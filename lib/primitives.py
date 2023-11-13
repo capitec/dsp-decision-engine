@@ -4,6 +4,7 @@ import typing
 import pandas as pd
 import abc
 import os
+import sys
 from hamilton import node as ham_node
 
 # from hamilton.function_modifiers import inject, value, source, recursive, dependencies
@@ -14,7 +15,7 @@ import importlib
 from lib import creators, builtin_funcs
 from lib.builtin_funcs import base_ops
 from .helpers import OverrideNodeExpander, infer_inject_parameter
-
+import functools
 
 class Primitive(abc.ABC):
     @classmethod
@@ -53,7 +54,7 @@ class Step(KwPrimitive):
     ):
         
         fn = function_map[step_config["step_type"]]
-
+        additional_conf = {}
         if "inputs" in step_config:
             injector = fm.inject(
                 **{
@@ -61,12 +62,15 @@ class Step(KwPrimitive):
                     for input_key, input_value in step_config["inputs"].items()
                 }
             )
+            # Needed for functions with kwargs
+            additional_conf["inputs"] = {input_key:input_key for input_key in step_config["inputs"].keys()}
         else:
             injector = None
         
         step_node_config = {
             **config,
-            **{c:v for c,v in step_config.items() if c not in ["inputs", "step_type"]}
+            **{c:v for c,v in step_config.items() if c not in ["inputs", "step_type"]},
+            **additional_conf
         }
         with OverrideNodeExpander(fn, injector):
             step_nodes = base.resolve_nodes(fn, step_node_config)
@@ -75,10 +79,10 @@ class Step(KwPrimitive):
             raise ValueError("Steps can only contain pipeline elements that evaluate to a single node")
 
         (node_, ) = step_nodes
-        return (node_.copy_with(
+        return [node_.copy_with(
             name=step_name,
             tags={**node_.tags, **fm.recursive.NON_FINAL_TAGS}
-        ),)
+        ),]
 
 
 class SubModule(KwPrimitive):
@@ -123,20 +127,49 @@ class SubModule(KwPrimitive):
 
             with open(os.path.join(root_path, module)) as fp:
                 child_config = pygohcl.loads(fp.read())
+
+            parent_outputs = rule_config.get("outputs")
+            if parent_outputs is None: # No outputs defined on outer limits
+                outputs = child_config.get("outputs")
+                assert isinstance(outputs, dict), f"Rule: {rule_name}. An outputs map must be defined in module: {module} or in the calling module."
+            else:
+                child_outputs = child_config.get("outputs")
+                if child_outputs is not None:
+                    outputs = {}
+                    for k,v in parent_outputs.items():
+                        if v not in child_outputs:
+                            raise ValueError(f"Rule: {rule_name}. Attempting to access variable {v} from module: {module}. However it is not exposed as an output.")
+                        outputs[k] = child_outputs[v]
+                else:
+                    outputs = parent_outputs
             return base.resolve_nodes(config_dag_fn, {
                 **child_config, 
+                "inputs": {k: infer_inject_parameter(v) for k,v in rule_config.get("inputs", {}).items()},
+                "outputs": outputs,
+                # TODO maybe define input types from child config to allow type validation
+                "namespace": rule_name, 
                 "module": os.path.splitext(os.path.split(module)[0])[1],
                 **{k: v for k, v in config.items() if k.startswith("__global_")}
             })
+
+        # Load module from path (unfortunately a bit cumbersome)
+        mod_loc = os.path.join(root_path, module)
+        mod_name = "ham_internal_graph_modules."+mod_loc[:-3].replace("/", ".").replace("\\", ".")
+        spec = importlib.util.spec_from_file_location(mod_name, mod_loc)
+        dyn_mod = importlib.util.module_from_spec(spec)
+        sys.modules[mod_name] = dyn_mod
+        spec.loader.exec_module(dyn_mod)
+        dyn_mod.__name__ = mod_name
         return creators.subdag_multi_out(
-            importlib.import_module(rule_config["module"]),
+            dyn_mod,
             inputs = {k: infer_inject_parameter(v) for k,v in rule_config.get("inputs", {}).items()},
             config = {c:v for c,v in rule_config.items() if c not in cls._NON_CONFIG_PARAMETERS},
             namespace = rule_name,
             output_node_map = rule_config.get("outputs", {}),
             external_inputs = rule_config.get("external_inputs"),
             isolate_inputs = rule_config.get("override_namespace_isolation", False)
-        )().generate_nodes()
+        ).generate_nodes(configuration={k: v for k, v in config.items() if k.startswith("__global_")})
+
 
 
 class WhenTree(KwPrimitive):
@@ -318,9 +351,113 @@ class WhenTree(KwPrimitive):
         # nodes.append(output_node)
         # return nodes
 
+class ScoreCard(KwPrimitive):
+
+    @classmethod
+    def expand_nodes(
+        cls,
+        scorecard_name: str, 
+        scorecard_config: typing.Dict[str, typing.Any], 
+        function_map: typing.Dict[str, typing.Callable], 
+        config: dict,
+        **kwargs
+    ):
+        from logging import getLogger
+        from lib.builtin_funcs.scorecard_impl import Score
+        from lib.builtin_funcs.scorecard import run_scorecard
+        scorecard_inner_conf = scorecard_config.get("data")
+        if scorecard_inner_conf is None:
+            assert "json" in scorecard_config, "Either json or data must be provided in scorecard"
+            import json
+            root_path = config.get("__global_root_base_path__", ".")
+            with open(os.path.join(root_path, scorecard_config["json"])) as fp:
+                scorecard_inner_conf = json.load(fp)
+        score_model = Score(scorecard_inner_conf, getLogger(__name__))
+
+        scorecard_node = Step.expand_nodes(
+            step_name=scorecard_name,
+            step_config= {
+                "inputs": {
+                    **scorecard_config.get("inputs", {}), 
+                    "scorecard": fm.value(score_model), 
+                    "include_pd": fm.value(scorecard_config.get("include_pd", True))
+                },
+                "step_type": "run_scorecard"
+            },
+            function_map={"run_scorecard": run_scorecard},
+            config = {}
+        )[0]
+        # TODO finish node extract inputs
+        outputs = scorecard_config.get("outputs", {})
+        output_nodes = [scorecard_node]
+        if len(outputs) > 0:
+            # Note this stops one value being represented as multiple items
+            inv_output_map = {v:k for k,v in outputs.items()}
+            assert len(inv_output_map) == len(outputs), "Duplicate values detected in output map. This is not supported."
+            column_extractor = fm.extract_columns(*[(k, pd.Series) for k in inv_output_map.keys()])
+            output_nodes = column_extractor.transform_node(scorecard_node, {}, None)
+            output_nodes = [
+                n.copy_with(name=inv_output_map[n.name])
+                if n.name in inv_output_map 
+                else n 
+                for n in output_nodes
+            ]
+        return output_nodes 
+
+class ScoreTable(KwPrimitive):
+
+    @classmethod
+    def expand_nodes(
+        cls,
+        scorecard_name: str, 
+        scorecard_config: typing.Dict[str, typing.Any], 
+        function_map: typing.Dict[str, typing.Callable], 
+        config: dict,
+        **kwargs
+    ):
+        from lib.builtin_funcs.score_table import run_score_table
+        scorecard_inner_conf = scorecard_config.get("data")
+        if scorecard_inner_conf is None:
+            assert "csv" in scorecard_config, "Either csv or data must be provided in scorecard"
+            root_path = config.get("__global_root_base_path__", ".")
+            scorecard_inner_conf = pd.read_csv(os.path.join(root_path, scorecard_config["json"]))
+        else:
+            scorecard_inner_conf = pd.DataFrame(scorecard_inner_conf)
+
+        scorecard_node = Step.expand_nodes(
+            step_name=scorecard_name,
+            step_config= {
+                "inputs": {
+                    **scorecard_config.get("inputs", {}), 
+                    "score_table_df": fm.value(scorecard_inner_conf),
+                },
+                "step_type": "run_scorecard"
+            },
+            function_map={"run_scorecard": run_score_table},
+            config = {}
+        )[0]
+        outputs = scorecard_config.get("outputs", {})
+        output_nodes = [scorecard_node]
+        if len(outputs) > 0:
+            # Note this stops one value being represented as multiple items
+            inv_output_map = {v:k for k,v in outputs.items()}
+            assert len(inv_output_map) == len(outputs), "Duplicate values detected in output map. This is not supported."
+            column_extractor = fm.extract_columns(*[(k, pd.Series) for k in inv_output_map.keys()])
+            output_nodes = column_extractor.transform_node(scorecard_node, {}, None)
+            output_nodes = [
+                n.copy_with(name=inv_output_map[n.name])
+                if n.name in inv_output_map 
+                else n 
+                for n in output_nodes
+            ]
+        return output_nodes 
+
+
 
 PRIMITIVES: typing.Dict[str, typing.Union[Primitive, KwPrimitive]] = {
     "step": Step,
     "external": SubModule,
-    "tree": WhenTree
+    "tree": WhenTree,
+    "scorecard": ScoreCard,
+    "scoretable": ScoreTable
 }

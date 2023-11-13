@@ -32,9 +32,14 @@ class parametrized_input_output(base.NodeCreator):
             raise ValueError(f"Node definition must contain **kwargs")
         new_inputs = {k:v for k,v in created_node.input_types.items() if k != "kwargs"}
         # TODO change this to model call and automatically infer typing.any and required true
-        additional_inputs = dict(self.resolve_input_from_config(value_name, value_config) for value_name, value_config in config["inputs"].items())
-        if not new_inputs.keys().isdisjoint(additional_inputs.keys()):
-            raise ValueError(f"Can only override inputs that are not in the function definition.")
+        additional_inputs = dict(
+            self.resolve_input_from_config(value_name, value_config) 
+            for value_name, value_config in config["inputs"].items()
+        )
+        additional_inputs = {k:v for k,v in additional_inputs.items() if k not in new_inputs.keys()}
+        # TODO check if validation needed with above line
+        # if not new_inputs.keys().isdisjoint(additional_inputs.keys()):
+        #     raise ValueError(f"Can only override inputs that are not in the function definition.")
         new_inputs.update(additional_inputs)
 
         output_type = eval(config.get("output_type","None")) or created_node.type
@@ -108,19 +113,19 @@ class subdag_multi_out(subdag):
     
     @classmethod
     def validate_isolation(cls, nodes, namespace, allowed_inputs):
-        namespace_prefix = assign_namespace(namespace, "")
+        namespace_prefix = assign_namespace("",namespace)
         for node in nodes:
             missing_keys = set()
             for input_key in node.input_types.keys():
-                if not input_key.startswith(namespace_prefix) or not input_key in allowed_inputs:
+                if not input_key.startswith(namespace_prefix) and input_key not in allowed_inputs:
                     missing_keys.add(input_key)
             if len(missing_keys):
                 raise ValueError(f"Missing inputs to subdag: {missing_keys}")
     
     def generate_nodes(
             self, 
-            fn: typing.Optional[typing.Callable], 
-            configuration: typing.Dict[str, typing.Any]
+            fn: typing.Optional[typing.Callable] = None, 
+            configuration: typing.Dict[str, typing.Any] = None
         ) -> typing.Collection[node.Node]:
 
         # Resolve all nodes from passed in functions
@@ -174,7 +179,7 @@ class config_dag(subdag_multi_out):
         from lib import primitives
         
         modules = [builtin_funcs]
-        modules += [importlib.import_module(m) for m in config["imports"]]
+        modules += [importlib.import_module(m) for m in config.get("imports",[])]
         functions = sum([graph_utils.find_functions(module) for module in modules], [])
         function_map = dict(functions)
 
@@ -207,15 +212,16 @@ class config_dag(subdag_multi_out):
         # Derive the namespace under which all these nodes will live
         namespace = self._derive_namespace(resolved_config)
         # Rename them all to have the right namespace
-        # inputs = resolved_config.get("inputs", [])
-        inputs = {}
+        inputs = resolved_config.get("inputs", {})
+        # inputs = {}
 
         nodes = self.add_namespace(nodes, namespace, inputs, self.config)
-        # Create any static input nodes we need to translate
-        nodes += self._create_additional_static_nodes(nodes, namespace)
         # Namespace Isolation
         if not resolved_config.get("override_namespace_isolation", False):
             self.validate_isolation(nodes, namespace, self.external_inputs)
+        # Create any static input nodes we need to translate
+        self.inputs = inputs
+        nodes += self._create_additional_static_nodes(nodes, namespace)
         # Add the final node that does the translation
         output_node_map = configuration.get("outputs", {})
         nodes += self.add_output_nodes(namespace, output_node_map=output_node_map, nodes=nodes)

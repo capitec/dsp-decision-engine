@@ -25,11 +25,15 @@ class OverrideNodeExpander:
 
 
 def infer_inject_parameter(input_value: typing.Union[str, dict], raise_on_fail=True):
+    if isinstance(input_value, fm.dependencies.SingleDependency):
+        return input_value
     if isinstance(input_value, str):
         return fm.source(input_value)
     if isinstance(input_value, dict):
         if "row" in input_value:
             additional_kwargs = {}
+            if isinstance(input_value["row"], list):
+                return fm.value(pd.Series(input_value["row"]))
             if all((not isinstance(v, list) for v in input_value["row"].values())):
                 additional_kwargs["index"] = [0]
             return fm.value(pd.DataFrame(input_value["row"], **additional_kwargs))
