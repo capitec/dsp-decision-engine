@@ -125,9 +125,9 @@ class ScoreCriteriaV2Numerical(BaseModel):
             # TODO: Maybe catch empty conditions as a value error?
             # if len(conditions) <= 0:
             #     continue
-            combined_condition = reduce(lambda c_agg, c_new: c_agg | c_new, condition)
+            # combined_condition = reduce(lambda c_agg, c_new: c_agg | c_new, condition)
             yield ConditionedScore(
-                combined_condition, bin_val, score_val, description_val
+                condition, bin_val, score_val, description_val
             )
 
 

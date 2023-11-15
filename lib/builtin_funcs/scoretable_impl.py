@@ -30,9 +30,9 @@ def score_table(df_score_table: pd.DataFrame, df: pd.DataFrame) -> pd.DataFrame:
         else:
             continue
         mask &= criteria_mask
-    value_idx = np.argmax(mask,axis=0)
-    assert all(mask[value_idx, range(mask.shape[1])]), "One or more columns didnt match any criteria"
+    value_idx = np.argmax(mask,axis=1)
+    assert all(mask[range(mask.shape[0]),value_idx]), "One or more columns didnt match any criteria"
     out_cols = [c for c in df_score_table if c.endswith("_OUT")]
     out_df = df_score_table[out_cols].iloc[value_idx]
-    return out_df.rename(columns={c:c[:-4] for c in out_df.columns}).reset_index(drop=True)
+    return out_df.rename(columns={c:c[:-4] for c in out_df.columns}).set_index(df.index)
 

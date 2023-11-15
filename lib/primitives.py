@@ -12,8 +12,7 @@ from hamilton import function_modifiers as fm
 # from hamilton.function_modifiers.recursive import NON_FINAL_TAGS
 
 import importlib
-from lib import creators, builtin_funcs
-from lib.builtin_funcs import base_ops
+from lib import creators
 from .helpers import OverrideNodeExpander, infer_inject_parameter
 import functools
 
@@ -41,6 +40,32 @@ class KwPrimitive(abc.ABC):
         **kwargs: typing.Dict[str, typing.Any]
     ) -> typing.Collection[ham_node.Node]:
         raise NotImplemented()
+    
+    @classmethod
+    def get_input_map(
+        cls, 
+        prim_key:str, 
+        prim_config: typing.Dict[str, typing.Any], 
+    ):
+        inputs = {k: infer_inject_parameter(v) for k,v in prim_config.get("inputs",{}).items()}
+        return {k: v.source for k, v in inputs.items() if isinstance(v,fm.UpstreamDependency)}
+
+    @classmethod
+    def get_outputs_map(
+        cls, 
+        prim_key:str, 
+        prim_config: typing.Dict[str, typing.Any], 
+    ):
+        return [prim_key, *prim_config.get("outputs", {}).keys()]
+    
+    @classmethod
+    def get_display_node_name(
+        cls, 
+        prim_key:str, 
+        prim_config: typing.Dict[str, typing.Any], 
+    ):
+        return prim_config.get("node_name", prim_key)
+        
 
 
 class Step(KwPrimitive):
@@ -55,17 +80,18 @@ class Step(KwPrimitive):
         
         fn = function_map[step_config["step_type"]]
         additional_conf = {}
-        if "inputs" in step_config:
-            injector = fm.inject(
-                **{
-                    input_key: infer_inject_parameter(input_value) 
-                    for input_key, input_value in step_config["inputs"].items()
-                }
-            )
-            # Needed for functions with kwargs
-            additional_conf["inputs"] = {input_key:input_key for input_key in step_config["inputs"].keys()}
-        else:
-            injector = None
+        inject_params = {
+            input_key: infer_inject_parameter(input_value) 
+            for input_key, input_value in step_config.get("inputs",{}).items()
+        }
+        additional_conf["inputs"] = {input_key:input_key for input_key in inject_params.keys()}
+        for prop_name, prop_val in step_config.get("properties", {}).items():
+            inject_params[prop_name] = fm.value(prop_val)
+        if getattr(fn, "_inject_function_map_", False):
+            inject_params["_function_map"] = fm.value(function_map)
+        injector = None
+        if len(inject_params) > 0:
+            injector = fm.inject(**inject_params)
         
         step_node_config = {
             **config,
@@ -106,7 +132,101 @@ class SubModule(KwPrimitive):
             external_inputs = rule_config.get("external_inputs"),
             isolate_inputs = rule_config.get("override_namespace_isolation", False)
         )().generate_nodes()
+    
+    @classmethod
+    def get_widget(
+        cls,
+        rule_name: str, 
+        rule_config: typing.Dict[str, typing.Any], 
+        function_map: typing.Dict[str, typing.Callable], 
+        config: dict,
+        **kwargs
+    ):        
+        # "nodes": {
+        #     "test": {"node_type": "step", "inputs": ["a"], "outputs":["value"], "title": "test", "x": 200, "y": 200},
+        #     "test2": {"node_type": "step", "inputs": ["a"], "outputs":["value"], "x": 700, "y": 200}
+        # },
+        # "connections": [
+        #     {"from_node": "test", "output_id": "value", "to_node": "test2", "input_id": "a"},
+        # ]
+        nodes = {}
         
+        root_path = config.get("__global_root_base_path__", ".")
+        module: str = rule_config["module"]
+        if module.endswith(".hcl"):
+            from pylitegraph import LiteGraphWidget
+            import pygohcl
+
+            with open(os.path.join(root_path, module)) as fp:
+                try:
+                    child_config = pygohcl.loads(fp.read())
+                except pygohcl.HCLParseError as e:
+                    raise ValueError(f"Error Parsing {module}") from e
+            
+
+            node_positions = child_config.get("metadata",{}).get("node_positions",{})
+            input_node_outputs = list(child_config.get("inputs").keys())
+            nodes["__root_inputs__"] = {
+                "node_type": "step", 
+                "inputs": [], 
+                "outputs": input_node_outputs, 
+                "title": "Inputs",
+                **node_positions.get("__root_inputs__", {"x": 0, "y": 0})
+            }
+            global_output_map = {v: ("__root_inputs__", i) for i, v in enumerate(input_node_outputs)}
+            global_inputs = []
+            x_pos = 200
+
+            for primitive_id, primitive_expander in PRIMITIVES.items():
+                for primitive_name, primitive_config in child_config.get(primitive_id, {}).items():
+                    node_outputs = primitive_expander.get_outputs_map(primitive_name, primitive_config)
+                    node_input_map = primitive_expander.get_input_map(primitive_name, primitive_config)
+                    # global_inputs.extend(((k,v) for k,v in node_inputs.items()))
+                    node_inputs = []
+                    for i, (k,v) in enumerate(node_input_map.items()):
+                        node_inputs.append(k)
+                        global_inputs.append((primitive_name, v, i))
+
+                    global_output_map.update({v: (primitive_name, i) for i, v in enumerate(node_outputs)})
+                    nodes[primitive_name] = {
+                        "node_type": "step", 
+                        "inputs": node_inputs, 
+                        "outputs": node_outputs, 
+                        "title": primitive_name, 
+                        **node_positions.get(primitive_name, {"x": x_pos, "y": 0})
+                    }
+                    x_pos += 200
+
+
+            output_node_inputs = []
+            for i, (k,v) in enumerate(child_config.get("outputs").items()):
+                output_node_inputs.append(k)
+                global_inputs.append(("__root_outputs__", v, i))
+            nodes["__root_outputs__"] = {
+                "node_type": "step", 
+                "inputs": output_node_inputs, 
+                "outputs":[], 
+                "title": "Outputs", 
+                **node_positions.get("__root_outputs__", {"x": x_pos, "y": 0})
+            }
+
+            connections = []
+            for to_node_name, global_input_var_name, to_node_input_idx in global_inputs:
+                if global_input_var_name not in global_output_map: continue
+                from_node_name, from_node_output_idx = global_output_map[global_input_var_name]
+                connections.append({
+                    "from_node": from_node_name, 
+                    "output_id": from_node_output_idx, 
+                    "to_node": to_node_name, 
+                    "input_id": to_node_input_idx
+                })
+
+            return LiteGraphWidget(
+                width=1280, 
+                height=600,
+                graph={"nodes": nodes, "connections": connections}
+            )
+
     @classmethod
     def expand_nodes(
         cls,
@@ -126,7 +246,10 @@ class SubModule(KwPrimitive):
                 pass
 
             with open(os.path.join(root_path, module)) as fp:
-                child_config = pygohcl.loads(fp.read())
+                try:
+                    child_config = pygohcl.loads(fp.read())
+                except pygohcl.HCLParseError as e:
+                    raise ValueError(f"Error Parsing {module}") from e
 
             parent_outputs = rule_config.get("outputs")
             if parent_outputs is None: # No outputs defined on outer limits
@@ -142,10 +265,15 @@ class SubModule(KwPrimitive):
                         outputs[k] = child_outputs[v]
                 else:
                     outputs = parent_outputs
+            df_outputs = None
+            if rule_config.get("return_outputs_as_df", False):
+                df_outputs = child_config.get("outputs", {})
+            rule_inputs = rule_config.get("inputs", {})
             return base.resolve_nodes(config_dag_fn, {
                 **child_config, 
-                "inputs": {k: infer_inject_parameter(v) for k,v in rule_config.get("inputs", {}).items()},
-                "outputs": outputs,
+                "inputs": {k: infer_inject_parameter(v) for k,v in rule_inputs.items()},
+                "outputs": {k: v for k, v in outputs.items() if v not in rule_inputs}, # TODO find a better way to deal with outputs derived from inputs
+                "df_outputs": df_outputs,
                 # TODO maybe define input types from child config to allow type validation
                 "namespace": rule_name, 
                 "module": os.path.splitext(os.path.split(module)[0])[1],
@@ -219,6 +347,7 @@ class WhenTree(KwPrimitive):
         config: dict,
         **kwargs
     ):
+        from lib import builtin_funcs
         when_tree, value_map, cond_map = builtin_funcs.WhenTree.from_config(tree_config)
         # TODO might need inputs here so that values listed internally can be identified to be bought into the namespace
         input_map = tree_config.get("inputs", {})
@@ -230,20 +359,35 @@ class WhenTree(KwPrimitive):
         condition_external_inputs = {}
         for key, value in cond_map.items():
             if isinstance(value, builtin_funcs.ExprCondition):
-                expr_node = base.resolve_nodes(
-                    base_ops.expression, 
-                    {"inputs": input_map,})[0]
+                expr_node = Step.expand_nodes(
+                    step_name = key,
+                    step_config={
+                        "step_type": "expression",
+                        "inputs": input_map,
+                        "properties": {
+                            "expr": value.expr
+                        }
+                    },
+                    function_map=function_map,
+                    config=config,
+                    **kwargs
+                )[0]
+                nodes.append(expr_node)
+                # expr_node = base.resolve_nodes(
+                #     base_ops.expression, 
+                #     {"inputs": input_map,}
+                # )[0]
                 
-                expr_node_injector = fm.inject(
-                    **input_map_inferred,
-                    expr=fm.value(value.expr),
-                )
+                # expr_node_injector = fm.inject(
+                #     **input_map_inferred,
+                #     expr=fm.value(value.expr),
+                # )
 
-                nodes.append(
-                    expr_node_injector.expand_node(
-                        expr_node, {}, base_ops.expression
-                    )[0].copy_with(name=key)
-                )
+                # nodes.append(
+                #     expr_node_injector.expand_node(
+                #         expr_node, {}, base_ops.expression
+                #     )[0].copy_with(name=key)
+                # )
             elif isinstance(value, builtin_funcs.ValueCondition):
                 # Just create a new input mapping from external source
                 condition_external_inputs[key] = fm.source(value.value)
@@ -251,12 +395,12 @@ class WhenTree(KwPrimitive):
         
         # Make a node to combine all inputs into a dictionary
         conditions_node = base.resolve_nodes(
-            base_ops.collect_to_dict, 
+            builtin_funcs.collect_to_dict, 
             {"inputs": {k:k for k in cond_map.keys()},})[0]
 
         # Map external inputs into the conditions node      
         cond_node_inj = fm.inject(**condition_external_inputs)
-        nodes.append(cond_node_inj.expand_node(conditions_node, {}, base_ops.collect_to_dict)[0].copy_with(
+        nodes.append(cond_node_inj.expand_node(conditions_node, {}, builtin_funcs.collect_to_dict)[0].copy_with(
             name="__conditions__",
             typ=typing.Dict[str, typing.Union[bool, pd.Series]]
         ))
@@ -272,11 +416,11 @@ class WhenTree(KwPrimitive):
 
         # Make a node to combine all values into a dictionary
         values_node = base.resolve_nodes(
-            base_ops.collect_to_dict, 
+            builtin_funcs.collect_to_dict, 
             {"inputs": {k:k for k in value_map.keys()},})[0]
         # Map external inputs into the values node      
         value_node_inj = fm.inject(**value_map)
-        nodes.append(value_node_inj.expand_node(values_node, {}, base_ops.collect_to_dict)[0].copy_with(
+        nodes.append(value_node_inj.expand_node(values_node, {}, builtin_funcs.collect_to_dict)[0].copy_with(
             name="__variables__",
         ))
 
@@ -420,7 +564,7 @@ class ScoreTable(KwPrimitive):
         if scorecard_inner_conf is None:
             assert "csv" in scorecard_config, "Either csv or data must be provided in scorecard"
             root_path = config.get("__global_root_base_path__", ".")
-            scorecard_inner_conf = pd.read_csv(os.path.join(root_path, scorecard_config["json"]))
+            scorecard_inner_conf = pd.read_csv(os.path.join(root_path, scorecard_config["csv"]))
         else:
             scorecard_inner_conf = pd.DataFrame(scorecard_inner_conf)
 

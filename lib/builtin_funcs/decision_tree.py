@@ -121,7 +121,7 @@ def _vec_when_tree_rec(
         selected_subset = pd.Series([True]*len(value))
     for node in reversed(tree.nodes):
         if isinstance(node.child, str):
-            node_subset = selected_subset
+            node_subset = selected_subset.copy()
             if node.condition_key:
                 node_subset &= conditions[node.condition_key]
             value[node_subset] = variables[node.child][node_subset]
@@ -131,7 +131,7 @@ def _vec_when_tree_rec(
                 value=value,
                 variables=variables,
                 conditions=conditions,
-                selected_subset=selected_subset & conditions[node.condition_key]
+                selected_subset= selected_subset if node.condition_key is None else (selected_subset & conditions[node.condition_key])
             )
             
 
