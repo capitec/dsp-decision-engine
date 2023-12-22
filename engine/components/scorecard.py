@@ -4,20 +4,24 @@
 # None's in the discrete will be handled as isNull check in Spark
 # If there is a range score, with a discrete score in the middle. The the range is evaluated first, thereafter discrete scores are allocated
 # Range only supports lower <= x < upper. Use discrete values with range values for special cases.
-
+#%%
 import typing
-import re
 import json
-from functools import reduce
-import numpy as np
+import logging
 
 from typing_extensions import Annotated
-from pydantic import BaseModel, Field, field_validator, ValidationError
+from pydantic import BaseModel, PrivateAttr, Field, field_validator, ValidationError
 from pydantic.functional_validators import BeforeValidator
+from pydantic import BaseModel, GetJsonSchemaHandler
+from pydantic.json_schema import JsonSchemaValue
+from pydantic_core import CoreSchema
+
+import numpy as np
 import pandas as pd
 
+from ..util import get_name
+
 if typing.TYPE_CHECKING:
-    import logging
     from pydantic_core import ErrorDetails
 
 
@@ -62,9 +66,49 @@ class ConditionedScore(typing.NamedTuple):
     description: typing.Optional[str]
 
 
-class ScoreCriteriaV2Categorical(BaseModel):
+class DiscreteScoreCardBuilderMixin:
+    discrete_scores: typing.List[DiscreteScorePattern]
+    other_score: typing.Optional[DefaultScorePattern]
+
+    def model_post_init(self, __context):
+        self._score_idx = -1
+
+    def _get_score_idx(self, override_idx: int = None):
+        if override_idx is not None: return override_idx
+        self._score_idx += 1
+        return self._score_idx
+    
+    def add_discrete_score(
+        self, matches: list, value: float, description: str, override_idx: int = None
+    ):
+        idx = self._get_score_idx(override_idx)
+        self.discrete_scores.append((matches, idx, value, description))
+        return self
+    
+    def set_other_score(self, value: float, description: str, override_idx: int = None):
+        idx = self._get_score_idx(override_idx)
+        self.other_score = (idx, value, description)
+        return self
+
+class RangeDiscreteScoreCardBuilderMixin(DiscreteScoreCardBuilderMixin):
+    range_scores: typing.List[RangeScorePattern]
+
+    def add_range_score(
+        self,
+        lower_thresh: float,
+        upper_thresh: float,
+        value: float,
+        description: str,
+        override_idx: int = None,
+    ):
+        idx = self._get_score_idx(override_idx)
+        self.range_scores.append(((lower_thresh, upper_thresh), idx, value, description))
+        return self
+
+class ScoreCriteriaV2Categorical(DiscreteScoreCardBuilderMixin, BaseModel):
     variable: str
-    type: typing.Literal["categorical"]
+    _variable_value: pd.Series = PrivateAttr(None)
+    type: typing.Literal["categorical"] = Field(default="categorical")
     discrete_scores: typing.List[DiscreteScorePattern] = Field(default_factory=list)
     other_score: typing.Optional[DefaultScorePattern] = None
 
@@ -77,10 +121,6 @@ class ScoreCriteriaV2Categorical(BaseModel):
             # TODO: validation error? (Empty list causes match on everything)
             if len(discrete_list) <= 0:
                 continue
-
-            # TODO: Ask Dan if avoiding rlike is needed with the optimizer
-            # TODO: Figure out how to NOT do rlike 3 times
-            # Bin
             # ?: avoids creating a capture group (we want groups but no captures)
             regex_values = [f"(?:^{dv}$)" for dv in discrete_list if dv is not None]
             condition = pd.Series([False]*len(input_col))
@@ -93,9 +133,10 @@ class ScoreCriteriaV2Categorical(BaseModel):
             )
 
 
-class ScoreCriteriaV2Numerical(BaseModel):
+class ScoreCriteriaV2Numerical(RangeDiscreteScoreCardBuilderMixin, BaseModel):
     variable: str
-    type: typing.Literal["numerical"]
+    _variable_value: pd.Series = PrivateAttr(None)
+    type: typing.Literal["numerical"] = Field(default="numerical")
     range_scores: typing.List[RangeScorePattern] = Field(default_factory=list)
     discrete_scores: typing.List[NumericDiscreteScorePattern] = Field(
         default_factory=list
@@ -122,10 +163,6 @@ class ScoreCriteriaV2Numerical(BaseModel):
                 else:
                     condition |= input_col == dv
 
-            # TODO: Maybe catch empty conditions as a value error?
-            # if len(conditions) <= 0:
-            #     continue
-            # combined_condition = reduce(lambda c_agg, c_new: c_agg | c_new, condition)
             yield ConditionedScore(
                 condition, bin_val, score_val, description_val
             )
@@ -143,13 +180,15 @@ class ScoreScallingParameters(BaseModel):
     pdo: float
 
 
+
 class ScoreCardModelV2(BaseModel):
     bin_prefix: str
     score_prefix: str
     description_prefix: str
     variable_params: typing.List[ScoreCriteriaV2] = Field(default_factory=list)
-    version: str = Field(pattern=r"^2.[0-9]+.[0-9]$")
+    version: str = Field(pattern=r"^2.[0-9]+.[0-9]$", default="2.2.0")
     score_scaling_params: typing.Optional[ScoreScallingParameters] = None
+
 
     @field_validator("score_scaling_params", mode="before")
     def allow_empty_dict(score_scaling_params: typing.Optional[dict]):
@@ -167,6 +206,43 @@ class ScoreCardModelV2(BaseModel):
                 )
             seen.add(p.variable)
         return variable_params
+    
+    def add_criteria(self, criteria: ScoreCriteriaV2):
+        # TODO automatically extract variables
+        self.variable_params.append(criteria)
+        return self
+    
+    def set_score_scaling_params(self, **params: dict) -> "ScoreCardModelV2":
+        self.score_scaling_params = params
+        return self
+    
+    def execute(self, include_pd=True, **kwargs) -> pd.DataFrame:
+        from logging import getLogger
+        internal_vars = {
+            v.variable: v._variable_value for v in self.variable_params
+            if v._variable_value is not None
+        }
+        return ScoreCardRunner(
+            self.model_dump(), 
+            getLogger(__name__)
+        ).score(pd.DataFrame({**internal_vars, **kwargs}), include_pd)
+
+
+ScoreCriteriaTypes = typing.Optional[typing.Union[typing.Literal["numerical"],typing.Literal["categorical"]]]
+def ScoreCriteria(variable: pd.Series, criteria_type: ScoreCriteriaTypes = None, variable_name: typing.Optional[str]=None) -> ScoreCriteriaV2:
+    variable_name = get_name(variable, variable_name)
+    if criteria_type is None:
+        criteria_type = "numerical" if pd.api.types.is_numeric_dtype(variable) else "categorical"
+    if criteria_type == "numerical":
+        criteria = ScoreCriteriaV2Numerical(variable=variable_name)
+    elif criteria_type == "categorical":
+        criteria = ScoreCriteriaV2Categorical(variable=variable_name)
+    else:
+        raise ValueError("Invalid Criteria type {criteria_type} expecting either \"numerical\" or \"categorical\"")
+    criteria._variable_value = variable
+    return criteria
+
+ScoreCard = ScoreCardModelV2
 
 
 class ScoreCardAdjustmentNoneOperator(BaseModel):
@@ -297,8 +373,10 @@ class ScoreCardValidationError(ValueError):
         return "\n".join(lines)
 
 
-class Score:
-    def __init__(self, model: dict, logger: "logging.Logger"):
+class ScoreCardRunner:
+    def __init__(self, model: dict, logger: "logging.Logger" = None):
+        if logger is None:
+            logger = logging.getLogger(__name__)
         model_version: str = model.get("version", None)
         if model_version.startswith("2."):
             parse_error = None
@@ -352,7 +430,7 @@ class Score:
         """Replace the values in the source columns with associated value if the row matches a condition"""
         res_data = data # TODO confirm if copy should be made
         for src_col, value in column_value_pairs:
-            res_data.loc[condition, src_col] = value
+            res_data.loc[condition.values, src_col] = value
         return res_data
 
     def score_vars(
@@ -532,3 +610,5 @@ def probability_of_default_from_log_odds(log_odds_col: pd.Series) -> pd.Series:
     """Calculate PD from log odds."""
     exp_log_odds = np.exp(log_odds_col)
     return 1 / (1 + exp_log_odds)
+
+# %%
