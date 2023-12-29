@@ -1,3 +1,4 @@
 from engine.components.dtree import *
-from engine.components.scorecard import ScoreCard, ScoreCriteria
-from engine.components.dtable import DecisionTable, DTEq, DTMax, DTIn, DTMin
+
+from importlib.metadata import version
+__version__ = version(__name__)
