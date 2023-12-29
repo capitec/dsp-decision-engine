@@ -46,6 +46,24 @@ class DTMax(DecisionTableOp):
         return criteria_mask
     def add_trace(self, idx):
         return {"upper": self.pred[idx]}
+    
+class DTMinNEq(DecisionTableOp):
+    op: typing.Literal["MINNEQ"] = "MINNEQ"
+    def __call__(self, values: ArrayV) -> ArrayPxV[np.bool_]:
+        criteria_mask = values[None] > self.pred[:,None]
+        criteria_mask[np.isnan(self.pred)]=True
+        return criteria_mask
+    def add_trace(self, idx):
+        return {"lower": self.pred[idx]}
+
+class DTMaxEq(DecisionTableOp):
+    op: typing.Literal["MAXEQ"] = "MAXEQ"
+    def __call__(self, values: ArrayV) -> ArrayPxV[np.bool_]:
+        criteria_mask = values[None] <= self.pred[:,None]
+        criteria_mask[np.isnan(self.pred)]=True # TODO verify that this works for isnull
+        return criteria_mask
+    def add_trace(self, idx):
+        return {"upper": self.pred[idx]}
 
 class DTIn(DecisionTableOp):
     op: typing.Literal["IN"] = "IN"
@@ -73,7 +91,7 @@ class DTEq(DecisionTableOp):
         return {"equals": self.pred[idx]}
 
 RegDTableOps = typing.Annotated[
-    typing.Union[DTMin,DTMax,DTIn],
+    typing.Union[DTMin,DTMax,DTMaxEq,DTMinNEq,DTIn],
     Field(discriminator="op")
 ]
 

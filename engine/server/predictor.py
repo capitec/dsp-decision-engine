@@ -20,7 +20,8 @@ from engine.serving import RuleServer, get_config_class_from_module
 
 
 prefix = os.environ.get("MODEL_PREFIX", "/opt/ml/")
-model_path = os.path.join(prefix, "model")
+model_path = os.environ.get("MODEL_PATH", os.path.join(prefix, "model"))
+
 sys.path.insert(1, model_path)
 # A singleton for holding the model. This simply loads the model and holds it.
 # It has a predict function that does a prediction based on the model and the input data.
@@ -53,11 +54,11 @@ async def lifespan(app: FastAPI):
     get_model.cache_clear()
 
 
-# app = FastAPI(lifespan=lifespan)
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
+# app = FastAPI()
 
 # from fastapi_cprofile.profiler import CProfileMiddleware
-# app.add_middleware(CProfileMiddleware, enable=True, server_app = app, filename= "/Users/cp371651/Documents/Workspace/Upskilling/Projects/HamingtonHCL/progs/merchant_loan/out/profilingrun.pstats", strip_dirs=False, sort_by="cumulative")
+# app.add_middleware(CProfileMiddleware, enable=True, server_app = app, filename= "/Users/cp371651/Documents/Workspace/TeamProjects/aip/bbc-re-merchant-loan/profilingrun.pstats", strip_dirs=False, sort_by="cumulative")
 # profiler_middleware = app.user_middleware[0]
 
 

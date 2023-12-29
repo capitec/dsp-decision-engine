@@ -80,7 +80,7 @@ class Driver(driver.Driver):
         if final_vars is None:
             final_vars = self._create_final_vars(self.outputs) if self.final_vars is None else self.final_vars
         return super().raw_execute(
-            final_vars, # DOnt do a concatenation as execute might already concatenate
+            final_vars, # Dont do a concatenation as execute might already concatenate
             overrides,
             display_graph,
             inputs
