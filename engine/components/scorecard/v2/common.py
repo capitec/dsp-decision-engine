@@ -1,7 +1,7 @@
 import typing
 import pandas as pd
 import numpy as np
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import BaseModel, Field, PrivateAttr, field_serializer
 
 
 class DefaultScorePattern(typing.NamedTuple):
@@ -21,13 +21,14 @@ class RangeScorePattern(typing.NamedTuple):
     score: float
     description: typing.Optional[str]
 
-
-T = typing.TypeVar("T")
-class DiscreteScorePattern(typing.NamedTuple, typing.Generic[T]):
-    values: typing.List[T]
-    group_id: int
-    score: float
-    description: typing.Optional[str]
+# This is only supported in python >3.12 sagemaker currently only supports python <=3.10
+# T = typing.TypeVar("T")
+# class DiscreteScorePattern(typing.NamedTuple, typing.Generic[T]):
+#     values: typing.List[T]
+#     group_id: int
+#     score: float
+#     description: typing.Optional[str]
+# Not sure if its worth the compatibility to save the verbosity
 
 class _Unset:
     pass
@@ -43,6 +44,15 @@ class ScoreCriteriaBuilderMixin(BaseModel):
         typing.Tuple[str,str,str],
         typing.Tuple[typing.Union[pd.Series, np.ndarray], ...]
     ] = PrivateAttr(None)
+
+    @field_serializer('other_score')
+    def serialize_dt(self, other_score: typing.Optional[DefaultScorePattern], _info):
+        if other_score is None: return None
+        return {
+                "group_id": other_score.group_id,
+                "score": other_score.score,
+                "description": other_score.description,
+            }
 
     def _get_score_idx(self, override_idx: int = None):
         if override_idx is not None: return override_idx
@@ -76,24 +86,30 @@ class ScoreCriteriaBuilderMixin(BaseModel):
         return res
 
 
-class DiscreteScoreCriteriaBuilderMixin(ScoreCriteriaBuilderMixin, typing.Generic[T]):
-    discrete_scores: typing.List[DiscreteScorePattern[T]] = Field(default_factory=list)
-    
-    def add_discrete_score(
-        self, matches: typing.List[T], value: float, description: str, override_idx: int = None
-    ):
-        idx = self._get_score_idx(override_idx)
-        self.discrete_scores.append(DiscreteScorePattern(matches, int(idx), float(value), str(description)))
-        return self
-    
-    def set_other_score(self, value: float, description: str, override_idx: int = None):
-        idx = self._get_score_idx(override_idx)
-        self.other_score = DefaultScorePattern(int(idx), float(value), str(description))
-        return self
-
+def float_serialiser(value: float):
+    if value == float('nan'):
+        return 'nan'
+    elif value == float('inf'):
+        return 'inf'
+    elif value == -float('inf'):
+        return '-inf'
+    else: return value
 
 class RangeScoreCriteriaBuilderMixin(ScoreCriteriaBuilderMixin):
     range_scores: typing.List[RangeScorePattern] = Field(default_factory=list)
+
+    @field_serializer('range_scores')
+    def serialize_dt(self, range_scores: typing.List[RangeScorePattern], _info):
+        sv = []
+        for dc in range_scores:
+            sv.append({
+                "range": [float_serialiser(dc.range.start), float_serialiser(dc.range.end)],
+                "group_id": dc.group_id,
+                "score": dc.score,
+                "description": dc.description,
+            })
+        return sv
+
 
     def add_range_score(
         self,
