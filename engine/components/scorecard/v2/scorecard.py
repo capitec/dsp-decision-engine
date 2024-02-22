@@ -1,3 +1,4 @@
+import os
 import typing
 
 import pandas as pd
@@ -66,7 +67,7 @@ class ScoreCardModel(BaseModel):
             if var.variable in input_data:
                 res_df = var.execute(self.bin_prefix, self.score_prefix, self.description_prefix, input_data[var.variable])
             else:
-                res_df = var.execute(self.bin_prefix, self.score_prefix, self.description_prefix, input_data)
+                res_df = var.execute(self.bin_prefix, self.score_prefix, self.description_prefix)
             all_res.append(res_df)
         if len(all_res) == 0: return pd.DataFrame()
         if ignore_idx:
@@ -105,7 +106,7 @@ class ScoreCardModel(BaseModel):
             res_data = self.pd_from_scores(res_data)
         return res_data
     
-    def execute(self, include_pd=True, **input_data: typing.Dict[str, pd.Series]) -> pd.DataFrame:
+    def execute(self, include_pd=False, **input_data: typing.Dict[str, pd.Series]) -> pd.DataFrame: # pragma: no cover
         """A convenience wrapper to score that allows calling with dict of series"""
         return self.score(input_data, include_pd=include_pd)
     
@@ -190,3 +191,43 @@ class ScoreCardModel(BaseModel):
             input_data = self.pd_from_scores(input_data, score_column)
 
         return input_data
+    
+    def get_view_model(self): # pragma: no cover
+        from .ui import ScoreCardViewModel
+        return ScoreCardViewModel.from_pydantic_model(self)
+
+    # TODO this was just a quick implementation doesnt promote code reuse
+    @classmethod
+    def from_config(cls, file: str) -> 'ScoreCardModel': # pragma: no cover
+        ext = os.path.splitext(file)[1]
+        if ext in ['.yaml', '.yml']:
+            from yaml import load
+            try:
+                from yaml import CLoader as Loader
+            except ImportError: # pragma: no cover
+                from yaml import Loader
+            with open(file, 'r') as fp:
+                config = load(fp, Loader=Loader)
+        elif ext == '.json':
+            import json
+            with open(file, 'r') as fp:
+                config = json.load(fp)
+        return cls(**config)
+    
+    def save(self, file: str): 
+        import json
+        ext = os.path.splitext(file)[1]
+        # Small dirty workaround for now to convert tuple and enum types before the yaml dump
+        config = json.loads(self.model_dump_json())
+        if ext in ['.yaml', '.yml']:
+            from yaml import dump
+            try:
+                from yaml import CDumper as Dumper
+            except ImportError: # pragma: no cover
+                from yaml import Dumper 
+            with open(file, 'w') as fp:
+                dump(config, fp, Dumper=Dumper)
+        elif ext == '.json':
+            import json
+            with open(file, 'w') as fp:
+                config = json.dump(config, fp)

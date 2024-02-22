@@ -5,8 +5,10 @@ import re as builtin_re
 
 import pandas as pd
 import numpy as np
-from pydantic import Field
-from .common import DiscreteScoreCriteriaBuilderMixin
+from pydantic import Field, field_serializer
+from .common import ScoreCriteriaBuilderMixin, DefaultScorePattern
+
+from pydantic import BaseModel, Field, PrivateAttr, field_serializer
 
 try:
     # Try use re2 where possible as it provides a speedup
@@ -74,7 +76,42 @@ def match_fn(equals_array: typing.List[builtin_re.Pattern], default_value, x):
         (default_value,)
     ))
 
-class ScoreCriteriaCategorical(DiscreteScoreCriteriaBuilderMixin[typing.Optional[str]]):
+
+class CategoricalDiscreteScorePattern(typing.NamedTuple):
+    values: typing.List[typing.Optional[str]]
+    group_id: int
+    score: float
+    description: typing.Optional[str]
+
+
+class CategoricalDiscreteScoreCriteriaBuilderMixin(ScoreCriteriaBuilderMixin):
+    discrete_scores: typing.List[CategoricalDiscreteScorePattern] = Field(default_factory=list)
+
+    @field_serializer('discrete_scores')
+    def serialize_dt(self, discrete_scores: typing.List[CategoricalDiscreteScorePattern], _info):
+        sv = []
+        for dc in discrete_scores:
+            sv.append({
+                "values": dc.values,
+                "group_id": dc.group_id,
+                "score": dc.score,
+                "description": dc.description,
+            })
+        return sv
+    
+    def add_discrete_score(
+        self, matches: typing.List[typing.Optional[str]], value: float, description: str, override_idx: int = None
+    ):
+        idx = self._get_score_idx(override_idx)
+        self.discrete_scores.append(CategoricalDiscreteScorePattern(matches, int(idx), float(value), str(description)))
+        return self
+    
+    def set_other_score(self, value: float, description: str, override_idx: int = None):
+        idx = self._get_score_idx(override_idx)
+        self.other_score = DefaultScorePattern(int(idx), float(value), str(description))
+        return self
+
+class ScoreCriteriaCategorical(CategoricalDiscreteScoreCriteriaBuilderMixin):
     type: typing.Literal["categorical"] = Field(default="categorical")
     default_behavior: PatternConstructorKey = Field(default="matches")
 

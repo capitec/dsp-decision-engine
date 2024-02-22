@@ -4,15 +4,50 @@ from typing import List
 
 import pandas as pd
 import numpy as np
-from pydantic import BaseModel, PrivateAttr, Field
+from pydantic import Field, field_serializer
 
-from .common import RangeScoreCriteriaBuilderMixin, DiscreteScoreCriteriaBuilderMixin
+from .common import RangeScoreCriteriaBuilderMixin, ScoreCriteriaBuilderMixin, DefaultScorePattern
 
 class Bounds(Enum):
     LOWER = 0
     UPPER = 1
 
-NumericDiscreteScoreCriteriaBuilderMixin = DiscreteScoreCriteriaBuilderMixin[typing.Optional[float]]
+
+class NumericalDiscreteScorePattern(typing.NamedTuple):
+    values: typing.List[typing.Optional[float]]
+    group_id: int
+    score: float
+    description: typing.Optional[str]
+
+
+
+class NumericDiscreteScoreCriteriaBuilderMixin(ScoreCriteriaBuilderMixin):
+    discrete_scores: typing.List[NumericalDiscreteScorePattern] = Field(default_factory=list)
+
+    @field_serializer('discrete_scores')
+    def serialize_dt(self, discrete_scores: typing.List[NumericalDiscreteScorePattern], _info):
+        sv = []
+        for dc in discrete_scores:
+            sv.append({
+                "values": dc.values,
+                "group_id": dc.group_id,
+                "score": dc.score,
+                "description": dc.description,
+            })
+        return sv
+    
+    def add_discrete_score(
+        self, matches: typing.List[typing.Optional[str]], value: float, description: str, override_idx: int = None
+    ):
+        idx = self._get_score_idx(override_idx)
+        self.discrete_scores.append(NumericalDiscreteScorePattern(matches, int(idx), float(value), str(description)))
+        return self
+    
+    def set_other_score(self, value: float, description: str, override_idx: int = None):
+        idx = self._get_score_idx(override_idx)
+        self.other_score = DefaultScorePattern(int(idx), float(value), str(description))
+        return self
+
 
 class ScoreCriteriaNumerical(
     RangeScoreCriteriaBuilderMixin, 
