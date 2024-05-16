@@ -71,12 +71,12 @@ def get_mod_outputs(mod: "types.ModuleType") -> typing.List[typing.Union[str, ty
     assert isinstance(outputs, list), f"Expecting global variable OUTPUTS to be defined on module {mod.__name__}"
     out = []
     for o in outputs:
-        if isinstance(o, VariableNodeExpander):
+        if isinstance(o, types.ModuleType):
+            out.extend(get_mod_outputs(o))
+        elif isinstance(o, VariableNodeExpander):
             out.append(o)
         elif isinstance(o, (str, typing.Callable)) or hasattr(o, "name"):
             out.append(o)
-        elif isinstance(o, types.ModuleType):
-            out.extend(get_mod_outputs(o))
         else:
             raise (ValueError(f"Invalid output defined {o} in module {mod.__name__}. Expecting a function, module, string or an element with a name property"))
     return out

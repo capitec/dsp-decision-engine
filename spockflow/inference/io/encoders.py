@@ -40,7 +40,7 @@ def encode_csv(result: "TDefaultResult") -> "Response":
     if isinstance(result, dict):
         from hamilton.base import PandasDataFrameResult
         result = PandasDataFrameResult.build_result()
-    if callable(getattr("to_csv", result, None)):
+    if callable(getattr(result, "to_csv", None)):
         result.to_csv(stream)
     else:
         np.savetxt(stream, result, delimiter=",", fmt="%s")

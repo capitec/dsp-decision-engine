@@ -1,8 +1,12 @@
 import typing
+import warnings
 import pandas as pd
 from dataclasses import dataclass, field
 import numpy as np
 from .._util import get_name, safe_update
+
+warnings.warn("This module will be deprecated in favor of the new tree module. If in use please contact sholtoarmstrong@capitecbank.co.za.", DeprecationWarning)
+
 
 NodeValue = typing.Union[pd.DataFrame, pd.Series, 'Tree', typing.Any]
 

@@ -1,12 +1,15 @@
 import typing
+import warnings
 from types import ModuleType
 from dataclasses import dataclass, field
 from typing import Any
 from hamilton import function_modifiers as fm
-from hamilton import node, base, common
+from hamilton import node, common
 from spockflow.nodes import VariableNodeExpander
 from spockflow.core import subdag
 from spockflow._util import get_mod_outputs, get_output_types, init_module_variable_node_names
+
+warnings.warn("This module will be deprecated in the future to align more with hamilton. If in use please contact sholtoarmstrong@capitecbank.co.za.", DeprecationWarning)
 
 @dataclass
 class ExtractFromNamespaceNode(VariableNodeExpander):

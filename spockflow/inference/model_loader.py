@@ -48,16 +48,22 @@ class ModelLoader():
         if key is None:
             return "__default__" in self.model_modules
         return key in self.model_modules
+    
+    def get_modules_for_model_name(self, model_name):
+        modules = self.model_modules.get(model_name, self.model_modules.get("__default__"))
+        if modules is None:
+            raise ValueError(
+                f"Could not infer the correct modules to use for model: \"{model_name}\""
+            )
+        return modules
 
 
     def load_model_with_config(self, model_name, config):
         if model_name is None: model_name = "__default__"
-        try:
-            modules = self.model_modules.get(model_name, self.model_modules["__default__"])
-        except KeyError as e:
-            logger.exception(e)
-            raise ValueError(f"Could not infer the correct modules to use for model: \"{model_name}\"") from e
-        model = self.dag_loader_fn(modules, config)
+        model = self.dag_loader_fn(
+            self.get_modules_for_model_name(model_name), 
+            config
+        )
         return model
 
 
@@ -87,11 +93,8 @@ class ModelLoader():
         # if cached_model is not None:
         #     logger.debug(f"Skipping retrieval of {model_name} {model_version} as it is already cached")
         #     return cached_model
-        try:
-            modules = self.model_modules.get(model_name, self.model_modules["__default__"])
-        except KeyError as e:
-            logger.exception(e)
-            raise ValueError(f"Could not infer the correct modules to use for model: \"{model_name}\"") from e
+        
+        modules = self.get_modules_for_model_name(model_name)
         
         try:
             config = config_loader.get_config(model_name, model_version)

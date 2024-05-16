@@ -47,7 +47,6 @@ class ConditionedNode(BaseModel, typing.Generic[TOutput,TCond]):
 
 
 class ChildTree(BaseModel, typing.Generic[TOutput,TCond,TNodeType]):
-    # TODO fix for pd.DataFrame
     model_config = ConfigDict(arbitrary_types_allowed=True)
     nodes: typing.List[TNodeType] = Field(default_factory=list)
     default_value: typing.Optional[TOutput] = None
@@ -135,11 +134,9 @@ class FromConfigTree(VariableNodeExpander): # This is very generic maybe its wor
         from .numpy_impl import NumpyTree
         return NumpyTree(**config)
 
-
     def get_return_type(self):
         raise NotImplementedError("TODO see where this is needed")
     
-
     def generate_nodes(self, config: dict, var_name: str=None) -> typing.List["node.Node"]:
         return self.load(config).generate_nodes(config, var_name)
 
@@ -156,15 +153,6 @@ class Tree(typing.Generic[TOutput,TCond],VariableNodeExpander):
     @property
     def TreeType(self) -> ChildTree:
         return ChildTree[ConditionedNode[TOutput,TCond],TOutput,TCond]
-
-    # def _add_condition_to_child(self, child: ConditionedNode):
-    #     def inner(output=None, condition=None):
-    #         if child.value is None:
-    #             child.value = self.TreeType()
-    #         if not isinstance(child.value, self.TreeType):
-    #             raise ValueError(f"Subtree must have no value set or already be associated to a subtree. Found value = {child.value}")
-    #         return self.condition(output=output, condition=condition, child_tree=child.value)
-    #     return inner
     
     @staticmethod
     def from_config(namespace: str, key: str) -> FromConfigTree:
@@ -233,6 +221,7 @@ class Tree(typing.Generic[TOutput,TCond],VariableNodeExpander):
     def copy(self, deep=True):
         return self.__class__(self.root.model_copy(deep=deep))
 
+    # def parameterize_condition(self) # TODO
     def condition(self, output: TOutput=None, condition: TCond=None, child_tree: ChildTree=None, **kwargs) -> typing.Callable[..., WrappedTreeFunction[TOutput, TCond]] :
         if child_tree is None:
             child_tree = self.root

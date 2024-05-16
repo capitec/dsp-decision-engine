@@ -209,6 +209,11 @@ class ServingHandler:
                 raise UnsupportedAcceptTypeError.from_accept_type(accept, list(self.encoders.keys()))
         return self.encoders[accept](prediction)
     
+    def override_model_version_fn(data, model_name, model_version) -> typing.Tuple[typing.Optional[str],str]:
+        """
+        Allows the user to change the model and version used based on input parameters
+        """
+        return model_name, model_version
 
     # TODO extend async implementation to here
     def transform_fn(
@@ -223,7 +228,9 @@ class ServingHandler:
     ) -> "Response":
 
         try:
-            data = self.pre_process_fn(self.input_fn(input_data, content_type))
+            data = self.input_fn(input_data, content_type)
+            model_name, model_version = self.override_model_version_fn(data, model_name, model_version)
+            data = self.pre_process_fn(data)
         except ValueError as e:
             logger.debug(f"Could not parse input data:\n {input_data}\nWith content type: {content_type}", exc_info=e)
             from .exceptions import InvalidInputError
@@ -240,4 +247,3 @@ class ServingHandler:
         prediction = self.predict_fn(data, model)
         prediction = self.post_process_fn(prediction)
         return self.output_fn(prediction, accept)
-    
