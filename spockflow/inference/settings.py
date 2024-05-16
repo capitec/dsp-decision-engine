@@ -27,6 +27,7 @@ class _Runtime_Settings(BaseSettings):
     # These two variables allow the directory of the model to be changes
     prefix: str = "/opt/ml/"
     relative_path: str = "model"
+    relative_requirements_path: str = "requirements.txt"
 
     serving_handler_module: str = "inference"
 
@@ -62,6 +63,10 @@ class _Runtime_Settings(BaseSettings):
     @property
     def model_path(self):
         return os.path.join(self.prefix, self.relative_path)
+    
+    @property
+    def requirements_path(self):
+        return os.path.join(self.model_path, self.relative_requirements_path)
 
 @lru_cache(maxsize=1)
 def get_settings():

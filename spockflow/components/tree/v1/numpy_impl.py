@@ -123,22 +123,22 @@ class NumpyTree(Tree):
                     self.name+".cast_data": TCastData,
                     self.name+".conditions_met": np.ndarray,
                 }
-            ),
-            node.Node(
-                self.name+".trace",
-                self.get_return_type(),
-                self.doc,
-                callabl=self.namespaced(self.name, compiled_tree.trace),
-                tags={
-                    "module": self.module, 
-                    **self.additional_tags
-                },
-                node_source=node.NodeType.STANDARD,
-                input_types = {
-                    self.name+".cast_data": TCastData,
-                    self.name+".conditions_met": np.ndarray,
-                }
-            )
+            )#,
+            # node.Node(
+            #     self.name+".trace",
+            #     self.get_return_type(),
+            #     self.doc,
+            #     callabl=self.namespaced(self.name, compiled_tree.trace),
+            #     tags={
+            #         "module": self.module, 
+            #         **self.additional_tags
+            #     },
+            #     node_source=node.NodeType.STANDARD,
+            #     input_types = {
+            #         self.name+".cast_data": TCastData,
+            #         self.name+".conditions_met": np.ndarray,
+            #     }
+            # )
         ]
 
 
@@ -211,18 +211,18 @@ class CompiledNumpyTree:
         if len(self.execution_outputs) == 0:
             self.predefined_outputs = pd.concat(
                 [self._get_empty_data_frame_like(self.predefined_outputs), self.predefined_outputs]
-            )
+            ).reset_index(drop=True)
         self.output_df_lengths = [1] + output_df_lengths
 
         truth_table = np.zeros(
-            (len(self.all_output_names)+1,len(self.all_condition_names)), 
+            (len(flattened_tree.tree)+1,len(self.all_condition_names)), 
             dtype=int
         )
 
         condition_lookup = {k:i for i,k in enumerate(self.all_condition_names)}
         # Preinserting default output during execution
         output_lookup = {k:i+1 for i,k in enumerate(self.all_output_names)}
-        self.ordered_output_map = np.zeros(len(self.all_output_names)+1, dtype=np.uint32)
+        self.ordered_output_map = np.zeros(len(flattened_tree.tree)+1, dtype=np.uint32)
         self.ordered_output_map[-1] = 0 # Set map to default output
         for ni, n in enumerate(flattened_tree.tree):
             oi = output_lookup[n.output]
@@ -237,7 +237,6 @@ class CompiledNumpyTree:
         self.truth_table = truth_table.T
         # shape [o,1]
         self.truth_table_thresh = truth_table.T.sum(axis=0,keepdims=True)
-
 
     @staticmethod
     def _get_empty_data_frame_like(other: pd.DataFrame)->pd.DataFrame:
@@ -261,7 +260,6 @@ class CompiledNumpyTree:
                 raise ValueError(f"All static conditions must have the same length. Found {len(v)} != {length}.")
             v = np.repeat(v, repeats=length)
         return v.astype(bool)
-
 
     @classmethod
     def _split_predefined(
@@ -288,7 +286,6 @@ class CompiledNumpyTree:
             else:
                 execution.append(k)
         return (predefined, predefined_names, execution)
-
 
     @classmethod
     def _get_symbolic_tree(
@@ -351,7 +348,6 @@ class CompiledNumpyTree:
             tree=new_tree_nodes
         )
 
-
     @classmethod
     def _flatten_tree(
         cls, 
@@ -403,10 +399,6 @@ class CompiledNumpyTree:
             )
 
         return conditioned_outputs
-
-    def trace(self, **kwds: typing.Union[pd.DataFrame, pd.Series]) -> pd.DataFrame:
-        raise NotImplementedError()
-    
 
     def _cast_length_conditions_outputs(self, **kwds: typing.Union[pd.DataFrame, pd.Series]) -> typing.Tuple[np.ndarray, pd.DataFrame, np.ndarray, np.ndarray, int]:
         length = self.length
@@ -491,10 +483,8 @@ class CompiledNumpyTree:
         item_index = np.arange(length)
         output_idx = output_start_offsets[ordered_output_idx]+(output_df_lengths[ordered_output_idx]>1)*item_index
         return outputs.iloc[output_idx].reset_index(drop=True)
-
-    
+   
     def __call__(self, **kwds: typing.Union[pd.DataFrame, pd.Series]) -> pd.DataFrame:
         cast_data = self._cast_length_conditions_outputs(**kwds)
         conditions_met = self._calculate_conditions_met(cast_data)
         return self.get_results(cast_data, conditions_met)
-

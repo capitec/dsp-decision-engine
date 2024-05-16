@@ -1,7 +1,8 @@
 # Initial version made use of FastAPI. Seems a bit bloated for the simple functionality
+import os
 from functools import lru_cache
 from starlette.applications import Starlette
-from starlette.responses import PlainTextResponse, Response
+from starlette.responses import Response
 from starlette.routing import Route
 from starlette.requests import Request
 from starlette import status
@@ -102,7 +103,13 @@ async def visualize(request: Request):
 
 
 def startup():
-    if get_settings().server_init_on_startup:
+    settings = get_settings()
+    if os.path.isfile(settings.requirements_path):
+        from spockflow.inference.util import install_requirements
+        install_requirements(settings.requirements_path)
+    # TODO: potentially add another directory to sys.path to load preinstalled 
+    # requirements from a directory (reduce startup time)
+    if settings.server_init_on_startup:
         get_handler()
 
 

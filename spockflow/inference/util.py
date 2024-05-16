@@ -92,3 +92,19 @@ def split_model_inputs(model: "Driver", model_data: dict):
             input_data[k] = v
 
     return input_data, override_data
+
+
+def install_requirements(requirements_path: str):
+    # This is used from 
+    # https://github.com/aws/sagemaker-scikit-learn-container/blob/602367b72c30159a12cc4dc2dfc17ab5b338169b/src/sagemaker_sklearn_container/mms_patch/model_server.py#L149
+    import sys
+    import subprocess
+
+    logger.info('installing packages from requirements.txt...')
+    pip_install_cmd = [sys.executable, '-m', 'pip', 'install', '-r', requirements_path]
+
+    try:
+        subprocess.check_call(pip_install_cmd)
+    except subprocess.CalledProcessError:
+        logger.error('failed to install required packages, exiting')
+        raise ValueError('failed to install required packages')
