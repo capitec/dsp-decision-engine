@@ -1,142 +1,145 @@
-from types import ModuleType
-from typing import Any, Dict, Union, Callable, List
-from hamilton import driver, base, function_modifiers, node
-from spockflow.nodes import VariableNodeExpander
-from spockflow._util import get_variable_nodes, get_mod_outputs, get_direct_modules
+import inspect
+from typing import Callable, List, Union, Collection, TYPE_CHECKING, Dict, Any
 
+from hamilton import node, driver
+from hamilton.function_modifiers import subdag
+from hamilton.function_modifiers import base
 
-def expand_variable_nodes(functions: List[VariableNodeExpander], config:dict, return_unprocessed: bool = False):
-    res = []
-    not_processed = []
-    for f in functions:
-        if not isinstance(f, VariableNodeExpander):
-            not_processed.append(f)
-            continue
-        res.extend(f.generate_nodes(config))
-    if return_unprocessed:
-        return res, not_processed
-    return res
+from spockflow.nodes import VariableNode
+
+if TYPE_CHECKING:
+    from types import ModuleType
+    from hamilton import graph
 
 
 class Driver(driver.Driver):
-    def __init__(
-        self,
-        config: Dict[str, Any],
-        *modules: ModuleType,
-        adapter: base.HamiltonGraphAdapter = None,
-        _graph_executor: driver.GraphExecutor = None,
-        _use_legacy_adapter: bool = True,
-        skip_create_final_vars: bool = False
-    ):
-        direct_modules = []
-        for mod in modules:
-            direct_modules.extend(get_direct_modules(mod))
-        super().__init__(config, 
-            *modules, 
-            *direct_modules, 
-            adapter=adapter, 
-            _graph_executor=_graph_executor,
-            _use_legacy_adapter=_use_legacy_adapter
-        )
-
-        # Enable the use of nodes like x = engine.calculate(lambda: y)
-        variable_nodes = expand_variable_nodes(
-            get_variable_nodes(modules+tuple(direct_modules)), 
-            config
-        )
-        # remove all external nodes from graph (deps)
-        self.graph.nodes = {
-            k: v for 
-            k, v in self.graph.nodes.items() 
-            if v._node_source != node.NodeType.EXTERNAL
-        }
-        self.graph = self.graph.with_nodes({n.name: n for n in variable_nodes})
-        outputs = []
-        for mod in modules:
-            outputs.extend(get_mod_outputs(mod))
-        self.outputs = outputs
-
-        if skip_create_final_vars:
-            self.final_vars = None
-        else:
-            self.final_vars = self._create_final_vars(self.outputs)
-    
-        # Allow direct access to module inner functions
-    def execute(
-        self,
-        final_vars: List[Union[str, Callable, driver.Variable]] = None,
-        overrides: Dict[str, Any] = None,
-        display_graph: bool = False,
-        inputs: Dict[str, Any] = None,
-    ) -> Any:
-        final_vars = final_vars or []
-        return super().execute(
-            final_vars + self.outputs,
-            overrides,
-            display_graph,
-            inputs
-        )
-    
     def raw_execute(
         self,
         final_vars: List[str] = None,
         overrides: Dict[str, Any] = None,
         display_graph: bool = False,
         inputs: Dict[str, Any] = None,
+        _fn_graph: "graph.FunctionGraph" = None,
+        *args,
+        **kwargs
+    ) -> Dict[str, Any]:
+        function_graph = _fn_graph if _fn_graph is not None else self.graph
+        if final_vars is None:
+            final_vars = configure_output._get_outputs(function_graph)
+        return super().raw_execute(
+            final_vars = final_vars,
+            overrides = overrides,
+            display_graph = display_graph,
+            inputs = inputs,
+            _fn_graph = function_graph,
+            *args,
+            **kwargs
+        )
+
+    def execute(
+        self,
+        final_vars: List[Union[str, Callable, "Variable"]] = None,
+        overrides: Dict[str, Any] = None,
+        display_graph: bool = False,
+        inputs: Dict[str, Any] = None,
+        *args,
+        **kwargs
     ) -> Dict[str, Any]:
         if final_vars is None:
-            final_vars = self._create_final_vars(self.outputs) if self.final_vars is None else self.final_vars
-        return super().raw_execute(
-            final_vars, # Dont do a concatenation as execute might already concatenate
-            overrides,
-            display_graph,
-            inputs
+            final_vars = configure_output._get_outputs(self.graph)
+        return super().execute(
+            final_vars = final_vars,
+            overrides = overrides,
+            display_graph = display_graph,
+            inputs = inputs,
+            *args,
+            **kwargs
         )
+        
 
-class subdag(function_modifiers.subdag):
-    def __init__(
-        self,
-        *load_from: Union[ModuleType, Callable],
-        inputs: Dict[str, function_modifiers.dependencies.ParametrizedDependency] = None,
-        config: Dict[str, Any] = None,
-        namespace: str = None,
-        final_node_name: str = None,
-        external_inputs: List[str] = None,
-    ):
-        """Adds a subDAG to the main DAG.
 
-        :param load_from: The functions that will be used to generate this subDAG.
-        :param inputs: Parameterized dependencies to inject into all sources of this subDAG.
-            This should *not* be an intermediate node in the subDAG.
-        :param config: A configuration dictionary for *just* this subDAG. Note that this passed in
-            value takes precedence over the DAG's config.
-        :param namespace: Namespace with which to prefix nodes. This is optional -- if not included,
-            this will default to the function name.
-        :param final_node_name: Name of the final node in the subDAG. This is optional -- if not included,
-            this will default to the function name.
-        :param external_inputs: Parameters in the function that are not produced by the functions
-            passed to the subdag. This is useful if you want to perform some logic with other inputs
-            in the subdag's processing function. Note that this is currently required to
-            differentiate and clarify the inputs to the subdag.
-
-        """
-        super().__init__(
-            *load_from,
-            inputs=inputs,
-            config=config,
-            namespace=namespace,
-            final_node_name=final_node_name,
-            external_inputs=external_inputs
-        )
-        self.subdag_functions+= get_variable_nodes(load_from)
-
+class configure_output(subdag):
+    DEFAULT_OUTPUT_TAG = "IsSpockDefaultOutput"
     @staticmethod
-    def collect_nodes(config: Dict[str, Any], subdag_functions: List[Union[Callable, VariableNodeExpander]]) -> List[node.Node]:
-        inner_subdag_functions = []
-        nodes_tmp, inner_subdag_functions = expand_variable_nodes(subdag_functions, config, return_unprocessed=True)
+    def is_variable_node(v):
+        return isinstance(v, VariableNode)
+    
+    @classmethod
+    def get_variable_nodes(cls, m: "ModuleType"):
+        var_nodes_w_names: "List[VariableNode]" = inspect.getmembers(
+            m, 
+            predicate=cls.is_variable_node
+        )
+        return [
+            var_node._set_name(name)._set_module(m) 
+            for name,var_node in var_nodes_w_names
+        ]
 
+    def __init__(self, included_modules: "Union[ModuleType, Callable, VariableNode]", ignore_output=False, output_names:List[str]=None):
+        self.output_names = set(output_names) if output_names is not None else set()
+        self.ignore_output=ignore_output
+        if included_modules:
+            self.do_generate=True
+            super().__init__(*included_modules)
+
+            for m in included_modules:
+                # Only add modules
+                if isinstance(m, Callable): continue
+                if isinstance(m, VariableNode): self.subdag_functions.append(m)
+                self.subdag_functions += self.get_variable_nodes(m)
+        else:
+            self.config={}
+            self.inputs={}
+            self.subdag_functions=[]
+            self.do_generate=True
+
+    def set_spock_output_flag(self, n: node.Node, force:bool=False) -> node.Node:
+        if force or n.name in self.output_names:
+            n.add_tag(self.DEFAULT_OUTPUT_TAG, True)
+        return n
+    
+    @classmethod
+    def _get_outputs(cls, g: "graph.FunctionGraph") -> List[str]:
+        if not hasattr(g, "_spock_cached_default_out"):
+            default_out = []
+            for k,n in g.nodes.items():
+                if n.tags.get(cls.DEFAULT_OUTPUT_TAG, False):
+                    default_out.append(k)
+            g._spock_cached_default_out = default_out
+        return g._spock_cached_default_out
+
+    def generate_nodes(self, fn: "Callable", configuration: "Dict[str, Any]") -> "Collection[node.Node]":
+        this_module = inspect.getmodule(fn)
+        subdag_functions = self.subdag_functions+self.get_variable_nodes(this_module)
+        # Resolve all nodes from passed in functions
+        resolved_config = dict(configuration, **self.config)
         nodes = []
-        for node_ in nodes_tmp:
-            nodes.append(node_.copy_with(tags={**node_.tags, **function_modifiers.recursive.NON_FINAL_TAGS}))
-        nodes += function_modifiers.subdag.collect_nodes(config, inner_subdag_functions)
+        for sd_fn in subdag_functions:
+            for node_ in base.resolve_nodes(sd_fn, resolved_config):
+                nodes.append(self.set_spock_output_flag(node_))
+        # TODO might hook in here to add config
+        # nodes += self._create_additional_static_nodes(nodes, namespace)
+        # Add the final node that does the translation
+        # nodes += [self.add_final_node(fn, final_node_name, namespace)]
+        if not self.ignore_output:
+            nodes.append(self.set_spock_output_flag(node.Node.from_fn(fn), force=True))
         return nodes
+
+
+def initialize_spock_module(module_name, included_modules=None, output_names:List[str]=None):
+    import sys
+    caller_module = sys.modules.get(module_name)
+    if caller_module is None:
+        raise ValueError(
+            f"Could not initialise module with name {module_name}.\n"
+            "Please ensure this function is called as initialize(__name__, ...).\n"
+            "If you believe this to be an error please report it with details on the environment.\n"
+            "Note that it is possible to use the following as a workaround:\n"
+            "@configure_output(..., ignore_output=True)\n"
+            "def initialise() -> None: pass\n"
+        )
+    @configure_output(included_modules, ignore_output=True, output_names=output_names)
+    def spock_bootstrap_entrypoint_fn__() -> None:
+        pass
+    spock_bootstrap_entrypoint_fn__.__module__ = module_name
+    setattr(caller_module, spock_bootstrap_entrypoint_fn__.__name__, spock_bootstrap_entrypoint_fn__)

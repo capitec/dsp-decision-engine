@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from dataclasses import dataclass
 from spockflow.components.tree.settings import settings
 from .core import ChildTree, ConditionedNode, Tree
+from spockflow.nodes import creates_node
 
 if typing.TYPE_CHECKING:
     from hamilton import node
@@ -21,125 +22,28 @@ class NumpyChildTree(ChildTree[TOutputType,TConditionType,NumpyConditionedNode])
         return NumpyConditionedNode
 
 
-class NumpyTree(Tree):
-    def __init__(self, doc: str=None, additional_tags: typing.Dict[str, str] = None, _root=None) -> None:
-        super().__init__(_root)
-        self._compiled_tree = None
-        if doc is None:
-            doc = "This executes a user defined decision tree"
-        self.doc = doc
-        if additional_tags is None:
-            additional_tags = {}
-        self.additional_tags = additional_tags
+class NumpyTree(Tree[NumpyChildTree,TOutputType,TConditionType]):
+    doc: str="This executes a user defined decision tree"
+    # def __init__(self, doc: str=None, additional_tags: typing.Dict[str, str] = None, _root=None) -> None:
+    #     super().__init__(_root)
+    #     self._compiled_tree = None
+    #     if doc is None:
+    #         doc = "This executes a user defined decision tree"
+    #     self.doc = doc
+    #     if additional_tags is None:
+    #         additional_tags = {}
+    #     self.additional_tags = additional_tags
 
-    @property
-    def TreeType(self):
+    @classmethod
+    def TreeType(cls):
         return NumpyChildTree
     
-    def _compile(self):
-        if self._compiled_tree is None:
-            self._compiled_tree = CompiledNumpyTree(self)
-        return self._compiled_tree
+    def compile(self):
+        return CompiledNumpyTree(self)
     
     def execute(self, **values):
         return self._compile()(**values)
     
-    def get_return_type(self):
-        return pd.DataFrame
-    
-    @staticmethod
-    def namespaced(namespace: str, fn: typing.Callable):
-        # from inspect import Signature
-        offset = len(namespace)+1
-        def inner(**kwargs):
-            return fn(**{k[offset:]: v for k,v in kwargs.items()})
-        return inner
-
-    def generate_nodes(self, config: dict, var_name: str=None) -> typing.List["node.Node"]:
-        from hamilton import node
-        self.set_name(var_name)
-        compiled_tree = self._compile()
-        node_input_types = {
-            o: pd.DataFrame
-            for o in compiled_tree.execution_outputs
-        }
-        node_input_types.update({
-            c: typing.Union[np.ndarray,pd.Series]
-            for c in compiled_tree.execution_conditions
-        })
-        TCastData = typing.Tuple[np.ndarray, pd.DataFrame, np.ndarray, np.ndarray, int]
-        return [
-            node.Node(
-                self.name+".cast_data",
-                TCastData,
-                self.doc,
-                callabl=compiled_tree._cast_length_conditions_outputs,
-                tags={
-                    "module": self.module, 
-                    **self.additional_tags
-                },
-                node_source=node.NodeType.STANDARD,
-                input_types = node_input_types
-            ),
-            node.Node(
-                self.name+".conditions_met",
-                np.ndarray,
-                self.doc,
-                callabl=self.namespaced(self.name, compiled_tree._calculate_conditions_met),
-                tags={
-                    "module": self.module, 
-                    **self.additional_tags
-                },
-                node_source=node.NodeType.STANDARD,
-                input_types = {
-                    self.name+".cast_data": TCastData
-                }
-            ),
-            node.Node(
-                self.name+".condition_names",
-                typing.List[str],
-                self.doc,
-                callabl=self.namespaced(self.name, compiled_tree._all_condition_names),
-                tags={
-                    "module": self.module, 
-                    **self.additional_tags
-                },
-                node_source=node.NodeType.STANDARD,
-                input_types = {
-                    self.name+".cast_data": TCastData
-                }
-            ),
-            node.Node(
-                self.name,
-                self.get_return_type(),
-                self.doc,
-                callabl=self.namespaced(self.name, compiled_tree.get_results),
-                tags={
-                    "module": self.module, 
-                    **self.additional_tags
-                },
-                node_source=node.NodeType.STANDARD,
-                input_types = {
-                    self.name+".cast_data": TCastData,
-                    self.name+".conditions_met": np.ndarray,
-                }
-            )#,
-            # node.Node(
-            #     self.name+".trace",
-            #     self.get_return_type(),
-            #     self.doc,
-            #     callabl=self.namespaced(self.name, compiled_tree.trace),
-            #     tags={
-            #         "module": self.module, 
-            #         **self.additional_tags
-            #     },
-            #     node_source=node.NodeType.STANDARD,
-            #     input_types = {
-            #         self.name+".cast_data": TCastData,
-            #         self.name+".conditions_met": np.ndarray,
-            #     }
-            # )
-        ]
 
 
 @dataclass
@@ -158,6 +62,8 @@ class SymbolicFlatTree:
     conditions: typing.Dict[str,TConditionType]
     tree: typing.List[SymbolicConditionedOutput]
 
+
+TFormatData = typing.Tuple[np.ndarray, pd.DataFrame, np.ndarray, np.ndarray, int]
 
 class CompiledNumpyTree:
     def __init__(self, tree: NumpyTree) -> None:
@@ -400,13 +306,29 @@ class CompiledNumpyTree:
 
         return conditioned_outputs
 
-    def _cast_length_conditions_outputs(self, **kwds: typing.Union[pd.DataFrame, pd.Series]) -> typing.Tuple[np.ndarray, pd.DataFrame, np.ndarray, np.ndarray, int]:
+    def _get_inputs(self, function: typing.Callable):
+        node_input_types = {
+            o: pd.DataFrame
+            for o in self.execution_outputs
+        }
+        node_input_types.update({
+            c: typing.Union[np.ndarray,pd.Series]
+            for c in self.execution_conditions
+        })
+        # 
+        return node_input_types
+
+
+    @creates_node(
+        kwarg_input_generator="_get_inputs"
+    )
+    def format_inputs(self, **kwargs: typing.Union[pd.DataFrame, pd.Series]) -> TFormatData:
         length = self.length
         if self.execution_outputs:
 
             execution_lengths = []
             for o in self.execution_outputs:
-                len_o = len(kwds[o])
+                len_o = len(kwargs[o])
                 is_length = len_o != 1
                 execution_lengths.append(is_length)
                 if is_length:
@@ -416,7 +338,7 @@ class CompiledNumpyTree:
                     
             outputs = pd.concat(
                 [self.predefined_outputs]+
-                [kwds[o] for o in self.execution_outputs]
+                [kwargs[o] for o in self.execution_outputs]
             )
             # Add in the default row now that the output schema should be known
             outputs = pd.concat(
@@ -431,7 +353,7 @@ class CompiledNumpyTree:
         output_df_lengths = np.array(output_df_lengths)
         # Calculate inputs
         for c in self.execution_conditions:
-            len_c = len(kwds[c])
+            len_c = len(kwargs[c])
             if len_c != 1:
                 if length == 1: length = len_c
                 elif length != len_c:
@@ -446,36 +368,39 @@ class CompiledNumpyTree:
         #     predefined_conditions = [predefined_conditions]
         conditions = np.hstack(
             [predefined_conditions]+
-            [self._cast_condition(kwds[c], length)[:,None] for c in self.execution_conditions]
+            [self._cast_condition(kwargs[c], length)[:,None] for c in self.execution_conditions]
         )
         return conditions, outputs, output_df_lengths, output_start_offsets, length
 
-    def _calculate_conditions_met(
+    @creates_node()
+    def conditions_met(
             self, 
-            cast_data: typing.Tuple[np.ndarray, pd.DataFrame, np.ndarray, np.ndarray, int]
-        ) -> pd.DataFrame:
+            format_inputs: TFormatData
+        ) -> np.ndarray:
         # Calculate outputs
-        conditions = cast_data[0]
+        conditions = format_inputs[0]
         # [O,C]@[C,N] => [O,N] (Matrix multiplication should be the same as performing a count of all true statements)
         # The thresh will see where they are all true
         return (conditions@self.truth_table) >= self.truth_table_thresh
-    
-    def _all_condition_names(
+
+    @creates_node()
+    def condition_names(
             self, 
-            cast_data: typing.Tuple[np.ndarray, pd.DataFrame, np.ndarray, np.ndarray, int]
+            format_inputs: TFormatData
         ) -> typing.List[str]:
-        conditions = cast_data[0]
+        conditions = format_inputs[0]
         res = []
         for c in conditions:
             res.append(",".join(v for v,t in zip(self.all_condition_names,c) if t))
         return res
 
+    @creates_node(is_namespaced=False)
     def get_results(
             self,
-            cast_data: typing.Tuple[np.ndarray, pd.DataFrame, np.ndarray, np.ndarray, int],
+            format_inputs: TFormatData,
             conditions_met: np.ndarray,
         ) -> pd.DataFrame:
-        _, outputs, output_df_lengths, output_start_offsets, length = cast_data
+        _, outputs, output_df_lengths, output_start_offsets, length = format_inputs
         condition_output_idx = np.argmax(conditions_met,axis=1)
         # Translate outputs from tree lookup to outputs from combined outputs.
         ordered_output_idx = self.ordered_output_map[condition_output_idx]
@@ -483,8 +408,9 @@ class CompiledNumpyTree:
         item_index = np.arange(length)
         output_idx = output_start_offsets[ordered_output_idx]+(output_df_lengths[ordered_output_idx]>1)*item_index
         return outputs.iloc[output_idx].reset_index(drop=True)
-   
-    def __call__(self, **kwds: typing.Union[pd.DataFrame, pd.Series]) -> pd.DataFrame:
-        cast_data = self._cast_length_conditions_outputs(**kwds)
+
+
+    def __call__(self, **kwargs: typing.Union[pd.DataFrame, pd.Series]) -> pd.DataFrame:
+        cast_data = self._cast_length_conditions_outputs(**kwargs)
         conditions_met = self._calculate_conditions_met(cast_data)
         return self.get_results(cast_data, conditions_met)

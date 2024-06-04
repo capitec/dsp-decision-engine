@@ -5,16 +5,12 @@ from dataclasses import dataclass
 from typing_extensions import Self
 from abc import ABC, abstractmethod
 from pydantic import BaseModel, Field, model_validator, ConfigDict
-from spockflow.nodes import VariableNodeExpander
+from spockflow.nodes import VariableNode
 
-
-# TOutputType = typing.Union[typing.Callable[...,pd.DataFrame], pd.DataFrame, str]
-# TConditionType = typing.Union[typing.Callable[...,pd.DataFrame], pd.DataFrame, str]
 
 TOutput = typing.TypeVar("TOutput")
 TCond = typing.TypeVar("TCond")
 TNodeType = typing.TypeVar("TNodeType")
-
 
 class ConditionedNode(BaseModel, typing.Generic[TOutput,TCond]):
     # TODO fix for pd.DataFrame
@@ -124,44 +120,28 @@ class WrappedTreeFunction(ABC,typing.Generic[TOutput,TCond]):
     @abstractmethod
     def include_subtree(self, subtree: typing.Union[Self, "ChildTree"], condition=None, **kwargs): ...
 
-@dataclass
-class FromConfigTree(VariableNodeExpander): # This is very generic maybe its worth abstracting this
-    namespace: str
-    key: str
-    def load(self, config_manager=None, config=None):
-        # TODO assert
-        # TODO dynamic config.pop
-        from .numpy_impl import NumpyTree
-        return NumpyTree(**config)
 
-    def get_return_type(self):
-        raise NotImplementedError("TODO see where this is needed")
+
+TChildTree = typing.TypeVar("TChildTree", bound=ChildTree[ConditionedNode[TOutput,TCond],TOutput,TCond])
+class Tree(VariableNode, typing.Generic[TChildTree,TOutput,TCond]):
+    root: TChildTree = None
     
-    def generate_nodes(self, config: dict, var_name: str=None) -> typing.List["node.Node"]:
-        return self.load(config).generate_nodes(config, var_name)
+    @model_validator(mode='before')
+    @classmethod
+    def default_empty_root(cls, data: typing.Any) -> typing.Any:
+        if isinstance(data, dict):
+            if 'root' not in data:
+                data['root'] = cls.TreeType()()
+        return data
 
-
-class Tree(typing.Generic[TOutput,TCond],VariableNodeExpander):
-    def __init__(self, _root=None) -> None:
-        super().__init__()
-        if _root is None:
-            _root = self.TreeType()
-        elif isinstance(_root, dict):
-            _root = self.TreeType(**_root)
-        self.root: 'ChildTree[ConditionedNode[TOutput,TCond],TOutput,TCond]' = _root
-
-    @property
-    def TreeType(self) -> ChildTree:
+    @classmethod
+    def TreeType(cls) -> ChildTree:
         return ChildTree[ConditionedNode[TOutput,TCond],TOutput,TCond]
-    
-    @staticmethod
-    def from_config(namespace: str, key: str) -> FromConfigTree:
-        return FromConfigTree(namespace=namespace, key=key)
 
     def _inject_child_tree_from_node(self, *args, child_node: ConditionedNode, function, **kwargs):
         if child_node.value is None:
-            child_node.value = self.TreeType()
-        if not isinstance(child_node.value, self.TreeType):
+            child_node.value = self.TreeType()()
+        if not isinstance(child_node.value, self.TreeType()):
             raise ValueError(f"Subtree must have no value set or already be associated to a subtree. Found value = {child_node.value}")
         return function(*args, **kwargs, child_tree=child_node.value)
         
@@ -266,17 +246,13 @@ class Tree(typing.Generic[TOutput,TCond],VariableNodeExpander):
             
         if condition is None:
             child_tree.merge_into(subtree)
-            try:
-                self._identify_loops(*child_tree.nodes)
-            except ValueError as e:
-                # Try to keep the order
-                self._remove_nodes_from_end(*subtree.nodes, child_tree=child_tree)
-                raise e from e
+            new_nodes = child_tree.nodes
         else:
-            new_node = child_tree.add_node(subtree, condition, **kwargs)
-            try:
-                self._identify_loops(new_node)
-            except ValueError as e:
-                # Try to keep the order
-                self._remove_nodes_from_end(new_node, child_tree=child_tree)
-                raise e from e
+            new_nodes = [child_tree.add_node(subtree, condition, **kwargs)]
+
+        try:
+            self._identify_loops(*new_nodes)
+        except ValueError as e:
+            # Try to keep the order
+            self._remove_nodes_from_end(*new_nodes, child_tree=child_tree)
+            raise e from e

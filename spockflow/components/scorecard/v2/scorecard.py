@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, field_validator
 from .criteria import ScoreCriteria
 from ..probability import log_odds_from_score, probability_of_default_from_log_odds
 from .adjustments import ScoreCardAdjustmentModel
+from spockflow.nodes import creates_node, VariableNode
 
 LATEST_VERSION = "2.2.0"
 
@@ -17,7 +18,7 @@ class ScoreScallingParameters(BaseModel):
 
 
 
-class ScoreCardModel(BaseModel):
+class ScoreCardModel(VariableNode):
     bin_prefix: str
     score_prefix: str
     description_prefix: str
@@ -98,19 +99,22 @@ class ScoreCardModel(BaseModel):
         input_data[sum_col_name] = input_data[sum_columns].sum(axis=1)
         return input_data
     
-    def score(self, data:pd.DataFrame, include_pd=True) -> pd.DataFrame:
+    def score_df(self, data:pd.DataFrame) -> pd.DataFrame:
         """Perform variable binning, variable scoring and total score calculation."""
         res_data = self.score_vars(data)
         self.sum_var_scores(res_data)
-        if include_pd:
-            res_data = self.pd_from_scores(res_data)
         return res_data
     
-    def execute(self, include_pd=False, **input_data: typing.Dict[str, pd.Series]) -> pd.DataFrame: # pragma: no cover
+    def _get_inputs(self, fn):
+        return {p.variable: pd.Series for p in self.variable_params}
+
+    @creates_node(kwarg_input_generator="_get_inputs", is_namespaced=False)
+    def score(self, **kwargs: typing.Dict[str, pd.Series]) -> pd.DataFrame: # pragma: no cover
         """A convenience wrapper to score that allows calling with dict of series"""
-        return self.score(input_data, include_pd=include_pd)
+        return self.score_df(kwargs)
     
-    def pd_from_scores(self, input_data: pd.DataFrame, score_column=None) -> pd.DataFrame:
+    @creates_node()
+    def score_pd(self, score: pd.DataFrame, score_column:str=None) -> pd.DataFrame:
         if self.score_scaling_params is None:
             raise ValueError(
                 "Scaling parameters must be provided to calculate probablility scores."
@@ -127,27 +131,28 @@ class ScoreCardModel(BaseModel):
 
 
         # calculate pds
-        input_data[log_odds_col] = log_odds_from_score(
-            input_data[score_col], 
+        score[log_odds_col] = log_odds_from_score(
+            score[score_col], 
             base_points, 
             base_odds, 
             pdo
         )
-        input_data[pd_col] = probability_of_default_from_log_odds(
-            input_data[log_odds_col]
+        score[pd_col] = probability_of_default_from_log_odds(
+            score[log_odds_col]
         )
-        return input_data
+        return score
     
+    # @creates_node() # TODO
     def adjust_scores(
         self,
-        input_data: pd.DataFrame,
-        adjustment_model: typing.Union[dict, ScoreCardAdjustmentModel],
-        include_non_adjusted_scores=True,
-        include_pd=True,
+        score: pd.DataFrame,
+        adjustment_model: typing.Union[dict, ScoreCardAdjustmentModel, None]=None,
+        include_non_adjusted_scores:bool=True,
+        include_pd:bool=True,
     ) -> pd.DataFrame:
         """Adjust scores based on an adjustment model."""
 
-        if isinstance(adjustment_model, dict):
+        if isinstance(adjustment_model, dict): # TODO handle None value
             adjustment_model = ScoreCardAdjustmentModel(**adjustment_model)
 
         score_column = adjustment_model.score_prefix + "SUM"
@@ -156,7 +161,7 @@ class ScoreCardModel(BaseModel):
         scores_requiring_adjustment = {
             params.variable for params in adjustment_model.variable_score_adjustments
         }
-        cols_not_in_df = scores_requiring_adjustment - set(input_data.columns)
+        cols_not_in_df = scores_requiring_adjustment - set(score.columns)
 
         if len(cols_not_in_df) != 0:
             raise ValueError(
@@ -173,73 +178,47 @@ class ScoreCardModel(BaseModel):
         # apply adjustments
         
         summed_adjusted_cols = sum((
-            adjustment.apply(input_data)
+            adjustment.apply(score)
             for adjustment in adjustment_model.variable_score_adjustments
         )) # Returns 0 if no items
         if include_non_adjusted_scores:
             summed_adjusted_cols = sum((
-                input_data[col_name]
+                score[col_name]
                 for col_name in unadjusted_score_cols
                 if col_name not in scores_requiring_adjustment
             ), summed_adjusted_cols)
 
         # sum  var scores for final adjusted score
         # self.logger.debug(f"Adjusted Columns to sum {adjustments}")
-        input_data[score_column] = summed_adjusted_cols
+        score[score_column] = summed_adjusted_cols
 
-        if include_pd:
-            input_data = self.pd_from_scores(input_data, score_column)
+        if include_pd: # TODO split this out into its own node
+            score = self.pd_from_scores(score, score_column)
 
-        return input_data
+        return score
     
     def get_view_model(self): # pragma: no cover
         from .ui import ScoreCardViewModel
         return ScoreCardViewModel.from_pydantic_model(self)
-
-    # TODO this was just a quick implementation doesnt promote code reuse
-    @classmethod
-    def from_config(cls, file: str) -> 'ScoreCardModel': # pragma: no cover
-        if isinstance(file, dict):
-            return cls(**file)
-        ext = os.path.splitext(file)[1]
-        if ext in ['.yaml', '.yml']:
-            try:
-                from yaml import dump
-            except ImportError as e:
-                raise ImportError("Could not import yaml please install Spockflow with yaml functionality 'pip install spockflow[yaml]'") from e
-            try:
-                from yaml import CLoader as Loader
-            except ImportError: # pragma: no cover
-                from yaml import Loader
-            with open(file, 'r') as fp:
-                config = load(fp, Loader=Loader)
-        elif ext == '.json':
-            import json
-            with open(file, 'r') as fp:
-                config = json.load(fp)
-        return cls(**config)
     
-    def to_config(self) -> dict:
-        import json
-        return json.loads(self.model_dump_json())
-    
-    def save(self, file: str): 
-        import json
-        ext = os.path.splitext(file)[1]
-        # Small dirty workaround for now to convert tuple and enum types before the yaml dump
-        config = json.loads(self.model_dump_json())
-        if ext in ['.yaml', '.yml']:
-            try:
-                from yaml import dump
-            except ImportError as e:
-                raise ImportError("Could not import yaml please install Spockflow with yaml functionality 'pip install spockflow[yaml]'") from e
-            try:
-                from yaml import CDumper as Dumper
-            except ImportError: # pragma: no cover
-                from yaml import Dumper 
-            with open(file, 'w') as fp:
-                dump(config, fp, Dumper=Dumper)
-        elif ext == '.json':
-            import json
-            with open(file, 'w') as fp:
-                config = json.dump(config, fp)
+    # TODO migrate this to the config loader
+    # def save(self, file: str): 
+    #     import json
+    #     ext = os.path.splitext(file)[1]
+    #     # Small dirty workaround for now to convert tuple and enum types before the yaml dump
+    #     config = json.loads(self.model_dump_json())
+    #     if ext in ['.yaml', '.yml']:
+    #         try:
+    #             from yaml import dump
+    #         except ImportError as e:
+    #             raise ImportError("Could not import yaml please install Spockflow with yaml functionality 'pip install spockflow[yaml]'") from e
+    #         try:
+    #             from yaml import CDumper as Dumper
+    #         except ImportError: # pragma: no cover
+    #             from yaml import Dumper 
+    #         with open(file, 'w') as fp:
+    #             dump(config, fp, Dumper=Dumper)
+    #     elif ext == '.json':
+    #         import json
+    #         with open(file, 'w') as fp:
+    #             config = json.dump(config, fp)

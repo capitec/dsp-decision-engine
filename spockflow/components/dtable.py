@@ -4,6 +4,7 @@ import numpy.typing as npt
 import pandas as pd
 from pydantic import BaseModel, Field
 from dataclasses import dataclass
+from spockflow.nodes import VariableNode, creates_node
 
 from .._util import get_name, safe_update
 
@@ -103,7 +104,13 @@ class _Unset:
 class PlaceHolderValue:
     name: str
 
-class DecisionTable(BaseModel):
+@dataclass
+class LookupResult:
+    value_idx: np.ndarray
+    mask: pd.Series
+
+
+class DecisionTable(BaseModel, VariableNode):
     operations: typing.List[RegDTableOps] = Field(default_factory=list)
     operation_inputs: typing.List[str] = Field(default_factory=list)
     outputs: typing.Dict[str, typing.Iterable] = Field(default_factory=dict)
@@ -113,11 +120,6 @@ class DecisionTable(BaseModel):
         # Allow previously seen values to not be needed in the execute step
         self._internal_values = {}
         self._default_value = _Unset
-
-    # def __init__(self):
-    #     self.mask = None
-    #     self.new_index = None
-    #     self.outputs = pd.DataFrame()
 
     def add(self, operation: DecisionTableOp, values: pd.Series, predicate: typing.Iterable, value_name: typing.Optional[str]=None) -> "DecisionTable":
         value_name = get_name(values, value_name)
@@ -135,17 +137,22 @@ class DecisionTable(BaseModel):
         self.outputs[name] = value
         return self
     
-    def _get_all_values(self, values):
+    def _get_inputs(self, fn):
+        return {k:pd.Series for k in self.operation_inputs if k not in self._internal_values}
+
+    @creates_node(kwarg_input_generator="_get_inputs")
+    def all_values(self, **values: typing.Dict[str, pd.Series]) -> typing.Dict[str, pd.Series]:
         values: typing.Dict[str, pd.Series] = dict(values) # make a copy
         safe_update(values, self._internal_values)
         return values
     
-    def _lookup_values(self, values):
+    @creates_node()
+    def lookup_values(self, all_values: typing.Dict[str, pd.Series]) -> LookupResult:
         assert len(self.operations) >= 1, "At least one operation must be added"
 
         mask: pd.Series = True
         for op, op_v in zip(self.operations, self.operation_inputs):
-            mask = mask & op(values[op_v].values)
+            mask = mask & op(all_values[op_v].values)
 
         if not self.allow_multi_result and mask.sum(axis=0).max() > 1:
             # msk_idx = np.where(mask.sum(axis=0).max() > 1)
@@ -156,22 +163,21 @@ class DecisionTable(BaseModel):
         if self._default_value is _Unset:
             assert all(mask[value_idx, range(mask.shape[1])]), "One or more columns didnt match any criteria"
         
-        return value_idx, mask
-
-    def execute(self, **values):
-        values = self._get_all_values(values)
+        return LookupResult(value_idx, mask)
+    
+    @creates_node(is_namespaced=False)
+    def get_outputs(self, lookup_values: LookupResult, all_values: typing.Dict[str, pd.Series]):
+        value_idx, mask = lookup_values.value_idx, lookup_values.mask
         outputs = pd.DataFrame(self.outputs)
-        value_idx, mask = self._lookup_values(values)
         out_df = outputs.iloc[value_idx].copy()
         if self._default_value is not _Unset:
             default_mask = ~mask[value_idx, range(mask.shape[1])]
             out_df[default_mask] = self._default_value
-        return out_df.set_index(values[self.operation_inputs[0]].index)
+        return out_df.set_index(all_values[self.operation_inputs[0]].index)
     
-    def trace(self, **values):
-        values = self._get_all_values(values)
-        value_idx, mask = self._lookup_values(values)
-
+    @creates_node()
+    def trace(self, lookup_values: LookupResult):
+        value_idx, mask = lookup_values.value_idx, lookup_values.mask
         trace_rows = []
         for idx in value_idx:
             trace = {}
