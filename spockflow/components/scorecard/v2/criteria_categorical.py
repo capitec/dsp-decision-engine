@@ -115,6 +115,7 @@ class ScoreCriteriaCategorical(CategoricalDiscreteScoreCriteriaBuilderMixin):
     type: typing.Literal["categorical"] = Field(default="categorical")
     default_behavior: PatternConstructorKey = Field(default="matches")
 
+    # TODO refactor this as part of the compile process
     def _get_check_array(self, bin_prefix: str, score_prefix: str, desc_prefix: str):
 
         other_record = {
@@ -194,7 +195,7 @@ class ScoreCriteriaCategorical(CategoricalDiscreteScoreCriteriaBuilderMixin):
         idx_lookup: np.ndarray
     ):
         # Not a fan of accessing private variables 
-        # but this is the fastest way to get things done
+        # but this is the most efficient way to do a string lookup.
         res_idx = value.str._data.array._str_map(
             get_match_idx, 
             na_value=len(idx_lookup)-2, 

@@ -9,8 +9,6 @@ from .settings import get_settings
 
 if typing.TYPE_CHECKING:
     from spockflow.inference.model_loader import VersionedModel, ModelLoader
-
-if typing.TYPE_CHECKING:
     from spockflow.core import Driver
 
 
@@ -65,7 +63,7 @@ class ModelCacheManager():
         if latest_ttl is None:
             latest_ttl = get_settings().config_cache_latest_ttl
 
-        self.models: typing.Dict[str, ModelCache[Driver]] = defaultdict(lambda: ModelCache(latest_ttl, max_size))
+        self.models: typing.Dict[str, ModelCache["Driver"]] = defaultdict(lambda: ModelCache(latest_ttl, max_size))
         self.model_loader = model_loader
 
 
@@ -77,16 +75,17 @@ class ModelCacheManager():
         try:
             return self.models[model_name][version]
         except KeyError:
-            # Cache miss
-            model_cache = self.models[model_name]
-            with model_cache.lock:
-                # Extra check to see if was added by a different thread
-                if version not in model_cache:
-                    versioned_model = self.model_loader.load_model(model_name, version)
-                    model_cache.update(versioned_model)
-                    return versioned_model.model
+            pass # Cache miss
+        model_cache = self.models[model_name]
+        with model_cache.lock:
+            # Extra check to see if was added by a different thread
+            if version not in model_cache:
+                versioned_model = self.model_loader.load_model(model_name, version)
+                model_cache.update(versioned_model)
+                return versioned_model.model
         return self.models[model_name][version]
-    
+
+
     def refresh_latest_models(self):
         for model_name, model_cache in self.models.items():
             versioned_model = self.model_loader.load_model(model_name, None)

@@ -60,6 +60,7 @@ class ScoreCriteriaNumerical(
         matches = [float('nan') if m is None else float(m) for m in matches]
         return super().add_discrete_score(matches, value, description, override_idx)
 
+    # TODO refactor this as part of the compile process
     def _get_check_array(self, bin_prefix: str, score_prefix: str, desc_prefix: str):
         other_record = {
             f"{bin_prefix}{self.variable}": -1,

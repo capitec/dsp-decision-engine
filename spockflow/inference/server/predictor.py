@@ -2,13 +2,15 @@
 import os
 from functools import lru_cache
 from starlette.applications import Starlette
-from starlette.responses import Response
+from starlette.responses import Response, JSONResponse
 from starlette.routing import Route
 from starlette.requests import Request
 from starlette import status
+from starlette.exceptions import HTTPException
 from spockflow.inference.exceptions import APIException, UnsupportedEncoding, InvalidInputError
 from spockflow.inference.settings import get_settings
 from spockflow.inference.io import content_types
+from pydantic import ValidationError
 
 @lru_cache(maxsize=1)
 def get_handler():
@@ -27,7 +29,6 @@ def extract_common_parameters(request: Request) -> dict:
         model_name_header: The name of the header containing the model name.
         model_version_header: The name of the header containing the model version.
     """
-    settings = get_settings()
     params = dict()
 
     content_type = request.headers.get("content-type", None)
@@ -37,16 +38,16 @@ def extract_common_parameters(request: Request) -> dict:
 
     params["accept"] = request.headers.get("accept", "*/*")
 
-    if settings.server_model_name_header is not None:
-        params["model_name"] = request.headers.get(settings.server_model_name_header)
+    # if settings.server_model_name_header is not None:
+    #     params["model_name"] = request.headers.get(settings.server_model_name_header)
 
-    if settings.server_model_version_header is not None:
-       params["model_version"] = request.headers.get(settings.server_model_version_header)
+    # if settings.server_model_version_header is not None:
+    #    params["model_version"] = request.headers.get(settings.server_model_version_header)
 
-    if settings.server_model_output_override_header is not None:
-        model_outputs = request.headers.get(settings.server_model_output_override_header)
-        if model_outputs is not None:
-            params["output_overrides"] = model_outputs.split(",")
+    # if settings.server_model_output_override_header is not None:
+    #     model_outputs = request.headers.get(settings.server_model_output_override_header)
+    #     if model_outputs is not None:
+    #         params["output_overrides"] = model_outputs.split(",")
 
     return params
 
@@ -133,8 +134,17 @@ if get_settings().server_include_visualize:
         Route('/visualize', visualize, methods=['GET'])
     )
 
+
+async def not_found(request: Request, exc: HTTPException):
+    return JSONResponse(content={"message": exc.detail}, status_code=exc.status_code)
+
+async def server_error(request: Request, exc: HTTPException):
+    return JSONResponse(content={"message": exc.detail}, status_code=exc.status_code)
+
 exception_handlers = {
-    APIException: APIException.handle
+    APIException: APIException.handle,
+    404: not_found,
+    500: server_error
 }
 
 app = Starlette(

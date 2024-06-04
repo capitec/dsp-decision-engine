@@ -1,5 +1,7 @@
 import typing
-
+from pydantic import ValidationError
+from spockflow.exceptions import SpockFlowException
+from contextlib import contextmanager
 try:
     from starlette import status
 except ImportError:
@@ -16,7 +18,14 @@ if typing.TYPE_CHECKING:
     from starlette.responses import JSONResponse
     from starlette.requests import Request
 
-class APIException(Exception):
+    class PydanticErrorDict(typing.TypedDict):
+        type: str
+        loc: typing.List[str]
+        msg: str
+        input: typing.Any
+
+
+class APIException(SpockFlowException):
     status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
 
     def __init__(
@@ -34,12 +43,12 @@ class APIException(Exception):
     def get_response(self):
         from starlette.responses import JSONResponse
         return JSONResponse(
-            {"message": self.error_message, **self.additional_content()},
+            {"message": self.detail, **self.additional_content()},
             status_code=self.status_code
         )
     
     @staticmethod
-    def handle(request: "Request", exc: "APIException") -> "JSONResponse":
+    async def handle(request: "Request", exc: "APIException") -> "JSONResponse":
         return exc.get_response()
 
 class InvalidInputError(APIException):
@@ -95,3 +104,40 @@ class UnsupportedAcceptTypeError(APIException):
             error_message=f"Unsupported accept type {accept_type}."+additional_info,
             accepted_types=accepted_types
         )
+    
+class PydanticFormatError(APIException):
+    status_code = status.HTTP_400_BAD_REQUEST
+    def __init__(
+        self,
+        title: str,
+        pydantic_errors: typing.List["PydanticErrorDict"],
+        status_code: int = None
+    ) -> None:
+        self.pydantic_errors = pydantic_errors
+        super().__init__(
+            f"Could not create model \"{title}\" from input data.", 
+            status_code
+        )
+
+    @classmethod
+    def from_pydantic(cls, err: "ValidationError", status_code: int = None):
+        return cls(
+            title=err.title,
+            pydantic_errors=err.errors(include_url=False),
+            status_code=status_code
+        )
+
+    def additional_content(self) -> dict:
+        return {"errors": self.pydantic_errors}
+
+
+@contextmanager
+def reraise_common_input_exceptions(err_callback=None, status_code: int = None):
+    try:
+        yield
+    except ValidationError as e:
+        if err_callback is not None: err_callback(e)
+        raise PydanticFormatError.from_pydantic(e, status_code) from e
+    except (ValueError, TypeError, AssertionError) as e:
+        if err_callback is not None: err_callback(e)
+        raise InvalidInputError(str(e), status_code) from e

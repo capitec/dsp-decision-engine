@@ -2,7 +2,9 @@ import typing
 from dataclasses import dataclass
 from logging import getLogger
 from .settings import get_settings
+from .exceptions import reraise_common_input_exceptions
 from spockflow.inference import util
+from functools import partial
 
 if typing.TYPE_CHECKING:
     from spockflow.core import Driver
@@ -29,10 +31,10 @@ def lazy_load_default_model_config(*args, **kwargs) -> "ConfigManager":
     from .config.loader.empty import EmptyConfigManager
     return EmptyConfigManager(*args, **kwargs)
 
-
+T = typing.TypeVar('T')
 @dataclass
-class WrappedInputData:
-    data: typing.Dict[str, typing.Any]
+class WrappedInputData(typing.Generic[T]):
+    data: T
     input_overrides: typing.Optional[typing.Dict[str, typing.Any]] = None
     final_vars: typing.Optional[typing.List[str]] = None
 
@@ -185,12 +187,11 @@ class ServingHandler:
         return input_data
 
     @staticmethod
-    def predict_fn(input_data: WrappedInputData, model: "Driver") -> typing.Dict[str, typing.Any]:
+    def predict_fn(input_data: typing.Dict[str, typing.Any], model: "Driver") -> typing.Dict[str, typing.Any]:
         return model.raw_execute(
-            inputs = input_data.data,
-            final_vars=input_data.final_vars,
-            overrides=input_data.input_overrides
+            inputs = input_data,
         )
+    
     
     @staticmethod
     def post_process_fn(prediction: typing.Dict[str, typing.Any]) -> typing.Any:
@@ -209,11 +210,12 @@ class ServingHandler:
                 raise UnsupportedAcceptTypeError.from_accept_type(accept, list(self.encoders.keys()))
         return self.encoders[accept](prediction)
     
-    def override_model_version_fn(data, model_name, model_version) -> typing.Tuple[typing.Optional[str],str]:
+    @staticmethod
+    def override_model_version_fn(data) -> typing.Tuple[typing.Optional[str],str]:
         """
         Allows the user to change the model and version used based on input parameters
         """
-        return model_name, model_version
+        return None, None
 
     # TODO extend async implementation to here
     def transform_fn(
@@ -221,29 +223,31 @@ class ServingHandler:
         input_data: bytes, # TODO make this a promise/task
         content_type: str, 
         accept: str, 
-        output_overrides: typing.List[str] = None, 
-        model_name: typing.Optional[str] = None, 
-        model_version: str = "latest", 
         config_override: typing.Optional["TNamespacedConfig"] = None
     ) -> "Response":
-
-        try:
+        log_callback = lambda e: logger.info(
+            f"Could not parse input data:\n {input_data}\nWith content type: {content_type}", 
+            exc_info=e
+        )
+        with reraise_common_input_exceptions(log_callback):
             data = self.input_fn(input_data, content_type)
-            model_name, model_version = self.override_model_version_fn(data, model_name, model_version)
+            model_name, model_version = self.override_model_version_fn(data)
             data = self.pre_process_fn(data)
-        except ValueError as e:
-            logger.debug(f"Could not parse input data:\n {input_data}\nWith content type: {content_type}", exc_info=e)
-            from .exceptions import InvalidInputError
-            raise InvalidInputError(str(e)) from e
+
         if config_override is None:
             # TODO Allow this to be awaitable
             model = self.model_cache.get(model_name, model_version)
         else:
-            model = self.model_cache.model_loader.load_model_with_config(model_name, config_override)
-        data = WrappedInputData(
-            *util.split_model_inputs(model, data),
-            output_overrides
-        )
-        prediction = self.predict_fn(data, model)
+            config_log_callback = lambda e: logger.info(
+                f"Could not load model with custom config {config_override}", 
+                exc_info=e
+            )
+            with reraise_common_input_exceptions(config_log_callback):
+                model = self.model_cache.model_loader.load_model_with_config(model_name, config_override)
+        
+
+        with reraise_common_input_exceptions():
+            prediction = self.predict_fn(data, model)
+
         prediction = self.post_process_fn(prediction)
         return self.output_fn(prediction, accept)
