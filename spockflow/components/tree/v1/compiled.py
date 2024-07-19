@@ -4,52 +4,16 @@ import numpy as np
 from pydantic import BaseModel
 from dataclasses import dataclass
 from spockflow.components.tree.settings import settings
-from .core import ChildTree, ConditionedNode, Tree
+from .core import ChildTree, Tree, TOutput, TCond
 from spockflow.nodes import creates_node
 
 if typing.TYPE_CHECKING:
     from hamilton import node
 
-# TODO support variable nodes (Placeholders)
-TOutputType = typing.Union[typing.Callable[...,pd.DataFrame], pd.DataFrame, str]
-TConditionType = typing.Union[typing.Callable[...,pd.Series], pd.Series, str]
-NumpyConditionedNode = ConditionedNode[TOutputType, TConditionType]
-
-
-class NumpyChildTree(ChildTree[TOutputType,TConditionType,NumpyConditionedNode]):
-    @property
-    def NodeType(self) -> NumpyConditionedNode:
-        return NumpyConditionedNode
-
-
-class NumpyTree(Tree[NumpyChildTree,TOutputType,TConditionType]):
-    doc: str="This executes a user defined decision tree"
-    # def __init__(self, doc: str=None, additional_tags: typing.Dict[str, str] = None, _root=None) -> None:
-    #     super().__init__(_root)
-    #     self._compiled_tree = None
-    #     if doc is None:
-    #         doc = "This executes a user defined decision tree"
-    #     self.doc = doc
-    #     if additional_tags is None:
-    #         additional_tags = {}
-    #     self.additional_tags = additional_tags
-
-    @classmethod
-    def TreeType(cls):
-        return NumpyChildTree
-    
-    def compile(self):
-        return CompiledNumpyTree(self)
-    
-    def execute(self, **values):
-        return self._compile()(**values)
-    
-
-
 @dataclass
 class ConditionedOutput:
-    output: TOutputType
-    conditions: typing.Tuple[TConditionType]
+    output: TOutput
+    conditions: typing.Tuple[TCond]
 
 @dataclass
 class SymbolicConditionedOutput:
@@ -58,15 +22,15 @@ class SymbolicConditionedOutput:
 
 @dataclass
 class SymbolicFlatTree:
-    outputs: typing.Dict[str,TOutputType]
-    conditions: typing.Dict[str,TConditionType]
+    outputs: typing.Dict[str,TOutput]
+    conditions: typing.Dict[str,TCond]
     tree: typing.List[SymbolicConditionedOutput]
 
 
 TFormatData = typing.Tuple[np.ndarray, pd.DataFrame, np.ndarray, np.ndarray, int]
 
 class CompiledNumpyTree:
-    def __init__(self, tree: NumpyTree) -> None:
+    def __init__(self, tree: Tree) -> None:
         self.length = len(tree.root)
 
         flattened_tree = self._flatten_tree(
@@ -78,6 +42,7 @@ class CompiledNumpyTree:
         flattened_tree = self._get_symbolic_tree(
             flattened_tree
         )
+        self._flattened_tree = flattened_tree
 
         (
             predefined_conditions, 
@@ -257,8 +222,8 @@ class CompiledNumpyTree:
     @classmethod
     def _flatten_tree(
         cls, 
-        sub_tree: NumpyChildTree,
-        current_conditions: typing.Tuple[TConditionType],
+        sub_tree: ChildTree,
+        current_conditions: typing.Tuple[TCond],
         seen: typing.Set[int],
         conditioned_outputs: typing.List[ConditionedOutput],
     ) -> typing.List[ConditionedOutput]:

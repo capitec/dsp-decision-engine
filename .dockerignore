@@ -1,0 +1,35 @@
+# Ignore everything (use whitelist approach rather to ensure only important files kept)
+*
+
+# Allow files and directories
+!/spockflow
+!/requirements
+!/pyproject.toml
+
+# Ignore unnecessary files inside allowed directories
+# This should go after the allowed directories
+**/*~
+**/*.log
+**/.DS_Store
+**/Thumbs.db
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.Python
+**/env
+**/pip-log.txt
+**/pip-delete-this-directory.txt
+**/.tox
+**/.coverage
+**/.coverage.*
+**/.cache
+**/nosetests.xml
+**/coverage.xml
+**/*.cover
+**/*.log
+**/.git
+**/.mypy_cache
+**/.pytest_cache
+**/.hypothesis
+**/.DS_Store

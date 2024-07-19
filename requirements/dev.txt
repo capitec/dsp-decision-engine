@@ -1,0 +1,12 @@
+build
+bump-my-version
+coverage[toml]
+pytest
+pytest-cov
+black
+twine
+# sphinx
+# sphinx_rtd_theme
+# sphinx-autoapi
+# tox
+# myst_parser
