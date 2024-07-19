@@ -60,18 +60,21 @@ class ConfigVariableNode(VariableNode, typing.Generic[T]):
             name: str, 
             config: "typing.Dict[str, typing.Any]"
         ) -> "typing.List[node.Node]":
-        from spockflow._util import index_config_path
         g = self.cache.query(name, config)
         if g is None:
-            g = self.node_class(
-                **index_config_path(config, self.config_path)
-            )\
+            g = self.load(config)\
             ._set_module(self._module)\
             ._set_name(self._name)\
             ._generate_nodes(name, config)
             self.cache.update(name, config, g)
         return g
     
+    def load(self, config: "typing.Dict[str, typing.Any]"):
+        from spockflow._util import index_config_path
+        return self.node_class(
+            **index_config_path(config, self.config_path)
+        )
+
     def alias(self) -> "AliasedVariableNode":
         # This cannot be done at this point in time
         raise NotImplementedError()

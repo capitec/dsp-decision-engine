@@ -1,0 +1,4 @@
+sf-hamilton>=1.56.0
+pydantic>=2.5.2
+pydantic_settings>=2.2.1
+cachetools>=5.3.3

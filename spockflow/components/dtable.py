@@ -2,9 +2,10 @@ import typing
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 from dataclasses import dataclass
 from spockflow.nodes import VariableNode, creates_node
+from spockflow._serializable import Series, DataFrame
 
 from .._util import get_name, safe_update
 
@@ -97,40 +98,35 @@ RegDTableOps = typing.Annotated[
     Field(discriminator="op")
 ]
 
-class _Unset:
-    pass
-
-@dataclass
-class PlaceHolderValue:
-    name: str
-
 @dataclass
 class LookupResult:
     value_idx: np.ndarray
     mask: pd.Series
 
 
-class DecisionTable(BaseModel, VariableNode):
+class DecisionTable(VariableNode):
     operations: typing.List[RegDTableOps] = Field(default_factory=list)
     operation_inputs: typing.List[str] = Field(default_factory=list)
     outputs: typing.Dict[str, typing.Iterable] = Field(default_factory=dict)
     allow_multi_result: bool = False
-    
-    def model_post_init(self, __context):
-        # Allow previously seen values to not be needed in the execute step
-        self._internal_values = {}
-        self._default_value = _Unset
+    default_value: typing.Union[Series,DataFrame,None] = None
+    # Allow previously seen values to not be needed in the execute step
+    _internal_values: typing.Dict[str, Series] = PrivateAttr(default_factory=dict)
 
-    def add(self, operation: DecisionTableOp, values: pd.Series, predicate: typing.Iterable, value_name: typing.Optional[str]=None) -> "DecisionTable":
+
+    def add(self, operation: DecisionTableOp, values: pd.Series|str, predicate: typing.Iterable, value_name: typing.Optional[str]=None) -> "DecisionTable":
+        values_is_placeholder = isinstance(values, str)
+        if value_name is None and values_is_placeholder:
+            value_name = values
         value_name = get_name(values, value_name)
         self.operations.append(operation(predicate=predicate))
         self.operation_inputs.append(value_name)
-        if not isinstance(values, PlaceHolderValue):
+        if not values_is_placeholder:
             safe_update(self._internal_values, {value_name: values})
         return self
     
     def set_default(self, value):
-        self._default_value = value
+        self.default_value = value
         return self
     
     def output(self, name: str, value: typing.Iterable) -> "DecisionTable":
@@ -141,8 +137,8 @@ class DecisionTable(BaseModel, VariableNode):
         return {k:pd.Series for k in self.operation_inputs if k not in self._internal_values}
 
     @creates_node(kwarg_input_generator="_get_inputs")
-    def all_values(self, **values: typing.Dict[str, pd.Series]) -> typing.Dict[str, pd.Series]:
-        values: typing.Dict[str, pd.Series] = dict(values) # make a copy
+    def all_values(self, **kwargs: typing.Dict[str, pd.Series]) -> typing.Dict[str, pd.Series]:
+        values: typing.Dict[str, pd.Series] = dict(kwargs) # make a copy
         safe_update(values, self._internal_values)
         return values
     
@@ -160,23 +156,23 @@ class DecisionTable(BaseModel, VariableNode):
             raise RuntimeError("Found values matching more than one criteria")
 
         value_idx = np.argmax(mask,axis=0)
-        if self._default_value is _Unset:
+        if self.default_value is None:
             assert all(mask[value_idx, range(mask.shape[1])]), "One or more columns didnt match any criteria"
         
         return LookupResult(value_idx, mask)
     
     @creates_node(is_namespaced=False)
-    def get_outputs(self, lookup_values: LookupResult, all_values: typing.Dict[str, pd.Series]):
+    def get_outputs(self, lookup_values: LookupResult, all_values: typing.Dict[str, pd.Series]) -> pd.DataFrame:
         value_idx, mask = lookup_values.value_idx, lookup_values.mask
         outputs = pd.DataFrame(self.outputs)
         out_df = outputs.iloc[value_idx].copy()
-        if self._default_value is not _Unset:
+        if self.default_value is not None:
             default_mask = ~mask[value_idx, range(mask.shape[1])]
-            out_df[default_mask] = self._default_value
+            out_df[default_mask] = self.default_value
         return out_df.set_index(all_values[self.operation_inputs[0]].index)
     
     @creates_node()
-    def trace(self, lookup_values: LookupResult):
+    def trace(self, lookup_values: LookupResult) -> dict: # TODO improve type-hinting
         value_idx, mask = lookup_values.value_idx, lookup_values.mask
         trace_rows = []
         for idx in value_idx:

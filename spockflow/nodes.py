@@ -1,6 +1,6 @@
 import typing
 import inspect
-from enum import Enum
+from typing_extensions import Self
 from pydantic import BaseModel
 from dataclasses import dataclass, field
 
@@ -138,7 +138,7 @@ class VariableNode(BaseModel):
     #     setattr(self, base.NodeCreator.get_lifecycle_name(), [VariableNodeCreator()])
 
 
-    def _set_module(self, module: "ModuleType") -> typing.Self:
+    def _set_module(self, module: "ModuleType") -> "Self":
         """Called when this node is discovered with the name of the variable that defines it to set the name of this instance in the pipeline
 
         Args:
@@ -161,7 +161,7 @@ class VariableNode(BaseModel):
         return self
 
 
-    def _set_name(self, name: str) -> typing.Self:
+    def _set_name(self, name: str) -> "Self":
         """Called when this node is discovered with the name of the variable that defines it to set the name of this instance in the pipeline
 
         Args:
@@ -186,8 +186,10 @@ class VariableNode(BaseModel):
 
     @property
     def __name__(self):
-        if self._name is None: 
-            raise RuntimeError("Name of node used before it was set. This is likely a bug with how Spock generates nodes. Please report with a working example.")
+        # Tough removing this check but it hinders the creating of nodes as the inspect.get_instances triggeres this property invokation often before it is set.
+        # if self._name is None: 
+        #     return None
+            # raise RuntimeError("Name of node used before it was set. This is likely a bug with how Spock generates nodes. Please report with a working example.")
         return self._name
 
 
@@ -243,7 +245,7 @@ class VariableNode(BaseModel):
             bool: if the passed in item can create a node
         """
         return (
-            isinstance(item, typing.Callable) and
+            callable(item) and
             hasattr(item, VariableNodeFunctionParameters._FUNCTION_NODE_GENERATION_ATTR)
         )
     
@@ -254,12 +256,24 @@ class VariableNode(BaseModel):
         return self
 
 
-    def _generate_nodes(self, name: str, config: "typing.Dict[str, typing.Any]") -> "typing.List[node.Node]":
+    def _generate_runtime_nodes(self, config: "typing.Dict[str, typing.Any]", compiled_node: "Self") -> "typing.List[node.Node]":
+        """Generate nodes that are needed when executing this node as a standalone function outside of the context of a Hamilton Dag
+
+        Args:
+            config (typing.Dict[str, typing.Any]): Additional Configuration
+
+        Returns:
+            typing.List[node.Node]: The Generated nodes
+        """
+        return []
+    
+    def _generate_nodes(self, name: str, config: "typing.Dict[str, typing.Any]", include_runtime_nodes: bool=False) -> "typing.List[node.Node]":
         """Generate nodes for this class to be used in a hamilton dag
 
         Args:
             name (str): This name is used rather than self.__name__ to allow the same generate function to be used with multiple copies
             config (Dict[str, Any]): This is the hamilton config passed down to this class
+            include_runtime_nodes (bool): Used to include additional nodes needed during runtime execution
 
         Returns:
             List[node.Node]: The resulting Hamilton nodes
@@ -284,6 +298,8 @@ class VariableNode(BaseModel):
 
         nodes += subdag.add_namespace(namespaced_nodes, name)
         nodes = [self._map_input_vars(n, node_input_mapping) for n in nodes]
+        if include_runtime_nodes:
+            nodes.extend(self._generate_runtime_nodes(config, compiled_variable_node))
 
         # Add a bit of early failure so that its easier to trace where the duplicate node originated from.
         node_names = set()
@@ -332,15 +348,26 @@ class VariableNode(BaseModel):
             _use_legacy_adapter=_use_legacy_adapter
         )
         if name is None: name = self.__class__.__name__
-        dr.graph = graph.FunctionGraph(
-            nodes=self._generate_nodes(name),
+        fg = graph.FunctionGraph(
+            nodes={n.name: n for n in self._generate_nodes(name, config, include_runtime_nodes=True)},
             config=config, 
             adapter=adapter,
         )
+        # Need to run this to create links between nodes
+        dr.graph = graph.FunctionGraph(
+            config=config, 
+            adapter=adapter,
+            nodes=graph.create_function_graph(
+                config=config, 
+                adapter=adapter,
+                fg=fg
+            )
+        )
         return dr
     
-    def execute(self, inputs, config, final_vars=None, overrides=None, name=None):
+    def execute(self, inputs, config=None, final_vars=None, overrides=None, name=None):
         if name is None: name = self.__class__.__name__
+        if config is None: config = {}
         dr = self.get_driver(config=config, name=name)
         if final_vars is None:
             final_vars = [name]
@@ -352,7 +379,7 @@ class VariableNode(BaseModel):
         cls,
         config_path: str="", 
         caching_strategy: typing.Optional["ConfigCacheStrategy"] = None
-    ) -> "ConfigVariableNode[typing.Self]":
+    ) -> "ConfigVariableNode[Self]":
         from spockflow.config_node import ConfigVariableNode
         kwargs = dict()
         if caching_strategy is not None:
