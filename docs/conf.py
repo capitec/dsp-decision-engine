@@ -70,7 +70,7 @@ html_theme_options = {
 # for the sitemap extension ---
 # check if the current commit is tagged as a release (vX.Y.Z) and set the version
 language = "en"
-html_baseurl = "https://spockflow.capinet/"
+html_baseurl = "https://capitec.github.io/ml-decision-engine"
 html_extra_path = ["robots.txt"]
 
 confluence_config_path = os.path.split(__file__)[0]+"/confluence.json"
