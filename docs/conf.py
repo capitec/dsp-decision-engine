@@ -13,7 +13,9 @@ sys.path.insert(0, os.path.abspath('..'))
 project = 'SpockFlow'
 copyright = '2024, Sholto Armstrong'
 author = 'Sholto Armstrong'
-release = '0.2.1'
+import spockflow
+version = str(spockflow.__version__)
+release = version
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

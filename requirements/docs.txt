@@ -1,0 +1,5 @@
+sphinx
+sphinx_rtd_theme
+sphinx-autoapi
+myst_parser
+# tox

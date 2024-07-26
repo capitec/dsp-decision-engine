@@ -1,1 +1,0 @@
-Decide on versioning strategy. If we set fixed versions it is more stable but might cause issues for others that want to use the system with older/newer versions
