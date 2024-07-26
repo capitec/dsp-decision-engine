@@ -69,12 +69,6 @@ html_theme_options = {
 
 # for the sitemap extension ---
 # check if the current commit is tagged as a release (vX.Y.Z) and set the version
-import subprocess
-is_latest = subprocess.check_output(["bump-my-version", "show", "scm_info.distance_to_latest_tag"]) == b"0"
-if is_latest:
-    version = "latest"
-else:
-    version = str(subprocess.check_output(["bump-my-version", "show", "current_version"]))
 language = "en"
 html_baseurl = "https://spockflow.capinet/"
 html_extra_path = ["robots.txt"]
