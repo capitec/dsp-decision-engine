@@ -22,6 +22,7 @@ release = version
 
 extensions = [
     "myst_nb",
+    'myst_parser', # Markdown support
     'sphinx.ext.napoleon', 
     'sphinx.ext.autodoc',  # Core library for html generation from docstrings
     'sphinx.ext.autosummary',  # Create neat summary tables
