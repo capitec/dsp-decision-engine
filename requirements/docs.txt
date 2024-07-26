@@ -1,6 +1,8 @@
 sphinx
-sphinx_rtd_theme
+furo
 sphinx-autoapi
+sphinxcontrib-confluencebuilder
+sphinx-sitemap
 myst_parser
 myst-nb
 # tox
