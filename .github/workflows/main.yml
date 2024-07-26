@@ -78,22 +78,9 @@ jobs:
   build-docker:
     runs-on: ubuntu-latest
 
-    services:
-      docker:
-        image: docker:dind
-        options: --privileged
-        ports:
-          - 2375:2375
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
-      - name: Set up Docker CLI
-        uses: docker/setup-docker-action@v1
 
       - name: Build Docker image
         run: |
