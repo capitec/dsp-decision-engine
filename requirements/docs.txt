@@ -2,4 +2,5 @@ sphinx
 sphinx_rtd_theme
 sphinx-autoapi
 myst_parser
+myst-nb
 # tox
