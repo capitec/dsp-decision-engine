@@ -4,6 +4,8 @@ on:
   pull_request:
     branches:
       - dev
+      - main
+      - release/*
 
 jobs:
   build-package:
@@ -22,7 +24,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install build versioneer black pytest
+          pip install -r requirements/dev.txt
+          pip install -r requirements/all.txt
 
       - name: Format code with Black
         run: black --check .

@@ -236,7 +236,7 @@ class Tree(VariableNode):
         return False
 
     def copy(self, deep=True):
-        return self.__class__(self.root.model_copy(deep=deep))
+        return self.model_copy(deep=deep)
 
     # def parameterize_condition(self) # TODO
     def condition(

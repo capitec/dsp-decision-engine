@@ -202,7 +202,7 @@ class ScoreCardModel(VariableNode):
         score[score_column] = summed_adjusted_cols
 
         if include_pd:  # TODO split this out into its own node
-            score = self.pd_from_scores(score, score_column)
+            score = self.score_pd(score, score_column)
 
         return score
 
