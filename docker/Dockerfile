@@ -21,7 +21,7 @@ RUN mkdir /opt/program &&  \
     rm /etc/pip.conf && \
     rm -rf /tmp/requirements
 
-COPY dist/ /tmp/spockflow/
+COPY dist /tmp/spockflow/
 RUN set -aex && \
     ls /tmp/spockflow && \
     echo "$PIP_CONF" >> /etc/pip.conf  && \

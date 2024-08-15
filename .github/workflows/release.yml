@@ -8,7 +8,7 @@ on:
       - release/*
 
 env:
-  DOCKER_IMAGE_NAME: capitec-decision-engine
+  DOCKER_IMAGE_NAME: sjnarmstrong/spockflow
 
 jobs:
   build-package:
@@ -45,55 +45,54 @@ jobs:
           name: python-package
           path: dist/*
 
-  # build-docs:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v4
-  #       with:
-  #         fetch-depth: 0
+  build-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-  #     - name: Set up Python
-  #       uses: actions/setup-python@v5
-  #       with:
-  #         python-version: '3.12.4'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12.4'
 
-  #     - name: Install documentation dependencies
-  #       run: |
-  #         python -m pip install --upgrade pip
-  #         pip install -r requirements/all.txt
-  #         pip install .
+      - name: Install documentation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements/all.txt
+          pip install .
 
-  #     - name: Build documentation
-  #       run: |
-  #         cd docs
-  #         make html
+      - name: Build documentation
+        run: |
+          cd docs
+          make html
 
-  #     - name: Archive artifact
-  #       shell: sh
-  #       run: |
-  #         echo ::group::Archive artifact
-  #         tar \
-  #           --dereference --hard-dereference \
-  #           --directory "$INPUT_PATH" \
-  #           -cvf "$RUNNER_TEMP/artifact.tar" \
-  #           --exclude=.git \
-  #           --exclude=.github \
-  #           .
-  #         echo ::endgroup::
-  #       env:
-  #         INPUT_PATH: docs/_build/html/
+      - name: Archive artifact
+        shell: sh
+        run: |
+          echo ::group::Archive artifact
+          tar \
+            --dereference --hard-dereference \
+            --directory "$INPUT_PATH" \
+            -cvf "$RUNNER_TEMP/artifact.tar" \
+            --exclude=.git \
+            --exclude=.github \
+            .
+          echo ::endgroup::
+        env:
+          INPUT_PATH: docs/_build/html/
       
-  #     - name: Upload docs
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: 'github-pages'
-  #         path: ${{ runner.temp }}/artifact.tar
-  #         if-no-files-found: error
+      - name: Upload docs
+        uses: actions/upload-artifact@v4
+        with:
+          name: 'github-pages'
+          path: ${{ runner.temp }}/artifact.tar
+          if-no-files-found: error
 
   release:
-    # needs: ["build-docs", "build-package"]
-    needs: ["build-package"]
+    needs: ["build-docs", "build-package"]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -115,11 +114,11 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # - name: Login to Docker Hub
-      #   uses: docker/login-action@v3
-      #   with:
-      #     username: ${{ vars.DOCKERHUB_USERNAME }}
-      #     password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
       
       - name: Install dependencies
         run: |
@@ -137,9 +136,6 @@ jobs:
           name: python-package
           path: dist
 
-      - name: Display structure of downloaded files
-        run: ls -R dist
-
       - name: Build and export to Docker
         uses: docker/build-push-action@v6
         with:
@@ -151,32 +147,30 @@ jobs:
       - name: Upload Docker image
         uses: docker/build-push-action@v3
         with:
-          push: true
+          context: .
+          push: false
           tags: ${{ env.DOCKER_IMAGE_NAME }}:${{ env.PACKAGE_VERSION }}
           file: docker/Dockerfile
 
-      # - name: Upload Latest Docker image
-      #   uses: docker/build-push-action@v3
-      #   if: github.ref == 'refs/heads/main'
-      #   with:
-      #     push: true
-      #     tags: ${{ env.DOCKER_IMAGE_NAME }}:latest
+      - name: Upload Latest Docker image
+        uses: docker/build-push-action@v3
+        if: github.ref == 'refs/heads/main'
+        with:
+          push: true
+          tags: ${{ env.DOCKER_IMAGE_NAME }}:latest
 
-      # - name: Publish python package
-      #   env:
-      #     TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
-      #     TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
-      #   run: |
-      #     twine upload dist/py/*
+      - name: Publish python package
+        run: |
+          twine upload dist/py/*
 
-      # - name: Deploy documentation to GitHub Pages
-      #   if: github.ref == 'refs/heads/main'
-      #   uses: actions/deploy-pages@v4
+      - name: Deploy documentation to GitHub Pages
+        if: github.ref == 'refs/heads/main'
+        uses: actions/deploy-pages@v4
       
-      # - name: Tag Release
-      #   run: |
-      #     git tag -a v${{ env.PACKAGE_VERSION }} -m "Release v${{ env.PACKAGE_VERSION }}"
-      #     git push origin v${{ env.PACKAGE_VERSION }}
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Tag Release
+        run: |
+          git tag -a v${{ env.PACKAGE_VERSION }} -m "Release v${{ env.PACKAGE_VERSION }}"
+          git push origin v${{ env.PACKAGE_VERSION }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         
