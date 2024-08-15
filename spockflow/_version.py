@@ -601,6 +601,46 @@ def render_git_describe_long(pieces: Dict[str, Any]) -> str:
     return rendered
 
 
+def render_rc_candidate_hook(pieces: Dict[str, Any]):
+    branch = pieces.get("branch", "")
+    if branch in ("master", "main"):
+        tag_match = re.match(r'(\d+)\.(\d+)\.(\d+)\.?rc(\d+)', pieces.get('closest-tag', ""))
+        branch_major = None
+        if tag_match:
+            branch_major, branch_minor, branch_patch, _ = tag_match.groups()
+            rev = None
+        if branch_major is None:
+            tag_match = re.match(r'(\d+)\.(\d+)\.(\d+)\.?(?:post|rev|r)(\d+)', pieces.get('closest-tag', ""))
+            if tag_match:
+                branch_major, branch_minor, branch_patch, rev = tag_match.groups()
+                rev = int(rev) + pieces.get('distance',1)
+        if branch_major is None:
+            tag_match = re.match(r'(\d+)\.(\d+)\.(\d+)', pieces.get('closest-tag', ""))
+            if tag_match:
+                branch_major, branch_minor, branch_patch = tag_match.groups()
+                rev = pieces.get('distance',1)
+        if branch_major is None:
+            return None
+        if rev is None:
+            return f"{branch_major}.{branch_minor}.{branch_patch}"
+        else:
+            return f"{branch_major}.{branch_minor}.{branch_patch}.post{rev}"
+
+    RELEASE_PREFIX = 'release/v'
+    if not branch.startswith(RELEASE_PREFIX): return None
+    branch_version = branch[len('release/v'):]
+    match = re.match(r'(\d+)\.(\d+)\.(\d+)', branch_version)
+    if not match: return None
+    branch_major, branch_minor, branch_patch = match.groups()
+    tag_match = re.match(r'\d+\.\d+\.\d+\.?rc(\d+)', pieces.get('closest-tag', ""))
+    if not tag_match:
+        rc_version = -1
+    else:
+        rc_version = int(tag_match.groups()[0])
+    rc_version += pieces.get('distance',1)
+    return f"{branch_major}.{branch_minor}.{branch_patch}rc{rc_version}"
+
+
 def render(pieces: Dict[str, Any], style: str) -> Dict[str, Any]:
     """Render the given version pieces into the requested style."""
     if pieces["error"]:
@@ -613,7 +653,10 @@ def render(pieces: Dict[str, Any], style: str) -> Dict[str, Any]:
     if not style or style == "default":
         style = "pep440"  # the default
 
-    if style == "pep440":
+    rc_rendered = render_rc_candidate_hook(pieces)
+    if rc_rendered is not None:
+        rendered = rc_rendered
+    elif style == "pep440":
         rendered = render_pep440(pieces)
     elif style == "pep440-branch":
         rendered = render_pep440_branch(pieces)
