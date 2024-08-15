@@ -45,54 +45,55 @@ jobs:
           name: python-package
           path: dist/*
 
-  build-docs:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+  # build-docs:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
+  #       with:
+  #         fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12.4'
+  #     - name: Set up Python
+  #       uses: actions/setup-python@v5
+  #       with:
+  #         python-version: '3.12.4'
 
-      - name: Install documentation dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements/all.txt
-          pip install .
+  #     - name: Install documentation dependencies
+  #       run: |
+  #         python -m pip install --upgrade pip
+  #         pip install -r requirements/all.txt
+  #         pip install .
 
-      - name: Build documentation
-        run: |
-          cd docs
-          make html
+  #     - name: Build documentation
+  #       run: |
+  #         cd docs
+  #         make html
 
-      - name: Archive artifact
-        shell: sh
-        run: |
-          echo ::group::Archive artifact
-          tar \
-            --dereference --hard-dereference \
-            --directory "$INPUT_PATH" \
-            -cvf "$RUNNER_TEMP/artifact.tar" \
-            --exclude=.git \
-            --exclude=.github \
-            .
-          echo ::endgroup::
-        env:
-          INPUT_PATH: docs/_build/html/
+  #     - name: Archive artifact
+  #       shell: sh
+  #       run: |
+  #         echo ::group::Archive artifact
+  #         tar \
+  #           --dereference --hard-dereference \
+  #           --directory "$INPUT_PATH" \
+  #           -cvf "$RUNNER_TEMP/artifact.tar" \
+  #           --exclude=.git \
+  #           --exclude=.github \
+  #           .
+  #         echo ::endgroup::
+  #       env:
+  #         INPUT_PATH: docs/_build/html/
       
-      - name: Upload docs
-        uses: actions/upload-artifact@v4
-        with:
-          name: 'github-pages'
-          path: ${{ runner.temp }}/artifact.tar
-          if-no-files-found: error
+  #     - name: Upload docs
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: 'github-pages'
+  #         path: ${{ runner.temp }}/artifact.tar
+  #         if-no-files-found: error
 
   release:
-    needs: ["build-docs", "build-package"]
+    # needs: ["build-docs", "build-package"]
+    needs: ["build-package"]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -131,7 +132,9 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: python-package
-          path: dist/py
+          path: dist
+      - name: Display structure of downloaded files
+        run: ls -R dist
 
       - name: Build and export to Docker
         uses: docker/build-push-action@v6
@@ -161,14 +164,14 @@ jobs:
       #   run: |
       #     twine upload dist/py/*
 
-      - name: Deploy documentation to GitHub Pages
-        if: github.ref == 'refs/heads/main'
-        uses: actions/deploy-pages@v4
+      # - name: Deploy documentation to GitHub Pages
+      #   if: github.ref == 'refs/heads/main'
+      #   uses: actions/deploy-pages@v4
       
-      - name: Tag Release
-        run: |
-          git tag -a v${{ env.PACKAGE_VERSION }} -m "Release v${{ env.PACKAGE_VERSION }}"
-          git push origin v${{ env.PACKAGE_VERSION }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # - name: Tag Release
+      #   run: |
+      #     git tag -a v${{ env.PACKAGE_VERSION }} -m "Release v${{ env.PACKAGE_VERSION }}"
+      #     git push origin v${{ env.PACKAGE_VERSION }}
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         
