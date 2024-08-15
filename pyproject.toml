@@ -2,15 +2,13 @@
 name = "SpockFlow"  
 description = "Everything you could ever dream of"# TODO
 readme = {file = "README.md", content-type = "text/markdown"}
-version = "0.2.1"
 requires-python = ">=3.8"
 authors = [
-    { name = "Sholto Armstrong", email = "sholto.armstrong@capitecbank.co.za" }
+    { name = "Sholto Armstrong", email = "sjnarmstrong@gmail.com" }
 ]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "Intended Audience :: Developers",
-    "Apache Software License 2.0': 'License :: OSI Approved :: Apache Software License",
     "Natural Language :: English",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
@@ -20,23 +18,23 @@ classifiers = [
     "Programming Language :: Python :: 3.8",
     "Topic :: Software Development :: Libraries :: Application Frameworks"
 ]
-dynamic = ["dependencies","optional-dependencies"]
+dynamic = ["dependencies","optional-dependencies","version"]
 keywords = []
 license = {file = "LICENSE"}
 
+[build-system]
+requires = ["setuptools", "versioneer[toml]"]
+build-backend = "setuptools.build_meta"
+
 [tool.setuptools.dynamic]
 dependencies = {file = "requirements/core.txt"}
+
 [tool.setuptools.dynamic.optional-dependencies]
 dev = {file = "requirements/dev.txt"}
 publishing = {file = "requirements/publishing.txt"}
 parsers = {file = "requirements/parsers.txt"}
 webapp = {file = "requirements/webapp.txt"}
 yaml = {file = "requirements/yaml.txt"}
-
-# [project.urls]
-# Repository = "{{ cookiecutter.repository_url }}"
-# Issues = "{{ cookiecutter.repository_url }}/issues"
-# Changelog = "{{ cookiecutter.repository_url }}/CHANGELOG.md"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -51,3 +49,11 @@ exclude = ["tests*"]
 
 [tool.setuptools.package-data]
 "spockflow.inference.server" = ["nginx.conf"]
+
+[tool.versioneer]
+VCS = "git"
+style = "pep440"
+versionfile_source = "spockflow/_version.py"
+versionfile_build = "spockflow/_version.py"
+tag_prefix = "v"
+parentdir_prefix = "spockflow-"
