@@ -25,9 +25,12 @@ jobs:
           pip install versioneer setuptools
 
       - name: Get version
+        id: get-package-version
         run: |
           version=$(python setup.py --version)
-          echo "PACKAGE_VERSION=$(python setup.py --version)" >> $GITHUB_ENV
+          echo "PACKAGE_VERSION=$(python setup.py --version)" >> $GITHUB_OUTPUT
+    outputs:
+      PACKAGE_VERSION: ${{ steps.get-package-version.outputs.PACKAGE_VERSION }}
 
   build-package:
     needs: ["get-version"]
@@ -44,8 +47,12 @@ jobs:
           python-version: '3.12.4'
           
       - name: Tag Release
+        env:
+          PACKAGE_VERSION: ${{needs.get-version.outputs.PACKAGE_VERSION}}
         run: |
-          git tag -a v${{ env.PACKAGE_VERSION }} -m "Release v${{ env.PACKAGE_VERSION }}"
+          git config --global user.email "sjnarmstrong@gmail.com"
+          git config --global user.name "Sholto Armstrong"
+          git tag -a v${PACKAGE_VERSION} -m "Release v${PACKAGE_VERSION}"
 
       - name: Install dependencies
         run: |
@@ -83,8 +90,12 @@ jobs:
           python-version: '3.12.4'
 
       - name: Tag Release
+        env:
+          PACKAGE_VERSION: ${{needs.get-version.outputs.PACKAGE_VERSION}}
         run: |
-          git tag -a v${{ env.PACKAGE_VERSION }} -m "Release v${{ env.PACKAGE_VERSION }}"
+          git config --global user.email "sjnarmstrong@gmail.com"
+          git config --global user.name "Sholto Armstrong"
+          git tag -a v${PACKAGE_VERSION} -m "Release v${PACKAGE_VERSION}"
 
       - name: Install documentation dependencies
         run: |
@@ -133,9 +144,14 @@ jobs:
         with:
           fetch-depth: 0
           
+      
       - name: Tag Release
+        env:
+          PACKAGE_VERSION: ${{needs.get-version.outputs.PACKAGE_VERSION}}
         run: |
-          git tag -a v${{ env.PACKAGE_VERSION }} -m "Release v${{ env.PACKAGE_VERSION }}"
+          git config --global user.email "sjnarmstrong@gmail.com"
+          git config --global user.name "Sholto Armstrong"
+          git tag -a v${PACKAGE_VERSION} -m "Release v${PACKAGE_VERSION}"
 
       - name: Set up Python
         uses: actions/setup-python@v5
