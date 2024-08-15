@@ -148,7 +148,7 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           context: .
-          push: false
+          push: true
           tags: ${{ env.DOCKER_IMAGE_NAME }}:${{ env.PACKAGE_VERSION }}
           file: docker/Dockerfile
 
@@ -156,8 +156,10 @@ jobs:
         uses: docker/build-push-action@v3
         if: github.ref == 'refs/heads/main'
         with:
+          context: .
           push: true
           tags: ${{ env.DOCKER_IMAGE_NAME }}:latest
+          file: docker/Dockerfile
 
       - name: Publish python package
         run: |
