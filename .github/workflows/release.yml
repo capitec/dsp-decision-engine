@@ -136,14 +136,6 @@ jobs:
           name: python-package
           path: dist
 
-      - name: Build and export to Docker
-        uses: docker/build-push-action@v6
-        with:
-          load: true
-          tags: ${{ env.DOCKER_IMAGE_NAME }}:hold
-          file: docker/Dockerfile
-          context: .
-
       - name: Upload Docker image
         uses: docker/build-push-action@v3
         with:
