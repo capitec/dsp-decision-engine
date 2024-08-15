@@ -45,12 +45,6 @@ jobs:
           version=$(python setup.py --version)
           echo "PACKAGE_VERSION=$(python setup.py --version)" >> $GITHUB_ENV
 
-      - name: Download Documentation Artifact
-        uses: actions/download-artifact@v3
-        with:
-          name: docs
-          path: dist/docs
-
       - name: Download Python Artifact
         uses: actions/download-artifact@v3
         with:
