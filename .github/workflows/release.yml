@@ -50,7 +50,7 @@ jobs:
         env:
           PACKAGE_VERSION: ${{needs.get-version.outputs.PACKAGE_VERSION}}
         run: |
-          git config --global user.email "sjnarmstrong@gmail.com"
+          git config --global user.email "githubbot@donotreply.com"
           git config --global user.name "Sholto Armstrong"
           git tag -a v${PACKAGE_VERSION} -m "Release v${PACKAGE_VERSION}"
 
@@ -93,7 +93,7 @@ jobs:
         env:
           PACKAGE_VERSION: ${{needs.get-version.outputs.PACKAGE_VERSION}}
         run: |
-          git config --global user.email "sjnarmstrong@gmail.com"
+          git config --global user.email "githubbot@donotreply.com"
           git config --global user.name "Sholto Armstrong"
           git tag -a v${PACKAGE_VERSION} -m "Release v${PACKAGE_VERSION}"
 
@@ -150,7 +150,7 @@ jobs:
         env:
           PACKAGE_VERSION: ${{needs.get-version.outputs.PACKAGE_VERSION}}
         run: |
-          git config --global user.email "sjnarmstrong@gmail.com"
+          git config --global user.email "githubbot@donotreply.com"
           git config --global user.name "Sholto Armstrong"
           git tag -a v${PACKAGE_VERSION} -m "Release v${PACKAGE_VERSION}"
 
@@ -206,14 +206,22 @@ jobs:
 
       - name: Publish distribution 📦 to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
 
       - name: Deploy documentation to GitHub Pages
         if: github.ref == 'refs/heads/main'
         uses: actions/deploy-pages@v4
       
-      - name: Push Tag
-        run: |
-          git push origin v${{ env.PACKAGE_VERSION }}
+      - name: Create Release
+        if: github.ref == 'refs/heads/main'
+        id: release-snapshot
+        uses: actions/create-release@latest
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{needs.get-version.outputs.PACKAGE_VERSION}}
+          release_name: Release ${{needs.get-version.outputs.PACKAGE_VERSION}}
+          draft: false
+          prerelease: false
         
