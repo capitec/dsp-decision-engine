@@ -45,13 +45,6 @@ jobs:
           version=$(python setup.py --version)
           echo "PACKAGE_VERSION=$(python setup.py --version)" >> $GITHUB_ENV
 
-      - name: Build and export to Docker
-        uses: docker/build-push-action@v6
-        with:
-          load: true
-          tags: ${{ env.DOCKER_IMAGE_NAME }}:hold
-          file: docker/Dockerfile
-
       - name: Download Documentation Artifact
         uses: actions/download-artifact@v3
         with:
@@ -63,6 +56,13 @@ jobs:
         with:
           name: python
           path: dist/py
+
+      - name: Build and export to Docker
+        uses: docker/build-push-action@v6
+        with:
+          load: true
+          tags: ${{ env.DOCKER_IMAGE_NAME }}:hold
+          file: docker/Dockerfile
 
       - name: Upload Docker image
         uses: docker/build-push-action@v3
