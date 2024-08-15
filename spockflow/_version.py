@@ -624,7 +624,8 @@ def render_git_describe_long(pieces: Dict[str, Any]) -> str:
 
 def render_rc_candidate_hook(pieces: Dict[str, Any]):
     branch = pieces.get("branch")
-    if branch is None: return
+    if branch is None:
+        return
     if branch in ("master", "main"):
         tag_match = re.match(
             r"(\d+)\.(\d+)\.(\d+)\.?rc(\d+)", pieces.get("closest-tag") or ""
