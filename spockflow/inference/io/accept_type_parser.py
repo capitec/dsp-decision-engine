@@ -5,7 +5,9 @@ from functools import lru_cache
 ACCEPTED_TYPES_LIMIT = 10
 
 Q_VALUE_REX = re.compile(r"q=(\d+\.?\d+)")
-def _get_q_value(accept_type:str):
+
+
+def _get_q_value(accept_type: str):
     """HTTP provides a method to set priorities on accepted types"""
     accept_type = accept_type.split(";")
     if len(accept_type) == 1:
@@ -21,9 +23,7 @@ def _get_q_value(accept_type:str):
 
 # Cache frequently requested types
 @lru_cache(maxsize=128)
-def parse_accepted_types(accept: str)->typing.Tuple[str]:
-    accept = [_get_q_value(s.strip()) for s in accept.split(',')[:ACCEPTED_TYPES_LIMIT]]
-    sorted_accept = sorted(
-        (q,i,v) for i,(q,v) in enumerate(accept)
-    )
-    return tuple([v for *_,v in sorted_accept])
+def parse_accepted_types(accept: str) -> typing.Tuple[str]:
+    accept = [_get_q_value(s.strip()) for s in accept.split(",")[:ACCEPTED_TYPES_LIMIT]]
+    sorted_accept = sorted((q, i, v) for i, (q, v) in enumerate(accept))
+    return tuple([v for *_, v in sorted_accept])
