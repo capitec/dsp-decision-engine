@@ -627,8 +627,9 @@ def render_rc_candidate_hook(pieces: Dict[str, Any]):
     if branch is None:
         return
     if branch in ("master", "main"):
+        closest_tag = pieces.get("closest-tag") or ""
         tag_match = re.match(
-            r"(\d+)\.(\d+)\.(\d+)\.?rc(\d+)", pieces.get("closest-tag") or ""
+            r"(\d+)\.(\d+)\.(\d+)\.?rc(\d+)", closest_tag
         )
         branch_major = None
         if tag_match:
@@ -637,13 +638,13 @@ def render_rc_candidate_hook(pieces: Dict[str, Any]):
         if branch_major is None:
             tag_match = re.match(
                 r"(\d+)\.(\d+)\.(\d+)\.?(?:post|rev|r)(\d+)",
-                pieces.get("closest-tag", ""),
+                closest_tag,
             )
             if tag_match:
                 branch_major, branch_minor, branch_patch, rev = tag_match.groups()
                 rev = int(rev) + pieces.get("distance", 1)
         if branch_major is None:
-            tag_match = re.match(r"(\d+)\.(\d+)\.(\d+)", pieces.get("closest-tag", ""))
+            tag_match = re.match(r"(\d+)\.(\d+)\.(\d+)", closest_tag)
             if tag_match:
                 branch_major, branch_minor, branch_patch = tag_match.groups()
                 rev = pieces.get("distance", 1)
