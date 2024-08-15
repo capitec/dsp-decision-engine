@@ -50,6 +50,7 @@ jobs:
         with:
           load: true
           tags: ${{ env.DOCKER_IMAGE_NAME }}:hold
+          file: docker/Dockerfile
 
       - name: Download Documentation Artifact
         uses: actions/download-artifact@v3
@@ -68,6 +69,7 @@ jobs:
         with:
           push: true
           tags: ${{ env.DOCKER_IMAGE_NAME }}:${{ env.PACKAGE_VERSION }}
+          file: docker/Dockerfile
 
       # - name: Upload Latest Docker image
       #   uses: docker/build-push-action@v3
