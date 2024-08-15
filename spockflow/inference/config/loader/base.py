@@ -12,12 +12,20 @@ TNamespacedConfig = Dict[str, Dict[str, Any]]
 #     patch: int = 0
 #     build_no: int = 0
 
+
 class ConfigManager(ABC):
     @abstractmethod
-    def get_latest_version(self, model_name: str)->'str': ...
+    def get_latest_version(self, model_name: str) -> "str": ...
 
     @abstractmethod
     def get_config(self, model_name: str, model_version: str) -> TNamespacedConfig: ...
 
     @abstractmethod
-    def save_to_config(self, model_name: str, model_version: str, namespace: str, config: Dict[str,any], key: Optional[str]=None): ...
+    def save_to_config(
+        self,
+        model_name: str,
+        model_version: str,
+        namespace: str,
+        config: Dict[str, any],
+        key: Optional[str] = None,
+    ): ...

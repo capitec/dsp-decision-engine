@@ -9,7 +9,6 @@ from pydantic.functional_validators import BeforeValidator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-
 def semicolon_separated(v: str) -> typing.List[str]:
     assert isinstance(v, str), "must be a semi-colon separated string"
     return [iv.split(",") for iv in v.split(";")]
@@ -17,12 +16,14 @@ def semicolon_separated(v: str) -> typing.List[str]:
 
 def get_cpu_count():
     import multiprocessing
+
     return int(multiprocessing.cpu_count())
+
 
 class _Runtime_Settings(BaseSettings):
     # This defines how the config is loaded from environment variables
     # e.g prefix can be changed by setting os.environ['MODEL_PREFIX']
-    model_config = SettingsConfigDict(case_sensitive=False, env_prefix='MODEL_')
+    model_config = SettingsConfigDict(case_sensitive=False, env_prefix="MODEL_")
 
     # These two variables allow the directory of the model to be changes
     prefix: str = "/opt/ml/"
@@ -33,15 +34,13 @@ class _Runtime_Settings(BaseSettings):
 
     # This is a list to describe which python file contains the dag to be executed
     default_entrypoints: typing.Annotated[
-        typing.List[typing.List[str]], 
-        BeforeValidator(semicolon_separated)
+        typing.List[typing.List[str]], BeforeValidator(semicolon_separated)
     ] = "main;run;proc"
 
     proc_prefix: str = "proc_"
     config_cache_capacity: int = 8
-    config_cache_latest_ttl: float = float('inf')
+    config_cache_latest_ttl: float = float("inf")
     config_cache_latest_reload_interval: float = 0
-
 
     server_timeout: int = 60
     server_workers: int = Field(default_factory=get_cpu_count)
@@ -63,13 +62,15 @@ class _Runtime_Settings(BaseSettings):
     @property
     def model_path(self):
         return os.path.join(self.prefix, self.relative_path)
-    
+
     @property
     def requirements_path(self):
         return os.path.join(self.model_path, self.relative_requirements_path)
 
+
 @lru_cache(maxsize=1)
 def get_settings():
     return _Runtime_Settings()
+
 
 __all__ = [get_settings]
