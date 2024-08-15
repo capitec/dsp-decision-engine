@@ -1,7 +1,8 @@
 import versioneer
+from spockflow import __version__
 from setuptools import setup
 
 setup(
-    version=versioneer.get_version(),
+    version=__version__,
     cmdclass=versioneer.get_cmdclass(),
 )
