@@ -138,6 +138,7 @@ jobs:
       url: https://pypi.org/p/spockflow
     permissions:
       id-token: write
+      pages: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
