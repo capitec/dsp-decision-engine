@@ -3,8 +3,8 @@ from spockflow.components.tree import Tree
 from spockflow.components.common import Reject
 
 
-
 tree = Tree()
+
 
 @tree.condition(output=Reject(100))
 def condition_a(a: pd.Series) -> pd.Series:

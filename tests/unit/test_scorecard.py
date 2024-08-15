@@ -39,9 +39,7 @@ def pd_scorecard_data() -> pd.DataFrame:
 
 
 @pytest.fixture(scope="module")
-def pd_scorecard_result_data(
-    pd_scorecard_data: "pd.DataFrame"
-):
+def pd_scorecard_result_data(pd_scorecard_data: "pd.DataFrame"):
     """Setup fixture to test adjustment modules."""
     # Set the data for each field
     score_data = {
@@ -140,18 +138,17 @@ def pd_scorecard_result_data(
 
 @pytest.fixture(scope="module")
 def adjustment_scorecard_model():
-    return get_test_scorecard(
-        score_scaling_params={
-            "base_points": 100,
-            "base_odds": 5,
-            "pdo": 9,
-        }
-    ).add_criteria(
-        scorecard.ScoreCriteria("value", "numerical")
-    ).add_criteria(
-        scorecard.ScoreCriteria("category", "numerical")
-    ).add_criteria(
-        scorecard.ScoreCriteria("category_idx", "numerical")
+    return (
+        get_test_scorecard(
+            score_scaling_params={
+                "base_points": 100,
+                "base_odds": 5,
+                "pdo": 9,
+            }
+        )
+        .add_criteria(scorecard.ScoreCriteria("value", "numerical"))
+        .add_criteria(scorecard.ScoreCriteria("category", "numerical"))
+        .add_criteria(scorecard.ScoreCriteria("category_idx", "numerical"))
     )
 
 
@@ -163,10 +160,7 @@ def test_log_odds_from_score(pd_input_data: "pd.DataFrame"):
 
     # Call the function on the DataFrame
     result = scorecard.log_odds_from_score(
-        pd_input_data["score"], 
-        base_points, 
-        base_odds, 
-        pdo
+        pd_input_data["score"], base_points, base_odds, pdo
     )
 
     # Extract the result from the DataFrame
@@ -199,7 +193,9 @@ def get_test_scorecard(**kwargs) -> scorecard.ScoreCardModelV2:
 
 def test_numerical_range_scorecard(pd_scorecard_data: "pd.DataFrame"):
     scorecard_runner = get_test_scorecard().add_criteria(
-        scorecard.ScoreCriteria("value", "numerical").add_range_score(0, "inf", 10, "positive")
+        scorecard.ScoreCriteria("value", "numerical").add_range_score(
+            0, "inf", 10, "positive"
+        )
     )
 
     res = scorecard_runner.score_numerical_vars(pd_scorecard_data.copy())
@@ -220,17 +216,15 @@ def test_numerical_range_scorecard(pd_scorecard_data: "pd.DataFrame"):
             ],
         }
     )
-    assert_frame_equal(
-        correct, res, check_index_type=False, check_dtype=False
-    )
+    assert_frame_equal(correct, res, check_index_type=False, check_dtype=False)
 
 
 def test_numerical_range_scorecard_with_default(pd_scorecard_data: "pd.DataFrame"):
 
     test_scorecard = get_test_scorecard().add_criteria(
         scorecard.ScoreCriteria("value", "numerical")
-                .set_other_score(10, "p")
-                .add_range_score("-inf", 0, 50, "np")
+        .set_other_score(10, "p")
+        .add_range_score("-inf", 0, 50, "np")
     )
     res = test_scorecard.score_numerical_vars(pd_scorecard_data.copy())
     correct = pd.DataFrame(
@@ -243,17 +237,14 @@ def test_numerical_range_scorecard_with_default(pd_scorecard_data: "pd.DataFrame
             "TESTDESC_value": ["p", "np", "p", "p", "np", "p", "p", "np", "p"],
         }
     )
-    assert_frame_equal(
-        correct, res, check_index_type=False, check_dtype=False
-    )
+    assert_frame_equal(correct, res, check_index_type=False, check_dtype=False)
 
 
 def test_numerical_discrete_score(pd_scorecard_data: "pd.DataFrame"):
     test_scorecard = get_test_scorecard().add_criteria(
-        scorecard.ScoreCriteria("value", "numerical")
-            .add_discrete_score(
-                [1.0, -1.0, 0.0, "inf", None, "nan"], 10, "ints"
-            )
+        scorecard.ScoreCriteria("value", "numerical").add_discrete_score(
+            [1.0, -1.0, 0.0, "inf", None, "nan"], 10, "ints"
+        )
     )
     res = test_scorecard.score_numerical_vars(pd_scorecard_data.copy())
     correct = pd.DataFrame(
@@ -276,17 +267,14 @@ def test_numerical_discrete_score(pd_scorecard_data: "pd.DataFrame"):
             ],
         }
     )
-    assert_frame_equal(
-        correct, res, check_index_type=False, check_dtype=False
-    )
+    assert_frame_equal(correct, res, check_index_type=False, check_dtype=False)
 
 
 def test_numerical_discrete_score_with_default(pd_scorecard_data: "pd.DataFrame"):
     test_scorecard = get_test_scorecard().add_criteria(
         scorecard.ScoreCriteria("value", "numerical")
-            .add_discrete_score(
-                    [0.1, -0.1, "-inf"], 10, "dec"
-            ).set_other_score(50, "ints")
+        .add_discrete_score([0.1, -0.1, "-inf"], 10, "dec")
+        .set_other_score(50, "ints")
     )
     res = test_scorecard.score_numerical_vars(pd_scorecard_data.copy())
     correct = pd.DataFrame(
@@ -309,22 +297,20 @@ def test_numerical_discrete_score_with_default(pd_scorecard_data: "pd.DataFrame"
             ],
         }
     )
-    assert_frame_equal(
-        correct, res, check_index_type=False, check_dtype=False
-    )
+    assert_frame_equal(correct, res, check_index_type=False, check_dtype=False)
 
 
 def test_numerical_combination(pd_scorecard_data: "pd.DataFrame"):
     # NOTE: Here the implementation details differ between pandas and spark as none is converted to nan
     test_scorecard = get_test_scorecard().add_criteria(
         scorecard.ScoreCriteria("value", "numerical")
-            .add_range_score(1.0, "inf", 10, ">=1")  # 0
-            .add_discrete_score(["-inf"], 20, "-inf")  # 1
-            .add_range_score(-0.1, 0, 30, "[-0.1, 0)")  # 2
-            .add_discrete_score([None], 40, "None")  # 3
-            .add_discrete_score(["nan"], 50, "nan")  # 4
-            .set_other_score(60, "default")  # 5
-            .add_discrete_score([], 999, "invalid")  # 6
+        .add_range_score(1.0, "inf", 10, ">=1")  # 0
+        .add_discrete_score(["-inf"], 20, "-inf")  # 1
+        .add_range_score(-0.1, 0, 30, "[-0.1, 0)")  # 2
+        .add_discrete_score([None], 40, "None")  # 3
+        .add_discrete_score(["nan"], 50, "nan")  # 4
+        .set_other_score(60, "default")  # 5
+        .add_discrete_score([], 999, "invalid")  # 6
     )
     res = test_scorecard.score_numerical_vars(pd_scorecard_data.copy())
     correct = pd.DataFrame(
@@ -348,22 +334,20 @@ def test_numerical_combination(pd_scorecard_data: "pd.DataFrame"):
         }
     )
 
-    assert_frame_equal(
-        correct, res, check_index_type=False, check_dtype=False
-    )
+    assert_frame_equal(correct, res, check_index_type=False, check_dtype=False)
 
 
 def test_numerical_overlapping_ranges(pd_scorecard_data: "pd.DataFrame"):
     test_scorecard = get_test_scorecard().add_criteria(
         scorecard.ScoreCriteria("value", "numerical")
-            .add_range_score(0.1, 1.0, 99, "[0.1, 1.0)")  # 0
-            .add_range_score(0.001, "inf", 10, ">=0")  # 1
-            .add_discrete_score(["-inf"], 20, "-inf")  # 2
-            .add_range_score(-0.1, 0, 30, "[-0.1, 0)")  # 3
-            .add_discrete_score(["nan"], 50, "nan")  # 4
-            .add_discrete_score([None], 40, "None")  # 5
-            .set_other_score(60, "default")  # 6
-            .add_discrete_score([0], 70, "0")  # 7
+        .add_range_score(0.1, 1.0, 99, "[0.1, 1.0)")  # 0
+        .add_range_score(0.001, "inf", 10, ">=0")  # 1
+        .add_discrete_score(["-inf"], 20, "-inf")  # 2
+        .add_range_score(-0.1, 0, 30, "[-0.1, 0)")  # 3
+        .add_discrete_score(["nan"], 50, "nan")  # 4
+        .add_discrete_score([None], 40, "None")  # 5
+        .set_other_score(60, "default")  # 6
+        .add_discrete_score([0], 70, "0")  # 7
     )
     res = test_scorecard.score_numerical_vars(pd_scorecard_data.copy())
     correct = pd.DataFrame(
@@ -387,22 +371,20 @@ def test_numerical_overlapping_ranges(pd_scorecard_data: "pd.DataFrame"):
         }
     )
 
-    assert_frame_equal(
-        correct, res, check_index_type=False, check_dtype=False
-    )
+    assert_frame_equal(correct, res, check_index_type=False, check_dtype=False)
 
 
 def test_discrete_override_range(pd_scorecard_data: "pd.DataFrame"):
     """Discrete values should always override range values"""
     test_scorecard = get_test_scorecard().add_criteria(
         scorecard.ScoreCriteria("value", "numerical")
-            .add_discrete_score([0, 1], 0, "{0, 1}")  # 0
-            .add_range_score(0, "inf", 10, ">=0")  # 1
-            .add_discrete_score(["-inf"], 20, "-inf")  # 2
-            .add_range_score(-0.1, 0, 30, "[-0.1, 0)")  # 3
-            .add_discrete_score([None], 40, "None")  # 4
-            .add_discrete_score(["nan"], 50, "nan")  # 5
-            .set_other_score(60, "default")  # 6
+        .add_discrete_score([0, 1], 0, "{0, 1}")  # 0
+        .add_range_score(0, "inf", 10, ">=0")  # 1
+        .add_discrete_score(["-inf"], 20, "-inf")  # 2
+        .add_range_score(-0.1, 0, 30, "[-0.1, 0)")  # 3
+        .add_discrete_score([None], 40, "None")  # 4
+        .add_discrete_score(["nan"], 50, "nan")  # 5
+        .set_other_score(60, "default")  # 6
     )
     res = test_scorecard.score_numerical_vars(pd_scorecard_data.copy())
     correct = pd.DataFrame(
@@ -426,15 +408,14 @@ def test_discrete_override_range(pd_scorecard_data: "pd.DataFrame"):
         }
     )
 
-    assert_frame_equal(
-        correct, res, check_index_type=False, check_dtype=False
-    )
+    assert_frame_equal(correct, res, check_index_type=False, check_dtype=False)
 
 
 def test_discrete_categorical_data(pd_scorecard_data: "pd.DataFrame"):
     test_scorecard = get_test_scorecard().add_criteria(
-        scorecard.ScoreCriteria("category", "categorical")
-            .add_discrete_score(["a", "b", "c"], 10, "{a,b,c}")
+        scorecard.ScoreCriteria("category", "categorical").add_discrete_score(
+            ["a", "b", "c"], 10, "{a,b,c}"
+        )
     )
     res = test_scorecard.score_categorical_vars(pd_scorecard_data.copy())
     correct = pd.DataFrame(
@@ -458,18 +439,16 @@ def test_discrete_categorical_data(pd_scorecard_data: "pd.DataFrame"):
         }
     )
 
-    assert_frame_equal(
-        correct, res, check_index_type=False, check_dtype=False
-    )
+    assert_frame_equal(correct, res, check_index_type=False, check_dtype=False)
 
 
 def test_discrete_categorical_data_edge_cases(pd_scorecard_data: "pd.DataFrame"):
     test_scorecard = get_test_scorecard().add_criteria(
         scorecard.ScoreCriteria("category", "categorical")
-            .add_discrete_score(["a" * 100_000, None, ""], 10, "edge")
-            .add_discrete_score(
-                [], 99999, "notvalid"
-            )  # NOTE: If not careful this could match with ''
+        .add_discrete_score(["a" * 100_000, None, ""], 10, "edge")
+        .add_discrete_score(
+            [], 99999, "notvalid"
+        )  # NOTE: If not careful this could match with ''
     )
     res = test_scorecard.score_categorical_vars(pd_scorecard_data.copy())
     correct = pd.DataFrame(
@@ -493,16 +472,14 @@ def test_discrete_categorical_data_edge_cases(pd_scorecard_data: "pd.DataFrame")
         }
     )
 
-    assert_frame_equal(
-        correct, res, check_index_type=False, check_dtype=False
-    )
+    assert_frame_equal(correct, res, check_index_type=False, check_dtype=False)
 
 
 def test_discrete_categorical_data_with_default(pd_scorecard_data: "pd.DataFrame"):
     test_scorecard = get_test_scorecard().add_criteria(
         scorecard.ScoreCriteria("category", "categorical")
-                .add_discrete_score(["a" * 100_000, None, ""], 10, "edge")
-                .set_other_score(20, "not")
+        .add_discrete_score(["a" * 100_000, None, ""], 10, "edge")
+        .set_other_score(20, "not")
     )
 
     res = test_scorecard.score_categorical_vars(pd_scorecard_data.copy())
@@ -527,46 +504,46 @@ def test_discrete_categorical_data_with_default(pd_scorecard_data: "pd.DataFrame
         }
     )
 
-    assert_frame_equal(
-        correct, res, check_index_type=False, check_dtype=False
-    )
+    assert_frame_equal(correct, res, check_index_type=False, check_dtype=False)
 
 
 def test_scorecard_integration(
     pd_scorecard_data: "pd.DataFrame", pd_scorecard_result_data: "pd.DataFrame"
 ):
-    test_scorecard = get_test_scorecard(
-        score_scaling_params={
-            "base_points": 100,
-            "base_odds": 5,
-            "pdo": 9,
-        }
-    )\
+    test_scorecard = (
+        get_test_scorecard(
+            score_scaling_params={
+                "base_points": 100,
+                "base_odds": 5,
+                "pdo": 9,
+            }
+        )
         .add_criteria(
             scorecard.ScoreCriteria("value", "numerical")
-                .add_range_score("inf", "inf", 99, "No Value")
-                .add_range_score(0.001, "inf", 10, ">=0")
-                .add_discrete_score(["-inf"], 20, "-inf")
-                .add_range_score(-0.1, 0, 30, "[-0.1, 0)")
-                .add_discrete_score([None], 40, "None")
-                .add_discrete_score(["nan"], 50, "nan")
-                .set_other_score(60, "default")
-                .add_discrete_score([0], 70, "0")
-        )\
+            .add_range_score("inf", "inf", 99, "No Value")
+            .add_range_score(0.001, "inf", 10, ">=0")
+            .add_discrete_score(["-inf"], 20, "-inf")
+            .add_range_score(-0.1, 0, 30, "[-0.1, 0)")
+            .add_discrete_score([None], 40, "None")
+            .add_discrete_score(["nan"], 50, "nan")
+            .set_other_score(60, "default")
+            .add_discrete_score([0], 70, "0")
+        )
         .add_criteria(
             scorecard.ScoreCriteria("category", "categorical")
-                .set_other_score(80, "default")
-                .add_discrete_score(["a"], 90, "a")
-                .add_discrete_score(["regex:[b-c]"], 100, "b,c")
-                .add_discrete_score(["d", "e", "f", None], 110, "d,e,f,None")
-        )\
+            .set_other_score(80, "default")
+            .add_discrete_score(["a"], 90, "a")
+            .add_discrete_score(["regex:[b-c]"], 100, "b,c")
+            .add_discrete_score(["d", "e", "f", None], 110, "d,e,f,None")
+        )
         .add_criteria(
             scorecard.ScoreCriteria("category_idx", "numerical")
-                .add_discrete_score([1], 120, "1")
-                .add_discrete_score([2, 3], 130, "2,3")
-                .add_discrete_score([], 9_999_999, "emptyset")
-                .add_discrete_score([None], 140, "None")
+            .add_discrete_score([1], 120, "1")
+            .add_discrete_score([2, 3], 130, "2,3")
+            .add_discrete_score([], 9_999_999, "emptyset")
+            .add_discrete_score([None], 140, "None")
         )
+    )
     res = test_scorecard.score_df(pd_scorecard_data.copy())
     correct_res_pd = pd_scorecard_result_data
 
@@ -577,60 +554,65 @@ def test_scorecard_integration(
         res.sort_index(axis=1),
         check_index_type=False,
         check_dtype=False,
-        check_names=True
+        check_names=True,
     )
     res = test_scorecard.score_pd(res)
     assert_frame_equal(
-        correct_res_pd.sort_index(axis=1), 
-        res.sort_index(axis=1), 
-        check_index_type=False, 
-        check_dtype=False, 
-        check_names=True
+        correct_res_pd.sort_index(axis=1),
+        res.sort_index(axis=1),
+        check_index_type=False,
+        check_dtype=False,
+        check_names=True,
     )
+
 
 def test_scorecard_integration_using_stored_values(
     pd_scorecard_data: "pd.DataFrame", pd_scorecard_result_data: "pd.DataFrame"
 ):
-    test_scorecard = get_test_scorecard(
-        score_scaling_params={
-            "base_points": 100,
-            "base_odds": 5,
-            "pdo": 9,
-        }
-    )\
+    test_scorecard = (
+        get_test_scorecard(
+            score_scaling_params={
+                "base_points": 100,
+                "base_odds": 5,
+                "pdo": 9,
+            }
+        )
         .add_criteria(
             scorecard.ScoreCriteria(pd_scorecard_data["value"], "numerical")
-                .add_range_score("inf", "inf", 99, "No Value")
-                .add_range_score(0.001, "inf", 10, ">=0")
-                .add_discrete_score(["-inf"], 20, "-inf")
-                .add_range_score(-0.1, 0, 30, "[-0.1, 0)")
-                .add_discrete_score([None], 40, "None")
-                .add_discrete_score(["nan"], 50, "nan")
-                .set_other_score(60, "default")
-                .add_discrete_score([0], 70, "0")
-        )\
+            .add_range_score("inf", "inf", 99, "No Value")
+            .add_range_score(0.001, "inf", 10, ">=0")
+            .add_discrete_score(["-inf"], 20, "-inf")
+            .add_range_score(-0.1, 0, 30, "[-0.1, 0)")
+            .add_discrete_score([None], 40, "None")
+            .add_discrete_score(["nan"], 50, "nan")
+            .set_other_score(60, "default")
+            .add_discrete_score([0], 70, "0")
+        )
         .add_criteria(
             scorecard.ScoreCriteria(pd_scorecard_data["category"], "categorical")
-                .set_other_score(80, "default")
-                .add_discrete_score(["a"], 90, "a")
-                .add_discrete_score(["regex:[b-c]"], 100, "b,c")
-                .add_discrete_score(["d", "e", "f", None], 110, "d,e,f,None")
-        )\
+            .set_other_score(80, "default")
+            .add_discrete_score(["a"], 90, "a")
+            .add_discrete_score(["regex:[b-c]"], 100, "b,c")
+            .add_discrete_score(["d", "e", "f", None], 110, "d,e,f,None")
+        )
         .add_criteria(
             scorecard.ScoreCriteria(pd_scorecard_data["category_idx"], "numerical")
-                .add_discrete_score([1], 120, "1")
-                .add_discrete_score([2, 3], 130, "2,3")
-                .add_discrete_score([], 9_999_999, "emptyset")
-                .add_discrete_score([None], 140, "None")
+            .add_discrete_score([1], 120, "1")
+            .add_discrete_score([2, 3], 130, "2,3")
+            .add_discrete_score([], 9_999_999, "emptyset")
+            .add_discrete_score([None], 140, "None")
         )
-    res = test_scorecard.execute(pd_scorecard_data, final_vars=["ScoreCardModel.score_pd"])
+    )
+    res = test_scorecard.execute(
+        pd_scorecard_data, final_vars=["ScoreCardModel.score_pd"]
+    )
     correct_res_pd = pd_scorecard_result_data
     assert_frame_equal(
-        correct_res_pd.sort_index(axis=1), 
-        res.sort_index(axis=1), 
-        check_index_type=False, 
-        check_dtype=False, 
-        check_names=True
+        correct_res_pd.sort_index(axis=1),
+        res.sort_index(axis=1),
+        check_index_type=False,
+        check_dtype=False,
+        check_names=True,
     )
     res = test_scorecard.execute(pd_scorecard_data)
 
@@ -641,12 +623,13 @@ def test_scorecard_integration_using_stored_values(
         res.sort_index(axis=1),
         check_index_type=False,
         check_dtype=False,
-        check_names=True
+        check_names=True,
     )
 
 
 def test_adjustment_model_no_variables(
-    pd_scorecard_result_data: "pd.DataFrame", adjustment_scorecard_model: "scorecard.Score"
+    pd_scorecard_result_data: "pd.DataFrame",
+    adjustment_scorecard_model: "scorecard.Score",
 ):
     # Test using non adjusted
     res = adjustment_scorecard_model.adjust_scores(
@@ -660,9 +643,7 @@ def test_adjustment_model_no_variables(
     )
     gt_result_df = pd_scorecard_result_data.copy()
     gt_result_df["ADJUSTED_TEST_SUM"] = gt_result_df["TESTPOINTS_SUM"]
-    assert_frame_equal(
-        gt_result_df, res, check_index_type=False, check_dtype=False
-    )
+    assert_frame_equal(gt_result_df, res, check_index_type=False, check_dtype=False)
     # Test only using adjusted
     # TODO maybe add better validation
     # with pytest.raises(TypeError):
@@ -681,7 +662,8 @@ def test_adjustment_model_no_variables(
 
 
 def test_adjustment_model_none(
-    pd_scorecard_result_data: "pd.DataFrame", adjustment_scorecard_model: "scorecard.Score"
+    pd_scorecard_result_data: "pd.DataFrame",
+    adjustment_scorecard_model: "scorecard.Score",
 ):
     # NOTE: Might be better to break this up into 3 tests
     # Test single operation no other scores
@@ -698,9 +680,7 @@ def test_adjustment_model_none(
     )
     gt_result_df = pd_scorecard_result_data.copy()
     gt_result_df["ADJUSTED_TEST_SUM"] = gt_result_df["TESTPOINTS_value"]
-    assert_frame_equal(
-        gt_result_df, res, check_index_type=False, check_dtype=False
-    )
+    assert_frame_equal(gt_result_df, res, check_index_type=False, check_dtype=False)
     # Test multiple operation no other scores
     res = adjustment_scorecard_model.adjust_scores(
         pd_scorecard_result_data.copy(),
@@ -717,9 +697,7 @@ def test_adjustment_model_none(
     gt_result_df["ADJUSTED_TEST_SUM"] = (
         gt_result_df["TESTPOINTS_category"] + gt_result_df["TESTPOINTS_category_idx"]
     )
-    assert_frame_equal(
-        gt_result_df, res, check_index_type=False, check_dtype=False
-    )
+    assert_frame_equal(gt_result_df, res, check_index_type=False, check_dtype=False)
     # Test include pd and non_adjusted
     res = adjustment_scorecard_model.adjust_scores(
         pd_scorecard_result_data.copy(),
@@ -737,13 +715,13 @@ def test_adjustment_model_none(
         "TESTPOINTS_SUM_PD_LOGODDS"
     ]
     gt_result_df["ADJUSTED_TEST_SUM_PD"] = gt_result_df["TESTPOINTS_SUM_PD"]
-    assert_frame_equal(
-        gt_result_df, res, check_index_type=False, check_dtype=False
-    )
+    assert_frame_equal(gt_result_df, res, check_index_type=False, check_dtype=False)
 
 
 def test_adjustment_model_constant(
-    pd_scorecard_data: "pd.DataFrame", pd_scorecard_result_data: "pd.DataFrame", adjustment_scorecard_model: "scorecard.Score"
+    pd_scorecard_data: "pd.DataFrame",
+    pd_scorecard_result_data: "pd.DataFrame",
+    adjustment_scorecard_model: "scorecard.Score",
 ):
     # Test Integer value
     res = adjustment_scorecard_model.adjust_scores(
@@ -763,9 +741,7 @@ def test_adjustment_model_constant(
     )
     gt_result_df = pd_scorecard_result_data.copy()
     gt_result_df["ADJUSTED_TEST_SUM"] = 100
-    assert_frame_equal(
-        gt_result_df, res, check_index_type=False, check_dtype=False
-    )
+    assert_frame_equal(gt_result_df, res, check_index_type=False, check_dtype=False)
     # Test float value
     res = adjustment_scorecard_model.adjust_scores(
         pd_scorecard_result_data.copy(),
@@ -786,12 +762,10 @@ def test_adjustment_model_constant(
     gt_result_df["ADJUSTED_TEST_SUM"] = (
         gt_result_df["TESTPOINTS_SUM"] - gt_result_df["TESTPOINTS_category"] + 3.14
     )
-    assert_frame_equal(
-        gt_result_df, res, check_index_type=False, check_dtype=False
-    )
+    assert_frame_equal(gt_result_df, res, check_index_type=False, check_dtype=False)
     # Test string value
     res = adjustment_scorecard_model.adjust_scores(
-        pd.concat([pd_scorecard_result_data, pd_scorecard_data],axis=1),
+        pd.concat([pd_scorecard_result_data, pd_scorecard_data], axis=1),
         adjustment_model={
             "score_prefix": "ADJUSTED_TEST_",
             "variable_score_adjustments": [
@@ -801,15 +775,13 @@ def test_adjustment_model_constant(
         include_non_adjusted_scores=True,
         include_pd=False,
     )
-    gt_result_df = pd.concat([pd_scorecard_result_data, pd_scorecard_data],axis=1)
+    gt_result_df = pd.concat([pd_scorecard_result_data, pd_scorecard_data], axis=1)
     gt_result_df["ADJUSTED_TEST_SUM"] = gt_result_df["TESTPOINTS_SUM"] + 3.14
-    assert_frame_equal(
-        gt_result_df, res, check_index_type=False, check_dtype=False
-    )
+    assert_frame_equal(gt_result_df, res, check_index_type=False, check_dtype=False)
     # Test invalid value
     with pytest.raises(ValueError):
         res = adjustment_scorecard_model.adjust_scores(
-            pd.concat([pd_scorecard_result_data, pd_scorecard_data],axis=1),
+            pd.concat([pd_scorecard_result_data, pd_scorecard_data], axis=1),
             adjustment_model={
                 "score_prefix": "ADJUSTED_TEST_",
                 "variable_score_adjustments": [
@@ -826,7 +798,8 @@ def test_adjustment_model_constant(
 
 
 def test_adjustment_model_sum(
-    pd_scorecard_result_data: "pd.DataFrame", adjustment_scorecard_model: "scorecard.Score"
+    pd_scorecard_result_data: "pd.DataFrame",
+    adjustment_scorecard_model: "scorecard.Score",
 ):
     # Test non adjusted off
     res = adjustment_scorecard_model.adjust_scores(
@@ -842,9 +815,7 @@ def test_adjustment_model_sum(
     )
     gt_result_df = pd_scorecard_result_data.copy()
     gt_result_df["ADJUSTED_TEST_SUM"] = gt_result_df["TESTPOINTS_category"] + 3.14
-    assert_frame_equal(
-        gt_result_df, res, check_index_type=False, check_dtype=False
-    )
+    assert_frame_equal(gt_result_df, res, check_index_type=False, check_dtype=False)
     # Test non adjusted on
     res = adjustment_scorecard_model.adjust_scores(
         pd_scorecard_result_data.copy(),
@@ -859,13 +830,12 @@ def test_adjustment_model_sum(
     )
     gt_result_df = pd_scorecard_result_data.copy()
     gt_result_df["ADJUSTED_TEST_SUM"] = gt_result_df["TESTPOINTS_SUM"] - 10
-    assert_frame_equal(
-        gt_result_df, res, check_index_type=False, check_dtype=False
-    )
+    assert_frame_equal(gt_result_df, res, check_index_type=False, check_dtype=False)
 
 
 def test_adjust_scores_invalid_op(
-    pd_scorecard_result_data: "pd.DataFrame", adjustment_scorecard_model: "scorecard.Score"
+    pd_scorecard_result_data: "pd.DataFrame",
+    adjustment_scorecard_model: "scorecard.Score",
 ):
     # Test non adjusted off
     with pytest.raises(ValueError):
@@ -943,31 +913,27 @@ def test_adjust_scores_invalid_op(
 #         test_scorecard.save("test.yaml")
 #     with patch("builtins.open", mock_open(read_data="data")) as mock_file:
 #         test_scorecard.save("test.json")
-    
-    # json_data = adjustment_scorecard_model.model_dump_json()
-    # with patch("builtins.open", mock_open(read_data=json_data)) as mock_file:
-    #     adjustment_scorecard_model.from_config("test.json")
-    # with patch("builtins.open", mock_open(read_data=json_data)) as mock_file:
-    #     adjustment_scorecard_model.from_config("test.yaml")
-    
-    
+
+# json_data = adjustment_scorecard_model.model_dump_json()
+# with patch("builtins.open", mock_open(read_data=json_data)) as mock_file:
+#     adjustment_scorecard_model.from_config("test.json")
+# with patch("builtins.open", mock_open(read_data=json_data)) as mock_file:
+#     adjustment_scorecard_model.from_config("test.yaml")
+
 
 def test_invalid_scorecards():
     with pytest.raises(
         ValueError,
         match=r"Invalid Criteria type numical expecting either \"numerical\" or \"categorical\"",
-    ):    
+    ):
         test_scorecard = get_test_scorecard().add_criteria(
             scorecard.ScoreCriteria("value", "numical")
         )
 
-    with pytest.raises(
-        TypeError, match=r"missing 1 required positional argument"
-    ):
+    with pytest.raises(TypeError, match=r"missing 1 required positional argument"):
         test_scorecard = get_test_scorecard().add_criteria(
-            scorecard.ScoreCriteria("value", "numerical").add_range_score(
-            0, 10, "desc"
-        ))
+            scorecard.ScoreCriteria("value", "numerical").add_range_score(0, 10, "desc")
+        )
     # test_model = get_test_scorecard(
     #     variable_params=[
     #         (
