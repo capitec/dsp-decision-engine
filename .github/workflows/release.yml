@@ -101,6 +101,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check branch info
+        run: git branch
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -133,6 +136,7 @@ jobs:
         with:
           name: python-package
           path: dist
+
       - name: Display structure of downloaded files
         run: ls -R dist
 
@@ -142,6 +146,7 @@ jobs:
           load: true
           tags: ${{ env.DOCKER_IMAGE_NAME }}:hold
           file: docker/Dockerfile
+          context: .
 
       - name: Upload Docker image
         uses: docker/build-push-action@v3
