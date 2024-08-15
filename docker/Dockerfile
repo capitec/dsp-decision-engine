@@ -21,10 +21,12 @@ RUN mkdir /opt/program &&  \
     rm /etc/pip.conf && \
     rm -rf /tmp/requirements
 
-COPY . /tmp/spockflow
+COPY dist/py/ /tmp/spockflow/
 RUN set -aex && \
     ls /tmp/spockflow && \
-    pip --no-cache-dir install --no-deps --no-build-isolation /tmp/spockflow && \
+    echo "$PIP_CONF" >> /etc/pip.conf  && \
+    pip --no-cache-dir install --no-deps --no-build-isolation /tmp/spockflow/*.whl && \
+    rm /etc/pip.conf && \
     rm -rf /tmp/spockflow
 
 # Set some environment variables. PYTHONUNBUFFERED keeps Python from buffering our standard
