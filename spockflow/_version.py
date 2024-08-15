@@ -642,12 +642,14 @@ def render_rc_candidate_hook(pieces: Dict[str, Any]):
             )
             if tag_match:
                 branch_major, branch_minor, branch_patch, rev = tag_match.groups()
-                rev = int(rev) + pieces.get("distance", 1)
+                # rev = int(rev) + pieces.get("distance", 1)
+                rev = int(rev) + 1 # We want to keep replacing till we make a new tag
         if branch_major is None:
             tag_match = re.match(r"(\d+)\.(\d+)\.(\d+)", closest_tag)
             if tag_match:
                 branch_major, branch_minor, branch_patch = tag_match.groups()
-                rev = pieces.get("distance", 1)
+                # rev = pieces.get("distance", 1)
+                rev = 1 # We want to keep replacing till we make a new tag
         if branch_major is None:
             return None
         if rev is None:
