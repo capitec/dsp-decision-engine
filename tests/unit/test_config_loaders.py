@@ -11,7 +11,7 @@ def test_loading_empty_conf():
 
 def test_pipeline_discovery():
     from spockflow.inference.util import autodiscover_entrypoints, load_all_entrypoints, register_model_dir
-    basic_pipeline_dir = os.path.join(PIPELINE_DIR, "basic")
+    basic_pipeline_dir = os.path.join(PIPELINE_DIR, "p00_basic")
     register_model_dir(basic_pipeline_dir)
     entrypoint_conf = autodiscover_entrypoints(basic_pipeline_dir)
     assert entrypoint_conf == {'1': ["proc_1"]}
