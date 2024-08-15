@@ -31,7 +31,6 @@ dependencies = {file = "requirements/core.txt"}
 
 [tool.setuptools.dynamic.optional-dependencies]
 dev = {file = "requirements/dev.txt"}
-publishing = {file = "requirements/publishing.txt"}
 parsers = {file = "requirements/parsers.txt"}
 webapp = {file = "requirements/webapp.txt"}
 yaml = {file = "requirements/yaml.txt"}

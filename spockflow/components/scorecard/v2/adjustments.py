@@ -28,7 +28,7 @@ class ScoreCardAdjustmentConstOperator(BaseModel):
     value: float
 
     def apply(self, df: pd.DataFrame) -> pd.Series:
-        return pd.Series([self.value]*len(df))
+        return pd.Series([self.value] * len(df))
 
 
 class ScoreCardAdjustmentFallbackOperator(BaseModel):
@@ -67,5 +67,3 @@ ScoreCardAdjustmentOperator = typing.Annotated[
 class ScoreCardAdjustmentModel(BaseModel):
     score_prefix: str
     variable_score_adjustments: typing.List[ScoreCardAdjustmentOperator]
-
-
