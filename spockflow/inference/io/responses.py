@@ -7,6 +7,7 @@ try:
 except ImportError:
     responses = None
 
+
 @dataclass
 class Response:
     content: typing.Any = None
@@ -20,12 +21,14 @@ class Response:
 
     def to_api(self):
         # TODO there must be a better way of doing this
-        assert responses is not None, "Requires starlette to be installed. Please install with pip install SpockFlow[webapp]"
+        assert (
+            responses is not None
+        ), "Requires starlette to be installed. Please install with pip install SpockFlow[webapp]"
         return self._api_response_cls(
-            content = self.content,
-            status_code = self.status_code,
-            headers = self.headers,
-            media_type = self.media_type,
+            content=self.content,
+            status_code=self.status_code,
+            headers=self.headers,
+            media_type=self.media_type,
         )
 
 
@@ -43,4 +46,4 @@ class PlainTextResponse(Response):
 
 @dataclass
 class CSVResponse(Response):
-    media_type:str = "text/csv"
+    media_type: str = "text/csv"

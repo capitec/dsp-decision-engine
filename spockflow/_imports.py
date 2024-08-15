@@ -2,9 +2,8 @@ import importlib
 from .exceptions import RequiredOptionalDependencyError
 
 # TODO see if its possible to extract this automatically
-OPTIONAL_DEPS = {
+OPTIONAL_DEPS = {}
 
-}
 
 def assert_module_exists(dep: str):
     try:

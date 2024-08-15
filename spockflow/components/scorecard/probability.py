@@ -1,8 +1,11 @@
 import pandas as pd
 import numpy as np
 
+
 # PD calcs
-def log_odds_from_score(score_col: pd.Series, base_points: float, base_odds: float, pdo: float) -> pd.Series:
+def log_odds_from_score(
+    score_col: pd.Series, base_points: float, base_odds: float, pdo: float
+) -> pd.Series:
     """Calculate log odds from a score."""
     factor = pdo / np.log(2)
     return (score_col - base_points) / factor + np.log(base_odds)

@@ -3,6 +3,7 @@ import typing
 if typing.TYPE_CHECKING:
     from pydantic_core import ErrorDetails
 
+
 class ScoreCardValidationError(ValueError):
     def __init__(self, errs: "typing.List[ErrorDetails]", source_data: dict):
         self.variable_errors = []
@@ -30,7 +31,7 @@ class ScoreCardValidationError(ValueError):
 
     @staticmethod
     def _get_error_message(variable_errors, other_errors):
-        import json        
+        import json
 
         lines = [f"Found {len(variable_errors)+len(other_errors)} Validation Errors"]
         if len(variable_errors) > 0:
