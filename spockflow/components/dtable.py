@@ -136,9 +136,9 @@ class LookupResult:
 class DecisionTable(VariableNode):
     operations: typing.List[RegDTableOps] = Field(default_factory=list)
     operation_inputs: typing.List[str] = Field(default_factory=list)
-    outputs: typing.Dict[str, typing.Iterable] = Field(default_factory=dict)
+    outputs: typing.Dict[str, typing.Union[list, Series]] = Field(default_factory=dict)
     allow_multi_result: bool = False
-    default_value: typing.Union[Series, DataFrame, None] = None
+    default_value: typing.Optional[DataFrame] = None
     # Allow previously seen values to not be needed in the execute step
     _internal_values: typing.Dict[str, Series] = PrivateAttr(default_factory=dict)
 

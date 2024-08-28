@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from spockflow.components.tree.settings import settings
 from .core import ChildTree, Tree, TOutput, TCond
 from spockflow.nodes import creates_node
+# from pandas.core.groupby import DataFrameGroupBy
 
 if typing.TYPE_CHECKING:
     from hamilton import node
@@ -349,6 +350,40 @@ class CompiledNumpyTree:
         for c in conditions:
             res.append(",".join(v for v, t in zip(self.all_condition_names, c) if t))
         return res
+    
+    def _lookup_output_idx(
+        self,
+        format_inputs: TFormatData,
+        condition_idx: np.ndarray,
+    ) -> np.ndarray:
+        _, outputs, output_df_lengths, output_start_offsets, length = format_inputs
+        # Translate outputs from tree lookup to outputs from combined outputs.
+        ordered_output_idx = self.ordered_output_map[condition_idx]
+        # Lookup values that are offset from the start index
+        item_index = np.arange(length)
+        output_idx = (
+            output_start_offsets[ordered_output_idx]
+            + (output_df_lengths[ordered_output_idx] > 1) * item_index
+        )
+        return output_idx
+
+    @creates_node()
+    def all(
+        self, 
+        format_inputs: TFormatData,
+        conditions_met: np.ndarray,
+    ) -> pd.DataFrame:
+        _, outputs, *_ = format_inputs
+        batch_idx, condition_idx = np.where(conditions_met[:,:-1])
+        mapped_outputs = outputs.iloc[
+            self._lookup_output_idx(
+                format_inputs,
+                condition_idx
+            )
+        ].reset_index(drop=True)
+        # Not a fan of using magic outputs but cant think of a better solution for now
+        mapped_outputs["tree_batch_index"] = batch_idx
+        return mapped_outputs
 
     @creates_node(is_namespaced=False)
     def get_results(
@@ -356,17 +391,14 @@ class CompiledNumpyTree:
         format_inputs: TFormatData,
         conditions_met: np.ndarray,
     ) -> pd.DataFrame:
-        _, outputs, output_df_lengths, output_start_offsets, length = format_inputs
+        _, outputs, *_ = format_inputs
         condition_output_idx = np.argmax(conditions_met, axis=1)
-        # Translate outputs from tree lookup to outputs from combined outputs.
-        ordered_output_idx = self.ordered_output_map[condition_output_idx]
-        # Lookup values that are offset from the start index
-        item_index = np.arange(length)
-        output_idx = (
-            output_start_offsets[ordered_output_idx]
-            + (output_df_lengths[ordered_output_idx] > 1) * item_index
-        )
-        return outputs.iloc[output_idx].reset_index(drop=True)
+        return outputs.iloc[
+            self._lookup_output_idx(
+                format_inputs,
+                condition_output_idx
+            )
+        ].reset_index(drop=True)
 
     def __call__(self, **kwargs: typing.Union[pd.DataFrame, pd.Series]) -> pd.DataFrame:
         cast_data = self._cast_length_conditions_outputs(**kwargs)
