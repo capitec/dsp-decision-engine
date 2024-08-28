@@ -34,8 +34,9 @@ def find_default_entrypoint() -> "TModuleList":
     for ep_modules in DEFAULT_ENTRYPOINTS:
         try:
             return load_entrypoint_modules(ep_modules)
-        except ImportError:
-            pass
+        except ModuleNotFoundError as e:
+            if e.name not in ep_modules:
+                raise e from e
     raise ValueError("Could not find default entrypoint")
 
 

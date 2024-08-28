@@ -52,10 +52,12 @@ class _PandasPydanticAnnotation:
         _handler: GetCoreSchemaHandler,
     ) -> core_schema.CoreSchema:
         def validate_from_dict(value: dict) -> pd.Series:
+            data_type = value.get("type")
+            if data_type is None:
+                return pd.DataFrame(value)
             if value.get("type") == "DataFrame":
                 return pd.DataFrame(value["values"])
-            else:
-                return pd.Series(value["values"], name=value["name"])
+            return pd.Series(value["values"], name=value["name"])
 
         from_int_schema = core_schema.chain_schema(
             [

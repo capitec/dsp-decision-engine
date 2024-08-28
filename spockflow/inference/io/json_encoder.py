@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from enum import Enum
 from json import JSONEncoder
 
 
@@ -13,4 +14,6 @@ class PandasJsonEncoder(JSONEncoder):
             return o.tolist()
         elif isinstance(o, np.generic):
             return o.tolist()
+        elif isinstance(o, Enum):
+            return o.value
         return o.__dict__

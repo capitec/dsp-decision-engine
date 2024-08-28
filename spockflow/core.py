@@ -2,7 +2,7 @@ import inspect
 from typing import Callable, List, Union, Collection, TYPE_CHECKING, Dict, Any
 
 from hamilton import node, driver
-from hamilton.function_modifiers import subdag
+from hamilton.function_modifiers import subdag, tag
 from hamilton.function_modifiers import base
 
 from spockflow.nodes import VariableNode
@@ -58,7 +58,8 @@ class Driver(driver.Driver):
 
 
 class configure_output(subdag):
-    DEFAULT_OUTPUT_TAG = "IsSpockDefaultOutput"
+    DEFAULT_OUTPUT_TAG = "spockflow.default_output"
+    DEFAULT_OUTPUT_VALUE = "true"
 
     @staticmethod
     def is_variable_node(v):
@@ -101,7 +102,7 @@ class configure_output(subdag):
 
     def set_spock_output_flag(self, n: node.Node, force: bool = False) -> node.Node:
         if force or n.name in self.output_names:
-            n.add_tag(self.DEFAULT_OUTPUT_TAG, True)
+            n.add_tag(self.DEFAULT_OUTPUT_TAG, configure_output.DEFAULT_OUTPUT_VALUE)
         return n
 
     @classmethod
@@ -109,7 +110,7 @@ class configure_output(subdag):
         if not hasattr(g, "_spock_cached_default_out"):
             default_out = []
             for k, n in g.nodes.items():
-                if n.tags.get(cls.DEFAULT_OUTPUT_TAG, False):
+                if n.tags.get(cls.DEFAULT_OUTPUT_TAG, None) == configure_output.DEFAULT_OUTPUT_VALUE:
                     default_out.append(k)
             g._spock_cached_default_out = default_out
         return g._spock_cached_default_out
@@ -134,6 +135,11 @@ class configure_output(subdag):
         return nodes
 
 
+class set_function_as_output(tag):
+    def __init__(self, *, target_: base.TargetType = None):
+        super().__init__(target_=target_, **{configure_output.DEFAULT_OUTPUT_TAG: configure_output.DEFAULT_OUTPUT_VALUE})
+
+
 def initialize_spock_module(
     module_name, included_modules=None, output_names: List[str] = None
 ):
@@ -149,8 +155,17 @@ def initialize_spock_module(
             "@configure_output(..., ignore_output=True)\n"
             "def initialise() -> None: pass\n"
         )
+    
+    # Support outputs that are defined in the current module
+    external_outputs = []
+    for k in output_names:
+        mod_fn = getattr(caller_module, k, None)
+        if mod_fn is None:
+            external_outputs.append(k)
+            continue
+        setattr(caller_module, k, set_function_as_output()(mod_fn))
 
-    @configure_output(included_modules, ignore_output=True, output_names=output_names)
+    @configure_output(included_modules, ignore_output=True, output_names=external_outputs)
     def spock_bootstrap_entrypoint_fn__() -> None:
         pass
 
