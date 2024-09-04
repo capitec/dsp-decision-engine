@@ -17,5 +17,5 @@
    :hidden:
    :caption: EXTERNAL RESOURCES
 
-   GitHub <https://git.int.capinet/ai-platform/team-projects/aip/hamilton-rules-engine>
-   Hamilton <https://hamilton.dagworks.io/en/latest/get-started/>
+   GitHub <https://github.com/capitec/dsp-decision-engine>
+   Hamilton <https://hamilton.dagworks.io/en/latest/get-started>
