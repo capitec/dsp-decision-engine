@@ -18,7 +18,6 @@ ArrayPxV = typing.Annotated[npt.NDArray[DType], typing.Literal["P", "V"]]
 # registered_dtable_ops = []
 
 
-
 class DecisionTableOp(BaseModel):
     # _sub_classes: typing.ClassVar[set] = set()
     predicate: typing.Union[typing.List[int], typing.List[float], typing.List[str]]
