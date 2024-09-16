@@ -18,9 +18,10 @@ ArrayPxV = typing.Annotated[npt.NDArray[DType], typing.Literal["P", "V"]]
 # registered_dtable_ops = []
 
 
+
 class DecisionTableOp(BaseModel):
     # _sub_classes: typing.ClassVar[set] = set()
-    predicate: typing.List[typing.Union[int, float, str]]
+    predicate: typing.Union[typing.List[int], typing.List[float], typing.List[str]]
     # def __init_subclass__(cls, /, **kwargs: object) -> None:
     #     # super().__init_subclass__(**kwargs)
     #     registered_dtable_ops.extend(cls)

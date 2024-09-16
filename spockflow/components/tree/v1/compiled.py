@@ -74,7 +74,7 @@ class CompiledNumpyTree:
             )
         )
         # Add in a empty dataframe as a default (will automatically get the right schema due to pd.concat)
-        self.predefined_outputs = pd.concat(predefined_outputs)
+        self.predefined_outputs = pd.concat(predefined_outputs) if len(predefined_outputs) else pd.DataFrame()
         self.all_output_names = predefined_outputs_names + execution_outputs
         self.execution_outputs = execution_outputs
         output_df_lengths = [len(o) for o in predefined_outputs]
