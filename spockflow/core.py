@@ -110,7 +110,10 @@ class configure_output(subdag):
         if not hasattr(g, "_spock_cached_default_out"):
             default_out = []
             for k, n in g.nodes.items():
-                if n.tags.get(cls.DEFAULT_OUTPUT_TAG, None) == configure_output.DEFAULT_OUTPUT_VALUE:
+                if (
+                    n.tags.get(cls.DEFAULT_OUTPUT_TAG, None)
+                    == configure_output.DEFAULT_OUTPUT_VALUE
+                ):
                     default_out.append(k)
             g._spock_cached_default_out = default_out
         return g._spock_cached_default_out
@@ -137,7 +140,12 @@ class configure_output(subdag):
 
 class set_function_as_output(tag):
     def __init__(self, *, target_: base.TargetType = None):
-        super().__init__(target_=target_, **{configure_output.DEFAULT_OUTPUT_TAG: configure_output.DEFAULT_OUTPUT_VALUE})
+        super().__init__(
+            target_=target_,
+            **{
+                configure_output.DEFAULT_OUTPUT_TAG: configure_output.DEFAULT_OUTPUT_VALUE
+            },
+        )
 
 
 def initialize_spock_module(
@@ -155,7 +163,7 @@ def initialize_spock_module(
             "@configure_output(..., ignore_output=True)\n"
             "def initialise() -> None: pass\n"
         )
-    
+
     # Support outputs that are defined in the current module
     external_outputs = []
     for k in output_names:
@@ -165,7 +173,9 @@ def initialize_spock_module(
             continue
         setattr(caller_module, k, set_function_as_output()(mod_fn))
 
-    @configure_output(included_modules, ignore_output=True, output_names=external_outputs)
+    @configure_output(
+        included_modules, ignore_output=True, output_names=external_outputs
+    )
     def spock_bootstrap_entrypoint_fn__() -> None:
         pass
 

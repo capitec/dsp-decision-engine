@@ -15,7 +15,6 @@ class Calculate(VariableNode, typing.Generic[T]):
     return_type: typing.Type[T] = pd.Series
     doc: typing.Optional[str] = None
 
-
     def _generate_nodes(
         self,
         name: str,
@@ -50,6 +49,6 @@ class Calculate(VariableNode, typing.Generic[T]):
                 typ=self.return_type,
                 doc_string=self.doc,
                 callabl=fn,
-                input_types=input_types
+                input_types=input_types,
             )
         ]
