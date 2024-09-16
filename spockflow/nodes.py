@@ -1,7 +1,7 @@
 import typing
 import inspect
 from typing_extensions import Self
-from pydantic import BaseModel
+from pydantic import BaseModel, PrivateAttr
 from dataclasses import dataclass, field
 
 from hamilton import node
@@ -145,8 +145,43 @@ class VariableNode(BaseModel):
     # NOTE: this assumes that base.NodeCreator.get_lifecycle_name() returns generate
     generate: typing.ClassVar[typing.List[base.NodeCreator]] = [VariableNodeCreator()]
 
+
     # def model_post_init(self, __context):
     #     setattr(self, base.NodeCreator.get_lifecycle_name(), [VariableNodeCreator()])
+    # 
+
+    # TODO evaluate if this is worthwile
+    # _lifecycle_hooks: dict = PrivateAttr(default_factory=lambda:{
+    #     "generate": [VariableNodeCreator()]
+    # })
+    # def __getattr__(self, name: str) -> typing.Any:
+    #     try:
+    #         return super().__getattr__(name)
+    #     except AttributeError as e:
+    #         if name in self._lifecycle_hooks:
+    #             return self._lifecycle_hooks[name]
+    #         raise e from e
+
+    # def __hasattr__(self, name: str) -> bool:
+    #     has_attr = super().__hasattr__(name)
+    #     if has_attr or name in self._lifecycle_hooks:
+    #         return True
+    #     return False
+
+    # def add_lifecycle(self, lifecycle: base.NodeTransformLifecycle, skip_validation=False) -> "Self":
+    #     if skip_validation:
+    #         lifecycle.validate(self)
+    #     lifecycle_name = lifecycle.__class__.get_lifecycle_name()
+    #     if lifecycle_name in self._lifecycle_hooks:
+    #         if not lifecycle.allows_multiple():
+    #             raise ValueError(
+    #                 f"Got multiple decorators for decorator @{lifecycle.__class__}. Only one allowed."
+    #             )
+    #         curr_value = self._lifecycle_hooks.get(lifecycle_name)
+    #         self._lifecycle_hooks[lifecycle_name] = curr_value + [lifecycle]
+    #     else:
+    #         self._lifecycle_hooks[lifecycle_name] = [lifecycle]
+    #     return self
 
     def _set_module(self, module: "ModuleType") -> "Self":
         """Called when this node is discovered with the name of the variable that defines it to set the name of this instance in the pipeline
@@ -405,6 +440,10 @@ class VariableNode(BaseModel):
         if caching_strategy is not None:
             kwargs["caching_strategy"] = caching_strategy
         return ConfigVariableNode(node_class=cls, config_path=config_path, **kwargs)
+    
+
+    # def __call__(self, inputs, config=None, final_vars=None, overrides=None, name=None):
+    #     raise NotImplementedError() # Doing this so that it passes the callable check
 
 
 class AliasedVariableNode(VariableNode):
