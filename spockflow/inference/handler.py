@@ -207,9 +207,12 @@ class ServingHandler:
 
     @staticmethod
     def predict_fn(
-        input_data: typing.Dict[str, typing.Any], model: "Driver"
+        input_data: typing.Dict[str, typing.Any], 
+        model: "Driver",
+        model_outputs: typing.Optional[typing.List[str]]=None
     ) -> typing.Dict[str, typing.Any]:
         return model.raw_execute(
+            final_vars=model_outputs,
             inputs=input_data,
         )
 
@@ -235,11 +238,11 @@ class ServingHandler:
         return self.encoders[accept](prediction)
 
     @staticmethod
-    def override_model_version_fn(data) -> typing.Tuple[typing.Optional[str], str]:
+    def override_model_version_fn(data) -> typing.Tuple[typing.Optional[str], typing.Optional[str], typing.Optional[typing.List[str]]]:
         """
         Allows the user to change the model and version used based on input parameters
         """
-        return None, None
+        return None, None, None
 
     # TODO extend async implementation to here
     def transform_fn(
@@ -255,7 +258,7 @@ class ServingHandler:
         )
         with reraise_common_input_exceptions(log_callback):
             data = self.input_fn(input_data, content_type)
-            model_name, model_version = self.override_model_version_fn(data)
+            model_name, model_version, model_outputs = self.override_model_version_fn(data)
             data = self.pre_process_fn(data)
 
         if config_override is None:
@@ -271,7 +274,7 @@ class ServingHandler:
                 )
 
         with reraise_common_input_exceptions():
-            prediction = self.predict_fn(data, model)
+            prediction = self.predict_fn(data, model, model_outputs)
 
         prediction = self.post_process_fn(prediction)
         return self.output_fn(prediction, accept)
