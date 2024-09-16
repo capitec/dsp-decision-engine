@@ -1,7 +1,7 @@
 Spockflow
 =========
 
-Spock is a python framework aimed at creating standalone micro-services that enrich data with actionable outputs. Spock supports both batch and live inference modes. Spock extends existing frameworks to provide a simplistic abstractions for common data flows including policy rules and scoring. Spock is designed to be extensible and modular allowing pipelines and config to be reused in multiple flows. Finally, a large emphasis is placed on runtime traceability and explainability by leveraging Hamilton which is a well established python framework. This allows the lineage of data to be tracked and visualised as well as enabling the steps in a process that lead to a certain outcome to be easily identifiable.
+Spock is a python framework aimed at creating standalone micro-services that enrich data with actionable outputs. Spock supports both batch and live inference modes. Spock extends existing frameworks to provide a simplistic abstraction for common data flows including policy rules and scoring. Spock is designed to be extensible and modular allowing pipelines and config to be reused in multiple flows. Finally, a large emphasis is placed on runtime traceability and explainability by leveraging Hamilton which is a well established python framework. This allows the lineage of data to be tracked and visualised as well as enabling the steps in a process that lead to a certain outcome to be easily identifiable.
 
 .. figure:: ./_static/getting-started/example_pipeline.drawio.svg
    :scale: 100
