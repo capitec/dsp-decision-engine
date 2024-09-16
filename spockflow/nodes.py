@@ -145,10 +145,9 @@ class VariableNode(BaseModel):
     # NOTE: this assumes that base.NodeCreator.get_lifecycle_name() returns generate
     generate: typing.ClassVar[typing.List[base.NodeCreator]] = [VariableNodeCreator()]
 
-
     # def model_post_init(self, __context):
     #     setattr(self, base.NodeCreator.get_lifecycle_name(), [VariableNodeCreator()])
-    # 
+    #
 
     # TODO evaluate if this is worthwile
     # _lifecycle_hooks: dict = PrivateAttr(default_factory=lambda:{
@@ -440,7 +439,6 @@ class VariableNode(BaseModel):
         if caching_strategy is not None:
             kwargs["caching_strategy"] = caching_strategy
         return ConfigVariableNode(node_class=cls, config_path=config_path, **kwargs)
-    
 
     # def __call__(self, inputs, config=None, final_vars=None, overrides=None, name=None):
     #     raise NotImplementedError() # Doing this so that it passes the callable check

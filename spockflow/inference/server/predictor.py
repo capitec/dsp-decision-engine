@@ -147,8 +147,8 @@ async def not_found(request: Request, exc: HTTPException):
 
 async def server_error(request: Request, exc: HTTPException):
     return JSONResponse(
-        content={"message": getattr(exc, "detail", str(exc))}, 
-        status_code=getattr(exc, "status_code", status.HTTP_500_INTERNAL_SERVER_ERROR)
+        content={"message": getattr(exc, "detail", str(exc))},
+        status_code=getattr(exc, "status_code", status.HTTP_500_INTERNAL_SERVER_ERROR),
     )
 
 

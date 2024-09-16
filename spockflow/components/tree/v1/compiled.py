@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from spockflow.components.tree.settings import settings
 from .core import ChildTree, Tree, TOutput, TCond
 from spockflow.nodes import creates_node
+
 # from pandas.core.groupby import DataFrameGroupBy
 
 if typing.TYPE_CHECKING:
@@ -74,7 +75,9 @@ class CompiledNumpyTree:
             )
         )
         # Add in a empty dataframe as a default (will automatically get the right schema due to pd.concat)
-        self.predefined_outputs = pd.concat(predefined_outputs) if len(predefined_outputs) else pd.DataFrame()
+        self.predefined_outputs = (
+            pd.concat(predefined_outputs) if len(predefined_outputs) else pd.DataFrame()
+        )
         self.all_output_names = predefined_outputs_names + execution_outputs
         self.execution_outputs = execution_outputs
         output_df_lengths = [len(o) for o in predefined_outputs]
@@ -350,7 +353,7 @@ class CompiledNumpyTree:
         for c in conditions:
             res.append(",".join(v for v, t in zip(self.all_condition_names, c) if t))
         return res
-    
+
     def _lookup_output_idx(
         self,
         format_inputs: TFormatData,
@@ -369,17 +372,14 @@ class CompiledNumpyTree:
 
     @creates_node()
     def all(
-        self, 
+        self,
         format_inputs: TFormatData,
         conditions_met: np.ndarray,
     ) -> pd.DataFrame:
         _, outputs, *_ = format_inputs
-        batch_idx, condition_idx = np.where(conditions_met[:,:-1])
+        batch_idx, condition_idx = np.where(conditions_met[:, :-1])
         mapped_outputs = outputs.iloc[
-            self._lookup_output_idx(
-                format_inputs,
-                condition_idx
-            )
+            self._lookup_output_idx(format_inputs, condition_idx)
         ].reset_index(drop=True)
         # Not a fan of using magic outputs but cant think of a better solution for now
         mapped_outputs["tree_batch_index"] = batch_idx
@@ -394,10 +394,7 @@ class CompiledNumpyTree:
         _, outputs, *_ = format_inputs
         condition_output_idx = np.argmax(conditions_met, axis=1)
         return outputs.iloc[
-            self._lookup_output_idx(
-                format_inputs,
-                condition_output_idx
-            )
+            self._lookup_output_idx(format_inputs, condition_output_idx)
         ].reset_index(drop=True)
 
     def __call__(self, **kwargs: typing.Union[pd.DataFrame, pd.Series]) -> pd.DataFrame:
