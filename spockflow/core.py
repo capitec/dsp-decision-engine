@@ -16,6 +16,7 @@ def omitted_function():
     """This function is omitted as it forms part of SpockFlow"""
     pass
 
+
 class Driver(driver.Driver):
     def raw_execute(
         self,
@@ -127,15 +128,18 @@ class configure_output(subdag):
         out = []
         for node_ in nodes:
             current_originating_functions = node_.originating_functions
-            if current_originating_functions is None: 
+            if current_originating_functions is None:
                 out.append(node_)
                 continue
-            if not any(isinstance(f, VariableNode) for f in current_originating_functions): 
+            if not any(
+                isinstance(f, VariableNode) for f in current_originating_functions
+            ):
                 out.append(node_)
                 continue
 
             new_originating_functions = tuple(
-                omitted_function if isinstance(f, VariableNode) else f for f in current_originating_functions
+                omitted_function if isinstance(f, VariableNode) else f
+                for f in current_originating_functions
             )
             out.append(node_.copy_with(originating_functions=new_originating_functions))
         return out

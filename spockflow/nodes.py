@@ -132,7 +132,6 @@ class VariableNodeCreator(base.NodeCreator):
         return None
 
 
-
 class VariableNode(BaseModel):
     """This is a base class for all variable nodes to use"""
 
@@ -149,9 +148,12 @@ class VariableNode(BaseModel):
     #
 
     # TODO evaluate if this is worthwile
-    _lifecycle_hooks: dict = PrivateAttr(default_factory=lambda:{
-        base.NodeCreator.get_lifecycle_name(): [VariableNodeCreator()]
-    })
+    _lifecycle_hooks: dict = PrivateAttr(
+        default_factory=lambda: {
+            base.NodeCreator.get_lifecycle_name(): [VariableNodeCreator()]
+        }
+    )
+
     def __getattr__(self, name: str) -> typing.Any:
         try:
             return super().__getattr__(name)
@@ -159,7 +161,7 @@ class VariableNode(BaseModel):
             if name in self._lifecycle_hooks:
                 return self._lifecycle_hooks[name]
             raise e from e
-        
+
     def __setattr__(self, name: str, value: typing.Any):
         if name in self._allowed_lifecycle_keys:
             self._lifecycle_hooks[name] = value
