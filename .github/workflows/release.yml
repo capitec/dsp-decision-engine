@@ -139,6 +139,9 @@ jobs:
     permissions:
       id-token: write
       pages: write
+      contents: write
+      pull-requests: write
+      repository-projects: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
