@@ -220,7 +220,7 @@ jobs:
         env:
           PACKAGE_VERSION: ${{needs.get-version.outputs.PACKAGE_VERSION}}
         run: |
-          git push v${PACKAGE_VERSION}
+          git push origin tag v${PACKAGE_VERSION}
 
       - name: Create Release
         if: github.ref == 'refs/heads/main'
