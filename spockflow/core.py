@@ -12,6 +12,11 @@ if TYPE_CHECKING:
     from hamilton import graph
 
 
+def omitted_function():
+    """This function is omitted as it forms part of SpockFlow"""
+    pass
+
+
 class Driver(driver.Driver):
     def raw_execute(
         self,
@@ -118,6 +123,27 @@ class configure_output(subdag):
             g._spock_cached_default_out = default_out
         return g._spock_cached_default_out
 
+    @staticmethod
+    def _filter_originating_functions(nodes: List[node.Node]) -> List[node.Node]:
+        out = []
+        for node_ in nodes:
+            current_originating_functions = node_.originating_functions
+            if current_originating_functions is None:
+                out.append(node_)
+                continue
+            if not any(
+                isinstance(f, VariableNode) for f in current_originating_functions
+            ):
+                out.append(node_)
+                continue
+
+            new_originating_functions = tuple(
+                omitted_function if isinstance(f, VariableNode) else f
+                for f in current_originating_functions
+            )
+            out.append(node_.copy_with(originating_functions=new_originating_functions))
+        return out
+
     def generate_nodes(
         self, fn: "Callable", configuration: "Dict[str, Any]"
     ) -> "Collection[node.Node]":
@@ -135,7 +161,7 @@ class configure_output(subdag):
         # nodes += [self.add_final_node(fn, final_node_name, namespace)]
         if not self.ignore_output:
             nodes.append(self.set_spock_output_flag(node.Node.from_fn(fn), force=True))
-        return nodes
+        return self._filter_originating_functions(nodes)
 
 
 class set_function_as_output(tag):
