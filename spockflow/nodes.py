@@ -132,40 +132,47 @@ class VariableNodeCreator(base.NodeCreator):
         return None
 
 
-assert (
-    base.NodeCreator.get_lifecycle_name() == "generate"
-), "The version of Hamilton you are using is incompatible with this generation"
-
-
 class VariableNode(BaseModel):
     """This is a base class for all variable nodes to use"""
 
     _name: typing.Optional[str] = None
     _module: typing.Optional[str] = None
     # NOTE: this assumes that base.NodeCreator.get_lifecycle_name() returns generate
-    generate: typing.ClassVar[typing.List[base.NodeCreator]] = [VariableNodeCreator()]
-
+    # generate: typing.ClassVar[typing.List[base.NodeCreator]] = [VariableNodeCreator()]
+    _allowed_lifecycle_keys: typing.ClassVar[typing.List[str]] = [
+        base.NodeCreator.get_lifecycle_name(),
+        base.NodeDecorator.get_lifecycle_name(),
+    ]
     # def model_post_init(self, __context):
     #     setattr(self, base.NodeCreator.get_lifecycle_name(), [VariableNodeCreator()])
     #
 
     # TODO evaluate if this is worthwile
-    # _lifecycle_hooks: dict = PrivateAttr(default_factory=lambda:{
-    #     "generate": [VariableNodeCreator()]
-    # })
-    # def __getattr__(self, name: str) -> typing.Any:
-    #     try:
-    #         return super().__getattr__(name)
-    #     except AttributeError as e:
-    #         if name in self._lifecycle_hooks:
-    #             return self._lifecycle_hooks[name]
-    #         raise e from e
+    _lifecycle_hooks: dict = PrivateAttr(
+        default_factory=lambda: {
+            base.NodeCreator.get_lifecycle_name(): [VariableNodeCreator()]
+        }
+    )
 
-    # def __hasattr__(self, name: str) -> bool:
-    #     has_attr = super().__hasattr__(name)
-    #     if has_attr or name in self._lifecycle_hooks:
-    #         return True
-    #     return False
+    def __getattr__(self, name: str) -> typing.Any:
+        try:
+            return super().__getattr__(name)
+        except AttributeError as e:
+            if name in self._lifecycle_hooks:
+                return self._lifecycle_hooks[name]
+            raise e from e
+
+    def __setattr__(self, name: str, value: typing.Any):
+        if name in self._allowed_lifecycle_keys:
+            self._lifecycle_hooks[name] = value
+            return
+        super().__setattr__(name, value)
+
+    def __hasattr__(self, name: str) -> bool:
+        has_attr = super().__hasattr__(name)
+        if has_attr or name in self._lifecycle_hooks:
+            return True
+        return False
 
     # def add_lifecycle(self, lifecycle: base.NodeTransformLifecycle, skip_validation=False) -> "Self":
     #     if skip_validation:
