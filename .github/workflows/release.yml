@@ -131,7 +131,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    needs: ["build-docs", "build-package"]
+    needs: ["build-docs", "build-package", "get-version"]
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -151,7 +151,7 @@ jobs:
           PACKAGE_VERSION: ${{needs.get-version.outputs.PACKAGE_VERSION}}
         run: |
           git config --global user.email "githubbot@donotreply.com"
-          git config --global user.name "Sholto Armstrong"
+          git config --global user.name "Github Bot"
           git tag -a v${PACKAGE_VERSION} -m "Release v${PACKAGE_VERSION}"
 
       - name: Set up Python
@@ -187,7 +187,7 @@ jobs:
           name: python-package
           path: dist
 
-      - name: Upload Docker image
+      - name: Build Docker image
         uses: docker/build-push-action@v3
         with:
           context: .
@@ -213,6 +213,12 @@ jobs:
         if: github.ref == 'refs/heads/main'
         uses: actions/deploy-pages@v4
       
+      - name: Push Tag
+        env:
+          PACKAGE_VERSION: ${{needs.get-version.outputs.PACKAGE_VERSION}}
+        run: |
+          git push v${PACKAGE_VERSION}
+
       - name: Create Release
         if: github.ref == 'refs/heads/main'
         id: release-snapshot
