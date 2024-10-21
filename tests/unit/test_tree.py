@@ -208,7 +208,7 @@ def test_set_default_twice(tree):
         tree.set_default(value(888))  # Default value already set
 
 
-def test_merge_subtrees_with_defaults(tree):
+def test_merge_subtrees_with_only_defaults(tree):
     subtree1 = Tree()
     subtree1.set_default(value(100))
 
@@ -219,6 +219,22 @@ def test_merge_subtrees_with_defaults(tree):
     with pytest.raises(ValueError):
         tree.include_subtree(subtree1)
 
+    with pytest.raises(ValueError):
+        tree.include_subtree(subtree2)
+
+
+def test_merge_subtrees_with_defaults(tree):
+    subtree = Tree()
+    subtree.condition(output=value(100), condition="SubA")
+    subtree.condition(output=value(200), condition="SubB")
+    subtree.set_default(output=value(300))
+
+    subtree2 = Tree()
+    subtree2.condition(output=value(1000), condition="SubD")
+    subtree2.condition(output=value(2000), condition="SubE")
+    subtree2.set_default(output=value(3000))
+
+    tree.include_subtree(subtree)
     with pytest.raises(ValueError):
         tree.include_subtree(subtree2)
 

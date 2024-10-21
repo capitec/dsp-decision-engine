@@ -113,6 +113,7 @@ class ChildTree(BaseModel):
                 raise ValueError(
                     f"Cannot set default as length of value ({len_value}) incompatible with tree {len_tree}."
                 )
+        self.default_value = value
 
     def merge_into(self, other: Self):
         len_subtree = len(other)
@@ -123,10 +124,8 @@ class ChildTree(BaseModel):
                     f"Subtree length ({len_subtree}) incompatible with tree ({len_tree})."
                 )
 
-        if other.default_value is not None and self.default_value is not None:
-            raise ValueError(
-                f"Cannot merge two subtrees both containing default values"
-            )
+        if other.default_value is not None:
+            self.set_default(other.default_value)
         self.nodes.extend(other.nodes)
 
 
@@ -332,11 +331,9 @@ class Tree(VariableNode):
         """
         if child_tree is None:
             child_tree = self.root
-        if child_tree.default_value is not None:
-            raise ValueError("Default value already set")
         if isinstance(output, Tree):
             output = output.root
-        child_tree.default_value = output
+        child_tree.set_default(output)
 
     def include_subtree(
         self,
