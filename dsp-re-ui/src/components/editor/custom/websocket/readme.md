@@ -1,0 +1,1 @@
+A tonne of this file was modled after https://github.com/retejs/history-plugin/blob/main/src/presets/classic/index.ts Please check there for a reference
