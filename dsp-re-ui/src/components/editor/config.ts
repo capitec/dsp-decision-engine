@@ -11,6 +11,7 @@ import { CustomNode } from "./custom/Node";
 import { StyledNode } from "./custom/StyledNode";
 import { CustomSocket } from "./custom/Socket";
 import { CustomConnection } from "./custom/Connection";
+// import * as CustomMinimapPreset from "./custom/minimap";
 import { addCustomBackground } from "./custom/background";
 import { HistoryPlugin, HistoryActions, Presets as HistoryPresets, HistoryExtensions } from "rete-history-plugin";
 import { WebsocketPlugin, WebsocketPresets } from "./custom/websocket";

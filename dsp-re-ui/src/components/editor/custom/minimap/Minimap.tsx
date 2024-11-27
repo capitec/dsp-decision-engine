@@ -4,9 +4,12 @@ import { useCallback, useRef } from 'react'
 import styled from 'styled-components'
 import { useResizeObserver } from 'usehooks-ts'
 import { Rect, Transform, Translate } from 'rete-react-plugin/_types/presets/minimap/types'
-import { px } from 'rete-react-plugin/_types/presets/minimap/utils'
-import { MiniNode } from 'rete-react-plugin/_types/presets/minimap/components/MiniNode'
-import { MiniViewport } from 'rete-react-plugin/_types/presets/minimap/components/MiniViewport'
+// @ts-ignore
+import { px } from 'rete-react-plugin/presets/minimap/utils'
+// @ts-ignore
+import { MiniNode } from 'rete-react-plugin/presets/minimap/components/MiniNode'
+// @ts-ignore
+import { MiniViewport } from 'rete-react-plugin/presets/minimap/components/MiniViewport'
 
 const Styles = styled.div<{ size: number }>`
     position: absolute;
