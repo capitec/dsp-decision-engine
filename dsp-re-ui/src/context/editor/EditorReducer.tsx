@@ -1,8 +1,9 @@
 import { EditorState, EditorAction } from './editorTypes';
 
 export const initialEditorState: EditorState = {
-  projectId: null,
+  projectId: "00000000-0000-0000-0000-000000000000",
   nodes: [],
+  selectedNodeId: null,
   loading: false,
   error: null
 };
@@ -16,6 +17,12 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
         nodes: [],
         error: null
       };
+    case 'SELECT_NODE':
+        return {
+          ...state,
+          selectedNodeId: action.payload,
+          error: null
+        };
     case 'FETCH_NODES_START':
       return {
         ...state,

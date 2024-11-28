@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.routing import APIRouter
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import os
 import httpx
 import uuid
@@ -12,6 +12,7 @@ import typing
 
 # Assuming your node structure and types are like this:
 class Node(BaseModel):
+    node_id: uuid.UUID = Field(default_factory=uuid.uuid4, alias="nodeId") # TODO get id from function name hash
     name: str
     documentation: str = ""
     dependencies: typing.List[str] = []

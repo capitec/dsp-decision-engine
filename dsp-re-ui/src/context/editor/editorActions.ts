@@ -1,6 +1,12 @@
 import { EditorAction } from './editorTypes';
 import axios from 'axios';
 
+
+export const selectNode = (nodeId: string | null): EditorAction => ({
+  type: 'SELECT_NODE',
+  payload: nodeId
+});
+
 export const setProjectId = (projectId: string): EditorAction => ({
   type: 'SET_PROJECT_ID',
   payload: projectId

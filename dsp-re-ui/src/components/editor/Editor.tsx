@@ -12,6 +12,9 @@ import {
   ArrangeAppliers
 } from "rete-auto-arrange-plugin";
 
+
+
+
 //@ts-ignore
 const updateNodes = async (
   area: AreaPlugin<Schemes, AreaExtra>, 
@@ -21,18 +24,19 @@ const updateNodes = async (
   rearrangeLayout: () => Promise<void>,
 ) => {
   const createdNodes: Record<string, any> = {};
+  // TODO dunamic update logic
+  await editor.clear();
 
   // Create Nodes
   await Promise.all(editorState.nodes.map(async (nodeData) => {
-    const { name, dependencies } = nodeData;
+    const { name, dependencies, nodeId } = nodeData;
     const node = new Node(name);
-    node.id = getUID(); 
+    node.id = nodeId; 
 
     node.addOutput('output', new ClassicPreset.Output(socket, 'Output'));
-
-    dependencies.forEach(element => {
-      node.addInput(element, new ClassicPreset.Input(socket, element))
-    });
+    if (dependencies.length > 0) {
+      node.addInput("inputs", new ClassicPreset.Input(socket, "Inputs"))
+    }
 
     createdNodes[name] = node;
     await editor.addNode(node);
@@ -49,7 +53,7 @@ const updateNodes = async (
         await editor.addConnection(
           new Connection(
             dependencyNode, "output", 
-            node, depName
+            node, "inputs"
           ))
       }
     }));
@@ -57,23 +61,26 @@ const updateNodes = async (
 
   await rearrangeLayout();
 
-  // Automatically rearange objects
+  // Automatically rearrange objects
   
 }
 
-export default function ReteEditor(props: {projectId: string}) {
+export default function ReteEditor(props: {}) {
   const [ref, reteEditor] = useRete(createEditor);
   const dispatch = useEditorDispatch();
   const editorState = useEditor();
   const currentProjectId = useRef("");
 
   useEffect(() => {
-    if (currentProjectId.current !== props.projectId) {
-      currentProjectId.current = props.projectId;
-      fetchProjectNodes(props.projectId, dispatch)
+    if (currentProjectId.current !== editorState.projectId && editorState.projectId) {
+      currentProjectId.current = editorState.projectId;
+      fetchProjectNodes(editorState.projectId, dispatch)
     }
-  }, [props.projectId, dispatch, currentProjectId]);
+  }, [editorState.projectId, dispatch, currentProjectId]);
 
+  useEffect(() => {
+    reteEditor?.setEditorDispatch(dispatch)
+  }, [reteEditor, dispatch])
 
   useEffect(() => {
     if (reteEditor !== null && editorState?.nodes){
@@ -85,7 +92,7 @@ export default function ReteEditor(props: {projectId: string}) {
         reteEditor.rearrangeLayout,
       )
     }
-  }, [editorState, reteEditor])
+  }, [editorState?.nodes, reteEditor])
   
 
   return (

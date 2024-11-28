@@ -17,5 +17,5 @@ def test_4(test_2: pd.Series) -> pd.Series:
 def test_5(test_4: pd.Series) -> pd.Series:
     return test_4
 
-def test_6(test_4: pd.Series) -> pd.Series:
+def test_6(test_4: pd.Series, test_5: pd.Series) -> pd.Series:
     return test_4

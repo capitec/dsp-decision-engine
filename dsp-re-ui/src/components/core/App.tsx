@@ -9,7 +9,7 @@ function App() {
     <div className="App">
       <EditorProvider>
         <Sidebar></Sidebar>
-        <Editor projectId={"00000000-0000-0000-0000-000000000000"}></Editor>
+        <Editor></Editor>
       </EditorProvider>
     </div>
   );

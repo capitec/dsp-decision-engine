@@ -1,3 +1,4 @@
+import { Dispatch } from "react";
 import { createRoot } from "react-dom/client";
 import { NodeEditor, GetSchemes, ClassicPreset } from "rete";
 import { AreaPlugin, AreaExtensions } from "rete-area-plugin";
@@ -28,6 +29,10 @@ import {
   ContextMenuExtra
 } from "rete-context-menu-plugin";
 
+import { selectNode } from "@ctx/editor/editorActions";
+import { EditorAction } from "@ctx/editor/editorTypes";
+import { SelectorEntity } from "rete-area-plugin/_types/extensions/selectable";
+
 export class Node extends ClassicPreset.Node {
   width = 180;
   height = 180;
@@ -40,7 +45,36 @@ export type Schemes = GetSchemes<
 >;
 export type AreaExtra = ReactArea2D<Schemes> | MinimapExtra | ContextMenuExtra;
 
+class CustomSelector<E extends SelectorEntity> extends AreaExtensions.Selector<E> {
+  editorDispatch: Dispatch<EditorAction> | null = null;
+  lastPicked: string | null = null
+  constructor() {super();}
+
+  pick(entity: Pick<E, 'label' | 'id'>) {
+    this.lastPicked = this.pickId
+    if (super.isPicked(entity)) {
+      super.release();
+      super.remove(entity);
+      this.editorDispatch && this.editorDispatch(selectNode(null))
+    } else {
+      super.pick(entity);
+      this.editorDispatch && this.editorDispatch(selectNode(entity.id))
+    }
+  }
+  unselectAll(): void {
+    super.unselectAll();
+    // This is a bit hacky but for some reason this even gets called after all picks
+    if (this.lastPicked === this.pickId) {
+      super.release();
+      this.editorDispatch && this.editorDispatch(selectNode(null))
+    }
+    this.lastPicked = this.pickId;
+  }
+}
+
+
 export async function createEditor(container: HTMLElement) {
+  let editorDispatch: Dispatch<EditorAction> | null = null;
   const socket = new ClassicPreset.Socket("socket");
   const history = new HistoryPlugin<Schemes, HistoryActions<Schemes>>();
 
@@ -50,6 +84,7 @@ export async function createEditor(container: HTMLElement) {
   const render = new ReactPlugin<Schemes, AreaExtra>({ createRoot });
   // @
   const arrange = new AutoArrangePlugin<Schemes>();
+  const selector = new CustomSelector();
   const applier = new ArrangeAppliers.TransitionApplier<Schemes, never>({
     duration: 500,
     timingFunction: (t) => t,
@@ -63,7 +98,7 @@ export async function createEditor(container: HTMLElement) {
     boundViewport: true
   });
 
-  AreaExtensions.selectableNodes(area, AreaExtensions.selector(), {
+  AreaExtensions.selectableNodes(area, selector, {
     accumulating: AreaExtensions.accumulateOnCtrl()
   });
 
@@ -126,6 +161,18 @@ export async function createEditor(container: HTMLElement) {
   area.use(minimap);
   area.use(arrange);
 
+  // area.addPipe(context => {
+  //   if (!editorDispatch) return context
+  //   if (!context || typeof context !== 'object' || !('type' in context)) return context
+
+  //   if (context.type === 'nodepicked') {
+  //       editorDispatch(selectNode(context.data.id))
+  //   }
+
+  //   return context
+  // })
+
+
   AreaExtensions.simpleNodesOrder(area);
   
   keyboard(
@@ -142,6 +189,7 @@ export async function createEditor(container: HTMLElement) {
       await arrange.layout({ applier: animate ? applier : undefined });
       AreaExtensions.zoomAt(area, editor.getNodes());
     },
+    setEditorDispatch: (d: Dispatch<EditorAction>) => {selector.editorDispatch = d},
     area,
     editor,
     socket,
