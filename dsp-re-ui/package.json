@@ -12,12 +12,14 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "axios": "^1.7.8",
+    "d3-shape": "^3.2.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-scripts": "^5.0.1",
     "rete": "^2.0.5",
     "rete-area-plugin": "^2.1.3",
     "rete-auto-arrange-plugin": "^2.0.2",
+    "rete-connection-path-plugin": "^2.0.4",
     "rete-connection-plugin": "^2.0.5",
     "rete-context-menu-plugin": "^2.0.4",
     "rete-history-plugin": "^2.0.2",
@@ -54,6 +56,7 @@
   },
   "devDependencies": {
     "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
+    "@types/d3-shape": "^3.1.6",
     "craco-alias": "^3.0.1"
   },
   "proxy": "http://localhost:8000"

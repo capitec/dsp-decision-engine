@@ -1,7 +1,7 @@
 import { Dispatch } from "react";
 import { createRoot } from "react-dom/client";
 import { NodeEditor, GetSchemes, ClassicPreset } from "rete";
-import { AreaPlugin, AreaExtensions } from "rete-area-plugin";
+import { AreaPlugin, AreaExtensions, Area2D } from "rete-area-plugin";
 import {
   ConnectionPlugin,
   Presets as ConnectionPresets
@@ -32,18 +32,24 @@ import {
 import { selectNode } from "@ctx/editor/editorActions";
 import { EditorAction } from "@ctx/editor/editorTypes";
 import { SelectorEntity } from "rete-area-plugin/_types/extensions/selectable";
+import { ConnectionPathPlugin } from "rete-connection-path-plugin";
+import { curveStep, curveStepBefore, curveMonotoneX, curveLinear, CurveFactory, curveStepAfter } from "d3-shape";
+
 
 export class Node extends ClassicPreset.Node {
-  width = 180;
-  height = 180;
+  width = 200;
+  height = 260;
 }
-export class Connection<N extends Node> extends ClassicPreset.Connection<N, N> {}
+
+export class Connection<N extends Node> extends ClassicPreset.Connection<N, N> {
+  curve?: CurveFactory;
+}
 
 export type Schemes = GetSchemes<
   Node,
   Connection<Node>
 >;
-export type AreaExtra = ReactArea2D<Schemes> | MinimapExtra | ContextMenuExtra;
+export type AreaExtra = ReactArea2D<Schemes> | MinimapExtra | ContextMenuExtra | Area2D<Schemes>;
 
 class CustomSelector<E extends SelectorEntity> extends AreaExtensions.Selector<E> {
   editorDispatch: Dispatch<EditorAction> | null = null;
@@ -93,6 +99,12 @@ export async function createEditor(container: HTMLElement) {
     }
   });
 
+  const pathPlugin = new ConnectionPathPlugin<Schemes, AreaExtra>({
+    curve: () => curveStepBefore,
+    // transformer: () => Transformers.classic({ vertical: false }),
+    // arrow: () => true
+  });
+
   // @ts-ignore
   const minimap = new MinimapPlugin<Schemes>({
     boundViewport: true
@@ -123,15 +135,16 @@ export async function createEditor(container: HTMLElement) {
   render.addPreset(
     Presets.classic.setup({
       customize: {
-        // node(context) {
+        node(context) {
+          // return CustomNode;
         // //   if (context.payload.label === "Fully customized") {
         // //     return CustomNode;
         // //   }
         // //   if (context.payload.label === "Override styles") {
         // //     return StyledNode;
         // //   }
-        //   return Presets.classic.Node;
-        // },
+          return Presets.classic.Node;
+        },
         socket(context) {
           return Presets.classic.Socket;
           // return CustomSocket;
@@ -160,6 +173,8 @@ export async function createEditor(container: HTMLElement) {
   area.use(contextMenu);
   area.use(minimap);
   area.use(arrange);
+  render.use(pathPlugin);
+
 
   // area.addPipe(context => {
   //   if (!editorDispatch) return context
@@ -186,7 +201,21 @@ export async function createEditor(container: HTMLElement) {
   return {
     destroy: () => area.destroy(),
     rearrangeLayout: async (animate: boolean = false) => {
-      await arrange.layout({ applier: animate ? applier : undefined });
+      await arrange.layout({ 
+        applier: animate ? applier : undefined,
+        options: {
+          'elk.direction': 'DOWN',
+          'elk.algorithm': 'mrtree',
+          'elk.alignment': 'DOWN',
+          // @ts-ignore
+          'elk.layered.spacing.nodeNodeBetweenLayers': 200,
+          'elk.mrtree.weighting': 'CONSTRAINT',
+          // @ts-ignore
+          'elk.spacing.edgeNode': 0,
+          // @ts-ignore
+          'elk.spacing.nodeNode': 200,
+        }
+      });
       AreaExtensions.zoomAt(area, editor.getNodes());
     },
     setEditorDispatch: (d: Dispatch<EditorAction>) => {selector.editorDispatch = d},
