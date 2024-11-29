@@ -14,7 +14,7 @@ const Svg = styled.svg`
 
 const Path = styled.path<{ styles?: (props: any) => any }>`
   fill: none;
-  stroke-width: 5px;
+  stroke-width: 2px;
   stroke: black;
   pointer-events: auto;
   ${(props) => props.styles && props.styles(props)}

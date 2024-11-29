@@ -6,7 +6,7 @@ import {
   ConnectionPlugin,
   Presets as ConnectionPresets
 } from "rete-connection-plugin";
-import { ReactPlugin, Presets, ReactArea2D } from "rete-react-plugin";
+import { ReactPlugin, Presets, ReactArea2D, Position } from "rete-react-plugin";
 import { MinimapExtra, MinimapPlugin } from "rete-minimap-plugin";
 import { CustomNode } from "./custom/Node";
 import { StyledNode } from "./custom/StyledNode";
@@ -32,13 +32,13 @@ import {
 import { selectNode } from "@ctx/editor/editorActions";
 import { EditorAction } from "@ctx/editor/editorTypes";
 import { SelectorEntity } from "rete-area-plugin/_types/extensions/selectable";
-import { ConnectionPathPlugin } from "rete-connection-path-plugin";
+import { ConnectionPathPlugin, Transformers } from "rete-connection-path-plugin";
 import { curveStep, curveStepBefore, curveMonotoneX, curveLinear, CurveFactory, curveStepAfter } from "d3-shape";
 
 
 export class Node extends ClassicPreset.Node {
   width = 200;
-  height = 260;
+  height = 60;
 }
 
 export class Connection<N extends Node> extends ClassicPreset.Connection<N, N> {
@@ -79,6 +79,31 @@ class CustomSelector<E extends SelectorEntity> extends AreaExtensions.Selector<E
 }
 
 
+const removeEndOffset = (points: Position[]) => {
+  // I really hate hardcoding the 12 here but it seems to be the way to do it from what i can see:
+  // https://github.com/retejs/render-utils/blob/e9f163159b21e3c04cf70ec1d27873000d119927/src/sockets-position/dom-socket-position.ts#L39
+  if (points.length !== 2) throw new Error('number of points should be equal to 2')
+    const [st, end] = points;
+    return [
+      {x:st.x - 12, y:st.y},
+      {x:end.x + 12, y:end.y},
+    ]
+}
+
+// TODO consider implementing this as a CurveFactory
+const extendDownward = (points: Position[]) => {
+  if (points.length !== 2) throw new Error('number of points should be equal to 2')
+  const [st, ed] = points;
+  if (st.x === ed.x) {return points}
+  const midpoint = Math.min((st.y+ed.y)/2, st.y+80)
+  return [
+    {x:st.x, y:st.y},
+    {x:st.x, y: midpoint},
+    {x:ed.x, y: midpoint},
+    {x:ed.x, y:ed.y},
+  ]
+}
+
 export async function createEditor(container: HTMLElement) {
   let editorDispatch: Dispatch<EditorAction> | null = null;
   const socket = new ClassicPreset.Socket("socket");
@@ -100,8 +125,11 @@ export async function createEditor(container: HTMLElement) {
   });
 
   const pathPlugin = new ConnectionPathPlugin<Schemes, AreaExtra>({
-    curve: () => curveStepBefore,
-    // transformer: () => Transformers.classic({ vertical: false }),
+    curve: (payload) => {
+      return curveLinear
+    },
+    transformer: () => (points) => extendDownward(removeEndOffset(points))
+    // transformer: () => Transformers.classic({ vertical: true }),
     // arrow: () => true
   });
 
@@ -111,7 +139,8 @@ export async function createEditor(container: HTMLElement) {
   });
 
   AreaExtensions.selectableNodes(area, selector, {
-    accumulating: AreaExtensions.accumulateOnCtrl()
+    // accumulating: AreaExtensions.accumulateOnCtrl()
+    accumulating: {active: ()=>false}
   });
 
   const contextMenu = new ContextMenuPlugin<Schemes>({
@@ -136,20 +165,21 @@ export async function createEditor(container: HTMLElement) {
     Presets.classic.setup({
       customize: {
         node(context) {
-          // return CustomNode;
+          return CustomNode;
         // //   if (context.payload.label === "Fully customized") {
         // //     return CustomNode;
         // //   }
         // //   if (context.payload.label === "Override styles") {
         // //     return StyledNode;
         // //   }
-          return Presets.classic.Node;
+          // return Presets.classic.Node;
         },
         socket(context) {
           return Presets.classic.Socket;
           // return CustomSocket;
         },
         connection(context) {
+          return Presets.classic.Connection;
           return CustomConnection;
         }
       }
