@@ -1,0 +1,164 @@
+{
+  "doc": "This executes a user defined decision tree",
+  "root": {
+    "nodes": [
+      {
+        "condition_type": "base",
+        "value": {
+          "type": "DataFrame",
+          "values": {
+            "code": 102,
+            "description": "My first condition"
+          },
+          "dtypes": {
+            "code": "int64",
+            "description": "object"
+          }
+        },
+        "condition": "first_condition",
+        "priority": null
+      },
+      {
+        "condition_type": "table",
+        "values": [
+          {
+            "type": "DataFrame",
+            "values": {
+              "code": 100,
+              "description": "o1"
+            },
+            "dtypes": {
+              "code": "int64",
+              "description": "object"
+            }
+          },
+          {
+            "type": "DataFrame",
+            "values": {
+              "code": 100,
+              "description": "o2"
+            },
+            "dtypes": {
+              "code": "int64",
+              "description": "object"
+            }
+          },
+          {
+            "type": "DataFrame",
+            "values": {
+              "code": 100,
+              "description": "o3"
+            },
+            "dtypes": {
+              "code": "int64",
+              "description": "object"
+            }
+          },
+          {
+            "type": "DataFrame",
+            "values": {
+              "code": 100,
+              "description": "o4"
+            },
+            "dtypes": {
+              "code": "int64",
+              "description": "object"
+            }
+          },
+          {
+            "type": "DataFrame",
+            "values": {
+              "code": 100,
+              "description": "o5"
+            },
+            "dtypes": {
+              "code": "int64",
+              "description": "object"
+            }
+          }
+        ],
+        "condition_table": "test",
+        "priority": null
+      },
+      {
+        "condition_type": "base",
+        "value": {
+          "nodes": [
+            {
+              "condition_type": "base",
+              "value": {
+                "type": "DataFrame",
+                "values": {
+                  "code": 100,
+                  "description": "a and b are out of range"
+                },
+                "dtypes": {
+                  "code": "int64",
+                  "description": "object"
+                }
+              },
+              "condition": "condition_b",
+              "priority": null
+            },
+            {
+              "condition_type": "base",
+              "value": {
+                "type": "DataFrame",
+                "values": {
+                  "code": 101,
+                  "description": "a and c are out of range"
+                },
+                "dtypes": {
+                  "code": "int64",
+                  "description": "object"
+                }
+              },
+              "condition": "condition_c",
+              "priority": null
+            }
+          ],
+          "default_value": null
+        },
+        "condition": "condition_a",
+        "priority": null
+      }
+    ],
+    "default_value": null
+  },
+  "decision_tables": {
+    "test": {
+      "operations": [
+        {
+          "predicate": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+          "op": "MIN"
+        },
+        {
+          "predicate": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+          "op": "MAX"
+        },
+        {
+          "predicate": [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1],
+          "op": "MIN"
+        },
+        {
+          "predicate": [1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2],
+          "op": "MAX"
+        }
+      ],
+      "operation_inputs": ["a", "a", "b", "b"],
+      "outputs": {
+        "value": [0, 2, 4, 0, 2, 3, 2, 2, 1, 1]
+      },
+      "allow_multi_result": false,
+      "default_value": {
+        "type": "DataFrame",
+        "values": {
+          "value": 1
+        },
+        "dtypes": {
+          "value": "int64"
+        }
+      }
+    }
+  }
+}

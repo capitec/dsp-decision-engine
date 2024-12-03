@@ -98,6 +98,7 @@ export function CustomNode<Scheme extends ClassicScheme>(props: Props<Scheme>) {
       height={height}
       styles={props.styles}
       data-testid="node"
+      key={id}
     >
 
       {/* Inputs */}
@@ -109,6 +110,7 @@ export function CustomNode<Scheme extends ClassicScheme>(props: Props<Scheme>) {
           emit={props.emit}
           payload={input.socket}
           data-testid="input-socket"
+          key={key}
         />)}
       <div className="title" data-testid="title">{label}</div>
       {/* Outputs */}
@@ -120,6 +122,7 @@ export function CustomNode<Scheme extends ClassicScheme>(props: Props<Scheme>) {
           emit={props.emit}
           payload={output.socket}
           data-testid="output-socket"
+          key={key}
         />)}
     </NodeStyles>
   )
