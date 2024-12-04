@@ -17,12 +17,12 @@ const SideBarDiv = styled.div<{ $hidden: boolean; }>`
 export function Sidebar() {
     const editorState = useEditor();
     const selectedNode = useMemo(
-        () => editorState.selectedNodeId && editorState.nodes.find(v => v.nodeId === editorState.selectedNodeId),
+        () => editorState.selectedNodeId && editorState.nodes[editorState.selectedNodeId],
         [editorState.selectedNodeId, editorState.nodes]
     )
     return (
         <SideBarDiv $hidden={!editorState.selectedNodeId}>
-            <h1>{selectedNode && selectedNode.name}</h1>
+            <h1>{selectedNode && editorState.selectedNodeId}</h1>
         </SideBarDiv>
     )
 }

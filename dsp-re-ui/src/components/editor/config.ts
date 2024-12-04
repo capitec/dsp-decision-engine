@@ -34,6 +34,7 @@ import { EditorAction } from "@ctx/editor/editorTypes";
 import { SelectorEntity } from "rete-area-plugin/_types/extensions/selectable";
 import { ConnectionPathPlugin, Transformers } from "rete-connection-path-plugin";
 import { curveStep, curveStepBefore, curveMonotoneX, curveLinear, CurveFactory, curveStepAfter } from "d3-shape";
+import { ReadonlyPlugin } from "rete-readonly-plugin";
 
 
 export class Node extends ClassicPreset.Node {
@@ -116,6 +117,7 @@ export async function createEditor(container: HTMLElement) {
   // @
   const arrange = new AutoArrangePlugin<Schemes>();
   const selector = new CustomSelector();
+  const readonly = new ReadonlyPlugin<Schemes>();
   const applier = new ArrangeAppliers.TransitionApplier<Schemes, never>({
     duration: 500,
     timingFunction: (t) => t,
@@ -195,7 +197,9 @@ export async function createEditor(container: HTMLElement) {
 
   addCustomBackground(area);
 
+  editor.use(readonly.root);
   editor.use(area);
+  area.use(readonly.area);
   area.use(connection);
   area.use(history);
   // area.use(websocketProvider);
@@ -252,5 +256,6 @@ export async function createEditor(container: HTMLElement) {
     area,
     editor,
     socket,
+    readonly,
   };
 }
