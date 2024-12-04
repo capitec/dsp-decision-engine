@@ -1,7 +1,18 @@
 import { useEditor } from '@ctx/editor/EditorContext';
 import React, { createContext, useContext, useReducer, ReactNode, useMemo } from 'react';
 import styled from 'styled-components'
-
+import BaseConditionEditor from './BaseConditionEditor'; // Import the new editor
+import {
+    Sidebar,
+    SidebarContent,
+    SidebarGroup,
+    SidebarGroupContent,
+    SidebarGroupLabel,
+    SidebarMenu,
+    SidebarMenuButton,
+    SidebarMenuItem,
+    SidebarRail,
+  } from "@/components/ui/sidebar"
 
 const SideBarDiv = styled.div<{ $hidden: boolean; }>`
     height: 100vh;
@@ -14,15 +25,45 @@ const SideBarDiv = styled.div<{ $hidden: boolean; }>`
     right: 0px;
 `
 
-export function Sidebar() {
+export function AppSidebar() {
     const editorState = useEditor();
     const selectedNode = useMemo(
         () => editorState.selectedNodeId && editorState.nodes[editorState.selectedNodeId],
         [editorState.selectedNodeId, editorState.nodes]
     )
+    const renderNodeEditor = () => {
+        if (!selectedNode || !("condition_type" in selectedNode)) {
+            return <div>Value Node (TODO)</div>
+        };
+
+        const handleNodeUpdate = (updatedNode: any) => {
+            console.log('Updating node:', updatedNode);
+        }
+    
+
+        switch (selectedNode.condition_type) {
+            case 'base':
+                return (
+                    <BaseConditionEditor 
+                        node={selectedNode} 
+                        onUpdate={handleNodeUpdate} 
+                    />
+                );
+            case 'table':
+                return <div>Table Condition Editor (TODO)</div>;
+            default:
+                return <div>Unsupported condition type</div>;
+        }
+    }
     return (
-        <SideBarDiv $hidden={!editorState.selectedNodeId}>
-            <h1>{selectedNode && editorState.selectedNodeId}</h1>
-        </SideBarDiv>
+        <Sidebar side="right">
+            <SidebarContent>
+            {renderNodeEditor()}
+            </SidebarContent>
+            <SidebarRail />
+        </Sidebar>
+        // <SideBarDiv $hidden={!editorState.selectedNodeId}>
+        //     {renderNodeEditor()}
+        // </SideBarDiv>
     )
 }

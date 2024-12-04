@@ -219,6 +219,6 @@ export default function ReteEditor(props: {}) {
   
 
   return (
-    <div ref={ref} style={{ height: "100vh", width: "100vw" }}></div>
+    <div ref={ref} className="flex flex-1 flex-col"></div>
   );
 }
