@@ -46,7 +46,7 @@ async def get_nodes(project_id: uuid.UUID) -> Tree:
         raise HTTPException(status_code=404, detail="Project not found")
 
 
-app.include_router(api_router,prefix="/api")
+app.include_router(api_router)
 
 
 # app.mount("/", StaticFiles(directory="static"), name="static")

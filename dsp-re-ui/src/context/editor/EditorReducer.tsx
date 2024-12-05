@@ -5,13 +5,11 @@ import {
   FlattenedNodes,
   FlattenedNodeValues,
   BaseConditionedNode,
-  TableConditionedNode,
   ChildTree,
-  TOutput,
-  DataFrame,
-  Series,
-  DefaultValueNode,
 } from './editorTypes';
+
+
+import { getUID } from 'rete';
 
 export const initialEditorState: EditorState = {
   projectId: "00000000-0000-0000-0000-000000000000",
@@ -46,7 +44,7 @@ function flattenDecisionTree(tree: DecisionTree): FlattenedNodes {
       return recursiveFlatten(value, parentName);
     }
     if (value.type) {
-      const key = `${parentName}.${subKey}`
+      const key = getUID()
       flattened.nodes[key] = value
       return {values:[key]}
     }
@@ -57,31 +55,32 @@ function flattenDecisionTree(tree: DecisionTree): FlattenedNodes {
     const res: FlattenedNodeValues = {values: []};
     value.nodes.forEach((node) => {
       if (node.condition_type === "base"){
-        res.values.push(node.condition);
-        flattened.nodes[node.condition] = {
+        const key = getUID()
+        res.values.push(key);
+        flattened.nodes[key] = {
           "condition_type": node.condition_type,
           "condition": node.condition,
-          ...handleValues(node.value, node.condition),
+          ...handleValues(node.value, key),
         }
       } else if (node.condition_type === "table"){ 
-        res.values.push(node.condition_table);
+        const conditionTableKey = node.id || getUID()
+        res.values.push(conditionTableKey);
         const childValues: string[] = [] 
         for (let index = 0; index < (dTableMaxValLookup[node.condition_table] || 0); index++) {
-          const key = `${node.condition_table}.*eq*.${index}`
+          const key = getUID()
           childValues.push(key)
           flattened.nodes[key] = {
             "condition_type": node.condition_type,
             "condition": `${node.condition_table} == ${index}`,
             ...handleValues((node.values && node.values[index]) || null, key),
           }
-          
         }
         // const childValues = node.values?.map((v, idx)=>{
         //   console.log({v})
         //   const child = handleValues(v, node.condition_table, `values.${idx}`)
         //   return child.values[0]
         // }) || []
-        flattened.nodes[node.condition_table] = {
+        flattened.nodes[conditionTableKey] = {
           "condition_type": node.condition_type,
           "condition": node.condition_table,
           "values": childValues
@@ -91,7 +90,7 @@ function flattenDecisionTree(tree: DecisionTree): FlattenedNodes {
       }
     })
     if (value.default_value) {
-      const key = `${parentName}.*default*`
+      const key = getUID()
       const res = handleValues(value.default_value, key);
       flattened.nodes[key] = {
         "condition_type": "default",
@@ -150,6 +149,66 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
       };
     case 'CLEAR_PROJECT':
       return initialEditorState;
+
+    case 'ADD_NODE':
+      return {
+        ...state,
+        nodes: {
+          ...state.nodes,
+          // If a parent key is specified, we might want to add logic to update the parent's values
+          // TODO: im going to need better logic here
+          //@ts-ignore
+          [action.payload.parentKey || action.payload.node.condition]: action.payload.node
+        }
+      };
+
+    case 'UPDATE_NODE':
+      return {
+        ...state,
+        //@ts-ignore TODO: Going to have to see why ts doesnt like this
+        nodes: {
+          ...state.nodes,
+          [action.payload.key]: {
+            ...state.nodes[action.payload.key],
+            ...action.payload.node
+          }
+        }
+      };
+
+    case 'DELETE_NODE':
+      const { [action.payload]: deletedNode, ...remainingNodes } = state.nodes;
+      return {
+        ...state,
+        nodes: remainingNodes
+      };
+
+    case 'ADD_DECISION_TABLE':
+      return {
+        ...state,
+        decision_tables: {
+          ...state.decision_tables,
+          [action.payload.key]: action.payload.table
+        }
+      };
+
+    case 'UPDATE_DECISION_TABLE':
+      return {
+        ...state,
+        decision_tables: {
+          ...state.decision_tables,
+          [action.payload.key]: {
+            ...state.decision_tables[action.payload.key],
+            ...action.payload.table
+          }
+        }
+      };
+
+    case 'DELETE_DECISION_TABLE':
+      const { [action.payload]: deletedTable, ...remainingTables } = state.decision_tables;
+      return {
+        ...state,
+        decision_tables: remainingTables
+      };
     default:
       return state;
   }

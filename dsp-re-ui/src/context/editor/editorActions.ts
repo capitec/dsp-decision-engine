@@ -33,3 +33,46 @@ export const fetchProjectNodes = (projectId: string, dispatch: React.Dispatch<Ed
     });
   })
 };
+
+
+export const addNode = (
+  node: Extract<EditorAction, { type: 'ADD_NODE' }>['payload'], 
+  parentKey?: string
+): EditorAction => ({
+  type: 'ADD_NODE',
+  payload: { ...node, parentKey }
+});
+
+export const updateNode = (
+  key: string, 
+  node: Extract<EditorAction, { type: 'UPDATE_NODE' }>['payload']['node']
+): EditorAction => ({
+  type: 'UPDATE_NODE',
+  payload: { key, node }
+});
+
+export const deleteNode = (key: string): EditorAction => ({
+  type: 'DELETE_NODE',
+  payload: key
+});
+
+export const addDecisionTable = (
+  key: string, 
+  table: Extract<EditorAction, { type: 'ADD_DECISION_TABLE' }>['payload']['table']
+): EditorAction => ({
+  type: 'ADD_DECISION_TABLE',
+  payload: { key, table }
+});
+
+export const updateDecisionTable = (
+  key: string, 
+  table: Extract<EditorAction, { type: 'UPDATE_DECISION_TABLE' }>['payload']['table']
+): EditorAction => ({
+  type: 'UPDATE_DECISION_TABLE',
+  payload: { key, table }
+});
+
+export const deleteDecisionTable = (key: string): EditorAction => ({
+  type: 'DELETE_DECISION_TABLE',
+  payload: key
+});
