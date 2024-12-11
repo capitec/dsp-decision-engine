@@ -60,31 +60,19 @@ function flattenDecisionTree(tree: DecisionTree): FlattenedNodes {
         flattened.nodes[key] = {
           "condition_type": node.condition_type,
           "condition": node.condition,
-          ...handleValues(node.value, key),
+          "connections": [handleValues(node.value, key)],
         }
       } else if (node.condition_type === "table"){ 
         const conditionTableKey = node.id || getUID()
         res.values.push(conditionTableKey);
-        const childValues: string[] = [] 
+        const childValues: FlattenedNodeValues[] = [] 
         for (let index = 0; index < (dTableMaxValLookup[node.condition_table] || 0); index++) {
-          const key = getUID()
-          childValues.push(key)
-          flattened.nodes[key] = {
-            "condition_type": node.condition_type,
-            "condition": `${node.condition_table} == ${index}`,
-            ...handleValues((node.values && node.values[index]) || null, key),
-          }
+          childValues.push(handleValues((node.values && node.values[index]) || null, conditionTableKey))
         }
-        // const childValues = node.values?.map((v, idx)=>{
-        //   console.log({v})
-        //   const child = handleValues(v, node.condition_table, `values.${idx}`)
-        //   return child.values[0]
-        // }) || []
         flattened.nodes[conditionTableKey] = {
           "condition_type": node.condition_type,
           "condition": node.condition_table,
-          "values": childValues
-          //...handleValues(node.value, node.condition),
+          "connections": childValues,
         }
 
       }
@@ -95,7 +83,7 @@ function flattenDecisionTree(tree: DecisionTree): FlattenedNodes {
       flattened.nodes[key] = {
         "condition_type": "default",
         "condition": "Otherwise",
-        ...res
+        "connections": [res]
       }
       res.defaultValue = key
     }
@@ -105,7 +93,7 @@ function flattenDecisionTree(tree: DecisionTree): FlattenedNodes {
   flattened.nodes["*root*"] = {
     "condition_type": "default",
     "condition": "Root",
-    ...recursiveFlatten(tree.root, "*root*")
+    "connections": [recursiveFlatten(tree.root, "*root*")]
   }
   console.log({flattened})
   

@@ -73,13 +73,14 @@ export interface DecisionTree {
 
 export interface FlattenedNodeValues {
   values: string[],
-  defaultValue?: string
+  defaultValue?: string,
+  priority?: number[] | null,
 }
 
-export interface FlattenedNode extends FlattenedNodeValues{
+export interface FlattenedNode{
   condition_type: "base" | "table" | "default";
   condition: string,
-  priority?: number[] | null,
+  connections: FlattenedNodeValues[],
 }
 
 export interface FlattenedNodes {

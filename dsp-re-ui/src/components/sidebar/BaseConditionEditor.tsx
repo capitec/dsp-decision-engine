@@ -14,13 +14,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Trash2, Plus } from 'lucide-react';
+import { FlattenedNode } from '@ctx/editor/editorTypes';
 
 interface BaseConditionEditorProps {
-  node: {
-    condition_type: string;
-    condition: string;
-    values: string[];
-  };
+  node: FlattenedNode;
   onUpdate: (updatedNode: any) => void;
 }
 
@@ -32,13 +29,13 @@ interface ValueEntry {
 
 export const BaseConditionEditor: React.FC<BaseConditionEditorProps> = ({ node, onUpdate }) => {
   const [values, setValues] = useState<ValueEntry[]>(
-    node.values.map((value, index) => ({
+    node.connections[0].values.map((value, index) => ({
       id: `value-${index}`,
       type: 'boolean', // Default to boolean, could be enhanced to detect type
       value: value
     }))
   );
-  const [defaultValue, setDefaultValue] = useState<string>(JSON.stringify(node.values || {}));
+  const [defaultValue, setDefaultValue] = useState<string>(JSON.stringify(node.connections[0].values || {}));
 
   const addValue = () => {
 
