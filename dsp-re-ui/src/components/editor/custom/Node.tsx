@@ -3,6 +3,15 @@ import { ClassicScheme, RenderEmit, Presets } from "rete-react-plugin";
 import styled, { css } from "styled-components";
 import { $nodewidth, $socketmargin, $socketsize } from "./vars";
 
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+
 const { RefSocket, RefControl } = Presets.classic;
 
 export const $nodecolor = 'rgba(110,136,255,0.8)'
@@ -80,7 +89,7 @@ type Props<S extends ClassicScheme> = {
 }
 export type NodeComponent<Scheme extends ClassicScheme> = (props: Props<Scheme>) => JSX.Element
 
-export function CustomNode<Scheme extends ClassicScheme>(props: Props<Scheme>) {
+export function CustomNodeold<Scheme extends ClassicScheme>(props: Props<Scheme>) {
   const inputs = Object.entries(props.data.inputs)
   const outputs = Object.entries(props.data.outputs)
   const controls = Object.entries(props.data.controls)
@@ -126,4 +135,20 @@ export function CustomNode<Scheme extends ClassicScheme>(props: Props<Scheme>) {
         />)}
     </NodeStyles>
   )
+}
+
+export function CustomNode<Scheme extends ClassicScheme>(props: Props<Scheme>) {
+  const inputs = Object.entries(props.data.inputs)
+  const outputs = Object.entries(props.data.outputs)
+  const selected = props.data.selected || false
+  const { id, label, width, height } = props.data
+  sortByIndex(inputs)
+  sortByIndex(outputs)
+
+  return (
+  <Card>
+    <CardHeader className='bg-accent'>
+      <CardTitle>{label}</CardTitle>
+    </CardHeader>
+  </Card>)
 }
