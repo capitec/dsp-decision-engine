@@ -8,6 +8,7 @@ import {
     SidebarGroup,
     SidebarGroupContent,
     SidebarGroupLabel,
+    SidebarHeader,
     SidebarMenu,
     SidebarMenuButton,
     SidebarMenuItem,
@@ -57,6 +58,10 @@ export function AppSidebar() {
     }
     return (
         <Sidebar side="right">
+            <SidebarHeader>
+                {/* @ts-ignore */}
+                Editor {selectedNode?.condition || "value" }
+            </SidebarHeader>
             <SidebarContent>
             {renderNodeEditor()}
             </SidebarContent>

@@ -16,7 +16,6 @@ function App() {
 
           <SidebarTrigger className="-mr-1 ml-auto rotate-180" />
           </header>
-          {/* <Editor/> */}
           <Editor/>
         </SidebarInset>
         <AppSidebar />

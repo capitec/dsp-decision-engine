@@ -8,14 +8,12 @@ const Svg = styled.svg`
   overflow: visible !important;
   position: absolute;
   pointer-events: none;
-  width: 9999px;
-  height: 9999px;
 `;
 
 const Path = styled.path<{ styles?: (props: any) => any }>`
   fill: none;
   stroke-width: 2px;
-  stroke: black;
+  stroke: blue;
   pointer-events: auto;
   ${(props) => props.styles && props.styles(props)}
 `;
@@ -30,7 +28,10 @@ export function CustomConnection(props: {
 
   return (
     <Svg data-testid="connection">
-      <Path styles={props.styles} d={path} />
+      <path 
+        className="stroke-primary stroke-2 pointer-events-auto fill-none"
+        d={path}
+       />
     </Svg>
   );
 }

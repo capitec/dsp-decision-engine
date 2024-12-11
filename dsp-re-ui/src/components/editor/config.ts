@@ -23,11 +23,7 @@ import {
   ArrangeAppliers
 } from "rete-auto-arrange-plugin";
 
-import {
-  ContextMenuPlugin,
-  Presets as ContextMenuPresets,
-  ContextMenuExtra
-} from "rete-context-menu-plugin";
+
 
 import { selectNode } from "@ctx/editor/editorActions";
 import { EditorAction } from "@ctx/editor/editorTypes";
@@ -50,7 +46,7 @@ export type Schemes = GetSchemes<
   Node,
   Connection<Node>
 >;
-export type AreaExtra = ReactArea2D<Schemes> | MinimapExtra | ContextMenuExtra | Area2D<Schemes>;
+export type AreaExtra = ReactArea2D<Schemes> | MinimapExtra | Area2D<Schemes>;
 
 class CustomSelector<E extends SelectorEntity> extends AreaExtensions.Selector<E> {
   editorDispatch: Dispatch<EditorAction> | null = null;
@@ -128,7 +124,7 @@ export async function createEditor(container: HTMLElement) {
 
   const pathPlugin = new ConnectionPathPlugin<Schemes, AreaExtra>({
     curve: (payload) => {
-      return curveLinear
+      return curveMonotoneX
     },
     transformer: () => (points) => extendDownward(removeEndOffset(points))
     // transformer: () => Transformers.classic({ vertical: true }),
@@ -145,23 +141,7 @@ export async function createEditor(container: HTMLElement) {
     accumulating: {active: ()=>false}
   });
 
-  const contextMenu = new ContextMenuPlugin<Schemes>({
-    items: ContextMenuPresets.classic.setup([
-      [
-        "Node",
-        () => {
-          const a = new Node("C");
-          a.addControl("a", new ClassicPreset.InputControl("text", {}));
-          a.addInput("a", new ClassicPreset.Input(socket));
-          a.addOutput("a", new ClassicPreset.Output(socket));
-          setTimeout(() => {
-            console.log(editor.getNodes());
-          }, 100);
-          return a;
-        }
-      ]
-    ])
-  });
+
 
   render.addPreset(
     Presets.classic.setup({
@@ -177,17 +157,16 @@ export async function createEditor(container: HTMLElement) {
           // return Presets.classic.Node;
         },
         socket(context) {
-          return Presets.classic.Socket;
-          // return CustomSocket;
+          // return Presets.classic.Socket;
+          return CustomSocket;
         },
         connection(context) {
-          return Presets.classic.Connection;
+          // return Presets.classic.Connection;
           return CustomConnection;
         }
       }
     })
   );
-  render.addPreset(Presets.contextMenu.setup());
   render.addPreset(Presets.minimap.setup({ size: 200 }));
   connection.addPreset(ConnectionPresets.classic.setup());
   history.addPreset(HistoryPresets.classic.setup());
@@ -197,14 +176,12 @@ export async function createEditor(container: HTMLElement) {
 
   addCustomBackground(area);
 
-  editor.use(readonly.root);
+  // editor.use(readonly.root);
   editor.use(area);
   area.use(readonly.area);
-  area.use(connection);
   area.use(history);
   // area.use(websocketProvider);
   area.use(render);
-  area.use(contextMenu);
   area.use(minimap);
   area.use(arrange);
   render.use(pathPlugin);
