@@ -35,7 +35,7 @@ import { ReadonlyPlugin } from "rete-readonly-plugin";
 
 export class Node extends ClassicPreset.Node {
   width = 200;
-  height = 60;
+  height = 40;
 }
 
 export class Connection<N extends Node> extends ClassicPreset.Connection<N, N> {

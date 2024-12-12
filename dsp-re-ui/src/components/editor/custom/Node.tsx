@@ -2,6 +2,8 @@ import * as React from 'react'
 import { ClassicScheme, RenderEmit, Presets } from "rete-react-plugin";
 import styled, { css } from "styled-components";
 import { $nodewidth, $socketmargin, $socketsize } from "./vars";
+import { Trash2, PlusCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 import {
   Card,
@@ -21,57 +23,6 @@ export const $socketcolor = '#96b38a'
 
 type NodeExtraData = { width?: number, height?: number }
 
-export const NodeStyles = styled.div<NodeExtraData & { selected: boolean, styles?: (props: any) => any }>`
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between; 
-    align-items: center; 
-    position: relative; 
-    background: ${$nodecolor};
-    border: 2px solid #4e58bf;
-    border-radius: 10px;
-    cursor: pointer;
-    box-sizing: border-box;
-    width: ${props => Number.isFinite(props.width)
-    ? `${props.width}px`
-    : `${$nodewidth}px`};
-    height: ${props => Number.isFinite(props.height)
-    ? `${props.height}px`
-    : 'auto'};
-    padding-bottom: 6px;
-    user-select: none;
-    line-height: initial;
-    font-family: Arial;
-
-    &:hover {
-        background: lighten(${$nodecolor},4%);
-    }
-    ${props => props.selected && css`
-        background: ${$nodecolorselected};
-        border-color: #e3c000;
-    `}
-    .title {
-        color: white;
-        font-family: sans-serif;
-        font-size: 18px;
-        padding: 8px;
-        text-align: center;
-    }
-    .output-socket {
-      position: absolute;
-      top: ${props => Number.isFinite(props.height)
-        ? `${12+props.height!/2}px`
-        : 'auto'};;
-    }
-    .input-socket {
-      position: absolute;
-      top: ${props => Number.isFinite(props.height)
-        ? `-${-12+props.height!/2}px`
-        : 'auto'};;
-    }
-    ${props => props.styles?.(props)}
-`
-// TODO some work is really needed on the top and bottom above to make it more dynamic
 
 function sortByIndex<T extends [string, undefined | { index?: number }][]>(entries: T) {
   entries.sort((a, b) => {
@@ -89,54 +40,13 @@ type Props<S extends ClassicScheme> = {
 }
 export type NodeComponent<Scheme extends ClassicScheme> = (props: Props<Scheme>) => JSX.Element
 
-export function CustomNodeold<Scheme extends ClassicScheme>(props: Props<Scheme>) {
-  const inputs = Object.entries(props.data.inputs)
-  const outputs = Object.entries(props.data.outputs)
-  const controls = Object.entries(props.data.controls)
-  const selected = props.data.selected || false
-  const { id, label, width, height } = props.data
-
-  sortByIndex(inputs)
-  sortByIndex(outputs)
-  sortByIndex(controls)
-
-  return (
-    <NodeStyles
-      selected={selected}
-      width={width}
-      height={height}
-      styles={props.styles}
-      data-testid="node"
-      key={id}
-    >
-
-      {/* Inputs */}
-      {inputs.map(([key, input]) => input && <RefSocket
-          name="input-socket"
-          side="input"
-          socketKey={key}
-          nodeId={id}
-          emit={props.emit}
-          payload={input.socket}
-          data-testid="input-socket"
-          key={key}
-        />)}
-      <div className="title" data-testid="title">{label}</div>
-      {/* Outputs */}
-      {outputs.map(([key, output]) => output && <RefSocket
-          name="output-socket"
-          side="output"
-          socketKey={key}
-          nodeId={id}
-          emit={props.emit}
-          payload={output.socket}
-          data-testid="output-socket"
-          key={key}
-        />)}
-    </NodeStyles>
-  )
+const onDelete = (id: string) => {
+  console.log(id)
 }
+const onAddChild = (id: string) => {
+  console.log(id)
 
+}
 export function CustomNode<Scheme extends ClassicScheme>(props: Props<Scheme>) {
   const inputs = Object.entries(props.data.inputs)
   const outputs = Object.entries(props.data.outputs)
@@ -146,9 +56,97 @@ export function CustomNode<Scheme extends ClassicScheme>(props: Props<Scheme>) {
   sortByIndex(outputs)
 
   return (
-  <Card>
-    <CardHeader className='bg-accent'>
-      <CardTitle>{label}</CardTitle>
-    </CardHeader>
-  </Card>)
+    <div 
+      className={`
+        relative 
+        bg-accent-foreground 
+        text-accent
+        rounded-lg 
+        border 
+        border-primary/50 
+        shadow-sm
+        flex
+        flex-col
+        items-center
+        justify-center
+        overflow-hidden
+        ${selected ? 'ring-2 ring-primary/70' : ''}
+      `}
+      style={{
+        width: `${width}px`,
+        height: `${height}px`
+      }}
+      data-testid="node"
+      key={id}
+    >
+      {/* Delete Button */}
+      {selected && onDelete && (
+        <Button 
+          variant="destructive" 
+          size="icon" 
+          className="absolute top-1 left-1 z-10 w-6 h-6"
+          onClick={() => onDelete(id)}
+        >
+          <Trash2 className="w-4 h-4" />
+        </Button>
+      )}
+
+      {/* Add Child Button */}
+      {selected && onAddChild && (
+        <Button 
+          variant="outline" 
+          size="icon" 
+          className="absolute top-1 right-1 z-10 w-6 h-6"
+          onClick={() => onAddChild(id)}
+        >
+          <PlusCircle className="w-4 h-4" />
+        </Button>
+      )}
+
+      {/* Input Sockets */}
+      <div className="absolute top-0 left-0 right-0 flex items-center justify-center px-2 -translate-y-1/2">
+        {inputs.map(([key, input]) => input && (
+          <RefSocket
+            name="input-socket"
+            side="input"
+            socketKey={key}
+            nodeId={id}
+            emit={props.emit}
+            payload={input.socket}
+            data-testid="input-socket"
+            key={key}
+          />
+        ))}
+      </div>
+
+      {/* Node Label */}
+      <div 
+        className="
+          text-center 
+          py-2 
+          px-4 
+          font-semibold 
+        " 
+        data-testid="title"
+      >
+        {label}
+      </div>
+
+      {/* Output Sockets */}
+      <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center px-2 translate-y-1/2">
+        {outputs.map(([key, output]) => output && (
+          <RefSocket
+            name="output-socket"
+            side="output"
+            socketKey={key}
+            nodeId={id}
+            emit={props.emit}
+            payload={output.socket}
+            data-testid="output-socket"
+            key={key}
+          />
+        ))}
+      </div>
+    </div>
+  )
 }

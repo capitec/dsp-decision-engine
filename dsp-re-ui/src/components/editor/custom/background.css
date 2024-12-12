@@ -9,22 +9,11 @@
   }
   
   .background {
-    background-color: var(--primary);
+    background-color: var(--primary-foreground);
     opacity: 1;
-    background-image: 
-    linear-gradient(var(--primary) calc(var(--grid-thickness) * 2), transparent calc(var(--grid-thickness) * 2)),
-    linear-gradient(90deg, var(--primary) calc(var(--grid-thickness) * 2), transparent calc(var(--grid-thickness) * 2)),
-    linear-gradient(var(--primary) var(--grid-thickness), transparent var(--grid-thickness)),
-    linear-gradient(90deg, var(--primary) var(--grid-thickness), var(--primary-foreground) var(--grid-thickness));
-  
-    background-size: calc(50 * var(--grid-thickness)) calc(50 * var(--grid-thickness)),
-                    calc(50 * var(--grid-thickness)) calc(50 * var(--grid-thickness)),
-                    calc(10 * var(--grid-thickness)) calc(10 * var(--grid-thickness)),
-                    calc(10 * var(--grid-thickness)) calc(10 * var(--grid-thickness));
-
-    background-position: calc(-1 * var(--grid-thickness) * 2) calc(-1 * var(--grid-thickness) * 2),
-                        calc(-1 * var(--grid-thickness) * 2) calc(-1 * var(--grid-thickness) * 2),
-                        calc(-1 * var(--grid-thickness)) calc(-1 * var(--grid-thickness)),
-                        calc(-1 * var(--grid-thickness)) calc(-1 * var(--grid-thickness));
+    background:
+      linear-gradient(90deg, var(--primary-foreground) calc(var(--dot-space) - var(--dot-size)), transparent 1%) center / var(--dot-space) var(--dot-space),
+      linear-gradient(var(--primary-foreground) calc(var(--dot-space) - var(--dot-size)), transparent 1%) center / var(--dot-space) var(--dot-space),
+      var(--primary);
   }
   
