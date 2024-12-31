@@ -37,9 +37,6 @@ export function AppSidebar() {
             return <div>Value Node (TODO)</div>
         };
 
-        const handleNodeUpdate = (updatedNode: any) => {
-            console.log('Updating node:', updatedNode);
-        }
     
 
         switch (selectedNode.condition_type) {
@@ -47,7 +44,8 @@ export function AppSidebar() {
                 return (
                     <BaseConditionEditor 
                         node={selectedNode} 
-                        onUpdate={handleNodeUpdate} 
+                        nodeId={editorState.selectedNodeId!}
+                        editorState={editorState}
                     />
                 );
             case 'table':

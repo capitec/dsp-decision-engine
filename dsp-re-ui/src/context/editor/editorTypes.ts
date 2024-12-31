@@ -109,7 +109,7 @@ export type EditorAction =
     | { type: 'FETCH_NODES_SUCCESS'; payload: DecisionTree }
     | { type: 'FETCH_NODES_FAILURE'; payload: string }
     | { type: 'CLEAR_PROJECT' }
-    | { type: 'ADD_NODE'; payload: { parentKey?: string; node: FlattenedNode | Series | DataFrame } }
+    | { type: 'ADD_NODE'; payload: { parentKey: string; valueIdx: number; node: FlattenedNode | Series | DataFrame } }
     | { type: 'UPDATE_NODE'; payload: { key: string; node: Partial<FlattenedNode | Series | DataFrame> } }
     | { type: 'DELETE_NODE'; payload: string }
     | { type: 'ADD_DECISION_TABLE'; payload: { key: string; table: DecisionTable } }

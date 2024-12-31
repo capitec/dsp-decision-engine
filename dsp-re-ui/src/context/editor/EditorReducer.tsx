@@ -143,6 +143,10 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
         ...state,
         nodes: {
           ...state.nodes,
+          [action.payload.parentKey]: {
+            ...state.nodes[action.payload.parentKey],
+            values: []
+          }
           // If a parent key is specified, we might want to add logic to update the parent's values
           // TODO: im going to need better logic here
           //@ts-ignore
