@@ -1,5 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import '@xyflow/react/dist/style.css';
+import './xy-theme.css';
 import './index.css';
 import App from './components/core/App';
 import reportWebVitals from './reportWebVitals';

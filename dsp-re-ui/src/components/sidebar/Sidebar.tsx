@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
 
 import {
     Sidebar,
@@ -21,24 +21,44 @@ import {
   Label 
 } from "@/components/ui/label";
 
-import { EditorState, TreeNode } from '@ctx/editor/editorTypes';
-import { updateNode } from '@ctx/editor/editorActions';
-import { useEditor, useEditorDispatch } from '@ctx/editor/EditorContext';
+import { ReactFlow, useOnSelectionChange } from '@xyflow/react';
+import { Node, Edge, TreeNode } from "../editor/types"
+import { useFeatures, useNodes } from '@components/editor/EditorContext';
+import { updateNodeData } from '@components/editor/util';
 
+function useSelectedNode() {
+    const [selectedNodeId, setSelectedNodeId] = useState<string|null>(null);
+    const [nodes, setNodes, onNodesChange] = useNodes();
 
+    const onChange = useCallback(({ nodes }: {nodes: Node[], edges: Edge[]}) => {
+        if (nodes.length) {
+            setSelectedNodeId(nodes[0].id)
+        } else {
+            setSelectedNodeId(null)
+        }
+    }, []);
+    const selectedNode = useMemo(()=>{
+        if (!selectedNodeId) { return null }
+        return nodes.find(n=>n.id === selectedNodeId)
+    }, [nodes, selectedNodeId])
+     
+    useOnSelectionChange({
+        //@ts-ignore
+        onChange, 
+    });
+    return selectedNode
+}
 
 export function AppSidebar() {
-    const editorState = useEditor();
-    const selectedNode = useMemo(
-        () => editorState.selectedNodeId && editorState.nodes[editorState.selectedNodeId],
-        [editorState.selectedNodeId, editorState.nodes]
-    )
-    const editorDispatch = useEditorDispatch();
-    const handleNodeTypeChange = (value: TreeNode["node_type"]) => {
-      editorDispatch(updateNode(editorState.selectedNodeId!, {
-        node_type: value
-      }));
-    };
+    const selectedNode = useSelectedNode();
+    const [nodes, setNodes, onNodesChange] = useNodes();
+    const [features, setFeatures] = useFeatures();
+
+    const updateNodeType = useCallback(
+        (value: TreeNode["node_type"]) => setNodes(vals => updateNodeData(selectedNode!, {node_type: value}, features, vals)),
+        [selectedNode, features, setNodes],
+    );
+    console.log({nodes})
 
     const renderNumericalConfig = () => {
         return (<div>Numerical</div>)
@@ -64,8 +84,8 @@ export function AppSidebar() {
                 <div className="space-y-2">
                 <Label>Condition Type</Label>
                 <Select 
-                    value={selectedNode.node_type} 
-                    onValueChange={handleNodeTypeChange}
+                    value={selectedNode.data.node_type} 
+                    onValueChange={updateNodeType}
                 >
                     <SelectTrigger>
                     <SelectValue placeholder="Select condition type" />
@@ -77,9 +97,9 @@ export function AppSidebar() {
                     </SelectContent>
                 </Select>
                 {
-                selectedNode.node_type == 'numerical_test_node'?
+                selectedNode.data.node_type == 'numerical_test_node'?
                 renderNumericalConfig() : 
-                selectedNode.node_type == 'categorical_test_node'?
+                selectedNode.data.node_type == 'categorical_test_node'?
                 renderCategoricalConfig() : renderValueConfig()
                 }
                 </div>
