@@ -1,7 +1,5 @@
-import { useEditor } from '@ctx/editor/EditorContext';
-import React, { createContext, useContext, useReducer, ReactNode, useMemo } from 'react';
-import styled from 'styled-components'
-import BaseConditionEditor from './BaseConditionEditor'; // Import the new editor
+import React, { useMemo } from 'react';
+
 import {
     Sidebar,
     SidebarContent,
@@ -9,22 +7,25 @@ import {
     SidebarGroupContent,
     SidebarGroupLabel,
     SidebarHeader,
-    SidebarMenu,
-    SidebarMenuButton,
-    SidebarMenuItem,
     SidebarRail,
   } from "@/components/ui/sidebar"
 
-const SideBarDiv = styled.div<{ $hidden: boolean; }>`
-    height: 100vh;
-    overflow: auto;
-    position: fixed;
-    z-index: 1;
-    display: ${props => props.$hidden?"none":"block"};
-    width: 400px;
-    background: white;
-    right: 0px;
-`
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select";
+import { 
+  Label 
+} from "@/components/ui/label";
+
+import { EditorState, TreeNode } from '@ctx/editor/editorTypes';
+import { updateNode } from '@ctx/editor/editorActions';
+import { useEditor, useEditorDispatch } from '@ctx/editor/EditorContext';
+
+
 
 export function AppSidebar() {
     const editorState = useEditor();
@@ -32,41 +33,71 @@ export function AppSidebar() {
         () => editorState.selectedNodeId && editorState.nodes[editorState.selectedNodeId],
         [editorState.selectedNodeId, editorState.nodes]
     )
-    const renderNodeEditor = () => {
-        if (!selectedNode || !("condition_type" in selectedNode)) {
-            return <div>Value Node (TODO)</div>
-        };
+    const editorDispatch = useEditorDispatch();
+    const handleNodeTypeChange = (value: TreeNode["node_type"]) => {
+      editorDispatch(updateNode(editorState.selectedNodeId!, {
+        node_type: value
+      }));
+    };
 
-    
-
-        switch (selectedNode.condition_type) {
-            case 'base':
-                return (
-                    <BaseConditionEditor 
-                        node={selectedNode} 
-                        nodeId={editorState.selectedNodeId!}
-                        editorState={editorState}
-                    />
-                );
-            case 'table':
-                return <div>Table Condition Editor (TODO)</div>;
-            default:
-                return <div>Unsupported condition type</div>;
-        }
+    const renderNumericalConfig = () => {
+        return (<div>Numerical</div>)
     }
+    const renderCategoricalConfig = () => {
+        return (<div>Categorical</div>)
+    }
+    const renderValueConfig = () => {
+        return (<div>Value</div>)
+    }
+
+    const renderConfig = () => {
+        if (!selectedNode) {
+            return (<SidebarGroup>
+                <SidebarGroupLabel>Project Configuration</SidebarGroupLabel>
+                <SidebarGroupContent className="space-y-4 p-4"></SidebarGroupContent>
+            </SidebarGroup>)
+        }
+        return (<SidebarGroup>
+            <SidebarGroupLabel>Condition Configuration</SidebarGroupLabel>
+            <SidebarGroupContent className="space-y-4 p-4">
+                {/* Condition Type Dropdown */}
+                <div className="space-y-2">
+                <Label>Condition Type</Label>
+                <Select 
+                    value={selectedNode.node_type} 
+                    onValueChange={handleNodeTypeChange}
+                >
+                    <SelectTrigger>
+                    <SelectValue placeholder="Select condition type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                    <SelectItem value="numerical_test_node">Numerical</SelectItem>
+                    <SelectItem value="categorical_test_node">Categorical</SelectItem>
+                    <SelectItem value="leaf">Value</SelectItem>
+                    </SelectContent>
+                </Select>
+                {
+                selectedNode.node_type == 'numerical_test_node'?
+                renderNumericalConfig() : 
+                selectedNode.node_type == 'categorical_test_node'?
+                renderCategoricalConfig() : renderValueConfig()
+                }
+                </div>
+
+            </SidebarGroupContent>
+        </SidebarGroup>)
+    }
+
     return (
         <Sidebar side="right">
             <SidebarHeader>
-                {/* @ts-ignore */}
-                Editor {selectedNode?.condition || "value" }
+                Header TODO get name of variable
             </SidebarHeader>
             <SidebarContent>
-            {renderNodeEditor()}
+            {renderConfig()}
             </SidebarContent>
             <SidebarRail />
         </Sidebar>
-        // <SideBarDiv $hidden={!editorState.selectedNodeId}>
-        //     {renderNodeEditor()}
-        // </SideBarDiv>
+
     )
 }

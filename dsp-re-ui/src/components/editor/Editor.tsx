@@ -32,52 +32,49 @@ const updateNodes = async (
   await editor.clear();
 
   // Create Nodes
+  const nodesToRemove: string[] = [];
   await Promise.all(Object.keys(editorState.nodes).map(async (nodeId) => {
     const nodeData = editorState.nodes[nodeId];
-    if ("condition_type" in nodeData){
-      const { condition, connections } = nodeData;
-      const node = new Node(condition);
-      node.id = nodeId; 
-  
-      connections.map((v,i)=>{
-        node.addOutput(`output-${i}`, new ClassicPreset.Output(socket, 'Output'));
-      })
-      if (nodeId !== "*root*"){
-        node.addInput("inputs", new ClassicPreset.Input(socket, "Inputs"))
-      }
-  
-      createdNodes[nodeId] = node;
-      await editor.addNode(node);
-    } else {
-      const node = new Node("value");
-      node.id = nodeId; 
+    let node: Node;
+    if (nodeData.node_type === 'leaf') {
+      node = new Node(`${nodeData.leaf_value}`);
       node.addInput("inputs", new ClassicPreset.Input(socket, "Inputs"))
-      createdNodes[nodeId] = node;
-      await editor.addNode(node);
-
+      if (nodeData.left_child) {nodesToRemove.push(nodeData.left_child)}
+      if (nodeData.right_child) {nodesToRemove.push(nodeData.right_child)}
+    } else {
+      node = new Node(`${nodeData.split_feature_id}`);
+      node.addInput("inputs", new ClassicPreset.Input(socket, "Inputs"))
+      node.addOutput(`output-right`, new ClassicPreset.Output(socket, 'Right Output'));
+      node.addOutput(`output-left`, new ClassicPreset.Output(socket, 'Left Output'));
     }
+    node.id = nodeId; 
+    createdNodes[nodeId] = node;
+    await editor.addNode(node);
   }));
 
   // Create Connections
+  await Promise.all(nodesToRemove.map(async (nodeId) => {
+    await editor.removeNode(nodeId);
+  }))
   await Promise.all(Object.keys(editorState.nodes).map(async (nodeId) => {
     const nodeData = editorState.nodes[nodeId];
-
-    if ("condition_type" in nodeData){
-      const { connections } = nodeData;
-      const parentNode = createdNodes[nodeId];
-
-      await Promise.all(connections.map(async (conn,connIdx) => {
-        await Promise.all(conn.values.map(async (value) => {
-          const childNode = createdNodes[value];
-          if (childNode) {
-            await editor.addConnection(
-              new Connection(
-                parentNode, `output-${connIdx}`,
-                childNode, "inputs", 
-              ))
-          }
-        }))
-      }));
+    if (nodeData.node_type === 'leaf') {return;}
+    const parentNode = createdNodes[nodeId];
+    if (nodeData.left_child){
+      const childNode = createdNodes[nodeData.left_child];
+      await editor.addConnection(
+        new Connection(
+          parentNode, `output-left`,
+          childNode, "inputs", 
+        ))
+    }
+    if (nodeData.right_child){
+      const childNode = createdNodes[nodeData.right_child];
+      await editor.addConnection(
+        new Connection(
+          parentNode, `output-right`,
+          childNode, "inputs", 
+        ))
     }
     }));
 

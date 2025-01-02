@@ -37,11 +37,11 @@ async def get_nodes_old(project_id: uuid.UUID):
     
 
 @api_router.get("/projects/{project_id}/nodes")
-async def get_nodes(project_id: uuid.UUID) -> Tree:
+async def get_nodes(project_id: uuid.UUID) -> dict:
     # Retrieve nodes for the given project ID (here we assume the same for all for simplicity)
     if project_id == uuid.UUID("00000000-0000-0000-0000-000000000000"):
         with open("./example/tree_data.json") as fp:
-            return Tree.model_validate_json(fp.read())
+            return json.load(fp)
     else:
         raise HTTPException(status_code=404, detail="Project not found")
 
