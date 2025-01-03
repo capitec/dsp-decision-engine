@@ -59,21 +59,22 @@ export default function NodeEditor({projectId}: {projectId: string}) {
         const { clientX, clientY } =
           'changedTouches' in event ? event.changedTouches[0] : event;
 
-        const [newNodes, newEdges] = addNode(
-          screenToFlowPosition({
-            x: clientX,
-            y: clientY,
-          }),
-          uuidv4(),
-          defaultLeafNode,
-          features,
-          [],
-          [],
-          {parentNodeId: connectionState.fromNode!.id, parentHandle: connectionState.fromHandle!.id!},
-        )
-        
-        setNodes((nds) => [...nds, ...newNodes]);
-        setEdges((eds) => [...eds, ...newEdges]);
+        setEdges((eds) => {
+          const [newNodes, newEdges] = addNode(
+            screenToFlowPosition({
+              x: clientX,
+              y: clientY,
+            }),
+            uuidv4(),
+            defaultLeafNode,
+            features,
+            [],
+            eds,
+            {parentNodeId: connectionState.fromNode!.id, parentHandle: connectionState.fromHandle!.id!},
+          )
+          setNodes((nds) => [...nds, ...newNodes])
+          return newEdges;
+        })
       }
     },
     [screenToFlowPosition],

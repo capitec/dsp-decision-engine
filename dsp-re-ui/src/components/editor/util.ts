@@ -1,5 +1,10 @@
 import { Edge, Node, SourceData, TreeNode, LeafNodeData, NumericalNodeData, CategoricalNodeData, ForkNodeData, NodeData, ParentIdentifier } from "./types";
 
+import {
+  Connection,
+  getOutgoers,
+} from '@xyflow/react';
+
 const getLabel = (node: TreeNode, features: string[]): string => {
   if (node.node_type === 'leaf') {
     return node.leaf_value.toString();
@@ -40,6 +45,22 @@ const defaultNodeLookup: Record<string, TreeNode> = {
   "categorical_test_node": defaultCategoricalNode,
   "leaf": defaultLeafNode,
 };
+
+const createsCycle = (newEdge: Connection | Edge, edges: Edge[]) => {
+  const hasCycle = (edge: Connection | Edge, visited = new Set()): boolean => {
+    if (visited.has(edge.target)) return false;
+    visited.add(edge.target);
+
+    const found: Edge | undefined = edges
+      .filter(v=>v.source == edge.target)
+      .find(v => {
+        return (newEdge.source == v.target) || hasCycle(v, visited)
+      })
+    return !!found;
+  };
+  const res = hasCycle(newEdge)
+  return res;
+}
 
 const getUpdatedNode = (node: Node, updates: Partial<NodeData>, features?: string[]): Node => {
   const baseNode: TreeNode = defaultNodeLookup[updates.node_type || node.data.node_type] || defaultLeafNode;
@@ -84,11 +105,13 @@ const createEdge = (sourceId: string, targetId: string, sourceHandle: 'left' | '
 
 const removeNodeConnections = (
   nodeId: string, 
+  parent: ParentIdentifier, 
   edges: Edge[]
 ): Edge[] => {
+  console.log({nodeId, parent,edges})
   const resEdges = edges.filter(edge => 
-    edge.target !== nodeId
-  );
+    (edge.target !== nodeId) && (edge.source !== parent.parentNodeId || edge.sourceHandle !== parent.parentHandle)
+  )
   return resEdges;
 };
 
@@ -119,7 +142,7 @@ export const addNode = (
     updatedEdges = linkNodeToParent(
       nodeId,
       parent,
-      updatedEdges
+      removeNodeConnections(nodeId, parent, updatedEdges)
     );
   }
 
@@ -131,14 +154,13 @@ export const linkNodeToParent = (
   parent: ParentIdentifier, 
   edges: Edge[]
 ): Edge[] => {
-  const edgesWithoutConnections = removeNodeConnections(nodeId, edges);
-
   const newEdge = createEdge(
     parent.parentNodeId, 
     nodeId, 
     parent.parentHandle as 'left' | 'right'
   );
-
+  if (createsCycle(newEdge, edges)) {return edges};
+  const edgesWithoutConnections = removeNodeConnections(nodeId, parent, edges);
   return [...edgesWithoutConnections, newEdge];
 };
 
