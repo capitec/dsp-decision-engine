@@ -58,7 +58,6 @@ export function AppSidebar() {
         (value: TreeNode["node_type"]) => setNodes(vals => updateNodeData(selectedNode!, {node_type: value}, features, vals)),
         [selectedNode, features, setNodes],
     );
-    console.log({nodes})
 
     const renderNumericalConfig = () => {
         return (<div>Numerical</div>)

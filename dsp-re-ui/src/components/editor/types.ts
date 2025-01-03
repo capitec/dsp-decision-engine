@@ -8,10 +8,13 @@ type BaseNode = {
     sum_hess?: number;
     gain?: number;
 };
-  
+
+interface withChildren {
+  left_child: string;
+  right_child: string;
+}
+
 export type ForkNode = BaseNode & {
-    left_child: string | null;
-    right_child: string | null;
     split_feature_id: number;
     default_left: boolean;
 };
@@ -37,9 +40,14 @@ export type TreeNode = (NumericalNode | CategoricalNode | LeafNode)
 
 export interface SourceData {
     features: string[];
-    nodes: Record<string, TreeNode>;
+    nodes: Record<string, TreeNode & withChildren>;
 }
 
 export type NodeData = TreeNode & {label: string}
 export type Node = xyNode<NodeData>;
 export type Edge = xyEdge;
+
+export interface ParentIdentifier {
+    parentNodeId: string;
+    parentHandle: string;
+}

@@ -10,9 +10,10 @@ import {
   Controls,
   useReactFlow,
   OnConnectEnd,
+  Connection,
 } from '@xyflow/react';
 import axios from 'axios';
-import {defaultLeafNode, formatNodes} from './util'
+import {addNode, defaultLeafNode, formatNodes, linkNodeToParent} from './util'
 import {Node, Edge} from './types'
 import {useFeatures, useEdges, useNodes} from './EditorContext'
 import { nodeTypes } from './nodes';
@@ -30,8 +31,8 @@ export default function NodeEditor({projectId}: {projectId: string}) {
     axios.get(`/api/projects/${projectId}/nodes`).then((response => {
       const {nodes, edges} = formatNodes(response.data)
       setFeatures(response.data.features)
-      setNodes(nodes)
-      setEdges(edges)
+      setNodes((curr)=>nodes)
+      setEdges((curr)=>edges)
     })).catch(error => {
       console.error(error);
     })
@@ -43,32 +44,36 @@ export default function NodeEditor({projectId}: {projectId: string}) {
 
  
   const onConnect = useCallback(
-    (params: any) => setEdges((els) => addEdge(params, els)),
-    [],
+    ({ source, sourceHandle, target }: Edge | Connection) => setEdges(
+      (edges) => linkNodeToParent(
+          target,
+          { parentNodeId: source, parentHandle: sourceHandle! },
+          edges
+        )),
+    []
   );
 
   const onConnectEnd = useCallback<OnConnectEnd>(
     (event, connectionState) => {
-      // when a connection is dropped on the pane it's not valid
       if (!connectionState.isValid) {
-        // we need to remove the wrapper bounds, in order to get the correct position
-        const id = uuidv4();
         const { clientX, clientY } =
           'changedTouches' in event ? event.changedTouches[0] : event;
-        const newNode: Node = {
-          id,
-          position: screenToFlowPosition({
+
+        const [newNodes, newEdges] = addNode(
+          screenToFlowPosition({
             x: clientX,
             y: clientY,
           }),
-          data: { label: `Node ${id}`, ...defaultLeafNode},
-          origin: [0.5, 0.0],
-        };
+          uuidv4(),
+          defaultLeafNode,
+          features,
+          [],
+          [],
+          {parentNodeId: connectionState.fromNode!.id, parentHandle: connectionState.fromHandle!.id!},
+        )
         
-        setNodes((nds) => nds.concat(newNode));
-        setEdges((eds) =>
-          eds.concat({ id, source: connectionState.fromNode!.id, sourceHandle: connectionState.fromHandle!.id, target: id }),
-        );
+        setNodes((nds) => [...nds, ...newNodes]);
+        setEdges((eds) => [...eds, ...newEdges]);
       }
     },
     [screenToFlowPosition],

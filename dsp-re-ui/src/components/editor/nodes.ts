@@ -3,5 +3,5 @@ import { OutputNode } from "./OutputNode";
 
 export const nodeTypes = {
     leftRightNode: LeftRightNode,
-    output: OutputNode
+    // output: OutputNode
   };
