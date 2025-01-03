@@ -10,8 +10,8 @@ type BaseNode = {
 };
   
 export type ForkNode = BaseNode & {
-    left_child: string;
-    right_child: string;
+    left_child: string | null;
+    right_child: string | null;
     split_feature_id: number;
     default_left: boolean;
 };

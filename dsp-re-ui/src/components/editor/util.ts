@@ -59,11 +59,7 @@ export const formatNodes = (data: SourceData): { nodes: Node[], edges: Edge[] } 
         id: nodeId,
         data: { ...nodeData, label },
         position,
-        hidden: nodeData.node_type === 'leaf' && 
-                data.nodes[Object.keys(data.nodes).find(id => 
-                  data.nodes[id].left_child === nodeId || 
-                  data.nodes[id].right_child === nodeId
-                ) || '']?.node_type === 'leaf'
+        type: nodeData.node_type === "leaf"? "output": "leftRightNode"
       });
   
       if ('left_child' in nodeData && nodeData.node_type !== 'leaf') {
@@ -71,6 +67,8 @@ export const formatNodes = (data: SourceData): { nodes: Node[], edges: Edge[] } 
           edges.push({
             id: `${nodeId}:${nodeData.left_child}`,
             source: nodeId,
+            sourceHandle: 'left',
+            type: 'step',
             target: nodeData.left_child
           });
           processNode(nodeData.left_child, treeIndex, position, false);
@@ -79,6 +77,8 @@ export const formatNodes = (data: SourceData): { nodes: Node[], edges: Edge[] } 
           edges.push({
             id: `${nodeId}:${nodeData.right_child}`,
             source: nodeId,
+            sourceHandle: 'right',
+            type: 'step',
             target: nodeData.right_child
           });
           processNode(nodeData.right_child, treeIndex, position, true);
@@ -94,8 +94,8 @@ export const formatNodes = (data: SourceData): { nodes: Node[], edges: Edge[] } 
 };
 
 const defaultForkNode: ForkNode = {
-    left_child: "",
-    right_child: "",
+    left_child: null,
+    right_child: null,
     split_feature_id: 0,
     default_left: false,
 }
@@ -114,7 +114,7 @@ const defaultCategoricalNode: CategoricalNode = {
     category_list: [],
 };
 
-const defaultLeafNode: LeafNode = {
+export const defaultLeafNode: LeafNode = {
     node_type: "leaf",
     leaf_value: 0,
 };
@@ -147,6 +147,11 @@ export const updateNodeData = (node: Node, newData: Partial<Node["data"]>, featu
   updatedNodes[nodeIndex] = {
     ...updatedNodes[nodeIndex],
     data: {...updatedNode, label: getLabel(updatedNode, features)},
+    type: updatedNode.node_type === "leaf"? "output": "leftRightNode"
   };
   return updatedNodes;
+};
+
+export const addNode = (position: Node["position"], parentNodeId: string, parentHandle: string, features: string[], nodes: Node[]) => {
+
 }
