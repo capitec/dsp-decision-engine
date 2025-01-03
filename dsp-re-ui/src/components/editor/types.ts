@@ -3,7 +3,7 @@ import {
     Edge as xyEdge,
 } from '@xyflow/react';
 
-type BaseNode = {
+type BaseNodeData = {
     data_count?: number;
     sum_hess?: number;
     gain?: number;
@@ -14,37 +14,38 @@ interface withChildren {
   right_child: string;
 }
 
-export type ForkNode = BaseNode & {
+export type ForkNodeData = BaseNodeData & {
     split_feature_id: number;
     default_left: boolean;
 };
 
-export type NumericalNode = ForkNode & {
+export type NumericalNodeData = ForkNodeData & {
     node_type: "numerical_test_node";
     comparison_op:  "<=" | "<" | "==" | ">" | ">=";
     threshold: number;
 };
 
-export type CategoricalNode = ForkNode & {
+export type CategoricalNodeData = ForkNodeData & {
     node_type: "categorical_test_node";
     category_list_right_child: boolean;
     category_list: number[];
 };
 
-export type LeafNode = Partial<ForkNode> & {
+export type LeafNodeData = Partial<ForkNodeData> & {
     node_type: "leaf";
     leaf_value: number;
 };
 
-export type TreeNode = (NumericalNode | CategoricalNode | LeafNode)
+export type TreeNode = (NumericalNodeData | CategoricalNodeData | LeafNodeData)
 
 export interface SourceData {
     features: string[];
     nodes: Record<string, TreeNode & withChildren>;
 }
 
-export type NodeData = TreeNode & {label: string}
-export type Node = xyNode<NodeData>;
+export type NodeData<T = TreeNode> = T & { label: string };
+
+export type Node<T = TreeNode> = xyNode<NodeData<T>>;
 export type Edge = xyEdge;
 
 export interface ParentIdentifier {

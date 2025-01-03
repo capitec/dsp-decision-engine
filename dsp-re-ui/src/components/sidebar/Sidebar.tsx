@@ -22,9 +22,10 @@ import {
 } from "@/components/ui/label";
 
 import { ReactFlow, useOnSelectionChange } from '@xyflow/react';
-import { Node, Edge, TreeNode } from "../editor/types"
+import { Node, Edge, TreeNode, NumericalNodeData, CategoricalNodeData, LeafNodeData } from "../editor/types"
 import { useFeatures, useNodes } from '@components/editor/EditorContext';
 import { updateNodeData } from '@components/editor/util';
+import { CategoricalConfig, LeafConfig, NumericalConfig } from './Editors';
 
 function useSelectedNode() {
     const [selectedNodeId, setSelectedNodeId] = useState<string|null>(null);
@@ -54,17 +55,14 @@ export function AppSidebar() {
     const [nodes, setNodes, onNodesChange] = useNodes();
     const [features, setFeatures] = useFeatures();
 
-    const updateNodeType = useCallback(
-        (value: TreeNode["node_type"]) => setNodes(vals => updateNodeData(selectedNode!, {node_type: value}, features, vals)),
+    const updateNode = useCallback(
+        (value: Partial<TreeNode>, feats?: string[]) => setNodes(vals => {
+            console.log({value, feats})
+            return updateNodeData(selectedNode!, value, feats||features, vals)
+        }),
         [selectedNode, features, setNodes],
     );
 
-    const renderNumericalConfig = () => {
-        return (<div>Numerical</div>)
-    }
-    const renderCategoricalConfig = () => {
-        return (<div>Categorical</div>)
-    }
     const renderValueConfig = () => {
         return (<div>Value</div>)
     }
@@ -84,7 +82,7 @@ export function AppSidebar() {
                 <Label>Condition Type</Label>
                 <Select 
                     value={selectedNode.data.node_type} 
-                    onValueChange={updateNodeType}
+                    onValueChange={(node_type: TreeNode["node_type"]) => updateNode({node_type})}
                 >
                     <SelectTrigger>
                     <SelectValue placeholder="Select condition type" />
@@ -97,9 +95,18 @@ export function AppSidebar() {
                 </Select>
                 {
                 selectedNode.data.node_type == 'numerical_test_node'?
-                renderNumericalConfig() : 
-                selectedNode.data.node_type == 'categorical_test_node'?
-                renderCategoricalConfig() : renderValueConfig()
+                <NumericalConfig
+                    node={selectedNode as Node<NumericalNodeData>}
+                    updateNode={updateNode}
+                /> : selectedNode.data.node_type == 'categorical_test_node'?
+                <CategoricalConfig
+                    node={selectedNode as Node<CategoricalNodeData>}
+                    updateNode={updateNode}
+                /> : 
+                <LeafConfig
+                    node={selectedNode as Node<LeafNodeData>}
+                    updateNode={updateNode}
+                />
                 }
                 </div>
 

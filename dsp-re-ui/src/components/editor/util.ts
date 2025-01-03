@@ -1,4 +1,4 @@
-import { Edge, Node, SourceData, TreeNode, LeafNode, NumericalNode, CategoricalNode, ForkNode, NodeData, ParentIdentifier } from "./types";
+import { Edge, Node, SourceData, TreeNode, LeafNodeData, NumericalNodeData, CategoricalNodeData, ForkNodeData, NodeData, ParentIdentifier } from "./types";
 
 const getLabel = (node: TreeNode, features: string[]): string => {
   if (node.node_type === 'leaf') {
@@ -11,26 +11,26 @@ const getLabel = (node: TreeNode, features: string[]): string => {
   return `${feature} in set`;
 };
 
-const defaultForkNode: ForkNode = {
+const defaultForkNode: ForkNodeData = {
     split_feature_id: 0,
     default_left: false,
 }
 
-const defaultNumericalNode: NumericalNode = {
+const defaultNumericalNode: NumericalNodeData = {
     ...defaultForkNode,
     node_type: "numerical_test_node",
     comparison_op: "==",
     threshold: 0,
   };
   
-const defaultCategoricalNode: CategoricalNode = {
+const defaultCategoricalNode: CategoricalNodeData = {
     ...defaultForkNode,
     node_type: "categorical_test_node",
     category_list_right_child: false,
     category_list: [],
 };
 
-export const defaultLeafNode: LeafNode = {
+export const defaultLeafNode: LeafNodeData = {
     node_type: "leaf",
     leaf_value: 0,
 };

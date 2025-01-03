@@ -10,7 +10,7 @@ import {
 
 interface EditorContextState {
     features: string[];
-    setFeatures: (features: string[]) => void;
+    setFeatures: React.Dispatch<React.SetStateAction<string[]>>;
     nodes: Node[];
     setNodes: Dispatch<SetStateAction<Node[]>>;
     onNodesChange: OnNodesChange<Node>;
@@ -36,7 +36,7 @@ export const EditorProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 export const useFeatures: ()=>[EditorContextState["features"], EditorContextState["setFeatures"]] = () => {
     const context = useContext(EditorContext);
     if (!context) {
-        return [[] as string[], (features: string[])=>{}]
+        return [[] as string[], (val)=>{}]
     }
     const {features, setFeatures} = context;
     return [features, setFeatures];
