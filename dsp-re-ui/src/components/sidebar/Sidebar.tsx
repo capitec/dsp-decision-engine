@@ -26,6 +26,7 @@ import { Node, Edge, TreeNode, NumericalNodeData, CategoricalNodeData, LeafNodeD
 import { useFeatures, useNodes } from '@components/editor/EditorContext';
 import { updateNodeData } from '@components/editor/util';
 import { CategoricalConfig, LeafConfig, NumericalConfig } from './Editors';
+import { ProjectSidebar } from './ProjectEditor';
 
 function useSelectedNode() {
     const [selectedNodeId, setSelectedNodeId] = useState<string|null>(null);
@@ -69,13 +70,22 @@ export function AppSidebar() {
 
     const renderConfig = () => {
         if (!selectedNode) {
-            return (<SidebarGroup>
-                <SidebarGroupLabel>Project Configuration</SidebarGroupLabel>
-                <SidebarGroupContent className="space-y-4 p-4"></SidebarGroupContent>
-            </SidebarGroup>)
+            return (<>
+                <SidebarHeader>
+                Project Configuration
+                </SidebarHeader>
+                <SidebarContent>
+                <ProjectSidebar/>
+                </SidebarContent>
+            </>
+        )
         }
-        return (<SidebarGroup>
-            <SidebarGroupLabel>Condition Configuration</SidebarGroupLabel>
+        return (<>
+            <SidebarHeader>
+            Node Configuration
+            </SidebarHeader>
+            <SidebarContent>
+            <SidebarGroup>
             <SidebarGroupContent className="space-y-4 p-4">
                 {/* Condition Type Dropdown */}
                 <div className="space-y-2">
@@ -111,17 +121,14 @@ export function AppSidebar() {
                 </div>
 
             </SidebarGroupContent>
-        </SidebarGroup>)
+            </SidebarGroup>
+            </SidebarContent>
+            </>)
     }
 
     return (
         <Sidebar side="right">
-            <SidebarHeader>
-                Header TODO get name of variable
-            </SidebarHeader>
-            <SidebarContent>
             {renderConfig()}
-            </SidebarContent>
             <SidebarRail />
         </Sidebar>
 
