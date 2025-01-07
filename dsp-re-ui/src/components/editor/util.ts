@@ -6,177 +6,15 @@ import {
   MarkerType,
 } from '@xyflow/react';
 
-import dagre from '@dagrejs/dagre';
 import ELK, {ElkExtendedEdge, ElkNode} from 'elkjs';
-
-
-export const formatTreeDagre = async (nodes: Node[], edges: Edge[]) => {
-  const dagreGraph = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
-  dagreGraph.setGraph({ rankdir: "TB" });
-
-
-  nodes.forEach((node) => {
-    dagreGraph.setNode(node.id, { 
-      width: node.width || node.initialWidth || 172,
-      height: node.height || node.initialHeight || 36,
-      rank: 0,
-    });
-  });
-
-  // nodes.forEach((node) => {
-  //   // Add invisible left/right anchor nodes
-  //   dagreGraph.setNode(`${node.id}-left`, { width: 1, height: 1 });
-  //   dagreGraph.setNode(`${node.id}-right`, { width: 1, height: 1 });
-    
-  //   // Connect anchors to parent
-  //   dagreGraph.setEdge(node.id, `${node.id}-left`, { weight: 1 });
-  //   dagreGraph.setEdge(node.id, `${node.id}-right`, { weight: 1 });
-  // });
-  
-  // edges.forEach((edge) => {
-  //   const sourceAnchor = edge.sourceHandle === 'left' ? 
-  //     `${edge.source}-left` : `${edge.source}-right`;
-  //   dagreGraph.setEdge(sourceAnchor, edge.target);
-  // });
-  // nodes.forEach((node) => {
-  //   dagreGraph.setNode(node.id, { 
-  //     width: node.width || node.initialWidth || 172,
-  //     height: node.height || node.initialHeight || 36,
-  //     rank: 0,
-  //   });
-  // });
-
- 
-  // // I tried to add Add left edges before right edges so that they are in the right format for dagre
-
-  edges.filter(edge=>edge.sourceHandle === 'right').forEach((edge) => {
-    dagreGraph.setEdge(edge.source, edge.target, { weight: 0 });
-  });
-  edges.filter(edge=>edge.sourceHandle === 'left').forEach((edge) => {
-    dagreGraph.setEdge(edge.source, edge.target, { weight: 2 });
-  });
-
- 
-  dagre.layout(dagreGraph);
-  // console.log(dagreGraph.nodes().map(n=>dagreGraph.node(n)))
- 
-  const newNodes = nodes.map((node) => {
-    const nodeWithPosition = dagreGraph.node(node.id);
-    const newNode = {
-      ...node,
-      // We are shifting the dagre node position (anchor=center center) to the top left
-      // so it matches the React Flow node anchor point (top left).
-      position: {
-        x: nodeWithPosition.x - nodeWithPosition.width / 2,
-        y: nodeWithPosition.y - nodeWithPosition.height / 2,
-      },
-    };
-    return newNode;
-  });
- 
-  return newNodes;
-};
-
 
 const elk = new ELK();
 
-// const elkOptions = {
-//   'elk.algorithm': 'layered',
-//   'elk.direction': 'DOWN',
-//   'elk.spacing.nodeNode': '50',
-//   'elk.layered.spacing.nodeNodeBetweenLayers': '50',
-//   'elk.portConstraints': 'FIXED_SIDE',
-//   'elk.layered.mergeEdges': 'false',
-//   'elk.layered.crossingMinimization.semiInteractive': 'true'
-// };
-// const OtherElkOptions = {
-//   'elk.algorithm': 'layered',
-//   'elk.direction': 'DOWN',
-//   'elk.spacing.nodeNode': '50',
-//   'elk.layered.spacing.nodeNodeBetweenLayers': '50',
-//   'elk.portConstraints': 'FIXED_SIDE',
-//   'elk.layered.mergeEdges': 'false',
-//   'elk.layered.crossingMinimization.semiInteractive': 'true'
-// }
-
-const OtherElkOptions2 = {
-  "elk.algorithm": "layered",
-  'elk.direction': 'DOWN',
-  "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
-  "elk.layered.compaction.strategy": "SIMPLE",
-  "elk.layered.spacing.nodeNode": "50",
-  "elk.layered.spacing.layerLayer": "50",
-  "elk.layered.nodePlacement.nodeDistance": "50",
-  "elk.layered.layerDistance": "100",
-  "elk.padding": "20",
-  'elk.portConstraints': 'FIXED_SIDE',
-}
-
-export const formatTreeElk2 = async (nodes: Node[], edges: Edge[]) => {
-
-  const graph = {
-    id: 'root',
-    layoutOptions: OtherElkOptions2,
-    children: nodes.map((node) => ({
-      ...node,
-      targetPosition: 'top',
-      sourcePosition: 'bottom',
-      ports: [
-        { 
-          id: `${node.id}-top`,
-          width: 100,
-          height: 10,
-          properties: { 
-            'port.side': 'NORTH',
-            'port.index': '0'
-          }
-        },
-        { 
-          id: `${node.id}-left`,
-          width: 10,
-          height: 10,
-          properties: { 
-            'port.side': 'WEST',
-            'port.index': '1'
-          }
-        },
-        { 
-          id: `${node.id}-right`,
-          width: 10,
-          height: 10,
-          properties: { 
-            'port.side': 'EAST',
-            'port.index': '2'
-          }
-        }
-      ],
-      width: node.width || node.initialWidth || 172,
-      height: node.height || node.initialHeight || 36,
-    })),
-    edges: edges.map(v=>({
-      id: v.id,
-      sources: [`${v.source}-${v.sourceHandle}`],
-      targets: [`${v.target}-top`]
-    }) as ElkExtendedEdge),
-  };
-  const layout = await elk.layout(graph);
-  return nodes.map(node => {
-    const elkNode = layout.children?.find(n => n.id === node.id);
-    return {
-      ...node,
-      position: {
-        x: elkNode?.x || 0,
-        y: elkNode?.y || 0
-      }
-    };
-  });
-};
 
 const elkOptions = {
   "elk.algorithm": "layered",
   "elk.direction": "DOWN",
   "elk.layered.crossingMinimization.strategy": "LAYER_SWEEP",
-  // "elk.layered.nodePlacement.strategy": "LINEAR_SEGMENTS",
   "elk.spacing.nodeNode": "25", 
   "elk.layered.spacing.edgeNodeBetweenLayers": "25",
   "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES",
@@ -187,19 +25,36 @@ const elkOptions = {
   "elk.layered.nodePlacement.strategy": "BRANDES_KOEPF",
   "elk.layered.nodePlacement.favorStraightEdges": "true",
   "elk.layered.nodePlacement.bk.fixedAlignment": "BALANCED",
-  // "elk.spacing.nodeNode": "150"
 };
+
+function getNodeOrder(nodes: Node[], edges: Edge[]) {
+  const order = new Map<string, number>();
+  let counter = 0;
+
+  function visit(nodeId: string, isLeft: boolean) {
+    const leftChild = edges.find(e => e.source === nodeId && e.sourceHandle === 'left')?.target;
+    const rightChild = edges.find(e => e.source === nodeId && e.sourceHandle === 'right')?.target;
+    
+    if (leftChild) visit(leftChild, true);
+    order.set(nodeId, counter++);
+    if (rightChild) visit(rightChild, false);
+  }
+
+  // Find all root nodes (nodes with no incoming edges)
+  const rootNodes = nodes.filter(n => !edges.some(e => e.target === n.id));
+
+  // Visit each root node
+  rootNodes.forEach(root => {
+    counter = 0
+    visit(root.id, true)
+  });
+
+  return order;
+}
 
 export const formatTree = async (nodes: Node[], edges: Edge[]) => {
   // Pre-process to determine node ordering
-  const nodeOrder = new Map<string, number>();
-  edges.forEach(edge => {
-    const targetNode = nodes.find(n => n.id === edge.target);
-    if (targetNode) {
-      nodeOrder.set(edge.target, 
-        edge.sourceHandle === 'left' ? -1 : 1);
-    }
-  });
+  const nodeOrder = getNodeOrder(nodes, edges);
 
   const graph = {
     id: 'root',
@@ -226,8 +81,8 @@ export const formatTree = async (nodes: Node[], edges: Edge[]) => {
     return {
       ...node,
       position: {
-        x: elkNode?.x || 0,
-        y: elkNode?.y || 0
+        x: (elkNode?.x || 0) - (elkNode?.width || 0)/2,
+        y: elkNode?.y || 0 - (elkNode?.height || 0)/2
       }
     };
   });
