@@ -28,12 +28,14 @@ export default function NodeEditor({projectId}: {projectId: string}) {
   const { screenToFlowPosition } = useReactFlow();
 
   const fetchProjectNodes = useCallback((projectId: string)=> {
-    axios.get(`/api/projects/${projectId}/nodes`).then((response => {
-      const {nodes, edges} = formatNodes(response.data)
-      setFeatures(response.data.features)
+    axios.get(`/api/projects/${projectId}/nodes`)
+    .then(response=>formatNodes(response.data))
+    .then(({nodes, edges, features})=> {
+      setFeatures(features)
       setNodes((curr)=>nodes)
       setEdges((curr)=>edges)
-    })).catch(error => {
+    })
+    .catch(error => {
       console.error(error);
     })
   }, [setNodes, setEdges])
@@ -55,27 +57,27 @@ export default function NodeEditor({projectId}: {projectId: string}) {
 
   const onConnectEnd = useCallback<OnConnectEnd>(
     (event, connectionState) => {
-      if (!connectionState.isValid) {
-        const { clientX, clientY } =
-          'changedTouches' in event ? event.changedTouches[0] : event;
+      if (connectionState.isValid) { return }
+      if (connectionState.fromHandle?.type === "target") {return}
+      const { clientX, clientY } =
+        'changedTouches' in event ? event.changedTouches[0] : event;
 
-        setEdges((eds) => {
-          const [newNodes, newEdges] = addNode(
-            screenToFlowPosition({
-              x: clientX,
-              y: clientY,
-            }),
-            uuidv4(),
-            defaultLeafNode,
-            features,
-            [],
-            eds,
-            {parentNodeId: connectionState.fromNode!.id, parentHandle: connectionState.fromHandle!.id!},
-          )
-          setNodes((nds) => [...nds, ...newNodes])
-          return newEdges;
-        })
-      }
+      setEdges((eds) => {
+        const [newNodes, newEdges] = addNode(
+          screenToFlowPosition({
+            x: clientX,
+            y: clientY,
+          }),
+          uuidv4(),
+          defaultLeafNode,
+          features,
+          [],
+          eds,
+          {parentNodeId: connectionState.fromNode!.id, parentHandle: connectionState.fromHandle!.id!},
+        )
+        setNodes((nds) => [...nds, ...newNodes])
+        return newEdges;
+      })
     },
     [screenToFlowPosition],
   );

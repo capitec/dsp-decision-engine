@@ -14,6 +14,10 @@ interface withChildren {
   right_child: string;
 }
 
+interface withPosition {
+    position: {x: number, y: number};
+}
+
 export type ForkNodeData = BaseNodeData & {
     split_feature_id: number;
     default_left: boolean;
@@ -40,7 +44,7 @@ export type TreeNode = (NumericalNodeData | CategoricalNodeData | LeafNodeData)
 
 export interface SourceData {
     features: string[];
-    nodes: Record<string, TreeNode & withChildren>;
+    nodes: Record<string, TreeNode & withChildren & Partial<withPosition>>;
 }
 
 export type NodeData<T = TreeNode> = T & { label: string };
