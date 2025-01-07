@@ -1,90 +1,105 @@
-// TableEditor.tsx
 import React, { useCallback, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead,
+  TableHeader, TableRow
 } from "@/components/ui/table";
 import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
+  Popover, PopoverContent, PopoverTrigger
 } from "@/components/ui/popover";
 import { Plus, X } from "lucide-react";
-import { useTreeOutput } from "@components/editor/EditorContext";
-import { Label } from "@/components/ui/label"
+import { useNodes, useTreeOutput } from "@components/editor/EditorContext";
+import { Label } from "@/components/ui/label";
+import { LeafNodeData, Node } from "@components/editor/types";
 
-
-export const TableEditor: React.FC<{}> = () => {
+export const TableEditor: React.FC = () => {
+  const { toast } = useToast();
   const [outputs, setOutputs] = useTreeOutput();
+  const [nodes, setNodes] = useNodes();
   const [newColName, setNewColName] = useState("");
   const [newColDialogOpen, setNewColDialogOpen] = useState(false);
-//   const columns = outputs.length > 0 ? Object.keys(outputs[0]) : [];
+
+  const getNodesDeleteValue = useCallback((rowIndex: number, prevNodes:Node<LeafNodeData>[]) => (
+    prevNodes.map(node => {
+        console.log({data: node.data, ri: rowIndex})
+        if (node.data.node_type !== 'leaf') return node;
+        if (node.data.leaf_value === rowIndex) {
+            throw new Error(`Row ${rowIndex} is referenced by node ${node.id}`);
+        }
+        if (node.data.leaf_value > rowIndex) {
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                leaf_value: node.data.leaf_value - 1
+              }
+            };
+        }
+        return node
+    })
+   ), []);
 
   const handleAddColumn = useCallback(() => {
-    setOutputs(outputs => {
-        return {
-            columns: [...outputs.columns, newColName],
-            data: outputs.data.map(v=>[...v,""])
-        }
-    })
+    setOutputs(outputs => ({
+      columns: [...outputs.columns, newColName],
+      data: outputs.data.map(v => [...v, ""])
+    }));
     setNewColName("");
     setNewColDialogOpen(false);
   }, [newColName]);
 
   const handleAddRow = useCallback(() => {
-    setOutputs(outputs => {
-        return {
-            columns: outputs.columns,
-            data: [...outputs.data, outputs.columns.map(v=>"")]
-        }
-    })
+    setOutputs(outputs => ({
+      columns: outputs.columns,
+      data: [...outputs.data, outputs.columns.map(() => "")]
+    }));
   }, []);
-  
 
   const handleRemoveColumn = useCallback((columnIdx: number) => {
-    setOutputs((outputs) => {
+    setOutputs(outputs => {
       if (columnIdx < 0 || columnIdx >= outputs.columns.length) return outputs;
       const newColumns = [...outputs.columns];
       newColumns.splice(columnIdx, 1);
-      const newData = outputs.data.map((row) => {
-        const newRow = [...row];
-        newRow.splice(columnIdx, 1);
-        return newRow;
-      });
       return {
         columns: newColumns,
-        data: newData,
+        data: outputs.data.map(row => {
+          const newRow = [...row];
+          newRow.splice(columnIdx, 1);
+          return newRow;
+        })
       };
     });
   }, []);
 
+  const handleRemoveRow = useCallback((index: number) => {
+    setNodes(nodes => {
+        try {
+            const newNodes = getNodesDeleteValue(index, nodes as Node<LeafNodeData>[])
+
+            setOutputs(outputs => ({
+                columns: outputs.columns,
+                data: outputs.data.filter((_, idx) => idx !== index)
+            }));
+            return newNodes;
+        } catch (error) {
+            toast({
+                variant: "destructive",
+                title: "Row in use",
+                description: (error as Error).message
+            });
+            return nodes;
+        }
+    })
+  }, [getNodesDeleteValue]);
 
   const handleRenameColumn = useCallback((columnIdx: number, newValue: string) => {
-    setOutputs((outputs) => {
+    setOutputs(outputs => {
       if (columnIdx < 0 || columnIdx >= outputs.columns.length) return outputs;
       const newColumns = [...outputs.columns];
       newColumns[columnIdx] = newValue;
-      return {
-        columns: newColumns,
-        data: outputs.data,
-      };
-    });
-  }, []);
-
-
-  const handleRemoveRow = useCallback((index: number) => {
-    setOutputs((outputs) => {
-      if (index < 0 || index >= outputs.data.length) return outputs;
-      return {
-        columns: outputs.columns,
-        data: outputs.data.filter((_, idx) => idx !== index),
-      };
+      return { columns: newColumns, data: outputs.data };
     });
   }, []);
 
@@ -93,16 +108,15 @@ export const TableEditor: React.FC<{}> = () => {
     columnIndex: number,
     value: string
   ) => {
-    setOutputs((outputs) => {
-        if (rowIndex < 0 || rowIndex >= outputs.data.length) return outputs;
-        if (columnIndex < 0 || columnIndex >= outputs.columns.length) return outputs;
-        const newData = [...outputs.data];
-        newData[rowIndex] = [...newData[rowIndex]];
-        newData[rowIndex][columnIndex] = value;
-      return {
-        columns: outputs.columns,
-        data: newData,
-      };
+    setOutputs(outputs => {
+      if (rowIndex < 0 || rowIndex >= outputs.data.length) return outputs;
+      if (columnIndex < 0 || columnIndex >= outputs.columns.length) return outputs;
+      const newData = outputs.data.map((row, idx) => 
+        idx === rowIndex 
+          ? row.map((cell, colIdx) => colIdx === columnIndex ? value : cell)
+          : row
+      );
+      return { columns: outputs.columns, data: newData };
     });
   }, []);
 
@@ -128,7 +142,7 @@ export const TableEditor: React.FC<{}> = () => {
                     onChange={(e) =>
                       handleRenameColumn(colIndex, e.target.value)
                     }
-                    className="w-full"
+                    className="w-full min-w-[80px]"
                   />
                   <Button
                     variant="ghost"
@@ -174,20 +188,6 @@ export const TableEditor: React.FC<{}> = () => {
                         </Button>
                     </PopoverContent>
                 </Popover>
-                  {/* <Input
-                    value={newColName}
-                    placeholder="Column Name"
-                    onChange={(e)=>setNewColName(e.target.value)}
-                    className="w-[30px]"
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-4 w-4"
-                    onClick={handleAddColumn}
-                  >
-                    <Plus className="h-3 w-3" />
-                  </Button> */}
                 </div>
             </TableHead>
           </TableRow>
@@ -224,7 +224,7 @@ export const TableEditor: React.FC<{}> = () => {
         </TableBody>
       </Table>
 
-      <Button variant="outline" onClick={handleAddRow} className="w-full">
+      <Button variant="outline" onClick={handleAddRow} className="w-full max-w-[1000px]">
         <Plus className="h-4 w-4 mr-2" />
         Add Row
       </Button>

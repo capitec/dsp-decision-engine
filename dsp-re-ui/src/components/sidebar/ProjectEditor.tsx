@@ -1,70 +1,111 @@
-// ConfigSidebar.tsx
 import React, { useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast"
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-  } from "@/components/ui/dialog"
+  Dialog, DialogContent, DialogDescription, DialogHeader,
+  DialogTitle, DialogTrigger
+} from "@/components/ui/dialog";
 import { TableEditor } from "./TableEditor";
 import { ArrowUpDown, X, Plus, Table as TableIcon } from "lucide-react";
 import {
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
+  SidebarGroup, SidebarGroupContent, SidebarGroupLabel
 } from "@components/ui/sidebar";
-import { useEdges, useFeatures, useNodes, useProjectMetadata } from "@components/editor/EditorContext";
+import { 
+  useEdges, useFeatures, useNodes, useProjectMetadata 
+} from "@components/editor/EditorContext";
 import { formatTree } from "@components/editor/util";
 
 export function ProjectSidebar() {
-  const [nodes, setNodes, onNodesChange] = useNodes();
-  const [edges, setEdges, onEdgesChange] = useEdges();
+  const { toast } = useToast();
+  const [nodes, setNodes] = useNodes();
+  const [edges, setEdges] = useEdges();
   const [features, setFeatures] = useFeatures();
   const [metadata, setMetadata] = useProjectMetadata();
 
-  const handleRearrange = useCallback(()=>{
+  const handleRearrange = useCallback(() => {
     formatTree(nodes, edges).then(newNodes => {
-        setNodes(newNodes)
-    })
-  }, [nodes, edges])
+      setNodes(newNodes);
+    });
+  }, [nodes, edges, setNodes]);
 
-//   const handleAddFeature = useCallback(()=>{
-//     setFeatures(features => {
+  const handleAddFeature = useCallback(() => {
+    setFeatures(prevFeatures => {
+      const newFeature = `Feature ${prevFeatures.length + 1}`;
+      if (prevFeatures.includes(newFeature)) {
+        toast({
+          variant: "destructive",
+          title: "Feature exists",
+          description: "A feature with this name already exists"
+        });
+        return prevFeatures;
+      }
+      return [...prevFeatures, newFeature];
+    });
+  }, [setFeatures, toast]);
 
-//     })
-//   })
-  const handleAddFeature = () => {
-    setFeatures([...features, `Feature ${features.length + 1}`]);
-  };
+  const handleDeleteFeature = useCallback((index: number) => {
+    setFeatures(prevFeatures => {
+      const nodeUsingFeature = nodes.find(node => 
+        node.data.split_feature_id === index
+      );
 
-  const handleDeleteFeature = (index: number) => {
-    setFeatures(features.filter((_, i) => i !== index));
-  };
+      if (nodeUsingFeature) {
+        toast({
+          variant: "destructive",
+          title: "Cannot delete feature",
+          description: `Feature is in use by node ${nodeUsingFeature.id}`
+        });
+        return prevFeatures;
+      }
 
-  const handleUpdateFeature = (index: number, value: string) => {
-    const newFeatures = [...features];
-    newFeatures[index] = value;
-    setFeatures(newFeatures);
-  };
+      const newFeatures = prevFeatures.filter((_, i) => i !== index);
+      
+      setNodes(prevNodes => 
+        prevNodes.map(node => {
+          if (!node.data.split_feature_id) return node;
+          if (node.data.split_feature_id > index) {
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                split_feature_id: node.data.split_feature_id - 1
+              }
+            };
+          }
+          return node;
+        })
+      );
 
+      return newFeatures;
+    });
+  }, [nodes, setNodes, setFeatures, toast]);
 
+  const handleUpdateFeature = useCallback((index: number, value: string) => {
+    setFeatures(prevFeatures => {
+      const newFeatures = [...prevFeatures];
+      newFeatures[index] = value;
+      return newFeatures;
+    });
+  }, [setFeatures]);
+
+  const handleMetadataChange = useCallback((field: keyof typeof metadata) => (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
+    setMetadata(prev => ({
+      ...prev,
+      [field]: e.target.value
+    }));
+  }, [setMetadata]);
+
+  // Rest of the JSX remains the same, but update event handlers:
   return (
     <>
       <SidebarGroup>
@@ -83,9 +124,7 @@ export function ProjectSidebar() {
             </TooltipProvider>
             <Input
               value={metadata.name}
-              onChange={(e) =>
-                setMetadata({ ...metadata, name: e.target.value })
-              }
+              onChange={handleMetadataChange('name')}
               placeholder="My Project"
               className="mt-1.5"
             />
@@ -104,9 +143,7 @@ export function ProjectSidebar() {
             </TooltipProvider>
             <Textarea
               value={metadata.description}
-              onChange={(e) =>
-                setMetadata({ ...metadata, description: e.target.value })
-              }
+              onChange={handleMetadataChange('description')}
               placeholder="Project description..."
               className="mt-1.5"
             />
@@ -118,32 +155,33 @@ export function ProjectSidebar() {
       <SidebarGroup>
         <SidebarGroupLabel>Features</SidebarGroupLabel>
         <SidebarGroupContent>
-          {features.map((feature, index) => (
-            <div key={index} className="flex gap-2">
-              <Input
-                value={feature}
-                onChange={(e) => handleUpdateFeature(index, e.target.value)}
-                placeholder="Feature name"
-              />
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDeleteFeature(index)}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Delete feature</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-          ))}
-
+          <div className="max-h-60 overflow-y-auto">
+            {features.map((feature, index) => (
+              <div key={index} className="flex gap-2">
+                <Input
+                  value={feature}
+                  onChange={(e) => handleUpdateFeature(index, e.target.value)}
+                  placeholder="Feature name"
+                />
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDeleteFeature(index)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Delete feature</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+            ))}
+          </div>
           <Button
             variant="outline"
             onClick={handleAddFeature}
@@ -166,14 +204,14 @@ export function ProjectSidebar() {
                 Configure Outputs
               </Button>
             </DialogTrigger>
-            <DialogContent className="md:max-w-[1000px] lg:max-w-[1500px]">
-                <DialogHeader>
+            <DialogContent className="md:max-w-[1000px] lg:max-w-[1500px] md:max-h-[600px] lg:max-h-[800px] overflow-scroll">
+              <DialogHeader>
                 <DialogTitle>Edit Outputs</DialogTitle>
                 <DialogDescription>
-                    Make changes to the output elements of the tree.
+                  Make changes to the output elements of the tree.
                 </DialogDescription>
-                </DialogHeader>
-              <TableEditor/>
+              </DialogHeader>
+              <TableEditor />
             </DialogContent>
           </Dialog>
         </SidebarGroupContent>
@@ -196,9 +234,7 @@ export function ProjectSidebar() {
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>
-                  Automatically format and organize the decision tree layout
-                </p>
+                <p>Automatically format and organize the decision tree layout</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
