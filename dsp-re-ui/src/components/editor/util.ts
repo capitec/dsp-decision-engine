@@ -45,34 +45,52 @@ function getNodeOrder(nodes: Node[], edges: Edge[]) {
 
   // Visit each root node
   rootNodes.forEach(root => {
-    counter = 0
     visit(root.id, true)
   });
 
-  return order;
+  return {order, rootNodes};
 }
 
 export const formatTree = async (nodes: Node[], edges: Edge[]) => {
   // Pre-process to determine node ordering
-  const nodeOrder = getNodeOrder(nodes, edges);
+  const {order:nodeOrder, rootNodes} = getNodeOrder(nodes, edges);
 
   const graph = {
     id: 'root',
     layoutOptions: elkOptions,
-    children: nodes.map(node => ({
-      ...node,
-      layoutOptions: {
-        "elk.position": nodeOrder.has(node.id) ? 
-          `(${nodeOrder.get(node.id)! * 100},0)` : undefined
-      },
-      width: node.width || node.initialWidth || 172,
-      height: node.height || node.initialHeight || 36,
-    } as ElkNode)),
-    edges: edges.map(edge => ({
-      id: edge.id,
-      sources: [`${edge.source}`],
-      targets: [`${edge.target}`]
-    }))
+    children: 
+    [
+      ...nodes.map(node => ({
+        ...node,
+        layoutOptions: {
+          "elk.position": nodeOrder.has(node.id) ? 
+            `(${nodeOrder.get(node.id)! * 100},0)` : undefined
+        },
+        width: node.width || node.initialWidth || 172,
+        height: node.height || node.initialHeight || 36,
+      } as ElkNode)),
+      {
+        id: "__*root*__",
+        layoutOptions: {
+          "elk.position": "(0,0)"
+        },
+        width: 1,
+        height: 1,
+      }
+    ],
+    edges: [
+      ...edges.map(edge => ({
+        id: edge.id,
+        sources: [`${edge.source}`],
+        targets: [`${edge.target}`]
+      })),
+      ...rootNodes.map(n => ({
+        id: `__*root*__${n.id}`,
+        sources: [`__*root*__`],
+        targets: [`${n.id}`]
+      })),
+
+    ]
   };
 
   const layout = await elk.layout(graph);

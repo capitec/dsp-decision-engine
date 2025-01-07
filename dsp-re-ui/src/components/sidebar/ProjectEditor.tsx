@@ -14,21 +14,30 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+  } from "@/components/ui/dialog"
 import { TableEditor } from "./TableEditor";
 import { ArrowUpDown, X, Plus, Table as TableIcon } from "lucide-react";
-import type { TreeOutput, ProjectMetadata } from "./types";
 import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
 } from "@components/ui/sidebar";
-import { useEdges, useFeatures, useNodes } from "@components/editor/EditorContext";
+import { useEdges, useFeatures, useNodes, useProjectMetadata } from "@components/editor/EditorContext";
 import { formatTree } from "@components/editor/util";
 
 export function ProjectSidebar() {
   const [nodes, setNodes, onNodesChange] = useNodes();
   const [edges, setEdges, onEdgesChange] = useEdges();
   const [features, setFeatures] = useFeatures();
+  const [metadata, setMetadata] = useProjectMetadata();
 
   const handleRearrange = useCallback(()=>{
     formatTree(nodes, edges).then(newNodes => {
@@ -36,14 +45,11 @@ export function ProjectSidebar() {
     })
   }, [nodes, edges])
 
-  const [metadata, setMetadata] = React.useState<ProjectMetadata>({
-    name: "",
-    description: "",
-  });
-  const [treeOutputs, setTreeOutputs] = React.useState<TreeOutput[]>([
-    { column1: "", column2: "" },
-  ]);
+//   const handleAddFeature = useCallback(()=>{
+//     setFeatures(features => {
 
+//     })
+//   })
   const handleAddFeature = () => {
     setFeatures([...features, `Feature ${features.length + 1}`]);
   };
@@ -153,21 +159,23 @@ export function ProjectSidebar() {
       <SidebarGroup>
         <SidebarGroupLabel>Outputs</SidebarGroupLabel>
         <SidebarGroupContent>
-          <Popover>
-            <PopoverTrigger asChild>
+          <Dialog>
+            <DialogTrigger asChild>
               <Button variant="outline" className="w-full">
                 <TableIcon className="h-4 w-4 mr-2" />
                 Configure Outputs
               </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[600px]">
-              {<div>Hi i am an editor</div>}
-              <TableEditor
-                outputs={treeOutputs}
-                onOutputsChange={setTreeOutputs}
-              />
-            </PopoverContent>
-          </Popover>
+            </DialogTrigger>
+            <DialogContent className="md:max-w-[1000px] lg:max-w-[1500px]">
+                <DialogHeader>
+                <DialogTitle>Edit Outputs</DialogTitle>
+                <DialogDescription>
+                    Make changes to the output elements of the tree.
+                </DialogDescription>
+                </DialogHeader>
+              <TableEditor/>
+            </DialogContent>
+          </Dialog>
         </SidebarGroupContent>
       </SidebarGroup>
 

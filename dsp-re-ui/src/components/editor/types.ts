@@ -56,3 +56,8 @@ export interface ParentIdentifier {
     parentNodeId: string;
     parentHandle: string;
 }
+
+export interface ProjectMetadata {
+    name: string;
+    description: string;
+}

@@ -33,8 +33,9 @@ import type {
   CategoricalNodeData,
   LeafNodeData,
 } from "../editor/types";
-import { useFeatures } from "@components/editor/EditorContext";
+import { useFeatures, useLeafOrder, useTreeOutput } from "@components/editor/EditorContext";
 import { useNodes } from "@xyflow/react";
+import { ScrollArea } from "@radix-ui/react-scroll-area";
 
 interface FeatureEditorProps {
   selectedFeatureId: number;
@@ -55,9 +56,11 @@ export function FeatureEditor({
   const [features, setFeatures] = useFeatures();
   const [searchValue, setSearchValue] = useState("");
   const [popoverOpen, setPopoverOpen] = useState(false);
+
   const showCreate = useMemo(()=>
     searchValue && (features.findIndex(ft=>ft===searchValue) === -1)
   , [searchValue, features])
+
   const selectFeature = useCallback((ft: string) => {
     if (!ft) { return }
     setFeatures(fts => {
@@ -264,32 +267,75 @@ export function CategoricalConfig({
   );
 }
 
+
+interface TreeOutput {
+  data: string[][]
+  columns: string[]
+}
 export function LeafConfig({
   node,
   updateNode
 }: ConfigProps<LeafNodeData>) {
   const nodes = useNodes<Node>();
-  const numLeafNodes = useMemo(() => 
-    nodes.reduce(
-      (acc: number, n: Node) => n.data.node_type === "leaf" ? acc + 1 : acc,
-      0
-    ),
-    [nodes]
+
+  const [outputs, setOutputs] = useTreeOutput();
+  const [leafOrder, updateLeafOrder] = useLeafOrder();
+  const leafIndex = useMemo(() => leafOrder.indexOf(node.id),
+    [leafOrder, node]
   );
+  const numLeafNodes = useMemo(() => leafOrder.length,
+    [leafOrder]
+  );
+  const selectedRow = outputs.data[node.data.leaf_value];
 
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <Label>Leaf Value (0-{Math.max(0, numLeafNodes - 1)})</Label>
+        <Label>{outputs.data.length?`Leaf Output Value (0-${outputs.data.length-1})`: "Leaf Output Value"}</Label>
+        {
+          outputs.data.length?(
+            <Input 
+              type="number"
+              min={0}
+              max={outputs.data.length-1}
+              value={node.data.leaf_value}
+              onChange={(e) => {
+                const value = parseInt(e.target.value);
+                if (!isNaN(value) && value >= 0 && value < outputs.data.length) {
+                  updateNode({ leaf_value: value });
+                }
+              }}
+            />
+          ):(
+            <Input 
+              type="text"
+              disabled
+              value="Please configure outputs in the output editor"
+            />
+          )
+        }
+        <ScrollArea className="h-24 border rounded-md p-2">
+          <div className="space-y-1">
+            {outputs.columns.map((column, i) => (
+              <div key={i} className="flex text-sm">
+                <span className="font-medium w-24 truncate">{column}:</span>
+                <span className="text-muted-foreground truncate">{selectedRow?.[i]}</span>
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
+      </div>
+      <div className="space-y-2">
+        <Label>Leaf Order (0-{numLeafNodes-1})</Label>
         <Input
           type="number"
           min={0}
-          max={Math.max(0, numLeafNodes - 1)}
-          value={node.data.leaf_value}
+          max={numLeafNodes-1}
+          value={leafIndex}
           onChange={(e) => {
             const value = parseInt(e.target.value);
             if (!isNaN(value) && value >= 0 && value < numLeafNodes) {
-              updateNode({ leaf_value: value });
+              updateLeafOrder(node.id, value);
             }
           }}
         />
