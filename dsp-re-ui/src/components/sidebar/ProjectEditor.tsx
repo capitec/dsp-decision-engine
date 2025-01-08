@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,14 +14,15 @@ import {
   DialogTitle, DialogTrigger
 } from "@/components/ui/dialog";
 import { TableEditor } from "./TableEditor";
-import { ArrowUpDown, X, Plus, Table as TableIcon } from "lucide-react";
+import { ArrowUpDown, X, Plus, Table as TableIcon, Download } from "lucide-react";
 import {
   SidebarGroup, SidebarGroupContent, SidebarGroupLabel
 } from "@components/ui/sidebar";
 import { 
-  useEdges, useFeatures, useNodes, useProjectMetadata 
+  useEdges, useFeatures, useLeafOrder, useNodes, useProjectMetadata, 
+  useTreeOutput
 } from "@components/editor/EditorContext";
-import { formatTree } from "@components/editor/util";
+import { exportState, formatTree } from "@components/editor/util";
 
 export function ProjectSidebar() {
   const { toast } = useToast();
@@ -29,6 +30,29 @@ export function ProjectSidebar() {
   const [edges, setEdges] = useEdges();
   const [features, setFeatures] = useFeatures();
   const [metadata, setMetadata] = useProjectMetadata();
+  const [treeOutput] = useTreeOutput();
+  const [leafOrder] = useLeafOrder();
+
+  const downloadLinkRef = useRef<HTMLAnchorElement | null>(null);
+
+  const handleDownload = () => {
+    if (!downloadLinkRef.current){
+      toast({
+        variant: "destructive",
+        title: "Download Error",
+        description: "Could not download the project due to issues with HTML"
+      });
+      return
+    }
+    const state = exportState(
+      nodes, edges, features, leafOrder, metadata, treeOutput
+    )
+    const json = JSON.stringify(state, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    downloadLinkRef.current.href = url;
+    downloadLinkRef.current.click();
+  };
 
   const handleRearrange = useCallback(() => {
     formatTree(nodes, edges).then(newNodes => {
@@ -238,8 +262,27 @@ export function ProjectSidebar() {
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  onClick={handleDownload}
+                  className="w-full"
+                >
+                  <a ref={downloadLinkRef} style={{ display: 'none' }} download="data.json"></a>
+                  <Download className="h-4 w-4 mr-2" />
+                  Download Project
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Download projectJson</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </SidebarGroupContent>
       </SidebarGroup>
     </>
   );
 }
+

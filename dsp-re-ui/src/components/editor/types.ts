@@ -9,7 +9,7 @@ type BaseNodeData = {
     gain?: number;
 };
 
-interface withChildren {
+export interface withChildren {
   left_child: string;
   right_child: string;
 }
@@ -42,9 +42,17 @@ export type LeafNodeData = Partial<ForkNodeData> & {
 
 export type TreeNode = (NumericalNodeData | CategoricalNodeData | LeafNodeData)
 
+export interface TreeOutput {
+    data: string[][]
+    columns: string[]
+}
+
 export interface SourceData {
     features: string[];
     nodes: Record<string, TreeNode & withChildren & Partial<withPosition>>;
+    leafOrder?: string[];
+    metadata?: ProjectMetadata;
+    treeOutput?: TreeOutput;
 }
 
 export type NodeData<T = TreeNode> = T & {};

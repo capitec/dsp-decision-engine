@@ -6,12 +6,9 @@ import {
     OnNodesChange,
     OnEdgesChange,
   } from '@xyflow/react';
-import {Node, Edge, ProjectMetadata} from './types'
+import {Node, Edge, ProjectMetadata, TreeOutput} from './types'
 
-interface TreeOutput {
-    data: string[][]
-    columns: string[]
-}
+
 
 const defaultTreeOutput: TreeOutput = {
     data: [],
