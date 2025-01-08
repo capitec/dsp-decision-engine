@@ -47,7 +47,7 @@ export interface SourceData {
     nodes: Record<string, TreeNode & withChildren & Partial<withPosition>>;
 }
 
-export type NodeData<T = TreeNode> = T & { label: string };
+export type NodeData<T = TreeNode> = T & {};
 
 export type Node<T = TreeNode> = xyNode<NodeData<T>>;
 export type Edge = xyEdge;

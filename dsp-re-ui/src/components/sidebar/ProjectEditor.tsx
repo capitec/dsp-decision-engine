@@ -155,7 +155,7 @@ export function ProjectSidebar() {
       <SidebarGroup>
         <SidebarGroupLabel>Features</SidebarGroupLabel>
         <SidebarGroupContent>
-          <div className="max-h-60 overflow-y-auto">
+          <div className="max-h-60 overflow-y-auto flex flex-col gap-2 mb-2">
             {features.map((feature, index) => (
               <div key={index} className="flex gap-2">
                 <Input
@@ -204,7 +204,7 @@ export function ProjectSidebar() {
                 Configure Outputs
               </Button>
             </DialogTrigger>
-            <DialogContent className="md:max-w-[1000px] lg:max-w-[1500px] md:max-h-[600px] lg:max-h-[800px] overflow-scroll">
+            <DialogContent className="md:max-w-[1000px] lg:max-w-[1500px] md:max-h-[600px] lg:max-h-[800px] overflow-auto flex flex-col">
               <DialogHeader>
                 <DialogTitle>Edit Outputs</DialogTitle>
                 <DialogDescription>

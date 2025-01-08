@@ -123,9 +123,9 @@ export const TableEditor: React.FC = () => {
 
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 flex flex-col space-y-4 h-full overflow-auto">
 
-      <Table>
+      <Table className="overflow-scroll">
         <TableHeader>
           <TableRow>
             
@@ -224,7 +224,7 @@ export const TableEditor: React.FC = () => {
         </TableBody>
       </Table>
 
-      <Button variant="outline" onClick={handleAddRow} className="w-full max-w-[1000px]">
+      <Button variant="outline" onClick={handleAddRow} className="w-full">
         <Plus className="h-4 w-4 mr-2" />
         Add Row
       </Button>

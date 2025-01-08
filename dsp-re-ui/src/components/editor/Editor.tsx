@@ -70,7 +70,6 @@ export default function NodeEditor({projectId}: {projectId: string}) {
           }),
           uuidv4(),
           defaultLeafNode,
-          features,
           [],
           eds,
           {parentNodeId: connectionState.fromNode!.id, parentHandle: connectionState.fromHandle!.id!},

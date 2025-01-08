@@ -1,32 +1,22 @@
-import { FunctionComponent } from 'react';
+import { FunctionComponent, useMemo } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { Node } from './types';
-// import { LimitHandle } from './LimitHandle';
+import { getLabel } from './util';
+import { useFeatures } from './EditorContext';
  
-
-interface NodeProps {
-    data: Node["data"], 
-    isConnectable: boolean, 
-    targetPosition: Position, 
-    leftSourcePosition: Position, 
-    rightSourcePosition: Position
-}
-
-const DEFAULT_HANDLE_STYLE = {
-  width: 10,
-  height: 10,
-  bottom: -5,
-};
 
 export const LeftRightNode: FunctionComponent<Pick<Node, "data" | "targetPosition"> & {isConnectable: boolean}> = ({
   data,
   isConnectable,
   targetPosition = Position.Top,
 }) => {
+  const [features, setFeatures] = useFeatures();
+  const nodeLabel = useMemo(()=>getLabel(data,features), [features, data])
+
   return (
     <>
       <Handle type="target" position={targetPosition} isConnectable={isConnectable}/>
-      {data?.label}
+      {nodeLabel}
       {/* <Handle id="left" type="source" position={Position.Left} isConnectable={isConnectable}/>
       <Handle id="right" type="source" position={Position.Right} isConnectable={isConnectable}/> */}
       <Handle

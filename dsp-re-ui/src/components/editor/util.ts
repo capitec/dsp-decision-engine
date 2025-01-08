@@ -106,7 +106,7 @@ export const formatTree = async (nodes: Node[], edges: Edge[]) => {
   });
 };
 
-const getLabel = (node: TreeNode, features: string[]): string => {
+export const getLabel = (node: TreeNode, features: string[]): string => {
   if (node.node_type === 'leaf') {
     return node.leaf_value.toString();
   }
@@ -171,9 +171,7 @@ const getUpdatedNode = (node: Node, updates: Partial<NodeData>, features?: strin
     ...node.data,
     ...updates,
   };
-  if (features) {
-    updatedNodeData.label = getLabel(updatedNodeData, features)
-  }
+
   return {
     ...node,
     data: updatedNodeData,
@@ -224,17 +222,13 @@ export const addNode = (
   position: Node["position"],
   nodeId: string = `node_${Date.now()}`,
   data: any = defaultLeafNode,
-  features: string[],
   nodes: Node[] = [],
   edges: Edge[] = [],
   parent: ParentIdentifier | undefined = undefined,
 ): [Node[], Edge[]] => {
   const newNode: Node = {
     id: nodeId,
-    data: { 
-      ...data,
-      label: getLabel(data, features)
-    },
+    data,
     position,
     type: data.node_type === "leaf" ? "output" : "leftRightNode"
   };
@@ -277,7 +271,7 @@ export const formatNodes = async (data: SourceData): Promise<{ nodes: Node[], ed
   const nodes: Node[] = Object.keys(data.nodes).map(nodeId=>{
     const {position, ...nodeData} = data.nodes[nodeId];
     if (position) { seenPosition = true }
-    const [[newNode,...otherNodes],empty] = addNode(position || {x:0,y:0}, nodeId, nodeData, data.features, [], [], undefined)
+    const [[newNode,...otherNodes],empty] = addNode(position || {x:0,y:0}, nodeId, nodeData, [], [], undefined)
     if (nodeData.left_child) {
       edges.push(createEdge(nodeId, nodeData.left_child, 'left'));
     }
@@ -289,62 +283,3 @@ export const formatNodes = async (data: SourceData): Promise<{ nodes: Node[], ed
 
   return {nodes: seenPosition?nodes: await formatTree(nodes,edges), edges, features: data.features}
 }
-export const formatNodesOld = (data: SourceData): { nodes: Node[], edges: Edge[] } => {
-  const childNodes = new Set<string>();
-  Object.values(data.nodes).forEach(node => {
-    if ('left_child' in node) {
-      if (node.left_child) childNodes.add(node.left_child);
-      if (node.right_child) childNodes.add(node.right_child);
-    }
-  });
-  
-  const rootNodes = Object.keys(data.nodes).filter(id => !childNodes.has(id));
-
-  const getPosition = (
-    nodeId: string, 
-    treeIndex: number,
-    parentPos?: { x: number, y: number }, 
-    isRight = false
-  ): { x: number, y: number } => {
-    if (!parentPos) {
-      return { x: treeIndex * 300, y: 0 };
-    }
-    return {
-      x: parentPos.x + (isRight ? 100 : -100),
-      y: parentPos.y + 100
-    };
-  };
-
-  let nodes: Node[] = [];
-  let edges: Edge[] = [];
-
-  const processNode = (
-    nodeId: string, 
-    treeIndex: number,
-    parentPos?: { x: number, y: number }, 
-    isRight = false
-  ) => {
-    const nodeData = data.nodes[nodeId];
-    if (!nodeData) return;
-
-    const position = getPosition(nodeId, treeIndex, parentPos, isRight);
-    [nodes, edges] = addNode(position, nodeId, nodeData, data.features, nodes, edges, undefined);
-
-    if ('left_child' in nodeData && nodeData.node_type !== 'leaf') {
-      if (nodeData.left_child) {
-        edges.push(createEdge(nodeId, nodeData.left_child, 'left'));
-        processNode(nodeData.left_child, treeIndex, position, false);
-      }
-      if (nodeData.right_child) {
-        edges.push(createEdge(nodeId, nodeData.right_child, 'right'));
-        processNode(nodeData.right_child, treeIndex, position, true);
-      }
-    }
-  };
-
-  rootNodes.forEach((rootId, index) => {
-    processNode(rootId, index);
-  });
-
-  return { nodes, edges };
-};
