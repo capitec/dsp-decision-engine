@@ -225,14 +225,15 @@ class Tree(VariableNode):
     def _remove_nodes_from_end(*nodes: "ConditionedNode", child_tree: ChildTree):
         # Not the most pythonic method can maybe be improved
         # Done to remove elements in the order they were added
-        nodes_to_remove = list(nodes)
+        nodes_to_remove = set(map(id, list(nodes)))
         last_el_idx = len(child_tree.nodes) - 1
         for rev_i, node in enumerate(reversed(child_tree.nodes)):
             i = last_el_idx - rev_i
-            if node in nodes_to_remove:
+            if id(node) in nodes_to_remove:
                 child_tree.nodes.pop(i)
-            if len(nodes_to_remove) <= 0:
-                return True
+                nodes_to_remove.discard(id(node))
+                if len(nodes_to_remove) <= 0:
+                    return True
         return False
 
     def copy(self, deep=True):
