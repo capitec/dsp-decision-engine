@@ -130,7 +130,7 @@ class ChildTree(BaseModel):
             )
         if other.default_value is not None:
             self.set_default(other.default_value)
-        
+
         self.nodes.extend(other.nodes)
 
 

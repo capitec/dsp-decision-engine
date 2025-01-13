@@ -222,6 +222,7 @@ def test_merge_subtrees_with_only_defaults(tree):
     with pytest.raises(ValueError):
         tree.include_subtree(subtree2)
 
+
 def test_merge_subtrees_with_defaults(tree):
     subtree = Tree()
     subtree.condition(output=value(100), condition="SubA")
@@ -252,6 +253,7 @@ def test_circular_dep_tree(tree):
 
     with pytest.raises(ValueError):
         subtree_2.condition(condition="A", output=subtree_1)
+
 
 def test_merge_with_tree_as_default_value(tree):
     tree0 = Tree()
