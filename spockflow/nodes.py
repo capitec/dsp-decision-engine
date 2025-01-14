@@ -322,6 +322,7 @@ class VariableNode(BaseModel):
         name: str,
         config: "typing.Dict[str, typing.Any]",
         include_runtime_nodes: bool = False,
+        compiled_node_override: typing.Optional[Self] = None,
     ) -> "typing.List[node.Node]":
         """Generate nodes for this class to be used in a hamilton dag
 
@@ -333,7 +334,11 @@ class VariableNode(BaseModel):
         Returns:
             List[node.Node]: The resulting Hamilton nodes
         """
-        compiled_variable_node = self.compile()
+        if compiled_node_override is None:
+            compiled_variable_node = self.compile()
+        else:
+            compiled_variable_node = self.compile()
+
         node_functions = inspect.getmembers(
             compiled_variable_node, predicate=self._does_define_node
         )
