@@ -208,7 +208,7 @@ def test_set_default_twice(tree):
         tree.set_default(value(888))  # Default value already set
 
 
-def test_merge_subtrees_with_defaults(tree):
+def test_merge_subtrees_with_only_defaults(tree):
     subtree1 = Tree()
     subtree1.set_default(value(100))
 
@@ -219,6 +219,22 @@ def test_merge_subtrees_with_defaults(tree):
     with pytest.raises(ValueError):
         tree.include_subtree(subtree1)
 
+    with pytest.raises(ValueError):
+        tree.include_subtree(subtree2)
+
+
+def test_merge_subtrees_with_defaults(tree):
+    subtree = Tree()
+    subtree.condition(output=value(100), condition="SubA")
+    subtree.condition(output=value(200), condition="SubB")
+    subtree.set_default(output=value(300))
+
+    subtree2 = Tree()
+    subtree2.condition(output=value(1000), condition="SubD")
+    subtree2.condition(output=value(2000), condition="SubE")
+    subtree2.set_default(output=value(3000))
+
+    tree.include_subtree(subtree)
     with pytest.raises(ValueError):
         tree.include_subtree(subtree2)
 
@@ -237,3 +253,20 @@ def test_circular_dep_tree(tree):
 
     with pytest.raises(ValueError):
         subtree_2.condition(condition="A", output=subtree_1)
+
+
+def test_merge_with_tree_as_default_value(tree):
+    tree0 = Tree()
+    tree0.condition(output=value(100), condition="SubA")
+    tree0.condition(output=value(200), condition="SubB")
+
+    tree.condition(output=value(300), condition="SubC")
+    tree.set_default(tree0)
+
+    assert len(tree.root.nodes) == 3
+    assert tree.root.nodes[0].value.loc[0, "value"] == 300
+    assert tree.root.nodes[0].condition == "SubC"
+    assert tree.root.nodes[1].value.loc[0, "value"] == 100
+    assert tree.root.nodes[1].condition == "SubA"
+    assert tree.root.nodes[2].value.loc[0, "value"] == 200
+    assert tree.root.nodes[2].condition == "SubB"
