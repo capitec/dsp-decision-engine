@@ -249,6 +249,7 @@ class ChildTree(BaseModel):
                 raise ValueError(
                     f"Cannot set default as length of value ({len_value}) incompatible with tree {len_tree}."
                 )
+        self.default_value = value
 
     def merge_into(self, other: Self):
         len_subtree = len(other)
@@ -268,6 +269,9 @@ class ChildTree(BaseModel):
             self._decision_tables,
             other._decision_tables
         )
+
+        if other.default_value is not None:
+            self.set_default(other.default_value)
 
         self.nodes.extend(other.nodes)
 
@@ -446,14 +450,15 @@ class Tree(VariableNode):
     def _remove_nodes_from_end(*nodes: "ConditionedNode", child_tree: ChildTree):
         # Not the most pythonic method can maybe be improved
         # Done to remove elements in the order they were added
-        nodes_to_remove = list(nodes)
+        nodes_to_remove = set(map(id, list(nodes)))
         last_el_idx = len(child_tree.nodes) - 1
         for rev_i, node in enumerate(reversed(child_tree.nodes)):
             i = last_el_idx - rev_i
-            if node in nodes_to_remove:
+            if id(node) in nodes_to_remove:
                 child_tree.nodes.pop(i)
-            if len(nodes_to_remove) <= 0:
-                return True
+                nodes_to_remove.discard(id(node))
+                if len(nodes_to_remove) <= 0:
+                    return True
         return False
 
     def copy(self, deep=True):
@@ -538,7 +543,7 @@ class Tree(VariableNode):
         Notes:
             - If `child_tree` is not provided, the default is set for `self.root`.
             - Checks if a default value is already assigned to `child_tree`. If so, raises an error.
-            - Converts `output` to the root node of `output` if `output` is an instance of `Tree`.
+            - if `output` is an instance of `Tree`, add it as subtree.
             - Sets `child_tree.default_value` to `output`, establishing it as the default action
             when no specific conditions are met in the decision tree.
 
@@ -557,8 +562,9 @@ class Tree(VariableNode):
         if child_tree.default_value is not None:
             raise ValueError("Default value already set")
         if isinstance(output, Tree):
-            output = output.root
-        child_tree.default_value = output
+            self.include_subtree(output, condition=None, child_tree=child_tree)
+        else:
+            child_tree.set_default(output)
 
     def include_subtree(
         self,
