@@ -1,0 +1,255 @@
+from spockflow.nodes import VariableNode
+
+import typing
+import numpy as np
+import pandas as pd
+from itertools import chain
+from typing_extensions import Annotated
+from dataclasses import dataclass
+from pydantic import BaseModel, Field
+
+if typing.TYPE_CHECKING:
+    import treelite
+    from treelite.model_builder import ModelBuilder
+
+
+@dataclass
+class Position:
+    x: float
+    y: float
+
+
+class PositionedNode(BaseModel):
+    position: typing.Optional[Position]
+
+
+class TestNode(PositionedNode):
+    split_feature_id: int
+    default_left: bool
+    left_child: str
+    right_child: str
+
+
+class NumericalTestNode(TestNode):
+    NODE_TYPE: typing.ClassVar[str] = "numerical_test_node"
+    node_type: typing.Literal["numerical_test_node"] = NODE_TYPE
+    threshold: float
+    comparison_op: typing.Literal["<=", "<", "==", ">", ">="]
+
+    def build(
+        self, builder: "ModelBuilder", node_id: str, node_lookup: typing.Dict[str, int]
+    ):
+        builder.start_node(node_lookup[node_id])
+        builder.numerical_test(
+            feature_id=self.split_feature_id,
+            threshold=self.threshold,
+            default_left=self.default_left,
+            opname=self.comparison_op,
+            left_child_key=node_lookup[self.left_child],
+            right_child_key=node_lookup[self.right_child],
+        )
+        builder.end_node()
+
+
+class CategoricalTestNode(TestNode):
+    NODE_TYPE: typing.ClassVar[str] = "categorical_test_node"
+    node_type: typing.Literal["categorical_test_node"] = NODE_TYPE
+    category_list: typing.List[int]
+    # Basically if the value should be in or not in set
+    category_list_right_child: bool
+
+    def build(
+        self, builder: "ModelBuilder", node_id: str, node_lookup: typing.Dict[str, int]
+    ):
+        builder.start_node(node_lookup[node_id])
+        builder.categorical_test(
+            feature_id=self.split_feature_id,
+            default_left=self.default_left,
+            left_child_key=node_lookup[self.left_child],
+            right_child_key=node_lookup[self.right_child],
+            category_list=self.category_list,
+            category_list_right_child=self.category_list_right_child,
+        )
+        builder.end_node()
+
+
+class LeafNode(PositionedNode):
+    DEFAULT_LEAF_VALUE: typing.ClassVar[str] = -1
+    NODE_TYPE: typing.ClassVar[str] = "leaf"
+    node_type: typing.Literal["leaf"] = NODE_TYPE
+    leaf_value: int
+
+    def build(
+        self, builder: "ModelBuilder", node_id: str, node_lookup: typing.Dict[str, int]
+    ):
+        builder.start_node(node_lookup[node_id])
+        builder.leaf([node_lookup[node_id]])
+        builder.end_node()
+
+
+class TreeOutput(BaseModel):
+    columns: typing.List[str]
+    data: typing.List[typing.List[str]]
+    dtype: typing.Optional[typing.List[str]]
+    # TODO add assertations here that
+    # len(columns) == len(dtypes) == len(data[*])
+
+
+class TreeMetadata(BaseModel):
+    name: str
+    description: str
+
+
+NodeType = Annotated[
+    typing.Union[NumericalTestNode, CategoricalTestNode, LeafNode],
+    Field(discriminator="node_type"),
+]
+
+_L = typing.TypeVar["_L"]
+
+@dataclass
+class CompiledTreeliteTree:
+    model: "treelite.Model"
+    output_priority_mapping: np.ndarray[typing.Tuple[_L], np.dtype[np.integer[typing.Any]]]
+    leaf_output_mapping: np.ndarray[typing.Tuple[_L], np.dtype[np.integer[typing.Any]]]
+    output_dataframe_mapping: pd.DataFrame
+
+
+    @staticmethod
+    def _get_node_id_mapping(nodes: typing.Dict[str, NodeType]):
+        leaf_nodes = list(filter(lambda k: nodes[k].node_type == LeafNode.NODE_TYPE, nodes.keys()))
+        return ({
+            # We want to keep leaf nodes at the start of the mapping so we can compress the outputs
+            # Dont have to differentiate between leaf_node_id and node_id.
+            k: i
+            for i,k in enumerate(chain(
+                leaf_nodes,
+                filter(lambda k: nodes[k].node_type != LeafNode.NODE_TYPE, nodes.keys()),
+            ))
+        }, leaf_nodes)
+    
+    @staticmethod
+    def _identify_independent_tree_roots(nodes: typing.Dict[str, NodeType]):
+        root_nodes = set(nodes.keys())
+        for n in nodes.values():
+            if n.node_type == LeafNode.NODE_TYPE:
+                continue
+            root_nodes.difference_update([n.left_child, n.right_child])
+        return root_nodes
+    
+    @staticmethod
+    def _get_treelite_model_builder(
+        root_nodes: typing.List[str], 
+        tree: "Tree"
+    ) -> "ModelBuilder":
+        from treelite.model_builder import (
+            Metadata,
+            ModelBuilder,
+            PostProcessorFunc,
+            TreeAnnotation,
+        )
+        no_subtrees = len(root_nodes)
+        return ModelBuilder(
+            threshold_type="float32",
+            leaf_output_type="float32",
+            metadata=Metadata(
+                num_feature=len(tree.features),
+                task_type="kMultiClf",
+                average_tree_output=False,
+                num_target=no_subtrees,  # We crete one target output per tree
+                num_class=[1] * no_subtrees,
+                leaf_vector_shape=(1, 1),
+            ),
+            tree_annotation=TreeAnnotation(
+                num_tree=no_subtrees,
+                target_id=list(
+                    range(no_subtrees)
+                ),  # Trees are independent and only contribute to their target
+                class_id=[-1] * no_subtrees,
+            ),
+            postprocessor=PostProcessorFunc(name="identity"),
+            base_scores=[0.0] * no_subtrees,
+        )
+    @staticmethod
+    def _sort_root_nodes(
+        node_id_mapping: typing.Dict[str, int],
+        root_nodes: typing.Set[str], 
+        tree: "Tree"
+    ) -> typing.List[str]:
+        # Might want to extend this later to take into account the leaf priority
+        return sorted(root_nodes, key=node_id_mapping.get)
+
+    # @staticmethod
+    # def _get_node_
+
+    @classmethod
+    def build(cls, tree: "Tree") -> "typing.Self":
+        node_id_mapping, leaf_nodes = cls._get_node_id_mapping(tree.nodes)
+        root_nodes = cls._identify_independent_tree_roots(tree.nodes)
+        builder = cls._get_treelite_model_builder(root_nodes, tree)
+
+        for root in cls._sort_root_nodes(node_id_mapping, root_nodes, tree):
+            builder.start_tree()
+            to_search = [root]
+            seen = set()
+            while to_search:
+                n_key = to_search.pop()
+                if n_key in seen:
+                    raise ValueError(f"Cannot build tree as it contains loops detected on node_id: {n_key}")
+                seen.add(n_key)
+                n = tree.nodes[n_key]
+                n.build(builder, n_key, node_id_mapping)
+                if n.node_type != LeafNode.NODE_TYPE:
+                    to_search.extend([n.left_child, n.right_child])
+            builder.end_tree()
+
+        # Priority
+        num_leaf_nodes = len(leaf_nodes)
+        output_priority_mapping = np.repeat(-1,num_leaf_nodes).astype(np.int64)
+        for leaf_node in leaf_nodes:
+            leaf_node_idx = node_id_mapping[leaf_node]
+            if tree.nodes[leaf_node].leaf_value == LeafNode.DEFAULT_LEAF_VALUE:
+                # Default leafs should be given least priority
+                output_priority_mapping[leaf_node_idx] = -2
+                continue
+
+            try:
+                # Give greatest priority to largest leaf
+                output_priority_mapping[leaf_node_idx] = num_leaf_nodes - tree.leaf_order.index(leaf_node)
+            except ValueError as e:
+                raise ValueError(f"Could not find {leaf_node} in leaf order") from e
+        # Output Mapping
+        num_leaf_nodes = len(leaf_nodes)
+        output_mapping = np.repeat(-1,num_leaf_nodes).astype(np.int64)
+        for leaf_node_key in leaf_nodes:
+            leaf_node_idx = node_id_mapping[leaf_node_key]
+            output_mapping[leaf_node_idx] = tree.nodes[leaf_node_key].leaf_value
+        # Output Dataframe
+        output_df_map = pd.DataFrame(
+            data=tree.tree_output.data,
+            columns=tree.tree_output.columns,
+            dtype=tree.tree_output.dtype,
+            index=range(-1,len(tree.tree_output.data)-1,1)
+        )
+        diff_set = set(output_mapping) - set(output_df_map.index)
+        if diff_set:
+            raise ValueError(f"Found output values with no matching items in output df: {diff_set}")
+
+
+        return CompiledTreeliteTree(
+            model=builder.commit(),
+            output_priority_mapping=output_priority_mapping,
+            leaf_output_mapping=output_mapping,
+            output_dataframe_mapping=output_df_map,
+        )
+
+
+class Tree(VariableNode):
+    features: typing.List[str]
+    nodes: typing.Dict[str, NodeType]
+    leaf_order: typing.List[str] = Field(alias="leafOrder")
+    metadata: TreeMetadata
+    tree_output: TreeOutput = Field(alias="treeOutput")
+
+    def compile(self):
+        return CompiledTreeliteTree(self)
