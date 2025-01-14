@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from spockflow.components.tree.settings import settings
 from .core import ChildTree, Tree, TOutput, TCond, ConditionedNode, TableConditionedNode
 from spockflow.nodes import creates_node
+
 if typing.TYPE_CHECKING:
     from spockflow.components.dtable import DecisionTable
 
@@ -42,9 +43,10 @@ TFormatData = typing.Tuple[np.ndarray, pd.DataFrame, np.ndarray, np.ndarray, int
 class CompiledNumpyTree:
     def __init__(self, tree: Tree) -> None:
         self.decision_tables: typing.Dict[str, "DecisionTable"] = {}
-        for k,v in tree.get_decision_tables().items():
-            assert list(v.outputs.keys()) == ["value"], \
-                f"Decision tables nested in decision trees can only have one output named \"value\""
+        for k, v in tree.get_decision_tables().items():
+            assert list(v.outputs.keys()) == [
+                "value"
+            ], f'Decision tables nested in decision trees can only have one output named "value"'
             # Decision tables dont need compilation but keeping with convention
             self.decision_tables[k] = v.compile()
 
@@ -58,7 +60,9 @@ class CompiledNumpyTree:
         )
         flattened_tree = self._get_symbolic_tree(flattened_tree)
         self._flattened_tree = flattened_tree
-        self._flattened_priority = np.array([n.priority for n in self._flattened_tree.tree], dtype=np.int32)
+        self._flattened_priority = np.array(
+            [n.priority for n in self._flattened_tree.tree], dtype=np.int32
+        )
         self._has_priority = any(self._flattened_priority != 1)
 
         (predefined_conditions, predefined_condition_names, execution_conditions) = (
@@ -243,10 +247,12 @@ class CompiledNumpyTree:
         )
 
     @staticmethod
-    def _merge_priority(p1: typing.Optional[int], p2: typing.Optional[int]) -> typing.Optional[int]:
+    def _merge_priority(
+        p1: typing.Optional[int], p2: typing.Optional[int]
+    ) -> typing.Optional[int]:
         if p1 is None and p2 is None:
             return None
-        return (p1 or 0) + (p2 or 0) # Also caps values to > 0
+        return (p1 or 0) + (p2 or 0)  # Also caps values to > 0
 
     def _flatten_tree(
         self,
@@ -254,7 +260,7 @@ class CompiledNumpyTree:
         current_conditions: typing.Tuple[TCond],
         seen: typing.Set[int],
         conditioned_outputs: typing.List[ConditionedOutput],
-        priority: typing.Optional[int]=None,
+        priority: typing.Optional[int] = None,
     ) -> typing.List[ConditionedOutput]:
         curr_id = id(sub_tree)
         if curr_id in seen:
@@ -280,17 +286,19 @@ class CompiledNumpyTree:
                         current_conditions=n_conditions,
                         seen=seen.union([curr_id]),
                         conditioned_outputs=conditioned_outputs,
-                        priority=self._merge_priority(priority, n.priority)
+                        priority=self._merge_priority(priority, n.priority),
                     )
                 else:
-                    conditioned_outputs.append(ConditionedOutput(n.value, n_conditions, max(priority or 0,1)))
+                    conditioned_outputs.append(
+                        ConditionedOutput(n.value, n_conditions, max(priority or 0, 1))
+                    )
             else:
                 if n.condition_table not in self.decision_tables:
                     raise ValueError(
                         f"Found node conditioned on a table ({n.condition_table}) that is not registered within the tree."
                     )
                 n._check_compatible_table(self.decision_tables[n.condition_table])
-                for i,v in enumerate(n.values):
+                for i, v in enumerate(n.values):
                     if v is None:
                         raise ValueError(
                             "All nodes must have a value set to be a valid tree.\n"
@@ -304,14 +312,18 @@ class CompiledNumpyTree:
                             current_conditions=n_conditions,
                             seen=seen.union([curr_id]),
                             conditioned_outputs=conditioned_outputs,
-                            priority=self._merge_priority(priority, n_priority)
+                            priority=self._merge_priority(priority, n_priority),
                         )
                     else:
-                        conditioned_outputs.append(ConditionedOutput(v, n_conditions, max(priority or 0,1)))
-                    
+                        conditioned_outputs.append(
+                            ConditionedOutput(v, n_conditions, max(priority or 0, 1))
+                        )
+
         if sub_tree.default_value is not None:
             conditioned_outputs.append(
-                ConditionedOutput(sub_tree.default_value, current_conditions, max(priority or 0,1))
+                ConditionedOutput(
+                    sub_tree.default_value, current_conditions, max(priority or 0, 1)
+                )
             )
 
         return conditioned_outputs
@@ -390,13 +402,14 @@ class CompiledNumpyTree:
         # [O,C]@[C,N] => [O,N] (Matrix multiplication should be the same as performing a count of all true statements)
         # The thresh will see where they are all true
         return (conditions @ self.truth_table) >= self.truth_table_thresh
-    
+
     @creates_node()
     def prioritized_conditions(self, conditions_met: np.ndarray) -> np.ndarray:
-        if not self._has_priority: return conditions_met
+        if not self._has_priority:
+            return conditions_met
         # [O] * [O,N] -> [O,N] (outputs, batch)
         return self._flattened_priority * conditions_met
-    
+
     @creates_node()
     def condition_names(self, format_inputs: TFormatData) -> typing.List[str]:
         conditions = format_inputs[0]

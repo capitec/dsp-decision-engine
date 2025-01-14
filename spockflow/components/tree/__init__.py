@@ -2,7 +2,7 @@ from typing import TypeVar, Generic
 import pandas as pd
 from spockflow.components.tree.v1.core import (
     Tree as Tree,
-    TableCondition as TableCondition
+    TableCondition as TableCondition,
 )
 
 T = TypeVar("T", bound=dict)
