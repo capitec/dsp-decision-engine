@@ -1,5 +1,6 @@
-from spockflow.nodes import VariableNode
+from spockflow.nodes import VariableNode, creates_node
 
+import treelite
 import typing
 import numpy as np
 import pandas as pd
@@ -9,7 +10,6 @@ from dataclasses import dataclass
 from pydantic import BaseModel, Field
 
 if typing.TYPE_CHECKING:
-    import treelite
     from treelite.model_builder import ModelBuilder
 
 
@@ -90,7 +90,7 @@ class LeafNode(PositionedNode):
 class TreeOutput(BaseModel):
     columns: typing.List[str]
     data: typing.List[typing.List[str]]
-    dtype: typing.Optional[typing.List[str]]
+    dtype: typing.Optional[typing.List[str]] = None
     # TODO add assertations here that
     # len(columns) == len(dtypes) == len(data[*])
 
@@ -105,14 +105,22 @@ NodeType = Annotated[
     Field(discriminator="node_type"),
 ]
 
-_L = typing.TypeVar["_L"]
+_L = typing.TypeVar("_L", bound=int) # Leaf Nodes
+_C = typing.TypeVar("_C", bound=int) # Condition nodes
+_B = typing.TypeVar("_B", bound=int) # Bach
+_T = typing.TypeVar("_T", bound=int) # Subtrees
+_F = typing.TypeVar("_F", bound=int) # Features
 
 @dataclass
 class CompiledTreeliteTree:
     model: "treelite.Model"
     output_priority_mapping: np.ndarray[typing.Tuple[_L], np.dtype[np.integer[typing.Any]]]
     leaf_output_mapping: np.ndarray[typing.Tuple[_L], np.dtype[np.integer[typing.Any]]]
+    paths_matrix: np.ndarray[typing.Tuple[_C, _L], np.dtype[np.integer[typing.Any]]]
     output_dataframe_mapping: pd.DataFrame
+    features: typing.List[str]
+    node_id_mapping: typing.Dict[str, int]
+    tree_path_labels: typing.List[str]
 
 
     @staticmethod
@@ -179,9 +187,6 @@ class CompiledTreeliteTree:
         # Might want to extend this later to take into account the leaf priority
         return sorted(root_nodes, key=node_id_mapping.get)
 
-    # @staticmethod
-    # def _get_node_
-
     @classmethod
     def build(cls, tree: "Tree") -> "typing.Self":
         node_id_mapping, leaf_nodes = cls._get_node_id_mapping(tree.nodes)
@@ -203,7 +208,7 @@ class CompiledTreeliteTree:
                     to_search.extend([n.left_child, n.right_child])
             builder.end_tree()
 
-        # Priority
+        # Priority (TODO move to function)
         num_leaf_nodes = len(leaf_nodes)
         output_priority_mapping = np.repeat(-1,num_leaf_nodes).astype(np.int64)
         for leaf_node in leaf_nodes:
@@ -218,13 +223,13 @@ class CompiledTreeliteTree:
                 output_priority_mapping[leaf_node_idx] = num_leaf_nodes - tree.leaf_order.index(leaf_node)
             except ValueError as e:
                 raise ValueError(f"Could not find {leaf_node} in leaf order") from e
-        # Output Mapping
+        # Output Mapping (TODO move to function)
         num_leaf_nodes = len(leaf_nodes)
         output_mapping = np.repeat(-1,num_leaf_nodes).astype(np.int64)
         for leaf_node_key in leaf_nodes:
             leaf_node_idx = node_id_mapping[leaf_node_key]
             output_mapping[leaf_node_idx] = tree.nodes[leaf_node_key].leaf_value
-        # Output Dataframe
+        # Output Dataframe (TODO move to function)
         output_df_map = pd.DataFrame(
             data=tree.tree_output.data,
             columns=tree.tree_output.columns,
@@ -234,6 +239,30 @@ class CompiledTreeliteTree:
         diff_set = set(output_mapping) - set(output_df_map.index)
         if diff_set:
             raise ValueError(f"Found output values with no matching items in output df: {diff_set}")
+        
+        # Path Maps (TODO move to function)
+        num_leaf_nodes = len(leaf_nodes)
+        num_condition_nodes = len(node_id_mapping) - num_leaf_nodes
+        paths_matrix = np.zeros((num_leaf_nodes, num_condition_nodes), dtype=np.int8)
+        tree_path_labels = ["" for i in range(num_condition_nodes)]
+        def dfs(node_key: str, path_vector: np.ndarray):
+            node = tree.nodes[node_key]
+            node_idx = node_id_mapping[node_key]
+            if node.node_type == LeafNode.NODE_TYPE:
+                if not (paths_matrix[node_idx] == 0).all():
+                    raise ValueError(f"Found multiple paths to leaf node {node_key}")
+                paths_matrix[node_idx] = path_vector
+            else:
+                tree_path_labels[node_idx-num_leaf_nodes] = node_key
+                path_vector[node_idx-num_leaf_nodes] = 1
+                dfs(node.left_child, path_vector)
+                path_vector[node_idx-num_leaf_nodes] = -1
+                dfs(node.right_child, path_vector)
+                path_vector[node_idx-num_leaf_nodes] = 0
+
+        for root in root_nodes:
+            path_vector = np.zeros((num_condition_nodes,), dtype=np.int8)
+            dfs(root, path_vector)
 
 
         return CompiledTreeliteTree(
@@ -241,7 +270,89 @@ class CompiledTreeliteTree:
             output_priority_mapping=output_priority_mapping,
             leaf_output_mapping=output_mapping,
             output_dataframe_mapping=output_df_map,
+            node_id_mapping=node_id_mapping,
+            features=tree.features,
+            paths_matrix=paths_matrix,
+            tree_path_labels=tree_path_labels,
         )
+    
+    def _get_inputs(self, function: typing.Callable):
+        return {
+            f: typing.Union[np.ndarray, pd.Series] 
+            for f in self.features
+        }
+    
+    @creates_node(kwarg_input_generator="_get_inputs")
+    def formatted_inputs(
+        self, **kwargs: typing.Union[np.ndarray, pd.Series]
+    ) -> np.ndarray:
+        return np.stack([kwargs[f] for f in self.features], axis=-1)
+    
+    @creates_node(kwarg_input_generator="_get_inputs")
+    def index(
+        self, **kwargs: typing.Union[np.ndarray, pd.Series]
+    ) -> pd.Index:
+        index_length = 0
+        for f_name in self.features:
+            f = kwargs[f_name]
+            if isinstance(f, pd.Series):
+                return f.index
+            index_length = max(index_length, len(f))
+        return pd.RangeIndex(0, index_length)
+
+    @creates_node()
+    def tree_results(
+        self, 
+        formatted_inputs: np.ndarray[typing.Tuple[_B, _F], np.dtype[np.number[typing.Any]]]
+    ) -> np.ndarray[typing.Tuple[_B, _T], np.dtype[np.integer[typing.Any]]]:
+        return treelite.gtil.predict(self.model, formatted_inputs)[:,:,0].astype(int)
+    
+    @creates_node()
+    def highest_priority_index(
+        self, 
+        tree_results: np.ndarray[typing.Tuple[_B, _T], np.dtype[np.integer[typing.Any]]]
+    ) ->  np.ndarray[typing.Tuple[_B], np.dtype[np.integer[typing.Any]]]:
+        priorities = self.output_priority_mapping[tree_results]
+        return priorities.argmax(axis=1)
+    
+    @creates_node()
+    def prioritized_outputs(
+        self, 
+        tree_results: np.ndarray[typing.Tuple[_B, _T], np.dtype[np.integer[typing.Any]]],
+        highest_priority_index: np.ndarray[typing.Tuple[_B], np.dtype[np.integer[typing.Any]]]
+    ) ->  np.ndarray[typing.Tuple[_B], np.dtype[np.integer[typing.Any]]]:
+        result_idx = tree_results[np.arange(len(highest_priority_index)), highest_priority_index]
+        return self.leaf_output_mapping[result_idx]
+
+    @creates_node(is_namespaced=False)
+    def get_output(
+        self, 
+        index: pd.Index, 
+        prioritized_outputs: np.ndarray[typing.Tuple[_B], np.dtype[np.integer[typing.Any]]]
+    ) -> pd.DataFrame:
+        return self.output_dataframe_mapping.loc[prioritized_outputs].set_index(index, drop=True)
+    
+    @creates_node()
+    def all_tree_paths(
+        self, 
+        tree_results: np.ndarray[typing.Tuple[_B, _T], np.dtype[np.integer[typing.Any]]],
+    ) -> np.ndarray[typing.Tuple[_B, _T, _C], np.dtype[np.integer[typing.Any]]]:
+        return self.paths_matrix[tree_results]
+    
+
+    @creates_node()
+    def prioritized_tree_paths(
+        self, 
+        all_tree_paths: np.ndarray[typing.Tuple[_B, _T, _C], np.dtype[np.integer[typing.Any]]],
+        highest_priority_index: np.ndarray[typing.Tuple[_B], np.dtype[np.integer[typing.Any]]]
+    ) -> np.ndarray[typing.Tuple[_B, _C], np.dtype[np.integer[typing.Any]]]:
+        return all_tree_paths[np.arange(len(highest_priority_index)), highest_priority_index]
+    
+    @creates_node()
+    def tree_path_keys(
+        self
+    ) -> typing.List[str]:
+        return self.tree_path_labels
 
 
 class Tree(VariableNode):
@@ -252,4 +363,4 @@ class Tree(VariableNode):
     tree_output: TreeOutput = Field(alias="treeOutput")
 
     def compile(self):
-        return CompiledTreeliteTree(self)
+        return CompiledTreeliteTree.build(self)
