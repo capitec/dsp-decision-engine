@@ -1,0 +1,78 @@
+{
+    "num_feature": 3,
+    "task_type": "kRegressor",
+    "average_tree_output": false,
+    "num_target": 1,
+    "num_class": [1],
+    "leaf_vector_shape": [1, 1],
+    "target_id": [0, 0],
+    "class_id": [0, 0],
+    "postprocessor": "identity",
+    "sigmoid_alpha": 1.0,
+    "ratio_c": 1.0,
+    "base_scores": [0.0],
+    "attributes": "{}",
+    "trees": [{
+            "num_nodes": 5,
+            "has_categorical_split": false,
+            "nodes": [{
+                    "node_id": 0,
+                    "split_feature_id": 0,
+                    "default_left": true,
+                    "node_type": "numerical_test_node",
+                    "comparison_op": "<",
+                    "threshold": 5.0,
+                    "left_child": 1,
+                    "right_child": 2
+                }, {
+                    "node_id": 1,
+                    "split_feature_id": 2,
+                    "default_left": false,
+                    "node_type": "numerical_test_node",
+                    "comparison_op": "<",
+                    "threshold": -3.0,
+                    "left_child": 3,
+                    "right_child": 4
+                }, {
+                    "node_id": 2,
+                    "leaf_value": 0.6000000238418579
+                }, {
+                    "node_id": 3,
+                    "leaf_value": -0.4000000059604645
+                }, {
+                    "node_id": 4,
+                    "leaf_value": 1.2000000476837159
+                }]
+        }, {
+            "num_nodes": 5,
+            "has_categorical_split": false,
+            "nodes": [{
+                    "node_id": 0,
+                    "split_feature_id": 1,
+                    "default_left": false,
+                    "node_type": "numerical_test_node",
+                    "comparison_op": "<",
+                    "threshold": 2.5,
+                    "left_child": 1,
+                    "right_child": 2
+                }, {
+                    "node_id": 1,
+                    "leaf_value": 1.600000023841858
+                }, {
+                    "node_id": 2,
+                    "split_feature_id": 2,
+                    "default_left": true,
+                    "node_type": "numerical_test_node",
+                    "comparison_op": "<",
+                    "threshold": -1.2000000476837159,
+                    "left_child": 3,
+                    "right_child": 4
+                }, {
+                    "node_id": 3,
+                    "leaf_value": 0.10000000149011612
+                }, {
+                    "node_id": 4,
+                    "leaf_value": -0.30000001192092898
+                }]
+        }]
+}
