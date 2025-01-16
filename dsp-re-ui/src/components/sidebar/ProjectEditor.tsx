@@ -22,8 +22,10 @@ import {
   useEdges, useFeatures, useLeafOrder, useNodes, useProjectMetadata, 
   useTreeOutput
 } from "@components/editor/EditorContext";
-import { exportState, formatTree } from "@components/editor/util";
+import { addNode, defaultLeafNode, exportState, formatTree } from "@components/editor/util";
 import FIleUploadButton from "./FileUpload"
+import { v4 as uuidv4 } from 'uuid';
+import { useReactFlow, useStore } from "@xyflow/react";
 
 export function ProjectSidebar() {
   const { toast } = useToast();
@@ -33,6 +35,11 @@ export function ProjectSidebar() {
   const [metadata, setMetadata] = useProjectMetadata();
   const [treeOutput] = useTreeOutput();
   const [leafOrder] = useLeafOrder();
+  const { getViewport } = useReactFlow();
+
+  const [editorWidth, editorHeight] = useStore((v)=>{
+    return [v.width, v.height]
+  });
 
   const downloadLinkRef = useRef<HTMLAnchorElement | null>(null);
 
@@ -70,6 +77,30 @@ export function ProjectSidebar() {
       setNodes(newNodes);
     });
   }, [nodes, edges, setNodes]);
+
+  const handleAddNode = useCallback(() => {
+
+    setNodes((nds) => {
+      const viewport = getViewport();
+      console.log({viewport})
+      const centerX = (0.5*editorWidth-viewport.x)/viewport.zoom;
+      const centerY = (0.5*editorHeight-viewport.y)/viewport.zoom;
+      const [newNodes, newEdges] = addNode(
+
+        {
+          x: centerX,
+          y: centerY,
+        },
+        uuidv4(),
+        defaultLeafNode,
+        nds,
+        [],
+        undefined,
+      )
+      return newNodes;
+    })
+
+  }, [setEdges, setNodes, editorWidth, editorHeight]);
 
   const handleAddFeature = useCallback(() => {
     setFeatures(prevFeatures => {
@@ -256,6 +287,24 @@ export function ProjectSidebar() {
       <SidebarGroup>
         <SidebarGroupLabel>Utilities</SidebarGroupLabel>
         <SidebarGroupContent>
+
+        <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  onClick={handleAddNode}
+                  className="w-full"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Node
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Add a node to the layout</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
