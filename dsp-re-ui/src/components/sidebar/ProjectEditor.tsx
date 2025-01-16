@@ -23,6 +23,7 @@ import {
   useTreeOutput
 } from "@components/editor/EditorContext";
 import { exportState, formatTree } from "@components/editor/util";
+import FIleUploadButton from "./FileUpload"
 
 export function ProjectSidebar() {
   const { toast } = useToast();
@@ -44,9 +45,19 @@ export function ProjectSidebar() {
       });
       return
     }
-    const state = exportState(
-      nodes, edges, features, leafOrder, metadata, treeOutput
-    )
+    let state;
+    try {
+      state = exportState(
+        nodes, edges, features, leafOrder, metadata, treeOutput
+      )
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Invalid Tree",
+        description: (error as Error).message
+      });
+      return
+    }
     const json = JSON.stringify(state, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -262,6 +273,7 @@ export function ProjectSidebar() {
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
+          <FIleUploadButton/>
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>

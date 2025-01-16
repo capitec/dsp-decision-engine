@@ -1,4 +1,4 @@
-import { Edge, Node, SourceData, TreeNode, LeafNodeData, NumericalNodeData, CategoricalNodeData, ForkNodeData, NodeData, ParentIdentifier, withChildren, TreeOutput, ProjectMetadata } from "./types";
+import { Edge, Node, SourceData, TreeNode, LeafNodeData, NumericalNodeData, CategoricalNodeData, ForkNodeData, NodeData, ParentIdentifier, withChildren, TreeOutput, ProjectMetadata, withPosition, BranchingNodeDataWithChildren } from "./types";
 
 import {
   Connection,
@@ -263,7 +263,7 @@ export const linkNodeToParent = (
 };
 
 
-const getDefaultFeatures = (nodes: Record<string, TreeNode & withChildren>): string[] => {
+const getDefaultFeatures = (nodes: SourceData["nodes"]): string[] => {
   const maxFeatureId = Math.max(
     ...Object.values(nodes)
       .filter((node): node is (NumericalNodeData | CategoricalNodeData) & withChildren => 
@@ -287,8 +287,8 @@ const compactLeafValues = (nodes: Record<string, TreeNode>): Map<number, number>
 };
 
 const validateNodes = (
-  nodes: Record<string, TreeNode & withChildren>, 
-  features: string[]
+  nodes: SourceData["nodes"], 
+  features: SourceData["features"]
 ): void => {
   // TODO
   // for (const [nodeId, node] of Object.entries(nodes)) {
@@ -301,28 +301,8 @@ const validateNodes = (
 };
 
 
-export const formatNodes = async (data: SourceData): Promise<{ nodes: Node[], edges: Edge[], features: string[] }> => {
-  const edges: Edge[] = [];
-  let seenPosition = false;
 
-  const nodes: Node[] = Object.keys(data.nodes).map(nodeId=>{
-    const {position, ...nodeData} = data.nodes[nodeId];
-    if (position) { seenPosition = true }
-    const [[newNode,...otherNodes],empty] = addNode(position || {x:0,y:0}, nodeId, nodeData, [], [], undefined)
-    if (nodeData.left_child) {
-      edges.push(createEdge(nodeId, nodeData.left_child, 'left'));
-    }
-    if (nodeData.right_child) {
-      edges.push(createEdge(nodeId, nodeData.right_child, 'right'));
-    }
-    return newNode;
-  })
-
-  const features = data.features ?? getDefaultFeatures(data.nodes);
-  return {nodes: seenPosition?nodes: await formatTree(nodes,edges), edges, features}
-}
-
-export const formatNodesNew = async (data: SourceData): Promise<{ 
+export const loadState = async (data: SourceData, filename?: string): Promise<{ 
   nodes: Node[],
   edges: Edge[], 
   features: string[],
@@ -330,56 +310,39 @@ export const formatNodesNew = async (data: SourceData): Promise<{
   metadata: ProjectMetadata,
   treeOutput: TreeOutput
 }> => {
-  const features = data.features ?? getDefaultFeatures(data.nodes);
-  validateNodes(data.nodes, features);
-  
-  const valueMapping = compactLeafValues(data.nodes);
   const edges: Edge[] = [];
+  const valueMapping = compactLeafValues(data.nodes);
   let seenPosition = false;
 
-  const nodes: Node[] = Object.entries(data.nodes).map(([nodeId, nodeData]) => {
-    const { position, left_child, right_child, ...rest } = nodeData;
-    if (position) seenPosition = true;
-
-    if (rest.node_type === 'leaf') {
-      return {
-        id: nodeId,
-        position: position || { x: 0, y: 0 },
-        data: {
-          ...rest,
-          leaf_value: valueMapping.get(rest.leaf_value)!
-        },
-        type: 'leaf'
-      };
+  const nodes: Node[] = Object.keys(data.nodes).map(nodeId=>{
+    const {position, ...nodeData} = data.nodes[nodeId];
+    if (position) { seenPosition = true }
+    const [[newNode]] = addNode(
+      position || {x:0,y:0}, 
+      nodeId, 
+      nodeData.node_type === "leaf"? {...nodeData, leaf_value:valueMapping.get(nodeData.leaf_value)||nodeData.leaf_value}:nodeData, 
+      [], [], 
+      undefined)
+    if (nodeData.node_type === 'leaf') { return newNode };
+    if (nodeData.left_child) {
+      edges.push(createEdge(nodeId, nodeData.left_child, 'left'));
     }
-
-    if (left_child) edges.push(createEdge(nodeId, left_child, 'left'));
-    if (right_child) edges.push(createEdge(nodeId, right_child, 'right'));
-
-    return {
-      id: nodeId,
-      position: position || { x: 0, y: 0 },
-      data: rest,
-      type: rest.node_type
-    };
+    if (nodeData.right_child) {
+      edges.push(createEdge(nodeId, nodeData.right_child, 'right'));
+    }
+    return newNode;
   });
 
-  const leafNodes = nodes.filter(n => n.data.node_type === 'leaf').map(n => n.id);
-  const defaultOutput: TreeOutput = {
-    data: [],
-    columns: Array.from(valueMapping.values()).map(i => `output_${i}`)
-  };
-
+  const features = data.features ?? getDefaultFeatures(data.nodes);
   return {
-    nodes: seenPosition ? nodes : await formatTree(nodes, edges),
-    edges,
+    nodes: seenPosition?nodes: await formatTree(nodes,edges), 
+    edges, 
     features,
-    leafOrder: data.leafOrder ?? leafNodes,
-    metadata: data.metadata ?? { name: "", description: "" },
-    treeOutput: data.treeOutput ?? defaultOutput
-  };
-};
-
+    leafOrder: data.leafOrder ?? nodes.filter(n => n.data.node_type === 'leaf').map(n => n.id),
+    metadata: data.metadata ?? { name: (filename||"Untitled"), description: "" },
+    treeOutput: data.treeOutput ?? { data: Object.keys(valueMapping).map(v=>[]), columns:[]}
+  }
+}
 
 export const exportState = (
   nodes: Node[],
@@ -403,21 +366,25 @@ export const exportState = (
 
   const exportNodes: SourceData["nodes"] = {};
   
-  for (const node of nodes) {
-    const children = edgeMap.get(node.id) ?? {};
-    if (!children.left || !children.right) {
-      if (node.data.node_type !== 'leaf') {
-        throw new Error(`Non-leaf node ${node.id} missing children`);
-      }
+  nodes.forEach((node)=>{
+    if (node.data.node_type === 'leaf') {
+      exportNodes[node.id] = ({
+        ...(node.data as LeafNodeData),
+        position: node.position
+      } as LeafNodeData & withPosition)
+      return
     }
-
+    const children = edgeMap.get(node.id) ;
+    if (!children || !children.left || !children.right) {
+      throw new Error(`Non-leaf node ${node.id} missing children`);
+    }
     exportNodes[node.id] = {
       ...node.data,
       position: node.position,
-      left_child: children.left ?? '',
-      right_child: children.right ?? ''
+      left_child: children.left,
+      right_child: children.right
     };
-  }
+  })
 
   validateNodes(exportNodes, features);
 

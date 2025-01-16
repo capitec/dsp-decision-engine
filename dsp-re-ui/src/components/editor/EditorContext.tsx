@@ -25,6 +25,7 @@ interface EditorContextState {
     setEdges: Dispatch<SetStateAction<Edge[]>>;
     onEdgesChange: OnEdgesChange<Edge>;
     leafOrder: string[];
+    setLeafOrder: Dispatch<SetStateAction<string[]>>;
     updateLeafOrder: (nodeId: string, newIndex: number) => void;
     metadata: ProjectMetadata;
     setMetadata: React.Dispatch<React.SetStateAction<ProjectMetadata>>;
@@ -32,7 +33,26 @@ interface EditorContextState {
     setTreeOutput: React.Dispatch<React.SetStateAction<TreeOutput>>;
 
   }
-const EditorContext = createContext<EditorContextState|undefined>(undefined);
+export const EditorContext = createContext<EditorContextState>({
+    features: [],
+    setFeatures: (ev)=>{},
+    nodes: [],
+    setNodes: (ev)=>{},
+    onNodesChange: (ev)=>{},
+    edges: [],
+    setEdges: (ev)=>{},
+    onEdgesChange: (ev)=>{},
+    leafOrder: [],
+    setLeafOrder: (ev)=>{},
+    updateLeafOrder: (ev)=>{},
+    metadata: {
+        name: "",
+        description: "",
+      },
+    setMetadata: (ev)=>{},
+    treeOutput: defaultTreeOutput,
+    setTreeOutput: (ev)=>{},
+});
 
 
 export const EditorProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -90,6 +110,7 @@ export const EditorProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         onEdgesChange,
 
         leafOrder,
+        setLeafOrder,
         updateLeafOrder,
 
         metadata,
@@ -104,55 +125,28 @@ export const EditorProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 };
 
 export const useFeatures: ()=>[EditorContextState["features"], EditorContextState["setFeatures"]] = () => {
-    const context = useContext(EditorContext);
-    if (!context) {
-        return [[] as string[], (val)=>{}]
-    }
-    const {features, setFeatures} = context;
+    const {features, setFeatures} = useContext(EditorContext);
     return [features, setFeatures];
 };
 export const useNodes: ()=>[EditorContextState["nodes"], EditorContextState["setNodes"], EditorContextState["onNodesChange"]] = () => {
-    const context = useContext(EditorContext);
-    if (!context) {
-        return [[], (val)=>{}, (val)=>{}]
-    }
-    const {nodes, setNodes, onNodesChange} = context;
+    const {nodes, setNodes, onNodesChange} = useContext(EditorContext);
     return [nodes, setNodes, onNodesChange];
 };
 export const useEdges: ()=>[EditorContextState["edges"], EditorContextState["setEdges"], EditorContextState["onEdgesChange"]] = () => {
-    const context = useContext(EditorContext);
-    if (!context) {
-        return [[], (val)=>{}, (val)=>{}]
-    }
-    const {edges, setEdges, onEdgesChange} = context;
+    const {edges, setEdges, onEdgesChange} = useContext(EditorContext);
     return [edges, setEdges, onEdgesChange];
 };
 export const useLeafOrder: ()=>[EditorContextState["leafOrder"], EditorContextState["updateLeafOrder"]] = () => {
-    const context = useContext(EditorContext);
-    if (!context) {
-        return [[], (val)=>{}]
-    }
-    const {leafOrder, updateLeafOrder} = context;
+    const {leafOrder, updateLeafOrder} = useContext(EditorContext);
     return [leafOrder, updateLeafOrder];
 };
 
 export const useProjectMetadata: ()=>[EditorContextState["metadata"], EditorContextState["setMetadata"]] = () => {
-    const context = useContext(EditorContext);
-    if (!context) {
-        return [{
-            name: "",
-            description: "",
-          }, (val)=>{}]
-    }
-    const {metadata, setMetadata} = context;
+    const {metadata, setMetadata} = useContext(EditorContext);
     return [metadata, setMetadata];
 };
 
 export const useTreeOutput: ()=>[EditorContextState["treeOutput"], EditorContextState["setTreeOutput"]] = () => {
-    const context = useContext(EditorContext);
-    if (!context) {
-        return [defaultTreeOutput, (val)=>{}]
-    }
-    const {treeOutput, setTreeOutput} = context;
+    const {treeOutput, setTreeOutput} = useContext(EditorContext);
     return [treeOutput, setTreeOutput,];
 };

@@ -14,7 +14,7 @@ export interface withChildren {
   right_child: string;
 }
 
-interface withPosition {
+export interface withPosition {
     position: {x: number, y: number};
 }
 
@@ -47,9 +47,11 @@ export interface TreeOutput {
     columns: string[]
 }
 
+export type BranchingNodeDataWithChildren = (NumericalNodeData & withChildren) | (CategoricalNodeData & withChildren)
+export type TreeNodeWithChildren = BranchingNodeDataWithChildren | LeafNodeData;
 export interface SourceData {
     features: string[];
-    nodes: Record<string, TreeNode & withChildren & Partial<withPosition>>;
+    nodes: Record<string, TreeNodeWithChildren & Partial<withPosition>>;
     leafOrder?: string[];
     metadata?: ProjectMetadata;
     treeOutput?: TreeOutput;

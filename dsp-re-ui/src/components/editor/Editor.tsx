@@ -13,7 +13,7 @@ import {
   Connection,
 } from '@xyflow/react';
 import axios from 'axios';
-import {addNode, defaultLeafNode, formatNodes, linkNodeToParent} from './util'
+import {addNode, defaultLeafNode, linkNodeToParent} from './util'
 import {Node, Edge} from './types'
 import {useFeatures, useEdges, useNodes} from './EditorContext'
 import { nodeTypes } from './nodes';
@@ -24,25 +24,25 @@ import { v4 as uuidv4 } from 'uuid';
 export default function NodeEditor({projectId}: {projectId: string}) {
   const [nodes, setNodes, onNodesChange] = useNodes();
   const [edges, setEdges, onEdgesChange] = useEdges();
-  const [features, setFeatures] = useFeatures();
+  // const [features, setFeatures] = useFeatures();
   const { screenToFlowPosition } = useReactFlow();
 
-  const fetchProjectNodes = useCallback((projectId: string)=> {
-    axios.get(`/api/projects/${projectId}/nodes`)
-    .then(response=>formatNodes(response.data))
-    .then(({nodes, edges, features})=> {
-      setFeatures(features)
-      setNodes((curr)=>nodes)
-      setEdges((curr)=>edges)
-    })
-    .catch(error => {
-      console.error(error);
-    })
-  }, [setNodes, setEdges])
+  // const fetchProjectNodes = useCallback((projectId: string)=> {
+  //   axios.get(`/api/projects/${projectId}/nodes`)
+  //   .then(response=>formatNodes(response.data))
+  //   .then(({nodes, edges, features})=> {
+  //     setFeatures(features)
+  //     setNodes((curr)=>nodes)
+  //     setEdges((curr)=>edges)
+  //   })
+  //   .catch(error => {
+  //     console.error(error);
+  //   })
+  // }, [setNodes, setEdges])
 
-  useEffect(() => {
-    fetchProjectNodes(projectId)
-  }, [projectId]);
+  // useEffect(() => {
+  //   fetchProjectNodes(projectId)
+  // }, [projectId]);
 
  
   const onConnect = useCallback(
