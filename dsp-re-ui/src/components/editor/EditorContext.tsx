@@ -11,7 +11,7 @@ import {Node, Edge, ProjectMetadata, TreeOutput} from './types'
 
 
 const defaultTreeOutput: TreeOutput = {
-    data: [],
+    data: [[],],
     columns: []
 }
 

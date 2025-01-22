@@ -138,7 +138,7 @@ const defaultCategoricalNode: CategoricalNodeData = {
 
 export const defaultLeafNode: LeafNodeData = {
     node_type: "leaf",
-    leaf_value: 0,
+    leaf_value: -1,
 };
 
 const defaultNodeLookup: Record<string, TreeNode> = {
@@ -280,10 +280,13 @@ const compactLeafValues = (nodes: Record<string, TreeNode>): Map<number, number>
   const uniqueValues = Array.from(new Set<number>(
     Object.values(nodes)
       .filter((node): node is LeafNodeData => node.node_type === 'leaf')
+      .filter((node): node is LeafNodeData => node.leaf_value != -1)
       .map(node => node.leaf_value)
   )).sort((a, b) => a - b);
   
-  return new Map(uniqueValues.map((value, index) => [value, index]));
+  const uniqueMap = new Map(uniqueValues.map((value, index) => [value, index]));
+  uniqueMap.set(-1, -1);
+  return uniqueMap;
 };
 
 const validateNodes = (

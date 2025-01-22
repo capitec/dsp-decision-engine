@@ -194,13 +194,13 @@ export const TableEditor: React.FC = () => {
         </TableHeader>
         <TableBody>
           {outputs.data.map((row, rowIndex) => (
-            <TableRow key={rowIndex}>
+            <TableRow key={rowIndex-1}>
 
-            <TableCell key={`_id_${rowIndex}`}>
-                {rowIndex}
+            <TableCell key={`_id_${rowIndex-1}`}>
+                {rowIndex===0?"-1 (default)":rowIndex-1}
             </TableCell>
               {row.map((value, colIndex) => (
-                <TableCell key={`${rowIndex}-${colIndex}`}>
+                <TableCell key={`${rowIndex-1}-${colIndex}`}>
                   <Input
                     value={value}
                     onChange={(e) =>
@@ -211,13 +211,13 @@ export const TableEditor: React.FC = () => {
                 </TableCell>
               ))}
               <TableCell>
-                <Button
+                {rowIndex!==0&&<Button
                   variant="ghost"
                   size="icon"
                   onClick={() => handleRemoveRow(rowIndex)}
                 >
                   <X className="h-4 w-4" />
-                </Button>
+                </Button>}
               </TableCell>
             </TableRow>
           ))}

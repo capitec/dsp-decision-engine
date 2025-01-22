@@ -1,90 +1,82 @@
-# DSP Decision Engine
+# Data Science Platform (DSP) Rule Engine UI
 
-[![Python Version](https://img.shields.io/badge/python-%3E%3D3.8-blue.svg)](https://www.python.org/downloads/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+## Overview
 
-**SpockFlow** is a Python framework designed to create standalone micro-services that enrich data with actionable outputs. It supports both batch and live inference modes, and extends existing frameworks to simplify data flows, including policy rules and scoring. Leveraging Hamilton for traceability, SpockFlow provides a powerful, modular approach for data enrichment and model deployment.
+The DSP Rule Engine UI is a React-based application that allows users to visually build decision trees for rule-based decision-making systems. Once the trees are built, users can save and execute them through endpoints or visualize and test them within a Jupyter notebook.
 
-## Table of Contents
+## Prerequisites
 
-- [Introduction](docs/intro.md)
-- [Installation](docs/getting_started/install.md)
-- [Concepts](docs/concepts/index.md)
-- [Usage Examples](#usage-examples)
-- [Contributing](#contributing)
-- [License](#license)
+Before getting started, make sure you have the following installed:
 
-## Introduction
-
-SpockFlow is built to be extensible and modular, allowing the reuse of pipelines and configurations across multiple data flows. Its emphasis on runtime traceability and explainability is empowered by Hamilton, which helps track and visualize data lineage and identify process steps leading to specific outcomes.
-
-![Example Pipeline](./docs/_static/getting-started/example_pipeline.drawio.svg)
-
-For a more detailed introduction, see [Introduction](docs/main.rst).
+- **Node.js** (for running the React app)
+- **Yarn** or **npm** (for managing dependencies)
+- **Python** (for running the backend model and Jupyter notebooks)
+- **Graphviz** (for visualizing decision trees in the notebook)
 
 ## Installation
 
-To get started with SpockFlow, you need to install the required dependencies. Follow the instructions in the [Installation Guide](docs/getting_started/install.md) to set up your environment.
+1. Clone the repository:
+
+    ```bash
+    git clone https://github.com/capitec/dsp-re-ui.git
+    cd dsp-re-ui
+    ```
+
+2. Install the dependencies using **Yarn** or **npm**:
+
+    - Using **npm**:
+        ```bash
+        npm install
+        ```
+
+    - Or using **Yarn** (if you prefer Yarn):
+        ```bash
+        yarn install
+        ```
+
+## Running the React App
+
+To start the React application in development mode:
+
+- Using **npm**:
+    ```bash
+    npm start
+    ```
+
+- Using **Yarn**:
+    ```bash
+    yarn start
+    ```
+
+This will start the UI on `http://localhost:3000`, where you can interact with the decision tree builder.
+
+## Visual Decision Tree Builder
+
+The UI allows you to visually build decision trees. Once a decision tree is created, you can save it to a configuration file.
+
+1. **Add Config to `config.json`**:
+   - After building the tree in the UI, save the configuration to the file `dsp-re-ui/example/tree/source_dir/config.json`.
+   
+2. **Run the Model with VSCode**:
+   - You can use VSCode to launch the decision tree model as an endpoint based on the config file.
+
+3. **Visualize and Test in Jupyter Notebook**:
+   - Alternatively, you can use the notebook `dsp-re-ui/example/tree/test.ipynb` to visualize the decision tree (make sure **Graphviz** is installed) and test it with batch data on the model.
+
+## Running the Project Manually
+
+If you'd prefer to run the project manually, you can use the following command:
 
 ```bash
-pip install spockflow[all]
+MODEL_PREFIX="dsp-re-ui/example/tree" MODEL_RELATIVE_PATH="source_dir" MODEL_VERSION="0.0.0" uvicorn spockflow.inference.server.asgi:app --reload
 ```
 
-## Concepts
-
-Explore the foundational principles and components of SpockFlow in the [Concepts](docs/concepts/index.md) section. This guide covers:
-
-- **Decision Trees**: Automate decision-making processes based on defined conditions.
-- **Decision Tables**: Map input values to outputs based on conditions.
-- **Score Cards**: Assign scores to entities based on parameters.
-- **API Customization**: Customize and extend SpockFlow functionalities.
-
-## Usage Examples
-
-Here are some examples of how to use SpockFlow:
-
-### Decision Trees
-
-Create and use decision trees in SpockFlow:
-
-```python
-from spockflow.components.tree import Tree, Action
-from spockflow.core import initialize_spock_module
-import pandas as pd
-from typing_extensions import TypedDict
-
-class Reject(TypedDict):
-    code: int
-    description: str
-
-RejectAction = Action[Reject]
-
-# Initialize Tree
-tree = Tree()
-
-# Define conditions and actions
-@tree.condition(output=RejectAction(code=102, description="My first condition"))
-def first_condition(d: pd.Series, e: pd.Series, f: pd.Series) -> pd.Series:
-    return (d > 5) & (e > 5) & (f > 5)
-
-tree.visualize(get_value_name=lambda x: x["description"][0])
-```
-
-For more details and advanced usage, check out the [Concepts](docs/concepts/index.md) section.
-
-## Contributing
-
-We welcome contributions to SpockFlow! Please refer to our [Contributing Guide](CONTRIBUTING.md) for information on how to contribute.
-
-- **Fork the repository** and create a branch from `develop`.
-- **Install dependencies** using `pip install -r requirements/all.txt`.
-- **Run tests** with `pytest` to ensure everything is working.
-- **Submit a Pull Request** with a clear description of your changes.
+Make sure to replace the relevant paths if needed, and this will start the backend server for your decision tree model.
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](../LICENSE) file for details.
 
 ---
 
-Thank you for your interest in SpockFlow! We look forward to your contributions and feedback.
+Now, the README includes options for **Yarn** alongside the npm instructions, offering flexibility for users who prefer Yarn as their package manager.

@@ -1,5 +1,5 @@
 from spockflow.nodes import VariableNode, creates_node
-
+from enum import StrEnum, auto, IntEnum
 import treelite
 import typing
 import numpy as np
@@ -37,7 +37,11 @@ class NumericalTestNode(TestNode):
     comparison_op: typing.Literal["<=", "<", "==", ">", ">="]
 
     def build(
-        self, builder: "ModelBuilder", node_id: str, node_lookup: typing.Dict[str, int]
+        self, 
+        builder: "ModelBuilder", 
+        node_id: str, 
+        node_lookup: typing.Dict[str, int],
+        **kwargs,
     ):
         builder.start_node(node_lookup[node_id])
         builder.numerical_test(
@@ -59,7 +63,11 @@ class CategoricalTestNode(TestNode):
     category_list_right_child: bool
 
     def build(
-        self, builder: "ModelBuilder", node_id: str, node_lookup: typing.Dict[str, int]
+        self, 
+        builder: "ModelBuilder", 
+        node_id: str, 
+        node_lookup: typing.Dict[str, int],
+        **kwargs,
     ):
         builder.start_node(node_lookup[node_id])
         builder.categorical_test(
@@ -73,6 +81,13 @@ class CategoricalTestNode(TestNode):
         builder.end_node()
 
 
+class OutputEncoding(StrEnum):
+    ONE_HOT = auto()
+    INDEX = auto()
+
+def _one_hot(n_classes: int, class_index: int):
+    return [int(i-1==class_index) for i in range(n_classes)]
+
 class LeafNode(PositionedNode):
     DEFAULT_LEAF_VALUE: typing.ClassVar[str] = -1
     NODE_TYPE: typing.ClassVar[str] = "leaf"
@@ -80,10 +95,18 @@ class LeafNode(PositionedNode):
     leaf_value: int
 
     def build(
-        self, builder: "ModelBuilder", node_id: str, node_lookup: typing.Dict[str, int]
+        self, 
+        builder: "ModelBuilder", 
+        node_id: str, 
+        node_lookup: typing.Dict[str, int],
+        output_encoding: OutputEncoding,
+        tree: "Tree"
     ):
         builder.start_node(node_lookup[node_id])
-        builder.leaf([node_lookup[node_id]])
+        builder.leaf(
+            [node_lookup[node_id]] if output_encoding == OutputEncoding.INDEX
+            else _one_hot(len(tree.tree_output.data), self.leaf_value)
+        )
         builder.end_node()
 
 
@@ -110,6 +133,7 @@ _C = typing.TypeVar("_C", bound=int) # Condition nodes
 _B = typing.TypeVar("_B", bound=int) # Bach
 _T = typing.TypeVar("_T", bound=int) # Subtrees
 _F = typing.TypeVar("_F", bound=int) # Features
+
 
 @dataclass
 class CompiledTreeliteTree:
@@ -148,7 +172,8 @@ class CompiledTreeliteTree:
     @staticmethod
     def _get_treelite_model_builder(
         root_nodes: typing.List[str], 
-        tree: "Tree"
+        tree: "Tree",
+        output_encoding: OutputEncoding = OutputEncoding.INDEX
     ) -> "ModelBuilder":
         from treelite.model_builder import (
             Metadata,
@@ -157,27 +182,63 @@ class CompiledTreeliteTree:
             TreeAnnotation,
         )
         no_subtrees = len(root_nodes)
+        no_outputs = len(tree.tree_output.data) if output_encoding == OutputEncoding.ONE_HOT else 1
         return ModelBuilder(
             threshold_type="float32",
             leaf_output_type="float32",
             metadata=Metadata(
                 num_feature=len(tree.features),
                 task_type="kMultiClf",
-                average_tree_output=False,
+                average_tree_output=output_encoding == OutputEncoding.ONE_HOT,
                 num_target=no_subtrees,  # We crete one target output per tree
-                num_class=[1] * no_subtrees,
-                leaf_vector_shape=(1, 1),
+                num_class=[no_outputs] * no_subtrees,
+                leaf_vector_shape=(1, no_outputs),
             ),
             tree_annotation=TreeAnnotation(
                 num_tree=no_subtrees,
+                # Trees are independent and only contribute to their target
                 target_id=list(
                     range(no_subtrees)
-                ),  # Trees are independent and only contribute to their target
-                class_id=[-1] * no_subtrees,
+                ),  
+                class_id=([-1] * no_subtrees),
             ),
             postprocessor=PostProcessorFunc(name="identity"),
-            base_scores=[0.0] * no_subtrees,
+            base_scores=[0.0] * (no_subtrees*no_outputs),
         )
+    
+
+    @classmethod
+    def _build_treelite_tree(
+        cls,
+        root_nodes: typing.List[str], 
+        tree: "Tree",
+        node_id_mapping: typing.Dict[str, int],
+        output_encoding: OutputEncoding = OutputEncoding.INDEX
+    ) -> "ModelBuilder":
+        builder = cls._get_treelite_model_builder(root_nodes, tree, output_encoding)
+
+        for root in cls._sort_root_nodes(node_id_mapping, root_nodes, tree):
+            builder.start_tree()
+            to_search = [root]
+            seen = set()
+            while to_search:
+                n_key = to_search.pop()
+                if n_key in seen:
+                    raise ValueError(f"Cannot build tree as it contains loops detected on node_id: {n_key}")
+                seen.add(n_key)
+                n = tree.nodes[n_key]
+                n.build(
+                    builder, 
+                    n_key, 
+                    node_id_mapping,
+                    output_encoding = output_encoding,
+                    tree=tree
+                )
+                if n.node_type != LeafNode.NODE_TYPE:
+                    to_search.extend([n.left_child, n.right_child])
+            builder.end_tree()
+        return builder
+    
     @staticmethod
     def _sort_root_nodes(
         node_id_mapping: typing.Dict[str, int],
@@ -191,22 +252,13 @@ class CompiledTreeliteTree:
     def build(cls, tree: "Tree") -> "typing.Self":
         node_id_mapping, leaf_nodes = cls._get_node_id_mapping(tree.nodes)
         root_nodes = cls._identify_independent_tree_roots(tree.nodes)
-        builder = cls._get_treelite_model_builder(root_nodes, tree)
+        builder = cls._build_treelite_tree(
+            root_nodes=root_nodes, 
+            tree=tree, 
+            node_id_mapping=node_id_mapping,
+            output_encoding=OutputEncoding.INDEX
+        )
 
-        for root in cls._sort_root_nodes(node_id_mapping, root_nodes, tree):
-            builder.start_tree()
-            to_search = [root]
-            seen = set()
-            while to_search:
-                n_key = to_search.pop()
-                if n_key in seen:
-                    raise ValueError(f"Cannot build tree as it contains loops detected on node_id: {n_key}")
-                seen.add(n_key)
-                n = tree.nodes[n_key]
-                n.build(builder, n_key, node_id_mapping)
-                if n.node_type != LeafNode.NODE_TYPE:
-                    to_search.extend([n.left_child, n.right_child])
-            builder.end_tree()
 
         # Priority (TODO move to function)
         num_leaf_nodes = len(leaf_nodes)

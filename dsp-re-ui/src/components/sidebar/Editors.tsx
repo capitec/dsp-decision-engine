@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useRef, useState } from "react";
+import React, { useMemo, useCallback, useRef, useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -133,6 +133,20 @@ export function NumericalConfig({
   node,
   updateNode,
 }: ConfigProps<NumericalNodeData>) {
+  const [threshold, setThreshold] = useState(`${node.data.threshold}`);
+  useEffect(()=>{
+    setThreshold(`${node.data.threshold}`)
+  },[node.data.threshold])
+  const handleOnBlur = useCallback(()=>{
+
+    const parsedThresh = parseFloat(threshold);
+    if (isNaN(parsedThresh)){
+      setThreshold(`${node.data.threshold}`)
+      return
+    }
+    updateNode({ threshold: parsedThresh })
+  }, [updateNode, threshold, node.data.threshold])
+
 
   return (
     <div className="space-y-4">
@@ -162,11 +176,17 @@ export function NumericalConfig({
         <div className="w-1/2">
           <Label>Threshold</Label>
           <Input
-            type="number"
-            step="any"
-            value={node.data.threshold}
+            type="text"
+            value={threshold}
+            placeholder="Enter a number"
+            onBlur={handleOnBlur}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handleOnBlur();
+              }
+            }}
             onChange={(e) =>
-              updateNode({ threshold: parseFloat(e.target.value) })
+              setThreshold(e.target.value)
             }
           />
         </div>
@@ -286,22 +306,22 @@ export function LeafConfig({
   const numLeafNodes = useMemo(() => leafOrder.length,
     [leafOrder]
   );
-  const selectedRow = outputs.data[node.data.leaf_value];
+  const selectedRow = outputs.data[node.data.leaf_value+1];
 
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <Label>{outputs.data.length?`Leaf Output Value (0-${outputs.data.length-1})`: "Leaf Output Value"}</Label>
+        <Label>{outputs.data.length?`Leaf Output Value (-1 – ${outputs.data.length-2})`: "Leaf Output Value"}</Label>
         {
           outputs.data.length?(
             <Input 
               type="number"
-              min={0}
-              max={outputs.data.length-1}
+              min={-1}
+              max={outputs.data.length-2}
               value={node.data.leaf_value}
               onChange={(e) => {
                 const value = parseInt(e.target.value);
-                if (!isNaN(value) && value >= 0 && value < outputs.data.length) {
+                if (!isNaN(value) && value >= -1 && value < outputs.data.length) {
                   updateNode({ leaf_value: value });
                 }
               }}
@@ -314,7 +334,7 @@ export function LeafConfig({
             />
           )
         }
-        <ScrollArea className="h-24 border rounded-md p-2">
+        <ScrollArea className="h-24 border rounded-md p-2 overflow-auto">
           <div className="space-y-1">
             {outputs.columns.map((column, i) => (
               <div key={i} className="flex text-sm">
