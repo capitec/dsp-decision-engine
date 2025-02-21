@@ -11,8 +11,8 @@ import {Node, Edge, ProjectMetadata, TreeOutput} from './types'
 
 
 const defaultTreeOutput: TreeOutput = {
-    data: [[],],
-    columns: []
+    data: [["Allow", "Default Action"], ["Alert", "A rule suggests that there is an alert"], ["Block", "This is more serious and must be blocked"]],
+    columns: ["Action", "Description"]
 }
 
 interface EditorContextState {
