@@ -34,7 +34,7 @@ If new features are added to the model they will need to ensure that the upstrea
 ## The Monitors
 There will likely be people who are interested in monitoring the real-time performance of the model to determine the accuracy over time. For these cases it will be the responsibility of the developer or endpoint user to integrate the results back into redshift this can be done with the use of endpoint capture or just by storing the results at the end of the day. Ideally results will be enriched at some point with ground-truth values such as if the fraud is confirmed or not. Feature pipelines or prodbooks can be developed to calculate desired metrics and this can be used then in a report on PowerBI for teams to monitor. Setting up the entire monitoring process has quite a few moving parts and may be considered cumbersome.
 # Advantages
-- A plugin has more control than a service
+- A plugin has more control than a widget
 - We do not not need to host it (use of existing compute)
 # Limitations
 - Hard to maintain (Plugin developers are niche)

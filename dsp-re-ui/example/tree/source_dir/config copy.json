@@ -1,0 +1,78 @@
+{
+  "features": [
+    "AFDelinquentAmount",
+    "AFDaysArrears",
+    "AFMinPaymentDue"
+  ],
+  "nodes": {
+    "99f9bc9c-a510-401a-96d4-f1d137e1e81e": {
+      "split_feature_id": 0,
+      "default_left": false,
+      "node_type": "numerical_test_node",
+      "comparison_op": ">",
+      "threshold": -50.999,
+      "leaf_value": 0,
+      "left_child": "7ad858d9-2df8-4a03-84cc-dda84d8bcc41",
+      "right_child": "7eb3bed2-6b18-4334-8894-383fb5305d1b"
+    },
+    "7ad858d9-2df8-4a03-84cc-dda84d8bcc41": {
+      "split_feature_id": 1,
+      "default_left": false,
+      "node_type": "numerical_test_node",
+      "comparison_op": ">",
+      "threshold": -0.1,
+      "leaf_value": 0,
+      "left_child": "12f56432-7524-40df-aa93-84d23dfc26b0",
+      "right_child": "f8ae9699-1144-45d1-b7fa-53608fdaa5ec"
+    },
+    "12f56432-7524-40df-aa93-84d23dfc26b0": {
+      "split_feature_id": 2,
+      "default_left": false,
+      "node_type": "numerical_test_node",
+      "comparison_op": ">",
+      "threshold": 0.999,
+      "leaf_value": 0,
+      "left_child": "e51b85fc-e614-4b3e-9aaf-5da318a698cc",
+      "right_child": "3c5a5929-3abd-4f90-bd75-d38dc40aba5f"
+    },
+    "e51b85fc-e614-4b3e-9aaf-5da318a698cc": {
+      "node_type": "leaf",
+      "leaf_value": 0
+    },
+    "3c5a5929-3abd-4f90-bd75-d38dc40aba5f": {
+      "node_type": "leaf",
+      "leaf_value": -1
+    },
+    "f8ae9699-1144-45d1-b7fa-53608fdaa5ec": {
+      "node_type": "leaf",
+      "leaf_value": -1
+    },
+    "7eb3bed2-6b18-4334-8894-383fb5305d1b": {
+      "node_type": "leaf",
+      "leaf_value": -1
+    }
+  },
+  "leafOrder": [
+    "e51b85fc-e614-4b3e-9aaf-5da318a698cc",
+    "3c5a5929-3abd-4f90-bd75-d38dc40aba5f",
+    "f8ae9699-1144-45d1-b7fa-53608fdaa5ec",
+    "7eb3bed2-6b18-4334-8894-383fb5305d1b"
+  ],
+  "metadata": {
+    "name": "AF Arrears_2 (1.1)",
+    "description": "Strat139 - 3003 CC LBB Qualifying Population: AF Arrears_2 (1.1)"
+  },
+  "treeOutput": {
+    "columns": [
+      "Result"
+    ],
+    "data": [
+      [
+        "Negative"
+      ],
+      [
+        "Positive"
+      ]
+    ]
+  }
+}
