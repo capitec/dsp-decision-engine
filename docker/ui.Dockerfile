@@ -16,19 +16,26 @@ RUN mkdir -p /var/cache/nginx/client_temp && \
     chown -R nginx:nginx /var/cache/nginx && \
     chown -R nginx:nginx /usr/share/nginx/html
 
-RUN echo 'server {' \
-'  listen 8000;' \
-'  root /usr/share/nginx/html;' \
-'  index index.html;' \
-'  location / {' \
-'    try_files $uri /index.html;' \
+RUN echo \
+'pid /tmp/nginx.pid;' \
+'events {' \
+'  worker_connections 1024;' \
+'}' \
+'http {' \
+'  server {' \
+'    listen 8000;' \
+'    root /usr/share/nginx/html;' \
+'    index index.html;' \
+'    location / {' \
+'      try_files $uri /index.html;' \
+'    }' \
+'    location ~* \.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?)$ {' \
+'      expires 1y;' \
+'      access_log off;' \
+'      add_header Cache-Control "public";' \
+'    }' \
 '  }' \
-'  location ~* \.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?)$ {' \
-'    expires 1y;' \
-'    access_log off;' \
-'    add_header Cache-Control "public";' \
-'  }' \
-'}' > /etc/nginx/conf.d/default.conf
+'}' > /etc/nginx/nginx.conf
 
 USER nginx
 
