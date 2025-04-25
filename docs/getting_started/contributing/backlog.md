@@ -18,3 +18,6 @@
 4. We should consider bringing an easy way to split the data and rejoin it after a tree. This way we can cull off parts of the pipeline where there is no data to compute.
 ## Dashboarding
 1. We should consider creating easy to use dashboarding functionalities into the ui so that we can monitor the outputs of the flows.
+
+
+We need a way to show feature use. Make sure you are able to catalog a feature and see the downstream impact of a feature on the entire system

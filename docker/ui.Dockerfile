@@ -12,6 +12,10 @@ FROM nginx:stable-alpine
 
 COPY --from=builder /app/build /usr/share/nginx/html
 
+RUN mkdir -p /var/cache/nginx/client_temp && \
+    chown -R nginx:nginx /var/cache/nginx && \
+    chown -R nginx:nginx /usr/share/nginx/html
+
 RUN echo 'server {' \
 '  listen 8000;' \
 '  root /usr/share/nginx/html;' \
@@ -25,6 +29,8 @@ RUN echo 'server {' \
 '    add_header Cache-Control "public";' \
 '  }' \
 '}' > /etc/nginx/conf.d/default.conf
+
+USER nginx
 
 EXPOSE 8000
 CMD ["nginx", "-g", "daemon off;"]
