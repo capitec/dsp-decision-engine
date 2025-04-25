@@ -12,9 +12,13 @@ FROM nginx:stable-alpine
 
 COPY --from=builder /app/build /usr/share/nginx/html
 
-RUN mkdir -p /var/cache/nginx/client_temp && \
-    chown -R nginx:nginx /var/cache/nginx && \
-    chown -R nginx:nginx /usr/share/nginx/html
+RUN addgroup -g 1000 -S appgroup && \
+    adduser -u 1000 -S appuser -G appgroup && \
+    mkdir -p /var/cache/nginx/client_temp && \
+    mkdir -p /tmp/nginx && \
+    chown -R 1000:1000 /var/cache/nginx && \
+    chown -R 1000:1000 /usr/share/nginx/html && \
+    chown -R 1000:1000 /tmp/nginx
 
 RUN echo \
 'pid /tmp/nginx.pid;' \
@@ -37,7 +41,7 @@ RUN echo \
 '  }' \
 '}' > /etc/nginx/nginx.conf
 
-USER nginx
+USER 1000
 
 EXPOSE 8000
 CMD ["nginx", "-g", "daemon off;"]
