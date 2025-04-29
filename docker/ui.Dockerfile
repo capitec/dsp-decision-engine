@@ -5,8 +5,15 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
-COPY . .
+COPY src/ ./src/
+COPY public/ ./public/
+COPY tsconfig*.json ./*.js ./*.json ./
+
 RUN npm run build
+# This is useful for testing
+# RUN npm i serve
+# EXPOSE 3000
+# CMD ["npx", "serve", "-s", "build"]
 
 FROM nginx:stable-alpine
 
@@ -20,26 +27,7 @@ RUN addgroup -g 1000 -S appgroup && \
     chown -R 1000:1000 /usr/share/nginx/html && \
     chown -R 1000:1000 /tmp/nginx
 
-RUN echo \
-'pid /tmp/nginx.pid;' \
-'events {' \
-'  worker_connections 1024;' \
-'}' \
-'http {' \
-'  server {' \
-'    listen 8000;' \
-'    root /usr/share/nginx/html;' \
-'    index index.html;' \
-'    location / {' \
-'      try_files $uri /index.html;' \
-'    }' \
-'    location ~* \.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?)$ {' \
-'      expires 1y;' \
-'      access_log off;' \
-'      add_header Cache-Control "public";' \
-'    }' \
-'  }' \
-'}' > /etc/nginx/nginx.conf
+COPY nginx.conf /etc/nginx/nginx.conf
 
 USER 1000
 
