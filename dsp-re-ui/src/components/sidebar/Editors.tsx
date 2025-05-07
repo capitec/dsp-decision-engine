@@ -32,6 +32,7 @@ import type {
   NumericalNodeData,
   CategoricalNodeData,
   LeafNodeData,
+  RangeNodeData,
 } from "../editor/types";
 import { useFeatures, useLeafOrder, useTreeOutput } from "@components/editor/EditorContext";
 import { useNodes } from "@xyflow/react";
@@ -282,6 +283,235 @@ export function CategoricalConfig({
           }
         />
         <Label htmlFor="category-right">Categories go to right child</Label>
+      </div>
+    </div>
+  );
+}
+
+
+export function RangeConfig({
+  node,
+  updateNode,
+}: ConfigProps<RangeNodeData>) {
+  const [newThreshold, setNewThreshold] = useState("");
+  const [editIndex, setEditIndex] = useState<number | null>(null);
+  const [editValue, setEditValue] = useState("");
+
+  // Sort thresholds when updating
+  const updateThresholds = (thresholds: number[]) => {
+    updateNode({ 
+      thresholds: [...thresholds].sort((a, b) => a - b) 
+    });
+  };
+
+  // Add a new threshold
+  const addThreshold = () => {
+    const value = parseFloat(newThreshold);
+    const thresholds = node.data.thresholds || [];
+    if (!isNaN(value) && !thresholds.includes(value)) {
+      updateThresholds([...thresholds, value]);
+      setNewThreshold("");
+    }
+  };
+
+  // Remove a threshold
+  const removeThreshold = (threshold: number) => {
+    const thresholds = node.data.thresholds || [];
+    updateThresholds(thresholds.filter(t => t !== threshold));
+  };
+
+  // Start editing a threshold
+  const startEdit = (index: number) => {
+    setEditIndex(index);
+    setEditValue(`${node.data.thresholds[index]}`);
+  };
+
+  // Save edited threshold
+  const saveEdit = () => {
+    if (editIndex !== null) {
+      const value = parseFloat(editValue);
+      if (!isNaN(value)) {
+        const newThresholds = [...node.data.thresholds];
+        newThresholds[editIndex] = value;
+        updateThresholds(newThresholds);
+      }
+      setEditIndex(null);
+    }
+  };
+
+  // Cancel editing
+  const cancelEdit = () => {
+    setEditIndex(null);
+  };
+
+  // Handle keyboard events for editing
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      saveEdit();
+    } else if (e.key === "Escape") {
+      cancelEdit();
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <FeatureEditor
+        selectedFeatureId={node.data.split_feature_id}
+        onFeatureSelect={(index, features) => updateNode({ split_feature_id: index }, features)}
+      />
+
+      <div className="space-y-2">
+        <Label>Thresholds</Label>
+        
+        {/* Display thresholds as ranges */}
+        <div className="space-y-2">
+          {node.data.thresholds && (
+            <div className="text-sm text-muted-foreground italic">
+              No thresholds defined yet. Add thresholds to create ranges.
+            </div>
+          )}
+          
+          {/* First range (if any thresholds exist) */}
+          {node.data.thresholds && (
+            <div className="flex items-center space-x-2 p-2 bg-muted/50 rounded-md">
+              <span className="text-sm">feature &lt; </span>
+              {editIndex === 0 ? (
+                <Input
+                  type="text"
+                  className="w-24"
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onBlur={saveEdit}
+                  onKeyDown={handleKeyDown}
+                  autoFocus
+                />
+              ) : (
+                <button
+                  className="px-2 py-1 bg-muted rounded hover:bg-muted/80"
+                  onClick={() => startEdit(0)}
+                >
+                  {node.data.thresholds[0]}
+                </button>
+              )}
+              <button
+                className="ml-2 hover:text-destructive"
+                onClick={() => removeThreshold(node.data.thresholds[0])}
+              >
+                <span className="sr-only">Remove</span>
+                ×
+              </button>
+            </div>
+          )}
+          
+          {/* Middle ranges */}
+          {(node.data.thresholds || []).slice(0, -1).map((threshold, index) => (
+            <div key={threshold} className="flex items-center space-x-2 p-2 bg-muted/50 rounded-md">
+              <span className="text-sm">feature ≥ </span>
+              {editIndex === index ? (
+                <Input
+                  type="text"
+                  className="w-24"
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onBlur={saveEdit}
+                  onKeyDown={handleKeyDown}
+                  autoFocus
+                />
+              ) : (
+                <button
+                  className="px-2 py-1 bg-muted rounded hover:bg-muted/80"
+                  onClick={() => startEdit(index)}
+                >
+                  {threshold}
+                </button>
+              )}
+              <span className="text-sm">&amp; feature &lt; </span>
+              {editIndex === index + 1 ? (
+                <Input
+                  type="text"
+                  className="w-24"
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onBlur={saveEdit}
+                  onKeyDown={handleKeyDown}
+                  autoFocus
+                />
+              ) : (
+                <button
+                  className="px-2 py-1 bg-muted rounded hover:bg-muted/80"
+                  onClick={() => startEdit(index + 1)}
+                >
+                  {node.data.thresholds[index + 1]}
+                </button>
+              )}
+            </div>
+          ))}
+          
+          {/* Last range (if multiple thresholds exist) */}
+          {node.data.thresholds && node.data.thresholds.length > 1 && (
+            <div className="flex items-center space-x-2 p-2 bg-muted/50 rounded-md">
+              <span className="text-sm">feature ≥ </span>
+              {editIndex === node.data.thresholds.length - 1 ? (
+                <Input
+                  type="text"
+                  className="w-24"
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onBlur={saveEdit}
+                  onKeyDown={handleKeyDown}
+                  autoFocus
+                />
+              ) : (
+                <button
+                  className="px-2 py-1 bg-muted rounded hover:bg-muted/80"
+                  onClick={() => startEdit(node.data.thresholds.length - 1)}
+                >
+                  {node.data.thresholds[node.data.thresholds.length - 1]}
+                </button>
+              )}
+              <button
+                className="ml-2 hover:text-destructive"
+                onClick={() => removeThreshold(node.data.thresholds[node.data.thresholds.length - 1])}
+              >
+                <span className="sr-only">Remove</span>
+                ×
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Add new threshold */}
+        <div className="flex space-x-2 mt-2">
+          <Input
+            type="text"
+            placeholder="Add threshold..."
+            value={newThreshold}
+            onChange={(e) => setNewThreshold(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                addThreshold();
+              }
+            }}
+          />
+          <Button 
+            type="button"
+            variant="secondary" 
+            size="sm" 
+            onClick={addThreshold}
+            disabled={!newThreshold || isNaN(parseFloat(newThreshold))}
+          >
+            Add
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex items-center space-x-2">
+        <Checkbox
+          id="default-left"
+          checked={node.data.default_left}
+          onCheckedChange={(checked) => updateNode({ default_left: !!checked })}
+        />
+        <Label htmlFor="default-left">Default Left</Label>
       </div>
     </div>
   );

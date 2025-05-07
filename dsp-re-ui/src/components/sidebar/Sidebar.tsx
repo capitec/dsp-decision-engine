@@ -22,10 +22,10 @@ import {
 } from "@/components/ui/label";
 
 import { ReactFlow, useOnSelectionChange } from '@xyflow/react';
-import { Node, Edge, TreeNode, NumericalNodeData, CategoricalNodeData, LeafNodeData } from "../editor/types"
+import { Node, Edge, TreeNode, NumericalNodeData, CategoricalNodeData, LeafNodeData, RangeNodeData } from "../editor/types"
 import { useFeatures, useNodes } from '@components/editor/EditorContext';
 import { updateNodeData } from '@components/editor/util';
-import { CategoricalConfig, LeafConfig, NumericalConfig } from './Editors';
+import { CategoricalConfig, LeafConfig, NumericalConfig, RangeConfig } from './Editors';
 import { ProjectSidebar } from './ProjectEditor';
 
 function useSelectedNode() {
@@ -98,6 +98,7 @@ export function AppSidebar() {
                     <SelectValue placeholder="Select condition type" />
                     </SelectTrigger>
                     <SelectContent>
+                    <SelectItem value="numerical_range_test_node">Ranges</SelectItem>
                     <SelectItem value="numerical_test_node">Numerical</SelectItem>
                     <SelectItem value="categorical_test_node">Categorical</SelectItem>
                     <SelectItem value="leaf">Value</SelectItem>
@@ -111,6 +112,10 @@ export function AppSidebar() {
                 /> : selectedNode.data.node_type == 'categorical_test_node'?
                 <CategoricalConfig
                     node={selectedNode as Node<CategoricalNodeData>}
+                    updateNode={updateNode}
+                /> : selectedNode.data.node_type == 'numerical_range_test_node'?
+                <RangeConfig
+                    node={selectedNode as Node<RangeNodeData>}
                     updateNode={updateNode}
                 /> : 
                 <LeafConfig

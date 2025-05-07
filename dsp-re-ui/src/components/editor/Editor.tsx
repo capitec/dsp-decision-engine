@@ -17,6 +17,7 @@ import {addNode, defaultLeafNode, linkNodeToParent} from './util'
 import {Node, Edge} from './types'
 import {useFeatures, useEdges, useNodes} from './EditorContext'
 import { nodeTypes } from './nodes';
+import { edgeTypes } from './edges';
 import { v4 as uuidv4 } from 'uuid';
 
 
@@ -47,12 +48,14 @@ export default function NodeEditor({projectId}: {projectId: string}) {
  
   const onConnect = useCallback(
     ({ source, sourceHandle, target }: Edge | Connection) => setEdges(
-      (edges) => linkNodeToParent(
+      (edges) => {
+        console.log({nodes})
+        return linkNodeToParent(
           target,
-          { parentNodeId: source, parentHandle: sourceHandle! },
+          { parentNodeId: source, parentHandle: sourceHandle!, parentNode: nodes.find(v => v.id === source) },
           edges
-        )),
-    []
+        )}),
+    [nodes]
   );
 
   const onConnectEnd = useCallback<OnConnectEnd>(
@@ -90,6 +93,7 @@ export default function NodeEditor({projectId}: {projectId: string}) {
       onConnect={onConnect}
       onConnectEnd={onConnectEnd}
       nodeTypes={nodeTypes}
+      edgeTypes={edgeTypes}
       fitView
       style={{ backgroundColor: "#F7F9FB" }}
     >

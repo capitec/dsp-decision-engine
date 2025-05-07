@@ -1,10 +1,17 @@
-import { Edge, Node, SourceData, TreeNode, LeafNodeData, NumericalNodeData, CategoricalNodeData, ForkNodeData, NodeData, ParentIdentifier, withChildren, TreeOutput, ProjectMetadata, withPosition, BranchingNodeDataWithChildren } from "./types";
+import { 
+  Edge, Node, SourceData, TreeNode, LeafNodeData, 
+  NumericalNodeData, CategoricalNodeData, ForkNodeData, 
+  NodeData, ParentIdentifier, withChildren, TreeOutput, 
+  ProjectMetadata, withPosition, BranchingNodeDataWithChildren ,
+  TreeNodeWithChildren
+} from "./types";
 
 import {
   Connection,
   getOutgoers,
   MarkerType,
 } from '@xyflow/react';
+import Dagre from '@dagrejs/dagre';
 
 import ELK, {ElkExtendedEdge, ElkNode} from 'elkjs';
 
@@ -27,31 +34,75 @@ const elkOptions = {
   "elk.layered.nodePlacement.bk.fixedAlignment": "BALANCED",
 };
 
+function sortedIndex(array: number[], value: number, edges: Edge[]) {
+	var low = 0,
+		high = array.length;
+
+	while (low < high) {
+		var mid = low + high >>> 1;
+		if (edges[array[mid]].data!.sourceIndex < value) low = mid + 1;
+		else high = mid;
+	}
+	return low;
+}
+
 function getNodeOrder(nodes: Node[], edges: Edge[]) {
   const order = new Map<string, number>();
+  const parentChildMap = new Map<string, number[]>();
+  edges.forEach((e, i) => {
+    if (!parentChildMap.has(e.source)) {
+      parentChildMap.set(e.source, [i]);
+    } else {
+      const arr = parentChildMap.get(e.source)!;
+      const insertIdx = sortedIndex(arr, e.data!.sourceIndex, edges)
+      arr.splice(insertIdx, 0, i);
+    }
+  })
   let counter = 0;
 
-  function visit(nodeId: string, isLeft: boolean) {
-    const leftChild = edges.find(e => e.source === nodeId && e.sourceHandle === 'left')?.target;
-    const rightChild = edges.find(e => e.source === nodeId && e.sourceHandle === 'right')?.target;
-    
-    if (leftChild) visit(leftChild, true);
-    order.set(nodeId, counter++);
-    if (rightChild) visit(rightChild, false);
+  function visit(nodeId: string) {
+    parentChildMap.get(nodeId)?.forEach(childIdx => {
+      visit(edges[childIdx]!.target);
+      order.set(nodeId, counter++);
+    });
   }
 
   // Find all root nodes (nodes with no incoming edges)
   const rootNodes = nodes.filter(n => !edges.some(e => e.target === n.id));
 
   // Visit each root node
-  rootNodes.forEach(root => {
-    visit(root.id, true)
-  });
+  rootNodes.forEach(root => visit(root.id));
 
   return {order, rootNodes};
 }
 
 export const formatTree = async (nodes: Node[], edges: Edge[]) => {
+  const g = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
+  g.setGraph({ rankdir: "TB" });
+ 
+  edges.forEach((edge) => g.setEdge(edge.source, edge.target));
+  nodes.forEach((node) =>
+    g.setNode(node.id, {
+      ...node,
+      width: node.measured?.width ?? 0,
+      height: node.measured?.height ?? 0,
+    }),
+  );
+
+  Dagre.layout(g);
+ 
+  return nodes.map((node) => {
+      const position = g.node(node.id);
+      // We are shifting the dagre node position (anchor=center center) to the top left
+      // so it matches the React Flow node anchor point (top left).
+      const x = position.x - (node.measured?.width ?? 0) / 2;
+      const y = position.y - (node.measured?.height ?? 0) / 2;
+ 
+      return { ...node, position: { x, y } };
+    })
+};
+
+export const formatTreeELK = async (nodes: Node[], edges: Edge[]) => {
   // Pre-process to determine node ordering
   const {order:nodeOrder, rootNodes} = getNodeOrder(nodes, edges);
 
@@ -111,10 +162,12 @@ export const getLabel = (node: TreeNode, features: string[]): string => {
     return node.leaf_value.toString();
   }
   const feature = features[node.split_feature_id];
-  if (node.node_type === "numerical_test_node") {
-    return `${feature} ${node.comparison_op} ${node.threshold}`;
-  }
-  return `${feature} in set`;
+  if (feature === undefined) {return "Unselected"}
+  return feature;
+  // if (node.node_type === "numerical_test_node") {
+  //   return `${feature} ${node.comparison_op} ${node.threshold}`;
+  // }
+  // return `${feature} in set`;
 };
 
 const defaultForkNode: ForkNodeData = {
@@ -175,7 +228,7 @@ const getUpdatedNode = (node: Node, updates: Partial<NodeData>, features?: strin
   return {
     ...node,
     data: updatedNodeData,
-    type: updatedNodeData.node_type === "leaf"? "output": "leftRightNode"
+    type: updatedNodeData.node_type === "leaf"? "out": "processNode"
   };
 };
 
@@ -194,15 +247,18 @@ export const updateNodeData = (node: Node, newData: Partial<Node["data"]>, featu
   return updatedNodes;
 };
 
-const createEdge = (sourceId: string, targetId: string, sourceHandle: 'left' | 'right'): Edge => ({
+const createEdge = (sourceId: string, targetId: string, sourceHandle: string, sourceIndex: number): Edge => ({
   id: `${sourceId}:${targetId}`,
   source: sourceId,
   sourceHandle,
-  type: 'step',
+  type: 'labeledEdge',
   target: targetId,
   markerEnd: {
     type: MarkerType.ArrowClosed,
   },
+  data: {
+    sourceIndex
+  }
 });
 
 const removeNodeConnections = (
@@ -210,9 +266,9 @@ const removeNodeConnections = (
   parent: ParentIdentifier, 
   edges: Edge[]
 ): Edge[] => {
-  console.log({nodeId, parent,edges})
+  console.log({nodeId, parent, edges})
   const resEdges = edges.filter(edge => 
-    (edge.target !== nodeId) && (edge.source !== parent.parentNodeId || edge.sourceHandle !== parent.parentHandle)
+    (edge.target !== nodeId) // && (edge.source !== parent.parentNodeId || edge.sourceHandle !== parent.parentHandle)
   )
   return resEdges;
 };
@@ -230,9 +286,9 @@ export const addNode = (
     id: nodeId,
     data,
     position,
-    type: data.node_type === "leaf" ? "output" : "leftRightNode"
+    type: data.node_type === "leaf" ? "out" : "processNode"
   };
-
+  console.log({newNode})
   let updatedNodes = [...nodes, newNode];
   let updatedEdges = edges;
 
@@ -247,6 +303,19 @@ export const addNode = (
   return [updatedNodes, updatedEdges];
 };
 
+export const getNextEdge = (edges: Edge[], parentNodeId: string): number => {
+  const usedIndices = new Set(
+    edges
+      .filter(edge => edge.source === parentNodeId)
+      .map(edge => edge.data?.sourceIndex)
+      .filter((index): index is number => typeof index === 'number')
+  );
+
+  return usedIndices.size === 0
+    ? 0
+    : Array.from({ length: usedIndices.size + 1 }, (_, i) => i).find(i => !usedIndices.has(i))!;
+};
+
 export const linkNodeToParent = (
   nodeId: string, 
   parent: ParentIdentifier, 
@@ -255,7 +324,8 @@ export const linkNodeToParent = (
   const newEdge = createEdge(
     parent.parentNodeId, 
     nodeId, 
-    parent.parentHandle as 'left' | 'right'
+    parent.parentHandle,
+    getNextEdge(edges, parent.parentNodeId),
   );
   if (createsCycle(newEdge, edges)) {return edges};
   const edgesWithoutConnections = removeNodeConnections(nodeId, parent, edges);
@@ -327,12 +397,9 @@ export const loadState = async (data: SourceData, filename?: string): Promise<{
       [], [], 
       undefined)
     if (nodeData.node_type === 'leaf') { return newNode };
-    if (nodeData.left_child) {
-      edges.push(createEdge(nodeId, nodeData.left_child, 'left'));
-    }
-    if (nodeData.right_child) {
-      edges.push(createEdge(nodeId, nodeData.right_child, 'right'));
-    }
+    nodeData.children.forEach((v,i) => {
+      edges.push(createEdge(nodeId, v, 'source', i))
+    })
     return newNode;
   });
 
@@ -355,15 +422,13 @@ export const exportState = (
   metadata: ProjectMetadata,
   treeOutput: TreeOutput
 ): SourceData => {
-  const edgeMap = new Map<string, {left?: string, right?: string}>();
+  const edgeMap = new Map<string, (string|null)[]>();
   
   for (const edge of edges) {
-    const entry = edgeMap.get(edge.source) ?? {};
-    if (edge.sourceHandle?.includes('left')) {
-      entry.left = edge.target;
-    } else {
-      entry.right = edge.target;
-    }
+    const entry = edgeMap.get(edge.source) ?? [];
+    const edgeIdx = edge.data!.sourceIndex!;
+    while (edgeIdx >= entry.length) {entry.push(null)}
+    entry[edgeIdx] = edge.target;
     edgeMap.set(edge.source, entry);
   }
 
@@ -377,15 +442,15 @@ export const exportState = (
       } as LeafNodeData & withPosition)
       return
     }
-    const children = edgeMap.get(node.id) ;
-    if (!children || !children.left || !children.right) {
+    const children = edgeMap.get(node.id) as string[];
+    if (!children?.every(v=>v!==null)) {
       throw new Error(`Non-leaf node ${node.id} missing children`);
     }
+
     exportNodes[node.id] = {
       ...node.data,
       position: node.position,
-      left_child: children.left,
-      right_child: children.right
+      children,
     };
   })
 

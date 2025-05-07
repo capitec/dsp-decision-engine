@@ -10,8 +10,7 @@ type BaseNodeData = {
 };
 
 export interface withChildren {
-  left_child: string;
-  right_child: string;
+  children: string[];
 }
 
 export interface withPosition {
@@ -21,6 +20,12 @@ export interface withPosition {
 export type ForkNodeData = BaseNodeData & {
     split_feature_id: number;
     default_left: boolean;
+};
+
+
+export type RangeNodeData = ForkNodeData & {
+    node_type: "numerical_range_test_node";
+    thresholds: number[];
 };
 
 export type NumericalNodeData = ForkNodeData & {
@@ -40,14 +45,14 @@ export type LeafNodeData = Partial<ForkNodeData> & {
     leaf_value: number;
 };
 
-export type TreeNode = (NumericalNodeData | CategoricalNodeData | LeafNodeData)
+export type TreeNode = (NumericalNodeData | RangeNodeData | CategoricalNodeData | LeafNodeData)
 
 export interface TreeOutput {
     data: string[][]
     columns: string[]
 }
 
-export type BranchingNodeDataWithChildren = (NumericalNodeData & withChildren) | (CategoricalNodeData & withChildren)
+export type BranchingNodeDataWithChildren = (NumericalNodeData & withChildren) | (CategoricalNodeData & withChildren) | (RangeNodeData & withChildren)
 export type TreeNodeWithChildren = BranchingNodeDataWithChildren | LeafNodeData;
 export interface SourceData {
     features: string[];
@@ -57,14 +62,19 @@ export interface SourceData {
     treeOutput?: TreeOutput;
 }
 
+export interface EdgeData extends Record<string, unknown> {
+    sourceIndex: number
+}
+
 export type NodeData<T = TreeNode> = T & {};
 
 export type Node<T = TreeNode> = xyNode<NodeData<T>>;
-export type Edge = xyEdge;
+export type Edge = xyEdge<EdgeData>;
 
 export interface ParentIdentifier {
     parentNodeId: string;
     parentHandle: string;
+    parentNode?: Node;
 }
 
 export interface ProjectMetadata {
