@@ -37,6 +37,8 @@ import type {
 import { useFeatures, useLeafOrder, useTreeOutput } from "@components/editor/EditorContext";
 import { useNodes } from "@xyflow/react";
 import { ScrollArea } from "@radix-ui/react-scroll-area";
+import { OP_SYMBOL_MAP } from "../editor/util"
+
 
 interface FeatureEditorProps {
   selectedFeatureId: number;
@@ -130,6 +132,8 @@ export function FeatureEditor({
   );
 }
 
+
+
 export function NumericalConfig({
   node,
   updateNode,
@@ -168,7 +172,7 @@ export function NumericalConfig({
             <SelectContent>
               {["<=", "<", "==", ">", ">="].map((op) => (
                 <SelectItem key={op} value={op}>
-                  {op}
+                  {OP_SYMBOL_MAP[op]}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -289,7 +293,7 @@ export function CategoricalConfig({
 }
 
 
-export function RangeConfig({
+export function RangeConfigOld({
   node,
   updateNode,
 }: ConfigProps<RangeNodeData>) {
@@ -517,7 +521,228 @@ export function RangeConfig({
   );
 }
 
+// ThresholdInput component for better number editing
+const ThresholdInput = ({
+  value,
+  onUpdate,
+  className = "w-24",
+}: {
+  value: number;
+  onUpdate: (value: number) => void;
+  className?: string;
+}) => {
+  const [editValue, setEditValue] = useState(`${value}`);
+  
+  // Update edit value when the prop value changes
+  useEffect(() => {
+    setEditValue(`${value}`);
+  }, [value]);
+  
+  // Handle blur event to validate and update
+  const handleOnBlur = useCallback(() => {
+    const parsedValue = parseFloat(editValue);
+    
+    // If invalid, reset to original value
+    if (isNaN(parsedValue)) {
+      setEditValue(`${value}`);
+      return;
+    }
+    
+    // Update with new value
+    onUpdate(parsedValue);
+  }, [editValue, value, onUpdate]);
+  
+  // Format for display
+  const formatValue = (val: string) => {
+    return val.length > 8 ? val.substring(0, 7) + '...' : val;
+  };
+  
+  return (
+    <Input
+      type="text"
+      className={className}
+      value={editValue}
+      onChange={(e) => setEditValue(e.target.value)}
+      onBlur={handleOnBlur}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          handleOnBlur();
+        }
+      }}
+    />
+  );
+};
 
+export function RangeConfig({
+  node,
+  updateNode,
+}: ConfigProps<RangeNodeData>) {
+  // Ensure thresholds array exists
+  const thresholds = node.data.thresholds || [];
+  const [newThreshold, setNewThreshold] = useState("");
+  
+  // Initialize data if missing
+  useEffect(() => {
+    if (!node.data.thresholds) {
+      updateNode({ thresholds: [] });
+    }
+  }, [node.data, updateNode]);
+
+  // Sort thresholds when updating
+  const updateThresholds = (newThresholds: number[]) => {
+    const sorted = [...newThresholds].sort((a, b) => a - b);
+    updateNode({ thresholds: sorted });
+  };
+
+  // Update a threshold at specific index
+  const updateThresholdAt = (index: number, value: number) => {
+    // Check if value already exists elsewhere in the thresholds
+    const otherThresholds = thresholds.filter((_, i) => i !== index);
+    if (otherThresholds.includes(value)) {
+      // If duplicate, don't update
+      return;
+    }
+    
+    // Create new thresholds array with updated value
+    const newThresholds = [...thresholds];
+    newThresholds[index] = value;
+    updateThresholds(newThresholds);
+  };
+
+  // Add a new threshold
+  const addThreshold = () => {
+    const value = parseFloat(newThreshold);
+    if (!isNaN(value) && !thresholds.includes(value)) {
+      updateThresholds([...thresholds, value]);
+      setNewThreshold("");
+    }
+  };
+
+  // Remove a threshold by index
+  const removeThreshold = (index: number) => {
+    const newThresholds = [...thresholds];
+    newThresholds.splice(index, 1);
+    updateThresholds(newThresholds);
+  };
+
+  return (
+    <div className="space-y-4">
+      <FeatureEditor
+        selectedFeatureId={node.data.split_feature_id}
+        onFeatureSelect={(index, features) => updateNode({ split_feature_id: index }, features)}
+      />
+
+      <div className="space-y-2">
+        <Label>Thresholds</Label>
+        
+        {/* Display thresholds as ranges */}
+        <div className="space-y-2">
+          {thresholds.length === 0 && (
+            <div className="text-sm text-muted-foreground italic">
+              No thresholds defined yet. Add thresholds to create ranges.
+            </div>
+          )}
+          
+          {/* First range (if any thresholds exist) */}
+          {thresholds.length > 0 && (
+            <div className="flex items-center space-x-2 p-2 bg-muted/50 rounded-md">
+              <span className="text-sm">&lt; </span>
+              <ThresholdInput
+                value={thresholds[0]}
+                onUpdate={(value) => updateThresholdAt(0, value)}
+              />
+              <div className="flex-grow"></div>
+              <button
+                className="text-lg hover:text-destructive"
+                onClick={() => removeThreshold(0)}
+                title="Remove"
+              >
+                ×
+              </button>
+            </div>
+          )}
+          
+          {/* Middle ranges */}
+          {thresholds.slice(0, -1).map((threshold, index) => (
+            <div key={`${threshold}-${index}`} className="flex items-center space-x-2 p-2 bg-muted/50 rounded-md">
+              <span className="text-sm">≥ </span>
+              <ThresholdInput
+                value={threshold}
+                onUpdate={(value) => updateThresholdAt(index, value)}
+              />
+              <span className="text-sm">&lt; </span>
+              <span className="px-2 py-1 bg-muted/80 rounded w-24 text-center overflow-hidden">
+                {thresholds[index + 1].toString().length > 8 
+                  ? thresholds[index + 1].toString().substring(0, 7) + '...' 
+                  : thresholds[index + 1]}
+              </span>
+              <div className="flex-grow"></div>
+              <button
+                className="text-lg hover:text-destructive"
+                onClick={() => removeThreshold(index)}
+                title="Remove"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+          
+          {/* Last range (if multiple thresholds exist) */}
+          {thresholds.length > 1 && (
+            <div className="flex items-center space-x-2 p-2 bg-muted/50 rounded-md">
+              <span className="text-sm">≥ </span>
+              <ThresholdInput
+                value={thresholds[thresholds.length - 1]}
+                onUpdate={(value) => updateThresholdAt(thresholds.length - 1, value)}
+              />
+              <div className="flex-grow"></div>
+              <button
+                className="text-lg hover:text-destructive"
+                onClick={() => removeThreshold(thresholds.length - 1)}
+                title="Remove"
+              >
+                ×
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Add new threshold */}
+        <div className="flex space-x-2 mt-2">
+          <Input
+            type="text"
+            placeholder="Add threshold..."
+            value={newThreshold}
+            onChange={(e) => setNewThreshold(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                addThreshold();
+              }
+            }}
+          />
+          <Button 
+            type="button"
+            variant="secondary" 
+            size="sm" 
+            onClick={addThreshold}
+            disabled={!newThreshold || isNaN(parseFloat(newThreshold))}
+          >
+            Add
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex items-center space-x-2">
+        <Checkbox
+          id="default-left"
+          checked={node.data.default_left !== undefined ? node.data.default_left : false}
+          onCheckedChange={(checked) => updateNode({ default_left: !!checked })}
+        />
+        <Label htmlFor="default-left">Default Left</Label>
+      </div>
+    </div>
+  );
+}
 interface TreeOutput {
   data: string[][]
   columns: string[]

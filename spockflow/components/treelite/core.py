@@ -2,12 +2,13 @@ from spockflow.nodes import VariableNode, creates_node
 from enum import StrEnum, auto, IntEnum
 import treelite
 import typing
+from uuid import uuid4
 import numpy as np
 import pandas as pd
 from itertools import chain
 from typing_extensions import Annotated
 from dataclasses import dataclass
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 if typing.TYPE_CHECKING:
     from treelite.model_builder import ModelBuilder
@@ -26,8 +27,93 @@ class PositionedNode(BaseModel):
 class TestNode(PositionedNode):
     split_feature_id: int
     default_left: bool
-    left_child: str
-    right_child: str
+    children: typing.List[str]
+
+
+class RangeTestNode(TestNode):
+    NODE_TYPE: typing.ClassVar[str] = "numerical_range_test_node"
+    node_type: typing.Literal["numerical_range_test_node"] = NODE_TYPE
+    thresholds: typing.List[float] = Field(min_length=1)
+
+    @model_validator(mode='after')
+    def validate_thresholds(self) -> typing.Self:
+        if len(self.thresholds) < 1:
+            raise ValueError(f'Range test nodes should have at least one threshold')
+        return self
+
+    @model_validator(mode='after')
+    def validate_children(self) -> typing.Self:
+        # Ensure the number of children equals the number of thresholds + 1
+        # Since N thresholds create N+1 ranges
+        # We allow more children here but ignore them if present
+        if len(self.children) < len(self.thresholds) + 1:
+            raise ValueError(f'Range test node must have exactly {len(self.thresholds) + 1} child outputs '
+                            f'for {len(self.thresholds)} thresholds')
+        return self
+
+    def build(
+        self, 
+        builder: "ModelBuilder", 
+        node_id: str, 
+        node_lookup: typing.Dict[str, int],
+        **kwargs,
+    ):
+        self._build_balanced_tree(
+            builder,
+            split_node_id = node_id,
+            node_lookup = node_lookup,
+            thresholds = self.thresholds,
+            children = self.children[:len(self.thresholds)+1],
+        )
+
+
+    def _build_balanced_tree(
+        self,
+        builder: "ModelBuilder",
+        split_node_id: str,
+        node_lookup: typing.Dict[str, int],
+        thresholds: typing.List[float],
+        children: typing.List[str],
+    ):
+        if not len(thresholds): return
+        # Update the node lookup
+        left_node_key = f"{split_node_id}_L"
+        if left_node_key in node_lookup:
+            left_node_key = f"{left_node_key}_{uuid4()}"
+        right_node_key = f"{split_node_id}_R"
+        if right_node_key in node_lookup:
+            right_node_key = f"{right_node_key}_{uuid4()}"
+        node_lookup[left_node_key] = len(node_lookup)
+        node_lookup[right_node_key] = len(node_lookup)
+        # Perform splits down the middle
+        mid_index = len(thresholds)//2
+        builder.start_node(node_lookup[split_node_id])
+        builder.numerical_test(
+            feature_id=self.split_feature_id,
+            threshold=thresholds[mid_index],
+            default_left=self.default_left,
+            opname="<",
+            left_child_key=node_lookup[children[0]] if len(thresholds) == 1 else node_lookup[left_node_key],
+            # We do lt or eq 2 here because if there are 2 thresholds [x,y]
+            # Then this will be <y and the next two calls will be [x], [] so the left branch will handle 
+            # The last split and the right branch will directly point to the child
+            right_child_key=node_lookup[children[len(children)-1]] if len(thresholds) <= 2 else node_lookup[right_node_key],
+        )
+        builder.end_node()
+        self._build_balanced_tree(
+            builder,
+            split_node_id = left_node_key,
+            node_lookup = node_lookup,
+            thresholds=thresholds[:mid_index],
+            children=children[:mid_index+1] # We not leaving a child behind
+        )
+        self._build_balanced_tree(
+            builder,
+            split_node_id = right_node_key,
+            node_lookup = node_lookup,
+            thresholds=thresholds[mid_index+1:],
+            children=children[mid_index+1:]
+        )
 
 
 class NumericalTestNode(TestNode):
@@ -35,6 +121,12 @@ class NumericalTestNode(TestNode):
     node_type: typing.Literal["numerical_test_node"] = NODE_TYPE
     threshold: float
     comparison_op: typing.Literal["<=", "<", "==", ">", ">="]
+
+    @model_validator(mode='after')
+    def validate_two_children(self) -> typing.Self:
+        if len(self.children) < 2:
+            raise ValueError('Numerical nodes must have at least 2 child outputs')
+        return self
 
     def build(
         self, 
@@ -49,8 +141,8 @@ class NumericalTestNode(TestNode):
             threshold=self.threshold,
             default_left=self.default_left,
             opname=self.comparison_op,
-            left_child_key=node_lookup[self.left_child],
-            right_child_key=node_lookup[self.right_child],
+            left_child_key=node_lookup[self.children[0]],
+            right_child_key=node_lookup[self.children[1]],
         )
         builder.end_node()
 
@@ -61,6 +153,12 @@ class CategoricalTestNode(TestNode):
     category_list: typing.List[int]
     # Basically if the value should be in or not in set
     category_list_right_child: bool
+
+    @model_validator(mode='after')
+    def validate_two_children(self) -> typing.Self:
+        if len(self.children) < 2:
+            raise ValueError('Categorical nodes must have at least 2 child outputs')
+        return self
 
     def build(
         self, 
@@ -73,8 +171,8 @@ class CategoricalTestNode(TestNode):
         builder.categorical_test(
             feature_id=self.split_feature_id,
             default_left=self.default_left,
-            left_child_key=node_lookup[self.left_child],
-            right_child_key=node_lookup[self.right_child],
+            left_child_key=node_lookup[self.children[0]],
+            right_child_key=node_lookup[self.children[1]],
             category_list=self.category_list,
             category_list_right_child=self.category_list_right_child,
         )
@@ -124,7 +222,7 @@ class TreeMetadata(BaseModel):
 
 
 NodeType = Annotated[
-    typing.Union[NumericalTestNode, CategoricalTestNode, LeafNode],
+    typing.Union[RangeTestNode, NumericalTestNode, CategoricalTestNode, LeafNode],
     Field(discriminator="node_type"),
 ]
 
@@ -166,7 +264,7 @@ class CompiledTreeliteTree:
         for n in nodes.values():
             if n.node_type == LeafNode.NODE_TYPE:
                 continue
-            root_nodes.difference_update([n.left_child, n.right_child])
+            root_nodes.difference_update(n.children)
         return root_nodes
     
     @staticmethod
@@ -235,7 +333,7 @@ class CompiledTreeliteTree:
                     tree=tree
                 )
                 if n.node_type != LeafNode.NODE_TYPE:
-                    to_search.extend([n.left_child, n.right_child])
+                    to_search.extend(n.children)
             builder.end_tree()
         return builder
     
@@ -295,25 +393,24 @@ class CompiledTreeliteTree:
         # Path Maps (TODO move to function)
         num_leaf_nodes = len(leaf_nodes)
         num_condition_nodes = len(node_id_mapping) - num_leaf_nodes
-        paths_matrix = np.zeros((num_leaf_nodes, num_condition_nodes), dtype=np.int8)
+        paths_matrix = -np.ones((num_leaf_nodes, num_condition_nodes), dtype=np.int8)
         tree_path_labels = ["" for i in range(num_condition_nodes)]
         def dfs(node_key: str, path_vector: np.ndarray):
             node = tree.nodes[node_key]
             node_idx = node_id_mapping[node_key]
             if node.node_type == LeafNode.NODE_TYPE:
-                if not (paths_matrix[node_idx] == 0).all():
+                if not (paths_matrix[node_idx] == -1).all():
                     raise ValueError(f"Found multiple paths to leaf node {node_key}")
                 paths_matrix[node_idx] = path_vector
             else:
                 tree_path_labels[node_idx-num_leaf_nodes] = node_key
-                path_vector[node_idx-num_leaf_nodes] = 1
-                dfs(node.left_child, path_vector)
+                for child_idx, child in enumerate(node.children):
+                    path_vector[node_idx-num_leaf_nodes] = child_idx
+                    dfs(child, path_vector)
                 path_vector[node_idx-num_leaf_nodes] = -1
-                dfs(node.right_child, path_vector)
-                path_vector[node_idx-num_leaf_nodes] = 0
 
         for root in root_nodes:
-            path_vector = np.zeros((num_condition_nodes,), dtype=np.int8)
+            path_vector = -np.ones((num_condition_nodes,), dtype=np.int8)
             dfs(root, path_vector)
 
 

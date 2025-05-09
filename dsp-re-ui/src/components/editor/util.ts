@@ -34,6 +34,16 @@ const elkOptions = {
   "elk.layered.nodePlacement.bk.fixedAlignment": "BALANCED",
 };
 
+
+export const OP_SYMBOL_MAP: Record<string, string> = {
+  "<=": "≤", 
+  "<": "<", 
+  "==": "=", 
+  ">": ">", 
+  ">=": "≥",
+}
+
+
 function sortedIndex(array: number[], value: number, edges: Edge[]) {
 	var low = 0,
 		high = array.length;
@@ -398,7 +408,7 @@ export const loadState = async (data: SourceData, filename?: string): Promise<{
       undefined)
     if (nodeData.node_type === 'leaf') { return newNode };
     nodeData.children.forEach((v,i) => {
-      edges.push(createEdge(nodeId, v, 'source', i))
+      edges.push(createEdge(nodeId, v, 'output', i))
     })
     return newNode;
   });
