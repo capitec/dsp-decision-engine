@@ -24,7 +24,7 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@xyflow/react": "^12.3.6",
-    "axios": "^1.7.8",
+    "axios": "^1.8.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
