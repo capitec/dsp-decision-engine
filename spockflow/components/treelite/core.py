@@ -26,7 +26,7 @@ class PositionedNode(BaseModel):
 
 class TestNode(PositionedNode):
     split_feature_id: int
-    default_left: bool = True
+    default_left: bool = False
     children: typing.List[str]
 
 
@@ -376,8 +376,13 @@ class CompiledTreeliteTree:
 
     @classmethod
     def build(cls, tree: "Tree") -> "typing.Self":
+        if len(tree.nodes) <= 0:
+            raise ValueError("Tree contains no nodes")
         node_id_mapping, leaf_nodes = cls._get_node_id_mapping(tree.nodes)
         root_nodes = cls._identify_independent_tree_roots(tree.nodes)
+        if len(root_nodes) <= 0:
+            # We know that the tree contains nodes so only way for no root is a loop
+            raise ValueError("Cannot build tree as it contains loops.")
         builder = cls._build_treelite_tree(
             root_nodes=root_nodes,
             tree=tree,
@@ -409,12 +414,15 @@ class CompiledTreeliteTree:
             leaf_node_idx = node_id_mapping[leaf_node_key]
             output_mapping[leaf_node_idx] = tree.nodes[leaf_node_key].leaf_value
         # Output Dataframe (TODO move to function)
-        output_df_map = pd.DataFrame(
-            data=tree.tree_output.data,
-            columns=tree.tree_output.columns,
-            dtype=tree.tree_output.dtype,
-            index=range(-1, len(tree.tree_output.data) - 1, 1),
-        )
+        try:
+            output_df_map = pd.DataFrame(
+                data=tree.tree_output.data,
+                columns=tree.tree_output.columns,
+                dtype=tree.tree_output.dtype,
+                index=range(-1, len(tree.tree_output.data) - 1, 1),
+            )
+        except ValueError as e:
+            raise ValueError("Could not create output dataframe") from e
         diff_set = set(output_mapping) - set(output_df_map.index)
         if diff_set:
             raise ValueError(

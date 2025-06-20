@@ -7,8 +7,7 @@
         "node_type": "numerical_test_node",
         "comparison_op": "<",
         "threshold": 1.5,
-        "left_child": "leaf1",
-        "right_child": "leaf2",
+        "children": ["leaf1", "leaf2"],
         "position": {"x": 0, "y": 0}
       },
       "leaf1": {
@@ -28,6 +27,7 @@
       "description": "Tree with no columns in output"
     },
     "treeOutput": {
+      "columns": [],
       "data": [
         ["-1"],
         ["0"],

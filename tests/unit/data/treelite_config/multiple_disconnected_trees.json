@@ -7,8 +7,7 @@
       "node_type": "numerical_test_node",
       "comparison_op": "<",
       "threshold": 1.5,
-      "left_child": "tree1_leaf1",
-      "right_child": "tree1_leaf2",
+      "children": ["tree1_leaf1", "tree1_leaf2"],
       "position": {"x": 0, "y": 0}
     },
     "tree1_leaf1": {
@@ -27,8 +26,7 @@
       "node_type": "categorical_test_node",
       "category_list_right_child": false,
       "category_list": [1, 2],
-      "left_child": "tree2_leaf1",
-      "right_child": "tree2_leaf2",
+      "children": ["tree2_leaf1", "tree2_leaf2"],
       "position": {"x": 200, "y": 0}
     },
     "tree2_leaf1": {

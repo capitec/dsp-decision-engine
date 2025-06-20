@@ -10,8 +10,7 @@
       "node_type": "numerical_test_node",
       "comparison_op": "<",
       "threshold": 1.5,
-      "left_child": "1",
-      "right_child": "2",
+      "children": ["1", "2"],
       "position": {
         "x": 122.99999999999997,
         "y": 33
@@ -20,8 +19,6 @@
     "1": {
       "node_type": "leaf",
       "leaf_value": 0,
-      "left_child": "",
-      "right_child": "",
       "position": {
         "x": 24.5,
         "y": 119
@@ -32,9 +29,8 @@
       "default_left": true,
       "node_type": "categorical_test_node",
       "category_list_right_child": false,
-      "category_list": [1,2,3,4],
-      "left_child": "3a96d1da-b922-4c4d-bf24-0f7119b7eb72",
-      "right_child": "ab018e87-cb89-4bc4-8612-5cab02280f09",
+      "category_list": [1, 2, 3, 4],
+      "children": ["3a96d1da-b922-4c4d-bf24-0f7119b7eb72", "ab018e87-cb89-4bc4-8612-5cab02280f09"],
       "position": {
         "x": 221.5,
         "y": 119
@@ -43,8 +39,6 @@
     "3a96d1da-b922-4c4d-bf24-0f7119b7eb72": {
       "node_type": "leaf",
       "leaf_value": 1,
-      "left_child": "",
-      "right_child": "",
       "position": {
         "x": -74,
         "y": 291

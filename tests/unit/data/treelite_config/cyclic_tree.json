@@ -7,8 +7,7 @@
         "node_type": "numerical_test_node",
         "comparison_op": "<",
         "threshold": 1.5,
-        "left_child": "node1",
-        "right_child": "leaf1",
+        "children": ["node1", "leaf1"],
         "position": {"x": 0, "y": 0}
       },
       "node1": {
@@ -17,8 +16,7 @@
         "node_type": "numerical_test_node",
         "comparison_op": "<",
         "threshold": 0.5,
-        "left_child": "root",
-        "right_child": "leaf2",
+        "children": ["root", "leaf2"],
         "position": {"x": -50, "y": 50}
       },
       "leaf1": {
@@ -45,4 +43,4 @@
         ["output2", "Second output", "1"]
       ]
     }
-  }
+}
