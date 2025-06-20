@@ -1,0 +1,37 @@
+{
+    "features": ["feature_0"],
+    "nodes": {
+      "root": {
+        "split_feature_id": 1,
+        "default_left": false,
+        "node_type": "numerical_test_node",
+        "comparison_op": "<",
+        "threshold": 1.5,
+        "children": ["leaf1", "leaf2"],
+        "position": {"x": 0, "y": 0}
+      },
+      "leaf1": {
+        "node_type": "leaf",
+        "leaf_value": 0,
+        "position": {"x": -50, "y": 50}
+      },
+      "leaf2": {
+        "node_type": "leaf",
+        "leaf_value": 1,
+        "position": {"x": 50, "y": 50}
+      }
+    },
+    "leafOrder": ["leaf1", "leaf2"],
+    "metadata": {
+      "name": "insufficient_features",
+      "description": "Tree with reference to feature_id not in features list"
+    },
+    "treeOutput": {
+      "columns": ["name", "description", "value"],
+      "data": [
+        ["default", "Default value", "-1"],
+        ["output1", "Left output", "0"],
+        ["output2", "Right output", "1"]
+      ]
+    }
+  }

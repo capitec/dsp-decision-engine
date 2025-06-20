@@ -1,61 +1,212 @@
 import typing
+import re
+import keyword
+import functools
 import pandas as pd
 import collections.abc
 from functools import partial
 from typing_extensions import Self
 from abc import ABC, abstractmethod
-from pydantic import BaseModel, Field, model_validator, ConfigDict
+from pydantic import (
+    BaseModel,
+    Field,
+    model_validator,
+    ConfigDict,
+    field_serializer,
+    PrivateAttr,
+    AfterValidator,
+    model_serializer,
+)
 from spockflow.nodes import VariableNode
+from ...dtable import DecisionTable
+from hamilton.node import DependencyType
+
+from spockflow._serializable import (
+    DataFrame,
+    Series,
+    dump_df_to_dict,
+    dump_series_to_dict,
+)
+
+if typing.TYPE_CHECKING:
+    from .compiled import CompiledNumpyTree
 
 
-TOutput = typing.Union[typing.Callable[..., pd.DataFrame], pd.DataFrame, str]
-TCond = typing.Union[typing.Callable[..., pd.Series], pd.Series, str]
+def _is_valid_function_name(name):
+    pattern = r"^[a-zA-Z_][a-zA-Z0-9_]*$"
+    assert (
+        re.match(pattern, name) and name not in keyword.kwlist
+    ), f"{name} must be a valid python function name"
+    return name
+
+
+class TableCondition(BaseModel):
+    name: typing.Annotated[str, AfterValidator(_is_valid_function_name)]
+    table: DecisionTable
+
+
+TOutput = typing.Union[typing.Callable[..., pd.DataFrame], DataFrame, str]
+TCond = typing.Union[typing.Callable[..., pd.Series], Series, str]
+TCondRaw = typing.Union[typing.Callable[..., pd.Series], pd.Series, TableCondition, str]
+
+_TABLE_VALUE_KEY = "value"
+
+
+def _length_attr(attr):
+    if attr is None:
+        return 1
+    if isinstance(attr, str):
+        return 1
+    if isinstance(attr, TableCondition):
+        return 1
+    if not isinstance(attr, collections.abc.Sized):
+        return 1
+    return len(attr)
+
+
+def _serialize_value(value: typing.Union[TOutput, "ChildTree", None]):
+    if value is None:
+        return value
+    if isinstance(value, typing.Callable):
+        return value.__name__
+    if isinstance(value, pd.DataFrame):
+        return dump_df_to_dict(value)
+        res = value.to_dict(orient="records")
+        if len(res) == 1:
+            return res[0]
+        return res
+    return value
+
+
+class TableConditionedNode(BaseModel):
+    condition_type: typing.Literal["table"] = "table"
+    # model_config = ConfigDict(arbitrary_types_allowed=True)
+    values: typing.List[typing.Union[TOutput, "ChildTree", None]] = None
+    condition_table: str
+    priority: typing.Optional[typing.List[int]] = None
+
+    @field_serializer("values")
+    def serialize_values(
+        self, values: typing.List[typing.Union[TOutput, "ChildTree", None]], _info
+    ):
+        return [_serialize_value(v) for v in values]
+
+    @model_validator(mode="after")
+    def check_compatible_lengths(self) -> Self:
+        self.ensure_length()
+        return self
+
+    def __len__(self):
+        len_values = (_length_attr(v) for v in self.values)
+        try:
+            return next(v for v in len_values if v != 1)
+        except StopIteration:
+            return 1
+
+    def ensure_length(self, tree_length: int = 1):
+        len_values = [_length_attr(v) for v in self.values] + [tree_length]
+        try:
+            non_unit_value = next(v for v in len_values if v != 1)
+        except StopIteration:
+            non_unit_value = 1
+        if not all(v == 1 or v == non_unit_value for v in len_values):
+            raise ValueError("Incompatible value lengths detected")
+
+    def _check_compatible_table(self, table: DecisionTable):
+        assert len(table.outputs) == 1, "Table must have exactly one output"
+        assert (
+            _TABLE_VALUE_KEY in table.outputs
+        ), f'Table must contain "{_TABLE_VALUE_KEY}" as an output key'
+        default_value = set()
+        if table.default_value is not None:
+            assert (
+                len(table.default_value.keys()) == 1
+            ), "Table must have exactly one output in the default values"
+            assert (
+                _TABLE_VALUE_KEY in table.default_value
+            ), f'Table must contain "{_TABLE_VALUE_KEY}" as an output key in the default values'
+            assert (
+                len(table.default_value) == 1
+            ), f"Default value must be a dataframe of length 1."
+            default_value = {table.default_value[_TABLE_VALUE_KEY].values[0]}
+        table_output_values = set(table.outputs[_TABLE_VALUE_KEY]) | default_value
+        last_value = len(table_output_values)
+        assert (
+            set(range(0, last_value)) == table_output_values
+        ), "Table output values must be sequential integer indicies"
+        assert last_value == len(
+            self.values
+        ), "There must be one output value for each index in the tree outputs"
+        if self.priority is not None:
+            assert last_value == len(
+                self.priority
+            ), "There must be one priority item for each index in the tree outputs"
 
 
 class ConditionedNode(BaseModel):
     # TODO fix for pd.DataFrame
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    condition_type: typing.Literal["base"] = "base"
+    # model_config = ConfigDict(arbitrary_types_allowed=True)
     value: typing.Union[TOutput, "ChildTree", None] = None
     condition: typing.Optional[TCond] = None
+    priority: typing.Optional[int] = None
 
-    @staticmethod
-    def _length_attr(attr):
-        if attr is None:
-            return 1
-        if isinstance(attr, str):
-            return 1
-        if not isinstance(attr, collections.abc.Sized):
-            return 1
-        return len(attr)
+    @field_serializer("condition")
+    def serialize_condition(self, condition: typing.Optional[TCond], _info):
+        if condition is None:
+            return condition
+        if isinstance(condition, typing.Callable):
+            return condition.__name__
+        if isinstance(condition, pd.Series):
+            return dump_series_to_dict(condition)
+            values = condition.tolist()
+            return {condition.name: values if len(values) > 1 else values[0]}
+        return condition
+
+    @field_serializer("value")
+    def serialize_value(self, value: typing.Union[TOutput, "ChildTree", None], _info):
+        return _serialize_value(value)
 
     def __len__(self):
-        len_attr = self._length_attr(self.value)
+        len_attr = _length_attr(self.value)
         if len_attr == 1:
-            len_attr = self._length_attr(self.condition)
+            len_attr = _length_attr(self.condition)
         return len_attr
 
     @model_validator(mode="after")
     def check_compatible_lengths(self) -> Self:
-        len_value = self._length_attr(self.value)
-        if len_value == 1:
-            return self
-        len_condition = self._length_attr(self.condition)
-        if len_condition == 1:
-            return self
-        if len_condition != len_value:
-            raise ValueError("Condition and value lengths incompatible")
+        self.ensure_length()
         return self
+
+    def ensure_length(self, tree_length: int = 1):
+        len_value = _length_attr(self.value)
+        len_condition = _length_attr(self.condition)
+        count_unit_length = (len_value == 1) + (len_condition == 1) + (tree_length == 1)
+        if count_unit_length >= 2:
+            return
+        if len_value == len_condition == tree_length:
+            return
+        raise ValueError("Condition and value and tree lengths are incompatible")
+
+
+TConditionedNode = typing.Annotated[
+    typing.Union[ConditionedNode, TableConditionedNode],
+    Field(discriminator="condition_type"),
+]
 
 
 class ChildTree(BaseModel):
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-    nodes: typing.List[ConditionedNode] = Field(default_factory=list)
+    # model_config = ConfigDict(arbitrary_types_allowed=True)
+    nodes: typing.List[TConditionedNode] = Field(default_factory=list)
     default_value: typing.Optional[TOutput] = None
+    _decision_tables: typing.Dict[str, DecisionTable] = PrivateAttr(
+        default_factory=dict
+    )
 
     def __len__(
         self,
     ):  # TODO could maybe cache this on bigger trees if the values havent changed
-        node_len = ConditionedNode._length_attr(self.default_value)
+        node_len = _length_attr(self.default_value)
         if node_len != 1:
             return node_len
         for node in self.nodes:
@@ -65,7 +216,7 @@ class ChildTree(BaseModel):
 
     @model_validator(mode="after")
     def check_compatible_lengths(self) -> Self:
-        child_tree_len = ConditionedNode._length_attr(self.default_value)
+        child_tree_len = _length_attr(self.default_value)
         for node in self.nodes:
             len_value = len(node)
             if len_value == 1:
@@ -78,33 +229,58 @@ class ChildTree(BaseModel):
                 )
         return self
 
-    def add_node(self, value: TOutput, condition: TCond, **kwargs) -> ConditionedNode:
-        len_value = ConditionedNode._length_attr(value)
-        len_condition = ConditionedNode._length_attr(condition)
-        if len_value != 1 and len_condition != 1 and len_value != len_condition:
-            raise ValueError(
-                f"Cannot add node as the length of the value ({len_value}) is not compatible with the length of the condition ({len_condition})."
+    @staticmethod
+    def _merge_decision_tables(
+        to_be_updated: typing.Dict[str, DecisionTable],
+        other: typing.Dict[str, DecisionTable],
+    ):
+        for k, v in other.items():
+            if k in to_be_updated:
+                assert (
+                    to_be_updated[k] is v
+                ), f"Decision table {k} added twice with different values."
+            else:
+                to_be_updated[k] = v
+
+    # def _get_condition_from_table(self, condition: TCondRaw):
+    #     if not isinstance(condition, TableCondition): return condition
+    #     self._merge_decision_tables(
+    #         self._decision_tables,
+    #         {condition.name: condition.table}
+    #     )
+    #     return TableConditionReference(table=condition.name)
+
+    def add_node(
+        self,
+        value: typing.Union[TOutput, typing.List[TOutput]],
+        condition: TCondRaw,
+        priority: typing.Union[int, typing.List[int], None] = None,
+        **kwargs,
+    ) -> ConditionedNode:
+
+        if isinstance(condition, TableCondition):
+            node = TableConditionedNode(
+                values=value,
+                condition_table=condition.name,
+                priority=priority,
+                **kwargs,
             )
-        if len_value != 1 or len_condition != 1:
-            # TODO adding this allows better validation but requires circular loops so hard for pydantic to serialise
-            # len_tree = len(self.root_tree.root)
-            len_tree = len(self)
-            if len_value != 1 and len_tree != 1 and len_value != len_tree:
-                raise ValueError(
-                    f"Cannot add node as the length of the value ({len_value}) incompatible with tree {len_tree}."
-                )
-            if len_condition != 1 and len_tree != 1 and len_condition != len_tree:
-                raise ValueError(
-                    f"Cannot add node as the length of the condition ({len_condition}) incompatible with tree {len_tree}."
-                )
-        node = ConditionedNode(value=value, condition=condition, **kwargs)
+            self._merge_decision_tables(
+                self._decision_tables, {condition.name: condition.table}
+            )
+            node._check_compatible_table(condition.table)
+        else:
+            node = ConditionedNode(
+                value=value, condition=condition, priority=priority, **kwargs
+            )
+        node.ensure_length(len(self))
         self.nodes.append(node)
         return node
 
     def set_default(self, value: TOutput):
         if self.default_value is not None:
             raise ValueError("Default value already set")
-        len_value = ConditionedNode._length_attr(value)
+        len_value = _length_attr(value)
         if len_value != 1:
             # TODO adding this allows better validation but requires circular loops so hard for pydantic to serialise
             # len_tree = len(self.root_tree.root)
@@ -113,6 +289,7 @@ class ChildTree(BaseModel):
                 raise ValueError(
                     f"Cannot set default as length of value ({len_value}) incompatible with tree {len_tree}."
                 )
+        self.default_value = value
 
     def merge_into(self, other: Self):
         len_subtree = len(other)
@@ -127,7 +304,25 @@ class ChildTree(BaseModel):
             raise ValueError(
                 f"Cannot merge two subtrees both containing default values"
             )
+
+        self._merge_decision_tables(self._decision_tables, other._decision_tables)
+
+        if other.default_value is not None:
+            self.set_default(other.default_value)
+
         self.nodes.extend(other.nodes)
+
+    def get_all_decision_tables(self):
+        tables = self._decision_tables.copy()
+        for node in self.nodes:
+            if isinstance(node, TableConditionedNode):
+                node_values = node.values
+            else:
+                node_values = [node.value]
+            for nv in node_values:
+                if isinstance(nv, ChildTree):
+                    self._merge_decision_tables(tables, nv.get_all_decision_tables())
+        return tables
 
 
 class WrappedTreeFunction(ABC):
@@ -145,18 +340,78 @@ class WrappedTreeFunction(ABC):
     ): ...
 
 
+def _check_table_result_eq(value: int, **kwargs: pd.DataFrame) -> pd.Series:
+    table_result = kwargs[next(iter(kwargs.keys()))]
+    return table_result[_TABLE_VALUE_KEY] == value
+
+
 class Tree(VariableNode):
     doc: str = "This executes a user defined decision tree"
     root: ChildTree = Field(default_factory=ChildTree)
+    decision_tables: typing.Dict[str, DecisionTable] = Field(default_factory=dict)
+
+    def get_decision_tables(self):
+        decision_tables = self.decision_tables.copy()
+        self.root._merge_decision_tables(
+            decision_tables, self.root.get_all_decision_tables()
+        )
+        return decision_tables
+
+    @model_serializer()
+    def serialize_model(self):
+        return {
+            "doc": self.doc,
+            "root": self.root,
+            "decision_tables": self.get_decision_tables(),
+        }
 
     def compile(self):
         from .compiled import CompiledNumpyTree
 
         return CompiledNumpyTree(self)
 
+    def _generate_nodes(
+        self,
+        name: str,
+        config: "typing.Dict[str, typing.Any]",
+        include_runtime_nodes: bool = False,
+    ) -> "typing.List[node.Node]":
+        from hamilton import node
+
+        compiled_node = self.compile()
+        output_nodes = super()._generate_nodes(
+            name=name,
+            config=config,
+            include_runtime_nodes=include_runtime_nodes,
+            compiled_node_override=compiled_node,
+        )
+        base_node_ = node.Node.from_fn(_check_table_result_eq, name="temporary_node")
+        for table_name, compiled_table in compiled_node.decision_tables.items():
+            output_nodes.extend(
+                compiled_table._generate_nodes(table_name, config, True)
+            )
+            unique_values = set(compiled_table.outputs[_TABLE_VALUE_KEY])
+            for v in unique_values:
+                v = int(v)  # Just to be safe
+
+                output_nodes.append(
+                    base_node_.copy_with(
+                        name=f"{table_name}_is_{v}",
+                        doc_string=f"This is a function used to determine if the result of {table_name} is {v} to be used in a decision tree.",
+                        callabl=functools.partial(_check_table_result_eq, value=v),
+                        input_types={
+                            table_name: (pd.DataFrame, DependencyType.REQUIRED)
+                        },
+                        include_refs=False,
+                    )
+                )
+
+        return output_nodes
+
     def _generate_runtime_nodes(
         self, config: "typing.Dict[str, typing.Any]", compiled_node: "CompiledNumpyTree"
     ) -> "typing.List[node.Node]":
+        # This is used to extract the condition functions when running outside of hamilton context
         from hamilton import node
 
         return [
@@ -216,7 +471,14 @@ class Tree(VariableNode):
             if id(el) in seen:
                 raise ValueError("Tree must not contain any loops")
             seen.add(id(el))
-            if isinstance(el.value, ChildTree):
+            if isinstance(el, TableConditionedNode):
+                for v in el.values:
+                    if isinstance(v, ChildTree):
+                        q.extend(v.nodes)
+                        if isinstance(v.default_value, ChildTree):
+                            q.extend(v.default_value.nodes)
+
+            elif isinstance(el.value, ChildTree):
                 q.extend(el.value.nodes)
                 if isinstance(el.value.default_value, ChildTree):
                     q.extend(el.value.default_value.nodes)
@@ -225,14 +487,15 @@ class Tree(VariableNode):
     def _remove_nodes_from_end(*nodes: "ConditionedNode", child_tree: ChildTree):
         # Not the most pythonic method can maybe be improved
         # Done to remove elements in the order they were added
-        nodes_to_remove = list(nodes)
+        nodes_to_remove = set(map(id, list(nodes)))
         last_el_idx = len(child_tree.nodes) - 1
         for rev_i, node in enumerate(reversed(child_tree.nodes)):
             i = last_el_idx - rev_i
-            if node in nodes_to_remove:
+            if id(node) in nodes_to_remove:
                 child_tree.nodes.pop(i)
-            if len(nodes_to_remove) <= 0:
-                return True
+                nodes_to_remove.discard(id(node))
+                if len(nodes_to_remove) <= 0:
+                    return True
         return False
 
     def copy(self, deep=True):
@@ -242,8 +505,9 @@ class Tree(VariableNode):
     def condition(
         self,
         output: TOutput = None,
-        condition: typing.Union[TCond, None] = None,
+        condition: typing.Optional[TCondRaw] = None,
         child_tree: ChildTree = None,
+        priority: typing.Optional[int] = None,
         **kwargs,
     ) -> typing.Callable[..., WrappedTreeFunction]:
         """
@@ -288,7 +552,9 @@ class Tree(VariableNode):
             nonlocal output
             if isinstance(output, Tree):
                 output = output.root
-            node = child_tree.add_node(value=output, condition=condition, **kwargs)
+            node = child_tree.add_node(
+                value=output, condition=condition, priority=priority, **kwargs
+            )
             try:
                 self._identify_loops(node)
             except ValueError as e:
@@ -316,7 +582,7 @@ class Tree(VariableNode):
         Notes:
             - If `child_tree` is not provided, the default is set for `self.root`.
             - Checks if a default value is already assigned to `child_tree`. If so, raises an error.
-            - Converts `output` to the root node of `output` if `output` is an instance of `Tree`.
+            - if `output` is an instance of `Tree`, add it as subtree.
             - Sets `child_tree.default_value` to `output`, establishing it as the default action
             when no specific conditions are met in the decision tree.
 
@@ -335,8 +601,9 @@ class Tree(VariableNode):
         if child_tree.default_value is not None:
             raise ValueError("Default value already set")
         if isinstance(output, Tree):
-            output = output.root
-        child_tree.default_value = output
+            self.include_subtree(output, condition=None, child_tree=child_tree)
+        else:
+            child_tree.set_default(output)
 
     def include_subtree(
         self,
@@ -455,21 +722,30 @@ class Tree(VariableNode):
             dot.node(curr_name, curr_name)
 
             for node in curr.nodes:
-                node_condition_name = get_condition_name(node.condition)
+                node_condition_name = get_condition_name(
+                    node.condition_table
+                    if isinstance(node, TableConditionedNode)
+                    else node.condition
+                )
                 dot.node(node_condition_name, node_condition_name)
                 dot.edge(curr_name, node_condition_name)
-                if hasattr(node.value, "nodes"):
-                    to_search.extend([(node.value, node_condition_name)])
-                elif node.value is not None:
-                    node_value_name = get_value_name(node.value)
-                    dot.node(
-                        node_value_name,
-                        node_value_name,
-                        style="filled",
-                        fillcolor="#ADDFFF",
-                        shape="rectangle",
-                    )
-                    dot.edge(node_condition_name, node_value_name)
+                if isinstance(node, TableConditionedNode):
+                    node_values = node.values
+                else:
+                    node_values = [node.value]
+                for val in node_values:
+                    if hasattr(val, "nodes"):
+                        to_search.extend([(val, node_condition_name)])
+                    elif val is not None:
+                        node_value_name = get_value_name(val)
+                        dot.node(
+                            node_value_name,
+                            node_value_name,
+                            style="filled",
+                            fillcolor="#ADDFFF",
+                            shape="rectangle",
+                        )
+                        dot.edge(node_condition_name, node_value_name)
 
             if curr.default_value is not None:
                 default_name = get_value_name(curr.default_value)

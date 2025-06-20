@@ -1,0 +1,58 @@
+{
+  "features": ["feature_0", "feature_1", "feature_2"],
+  "nodes": {
+    "tree1_root": {
+      "split_feature_id": 0,
+      "default_left": false,
+      "node_type": "numerical_test_node",
+      "comparison_op": "<",
+      "threshold": 1.5,
+      "children": ["tree1_leaf1", "tree1_leaf2"],
+      "position": {"x": 0, "y": 0}
+    },
+    "tree1_leaf1": {
+      "node_type": "leaf",
+      "leaf_value": 0,
+      "position": {"x": -50, "y": 50}
+    },
+    "tree1_leaf2": {
+      "node_type": "leaf",
+      "leaf_value": 1,
+      "position": {"x": 50, "y": 50}
+    },
+    "tree2_root": {
+      "split_feature_id": 1,
+      "default_left": true,
+      "node_type": "categorical_test_node",
+      "category_list_right_child": false,
+      "category_list": [1, 2],
+      "children": ["tree2_leaf1", "tree2_leaf2"],
+      "position": {"x": 200, "y": 0}
+    },
+    "tree2_leaf1": {
+      "node_type": "leaf",
+      "leaf_value": 2,
+      "position": {"x": 150, "y": 50}
+    },
+    "tree2_leaf2": {
+      "node_type": "leaf",
+      "leaf_value": 3,
+      "position": {"x": 250, "y": 50}
+    }
+  },
+  "leafOrder": ["tree1_leaf1", "tree1_leaf2", "tree2_leaf1", "tree2_leaf2"],
+  "metadata": {
+    "name": "multiple_trees",
+    "description": "Test with two disconnected decision trees"
+  },
+  "treeOutput": {
+    "columns": ["name", "description", "value"],
+    "data": [
+      ["default", "Default value", "-1"],
+      ["output1", "First tree left output", "0"],
+      ["output2", "First tree right output", "1"],
+      ["output3", "Second tree left output", "2"],
+      ["output4", "Second tree right output", "3"]
+    ]
+  }
+}

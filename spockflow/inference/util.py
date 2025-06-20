@@ -41,7 +41,7 @@ def find_default_entrypoint() -> "TModuleList":
 
 
 def load_all_entrypoints(
-    entrypoint_configuration: typing.Dict[str, typing.List[str]]
+    entrypoint_configuration: typing.Dict[str, typing.List[str]],
 ) -> "TModuleListMap":
     mods = {k: load_entrypoint_modules(v) for k, v in entrypoint_configuration.items()}
     if "__default__" not in mods:
@@ -57,7 +57,7 @@ def load_all_entrypoints(
 
 
 def cast_result_of_model_fn(
-    modules: typing.Union["TModuleList", "TModuleListMap", "ModuleType"]
+    modules: typing.Union["TModuleList", "TModuleListMap", "ModuleType"],
 ) -> "TModuleListMap":
     """Allow user to return multiple types from the model fn and cast it to the form expected"""
     if isinstance(modules, dict):

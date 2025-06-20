@@ -1,3 +1,6 @@
 # License
 
-Coming Soon
+```{include} ../../LICENSE
+:relative-docs: docs
+:relative-images:
+```

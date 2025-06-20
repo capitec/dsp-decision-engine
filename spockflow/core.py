@@ -197,7 +197,7 @@ def initialize_spock_module(
         if mod_fn is None:
             external_outputs.append(k)
             continue
-        setattr(caller_module, k, set_function_as_output()(mod_fn))
+        setattr(caller_module, k, set_function_as_output(target_=k)(mod_fn))
 
     @configure_output(
         included_modules, ignore_output=True, output_names=external_outputs

@@ -6,6 +6,6 @@ Welcome to Spockflow! This guide will help you get up and running with Spockflow
 
 Installation Guide <install>
 Quick Start <quick_start>
-Contributing <contributing>
+Contributing <contributing/index>
 License <license>
 ```

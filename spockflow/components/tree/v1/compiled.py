@@ -4,8 +4,11 @@ import numpy as np
 from pydantic import BaseModel
 from dataclasses import dataclass
 from spockflow.components.tree.settings import settings
-from .core import ChildTree, Tree, TOutput, TCond
+from .core import ChildTree, Tree, TOutput, TCond, ConditionedNode, TableConditionedNode
 from spockflow.nodes import creates_node
+
+if typing.TYPE_CHECKING:
+    from spockflow.components.dtable import DecisionTable
 
 # from pandas.core.groupby import DataFrameGroupBy
 
@@ -17,12 +20,14 @@ if typing.TYPE_CHECKING:
 class ConditionedOutput:
     output: TOutput
     conditions: typing.Tuple[TCond]
+    priority: int
 
 
 @dataclass
 class SymbolicConditionedOutput:
     output: str
     conditions: typing.Tuple[str]
+    priority: int
 
 
 @dataclass
@@ -37,6 +42,14 @@ TFormatData = typing.Tuple[np.ndarray, pd.DataFrame, np.ndarray, np.ndarray, int
 
 class CompiledNumpyTree:
     def __init__(self, tree: Tree) -> None:
+        self.decision_tables: typing.Dict[str, "DecisionTable"] = {}
+        for k, v in tree.get_decision_tables().items():
+            assert list(v.outputs.keys()) == [
+                "value"
+            ], f'Decision tables nested in decision trees can only have one output named "value"'
+            # Decision tables dont need compilation but keeping with convention
+            self.decision_tables[k] = v.compile()
+
         self.length = len(tree.root)
 
         flattened_tree = self._flatten_tree(
@@ -47,6 +60,10 @@ class CompiledNumpyTree:
         )
         flattened_tree = self._get_symbolic_tree(flattened_tree)
         self._flattened_tree = flattened_tree
+        self._flattened_priority = np.array(
+            [n.priority for n in self._flattened_tree.tree], dtype=np.int32
+        )
+        self._has_priority = any(self._flattened_priority != 1)
 
         (predefined_conditions, predefined_condition_names, execution_conditions) = (
             self._split_predefined(
@@ -222,51 +239,91 @@ class CompiledNumpyTree:
             name = get_unique_name(n.output)
             outputs[name] = n.output
             new_tree_nodes.append(
-                SymbolicConditionedOutput(name, tuple(new_conditions))
+                SymbolicConditionedOutput(name, tuple(new_conditions), n.priority)
             )
 
         return SymbolicFlatTree(
             outputs=outputs, conditions=conditions, tree=new_tree_nodes
         )
 
-    @classmethod
+    @staticmethod
+    def _merge_priority(
+        p1: typing.Optional[int], p2: typing.Optional[int]
+    ) -> typing.Optional[int]:
+        if p1 is None and p2 is None:
+            return None
+        return (p1 or 0) + (p2 or 0)  # Also caps values to > 0
+
     def _flatten_tree(
-        cls,
+        self,
         sub_tree: ChildTree,
         current_conditions: typing.Tuple[TCond],
         seen: typing.Set[int],
         conditioned_outputs: typing.List[ConditionedOutput],
+        priority: typing.Optional[int] = None,
     ) -> typing.List[ConditionedOutput]:
         curr_id = id(sub_tree)
         if curr_id in seen:
             raise ValueError("Current tree contains loops. Cannot compile tree.")
         for n in sub_tree.nodes:
-            if n.value is None:
-                raise ValueError(
-                    "All nodes must have a value set to be a valid tree.\n"
-                    "Found a leaf with no value."
-                )
-            if n.condition is None:
-                raise ValueError(
-                    "All nodes must have a condition set to be a valid tree\n"
-                    "Found a leaf with no condition.\n"
-                    "If this is intended to be a default value please use set_default."
-                )
+            if isinstance(n, ConditionedNode):
+                if n.value is None:
+                    raise ValueError(
+                        "All nodes must have a value set to be a valid tree.\n"
+                        "Found a leaf with no value."
+                    )
+                if n.condition is None:
+                    raise ValueError(
+                        "All nodes must have a condition set to be a valid tree\n"
+                        "Found a leaf with no condition.\n"
+                        "If this is intended to be a default value please use set_default."
+                    )
 
-            n_conditions = current_conditions + (n.condition,)
-            if isinstance(n.value, ChildTree):
-                cls._flatten_tree(
-                    n.value,
-                    current_conditions=n_conditions,
-                    seen=seen.union([curr_id]),
-                    conditioned_outputs=conditioned_outputs,
-                )
+                n_conditions = current_conditions + (n.condition,)
+                if isinstance(n.value, ChildTree):
+                    self._flatten_tree(
+                        n.value,
+                        current_conditions=n_conditions,
+                        seen=seen.union([curr_id]),
+                        conditioned_outputs=conditioned_outputs,
+                        priority=self._merge_priority(priority, n.priority),
+                    )
+                else:
+                    conditioned_outputs.append(
+                        ConditionedOutput(n.value, n_conditions, max(priority or 0, 1))
+                    )
             else:
-                conditioned_outputs.append(ConditionedOutput(n.value, n_conditions))
+                if n.condition_table not in self.decision_tables:
+                    raise ValueError(
+                        f"Found node conditioned on a table ({n.condition_table}) that is not registered within the tree."
+                    )
+                n._check_compatible_table(self.decision_tables[n.condition_table])
+                for i, v in enumerate(n.values):
+                    if v is None:
+                        raise ValueError(
+                            "All nodes must have a value set to be a valid tree.\n"
+                            "Found a leaf with no value."
+                        )
+                    n_priority = None if n.priority is None else n.priority[i]
+                    n_conditions = current_conditions + (f"{n.condition_table}_is_{i}",)
+                    if isinstance(v, ChildTree):
+                        self._flatten_tree(
+                            v,
+                            current_conditions=n_conditions,
+                            seen=seen.union([curr_id]),
+                            conditioned_outputs=conditioned_outputs,
+                            priority=self._merge_priority(priority, n_priority),
+                        )
+                    else:
+                        conditioned_outputs.append(
+                            ConditionedOutput(v, n_conditions, max(priority or 0, 1))
+                        )
 
         if sub_tree.default_value is not None:
             conditioned_outputs.append(
-                ConditionedOutput(sub_tree.default_value, current_conditions)
+                ConditionedOutput(
+                    sub_tree.default_value, current_conditions, max(priority or 0, 1)
+                )
             )
 
         return conditioned_outputs
@@ -347,6 +404,13 @@ class CompiledNumpyTree:
         return (conditions @ self.truth_table) >= self.truth_table_thresh
 
     @creates_node()
+    def prioritized_conditions(self, conditions_met: np.ndarray) -> np.ndarray:
+        if not self._has_priority:
+            return conditions_met
+        # [O] * [O,N] -> [O,N] (outputs, batch)
+        return self._flattened_priority * conditions_met
+
+    @creates_node()
     def condition_names(self, format_inputs: TFormatData) -> typing.List[str]:
         conditions = format_inputs[0]
         res = []
@@ -389,10 +453,10 @@ class CompiledNumpyTree:
     def get_results(
         self,
         format_inputs: TFormatData,
-        conditions_met: np.ndarray,
+        prioritized_conditions: np.ndarray,
     ) -> pd.DataFrame:
         _, outputs, *_ = format_inputs
-        condition_output_idx = np.argmax(conditions_met, axis=1)
+        condition_output_idx = np.argmax(prioritized_conditions, axis=1)
         return outputs.iloc[
             self._lookup_output_idx(format_inputs, condition_output_idx)
         ].reset_index(drop=True)

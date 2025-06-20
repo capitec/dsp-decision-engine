@@ -1,0 +1,46 @@
+{
+    "features": ["feature_0"],
+    "nodes": {
+      "root": {
+        "split_feature_id": 0,
+        "default_left": false,
+        "node_type": "numerical_test_node",
+        "comparison_op": "<",
+        "threshold": 1.5,
+        "children": ["node1", "leaf1"],
+        "position": {"x": 0, "y": 0}
+      },
+      "node1": {
+        "split_feature_id": 0,
+        "default_left": false,
+        "node_type": "numerical_test_node",
+        "comparison_op": "<",
+        "threshold": 0.5,
+        "children": ["root", "leaf2"],
+        "position": {"x": -50, "y": 50}
+      },
+      "leaf1": {
+        "node_type": "leaf",
+        "leaf_value": 0,
+        "position": {"x": 50, "y": 50}
+      },
+      "leaf2": {
+        "node_type": "leaf",
+        "leaf_value": 1,
+        "position": {"x": -100, "y": 100}
+      }
+    },
+    "leafOrder": ["leaf1", "leaf2"],
+    "metadata": {
+      "name": "cyclic_tree",
+      "description": "Tree with a cycle between root and node1"
+    },
+    "treeOutput": {
+      "columns": ["name", "description", "value"],
+      "data": [
+        ["default", "Default value", "-1"],
+        ["output1", "First output", "0"],
+        ["output2", "Second output", "1"]
+      ]
+    }
+}
