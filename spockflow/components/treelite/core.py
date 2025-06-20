@@ -26,7 +26,7 @@ class PositionedNode(BaseModel):
 
 class TestNode(PositionedNode):
     split_feature_id: int
-    default_left: bool
+    default_left: bool = True
     children: typing.List[str]
 
 
