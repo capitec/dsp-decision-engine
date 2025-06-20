@@ -150,14 +150,16 @@ def test_multiple_disconnected_trees(multiple_trees_config: str):
 
     outputs = compiled_tree.leaf_output_mapping[predictions[:, :, 0].astype(int)]
     results = compiled_tree.output_dataframe_mapping.loc[outputs.flatten()].description
-    expected_results = np.array([
-        "First tree left output",
-        "Second tree right output",
-        "First tree right output",
-        "Second tree left output",
-        "First tree left output",
-        "Second tree left output",
-    ])
+    expected_results = np.array(
+        [
+            "First tree left output",
+            "Second tree right output",
+            "First tree right output",
+            "Second tree left output",
+            "First tree left output",
+            "Second tree left output",
+        ]
+    )
     assert (results == expected_results).all()
 
 
@@ -165,7 +167,9 @@ def test_insufficient_features(insufficient_features_config: str):
     """Test error handling when feature_id references non-existent feature."""
     tree = Tree.model_validate_json(insufficient_features_config)
 
-    with pytest.raises(treelite.core.TreeliteError, match=r"split_index must be less than num_feature"):
+    with pytest.raises(
+        treelite.core.TreeliteError, match=r"split_index must be less than num_feature"
+    ):
         tree.compile()
 
 
@@ -182,7 +186,6 @@ def test_no_columns(no_columns_config: str):
     tree = Tree.model_validate_json(no_columns_config)
     with pytest.raises(ValueError, match=r".*output dataframe.*"):
         compiled_tree = tree.compile()
-
 
 
 def test_cyclic_tree(cyclic_tree_config: str):
@@ -391,6 +394,7 @@ def test_get_output(basic_treelite_config: str):
         results.loc["d", "description"]
         == "Output of node 3a96d1da-b922-4c4d-bf24-0f7119b7eb72"
     )
+
 
 # THESE MIGHT CHANGE SOON SO NOT TOO WORRIED ABOUT TEST FOR NOW
 # def test_all_tree_paths(basic_treelite_config: str):
