@@ -1,5 +1,10 @@
 # North Pole
 
+What is our problem definition (Not just internally but externally to drive open source colaboration)
+
+Competitors
+- http://perfect.io/
+
 1. Do we want to use Hamilton to construct the pipeline or rather have a Hamilton element in the pipeline 
 
 2. A close look at elements that are needed (decision trees, scorecards and decision tables) to check for differences. 
