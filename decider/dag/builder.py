@@ -31,3 +31,7 @@ class DeciderBuilder(Builder):
             )
         self._decider_adaptor.add_module(module)
         return self
+    
+    def compile(self):
+        from .compile import CompiledModulePlaceholder
+        return CompiledModulePlaceholder(None)

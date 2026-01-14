@@ -26,19 +26,35 @@ class InjectedModule(DeciderExpandableModule):
         
         Returns:
             A dictionary mapping node names to nodes with remapped input parameters.
+            
+        Raises:
+            ValueError: If any parameter mappings don't correspond to actual node parameters.
         """
         nodes_dict = self.expander.expand_nodes()
+        
+        # Start with all mappings as unused, remove as they get used
+        unused_mappings = set(self.parameter_mapping.items())
         
         # Apply parameter mapping to each node
         remapped_nodes = {}
         for node_name, original_node in nodes_dict.items():
-            remapped_node = self._map_input_vars(original_node, self.parameter_mapping)
+            remapped_node, used_mappings = self._map_input_vars(original_node, self.parameter_mapping)
             remapped_nodes[node_name] = remapped_node
+            # Remove used mappings from unused set
+            unused_mappings -= used_mappings
+        
+        # Check if any mappings were never used
+        if unused_mappings:
+            unused_dict = dict(unused_mappings)
+            raise ValueError(
+                f"Parameter mapping(s) not found in any node: {unused_dict}. "
+                f"These internal parameter names don't exist in the expander's nodes."
+            )
             
         return remapped_nodes
     
     @staticmethod
-    def _map_input_vars(n: node.Node, input_mapping: t.Dict[str, str]) -> node.Node:
+    def _map_input_vars(n: node.Node, input_mapping: t.Dict[str, str]) -> t.Tuple[node.Node, t.Set[t.Tuple[str, str]]]:
         """Maps external parameter names to internal parameter names for a node.
         
         Args:
@@ -46,12 +62,15 @@ class InjectedModule(DeciderExpandableModule):
             input_mapping: Dictionary mapping external names to internal names
             
         Returns:
-            Either the original node if no remapping needed, or a new node with 
-            remapped input parameters and a wrapper function.
+            A tuple of:
+            - Either the original node if no remapping needed, or a new node with 
+              remapped input parameters and a wrapper function
+            - Set of (external_name, internal_name) tuples that were actually used
         """
         should_replace = False
         new_input_types = {}
         internal_to_external_map = {}
+        used_mappings = set()
         
         # Check each input parameter of the node
         for internal_param, param_info in n.input_types.items():
@@ -60,6 +79,7 @@ class InjectedModule(DeciderExpandableModule):
             for ext_name, int_name in input_mapping.items():
                 if int_name == internal_param:
                     external_param = ext_name
+                    used_mappings.add((ext_name, int_name))
                     break
                     
             if external_param:
@@ -71,7 +91,7 @@ class InjectedModule(DeciderExpandableModule):
                 internal_to_external_map[internal_param] = internal_param
                 
         if not should_replace:
-            return n
+            return n, used_mappings
             
         current_fn = n.callable
         
@@ -83,4 +103,4 @@ class InjectedModule(DeciderExpandableModule):
             }
             return current_fn(**internal_kwargs)
             
-        return n.copy_with(input_types=new_input_types, callabl=remapped_function)
+        return n.copy_with(input_types=new_input_types, callabl=remapped_function), used_mappings
