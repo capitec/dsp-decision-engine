@@ -2,24 +2,10 @@ import typing as t
 from types import ModuleType
 from dataclasses import dataclass, field
 from hamilton.lifecycle.base import BasePostGraphConstruct
+from decider.dag.expanders.base import DeciderExpandableModule
+
 if t.TYPE_CHECKING:
-    from hamilton import graph, node
-
-from abc import ABC, abstractmethod
-
-
-class DeciderExpandableModule(ABC):
-    @abstractmethod
-    def expand_nodes(self) -> t.Dict[str, "node.Node"]:
-        pass
-
-@dataclass
-class NamespacedModule(DeciderExpandableModule):
-    namespace: str
-    expander: DeciderExpandableModule
-    def expand_nodes(self) -> t.Dict[str, "node.Node"]:
-        pass
-        
+    from hamilton import graph
 
 @dataclass
 class DeciderAdaptorHook(BasePostGraphConstruct):
@@ -37,5 +23,5 @@ class DeciderAdaptorHook(BasePostGraphConstruct):
     ):
         extra_nodes = {}
         for m in self.modules:
-            extra_nodes.update(m.expand_nodes())
+            extra_nodes.update(m.expand_nodes(config))
         graph.nodes = graph.with_nodes(extra_nodes).nodes

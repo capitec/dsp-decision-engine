@@ -1,7 +1,7 @@
 import typing as t
 from hamilton import node
 from dataclasses import dataclass
-from decider.dag.core import DeciderExpandableModule
+from decider.dag.expanders.base import DeciderExpandableModule
 from . import funcs
 
 @dataclass

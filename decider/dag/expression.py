@@ -2,7 +2,7 @@ import typing as t
 from dataclasses import dataclass
 import polars as pl
 from hamilton import node
-from .core import DeciderExpandableModule
+from .expanders.base import DeciderExpandableModule
 
 if t.TYPE_CHECKING:
     from hamilton import node

@@ -9,10 +9,10 @@ from polars._typing import SchemaDefinition
 
 from dataclasses import dataclass
 from hamilton import node
-from .core import DeciderExpandableModule
+from .expanders.base import DeciderExpandableModule
 from hamilton.driver import Builder
 
-from .lazyframe import LazyFrameModule
+from .expanders.lazyframe import LazyFrameModule
 
 if t.TYPE_CHECKING:
     from hamilton import node
