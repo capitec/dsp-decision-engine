@@ -1,0 +1,282 @@
+import typing as t
+import polars as pl
+import pandera.pandas as pa
+from pydantic import BaseModel, Discriminator, Tag, model_validator, PrivateAttr
+from decider.dag.expanders.base import ConfigurableDeciderExpandableModule
+from decider.dag.util import create_node_with_mapping
+
+
+class ParametersConfig(BaseModel):
+    columns: t.List[str]
+    values: t.List[t.List[t.Any]]
+    dtypes: t.Dict[str, str]
+    
+    _parameters_df: pl.DataFrame = PrivateAttr()
+    _pandera_schema: pa.DataFrameSchema = PrivateAttr()
+    
+    @model_validator(mode='after')
+    def validate_and_create_dataframe(self):
+        # Validate that all dtypes correspond to existing columns
+        for col in self.dtypes:
+            if col not in self.columns:
+                raise ValueError(f"Dtype specified for column '{col}' but column not found in parameters columns")
+        
+        # Validate that values matrix has correct dimensions
+        if self.values:
+            expected_cols = len(self.columns)
+            for i, row in enumerate(self.values):
+                if len(row) != expected_cols:
+                    raise ValueError(f"Row {i} has {len(row)} values but {expected_cols} columns expected")
+        
+        # Create DataFrame from values
+        df_dict = {}
+        for i, col in enumerate(self.columns):
+            df_dict[col] = [row[i] for row in self.values]
+        
+        self._parameters_df = pl.DataFrame(df_dict)
+        
+        # Create Pandera schema and validate
+        schema_dict = {}
+        for col, dtype_str in self.dtypes.items():
+            if dtype_str == "float":
+                schema_dict[col] = pa.Column(float)
+            elif dtype_str == "int":
+                schema_dict[col] = pa.Column(int)
+            elif dtype_str == "string":
+                schema_dict[col] = pa.Column(str)
+            elif dtype_str.startswith("list"):
+                schema_dict[col] = pa.Column(object)  # Lists stored as objects
+            else:
+                raise ValueError(f"Unsupported dtype '{dtype_str}' for column '{col}'")
+        
+        self._pandera_schema = pa.DataFrameSchema(schema_dict)
+        
+        # Convert to pandas for pandera validation, then back to polars
+        pandas_df = self._parameters_df.to_pandas()
+        try:
+            validated_df = self._pandera_schema.validate(pandas_df)
+            self._parameters_df = pl.from_pandas(validated_df)
+        except pa.errors.SchemaError as e:
+            raise ValueError(f"Schema validation failed: {e}")
+        
+        return self
+
+
+class BaseExpression(BaseModel):
+    """Base class for all decision table expressions"""
+    
+    def __call__(self, **kwargs: pl.Expr) -> pl.Expr:
+        """Evaluate the expression with given polars expressions"""
+        raise NotImplementedError
+    
+    def validate_parameters(self, parameters: "ParametersConfig") -> None:
+        """Validate that required variables exist in parameters with correct types"""
+        raise NotImplementedError
+
+
+class AndExpression(BaseExpression):
+    typ: t.Literal["and"] = "and"
+    expressions: t.List["Expression"]
+    
+    def __call__(self, **kwargs: pl.Expr) -> pl.Expr:
+        expr_results = [expr(**kwargs) for expr in self.expressions]
+        return pl.all_horizontal(*expr_results)
+    
+    def validate_parameters(self, parameters: t.Dict[str, t.Any]) -> None:
+        for expr in self.expressions:
+            expr.validate_parameters(parameters)
+
+
+class OrExpression(BaseExpression):
+    typ: t.Literal["or"] = "or"
+    expressions: t.List["Expression"]
+    
+    def __call__(self, **kwargs: pl.Expr) -> pl.Expr:
+        expr_results = [expr(**kwargs) for expr in self.expressions]
+        return pl.any_horizontal(*expr_results)
+    
+    def validate_parameters(self, parameters: t.Dict[str, t.Any]) -> None:
+        for expr in self.expressions:
+            expr.validate_parameters(parameters)
+
+
+class BetweenExpression(BaseExpression):
+    typ: t.Literal["between"] = "between"
+    variable: str
+    lower_bound_column: t.Optional[str] = None
+    upper_bound_column: t.Optional[str] = None
+    mode: t.Literal["lower_inclusive", "upper_inclusive", "both_inclusive", "both_exclusive"] = "both_inclusive"
+    
+    def __call__(self, **kwargs: pl.Expr) -> pl.Expr:
+        if self.variable not in kwargs:
+            raise ValueError(f"Variable '{self.variable}' not found in expression arguments")
+        
+        var_expr = kwargs[self.variable]
+        conditions = []
+        
+        if self.lower_bound_column:
+            lower_bound = kwargs.get(self.lower_bound_column)
+            if lower_bound is None:
+                raise ValueError(f"Lower bound column '{self.lower_bound_column}' not found in expression arguments")
+            
+            if self.mode in ["lower_inclusive", "both_inclusive"]:
+                conditions.append(var_expr >= lower_bound)
+            else:
+                conditions.append(var_expr > lower_bound)
+        
+        if self.upper_bound_column:
+            upper_bound = kwargs.get(self.upper_bound_column)
+            if upper_bound is None:
+                raise ValueError(f"Upper bound column '{self.upper_bound_column}' not found in expression arguments")
+            
+            if self.mode in ["upper_inclusive", "both_inclusive"]:
+                conditions.append(var_expr <= upper_bound)
+            else:
+                conditions.append(var_expr < upper_bound)
+        
+        if not conditions:
+            raise ValueError("At least one of lower_bound_column or upper_bound_column must be specified")
+        
+        return pl.all_horizontal(*conditions) if len(conditions) > 1 else conditions[0]
+    
+    def validate_parameters(self, parameters: "ParametersConfig") -> None:
+        # Note: self.variable is an input variable, not a column in parameters
+        # We only need to validate that the bound columns exist
+        
+        # Check that bound columns exist and are numeric types
+        if self.lower_bound_column:
+            if self.lower_bound_column not in parameters.columns:
+                raise ValueError(f"Lower bound column '{self.lower_bound_column}' not found in parameters columns")
+            
+            lower_dtype = parameters.dtypes.get(self.lower_bound_column)
+            if lower_dtype not in ["float", "int"]:
+                raise ValueError(f"Lower bound column '{self.lower_bound_column}' must be numeric type, got {lower_dtype}")
+        
+        if self.upper_bound_column:
+            if self.upper_bound_column not in parameters.columns:
+                raise ValueError(f"Upper bound column '{self.upper_bound_column}' not found in parameters columns")
+            
+            upper_dtype = parameters.dtypes.get(self.upper_bound_column)
+            if upper_dtype not in ["float", "int"]:
+                raise ValueError(f"Upper bound column '{self.upper_bound_column}' must be numeric type, got {upper_dtype}")
+        
+        if not self.lower_bound_column and not self.upper_bound_column:
+            raise ValueError("At least one of lower_bound_column or upper_bound_column must be specified")
+
+
+class InExpression(BaseExpression):
+    typ: t.Literal["in"] = "in"
+    variable: str
+    values_column: str
+    
+    def __call__(self, **kwargs: pl.Expr) -> pl.Expr:
+        if self.variable not in kwargs:
+            raise ValueError(f"Variable '{self.variable}' not found in expression arguments")
+        if self.values_column not in kwargs:
+            raise ValueError(f"Values column '{self.values_column}' not found in expression arguments")
+        
+        var_expr = kwargs[self.variable]
+        values_expr = kwargs[self.values_column]
+        
+        return var_expr.is_in(values_expr)
+    
+    def validate_parameters(self, parameters: "ParametersConfig") -> None:
+        # Note: self.variable is an input variable, not a column in parameters
+        # We only need to validate that the values column exists
+        
+        # Check that values column exists and is a list type
+        if self.values_column not in parameters.columns:
+            raise ValueError(f"Values column '{self.values_column}' not found in parameters columns")
+        
+        values_dtype = parameters.dtypes.get(self.values_column)
+        if not (values_dtype and values_dtype.startswith("list")):
+            raise ValueError(f"Values column '{self.values_column}' must be a list type, got {values_dtype}")
+
+
+class IsTrueExpression(BaseExpression):
+    typ: t.Literal["is_true"] = "is_true"
+    variable: str
+    
+    def __call__(self, **kwargs: pl.Expr) -> pl.Expr:
+        if self.variable not in kwargs:
+            raise ValueError(f"Variable '{self.variable}' not found in expression arguments")
+        
+        return kwargs[self.variable]
+    
+    def validate_parameters(self, parameters: "ParametersConfig") -> None:  # noqa: ARG002
+        # Note: self.variable is an input variable, not a column in parameters
+        # No validation needed for IsTrueExpression beyond basic structure
+        pass
+
+
+def get_expression_type(expr_obj: t.Union[BaseExpression, dict]) -> str:
+    if isinstance(expr_obj, dict):
+        return expr_obj.get("typ", "unknown")
+    return expr_obj.typ
+
+
+Expression = t.Annotated[
+    t.Union[
+        t.Annotated[AndExpression, Tag("and")],
+        t.Annotated[OrExpression, Tag("or")],
+        t.Annotated[BetweenExpression, Tag("between")],
+        t.Annotated[InExpression, Tag("in")],
+        t.Annotated[IsTrueExpression, Tag("is_true")]
+    ],
+    Discriminator(get_expression_type)
+]
+
+# Update forward references
+AndExpression.model_rebuild()
+OrExpression.model_rebuild()
+
+
+class DecisionTableConfig(BaseModel):
+    parameters: ParametersConfig
+    expression: Expression
+    outputs: t.List[str]
+    default: t.Optional[t.List[t.Any]] = None
+    
+    @model_validator(mode='after')
+    def validate_config(self):
+        # Validate that all output columns exist in parameters
+        for output in self.outputs:
+            if output not in self.parameters.columns:
+                raise ValueError(f"Output column '{output}' not found in parameters columns")
+        
+        # Validate default has correct length if specified
+        if self.default is not None:
+            if len(self.default) != len(self.outputs):
+                raise ValueError(f"Default values length ({len(self.default)}) must match outputs length ({len(self.outputs)})")
+        
+        # Validate expression parameters
+        self.expression.validate_parameters(self.parameters)
+        
+        return self
+
+
+class DecisionTable(ConfigurableDeciderExpandableModule):
+    typ: t.Literal["decision_table"] = "decision_table"
+    config: DecisionTableConfig
+    output_name: str = "decision_table_result"
+    
+    def expand_nodes(self, config: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:  # noqa: ARG002
+        """
+        Expand the decision table configuration into Hamilton nodes.
+        
+        Returns:
+            Dict mapping output node names to Hamilton nodes
+        """
+        from .impl import evaluate_decision_table_from_config
+        
+        # Create the main decision table evaluation node
+        return {
+            self.output_name: create_node_with_mapping(
+                evaluate_decision_table_from_config,
+                name=self.output_name,
+                partial_kwargs={"config": self.config}
+            )
+        }
+    
+    def compile(self):
+        raise NotImplementedError("Compile method not implemented yet for DecisionTable")
