@@ -41,8 +41,8 @@
             }
         }
     },
-    "modules": [
-        {
+    "modules": {
+        "module1": {
             "type": "my_module", // The providers must have a function that can be called to say list_modules or some discovery and we can do some magic to go through providers in order to determine if it can provide the module
             "version":"1.0", // we can allow it to always fetch latest if this isnt provided and we should allow versioned modules as well as unversioned modules. Unless we always do versioned modules.
             "source": "source1", // Maybe we can allow a source override that skips the discovery process.
@@ -70,7 +70,7 @@
                 "decision_table_thresholds": {"source": "parameter_source", "source_name": "source1", "key": "decision_table.thresholds"}
             }
         },
-        {
+        "module2": {
             "type": "decision_table", // This is a module that is provided by a internal module provider
             "module_config":  { // This is where it might be userful to get it from a path rather
                 "parameters": {
@@ -140,7 +140,7 @@
                 "interest_rate": "customer_interest_rate" // And then all unmapped outputs would be hidden from the external graph space.
             }
         },
-        {
+        "module3": {
             "type": "inline",
             "module_config": { // Do we do the nesting here. i think its needed to have one class be the dynamic module class that is used to route the pydantic model validates with the other moduls.
                 "expression_set": { // not sure how we do this safely. does it matter? as if a user has access to this json they can anyway just include a python script as a module
@@ -155,7 +155,7 @@
                 "max_transaction_amount": {"source": "parameter_source", "source_name": "source1", "key": "max_transaction_amount"}
             }
         },
-        { 
+        "module4": {
             "type": "python_script",
             // if above needs to be in module config then this should be in as well unless we have a set of internal module types that we handle and then if its not one of those we 
             // make use of a generic fallback module type that dynamically injects. which might be a better design.
@@ -166,11 +166,11 @@
             "internal_overrides": {...},
             "parameters": {...}
         },
-        {
+        "module5": {
             "type": "namespace",
             "namespace": "data_processing",
             "modules": [...], // we can then nest modules inside the namespace that way we can have a nice structure for our modules
             "exposed_outputs": ["processed_data"] 
         }
-    ]
+    }
 }
