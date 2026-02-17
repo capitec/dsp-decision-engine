@@ -13,7 +13,10 @@ def config_source_provider(
     # request: t.Any = _UNSET_,
     **kwargs,
 ):
-    token = _config_source_provider.set(provider.with_values_set(**kwargs))
+    token = _config_source_provider.set(
+        # This makes a copy which is very important for isolation between requests
+        provider.with_values_set(**kwargs)
+    )
     try:
         yield
     finally:
