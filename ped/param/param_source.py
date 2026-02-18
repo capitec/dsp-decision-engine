@@ -1,25 +1,18 @@
 import typing as t
 import warnings
-from enum import StrEnum
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field, replace
-from .cache import ParameterCache
+from dataclasses import dataclass, field
 from .sources import ParameterSource
 
 
+# Compatibility for Python < 3.11
+try:
+    from enum import StrEnum
+except ImportError:
+    from enum import Enum
+    class StrEnum(str, Enum):
+        pass
 
-class AbstractParameterSourceProvider(ABC):
-    @abstractmethod
-    def with_values_set(self, **kwargs) -> 't.Self':
-        ...
 
-    @abstractmethod
-    def requires_refresh(self, **kwargs) -> bool:
-        ...
-
-    @abstractmethod
-    def resolve(self, source_name: str, key: str, **kwargs) -> t.Any:
-        ...
 
 class VersionMismatchStrategy(StrEnum):
     WARN = 'warn'
@@ -28,26 +21,20 @@ class VersionMismatchStrategy(StrEnum):
 
 
 @dataclass
-class ParameterSourceProvider(AbstractParameterSourceProvider):
-    sources: dict[str, t.Union[ParameterCache, ParameterSource]]
+class ParameterSourceProvider:
+    sources: dict[str, ParameterSource]
     request: t.Any = None
-    versions: dict[str, t.Any] = field(default_factory=dict)
+    requested_versions: dict[str, t.Any] = field(default_factory=dict)
+    current_versions: dict[str, t.Any] = field(default_factory=dict)
     kwargs: t.Dict[str, t.Any] = field(default_factory=dict)
     version_mismatch_strategy: VersionMismatchStrategy = VersionMismatchStrategy.ERROR
-
-    def with_values_set(self, **kwargs) -> 't.Self':
-        return replace(
-            self, 
-            request=kwargs.pop('request', self.request), 
-            versions=kwargs.pop('requested_versions', self.versions), 
-            kwargs=kwargs or self.kwargs
-        )
     
     def requires_refresh(self) -> bool:
         return any(
             source.requires_refresh(
                 request=self.request,
-                requested_version=self.versions.get(source_name),
+                curr_version=self.current_versions.get(source_name),
+                requested_version=self.requested_versions.get(source_name),
                 **self.kwargs,
             ) 
             for source_name, source in self.sources.items()
@@ -56,8 +43,8 @@ class ParameterSourceProvider(AbstractParameterSourceProvider):
     def resolve(self, source_name: str, key: str) -> t.Any:
         if source_name not in self.sources:
             raise ValueError(f"Source '{source_name}' not found in provider.")
-        requested_version = self.versions.get(source_name)
-        result_version, result = self.sources[source_name].get(
+        requested_version = self.requested_versions.get(source_name)
+        result_version, result = self.sources[source_name].root.get(
             key, 
             request=self.request,
             requested_version=requested_version,
@@ -67,7 +54,7 @@ class ParameterSourceProvider(AbstractParameterSourceProvider):
             # We pin the version now so the rest of the parameters in the same request will use the same version.
             # This makes use of the fact that the context will always make a copy of the provider so we are safe to 
             # mutate the versions here without affecting other requests.
-            self.versions[source_name] = result_version
+            self.requested_versions[source_name] = result_version
         elif (
             self.version_mismatch_strategy != VersionMismatchStrategy.IGNORE and 
             result_version != requested_version

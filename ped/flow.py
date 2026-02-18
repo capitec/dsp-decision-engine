@@ -4,7 +4,7 @@ import typing as t
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator, PrivateAttr
 from .param.sources import ParameterSource
 from .param.context import config_source_provider
-from .param.param_source import ParameterSourceProvider
+from .param.param_source import ParameterSourceProvider, VersionMismatchStrategy
 from omegaconf import OmegaConf, DictConfig
 
 
@@ -17,6 +17,13 @@ class FlowMetadata(BaseModel):
     license: str = Field(default="MIT")
     version: str = Field(default="1.0")
 
+class ParameterSourceConfig(BaseModel):
+    """Configuration for a parameter source"""
+    kwargs: t.Dict[str, t.Any] = Field(default_factory=dict, description="Additional keyword arguments for the parameter source")
+    version_missmatch_strategy: VersionMismatchStrategy = Field(
+        default=VersionMismatchStrategy.ERROR,
+        description="Strategy to handle version mismatches between requested and actual parameter versions."
+    )
 
 class FlowConfiguration(BaseModel):
     """Main flow configuration model"""
@@ -32,9 +39,31 @@ class FlowConfiguration(BaseModel):
     modules: t.Dict[str, t.Dict[str, t.Any]] = Field(
         description="Module definitions and configurations."
     )
+    parameter_source_config: ParameterSourceConfig = Field(
+        default_factory=ParameterSourceConfig,
+        description="Configuration for parameter sources, including version mismatch strategy."
+    )
 
     _provider: "ParameterSourceProvider" = PrivateAttr()
     _modules_config: DictConfig = PrivateAttr(default=None)
+
+
+    @model_validator(mode='before')
+    @classmethod
+    def enable_omegaconf(cls, values):
+        if not isinstance(values, dict):
+            return values
+        try:
+            with config_source_provider(
+                ParameterSourceProvider(
+                    sources={}, # TODO can add some default sources
+                ), 
+            ):
+                return OmegaConf.to_object(OmegaConf.create(values))
+        except Exception:
+            # If we fail to parse with omegaconf just return the original values and let pydantic handle the error
+            return values
+        
 
     @field_validator('modules')
     def validate_modules_not_empty(cls, v):
@@ -60,12 +89,21 @@ class FlowConfiguration(BaseModel):
     ) -> t.Dict[str, t.Dict[str, t.Any]]:
         if requested_versions is not None and not isinstance(requested_versions, dict):
             requested_versions = {source_name: requested_versions for source_name in self.parameter_sources.keys()}
+        if requested_versions is None:
+            requested_versions = {}
         if request is None:
             request = {}
         if self._modules_config is None or rebuild_modules:
             self._modules_config = OmegaConf.create(self.modules)
-        with config_source_provider(self._provider, request=request, requested_versions=requested_versions) as provider:
+        with config_source_provider(
+            ParameterSourceProvider(
+                sources=self.parameter_sources,
+                request=request, 
+                requested_versions=requested_versions,
+                version_mismatch_strategy=self.parameter_source_config.version_missmatch_strategy,
+                kwargs=self.parameter_source_config.kwargs,
+                # Note we dont inject current version as that is more useful to determine if we need to reload the config
+                # When we are getting config we just want to get the config at a version
+            ), 
+        ):
             return OmegaConf.to_object(self._modules_config)
-
-
-

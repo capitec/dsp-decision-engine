@@ -1,6 +1,7 @@
 import typing as t
 from .core import BaseSource
 from ._ext import register_source
+from ..types import VersionedValue
 
 
 class StaticSource(BaseSource):
@@ -11,7 +12,7 @@ class StaticSource(BaseSource):
     def requires_refresh(self, **kwargs) -> bool:
         return False
 
-    def get(self, key: str, **kwargs) -> t.Any:
-        return self.values[key]
+    def get(self, key: str, **kwargs) -> VersionedValue:
+        return VersionedValue(self.version, self.values[key])
 
 register_source(StaticSource)

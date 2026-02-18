@@ -3,9 +3,6 @@ from pydantic import BaseModel, Field
 from abc import ABC, abstractmethod
 from ped.param.types import VersionedValue
 
-if t.TYPE_CHECKING:
-    from ..cache import ParameterCache
-
 class BaseSource(BaseModel, ABC):
     cache_kwargs: t.Optional[t.Dict[str, t.Any]] = Field(default_factory=lambda: {"type": "default"})
 
@@ -31,11 +28,3 @@ class BaseSource(BaseModel, ABC):
     ) -> VersionedValue:
         ...
 
-    def get_cached_source(self) -> 't.Self | ParameterCache':
-        if self.cache_kwargs is None:
-            return self
-        from ..cache import ParameterCache
-        return ParameterCache(
-            parameter_source=self, 
-            **self.cache_kwargs
-        )
