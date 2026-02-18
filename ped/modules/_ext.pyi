@@ -11,7 +11,7 @@ from ped._ext import TExtendableModel
 
 GraphModule = TExtendableModel[BaseModule]
 
-GraphModuleDict = RootModel[GraphModule]
+ConstructedGraphModules = RootModel[GraphModule]
 
 def register_graph_module(provider_class: t.Type[BaseModule]) -> None: ...
 

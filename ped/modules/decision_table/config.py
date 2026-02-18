@@ -1,10 +1,13 @@
 import typing as t
 import polars as pl
-import pandera.pandas as pa
 from pydantic import BaseModel, Discriminator, Tag, model_validator, PrivateAttr
 from ..core import BaseModule
 from ..util import create_node_with_mapping
+from ped.exceptions import wrap_import_errors
 
+
+if t.TYPE_CHECKING:
+    import pandera.pandas as pa
 
 class ParametersConfig(BaseModel):
     columns: t.List[str]
@@ -12,10 +15,13 @@ class ParametersConfig(BaseModel):
     dtypes: t.Dict[str, str]
     
     _parameters_df: pl.DataFrame = PrivateAttr()
-    _pandera_schema: pa.DataFrameSchema = PrivateAttr()
+    _pandera_schema: "pa.DataFrameSchema" = PrivateAttr()
     
     @model_validator(mode='after')
     def validate_and_create_dataframe(self):
+        with wrap_import_errors(optional_source="dt"):
+            import pandera.pandas as pa
+        # TODO we could make the pandera validation optional?
         # Validate that all dtypes correspond to existing columns
         for col in self.dtypes:
             if col not in self.columns:
@@ -232,7 +238,7 @@ OrExpression.model_rebuild()
 
 
 
-class DecisionTable(BaseModule):
+class DecisionTableModule(BaseModule):
     type: t.Literal["decision_table"] = "decision_table"
     parameters: ParametersConfig
     expression: Expression

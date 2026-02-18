@@ -12,8 +12,8 @@ GraphModule, register_graph_module = create_extendable_model(
     model_name="GraphModule"
 )
 
-class GraphModuleDict(RootModel):
+class ConstructedGraphModules(RootModel):
     root: t.Dict[str, GraphModule] # pyright: ignore[reportInvalidTypeForm]
 
 
-__all__ = ['GraphModule', 'register_graph_module', 'GraphModuleDict']
+__all__ = ['GraphModule', 'register_graph_module', 'ConstructedGraphModules']
