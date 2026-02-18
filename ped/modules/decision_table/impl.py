@@ -89,27 +89,6 @@ def calculate_decision_table_output(
         return output_expr.otherwise(default_output)
 
 
-def evaluate_decision_table_from_config(
-    config: "DecisionTableConfig",
-    **kwargs: pl.Expr
-) -> pl.Expr:
-    """
-    Convenience function to evaluate decision table using a DecisionTableConfig.
-    
-    Args:
-        config: DecisionTableConfig object
-        **kwargs: Input variable expressions
-        
-    Returns:
-        pl.Expr: Decision table evaluation result
-    """
-    return calculate_decision_table_output(
-        parameters=config.parameters._parameters_df,
-        expression=config.expression,
-        output_columns=config.outputs,
-        default=config.default,
-        **kwargs
-    )
 
 
 def extract_struct_fields(

@@ -2,8 +2,8 @@ import typing as t
 import polars as pl
 import pandera.pandas as pa
 from pydantic import BaseModel, Discriminator, Tag, model_validator, PrivateAttr
-from decider.dag.expanders.base import ConfigurableDeciderExpandableModule
-from decider.dag.util import create_node_with_mapping
+from ..core import BaseModule
+from ..util import create_node_with_mapping
 
 
 class ParametersConfig(BaseModel):
@@ -231,7 +231,9 @@ AndExpression.model_rebuild()
 OrExpression.model_rebuild()
 
 
-class DecisionTableConfig(BaseModel):
+
+class DecisionTable(BaseModule):
+    type: t.Literal["decision_table"] = "decision_table"
     parameters: ParametersConfig
     expression: Expression
     outputs: t.List[str]
@@ -253,12 +255,6 @@ class DecisionTableConfig(BaseModel):
         self.expression.validate_parameters(self.parameters)
         
         return self
-
-
-class DecisionTable(ConfigurableDeciderExpandableModule):
-    typ: t.Literal["decision_table"] = "decision_table"
-    config: DecisionTableConfig
-    output_name: str = "decision_table_result"
     
     def expand_nodes(self, config: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:  # noqa: ARG002
         """
@@ -267,16 +263,18 @@ class DecisionTable(ConfigurableDeciderExpandableModule):
         Returns:
             Dict mapping output node names to Hamilton nodes
         """
-        from .impl import evaluate_decision_table_from_config
+        from .impl import calculate_decision_table_output
         
         # Create the main decision table evaluation node
-        return {
-            self.output_name: create_node_with_mapping(
-                evaluate_decision_table_from_config,
-                name=self.output_name,
-                partial_kwargs={"config": self.config}
+        return [
+            create_node_with_mapping(
+                calculate_decision_table_output,
+                name="output",
+                partial_kwargs={
+                    "parameters": self.parameters._parameters_df,
+                    "expression": self.expression,
+                    "output_columns": self.outputs,
+                    "default": self.default
+                }
             )
-        }
-    
-    def compile(self):
-        raise NotImplementedError("Compile method not implemented yet for DecisionTable")
+        ]
