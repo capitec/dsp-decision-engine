@@ -2,7 +2,7 @@ import typing as t
 from hamilton.driver import Builder
 
 from .expanders.base import DeciderExpandableModule
-from .core import DeciderAdaptorHook
+from ...ped.graph.hamilton.adaptor import DeciderAdaptorHook
 from decider.typing import inherit_signature_from
 
 
