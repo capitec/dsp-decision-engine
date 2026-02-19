@@ -1,7 +1,7 @@
 import typing as t
 import polars as pl
 from pydantic import BaseModel, Discriminator, Tag, model_validator, PrivateAttr
-from ..core import BaseModule
+from ..core import BaseModule, PEDNode
 from ..util import create_node_with_mapping
 from ped.exceptions import wrap_import_errors
 
@@ -262,7 +262,7 @@ class DecisionTableModule(BaseModule):
         
         return self
     
-    def expand_nodes(self, config: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:  # noqa: ARG002
+    def expand_nodes(self, config: t.Dict[str, t.Any]) -> t.List[PEDNode]: # noqa: ARG002
         """
         Expand the decision table configuration into Hamilton nodes.
         
