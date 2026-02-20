@@ -16,7 +16,7 @@ class PostgresSource(BaseSource):
     # Don't use the default cache system since we're implementing our own
     cache_kwargs: t.Optional[t.Dict[str, t.Any]] = None
 
-    def requires_refresh(
+    def get_version(
         self, 
         curr_version: t.Any, 
         requested_version: t.Any = None, 

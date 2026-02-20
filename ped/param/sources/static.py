@@ -1,18 +1,24 @@
 import typing as t
-from .core import BaseSource
+from .core import BaseSource, DictVersionedSource
 from ._ext import register_source
-from ..types import VersionedValue
+from ped.types import TInputType
 
-
-class StaticSource(BaseSource):
+class StaticSource(BaseSource[DictVersionedSource]):
     type: t.Literal['static'] = "static"
     values: dict[str, t.Any]
-    version: t.Optional[t.Any] = None
+    # We dont want to return none here as it will then always rebuild for static which is very wasteful.
+    version: t.Any = "unknown" 
 
-    def requires_refresh(self, **kwargs) -> bool:
-        return False
+    async def get_version(self, **kwargs) -> t.Optional[t.Any]:
+        return self.version
+    
+    async def get_versioned_source(
+        self, 
+        inputs: TInputType,
+        version: t.Any,
+    ) -> DictVersionedSource:
+        # Not sure if we should add an assert here for safety
+        return DictVersionedSource(version=self.version, values=self.values)
 
-    def get(self, key: str, **kwargs) -> VersionedValue:
-        return VersionedValue(self.version, self.values[key])
 
 register_source(StaticSource)

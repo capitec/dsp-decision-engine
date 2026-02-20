@@ -41,7 +41,6 @@ class DeciderAdaptorHook(BasePostGraphConstruct):
     def add_module(self, key: str, mod: GraphModule):
         self.modules.root[key] = mod
 
-
     def post_graph_construct(
         self,
         *,
