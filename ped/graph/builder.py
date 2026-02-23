@@ -15,5 +15,6 @@ class BaseBuilder(BaseModel, t.Generic[TGraph], ABC):
     def build_graph(
         self, 
         modules: ConstructedGraphModules, 
+        output_nodes: t.List[str],
     ) -> TGraph:
         ...

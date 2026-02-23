@@ -42,12 +42,28 @@ class PEDNode:
                          "will receive the value from the external 'user_records' variable."
         }
     )
-    additional_kwargs: t.Dict[str, t.Any] = field(default_factory=dict, metadata={"description": "Additional keyword arguments for the node. can be used to capture additional information needed for the node."})
+    static_kwargs: t.Dict[str, t.Any] = field(
+        default_factory=dict, 
+        metadata={
+            "description": "Static keyword arguments that are injected into the function at execution time. "
+                         "These are constant values (like config objects) that don't depend on other nodes."
+        }
+    )
+    extra: t.Dict[str, t.Any] = field(
+        default_factory=dict, 
+        metadata={
+            "description": "Extra metadata for the node (e.g., Hamilton-specific attributes like 'collect')."
+        }
+    )
+
+    def namespaced_name_with_namespace(self, *additional_namespace: t.Tuple[str, ...]) -> str:
+        """Returns the fully qualified name of the node, including its namespace and additional namespace."""
+        return ".".join(additional_namespace + self.namespace + (self.name,))
 
     @property
     def namespaced_name(self) -> str:
         """Returns the fully qualified name of the node, including its namespace."""
-        return ".".join(self.namespace + (self.name,))
+        return self.namespaced_name_with_namespace()
 
     @property
     def type_callable(self) -> t.Callable:
@@ -60,7 +76,8 @@ class PEDNode:
         func: t.Callable,
         name: t.Optional[str] = None,
         input_map: t.Optional[t.Dict[str, str]] = None,
-        additional_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
+        static_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
+        extra: t.Optional[t.Dict[str, t.Any]] = None,
     ) -> "PEDNode":
         """Create a PEDNode from a callable function.
         
@@ -70,7 +87,8 @@ class PEDNode:
             input_map: Optional mapping of function parameters to external variable names.
                       Format: {function_param: external_variable_name}.
                       If not provided, all required parameters map to themselves.
-            additional_kwargs: Optional additional metadata for the node
+            static_kwargs: Optional static keyword arguments to inject into the function
+            extra: Optional additional metadata for the node
             
         Returns:
             A PEDNode instance configured with the function and mappings
@@ -83,26 +101,30 @@ class PEDNode:
             node = PEDNode.from_callable(
                 process_data,
                 name="data_processor", 
-                input_map={"data": "user_records"}
+                input_map={"data": "user_records"},
+                static_kwargs={"threshold": 100}  # Inject constant threshold
             )
         """
         name = name or func.__name__
         function_kwargs = inspect.signature(func).parameters
+        static_kwargs = static_kwargs or {}
         required_kwargs = {
             k 
             for k, v in function_kwargs.items() 
             if v.default == inspect.Parameter.empty 
             and v.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
+            and k not in static_kwargs  # Exclude parameters provided by static_kwargs
         }
         input_map = input_map or {}
         input_map = {k: input_map.get(k, k) for k in required_kwargs}
-        additional_kwargs = additional_kwargs or {}
+        extra = extra or {}
         return cls(
             name=name,
             callable=func,
             original_callable=func,
             input_map=input_map,
-            additional_kwargs=additional_kwargs,
+            static_kwargs=static_kwargs,
+            extra=extra,
         )
 
 
@@ -169,9 +191,6 @@ class BaseModule(BaseModel, ABC):
         
         namespaced_nodes = []
         for node in raw_nodes:
-            # Add module namespace to node
-            new_namespace = (module_name,) + node.namespace
-            
             # Apply input mapping transformation
             updated_input_map = {}
             for internal_param, current_external_var in node.input_map.items():
@@ -180,7 +199,7 @@ class BaseModule(BaseModel, ABC):
                     updated_input_map[internal_param] = self.input_mapping[current_external_var]
                 elif current_external_var in node_map:
                     # This is a dependency on another node in this module - namespace it
-                    updated_input_map[internal_param] = node_map[current_external_var].namespaced_name
+                    updated_input_map[internal_param] = node_map[current_external_var].namespaced_name_with_namespace(module_name)
                 else:
                     # External dependency - keep as is
                     updated_input_map[internal_param] = current_external_var
@@ -189,10 +208,11 @@ class BaseModule(BaseModel, ABC):
             namespaced_node = PEDNode(
                 name=node.name,
                 callable=node.callable,
-                namespace=new_namespace,
+                namespace=(module_name,) + node.namespace,
                 original_callable=node.original_callable,
                 input_map=updated_input_map,
-                additional_kwargs=node.additional_kwargs
+                static_kwargs=node.static_kwargs,
+                extra=node.extra
             )
             
             namespaced_nodes.append(namespaced_node)

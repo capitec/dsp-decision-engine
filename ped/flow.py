@@ -46,8 +46,12 @@ class FlowConfiguration(BaseModel):
     )
 
     cache: CacheProvider = Field(
-        default_factory=lru.LRUCache, 
+        default_factory=lambda: CacheProvider(type="lru"),
         description="Caching configuration for the builder"
+    )
+    outputs: t.List[str] = Field(
+        default_factory=list,
+        description="List of output node names for the graph."
     )
 
     _modules_config: DictConfig = PrivateAttr(default=None)
@@ -157,7 +161,8 @@ class FlowConfiguration(BaseModel):
         )
         # We can add some additional information to the builder config here if needed before we build the graph
         return self.graph_builder.root.build_graph(
-            parameterized_modules
+            parameterized_modules,
+            output_nodes=self.outputs,
         )
 
     async def get_graph(
