@@ -92,23 +92,10 @@ def ped_nodes_to_hamilton_nodes(ped_nodes: t.List["PEDNode"]) -> t.Dict[str, "ha
         # Create Hamilton node with original function to get proper typing
         original_node = hamilton_node.Node.from_fn(ped_node.original_callable)
         
-        # kwarg_parameters = {
-        #     p.name for p in inspect.signature(ped_node.callable).parameters.values() if p.kind == p.VAR_KEYWORD
-        # }
 
         # Build input_types for Hamilton node from the external variable names
         # Exclude static_kwargs parameters as they don't come from the graph
         hamilton_input_types = {}
-        # # unseen_mapping_params = set(ped_node.input_map.keys())
-        # for internal_param_name, internal_param_type in original_node.input_types.items():
-        #     # TODO there is probably a far better way to do kwargs. I just want to account for it
-        #     if internal_param_name in ped_node.static_kwargs or internal_param_name == "kwargs":
-        #         continue  # Skip static kwargs
-        #     elif internal_param_name in ped_node.input_map:
-        #         external_var_name = ped_node.input_map[internal_param_name]
-        #         hamilton_input_types[external_var_name] = internal_param_type
-        #     else:
-        #         raise ValueError(f"Internal parameter '{internal_param_name}' not found in input mapping for node '{ped_node.namespaced_name}'")
         for internal_param, external_var in ped_node.input_map.items():
             # Skip parameters that are provided by static_kwargs
             if internal_param not in ped_node.static_kwargs:
