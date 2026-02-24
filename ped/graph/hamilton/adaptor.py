@@ -48,8 +48,8 @@ def wrap_function_inputs(
 class DeciderAdaptorHook(BasePostGraphConstruct):
     modules: ConstructedGraphModules = field(default_factory=ConstructedGraphModules)
 
-    def add_module(self, key: str, mod: GraphModule):
-        self.modules.root[key] = mod
+    def add_module(self, mod: GraphModule):
+        self.modules.root.append(mod)
 
     def post_graph_construct(
         self,
@@ -61,8 +61,8 @@ class DeciderAdaptorHook(BasePostGraphConstruct):
         extra_nodes: t.Dict[str, "hamilton_node.Node"] = {}
         
         # Convert PED modules to Hamilton nodes
-        for module_name, module in self.modules.root.items():
-            ped_nodes = module.root.module_namespaced_nodes(module_name)
+        for module in self.modules.root:
+            ped_nodes = module.root.module_namespaced_nodes(module.root.name)
             hamilton_nodes = ped_nodes_to_hamilton_nodes(ped_nodes)
             extra_nodes.update(hamilton_nodes)
         

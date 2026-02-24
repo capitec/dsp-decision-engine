@@ -5,13 +5,11 @@ stub file that defines the type of ParameterSource and the register_graph_module
 which can be used by static type checkers to understand the types of these objects.
 """
 import typing as t
-from pydantic import RootModel
 from .core import BaseModule
 from ped._ext import TExtendableModel
 
 GraphModule = TExtendableModel[BaseModule]
 
-ConstructedGraphModules = RootModel[t.Dict[str, GraphModule]]
 
 def register_graph_module(provider_class: t.Type[BaseModule]) -> None: ...
 

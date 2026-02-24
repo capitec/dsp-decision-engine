@@ -36,7 +36,7 @@ class FlowConfiguration(BaseModel):
     
     # Note these are dictionaries still so that we can use omegaconf to update before we 
     # parse them into modules. This helps make things dynamic
-    modules: t.Dict[str, t.Dict[str, t.Any]] = Field(
+    modules: t.List[t.Dict[str, t.Any]] = Field(
         description="Module definitions and configurations."
     )
 
@@ -145,7 +145,7 @@ class FlowConfiguration(BaseModel):
             rebuild_modules=rebuild_modules,
         )
         # We can add some additional information to the module config here if needed before we build the graph
-        return ConstructedGraphModules.model_validate(parameterized_module_config)
+        return ConstructedGraphModules.model_validate({"root": parameterized_module_config})
     
     async def build_graph(
         self,

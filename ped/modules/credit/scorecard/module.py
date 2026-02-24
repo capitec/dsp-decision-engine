@@ -267,47 +267,38 @@ class ScoreCard(BaseModule):
 
 class ProbabilityDefault(BaseModule):
     type: t.Literal["probability_default"] = "probability_default"
-    score_input_name: str
-    probability_output_name: str = "{score_name}_pd"
 
     def expand_nodes(self) -> t.List[PEDNode]:
-        output_name = self.probability_output_name.format(score_name=self.score_input_name)
         return [
             PEDNode.from_callable(
                 calculate_probability_of_default,
-                name=output_name,
-                input_map={"score": self.score_input_name}
+                name=self.output_name,
+                input_map={"score": self.input_name}
             )
         ]
     
 class LogProbability(BaseModule):
     type: t.Literal["log_probability"] = "log_probability"
-    score_input_name: str
-    log_probability_output_name: str = "{score_name}_log_odds"
 
     def expand_nodes(self) -> t.List[PEDNode]:
-        output_name = self.log_probability_output_name.format(score_name=self.score_input_name)
         return [
             PEDNode.from_callable(
                 log_odds_from_score,
-                name=output_name,
-                input_map={"score": self.score_input_name},
+                name=self.output_name,
+                input_map={"score": self.input_name},
                 static_kwargs={"anchor_score": 660, "target_odds": 15, "points_to_double_the_odds": 20}
             )
         ]
     
 class ScoreFromPDO(BaseModule):
     type: t.Literal["score_from_pdo"] = "score_from_pdo"
-    pd_input_name: str
-    score_output_name: str = "{pd_name}_score"
 
     def expand_nodes(self) -> t.List[PEDNode]:
-        output_name = self.score_output_name.format(pd_name=self.pd_input_name)
         return [
             PEDNode.from_callable(
                 calculate_credit_score,
-                name=output_name,
-                input_map={"probability_of_default": self.pd_input_name}
+                name=self.output_name,
+                input_map={"probability_of_default": self.input_name}
             )
         ]
 

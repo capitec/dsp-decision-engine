@@ -135,6 +135,7 @@ class BaseModule(BaseModel, ABC):
             raise TypeError(f"{cls.__name__} must define a 'type' class variable")
 
     type: str
+    name: str
     input_mapping: t.Dict[str, str] = Field(
         default_factory=dict, 
         description="Maps this module's input parameters to external variable names. "
@@ -142,6 +143,11 @@ class BaseModule(BaseModel, ABC):
                    "Example: {'data': 'user_records'} means this module's 'data' parameter "
                    "will receive the value from the external 'user_records' variable."
     )
+
+    # The below is used for chaining and defines the main input and output of the node.
+    input_name: t.Optional[str] = "input"
+    output_name: t.Optional[str] = "output"
+
     # Again i think this only really makes sense for referenced modules so leaving out for now until the use becomes apparent
     # version: t.Optional[str] = Field(default=None, description="Module version, latest if not specified")
     # I think that source could be for a specific module type maybe?
@@ -156,12 +162,36 @@ class BaseModule(BaseModel, ABC):
     # This approach is often times a bit more flexible and was useful in the last implementation to do some heavy work required before returning nodes
     # However for this implementation we assume that the graph is cached at the upper level so the expand nodes can 
     # really be used to execute a node as well.
+
+    def __or__(self, other: "BaseModule") -> "BaseModule":
+        from ped.modules.primitives.chain import ChainModule
+        if not isinstance(other, BaseModule):
+            raise TypeError(f"Unsupported type for chaining: {type(other)}")
+        left = list(self.modules) if isinstance(self, ChainModule) else [self]  # type: ignore[attr-defined]
+        right = list(other.modules) if isinstance(other, ChainModule) else [other]  # type: ignore[attr-defined]
+        new_modules = left + right
+        if isinstance(self, ChainModule):
+            return self.model_copy(update={"modules": new_modules})
+        if isinstance(other, ChainModule):
+            return other.model_copy(update={"modules": new_modules})
+        return ChainModule(name=new_modules[0].name, modules=new_modules)
+
+    def __ror__(self, other: "BaseModule") -> "BaseModule":
+        from ped.modules.primitives.chain import ChainModule
+        if not isinstance(other, BaseModule):
+            raise TypeError(f"Unsupported type for chaining: {type(other)}")
+        left = list(other.modules) if isinstance(other, ChainModule) else [other]  # type: ignore[attr-defined]
+        right = list(self.modules) if isinstance(self, ChainModule) else [self]  # type: ignore[attr-defined]
+        new_modules = left + right
+        if isinstance(self, ChainModule):
+            return self.model_copy(update={"modules": new_modules})
+        if isinstance(other, ChainModule):
+            return other.model_copy(update={"modules": new_modules})
+        return ChainModule(name=new_modules[0].name, modules=new_modules)
+    
     @abstractmethod
     def expand_nodes(self) -> t.List[PEDNode]:
-        """
-        Expands the module into a list of Hamilton nodes. This is where the logic of how the module is represented as a graph goes.
-        Note: The use of a list over a dict is deliberate as Node contains a name parameter and using a dict makes it ambiguous as to which name we are using.
-        """
+        """Expands the module into a list of PEDNodes."""
         ...
 
 
