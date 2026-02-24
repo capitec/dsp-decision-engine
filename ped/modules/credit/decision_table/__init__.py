@@ -1,12 +1,7 @@
-from .config import (
+from .module import (
     DecisionTableModule,
     ParametersConfig,
     Expression,
-    AndExpression,
-    OrExpression,
-    BetweenExpression,
-    InExpression,
-    IsTrueExpression,
 )
 
 from .impl import (
@@ -20,13 +15,6 @@ __all__ = [
     "DecisionTableConfig", 
     "ParametersConfig",
     "Expression",
-    "AndExpression",
-    "OrExpression",
-    "BetweenExpression",
-    "InExpression",
-    "IsTrueExpression",
     "default_form_output_struct_from_row",
     "calculate_decision_table_output",
-    "evaluate_decision_table_from_config",
-    "extract_struct_fields",
 ]

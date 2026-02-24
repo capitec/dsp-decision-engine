@@ -1,8 +1,7 @@
 import typing as t
 import polars as pl
 from pydantic import Discriminator, Tag, model_validator, PrivateAttr, field_validator
-from decider.dag.expanders.base import ConfigurableDeciderExpandableModule
-from decider.dag.util import create_node_with_mapping
+from ped.modules.core import BaseModule, PEDNode
 from .impl import (
     BoundBin, 
     ValuesBin, 
@@ -15,7 +14,7 @@ from .impl import (
     log_odds_from_score,
     calculate_credit_score,
 )
-from decider.serializable import DefinedFunction
+from ped.serializable import DefinedFunction
 
 def get_bin_type(bin_obj: t.Union[BoundBin, ValuesBin, dict]) -> str:
     if isinstance(bin_obj, dict):
@@ -31,8 +30,8 @@ _TBin = t.Annotated[
 ]
 
 
-class ScoredVariable(ConfigurableDeciderExpandableModule):
-    typ: t.Literal["scored"] = "scored"
+class ScoredVariable(BaseModule):
+    type: t.Literal["scored"] = "scored"
     variable_name: str
     bins: t.List[_TBin]
     default: DefaultBin
@@ -143,36 +142,33 @@ class ScoredVariable(ConfigurableDeciderExpandableModule):
             return None
         return self.value_output_name.format(variable_name=self.variable_name)
 
-    def expand_nodes(self, config: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-        nodes = {}
+    def expand_nodes(self) -> t.List[PEDNode]:
+        nodes = []
         
         if self.raw_output_name is not None:
-            # Create node for score_variable with parameter mapping and partial application
-            nodes[self.raw_output_name] = create_node_with_mapping(
+            nodes.append(PEDNode.from_callable(
                 score_variable,
                 name=self.raw_output_name,
-                input_mapping={self.variable_name: "input"},
-                partial_kwargs={
+                input_map={"input": self.variable_name},
+                static_kwargs={
                     "bound_bins": self._bound_bins,
                     "value_bins": self._value_bins,
                     "default_bin": self.default,
                     "input_name": self.variable_name,
                     "output_expr_fn": self.variable_struct_function.get_function() if self.variable_struct_function is not None else None
                 }
-            )
+            ))
         
         value_output_name = self.get_value_output_name()
         if value_output_name is not None:
-            # Create node for struct-to-value conversion
             value_func = (self.struct_to_score_function.get_function() 
                          if self.struct_to_score_function is not None 
                          else default_get_value_from_struct)
-            
-            nodes[value_output_name] = create_node_with_mapping(
+            nodes.append(PEDNode.from_callable(
                 value_func,
                 name=value_output_name,
-                input_mapping={self.raw_output_name: "struct"}
-            )
+                input_map={"struct": self.raw_output_name}
+            ))
         
         return nodes
     
@@ -180,8 +176,8 @@ class ScoredVariable(ConfigurableDeciderExpandableModule):
         raise NotImplementedError("Compile method not implemented yet for ScoredVariable")
 
 
-class AdjustedVariable(ConfigurableDeciderExpandableModule):
-    typ: t.Literal["adjusted"] = "adjusted"
+class AdjustedVariable(BaseModule):
+    type: t.Literal["adjusted"] = "adjusted"
     variable: ScoredVariable
     offset: float = 0.0
     scale: float = 1.0
@@ -200,39 +196,38 @@ class AdjustedVariable(ConfigurableDeciderExpandableModule):
             score_value_output_name=self.variable.get_value_output_name(),
         )
     
-    def expand_nodes(self, config: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+    def expand_nodes(self) -> t.List[PEDNode]:
         output_name = self.get_value_output_name()
-        return {
-            output_name: create_node_with_mapping(
+        return [
+            PEDNode.from_callable(
                 adjust_score,
                 name=output_name,
-                input_mapping={self.variable.get_value_output_name(): "score"},
-                partial_kwargs={"offset": self.offset, "scale": self.scale}
+                input_map={"score": self.variable.get_value_output_name()},
+                static_kwargs={"offset": self.offset, "scale": self.scale}
             )
-        }
+        ]
     
-class ConstantScore(ConfigurableDeciderExpandableModule):
-    typ: t.Literal["constant"] = "constant"
+class ConstantScore(BaseModule):
+    type: t.Literal["constant"] = "constant"
     score: float
     output_name: str = "constant_score"
 
     def get_value_output_name(self) -> str:
         return self.output_name
 
-    def expand_nodes(self, config: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+    def expand_nodes(self) -> t.List[PEDNode]:
         def constant_score_fn() -> pl.Expr:
             return pl.lit(self.score)
         
-        return {
-            self.output_name: create_node_with_mapping(constant_score_fn, name=self.output_name)
-        }
+        return [PEDNode.from_callable(constant_score_fn, name=self.output_name)]
 
 _TScoredVariable = t.Annotated[
     t.Union[ScoredVariable, AdjustedVariable, ConstantScore],
-    Discriminator("typ")
+    Discriminator("type")
 ]
 
-class ScoreCard(ConfigurableDeciderExpandableModule):
+class ScoreCard(BaseModule):
+    type: t.Literal["scorecard"] = "scorecard"
     variables: t.List[_TScoredVariable]
     score_output_name: str = "score"
 
@@ -241,7 +236,7 @@ class ScoreCard(ConfigurableDeciderExpandableModule):
     def validate_variables(cls, variables: t.List[_TScoredVariable]) -> t.List[_TScoredVariable]:
         variable_names = set()
         for var in variables:
-            if var.typ == "constant": continue
+            if var.type == "constant": continue
             if var.variable_name in variable_names:
                 raise ValueError(f"Duplicate variable_name '{var.variable_name}' found in ScoreCard variables. Each ScoredVariable must have a unique variable_name.")
             variable_names.add(var.variable_name)
@@ -249,20 +244,20 @@ class ScoreCard(ConfigurableDeciderExpandableModule):
                 raise ValueError(f"ScoredVariable with variable_name '{var.variable_name}' must have a value_output_name defined to be used in ScoreCard.")
         return variables
     
-    def expand_nodes(self, config: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-        # Create nodes for each variable and then a final node that sums them up for the total score
-        nodes = {}
+    def expand_nodes(self) -> t.List[PEDNode]:
+        nodes = []
         for variable in self.variables:
-            nodes.update(variable.expand_nodes(config))
+            nodes.extend(variable.expand_nodes())
         
         # Get all value output names to create input mapping for calculate_score
-        input_mapping = {var_name: var_name for var in self.variables if (var_name :=var.get_value_output_name())}  # Map each output name to itself
+        input_map = {var_name: var_name for var in self.variables if (var_name := var.get_value_output_name())}
         
-        nodes[self.score_output_name] = create_node_with_mapping(
-            calculate_score,
-            input_mapping=input_mapping,
-            name=self.score_output_name
-        )
+        nodes.append(PEDNode(
+            name=self.score_output_name,
+            callable=calculate_score,
+            original_callable=calculate_score,
+            input_map=input_map,
+        ))
         
         return nodes
 
@@ -270,59 +265,59 @@ class ScoreCard(ConfigurableDeciderExpandableModule):
         raise NotImplementedError("Compile method not implemented yet for DecisionTable")
     
 
-class ProbabilityDefault(ConfigurableDeciderExpandableModule):
-    typ: t.Literal["probability_default"] = "probability_default"
+class ProbabilityDefault(BaseModule):
+    type: t.Literal["probability_default"] = "probability_default"
     score_input_name: str
     probability_output_name: str = "{score_name}_pd"
 
-    def expand_nodes(self, config: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+    def expand_nodes(self) -> t.List[PEDNode]:
         output_name = self.probability_output_name.format(score_name=self.score_input_name)
-        return {
-            output_name: create_node_with_mapping(
+        return [
+            PEDNode.from_callable(
                 calculate_probability_of_default,
-                input_mapping={self.score_input_name: "score"},
-                name=output_name
+                name=output_name,
+                input_map={"score": self.score_input_name}
             )
-        }
+        ]
     
-class LogProbability(ConfigurableDeciderExpandableModule):
-    typ: t.Literal["log_probability"] = "log_probability"
+class LogProbability(BaseModule):
+    type: t.Literal["log_probability"] = "log_probability"
     score_input_name: str
     log_probability_output_name: str = "{score_name}_log_odds"
 
-    def expand_nodes(self, config: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+    def expand_nodes(self) -> t.List[PEDNode]:
         output_name = self.log_probability_output_name.format(score_name=self.score_input_name)
-        return {
-            output_name: create_node_with_mapping(
+        return [
+            PEDNode.from_callable(
                 log_odds_from_score,
-                input_mapping={self.score_input_name: "score"},
-                partial_kwargs={"anchor_score": 660, "target_odds": 15, "points_to_double_the_odds": 20},
-                name=output_name
+                name=output_name,
+                input_map={"score": self.score_input_name},
+                static_kwargs={"anchor_score": 660, "target_odds": 15, "points_to_double_the_odds": 20}
             )
-        }
+        ]
     
-class ScoreFromPDO(ConfigurableDeciderExpandableModule):
-    typ: t.Literal["score_from_pdo"] = "score_from_pdo"
+class ScoreFromPDO(BaseModule):
+    type: t.Literal["score_from_pdo"] = "score_from_pdo"
     pd_input_name: str
     score_output_name: str = "{pd_name}_score"
 
-    def expand_nodes(self, config: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+    def expand_nodes(self) -> t.List[PEDNode]:
         output_name = self.score_output_name.format(pd_name=self.pd_input_name)
-        return {
-            output_name: create_node_with_mapping(
+        return [
+            PEDNode.from_callable(
                 calculate_credit_score,
-                input_mapping={self.pd_input_name: "probability_of_default"},
-                name=output_name
+                name=output_name,
+                input_map={"probability_of_default": self.pd_input_name}
             )
-        }
+        ]
 
 
 class WeightedScore(t.NamedTuple):
     score_name: str
     weight: float
 
-class MergeScorecardValues(ConfigurableDeciderExpandableModule):
-    typ: t.Literal["merge_scorecard_values"] = "merge_scorecard_values"
+class MergeScorecardValues(BaseModule):
+    type: t.Literal["merge_scorecard_values"] = "merge_scorecard_values"
     weighted_scores: t.List[WeightedScore]
     output_name: str = "merged_scorecard_values"
 
@@ -334,22 +329,24 @@ class MergeScorecardValues(ConfigurableDeciderExpandableModule):
             raise ValueError(f"The sum of weights in weighted_scores must equal 1.0. Current sum is {total_weight}.")
         return weighted_scores
 
-    def expand_nodes(self) -> t.Dict[str, t.Any]:
+    def expand_nodes(self) -> t.List[PEDNode]:
         # TODO i just made this up i think its more complex than this as pd is involved here. @christiaan
+        weighted_scores = self.weighted_scores
         def merge_scorecard_values(**kwargs):
             # Create a weighted sum of the scores
             result = 0.0
-            for weighted_score in self.weighted_scores:
+            for weighted_score in weighted_scores:
                 score_value = kwargs[weighted_score.score_name]
                 result += score_value * weighted_score.weight
             return result
         
-        # Create input mapping for all the weighted scores
-        input_mapping = {ws.score_name: ws.score_name for ws in self.weighted_scores}
+        input_map = {ws.score_name: ws.score_name for ws in self.weighted_scores}
         
-        return {
-            self.output_name: create_node_with_mapping(
-                merge_scorecard_values,
-                input_mapping=input_mapping
+        return [
+            PEDNode(
+                name=self.output_name,
+                callable=merge_scorecard_values,
+                original_callable=merge_scorecard_values,
+                input_map=input_map,
             )
-        }
+        ]

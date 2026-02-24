@@ -1,8 +1,6 @@
 import typing as t
 import polars as pl
-
-if t.TYPE_CHECKING:
-    from .config import Expression, DecisionTableConfig
+from .config import Expression
 
 
 def default_form_output_struct_from_row(
@@ -27,7 +25,7 @@ def default_form_output_struct_from_row(
 
 def calculate_decision_table_output(
     parameters: pl.DataFrame,
-    expression: "Expression",
+    expression: Expression,
     output_columns: t.List[str],
     default: t.Optional[t.List[t.Any]] = None,
     output_fn: t.Callable[[t.Dict[str, t.Any], t.List[str]], pl.Expr] = default_form_output_struct_from_row,
@@ -87,29 +85,3 @@ def calculate_decision_table_output(
         return default_output
     else:
         return output_expr.otherwise(default_output)
-
-
-
-
-def extract_struct_fields(
-    df: pl.DataFrame,
-    struct_column: str,
-    field_names: t.List[str]
-) -> pl.DataFrame:
-    """
-    Extract fields from a struct column into separate columns.
-    
-    Args:
-        df: Input DataFrame
-        struct_column: Name of the struct column
-        field_names: List of field names to extract
-        
-    Returns:
-        pl.DataFrame: DataFrame with extracted fields as separate columns
-    """
-    extractions = []
-    for field_name in field_names:
-        extractions.append(
-            pl.col(struct_column).struct.field(field_name).alias(field_name)
-        )
-    return df.with_columns(extractions)

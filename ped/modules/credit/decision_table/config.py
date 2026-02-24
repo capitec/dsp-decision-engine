@@ -1,10 +1,7 @@
 import typing as t
 import polars as pl
 from pydantic import BaseModel, Discriminator, Tag, model_validator, PrivateAttr
-from ..core import BaseModule, PEDNode
-from ..util import create_node_with_mapping
 from ped.exceptions import wrap_import_errors
-
 
 if t.TYPE_CHECKING:
     import pandera.pandas as pa
@@ -235,52 +232,3 @@ Expression = t.Annotated[
 # Update forward references
 AndExpression.model_rebuild()
 OrExpression.model_rebuild()
-
-
-
-class DecisionTableModule(BaseModule):
-    type: t.Literal["decision_table"] = "decision_table"
-    parameters: ParametersConfig
-    expression: Expression
-    outputs: t.List[str]
-    default: t.Optional[t.List[t.Any]] = None
-    
-    @model_validator(mode='after')
-    def validate_config(self):
-        # Validate that all output columns exist in parameters
-        for output in self.outputs:
-            if output not in self.parameters.columns:
-                raise ValueError(f"Output column '{output}' not found in parameters columns")
-        
-        # Validate default has correct length if specified
-        if self.default is not None:
-            if len(self.default) != len(self.outputs):
-                raise ValueError(f"Default values length ({len(self.default)}) must match outputs length ({len(self.outputs)})")
-        
-        # Validate expression parameters
-        self.expression.validate_parameters(self.parameters)
-        
-        return self
-    
-    def expand_nodes(self, config: t.Dict[str, t.Any]) -> t.List[PEDNode]: # noqa: ARG002
-        """
-        Expand the decision table configuration into Hamilton nodes.
-        
-        Returns:
-            Dict mapping output node names to Hamilton nodes
-        """
-        from .impl import calculate_decision_table_output
-        
-        # Create the main decision table evaluation node
-        return [
-            create_node_with_mapping(
-                calculate_decision_table_output,
-                name="output",
-                partial_kwargs={
-                    "parameters": self.parameters._parameters_df,
-                    "expression": self.expression,
-                    "output_columns": self.outputs,
-                    "default": self.default
-                }
-            )
-        ]
