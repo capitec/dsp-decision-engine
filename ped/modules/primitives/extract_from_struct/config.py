@@ -1,7 +1,7 @@
 import typing as t
 import polars as pl
-from ..core import BaseModule
-from ..util import create_node_with_mapping
+from ped.modules.core import BaseModule
+from ped.modules.util import create_node_with_mapping
 
 class ExtractFromStructModule(BaseModule):
     type: t.Literal['extract_from_struct'] = "extract_from_struct"
