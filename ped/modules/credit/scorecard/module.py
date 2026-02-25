@@ -144,11 +144,21 @@ class ScoredVariable(BaseModule):
 
     def expand_nodes(self) -> t.List[PEDNode]:
         nodes = []
-        
-        if self.raw_output_name is not None:
+
+        value_output_name = self.get_value_output_name()
+
+        # Determine the name of the intermediate struct node.
+        # If raw_output_name is explicitly set, use it (and always emit the node).
+        # If only value_output_name is set we still need the struct, so use a
+        # private internal name that won't be exposed as a graph output.
+        struct_node_name = self.raw_output_name
+        if struct_node_name is None and value_output_name is not None:
+            struct_node_name = f"_{self.variable_name}_raw"
+
+        if struct_node_name is not None:
             nodes.append(PEDNode.from_callable(
                 score_variable,
-                name=self.raw_output_name,
+                name=struct_node_name,
                 input_map={"input": self.variable_name},
                 static_kwargs={
                     "bound_bins": self._bound_bins,
@@ -158,8 +168,7 @@ class ScoredVariable(BaseModule):
                     "output_expr_fn": self.variable_struct_function.get_function() if self.variable_struct_function is not None else None
                 }
             ))
-        
-        value_output_name = self.get_value_output_name()
+
         if value_output_name is not None:
             value_func = (self.struct_to_score_function.get_function() 
                          if self.struct_to_score_function is not None 
@@ -167,7 +176,7 @@ class ScoredVariable(BaseModule):
             nodes.append(PEDNode.from_callable(
                 value_func,
                 name=value_output_name,
-                input_map={"struct": self.raw_output_name}
+                input_map={"struct": struct_node_name}
             ))
         
         return nodes
@@ -229,7 +238,7 @@ _TScoredVariable = t.Annotated[
 class ScoreCard(BaseModule):
     type: t.Literal["scorecard"] = "scorecard"
     variables: t.List[_TScoredVariable]
-    score_output_name: str = "score"
+    output_name: str = "score"
 
     @field_validator("variables", mode="after")
     @classmethod
@@ -253,7 +262,7 @@ class ScoreCard(BaseModule):
         input_map = {var_name: var_name for var in self.variables if (var_name := var.get_value_output_name())}
         
         nodes.append(PEDNode(
-            name=self.score_output_name,
+            name=self.output_name,
             callable=calculate_score,
             original_callable=calculate_score,
             input_map=input_map,

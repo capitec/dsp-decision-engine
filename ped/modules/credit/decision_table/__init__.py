@@ -7,7 +7,6 @@ from .module import (
 from .impl import (
     default_form_output_struct_from_row,
     calculate_decision_table_output,
-    extract_struct_fields,
 )
 
 __all__ = [

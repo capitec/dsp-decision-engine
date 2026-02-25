@@ -76,6 +76,10 @@ class BaseExpression(BaseModel):
         """Validate that required variables exist in parameters with correct types"""
         raise NotImplementedError
 
+    def get_variables(self) -> t.List[str]:
+        """Return the list of external input variable names this expression consumes."""
+        raise NotImplementedError
+
 
 class AndExpression(BaseExpression):
     typ: t.Literal["and"] = "and"
@@ -89,6 +93,16 @@ class AndExpression(BaseExpression):
         for expr in self.expressions:
             expr.validate_parameters(parameters)
 
+    def get_variables(self) -> t.List[str]:
+        seen = set()
+        result = []
+        for expr in self.expressions:
+            for v in expr.get_variables():
+                if v not in seen:
+                    seen.add(v)
+                    result.append(v)
+        return result
+
 
 class OrExpression(BaseExpression):
     typ: t.Literal["or"] = "or"
@@ -101,6 +115,16 @@ class OrExpression(BaseExpression):
     def validate_parameters(self, parameters: t.Dict[str, t.Any]) -> None:
         for expr in self.expressions:
             expr.validate_parameters(parameters)
+
+    def get_variables(self) -> t.List[str]:
+        seen = set()
+        result = []
+        for expr in self.expressions:
+            for v in expr.get_variables():
+                if v not in seen:
+                    seen.add(v)
+                    result.append(v)
+        return result
 
 
 class BetweenExpression(BaseExpression):
@@ -166,6 +190,9 @@ class BetweenExpression(BaseExpression):
         if not self.lower_bound_column and not self.upper_bound_column:
             raise ValueError("At least one of lower_bound_column or upper_bound_column must be specified")
 
+    def get_variables(self) -> t.List[str]:
+        return [self.variable]
+
 
 class InExpression(BaseExpression):
     typ: t.Literal["in"] = "in"
@@ -195,6 +222,9 @@ class InExpression(BaseExpression):
         if not (values_dtype and values_dtype.startswith("list")):
             raise ValueError(f"Values column '{self.values_column}' must be a list type, got {values_dtype}")
 
+    def get_variables(self) -> t.List[str]:
+        return [self.variable]
+
 
 class IsTrueExpression(BaseExpression):
     typ: t.Literal["is_true"] = "is_true"
@@ -210,6 +240,9 @@ class IsTrueExpression(BaseExpression):
         # Note: self.variable is an input variable, not a column in parameters
         # No validation needed for IsTrueExpression beyond basic structure
         pass
+
+    def get_variables(self) -> t.List[str]:
+        return [self.variable]
 
 
 def get_expression_type(expr_obj: t.Union[BaseExpression, dict]) -> str:

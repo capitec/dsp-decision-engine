@@ -35,7 +35,7 @@ class ConstructedGraphModules(RootModel):
     def execute(
         self,
         inputs: TInputType,
-        output_nodes:t.List[str]=[],
+        output_nodes:t.List[str],
         builder: "BaseBuilder"=None, # pyright: ignore[reportUnusedFunction]
         **kwargs
     ) -> TOutputType:

@@ -57,7 +57,7 @@ def default_output_expr(
         pl.lit(current_bin.name).alias("bin"),
     ]
     if input_name is not None:
-        common_args.append(input_name.alias("input_name"))
+        common_args.append(pl.lit(input_name).alias("input_name"))
     if isinstance(current_bin, BoundBin):
         return pl.struct(
             *common_args,

@@ -38,11 +38,15 @@ class DecisionTableModule(BaseModule):
         """
         from .impl import calculate_decision_table_output
         
+        variables = self.expression.get_variables()
+        input_map = {v: v for v in variables}
+
         # Create the main decision table evaluation node
         return [
             PEDNode.from_callable(
                 calculate_decision_table_output,
                 name="output",
+                input_map=input_map,
                 static_kwargs={
                     "parameters": self.parameters._parameters_df,
                     "expression": self.expression,

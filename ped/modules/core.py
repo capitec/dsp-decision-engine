@@ -3,6 +3,10 @@ import inspect
 from dataclasses import dataclass, field
 from pydantic import BaseModel, Field
 from abc import ABC, abstractmethod
+from ped.types import TInputType, TOutputType
+
+if t.TYPE_CHECKING:
+    from ped.modules import ConstructedGraphModules
 
 # WIth our approach relying on hamilton nodes makes it really complicated to implement namespaces
 # as each layer of namespacing requires a new wrapper function to map inputs to the original function
@@ -108,15 +112,36 @@ class PEDNode:
         name = name or func.__name__
         function_kwargs = inspect.signature(func).parameters
         static_kwargs = static_kwargs or {}
+        has_var_keyword = any(
+            v.kind == inspect.Parameter.VAR_KEYWORD
+            for v in function_kwargs.values()
+        )
+        named_params = {
+            k
+            for k, v in function_kwargs.items()
+            if v.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
+        }
         required_kwargs = {
-            k 
-            for k, v in function_kwargs.items() 
-            if v.default == inspect.Parameter.empty 
-            and v.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
-            and k not in static_kwargs  # Exclude parameters provided by static_kwargs
+            k
+            for k in named_params
+            if function_kwargs[k].default == inspect.Parameter.empty
+            and k not in static_kwargs
         }
         input_map = input_map or {}
-        input_map = {k: input_map.get(k, k) for k in required_kwargs}
+        # Base map: all required named params (use provided mapping or identity)
+        resolved_map = {k: input_map.get(k, k) for k in required_kwargs}
+        # Extra keys in input_map that don't correspond to any named param
+        extra_map_keys = {k for k in input_map if k not in named_params and k not in static_kwargs}
+        if extra_map_keys:
+            if not has_var_keyword:
+                raise ValueError(
+                    f"Parameters {sorted(extra_map_keys)} are in input_map but have no matching "
+                    f"parameter in '{func.__name__}' and the function has no **kwargs to absorb them."
+                )
+            # Forward them through **kwargs
+            for k in extra_map_keys:
+                resolved_map[k] = input_map[k]
+        input_map = resolved_map
         extra = extra or {}
         return cls(
             name=name,
@@ -188,6 +213,40 @@ class BaseModule(BaseModel, ABC):
         if isinstance(other, ChainModule):
             return other.model_copy(update={"modules": new_modules})
         return ChainModule(name=new_modules[0].name, modules=new_modules)
+    
+
+    def as_config(self) -> t.Dict[str, t.Any]:
+        """Serialise this module to a config dict for use in FlowConfiguration.
+
+        Fields that match their default value are excluded to keep the output
+        concise.  The ``type`` discriminator is always included so the dict can
+        be round-tripped through ``FlowConfiguration`` (which uses a
+        discriminated union on ``type`` to re-hydrate modules).
+        """
+        config = self.model_dump(exclude_defaults=True)
+        # ``type`` equals its own default by design, so exclude_defaults strips
+        # it — put it back so FlowConfiguration can discriminate the module.
+        config.setdefault("type", self.type)
+        return config
+
+    def as_constructed_graph_modules(self) -> "ConstructedGraphModules":
+        from ped.modules import ConstructedGraphModules
+        from ped.modules._ext import GraphModule
+        return ConstructedGraphModules(root=[GraphModule(root=self)])
+
+    def execute(
+        self, 
+        inputs: TInputType,
+        outputs: t.List[str] = None,
+        **kwargs
+    ) -> TOutputType:
+        """Execute this module with the given inputs. This is a convenience method that expands the nodes and executes them."""
+
+        constructed_modules = self.as_constructed_graph_modules()
+        if outputs is None:
+            assert self.output_name is not None, "Output nodes must be specified for execution if output_name is not defined on the module."
+            outputs = [f"{self.name}.{self.output_name}"] # TODO change this to self.name and auto infer self.name in the executor as f"{self.name}.{self.output_name}"
+        return constructed_modules.execute(inputs=inputs, output_nodes=outputs, **kwargs)
     
     @abstractmethod
     def expand_nodes(self) -> t.List[PEDNode]:

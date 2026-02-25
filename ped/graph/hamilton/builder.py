@@ -4,7 +4,9 @@ from pydantic import PrivateAttr
 from .adaptor import DeciderAdaptorHook
 from ..builder import BaseBuilder
 from .graph import HamiltonGraph
-from ped.modules import ConstructedGraphModules
+
+if t.TYPE_CHECKING:
+    from ped.modules import ConstructedGraphModules
 
 
 class HamiltonBuilder(BaseBuilder[HamiltonGraph]):
@@ -12,7 +14,7 @@ class HamiltonBuilder(BaseBuilder[HamiltonGraph]):
 
     def build_graph(
         self, 
-        modules: ConstructedGraphModules, 
+        modules: "ConstructedGraphModules", 
         output_nodes: t.List[str],
     ) -> HamiltonGraph:
         adaptor = DeciderAdaptorHook(modules=modules)
