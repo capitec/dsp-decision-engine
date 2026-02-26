@@ -45,43 +45,22 @@ def calculate_decision_table_output(
     Returns:
         pl.Expr: Expression that evaluates to output struct for first matching row
     """
+    # expression() returns one boolean pl.Expr per parameter row.
+    conditions = expression(parameters, **kwargs)
+
     output_expr = pl
-    
-    # Process each row in parameters DataFrame
-    for row_idx in range(len(parameters)):
-        # Get row values as dict
-        row_values = {}
-        for col in parameters.columns:
-            row_values[col] = parameters[col][row_idx]
-        
-        # Create kwargs for expression evaluation (row parameters + input variables)
-        expr_kwargs = {}
-        # Add parameter values as literals
-        for col, value in row_values.items():
-            expr_kwargs[col] = pl.lit(value)
-        # Add input variables
-        expr_kwargs.update(kwargs)
-        
-        # Evaluate expression condition for this row
-        condition = expression(**expr_kwargs)
-        
-        # Create output for this row using output_fn
+    for condition, row_values in zip(conditions, parameters.iter_rows(named=True)):
         row_output = output_fn(row_values, output_columns)
-        
-        # Add to when/then chain
         output_expr = output_expr.when(condition).then(row_output)
-    
+
     # Handle default case
     if default is not None:
         default_values = {col: default[i] for i, col in enumerate(output_columns)}
         default_output = output_fn(default_values, output_columns)
     else:
-        # Create null struct for unmatched cases
         default_fields = [pl.lit(None).alias(col) for col in output_columns]
         default_output = pl.struct(*default_fields)
-    
+
     if output_expr is pl:
-        # No conditions, return default
         return default_output
-    else:
-        return output_expr.otherwise(default_output)
+    return output_expr.otherwise(default_output)
