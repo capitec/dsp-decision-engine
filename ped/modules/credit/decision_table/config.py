@@ -1,7 +1,9 @@
 import typing as t
 import polars as pl
-from pydantic import BaseModel, Discriminator, Tag, model_validator, PrivateAttr
+from pydantic import BaseModel, Field, model_validator, PrivateAttr
 from ped.exceptions import wrap_import_errors
+from ped._ext import TypeDiscriminatedBaseModule
+
 
 if t.TYPE_CHECKING:
     import pandera.pandas as pa
@@ -81,8 +83,8 @@ class BaseExpression(BaseModel):
         raise NotImplementedError
 
 
-class AndExpression(BaseExpression):
-    typ: t.Literal["and"] = "and"
+class AndExpression(TypeDiscriminatedBaseModule):
+    type: t.Literal["and"]
     expressions: t.List["Expression"]
     
     def __call__(self, **kwargs: pl.Expr) -> pl.Expr:
@@ -104,8 +106,8 @@ class AndExpression(BaseExpression):
         return result
 
 
-class OrExpression(BaseExpression):
-    typ: t.Literal["or"] = "or"
+class OrExpression(TypeDiscriminatedBaseModule):
+    type: t.Literal["or"]
     expressions: t.List["Expression"]
     
     def __call__(self, **kwargs: pl.Expr) -> pl.Expr:
@@ -127,8 +129,8 @@ class OrExpression(BaseExpression):
         return result
 
 
-class BetweenExpression(BaseExpression):
-    typ: t.Literal["between"] = "between"
+class BetweenExpression(TypeDiscriminatedBaseModule):
+    type: t.Literal["between"]
     variable: str
     lower_bound_column: t.Optional[str] = None
     upper_bound_column: t.Optional[str] = None
@@ -194,8 +196,8 @@ class BetweenExpression(BaseExpression):
         return [self.variable]
 
 
-class InExpression(BaseExpression):
-    typ: t.Literal["in"] = "in"
+class InExpression(TypeDiscriminatedBaseModule):
+    type: t.Literal["in"]
     variable: str
     values_column: str
     
@@ -226,8 +228,8 @@ class InExpression(BaseExpression):
         return [self.variable]
 
 
-class IsTrueExpression(BaseExpression):
-    typ: t.Literal["is_true"] = "is_true"
+class IsTrueExpression(TypeDiscriminatedBaseModule):
+    type: t.Literal["is_true"]
     variable: str
     
     def __call__(self, **kwargs: pl.Expr) -> pl.Expr:
@@ -245,21 +247,15 @@ class IsTrueExpression(BaseExpression):
         return [self.variable]
 
 
-def get_expression_type(expr_obj: t.Union[BaseExpression, dict]) -> str:
-    if isinstance(expr_obj, dict):
-        return expr_obj.get("typ", "unknown")
-    return expr_obj.typ
-
-
 Expression = t.Annotated[
     t.Union[
-        t.Annotated[AndExpression, Tag("and")],
-        t.Annotated[OrExpression, Tag("or")],
-        t.Annotated[BetweenExpression, Tag("between")],
-        t.Annotated[InExpression, Tag("in")],
-        t.Annotated[IsTrueExpression, Tag("is_true")]
+        AndExpression,
+        OrExpression,
+        BetweenExpression,
+        InExpression,
+        IsTrueExpression,
     ],
-    Discriminator(get_expression_type)
+    Field(discriminator="type")
 ]
 
 # Update forward references

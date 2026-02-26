@@ -1,8 +1,9 @@
 import typing as t
 from dataclasses import dataclass
-from pydantic import BaseModel, Field
+from pydantic import Field
 from abc import ABC, abstractmethod
 
+from ped._ext import TypeDiscriminatedBaseModule
 from ped.types import TInputType
 from ped.param.types import TVersionType, TParamValue
 
@@ -34,7 +35,7 @@ class DictVersionedSource(VersionedSource):
 TVersionedSource = t.TypeVar("TVersionedSource", bound=VersionedSource)
 
 
-class BaseSource(BaseModel, ABC, t.Generic[TVersionedSource]):
+class BaseSource(TypeDiscriminatedBaseModule, ABC, t.Generic[TVersionedSource]):
     cache_kwargs: t.Optional[t.Dict[str, t.Any]] = Field(default_factory=lambda: {"type": "default"})
 
     def __init_subclass__(cls, **kwargs):

@@ -1,12 +1,11 @@
 import typing as t
 from pydantic import PrivateAttr, Field
-from ...types import VersionedValue
 from ..core import BaseSource
 from .core import DatabaseSettings
 
 
 class PostgresSource(BaseSource):
-    type: t.Literal['postgres'] = "postgres"
+    type: t.Literal['postgres']
     db: DatabaseSettings
     
     # Private cache for row data

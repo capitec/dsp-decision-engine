@@ -1,9 +1,10 @@
 import typing as t
 import inspect
 from dataclasses import dataclass, field
-from pydantic import BaseModel, Field
+from pydantic import Field
 from abc import ABC, abstractmethod
 from ped.types import TInputType, TOutputType
+from ped._ext import TypeDiscriminatedBaseModule
 
 if t.TYPE_CHECKING:
     from ped.modules import ConstructedGraphModules
@@ -158,13 +159,7 @@ class PEDNode:
         )
 
 
-class BaseModule(BaseModel, ABC):
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-        if 'type' not in cls.__annotations__:
-            raise TypeError(f"{cls.__name__} must define a 'type' class variable")
-
-    type: str
+class BaseModule(TypeDiscriminatedBaseModule, ABC):
     name: str
     input_mapping: t.Dict[str, str] = Field(
         default_factory=dict, 

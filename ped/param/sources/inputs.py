@@ -10,7 +10,7 @@ class InputsSource(BaseSource[DictVersionedSource]):
     """
     This module gets the parameters from the inputs per request. Providing a version allows the system to not have to rebuild the models for each request but enables caching.
     """
-    type: t.Literal['inputs'] = "inputs"
+    type: t.Literal['inputs']
     base_key: str
     version_key: t.Optional[str] = None
     defaults: dict[str, t.Any] = Field(default_factory=dict)

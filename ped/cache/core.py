@@ -2,7 +2,8 @@ import typing as t
 import asyncio
 from abc import ABC, abstractmethod
 from enum import Enum
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import Field, PrivateAttr
+from ped._ext import TypeDiscriminatedBaseModule
 from contextlib import asynccontextmanager
 
 
@@ -59,7 +60,7 @@ class LockManager(t.Generic[TSourceVersions]):
                     self._lock_ref_counts.pop(source_versions, None)
 
 
-class BaseCache(BaseModel, ABC, t.Generic[TGraph, TSourceVersions]):
+class BaseCache(TypeDiscriminatedBaseModule, ABC, t.Generic[TGraph, TSourceVersions]):
     """Base class for all cache implementations."""
     
     locking_method: LockingMethod = Field(default=LockingMethod.LOCK_ON_BUILD)

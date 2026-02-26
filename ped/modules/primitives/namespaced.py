@@ -30,7 +30,7 @@ class NamespacedModule(BaseModule):
     * ``scoring.output``     – ProbabilityDefault's output  (promoted)
     """
 
-    type: t.Literal["namespaced"] = "namespaced"
+    type: t.Literal["namespaced"]
 
     modules: t.List[BaseModule]
     outputs: t.List[str] = Field(

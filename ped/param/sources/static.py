@@ -4,7 +4,7 @@ from ._ext import register_source
 from ped.types import TInputType
 
 class StaticSource(BaseSource[DictVersionedSource]):
-    type: t.Literal['static'] = "static"
+    type: t.Literal['static']
     values: dict[str, t.Any]
     # We dont want to return none here as it will then always rebuild for static which is very wasteful.
     version: t.Any = "unknown" 

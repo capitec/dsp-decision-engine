@@ -31,7 +31,7 @@ _TBin = t.Annotated[
 
 
 class ScoredVariable(BaseModule):
-    type: t.Literal["scored"] = "scored"
+    type: t.Literal["scored"]
     variable_name: str
     bins: t.List[_TBin]
     default: DefaultBin
@@ -186,7 +186,7 @@ class ScoredVariable(BaseModule):
 
 
 class AdjustedVariable(BaseModule):
-    type: t.Literal["adjusted"] = "adjusted"
+    type: t.Literal["adjusted"]
     variable: ScoredVariable
     offset: float = 0.0
     scale: float = 1.0
@@ -217,7 +217,7 @@ class AdjustedVariable(BaseModule):
         ]
     
 class ConstantScore(BaseModule):
-    type: t.Literal["constant"] = "constant"
+    type: t.Literal["constant"]
     score: float
     output_name: str = "constant_score"
 
@@ -236,7 +236,7 @@ _TScoredVariable = t.Annotated[
 ]
 
 class ScoreCard(BaseModule):
-    type: t.Literal["scorecard"] = "scorecard"
+    type: t.Literal["scorecard"]
     variables: t.List[_TScoredVariable]
     output_name: str = "score"
 
@@ -275,7 +275,7 @@ class ScoreCard(BaseModule):
     
 
 class ProbabilityDefault(BaseModule):
-    type: t.Literal["probability_default"] = "probability_default"
+    type: t.Literal["probability_default"]
 
     def expand_nodes(self) -> t.List[PEDNode]:
         return [
@@ -287,7 +287,7 @@ class ProbabilityDefault(BaseModule):
         ]
     
 class LogProbability(BaseModule):
-    type: t.Literal["log_probability"] = "log_probability"
+    type: t.Literal["log_probability"]
 
     def expand_nodes(self) -> t.List[PEDNode]:
         return [
@@ -300,7 +300,7 @@ class LogProbability(BaseModule):
         ]
     
 class ScoreFromPDO(BaseModule):
-    type: t.Literal["score_from_pdo"] = "score_from_pdo"
+    type: t.Literal["score_from_pdo"]
 
     def expand_nodes(self) -> t.List[PEDNode]:
         return [
@@ -317,7 +317,7 @@ class WeightedScore(t.NamedTuple):
     weight: float
 
 class MergeScorecardValues(BaseModule):
-    type: t.Literal["merge_scorecard_values"] = "merge_scorecard_values"
+    type: t.Literal["merge_scorecard_values"]
     weighted_scores: t.List[WeightedScore]
     output_name: str = "merged_scorecard_values"
 

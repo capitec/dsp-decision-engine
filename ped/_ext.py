@@ -1,6 +1,60 @@
+import inspect
 import typing as t
-from pydantic import create_model, RootModel, Field
+from abc import ABC
+from pydantic import create_model, RootModel, BaseModel, Field, model_validator
 from warnings import warn
+
+
+class TypeDiscriminatedBaseModule(BaseModel, ABC):
+    type: str 
+
+    _CLASS_TYPE_IDENTIFIER: t.ClassVar[str]
+
+    def __init_subclass__(cls, **kwargs):
+        """
+        We are basically using the below to ensure:
+        1. the class implements a type: Literal['value'] so we can use that as a discriminator for the union of all implementations of this class
+        2. We dont want there to be type: Literal['value'] = 'value' on the class because we making use of pydantic.model_dump(exclude_defaults=True) to exclude the type field when saving out modules, and if there is a default value then it will not be included in the dumped dict which breaks loading it back in.
+        3. We want to store what the value of Literal is so we can automatically initialise it when we construct the model Model() rather than needing Model(type='value') every time
+        """
+        super().__init_subclass__(**kwargs)
+
+        # Skip abstract classes. as this will be used as a base for multiple implementations.
+        if inspect.isabstract(cls):
+            return
+
+        # Ensure `type` declared
+        if "type" not in cls.__annotations__:
+            raise TypeError(f"{cls.__name__} must define a 'type' annotation")
+
+        annotation = cls.__annotations__["type"]
+
+        if t.get_origin(annotation) is not t.Literal:
+            raise TypeError(
+                f"{cls.__name__}.type must be typing.Literal[...]"
+            )
+
+        literal_values = t.get_args(annotation)
+
+        if len(literal_values) != 1:
+            raise TypeError(
+                f"{cls.__name__}.type must be a single-value Literal"
+            )
+
+        if "type" in cls.__dict__:
+            raise TypeError(
+                f"{cls.__name__}.type must not define a default value"
+            )
+
+        cls._CLASS_TYPE_IDENTIFIER = literal_values[0]
+
+    @model_validator(mode="before")
+    @classmethod
+    def auto_set_type(cls, values):
+        if isinstance(values, dict) and not inspect.isabstract(cls):
+            values.setdefault("type", cls._CLASS_TYPE_IDENTIFIER)
+        return values
+
 
 _TExtenableRootType = t.TypeVar("_TExtenableRootType")
 

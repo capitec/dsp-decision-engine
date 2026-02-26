@@ -3,7 +3,7 @@ import polars as pl
 from ped.modules.core import BaseModule, PEDNode
 
 class ExtractFromStructModule(BaseModule):
-    type: t.Literal['extract_from_struct'] = "extract_from_struct"
+    type: t.Literal['extract_from_struct']
     field_names: t.List[str]
 
     def expand_nodes(self) -> t.List[PEDNode]:

@@ -5,7 +5,7 @@ from ped.modules.core import BaseModule, PEDNode
 
 
 class ChainModule(BaseModule):
-    type: t.Literal["chain"] = "chain"
+    type: t.Literal["chain"]
     modules: t.List[BaseModule]
 
     @field_validator("modules", mode="after")

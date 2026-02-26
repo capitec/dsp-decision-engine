@@ -22,7 +22,7 @@ class HamiltonModule(BaseModule):
     name remains `<module_name>.<hamilton_namespace>.<node_name>`.
     """
 
-    type: t.Literal["hamilton"] = "hamilton"
+    type: t.Literal["hamilton"]
 
     module_paths: t.List[str] = Field(
         description=(

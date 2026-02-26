@@ -6,7 +6,7 @@ from .config import ParametersConfig, Expression
 
 
 class DecisionTableModule(BaseModule):
-    type: t.Literal["decision_table"] = "decision_table"
+    type: t.Literal["decision_table"]
     parameters: ParametersConfig
     expression: Expression
     outputs: t.List[str]

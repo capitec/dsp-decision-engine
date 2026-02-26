@@ -11,7 +11,7 @@ class NoCache(BaseCache[t.Any, t.Any]):
     the same interface as other cache implementations.
     """
     
-    type: t.Literal['none'] = "none"
+    type: t.Literal['none']
 
     def has(self, source_versions: t.Any) -> bool:
         """Always returns False since nothing is cached."""

@@ -47,7 +47,7 @@ class ExternalModule(NamespacedModule):
         the loaded config can be parameterized at construction time.
     """
 
-    type: t.Literal["external"] = "external"  # type: ignore[assignment]
+    type: t.Literal["external"]
 
     config_path: str
     parameters: t.Dict[str, t.Any] = Field(

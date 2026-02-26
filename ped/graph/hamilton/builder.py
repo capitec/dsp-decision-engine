@@ -10,7 +10,7 @@ if t.TYPE_CHECKING:
 
 
 class HamiltonBuilder(BaseBuilder[HamiltonGraph]):
-    type: t.Literal["hamilton"] = "hamilton"
+    type: t.Literal["hamilton"]
 
     def build_graph(
         self, 

@@ -12,7 +12,7 @@ class LRUCache(BaseCache[t.Any, t.Any]):
     items when the cache reaches its maximum size.
     """
     
-    type: t.Literal['lru'] = "lru"
+    type: t.Literal['lru']
     max_size: int = 1
     
     def __init__(self, **data):
