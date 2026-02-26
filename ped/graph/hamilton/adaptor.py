@@ -79,7 +79,7 @@ class DeciderAdaptorHook(BasePostGraphConstruct):
         
         # Convert PED modules to Hamilton nodes
         for module in self.modules.root:
-            ped_nodes = module.root.module_namespaced_nodes(module.root.name)
+            ped_nodes = module.root.module_namespaced_nodes()
             hamilton_nodes = ped_nodes_to_hamilton_nodes(ped_nodes)
             extra_nodes.update(hamilton_nodes)
         

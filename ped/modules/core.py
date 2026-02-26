@@ -60,9 +60,14 @@ class PEDNode:
         }
     )
 
+    @staticmethod
+    def calculate_namespaced_name(*parts: str) -> str:
+        """Calculate the fully qualified namespaced name for a node."""
+        return ".".join(parts)
+
     def namespaced_name_with_namespace(self, *additional_namespace: t.Tuple[str, ...]) -> str:
         """Returns the fully qualified name of the node, including its namespace and additional namespace."""
-        return ".".join(additional_namespace + self.namespace + (self.name,))
+        return self.calculate_namespaced_name(*additional_namespace, *self.namespace, self.name)
 
     @property
     def namespaced_name(self) -> str:
@@ -255,8 +260,8 @@ class BaseModule(BaseModel, ABC):
 
 
     def module_namespaced_nodes(
-        self, 
-        module_name: str,
+        self,
+        module_name: t.Optional[str] = None,
     ) -> t.List[PEDNode]:
         """
         Expand module nodes with namespace and apply input mapping.
@@ -273,10 +278,11 @@ class BaseModule(BaseModel, ABC):
             List of PEDNodes with namespace and input mapping applied
         """
         # Get the raw nodes from the module
+        module_name = module_name or self.name
         raw_nodes = self.expand_nodes()
         
         # Track all node names in this module for internal dependency mapping
-        node_map = {node.name: node for node in raw_nodes}
+        node_map = {node.namespaced_name: node for node in raw_nodes}
         
         namespaced_nodes = []
         for node in raw_nodes:
