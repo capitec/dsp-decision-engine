@@ -1,0 +1,204 @@
+{
+    "type": "external",
+    "name": "external_example",
+    "input_mapping": {},
+    "input_name": "input",
+    "output_name": "output",
+    "modules": [
+        {
+            "type": "scorecard",
+            "name": "my_scorecard",
+            "input_mapping": {},
+            "input_name": "input",
+            "output_name": "score",
+            "variables": [
+                {
+                    "type": "scored",
+                    "name": "income_var",
+                    "input_mapping": {},
+                    "input_name": "input",
+                    "output_name": "output",
+                    "variable_name": "income",
+                    "bins": [
+                        {
+                            "value": 50.0,
+                            "name": null,
+                            "lower_bound": null,
+                            "upper_bound": 30000.0
+                        },
+                        {
+                            "value": 100.0,
+                            "name": null,
+                            "lower_bound": 30000.0,
+                            "upper_bound": 60000.0
+                        },
+                        {
+                            "value": 150.0,
+                            "name": null,
+                            "lower_bound": 60000.0,
+                            "upper_bound": 100000.0
+                        },
+                        {
+                            "value": 200.0,
+                            "name": null,
+                            "lower_bound": 100000.0,
+                            "upper_bound": null
+                        }
+                    ],
+                    "default": {
+                        "value": 75.0,
+                        "name": null
+                    },
+                    "strict": true,
+                    "raw_output_name": null,
+                    "value_output_name": "income_score",
+                    "variable_struct_function": null,
+                    "struct_to_score_function": null
+                },
+                {
+                    "type": "scored",
+                    "name": "dti_var",
+                    "input_mapping": {},
+                    "input_name": "input",
+                    "output_name": "output",
+                    "variable_name": "debt_to_income",
+                    "bins": [
+                        {
+                            "value": 200.0,
+                            "name": null,
+                            "lower_bound": null,
+                            "upper_bound": 0.2
+                        },
+                        {
+                            "value": 150.0,
+                            "name": null,
+                            "lower_bound": 0.2,
+                            "upper_bound": 0.4
+                        },
+                        {
+                            "value": 100.0,
+                            "name": null,
+                            "lower_bound": 0.4,
+                            "upper_bound": 0.6
+                        },
+                        {
+                            "value": 50.0,
+                            "name": null,
+                            "lower_bound": 0.6,
+                            "upper_bound": null
+                        }
+                    ],
+                    "default": {
+                        "value": 100.0,
+                        "name": null
+                    },
+                    "strict": true,
+                    "raw_output_name": null,
+                    "value_output_name": "dti_score",
+                    "variable_struct_function": null,
+                    "struct_to_score_function": null
+                },
+                {
+                    "type": "scored",
+                    "name": "employment_var",
+                    "input_mapping": {},
+                    "input_name": "input",
+                    "output_name": "output",
+                    "variable_name": "employment_status",
+                    "bins": [
+                        {
+                            "value": 150.0,
+                            "name": null,
+                            "items": [
+                                "full_time"
+                            ]
+                        },
+                        {
+                            "value": 100.0,
+                            "name": null,
+                            "items": [
+                                "part_time"
+                            ]
+                        },
+                        {
+                            "value": 50.0,
+                            "name": null,
+                            "items": [
+                                "unemployed"
+                            ]
+                        }
+                    ],
+                    "default": {
+                        "value": 75.0,
+                        "name": null
+                    },
+                    "strict": true,
+                    "raw_output_name": null,
+                    "value_output_name": "employment_score",
+                    "variable_struct_function": null,
+                    "struct_to_score_function": null
+                }
+            ]
+        },
+        {
+            "type": "decision_table",
+            "name": "risk_band",
+            "input_mapping": {
+                "score": "my_scorecard.score"
+            },
+            "input_name": "input",
+            "output_name": "output",
+            "parameters": {
+                "columns": [
+                    "min_score",
+                    "max_score",
+                    "risk_label"
+                ],
+                "values": [
+                    [
+                        0,
+                        300,
+                        "high"
+                    ],
+                    [
+                        300,
+                        450,
+                        "medium"
+                    ],
+                    [
+                        450,
+                        600,
+                        "low"
+                    ],
+                    [
+                        600,
+                        null,
+                        "extremely low"
+                    ]
+                ],
+                "dtypes": {
+                    "min_score": "int",
+                    "max_score": "Optional[float]",
+                    "risk_label": "string"
+                }
+            },
+            "expression": {
+                "type": "between",
+                "variable": "score",
+                "lower_bound_column": "min_score",
+                "upper_bound_column": "max_score",
+                "mode": "lower_inclusive",
+                "allow_gaps": false
+            },
+            "outputs": [
+                "risk_label"
+            ],
+            "default": [
+                "unknown"
+            ]
+        }
+    ],
+    "outputs": [
+        "risk_band.output"
+    ]
+}

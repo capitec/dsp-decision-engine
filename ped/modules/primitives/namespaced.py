@@ -1,7 +1,10 @@
 import typing as t
 from pydantic import Field, field_validator
 from ped.modules.core import BaseModule, PEDNode
+from ped.modules._ext import GraphModule
 
+if t.TYPE_CHECKING:
+    from .external import ExternalModule
 
 class NamespacedModule(BaseModule):
     """Groups a set of child modules under a single namespace.
@@ -32,7 +35,7 @@ class NamespacedModule(BaseModule):
 
     type: t.Literal["namespaced"]
 
-    modules: t.List[BaseModule]
+    modules: t.List[GraphModule]
     outputs: t.List[str] = Field(
         default_factory=list,
         description=(
@@ -45,8 +48,8 @@ class NamespacedModule(BaseModule):
 
     @field_validator("modules", mode="after")
     @classmethod
-    def validate_unique_names(cls, modules: t.List[BaseModule]) -> t.List[BaseModule]:
-        names = [m.name for m in modules]
+    def validate_unique_names(cls, modules: t.List[GraphModule]) -> t.List[GraphModule]:
+        names = [m.root.name for m in modules]
         seen: set = set()
         duplicates = {n for n in names if n in seen or seen.add(n)}  # type: ignore[func-returns-value]
         if duplicates:
@@ -70,8 +73,37 @@ class NamespacedModule(BaseModule):
         """
         all_nodes: t.List[PEDNode] = []
         for module in self.modules:
-            all_nodes.extend(module.module_namespaced_nodes())
+            all_nodes.extend(module.root.module_namespaced_nodes())
         return all_nodes
+    
+    def as_external_module(
+        self,
+        module_name: str = None,
+        config_path: str = None,
+    ) -> "ExternalModule":
+        """Convert this NamespacedModule to an ExternalModule by serializing its config
+        and storing it in a temporary JSON file, then returning an ExternalReference
+        to that file. This is used by the Hamilton adaptor to convert nested modules
+        into a flat list of ExternalReferences.
+        """
+        from .external import ExternalModule, ExternalReference
+        
+        # Serialize this module's config to a dict
+        config_dict = self.model_dump(exclude={"type"})
+
+
+        ref = ExternalReference(
+            module_name=module_name or self.name,
+            **({} if config_path is None else {"config_path": config_path})
+        )
+        
+        # Create an ExternalModule with this config as its content
+        external_module = ExternalModule(
+            **config_dict,
+            ref=ref,
+        )
+        
+        return external_module
 
     # # ------------------------------------------------------------------ #
     # # Override: two-level namespacing + output promotion                  #

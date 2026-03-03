@@ -11,7 +11,7 @@ Computed nodes:
     combined_risk_score – weighted combination of both signals
 """
 import polars as pl
-from helper import mul
+from .helper import mul
 
 
 def income_scaled(income: pl.Expr) -> pl.Expr:
