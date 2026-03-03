@@ -1,7 +1,12 @@
 import typing as t
 import importlib
-from pydantic import Field
+from pydantic import Field, PrivateAttr, model_validator
 from ped.modules.core import BaseModule, PEDNode
+from ._importer import add_to_path
+
+if t.TYPE_CHECKING:
+    from types import ModuleType
+    from hamilton.node import NodeType
 
 
 class HamiltonModule(BaseModule):
@@ -32,6 +37,12 @@ class HamiltonModule(BaseModule):
             "Example: ['my_package.transforms', 'my_package.features']"
         )
     )
+    base_import_path: t.Optional[str] = Field(
+        default=None,
+        description=(
+            "The location to load into sys.paths before importing the modules"
+        )
+    )
     hamilton_config: t.Dict[str, t.Any] = Field(
         default_factory=dict,
         description=(
@@ -47,24 +58,42 @@ class HamiltonModule(BaseModule):
         ),
     )
 
+    _hamilton_nodes: t.List["NodeType"] = PrivateAttr()  # for caching imported modules
+
+    @staticmethod
+    def _import_modules(base_import_path: str, module_paths: t.List[str]) -> t.List["ModuleType"]:
+        """Import the specified modules and return the module objects."""
+        with add_to_path(base_import_path):
+            return [importlib.import_module(path) for path in module_paths]
+    
+    @staticmethod
+    def _build_hamilton_graph(modules: t.List["ModuleType"]) -> t.List["NodeType"]:
+        """Build the Hamilton FunctionGraph from the imported modules."""
+        from hamilton.driver import Builder
+        graph = Builder().with_modules(*modules).build().graph
+        return list(graph.nodes.values())
+
+    @model_validator(mode="after")
+    def validate_can_build_graph(self) -> "t.Self":
+        """Validate that we can successfully import the modules and build a Hamilton graph."""
+        try:
+            modules = self._import_modules(self.base_import_path, self.module_paths)
+        except ModuleNotFoundError as e:
+            raise ValueError(f"Failed to import {e.name} using additional path={self.base_import_path}. Please ensure you have configured the modules and the base import path correctly. Detail:\n{e}") from e
+        except ImportError as e:
+            raise ValueError(f"Failed to import modules. Detail:\n{e}") from e
+
+        try:
+            self._hamilton_nodes = self._build_hamilton_graph(modules)
+        except Exception as e:
+            raise ValueError(f"Failed to build Hamilton graph. Detail:\n{e}") from e
+        
+        return self
+
     def expand_nodes(self) -> t.List[PEDNode]:
-        from hamilton.graph import FunctionGraph
-        from hamilton.node import NodeType  # noqa: F401 – used via h_node.user_defined
-
-        # ── 1. Import all specified Python modules ────────────────────────────
-        loaded_modules = [importlib.import_module(path) for path in self.module_paths]
-
-        # ── 2. Build a Hamilton FunctionGraph ─────────────────────────────────
-        fn_graph = FunctionGraph.from_modules(
-            *loaded_modules,
-            config=self.hamilton_config,
-            allow_module_overrides=self.allow_module_overrides,
-        )
-
-        # ── 3. Convert Hamilton nodes → PEDNodes ──────────────────────────────
+        """Convert the Hamilton graph nodes to PEDNodes, preserving namespaces and wiring internal dependencies."""
         ped_nodes: t.List[PEDNode] = []
-
-        for h_node in fn_graph.nodes.values():
+        for h_node in self._hamilton_nodes:
             # Skip external / user-input nodes.
             # These are NOT computed — they represent runtime inputs whose values
             # are injected via the graph execution inputs dict.

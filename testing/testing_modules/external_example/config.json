@@ -1,0 +1,7 @@
+{
+    "type": "hamilton",
+    "name": "risk_features",
+    "module_paths": [
+        "testing_modules.external_example.flow"
+    ]
+}

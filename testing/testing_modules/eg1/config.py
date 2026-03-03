@@ -12,7 +12,7 @@ from .impl import (
 
 class EG1Module(BaseModule):
     """Example module 1 - spend analysis functions."""
-    type: t.Literal["eg1"] = "eg1"
+    type: t.Literal["eg1"]
     
     def expand_nodes(self) -> t.List[PEDNode]:
         return [
