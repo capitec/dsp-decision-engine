@@ -26,6 +26,7 @@ class ExternalReference(BaseModel):
     # Doing a bit of a hack here because we use this as the serialized model for below
     # and we use the model validate to inject the model.
     type: t.Literal["external"] = "external"
+    name: t.Optional[str] = Field(description="Name of the module in the flow. Default is to use the name of the namespaced node.", default=None)
     module_name: str = Field(description="Name of the external module being referenced")
     config_path: str = Field(
         description="Path to the JSON file containing the module definition. Must be relative to the module.", 
@@ -60,7 +61,10 @@ class ExternalReference(BaseModel):
         ):
             loaded_config = OmegaConf.to_object(OmegaConf.create(loaded_config))
         # Store a reference to this model so we can serialize it later
-        return loaded_config | {"ref": self}
+        extra = {"ref": self}
+        if self.name:
+            extra["name"] = self.name
+        return loaded_config | extra
 
 class ExternalModule(NamespacedModule):
     """
