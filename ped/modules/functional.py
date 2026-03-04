@@ -48,6 +48,7 @@ def generate_from_functions(module_name: str, *functions: t.Callable) -> t.Type[
                 )
                 nodes.append(node)
             return nodes
+    return TModule
 
 def generate_from_module(module_name: str, module: ModuleType) -> t.Type[BaseModule]:
     """Dynamically generate a BaseModule subclass from all the functions in a given module."""
