@@ -11,6 +11,6 @@ from ped._ext import TExtendableModel
 GraphAdapter = TExtendableModel[BaseAdapter]
 
 
-def register_graph_adaptor(provider_class: t.Type[BaseAdapter]) -> None: ...
+def register_graph_adapter(provider_class: t.Type[BaseAdapter]) -> None: ...
 
 __all__: list[str]

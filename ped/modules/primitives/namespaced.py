@@ -26,7 +26,7 @@ class NamespacedModule(BaseModule):
             outputs=["output"],        # pd's output node
         )
 
-    Resulting fully-qualified node names (assuming the adaptor calls
+    Resulting fully-qualified node names (assuming the adapter calls
     ``module_namespaced_nodes("scoring")``):
 
     * ``scoring.sc.output``  – ScoreCard's output (not promoted)
@@ -83,7 +83,7 @@ class NamespacedModule(BaseModule):
     ) -> "ExternalModule":
         """Convert this NamespacedModule to an ExternalModule by serializing its config
         and storing it in a temporary JSON file, then returning an ExternalReference
-        to that file. This is used by the Hamilton adaptor to convert nested modules
+        to that file. This is used by the Hamilton adapter to convert nested modules
         into a flat list of ExternalReferences.
         """
         from .external import ExternalModule, ExternalReference

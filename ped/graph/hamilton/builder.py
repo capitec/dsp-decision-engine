@@ -1,7 +1,7 @@
 import typing as t
 from hamilton.driver import Builder
 from pydantic import PrivateAttr
-from .adaptor import DeciderAdaptorHook
+from .adapter import DeciderAdapterHook
 from ..builder import BaseBuilder
 from .graph import HamiltonGraph
 
@@ -17,11 +17,11 @@ class HamiltonBuilder(BaseBuilder[HamiltonGraph]):
         modules: "ConstructedGraphModules", 
         output_nodes: t.List[str],
     ) -> HamiltonGraph:
-        adaptor = DeciderAdaptorHook(modules=modules)
+        adapter = DeciderAdapterHook(modules=modules)
         hamilton_builder = (
             Builder()
             # TODO we must maybe add some default result builders here
-            .with_adapter(adaptor)
+            .with_adapter(adapter)
         )
         hamilton_graph = hamilton_builder.build()
         return HamiltonGraph(hamilton_graph, default_outputs=output_nodes)

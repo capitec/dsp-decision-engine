@@ -57,7 +57,7 @@ def wrap_function_inputs(
 
 
 @dataclass
-class DeciderAdaptorHook(BasePostGraphConstruct):
+class DeciderAdapterHook(BasePostGraphConstruct):
     modules: "ConstructedGraphModules" = field(default=None)
 
     def __post_init__(self):

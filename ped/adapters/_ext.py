@@ -6,10 +6,10 @@ from .core import BaseAdapter
 from ped._ext import create_extendable_model
 
 
-GraphAdapter, register_graph_adaptor = create_extendable_model(
+GraphAdapter, register_graph_adapter = create_extendable_model(
     BaseAdapter, 
     discriminator_field="type",
     model_name="GraphAdapter"
 )
 
-__all__ = ['GraphAdapter', 'register_graph_adaptor', ]
+__all__ = ['GraphAdapter', 'register_graph_adapter', ]
