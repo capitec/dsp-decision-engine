@@ -232,7 +232,7 @@ class BaseModule(TypeDiscriminatedBaseModule, ABC):
     def as_constructed_graph_modules(self) -> "ConstructedGraphModules":
         from ped.modules import ConstructedGraphModules
         from ped.modules._ext import GraphModule
-        return ConstructedGraphModules(root=[GraphModule(root=self)])
+        return ConstructedGraphModules(modules=[GraphModule(root=self)])
 
     def execute(
         self, 

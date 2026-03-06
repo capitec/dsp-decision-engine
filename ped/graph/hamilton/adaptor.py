@@ -72,16 +72,15 @@ class DeciderAdaptorHook(BasePostGraphConstruct):
         self,
         *,
         graph: "graph.FunctionGraph",
-        modules: "ConstructedGraphModules",
+        modules: "t.List[ModuleType]", # Values passed bt hamilton
         config: t.Dict[str, t.Any],
     ):
         extra_nodes: t.Dict[str, "hamilton_node.Node"] = {}
         
         # Convert PED modules to Hamilton nodes
-        for module in self.modules.root:
-            ped_nodes = module.root.module_namespaced_nodes()
-            hamilton_nodes = ped_nodes_to_hamilton_nodes(ped_nodes)
-            extra_nodes.update(hamilton_nodes)
+        ped_nodes = self.modules.namespaced_nodes()
+        hamilton_nodes = ped_nodes_to_hamilton_nodes(ped_nodes)
+        extra_nodes.update(hamilton_nodes)
         
         graph.nodes = graph.with_nodes(extra_nodes).nodes
 

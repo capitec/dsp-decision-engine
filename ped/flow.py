@@ -10,8 +10,9 @@ from .param.param_source import ParameterSourceProvider, VersionedSource
 from .param.types import TVersionType
 from ped.types import TInputType
 from .graph import GraphBuilder, BaseGraph
-from .cache import CacheProvider, lru
+from .cache import CacheProvider
 from .modules import ConstructedGraphModules
+from ped.adapters import GraphAdapter, get_default_adapters
 from omegaconf import OmegaConf, DictConfig
 
 
@@ -52,6 +53,10 @@ class FlowConfiguration(BaseModel):
     outputs: t.List[str] = Field(
         default_factory=list,
         description="List of output node names for the graph."
+    )
+    adapters: t.List[GraphAdapter] = Field(
+        default_factory=get_default_adapters,
+        description="List of graph adapters to apply to the graph."
     )
 
     _modules_config: DictConfig = PrivateAttr(default=None)
@@ -145,7 +150,10 @@ class FlowConfiguration(BaseModel):
             rebuild_modules=rebuild_modules,
         )
         # We can add some additional information to the module config here if needed before we build the graph
-        return ConstructedGraphModules.model_validate(parameterized_module_config)
+        return ConstructedGraphModules(
+            modules = parameterized_module_config,
+            adapters = self.adapters
+        )
     
     async def build_graph(
         self,

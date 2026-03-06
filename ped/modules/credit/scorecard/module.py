@@ -14,7 +14,7 @@ from .impl import (
     log_odds_from_score,
     calculate_credit_score,
 )
-from ped.serializable import DefinedFunction
+from ped.serializable.function import DefinedFunction
 
 def get_bin_type(bin_obj: t.Union[BoundBin, ValuesBin, dict]) -> str:
     if isinstance(bin_obj, dict):
