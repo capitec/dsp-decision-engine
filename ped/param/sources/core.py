@@ -38,13 +38,13 @@ TVersionedSource = t.TypeVar("TVersionedSource", bound=VersionedSource)
 class BaseSource(TypeDiscriminatedBaseModule, ABC, t.Generic[TVersionedSource]):
     cache_kwargs: t.Optional[t.Dict[str, t.Any]] = Field(default_factory=lambda: {"type": "default"})
 
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-        # Skip validation for Pydantic's generic parameterizations
-        if hasattr(cls, '__pydantic_generic_metadata__'):
-            return
-        if 'type' not in cls.__annotations__:
-            raise TypeError(f"{cls.__name__} must define a 'type' class variable")
+    # def __init_subclass__(cls, **kwargs):
+    #     super().__init_subclass__(**kwargs)
+    #     # Skip validation for Pydantic's generic parameterizations
+    #     if hasattr(cls, '__pydantic_generic_metadata__'):
+    #         return
+    #     if 'type' not in cls.__annotations__:
+    #         raise TypeError(f"{cls.__name__} must define a 'type' class variable")
 
     @abstractmethod
     async def get_version(self, 

@@ -328,18 +328,101 @@ class StringNodeType(BaseNodeType[StringPatternConditionType]):
         condition: StringPatternConditionType = self.branches[branch_idx].when
         return condition.get_condition(feature_expr, inputs, parameters)
 
+
+# ---------------------------------------------------------------------------
+# Numerical node  (single comparison: feature op threshold)
+# ---------------------------------------------------------------------------
+
+NumericalOp = t.Literal["<=", "<", "==", ">", ">="]
+
+class NumericalConditionType(BaseModel):
+    """Condition type for a single numerical comparison (feature op threshold)."""
+    op: NumericalOp = "<="
+    threshold: t.Union[InputRef, float]
+
+    def get_required_parameters(self) -> t.Set[str]:
+        return {self.threshold.key} if isinstance(self.threshold, InputRef) else set()
+
+    def threshold_expr(self, parameters: t.Optional[pl.Expr]) -> pl.Expr:
+        if isinstance(self.threshold, InputRef):
+            return self.threshold.resolve(parameters)
+        return pl.lit(self.threshold)
+
+    def get_condition(self, feature: pl.Expr, parameters: t.Optional[pl.Expr]) -> pl.Expr:
+        t_expr = self.threshold_expr(parameters)
+        if self.op == "<=": return feature <= t_expr
+        if self.op == "<":  return feature < t_expr
+        if self.op == "==": return feature == t_expr
+        if self.op == ">":  return feature > t_expr
+        if self.op == ">=": return feature >= t_expr
+        raise ValueError(f"Unsupported operator: {self.op}")
+
+
+class NumericalNodeType(BaseNodeType[NumericalConditionType]):
+    """Node type for numerical comparison branching (feature op threshold)."""
+    type: t.Literal["numerical"] = "numerical"
+
+    def build_condition(self, feature_expr, branch_idx, inputs, parameters=None):
+        condition: NumericalConditionType = self.branches[branch_idx].when
+        return condition.get_condition(feature_expr, parameters)
+
+
+# ---------------------------------------------------------------------------
+# Categorical node  (feature is_in a list of values)
+# ---------------------------------------------------------------------------
+
+_CatValue = t.Union[int, float, str]
+
+class CategoricalConditionType(BaseModel):
+    """Condition type for categorical membership branching (feature is_in categories)."""
+    categories: t.Union[t.List[_CatValue], InputRef]
+    case_sensitive: bool = True  # only applies when category values are strings
+
+    def get_required_parameters(self) -> t.Set[str]:
+        return {self.categories.key} if isinstance(self.categories, InputRef) else set()
+
+    def get_condition(self, feature: pl.Expr, parameters: t.Optional[pl.Expr]) -> pl.Expr:
+        if isinstance(self.categories, InputRef):
+            # Single category value sourced from a runtime parameter
+            cat_expr = self.categories.resolve(parameters)
+            if not self.case_sensitive:
+                return feature.str.to_lowercase() == cat_expr.str.to_lowercase()
+            return feature == cat_expr
+
+        cats = self.categories
+        if not self.case_sensitive:
+            cats = [c.lower() if isinstance(c, str) else c for c in cats]
+            return feature.str.to_lowercase().is_in(cats)
+        return feature.is_in(cats)
+
+
+class CategoricalNodeType(BaseNodeType[CategoricalConditionType]):
+    """Node type for categorical membership branching."""
+    type: t.Literal["categorical"] = "categorical"
+
+    def build_condition(self, feature_expr, branch_idx, inputs, parameters=None):
+        condition: CategoricalConditionType = self.branches[branch_idx].when
+        return condition.get_condition(feature_expr, parameters)
+
+
 NodeType = t.Annotated[
     t.Union[
-        LeafNodeType, 
-        RangesNodeType, 
-        StringNodeType
+        LeafNodeType,
+        RangesNodeType,
+        NumericalNodeType,
+        CategoricalNodeType,
+        StringNodeType,
     ], Field(discriminator="type")
 ]
 
 TBranch = t.Union[
     BranchType[RangeConditionType],
+    BranchType[NumericalConditionType],
+    BranchType[CategoricalConditionType],
     BranchType[StringPatternConditionType],
 ]
 
 RangesNodeType.model_rebuild()
+NumericalNodeType.model_rebuild()
+CategoricalNodeType.model_rebuild()
 StringNodeType.model_rebuild()
