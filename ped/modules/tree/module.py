@@ -1,29 +1,30 @@
 import typing as t
 import enum
-import polars as pl
 from pydantic import Field
 from ped.modules.core import BaseModule, PEDNode
+from ped.serializable.function import DefinedFunction
 from .tree import Tree
-from .impl import OutputFn, execute_tree, execute_prioritized_trees
+from .shared import WithTreeOutput
+from .impl import execute_tree, execute_prioritized_trees
 from .nodes import NodeType
 
 
-class PrioritizationMode(enum.StrEnum):
+class PrioritizationMode(str, enum.Enum):
     first_match = "first_match"
     all = "all"
 
 
-class TreeModule(BaseModule, Tree):
+class TreeModule(Tree, BaseModule):
     """A single decision tree evaluated as a Polars expression."""
-    type: t.Literal["tree"] = "tree"
+    type: t.Literal["tree"]
     result_col: str = Field(default="result", description="Name of the output column / node")
-    output_fn: t.Optional[OutputFn] = Field(default=None, exclude=True)
+    output_fn: t.Optional[DefinedFunction] = None
 
     output_name: t.Optional[str] = "result"
 
     def expand_nodes(self) -> t.List[PEDNode]:
-        tree = self.tree
-        output_fn = self.output_fn
+        tree = self
+        output_fn = self.output_fn.get_function() if self.output_fn else None
 
         def _run(**inputs: pl.Expr) -> pl.Expr:
             return execute_tree(inputs=inputs, tree=tree, output_fn=output_fn)
@@ -40,55 +41,76 @@ class TreeModule(BaseModule, Tree):
         return [node]
 
 
-class PrioritizedTreeModule(BaseModule, Tree):
+class PrioritizedTreeModule(WithTreeOutput, BaseModule):
     """Multiple decision trees evaluated in order; the first real match wins."""
-    type: t.Literal["prioritized_tree"] = "prioritized_tree"
-    
+    type: t.Literal["prioritized_tree"]
+    result_col: str = Field(default="result", description="Name of the output column / node")
+    output_name: t.Optional[str] = "result"
+
     roots: t.List[NodeType]
     parameters_col: str = "parameters"
     default_parameters: t.Dict[str, t.Any] = Field(default_factory=dict)
-    default_expr: t.Optional[pl.Expr] = Field(
-        default=None,
-        exclude=True,
-        description="Fallback Polars expression when no tree matches. Defaults to pl.lit(None).",
-    )
     mode: PrioritizationMode = Field(
         default=PrioritizationMode.first_match,
         description="'first_match' returns the first tree that matches; 'all' is reserved for future use.",
     )
-    output_fn: t.Optional[OutputFn] = Field(default=None, exclude=True)
-    post_process_fn: t.Optional[t.Callable[[pl.Expr], pl.Expr]] = Field(default=None, exclude=True)
+    output_fn: t.Optional[DefinedFunction] = None
+    post_process_fn: t.Optional[DefinedFunction] = None
 
+    def _as_trees(self) -> t.List[Tree]:
+        """Build individual Tree objects (one per root) for execution."""
+        return [
+            Tree(
+                root=root,
+                output=self.output,
+                schema=self.schema,
+                default=self.default,
+                parameters_col=self.parameters_col,
+                default_parameters=self.default_parameters,
+            )
+            for root in self.roots
+        ]
+
+    def to_ui_tree(self) -> "V2Tree":
+        """Convert this module back to a v2 UI tree (inverse of v2 Tree.to_tree_module())."""
+        from ped.modules.tree.ui.v2.tree import Tree as V2Tree
+        all_nodes, all_edges, subtree_roots = [], [], []
+        for root in self.roots:
+            root_id, nodes, edges = root.to_ui_nodes()
+            all_nodes.extend(nodes)
+            all_edges.extend(edges)
+            subtree_roots.append(root_id)
+        return V2Tree(
+            nodes=all_nodes, edges=all_edges, subtrees=subtree_roots,
+            output=self.output, schema=self.schema, default=self.default,
+        )
 
     def expand_nodes(self) -> t.List[PEDNode]:
-        pass
+        import polars as pl
+        trees = self._as_trees()
+        default_expr = self.default_literal if self.default_literal is not None else pl.lit(None)
+        output_fn = self.output_fn.get_function() if self.output_fn else None
+        post_process_fn = self.post_process_fn.get_function() if self.post_process_fn else None
+
+        def _run(**inputs) -> pl.Expr:
+            return execute_prioritized_trees(
+                inputs=inputs,
+                trees=trees,
+                default_expr=default_expr,
+                output_fn=output_fn,
+                post_process_fn=post_process_fn,
+            )
+
+        required: t.Set[str] = set()
+        for tree in trees:
+            required |= tree.get_required_features()
+            if tree.get_required_parameters():
+                required.add(tree.parameters_col)
+
+        node = PEDNode(
+            name=self.result_col,
+            callable=_run,
+            input_map={col: col for col in required},
+        )
+        return [node]
         # ... ill do this later
-        # if self.mode != PrioritizationMode.first_match:
-        #     raise NotImplementedError(f"Prioritization mode '{self.mode}' is not yet implemented.")
-
-        # trees = self.trees
-        # default_expr = self.default_expr or pl.lit(None)
-        # output_fn = self.output_fn
-        # post_process_fn = self.post_process_fn
-
-        # def _run(**inputs: pl.Expr) -> pl.Expr:
-        #     return execute_prioritized_trees(
-        #         inputs=inputs,
-        #         trees=trees,
-        #         default_expr=default_expr,
-        #         output_fn=output_fn,
-        #         post_process_fn=post_process_fn,
-        #     )
-
-        # required: t.Set[str] = set()
-        # for tree in trees:
-        #     required |= tree.get_required_features()
-        #     if tree.get_required_parameters():
-        #         required.add(tree.parameters_col)
-
-        # node = PEDNode(
-        #     name=self.result_col,
-        #     callable=_run,
-        #     input_map={col: col for col in required},
-        # )
-        # return [node]

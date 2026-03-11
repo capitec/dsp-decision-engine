@@ -41,7 +41,12 @@ class PolarsSchema(RootModel):
         schema = handle_type(self.root)
         assert isinstance(schema, polars_dtypes.Struct), "Expected upper level to be a struct."
         try:
-            self._polars_schema = pl.Schema(schema.fields)
+            fields = [
+                (f.name if hasattr(f, 'name') else f[0],
+                 f.dtype if hasattr(f, 'dtype') else f[1])
+                for f in schema.fields
+            ]
+            self._polars_schema = pl.Schema(fields)
         except pl.exceptions.DuplicateError as e:
             raise ValueError(f"Found one or more duplicate keys in a struct field. Detail: {e}")
         return self
@@ -110,7 +115,7 @@ def handle_type(t: TType|'TStruct'):
     raise ValueError(f"Unexpected value {t}. Expected either a dict, list, string or explicit type")
 
 def handle_kv_pair(it: t.Iterable[t.Tuple[str, TType|'TStruct']]):
-    return [(k, handle_type(v)) for k,v in it]
+    return [pl.Field(k, handle_type(v)) for k,v in it]
 
 def get_type_from_str(t: str):
     return get_allowed_types().get(t.lower())

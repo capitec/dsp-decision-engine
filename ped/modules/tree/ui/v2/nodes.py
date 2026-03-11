@@ -34,20 +34,10 @@ class NumericalNode(BaseModel):
     NODE_TYPE: t.ClassVar[str] = "numerical_test_node"
     node_type: t.Literal[NODE_TYPE] = NODE_TYPE  # type: ignore[valid-type]
     feature: str
-
-
     comparison_op: t.Literal["<=", "<", "==", ">", ">="] = "<="
     threshold: t.Union[float, VariableReference] = Field(
-        description="Direct threshold value", default=None
+        description="Direct threshold value or a variable reference",
     )
-
-    @model_validator(mode="after")
-    def validate_threshold_or_variable(self) -> t_ext.Self:
-        if self.threshold is None and len(self.variables) != 1:
-            raise ValueError(
-                "A single variable must be provided if no threshold is given"
-            )
-        return self
 
 
 class CategoricalNode(BaseModel):
@@ -62,14 +52,6 @@ class CategoricalNode(BaseModel):
         default_factory=list, description="Direct category values"
     )
     category_list_right_child: bool = False
-
-    @model_validator(mode="after")
-    def validate_threshold_or_variable(self) -> t_ext.Self:
-        if len(self.category_list) == 0 and len(self.variables) != 1:
-            raise ValueError(
-                "One or more variables must be given if no categories are provided."
-            )
-        return self
 
 
 class StringMatchNode(BaseModel):
@@ -87,16 +69,6 @@ class StringMatchNode(BaseModel):
     )
     case_sensitive: bool = True
     match_any: bool = True
-
-    @model_validator(mode="after")
-    def validate_threshold_or_variable(self) -> t_ext.Self:
-        if not self.match_any and len(self.variables):
-            raise ValueError("String match node only supports variables on match_any.")
-        if len(self.patterns) == 0 and len(self.variables) != 1:
-            raise ValueError(
-                "One or more variables must be given if no patterns are provided."
-            )
-        return self
 
 
 class LeafNode(BaseModel):

@@ -1,0 +1,29 @@
+{
+  "metadata": {
+    "name": "basic_scorecard_test",
+    "description": "Single-variable scorecard – income banding",
+    "author": "tests"
+  },
+  "modules": [
+    {
+      "type": "scorecard",
+      "name": "my_scorecard",
+      "variables": [
+        {
+          "type": "scored",
+          "name": "income_var",
+          "variable_name": "income",
+          "bins": [
+            {"value": 50,  "upper_bound": 30000},
+            {"value": 100, "lower_bound": 30000, "upper_bound": 60000},
+            {"value": 150, "lower_bound": 60000, "upper_bound": 100000},
+            {"value": 200, "lower_bound": 100000}
+          ],
+          "default": {"value": 75},
+          "value_output_name": "income_score"
+        }
+      ]
+    }
+  ],
+  "outputs": ["my_scorecard.score"]
+}

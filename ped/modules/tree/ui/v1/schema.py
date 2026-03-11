@@ -311,13 +311,13 @@ class OutputSchema(BaseModel):
         # So for now we work around it.
         return len(self.default_values) > 0 and has_required_fields
 
-    @model_validator(mode="after")
-    def validate_default_values(self) -> "t_ext.Self":
-        if self.has_default_values():
-            errors = self.validate_data(self.default_values)
-            if errors:
-                raise ValueError(f"Default values validation errors: {errors}")
-        return self
+    # @model_validator(mode="after")
+    # def validate_default_values(self) -> "t_ext.Self":
+    #     if self.has_default_values():
+    #         errors = self.validate_data(self.default_values)
+    #         if errors:
+    #             raise ValueError(f"Default values validation errors: {errors}")
+    #     return self
 
     def validate_data(self, data: t.Dict[str, t.Any]) -> t.List[str]:
         """Validate output data against schema. Returns list of validation errors."""

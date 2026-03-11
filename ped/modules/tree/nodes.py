@@ -1,5 +1,5 @@
 import typing as t
-import regex as re
+import re
 import enum
 import polars as pl
 from abc import ABC, abstractmethod
@@ -7,11 +7,30 @@ from pydantic import BaseModel, Field, PrivateAttr, model_validator
 from dataclasses import dataclass, field
 
 
-class ConditionTypeProtocol(t.Protocol):
-    def get_required_parameters(self) -> t.Set[str]: ...
+class NodePosition(BaseModel):
+    x: float = 0.0
+    y: float = 0.0
 
 
-_TConditionType = t.TypeVar("_TConditionType", bound=ConditionTypeProtocol)
+class NodeMeta(BaseModel):
+    """Execution-agnostic metadata attached to a node.
+    Currently used to preserve UI layout positions through round-trip conversion.
+    """
+    position: t.Optional[NodePosition] = None
+
+
+def _get_ui_position(meta: "NodeMeta") -> "t.Any":
+    """Resolve meta.position to a v2 UI Position, defaulting to (0, 0)."""
+    from ped.modules.tree.ui.v2.nodes import Position
+    pos = meta.position
+    return Position(x=pos.x, y=pos.y) if pos else Position(x=0.0, y=0.0)
+
+
+# class ConditionTypeProtocol(t.Protocol):
+#     def get_required_parameters(self) -> t.Set[str]: ...
+
+
+_TConditionType = t.TypeVar("_TConditionType")
 
 class BranchType(BaseModel, t.Generic[_TConditionType]):
     when: _TConditionType
@@ -53,12 +72,22 @@ class LeafNodeType(BaseModel):
         default=-1,
         description="Index into the output literals table. -1 marks a default/no-match leaf."
     )
+    meta: NodeMeta = Field(default_factory=NodeMeta, description="Optional execution-agnostic metadata (e.g. UI position).")
 
     def get_required_features(self) -> t.Set[str]:
         return set()
 
     def get_required_parameters(self) -> t.Set[str]:
         return set()
+
+    def _as_ui_node(self, node_id: str):
+        from ped.modules.tree.ui.v2.nodes import PositionedNode, LeafNode as V2Leaf
+        return PositionedNode(id=node_id, position=_get_ui_position(self.meta), data=V2Leaf(leaf_value=self.result_idx))
+
+    def to_ui_nodes(self):
+        from uuid import uuid4
+        nid = str(uuid4())
+        return nid, [self._as_ui_node(nid)], []
 
     def build_expression(
         self,
@@ -83,6 +112,7 @@ class BaseNodeType(BaseModel, t.Generic[_TConditionType], ABC):
     feature: str = Field(description="Feature to apply the node logic on")
     branches: t.List[BranchType[_TConditionType]] = Field(description="Branching logic for the node")
     otherwise: "NodeType" = Field(description="Default branch if no conditions are met")
+    meta: NodeMeta = Field(default_factory=NodeMeta, description="Optional execution-agnostic metadata (e.g. UI position).")
 
     def get_nodes_required_parameters(self) -> t.Set[str]:
         return set().union(*(b.when.get_required_parameters() for b in self.branches))
@@ -98,6 +128,35 @@ class BaseNodeType(BaseModel, t.Generic[_TConditionType], ABC):
             *(b.then.get_required_features() for b in self.branches),
             self.otherwise.get_required_features(),
         )
+
+    @abstractmethod
+    def _as_ui_node(self, node_id: str):
+        """Return the UI PositionedNode for this node only (no children)."""
+        ...
+
+    def to_ui_nodes(self):
+        """Recursively convert this node and all children to v2 UI nodes and edges."""
+        from uuid import uuid4
+        from ped.modules.tree.ui.v1.edges import MultiSourceEdge, MultiEdgeData
+        nid = str(uuid4())
+        all_nodes = [self._as_ui_node(nid)]
+        all_edges = []
+        for i, branch in enumerate(self.branches):
+            child_id, child_nodes, child_edges = branch.then.to_ui_nodes()
+            all_nodes.extend(child_nodes)
+            all_edges.extend(child_edges)
+            all_edges.append(MultiSourceEdge(
+                id=f"{nid}:{child_id}", source=nid, target=child_id,
+                data=MultiEdgeData(sourceIndex=[i]),
+            ))
+        oth_id, oth_nodes, oth_edges = self.otherwise.to_ui_nodes()
+        all_nodes.extend(oth_nodes)
+        all_edges.extend(oth_edges)
+        all_edges.append(MultiSourceEdge(
+            id=f"{nid}:{oth_id}", source=nid, target=oth_id,
+            data=MultiEdgeData(sourceIndex=[len(self.branches)]),
+        ))
+        return nid, all_nodes, all_edges
 
     @abstractmethod
     def build_condition(
@@ -143,7 +202,7 @@ class BaseNodeType(BaseModel, t.Generic[_TConditionType], ABC):
         if out_expr is pl: return default_expr
         return out_expr.otherwise(default_expr)
 
-class RangeEndLogic(enum.StrEnum):
+class RangeEndLogic(str, enum.Enum):
     lower_inclusive = "lower_inclusive"
     upper_inclusive = "upper_inclusive"
 
@@ -239,6 +298,18 @@ class RangesNodeType(BaseNodeType[RangeConditionType]):
         self._completed_branches = completed_branches
         return self
 
+    def _as_ui_node(self, node_id: str):
+        from ped.modules.tree.ui.v2.nodes import PositionedNode, RangeNode as V2Range
+        thresholds = [
+            b.when.max for b in self.branches
+            if isinstance(b.when, MinMaxConditionType) and b.when.max is not None
+        ]
+        return PositionedNode(
+            id=node_id, position=_get_ui_position(self.meta),
+            data=V2Range(feature=self.feature, thresholds=thresholds,
+                         default_left=self.end_logic == RangeEndLogic.upper_inclusive),
+        )
+
     def build_condition(self, feature_expr, branch_idx, inputs, parameters):
         condition = self._completed_branches[branch_idx]
         if isinstance(condition, EqualConditionType):
@@ -259,7 +330,7 @@ class RangesNodeType(BaseNodeType[RangeConditionType]):
             raise ValueError(f"Unsupported condition type: {type(condition)}")
 
 
-class StringPatternMatchType(enum.StrEnum):
+class StringPatternMatchType(str, enum.Enum):
     exact = "exact"
     starts_with = "starts_with"
     contains = "contains"
@@ -324,6 +395,84 @@ class StringNodeType(BaseNodeType[StringPatternConditionType]):
     """Node type for string equality-based branching."""
     type: t.Literal["string"] = "string"
 
+    def _as_ui_node(self, node_id: str):
+        from ped.modules.tree.ui.v2.nodes import PositionedNode, StringMatchNode as V2Str
+        if len(self.branches) == 1:
+            pat = self.branches[0].when.pattern
+            patterns = list(pat) if isinstance(pat, (set, frozenset)) else [pat]
+            match_any = isinstance(pat, (set, frozenset))
+        else:
+            patterns = [b.when.pattern for b in self.branches]
+            match_any = False
+        first_cond = self.branches[0].when
+        return PositionedNode(
+            id=node_id, position=_get_ui_position(self.meta),
+            data=V2Str(feature=self.feature, patterns=patterns,
+                       match_type=first_cond.match_type, case_sensitive=first_cond.case_sensitive,
+                       match_any=match_any),
+        )
+
+    def to_ui_nodes(self):
+        """Single branch → defer to base class (match_any=True path in _as_ui_node).
+        Multi-branch → explode any set-patterns to individual UI indices and
+        deduplicate shared child subtrees via MultiSourceEdge.sourceIndex."""
+        if len(self.branches) == 1:
+            return super().to_ui_nodes()
+
+        from uuid import uuid4
+        from ped.modules.tree.ui.v2.nodes import PositionedNode, StringMatchNode as V2Str
+        from ped.modules.tree.ui.v1.edges import MultiSourceEdge, MultiEdgeData
+
+        nid = str(uuid4())
+
+        # Explode each branch's pattern(s) into a flat list, tracking which UI
+        # indices belong to each branch in one pass.
+        # e.g. patterns [(a,b,c), (d,e), (f)] → flat [a,b,c,d,e,f]
+        #   branch 0 → sourceIndex=[0,1,2], branch 1 → sourceIndex=[3,4], branch 2 → sourceIndex=[5]
+        flat_patterns: t.List[str] = []
+        branch_ui_indices: t.List[t.List[int]] = []
+        ui_idx = 0
+        for branch in self.branches:
+            pat = branch.when.pattern
+            members = sorted(pat) if isinstance(pat, (set, frozenset)) else [pat]
+            branch_pattern_indices: t.List[int] = []
+            for p in members:
+                flat_patterns.append(p)
+                branch_pattern_indices.append(ui_idx)
+                ui_idx += 1
+            branch_ui_indices.append(branch_pattern_indices)
+
+        first_cond = self.branches[0].when
+        all_nodes = [PositionedNode(
+            id=nid, position=_get_ui_position(self.meta),
+            data=V2Str(
+                feature=self.feature,
+                patterns=flat_patterns,
+                match_type=first_cond.match_type,
+                case_sensitive=first_cond.case_sensitive,
+                match_any=False,
+            ),
+        )]
+        all_edges: t.List = []
+
+        for b_idx, indices in enumerate(branch_ui_indices):
+            child_id, child_nodes, child_edges = self.branches[b_idx].then.to_ui_nodes()
+            all_nodes.extend(child_nodes)
+            all_edges.extend(child_edges)
+            all_edges.append(MultiSourceEdge(
+                id=f"{nid}:{child_id}", source=nid, target=child_id,
+                data=MultiEdgeData(sourceIndex=indices),
+            ))
+
+        oth_id, oth_nodes, oth_edges = self.otherwise.to_ui_nodes()
+        all_nodes.extend(oth_nodes)
+        all_edges.extend(oth_edges)
+        all_edges.append(MultiSourceEdge(
+            id=f"{nid}:{oth_id}", source=nid, target=oth_id,
+            data=MultiEdgeData(sourceIndex=[len(flat_patterns)]),
+        ))
+        return nid, all_nodes, all_edges
+
     def build_condition(self, feature_expr, branch_idx, inputs, parameters=None):
         condition: StringPatternConditionType = self.branches[branch_idx].when
         return condition.get_condition(feature_expr, inputs, parameters)
@@ -361,6 +510,15 @@ class NumericalConditionType(BaseModel):
 class NumericalNodeType(BaseNodeType[NumericalConditionType]):
     """Node type for numerical comparison branching (feature op threshold)."""
     type: t.Literal["numerical"] = "numerical"
+
+    def _as_ui_node(self, node_id: str):
+        from ped.modules.tree.ui.v2.nodes import PositionedNode, NumericalNode as V2Num, VariableReference
+        cond: NumericalConditionType = self.branches[0].when
+        thr = VariableReference(name=cond.threshold.key) if isinstance(cond.threshold, InputRef) else cond.threshold
+        return PositionedNode(
+            id=node_id, position=_get_ui_position(self.meta),
+            data=V2Num(feature=self.feature, comparison_op=cond.op, threshold=thr),
+        )
 
     def build_condition(self, feature_expr, branch_idx, inputs, parameters=None):
         condition: NumericalConditionType = self.branches[branch_idx].when
@@ -400,6 +558,15 @@ class CategoricalNodeType(BaseNodeType[CategoricalConditionType]):
     """Node type for categorical membership branching."""
     type: t.Literal["categorical"] = "categorical"
 
+    def _as_ui_node(self, node_id: str):
+        from ped.modules.tree.ui.v2.nodes import PositionedNode, CategoricalNode as V2Cat, VariableReference
+        cond: CategoricalConditionType = self.branches[0].when
+        cats = [VariableReference(name=cond.categories.key)] if isinstance(cond.categories, InputRef) else list(cond.categories)
+        return PositionedNode(
+            id=node_id, position=_get_ui_position(self.meta),
+            data=V2Cat(feature=self.feature, category_list=cats),
+        )
+
     def build_condition(self, feature_expr, branch_idx, inputs, parameters=None):
         condition: CategoricalConditionType = self.branches[branch_idx].when
         return condition.get_condition(feature_expr, parameters)
@@ -422,6 +589,7 @@ TBranch = t.Union[
     BranchType[StringPatternConditionType],
 ]
 
+BranchType.model_rebuild()
 RangesNodeType.model_rebuild()
 NumericalNodeType.model_rebuild()
 CategoricalNodeType.model_rebuild()

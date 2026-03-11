@@ -47,7 +47,7 @@ def _collect_outputs_v1(
     for node in nodes:
         if not isinstance(node.data, LeafNode):
             continue
-        if node.data.leaf_value == -1 or node.data.output_data is None:
+        if node.data.output_data is None:
             node_id_output_map[node.id] = -1
             continue
         key = str(sorted(node.data.output_data.items()))
@@ -81,7 +81,23 @@ _LIST_ITEM_TYPE_TO_POLARS: t.Dict[FieldType, str] = {
 }
 
 
-def _convert_schema(output_schema: OutputSchema) -> t.Dict[str, t.Any]:
+_RECORD_FIELD_TYPE_TO_POLARS: t.Dict[str, str] = {
+    "string": "String",
+    "number": "Float64",
+    "boolean": "Boolean",
+}
+
+
+def _record_to_polars_struct(record_def: "RecordDefinition") -> t.Dict[str, t.Any]:
+    """Convert a v1 RecordDefinition to a nested PolarsSchema-compatible struct dict."""
+    from .schema import RecordDefinition
+    return {
+        field_name: _RECORD_FIELD_TYPE_TO_POLARS.get(field_type, "String")
+        for field_name, field_type in record_def.fields.items()
+    }
+
+
+def _convert_schema(output_schema: "OutputSchema") -> t.Dict[str, t.Any]:
     """Convert a v1 OutputSchema to the dict format accepted by PolarsSchema."""
     result: t.Dict[str, t.Any] = {}
     for field in output_schema.fields:
@@ -91,10 +107,12 @@ def _convert_schema(output_schema: OutputSchema) -> t.Dict[str, t.Any]:
             item_type = _LIST_ITEM_TYPE_TO_POLARS.get(field.list_type, "String")
             result[field.field_name] = {"List": item_type}
         elif field.field_type == FieldType.CUSTOM:
-            # Enum → Categorical, Record → String (complex struct conversion out of scope)
+            # Enum → Categorical, Record → nested Struct (preserves id + all record fields)
             from .schema import CustomTypeKind
             if field.custom_type and field.custom_type.type_kind == CustomTypeKind.ENUM:
                 result[field.field_name] = "Categorical"
+            elif field.custom_type and field.custom_type.type_kind == CustomTypeKind.RECORD:
+                result[field.field_name] = _record_to_polars_struct(field.custom_type.definition)
             else:
                 result[field.field_name] = "String"
         else:
@@ -197,7 +215,7 @@ def _upgrade_nodes(
     return [
         V2PositionedNode(
             id=node.id,
-            position=node.position,
+            position=node.position.model_dump(mode='python'),
             data=_upgrade_node_data(node.data, features, variables, node_id_output_map, node.id),
         )
         for node in nodes
@@ -294,7 +312,7 @@ class Tree(BaseModel):
             )
 
         return V2Tree(
-            metadata=self.metadata,
+            metadata=self.metadata.model_dump(mode='python'),
             edges=self.edges,
             nodes=_upgrade_nodes(self.nodes, self.features, self.variables, node_id_output_map),
             subtrees=[
