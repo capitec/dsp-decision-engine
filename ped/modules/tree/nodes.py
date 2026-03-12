@@ -52,18 +52,6 @@ DefaultBranch = IndexedBranch(index=None, branch=None)
 TBranchStack = t.Tuple[IndexedBranch,...]
 
 
-def default_result_builder(
-    inputs: t.Dict[str, pl.Expr],
-    branch_stack: TBranchStack,
-    config: BuilderConfig,
-    result_idx: int,
-) -> pl.Expr:
-    """Default output function: returns the output literal at result_idx,
-    or the default literal when result_idx is -1 (the no-match leaf)."""
-    if result_idx == -1:
-        return config.default_literal
-    return config.output_literals[result_idx]
-
 class LeafNodeType(BaseModel):
     """Base configuration for a node type."""
     IS_LEAF: t.ClassVar[bool] = True

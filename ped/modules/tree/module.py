@@ -5,8 +5,8 @@ from ped.modules.core import BaseModule, PEDNode
 from ped.serializable.function import DefinedFunction
 from .tree import Tree
 from .shared import WithTreeOutput
-from .impl import execute_tree, execute_prioritized_trees
-from .nodes import NodeType
+from .impl import execute_tree, execute_prioritized_trees, build_parameters_expr, default_result_builder, extract_value
+from .nodes import NodeType, BuilderConfig
 
 
 class PrioritizationMode(str, enum.Enum):
@@ -23,22 +23,47 @@ class TreeModule(Tree, BaseModule):
     output_name: t.Optional[str] = "result"
 
     def expand_nodes(self) -> t.List[PEDNode]:
-        tree = self
-        output_fn = self.output_fn.get_function() if self.output_fn else None
+        # tree = self
+        # output_fn = self.output_fn.get_function() if self.output_fn else None
 
-        def _run(**inputs: pl.Expr) -> pl.Expr:
-            return execute_tree(inputs=inputs, tree=tree, output_fn=output_fn)
+        # def _run(**inputs: pl.Expr) -> pl.Expr:
+        #     return execute_tree(inputs=inputs, tree=tree, output_fn=output_fn)
 
-        required = tree.get_required_features()
-        if tree.get_required_parameters():
-            required = required | {tree.parameters_col}
+        # required = tree.get_required_features()
+        # if tree.get_required_parameters():
+        #     required = required | {tree.parameters_col}
 
-        node = PEDNode(
-            name=self.result_col,
-            callable=_run,
-            input_map={col: col for col in required},
+        # node = PEDNode(
+        #     name=self.result_col,
+        #     callable=_run,
+        #     input_map={col: col for col in required},
+        # )
+        # return [node]
+        output_fn = self.output_fn.get_function() if self.output_fn else default_result_builder
+        config = BuilderConfig(
+            build_result_function=output_fn,
+            output_literals=self._output_literals,
+            default_literal=self._default_literal,
         )
-        return [node]
+        required_parameters = self.tree.get_required_parameters()
+        res = []
+        extra_input = {}
+        if required_parameters:
+            res.append(PEDNode.from_callable(
+                name="_parameter_expression",
+                func=build_parameters_expr,
+                input_map={"runtime_params": self.parameters_col},
+                static_kwargs={"default_params": self.default_parameters},
+            )) 
+            extra_input["_parameter_expression"] = "_parameter_expression"
+        res.append(PEDNode.from_callable(
+            name=self.result_col,
+            func=execute_tree,
+            input_map={col: col for col in self.get_required_features()}|extra_input,
+            static_kwargs={"tree": self.root, "builder_config": config},
+        ))
+        return res
+
 
 
 class PrioritizedTreeModule(WithTreeOutput, BaseModule):
@@ -86,31 +111,38 @@ class PrioritizedTreeModule(WithTreeOutput, BaseModule):
         )
 
     def expand_nodes(self) -> t.List[PEDNode]:
-        import polars as pl
-        trees = self._as_trees()
-        default_expr = self.default_literal if self.default_literal is not None else pl.lit(None)
-        output_fn = self.output_fn.get_function() if self.output_fn else None
-        post_process_fn = self.post_process_fn.get_function() if self.post_process_fn else None
-
-        def _run(**inputs) -> pl.Expr:
-            return execute_prioritized_trees(
-                inputs=inputs,
-                trees=trees,
-                default_expr=default_expr,
-                output_fn=output_fn,
-                post_process_fn=post_process_fn,
-            )
-
-        required: t.Set[str] = set()
-        for tree in trees:
-            required |= tree.get_required_features()
-            if tree.get_required_parameters():
-                required.add(tree.parameters_col)
-
-        node = PEDNode(
-            name=self.result_col,
-            callable=_run,
-            input_map={col: col for col in required},
+        output_fn = self.output_fn.get_function() if self.output_fn else default_result_builder
+        post_process_fn = self.post_process_fn.get_function() if self.post_process_fn else extract_value
+        config = BuilderConfig(
+            build_result_function=output_fn,
+            output_literals=self._output_literals,
+            default_literal=self._default_literal,
         )
-        return [node]
-        # ... ill do this later
+        required_parameters = set().union(*[r.get_required_parameters() for r in self.roots])
+        required_vars = set().union(*[r.get_required_features() for r in self.roots])
+        res = []
+        extra_input = {}
+        if required_parameters:
+            res.append(PEDNode.from_callable(
+                name="_parameter_expression",
+                func=build_parameters_expr,
+                input_map={"runtime_params": self.parameters_col},
+                static_kwargs={"default_params": self.default_parameters},
+            )) 
+            extra_input["parameters"] = "_parameter_expression"
+        if self.mode == PrioritizationMode.first_match:
+            res.append(PEDNode.from_callable(
+                name=self.result_col,
+                func=execute_prioritized_trees,
+                input_map={col: col for col in required_vars}|extra_input,
+                static_kwargs={"roots": self.roots, "builder_config": config, "post_process_fn": post_process_fn},
+            ))
+        elif self.mode == PrioritizationMode.all:
+            res.append(PEDNode.from_callable(
+                name=self.result_col,
+                func=execute_tree_list,
+                input_map={col: col for col in required_vars}|extra_input,
+                static_kwargs={"roots": self.roots, "builder_config": config},
+            ))
+
+        return res
