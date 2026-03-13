@@ -1,0 +1,42 @@
+{
+  "formatVersion": 1,
+  "nodes": [
+    {
+      "id": "range_root",
+      "position": {"x": 0, "y": 0},
+      "data": {
+        "node_type": "numerical_range_test_node",
+        "thresholds": [20.0, 30.0],
+        "split_feature_id": 0,
+        "default_left": false
+      }
+    },
+    {
+      "id": "leaf_low",
+      "position": {"x": -150, "y": 100},
+      "data": {"node_type": "leaf", "leaf_value": -1}
+    },
+    {
+      "id": "leaf_mid",
+      "position": {"x": 0, "y": 100},
+      "data": {"node_type": "leaf", "leaf_value": 0}
+    },
+    {
+      "id": "leaf_high",
+      "position": {"x": 150, "y": 100},
+      "data": {"node_type": "leaf", "leaf_value": 1}
+    }
+  ],
+  "edges": [
+    {"source": "range_root", "target": "leaf_low", "data": {"sourceIndex": 0}},
+    {"source": "range_root", "target": "leaf_mid", "data": {"sourceIndex": 1}},
+    {"source": "range_root", "target": "leaf_high", "data": {"sourceIndex": 2}}
+  ],
+  "features": ["amount"],
+  "metadata": {"name": "Range Tree", "description": "Tree with range test"},
+  "treeOutput": {
+    "columns": ["category"],
+    "data": [["low"], ["medium"], ["high"]]
+  },
+  "subtrees": [{"rootNodeId": "range_root", "priority": 0}]
+}

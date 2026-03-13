@@ -1,0 +1,426 @@
+{
+  "features": [
+    "feature_0",
+    "feature_1",
+    "feature_2"
+  ],
+  "nodes": [
+    {
+      "id": "node_1755083290333",
+      "position": {
+        "x": 200,
+        "y": 0
+      },
+      "data": {
+        "split_feature_id": 0,
+        "default_left": false,
+        "node_type": "string_match_node",
+        "patterns": [
+          "10",
+          "20"
+        ],
+        "match_type": "exact",
+        "case_sensitive": true,
+        "match_any": false,
+        "variables": []
+      }
+    },
+    {
+      "id": "node_1755083291702",
+      "position": {
+        "x": 0,
+        "y": 92
+      },
+      "data": {
+        "split_feature_id": 1,
+        "default_left": false,
+        "node_type": "numerical_range_test_node",
+        "thresholds": [
+          0,
+          10,
+          30,
+          40
+        ]
+      }
+    },
+    {
+      "id": "node_1755083300624",
+      "position": {
+        "x": 0,
+        "y": 214
+      },
+      "data": {
+        "node_type": "leaf",
+        "leaf_value": -1,
+        "output_data": {
+          "Action": {
+            "id": 2,
+            "Type": "NCALimitPercentage",
+            "Amount": 0.1,
+            "Recipient": "BANKS"
+          },
+          "number": 10,
+          "Outcome": "Action1"
+        }
+      }
+    },
+    {
+      "id": "node_1755170153559",
+      "position": {
+        "x": 200,
+        "y": 92
+      },
+      "data": {
+        "node_type": "leaf",
+        "leaf_value": -1,
+        "output_data": {
+          "Action": {
+            "id": 1,
+            "Type": "NCALimitAmount",
+            "Amount": 100,
+            "Recipient": "BANKS"
+          },
+          "number": 99,
+          "Outcome": "Action1"
+        }
+      }
+    },
+    {
+      "id": "node_1768490706466",
+      "position": {
+        "x": 400,
+        "y": 92
+      },
+      "data": {
+        "node_type": "leaf",
+        "leaf_value": -1,
+        "output_data": {
+          "Action": {
+            "id": 1,
+            "Type": "NCALimitAmount",
+            "Amount": 100,
+            "Recipient": "BANKS"
+          },
+          "number": 12,
+          "Outcome": "Action3"
+        }
+      }
+    },
+    {
+      "id": "node_1773047407334",
+      "position": {
+        "x": 700,
+        "y": 0
+      },
+      "data": {
+        "split_feature_id": 1,
+        "default_left": false,
+        "node_type": "numerical_test_node",
+        "threshold": 5,
+        "comparison_op": "<=",
+        "variables": []
+      }
+    },
+    {
+      "id": "node_1773047414071",
+      "position": {
+        "x": 600,
+        "y": 92
+      },
+      "data": {
+        "node_type": "leaf",
+        "leaf_value": -1,
+        "output_data": {
+          "Action": {
+            "id": 3,
+            "Type": "VMaxAmount",
+            "Amount": 200,
+            "Recipient": "VMAX"
+          },
+          "number": 10,
+          "Outcome": "Action1"
+        }
+      }
+    },
+    {
+      "id": "node_1773047450811",
+      "position": {
+        "x": 800,
+        "y": 92
+      },
+      "data": {
+        "split_feature_id": 1,
+        "default_left": false,
+        "node_type": "categorical_test_node",
+        "category_list": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "category_list_right_child": false,
+        "variables": []
+      }
+    },
+    {
+      "id": "node_1773047465895",
+      "position": {
+        "x": 800,
+        "y": 204
+      },
+      "data": {
+        "split_feature_id": 2,
+        "default_left": false,
+        "node_type": "numerical_range_test_node",
+        "thresholds": [
+          1,
+          2,
+          3
+        ]
+      }
+    },
+    {
+      "id": "node_1773047480741",
+      "position": {
+        "x": 800,
+        "y": 316
+      },
+      "data": {
+        "node_type": "leaf",
+        "leaf_value": -1,
+        "output_data": {
+          "Action": {
+            "id": 1,
+            "Type": "NCALimitAmount",
+            "Amount": 100,
+            "Recipient": "BANKS"
+          },
+          "number": 5,
+          "Outcome": "Action3"
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "name": "Test",
+    "description": "",
+    "project_id": "8be71217-c55c-472c-90dc-ecde838f6f0e",
+    "exported_at": "2026-03-09T09:12:37.841459"
+  },
+  "treeOutput": {
+    "columns": [
+      "Action",
+      "Description"
+    ],
+    "data": [
+      [
+        "Allow",
+        "Default Action"
+      ],
+      [
+        "Alert",
+        "A rule suggests that there is an alert"
+      ],
+      [
+        "Block",
+        "This is more serious and must be blocked"
+      ]
+    ],
+    "dtype": null
+  },
+  "edges": [
+    {
+      "id": "node_1755083290333:node_1755083291702",
+      "source": "node_1755083290333",
+      "target": "node_1755083291702",
+      "data": {
+        "sourceIndex": [
+          0
+        ]
+      }
+    },
+    {
+      "id": "node_1755083291702:node_1755083300624",
+      "source": "node_1755083291702",
+      "target": "node_1755083300624",
+      "data": {
+        "sourceIndex": [
+          4
+        ]
+      }
+    },
+    {
+      "id": "node_1755083290333:node_1755170153559",
+      "source": "node_1755083290333",
+      "target": "node_1755170153559",
+      "data": {
+        "sourceIndex": [
+          1
+        ]
+      }
+    },
+    {
+      "id": "node_1755083290333:node_1768490706466",
+      "source": "node_1755083290333",
+      "target": "node_1768490706466",
+      "data": {
+        "sourceIndex": [
+          2
+        ]
+      }
+    },
+    {
+      "id": "node_1773047407334:node_1773047414071",
+      "source": "node_1773047407334",
+      "target": "node_1773047414071",
+      "data": {
+        "sourceIndex": [
+          0
+        ]
+      }
+    },
+    {
+      "id": "node_1773047407334:node_1773047450811",
+      "source": "node_1773047407334",
+      "target": "node_1773047450811",
+      "data": {
+        "sourceIndex": [
+          1
+        ]
+      }
+    },
+    {
+      "id": "node_1773047450811:node_1773047465895",
+      "source": "node_1773047450811",
+      "target": "node_1773047465895",
+      "data": {
+        "sourceIndex": [
+          0
+        ]
+      }
+    },
+    {
+      "id": "node_1773047465895:node_1773047480741",
+      "source": "node_1773047465895",
+      "target": "node_1773047480741",
+      "data": {
+        "sourceIndex": [
+          0
+        ]
+      }
+    }
+  ],
+  "subtrees": [
+    {
+      "id": "subtree_node_1755083290333",
+      "name": "feature_0 exact(0)",
+      "order": 1,
+      "rootNodeId": "node_1755083290333",
+      "isActive": false,
+      "hidden": false
+    },
+    {
+      "id": "subtree_node_1773047407334",
+      "name": "feature_0 ≤ 5",
+      "order": 2,
+      "rootNodeId": "node_1773047407334",
+      "isActive": false,
+      "hidden": false
+    }
+  ],
+  "variables": {},
+  "outputSchema": {
+    "fields": [
+      {
+        "id": "temp_1773047319910_1uj2o3ej3",
+        "field_name": "Action",
+        "field_type": "custom",
+        "list_type": "string",
+        "is_required": true,
+        "custom_type": {
+          "id": "76a06234-a558-4f7a-bb71-d3cd72ccf392",
+          "name": "Action3",
+          "type_kind": "record",
+          "definition": {
+            "fields": {
+              "id": "number",
+              "Type": "string",
+              "Amount": "number",
+              "Recipient": "string"
+            },
+            "records": [
+              {
+                "id": 1,
+                "Type": "NCALimitAmount",
+                "Amount": 100,
+                "Recipient": "BANKS"
+              },
+              {
+                "id": 2,
+                "Type": "NCALimitPercentage",
+                "Amount": 0.1,
+                "Recipient": "BANKS"
+              },
+              {
+                "id": 3,
+                "Type": "VMaxAmount",
+                "Amount": 200,
+                "Recipient": "VMAX"
+              },
+              {
+                "id": 4,
+                "Type": "VMaxPercentage",
+                "Amount": 0.1,
+                "Recipient": "VMAX"
+              }
+            ]
+          },
+          "display_format": "{Type}: {Recipient} {Amount}"
+        },
+        "custom_type_id": "76a06234-a558-4f7a-bb71-d3cd72ccf392"
+      },
+      {
+        "id": "temp_1773047328762_2udfe2vdc",
+        "field_name": "Outcome",
+        "field_type": "custom",
+        "list_type": "string",
+        "is_required": true,
+        "custom_type": {
+          "id": "9112e99f-4a41-4c56-a055-5912c39affeb",
+          "name": "ActionEnum",
+          "type_kind": "enum",
+          "definition": {
+            "values": [
+              "Action3",
+              "Action1"
+            ]
+          }
+        },
+        "custom_type_id": "9112e99f-4a41-4c56-a055-5912c39affeb"
+      },
+      {
+        "id": "temp_1773047337822_abvxr2lz1",
+        "field_name": "number",
+        "field_type": "number",
+        "list_type": "string",
+        "is_required": true,
+        "custom_type": null,
+        "custom_type_id": null
+      }
+    ],
+    "display_format": "",
+    "default_values": {
+      "Action": {
+        "id": 2,
+        "Type": "NCALimitPercentage",
+        "Amount": 0.1,
+        "Recipient": "BANKS"
+      },
+      "number": 10,
+      "Outcome": "Action1"
+    }
+  },
+  "nodeOutputFormatVersion": 1,
+  "formatVersion": 1,
+  "variable_input_name": "variables"
+}
