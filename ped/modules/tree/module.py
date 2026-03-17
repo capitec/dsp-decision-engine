@@ -3,9 +3,9 @@ import enum
 from pydantic import Field
 from ped.modules.core import BaseModule, PEDNode
 from ped.serializable.function import DefinedFunction
-from .tree import Tree
+from .tree import Tree, SubTreeRoot
 from .shared import WithTreeOutput
-from .impl import execute_tree, execute_prioritized_trees, build_parameters_expr, default_result_builder, extract_value
+from .impl import execute_tree, execute_prioritized_trees, build_parameters_expr, default_result_builder, extract_value, execute_tree_list
 from .nodes import NodeType, BuilderConfig
 
 
@@ -72,7 +72,7 @@ class PrioritizedTreeModule(WithTreeOutput, BaseModule):
     result_col: str = Field(default="result", description="Name of the output column / node")
     output_name: t.Optional[str] = "result"
 
-    roots: t.List[NodeType]
+    roots: t.List[SubTreeRoot]
     parameters_col: str = "parameters"
     default_parameters: t.Dict[str, t.Any] = Field(default_factory=dict)
     mode: PrioritizationMode = Field(
@@ -118,8 +118,8 @@ class PrioritizedTreeModule(WithTreeOutput, BaseModule):
             output_literals=self._output_literals,
             default_literal=self._default_literal,
         )
-        required_parameters = set().union(*[r.get_required_parameters() for r in self.roots])
-        required_vars = set().union(*[r.get_required_features() for r in self.roots])
+        required_parameters = set().union(*[r.node.get_required_parameters() for r in self.roots])
+        required_vars = set().union(*[r.node.get_required_features() for r in self.roots])
         res = []
         extra_input = {}
         if required_parameters:

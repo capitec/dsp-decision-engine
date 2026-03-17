@@ -1,8 +1,16 @@
 import typing as t
-from pydantic import Field
+from pydantic import Field, BaseModel, ConfigDict
 from .nodes import NodeType
 from ped.serializable.dataframe import TDataFrameData, TDataFrameRow, PolarsSchema, build_polars_df
 from .shared import WithTreeOutput
+
+
+class RootMetadata(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    name: str
+class SubTreeRoot(BaseModel):
+    meta: RootMetadata
+    node: NodeType
 
 class Tree(WithTreeOutput):
     root: NodeType

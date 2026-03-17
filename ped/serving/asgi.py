@@ -5,18 +5,37 @@ from starlette.requests import Request
 from starlette import status
 from starlette.exceptions import HTTPException
 from ped.exceptions import PEDError
+from ped.serving.request_handler import initialize_request_handler, RequestHandler
 
+
+handler: RequestHandler = None
+
+async def predict(request: Request):
+    global handler
+    if handler is None:
+        return JSONResponse(
+            content={"message": "Server is initializing, please try again shortly."}, 
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE
+        )
+    parsed_input = await handler.parse_fn(request)
+    response = await handler.predict_fn(parsed_input)
+    return JSONResponse(content=response)
 
 def ping(request: Request):
+    if handler is None:
+        return JSONResponse(
+            content={"message": "Server is initializing, please try again shortly."}, 
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE
+        )
     return Response(status_code=status.HTTP_200_OK)
 
 
-def startup():
-    from ped import initialize_ped
-    initialize_ped()
+async def startup():
+    global handler
+    handler = await initialize_request_handler()
 
-def shutdown():
-    pass
+async def shutdown():
+    await handler.cleanup_fn()
 
 routes = [
     Route("/ping", ping, methods=["GET"]),

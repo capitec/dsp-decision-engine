@@ -1,8 +1,8 @@
 import typing as t
 import functools
 import polars as pl
-from .tree import Tree
-from .nodes import BuilderConfig, NodeType, TBranchStack
+from .tree import SubTreeRoot
+from .nodes import BuilderConfig, TBranchStack
 from dataclasses import replace
 
 
@@ -44,23 +44,23 @@ def build_parameters_expr(
 
 
 def execute_tree(
-    tree_root: NodeType,
+    tree_root: SubTreeRoot,
     builder_config: BuilderConfig,
     _parameter_expression: t.Optional[pl.Expr]=None,
     **inputs: pl.Expr,
 ) -> pl.Expr:
     """Execute a single decision tree and return the resulting Polars expression."""
 
-    return tree_root.build_expression(
+    return tree_root.node.build_expression(
         inputs=inputs,
         branch_stack=(),
-        config=builder_config,
+        config=replace(builder_config, root_meta=tree_root.meta),
         parameters=_parameter_expression,
     )
 
 
 def execute_tree_list(
-    roots: t.List[NodeType],
+    roots: t.List[SubTreeRoot],
     builder_config: BuilderConfig,
     parameters: t.Optional[pl.Expr]=None,
     **inputs: pl.Expr,
@@ -130,7 +130,7 @@ def extract_value(prioritized: pl.Expr) -> pl.Expr:
 
 
 def execute_prioritized_trees(
-    roots: t.List[NodeType],
+    roots: t.List[SubTreeRoot],
     builder_config: BuilderConfig,
     parameters: t.Optional[pl.Expr]=None,
     post_process_fn: t.Optional[t.Callable[[pl.Expr], pl.Expr]] = None,

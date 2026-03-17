@@ -285,7 +285,7 @@ class Tree(BaseModel):
 
     def upgrade(self):
         """Upgrade to the latest v2 tree format."""
-        from ..v2.tree import Tree as V2Tree
+        from ..v2.tree import Tree as V2Tree, SubTree as V2SubTree
         from ped.serializable.schema import PolarsSchema
 
         keyed_nodes = {n.id: n for n in self.nodes}
@@ -316,7 +316,7 @@ class Tree(BaseModel):
             edges=self.edges,
             nodes=_upgrade_nodes(self.nodes, self.features, self.variables, node_id_output_map),
             subtrees=[
-                s.rootNodeId
+                V2SubTree(id=s.rootNodeId, name=s.name)
                 for s in (sorted(self.subtrees, key=lambda st: st.order) if self.subtrees else [])
                 if s.rootNodeId in keyed_nodes
             ],

@@ -6,6 +6,9 @@ from abc import ABC, abstractmethod
 from pydantic import BaseModel, Field, PrivateAttr, model_validator
 from dataclasses import dataclass, field
 
+if t.TYPE_CHECKING:
+    from .tree import RootMetadata
+
 
 class NodePosition(BaseModel):
     x: float = 0.0
@@ -42,6 +45,7 @@ class BuilderConfig:
     build_result_function: t.Callable
     output_literals: t.List[pl.Expr]
     default_literal: t.Optional[pl.Expr] = None
+    root_meta: "t.Optional[RootMetadata]" = None
 
 
 class IndexedBranch(t.NamedTuple):

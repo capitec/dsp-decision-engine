@@ -25,12 +25,16 @@ class TreeMetadata(BaseModel):
     name: str
     description: str
 
+class SubTree(BaseModel):
+    id: t.Optional[str] = None
+    name: t.Optional[str] = None
+
 
 class Tree(WithTreeOutput):
     metadata: TreeMetadata | None = None
     edges: t.List[MultiSourceEdge]
     nodes: t.List[PositionedNode]
-    subtrees: t.List[str] = Field(default_factory=list)
+    subtrees: t.List[SubTree] = Field(default_factory=list)
 
     format_version: t.Literal[2] = Field(alias="formatVersion", default=2)
 
@@ -49,7 +53,7 @@ class Tree(WithTreeOutput):
         Each subtree root is converted recursively into an execution NodeType using
         the edge adjacency.  Unconnected child slots become no-match LeafNodeType(-1).
         """
-        from ped.modules.tree.module import PrioritizedTreeModule
+        from ped.modules.tree.module import PrioritizedTreeModule, SubTreeRoot
         from ped.modules.tree.nodes import (
             LeafNodeType, RangesNodeType, NumericalNodeType, CategoricalNodeType,
             StringNodeType, BranchType, MinMaxConditionType, NumericalConditionType,
@@ -155,7 +159,10 @@ class Tree(WithTreeOutput):
 
         if name is None:
             name = re.sub(r'\W+', '_', self.metadata.name.lower()) if self.metadata and self.metadata.name else "TreeModule"
-        roots = [_build(root_id) for root_id in self.subtrees]
+        roots = [
+            SubTreeRoot(node=_build(st.id), meta={"name":st.name})
+            for st in self.subtrees
+        ]
         return PrioritizedTreeModule(
             roots=roots,
             name=name,
