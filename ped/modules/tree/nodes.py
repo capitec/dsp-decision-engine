@@ -36,8 +36,12 @@ def _get_ui_position(meta: "NodeMeta") -> "t.Any":
 _TConditionType = t.TypeVar("_TConditionType")
 
 class BranchType(BaseModel, t.Generic[_TConditionType]):
-    when: _TConditionType
+    when: t.Union[_TConditionType, t.List[_TConditionType]]
     then: "NodeType"
+
+    @property
+    def whens(self) -> t.List[_TConditionType]:
+        return self.when if isinstance(self.when, list) else [self.when]
 
 
 @dataclass
@@ -107,7 +111,11 @@ class BaseNodeType(BaseModel, t.Generic[_TConditionType], ABC):
     meta: NodeMeta = Field(default_factory=NodeMeta, description="Optional execution-agnostic metadata (e.g. UI position).")
 
     def get_nodes_required_parameters(self) -> t.Set[str]:
-        return set().union(*(b.when.get_required_parameters() for b in self.branches))
+        return set().union(*(
+            when.get_required_parameters() 
+            for b in self.branches
+            for when in b.whens
+        ))
 
     def get_required_parameters(self) -> t.Set[str]:
         return self.get_nodes_required_parameters().union(
@@ -151,13 +159,13 @@ class BaseNodeType(BaseModel, t.Generic[_TConditionType], ABC):
         return nid, all_nodes, all_edges
 
     @abstractmethod
-    def build_condition(
+    def build_conditions(
         self,
         feature_expr: pl.Expr,
         branch_idx: int,
         inputs: t.Dict[str, pl.Expr],
         parameters: t.Optional[pl.Expr],
-    ) -> pl.Expr:
+    ) -> t.List[pl.Expr]:
         """Builds the Polars expression for the condition of a given branch index"""
         ...
 
@@ -171,20 +179,22 @@ class BaseNodeType(BaseModel, t.Generic[_TConditionType], ABC):
         """Builds the Polars expression for this node based on the input expressions and the branching logic."""
         out_expr = pl
         for idx, branch in enumerate(self.branches):
-            condition_expr = self.build_condition(
+            condition_exprs = self.build_conditions(
                 feature_expr=inputs[self.feature],
                 branch_idx=idx,
                 inputs=inputs,
                 parameters=parameters,
             )
-            out_expr = out_expr.when(condition_expr).then(
-                branch.then.build_expression(
+            then_expr = branch.then.build_expression(
                     inputs=inputs, 
                     branch_stack=branch_stack + (IndexedBranch(index=idx, branch=branch),), 
                     config=config,
                     parameters=parameters,
                 )
-            )
+            for condition_expr in condition_exprs:
+                out_expr = out_expr\
+                    .when(condition_expr)\
+                    .then(then_expr)
         default_expr = self.otherwise.build_expression(
             inputs=inputs, 
             branch_stack=branch_stack + (DefaultBranch,), 
@@ -267,34 +277,35 @@ class RangesNodeType(BaseNodeType[RangeConditionType]):
         completed_branches = []
         last_max = None
         for branch in self.branches:
-            condition = branch.when
-            if isinstance(condition, EqualConditionType):
-                completed_branches.append(condition)
-                # last_max = condition.equal
-            elif isinstance(condition, MinMaxConditionType):
-                min_val = condition.min
-                max_val = condition.max
-                if min_val is None and last_max is not None:
-                    min_val = last_max
-                if max_val is None and min_val is not None:
-                    max_val = min_val
-                if self.strict and min_val is not None and last_max is not None:
-                    if min_val != last_max:
-                        raise ValueError("Gaps between ranges are not allowed in strict mode")
-                    if not isinstance(max_val, InputRef) and not isinstance(last_max, InputRef) and max_val < last_max:
-                        raise ValueError("Overlapping ranges are not allowed in strict mode")
-                completed_branches.append(MinMaxConditionType(min=min_val, max=max_val))
-                last_max = max_val
-            else:
-                raise ValueError(f"Unsupported condition type: {type(condition)}")
+            for condition in branch.whens:
+                if isinstance(condition, EqualConditionType):
+                    completed_branches.append(condition)
+                    # last_max = condition.equal
+                elif isinstance(condition, MinMaxConditionType):
+                    min_val = condition.min
+                    max_val = condition.max
+                    if min_val is None and last_max is not None:
+                        min_val = last_max
+                    if max_val is None and min_val is not None:
+                        max_val = min_val
+                    if self.strict and min_val is not None and last_max is not None:
+                        if min_val != last_max:
+                            raise ValueError("Gaps between ranges are not allowed in strict mode")
+                        if not isinstance(max_val, InputRef) and not isinstance(last_max, InputRef) and max_val < last_max:
+                            raise ValueError("Overlapping ranges are not allowed in strict mode")
+                    completed_branches.append(MinMaxConditionType(min=min_val, max=max_val))
+                    last_max = max_val
+                else:
+                    raise ValueError(f"Unsupported condition type: {type(condition)}")
         self._completed_branches = completed_branches
         return self
 
     def _as_ui_node(self, node_id: str):
         from ped.modules.tree.ui.v2.nodes import PositionedNode, RangeNode as V2Range
         thresholds = [
-            b.when.max for b in self.branches
-            if isinstance(b.when, MinMaxConditionType) and b.when.max is not None
+            c.max for b in self.branches
+            for c in b.whens
+            if isinstance(c, MinMaxConditionType) and c.max is not None
         ]
         return PositionedNode(
             id=node_id, position=_get_ui_position(self.meta),
@@ -302,24 +313,34 @@ class RangesNodeType(BaseNodeType[RangeConditionType]):
                          default_left=self.end_logic == RangeEndLogic.upper_inclusive),
         )
 
-    def build_condition(self, feature_expr, branch_idx, inputs, parameters):
-        condition = self._completed_branches[branch_idx]
-        if isinstance(condition, EqualConditionType):
-            return feature_expr == condition.equal_expr(parameters)
-        elif isinstance(condition, MinMaxConditionType):
-            min_expr = condition.min_expr(parameters)
-            max_expr = condition.max_expr(parameters)
-            if self.end_logic == RangeEndLogic.upper_inclusive:
-                min_cond = feature_expr >= min_expr if min_expr is not None else None
-                max_cond = feature_expr < max_expr if max_expr is not None else None
+    def build_conditions(
+        self,
+        feature_expr: pl.Expr,
+        branch_idx: int,
+        inputs: t.Dict[str, pl.Expr],
+        parameters: t.Optional[pl.Expr],
+    ) -> t.List[pl.Expr]:
+        branch = self.branches[branch_idx]
+        conditions = []
+        for when in branch.whens:
+            if isinstance(when, EqualConditionType):
+                conditions.append(feature_expr == when.equal_expr(parameters))
+            elif isinstance(when, MinMaxConditionType):
+                min_expr = when.min_expr(parameters)
+                max_expr = when.max_expr(parameters)
+                if self.end_logic == RangeEndLogic.upper_inclusive:
+                    min_cond = feature_expr >= min_expr if min_expr is not None else None
+                    max_cond = feature_expr < max_expr if max_expr is not None else None
+                else:
+                    min_cond = feature_expr > min_expr if min_expr is not None else None
+                    max_cond = feature_expr <= max_expr if max_expr is not None else None
+                if min_cond is not None and max_cond is not None:
+                    conditions.append(min_cond & max_cond)
+                else:
+                    conditions.append(min_cond if max_cond is None else max_cond)
             else:
-                min_cond = feature_expr > min_expr if min_expr is not None else None
-                max_cond = feature_expr <= max_expr if max_expr is not None else None
-            if min_cond is not None and max_cond is not None:
-                return min_cond & max_cond
-            return min_cond or max_cond
-        else:
-            raise ValueError(f"Unsupported condition type: {type(condition)}")
+                raise ValueError(f"Unsupported condition type: {type(when)}")
+        return conditions
 
 
 class StringPatternMatchType(str, enum.Enum):
@@ -389,14 +410,15 @@ class StringNodeType(BaseNodeType[StringPatternConditionType]):
 
     def _as_ui_node(self, node_id: str):
         from ped.modules.tree.ui.v2.nodes import PositionedNode, StringMatchNode as V2Str
-        if len(self.branches) == 1:
-            pat = self.branches[0].when.pattern
+        all_conditions = [when for b in self.branches for when in b.whens]
+        if len(all_conditions) == 1:
+            pat = all_conditions[0].pattern
             patterns = list(pat) if isinstance(pat, (set, frozenset)) else [pat]
             match_any = isinstance(pat, (set, frozenset))
         else:
-            patterns = [b.when.pattern for b in self.branches]
+            patterns = [when.pattern for when in all_conditions]
             match_any = False
-        first_cond = self.branches[0].when
+        first_cond = all_conditions[0]
         return PositionedNode(
             id=node_id, position=_get_ui_position(self.meta),
             data=V2Str(feature=self.feature, patterns=patterns,
@@ -425,16 +447,17 @@ class StringNodeType(BaseNodeType[StringPatternConditionType]):
         branch_ui_indices: t.List[t.List[int]] = []
         ui_idx = 0
         for branch in self.branches:
-            pat = branch.when.pattern
-            members = sorted(pat) if isinstance(pat, (set, frozenset)) else [pat]
             branch_pattern_indices: t.List[int] = []
-            for p in members:
-                flat_patterns.append(p)
-                branch_pattern_indices.append(ui_idx)
-                ui_idx += 1
+            for when in branch.whens:
+                pat = when.pattern
+                members = sorted(pat) if isinstance(pat, (set, frozenset)) else [pat]
+                for p in members:
+                    flat_patterns.append(p)
+                    branch_pattern_indices.append(ui_idx)
+                    ui_idx += 1
             branch_ui_indices.append(branch_pattern_indices)
 
-        first_cond = self.branches[0].when
+        first_cond = self.branches[0].whens[0]
         all_nodes = [PositionedNode(
             id=nid, position=_get_ui_position(self.meta),
             data=V2Str(
@@ -465,9 +488,15 @@ class StringNodeType(BaseNodeType[StringPatternConditionType]):
         ))
         return nid, all_nodes, all_edges
 
-    def build_condition(self, feature_expr, branch_idx, inputs, parameters=None):
-        condition: StringPatternConditionType = self.branches[branch_idx].when
-        return condition.get_condition(feature_expr, inputs, parameters)
+    def build_conditions(
+        self,
+        feature_expr: pl.Expr,
+        branch_idx: int,
+        inputs: t.Dict[str, pl.Expr],
+        parameters: t.Optional[pl.Expr] = None,
+    ) -> t.List[pl.Expr]:
+        branch = self.branches[branch_idx]
+        return [when.get_condition(feature_expr, inputs, parameters) for when in branch.whens]
 
 
 # ---------------------------------------------------------------------------
@@ -503,18 +532,30 @@ class NumericalNodeType(BaseNodeType[NumericalConditionType]):
     """Node type for numerical comparison branching (feature op threshold)."""
     type: t.Literal["numerical"] = "numerical"
 
+    @model_validator(mode="after")
+    def validate_conditions(self) -> "t.Self":
+        assert len(self.branches) <= 1, "Numerical at most one branch and an otherwise"
+        assert len(self.branches) == 0 or len(self.branches[0].whens) == 1, "Numerical conditions must have exactly one 'when'"
+        return self
+
     def _as_ui_node(self, node_id: str):
         from ped.modules.tree.ui.v2.nodes import PositionedNode, NumericalNode as V2Num, VariableReference
-        cond: NumericalConditionType = self.branches[0].when
+        cond: NumericalConditionType = self.branches[0].whens[0]
         thr = VariableReference(name=cond.threshold.key) if isinstance(cond.threshold, InputRef) else cond.threshold
         return PositionedNode(
             id=node_id, position=_get_ui_position(self.meta),
             data=V2Num(feature=self.feature, comparison_op=cond.op, threshold=thr),
         )
 
-    def build_condition(self, feature_expr, branch_idx, inputs, parameters=None):
-        condition: NumericalConditionType = self.branches[branch_idx].when
-        return condition.get_condition(feature_expr, parameters)
+    def build_conditions(
+        self,
+        feature_expr: pl.Expr,
+        branch_idx: int,
+        inputs: t.Dict[str, pl.Expr],
+        parameters: t.Optional[pl.Expr] = None,
+    ) -> t.List[pl.Expr]:
+        branch = self.branches[branch_idx]
+        return [when.get_condition(feature_expr, parameters) for when in branch.whens]
 
 
 # ---------------------------------------------------------------------------
@@ -552,16 +593,22 @@ class CategoricalNodeType(BaseNodeType[CategoricalConditionType]):
 
     def _as_ui_node(self, node_id: str):
         from ped.modules.tree.ui.v2.nodes import PositionedNode, CategoricalNode as V2Cat, VariableReference
-        cond: CategoricalConditionType = self.branches[0].when
+        cond: CategoricalConditionType = self.branches[0].whens[0]
         cats = [VariableReference(name=cond.categories.key)] if isinstance(cond.categories, InputRef) else list(cond.categories)
         return PositionedNode(
             id=node_id, position=_get_ui_position(self.meta),
             data=V2Cat(feature=self.feature, category_list=cats),
         )
 
-    def build_condition(self, feature_expr, branch_idx, inputs, parameters=None):
-        condition: CategoricalConditionType = self.branches[branch_idx].when
-        return condition.get_condition(feature_expr, parameters)
+    def build_conditions(
+        self,
+        feature_expr: pl.Expr,
+        branch_idx: int,
+        inputs: t.Dict[str, pl.Expr],
+        parameters: t.Optional[pl.Expr] = None,
+    ) -> t.List[pl.Expr]:
+        branch = self.branches[branch_idx]
+        return [when.get_condition(feature_expr, parameters) for when in branch.whens]
 
 
 NodeType = t.Annotated[
