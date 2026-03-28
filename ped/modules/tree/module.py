@@ -81,6 +81,7 @@ class PrioritizedTreeModule(WithTreeOutput, BaseModule):
     )
     output_fn: t.Optional[DefinedFunction] = None
     post_process_fn: t.Optional[DefinedFunction] = None
+    format_prioritized_fn: t.Optional[DefinedFunction] = None
 
     def _as_trees(self) -> t.List[Tree]:
         """Build individual Tree objects (one per root) for execution."""
@@ -135,7 +136,7 @@ class PrioritizedTreeModule(WithTreeOutput, BaseModule):
                 name=self.result_col,
                 func=execute_prioritized_trees,
                 input_map={col: col for col in required_vars}|extra_input,
-                static_kwargs={"roots": self.roots, "builder_config": config, "post_process_fn": post_process_fn},
+                static_kwargs={"roots": self.roots, "builder_config": config, "post_process_fn": post_process_fn, "format_prioritized_fn": self.format_prioritized_fn.get_function() if self.format_prioritized_fn else None},
             ))
         elif self.mode == PrioritizationMode.all:
             res.append(PEDNode.from_callable(

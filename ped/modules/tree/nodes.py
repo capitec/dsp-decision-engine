@@ -3,8 +3,9 @@ import re
 import enum
 import polars as pl
 from abc import ABC, abstractmethod
-from pydantic import BaseModel, Field, PrivateAttr, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, model_validator, ConfigDict, Tag, Discriminator
 from dataclasses import dataclass, field
+from functools import partial
 
 if t.TYPE_CHECKING:
     from .tree import RootMetadata
@@ -35,9 +36,32 @@ def _get_ui_position(meta: "NodeMeta") -> "t.Any":
 
 _TConditionType = t.TypeVar("_TConditionType")
 
+def _discriminate_when(v: t.Any) -> str:
+    """Discriminator function to distinguish single condition vs list.
+    
+    Performance optimization: Prevents Pydantic from attempting to validate 
+    against each Union member sequentially until one succeeds. Instead, it 
+    uses this isinstance check to immediately select the correct type.
+    Critical for deeply nested trees with 700+ nodes (Python 3.12+).
+    """
+    return "list" if isinstance(v, list) else "single"
+
 class BranchType(BaseModel, t.Generic[_TConditionType]):
-    when: t.Union[_TConditionType, t.List[_TConditionType]]
+    when: t.Annotated[
+        t.Union[
+            t.Annotated[_TConditionType, Tag("single")],
+            t.Annotated[t.List[_TConditionType], Tag("list")]
+        ],
+        Discriminator(_discriminate_when)
+    ]
     then: "NodeType"
+
+    @model_validator(mode='after')
+    def _validate_when_not_empty(self) -> "t.Self":
+        """Ensure when list contains at least one condition."""
+        if isinstance(self.when, list) and len(self.when) == 0:
+            raise ValueError("'when' must contain at least one condition")
+        return self
 
     @property
     def whens(self) -> t.List[_TConditionType]:
@@ -51,17 +75,23 @@ class BuilderConfig:
     default_literal: t.Optional[pl.Expr] = None
     root_meta: "t.Optional[RootMetadata]" = None
 
+    @property
+    def default_expr(self):
+        return self.default_literal if self.default_literal is not None else pl.lit(None)
+
 
 class IndexedBranch(t.NamedTuple):
     index: t.Optional[int]
     branch: "Branch"
+    node: "NodeType"
 
-DefaultBranch = IndexedBranch(index=None, branch=None)
+DefaultBranch = partial(IndexedBranch, index=None, branch=None)
 TBranchStack = t.Tuple[IndexedBranch,...]
 
 
 class LeafNodeType(BaseModel):
     """Base configuration for a node type."""
+    model_config = ConfigDict(defer_build=True)
     IS_LEAF: t.ClassVar[bool] = True
     type: t.Literal["leaf"] = "leaf"
     result_idx: int = Field(
@@ -103,12 +133,17 @@ class LeafNodeType(BaseModel):
 
 class BaseNodeType(BaseModel, t.Generic[_TConditionType], ABC):
     """Base configuration for a node type."""
+    model_config = ConfigDict(defer_build=True)
     IS_LEAF: t.ClassVar[bool] = False
     type: str = Field(description="Type of the node")
     feature: str = Field(description="Feature to apply the node logic on")
     branches: t.List[BranchType[_TConditionType]] = Field(description="Branching logic for the node")
-    otherwise: "NodeType" = Field(description="Default branch if no conditions are met")
+    otherwise: t.Optional["NodeType"] = Field(description="Default branch if no conditions are met", default=None)
     meta: NodeMeta = Field(default_factory=NodeMeta, description="Optional execution-agnostic metadata (e.g. UI position).")
+
+    @property
+    def otherwise_node(self) -> "NodeType":
+        return LeafNodeType(result_idx=-1) if self.otherwise is None else self.otherwise
 
     def get_nodes_required_parameters(self) -> t.Set[str]:
         return set().union(*(
@@ -120,13 +155,13 @@ class BaseNodeType(BaseModel, t.Generic[_TConditionType], ABC):
     def get_required_parameters(self) -> t.Set[str]:
         return self.get_nodes_required_parameters().union(
             *(b.then.get_required_parameters() for b in self.branches),
-            self.otherwise.get_required_parameters(),
+            *(self.otherwise_node.get_required_parameters()),
         )
 
     def get_required_features(self) -> t.Set[str]:
         return {self.feature}.union(
             *(b.then.get_required_features() for b in self.branches),
-            self.otherwise.get_required_features(),
+            self.otherwise_node.get_required_features()
         )
 
     @abstractmethod
@@ -149,13 +184,14 @@ class BaseNodeType(BaseModel, t.Generic[_TConditionType], ABC):
                 id=f"{nid}:{child_id}", source=nid, target=child_id,
                 data=MultiEdgeData(sourceIndex=[i]),
             ))
-        oth_id, oth_nodes, oth_edges = self.otherwise.to_ui_nodes()
-        all_nodes.extend(oth_nodes)
-        all_edges.extend(oth_edges)
-        all_edges.append(MultiSourceEdge(
-            id=f"{nid}:{oth_id}", source=nid, target=oth_id,
-            data=MultiEdgeData(sourceIndex=[len(self.branches)]),
-        ))
+        if self.otherwise:
+            oth_id, oth_nodes, oth_edges = self.otherwise.to_ui_nodes()
+            all_nodes.extend(oth_nodes)
+            all_edges.extend(oth_edges)
+            all_edges.append(MultiSourceEdge(
+                id=f"{nid}:{oth_id}", source=nid, target=oth_id,
+                data=MultiEdgeData(sourceIndex=[len(self.branches)]),
+            ))
         return nid, all_nodes, all_edges
 
     @abstractmethod
@@ -187,7 +223,7 @@ class BaseNodeType(BaseModel, t.Generic[_TConditionType], ABC):
             )
             then_expr = branch.then.build_expression(
                     inputs=inputs, 
-                    branch_stack=branch_stack + (IndexedBranch(index=idx, branch=branch),), 
+                    branch_stack=branch_stack + (IndexedBranch(index=idx, branch=branch, node=self),), 
                     config=config,
                     parameters=parameters,
                 )
@@ -195,9 +231,9 @@ class BaseNodeType(BaseModel, t.Generic[_TConditionType], ABC):
                 out_expr = out_expr\
                     .when(condition_expr)\
                     .then(then_expr)
-        default_expr = self.otherwise.build_expression(
+        default_expr = self.otherwise_node.build_expression(
             inputs=inputs, 
-            branch_stack=branch_stack + (DefaultBranch,), 
+            branch_stack=branch_stack + (DefaultBranch(node=self),), 
             config=config,
             parameters=parameters,
         )
@@ -628,8 +664,8 @@ TBranch = t.Union[
     BranchType[StringPatternConditionType],
 ]
 
-BranchType.model_rebuild()
-RangesNodeType.model_rebuild()
-NumericalNodeType.model_rebuild()
-CategoricalNodeType.model_rebuild()
-StringNodeType.model_rebuild()
+BranchType.model_rebuild(_types_namespace={"NodeType": NodeType})
+RangesNodeType.model_rebuild(_types_namespace={"NodeType": NodeType})
+NumericalNodeType.model_rebuild(_types_namespace={"NodeType": NodeType})
+CategoricalNodeType.model_rebuild(_types_namespace={"NodeType": NodeType})
+StringNodeType.model_rebuild(_types_namespace={"NodeType": NodeType})

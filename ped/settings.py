@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class APISettings(BaseModel):
     """Settings for the PED API."""
     root_path: str = "./model/code"
-    flow_subpath: str = "flows"
+    flow_subpath: str = ""
     init_module: t.Optional[str] = "inference"
 
 class PEDAppExtensionSettings(BaseModel):

@@ -1,7 +1,8 @@
 import typing as t
 from pydantic import BaseModel, Field, Tag, RootModel, Discriminator, ValidationError, model_validator
-from .v0.tree import Tree as V0Tree
+# from .v0.tree import Tree as V0Tree
 from .v1.tree import Tree as V1Tree
+from .v2.tree import Tree as V2Tree
 from spockflow.nodes import VariableNode
 
 
@@ -97,6 +98,7 @@ _Tree = t.Annotated[
     t.Union[
         t.Annotated[DeprecatedTree, Tag("v0-tree")],
         t.Annotated[V1Tree, Tag("v1-tree")],
+        t.Annotated[V2Tree, Tag("v2-tree")],
     ],
     Discriminator(get_tree_version),
 ]

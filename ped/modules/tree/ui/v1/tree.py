@@ -93,7 +93,7 @@ def _record_to_polars_struct(record_def: "RecordDefinition") -> t.Dict[str, t.An
     from .schema import RecordDefinition
     return {
         field_name: _RECORD_FIELD_TYPE_TO_POLARS.get(field_type, "String")
-        for field_name, field_type in record_def.fields.items()
+        for field_name, field_type in record_def.field_items()
     }
 
 

@@ -223,10 +223,11 @@ class BaseModule(TypeDiscriminatedBaseModule, ABC):
         be round-tripped through ``FlowConfiguration`` (which uses a
         discriminated union on ``type`` to re-hydrate modules).
         """
-        config = self.model_dump(exclude_defaults=True)
+        # config = self.model_dump(exclude_defaults=True)
+        config = self.model_dump()
         # ``type`` equals its own default by design, so exclude_defaults strips
         # it — put it back so FlowConfiguration can discriminate the module.
-        config.setdefault("type", self.type)
+        # config.setdefault("type", self.type)
         return config
 
     def as_constructed_graph_modules(self) -> "ConstructedGraphModules":

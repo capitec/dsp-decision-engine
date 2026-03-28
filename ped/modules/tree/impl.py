@@ -16,7 +16,7 @@ def default_result_builder(
     """Default output function: returns the output literal at result_idx,
     or the default literal when result_idx is -1 (the no-match leaf)."""
     if result_idx == -1:
-        return config.default_literal
+        return config.default_expr
     return config.output_literals[result_idx]
 
 
@@ -84,10 +84,21 @@ def _with_tree_idx(expr: pl.Expr, tree_idx: int) -> pl.Expr:
         expr.struct.field("val").alias("val"),
     )
 
+def default_get_prioritized_result(
+    failed_tree_results: t.List[pl.Expr],
+    current_result: t.Optional[pl.Expr],
+    default_expr: pl.Expr,
+) -> pl.Expr:
+    if current_result is None:
+        if len(failed_tree_results) == 0:
+            return default_expr
+        return failed_tree_results[-1]
+    return current_result
 
 def prioritize_results(
     results: t.List[pl.Expr],
     default_expr: pl.Expr,
+    format_prioritized_fn: t.Optional[t.Callable[[t.List[pl.Expr], t.Optional[pl.Expr], pl.Expr], pl.Expr]] = None,
 ) -> pl.Expr:
     """Return the first result (lowest tree index) where idx != -1 (a real branch
     was taken), enriched with tree_idx.  Falls back to a sentinel default struct
@@ -97,15 +108,22 @@ def prioritize_results(
         pl.lit(-1).alias("tree_idx"),
         default_expr.alias("val"),
     )
+    if format_prioritized_fn is None:
+        format_prioritized_fn = default_get_prioritized_result
 
     out_expr = pl
+    previous_results = []
+    # TODO make default_get_prioritized_result configurable. as someone might want to see why it failed all trees not just the last one.
     for i, tree_res in enumerate(results):
         indexed_res = _with_tree_idx(tree_res, i)
-        out_expr = out_expr.when(tree_res.struct.field("idx") != -1).then(indexed_res)
+        out_expr = out_expr\
+            .when(tree_res.struct.field("idx") != -1)\
+            .then(format_prioritized_fn(previous_results, indexed_res, default_struct))
+        previous_results.append(indexed_res)
 
     if out_expr is pl:
         return default_struct
-    return out_expr.otherwise(default_struct)
+    return out_expr.otherwise(format_prioritized_fn(previous_results, None, default_struct))
 
 
 def wrap_output_fn_for_index(fn: OutputFn) -> OutputFn:
@@ -134,6 +152,7 @@ def execute_prioritized_trees(
     builder_config: BuilderConfig,
     parameters: t.Optional[pl.Expr]=None,
     post_process_fn: t.Optional[t.Callable[[pl.Expr], pl.Expr]] = None,
+    format_prioritized_fn: t.Optional[t.Callable[[t.List[pl.Expr], t.Optional[pl.Expr], pl.Expr], pl.Expr]] = None,
     **inputs: pl.Expr,
 ) -> pl.Expr:
     """Execute multiple trees and return the result of the first one (by position)
@@ -142,12 +161,24 @@ def execute_prioritized_trees(
     post_process_fn is applied to the full prioritized struct {idx, tree_idx, val}
     and defaults to extract_value which simply returns the val field.
     """
+    # Process the results with the build result fn before using it.
+    default_result_expr = builder_config.build_result_function(
+        inputs=inputs,
+        branch_stack=(),
+        config=builder_config,
+        result_idx=-1,
+    )
+
     builder_config = replace(builder_config, build_result_function=wrap_output_fn_for_index(builder_config.build_result_function))
 
     post_process_fn = post_process_fn or extract_value
 
     results = execute_tree_list(**inputs, roots=roots, builder_config=builder_config, parameters=parameters)
-    prioritized = prioritize_results(results=results, default_expr=builder_config.default_literal)
+    prioritized = prioritize_results(
+        results=results, 
+        default_expr=default_result_expr,
+        format_prioritized_fn=format_prioritized_fn 
+    )
     return post_process_fn(prioritized)
 
 

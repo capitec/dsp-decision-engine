@@ -90,9 +90,10 @@ class Tree(WithTreeOutput):
                 return LeafNodeType(result_idx=data.leaf_value, meta=m)
 
             if isinstance(data, NumericalNode):
-                return NumericalNodeType(
+                return NumericalNodeType.model_construct(
+                    type="numerical",
                     feature=data.feature, meta=m,
-                    branches=[BranchType(
+                    branches=[BranchType.model_construct(
                         when=NumericalConditionType(op=data.comparison_op, threshold=_ref(data.threshold)),
                         then=_child(node_id, 0),
                     )],
@@ -107,9 +108,10 @@ class Tree(WithTreeOutput):
                 # category_list_right_child=True → matches go to sourceIndex 1 (right)
                 left, right = (_child(node_id, 0), _child(node_id, 1))
                 then_child, otherwise_child = (right, left) if data.category_list_right_child else (left, right)
-                return CategoricalNodeType(
+                return CategoricalNodeType.model_construct(
+                    type="categorical",
                     feature=data.feature, meta=m,
-                    branches=[BranchType(when=CategoricalConditionType(categories=cats), then=then_child)],
+                    branches=[BranchType.model_construct(when=CategoricalConditionType(categories=cats), then=then_child)],
                     otherwise=otherwise_child,
                 )
 
@@ -120,13 +122,14 @@ class Tree(WithTreeOutput):
                 if N == 0:
                     return _child(node_id, 0)
                 branches = [
-                    BranchType(
+                    BranchType.model_construct(
                         when=MinMaxConditionType(min=thrs[i - 1] if i > 0 else None, max=thrs[i]),
                         then=_child(node_id, i),
                     )
                     for i in range(N)
                 ]
-                return RangesNodeType(
+                return RangesNodeType.model_construct(
+                    type="ranges",
                     feature=data.feature, branches=branches, meta=m,
                     otherwise=_child(node_id, N), end_logic=end_logic, strict=False,
                 )
@@ -134,9 +137,10 @@ class Tree(WithTreeOutput):
             if isinstance(data, StringMatchNode):
                 if data.match_any:
                     pat = set(data.patterns) if len(data.patterns) > 1 else (data.patterns[0] if data.patterns else "")
-                    return StringNodeType(
+                    return StringNodeType.model_construct(
+                        type="string",
                         feature=data.feature, meta=m,
-                        branches=[BranchType(
+                        branches=[BranchType.model_construct(
                             when=StringPatternConditionType(pattern=pat, match_type=data.match_type, case_sensitive=data.case_sensitive),
                             then=_child(node_id, 0),
                         )],
@@ -144,13 +148,14 @@ class Tree(WithTreeOutput):
                     )
                 else:
                     branches = [
-                        BranchType(
+                        BranchType.model_construct(
                             when=StringPatternConditionType(pattern=p, match_type=data.match_type, case_sensitive=data.case_sensitive),
                             then=_child(node_id, i),
                         )
                         for i, p in enumerate(data.patterns)
                     ]
-                    return StringNodeType(
+                    return StringNodeType.model_construct(
+                        type="string",
                         feature=data.feature, branches=branches, meta=m,
                         otherwise=_child(node_id, len(data.patterns)),
                     )

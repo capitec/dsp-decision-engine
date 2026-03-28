@@ -125,7 +125,6 @@ class RequestHandler(t.Generic[TParsedInputType]):
     @classmethod
     def from_module(cls, module: ModuleType) -> "RequestHandler":
         """Create handler from module, auto-discovering overridable methods"""
-        overrides = {}
         ret = cls()
         for method_name in cls.OVERRIDABLE_METHODS:
             if (m := getattr(module, method_name, None)):

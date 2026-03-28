@@ -17,6 +17,7 @@ from pydantic import (
     Discriminator,
     RootModel,
     Tag,
+    ConfigDict,
 )
 
 
@@ -40,10 +41,21 @@ class CustomTypeKind(str, Enum):
 class RecordDefinition(BaseModel):
     """Record definition containing fields and records"""
 
-    fields: t.Dict[
-        str, t.Literal[FieldType.STRING, FieldType.NUMBER, FieldType.BOOLEAN]
-    ]
+    fields: (
+        t.Dict[str, t.Literal[FieldType.STRING, FieldType.NUMBER, FieldType.BOOLEAN]]
+        | t.List[
+            t.Tuple[
+                str, t.Literal[FieldType.STRING, FieldType.NUMBER, FieldType.BOOLEAN]
+            ]
+        ]
+    )
     records: t.List[t.Dict[str, t.Any]] = Field(default_factory=list)
+
+    def field_items(self):
+        if isinstance(self.fields, dict):
+            return self.fields.items()
+        else:
+            return self.fields
 
 
 class EnumDefinition(BaseModel):
@@ -81,7 +93,7 @@ class _RecordCustomTypeInfo(BaseModel):
                         f"Duplicate record id {record_id} in custom record type"
                     )
                 parsed_record = {}
-                for field_name, field_type in self.definition.fields.items():
+                for field_name, field_type in self.definition.field_items():
                     if field_name not in record:
                         parsed_record[field_name] = None
                     else:
@@ -207,16 +219,24 @@ class _CustomEnumFieldType(_BaseFieldValueType[t.Literal[FieldType.CUSTOM], str]
         return self
 
 
-class _CustomRecordFieldType(_BaseFieldValueType[t.Literal[FieldType.CUSTOM], int]):
+class _ReferencedFieldType(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    id: int
+
+
+class _CustomRecordFieldType(
+    _BaseFieldValueType[t.Literal[FieldType.CUSTOM], t.Union[int, _ReferencedFieldType]]
+):
     custom_type: _RecordCustomTypeInfo
     _parsed_values: t.Dict[str, t.Union[str, int, float]] = PrivateAttr()
 
     @model_validator(mode="after")
     def validate_values(self):
+        value = self.value if isinstance(self.value, int) else self.value.id
         assert (
-            0 <= self.value < len(self.custom_type.parsed_records)
-        ), f"Record id must be between 0 and {len(self.custom_type.parsed_records)-1}, got '{self.value}'"
-        self._parsed_values = self.custom_type.parsed_records[self.value]
+            0 <= value < len(self.custom_type.parsed_records)
+        ), f"Record id must be between 0 and {len(self.custom_type.parsed_records)-1}, got '{value}'"
+        self._parsed_values = self.custom_type.parsed_records[value]
         return self
 
     @property
@@ -238,8 +258,8 @@ def _discriminate_custom_type(v):
 
 _TCustomTypes = t.Annotated[
     t.Union[
-        t.Annotated[_CustomEnumFieldType, Tag("enum")],
-        t.Annotated[_CustomRecordFieldType, Tag("record")],
+        t.Annotated[_CustomEnumFieldType, Tag(CustomTypeKind.ENUM)],
+        t.Annotated[_CustomRecordFieldType, Tag(CustomTypeKind.RECORD)],
     ],
     Discriminator(_discriminate_custom_type),
 ]
@@ -311,13 +331,13 @@ class OutputSchema(BaseModel):
         # So for now we work around it.
         return len(self.default_values) > 0 and has_required_fields
 
-    # @model_validator(mode="after")
-    # def validate_default_values(self) -> "t_ext.Self":
-    #     if self.has_default_values():
-    #         errors = self.validate_data(self.default_values)
-    #         if errors:
-    #             raise ValueError(f"Default values validation errors: {errors}")
-    #     return self
+    @model_validator(mode="after")
+    def validate_default_values(self) -> "t_ext.Self":
+        if self.has_default_values():
+            errors = self.validate_data(self.default_values)
+            if errors:
+                raise ValueError(f"Default values validation errors: {errors}")
+        return self
 
     def validate_data(self, data: t.Dict[str, t.Any]) -> t.List[str]:
         """Validate output data against schema. Returns list of validation errors."""
