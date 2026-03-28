@@ -1,6 +1,0 @@
-{"Action": {"id": 3.0, "Type": "VMaxAmount", "Amount": 200.0, "Recipient": "VMAX"}, "Outcome": "Action1", "number": 10.0}
-{"Action": {"id": 1.0, "Type": "NCALimitAmount", "Amount": 100.0, "Recipient": "BANKS"}, "Outcome": "Action1", "number": 99.0}
-{"Action": {"id": 1.0, "Type": "NCALimitAmount", "Amount": 100.0, "Recipient": "BANKS"}, "Outcome": "Action3", "number": 12.0}
-{"Action": {"id": 2.0, "Type": "NCALimitPercentage", "Amount": 0.1, "Recipient": "BANKS"}, "Outcome": "Action1", "number": 10.0}
-{"Action": {"id": 1.0, "Type": "NCALimitAmount", "Amount": 100.0, "Recipient": "BANKS"}, "Outcome": "Action1", "number": 99.0}
-{"Action": {"id": 1.0, "Type": "NCALimitAmount", "Amount": 100.0, "Recipient": "BANKS"}, "Outcome": "Action3", "number": 12.0}
