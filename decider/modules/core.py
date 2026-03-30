@@ -138,6 +138,7 @@ class BaseModule(TypeDiscriminatedBaseModule, ABC):
     ) -> TOutputType:
         # TODO i really think that we should pass in an executor here and then do a build step and an execute step to keep thinks a bit seperated and modular
         # But for the sake of simplicity lets just keep this as is.
+        pass
     
     @abstractmethod
     def expand_nodes(self) -> t.List[Node]:

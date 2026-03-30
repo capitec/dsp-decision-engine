@@ -1,13 +1,13 @@
 import typing as t
 from pydantic import model_validator
 from ped.modules.core import BaseModule, PEDNode
-from .config import ParametersConfig, Expression
-
+from .config import Expression
+from ped.serializable.dataframe import DataFrame
 
 
 class DecisionTableModule(BaseModule):
     type: t.Literal["decision_table"]
-    parameters: ParametersConfig
+    parameters: DataFrame
     expression: Expression
     outputs: t.List[str]
     default: t.Optional[t.List[t.Any]] = None
@@ -16,7 +16,7 @@ class DecisionTableModule(BaseModule):
     def validate_config(self):
         # Validate that all output columns exist in parameters
         for output in self.outputs:
-            if output not in self.parameters.columns:
+            if output not in self.parameters.df.columns:
                 raise ValueError(f"Output column '{output}' not found in parameters columns")
         
         # Validate default has correct length if specified
@@ -48,7 +48,7 @@ class DecisionTableModule(BaseModule):
                 name="output",
                 input_map=input_map,
                 static_kwargs={
-                    "parameters": self.parameters._parameters_df,
+                    "parameters": self.parameters.df,
                     "expression": self.expression,
                     "output_columns": self.outputs,
                     "default": self.default

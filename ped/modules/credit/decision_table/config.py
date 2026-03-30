@@ -5,146 +5,10 @@ from dataclasses import dataclass
 from enum import Enum
 import polars as pl
 from pydantic import BaseModel, Field, model_validator, PrivateAttr
+from ped.serializable.dataframe import DataFrame
 from ped.exceptions import wrap_import_errors
 from ped._ext import TypeDiscriminatedBaseModule
 
-
-if t.TYPE_CHECKING:
-    import pandera.pandas as pa
-
-_ALLOWED_NAMES: t.Dict[str, t.Any] = {
-    "Optional": t.Optional,
-    "List": t.List,
-    "Dict": t.Dict,
-    "str": str,
-    "string": str,   # pandera-style alias
-    "int": int,
-    "float": float,
-    "bool": bool,
-    "list": list,
-}
-
-
-class _TypeEvaluator(ast.NodeVisitor):
-    def visit_Name(self, node: ast.Name) -> t.Any:
-        if node.id not in _ALLOWED_NAMES:
-            raise ValueError(f"Disallowed name: {node.id!r}")
-        return _ALLOWED_NAMES[node.id]
-
-    def visit_Subscript(self, node: ast.Subscript) -> t.Any:
-        base = self.visit(node.value)
-        sub = self.visit(node.slice)
-        return base[sub]
-
-    def visit_Index(self, node: ast.Index) -> t.Any:  # Python < 3.9
-        return self.visit(node.value)
-
-    def visit_Tuple(self, node: ast.Tuple) -> tuple:
-        return tuple(self.visit(elt) for elt in node.elts)
-
-    def visit_Constant(self, node: ast.Constant) -> t.Any:
-        return node.value
-
-    def generic_visit(self, node: ast.AST) -> t.Any:
-        raise ValueError(f"Unsupported syntax: {ast.dump(node)}")
-
-
-def _safe_eval_type(expr: str) -> t.Any:
-    """Parse a type-expression string into a real type using AST (no eval)."""
-    tree = ast.parse(expr.strip(), mode="eval")
-    return _TypeEvaluator().visit(tree.body)
-
-
-@dataclass(frozen=True)
-class ParsedDtype:
-    type: type
-    optional: bool
-    list_inner_type: t.Optional[type] = None  # set when type is list
-
-    @property
-    def is_list(self) -> bool:
-        return self.type is list
-
-
-@functools.lru_cache(maxsize=None)
-def _parse_dtype(dtype_str: str) -> ParsedDtype:
-    """Parse a dtype string into a ParsedDtype.
-
-    Uses an AST walker with an allowlist of safe names — no eval().
-    Supports ``int``, ``float``, ``str`` / ``string``, ``bool``,
-    ``list`` / ``List[X]``, and ``Optional[X]`` variants of all the above.
-    Results are cached so repeated calls for the same string are free.
-    """
-    result = _safe_eval_type(dtype_str)
-    # Unwrap Optional[X]  ==  Union[X, None]
-    optional = False
-    if t.get_origin(result) is t.Union and type(None) in t.get_args(result):
-        optional = True
-        result = next(a for a in t.get_args(result) if a is not type(None))
-    # Detect list / List[X]
-    if result is list or t.get_origin(result) is list:
-        args = t.get_args(result)
-        inner = args[0] if args else None
-        return ParsedDtype(type=list, optional=optional, list_inner_type=inner)
-    return ParsedDtype(type=result, optional=optional)
-
-class ParametersConfig(BaseModel):
-    columns: t.List[str]
-    values: t.List[t.List[t.Any]]
-    dtypes: t.Dict[str, str]
-    
-    _parameters_df: pl.DataFrame = PrivateAttr()
-    _pandera_schema: "pa.DataFrameSchema" = PrivateAttr()
-    _parsed_dtypes: t.Dict[str, "ParsedDtype"] = PrivateAttr()
-    
-    @model_validator(mode='after')
-    def validate_and_create_dataframe(self):
-        with wrap_import_errors(optional_source="dt"):
-            import pandera.pandas as pa
-        # TODO we could make the pandera validation optional?
-        # Validate that all dtypes correspond to existing columns
-        for col in self.dtypes:
-            if col not in self.columns:
-                raise ValueError(f"Dtype specified for column '{col}' but column not found in parameters columns")
-        
-        # Validate that values matrix has correct dimensions
-        if self.values:
-            expected_cols = len(self.columns)
-            for i, row in enumerate(self.values):
-                if len(row) != expected_cols:
-                    raise ValueError(f"Row {i} has {len(row)} values but {expected_cols} columns expected")
-        
-        # Create DataFrame from values
-        df_dict = {}
-        for i, col in enumerate(self.columns):
-            df_dict[col] = [row[i] for row in self.values]
-        
-        self._parameters_df = pl.DataFrame(df_dict)
-        
-        # Parse dtypes once and cache them, then build the pandera schema
-        parsed_dtypes: t.Dict[str, ParsedDtype] = {}
-        schema_dict = {}
-        for col, dtype_str in self.dtypes.items():
-            try:
-                parsed = _parse_dtype(dtype_str)
-            except ValueError:
-                raise ValueError(f"Unsupported dtype '{dtype_str}' for column '{col}'")
-            parsed_dtypes[col] = parsed
-            pa_dtype = pa.PythonList(parsed.list_inner_type) if parsed.is_list else parsed.type
-            schema_dict[col] = pa.Column(pa_dtype, nullable=parsed.optional)
-        
-        self._parsed_dtypes = parsed_dtypes
-        self._pandera_schema = pa.DataFrameSchema(schema_dict)
-        
-        # Convert to pandas for pandera validation, then back to polars
-        pandas_df = self._parameters_df.to_pandas()
-        try:
-            validated_df = self._pandera_schema.validate(pandas_df)
-            self._parameters_df = pl.from_pandas(validated_df)
-        except pa.errors.SchemaError as e:
-            raise ValueError(f"Schema validation failed: {e}")
-        
-        return self
 
 
 def _safe_list_get(lst: t.List, i: int) -> t.Optional[t.Any]:
@@ -177,7 +41,7 @@ class BaseExpression(BaseModel):
         """
         raise NotImplementedError
     
-    def validate_parameters(self, parameters: "ParametersConfig") -> None:
+    def validate_parameters(self, parameters: DataFrame) -> None:
         """Validate that required variables exist in parameters with correct types"""
         raise NotImplementedError
 
@@ -199,7 +63,7 @@ class AndExpression(TypeDiscriminatedBaseModule):
             for row_conds in zip(*per_child)
         ]
 
-    def validate_parameters(self, parameters: "ParametersConfig") -> None:
+    def validate_parameters(self, parameters: DataFrame) -> None:
         for expr in self.expressions:
             expr.validate_parameters(parameters)
 
@@ -225,7 +89,7 @@ class OrExpression(TypeDiscriminatedBaseModule):
             for row_conds in zip(*per_child)
         ]
 
-    def validate_parameters(self, parameters: "ParametersConfig") -> None:
+    def validate_parameters(self, parameters: DataFrame) -> None:
         for expr in self.expressions:
             expr.validate_parameters(parameters)
 
@@ -276,23 +140,25 @@ class BetweenExpression(TypeDiscriminatedBaseModule):
 
         return row_conditions
 
-    def validate_parameters(self, parameters: "ParametersConfig") -> None:
+    def validate_parameters(self, parameters: DataFrame) -> None:
         if not self.lower_bound_column and not self.upper_bound_column:
             raise ValueError("At least one of lower_bound_column or upper_bound_column must be specified")
 
+        df = parameters.df
+        columns = df.columns
         for col_attr, label in (
             (self.lower_bound_column, "Lower"),
             (self.upper_bound_column, "Upper"),
         ):
             if col_attr is None:
                 continue
-            if col_attr not in parameters.columns:
+            if col_attr not in columns:
                 raise ValueError(f"{label} bound column '{col_attr}' not found in parameters columns")
-            dtype = parameters._parsed_dtypes[col_attr]
-            if dtype.type not in (float, int):
-                raise ValueError(f"{label} bound column '{col_attr}' must be numeric, got {dtype.type}")
+            dtype = df[col_attr].dtype
+            if dtype not in (pl.Float32, pl.Float64, pl.Int8, pl.Int16, pl.Int32, pl.Int64, pl.UInt8, pl.UInt16, pl.UInt32, pl.UInt64):
+                raise ValueError(f"{label} bound column '{col_attr}' must be numeric, got {dtype}")
 
-        df = parameters._parameters_df
+        df = parameters.df
         n = len(df)
         lower_vals = df[self.lower_bound_column].to_list() if self.lower_bound_column else [None] * n
         upper_vals = df[self.upper_bound_column].to_list() if self.upper_bound_column else [None] * n
@@ -336,17 +202,18 @@ class InExpression(TypeDiscriminatedBaseModule):
             for row in parameters.iter_rows(named=True)
         ]
     
-    def validate_parameters(self, parameters: "ParametersConfig") -> None:
+    def validate_parameters(self, parameters: DataFrame) -> None:
         # Note: self.variable is an input variable, not a column in parameters
         # We only need to validate that the values column exists
         
         # Check that values column exists and is a list type
-        if self.values_column not in parameters.columns:
+        df = parameters.df
+        if self.values_column not in df.columns:
             raise ValueError(f"Values column '{self.values_column}' not found in parameters columns")
         
-        values_dtype = parameters._parsed_dtypes[self.values_column]
-        if not values_dtype.is_list:
-            raise ValueError(f"Values column '{self.values_column}' must be a list type, got {values_dtype.type}")
+        values_dtype = df[self.values_column].dtype
+        if not isinstance(values_dtype, pl.List):
+            raise ValueError(f"Values column '{self.values_column}' must be a list type, got {values_dtype}")
 
     def get_variables(self) -> t.List[str]:
         return [self.variable]
@@ -362,7 +229,7 @@ class IsTrueExpression(TypeDiscriminatedBaseModule):
         expr = kwargs[self.variable]
         return [expr] * len(parameters)
     
-    def validate_parameters(self, parameters: "ParametersConfig") -> None:  # noqa: ARG002
+    def validate_parameters(self, parameters: DataFrame) -> None:  # noqa: ARG002
         # Note: self.variable is an input variable, not a column in parameters
         # No validation needed for IsTrueExpression beyond basic structure
         pass
