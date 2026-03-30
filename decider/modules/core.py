@@ -8,7 +8,7 @@ from decider._ext import TypeDiscriminatedBaseModule
 if t.TYPE_CHECKING:
     from decider.modules.primitives.mapper import MapperModule, ModuleInputSelector, ModuleOutputSelector
 
-@dataclass
+@dataclass(slots=True)
 class StaticValueNode:
     value: t.Any
 
@@ -19,7 +19,7 @@ class StaticValueNode:
     def __call__(self, inputs, cache=None) -> t.Any:
         return self.value
     
-@dataclass
+@dataclass(slots=True)
 class ExternalInputNode:
     input_name: str
 
@@ -31,7 +31,7 @@ class ExternalInputNode:
         return inputs[self.input_name]
     
 
-@dataclass
+@dataclass(slots=True)
 class Node:
     name: str
     callable: t.Callable
