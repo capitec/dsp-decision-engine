@@ -5,6 +5,9 @@ from abc import ABC, abstractmethod
 from decider.types import TInputType, TOutputType
 from decider._ext import TypeDiscriminatedBaseModule
 
+if t.TYPE_CHECKING:
+    from decider.modules.primitives.mapper import MapperModule, ModuleInputSelector, ModuleOutputSelector
+
 @dataclass
 class StaticValueNode:
     value: t.Any
@@ -129,6 +132,161 @@ class BaseModule(TypeDiscriminatedBaseModule, ABC):
 
     def as_graph(self):
         ...
+
+    @property
+    def outputs(self):
+        from decider.modules.primitives.mapper import ModuleOutputAccessor
+        return ModuleOutputAccessor(self)
+
+    @property
+    def inputs(self):
+        from decider.modules.primitives.mapper import ModuleInputAccessor
+        return ModuleInputAccessor(self)
+
+    @property
+    def output_names(self) -> t.List[str]:
+        nodes = self.expand_nodes()
+        referenced_nodes = set()
+        
+        for node in nodes:
+            for input_ref in node.input_map.values():
+                if isinstance(input_ref, Node):
+                    referenced_nodes.add(input_ref.node_id)
+        
+        output_nodes = [node for node in nodes if node.node_id not in referenced_nodes]
+        return [node.name for node in output_nodes]
+
+    @property
+    def input_names(self) -> t.List[str]:
+        nodes = self.expand_nodes()
+        external_inputs = set()
+        
+        for node in nodes:
+            for input_ref in node.input_map.values():
+                if isinstance(input_ref, ExternalInputNode):
+                    external_inputs.add(input_ref.input_name)
+        
+        return sorted(external_inputs)
+
+    def __or__(self, other: t.Union["BaseModule", "ModuleInputSelector"]) -> "MapperModule":
+        from decider.modules.primitives.mapper import MapperModule, ModuleInputSelector
+        
+        if isinstance(other, ModuleInputSelector):
+            my_outputs = self.output_names
+            if len(my_outputs) != 1:
+                raise ValueError(
+                    f"Module '{self.name}' has {len(my_outputs)} outputs ({my_outputs}). "
+                    f"Use .outputs.<name> to select one explicitly."
+                )
+            
+            if isinstance(self, MapperModule):
+                new_modules = self.modules + [other.module]
+                new_mappings = dict(self.mappings)
+                if other.module.name not in new_mappings:
+                    new_mappings[other.module.name] = {}
+                new_mappings[other.module.name][other.input_name] = (self.name, my_outputs[0])
+                return self.model_copy(update={"modules": new_modules, "mappings": new_mappings})
+            else:
+                return MapperModule(
+                    name=self.name,
+                    modules=[self, other.module],
+                    mappings={other.module.name: {other.input_name: (self.name, my_outputs[0])}},
+                )
+        
+        elif isinstance(other, BaseModule):
+            from decider.modules.primitives.mapper import MapperModule as MapperClass
+            
+            my_outputs = self.output_names
+            other_inputs = other.input_names
+            
+            if len(my_outputs) != 1:
+                raise ValueError(
+                    f"Module '{self.name}' has {len(my_outputs)} outputs ({my_outputs}). "
+                    f"Use .outputs.<name> | other.inputs.<name> for explicit wiring."
+                )
+            
+            if len(other_inputs) != 1:
+                raise ValueError(
+                    f"Module '{other.name}' has {len(other_inputs)} inputs ({other_inputs}). "
+                    f"Use self.outputs.<name> | other.inputs.<name> for explicit wiring."
+                )
+            
+            if isinstance(self, MapperClass):
+                if isinstance(other, MapperClass):
+                    new_modules = self.modules + other.modules
+                    new_mappings = dict(self.mappings)
+                    new_mappings.update(other.mappings)
+                else:
+                    new_modules = self.modules + [other]
+                    new_mappings = dict(self.mappings)
+                
+                if other.name not in new_mappings:
+                    new_mappings[other.name] = {}
+                new_mappings[other.name][other_inputs[0]] = (self.name, my_outputs[0])
+                return self.model_copy(update={"modules": new_modules, "mappings": new_mappings})
+            else:
+                return MapperClass(
+                    name=self.name,
+                    modules=[self, other],
+                    mappings={other.name: {other_inputs[0]: (self.name, my_outputs[0])}},
+                )
+        
+        else:
+            raise TypeError(f"Cannot wire BaseModule to {type(other).__name__}")
+
+    def __lshift__(self, mapping: t.Dict[str, t.Union["BaseModule", "ModuleOutputSelector"]]) -> "MapperModule":
+        from decider.modules.primitives.mapper import MapperModule as MapperClass, ModuleOutputSelector
+        
+        resolved_mappings = {}
+        modules_to_add = []
+        extra_mappings = {}
+        
+        for input_var_name, source in mapping.items():
+            if isinstance(source, ModuleOutputSelector):
+                resolved_mappings[input_var_name] = (source.module.name, source.output_node_name)
+                if source.module not in modules_to_add:
+                    modules_to_add.append(source.module)
+            elif isinstance(source, BaseModule):
+                if isinstance(source, MapperClass):
+                    modules_to_add.extend(source.modules)
+                    extra_mappings.update(source.mappings)
+                    source_outputs = source.output_names
+                    if len(source_outputs) != 1:
+                        raise ValueError(
+                            f"Module '{source.name}' has {len(source_outputs)} outputs ({source_outputs}). "
+                            f"Use module.outputs.<name> to select one explicitly."
+                        )
+                    resolved_mappings[input_var_name] = (source.name, source_outputs[0])
+                else:
+                    source_outputs = source.output_names
+                    if len(source_outputs) != 1:
+                        raise ValueError(
+                            f"Module '{source.name}' has {len(source_outputs)} outputs ({source_outputs}). "
+                            f"Use module.outputs.<name> to select one explicitly."
+                        )
+                    resolved_mappings[input_var_name] = (source.name, source_outputs[0])
+                    if source not in modules_to_add:
+                        modules_to_add.append(source)
+            else:
+                raise TypeError(f"Mapping value must be BaseModule or ModuleOutputSelector, got {type(source).__name__}")
+        
+        if isinstance(self, MapperClass):
+            new_modules = modules_to_add + self.modules
+            new_mappings = dict(self.mappings)
+            new_mappings.update(extra_mappings)
+            if self.name not in new_mappings:
+                new_mappings[self.name] = {}
+            new_mappings[self.name].update(resolved_mappings)
+            return self.model_copy(update={"modules": new_modules, "mappings": new_mappings})
+        else:
+            return MapperClass(
+                name=self.name,
+                modules=modules_to_add + [self],
+                mappings={self.name: resolved_mappings, **extra_mappings},
+            )
+
+    def bind(self, **kwargs: t.Union["BaseModule", "ModuleOutputSelector"]) -> "MapperModule":
+        return self.__lshift__(kwargs)
 
     def execute(
         self, 

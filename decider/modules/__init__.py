@@ -3,6 +3,7 @@ from .core import Node
 
 def _load_core_modules():
     from .credit import register_credit_modules
+    from .primitives import MapperModule
     register_credit_modules()
 
 _load_core_modules()
