@@ -29,7 +29,7 @@ class ExternalInputNode:
 
     def __call__(self, inputs, cache= None) -> t.Any:
         return inputs[self.input_name]
-    
+
 
 @dataclass(slots=True)
 class Node:
@@ -77,7 +77,7 @@ class Node:
                 return data[data.value > threshold]
                 
             # Create node that maps 'data' param to 'user_records' variable
-            node = DeciderNode.from_callable(
+            node = Node.from_callable(
                 process_data,
                 name="data_processor", 
                 input_map={"data": "user_records"},

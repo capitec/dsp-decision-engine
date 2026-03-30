@@ -3,7 +3,6 @@ import typing as t
 import polars as pl
 from dataclasses import dataclass
 
-from ped.cache.core import TGraph
 
 if t.TYPE_CHECKING:
     from modules.core import Node
