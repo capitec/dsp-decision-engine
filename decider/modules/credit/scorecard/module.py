@@ -180,9 +180,6 @@ class ScoredVariable(BaseModule):
             ))
         
         return nodes
-    
-    def compile(self):
-        raise NotImplementedError("Compile method not implemented yet for ScoredVariable")
 
 
 class AdjustedVariable(BaseModule):
@@ -254,24 +251,27 @@ class ScoreCard(BaseModule):
         return variables
     
     def expand_nodes(self) -> t.List[Node]:
+        from decider.modules.core import ExternalInputNode
+
         nodes = []
         for variable in self.variables:
             nodes.extend(variable.expand_nodes())
-        
+
         # Get all value output names to create input mapping for calculate_score
-        input_map = {var_name: var_name for var in self.variables if (var_name := var.get_value_output_name())}
-        
+        # Need to convert to ExternalInputNode references
+        input_map = {
+            var_name: ExternalInputNode(var_name)
+            for var in self.variables
+            if (var_name := var.get_value_output_name())
+        }
+
         nodes.append(Node(
             name=self.output_name,
             callable=calculate_score,
-            original_callable=calculate_score,
             input_map=input_map,
         ))
-        
-        return nodes
 
-    def compile(self):
-        raise NotImplementedError("Compile method not implemented yet for DecisionTable")
+        return nodes
     
 
 class ProbabilityDefault(BaseModule):
@@ -330,6 +330,8 @@ class MergeScorecardValues(BaseModule):
         return weighted_scores
 
     def expand_nodes(self) -> t.List[Node]:
+        from decider.modules.core import ExternalInputNode
+
         # TODO i just made this up i think its more complex than this as pd is involved here. @christiaan
         weighted_scores = self.weighted_scores
         def merge_scorecard_values(**kwargs):
@@ -339,14 +341,16 @@ class MergeScorecardValues(BaseModule):
                 score_value = kwargs[weighted_score.score_name]
                 result += score_value * weighted_score.weight
             return result
-        
-        input_map = {ws.score_name: ws.score_name for ws in self.weighted_scores}
-        
+
+        input_map = {
+            ws.score_name: ExternalInputNode(ws.score_name)
+            for ws in self.weighted_scores
+        }
+
         return [
             Node(
                 name=self.output_name,
                 callable=merge_scorecard_values,
-                original_callable=merge_scorecard_values,
                 input_map=input_map,
             )
         ]

@@ -1,12 +1,15 @@
 import typing as t
 import inspect
+import polars as pl
 from dataclasses import dataclass, field, replace
 from abc import ABC, abstractmethod
 from decider.types import TInputType, TOutputType
 from decider._ext import TypeDiscriminatedBaseModule
 
 if t.TYPE_CHECKING:
-    from decider.modules.primitives.mapper import MapperModule, ModuleInputSelector, ModuleOutputSelector
+    from decider.modules.primitives.mapper import MapperModule, ModuleOutputSelector
+    from decider.executor import Executor, CompiledDag
+    from decider.pipeline import Pipeline, ForkPipeline
 
 @dataclass(slots=True)
 class StaticValueNode:
@@ -18,7 +21,13 @@ class StaticValueNode:
 
     def __call__(self, inputs, cache=None) -> t.Any:
         return self.value
-    
+
+    def get_expr(self) -> t.Any:
+        return pl.lit(self.value)
+
+    def get_frame_value(self, _frames: t.Dict[str, t.Any]) -> t.Any:
+        return self.value
+
 @dataclass(slots=True)
 class ExternalInputNode:
     input_name: str
@@ -30,15 +39,34 @@ class ExternalInputNode:
     def __call__(self, inputs, cache= None) -> t.Any:
         return inputs[self.input_name]
 
+    def get_expr(self) -> pl.Expr:
+        return pl.col(self.input_name)
+
+    def get_frame_value(self, frames: t.Dict[str, t.Any]) -> t.Any:
+        if self.input_name not in frames:
+            raise ValueError(
+                f"Frame '{self.input_name}' not found. Available: {list(frames.keys())}"
+            )
+        return frames[self.input_name]
+
 
 @dataclass(slots=True)
 class Node:
+    """Represents a computation unit in the graph.
+
+    Nodes can be either:
+    - Expression nodes: pl.Expr → pl.Expr (add columns to existing frames)
+    - Frame nodes: pl.LazyFrame → pl.LazyFrame (create new frames via joins, etc.)
+    """
     name: str
     callable: t.Callable
+    node_type: t.Literal["expression", "frame"] = "expression"
+    """Type of node: 'expression' adds columns, 'frame' creates new frames"""
+
     namespace: t.Tuple[str, ...] = field(default_factory=tuple)
-    
+
     input_map: t.Dict[str, t.Union["Node", StaticValueNode, ExternalInputNode]] = field(
-        default_factory=dict, 
+        default_factory=dict,
         metadata={
             "description": "Maps this module's input parameters to external variable names. "
                          "Format: {my_input_param: external_variable_name}. "
@@ -47,9 +75,25 @@ class Node:
         }
     )
 
+    target_frame: str = "input"
+    """For expression nodes: which frame to add columns to. For frame nodes: output frame name."""
+
     @property
     def node_id(self) -> t.Tuple[str, ...]:
         return self.namespace + (self.name,)
+
+    def get_expr(self) -> pl.Expr:
+        return pl.col(self.name)
+
+    def get_input_expressions(self) -> t.Dict[str, t.Any]:
+        return {param_name: ref.get_expr() for param_name, ref in self.input_map.items()}
+
+    def get_frame_kwargs(self, frames: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+        return {param_name: ref.get_frame_value(frames) for param_name, ref in self.input_map.items()}
+
+    @property
+    def frame_dependencies(self) -> t.List[str]:
+        return [ref.input_name for ref in self.input_map.values() if isinstance(ref, ExternalInputNode)]
 
     @classmethod
     def from_callable(
@@ -143,6 +187,37 @@ class BaseModule(TypeDiscriminatedBaseModule, ABC):
         from decider.modules.primitives.mapper import ModuleInputAccessor
         return ModuleInputAccessor(self)
 
+    def compile(
+        self,
+        executor: t.Optional["Executor"] = None,
+        allow_overrides: bool = False,
+    ) -> "CompiledDag":
+        """Compile this module into an executable form.
+
+        This is the compilation step - it converts nodes into ordered expressions.
+        The result (CompiledDag) can be cached and reused for multiple executions.
+
+        Args:
+            executor: Optional executor override. If None, uses global default from settings.
+            allow_overrides: If True, input columns whose names collide with this
+                module's computed columns take precedence — the expression is skipped
+                and the existing column is preserved. Use this for what-if injection
+                (passing a pre-computed value to bypass the module's own logic).
+                If False (default), a name collision raises a ValueError.
+
+        Returns:
+            CompiledDag ready for execution
+
+        Example:
+            >>> compiled = module.compile()           # raises on collision
+            >>> compiled = module.compile(allow_overrides=True)  # injection mode
+        """
+        from decider.settings import get_default_executor
+
+        exec_instance = executor or get_default_executor()
+        nodes = self.expand_nodes()
+        return exec_instance.compile(nodes, allow_overrides=allow_overrides)
+
     @property
     def output_names(self) -> t.List[str]:
         nodes = self.expand_nodes()
@@ -168,71 +243,27 @@ class BaseModule(TypeDiscriminatedBaseModule, ABC):
         
         return sorted(external_inputs)
 
-    def __or__(self, other: t.Union["BaseModule", "ModuleInputSelector"]) -> "MapperModule":
-        from decider.modules.primitives.mapper import MapperModule, ModuleInputSelector
-        
-        if isinstance(other, ModuleInputSelector):
-            my_outputs = self.output_names
-            if len(my_outputs) != 1:
-                raise ValueError(
-                    f"Module '{self.name}' has {len(my_outputs)} outputs ({my_outputs}). "
-                    f"Use .outputs.<name> to select one explicitly."
-                )
-            
-            if isinstance(self, MapperModule):
-                new_modules = self.modules + [other.module]
-                new_mappings = dict(self.mappings)
-                if other.module.name not in new_mappings:
-                    new_mappings[other.module.name] = {}
-                new_mappings[other.module.name][other.input_name] = (self.name, my_outputs[0])
-                return self.model_copy(update={"modules": new_modules, "mappings": new_mappings})
-            else:
-                return MapperModule(
-                    name=self.name,
-                    modules=[self, other.module],
-                    mappings={other.module.name: {other.input_name: (self.name, my_outputs[0])}},
-                )
-        
-        elif isinstance(other, BaseModule):
-            from decider.modules.primitives.mapper import MapperModule as MapperClass
-            
-            my_outputs = self.output_names
-            other_inputs = other.input_names
-            
-            if len(my_outputs) != 1:
-                raise ValueError(
-                    f"Module '{self.name}' has {len(my_outputs)} outputs ({my_outputs}). "
-                    f"Use .outputs.<name> | other.inputs.<name> for explicit wiring."
-                )
-            
-            if len(other_inputs) != 1:
-                raise ValueError(
-                    f"Module '{other.name}' has {len(other_inputs)} inputs ({other_inputs}). "
-                    f"Use self.outputs.<name> | other.inputs.<name> for explicit wiring."
-                )
-            
-            if isinstance(self, MapperClass):
-                if isinstance(other, MapperClass):
-                    new_modules = self.modules + other.modules
-                    new_mappings = dict(self.mappings)
-                    new_mappings.update(other.mappings)
-                else:
-                    new_modules = self.modules + [other]
-                    new_mappings = dict(self.mappings)
-                
-                if other.name not in new_mappings:
-                    new_mappings[other.name] = {}
-                new_mappings[other.name][other_inputs[0]] = (self.name, my_outputs[0])
-                return self.model_copy(update={"modules": new_modules, "mappings": new_mappings})
-            else:
-                return MapperClass(
-                    name=self.name,
-                    modules=[self, other],
-                    mappings={other.name: {other_inputs[0]: (self.name, my_outputs[0])}},
-                )
-        
-        else:
-            raise TypeError(f"Cannot wire BaseModule to {type(other).__name__}")
+    def __or__(self, other: t.Union["BaseModule", "Pipeline"]) -> "Pipeline":
+        from decider.pipeline import Pipeline
+        if isinstance(other, Pipeline):
+            return Pipeline([self] + other.steps)
+        return Pipeline([self, other])
+
+    def __and__(self, other: t.Union["BaseModule", "Pipeline", "ForkPipeline"]) -> "ForkPipeline":
+        from decider.pipeline import Pipeline, ForkPipeline
+        left = Pipeline([self])
+        right = other if isinstance(other, (Pipeline, ForkPipeline)) else Pipeline([other])
+        return ForkPipeline(branches=[left, right])
+
+    def include(self, *others: "BaseModule") -> "ForkPipeline":
+        """Branch from self into parallel paths, one per module.
+
+        engagement.include(mod1, mod2) is sugar for:
+            (engagement | mod1) & (engagement | mod2)
+        """
+        from decider.pipeline import Pipeline, ForkPipeline
+        branches = [Pipeline([self, other]) for other in others]
+        return ForkPipeline(branches=branches)
 
     def __lshift__(self, mapping: t.Dict[str, t.Union["BaseModule", "ModuleOutputSelector"]]) -> "MapperModule":
         from decider.modules.primitives.mapper import MapperModule as MapperClass, ModuleOutputSelector
@@ -289,42 +320,80 @@ class BaseModule(TypeDiscriminatedBaseModule, ABC):
         return self.__lshift__(kwargs)
 
     def execute(
-        self, 
-        inputs: TInputType,
-        outputs: t.List[str] = None,
-        **kwargs
-    ) -> TOutputType:
-        # TODO i really think that we should pass in an executor here and then do a build step and an execute step to keep thinks a bit seperated and modular
-        # But for the sake of simplicity lets just keep this as is.
-        pass
-    
+        self,
+        dataframes: t.Union[t.Dict[str, pl.LazyFrame], t.Dict[str, pl.DataFrame]],
+        output_frames: t.Optional[t.List[str]] = None,
+        executor: t.Optional["Executor"] = None,
+        debug: bool = False,
+        lazy: bool = True,
+        allow_overrides: bool = False,
+    ) -> t.Union[pl.LazyFrame, pl.DataFrame, t.Dict[str, pl.LazyFrame], t.Dict[str, pl.DataFrame]]:
+        """Execute this module on input dataframes.
+
+        Input frame convention:
+            Pass a dict of frames keyed by name.  Use ``"input"`` as the key
+            for the main frame — that is the default target every expression
+            writes to::
+
+                module.execute({"input": df})
+
+            You may supply additional named frames for multi-frame modules
+            (e.g. JoinModule) by adding extra keys::
+
+                join_module.execute({"transactions": txn_df, "users": user_df})
+
+        Args:
+            dataframes: Input frames (name → LazyFrame or DataFrame).
+            output_frames: If None, returns the final LazyFrame (or DataFrame
+                when ``lazy=False``).  Pass a list of frame names to get a
+                dict of results instead.
+            executor: Optional executor override (uses default from settings if None).
+            debug: If True, print debug information during execution.
+            lazy: If True (default), results are returned as LazyFrame(s).
+                Set to False to call ``.collect()`` automatically and return
+                eager DataFrame(s).
+
+        Returns:
+            * ``lazy=True, output_frames=None``  → ``pl.LazyFrame``
+            * ``lazy=False, output_frames=None`` → ``pl.DataFrame``
+            * ``lazy=True, output_frames=[...]`` → ``Dict[str, pl.LazyFrame]``
+            * ``lazy=False, output_frames=[...]`` → ``Dict[str, pl.DataFrame]``
+        """
+        from decider.pipeline import Pipeline
+        result = Pipeline([self]).execute(
+            dataframes,
+            output_frames=output_frames,
+            executor=executor,
+            debug=debug,
+            allow_overrides=allow_overrides,
+        )
+        if not lazy:
+            if isinstance(result, dict):
+                return {k: v.collect() for k, v in result.items()}
+            return result.collect()
+        return result
+
     @abstractmethod
     def expand_nodes(self) -> t.List[Node]:
-        """Expands the module into a list of DeciderNodes."""
+        """Expands the module into a list of DeciderNodes.
+
+        DEPRECATED: Use expand_expressions() instead.
+        This method is kept for backward compatibility only.
+        """
         ...
 
-    def module_namespaced_nodes(
-        self,
-        module_name: t.Optional[str] = None,
-    ) -> t.List[Node]:
+    def module_namespaced_nodes(self) -> t.List[Node]:
         """
         Expand module nodes with namespace and apply input mapping.
-        
+
         This method:
         1. Expands the module into DeciderNodes
         2. Adds the module namespace to each node
-        3. Applies input mapping to redirect external variables to internal parameters
-        
-        Args:
-            module_name: The namespace to apply to all nodes in this module
-            
+
         Returns:
             List of DeciderNodes with namespace and input mapping applied
         """
-        # Get the raw nodes from the module
-        module_name = module_name or self.name
         raw_nodes = self.expand_nodes()
-
         return [
-            replace(n, namespace=(module_name,) + n.namespace) for n in raw_nodes
+            replace(n, namespace=(self.name,) + n.namespace) for n in raw_nodes
         ]

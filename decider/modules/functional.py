@@ -1,12 +1,78 @@
 import typing as t
 import inspect
+import polars as pl
 from pydantic import BaseModel
 from types import ModuleType
 from .core import BaseModule, Node
 
+if t.TYPE_CHECKING:
+    from decider.execution import ExpressionPlan, ExecutionContext
+
 
 def generate_from_functions(module_name: str, *functions: t.Callable) -> t.Type[BaseModule]:
-    """Dynamically generate a BaseModule subclass from a list of functions."""
+    """Create a module class from plain Python functions.
+
+    Three conventions wire everything together automatically:
+
+    1. **Function name → output column name**
+       Each function produces a new column whose name matches the function's
+       ``__name__``.  ``def risk_score(...) → pl.Expr`` adds a ``risk_score``
+       column to the frame.
+
+    2. **Parameter name → input column lookup**
+       Parameters are resolved in order:
+       a. If another function in this call has the same name, its output
+          expression is injected (dependency wiring).
+       b. Otherwise the parameter is read from the column of that name in the
+          input dataframe.
+
+       Example — ``amount_centered`` receives the output of ``amount_mean``:
+       ::
+
+           def amount_mean(amount: pl.Expr) -> pl.Expr:
+               return amount.mean()
+
+           def amount_centered(amount: pl.Expr, amount_mean: pl.Expr) -> pl.Expr:
+               return amount - amount_mean
+
+    3. **Optional ``config`` parameter → module config injection**
+       If a function declares a ``config`` parameter annotated with a Pydantic
+       model, the module itself acts as that config (fields are defined on the
+       generated class) and the current instance is injected at call time.
+
+    Args:
+        module_name: Type discriminator string used for serialisation.  Also
+            shows up in debug output and error messages.  Must be lowercase and
+            unique within your project (e.g. ``"income_scorer"``).
+        *functions: One or more plain functions returning ``pl.Expr``.  Order
+            only matters when two functions share the same dependency graph
+            level — prefer topological clarity over positional ordering.
+
+    Returns:
+        A new ``BaseModule`` subclass.  Instantiate it with ``name=`` to get a
+        module you can ``.execute()``, ``.compile()``, or compose with ``|``::
+
+            Scorer = generate_from_functions("scorer", risk_score, tier_flag)
+            scorer = Scorer(name="my_scorer")
+            result = scorer.execute({"input": df})
+
+    Input frame convention:
+        Pass frames as a dict.  The key ``"input"`` is the default frame every
+        expression targets.  You may pass additional named frames; expression
+        functions always operate on columns, not whole frames.
+
+    Quickstart::
+
+        import polars as pl
+        from decider.modules.functional import generate_from_functions
+
+        def score(amount: pl.Expr) -> pl.Expr:
+            return amount * 100
+
+        Scorer = generate_from_functions("scorer", score)
+        result = Scorer(name="s").execute({"input": pl.DataFrame({"amount": [1, 2, 3]})})
+        # result is a LazyFrame; call .collect() to materialise it
+    """
     # Create a dictionary of the functions to be used as the namespace for the new class
 
     # 1. look in all functions for a keyword argument named config and ensure they are all the same
@@ -39,15 +105,19 @@ def generate_from_functions(module_name: str, *functions: t.Callable) -> t.Type[
         type: t.Literal[module_name]
 
         def expand_nodes(self) -> t.List["Node"]:
+            """DEPRECATED: Use expand_expressions() instead.
+
+            Kept for backward compatibility with existing code.
+            """
             nonlocal functions, requires_injection
             internal_nodes: t.Dict[str, Node] = {}
             for inject, func in zip(requires_injection, functions):
                 node = Node.from_callable(
-                    func, 
+                    func,
                     static_kwargs={"config": self} if inject else None
                 )
                 internal_nodes[node.name] = node
-            
+
             for node in internal_nodes.values():
                 for k in node.input_map.keys():
                     if k in internal_nodes:
