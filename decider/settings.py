@@ -1,6 +1,7 @@
 import typing as t
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from functools import cache
 
 
 class APISettings(BaseModel):
@@ -24,6 +25,14 @@ class DeciderAppExtensionSettings(BaseModel):
 
 SETTINGS_DEFAULT_CONFIG_POLL_DURATION_S: int = 10
 
+class DeciderConfigSettings(BaseModel):
+    model_config = ConfigDict(extra='allow')
+    type: str = "file:json"
+
+    def get(self):
+        from decider.config import ConfigManager
+        return ConfigManager.model_validate(self.model_dump())
+
 
 class DeciderSettings(BaseSettings):
     """Main settings for the Decider application."""
@@ -35,7 +44,7 @@ class DeciderSettings(BaseSettings):
 
     ext: DeciderAppExtensionSettings = Field(default_factory=DeciderAppExtensionSettings)
     api: APISettings = Field(default_factory=APISettings)
-    config_poll_duration_s: int = SETTINGS_DEFAULT_CONFIG_POLL_DURATION_S
+    config: DeciderConfigSettings = Field(default_factory=DeciderConfigSettings)
 
 
 settings = DeciderSettings()
@@ -49,9 +58,8 @@ if t.TYPE_CHECKING:
     from decider.executor import Executor
 
 
-_default_executor: t.Optional["Executor"] = None
 
-
+@cache
 def get_default_executor() -> "Executor":
     """Get the default executor from settings.
 
@@ -64,31 +72,5 @@ def get_default_executor() -> "Executor":
         >>> executor = get_default_executor()
         >>> compiled = module.compile(executor)
     """
-    global _default_executor
-    if _default_executor is None:
-        from decider.executor import SimpleExecutor
-        _default_executor = SimpleExecutor()
-    return _default_executor
-
-
-def set_default_executor(executor: "Executor") -> None:
-    """Set the default executor globally.
-
-    This affects all modules that don't specify an explicit executor.
-
-    Args:
-        executor: The executor instance to use as default
-
-    Example:
-        >>> from decider.executor import WaveExecutor
-        >>> set_default_executor(WaveExecutor())
-        >>> # All modules now use WaveExecutor by default
-    """
-    global _default_executor
-    _default_executor = executor
-
-
-def reset_default_executor() -> None:
-    """Reset the default executor to None (will be lazy-initialized on next use)."""
-    global _default_executor
-    _default_executor = None
+    from decider.executor import SimpleExecutor
+    return SimpleExecutor()

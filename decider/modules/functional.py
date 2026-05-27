@@ -3,10 +3,8 @@ import inspect
 import polars as pl
 from pydantic import BaseModel
 from types import ModuleType
-from .core import BaseModule, Node
-
-if t.TYPE_CHECKING:
-    from decider.execution import ExpressionPlan, ExecutionContext
+from .core import BaseModule
+from .expression import ExpressionModule, Node
 
 
 def generate_from_functions(module_name: str, *functions: t.Callable) -> t.Type[BaseModule]:
@@ -50,11 +48,11 @@ def generate_from_functions(module_name: str, *functions: t.Callable) -> t.Type[
 
     Returns:
         A new ``BaseModule`` subclass.  Instantiate it with ``name=`` to get a
-        module you can ``.execute()``, ``.compile()``, or compose with ``|``::
+        module you can call directly or compose with ``|`` and ``&``::
 
             Scorer = generate_from_functions("scorer", risk_score, tier_flag)
             scorer = Scorer(name="my_scorer")
-            result = scorer.execute({"input": df})
+            result = scorer({"input": df})
 
     Input frame convention:
         Pass frames as a dict.  The key ``"input"`` is the default frame every
@@ -70,7 +68,7 @@ def generate_from_functions(module_name: str, *functions: t.Callable) -> t.Type[
             return amount * 100
 
         Scorer = generate_from_functions("scorer", score)
-        result = Scorer(name="s").execute({"input": pl.DataFrame({"amount": [1, 2, 3]})})
+        result = Scorer(name="s")({"input": pl.DataFrame({"amount": [1, 2, 3]})})
         # result is a LazyFrame; call .collect() to materialise it
     """
     # Create a dictionary of the functions to be used as the namespace for the new class
@@ -101,14 +99,10 @@ def generate_from_functions(module_name: str, *functions: t.Callable) -> t.Type[
 
     module_name = module_name.lower()
 
-    class TModule(BaseModule, config_class):
+    class TModule(ExpressionModule, config_class):
         type: t.Literal[module_name]
 
-        def expand_nodes(self) -> t.List["Node"]:
-            """DEPRECATED: Use expand_expressions() instead.
-
-            Kept for backward compatibility with existing code.
-            """
+        def expand_nodes(self) -> t.Dict[str, "Node"]:
             nonlocal functions, requires_injection
             internal_nodes: t.Dict[str, Node] = {}
             for inject, func in zip(requires_injection, functions):
@@ -123,7 +117,7 @@ def generate_from_functions(module_name: str, *functions: t.Callable) -> t.Type[
                     if k in internal_nodes:
                         node.input_map[k] = internal_nodes[k]
 
-            return list(internal_nodes.values())
+            return internal_nodes
     return TModule
 
 def generate_from_module(module_name: str, module: ModuleType) -> t.Type[BaseModule]:

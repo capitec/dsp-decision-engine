@@ -1,10 +1,5 @@
-from decider.modules._ext import register_graph_module
-from .mapper import MapperModule, ModuleOutputSelector, ModuleInputSelector
+from .join import FrameModule, JoinModule, FrameRef
+from .union import UnionExpressionModule
+from .sequential import SequentialModule
 
-register_graph_module(MapperModule)
-
-__all__ = [
-    "MapperModule",
-    "ModuleOutputSelector",
-    "ModuleInputSelector",
-]
+__all__ = ["FrameModule", "JoinModule", "FrameRef", "UnionExpressionModule", "SequentialModule"]

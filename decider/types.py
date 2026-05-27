@@ -1,4 +1,6 @@
 import typing as t
+import polars as pl
 
-TInputType = t.Any
-TOutputType = t.Any
+
+TInputType = t.Dict[str, pl.LazyFrame]
+TOutputType = pl.LazyFrame

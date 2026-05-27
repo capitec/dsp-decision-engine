@@ -1,6 +1,7 @@
 import typing as t
 from pydantic import model_validator
-from decider.modules.core import BaseModule, Node
+from decider.modules.core import BaseModule
+from decider.modules.expression import Node, ExternalInputNode
 from .config import ParametersConfig, Expression
 
 

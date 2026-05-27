@@ -3,10 +3,10 @@ import typing as t
 from abc import abstractmethod
 
 from pydantic import Field
-from .core import ConfigManager, VersionedConfig
+from .core import CoreConfigManager, VersionedConfig
 
 
-class BaseFileConfigManager(ConfigManager):
+class BaseFileConfigManager(CoreConfigManager):
     """Shared logic for all file-backed config managers.
 
     Files are stored as:

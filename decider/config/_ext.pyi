@@ -4,13 +4,13 @@ ConfigManagerModel is generated dynamically; this gives pyright/mypy a
 concrete type.
 """
 import typing as t
-from .core import ConfigManager
+from .core import CoreConfigManager
 from decider._ext import TExtendableModel
 
-ConfigManagerModel = TExtendableModel[ConfigManager]
+ConfigManager = TExtendableModel[CoreConfigManager]
 
 
-def register_config_manager(provider_class: t.Type[ConfigManager]) -> None: ...
+def register_config_manager(provider_class: t.Type[CoreConfigManager]) -> None: ...
 
 
 __all__: list[str]

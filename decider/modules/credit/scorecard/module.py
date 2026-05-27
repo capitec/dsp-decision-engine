@@ -1,7 +1,8 @@
 import typing as t
 import polars as pl
 from pydantic import Discriminator, Tag, model_validator, PrivateAttr, field_validator
-from decider.modules.core import BaseModule, Node
+from decider.modules.core import BaseModule
+from decider.modules.expression import Node
 from .impl import (
     BoundBin, 
     ValuesBin, 
@@ -251,7 +252,7 @@ class ScoreCard(BaseModule):
         return variables
     
     def expand_nodes(self) -> t.List[Node]:
-        from decider.modules.core import ExternalInputNode
+        from decider.modules.expression import ExternalInputNode
 
         nodes = []
         for variable in self.variables:
@@ -330,7 +331,7 @@ class MergeScorecardValues(BaseModule):
         return weighted_scores
 
     def expand_nodes(self) -> t.List[Node]:
-        from decider.modules.core import ExternalInputNode
+        from decider.modules.expression import ExternalInputNode
 
         # TODO i just made this up i think its more complex than this as pd is involved here. @christiaan
         weighted_scores = self.weighted_scores

@@ -1,45 +1,25 @@
 import asyncio
 import typing as t
 from abc import abstractmethod
-from dataclasses import dataclass, field
 
 from pydantic import PrivateAttr
 from decider._ext import TypeDiscriminatedBaseModule
+from .versioned import VersionedConfig, Version, VersionPart, with_versioned_config
 
 
-@dataclass
-class VersionedConfig:
-    version: str
-    config: t.Dict[str, t.Any] = field(default_factory=dict)
-
-
-def _parse_version(version: str) -> t.Tuple[int, int, int]:
-    parts = version.split(".")
-    if len(parts) != 3:
-        raise ValueError(f"Invalid version string: {version!r}. Expected MAJOR.MINOR.PATCH")
-    return (int(parts[0]), int(parts[1]), int(parts[2]))
-
-
-def _bump_version(version: str, bump: t.Literal["major", "minor", "patch"] = "minor") -> str:
-    major, minor, patch = _parse_version(version)
-    if bump == "major":
-        return f"{major + 1}.0.0"
-    elif bump == "minor":
-        return f"{major}.{minor + 1}.0"
-    else:
-        return f"{major}.{minor}.{patch + 1}"
-
-
-class ConfigManager(TypeDiscriminatedBaseModule):
+class CoreConfigManager(TypeDiscriminatedBaseModule):
     """Base pydantic model for versioned config managers.
 
-    Runtime state (_current, _dirty) is stored in PrivateAttr so pydantic
+    Runtime state (_current, _lock) is stored in PrivateAttr so pydantic
     doesn't include it in serialisation. Subclasses implement the four
     storage primitives; the public API is fully implemented here.
+
+    _dirty state lives on VersionedConfig.is_dirty; _lock guards all reads
+    and writes of _current.
     """
 
     _current: t.Optional[VersionedConfig] = PrivateAttr(default=None)
-    _dirty: bool = PrivateAttr(default=False)
+    _lock: asyncio.Lock = PrivateAttr(default_factory=asyncio.Lock)
 
     # ------------------------------------------------------------------
     # Abstract storage primitives
@@ -55,7 +35,7 @@ class ConfigManager(TypeDiscriminatedBaseModule):
     async def _version_exists(self, version: str) -> bool: ...
 
     @abstractmethod
-    async def _latest_version(self) -> t.Optional[str]: ...
+    async def _latest_version(self) -> t.Optional[Version]: ...
 
     # ------------------------------------------------------------------
     # Public API
@@ -63,46 +43,68 @@ class ConfigManager(TypeDiscriminatedBaseModule):
 
     async def get(self) -> VersionedConfig:
         if self._current is None:
-            latest = await self._latest_version()
-            if latest is None:
-                self._current = VersionedConfig(version="0.1.0")
-            else:
-                self._current = await self._load_version(latest)
+            async with self._lock:
+                # Check it hasn't updated while we were waiting for the lock
+                if self._current is None:
+                    latest = await self._latest_version()
+                    if latest is None:
+                        self._current = VersionedConfig(version=Version(0, 0, -1), config={})
+                    else:
+                        self._current = await self._load_version(latest)
         return self._current
+    
 
-    def create_version(self, bump: t.Literal["major", "minor", "patch"] = "minor") -> VersionedConfig:
-        if self._current is None:
-            new_version = "0.1.0"
-            new_config: t.Dict[str, t.Any] = {}
-        else:
-            new_version = _bump_version(self._current.version, bump)
-            new_config = dict(self._current.config)
+    async def current_version_context(self) -> t.ContextManager[VersionedConfig]:
+        """Context manager to get the current versioned config. Use this in any code that needs access to the config."""
+        config = await self.get()
+        return with_versioned_config(config)
 
-        self._current = VersionedConfig(version=new_version, config=new_config)
-        self._dirty = True
-        return self._current
 
-    async def save_version(self, override: bool = False) -> None:
-        if self._current is None:
-            raise RuntimeError("No current version to save. Call create_version() first.")
-
-        exists = await self._version_exists(self._current.version)
-        if exists and not override:
-            raise FileExistsError(
-                f"Version {self._current.version!r} already exists. "
-                "Pass override=True to overwrite."
+    async def create_version(self, bump: VersionPart = VersionPart.MINOR, force: bool = False) -> VersionedConfig:
+        async with self._lock:
+            if self._current is None:
+                self._current = VersionedConfig(version=Version(0,0,0), config={})
+                return self._current
+            if not force:
+                latest_version = await self._latest_version()
+                if latest_version is not None and latest_version != self._current.version:
+                    raise ValueError(
+                        f"Current version {self._current.version!r} should exactly match latest version {latest_version!r} before creating a new version."
+                        + (
+                            "You are behind the latest version please run check_for_updates to fetch the latest version, or pass force=True to ignore this check."
+                            if latest_version > self._current.version else 
+                            "You are ahead of the latest version, which likely means you have un-pushed changes. Please push them before creating a new version, or pass force=True to ignore this check."
+                          )
+                    )
+            self._current = VersionedConfig(
+                version=self._current.version.bump(bump), 
+                config=self._current.config.copy()
             )
+            return self._current
 
-        await self._write_version(self._current)
-        self._dirty = False
+    async def save_version(self, overwrite: bool = False) -> None:
+        async with self._lock:
+            if self._current is None:
+                raise RuntimeError("No current version to save. Call create_version() first.")
 
-    async def check_for_updates(self) -> t.Tuple[t.Optional[str], bool]:
+            exists = await self._version_exists(self._current.version)
+            if exists and not overwrite:
+                raise FileExistsError(
+                    f"Version {self._current.version!r} already exists. "
+                    "Pass overwrite=True to overwrite."
+                )
+
+            await self._write_version(self._current)
+
+    async def check_for_updates(self) -> t.Tuple[t.Optional[Version], bool]:
         latest = await self._latest_version()
         if latest is None:
             return None, False
-        if self._current is None:
+        async with self._lock:
+            current = self._current
+        if current is None:
             return latest, True
-        has_update = _parse_version(latest) > _parse_version(self._current.version)
+        has_update = latest > current.version
         return latest, has_update
 
     async def pull_version(
@@ -110,19 +112,20 @@ class ConfigManager(TypeDiscriminatedBaseModule):
         version: t.Optional[str] = None,
         force: bool = False,
     ) -> VersionedConfig:
-        if self._dirty and not force:
-            raise RuntimeError(
-                "There are unsaved changes to the current version. "
-                "Call save_version() first, or pass force=True to discard them."
-            )
+        async with self._lock:
 
-        target = version or await self._latest_version()
-        if target is None:
-            raise RuntimeError("No versions available in the store.")
-
-        self._current = await self._load_version(target)
-        self._dirty = False
-        return self._current
+            target = version or await self._latest_version()
+            if target is None:
+                raise RuntimeError("No versions available in the store.")
+            if not force and self._current is not None:
+                if self._current.version >= target.version:
+                    raise ValueError(
+                        f"Current version {self._current.version!r} is newer or equal to target version {target!r}. "
+                        "Pass force=True to ignore this check."
+                    )
+            
+            self._current = await self._load_version(target)
+            return self._current
 
     async def subscribe_version_updates(self, force: bool = True) -> None:
         """Poll for new versions and auto-pull. Safe to run as a background task."""

@@ -1,6 +1,6 @@
-from .core import ConfigManager, VersionedConfig
+from .core import CoreConfigManager, VersionedConfig
 from .file import JsonFileConfigManager, YamlFileConfigManager, TomlFileConfigManager
-from ._ext import ConfigManagerModel, register_config_manager
+from ._ext import ConfigManager, register_config_manager
 
 
 def _register_builtins() -> None:
@@ -12,11 +12,11 @@ def _register_builtins() -> None:
 _register_builtins()
 
 __all__ = [
-    "ConfigManager",
+    "CoreConfigManager",
     "VersionedConfig",
     "JsonFileConfigManager",
     "YamlFileConfigManager",
     "TomlFileConfigManager",
-    "ConfigManagerModel",
+    "ConfigManager",
     "register_config_manager",
 ]

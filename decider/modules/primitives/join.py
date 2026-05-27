@@ -1,74 +1,63 @@
-"""Join module for combining dataframes.
-
-This module provides JoinModule which creates frame-level nodes for joining dataframes.
-"""
-
 import typing as t
+from abc import abstractmethod
+
 import polars as pl
-from decider.modules.core import BaseModule, Node, ExternalInputNode
+
+from decider.types import TInputType, TOutputType
+from decider.modules.core import BaseModule, BaseExecuteModule
 
 
-class JoinModule(BaseModule):
-    """Module that joins two dataframes.
+if t.TYPE_CHECKING:
+    from decider.executor import Executor
 
-    Creates a single frame node that performs a join operation.
 
-    Example:
-        >>> join = JoinModule(
-        ...     name="user_transactions",
-        ...     left="transactions",
-        ...     right="users",
-        ...     on="user_id",
-        ...     how="left",
-        ...     output_frame="enriched"
-        ... )
-        >>> result = join.execute({
-        ...     "transactions": txn_df,
-        ...     "users": user_df
-        ... })
-        >>> # result["enriched"] contains the joined data
+FrameInput = t.Union[str, BaseModule]
+
+
+def _resolve_frame(
+    ref: FrameInput,
+    inputs: TInputType,
+    executor: "Executor",
+) -> pl.LazyFrame:
+    if isinstance(ref, str):
+        frame = inputs[ref]
+        return frame.lazy() if isinstance(frame, pl.DataFrame) else frame
+    result = ref(inputs, executor=executor)
+    return result.lazy() if isinstance(result, pl.DataFrame) else result
+
+
+class FrameRef(BaseExecuteModule):
+    """Extracts a named frame from inputs as 'input', enabling frame routing.
+
+    Used to feed a specific named input into a sub-pipeline:
+        FrameRef("input1") | scorer  →  routes input1 through scorer
     """
 
+    type: t.Literal["frame_ref"]
+
+    def execute(self, inputs: TInputType, executor: "Executor") -> TOutputType:
+        frame = inputs[self.name]
+        return frame.lazy() if isinstance(frame, pl.DataFrame) else frame
+
+
+class FrameModule(BaseExecuteModule):
+    """Module that combines named input frames and returns a new LazyFrame."""
+
+    @abstractmethod
+    def execute(self, inputs: TInputType, executor: "Executor") -> TOutputType:
+        ...
+
+
+class JoinModule(FrameModule):
     type: t.Literal["join"]
-    left: str
-    """Name of the left dataframe"""
-
-    right: str
-    """Name of the right dataframe"""
-
+    left: FrameInput
+    right: FrameInput
     on: t.Union[str, t.List[str]]
-    """Column(s) to join on"""
+    how: str = "left"
 
-    how: t.Literal["inner", "left", "outer", "cross", "semi", "anti"] = "left"
-    """Join strategy"""
+    model_config = {"arbitrary_types_allowed": True}
 
-    output_frame: str = "joined"
-    """Name of the output frame (default: 'joined')"""
-
-    suffix: str = "_right"
-    """Suffix for duplicate column names from right frame"""
-
-    def expand_nodes(self) -> t.List[Node]:
-        """Create a single frame node that performs the join."""
-
-        def join_func(left_df: pl.LazyFrame, right_df: pl.LazyFrame) -> pl.LazyFrame:
-            """Execute the join operation."""
-            return left_df.join(
-                right_df,
-                on=self.on,
-                how=self.how,
-                suffix=self.suffix
-            )
-
-        node = Node(
-            name=f"{self.name}_join",
-            callable=join_func,
-            node_type="frame",
-            target_frame=self.output_frame,
-            input_map={
-                "left_df": ExternalInputNode(self.left),
-                "right_df": ExternalInputNode(self.right),
-            }
-        )
-
-        return [node]
+    def execute(self, inputs: TInputType, executor: "Executor") -> TOutputType:
+        left_frame = _resolve_frame(self.left, inputs, executor)
+        right_frame = _resolve_frame(self.right, inputs, executor)
+        return left_frame.join(right_frame, on=self.on, how=self.how)
