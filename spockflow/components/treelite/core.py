@@ -36,13 +36,13 @@ class RangeTestNode(TestNode):
     thresholds: typing.List[float] = Field(min_length=1)
 
     @model_validator(mode="after")
-    def validate_thresholds(self) -> typing.Self:
+    def validate_thresholds(self) -> "typing.Self":
         if len(self.thresholds) < 1:
             raise ValueError(f"Range test nodes should have at least one threshold")
         return self
 
     @model_validator(mode="after")
-    def validate_children(self) -> typing.Self:
+    def validate_children(self) -> "typing.Self":
         # Ensure the number of children equals the number of thresholds + 1
         # Since N thresholds create N+1 ranges
         # We allow more children here but ignore them if present
@@ -133,7 +133,7 @@ class NumericalTestNode(TestNode):
     comparison_op: typing.Literal["<=", "<", "==", ">", ">="]
 
     @model_validator(mode="after")
-    def validate_two_children(self) -> typing.Self:
+    def validate_two_children(self) -> "typing.Self":
         if len(self.children) < 2:
             raise ValueError("Numerical nodes must have at least 2 child outputs")
         return self
@@ -165,7 +165,7 @@ class CategoricalTestNode(TestNode):
     category_list_right_child: bool
 
     @model_validator(mode="after")
-    def validate_two_children(self) -> typing.Self:
+    def validate_two_children(self) -> "typing.Self":
         if len(self.children) < 2:
             raise ValueError("Categorical nodes must have at least 2 child outputs")
         return self

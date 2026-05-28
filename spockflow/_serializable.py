@@ -10,7 +10,6 @@ from pydantic import (
 )
 from pydantic.json_schema import JsonSchemaValue
 
-
 values_schema = core_schema.dict_schema(keys_schema=core_schema.str_schema())
 
 dataframe_json_schema = core_schema.model_fields_schema(

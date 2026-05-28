@@ -2,7 +2,6 @@ import pandas as pd
 from spockflow.components.tree import Tree
 from spockflow.components.common import Reject
 
-
 tree = Tree()
 
 

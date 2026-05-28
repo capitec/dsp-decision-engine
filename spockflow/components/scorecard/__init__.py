@@ -9,7 +9,6 @@ from .v2.criteria import (
 from .v2.criteria_numerical import Bounds
 from .probability import log_odds_from_score, probability_of_default_from_log_odds
 
-
 # This is for when there is more than one version
 # class ScoreCard(RootModel):
 #     root: typing.Annotated[
