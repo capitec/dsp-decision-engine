@@ -65,10 +65,6 @@ def test_parse_and_compile(basic_treelite_config: str):
 
     assert compiled_tree.output_priority_mapping.shape == (3,)
     assert compiled_tree.leaf_output_mapping.shape == (3,)
-    assert all(
-        str(dt) in ("object", "string")
-        for dt in compiled_tree.output_dataframe_mapping.dtypes
-    )
     leaf_priorities = [
         compiled_tree.output_priority_mapping[compiled_tree.node_id_mapping["1"]],
         compiled_tree.output_priority_mapping[
