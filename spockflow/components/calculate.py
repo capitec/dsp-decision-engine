@@ -6,7 +6,6 @@ import pandas as pd
 from spockflow.nodes import VariableNode, creates_node
 from hamilton import node
 
-
 T = typing.TypeVar("T")
 
 

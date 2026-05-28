@@ -65,7 +65,7 @@ class CompiledNumpyTree:
         )
         self._has_priority = any(self._flattened_priority != 1)
 
-        (predefined_conditions, predefined_condition_names, execution_conditions) = (
+        predefined_conditions, predefined_condition_names, execution_conditions = (
             self._split_predefined(
                 items=flattened_tree.conditions,
                 predefined_types=(pd.Series, np.ndarray),
@@ -82,7 +82,7 @@ class CompiledNumpyTree:
         self.all_condition_names = predefined_condition_names + execution_conditions
         self.execution_conditions = execution_conditions
 
-        (predefined_outputs, predefined_outputs_names, execution_outputs) = (
+        predefined_outputs, predefined_outputs_names, execution_outputs = (
             self._split_predefined(
                 items=flattened_tree.outputs,
                 predefined_types=pd.DataFrame,

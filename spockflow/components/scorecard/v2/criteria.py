@@ -7,7 +7,6 @@ from spockflow._util import get_name
 from .criteria_numerical import ScoreCriteriaNumerical
 from .criteria_categorical import ScoreCriteriaCategorical
 
-
 ScoreCriteria = typing.Annotated[
     typing.Union[ScoreCriteriaCategorical, ScoreCriteriaNumerical],
     Field(discriminator="type"),

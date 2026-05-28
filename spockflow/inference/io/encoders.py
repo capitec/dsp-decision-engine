@@ -7,7 +7,6 @@ import pandas as pd
 from .responses import Response, CSVResponse, JSONResponse
 from . import content_types
 
-
 TDefaultResult = typing.Union[
     pd.Series, pd.DataFrame, np.ndarray, typing.Dict[str, typing.Any]
 ]
