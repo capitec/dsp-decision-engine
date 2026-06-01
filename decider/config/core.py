@@ -41,24 +41,34 @@ class CoreConfigManager(TypeDiscriminatedBaseModule):
     # Public API
     # ------------------------------------------------------------------
 
-    async def get(self) -> VersionedConfig:
+    def get(self) -> VersionedConfig:
         if self._current is None:
-            async with self._lock:
-                # Check it hasn't updated while we were waiting for the lock
-                if self._current is None:
-                    latest = await self._latest_version()
-                    if latest is None:
-                        self._current = VersionedConfig(version=Version(0, 0, -1), config={})
-                    else:
-                        self._current = await self._load_version(latest)
+            raise RuntimeError("No versioned config loaded. Call pull_version() or create_version() first.")
         return self._current
     
+    async def get_latest(self) -> VersionedConfig:
+        latest_version = await self._latest_version()
+        if latest_version is None:
+            raise RuntimeError("No versions available in the store.")
+        if self._current is not None and self._current.version >= latest_version:
+            return self._current
+        async with self._lock:
+            if self._current is not None and self._current.version >= latest_version:
+                return self._current
+            _current = await self._load_version(latest_version)
+            self._current = _current
+        return _current
+    
 
-    async def current_version_context(self) -> t.ContextManager[VersionedConfig]:
-        """Context manager to get the current versioned config. Use this in any code that needs access to the config."""
-        config = await self.get()
+    async def latest_version_context(self) -> t.ContextManager[VersionedConfig]:
+        """Context manager to get the latest versioned config. Use this in any code that needs access to the config."""
+        config = await self.get_latest()
         return with_versioned_config(config)
-
+    
+    def current_version_context(self) -> t.ContextManager[VersionedConfig]:
+        """Context manager to get the current versioned config. Use this in any code that needs access to the config."""
+        config = self.get()
+        return with_versioned_config(config)
 
     async def create_version(self, bump: VersionPart = VersionPart.MINOR, force: bool = False) -> VersionedConfig:
         async with self._lock:

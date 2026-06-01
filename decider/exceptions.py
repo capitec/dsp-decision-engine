@@ -57,6 +57,45 @@ class DeciderMissingDependencyError(DeciderError, ModuleNotFoundError):
         super().__init__(self.message, *args)
 
 
+class BaseConfigurationError(DeciderError):
+    _STATUS_CODE = 500
+    _MESSAGE = "A configuration error occurred."
+
+
+class ModuleLoadError(DeciderError):
+    _STATUS_CODE = 500
+    _MESSAGE = "Failed to load the decider module."
+
+    @classmethod
+    def from_value_error(cls, e: ValueError) -> "ModuleLoadError":
+        return cls(str(e))
+
+
+class UnsupportedContentTypeError(DeciderError):
+    _STATUS_CODE = 415
+    _MESSAGE = "Unsupported content type."
+
+
+class InputParsingError(DeciderError):
+    _STATUS_CODE = 400
+    _MESSAGE = "Failed to parse request input."
+
+
+class UnsupportedAcceptError(DeciderError):
+    _STATUS_CODE = 406
+    _MESSAGE = "Unsupported Accept media type."
+
+
+class OutputFormattingError(DeciderError):
+    _STATUS_CODE = 500
+    _MESSAGE = "Failed to format the output."
+
+
+class DeciderRuntimeError(DeciderError):
+    _STATUS_CODE = 500
+    _MESSAGE = "A runtime error occurred."
+
+
 @contextmanager
 def wrap_import_errors(optional_source: str = None, raise_error=True):
     try:

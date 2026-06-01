@@ -2,6 +2,9 @@ import typing as t
 from pydantic import BaseModel, ConfigDict, PrivateAttr, model_serializer, model_validator, SerializerFunctionWrapHandler, SerializationInfo
 from .versioned import Version, get_current_versioned_config
 
+if t.TYPE_CHECKING:
+    from decider.executor import Executor, FrameNode
+
 T = t.TypeVar("T", bound=BaseModel)
 
 DUMP_TRIGGER_KEY = "dump_to_versioned_config"
@@ -64,5 +67,47 @@ class BaseConfig(BaseModel, t.Generic[T]):
             if versioned_config is None:
                 raise RuntimeError("No versioned config found in context. Make sure to use current_version_context() when accessing the config.")
             # Update the versioned config with the current model's data
-            versioned_config.config[self.config_key] = self._constructed_model.model_dump()
+            versioned_config.config[self.config_key] = self._constructed_model.model_dump(context=ctx)
         return result
+
+
+TModule = t.TypeVar("TModule", bound="BaseModuleT")
+# Forward ref — resolved at runtime to avoid circular imports
+BaseModuleT = t.Any
+
+
+class ConfigModule(BaseConfig[TModule]):
+    """A BaseConfig whose _constructed_model is a BaseModule.
+
+    Delegates get_frame_nodes (and therefore __call__ / compile) to the
+    underlying module so the config layer is transparent at execution time.
+    The type discriminator required by TypeDiscriminatedBaseModule is
+    inherited from the wrapped module.
+    """
+
+    _MODEL_CLASS: t.ClassVar[t.Type]  # set by subclasses or inferred
+
+    @classmethod
+    def for_module_class(cls, module_class: t.Type[TModule]) -> t.Type["ConfigModule[TModule]"]:
+        """Factory that produces a ConfigModule subclass bound to a specific module class."""
+        return t.cast(
+            t.Type["ConfigModule[TModule]"],
+            type(
+                f"{module_class.__name__}Config",
+                (ConfigModule,),
+                {"_MODEL_CLASS": module_class, "__module__": module_class.__module__},
+            ),
+        )
+
+    # ------------------------------------------------------------------
+    # Delegate module interface to _constructed_model
+    # ------------------------------------------------------------------
+
+    def get_frame_nodes(self, executor: "Executor") -> t.List["FrameNode"]:
+        return self._constructed_model.get_frame_nodes(executor)
+
+    def compile(self, executor: "Executor"):
+        return self._constructed_model.compile(executor)
+
+    def __call__(self, inputs, executor=None):
+        return self._constructed_model(inputs, executor=executor)

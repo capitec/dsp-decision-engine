@@ -1,9 +1,10 @@
+import enum
 import typing as t
 from contextlib import contextmanager
 from contextvars import ContextVar
 
 
-class VersionPart(t.Enum):
+class VersionPart(enum.Enum):
     MAJOR = "major"
     MINOR = "minor"
     PATCH = "patch"
