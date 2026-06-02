@@ -4,6 +4,7 @@ from abc import abstractmethod
 
 from pydantic import Field
 from .core import CoreConfigManager, VersionedConfig
+from .versioned import Version
 
 
 class BaseFileConfigManager(CoreConfigManager):
@@ -25,10 +26,10 @@ class BaseFileConfigManager(CoreConfigManager):
     # Subclasses set this to the file extension (without leading dot).
     _file_ext: t.ClassVar[str]
 
-    def _version_dir(self, version: str) -> str:
-        return os.path.join(self.basepath, version)
+    def _version_dir(self, version) -> str:
+        return os.path.join(self.basepath, str(version))
 
-    def _file_path(self, version: str, key: str) -> str:
+    def _file_path(self, version, key: str) -> str:
         return os.path.join(self._version_dir(version), f"{key}.{self._file_ext}")
 
     def _list_versions(self) -> t.List[str]:
@@ -86,9 +87,13 @@ class BaseFileConfigManager(CoreConfigManager):
     async def _version_exists(self, version: str) -> bool:
         return os.path.isdir(self._version_dir(version))
 
-    async def _latest_version(self) -> t.Optional[str]:
+    async def _latest_version(self) -> t.Optional[Version]:
         versions = self._list_versions()
-        return versions[-1] if versions else None
+        if not versions:
+            return None
+        v = versions[-1]
+        parts = v.split(".")
+        return Version(int(parts[0]), int(parts[1]), int(parts[2]))
 
 
 class JsonFileConfigManager(BaseFileConfigManager):

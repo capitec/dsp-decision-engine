@@ -12,13 +12,17 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
-def initialize_decider() -> None:
+def initialize_decider(extension_path: str = None) -> None:
     """Initialise Decider by loading extensions from the configured extension path
     and importing any explicitly listed extension modules.
+
+    Args:
+        extension_path: Override the extension path from settings. Useful when
+            calling from a script before the settings singleton is configured.
     """
     from .settings import settings
     ext_settings = settings.ext
-    ext_path = Path(ext_settings.extension_path).resolve()
+    ext_path = Path(extension_path).resolve() if extension_path else Path(ext_settings.extension_path).resolve()
 
     # Add the extension path to sys.path so packages inside it are importable
     ext_path_str = str(ext_path)

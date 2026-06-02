@@ -23,7 +23,7 @@ async def predict(request: Request) -> Response:
     if handler is None:
         return Response(content=_INITIALIZING, status_code=503, media_type="application/json")
     content_type, accept = parse_content_headers(request.headers)
-    result = handler.process_fn(await request.body(), accept, content_type)
+    result = await handler.process_fn(await request.body(), accept, content_type)
     return Response(content=result.content, media_type=result.media_type)
 
 
@@ -34,7 +34,9 @@ async def ping(_request: Request) -> Response:
 
 
 async def startup() -> None:
+    from decider.initialization import initialize_decider
     global handler
+    initialize_decider()
     _handler = construct_handler_from_settings()
     await _handler.init_fn()
     handler = _handler

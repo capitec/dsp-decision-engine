@@ -19,6 +19,9 @@ class SequentialModule(BaseExecuteModule):
     type: t.Literal["sequential"]
     steps: t.List[BaseModule]
 
+    def _compute_input_frame_keys(self) -> t.List[str]:
+        return self.steps[0].get_input_frame_keys() if self.steps else ["input"]
+
     def execute(self, inputs: TInputType, executor: "Executor") -> TOutputType:
         frames: t.Dict[str, pl.LazyFrame] = {
             k: v.lazy() if isinstance(v, pl.DataFrame) else v

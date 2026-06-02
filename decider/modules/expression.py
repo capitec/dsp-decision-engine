@@ -20,7 +20,7 @@ class StaticValueNode:
     value: t.Any
 
     def get_expr(self) -> t.Any:
-        return pl.lit(self.value)
+        return self.value
 
     def get_frame_value(self, _frames: t.Dict[str, t.Any]) -> t.Any:
         return self.value

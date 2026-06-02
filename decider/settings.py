@@ -31,7 +31,7 @@ class DeciderConfigSettings(BaseModel):
 
     def get(self):
         from decider.config import ConfigManager
-        return ConfigManager.model_validate(self.model_dump())
+        return ConfigManager.model_validate(self.model_dump()).root
 
 
 class DeciderSettings(BaseSettings):
@@ -39,6 +39,7 @@ class DeciderSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="Decider_",
+        env_nested_delimiter="__",
         case_sensitive=False,
     )
 

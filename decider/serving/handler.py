@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 import asyncio
 import importlib.util
+import typing as t
 
 import polars as pl
 
@@ -8,7 +9,7 @@ from decider.config import ConfigManager
 from decider.config.versioned import Version
 from decider.modules import GraphModule
 import decider.exceptions as exc
-from .parse import DEFAULT_INPUT_HANDLERS
+from .parse import DEFAULT_INPUT_HANDLERS, ParserConfig
 from .format import DEFAULT_OUTPUT_FORMATTERS, Response
 from .media_types import MediaType
 
@@ -20,24 +21,26 @@ class RequestHandler:
     _update_task: asyncio.Task = None
     _constructed_module: GraphModule = None
     _constructed_version: Version = None
+    _constructed_parse_config: t.Optional[ParserConfig] = None
 
     async def init_fn(self):
-        await self.config_manager.pull_version()
+        await self.config_manager.get_latest()
         self._update_task = asyncio.create_task(self.config_manager.subscribe_version_updates())
 
 
-    def module_fn(self) -> GraphModule:
+    def module_fn(self) -> t.Tuple[GraphModule, ParserConfig]:
         try:
             with self.config_manager.current_version_context() as versioned_config:
                 if self._constructed_version is not None and versioned_config.version == self._constructed_version:
-                    return self._constructed_module
+                    return self._constructed_module, self._constructed_parse_config
 
                 module_config = versioned_config.config.get(self.root_module)
                 if module_config is None:
                     raise ValueError(f"No config found for root module '{self.root_module}' in the current versioned config.")
-                self._constructed_module = GraphModule.model_validate(module_config)
+                self._constructed_module = GraphModule.model_validate(module_config).root
                 self._constructed_version = versioned_config.version
-                return self._constructed_module
+                self._constructed_parse_config = ParserConfig(input_frame_keys=self._constructed_module.get_input_frame_keys())
+                return self._constructed_module, self._constructed_parse_config
 
         except exc.BaseConfigurationError:
             raise
@@ -46,12 +49,12 @@ class RequestHandler:
         except Exception as e:
             raise exc.ModuleLoadError(str(e))
         
-    def input_fn(self, data: bytes, content_type: str):
+    async def input_fn(self, data: bytes, content_type: str, parse_config: t.Optional[ParserConfig] = None):
         handler = DEFAULT_INPUT_HANDLERS.get(content_type)
         if handler is None:
             raise exc.UnsupportedContentTypeError(f"Unsupported content type: {content_type!r}")
         try:
-            return handler(data)
+            return await handler(data, parse_config or ParserConfig())
         except Exception as e:
             raise exc.InputParsingError(str(e))
         
@@ -71,11 +74,11 @@ class RequestHandler:
         except Exception as e:
             raise exc.OutputFormattingError(str(e))
 
-    def process_fn(self, data: bytes, accept: str, content_type: str) -> Response:
-        module = self.module_fn()
-        input_data = self.input_fn(data, content_type)
-        resp = module(input_data)
-        return self.output_fn(resp, accept)
+    async def process_fn(self, data: bytes, accept: str, content_type: str) -> Response:
+        module, parse_config = self.module_fn()
+        input_data = await self.input_fn(data, content_type, parse_config)
+        result_df = module(input_data)
+        return self.output_fn(result_df, accept)
 
     async def shutdown_fn(self):
         self._update_task.cancel()

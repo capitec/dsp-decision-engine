@@ -1,0 +1,7 @@
+{
+  "dti_weight": 200.0,
+  "utilization_weight": 100.0,
+  "score_base": 800.0,
+  "type": "credit_scorer",
+  "name": "credit_scorer"
+}

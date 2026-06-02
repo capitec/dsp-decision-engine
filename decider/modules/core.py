@@ -13,6 +13,7 @@ if t.TYPE_CHECKING:
 class BaseModule(TypeDiscriminatedBaseModule, ABC):
     name: str
     _compiled_graph: t.Optional["CompiledFrameGraph"] = PrivateAttr(default=None)
+    _input_frame_keys: t.Optional[t.List[str]] = PrivateAttr(default=None)
 
 
     def compile(self, executor: "Executor") -> None:
@@ -39,6 +40,16 @@ class BaseModule(TypeDiscriminatedBaseModule, ABC):
         if isinstance(self, SequentialModule):
             return SequentialModule(name=self.name, steps=self.steps + [other])  # type: ignore[attr-defined]
         return SequentialModule(name=self.name, steps=[self, other])
+
+    def get_input_frame_keys(self) -> t.List[str]:
+        """Return the names of input frames this module expects, computed once and cached."""
+        if self._input_frame_keys is None:
+            self._input_frame_keys = self._compute_input_frame_keys()
+        return self._input_frame_keys
+
+    def _compute_input_frame_keys(self) -> t.List[str]:
+        """Override in subclasses that consume named frames other than 'input'."""
+        return ["input"]
 
     def to_config(self, config_key: str) -> "BaseConfig[t.Self]":
         from decider.config.base import ConfigModule

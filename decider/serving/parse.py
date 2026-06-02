@@ -1,13 +1,13 @@
 import json
 import typing as t
 import polars as pl
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from .media_types import MediaType
 
 
 @dataclass(slots=True)
 class ParserConfig:
-    input_frame_keys: t.List[str] = ("input")
+    input_frame_keys: t.List[str] = field(default_factory=lambda: ["input"])
 
 
 TParsedMessage = t.Dict[str, pl.DataFrame]

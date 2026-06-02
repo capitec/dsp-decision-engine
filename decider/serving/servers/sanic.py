@@ -17,7 +17,7 @@ async def predict(request: Request) -> HTTPResponse:
     if handler is None:
         return raw(_INITIALIZING, status=503, content_type="application/json")
     content_type, accept = parse_content_headers(request.headers)
-    result = handler.process_fn(request.body, accept, content_type)
+    result = await handler.process_fn(request.body, accept, content_type)
     return raw(result.content, status=200, content_type=result.media_type)
 
 
@@ -39,7 +39,9 @@ def create_app(name: str = "decider") -> Sanic:
 
     @app.before_server_start
     async def startup(_app, _loop) -> None:
+        from decider.initialization import initialize_decider
         global handler
+        initialize_decider()
         _handler = construct_handler_from_settings()
         await _handler.init_fn()
         handler = _handler

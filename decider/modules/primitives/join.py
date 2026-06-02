@@ -57,6 +57,18 @@ class JoinModule(FrameModule):
 
     model_config = {"arbitrary_types_allowed": True}
 
+    def _compute_input_frame_keys(self) -> t.List[str]:
+        keys = []
+        if isinstance(self.left, str):
+            keys.append(self.left)
+        else:
+            keys.extend(self.left.get_input_frame_keys())
+        if isinstance(self.right, str):
+            keys.append(self.right)
+        else:
+            keys.extend(self.right.get_input_frame_keys())
+        return list(dict.fromkeys(keys))  # deduplicate, preserve order
+
     def execute(self, inputs: TInputType, executor: "Executor") -> TOutputType:
         left_frame = _resolve_frame(self.left, inputs, executor)
         right_frame = _resolve_frame(self.right, inputs, executor)
