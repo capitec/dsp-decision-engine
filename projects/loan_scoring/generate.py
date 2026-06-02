@@ -32,8 +32,6 @@ EXTENSIONS_DIR = os.path.join(PROJECT_DIR, "decider_extensions")
 
 from decider.initialization import initialize_decider
 from decider.config.file import JsonFileConfigManager
-from decider.config.versioned import with_versioned_config
-from decider.config.base import DUMP_TRIGGER_KEY
 from decider.modules import GraphModule
 
 CONFIGS_DIR = os.path.join(PROJECT_DIR, "configs")
@@ -70,16 +68,10 @@ async def main():
 
     # ── Step 3: save to versioned JSON config ─────────────────────────────────
     config_manager = JsonFileConfigManager(basepath=CONFIGS_DIR)
-    versioned = await config_manager.create_version()
-    print(f"\n[3] Created version: {versioned.version}")
-
-    with with_versioned_config(versioned):
-        cfg = scorer.to_config(config_key=ROOT_KEY)
-        cfg.model_dump(context={DUMP_TRIGGER_KEY: True})
-
+    versioned = await scorer.asave(ROOT_KEY, config_manager)
     await config_manager.save_version(overwrite=True)
     written_path = os.path.join(CONFIGS_DIR, str(versioned.version), f"{ROOT_KEY}.json")
-    print(f"    Saved to: {written_path}")
+    print(f"\n[3] Saved version {versioned.version} to: {written_path}")
 
     with open(written_path) as f:
         on_disk = json.load(f)
@@ -131,8 +123,8 @@ before any config is parsed.
   python -m sanic decider.serving.servers.sanic:app --host 0.0.0.0 --port 8080
 
 Test request:
-  curl -X POST http://localhost:8080/predict \\
-       -H 'Content-Type: application/json' \\
+  curl -X POST http://localhost:8080/predict \
+       -H 'Content-Type: application/json' \
        -d '{{"debt":[25000],"income":[50000],"credit_used":[4000],"credit_limit":[10000]}}'
 """)
 

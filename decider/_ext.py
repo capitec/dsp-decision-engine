@@ -80,27 +80,27 @@ def create_extendable_model(
         root=("RootType", ...)
     )
     
-    _union_type = None
-    
-    def register_provider(provider_class: t.Type):
-        nonlocal _union_type
-        assert issubclass(provider_class, base_class), f"Provider must be a subclass of {base_class.__name__}"
-        
-        if _union_type is None:
-            _union_type = provider_class
-            # print(f"Updated union type: {_union_type}")
-        else:
-            _union_type = t.Union[_union_type, provider_class]
-            # print(f"Updated union type: {_union_type}")
-        
-        ExtendableModel.__annotations__["root"] = t.Annotated[_union_type, Field(discriminator=discriminator_field)]
-        ExtendableModel.model_fields["root"].annotation = t.Annotated[_union_type, Field(discriminator=discriminator_field)]
-        
+    _registered: t.Dict[str, t.Type] = {}
+
+    def _rebuild():
+        classes = list(_registered.values())
+        if not classes:
+            return
+        union = classes[0] if len(classes) == 1 else t.Union[tuple(classes)]
+        annotated = t.Annotated[union, Field(discriminator=discriminator_field)]
+        ExtendableModel.__annotations__["root"] = annotated
+        ExtendableModel.model_fields["root"].annotation = annotated
         was_rebuilt = ExtendableModel.model_rebuild(
-            force=True, 
-            _types_namespace={"RootType": t.Annotated[_union_type, Field(discriminator=discriminator_field)]}
+            force=True,
+            _types_namespace={"RootType": annotated},
         )
-        if was_rebuilt != True:
-            warn(f"{provider_class.__name__} was not properly rebuilt into {ExtendableModel.__name__}")
+        if was_rebuilt is not True:
+            warn(f"model_rebuild did not return True for {ExtendableModel.__name__}")
+
+    def register_provider(provider_class: t.Type):
+        assert issubclass(provider_class, base_class), f"Provider must be a subclass of {base_class.__name__}"
+        type_id = getattr(provider_class, "_CLASS_TYPE_IDENTIFIER", None) or provider_class.__name__
+        _registered[type_id] = provider_class
+        _rebuild()
     
     return ExtendableModel, register_provider

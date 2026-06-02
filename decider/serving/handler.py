@@ -21,7 +21,6 @@ class RequestHandler:
     _update_task: asyncio.Task = None
     _constructed_module: GraphModule = None
     _constructed_version: Version = None
-    _constructed_parse_config: t.Optional[ParserConfig] = None
 
     async def init_fn(self):
         await self.config_manager.get_latest()
@@ -32,15 +31,14 @@ class RequestHandler:
         try:
             with self.config_manager.current_version_context() as versioned_config:
                 if self._constructed_version is not None and versioned_config.version == self._constructed_version:
-                    return self._constructed_module, self._constructed_parse_config
+                    return self._constructed_module, ParserConfig(input_frame_keys=self._constructed_module.get_input_frame_keys())
 
                 module_config = versioned_config.config.get(self.root_module)
                 if module_config is None:
                     raise ValueError(f"No config found for root module '{self.root_module}' in the current versioned config.")
                 self._constructed_module = GraphModule.model_validate(module_config).root
                 self._constructed_version = versioned_config.version
-                self._constructed_parse_config = ParserConfig(input_frame_keys=self._constructed_module.get_input_frame_keys())
-                return self._constructed_module, self._constructed_parse_config
+                return self._constructed_module, ParserConfig(input_frame_keys=self._constructed_module.get_input_frame_keys())
 
         except exc.BaseConfigurationError:
             raise

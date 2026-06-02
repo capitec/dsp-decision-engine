@@ -56,17 +56,24 @@ class BaseModule(TypeDiscriminatedBaseModule, ABC):
         config_class = ConfigModule.for_module_class(type(self))
         return config_class.from_model(model=self, config_key=config_key)
 
-    async def save(self, root_key: str, config_manager=None) -> "VersionedConfig":
+    async def asave(self, root_key: str, config_manager=None) -> "VersionedConfig":
         from decider.config.base import DUMP_TRIGGER_KEY
         from decider.config.versioned import with_versioned_config
         if config_manager is None:
             from decider.settings import settings
             config_manager = settings.config.get()
-        versioned_conf = await config_manager.get()
+        try:
+            versioned_conf = await config_manager.get_latest()
+        except RuntimeError:
+            versioned_conf = await config_manager.create_version()
         with with_versioned_config(versioned_conf):
             config_mod = self.to_config(config_key=root_key)
             config_mod.model_dump(context={DUMP_TRIGGER_KEY: True})
         return versioned_conf
+
+    def save(self, root_key: str, config_manager=None) -> "VersionedConfig":
+        import asyncio
+        return asyncio.run(self.asave(root_key, config_manager))
 
 
 class BaseExecuteModule(BaseModule, ABC):
