@@ -67,11 +67,12 @@ class Executor(TypeDiscriminatedBaseModule, ABC):
         graph = module.compile(self)
         result = graph.execute(inputs, self)
         if self.debug:
-            if self.collect: 
-                result = {k:v.collect() for k,v in result.items()}
+            if self.collect:
+                result = {k: v.collect() if isinstance(v, pl.LazyFrame) else v for k, v in result.items()}
             return result
         res = result[graph.nodes[-1].name]  # Return only the final output frame
-        if self.collect: res = res.collect()
+        if self.collect and isinstance(res, pl.LazyFrame):
+            res = res.collect()
         return res
 
 
