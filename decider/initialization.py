@@ -30,10 +30,20 @@ def initialize_decider(extension_path: str = None) -> None:
         sys.path.insert(0, ext_path_str)
         logger.debug("Added extension path to sys.path: %s", ext_path_str)
 
-    # Discover and import all packages found at {ext_path}/*/__init__.py
+    # Discover flat packages:  ext_path/<pkg>/__init__.py
     for init_file in glob.glob(str(ext_path / "*" / "__init__.py")):
         module_name = Path(init_file).parent.name
-        logger.debug("Initialising extension module: %s", module_name)
+        logger.debug("Initialising flat extension: %s", module_name)
+        importlib.import_module(module_name)
+
+    # Discover src-layout packages:  ext_path/<pkg>/src/<pkg>/__init__.py
+    for init_file in glob.glob(str(ext_path / "*" / "src" / "*" / "__init__.py")):
+        src_dir = str(Path(init_file).parent.parent)
+        module_name = Path(init_file).parent.name
+        if src_dir not in sys.path:
+            sys.path.insert(0, src_dir)
+            logger.debug("Added src-layout path to sys.path: %s", src_dir)
+        logger.debug("Initialising src-layout extension: %s", module_name)
         importlib.import_module(module_name)
 
     # Import any explicitly listed extension modules
