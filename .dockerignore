@@ -1,0 +1,25 @@
+# Ignore everything then whitelist what the image actually needs
+*
+
+# Package source and build artefacts
+!/decider
+!/dist
+!/pyproject.toml
+!/uv.lock
+
+# Strip noise from allowed directories
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/*.egg-info
+**/.DS_Store
+**/Thumbs.db
+**/*.log
+**/.git
+**/.mypy_cache
+**/.pytest_cache
+**/.hypothesis
+**/.coverage
+**/.coverage.*
+**/.tox

@@ -1,6 +1,7 @@
 import typing as t
 
 import polars as pl
+from pydantic import field_validator
 
 from decider.types import TInputType, TOutputType
 from decider.modules.core import BaseModule, BaseExecuteModule
@@ -17,7 +18,21 @@ class SequentialModule(BaseExecuteModule):
     """
 
     type: t.Literal["sequential"]
-    steps: t.List[BaseModule]
+    steps: t.List[t.Any]  # BaseModule; use Any to allow discriminated deserialisation
+
+    @field_validator("steps", mode="before")
+    @classmethod
+    def _deserialise_steps(cls, v: t.Any) -> t.List[BaseModule]:
+        from decider.modules._ext import GraphModule
+        result = []
+        for item in v:
+            if isinstance(item, BaseModule):
+                result.append(item)
+            elif isinstance(item, dict):
+                result.append(GraphModule.model_validate(item).root)
+            else:
+                result.append(item)
+        return result
 
     def _compute_input_frame_keys(self) -> t.List[str]:
         return self.steps[0].get_input_frame_keys() if self.steps else ["input"]

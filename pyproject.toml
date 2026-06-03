@@ -1,7 +1,8 @@
 [project]
 name = "decider"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Build, serve and inspect decision pipelines"
+readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "polars",
@@ -15,19 +16,66 @@ serve-starlette = ["uvicorn", "starlette"]
 serve-sanic     = ["sanic"]
 visualise       = ["streamlit", "graphviz"]
 notebook        = ["ipython"]
-all             = [
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "anyio",
+]
+docs = [
+    "sphinx",
+    "furo",
+    "myst-nb",
+    "sphinx-design",
+    "sphinx-sitemap",
+]
+all = [
     "uvicorn", "starlette",
     "sanic",
     "streamlit", "graphviz",
     "ipython",
+    "pytest",
+    "pytest-asyncio",
+    "anyio",
+    "sphinx",
+    "furo",
+    "myst-nb",
+    "sphinx-design",
+    "sphinx-sitemap",
 ]
 
 [project.scripts]
 decider = "decider.cli:cli"
 
+# ── build ─────────────────────────────────────────────────────────────────────
+
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+# tag format: v{version}  e.g. v0.1.0
+tag_regex = "^v(?P<version>[0-9]+\\.[0-9]+\\.[0-9]+.*)$"
 
 [tool.hatch.build.targets.wheel]
 packages = ["decider"]
+
+# ── uv ────────────────────────────────────────────────────────────────────────
+
+[tool.uv]
+system-certs = true   # required: corporate proxy uses a private CA
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "anyio",
+]
+
+# ── pytest ────────────────────────────────────────────────────────────────────
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

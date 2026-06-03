@@ -4,7 +4,7 @@ Jupyter magic for interactive module development.
 Load in a notebook with:
     %load_ext decider.magics
 
-Inline module (writes decider_extensions/<snake>/__ init__.py):
+Inline module (writes decider_extensions/<snake>/__init__.py):
     %%module CreditScorer
 
     def score(amount: pl.Expr) -> pl.Expr:

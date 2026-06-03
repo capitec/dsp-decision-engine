@@ -1,4 +1,5 @@
 import typing as t
+from contextlib import asynccontextmanager
 from decider.exceptions import DeciderError, wrap_import_errors
 
 with wrap_import_errors("starlette"):
@@ -33,30 +34,35 @@ async def ping(_request: Request) -> Response:
     return Response(status_code=200)
 
 
-async def startup() -> None:
+@asynccontextmanager
+async def lifespan(app: "Starlette"):
     from decider.initialization import initialize_decider
     global handler
     initialize_decider()
     _handler = construct_handler_from_settings()
     await _handler.init_fn()
     handler = _handler
-
-
-async def shutdown() -> None:
+    yield
     if handler is not None:
         await handler.shutdown_fn()
 
 
-def create_app() -> Starlette:
+def create_app() -> "Starlette":
     return Starlette(
         routes=[
-            Route("/predict", predict, methods=["POST"]),
+            Route("/invocations", predict, methods=["POST"]),
             Route("/ping", ping, methods=["GET"]),
         ],
-        on_startup=[startup],
-        on_shutdown=[shutdown],
+        lifespan=lifespan,
         exception_handlers={DeciderError: decider_error_handler},
     )
 
 
-app = create_app()
+app: t.Optional["Starlette"] = None
+
+
+def get_app() -> "Starlette":
+    global app
+    if app is None:
+        app = create_app()
+    return app

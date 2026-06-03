@@ -11,6 +11,7 @@ from .core import BaseModule, BaseExecuteModule
 
 if t.TYPE_CHECKING:
     from decider.executor import Executor
+    from decider.config.base import BaseConfig
 
 
 # ── Input ref types ───────────────────────────────────────────────────────────
@@ -24,6 +25,40 @@ class StaticValueNode:
 
     def get_frame_value(self, _frames: t.Dict[str, t.Any]) -> t.Any:
         return self.value
+
+    def to_config(self, config_key: str) -> "ConfigValueNode":
+        from pydantic import BaseModel
+        from decider.config.base import BaseConfig
+        if not isinstance(self.value, BaseModel):
+            raise TypeError(
+                f"StaticValueNode.to_config requires the value to be a Pydantic BaseModel, "
+                f"got {type(self.value).__name__}."
+            )
+        value_class = type(self.value)
+        config_class = type(
+            f"{value_class.__name__}Config",
+            (BaseConfig,),
+            {"_MODEL_CLASS": value_class, "__module__": value_class.__module__},
+        )
+        return ConfigValueNode(
+            config=config_class.from_model(model=self.value, config_key=config_key)
+        )
+
+
+@dataclass(slots=True)
+class ConfigValueNode:
+    """A node whose value is owned by a BaseConfig instance.
+
+    Reads config._constructed_model at expression-graph evaluation time.
+    Call node.config.reload() externally to pick up a new config version.
+    """
+    config: "BaseConfig[t.Any]"
+
+    def get_expr(self) -> t.Any:
+        return self.config._constructed_model
+
+    def get_frame_value(self, _frames: t.Dict[str, t.Any]) -> t.Any:
+        return self.config._constructed_model
 
 
 @dataclass(slots=True)
@@ -48,7 +83,7 @@ class Node:
     name: str
     callable: t.Callable
 
-    input_map: t.Dict[str, t.Union["Node", StaticValueNode, ExternalInputNode]] = field(
+    input_map: t.Dict[str, t.Union["Node", StaticValueNode, ExternalInputNode, ConfigValueNode]] = field(
         default_factory=dict
     )
 

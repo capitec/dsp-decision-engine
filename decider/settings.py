@@ -1,7 +1,22 @@
+import os
 import typing as t
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import cache
+
+
+def _default_workers() -> int:
+    """nproc * 2 + 1 — sensible default for I/O-bound async workers."""
+    return os.cpu_count() * 2 + 1
+
+
+class ServeSettings(BaseModel):
+    """Settings for the Decider HTTP server."""
+    host: str = "0.0.0.0"
+    port: int = 8080
+    # None means use _default_workers() at serve time so nproc is evaluated
+    # on the target machine, not at settings-parse time.
+    workers: t.Optional[int] = None
 
 
 class APISettings(BaseModel):
@@ -43,6 +58,7 @@ class DeciderSettings(BaseSettings):
         case_sensitive=False,
     )
 
+    serve: ServeSettings = Field(default_factory=ServeSettings)
     ext: DeciderAppExtensionSettings = Field(default_factory=DeciderAppExtensionSettings)
     api: APISettings = Field(default_factory=APISettings)
     config: DeciderConfigSettings = Field(default_factory=DeciderConfigSettings)

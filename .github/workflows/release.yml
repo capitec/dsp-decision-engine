@@ -1,0 +1,220 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  DOCKER_IMAGE: capitecbankltd/decider
+
+jobs:
+  # ── 1. Resolve version from git tags (hatch-vcs) ──────────────────────────
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # full history so hatch-vcs can read tags
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve version
+        id: get
+        run: |
+          uv sync --group dev
+          VERSION=$(uv run python -c "from importlib.metadata import version; print(version('decider'))")
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+  # ── 2a. Build wheel → PyPI ─────────────────────────────────────────────────
+  publish-pypi:
+    needs: version
+    runs-on: ubuntu-latest
+    environment:
+      name: release
+      url: https://pypi.org/p/decider
+    permissions:
+      id-token: write     # OIDC trusted publishing — no token secret needed
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run tests
+        run: |
+          uv sync --group dev
+          uv run pytest
+
+      - name: Build wheel + sdist
+        run: uv build
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 1
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
+
+  # ── 2b. Build and push Docker image ───────────────────────────────────────
+  publish-docker:
+    needs: [version, publish-pypi]
+    runs-on: ubuntu-latest
+    environment:
+      name: release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download wheel artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push versioned image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          tags: ${{ env.DOCKER_IMAGE }}:${{ needs.version.outputs.version }}
+          cache-from: type=gha
+          cache-to:   type=gha,mode=max
+
+      - name: Re-tag as latest
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          tags: ${{ env.DOCKER_IMAGE }}:latest
+          cache-from: type=gha
+
+  # ── 2c. Build and deploy versioned docs to GitHub Pages ───────────────────
+  publish-docs:
+    needs: version
+    runs-on: ubuntu-latest
+    environment:
+      name: release
+      url: https://capitecbankltd.github.io/dsp_north-polrs
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install docs dependencies
+        run: uv sync --extra docs
+
+      - name: Restore previous gh-pages (for versioned history)
+        # Pull whatever is already deployed so we can layer this release on top.
+        # If the branch doesn't exist yet the step silently skips.
+        run: |
+          git fetch origin gh-pages:gh-pages 2>/dev/null || true
+          if git show-ref --quiet refs/heads/gh-pages; then
+            git worktree add _site gh-pages
+          else
+            mkdir -p _site
+          fi
+
+      - name: Build docs for this version
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          uv run python -m sphinx docs docs/_build/html -b html
+          # Copy into a versioned subdirectory so older releases stay accessible.
+          mkdir -p _site/$VERSION
+          cp -r docs/_build/html/. _site/$VERSION/
+          # Also update the root (latest) copy.
+          cp -r docs/_build/html/. _site/
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site/
+
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4
+
+  # ── 3. Tag and create GitHub Release (after all three deploys succeed) ─────
+  github-release:
+    needs: [version, publish-pypi, publish-docker, publish-docs]
+    runs-on: ubuntu-latest
+    environment:
+      name: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download wheel artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Push version tag
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name  "github-actions[bot]"
+          # Skip if tag already exists (e.g. re-run on same commit).
+          git tag "v${VERSION}" || true
+          git push origin "v${VERSION}" || true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.version.outputs.version }}
+          name:     Release ${{ needs.version.outputs.version }}
+          generate_release_notes: true
+          files: dist/*

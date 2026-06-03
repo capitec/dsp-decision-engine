@@ -28,8 +28,10 @@ async def ping(_request: Request) -> HTTPResponse:
 
 
 def create_app(name: str = "decider") -> Sanic:
+    # Must be called inside each worker process — do NOT call at module level.
+    # Sanic's multi-process AppLoader invokes this factory once per worker.
     app = Sanic(name)
-    app.add_route(predict, "/predict", methods=["POST"])
+    app.add_route(predict, "/invocations", methods=["POST"])
     app.add_route(ping, "/ping", methods=["GET"])
 
     @app.exception(DeciderError)
@@ -38,7 +40,7 @@ def create_app(name: str = "decider") -> Sanic:
         return raw(body, status=status_code, content_type=media_type)
 
     @app.before_server_start
-    async def startup(_app, _loop) -> None:
+    async def startup(_app) -> None:
         from decider.initialization import initialize_decider
         global handler
         initialize_decider()
@@ -47,11 +49,8 @@ def create_app(name: str = "decider") -> Sanic:
         handler = _handler
 
     @app.after_server_stop
-    async def shutdown(_app, _loop) -> None:
+    async def shutdown(_app) -> None:
         if handler is not None:
             await handler.shutdown_fn()
 
     return app
-
-
-app = create_app()

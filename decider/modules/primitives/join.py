@@ -2,6 +2,7 @@ import typing as t
 from abc import abstractmethod
 
 import polars as pl
+from pydantic import field_validator
 
 from decider.types import TInputType, TOutputType
 from decider.modules.core import BaseModule, BaseExecuteModule
@@ -12,6 +13,15 @@ if t.TYPE_CHECKING:
 
 
 FrameInput = t.Union[str, BaseModule]
+
+
+def _deserialise_frame_input(v: t.Any) -> FrameInput:
+    if isinstance(v, (str, BaseModule)):
+        return v
+    if isinstance(v, dict):
+        from decider.modules._ext import GraphModule
+        return GraphModule.model_validate(v).root
+    return v
 
 
 def _resolve_frame(
@@ -50,12 +60,17 @@ class FrameModule(BaseExecuteModule):
 
 class JoinModule(FrameModule):
     type: t.Literal["join"]
-    left: FrameInput
-    right: FrameInput
+    left: t.Any  # FrameInput; Any allows discriminated deserialisation
+    right: t.Any
     on: t.Union[str, t.List[str]]
     how: str = "left"
 
     model_config = {"arbitrary_types_allowed": True}
+
+    @field_validator("left", "right", mode="before")
+    @classmethod
+    def _deserialise_frame_input(cls, v: t.Any) -> FrameInput:
+        return _deserialise_frame_input(v)
 
     def _compute_input_frame_keys(self) -> t.List[str]:
         keys = []
