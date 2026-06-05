@@ -20,60 +20,21 @@ from .flat_rules.module import PrioritizedFlatRuleModule
 # =============================================================================
 
 
-def module_discriminator(value: t.Any) -> str:
-    """Custom discriminator for nested tree/flat-rule union.
+# Union of all tree formats (v1, v2, v3)
+TTreeFormat = t.Union[V1Tree, V2Tree, V3Tree]
 
-    Returns:
-        - "v1_tree" for format_version=1
-        - "v2_tree" for format_version=2
-        - "v3_tree" for format_version=3
-        - "flat_rule" for type="prioritized_flat_rule"
-    """
-    if isinstance(value, dict):
-        # Check if it's a flat rule module
-        if value.get("type") == "prioritized_flat_rule":
-            return "flat_rule"
-
-        # Otherwise, discriminate by format_version
-        format_version = value.get("formatVersion") or value.get("format_version")
-        if format_version == 1:
-            return "v1_tree"
-        elif format_version == 2:
-            return "v2_tree"
-        elif format_version == 3:
-            return "v3_tree"
-
-    # Fallback for objects (already instantiated models)
-    if hasattr(value, "type") and value.type == "prioritized_flat_rule":
-        return "flat_rule"
-
-    if hasattr(value, "format_version"):
-        if value.format_version == 1:
-            return "v1_tree"
-        elif value.format_version == 2:
-            return "v2_tree"
-        elif value.format_version == 3:
-            return "v3_tree"
-
-    # Default fallback (shouldn't reach here)
-    return "v2_tree"
-
-
-# Union of all tree formats (v1, v2, v3) - kept for backward compatibility
-TTreeFormat = t.Annotated[
-    t.Union[V1Tree, V2Tree, V3Tree], Field(discriminator="format_version")
-]
-
-# Union of all executable module types (tree formats + flat rules)
+# Union of all executable module types (tree formats + flat rules) — discriminated by type literal
 TModule = t.Annotated[
-    t.Union[
-        t.Annotated[V1Tree, Tag("v1_tree")],
-        t.Annotated[V2Tree, Tag("v2_tree")],
-        t.Annotated[V3Tree, Tag("v3_tree")],
-        t.Annotated[PrioritizedFlatRuleModule, Tag("flat_rule")],
-    ],
-    Discriminator(module_discriminator),
+    t.Union[V1Tree, V2Tree, V3Tree, PrioritizedFlatRuleModule],
+    Field(discriminator="type"),
 ]
+
+
+def module_discriminator(value: t.Any) -> str:
+    """Return the type discriminator string for a module value."""
+    if isinstance(value, dict):
+        return value.get("type", "v3-tree")
+    return getattr(value, "type", "v3-tree")
 
 
 class ModuleWrapper(RootModel):

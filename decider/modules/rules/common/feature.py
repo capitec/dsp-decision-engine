@@ -1,4 +1,5 @@
 import ast
+import types
 import typing as t
 from pydantic import BaseModel, Field, PrivateAttr, model_validator, RootModel
 import polars as pl
@@ -84,9 +85,12 @@ class _ComputedFeature(BaseModel):
                 "simpleeval is required to evaluate computed feature expressions. Please install it with 'pip install simpleeval'."
             )
 
+        p = types.SimpleNamespace(
+            **{name: parameters.struct.field(name) for name in self._parameters}
+        ) if parameters is not None else None
         res = simple_eval(
             self.expression,
-            names={**inputs, "p": parameters},
+            names={**inputs, "p": p},
             functions=ALLOWED_POLARS_FUNCTIONS,
         )
         assert isinstance(

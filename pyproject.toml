@@ -16,6 +16,7 @@ serve-starlette = ["uvicorn", "starlette"]
 serve-sanic     = ["sanic"]
 visualise       = ["streamlit", "graphviz"]
 notebook        = ["ipython"]
+eval            = ["simpleeval"]
 dev = [
     "pytest",
     "pytest-asyncio",
@@ -33,6 +34,7 @@ all = [
     "sanic",
     "streamlit", "graphviz",
     "ipython",
+    "simpleeval",
     "pytest",
     "pytest-asyncio",
     "anyio",

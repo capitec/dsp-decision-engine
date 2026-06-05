@@ -1,5 +1,6 @@
 import typing as t
 import re
+import polars as pl
 from pydantic import BaseModel, Field, PrivateAttr, model_validator
 from .nodes import NodeData, PositionedNode
 from ..v1.edges import MultiSourceEdge
@@ -7,9 +8,12 @@ from logging import getLogger
 from ...common.shared import WithTreeOutput, TreeOutput
 from .....serializable.schema import PolarsSchema
 from ...common.parameters import WithParameters
+from decider.modules.core import BaseExecuteModule
+from decider.types import TInputType, TOutputType
 
 if t.TYPE_CHECKING:
     from ..v3.tree import Tree as V3Tree
+    from decider.executor import Executor
 
 
 logger = getLogger(__name__)
@@ -25,8 +29,9 @@ class SubTree(BaseModel):
     name: t.Optional[str] = None
 
 
-class Tree(WithTreeOutput, WithParameters):
-    type: t.Literal["ui-tree"] = "ui-tree"
+class Tree(WithTreeOutput, BaseExecuteModule, WithParameters):
+    type: t.Literal["v2-tree"]
+    name: str = "output"
     metadata: TreeMetadata | None = None
     edges: t.List[MultiSourceEdge]
     nodes: t.List[PositionedNode]
@@ -98,3 +103,11 @@ class Tree(WithTreeOutput, WithParameters):
             parameters_col=self.parameters_col,
             input_schema=self.input_schema,
         )
+
+    def execute(self, inputs: TInputType, _executor: "Executor") -> TOutputType:
+        frame = inputs["input"]
+        if isinstance(frame, pl.LazyFrame):
+            frame = frame.collect()
+        v3 = self.upgrade()
+        compiled = v3.to_tree_module().build_expression()
+        return frame.select(compiled.expr.struct.unnest()).lazy()

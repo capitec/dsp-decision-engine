@@ -3,7 +3,7 @@
 import typing as t
 import enum
 import polars as pl
-from pydantic import BaseModel, Field
+from pydantic import Field
 from dataclasses import dataclass
 
 from ....serializable.function import DefinedFunction
@@ -19,6 +19,11 @@ from .impl import (
     extract_value,
 )
 from ....serializable.schema import PolarsSchema
+from decider.modules.core import BaseExecuteModule
+
+if t.TYPE_CHECKING:
+    from decider.executor import Executor
+    from decider.types import TInputType, TOutputType
 
 
 class PrioritizationMode(str, enum.Enum):
@@ -53,10 +58,11 @@ class RunPolarsExpression:
         return input_frame.select(self.expr.struct.unnest())
 
 
-class FlatRuleModule(WithTreeOutput, BaseModel, WithParameters):
-    """Single rule compiled as a Polars expression for Hamilton execution."""
+class FlatRuleModule(WithTreeOutput, BaseExecuteModule, WithParameters):
+    """Single rule compiled as a Polars expression."""
 
-    type: t.Literal["flat_rule"] = "flat_rule"
+    type: t.Literal["flat_rule"]
+    name: str = "output"
     rule: RuleRoot
     output_fn: t.Optional[DefinedFunction] = None
     use_optimized_execution: bool = False
@@ -69,7 +75,7 @@ class FlatRuleModule(WithTreeOutput, BaseModel, WithParameters):
         """Get all features required by this rule."""
         return self.rule.rule.get_required_features()
 
-    def compile(self) -> RunPolarsExpression:
+    def build_expression(self) -> RunPolarsExpression:
         """Compile rule into a RunPolarsExpression that can be executed as Hamilton nodes."""
         output_fn = (
             self.output_fn.get_function() if self.output_fn else default_result_builder
@@ -125,11 +131,21 @@ class FlatRuleModule(WithTreeOutput, BaseModel, WithParameters):
             parameters_expr=parameters_expr,
         )
 
+    def execute(self, inputs: "TInputType", _executor: "Executor") -> "TOutputType":
+        frame = inputs["input"]
+        if isinstance(frame, pl.LazyFrame):
+            frame = frame.collect()
+        if self.parameters and self.parameters_col not in frame.columns:
+            frame = frame.with_columns(pl.lit(None).alias(self.parameters_col))
+        compiled = self.build_expression()
+        return frame.select(compiled.expr.struct.unnest()).lazy()
 
-class PrioritizedFlatRuleModule(WithTreeOutput, BaseModel, WithParameters):
+
+class PrioritizedFlatRuleModule(WithTreeOutput, BaseExecuteModule, WithParameters):
     """Multiple flat rules evaluated in priority order; first match wins."""
 
-    type: t.Literal["prioritized_flat_rule"] = "prioritized_flat_rule"
+    type: t.Literal["prioritized_flat_rule"]
+    name: str = "output"
 
     input_schema: t.Optional[PolarsSchema] = Field(
         default=None, description="Input schema for casting inputs at runtime"
@@ -160,7 +176,7 @@ class PrioritizedFlatRuleModule(WithTreeOutput, BaseModel, WithParameters):
             features.update(rule.rule.get_required_features())
         return features
 
-    def compile(self) -> RunPolarsExpression:
+    def build_expression(self) -> RunPolarsExpression:
         """Compile prioritized flat rules into a RunPolarsExpression."""
         output_fn = (
             self.output_fn.get_function() if self.output_fn else default_result_builder
@@ -245,3 +261,12 @@ class PrioritizedFlatRuleModule(WithTreeOutput, BaseModel, WithParameters):
             features=list(required_features) + extra_features,
             parameters_expr=parameters_expr,
         )
+
+    def execute(self, inputs: "TInputType", _executor: "Executor") -> "TOutputType":
+        frame = inputs["input"]
+        if isinstance(frame, pl.LazyFrame):
+            frame = frame.collect()
+        if self.parameters and self.parameters_col not in frame.columns:
+            frame = frame.with_columns(pl.lit(None).alias(self.parameters_col))
+        compiled = self.build_expression()
+        return frame.select(compiled.expr.struct.unnest()).lazy()

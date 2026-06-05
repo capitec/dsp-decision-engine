@@ -147,7 +147,7 @@ class Tree(RootModel):
             ),
         )
 
-        return module.compile()
+        return module.build_expression()
 
     def upgrade(self):
         """Upgrade tree to latest version (v3) via upgrade chain."""

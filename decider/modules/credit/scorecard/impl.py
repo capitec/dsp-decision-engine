@@ -1,7 +1,7 @@
 import typing as t
 from dataclasses import dataclass, field
 import polars as pl
-import numpy as np
+import math
 
 
 @dataclass
@@ -177,8 +177,8 @@ def log_odds_from_score(
         pl.Expr: A Polars expression representing the log odds.
     """
     # I was considering writing like pl.lit(2).log() but it seems that its better practice to just use the literal from python side (source chatgpt)
-    factor = points_to_double_the_odds / np.log(2)
-    return (score - anchor_score) / factor + np.log(target_odds)
+    factor = points_to_double_the_odds / math.log(2)
+    return (score - anchor_score) / factor + math.log(target_odds)
 
 
 def probability_of_default_from_log_odds(
@@ -300,8 +300,8 @@ def calculate_credit_score(
         optionally rounded to the nearest integer and cast to Int32.
     """
     # Calculation Parameters
-    factor: pl.Expr = pl.lit(factor_value := points_to_double_the_odds / np.log(2))
-    offset: pl.Expr = pl.lit(anchor_score - (np.log(target_odds) * factor_value))
+    factor: pl.Expr = pl.lit(factor_value := points_to_double_the_odds / math.log(2))
+    offset: pl.Expr = pl.lit(anchor_score - (math.log(target_odds) * factor_value))
     # Ensure PD is within (safety_factor, 1-safety_factor) for numerical stability
     pd = probability_of_default.clip(safety_factor, 1 - safety_factor)
     # Note original implementation wrapped this with if probability_of_default.is_null() 

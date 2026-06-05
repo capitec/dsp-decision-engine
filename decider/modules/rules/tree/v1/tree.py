@@ -1,5 +1,11 @@
 import typing as t
+import polars as pl
 from pydantic import BaseModel, Field, PrivateAttr, model_validator
+from decider.modules.core import BaseExecuteModule
+from decider.types import TInputType, TOutputType
+
+if t.TYPE_CHECKING:
+    from decider.executor import Executor
 from .nodes import (
     NodeData,
     PositionedNode,
@@ -382,8 +388,9 @@ class SubTree(BaseModel):
         return self.order
 
 
-class Tree(BaseModel):
-    type: t.Literal["ui-tree"] = "ui-tree"
+class Tree(BaseExecuteModule):
+    type: t.Literal["v1-tree"]
+    name: str = "output"
     features: t.List[str]
     nodes: t.List[PositionedNode]
     metadata: TreeMetadata | None = None
@@ -568,3 +575,12 @@ class Tree(BaseModel):
             parameters=parameters,
             parameters_col=self.variable_input_name,
         )
+
+    def execute(self, inputs: TInputType, _executor: "Executor") -> TOutputType:
+        frame = inputs["input"]
+        if isinstance(frame, pl.LazyFrame):
+            frame = frame.collect()
+        v2 = self.upgrade()
+        v3 = v2.upgrade()
+        compiled = v3.to_tree_module().build_expression()
+        return frame.select(compiled.expr.struct.unnest()).lazy()

@@ -6,15 +6,19 @@ with both inline (for flat rules) and graph-based (for UI) representations.
 """
 
 import typing as t
+import polars as pl
 from pydantic import BaseModel, Field
 from .nodes_ui import NodeData, PositionedNode
 from ..v1.edges import MultiSourceEdge
 from ...common.shared import WithTreeOutput, TreeOutput
 from .....serializable.schema import PolarsSchema
 from ...common.parameters import WithParameters
+from decider.modules.core import BaseExecuteModule
+from decider.types import TInputType, TOutputType
 
 if t.TYPE_CHECKING:
     from ...flat_rules.nodes import RuleType
+    from decider.executor import Executor
 
 
 class TreeMetadata(BaseModel):
@@ -31,7 +35,7 @@ class SubTree(BaseModel):
     name: t.Optional[str] = None
 
 
-class Tree(WithTreeOutput, WithParameters):
+class Tree(WithTreeOutput, BaseExecuteModule, WithParameters):
     """V3 Tree structure with nodes and edges.
 
     Structure:
@@ -42,7 +46,8 @@ class Tree(WithTreeOutput, WithParameters):
     - For CompositeNode: sourceIndex=0 is 'then', sourceIndex=1 is 'otherwise'
     """
 
-    type: t.Literal["ui-tree"] = "ui-tree"
+    type: t.Literal["v3-tree"]
+    name: str = "output"
     metadata: t.Optional[TreeMetadata] = None
     edges: t.List[MultiSourceEdge]
     nodes: t.List[PositionedNode]
@@ -153,3 +158,20 @@ class Tree(WithTreeOutput, WithParameters):
             root_id = next(iter(root_keys))
 
         return _build(root_id)
+
+    def execute(self, inputs: TInputType, _executor: "Executor") -> TOutputType:
+        from ...flat_rules.nodes import RuleRoot, RuleMeta
+        from ...flat_rules.module import FlatRuleModule
+
+        flat_rule = self.to_flat_rule_tree()
+        module = FlatRuleModule(
+            rule=RuleRoot(meta=RuleMeta(), rule=flat_rule),
+            output=self.output,
+            parameters=self.parameters,
+            parameters_col=self.parameters_col,
+        )
+        frame = inputs["input"]
+        if isinstance(frame, pl.LazyFrame):
+            frame = frame.collect()
+        compiled = module.build_expression()
+        return frame.select(compiled.expr.struct.unnest()).lazy()

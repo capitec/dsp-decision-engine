@@ -5,11 +5,13 @@ def _load_core_modules():
     from .primitives.sequential import SequentialModule
     from .primitives.join import JoinModule, FrameRef, FrameModule
     from .credit import register_credit_modules
+    from .rules import register_rule_modules
 
     for cls in (SequentialModule, JoinModule, FrameRef):
         register_graph_module(cls)
 
     register_credit_modules()
+    register_rule_modules()
 
 _load_core_modules()
 
