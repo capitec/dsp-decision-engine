@@ -1,4 +1,0 @@
-fastapi>=0.104.1
-starlette>=1.1.0
-uvicorn>=0.24.0.post1
-gunicorn>=21.2.0

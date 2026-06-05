@@ -1,6 +1,0 @@
--r core.txt
--r dev.txt
--r parsers.txt
--r docs.txt
--r webapp.txt
--r yaml.txt
