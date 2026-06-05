@@ -42,7 +42,64 @@ from decider.modules.rules import (
     UnaryIsNotNull,
     UnaryIsTrue,
     UnaryIsFalse,
+    InputRef,
+    ParameterInfo,
 )
+from decider.serializable.schema import PrimitiveSchema
+
+
+# ---------------------------------------------------------------------------
+# Helpers (path tracking — gap 3/4/5 additions use these)
+# ---------------------------------------------------------------------------
+
+def _run_with_path(rule, output: TreeOutput, df: pl.DataFrame) -> pl.DataFrame:
+    """Run a rule with path tracking; returns DataFrame with columns 'r' and 'Path'."""
+    from decider.modules.rules.flat_rules.nodes import BuilderConfig
+    from decider.modules.rules.flat_rules.impl import execute_rule_root
+
+    def path_output_fn(inputs, branch_stack, config, result_idx):
+        result_value = config.default_expr if result_idx == -1 else config.output_literals[result_idx]
+        path_parts = []
+        for item in branch_stack:
+            idx = item.index if item.index is not None else _branch_count(item.rule)
+            feature = _rule_feature(item.rule)
+            path_parts.append(f"{feature},{idx}")
+        path_str = "|".join(path_parts) if path_parts else "root"
+        return pl.struct(result_value.alias("r"), pl.lit(path_str).alias("Path"))
+
+    config = BuilderConfig(
+        build_result_function=path_output_fn,
+        output_literals=output.output_literals,
+        default_literal=output.default_literal,
+    )
+    from decider.modules.rules.flat_rules.nodes import RuleRoot, RuleMeta
+    expr = execute_rule_root(RuleRoot(meta=RuleMeta(), rule=rule), config)
+    return df.select(expr.struct.unnest())
+
+
+def _branch_count(rule) -> int:
+    from decider.modules.rules.flat_rules.nodes import (
+        CasesRanges, CasesStringMatch, CasesIsIn, UnaryRule, CompositeRule
+    )
+    if isinstance(rule, (CasesRanges, CasesStringMatch, CasesIsIn)):
+        return len(rule.root.conditions) if hasattr(rule, "root") else len(rule.conditions)
+    if isinstance(rule, (UnaryRule, CompositeRule)):
+        return 1
+    return 0
+
+
+def _rule_feature(rule) -> str:
+    from decider.modules.rules.flat_rules.nodes import (
+        CasesRanges, CasesStringMatch, CasesIsIn, UnaryRule, CompositeRule
+    )
+    if isinstance(rule, (CasesRanges, CasesStringMatch, CasesIsIn)):
+        inner = rule.root if hasattr(rule, "root") else rule
+        return str(inner.feature)
+    if isinstance(rule, UnaryRule):
+        return str(rule.condition.feature)
+    if isinstance(rule, CompositeRule):
+        return rule.id or "composite"
+    return "leaf"
 
 
 # ---------------------------------------------------------------------------
@@ -378,3 +435,117 @@ def test_prioritized_falls_back_to_default():
         rules=[r1],
     )
     assert m({"input": df.lazy()})["r"].to_list() == ["high", "high"]
+
+
+# ---------------------------------------------------------------------------
+# Gap 3: UnaryIsIn operator
+# ---------------------------------------------------------------------------
+
+def test_unary_is_in():
+    """UnaryIsIn routes rows whose value is in the list to then, others to otherwise."""
+    df = pl.DataFrame({"code": [1, 2, 3, 4, 5]})
+    out = _output("allowed", default="denied")
+    rule = UnaryRule(
+        condition=UnaryIsIn(feature="code", values=[1, 3, 5]),
+        then=LeafRule(result_idx=0), otherwise=LeafRule(result_idx=-1),
+    )
+    assert _run(rule, out, df) == ["allowed", "denied", "allowed", "denied", "allowed"]
+
+
+# ---------------------------------------------------------------------------
+# Gap 4: InputRef bounds inside Cases nodes
+# ---------------------------------------------------------------------------
+
+def test_cases_ranges_inputref_bounds():
+    """CasesRanges where min/max come from InputRef parameters, not static values."""
+    df = pl.DataFrame({
+        "score": [10.0, 40.0, 80.0],
+        "parameters": [{"lo": 20.0, "hi": 60.0}] * 3,
+    })
+    out = _output("low", "mid", default="high")
+
+    rule = CasesRule(root=CasesRanges(
+        feature="score",
+        conditions=[
+            CasesBranch(when=RangeCondition(max=InputRef(key="lo")), then=0),
+            CasesBranch(when=RangeCondition(min=InputRef(key="lo"), max=InputRef(key="hi")), then=1),
+        ],
+        otherwise=2,
+        branches=[LeafRule(result_idx=0), LeafRule(result_idx=1), LeafRule(result_idx=-1)],
+        end_logic=RangeEndLogic.lower_inclusive,
+        strict=False,
+    ))
+    m = FlatRuleModule(
+        output=out,
+        rule=RuleRoot(meta=RuleMeta(), rule=rule),
+        parameters={
+            "lo": ParameterInfo(type=PrimitiveSchema(type="Float64"), default_value=20.0),
+            "hi": ParameterInfo(type=PrimitiveSchema(type="Float64"), default_value=60.0),
+        },
+    )
+    result = m({"input": df.lazy()})["r"].to_list()
+    assert result == ["low", "mid", "high"]
+
+
+def test_cases_string_match_inputref_pattern():
+    """CasesStringMatch where a pattern comes from an InputRef parameter."""
+    df = pl.DataFrame({
+        "status": ["gold", "silver", "bronze"],
+        "parameters": [{"vip_tier": "gold"}] * 3,
+    })
+    out = _output("vip", default="standard")
+
+    rule = CasesRule(root=CasesStringMatch(
+        feature="status",
+        match_type="exact",
+        conditions=[
+            CasesBranch(when=StringMatchCondition(patterns=[InputRef(key="vip_tier")]), then=0),
+        ],
+        otherwise=1,
+        branches=[LeafRule(result_idx=0), LeafRule(result_idx=-1)],
+    ))
+    m = FlatRuleModule(
+        output=out,
+        rule=RuleRoot(meta=RuleMeta(), rule=rule),
+        parameters={
+            "vip_tier": ParameterInfo(type=PrimitiveSchema(type="String"), default_value="gold"),
+        },
+    )
+    result = m({"input": df.lazy()})["r"].to_list()
+    assert result == ["vip", "standard", "standard"]
+
+
+# ---------------------------------------------------------------------------
+# Gap 5: PrioritizedFlatRuleModule + parameters
+# ---------------------------------------------------------------------------
+
+def test_prioritized_module_with_parameters():
+    """Parameters flow correctly through a PrioritizedFlatRuleModule."""
+    r1 = RuleRoot(meta=RuleMeta(name="premium"), rule=UnaryRule(
+        condition=UnaryGreaterThanEqual(feature="score", threshold=InputRef(key="premium_thresh")),
+        then=LeafRule(result_idx=0), otherwise=LeafRule(result_idx=-1),
+    ))
+    r2 = RuleRoot(meta=RuleMeta(name="basic"), rule=UnaryRule(
+        condition=UnaryGreaterThanEqual(feature="score", threshold=InputRef(key="basic_thresh")),
+        then=LeafRule(result_idx=1), otherwise=LeafRule(result_idx=-1),
+    ))
+    m = PrioritizedFlatRuleModule(
+        output=_output("premium", "basic", default="rejected"),
+        rules=[r1, r2],
+        parameters={
+            "premium_thresh": ParameterInfo(type=PrimitiveSchema(type="Float64"), default_value=80.0),
+            "basic_thresh": ParameterInfo(type=PrimitiveSchema(type="Float64"), default_value=50.0),
+        },
+    )
+    df = pl.DataFrame({"score": [90.0, 60.0, 30.0]})
+    result = m({"input": df.lazy()})["r"].to_list()
+    # score=90 → premium (>=80), score=60 → basic (>=50 but not >=80), score=30 → rejected
+    assert result == ["premium", "basic", "rejected"]
+
+    # Override premium_thresh at runtime — score=60 now qualifies for premium
+    df_rt = pl.DataFrame({
+        "score": [90.0, 60.0, 30.0],
+        "parameters": [{"premium_thresh": 55.0, "basic_thresh": 50.0}] * 3,
+    })
+    result_rt = m({"input": df_rt.lazy()})["r"].to_list()
+    assert result_rt == ["premium", "premium", "rejected"]
