@@ -1,9 +1,9 @@
 import typing as t
 import polars as pl
 from pydantic import BaseModel, PrivateAttr, model_validator, Field
-from ..serializable.dataframe import TDataFrameData, TDataFrameRow
-from ..serializable.dtypes import ContainsDtypes, TTypeDef
-from ..serializable.schema import TType, ExplicitType
+from ....serializable.dataframe import TDataFrameData, TDataFrameRow
+from ....serializable.dtypes import ContainsDtypes, TTypeDef
+from ....serializable.schema import TType, ExplicitType
 
 
 class InputRef(BaseModel):

@@ -4,12 +4,12 @@ from pydantic import BaseModel, Field, PrivateAttr, model_validator
 from .nodes import NodeData, PositionedNode
 from ..v1.edges import MultiSourceEdge
 from logging import getLogger
-from dspd.components.common.shared import WithTreeOutput, TreeOutput
-from dspd.components.serializable.schema import PolarsSchema
-from dspd.components.common.parameters import WithParameters
+from ...common.shared import WithTreeOutput, TreeOutput
+from .....serializable.schema import PolarsSchema
+from ...common.parameters import WithParameters
 
 if t.TYPE_CHECKING:
-    from dspd.components.tree.v3.tree import Tree as V3Tree
+    from ..v3.tree import Tree as V3Tree
 
 
 logger = getLogger(__name__)
@@ -58,11 +58,11 @@ class Tree(WithTreeOutput, WithParameters):
         V3 is the latest format with unified types shared with flat rules.
         V2 nodes are converted to v3 nodes via their to_v3_node() method.
         """
-        from dspd.components.tree.v3.tree import Tree as V3Tree
-        from dspd.components.tree.v3.tree import TreeMetadata as V3TreeMetadata
-        from dspd.components.tree.v3.tree import SubTree as V3SubTree
-        from dspd.components.tree.v3.nodes_ui import PositionedNode as V3PositionedNode
-        from dspd.components.tree.v3.nodes_ui import Position as V3Position
+        from ..v3.tree import Tree as V3Tree
+        from ..v3.tree import TreeMetadata as V3TreeMetadata
+        from ..v3.tree import SubTree as V3SubTree
+        from ..v3.nodes_ui import PositionedNode as V3PositionedNode
+        from ..v3.nodes_ui import Position as V3Position
 
         # Convert nodes - v2 nodes need to be converted to v3 node format
         v3_nodes = []

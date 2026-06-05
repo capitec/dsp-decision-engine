@@ -16,9 +16,9 @@ import typing_extensions as t_ext
 import polars as pl
 from dataclasses import dataclass
 
-from dspd.components.common.shared import InputRef
-from dspd.components.common.feature import Feature as _Feature
-from dspd.components.common.nodetypes import (
+from ..common.shared import InputRef
+from ..common.feature import Feature as _Feature
+from ..common.nodetypes import (
     BaseRule,
     TNodeType,
     TLogicOp,
@@ -27,7 +27,7 @@ from dspd.components.common.nodetypes import (
 )
 
 # Import everything from common.nodes
-from dspd.components.common.nodes import (
+from ..common.nodes import (
     TUnaryOp,
     RangeCondition,
     StringMatchCondition,

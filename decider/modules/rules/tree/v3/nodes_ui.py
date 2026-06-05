@@ -8,7 +8,7 @@ for converting the edge-based tree representation to flat rules.
 import typing as t
 from pydantic import BaseModel, Field, RootModel
 
-from dspd.components.common.nodetypes import (
+from ...common.nodetypes import (
     LeafNodeCore,
     BaseRule,
     NodeMeta,
@@ -16,7 +16,7 @@ from dspd.components.common.nodetypes import (
     TLogicOp,
     RangeEndLogic,
 )
-from dspd.components.common.nodes import (
+from ...common.nodes import (
     TUnaryOp,
     RangeCondition,
     StringMatchCondition,
@@ -47,7 +47,7 @@ from dspd.components.common.nodes import (
 )
 
 if t.TYPE_CHECKING:
-    from dspd.components.flat_rules.nodes import RuleType
+    from ...flat_rules.nodes import RuleType
 
 
 # =============================================================================
@@ -64,7 +64,7 @@ class LeafNode(LeafNodeCore):
     def to_flat_rule_node(
         self, node_id: str, get_child: t.Callable[[int], "RuleType"]
     ) -> "RuleType":
-        from dspd.components.flat_rules.nodes import LeafRule
+        from ...flat_rules.nodes import LeafRule
 
         return LeafRule(result_idx=self.result_idx)
 
@@ -93,7 +93,7 @@ class UnaryNode(BaseUnaryNode):
     def to_flat_rule_node(
         self, node_id: str, get_child: t.Callable[[int], "RuleType"]
     ) -> "RuleType":
-        from dspd.components.flat_rules.nodes import UnaryRule
+        from ...flat_rules.nodes import UnaryRule
 
         return UnaryRule(
             id=node_id,
@@ -121,7 +121,7 @@ class CasesRanges(BaseCasesRanges):
     def to_flat_rule_node(
         self, node_id: str, get_child: t.Callable[[int], "RuleType"]
     ) -> "RuleType":
-        from dspd.components.flat_rules.nodes import (
+        from ...flat_rules.nodes import (
             CasesRanges as FlatCasesRanges,
             CasesBranch as FlatCasesBranch,
         )
@@ -158,7 +158,7 @@ class CasesStringMatch(BaseCasesStringMatch):
     def to_flat_rule_node(
         self, node_id: str, get_child: t.Callable[[int], "RuleType"]
     ) -> "RuleType":
-        from dspd.components.flat_rules.nodes import (
+        from ...flat_rules.nodes import (
             CasesStringMatch as FlatCasesStringMatch,
             CasesBranch as FlatCasesBranch,
         )
@@ -196,7 +196,7 @@ class CasesIsIn(BaseCasesIsIn):
     def to_flat_rule_node(
         self, node_id: str, get_child: t.Callable[[int], "RuleType"]
     ) -> "RuleType":
-        from dspd.components.flat_rules.nodes import (
+        from ...flat_rules.nodes import (
             CasesIsIn as FlatCasesIsIn,
             CasesBranch as FlatCasesBranch,
         )
@@ -275,7 +275,7 @@ class CompositeNode(BaseCompositeNode):
     def to_flat_rule_node(
         self, node_id: str, get_child: t.Callable[[int], "RuleType"]
     ) -> "RuleType":
-        from dspd.components.flat_rules.nodes import CompositeRule
+        from ...flat_rules.nodes import CompositeRule
 
         return CompositeRule(
             id=node_id,

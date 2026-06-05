@@ -1,7 +1,7 @@
 import typing as t
 import polars as pl
 from pydantic import BaseModel, Field, model_validator, PrivateAttr
-from ..serializable.schema import PrimitiveSchema
+from ....serializable.schema import PrimitiveSchema
 
 
 class ParameterInfo(BaseModel):

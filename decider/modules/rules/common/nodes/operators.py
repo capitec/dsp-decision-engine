@@ -16,9 +16,9 @@ from pydantic import BaseModel, Field, model_validator
 import typing_extensions as t_ext
 import polars as pl
 
-from dspd.components.common.shared import InputRef
-from dspd.components.common.feature import Feature as _Feature
-from dspd.components.common.nodetypes import TStringMatchType
+from ..shared import InputRef
+from ..feature import Feature as _Feature
+from ..nodetypes import TStringMatchType
 
 
 class _BaseUnaryOp(BaseModel, ABC):
@@ -226,7 +226,7 @@ class UnaryStringMatch(_BaseUnaryOp):
     def build_condition(
         self, inputs: t.Dict[str, pl.Expr], parameters: t.Optional[pl.Expr]
     ) -> pl.Expr:
-        from dspd.components.common.nodes.conditions import StringMatchCondition
+        from .conditions import StringMatchCondition
 
         feature_expr = self.feature.build_expression(inputs, parameters)
         if self.trim_whitespace:

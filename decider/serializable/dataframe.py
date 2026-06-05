@@ -3,8 +3,9 @@ import polars as pl
 from pydantic import BaseModel, model_validator, model_serializer, PrivateAttr
 from .schema import PolarsSchema
 
-TDataFrameRow = t.Dict[str,t.Any]
+TDataFrameRow = t.Dict[str, t.Any]
 TDataFrameData = t.List[TDataFrameRow]
+
 
 def build_polars_df(
     data: TDataFrameData,
@@ -18,14 +19,12 @@ def build_polars_df(
         return pl.DataFrame(data)
     except Exception as e:
         schema_str = str(schema.root) if schema else "inferred"
-        raise ValueError(
-            f"Could not load data into schema ({schema_str}): {e}"
-        ) from e
+        raise ValueError(f"Could not load data into schema ({schema_str}): {e}") from e
 
 
 class DataFrame(BaseModel):
     data: TDataFrameData
-    schema: t.Optional[PolarsSchema] = None
+    dtypes: t.Optional[PolarsSchema] = None
 
     _pl_df: pl.DataFrame = PrivateAttr()
 
@@ -36,25 +35,26 @@ class DataFrame(BaseModel):
         ret.infer_schema()
         return ret
 
-    @model_validator(mode='before')
+    @model_validator(mode="before")
     @staticmethod
-    def enable_raw_data(data:t.Any):
-        if isinstance(data, list): return {"data": data}
+    def enable_raw_data(data: t.Any):
+        if isinstance(data, list):
+            return {"data": data}
         return data
-    
+
     @model_validator(mode="after")
     def construct_polars_df(self):
-        self._pl_df = build_polars_df(self.data, self.schema)
+        self._pl_df = build_polars_df(self.data, self.dtypes)
         return self
 
     @model_serializer
     def serialize(self) -> t.Any:
-        if self.schema is None:
+        if self.dtypes is None:
             return self.data
-        return {"data": self.data, "schema": self.schema.model_dump()}
+        return {"data": self.data, "schema": self.dtypes.model_dump()}
 
     def infer_schema(self):
-        self.schema = PolarsSchema.from_polars_schema(self.df.collect_schema())
+        self.dtypes = PolarsSchema.from_polars_schema(self.df.collect_schema())
 
     @property
     def df(self):

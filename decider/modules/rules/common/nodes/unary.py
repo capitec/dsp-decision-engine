@@ -7,8 +7,8 @@ They add their own child-resolution mechanism (embedded vs edge-based).
 import typing as t
 from pydantic import Field
 
-from dspd.components.common.nodetypes import BaseRule
-from dspd.components.common.nodes.operators import TUnaryOp
+from ..nodetypes import BaseRule
+from .operators import TUnaryOp
 
 
 class BaseUnaryNode(BaseRule):

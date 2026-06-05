@@ -1,18 +1,12 @@
-"""Flat rules module for Hamilton/Spockflow integration.
-
-Provides VariableNode implementations that compile flat rules into executable
-Polars expressions with proper parameter handling and Hamilton node generation.
-"""
+"""Flat rules module — compiles rules into executable Polars expressions."""
 
 import typing as t
 import enum
-import numpy as np
-import pandas as pd
 import polars as pl
-from pydantic import Field
+from pydantic import BaseModel, Field
 from dataclasses import dataclass
 
-from ..serializable.function import DefinedFunction
+from ....serializable.function import DefinedFunction
 from ..common.shared import WithTreeOutput, InputRef
 from ..common.parameters import WithParameters
 from .nodes import BuilderConfig, RuleRoot, FlatRuleTree, RuleMeta
@@ -24,8 +18,7 @@ from .impl import (
     default_result_builder,
     extract_value,
 )
-from spockflow.nodes import VariableNode, creates_node
-from ..serializable.schema import PolarsSchema
+from ....serializable.schema import PolarsSchema
 
 
 class PrioritizationMode(str, enum.Enum):
@@ -41,7 +34,6 @@ class OptimRunPolarsExpression:
 
     expr: pl.Expr
 
-    @creates_node(is_namespaced=False)
     def get_output(
         self,
         input_frame: pl.DataFrame,
@@ -57,28 +49,11 @@ class RunPolarsExpression:
     features: t.List[str]
     parameters_expr: t.Optional[pl.Expr] = None
 
-    def _get_features(self, function: t.Callable):
-        feature_inputs = {f: t.Union[np.ndarray, pd.Series] for f in self.features}
-        return feature_inputs
-
-    @creates_node(kwarg_input_generator="_get_features")
-    def input_frame(
-        self, **kwargs: t.Union[np.ndarray, pd.Series, t.Dict[str, t.Any]]
-    ) -> pl.DataFrame:
-        df = pl.DataFrame(pd.DataFrame(kwargs))
-        if self.parameters_expr is not None:
-            df = df.with_columns(self.parameters_expr.alias("parameters"))
-        return df
-
-    @creates_node(is_namespaced=False)
-    def get_output(
-        self,
-        input_frame: pl.DataFrame,
-    ) -> pd.DataFrame:
-        return input_frame.select(self.expr.struct.unnest()).to_pandas()
+    def execute(self, input_frame: pl.DataFrame) -> pl.DataFrame:
+        return input_frame.select(self.expr.struct.unnest())
 
 
-class FlatRuleModule(WithTreeOutput, VariableNode, WithParameters):
+class FlatRuleModule(WithTreeOutput, BaseModel, WithParameters):
     """Single rule compiled as a Polars expression for Hamilton execution."""
 
     type: t.Literal["flat_rule"] = "flat_rule"
@@ -151,7 +126,7 @@ class FlatRuleModule(WithTreeOutput, VariableNode, WithParameters):
         )
 
 
-class PrioritizedFlatRuleModule(WithTreeOutput, VariableNode, WithParameters):
+class PrioritizedFlatRuleModule(WithTreeOutput, BaseModel, WithParameters):
     """Multiple flat rules evaluated in priority order; first match wins."""
 
     type: t.Literal["prioritized_flat_rule"] = "prioritized_flat_rule"

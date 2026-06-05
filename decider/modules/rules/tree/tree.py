@@ -13,7 +13,6 @@ from pydantic import (
 from .v1.tree import Tree as V1Tree
 from .v2.tree import Tree as V2Tree
 from .v3.tree import Tree as V3Tree
-from spockflow.nodes import VariableNode
 
 
 class DeprecatedTree(BaseModel):
@@ -118,12 +117,12 @@ _Tree = t.Annotated[
 ]
 
 
-class Tree(RootModel, VariableNode):
+class Tree(RootModel):
     root: _Tree
 
     def compile(self):
-        from dspd.components.flat_rules.nodes import RuleRoot, RuleMeta
-        from dspd.components.flat_rules.module import FlatRuleModule
+        from ..flat_rules.nodes import RuleRoot, RuleMeta
+        from ..flat_rules.module import FlatRuleModule
 
         # Upgrade to v3 (keep upgrading until we reach latest version)
         upgraded = self.root
@@ -173,7 +172,7 @@ class Tree(RootModel, VariableNode):
     def default_tree(cls):
         """Create a default V3 tree with a single leaf node."""
         from .v3.nodes_ui import LeafNode, Position, PositionedNode
-        from dspd.components.common.shared import TreeOutput
+        from ..common.shared import TreeOutput
 
         return cls(
             root=V3Tree(

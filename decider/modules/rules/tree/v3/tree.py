@@ -9,12 +9,12 @@ import typing as t
 from pydantic import BaseModel, Field
 from .nodes_ui import NodeData, PositionedNode
 from ..v1.edges import MultiSourceEdge
-from dspd.components.common.shared import WithTreeOutput, TreeOutput
-from dspd.components.serializable.schema import PolarsSchema
-from dspd.components.common.parameters import WithParameters
+from ...common.shared import WithTreeOutput, TreeOutput
+from .....serializable.schema import PolarsSchema
+from ...common.parameters import WithParameters
 
 if t.TYPE_CHECKING:
-    from dspd.components.flat_rules.nodes import RuleType
+    from ...flat_rules.nodes import RuleType
 
 
 class TreeMetadata(BaseModel):
@@ -66,8 +66,8 @@ class Tree(WithTreeOutput, WithParameters):
         This method exists for compatibility with tests that expect to_tree_module().
         The new architecture uses to_flat_rule_tree() → FlatRuleModule.
         """
-        from dspd.components.flat_rules.nodes import RuleRoot, RuleMeta
-        from dspd.components.flat_rules.module import FlatRuleModule
+        from ...flat_rules.nodes import RuleRoot, RuleMeta
+        from ...flat_rules.module import FlatRuleModule
 
         # Convert to flat rule tree
         flat_rule = self.to_flat_rule_tree()
@@ -91,8 +91,8 @@ class Tree(WithTreeOutput, WithParameters):
         This reconstructs the tree structure from edges and converts each node
         to its flat rule equivalent, preserving position metadata.
         """
-        from dspd.components.flat_rules.nodes import LeafRule
-        from dspd.components.common.nodetypes import NodeMeta, NodePosition
+        from ...flat_rules.nodes import LeafRule
+        from ...common.nodetypes import NodeMeta, NodePosition
 
         keyed_nodes = {n.id: n for n in self.nodes}
 

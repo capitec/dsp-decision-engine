@@ -4,7 +4,7 @@ Unified type system that shares core types with flat_rules.
 Nodes are managed via edges (tree.py), not embedded in node definitions.
 """
 
-from dspd.components.common.nodetypes import (
+from ...common.nodetypes import (
     BaseRule,
     NodeMeta,
     NodePosition,
@@ -38,7 +38,7 @@ from .nodes_ui import (
 )
 
 # TUnaryOp and condition types live in common.nodes
-from dspd.components.common.nodes import (
+from ...common.nodes import (
     TUnaryOp,
     RangeCondition,
     StringMatchCondition,

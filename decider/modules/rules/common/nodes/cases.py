@@ -20,10 +20,10 @@ import typing as t
 from pydantic import BaseModel, Field, model_validator
 import typing_extensions as t_ext
 
-from dspd.components.common.nodetypes import BaseRule, TStringMatchType, RangeEndLogic
-from dspd.components.common.feature import Feature as _Feature
-from dspd.components.common.shared import InputRef
-from dspd.components.common.nodes.conditions import (
+from ..nodetypes import BaseRule, TStringMatchType, RangeEndLogic
+from ..feature import Feature as _Feature
+from ..shared import InputRef
+from .conditions import (
     RangeCondition,
     StringMatchCondition,
     IsInCondition,

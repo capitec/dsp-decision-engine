@@ -5,8 +5,8 @@ from uuid import UUID
 import typing_extensions as t_ext
 from logging import getLogger
 from pydantic import BaseModel, Field, model_validator
-from dspd.components.common.nodetypes import RangeEndLogic
-from dspd.components.common.shared import InputRef
+from ...common.nodetypes import RangeEndLogic
+from ...common.shared import InputRef
 
 logger = getLogger(__name__)
 
@@ -36,7 +36,7 @@ class RangeNode(BaseModel):
 
     def to_v3_node(self) -> "t.Any":
         """Convert v2 RangeNode to v3 CasesRanges."""
-        from dspd.components.tree.v3.nodes_ui import CasesRanges, RangeCondition
+        from ..v3.nodes_ui import CasesRanges, RangeCondition
 
         thrs = (
             self.thresholds if isinstance(self.thresholds, list) else [self.thresholds]
@@ -78,7 +78,7 @@ class NumericalNode(BaseModel):
 
     def to_v3_node(self) -> "t.Any":
         """Convert v2 NumericalNode to v3 UnaryNode."""
-        from dspd.components.tree.v3.nodes_ui import (
+        from ..v3.nodes_ui import (
             UnaryNode,
             UnaryLeq,
             UnaryLt,
@@ -127,7 +127,7 @@ class CategoricalNode(BaseModel):
 
     def to_v3_node(self) -> "t.Any":
         """Convert v2 CategoricalNode to v3 UnaryNode with IsInOp."""
-        from dspd.components.tree.v3.nodes_ui import UnaryNode, IsInOp
+        from ..v3.nodes_ui import UnaryNode, IsInOp
 
         # Convert to UnaryNode with IsInOp condition
         condition = IsInOp(feature=self.feature, values=self.category_list)
@@ -158,13 +158,13 @@ class StringMatchNode(BaseModel):
 
     def to_v3_node(self) -> "t.Any":
         """Convert v2 StringMatchNode to v3 UnaryNode or CasesStringMatch."""
-        from dspd.components.tree.v3.nodes_ui import (
+        from ..v3.nodes_ui import (
             UnaryNode,
             StringMatchOp,
             CasesStringMatch,
             StringMatchCondition,
         )
-        from dspd.components.common.nodetypes import TStringMatchType
+        from ...common.nodetypes import TStringMatchType
 
         if self.match_any:
             # match_any=True: Use UnaryNode with StringMatchOp
@@ -195,69 +195,6 @@ class StringMatchNode(BaseModel):
                 conditions=conditions,
             )
 
-    def to_module_node(
-        self,
-        node_id: str,
-        meta: "t.Any",
-        get_child: t.Callable[[int], "t.Any"],
-        child_mapping: t.Optional[t.Dict[int, str]] = None,
-    ) -> "t.Any":
-        """Convert this UI node to a StringNodeType execution node."""
-        from dspd.components.tree.nodes import (
-            StringNodeType,
-            BranchType,
-            StringPatternConditionType,
-        )
-
-        if self.match_any:
-            # match_any=True means single branch with all patterns
-            return StringNodeType.model_construct(
-                id=node_id,
-                type="string",
-                feature=self.feature,
-                meta=meta,
-                branches=[
-                    BranchType.model_construct(
-                        when=StringPatternConditionType(
-                            pattern=self.patterns,
-                            match_type=self.match_type,
-                            case_sensitive=self.case_sensitive,
-                        ),
-                        then=get_child(0),
-                    )
-                ],
-                otherwise=get_child(1),
-            )
-        else:
-            # match_any=False means separate branch per pattern
-            # TODO: Future optimization - when child_mapping shows multiple patterns
-            # pointing to same target, group them into a single branch with multiple
-            # conditions in the `when` list.
-            pattern_list = (
-                self.patterns if isinstance(self.patterns, list) else [self.patterns]
-            )
-            branches = [
-                BranchType.model_construct(
-                    when=StringPatternConditionType(
-                        pattern=p,
-                        match_type=self.match_type,
-                        case_sensitive=self.case_sensitive,
-                    ),
-                    then=get_child(i),
-                )
-                for i, p in enumerate(pattern_list)
-            ]
-
-            return StringNodeType.model_construct(
-                id=node_id,
-                type="string",
-                feature=self.feature,
-                branches=branches,
-                meta=meta,
-                otherwise=get_child(len(pattern_list)),
-            )
-
-
 class LeafNode(BaseModel):
     """Leaf node."""
 
@@ -270,7 +207,7 @@ class LeafNode(BaseModel):
 
     def to_v3_node(self) -> "t.Any":
         """Convert v2 LeafNode to v3 LeafNode."""
-        from dspd.components.tree.v3.nodes_ui import LeafNode as V3LeafNode
+        from ..v3.nodes_ui import LeafNode as V3LeafNode
 
         return V3LeafNode(result_idx=self.leaf_value)
 

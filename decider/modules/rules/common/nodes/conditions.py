@@ -10,9 +10,9 @@ from pydantic import BaseModel, Field, model_validator, Discriminator, Tag
 import typing_extensions as t_ext
 import polars as pl
 
-from dspd.components.common.shared import InputRef
-from dspd.components.common.nodetypes import TStringMatchType, TLogicOp, RangeEndLogic
-from dspd.components.common.nodes.operators import TUnaryOp
+from ..shared import InputRef
+from ..nodetypes import TStringMatchType, TLogicOp, RangeEndLogic
+from .operators import TUnaryOp
 
 # =============================================================================
 # Range

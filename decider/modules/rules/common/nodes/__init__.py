@@ -1,6 +1,6 @@
 """Common node definitions shared between flat_rules and tree v3."""
 
-from dspd.components.common.nodes.operators import (
+from .operators import (
     _BaseUnaryOp,
     _ThresholdedUnaryOp,
     UnaryLessThanEqual,
@@ -19,7 +19,7 @@ from dspd.components.common.nodes.operators import (
     TUnaryOp,
 )
 
-from dspd.components.common.nodes.conditions import (
+from .conditions import (
     RangeCondition,
     StringMatchCondition,
     IsInCondition,
@@ -30,8 +30,8 @@ from dspd.components.common.nodes.conditions import (
     _UnaryOpConditionWrapper,
 )
 
-from dspd.components.common.nodes.unary import BaseUnaryNode
-from dspd.components.common.nodes.cases import (
+from .unary import BaseUnaryNode
+from .cases import (
     _CasesRangesCore,
     _CasesStringMatchCore,
     _CasesIsInCore,
@@ -40,7 +40,7 @@ from dspd.components.common.nodes.cases import (
     BaseCasesIsIn,
     validate_range_conditions,
 )
-from dspd.components.common.nodes.composite import BaseCompositeNode
+from .composite import BaseCompositeNode
 
 __all__ = [
     # Operators

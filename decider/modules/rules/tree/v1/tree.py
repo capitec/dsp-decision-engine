@@ -114,7 +114,7 @@ def _convert_custom_types_to_defs(output_schema: "OutputSchema") -> t.Dict[str, 
     v2 TreeOutput.type_defs field.
     """
     from .schema import CustomTypeKind
-    from ...serializable.dtypes import StructTypeDef, CategoricalTypeDef
+    from .....serializable.dtypes import StructTypeDef, CategoricalTypeDef
 
     type_defs: t.Dict[str, t.Any] = {}
 
@@ -170,7 +170,7 @@ def _convert_schema(output_schema: "OutputSchema") -> t.Dict[str, t.Any]:
     instead of inlining their definitions.
     """
     from .schema import CustomTypeKind
-    from ...serializable.schema import ExplicitType
+    from .....serializable.schema import ExplicitType
 
     result: t.Dict[str, t.Any] = {}
     for field in output_schema.fields:
@@ -413,7 +413,7 @@ class Tree(BaseModel):
             SubTree as V2SubTree,
             TreeOutput as V2TreeOutput,
         )
-        from ...serializable.schema import PolarsSchema
+        from .....serializable.schema import PolarsSchema
 
         keyed_nodes = {n.id: n for n in self.nodes}
 
@@ -434,7 +434,7 @@ class Tree(BaseModel):
                 else collected_output
             )
             if _schema_collected_output and len(_schema_collected_output) > 0:
-                from ...serializable.schema import convert_schema
+                from .....serializable.schema import convert_schema
                 import polars as pl
 
                 # Infer schema from the first output row
@@ -444,7 +444,7 @@ class Tree(BaseModel):
                 dtypes_struct = {}  # Empty struct
             type_defs = {}
         else:
-            from ...serializable.schema import ExplicitType
+            from .....serializable.schema import ExplicitType
 
             collected_output, default_value, node_id_output_map = _collect_outputs_v1(
                 self.nodes, self.output_schema
@@ -456,7 +456,7 @@ class Tree(BaseModel):
             else:
                 # No schema: infer from collected output data
                 if collected_output and len(collected_output) > 0:
-                    from ...serializable.schema import convert_schema
+                    from .....serializable.schema import convert_schema
                     import polars as pl
 
                     temp_df = pl.DataFrame([collected_output[0]])
@@ -525,7 +525,7 @@ class Tree(BaseModel):
 
         # Convert v1 variables to v2 parameters
         from ...common.parameters import ParameterInfo
-        from ...serializable.schema import PrimitiveSchema
+        from .....serializable.schema import PrimitiveSchema
 
         parameters = {}
         if self.variables:

@@ -7,8 +7,8 @@ import typing as t
 from pydantic import Field, model_validator
 import typing_extensions as t_ext
 
-from dspd.components.common.nodetypes import BaseRule, TLogicOp
-from dspd.components.common.nodes.conditions import TCondition
+from ..nodetypes import BaseRule, TLogicOp
+from .conditions import TCondition
 
 
 class BaseCompositeNode(BaseRule):
