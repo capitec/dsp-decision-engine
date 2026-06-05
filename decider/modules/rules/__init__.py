@@ -2,7 +2,7 @@
 from .tree.v1.tree import Tree as V1Tree
 from .tree.v2.tree import Tree as V2Tree
 from .tree.v3.tree import Tree as V3Tree
-from .tree.tree import Tree, validate_tree, ValidationResults
+from .tree.tree import Tree
 
 # Flat rule module (the main execution unit)
 from .flat_rules.module import (
@@ -91,8 +91,6 @@ __all__ = [
     "V2Tree",
     "V3Tree",
     "Tree",
-    "validate_tree",
-    "ValidationResults",
     # Flat rules
     "FlatRuleModule",
     "PrioritizedFlatRuleModule",

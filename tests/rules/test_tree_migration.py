@@ -12,7 +12,7 @@ Written against the v1 format so it also validates backward compatibility.
 
 import polars as pl
 import pytest
-from decider.modules.rules import V1Tree, V3Tree, TreeOutput, validate_tree
+from decider.modules.rules import V1Tree, V3Tree, TreeOutput
 from decider.modules.rules.tree.v1.tree import Tree as _V1Tree
 
 
@@ -168,70 +168,30 @@ def test_v3_numerical_and_range_nodes_execute_correctly():
     assert bands == ["low", "mid", "mid", "high", "high"]
 
 
-def test_validate_tree_returns_valid_result():
-    """validate_tree() on a valid v1 dict returns a valid ValidationResults."""
-    tree, results = validate_tree(_V1_DICT, return_results=True)
-    assert results.valid, f"Unexpected errors: {results.errors}"
-    assert results.format_version == 3  # upgraded to latest
-    assert results.node_count == 6
-
-
-# ---------------------------------------------------------------------------
-# Gap 7: validate_tree negative cases
-# ---------------------------------------------------------------------------
-
-def _dict_without(key: str) -> dict:
-    """Return a shallow copy of _V1_DICT with a top-level key removed."""
-    d = dict(_V1_DICT)
-    d.pop(key, None)
-    return d
-
-
-def _dict_with_bad_node_type() -> dict:
-    """Return _V1_DICT with the first node's node_type replaced by an unknown value."""
-    import json
-    d = json.loads(json.dumps(_V1_DICT))
-    d["nodes"][0]["data"]["node_type"] = "nonexistent_node_type"
-    return d
-
-
-def _dict_with_out_of_range_feature() -> dict:
-    """Return _V1_DICT with a node referencing a feature index beyond the features list."""
-    import json
-    d = json.loads(json.dumps(_V1_DICT))
-    # features list has 2 entries (indices 0 and 1); set split_feature_id to 99
-    d["nodes"][0]["data"]["split_feature_id"] = 99
-    return d
-
-
-def test_validate_tree_missing_nodes_key():
-    """validate_tree() with no 'nodes' key is invalid and reports errors."""
-    _, results = validate_tree(_dict_without("nodes"), return_results=True)
-    assert not results.valid
-    assert results.errors
-
-
-def test_validate_tree_unknown_node_type():
-    """validate_tree() with an unrecognised node_type is invalid."""
-    _, results = validate_tree(_dict_with_bad_node_type(), return_results=True)
-    assert not results.valid
-    assert results.errors
-
-
-def test_validate_tree_out_of_range_feature():
-    """validate_tree() with a node referencing an out-of-range feature index raises or is invalid."""
-    # The upgrade pipeline raises IndexError for out-of-bounds feature_id before
-    # the ValidationError handler can catch it, so either outcome is acceptable.
-    try:
-        _, results = validate_tree(_dict_with_out_of_range_feature(), return_results=True)
-        assert not results.valid
-        assert results.errors
-    except (IndexError, Exception):
-        pass  # raised before validation could record the error — still incorrect input
-
-
-def test_validate_tree_raises_without_return_results():
-    """validate_tree() re-raises on invalid input when return_results=False."""
+def test_v1_tree_parse_rejects_missing_nodes():
+    """V1Tree.model_validate raises on a dict with no 'nodes' key."""
     from pydantic import ValidationError
-    with pytest.raises((ValidationError, Exception)):
-        validate_tree(_dict_without("nodes"), return_results=False)
+    bad = dict(_V1_DICT)
+    bad.pop("nodes")
+    with pytest.raises(ValidationError):
+        _V1Tree.model_validate(bad)
+
+
+def test_v1_tree_parse_rejects_unknown_node_type():
+    """V1Tree.model_validate raises on an unrecognised node_type."""
+    import json
+    from pydantic import ValidationError
+    bad = json.loads(json.dumps(_V1_DICT))
+    bad["nodes"][0]["data"]["node_type"] = "nonexistent_node_type"
+    with pytest.raises(ValidationError):
+        _V1Tree.model_validate(bad)
+
+
+def test_can_create_default_tree():
+    """Tree.default_tree() creates a valid V3 tree with expected structure."""
+    from decider.modules.rules import Tree
+    default = Tree.default_tree()
+    assert isinstance(default.root, V3Tree)
+    assert default.root.format_version == 3
+    assert len(default.root.nodes) == 1
+    assert default.root.nodes[0].data.type == "leaf"

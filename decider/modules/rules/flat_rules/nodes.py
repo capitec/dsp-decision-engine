@@ -265,17 +265,6 @@ class CasesRanges(_CasesRangesCore, WithCasesBranches):
         )
         return self
 
-    def get_required_parameters(self) -> t.Set[str]:
-        params = self.feature.get_required_parameters()
-        for cb in self.conditions:
-            if isinstance(cb.when, RangeCondition):
-                if isinstance(cb.when.min, InputRef):
-                    params.add(cb.when.min.key)
-                if isinstance(cb.when.max, InputRef):
-                    params.add(cb.when.max.key)
-        params.update(self.get_branch_required_parameters())
-        return params
-
     def build_expression(
         self,
         inputs: t.Dict[str, pl.Expr],
@@ -309,14 +298,22 @@ class CasesRanges(_CasesRangesCore, WithCasesBranches):
         )
 
         if out_expr is pl:
-            return otherwise_expr
+            return pl.when(feature_expr.is_not_null()).then(otherwise_expr).otherwise(otherwise_expr)
         return out_expr.otherwise(otherwise_expr)
 
     def get_required_features(self) -> t.Set[str]:
         return super().get_required_features() | self.get_branch_required_features()
 
     def get_required_parameters(self) -> t.Set[str]:
-        return super().get_required_parameters() | self.get_branch_required_parameters()
+        params = self.feature.get_required_parameters()
+        for cb in self.conditions:
+            if isinstance(cb.when, RangeCondition):
+                if isinstance(cb.when.min, InputRef):
+                    params.add(cb.when.min.key)
+                if isinstance(cb.when.max, InputRef):
+                    params.add(cb.when.max.key)
+        params.update(super().get_required_parameters() | self.get_branch_required_parameters())
+        return params
 
 
 class CasesStringMatch(_CasesStringMatchCore, WithCasesBranches):
@@ -331,16 +328,6 @@ class CasesStringMatch(_CasesStringMatchCore, WithCasesBranches):
         if self.id is None:
             self.id = str(uuid.uuid4())
         return self
-
-    def get_required_parameters(self) -> t.Set[str]:
-        params = self.feature.get_required_parameters()
-        for cb in self.conditions:
-            if isinstance(cb.when, StringMatchCondition):
-                for pattern in cb.when.patterns:
-                    if isinstance(pattern, InputRef):
-                        params.add(pattern.key)
-        params.update(self.get_branch_required_parameters())
-        return params
 
     def build_expression(
         self,
@@ -382,14 +369,21 @@ class CasesStringMatch(_CasesStringMatchCore, WithCasesBranches):
         )
 
         if out_expr is pl:
-            return otherwise_expr
+            return pl.when(feature_expr.is_not_null()).then(otherwise_expr).otherwise(otherwise_expr)
         return out_expr.otherwise(otherwise_expr)
 
     def get_required_features(self) -> t.Set[str]:
         return super().get_required_features() | self.get_branch_required_features()
 
     def get_required_parameters(self) -> t.Set[str]:
-        return super().get_required_parameters() | self.get_branch_required_parameters()
+        params = self.feature.get_required_parameters()
+        for cb in self.conditions:
+            if isinstance(cb.when, StringMatchCondition):
+                for pattern in cb.when.patterns:
+                    if isinstance(pattern, InputRef):
+                        params.add(pattern.key)
+        params.update(super().get_required_parameters() | self.get_branch_required_parameters())
+        return params
 
 
 class CasesIsIn(_CasesIsInCore, WithCasesBranches):
@@ -404,16 +398,6 @@ class CasesIsIn(_CasesIsInCore, WithCasesBranches):
         if self.id is None:
             self.id = str(uuid.uuid4())
         return self
-
-    def get_required_parameters(self) -> t.Set[str]:
-        params = self.feature.get_required_parameters()
-        for cb in self.conditions:
-            if isinstance(cb.when, IsInCondition) and isinstance(
-                cb.when.values, InputRef
-            ):
-                params.add(cb.when.values.key)
-        params.update(self.get_branch_required_parameters())
-        return params
 
     def build_expression(
         self,
@@ -450,14 +434,19 @@ class CasesIsIn(_CasesIsInCore, WithCasesBranches):
         )
 
         if out_expr is pl:
-            return otherwise_expr
+            return pl.when(feature_expr.is_not_null()).then(otherwise_expr).otherwise(otherwise_expr)
         return out_expr.otherwise(otherwise_expr)
 
     def get_required_features(self) -> t.Set[str]:
         return super().get_required_features() | self.get_branch_required_features()
 
     def get_required_parameters(self) -> t.Set[str]:
-        return super().get_required_parameters() | self.get_branch_required_parameters()
+        params = self.feature.get_required_parameters()
+        for cb in self.conditions:
+            if isinstance(cb.when, IsInCondition) and isinstance(cb.when.values, InputRef):
+                params.add(cb.when.values.key)
+        params.update(super().get_required_parameters() | self.get_branch_required_parameters())
+        return params
 
 
 # Discriminated union for cases rules
@@ -517,7 +506,8 @@ class CompositeRule(BaseCompositeNode, WithUnaryBranches):
         parameters: t.Optional[pl.Expr] = None,
     ) -> pl.Expr:
         if not self.conditions:
-            composite_condition = pl.lit(False)
+            # pl.lit(False) is scalar and won't broadcast per-row; use a per-row false
+            composite_condition = pl.int_range(pl.len()) < 0
         else:
             # Delegate to CompositeCondition's shared build_condition logic
             _tmp = CompositeCondition(op=self.op, conditions=self.conditions)

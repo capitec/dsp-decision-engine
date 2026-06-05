@@ -37,6 +37,9 @@ from decider.modules.rules import (
     UnaryIsIn,
     UnaryIsNull,
     UnaryStringMatch,
+    InputRef,
+    StringMatchCondition,
+    IsInCondition,
 )
 from decider.modules.rules.flat_rules.nodes import (
     BuilderConfig,
@@ -466,3 +469,304 @@ def test_path_null_input_takes_otherwise_path():
     assert result["r"].to_list() == ["low", "other"]
     assert result["path"][0] == "v,0"   # matched → then
     assert result["path"][1] == "v,1"   # null → otherwise
+
+
+# ---------------------------------------------------------------------------
+# Multi-column TreeOutput with custom types (schema tests)
+# ---------------------------------------------------------------------------
+
+def _multi_output() -> TreeOutput:
+    """TreeOutput with three columns: a string, a float, and a bool."""
+    return TreeOutput(
+        data=[
+            {"label": "low",  "score": 0.1, "flag": False},
+            {"label": "mid",  "score": 0.5, "flag": False},
+            {"label": "high", "score": 0.9, "flag": True},
+        ],
+        default={"label": "none", "score": 0.0, "flag": False},
+        dtypes=[("label", "String"), ("score", "Float64"), ("flag", "Boolean")],
+        type_defs={},
+    )
+
+
+def test_multi_column_output_all_fields_correct():
+    """Each output row's label, score, and flag columns are populated correctly."""
+    rule = CasesRule(root=CasesRanges(
+        feature="x",
+        conditions=[
+            CasesBranch(when=RangeCondition(max=30.0), then=0),           # [min, 30)
+            CasesBranch(when=RangeCondition(min=30.0, max=70.0), then=1), # [30, 70)
+            CasesBranch(when=RangeCondition(min=70.0, max=100.0), then=2),# [70, 100)
+        ],
+        otherwise=3,  # >= 100 falls through to default
+        branches=[
+            LeafRule(result_idx=0),
+            LeafRule(result_idx=1),
+            LeafRule(result_idx=2),
+            LeafRule(result_idx=-1),
+        ],
+        end_logic=RangeEndLogic.lower_inclusive,
+        strict=False,
+    ))
+    out = _multi_output()
+    m = FlatRuleModule(output=out, rule=RuleRoot(meta=RuleMeta(), rule=rule))
+    df = pl.DataFrame({"x": [10.0, 50.0, 80.0, 200.0]})
+    result = m({"input": df.lazy()})
+
+    assert result["label"].to_list() == ["low", "mid", "high", "none"]
+    assert result["score"].to_list() == pytest.approx([0.1, 0.5, 0.9, 0.0])
+    assert result["flag"].to_list() == [False, False, True, False]
+
+
+def test_multi_column_output_default_row_on_no_match():
+    """When no condition matches, all columns come from the default row."""
+    rule = UnaryRule(
+        condition=UnaryLessThan(feature="x", threshold=0.0),
+        then=LeafRule(result_idx=0),
+        otherwise=LeafRule(result_idx=-1),
+    )
+    out = _multi_output()
+    m = FlatRuleModule(output=out, rule=RuleRoot(meta=RuleMeta(), rule=rule))
+    df = pl.DataFrame({"x": [50.0, 100.0]})
+    result = m({"input": df.lazy()})
+
+    assert result["label"].to_list() == ["none", "none"]
+    assert result["score"].to_list() == pytest.approx([0.0, 0.0])
+    assert result["flag"].to_list() == [False, False]
+
+
+def test_multi_column_output_in_prioritized_first_match():
+    """PrioritizedFlatRuleModule with multi-column output picks the right row."""
+    r1 = RuleRoot(meta=RuleMeta(name="high"), rule=UnaryRule(
+        condition=UnaryGreaterThanEqual(feature="x", threshold=80.0),
+        then=LeafRule(result_idx=2), otherwise=LeafRule(result_idx=-1),
+    ))
+    r2 = RuleRoot(meta=RuleMeta(name="mid"), rule=UnaryRule(
+        condition=UnaryGreaterThanEqual(feature="x", threshold=30.0),
+        then=LeafRule(result_idx=1), otherwise=LeafRule(result_idx=-1),
+    ))
+    m = PrioritizedFlatRuleModule(output=_multi_output(), rules=[r1, r2])
+    df = pl.DataFrame({"x": [90.0, 50.0, 10.0]})
+    result = m({"input": df.lazy()})
+
+    assert result["label"].to_list() == ["high", "mid", "none"]
+    assert result["flag"].to_list() == [True, False, False]
+
+
+# ---------------------------------------------------------------------------
+# flat_rules coverage: uncovered paths in impl.py / module.py / nodes.py
+# ---------------------------------------------------------------------------
+
+def test_build_parameters_expr_no_runtime_column_uses_defaults():
+    """build_parameters_expr with runtime_params=None returns a struct of defaults (impl.py:68-72)."""
+    from decider.modules.rules.flat_rules.impl import build_parameters_expr
+    schema = pl.Schema({"thresh": pl.Float64})
+    defaults = {"thresh": pl.lit(42.0)}
+    expr = build_parameters_expr(runtime_params=None, parameter_schema=schema, default_literals=defaults)
+    assert expr is not None
+    result = pl.DataFrame({"x": [1]}).select(expr)
+    assert result[0, 0] == {"thresh": 42.0}
+
+
+def test_build_parameters_expr_empty_schema_returns_none():
+    """build_parameters_expr with an empty schema returns None (impl.py:63-64)."""
+    from decider.modules.rules.flat_rules.impl import build_parameters_expr
+    result = build_parameters_expr(runtime_params=None, parameter_schema=pl.Schema({}), default_literals={})
+    assert result is None
+
+
+def test_build_parameters_expr_parameter_with_no_default_uses_runtime():
+    """A parameter with no default entry falls back to the raw runtime field (impl.py:90)."""
+    from decider.modules.rules.flat_rules.impl import build_parameters_expr
+    schema = pl.Schema({"thresh": pl.Float64})
+    # No default provided for "thresh"
+    expr = build_parameters_expr(
+        runtime_params=pl.col("parameters"),
+        parameter_schema=schema,
+        default_literals={},  # no default
+    )
+    df = pl.DataFrame({"parameters": [{"thresh": 99.0}]})
+    result = df.select(expr)
+    assert result[0, 0] == {"thresh": 99.0}
+
+
+def test_prioritize_results_empty_list_returns_default(tmp_path):
+    """prioritize_results with an empty rule list returns the default struct (impl.py:299)."""
+    from decider.modules.rules.flat_rules.impl import prioritize_results
+    default_expr = pl.lit("fallback")
+    result_expr = prioritize_results(results=[], default_expr=default_expr)
+    df = pl.DataFrame({"x": [1]})
+    val = df.select(result_expr.struct.field("val"))[0, 0]
+    assert val == "fallback"
+
+
+def test_optimized_execution_path():
+    """use_optimized_execution=True returns an OptimRunPolarsExpression (module.py:125-126)."""
+    from decider.modules.rules.flat_rules.module import OptimRunPolarsExpression
+    rule = UnaryRule(
+        condition=UnaryLessThan(feature="x", threshold=10.0),
+        then=LeafRule(result_idx=0), otherwise=LeafRule(result_idx=-1),
+    )
+    m = FlatRuleModule(
+        output=_output("match", default="no"),
+        rule=RuleRoot(meta=RuleMeta(), rule=rule),
+        use_optimized_execution=True,
+    )
+    compiled = m.build_expression()
+    assert isinstance(compiled, OptimRunPolarsExpression)
+
+
+def test_optimized_execution_prioritized():
+    """use_optimized_execution=True on PrioritizedFlatRuleModule (module.py:256-257)."""
+    from decider.modules.rules.flat_rules.module import OptimRunPolarsExpression
+    r = RuleRoot(meta=RuleMeta(name="r"), rule=UnaryRule(
+        condition=UnaryLessThan(feature="x", threshold=5.0),
+        then=LeafRule(result_idx=0), otherwise=LeafRule(result_idx=-1),
+    ))
+    m = PrioritizedFlatRuleModule(
+        output=_output("match", default="no"),
+        rules=[r],
+        use_optimized_execution=True,
+    )
+    compiled = m.build_expression()
+    assert isinstance(compiled, OptimRunPolarsExpression)
+
+
+def test_run_polars_expression_execute():
+    """RunPolarsExpression.execute() produces the same result as FlatRuleModule.__call__ (module.py:58)."""
+    rule = UnaryRule(
+        condition=UnaryLessThan(feature="x", threshold=10.0),
+        then=LeafRule(result_idx=0), otherwise=LeafRule(result_idx=-1),
+    )
+    m = FlatRuleModule(output=_output("low", default="high"), rule=RuleRoot(meta=RuleMeta(), rule=rule))
+    compiled = m.build_expression()
+    df = pl.DataFrame({"x": [5.0, 15.0]})
+    result = compiled.execute(df)
+    assert result["r"].to_list() == ["low", "high"]
+
+
+def test_cases_ranges_empty_conditions_returns_otherwise():
+    """CasesRanges with zero conditions falls straight to otherwise (nodes.py:311-312)."""
+    from decider.modules.rules.flat_rules.impl import execute_rule
+    from decider.modules.rules.flat_rules.nodes import BuilderConfig
+    from decider.modules.rules.flat_rules.impl import default_result_builder
+    out = _output(default="always")
+    rule = CasesRanges(
+        feature="x",
+        conditions=[],
+        otherwise=0,
+        branches=[LeafRule(result_idx=-1)],
+        end_logic=RangeEndLogic.lower_inclusive,
+        strict=False,
+    )
+    config = BuilderConfig(
+        build_result_function=default_result_builder,
+        output_literals=out.output_literals,
+        default_literal=out.default_literal,
+    )
+    expr = execute_rule(rule, config, x=pl.col("x"))
+    result = pl.DataFrame({"x": [1.0, 2.0]}).select(expr.struct.unnest())
+    assert result["r"].to_list() == ["always", "always"]
+
+
+def test_cases_string_match_empty_conditions_returns_otherwise():
+    """CasesStringMatch with zero conditions falls straight to otherwise (nodes.py:384-385)."""
+    from decider.modules.rules.flat_rules.impl import execute_rule, default_result_builder
+    from decider.modules.rules.flat_rules.nodes import BuilderConfig
+    out = _output(default="always")
+    rule = CasesStringMatch(
+        feature="s",
+        match_type="exact",
+        conditions=[],
+        otherwise=0,
+        branches=[LeafRule(result_idx=-1)],
+    )
+    config = BuilderConfig(
+        build_result_function=default_result_builder,
+        output_literals=out.output_literals,
+        default_literal=out.default_literal,
+    )
+    expr = execute_rule(rule, config, s=pl.col("s"))
+    result = pl.DataFrame({"s": ["a", "b"]}).select(expr.struct.unnest())
+    assert result["r"].to_list() == ["always", "always"]
+
+
+def test_cases_isin_empty_conditions_returns_otherwise():
+    """CasesIsIn with zero conditions falls straight to otherwise (nodes.py:452-453)."""
+    from decider.modules.rules.flat_rules.impl import execute_rule, default_result_builder
+    from decider.modules.rules.flat_rules.nodes import BuilderConfig
+    out = _output(default="always")
+    rule = CasesIsIn(
+        feature="x",
+        conditions=[],
+        otherwise=0,
+        branches=[LeafRule(result_idx=-1)],
+    )
+    config = BuilderConfig(
+        build_result_function=default_result_builder,
+        output_literals=out.output_literals,
+        default_literal=out.default_literal,
+    )
+    expr = execute_rule(rule, config, x=pl.col("x"))
+    result = pl.DataFrame({"x": [1, 2]}).select(expr.struct.unnest())
+    assert result["r"].to_list() == ["always", "always"]
+
+
+def test_composite_rule_empty_conditions_evaluates_false():
+    """CompositeRule with no conditions evaluates to False → always otherwise (nodes.py:519-520)."""
+    rule = CompositeRule(
+        op=TLogicOp.AND,
+        conditions=[],
+        then=LeafRule(result_idx=0),
+        otherwise=LeafRule(result_idx=-1),
+    )
+    out = _output("never", default="always")
+    m = FlatRuleModule(output=out, rule=RuleRoot(meta=RuleMeta(), rule=rule))
+    df = pl.DataFrame({"_dummy": [1, 2]})
+    assert m({"input": df.lazy()})["r"].to_list() == ["always", "always"]
+
+
+def test_cases_ranges_get_required_parameters_with_inputref_bounds():
+    """CasesRanges.get_required_parameters collects InputRef keys from condition bounds (nodes.py:269-277)."""
+    rule = CasesRanges(
+        feature="x",
+        conditions=[
+            CasesBranch(when=RangeCondition(min=InputRef(key="lo"), max=InputRef(key="hi")), then=0),
+        ],
+        otherwise=1,
+        branches=[LeafRule(result_idx=0), LeafRule(result_idx=-1)],
+        end_logic=RangeEndLogic.lower_inclusive,
+        strict=False,
+    )
+    params = rule.get_required_parameters()
+    assert "lo" in params
+    assert "hi" in params
+
+
+def test_cases_string_match_get_required_parameters_with_inputref():
+    """CasesStringMatch.get_required_parameters collects InputRef keys from patterns (nodes.py:336-343)."""
+    rule = CasesStringMatch(
+        feature="s",
+        match_type="exact",
+        conditions=[
+            CasesBranch(when=StringMatchCondition(patterns=[InputRef(key="pat")]), then=0),
+        ],
+        otherwise=1,
+        branches=[LeafRule(result_idx=0), LeafRule(result_idx=-1)],
+    )
+    params = rule.get_required_parameters()
+    assert "pat" in params
+
+
+def test_cases_isin_get_required_parameters_with_inputref():
+    """CasesIsIn.get_required_parameters collects an InputRef values key (nodes.py:409-416)."""
+    rule = CasesIsIn(
+        feature="x",
+        conditions=[
+            CasesBranch(when=IsInCondition(values=InputRef(key="allowed")), then=0),
+        ],
+        otherwise=1,
+        branches=[LeafRule(result_idx=0), LeafRule(result_idx=-1)],
+    )
+    params = rule.get_required_parameters()
+    assert "allowed" in params
