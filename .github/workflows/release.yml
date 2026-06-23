@@ -180,9 +180,14 @@ jobs:
         env:
           VERSION: ${{ needs.version.outputs.version }}
         run: |
-          # Collect all versioned subdirectories (semver-looking names), sort descending, prepend "latest".
-          { echo "latest"; ls -1 _site/ | grep -E '^[0-9]+\.[0-9]+' | sort -Vr; } \
-            | jq -Rn '["latest"] + [limit(1000; inputs | select(. != "latest"))]' \
+          # Start from the previous versions.json if present, otherwise empty list.
+          PREV=[]
+          if [ -f _site/versions.json ]; then
+            PREV=$(cat _site/versions.json)
+          fi
+          # Prepend "latest" and the new version, deduplicating any prior entries.
+          echo "$PREV" \
+            | jq --arg v "$VERSION" '["latest", $v] + (. | map(select(. != "latest" and . != $v)))' \
             > _site/versions.json
           cat _site/versions.json
 
