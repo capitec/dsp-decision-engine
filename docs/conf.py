@@ -38,6 +38,7 @@ templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "**.ipynb_checkpoints"]
 
 html_static_path = ["_static"]
+html_js_files = ["version-switcher.js"]
 html_theme = "furo"
 html_title = "Decider"
 html_theme_options = {

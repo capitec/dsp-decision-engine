@@ -6,7 +6,7 @@ on:
       - 'v[0-9]*'
 
 env:
-  DOCKER_IMAGE: capitecbankltd/decider
+  DOCKER_IMAGE: sjnarmstrong/pydecider
 
 jobs:
   # ── 1. Resolve version from git tags (hatch-vcs) ──────────────────────────
@@ -136,6 +136,7 @@ jobs:
     permissions:
       pages: write
       id-token: write
+      contents: read        # needed to download release assets via gh cli
     steps:
       - uses: actions/checkout@v4
         with:
@@ -152,15 +153,18 @@ jobs:
       - name: Install docs dependencies
         run: uv sync --extra docs
 
-      - name: Restore previous gh-pages (for versioned history)
-        # Pull whatever is already deployed so we can layer this release on top.
-        # If the branch doesn't exist yet the step silently skips.
+      - name: Restore docs from previous release
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          git fetch origin gh-pages:gh-pages 2>/dev/null || true
-          if git show-ref --quiet refs/heads/gh-pages; then
-            git worktree add _site gh-pages
-          else
-            mkdir -p _site
+          mkdir -p _site
+          PREV=$(gh release list --limit 1 --json tagName -q '.[0].tagName' 2>/dev/null || echo "")
+          if [ -n "$PREV" ]; then
+            gh release download "$PREV" --pattern "docs-site.tar.gz" --dir /tmp/prev-docs 2>/dev/null || true
+            if [ -f /tmp/prev-docs/docs-site.tar.gz ]; then
+              tar -xzf /tmp/prev-docs/docs-site.tar.gz -C _site
+              echo "Restored docs history from $PREV"
+            fi
           fi
 
       - name: Build docs for this version
@@ -168,11 +172,29 @@ jobs:
           VERSION: ${{ needs.version.outputs.version }}
         run: |
           uv run python -m sphinx docs docs/_build/html -b html
-          # Copy into a versioned subdirectory so older releases stay accessible.
           mkdir -p _site/$VERSION
           cp -r docs/_build/html/. _site/$VERSION/
-          # Also update the root (latest) copy.
           cp -r docs/_build/html/. _site/
+
+      - name: Write versions.json
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          # Collect all versioned subdirectories (semver-looking names), sort descending, prepend "latest".
+          { echo "latest"; ls -1 _site/ | grep -E '^[0-9]+\.[0-9]+' | sort -Vr; } \
+            | jq -Rn '["latest"] + [limit(1000; inputs | select(. != "latest"))]' \
+            > _site/versions.json
+          cat _site/versions.json
+
+      - name: Package cumulative docs bundle
+        run: tar -czf /tmp/docs-site.tar.gz -C _site .
+
+      - name: Upload docs bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-site
+          path: /tmp/docs-site.tar.gz
+          retention-days: 1
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
@@ -201,6 +223,12 @@ jobs:
           name: dist
           path: dist/
 
+      - name: Download docs bundle artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docs-site
+          path: /tmp/docs-bundle/
+
       - name: Push version tag
         env:
           VERSION: ${{ needs.version.outputs.version }}
@@ -217,4 +245,6 @@ jobs:
           tag_name: v${{ needs.version.outputs.version }}
           name:     Release ${{ needs.version.outputs.version }}
           generate_release_notes: true
-          files: dist/*
+          files: |
+            dist/*
+            /tmp/docs-bundle/docs-site.tar.gz
