@@ -135,8 +135,12 @@ class SimpleExecutor(Executor):
         # --- 4. Only expose output nodes to CompiledExpressions ---
         # Hidden intermediates (dep-only nodes) are inlined and never written
         # as standalone frame columns.
+        # Use sorted_nodes order (not output_names set order) so that column
+        # dependencies resolve correctly when each expression is materialised.
         expressions: OrderedDict[str, pl.Expr] = OrderedDict(
-            (name, computed[name]) for name in output_names if name in computed
+            (node.name, computed[node.name])
+            for node in sorted_nodes
+            if node.name in output_names
         )
         return CompiledExpressions(expressions=expressions)
 
