@@ -1,12 +1,11 @@
 import typing as t
 from pydantic import model_validator
-from decider.modules.core import BaseModule
-from decider.modules.expression import Node, ExternalInputNode
+from decider.modules.expression import ExpressionModule, Node, ExternalInputNode
 from .config import ParametersConfig, Expression
 
 
 
-class DecisionTableModule(BaseModule):
+class DecisionTableModule(ExpressionModule):
     type: t.Literal["decision_table"]
     parameters: ParametersConfig
     expression: Expression
@@ -30,29 +29,21 @@ class DecisionTableModule(BaseModule):
         
         return self
     
-    def expand_nodes(self, config: t.Dict[str, t.Any] = None) -> t.List[Node]: # noqa: ARG002
-        """
-        Expand the decision table configuration into DeciderNodes.
-        
-        Returns:
-            List of DeciderNodes
-        """
+    def expand_nodes(self) -> t.Dict[str, Node]:
         from .impl import calculate_decision_table_output
-        
+
         variables = self.expression.get_variables()
         input_map = {v: v for v in variables}
 
-        # Create the main decision table evaluation node
-        return [
-            Node.from_callable(
-                calculate_decision_table_output,
-                name="output",
-                input_map=input_map,
-                static_kwargs={
-                    "parameters": self.parameters._parameters_df,
-                    "expression": self.expression,
-                    "output_columns": self.outputs,
-                    "default": self.default
-                }
-            )
-        ]
+        node = Node.from_callable(
+            calculate_decision_table_output,
+            name="output",
+            input_map=input_map,
+            static_kwargs={
+                "parameters": self.parameters.df,
+                "expression": self.expression,
+                "output_columns": self.outputs,
+                "default": self.default
+            }
+        )
+        return {node.name: node}

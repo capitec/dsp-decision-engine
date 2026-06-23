@@ -2,7 +2,8 @@ import typing as t
 import polars as pl
 from pydantic import Discriminator, Tag, model_validator, PrivateAttr, field_validator
 from decider.modules.core import BaseModule
-from decider.modules.expression import Node
+from decider.modules.expression import ExpressionModule, Node
+from decider._ext import TypeDiscriminatedBaseModule
 from .impl import (
     BoundBin, 
     ValuesBin, 
@@ -31,7 +32,7 @@ _TBin = t.Annotated[
 ]
 
 
-class ScoredVariable(BaseModule):
+class ScoredVariable(TypeDiscriminatedBaseModule):
     type: t.Literal["scored"]
     variable_name: str
     bins: t.List[_TBin]
@@ -183,7 +184,7 @@ class ScoredVariable(BaseModule):
         return nodes
 
 
-class AdjustedVariable(BaseModule):
+class AdjustedVariable(TypeDiscriminatedBaseModule):
     type: t.Literal["adjusted"]
     variable: ScoredVariable
     offset: float = 0.0
@@ -205,16 +206,16 @@ class AdjustedVariable(BaseModule):
     
     def expand_nodes(self) -> t.List[Node]:
         output_name = self.get_value_output_name()
-        return [
-            Node.from_callable(
-                adjust_score,
-                name=output_name,
-                input_map={"score": self.variable.get_value_output_name()},
-                static_kwargs={"offset": self.offset, "scale": self.scale}
-            )
-        ]
+        nodes = list(self.variable.expand_nodes())
+        nodes.append(Node.from_callable(
+            adjust_score,
+            name=output_name,
+            input_map={"score": self.variable.get_value_output_name()},
+            static_kwargs={"offset": self.offset, "scale": self.scale}
+        ))
+        return nodes
     
-class ConstantScore(BaseModule):
+class ConstantScore(TypeDiscriminatedBaseModule):
     type: t.Literal["constant"]
     score: float
     output_name: str = "constant_score"
@@ -233,7 +234,7 @@ _TScoredVariable = t.Annotated[
     Discriminator("type")
 ]
 
-class ScoreCard(BaseModule):
+class ScoreCard(ExpressionModule):
     type: t.Literal["scorecard"]
     variables: t.List[_TScoredVariable]
     output_name: str = "score"
@@ -244,80 +245,83 @@ class ScoreCard(BaseModule):
         variable_names = set()
         for var in variables:
             if var.type == "constant": continue
-            if var.variable_name in variable_names:
-                raise ValueError(f"Duplicate variable_name '{var.variable_name}' found in ScoreCard variables. Each ScoredVariable must have a unique variable_name.")
-            variable_names.add(var.variable_name)
+            vname = var.variable.variable_name if isinstance(var, AdjustedVariable) else var.variable_name
+            if vname in variable_names:
+                raise ValueError(f"Duplicate variable_name '{vname}' found in ScoreCard variables. Each ScoredVariable must have a unique variable_name.")
+            variable_names.add(vname)
             if var.get_value_output_name() is None:
-                raise ValueError(f"ScoredVariable with variable_name '{var.variable_name}' must have a value_output_name defined to be used in ScoreCard.")
+                raise ValueError(f"ScoredVariable with variable_name '{vname}' must have a value_output_name defined to be used in ScoreCard.")
         return variables
-    
-    def expand_nodes(self) -> t.List[Node]:
+
+    def expand_nodes(self) -> t.Dict[str, Node]:
         from decider.modules.expression import ExternalInputNode
 
-        nodes = []
+        nodes: t.Dict[str, Node] = {}
         for variable in self.variables:
-            nodes.extend(variable.expand_nodes())
+            for node in variable.expand_nodes():
+                nodes[node.name] = node
 
-        # Get all value output names to create input mapping for calculate_score
-        # Need to convert to ExternalInputNode references
         input_map = {
             var_name: ExternalInputNode(var_name)
             for var in self.variables
             if (var_name := var.get_value_output_name())
         }
 
-        nodes.append(Node(
+        score_node = Node(
             name=self.output_name,
             callable=calculate_score,
             input_map=input_map,
-        ))
-
+        )
+        nodes[score_node.name] = score_node
         return nodes
     
 
-class ProbabilityDefault(BaseModule):
+class ProbabilityDefault(ExpressionModule):
     type: t.Literal["probability_default"]
+    input_name: str = "score"
+    output_name: str = "probability_default"
 
-    def expand_nodes(self) -> t.List[Node]:
-        return [
-            Node.from_callable(
-                calculate_probability_of_default,
-                name=self.output_name,
-                input_map={"score": self.input_name}
-            )
-        ]
-    
-class LogProbability(BaseModule):
+    def expand_nodes(self) -> t.Dict[str, Node]:
+        node = Node.from_callable(
+            calculate_probability_of_default,
+            name=self.output_name,
+            input_map={"score": self.input_name}
+        )
+        return {node.name: node}
+
+class LogProbability(ExpressionModule):
     type: t.Literal["log_probability"]
+    input_name: str = "score"
+    output_name: str = "log_probability"
 
-    def expand_nodes(self) -> t.List[Node]:
-        return [
-            Node.from_callable(
-                log_odds_from_score,
-                name=self.output_name,
-                input_map={"score": self.input_name},
-                static_kwargs={"anchor_score": 660, "target_odds": 15, "points_to_double_the_odds": 20}
-            )
-        ]
-    
-class ScoreFromPDO(BaseModule):
+    def expand_nodes(self) -> t.Dict[str, Node]:
+        node = Node.from_callable(
+            log_odds_from_score,
+            name=self.output_name,
+            input_map={"score": self.input_name},
+            static_kwargs={"anchor_score": 660, "target_odds": 15, "points_to_double_the_odds": 20}
+        )
+        return {node.name: node}
+
+class ScoreFromPDO(ExpressionModule):
     type: t.Literal["score_from_pdo"]
+    input_name: str = "probability_default"
+    output_name: str = "score_from_pdo"
 
-    def expand_nodes(self) -> t.List[Node]:
-        return [
-            Node.from_callable(
-                calculate_credit_score,
-                name=self.output_name,
-                input_map={"probability_of_default": self.input_name}
-            )
-        ]
+    def expand_nodes(self) -> t.Dict[str, Node]:
+        node = Node.from_callable(
+            calculate_credit_score,
+            name=self.output_name,
+            input_map={"probability_of_default": self.input_name}
+        )
+        return {node.name: node}
 
 
 class WeightedScore(t.NamedTuple):
     score_name: str
     weight: float
 
-class MergeScorecardValues(BaseModule):
+class MergeScorecardValues(ExpressionModule):
     type: t.Literal["merge_scorecard_values"]
     weighted_scores: t.List[WeightedScore]
     output_name: str = "merged_scorecard_values"
@@ -330,13 +334,12 @@ class MergeScorecardValues(BaseModule):
             raise ValueError(f"The sum of weights in weighted_scores must equal 1.0. Current sum is {total_weight}.")
         return weighted_scores
 
-    def expand_nodes(self) -> t.List[Node]:
+    def expand_nodes(self) -> t.Dict[str, Node]:
         from decider.modules.expression import ExternalInputNode
 
         # TODO i just made this up i think its more complex than this as pd is involved here. @christiaan
         weighted_scores = self.weighted_scores
         def merge_scorecard_values(**kwargs):
-            # Create a weighted sum of the scores
             result = 0.0
             for weighted_score in weighted_scores:
                 score_value = kwargs[weighted_score.score_name]
@@ -348,10 +351,9 @@ class MergeScorecardValues(BaseModule):
             for ws in self.weighted_scores
         }
 
-        return [
-            Node(
-                name=self.output_name,
-                callable=merge_scorecard_values,
-                input_map=input_map,
-            )
-        ]
+        node = Node(
+            name=self.output_name,
+            callable=merge_scorecard_values,
+            input_map=input_map,
+        )
+        return {node.name: node}
