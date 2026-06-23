@@ -1,9 +1,22 @@
 // Injects a version switcher dropdown at the bottom of the sidebar.
 // Reads /versions.json (written by CI).
 (function () {
-  function siteRoot() {
-    // docs-config.js (written by conf.py build hook) sets this from html_baseurl.
-    if (window.DOCS_BASE_URL) return window.DOCS_BASE_URL.replace(/\/$/, '');
+  function siteRoot() {    
+    // sphinx-sitemap writes a <link rel="canonical"> with the full absolute URL of
+    // the current page, e.g.:
+    //   https://capitec.github.io/dsp-decision-engine/0.0.1/index.html
+    // We strip the page filename and the versioned path segment to get the repo root.
+    const canonical = document.querySelector('link[rel="canonical"]');
+    if (canonical) {
+      const url = new URL(canonical.href);
+      const parts = url.pathname.replace(/\/$/, '').split('/').filter(Boolean);
+      // Drop the filename (last segment) and optionally the version segment.
+      parts.pop(); // filename
+      if (parts.length && /^\d+\.\d+/.test(parts[parts.length - 1])) {
+        parts.pop(); // versioned subdirectory
+      }
+      return url.origin + (parts.length ? '/' + parts.join('/') : '');
+    }
     // Fallback for local dev: just use origin (no subpath).
     return window.location.origin;
   }
