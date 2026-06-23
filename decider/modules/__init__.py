@@ -2,12 +2,12 @@ from ._ext import register_graph_module, GraphModule
 from .expression import Node
 
 def _load_core_modules():
-    from .primitives.sequential import SequentialModule
+    from .primitives.sequential import SequentialModule, ConfigRef
     from .primitives.join import JoinModule, FrameRef, FrameModule
     from .credit import register_credit_modules
     from .rules import register_rule_modules
 
-    for cls in (SequentialModule, JoinModule, FrameRef):
+    for cls in (SequentialModule, ConfigRef, JoinModule, FrameRef):
         register_graph_module(cls)
 
     register_credit_modules()

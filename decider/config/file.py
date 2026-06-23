@@ -13,12 +13,25 @@ class BaseFileConfigManager(CoreConfigManager):
     Files are stored as:
         {basepath}/{version}/{key}.{ext}
 
-    All keys within a version directory are merged into VersionedConfig.config.
+    Subdirectories are supported and produce dotted keys:
+        {basepath}/{version}/{group}/{key}.{ext}  →  config key "group.key"
 
-    Example:
-        configs/1.0.0/tree.json
-        configs/1.0.0/scorecard.json
-        → VersionedConfig(version="1.0.0", config={"tree": {...}, "scorecard": {...}})
+    Nesting is arbitrary depth — each path segment becomes a dot-separated
+    component of the key.
+
+    Examples:
+        configs/1.0.0/tree.json                  → key "tree"
+        configs/1.0.0/scorecard.json             → key "scorecard"
+        configs/1.0.0/01_init_afs/bureau.json    → key "01_init_afs.bureau"
+        configs/1.0.0/01_init_afs/main.json      → key "01_init_afs.main"
+        → VersionedConfig(version="1.0.0", config={
+              "tree": {...},
+              "scorecard": {...},
+              "01_init_afs.bureau": {...},
+              "01_init_afs.main": {...},
+          })
+
+    When writing, dotted keys are converted back to subdirectory paths.
     """
 
     basepath: str = Field(default="configs")
@@ -30,7 +43,10 @@ class BaseFileConfigManager(CoreConfigManager):
         return os.path.join(self.basepath, str(version))
 
     def _file_path(self, version, key: str) -> str:
-        return os.path.join(self._version_dir(version), f"{key}.{self._file_ext}")
+        # Convert dotted key to filesystem path:
+        #   "01_init_afs.bureau_source"  →  "{version_dir}/01_init_afs/bureau_source.json"
+        parts = key.split(".")
+        return os.path.join(self._version_dir(version), *parts[:-1], f"{parts[-1]}.{self._file_ext}")
 
     def _list_versions(self) -> t.List[str]:
         if not os.path.isdir(self.basepath):
@@ -62,18 +78,29 @@ class BaseFileConfigManager(CoreConfigManager):
     # ConfigManager storage primitives
     # ------------------------------------------------------------------
 
+    def _collect_keys(self, directory: str, prefix: str = "") -> t.Dict[str, str]:
+        """Recursively collect {dotted_key: filepath} for all matching files under directory."""
+        ext = f".{self._file_ext}"
+        result: t.Dict[str, str] = {}
+        for entry in sorted(os.listdir(directory)):
+            full_path = os.path.join(directory, entry)
+            if os.path.isdir(full_path):
+                sub_prefix = f"{prefix}{entry}." if prefix else f"{entry}."
+                result.update(self._collect_keys(full_path, sub_prefix))
+            elif entry.endswith(ext):
+                key = f"{prefix}{entry[:-len(ext)]}"
+                result[key] = full_path
+        return result
+
     async def _load_version(self, version: str) -> VersionedConfig:
         version_dir = self._version_dir(version)
         if not os.path.isdir(version_dir):
             raise FileNotFoundError(f"Version directory not found: {version_dir!r}")
 
-        ext = f".{self._file_ext}"
         config: t.Dict[str, t.Any] = {}
-        for filename in sorted(os.listdir(version_dir)):
-            if filename.endswith(ext):
-                key = filename[: -len(ext)]
-                with open(os.path.join(version_dir, filename), "rb") as f:
-                    config[key] = self._deserialize(f.read())
+        for key, filepath in self._collect_keys(version_dir).items():
+            with open(filepath, "rb") as f:
+                config[key] = self._deserialize(f.read())
 
         return VersionedConfig(version=version, config=config)
 

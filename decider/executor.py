@@ -82,14 +82,41 @@ class SimpleExecutor(Executor):
     type: t.Literal["simple"]
 
     def compile_expression_graph(self, nodes: t.List["Node"]) -> "CompiledExpressions":
-        from decider.modules.expression import CompiledExpressions, ExternalInputNode
+        from decider.modules.expression import CompiledExpressions, ExternalInputNode, Node as ExprNode
 
-        sorted_nodes = topological_sort(nodes)
+        # --- 1. Collect ALL reachable nodes (output + hidden intermediates) ---
+        # Walk the full dependency tree so that Node references used only as
+        # inputs (never returned as top-level outputs) are still compiled.
+        output_names: t.Set[str] = {n.name for n in nodes}
+        all_nodes: t.Dict[str, "ExprNode"] = {}
 
-        expressions: OrderedDict[str, pl.Expr] = OrderedDict()
+        def _collect(node: "ExprNode") -> None:
+            existing = all_nodes.get(node.name)
+            if existing is not None:
+                if id(existing) != id(node):
+                    raise ValueError(
+                        f"Two different Node objects share the name '{node.name}'. "
+                        "Each node name must be unique within an expression graph. "
+                        "Use distinct names or reuse the same Node instance."
+                    )
+                return  # already visited
+            all_nodes[node.name] = node
+            for ref in node.input_map.values():
+                if isinstance(ref, ExprNode):
+                    _collect(ref)
+
+        for node in nodes:
+            _collect(node)
+
+        # --- 2. Topological sort over the full node set ---
+        sorted_nodes = topological_sort(list(all_nodes.values()))
+
+        # --- 3. Build expressions, inlining hidden nodes instead of
+        #        materialising them as frame columns ---
+        computed: OrderedDict[str, pl.Expr] = OrderedDict()
         for node in sorted_nodes:
             try:
-                expr = node.callable(**node.get_input_expressions())
+                expr = node.callable(**node.get_input_expressions(computed))
             except Exception as e:
                 missing = [
                     f"'{k}' (column '{v.input_name}')"
@@ -103,7 +130,13 @@ class SimpleExecutor(Executor):
                 raise ValueError(
                     f"Error building expression for '{node.name}': {e}{hint}"
                 ) from e
-            expressions[node.name] = expr
+            computed[node.name] = expr
 
+        # --- 4. Only expose output nodes to CompiledExpressions ---
+        # Hidden intermediates (dep-only nodes) are inlined and never written
+        # as standalone frame columns.
+        expressions: OrderedDict[str, pl.Expr] = OrderedDict(
+            (name, computed[name]) for name in output_names if name in computed
+        )
         return CompiledExpressions(expressions=expressions)
 

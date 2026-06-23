@@ -67,6 +67,19 @@ class TStringMatchType(str, enum.Enum):
     regex = "regex"
 
 
+class TNullHandling(str, enum.Enum):
+    """How to handle null values in string/pattern conditions.
+
+    match     — null features match every pattern (wildcard behaviour).
+    no_match  — null features never match any pattern (safe default).
+    error     — raise at runtime if a null value is encountered.
+    """
+
+    match    = "match"
+    no_match = "no_match"
+    error    = "error"
+
+
 class TLogicOp(str, enum.Enum):
     """Logical operators for composite conditions."""
 

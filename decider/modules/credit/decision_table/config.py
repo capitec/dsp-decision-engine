@@ -220,17 +220,54 @@ class InExpression(TypeDiscriminatedBaseModule):
 class IsTrueExpression(TypeDiscriminatedBaseModule):
     type: t.Literal["is_true"]
     variable: str
-    
+
     def __call__(self, parameters: pl.DataFrame, **kwargs: pl.Expr) -> t.List[pl.Expr]:
         if self.variable not in kwargs:
             raise ValueError(f"Variable '{self.variable}' not found in expression arguments")
         expr = kwargs[self.variable]
         return [expr] * len(parameters)
-    
+
     def validate_parameters(self, parameters: "ParametersConfig") -> None:  # noqa: ARG002
-        # Note: self.variable is an input variable, not a column in parameters
-        # No validation needed for IsTrueExpression beyond basic structure
         pass
+
+    def get_variables(self) -> t.List[str]:
+        return [self.variable]
+
+
+class EqExpression(TypeDiscriminatedBaseModule):
+    """Match rows where the input variable equals the value in a parameters column.
+
+    Supports any scalar type (numeric, string). Each row in the parameters table
+    provides the value to compare against — the condition is True when the input
+    variable equals that row's value exactly.
+
+    Example config::
+
+        {
+          "type": "eq",
+          "variable": "BureauKey",
+          "value_column": "key"
+        }
+    """
+
+    type: t.Literal["eq"]
+    variable: str
+    value_column: str
+
+    def __call__(self, parameters: pl.DataFrame, **kwargs: pl.Expr) -> t.List[pl.Expr]:
+        if self.variable not in kwargs:
+            raise ValueError(f"Variable '{self.variable}' not found in expression arguments")
+        var_expr = kwargs[self.variable]
+        return [
+            var_expr == pl.lit(row[self.value_column])
+            for row in parameters.iter_rows(named=True)
+        ]
+
+    def validate_parameters(self, parameters: "ParametersConfig") -> None:
+        if self.value_column not in parameters.columns:
+            raise ValueError(
+                f"Value column '{self.value_column}' not found in parameters columns"
+            )
 
     def get_variables(self) -> t.List[str]:
         return [self.variable]
@@ -243,6 +280,7 @@ Expression = t.Annotated[
         BetweenExpression,
         InExpression,
         IsTrueExpression,
+        EqExpression,
     ],
     Field(discriminator="type")
 ]

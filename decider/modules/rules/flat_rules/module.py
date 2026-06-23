@@ -66,6 +66,11 @@ class FlatRuleModule(WithTreeOutput, BaseExecuteModule, WithParameters):
     rule: RuleRoot
     output_fn: t.Optional[DefinedFunction] = None
     use_optimized_execution: bool = False
+    keep_input: bool = False
+    """When True, output columns are added to the input frame (with_columns)
+    rather than replacing it (select).  Use this when composing flat rules
+    in a sequential pipeline where downstream steps need both the rule outputs
+    and the original input columns."""
 
     def get_required_parameters(self) -> t.Set[str]:
         """Get all parameters required by this rule."""
@@ -138,7 +143,10 @@ class FlatRuleModule(WithTreeOutput, BaseExecuteModule, WithParameters):
         if self.parameters and self.parameters_col not in frame.columns:
             frame = frame.with_columns(pl.lit(None).alias(self.parameters_col))
         compiled = self.build_expression()
-        return frame.select(compiled.expr.struct.unnest()).lazy()
+        output_cols = compiled.expr.struct.unnest()
+        if self.keep_input:
+            return frame.with_columns(output_cols).lazy()
+        return frame.select(output_cols).lazy()
 
 
 class PrioritizedFlatRuleModule(WithTreeOutput, BaseExecuteModule, WithParameters):
@@ -153,6 +161,10 @@ class PrioritizedFlatRuleModule(WithTreeOutput, BaseExecuteModule, WithParameter
     rules: t.List[RuleRoot] = Field(
         description="List of rules to evaluate in priority order"
     )
+    keep_input: bool = False
+    """When True, output columns are added to the input frame (with_columns)
+    rather than replacing it (select).  Use this when composing flat rules
+    in a sequential pipeline."""
     mode: PrioritizationMode = Field(
         default=PrioritizationMode.first_match,
         description="'first_match' returns the first rule that matches; 'all' returns all results.",
@@ -269,4 +281,7 @@ class PrioritizedFlatRuleModule(WithTreeOutput, BaseExecuteModule, WithParameter
         if self.parameters and self.parameters_col not in frame.columns:
             frame = frame.with_columns(pl.lit(None).alias(self.parameters_col))
         compiled = self.build_expression()
-        return frame.select(compiled.expr.struct.unnest()).lazy()
+        output_cols = compiled.expr.struct.unnest()
+        if self.keep_input:
+            return frame.with_columns(output_cols).lazy()
+        return frame.select(output_cols).lazy()

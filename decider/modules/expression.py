@@ -90,8 +90,34 @@ class Node:
     def get_expr(self) -> pl.Expr:
         return pl.col(self.name)
 
-    def get_input_expressions(self) -> t.Dict[str, t.Any]:
-        return {k: ref.get_expr() for k, ref in self.input_map.items()}
+    def get_input_expressions(
+        self,
+        computed: t.Optional[t.Dict[str, pl.Expr]] = None,
+    ) -> t.Dict[str, t.Any]:
+        """Resolve input expressions for this node.
+
+        For each entry in input_map:
+          - ExternalInputNode  → pl.col(name)  (reads from the live frame)
+          - Node reference     → computed[node.name] (inlined expr, never
+                                 materialised as a frame column)
+          - StaticValueNode / ConfigValueNode → literal / config value
+
+        When `computed` is None the old behaviour is preserved:
+        Node references fall back to pl.col(name).
+        """
+        result = {}
+        for k, ref in self.input_map.items():
+            if isinstance(ref, Node) and computed is not None:
+                if ref.name not in computed:
+                    raise KeyError(
+                        f"Node '{ref.name}' (dependency of '{self.name}') "
+                        "was not found in computed expressions. "
+                        "Check topological ordering."
+                    )
+                result[k] = computed[ref.name]
+            else:
+                result[k] = ref.get_expr()
+        return result
 
     def get_frame_kwargs(self, frames: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
         return {k: ref.get_frame_value(frames) for k, ref in self.input_map.items()}
@@ -111,7 +137,7 @@ class Node:
         cls,
         func: t.Callable,
         name: t.Optional[str] = None,
-        input_map: t.Optional[t.Dict[str, str]] = None,
+        input_map: t.Optional[t.Dict[str, t.Union[str, "Node"]]] = None,
         static_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
     ) -> "Node":
         name = name or func.__name__
@@ -147,7 +173,7 @@ class Node:
             name=name,
             callable=func,
             input_map={
-                k: ExternalInputNode(input_name=resolved[k]) for k in resolved
+                k: ExternalInputNode(input_name=resolved[k]) if isinstance(resolved[k], str) else resolved[k] for k in resolved
             } | {
                 k: StaticValueNode(value=v) for k, v in static_kwargs.items()
             },

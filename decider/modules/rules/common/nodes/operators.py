@@ -18,7 +18,7 @@ import polars as pl
 
 from ..shared import InputRef
 from ..feature import Feature as _Feature
-from ..nodetypes import TStringMatchType
+from ..nodetypes import TStringMatchType, TNullHandling
 
 
 class _BaseUnaryOp(BaseModel, ABC):
@@ -209,6 +209,15 @@ class UnaryStringMatch(_BaseUnaryOp):
     match_type: TStringMatchType = Field(default=TStringMatchType.exact)
     case_sensitive: bool = Field(default=True)
     trim_whitespace: bool = Field(default=False)
+    null_handling: TNullHandling = Field(
+        default=TNullHandling.no_match,
+        description=(
+            "How to handle null feature values. "
+            "'no_match' (default) — nulls never match any pattern. "
+            "'match' — nulls match every pattern (wildcard). "
+            "'error' — raise at runtime if a null is encountered."
+        ),
+    )
 
     @model_validator(mode="after")
     def validate_patterns(self) -> t_ext.Self:
@@ -232,7 +241,7 @@ class UnaryStringMatch(_BaseUnaryOp):
         if self.trim_whitespace:
             feature_expr = feature_expr.str.strip_chars()
         matcher = StringMatchCondition(patterns=self.patterns)
-        return matcher.build_match_condition(
+        match_cond = matcher.build_match_condition(
             feature_expr=feature_expr,
             match_type=(
                 self.match_type.value
@@ -241,7 +250,9 @@ class UnaryStringMatch(_BaseUnaryOp):
             ),
             case_sensitive=self.case_sensitive,
             parameters=parameters,
+            null_handling=self.null_handling,
         )
+        return match_cond
 
 
 class UnaryIsNull(_BaseUnaryOp):

@@ -83,6 +83,33 @@ TPrimitiveType = t.Union[str, ExplicitType]
 
 
 class PrimitiveSchema(RootModel):
+    """Schema for a single primitive (non-struct) Polars type.
+
+    Used by ``ParameterInfo`` to declare the type of a flat-rule parameter.
+    Supports both simple string types and compound types via ``ExplicitType``.
+
+    **Simple types** — pass a plain string matching a Polars dtype name::
+
+        PrimitiveSchema.model_validate("Float64")   # pl.Float64
+        PrimitiveSchema.model_validate("String")    # pl.String
+        PrimitiveSchema.model_validate("Int64")     # pl.Int64
+        PrimitiveSchema.model_validate("Boolean")   # pl.Boolean
+
+    **Compound types** — pass a dict with a ``"type"`` key and type-specific
+    extra fields.  These map to ``ExplicitType``::
+
+        # List of strings
+        PrimitiveSchema.model_validate({"type": "List", "inner": "String"})
+
+        # List of floats
+        PrimitiveSchema.model_validate({"type": "List", "inner": "Float64"})
+
+        # Array (fixed-length) of Int32
+        PrimitiveSchema.model_validate({"type": "Array", "inner": "Int32", "width": 4})
+
+    The resolved Polars dtype is available via ``.polars_type``.
+    """
+
     root: TPrimitiveType
     _polars_type: pl.Schema = PrivateAttr()
 

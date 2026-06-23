@@ -3,6 +3,14 @@ from .module import (
     ParametersConfig,
     Expression,
 )
+from .config import (
+    AndExpression,
+    OrExpression,
+    BetweenExpression,
+    InExpression,
+    IsTrueExpression,
+    EqExpression,
+)
 
 from .impl import (
     default_form_output_struct_from_row,

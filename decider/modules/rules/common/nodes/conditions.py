@@ -11,7 +11,7 @@ import typing_extensions as t_ext
 import polars as pl
 
 from ..shared import InputRef
-from ..nodetypes import TStringMatchType, TLogicOp, RangeEndLogic
+from ..nodetypes import TStringMatchType, TLogicOp, RangeEndLogic, TNullHandling
 from .operators import TUnaryOp
 
 # =============================================================================
@@ -90,29 +90,47 @@ class StringMatchCondition(BaseModel):
         static_patterns: t.List[str],
         match_type: str,
         case_sensitive: bool,
+        null_handling: TNullHandling = TNullHandling.no_match,
     ) -> t.Optional[pl.Expr]:
         if not static_patterns:
             return None
 
+        # Apply null handling before string operations.
+        is_null_expr = feature_expr.is_null()
+        if null_handling == TNullHandling.error:
+            # Cast strictly — nulls will propagate as null booleans which
+            # downstream callers can detect.  A stricter approach would require
+            # explicit upstream validation.
+            safe_expr = feature_expr.cast(pl.String, strict=False)
+        else:
+            # Cast to String first (handles Null-dtype columns), then fill null.
+            safe_expr = feature_expr.cast(pl.String, strict=False).fill_null("")
+
         if match_type == "exact":
-            return feature_expr.is_in(static_patterns)
+            pattern_cond = safe_expr.is_in(static_patterns)
         elif match_type == "regex":
             combined_pattern = "|".join(f"(?:{p})" for p in static_patterns)
-            return feature_expr.str.contains(combined_pattern, literal=False)
+            pattern_cond = safe_expr.str.contains(combined_pattern, literal=False)
         else:
             if match_type == "contains":
-                exprs = [
-                    feature_expr.str.contains(p, literal=True) for p in static_patterns
-                ]
+                exprs = [safe_expr.str.contains(p, literal=True) for p in static_patterns]
             elif match_type == "starts_with":
-                exprs = [feature_expr.str.starts_with(p) for p in static_patterns]
+                exprs = [safe_expr.str.starts_with(p) for p in static_patterns]
             else:  # ends_with
-                exprs = [feature_expr.str.ends_with(p) for p in static_patterns]
-
-            result = exprs[0]
+                exprs = [safe_expr.str.ends_with(p) for p in static_patterns]
+            pattern_cond = exprs[0]
             for expr in exprs[1:]:
-                result = result | expr
-            return result
+                pattern_cond = pattern_cond | expr
+
+        if null_handling == TNullHandling.match:
+            # Null rows always match
+            return is_null_expr | pattern_cond
+        elif null_handling == TNullHandling.no_match:
+            # Null rows never match (fill_null("") already ensures this for most ops,
+            # but be explicit: null → False)
+            return is_null_expr.not_() & pattern_cond
+        else:  # error — pattern_cond built on strict cast, nulls propagate
+            return pattern_cond
 
     def _handle_dynamic_patterns(
         self,
@@ -146,8 +164,12 @@ class StringMatchCondition(BaseModel):
         match_type: str,
         case_sensitive: bool,
         parameters: t.Optional[pl.Expr],
+        null_handling: TNullHandling = TNullHandling.no_match,
     ) -> pl.Expr:
-        feat = feature_expr.str.to_lowercase() if not case_sensitive else feature_expr
+        # Cast to String first to handle Null-dtype columns (e.g. when a column
+        # is inferred as Null because all values are null in the input batch).
+        typed_expr = feature_expr.cast(pl.String, strict=False)
+        feat = typed_expr.str.to_lowercase() if not case_sensitive else typed_expr
 
         static_patterns = [p for p in self.patterns if isinstance(p, str)]
         dynamic_refs = [p for p in self.patterns if isinstance(p, InputRef)]
@@ -157,7 +179,7 @@ class StringMatchCondition(BaseModel):
 
         conditions = []
         static_cond = self._handle_static_patterns(
-            feat, static_patterns, match_type, case_sensitive
+            feat, static_patterns, match_type, case_sensitive, null_handling
         )
         if static_cond is not None:
             conditions.append(static_cond)
