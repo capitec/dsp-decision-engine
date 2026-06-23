@@ -38,11 +38,11 @@ templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "**.ipynb_checkpoints"]
 
 html_static_path = ["_static"]
-html_js_files = ["version-switcher.js"]
+html_js_files = ["docs-config.js", "version-switcher.js"]
 html_theme = "furo"
 html_title = "Decider"
 html_theme_options = {
-    "source_repository": "https://github.com/capitecbankltd/dsp_north-polrs",
+    "source_repository": "https://github.com/capitec/dsp-decision-engine",
     "source_branch": "main",
     "source_directory": "docs/",
     "light_css_variables": {
@@ -59,5 +59,23 @@ html_theme_options = {
 suppress_warnings = ["myst.xref_missing"]
 
 language = "en"
-html_baseurl = "https://capitecbankltd.github.io/dsp_north-polrs"
+html_baseurl = "https://capitec.github.io/dsp-decision-engine"
 html_extra_path = ["robots.txt"]
+
+
+def _on_build_finished(app, exception):
+    if exception or app.builder.name != "html":
+        return
+    import json, pathlib
+    outdir = pathlib.Path(app.outdir)
+    base_url = os.environ.get("DOCS_BASE_URL", app.config.html_baseurl or "").rstrip("/")
+    (outdir / "docs-config.js").write_text(
+        f"window.DOCS_BASE_URL = {json.dumps(base_url)};\n"
+    )
+    raw = os.environ.get("DOCS_VERSIONS", "latest," + version)
+    versions = [v.strip() for v in raw.split(",") if v.strip()]
+    (outdir / "versions.json").write_text(json.dumps(versions))
+
+
+def setup(app):
+    app.connect("build-finished", _on_build_finished)

@@ -44,8 +44,8 @@ pip install "decider[all]"
 **With uv (recommended):**
 
 ```bash
-git clone https://github.com/capitecbankltd/dsp_north-polrs.git
-cd dsp_north-polrs
+git clone https://github.com/capitec/dsp-decision-engine.git
+cd dsp-decision-engine
 uv sync --all-extras
 ```
 

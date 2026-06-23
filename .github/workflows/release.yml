@@ -132,7 +132,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: release
-      url: https://capitecbankltd.github.io/dsp_north-polrs
+      url: https://capitec.github.io/dsp-decision-engine
     permissions:
       pages: write
       id-token: write

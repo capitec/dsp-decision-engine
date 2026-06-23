@@ -17,7 +17,7 @@ Please read and follow our [Code of Conduct](CODE_OF_CONDUCT.md).
 Engagement starts with an Issue where conversations and debates can occur around [bugs](#bugs) and [feature requests](#feature-requests):
 
 - ✅ **Do** search for a similar or existing Issue prior to submitting a new one.
-- ❌ **Do not** use Issues for personal support. Use [Discussions](https://github.com/capitecbankltd/dsp_north-polrs/discussions) or [StackOverflow](https://stackoverflow.com/) instead.
+- ❌ **Do not** use Issues for personal support. Use [Discussions](https://github.com/capitec/dsp-decision-engine/discussions) or [StackOverflow](https://stackoverflow.com/) instead.
 - ❌ **Do not** side-track or derail Issue threads. Stick to the topic, please.
 - ❌ **Do not** post comments using just "+1", "++" or "👍". Use [Reactions](https://github.blog/2016-03-10-add-reactions-to-pull-requests-issues-and-comments/) instead.
 
@@ -37,7 +37,7 @@ Engagement starts with an Issue where conversations and debates can occur around
 
 ## 3. Vulnerabilities
 
-- ✅ **Do** refer to our [Security Policy](https://github.com/capitecbankltd/dsp_north-polrs/security/policy) for more information.
+- ✅ **Do** refer to our [Security Policy](https://github.com/capitec/dsp-decision-engine/security/policy) for more information.
 - ✅ **Do** report vulnerabilities via this [link](https://github.com/capitec/ml-decision-engine/security/advisories/new).
 - ❌ **Do not** open a public Issue or Discussion for security vulnerabilities.
 
@@ -57,8 +57,8 @@ Engagement starts with an Issue where conversations and debates can occur around
 
 ```bash
 # 1. Clone and enter the repo
-git clone https://github.com/capitecbankltd/dsp_north-polrs.git
-cd dsp_north-polrs
+git clone https://github.com/capitec/dsp-decision-engine.git
+cd dsp-decision-engine
 
 # 2. Install all dependencies (creates .venv automatically)
 uv sync --all-extras

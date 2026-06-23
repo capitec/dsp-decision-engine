@@ -1,2 +1,2 @@
 User-agent: *
-Sitemap: https://capitecbankltd.github.io/dsp_north-polrs/sitemap.xml
+Sitemap: https://capitec.github.io/dsp-decision-engine/sitemap.xml
