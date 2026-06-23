@@ -1,36 +1,25 @@
-# Ignore everything (use whitelist approach rather to ensure only important files kept)
+# Ignore everything then whitelist what the image actually needs
 *
 
-# Allow files and directories
+# Package source and build artefacts
+!/decider
 !/dist
-!/spockflow
-!/requirements
 !/pyproject.toml
+!/uv.lock
 
-# Ignore unnecessary files inside allowed directories
-# This should go after the allowed directories
-**/*~
-**/*.log
-**/.DS_Store
-**/Thumbs.db
+# Strip noise from allowed directories
 **/__pycache__
 **/*.pyc
 **/*.pyo
 **/*.pyd
-**/.Python
-**/env
-**/pip-log.txt
-**/pip-delete-this-directory.txt
-**/.tox
-**/.coverage
-**/.coverage.*
-**/.cache
-**/nosetests.xml
-**/coverage.xml
-**/*.cover
+**/*.egg-info
+**/.DS_Store
+**/Thumbs.db
 **/*.log
 **/.git
 **/.mypy_cache
 **/.pytest_cache
 **/.hypothesis
-**/.DS_Store
+**/.coverage
+**/.coverage.*
+**/.tox

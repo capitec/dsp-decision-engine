@@ -1,6 +1,0 @@
-build
-coverage[toml]
-pytest
-pytest-cov
-black
-versioneer

@@ -13,5 +13,7 @@ Older versions will not be supported if the vulnerability has been fixed in late
 
 ## Reporting a Vulnerability
 
-This repository makes use of GitHub's [private vulnerability reporting feature](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing/privately-reporting-a-security-vulnerability). 
+This repository uses GitHub's [private vulnerability reporting](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing/privately-reporting-a-security-vulnerability).
 Vulnerabilities can be reported using the [repository's security advisories](https://github.com/capitec/ml-decision-engine/security/advisories/new).
+
+Please do **not** open a public issue for security vulnerabilities.

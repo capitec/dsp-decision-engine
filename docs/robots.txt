@@ -1,3 +1,2 @@
 User-agent: *
-
-Sitemap: https://spockflow.capinet/en/latest/sitemap.xml
+Sitemap: https://capitecbankltd.github.io/dsp_north-polrs/sitemap.xml

@@ -1,11 +1,9 @@
-# Getting Started with Spockflow
+# Getting Started
 
-Welcome to Spockflow! This guide will help you get up and running with Spockflow, a Python framework designed for creating standalone micro-services that enrich data with actionable outputs.
+Welcome to Decider! This guide will get you up and running with Decider, a Python framework for building, serving, and inspecting decision pipelines as versioned, deployable micro-services.
 
 ```{toctree}
 
-Installation Guide <install>
+Installation <install>
 Quick Start <quick_start>
-Contributing <contributing/index>
-License <license>
 ```

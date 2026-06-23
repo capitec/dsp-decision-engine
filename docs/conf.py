@@ -1,62 +1,47 @@
-# Configuration file for the Sphinx documentation builder.
-#
-# For the full list of built-in configuration values, see the documentation:
-# https://www.sphinx-doc.org/en/master/usage/configuration.html
 import os
 import sys
 
 sys.path.insert(0, os.path.abspath(".."))
 
-
-# -- Project information -----------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
-
-project = "SpockFlow"
-copyright = "2024, Sholto Armstrong"
+project = "Decider"
+copyright = "2024-2026, Capitec"
 author = "Sholto Armstrong"
-import spockflow
 
-version = str(spockflow.__version__)
+import decider
+version = decider.__version__
 release = version
-
-# -- General configuration ---------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
 extensions = [
     "myst_nb",
+    "sphinx_design",
     "sphinx.ext.napoleon",
-    "sphinx.ext.autodoc",  # Core library for html generation from docstrings
-    "sphinx.ext.autosummary",  # Create neat summary tables
-    "sphinxcontrib.confluencebuilder",
-    "sphinx_sitemap",  # Welcome robots to the website
+    "sphinx.ext.autodoc",
+    "sphinx.ext.autosummary",
+    "sphinx_sitemap",
 ]
 
-# AutoDoc Conf (Thanks https://github.com/JamesALeedham/Sphinx-Autosummary-Recursion/blob/master/docs/conf.py)
-autosummary_generate = True  # Turn on sphinx.ext.autosummary
-autoclass_content = "both"  # Add __init__ doc (ie. params) to class summaries
-html_show_sourcelink = (
-    False  # Remove 'view source code' from top of page (for html, not python)
-)
-autodoc_inherit_docstrings = True  # If no docstring, inherit from base class
-set_type_checking_flag = True  # Enable 'expensive' imports for sphinx_autodoc_typehints
-nbsphinx_allow_errors = True  # Continue through Jupyter errors
-# autodoc_typehints = "description" # Sphinx-native method. Not as good as sphinx_autodoc_typehints
-add_module_names = False  # Remove namespaces from class/method signatures
+autosummary_generate = True
+autoclass_content = "both"
+html_show_sourcelink = False
+autodoc_inherit_docstrings = True
+add_module_names = False
+autodoc_mock_imports = ["hamilton", "streamlit"]
+nb_execution_mode = "off"   # don't execute notebooks during build
 
+myst_enable_extensions = [
+    "colon_fence",
+    "deflist",
+    "dollarmath",
+]
 
 templates_path = ["_templates"]
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "**.ipynb_checkpoints"]
 
-
-# -- Options for HTML output -------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
-
-# html_theme = 'alabaster'
 html_static_path = ["_static"]
-
 html_theme = "furo"
-html_title = "SpockFlow"
+html_title = "Decider"
 html_theme_options = {
+    "source_repository": "https://github.com/capitecbankltd/dsp_north-polrs",
     "source_branch": "main",
     "source_directory": "docs/",
     "light_css_variables": {
@@ -69,23 +54,9 @@ html_theme_options = {
     },
 }
 
+# anchor links inside {include}'d CONTRIBUTING.md don't resolve cross-doc
+suppress_warnings = ["myst.xref_missing"]
 
-# for the sitemap extension ---
-# check if the current commit is tagged as a release (vX.Y.Z) and set the version
 language = "en"
-html_baseurl = "https://capitec.github.io/ml-decision-engine"
+html_baseurl = "https://capitecbankltd.github.io/dsp_north-polrs"
 html_extra_path = ["robots.txt"]
-
-confluence_config_path = os.path.split(__file__)[0] + "/confluence.json"
-if os.path.isfile(confluence_config_path):
-    import json
-
-    with open(confluence_config_path) as fp:
-        conf_config = json.load(fp)
-    confluence_publish = conf_config["confluence_publish"]
-    confluence_parent_page = conf_config["confluence_parent_page"]
-    confluence_space_key = conf_config["confluence_space_key"]
-    confluence_ask_password = conf_config["confluence_ask_password"]
-    confluence_server_url = conf_config["confluence_server_url"]
-    confluence_server_user = conf_config["confluence_server_user"]
-    confluence_server_cookies = conf_config["confluence_server_cookies"]

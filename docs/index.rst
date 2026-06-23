@@ -1,21 +1,11 @@
-.. include:: main.rst
+.. include:: main.md
+   :parser: myst_parser.sphinx_
 
 .. toctree::
    :hidden:
+   :maxdepth: 2
 
-   Home page <self>
-
-.. toctree::
-   :hidden:
-   :caption: USER GUIDE
-
-   Getting Started <getting_started/index>
+   getting_started/index
    concepts/index
-   API reference <_autosummary/spockflow>
-
-.. toctree::
-   :hidden:
-   :caption: EXTERNAL RESOURCES
-
-   GitHub <https://github.com/capitec/dsp-decision-engine>
-   Hamilton <https://hamilton.dagworks.io/en/latest/get-started>
+   contributing/index
+   api

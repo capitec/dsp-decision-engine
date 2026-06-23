@@ -1,58 +1,84 @@
 [project]
-name = "SpockFlow"  
-description = "Everything you could ever dream of"# TODO
-readme = {file = "README.md", content-type = "text/markdown"}
-requires-python = ">=3.8"
-authors = [
-    { name = "Sholto Armstrong", email = "sjnarmstrong@gmail.com" }
+name = "decider"
+dynamic = ["version"]
+description = "Build, serve and inspect decision pipelines"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "polars",
+    "pydantic>=2",
+    "pydantic-settings",
+    "click",
 ]
-classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
-    "Intended Audience :: Developers",
-    "Natural Language :: English",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.8",
-    "Topic :: Software Development :: Libraries :: Application Frameworks"
+
+[project.optional-dependencies]
+serve-starlette = ["uvicorn", "starlette"]
+serve-sanic     = ["sanic"]
+visualise       = ["streamlit", "graphviz"]
+notebook        = ["ipython"]
+eval            = ["simpleeval"]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "anyio",
 ]
-dynamic = ["dependencies","optional-dependencies","version"]
-keywords = []
-license = {file = "LICENSE"}
+docs = [
+    "sphinx",
+    "furo",
+    "myst-nb",
+    "sphinx-design",
+    "sphinx-sitemap",
+]
+all = [
+    "uvicorn", "starlette",
+    "sanic",
+    "streamlit", "graphviz",
+    "ipython",
+    "simpleeval",
+    "pytest",
+    "pytest-asyncio",
+    "anyio",
+    "sphinx",
+    "furo",
+    "myst-nb",
+    "sphinx-design",
+    "sphinx-sitemap",
+]
+
+[project.scripts]
+decider = "decider.cli:cli"
+
+# ── build ─────────────────────────────────────────────────────────────────────
 
 [build-system]
-requires = ["setuptools", "versioneer[toml]"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
 
-[tool.setuptools.dynamic]
-dependencies = {file = "requirements/core.txt"}
+[tool.hatch.version]
+source = "vcs"
 
-[tool.setuptools.dynamic.optional-dependencies]
-dev = {file = "requirements/dev.txt"}
-parsers = {file = "requirements/parsers.txt"}
-webapp = {file = "requirements/webapp.txt"}
-yaml = {file = "requirements/yaml.txt"}
+[tool.hatch.version.raw-options]
+# tag format: v{version}  e.g. v0.1.0
+tag_regex = "^v(?P<version>[0-9]+\\.[0-9]+\\.[0-9]+.*)$"
+
+[tool.hatch.build.targets.wheel]
+packages = ["decider"]
+
+# ── uv ────────────────────────────────────────────────────────────────────────
+
+[tool.uv]
+system-certs = true   # required: corporate proxy uses a private CA
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "anyio",
+    "pytest-cov>=7.1.0",
+]
+
+# ── pytest ────────────────────────────────────────────────────────────────────
 
 [tool.pytest.ini_options]
+asyncio_mode = "auto"
 testpaths = ["tests"]
-
-[tool.coverage.run]
-branch = true
-command_line = "-m pytest"
-
-[tool.setuptools.packages.find]
-include = ["spockflow*"]
-exclude = ["tests*"]
-
-[tool.setuptools.package-data]
-"spockflow.inference.server" = ["nginx.conf"]
-
-[tool.versioneer]
-VCS = "git"
-style = "pep440"
-versionfile_source = "spockflow/_version.py"
-versionfile_build = "spockflow/_version.py"
-tag_prefix = "v"
-parentdir_prefix = "spockflow-"
