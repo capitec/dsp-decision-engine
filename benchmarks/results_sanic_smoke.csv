@@ -1,0 +1,2 @@
+variant,n_clients,n_sent,n_ok,n_error,n_timeout,duration_s,actual_rps,success_rate,error_rate,mean_ms,p50_ms,p95_ms
+sanic_default,1,2667,2667,0,0,4.006,665.82,1.0000,0.0000,1.50,1.40,2.00

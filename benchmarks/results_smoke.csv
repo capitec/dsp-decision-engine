@@ -1,0 +1,5 @@
+variant,n_clients,n_sent,n_ok,n_error,n_timeout,duration_s,actual_rps,success_rate,error_rate,mean_ms,p50_ms,p95_ms
+starlette_default,1,3441,3441,0,0,5.005,687.57,1.0000,0.0000,1.45,1.39,1.75
+starlette_default,2,5652,5652,0,0,5.008,1128.57,1.0000,0.0000,1.77,1.60,2.61
+starlette_executor,1,3045,3045,0,0,5.006,608.32,1.0000,0.0000,1.64,1.60,1.92
+starlette_executor,2,4257,4257,0,0,5.008,849.97,1.0000,0.0000,2.35,2.27,2.73
