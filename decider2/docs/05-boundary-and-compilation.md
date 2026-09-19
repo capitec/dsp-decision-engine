@@ -74,33 +74,58 @@ Also never use `.to_numpy()` on a nullable column: it copies *and* silently
 changes dtype — `Int64→float64` (lossy above 2⁵³), `UInt8→float32`,
 `Boolean→object`.
 
-### 1.5 The admissible-dtype contract
+### 1.5 The dtype ladder — flexible by default, tighten for speed
 
-Measured, [EXPERIMENTS.md](EXPERIMENTS.md) §A. A dtype is admissible only via the column marked ✅.
+**Revised.** An earlier draft called this "the admissible-dtype contract" and
+marked `Decimal` and `List` **inadmissible**. That is the wrong default: the
+framework must not be restrictive about data. Real inputs are a mix of flat and
+deeply nested, with mixed types, and **everything should work — some things just
+cost more.** Tightening a dtype is then a performance choice an author makes
+deliberately, not a precondition for using the library at all.
 
-| dtype | `.to_numpy()` → njit | values buffer → njit | verdict |
-|---|---|---|---|
-| Float64, Int64, Int32, UInt8 | ✅ | ✅ | admissible, zero-copy when clean |
-| Boolean | ✅ clean / ✗ `object` when null | ✅ | admissible **via buffer only** |
-| Date, Datetime | ✅ compare only | ✅ as int | admissible **as integer**; `add(datetime64, datetime64)` does not compile |
-| Duration | ✅ | ✅ | admissible |
-| Utf8 | ✗ `object` | ✅ as uint8 bytes + offsets | **not admissible as a value**; dictionary-encode first |
-| Categorical, Enum | ✗ `object` | ✅ as codes | admissible **as codes**; code stability across frames must be declared |
-| Decimal | ✗ | **Rust panic** | **inadmissible** — use scaled int64 |
-| List | ✗ | `_get_buffers` raises | **inadmissible** — O5 |
+Measured, [EXPERIMENTS.md](EXPERIMENTS.md) §A and §B. Three tiers, and nothing is forbidden:
 
-Two rules follow, both non-optional:
+**Tier 1 — zero-copy.** Clean `Float64`, `Int64`, `Int32`, `UInt8`, `Datetime`,
+`Duration`. 0.8–1.2 µs/column at 100k rows. Six of 26 combinations measured.
 
-- **Gate on dtype before extraction, and gate with `except BaseException`.**
-  `Decimal` raises `pyo3_runtime.PanicException`, which inherits `BaseException`,
-  not `Exception` — so the obvious `except Exception` does not catch it and the
-  process prints an unsuppressable Rust panic to stderr. Money is the dtype most
-  likely to hit this.
-- **A string never enters a kernel as a string.** It enters as a categorical code
-  or not at all. That makes code stability a declared property of the input
-  schema, not an accident of the data.
+**Tier 2 — copies, still compiled.** Any nullable numeric (~550–630 µs/column at
+100k — a 500× cliff, and the single most important number for sizing a boundary);
+`Boolean` via its buffer; `Categorical`/`Enum` as codes; `Date`/`Datetime` as
+integers. All run in the kernel at full speed once converted.
 
----
+**Tier 3 — works, via a conversion the framework does for you.** Strings, `List`,
+`Decimal`. These cannot enter a nopython kernel directly, so the framework
+**converts at the boundary or splits the kernel around the step that needs them**
+— both measured at ~30× a pure kernel, against 77× for a per-row `objmode` escape,
+which is why the escape is never per-row (§B).
+
+| dtype | tier | how it enters |
+|---|---|---|
+| Float64, Int64, Int32, UInt8 (clean) | **1** | zero-copy |
+| the same, nullable | 2 | copy + validity |
+| Boolean | 2 | via buffer |
+| Date, Datetime, Duration | 2 | as integers — note `add(datetime64, datetime64)` does not compile |
+| Categorical, Enum | 2 | as codes; code stability across frames must be declared |
+| Utf8 | 3 | dictionary-encoded to codes, or the kernel splits |
+| List | 3 | CSR offsets + values (§O5's `grain`), or the kernel splits |
+| Decimal | 3 | **converted to scaled `int64` cents** — which is the money answer anyway (doc 03 §1.2) |
+
+**What the framework owes the author, since nothing is rejected:** `explain_boundary()`
+reports each column's tier and its measured cost, so "why is my batch slow" is
+answerable by reading a table rather than guessing. Tightening a dtype is then an
+informed choice.
+
+**Two hard requirements that survive from the stricter draft**, because they are
+correctness rather than performance:
+
+- **Gate with `except BaseException`, not `except Exception`.** `Decimal` raises
+  `pyo3_runtime.PanicException`, which inherits `BaseException`. Refined by
+  §O11: `_get_buffers()` on a `Decimal` column **succeeds** and returns a usable
+  Int128 series; the panic fires one call deeper, on `.to_numpy()` of that buffer.
+  So the gate belongs at the conversion, not at extraction.
+- **A string never enters a kernel as a string.** It enters as a code. That makes
+  code stability a declared property of the input schema rather than an accident
+  of the data.
 
 ## 2. Nulls
 

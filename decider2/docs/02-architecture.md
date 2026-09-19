@@ -441,6 +441,25 @@ discovered as slow startups.
 > slower kernels, or build in the CPU family you deploy on. Choose explicitly;
 > don't discover it.
 
+### 3.4b The build target is checked at startup, never assumed
+
+Numba's cache keys include CPU features, so a cache built on one CPU family is
+silently discarded on another and every process start recompiles — 5 to 50 s,
+appearing as "slow startups" rather than as an error.
+
+Deployment is Docker images, so the target is normally known and constant. The
+framework still **records the build target in the manifest and compares it at
+startup**, logging loudly on a mismatch rather than silently recompiling. That
+costs nothing, decides nothing, and turns the failure mode from invisible into
+obvious — which matters more here than in a closed system, because **this library
+is intended to be open-sourced** and other people's deployment targets will not
+resemble this one.
+
+`decider build --cpu generic` remains available for a genuinely mixed fleet. It
+forfeits CPU-specific vectorisation, which is what makes small kernels fast — but
+at a 20–100 ms single-record budget against a ~1 µs kernel (doc 01 §6.1), that is
+very unlikely to be the constraint.
+
 ### 3.5 Two entry points, one kernel
 
 ```python
@@ -488,6 +507,44 @@ budget.
 > different scenario, now moot in production since doc 08 §4's compile
 > subprocess never competes with a serving thread at all. `experimentation/n4-tail-concurrency-swap/`,
 > EXPERIMENTS.md §N4.
+
+---
+
+### 3.6 Serving is a package, not a design constraint
+
+**decider2 ships a server** — but the design must not depend on it, and anyone
+should be able to replace it in an afternoon. The existing `decider/serving/`
+already has the right shape and **decider2 keeps its conventions**:
+
+- **SageMaker routes**: `GET /ping` (health) and `POST /invocations` (inference).
+  These are a platform contract, not a preference.
+- **The handler protocol is the seam**: `init_fn`, `module_fn`, `input_fn`,
+  `process_fn`, `output_fn`, `shutdown_fn`. A user drops an `inference.py` with a
+  `Handler` class into the working directory and overrides only what they need —
+  most often `input_fn` to change request preprocessing.
+- **Server backends are swappable** behind that protocol. `decider/serving/servers/`
+  ships starlette and sanic today; the protocol is what makes that possible.
+
+Three rules keep it decoupled, and they are what makes "write your own serving
+layer" real rather than nominal:
+
+1. **Nothing in `graph/`, `compile/`, `params/` or `interiors/` may import from
+   `serving/`.** A lint enforces it. The core must be usable as a library with no
+   server present.
+2. **The core's entry point is `score(dict) -> dict`** (doc 02 §3.5). Everything
+   the server does — content negotiation, parsing, formatting, health — sits
+   *above* that line and is replaceable without touching it.
+3. **Serving owns no state that the core needs.** The params cell and the
+   generation pointer live in `runtime/`, not in the handler, so a custom serving
+   layer inherits config swapping and atomic activation for free rather than
+   reimplementing them.
+
+> **One thing to carry forward from `decider` and one to leave behind.** Keep the
+> overridable-`Handler`-from-the-working-directory pattern — it is the mechanism
+> that lets a team change preprocessing without forking. Leave behind
+> `subscribe_version_updates`, which polls every 10 s and hot-swaps credit logic
+> inside `except Exception: pass` (doc 08 §6). Config arrives through
+> `ParamsCell.swap` and `Runtime.activate`, which are explicit and measured.
 
 ---
 
@@ -637,7 +694,7 @@ decider2/
                  manifest.py     # build manifest; --verify checks hashes, not just compiles
                  numba/          kernel.py, variants.py, fallback.py  # fallback splits the
                                  #   KERNEL, never a node (§B)
-                 boundary/       dtypes.py    # admissibility gate, except BaseException (§1.5)
+                 boundary/       dtypes.py    # the dtype LADDER — nothing rejected (§1.5)
                                  extract.py   # polars-native _get_buffers, never to_arrow
                                  marshal.py   # WHOLE-ROW bulk, never per-field (§N1)
                                  writeback.py # dtype-grouped 2D; layout per entry point (§3.1)
@@ -652,6 +709,10 @@ decider2/
                  plan.py         # ordering DERIVED from the graph, never declared
                  lifecycle.py    # generations: stage -> compile (SUBPROCESS) -> activate
                  serve.py        # nogil=True unconditionally for serving kernels (§N4)
+  serving/       handler.py      # init/module/input/process/output/shutdown — THE SEAM
+                 servers/        starlette.py, sanic.py — swappable behind the protocol
+                 parse.py, format.py, media_types.py   # content negotiation
+                 # nothing in graph/ compile/ params/ interiors/ may import this
   binding/       register.py, finalise.py, admit.py, fingerprint.py, errors.py
   testing/       assertions.py, equivalence.py, golden.py, impact.py
                  corpus.py       # boundary-value generation; sampling misses overflow (§I)
@@ -681,6 +742,9 @@ decider2_credit/     scorecard/, tree/, rule_table/, waterfall/, affordability/
 | money is scaled int64; `round_half_up` | §I | `money/` |
 | corpus must include boundary values | §I | `testing/corpus.py` |
 | the reviewable artefact renders resolved values | O3, cold-read §5.1 | `observe/review.py` |
+| flexible dtypes; tighten for speed, reject nothing | §A, §B, §O11 | `boundary/dtypes.py` |
+| serving is replaceable; SageMaker `/ping` + `/invocations` | decider 1 convention | `serving/` |
+| build target checked at startup, never assumed | §C | `compile/manifest.py` |
 | blast radius is visible **before** an edit | cold-read §5.2 | `observe/blast_radius.py` |
 | cross-artefact agreement is checked | cold-read §2 | `observe/consistency.py` |
 | interface inferred, materialised, freezable | REVIEW §5 | `graph/interface.py` |
