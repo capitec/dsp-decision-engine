@@ -33,10 +33,14 @@ implementation starts, and says plainly which are cheap doc edits and which are 
 | §3.1 `--verify` / payload params | **fixed** — doc 04 §2.1 rewritten, with the correction recorded in place. |
 | §4.5 business users add rules | **answered** by doc 08 (three change classes, bounded interiors, staged compile). |
 | §6 config seam | **answered** by doc 08 §6–§7, and doc 02 §6's `config/` renamed `binding/`. |
+| §4.6 one output per step | **open.** |
+| write-back (E9's 54.7%) | **measured at 64.0% and addressed** — doc 05 §3.1, dtype-grouped 2D output, layout per entry point. |
+| chunking | **new requirement, now specified** — doc 05 §3.2. 1 M rows at 400-in/633-out does not fit unchunked; default chunk 100k. |
+| doc 08 §4 lifecycle | **confirmed with numbers** — subprocess compile, 97.9% serving retained, 2.56–7.34 s change-to-serving. |
 | §7 compile gaps | **largely measured — see EXPERIMENTS.md.** Doc 05 §9 now has criteria 10–15. Confirmed: per-node fallback cannot exist inside a fused driver (§B), and byte-identical is insufficient for cache survival (§C). Both now specified. |
 | §4.4 dtypes | **resolved.** Doc 05 §1.5 is the admissible-dtype contract, measured across 26 dtype/nullability combinations. Utf8/Categorical/Enum enter as codes; Decimal and List are inadmissible; money is scaled int64 (doc 03 §1.2). |
 | §4.3 cost of one rule | **designed, 6 artefacts → 1.** Doc 03 §1.1 — a bare function is a pipeline element (§5.3), `param()` in the signature generates the model (§4.4, settling O2), the docstring is the description, and the config entry is generated. Gated on E11 confirming numba accepts the generated signature. |
-| §4.6 one output per step, §4.9 doc errors | **open.** |
+| §4.9 doc errors | **open.** |
 
 ---
 

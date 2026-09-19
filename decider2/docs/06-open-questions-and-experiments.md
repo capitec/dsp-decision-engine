@@ -432,7 +432,28 @@ And it corrected a fact previously recorded in doc 01 §4, which is a useful
 reminder that a plausible mechanism ("bit tests are cheap") can be exactly
 backwards once branch prediction is involved.
 
-### E10 — Configuration lifecycle
+### ~~E10 — Configuration lifecycle~~ — **DONE (as H and K)**
+
+Doc 08 §4's staged lifecycle is confirmed as a mechanism, with one change: the
+background worker must be a **subprocess**, not a thread. Measured, [EXPERIMENTS.md](EXPERIMENTS.md) §H, §K:
+
+| | thread | subprocess |
+|---|---|---|
+| serving throughput retained | 26–55% | **97.9%** |
+| parent-side compile events | — | **0** |
+
+Atomic swap: **0 straddled batches** of 1564 across 11,605 swaps, with a
+deliberately-wrong per-chunk control straddling 99.87%. `activate()` 0.177 µs,
+rollback 3.36 µs and zero compiles, three generations resident for +2.4 MB.
+
+**Config change to serving: 2.56 s (10 rules), 7.34 s (30 rules).**
+
+Two new cache requirements came out of it (doc 05 §4): import the generated driver
+**by module name** — `spec_from_file_location` loses the cache across processes —
+and derive the **`sys.modules` registration name** identically in child and parent,
+a seventh condition whose violation is a cryptic `ModuleNotFoundError('<dynamic>')`.
+
+### ~~E10b — the original brief, superseded above~~
 **New, from doc 08 §9.** Two to three days on top of the E1+E2+E3 vertical slice.
 Settles the staged-compile lifecycle and answers **O16**.
 
@@ -495,6 +516,43 @@ Part two — the composition mechanics, all of which have a plausible failure mo
   and therefore does not trigger recompilation.
 
 ---
+
+### ~~J — Output write-back convention~~ — **DONE**
+Record output is dominated on both axes by dtype-grouped 2D arrays. Write-back is
+**64.0%** of batch total (E9 said 54.7%). Column-major reaches polars zero-copy and
+wins 1.74× unchunked; a row-major control proves the win is *column-major*
+specifically. Both 2D forms compile **42× faster**. At N=1 the ranking inverts, so
+doc 05 §3.1 chooses layout per entry point. [EXPERIMENTS.md](EXPERIMENTS.md) §J.
+
+### ~~L — Rule thresholds as arguments~~ — **DONE**
+Adopt, but not for the stated reason. Hoisting constants does **not** reduce
+emitted lines or compile time — that claim is withdrawn. The case is that a retune
+never recompiles (0 events vs 343 ms each at five rules), for 1–4.5 ns/row. Rule
+enablement as a mask array fixes §G's disabled-rule compile tax. [EXPERIMENTS.md](EXPERIMENTS.md) §L.
+
+### ~~J2 — Chunked write-back~~ — **DONE**
+Chunking is **mandatory**: 1 M rows at 400-in/633-out needs 16.2 GB (record) or
+11.9 GB (column-major). Default chunk **100k rows**. The 1.74× becomes
+**1.03–1.57×** end-to-end once per-chunk assembly and persistence are counted.
+[EXPERIMENTS.md](EXPERIMENTS.md) §J2.
+
+### N1–N4 — The single-record request path — **NEXT**
+**New, and now the highest-value set**, from doc 01 §6.1: the single-record path is
+primary, its budget is 20–100 ms, and the compiled path runs at ~1 µs — four
+orders of magnitude of headroom. So the open question is not how fast the kernel
+is, but **what fixed overhead the framework adds per request**.
+
+- **N1 — the overhead budget.** Total framework cost for one `score()` call at 400
+  inputs, excluding user logic and I/O, phase by phase. If it is under ~1% of
+  20 ms, "stop optimising" is a legitimate and valuable result.
+- **N2 — the `score()` calling convention at width.** 400 keyword arguments means
+  per-request signature binding and dict construction. Compare kwargs / dict /
+  pre-built record, on latency **and** readability — this is a maintainability
+  question as much as a performance one.
+- **N3 — params validation per request.** E0 measured 58.5 µs to validate-and-bind
+  63 nodes; doc 02 §4 allows params in a realtime payload.
+- **N4 — tail latency.** p99 under concurrency and across a config swap. At a
+  20 ms SLA the tail *is* the SLA, and nothing has measured one.
 
 ## Sequencing
 

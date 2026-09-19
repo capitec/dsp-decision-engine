@@ -48,13 +48,20 @@ people-blocked and should start before implementation.
 A standing review of this doc set, with findings ranked by cost of late
 discovery, is in [REVIEW.md](REVIEW.md). Items acted on are marked there.
 
-**[EXPERIMENTS.md](EXPERIMENTS.md) holds measured results** from seven experiments
-run against real numba on this project's own environment. Five refuted or
-partially refuted a documented claim; three changed a design decision. Every
-harness is checked in under `experimentation/` and is runnable — unlike the
-figures in doc 01, which existed only as tables and could not be re-run on a
-different workload shape. Where a claim in docs 01–08 has been measured, an
-inline note points here.
+**[EXPERIMENTS.md](EXPERIMENTS.md) holds measured results** from fifteen
+experiments run against real numba on this project's own environment. Most
+refuted or partially refuted a documented claim, and several changed a design
+decision rather than a number — fusion, `prange`, per-node fallback, the output
+convention and the compile lifecycle all moved. Every harness is checked in under
+`experimentation/` and is runnable, unlike the figures in doc 01, which existed
+only as tables and could not be re-run on a different workload shape. Where a
+claim in docs 01–08 has been measured, an inline note points here.
+
+**Read the performance findings against doc 01 §6.1.** The single-record path is
+primary, with a 20–100 ms budget, and the compiled path runs at ~1 µs — so fusion,
+output conventions and chunking are *batch* concerns with four orders of magnitude
+of headroom at N=1, and should be chosen for maintainability unless a request-path
+measurement says otherwise.
 
 ## Conventions used in these docs
 
