@@ -905,6 +905,20 @@ a single-step one, with its name from the function, its interface inferred
 pipeline = Affordability | cap_by_income_band | cap_by_sector | Scoring
 ```
 
+**`|` needs a module on its left.** A plain Python function has no `__or__`, so
+`fn_a | fn_b` between two bare functions cannot work — every example above happens
+to start with a `Module`, which hides this. A pipeline of only bare functions is
+built with `flow(...)`:
+
+```python
+pipeline = flow(disposable_income, affordability_ratio, cap_by_income_band)
+```
+
+`flow(...)` is the general constructor and `|` is sugar over it, so the two are the
+same object and mix freely: `flow(a, b) | Scoring`. Worth stating because the
+simplest pipeline the design claims to support — §1.1's one-rule-one-artefact case,
+with nothing promoted to a module — is exactly the one `|` alone cannot express.
+
 Nothing is special-cased. The engine cannot tell this from
 `module(cap_by_income_band, name="cap_by_income_band")`, which is what it desugars
 to — the same statement doc 07 §3 already makes about inline modules. Everything
