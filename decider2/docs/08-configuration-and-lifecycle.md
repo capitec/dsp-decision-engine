@@ -180,21 +180,25 @@ from decider2 import ruleset
 PolicyRules = ruleset(
     name="policy_rules",
     reads=["term_cap", "min_net_salary", "employer_sector_code"],
-    overwrites=["term_cap"],        # already exists upstream; this narrows it
-    originates=["decline_code"],    # this ruleset is where the name begins
+    writes=["term_cap", "decline_code"],
     params=PolicyRuleParams,
 )
 ```
 
-> **Why two words and not `writes=`.** A single `writes=` covers both cases, and
-> a cold reader hit exactly that: they found a module declaring `writes=` for a
-> name it only *consumed*, and read it as a violation of the project's own lineage
-> guarantee (COLD-READ §6 item 13). `overwrites=` is the normal module-boundary
-> case (doc 03 §3.2); `originates=` is the one that answers "where does this value
-> come from?" — which is the question lineage exists to answer. Splitting them
-> costs one line and makes the declaration checkable: a name in `originates=` that
-> already exists upstream is a build error, and so is a name in `overwrites=` that
-> does not.
+> **`reads=`/`writes=` are a bound, not a description.** They say what config
+> *may ever* touch, not what today's config happens to touch — which is why they
+> cannot be inferred from the config document. Deriving them from what the rules
+> currently reference would let a UI edit silently widen its own reach, and the
+> whole point is that a business user's edit has a blast radius stated in code and
+> reviewed once.
+>
+> **What *is* inferred: whether a write originates a value or overwrites one.**
+> A name is originated if nothing upstream produces it — a graph property the build
+> already knows, so it is displayed in the lineage view rather than declared. An
+> earlier draft asked authors to type the distinction as `originates=`/
+> `overwrites=`, prompted by a cold reader who read a module's `writes=` as a
+> lineage violation (COLD-READ §6 item 13). The confusion was real; the remedy was
+> wrong. A generated view answers it without a second keyword.
 
 ```json
 // config — a UI writes this. Cannot reach anything not declared above.
@@ -753,7 +757,7 @@ identifies the config but not the code that ran:
 | generation | which generation served this invocation (§4) |
 | declared variants | `fuse(...)` groups, `parallel(...)` regions and `fastmath` per kernel — authored, so they are part of the structure fingerprint rather than a runtime choice to record separately |
 | fallback set | which nodes ran as Python (doc 05 §6) — **empty in production** |
-| inputs, outputs, tapped values | as doc 04 §5.2 |
+| inputs, outputs, emitted values | as doc 04 §5.2 |
 
 The last three are new and each closes a reproducibility hole: doc 04 §5.2 as
 written cannot answer "re-run this decision" because the variant choice is

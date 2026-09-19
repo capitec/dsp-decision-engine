@@ -182,6 +182,12 @@ is preferred, records are never much worse.
 
 ### 3.1 Output side: dtype-grouped 2D, layout per entry point
 
+> **This is the internal layout. The user-facing contract is doc 03 §7:** the
+> returned frame is *additive* — inputs, plus terminal values, plus whatever the
+> pipeline `.emit()`s, minus whatever it `.drop()`s. An intermediate that nothing
+> downstream reads and nothing emits is **never materialised**, which is where
+> most of the saving below actually comes from.
+
 **Measured — [EXPERIMENTS.md](EXPERIMENTS.md) §J.** Record write-back is confirmed as the dominant batch
 cost (**64.0%** of total at 633 outputs here, against E9's 54.7%), and **record
 output is dominated on both axes** by dtype-grouped 2D arrays — one
@@ -335,11 +341,11 @@ def _driver(inp, params_m1, params_m2, shared, out):
             v_term_cap = _cap_public(v_term_cap, params_m1)
         v_score = _final_score(v_ratio, v_term_cap, params_m2, shared)
         out.score[i] = v_score
-        out.term_cap[i] = v_term_cap                    # a tap
+        out.term_cap[i] = v_term_cap                    # an emitted value
 ```
 
 Note what this gets for free: short-circuiting (only the taken arm runs), value
-overwrite as plain local reassignment, and taps as one extra store.
+overwrite as plain local reassignment, and an emitted value as one extra store.
 
 ---
 
@@ -351,7 +357,6 @@ per kernel, not two** — serial unless the author wrote `parallel(...)` (§5.1)
 | variant | steps | driver | purpose |
 |---|---|---|---|
 | `fused` | njit, inlined | njit | production |
-| `fused` + taps | njit, inlined | njit | production diagnostics |
 | `stepped` | njit | Python, one step at a time | driver-level debugging; **also the fallback path** |
 | `interpreted` | Python | Python | reference semantics; full internals |
 
@@ -488,10 +493,12 @@ What `compile/` implements instead:
   0.85–3.30 heavy — not the 0.20 ns/step an earlier draft claimed, which is below
   the floor of a single kernel call). Flat-in-size is what matters here: it is the
   predictable choice, and boundary stores are near-free.
-- **`score()` emits one maximally-fused kernel.** At N=1 fusion wins **9.4–48×**
-  because per-call dispatch (0.44 µs/kernel) dominates everything else. There is no
-  common break-even to be below — `trivial/straight` never crosses at any size —
-  but N=1 is the one regime where fusion is unambiguous.
+- **`score()` uses the same grouping as `apply()`.** At N=1 fusion wins 9.4–48×
+  against per-call dispatch of 0.44 µs/kernel — but that is a multiple of
+  microseconds, and 30 unfused kernels cost ~13 µs against a 20 ms budget (0.07%).
+  Maximal fusion would also breach the ~500-line cap by construction at 30 rules
+  (§G: 517 lines). One grouping, one codegen path, one cache surface. An author who
+  measures a case where it matters writes `fuse()`.
 - **A `fuse(...)` combinator in the graph** groups modules into one kernel
   explicitly. It is authored, not inferred.
 - **A hard cap on emitted lines (~500) per kernel**, enforced as a build error
@@ -555,7 +562,7 @@ This layer is done when:
 1. A kernel runs end-to-end over a polars frame: extract → record assembly →
    driver → write-back, matching a numpy reference exactly.
 2. The **same kernel** answers a single record with no polars involvement.
-3. All four variants agree — `interpreted ≡ stepped ≡ fused` — over a test
+3. All three modes agree — `interpreted ≡ stepped ≡ fused` — over a test
    corpus, and deliberately injected drift at each layer is localised to the
    right rung (E3).
 4. A `required` null violation fails fast naming the column, count and example
@@ -563,8 +570,13 @@ This layer is done when:
    `Boolean`.
 5. Retuning any params bundle leaves `driver.signatures` at length 1; changing a
    field's *type* adds one (negative control).
-6. A node containing something numba cannot compile (e.g. `re.match`) falls back
-   to Python **without** disabling compilation for any sibling node.
+6. A node containing something numba cannot compile (e.g. `re.match`) **splits
+   the kernel around itself**: the offending node runs in Python, the nodes before
+   and after it stay compiled, and the build names the split and its cause. Falling
+   back *without* splitting is impossible — a nopython driver cannot call Python,
+   and §B measured the alternatives at 77× (`objmode` per row) and 23.5× (whole
+   driver in Python). The blast radius of an un-njit-able node is its kernel, and
+   the acceptance test is that the radius stops there (§6).
 7. `decider build --verify` reports zero runtime compilations.
 8. A regression test guards the same-name-NamedTuple collision (doc 01 §4c) with
    an **exact structural assertion**, not a timing one: two distinct bundle
@@ -596,6 +608,9 @@ This layer is done when:
     an `objmode` block within the row loop — [EXPERIMENTS.md](EXPERIMENTS.md) §B measured it at 77× serial and
     615× under `prange`, both worse than giving up and running the whole driver in
     Python (23.5×).
-15. **An inadmissible dtype fails at the gate, named**, before extraction — with
-    the gate catching `BaseException`, since `Decimal` raises a Rust panic that
-    `except Exception` does not catch (§1.5).
+15. **Every dtype is placed on the ladder at the gate, named**, before extraction
+    — nothing is rejected (§1.5, doc 00 §2b). A tier-3 dtype is converted or the
+    kernel splits around it, and the gate *reports* which tier each column landed
+    on so tightening is an informed choice. The gate must catch `BaseException`,
+    since `Decimal` raises a Rust panic that `except Exception` does not catch —
+    that is a *probe* failure to handle, not a rejection.

@@ -185,6 +185,42 @@ Why this shape:
 
 ---
 
+### 1.3 Naming a rule, and joining it to policy
+
+Two joins matter, and neither costs a declaration.
+
+**The rule id goes in the function name.** `cap_by_income_band` is fine for a
+helper; a *policy rule* is `term_0042_cap_by_income_band`. This was the single
+highest-rated comprehension aid in the cold-read study — one reader: *"I could
+grep the spec's rule table and the code and get an instant match, **or an instant,
+checkable mismatch**."* It is a lint rule, not a convention (doc 07 §6).
+
+**The policy section goes in the docstring**, as a trailing line:
+
+```python
+def term_0042_cap_by_income_band(
+    term_cap: float,
+    min_net_salary: float,
+    cap:              float = param(48.0, ge=6, le=60),
+    income_threshold: float = param(5000.0, ge=0),
+) -> float:
+    """Cap term at 48 months below the income floor.
+
+    Implements: Credit Policy §7.4.2
+    """
+```
+
+`Implements:` is the join key doc 04 §6.3c and doc 00 §6 refer to. It lives in the
+docstring for one reason: §1 already makes the docstring the reviewer-facing
+channel, and the governance artefact must not be populated from a field the
+authoring guidance tells you to omit. Putting it in `@step(implements=...)` would
+make the decorator **mandatory on every policy rule**, directly against §1's "only
+needed when you want to override defaults" and against §1.1's one-artefact rule.
+
+It is optional. A rule without it still renders; the generated sheet shows
+"policy section not declared" rather than inventing one, and
+`decider check --policy` lists them.
+
 ## 2. Wiring rules
 
 Wiring is by name, with two declared exceptions:
@@ -243,8 +279,8 @@ So it is an error, and the message says what to do:
 ```
 'affordability' input 'net_income' is ambiguous: produced by module 'new_thing'
 (added in decider2_credit 1.1.0) and present as an input column.
-Qualify it:  Affordability.at(inputs={"net_income": "frame:net_income"})
-        or:  Affordability.at(inputs={"net_income": "new_thing.net_income"})
+Qualify it:  Affordability.relabel(reads={"net_income": "frame:net_income"})
+        or:  Affordability.relabel(reads={"net_income": "new_thing.net_income"})
 ```
 
 Overwrite between modules stays silent because it is *intended* and *auditable*;
@@ -563,16 +599,24 @@ signature is the better slot:
 
 - **Two ways to declare a param.** Inline and explicit model must produce the
   same object, and a lint forbids both in one module (doc 07 §6).
-- **Direct calls need care.** `cap_by_income_band(term_cap=60.0,
-  min_net_salary=4000.0)` would otherwise receive the `param()` sentinel.
-  Substitution happens where the interface is inferred (§5.1) — when the function
-  becomes a pipeline element, whether by appearing in a pipeline expression, in a
-  `module(...)` call, or under a decorator. It is **not** the decorator's job:
-  §1.1's flagship rule and every bare function in §5.3 carry `param()` defaults
-  with nothing attached to them, and those must be directly callable too. By the
-  time a test imports the module, the pipeline expression at its foot has already
-  run and the defaults are real. A test passes `params=` to override — doc 03
-  §11's testing story depends on steps staying directly callable.
+- **`param()` returns a real value, so nothing needs substituting.** `param(48.0,
+  ge=6, le=60)` returns a `float` **subclass** carrying the metadata — likewise
+  `int` and `str`. So `cap_by_income_band(term_cap=60.0, min_net_salary=4000.0)`
+  receives 48.0 and works, with no decorator, no registration and no import-order
+  dependence. The harvester finds params by `isinstance(default, ParamSpec)`;
+  codegen passes real arguments, so numba never sees the sentinel (§E11 confirms
+  the default may stay in place).
+
+  > **An earlier draft had composition rewrite `__defaults__` at import.** That
+  > made a step's behaviour depend on whether an unrelated line had executed:
+  > importing `modules/x/steps.py` without its pipeline gave `min(60.0,
+  > <ParamSpec>)` → `TypeError`, and two pipelines in one test session fought over
+  > the same function object. A value that is already a value has none of those
+  > failure modes. Withdrawn.
+
+  **`bool` cannot be subclassed in CPython.** A bool knob is an enable mask (doc 08
+  §2.1), so `param()` rejects `bool` and names the alternative rather than
+  silently returning an `int` that prints as `1`.
 - **numba and default arguments.** ✅ **Confirmed, [EXPERIMENTS.md](EXPERIMENTS.md) §E11.** The emitted step
   does *not* need its default stripped: emitted with the sentinel default, with it
   stripped, and called through a driver all produce an identical numba signature
@@ -608,14 +652,20 @@ from decider2 import module
 Affordability = module(
     disposable_income,
     ratio,
-    apply_income_cap,
-    apply_sector_cap,
     final_score,
     name="affordability",
     params=AffordabilityParams,
-    taps=["term_cap", "branch_path"],
 )
+
+pipeline = Affordability | apply_income_cap | apply_sector_cap
 ```
+
+> **Why the two cap steps are not in the module.** Both declare
+> `@step(output="term_cap")`, and two steps declaring the same output inside one
+> module is a build-time error (§3.1). That is not a limitation to work around —
+> it is the rule that keeps "which rule set this value?" answerable. Composed with
+> `|` they are two auditable units that each narrow `term_cap` in a stated order,
+> which is also §1.1's one-rule-one-artefact shape.
 
 `Affordability` is a **pydantic instance describing the graph** — not a generated
 class. It can be printed, rendered, diffed, serialised and validated. See doc 02
@@ -630,7 +680,7 @@ function to name it after, so it says so once. Writing
 
 Two steps declaring the same output is a **build-time error** (§3.1), reported
 with both remedies: give them distinct names, or split them into modules composed
-with `|`.
+with `|` — as the two cap steps are above.
 
 ### 5.1 The interface is inferred, and then it is real
 
@@ -648,7 +698,18 @@ Affordability.interface
 #          final_score         float
 # params   AffordabilityParams
 # shared   base_rate: float
-# taps     term_cap, branch_path
+```
+
+**What the frame carries is declared on the pipeline, not the module** (§7),
+because it is a question about a run and not about a component — and because the
+name you want is often produced by a *different* module than the one you would
+attach it to:
+
+```python
+pipeline = (Affordability | apply_income_cap | apply_sector_cap).emit(
+    "term_cap@apply_sector_cap",   # which writer's version, when several write it
+    "disposable_income",
+)
 ```
 
 Nobody typed that, so authoring cost is unchanged — which matters, because doc 01
@@ -658,7 +719,7 @@ exists as data rather than as an accident of function names:
 - **it renders, diffs and serialises**, so a breaking change is visible;
 - **a tool can read it without executing anything**, which is what makes an edit
   checkable rather than runnable;
-- **`.at()` has something to rebind** (§5.2);
+- **`.relabel()` has something to rebind** (§5.2);
 - **a library can freeze it**, so CI catches an interface change.
 
 ```python
@@ -706,13 +767,19 @@ input columns — which a rename-at-the-frame-boundary approach cannot.
 twice against different sources:
 
 ```python
-AffordCurrent = Affordability.at(inputs={"net_income": "current_net_income"})
-AffordProposed = Affordability.at(inputs={"net_income": "proposed_net_income"})
+AffordCurrent  = Affordability.relabel(reads={"net_income": "current_net_income"})
+AffordProposed = Affordability.relabel(reads={"net_income": "proposed_net_income"},
+                                       writes={"score": "proposed_score"})
 ```
 
-`.at()` is declared data on the instance, exactly like `.bind()` (§4.3): applied
+**`reads=` and `writes=` are symmetric.** A module producing `score` that you want
+landing as `proposed_score` is the same problem as one reading `net_income` from a
+column called something else, and there is no reason for the output side to be the
+harder one — the two-frame comparison above needs both.
+
+`.relabel()` is declared data on the instance, exactly like `.bind()` (§4.3): applied
 at the scope boundary, so the module's interior is untouched, and it renders,
-diffs and serialises.
+diffs and serialises. `Vocabulary` (layer 2) covers both directions too.
 
 **Three properties keep this from becoming mess:**
 
@@ -728,7 +795,7 @@ diffs and serialises.
 'affordability' needs input 'net_income'; nothing in scope produces it and it is
 not a declared input column. Closest available: 'monthly_net_salary'.
 Add it to the project vocabulary, or:
-    Affordability.at(inputs={"net_income": "monthly_net_salary"})
+    Affordability.relabel(reads={"net_income": "monthly_net_salary"})
 ```
 
 > **Why not just rename at the frame boundary?** It is simpler, and it is the
@@ -777,6 +844,18 @@ The lint from doc 07 §3 still holds, with one word changed: **every `def` in a
 pipeline file must appear in the pipeline expression or in a `module(...)` call
 in that file.** Steps may not float.
 
+**Using a bare function twice in one pipeline is a build error.** `A | fn | B | fn`
+would give two instances both named `fn`, and params are namespaced per instance
+(§4.1), so there would be no way to tune them apart or to say which one an audit
+record refers to. The error names the remedy — promote it:
+
+```python
+pipeline = A | ApplyCap(name="cap_primary") | B | ApplyCap(name="cap_secondary")
+```
+
+Reuse is exactly the point at which the light form should graduate, and the growth
+path above is one mechanical step.
+
 ---
 
 ## 6. Running it
@@ -784,11 +863,58 @@ in that file.** Steps may not float.
 ### Batch
 
 ```python
-frame = Affordability.apply(frame, params=p)
+out = pipeline.apply(frame)                       # param() defaults — notebooks, tests
 ```
 
-Per-column zero-copy in, batched write-back out, `prange`/serial chosen by row
-count.
+Per-column zero-copy in, batched write-back out. Serial unless the author wrote
+`parallel(...)` — never chosen by row count (doc 02 §1.2). The frame that comes
+back is **additive**: inputs, plus terminal values, plus whatever you `.emit()`
+(§7).
+
+### Supplying parameters and config at run time
+
+Three ways, and the framework fetches nothing in any of them — **where config
+comes from is yours** (doc 08 §6):
+
+```python
+# 1. declared defaults — what param() already carries
+pipeline.apply(frame)
+
+# 2. a resolved params document, however you loaded it
+pipeline.apply(frame, params=json.load(open("config/term_loan/production.json")))
+
+# 3. your own backend, with provenance recorded
+params = my_config_store.fetch("term_loan", version="2026-09-19")
+pipeline.apply(frame, params=params, shared={"base_rate": 5.0},
+               origin=f"s3://cfg/term_loan@{sha}")
+```
+
+`origin=` lands in the audit record and is what makes a decision reproducible. A
+string literal there (`origin="prod"`) is a lint error (doc 07 §6) — provenance is
+either real or absent, never decorative.
+
+**A long-running service swaps config without a restart:**
+
+```python
+handle = pipeline.serve()          # compiled once, at image build
+
+handle.stage(new_params)           # validated; NO compile — values only
+handle.activate()                  # 3.36 µs, measured. in-flight work finishes on the old generation
+handle.rollback()                  # previous generation still resident (+2.4 MB)
+```
+
+```python
+handle.stage(new_structure)        # a rule appeared → compile, in a subprocess
+handle.pending                     # -> Compiling(started=…, eta≈2.5 s)
+handle.activate()                  # only once ready; a failed compile never activates
+                                   # and surfaces on the handle, never as a swallowed exception
+```
+
+The distinction that governs everything here: **retuning a threshold never
+recompiles**, because params arrive as arguments and the signature is unchanged
+(§4.4, §L). Adding or removing a rule does. `handle.stage()` tells you which one
+you are doing *before* you activate it, and doc 08 §2 makes that the permission
+boundary as well as the performance one.
 
 ### Realtime, single record
 
@@ -822,34 +948,51 @@ with Affordability.debug(net_income=42000.0, …, params=p) as dbg:
 
 Defaults to `stepped` (real compiled step code — production numerics, no drift).
 `Affordability.debug(..., mode="interpreted")` drops to Python steps when you need
-to see *inside* a step. Requires no taps and no redeploy.
+to see *inside* a step. Requires nothing declared in advance and no redeploy.
 
 ---
 
-## 7. Taps — production diagnostics
+## 7. The output frame: what lands, and what does not
 
-Declared as data, never a code pointer (doc 01 §5.4):
+**The frame is additive.** `pipeline.apply(df)` returns every input column, plus
+every terminal value, plus anything you name. An intermediate that nothing
+downstream reads and nothing names is **never materialised** — it lives in the
+kernel's registers and dies there, which is where most of the write-back saving
+comes from (§J: write-back is 64% of batch cost).
 
 ```python
-module(..., taps=["term_cap", "branch_path"])
+pipeline = (Affordability | term_0042_cap_by_income_band | Scoring)
+    .emit("disposable_income", "term_cap@*")   # intermediates you want kept
+    .drop("id_number", "employer_name")        # columns that must not leave
 ```
 
-Each tap becomes an extra output column, and E5 confirms taps are cheap and
-**do not split the kernel** — +0.11 ns/row/tap at 1 M rows (linear to at least 4
-taps), against +2.0 ns/row for an actual kernel split, so ~17× cheaper.
-`branch_path` is the special case: which branch fired, encoded as one `int64`
-compile-time immediate per branch, effectively free at any batch size.
+> **There is no separate "tap" concept.** An earlier draft had one: a tap was an
+> intermediate promoted to an output column, declared apart from the module's real
+> outputs. But a tap *is* just a column — same cost, same shape, same lifetime —
+> so the second mechanism bought nothing and had to answer the same questions
+> twice. One question, asked once: **which values land in the frame?** Anything
+> you would once have tapped, you now emit.
 
-### Tapping a value that gets rewritten
+`.emit()` is measured at **+0.11 ns/row per value** at 1M rows, linear to at least
+four, against +2.0 ns/row for an actual kernel split — ~17× cheaper (§E5). It does
+**not** split the kernel. Always-on production diagnostics are affordable
+precisely because emitting a value is not a structural change.
+
+`.drop()` is declared on the pipeline rather than applied to the frame afterwards,
+so *"this flow does not emit `id_number`"* is a property the interface states and
+CI can check, rather than a habit someone maintains. Dropping a column a later
+module reads is a build error.
+
+### A value that gets rewritten
 
 In a waterfall the same name holds several values in turn — a term cap starting
-at 60, cut to 48 by one rule and 36 by another. So a tap has to say *which*:
+at 60, cut to 48 by one rule and 36 by another. So naming it has to say *which*:
 
 ```python
-taps=["term_cap"]              # the FINAL version — the default, and what you
-                               # almost always want
-taps=["term_cap@sector_cap"]         # the version produced by module `sector_cap`
-taps=["term_cap@*"]            # every version, one column each — "which rule bit?"
+.emit("term_cap")               # the FINAL version — the default, and what you
+                                # almost always want
+.emit("term_cap@sector_cap")    # the version produced by module `sector_cap`
+.emit("term_cap@*")             # every version, one column each — "which rule bit?"
 ```
 
 Qualification is by **producing module name**, not by position. A positional form
@@ -859,9 +1002,30 @@ unstable auto-generated node ids noted in doc 01 §5.4. A module name is stable
 under insertion, and "term_cap after the sector-cap rule" means something in an audit report
 where "version 5" does not.
 
-Defaulting to *first* rather than final is what E5 found the naive
+Defaulting to *first* rather than final is what §E5 found the naive
 implementation does, and it is wrong in a way that fails quietly: you would get
 60 in an audit report that should read 36.
+
+### Which branch fired
+
+A `Branch` named `TermCapBySector` makes `TermCapBySector_path` available as an
+ordinary emittable name — one `int64` compile-time immediate per arm, effectively
+free at any batch size:
+
+```python
+.emit("TermCapBySector_path")
+```
+
+No keyword, no special case: it is a value the node produces, and you emit it the
+way you emit any other.
+
+### Debug mode shows everything regardless
+
+None of this restricts what you can *see* while debugging. `stepped` and
+`interpreted` expose every intermediate at every step without any declaration
+(§6, doc 02 §3.1) — `.emit()` is about what a **production** frame carries, which
+is a cost question, not a visibility one. You never have to predict in advance
+what you will want to look at.
 
 ---
 
@@ -923,8 +1087,10 @@ Rules:
   about `term_cap` simply doesn't mention it. This is the "skip" semantic that
   an internal module needed a hand-written mirror module 
   to fake.
-- **Every arm must produce every declared `modifies` value, with agreeing
-  types** — validated at build time. This is deliberately stricter than
+- **An arm that does produce a `modifies` value must agree on its type with every
+  other arm that does** — validated at build time. An arm may stay silent about a
+  name, and then that name passes through unchanged; what it may not do is emit it
+  at a different type. This is deliberately stricter than
   `decider`, whose `BranchModule` reconciles a cross-arm dtype mismatch with
   `pl.concat(..., how="diagonal_relaxed")`
   (`decider/modules/primitives/branching.py:96`), silently upcasting the whole
@@ -1100,92 +1266,122 @@ golden.record(Affordability, corpus)        # optional regression baseline
 
 ## 12. Worked example
 
+Written in the §1.1 form — the one the growth path says to start in. Every rule
+is one function; only `Affordability`, where three steps share knobs, earns an
+explicit model.
+
 ```python
+# pipelines/term_loan.py
+from decider2 import module, step, param, Branch
 from pydantic import BaseModel, Field
-from decider2 import module, step
 
 class SharedParams(BaseModel):          # declared once for the pipeline
     base_rate: float = Field(5.0, ge=0, le=30)
 
-class AffordabilityParams(BaseModel):
+class AffordabilityParams(BaseModel):   # three steps read these
     min_ratio: float = Field(0.3, ge=0, le=1)
-    weight: float = Field(100.0, gt=0)
-
-class IncomeCapParams(BaseModel):
-    cap: float = Field(36.0, ge=6, le=60)
-    income_threshold: float = Field(5000.0, ge=0)
+    weight:    float = Field(100.0, gt=0)
 
 # --- module 1: affordability. Interior is a pure DAG, distinct names. ---
 
 def disposable_income(net_income: float, expenses: float) -> float:
+    """Income remaining after committed expenses."""
     return net_income - expenses
 
 def ratio(disposable_income: float, instalment: float) -> float:
+    """Affordability ratio — disposable income per rand of instalment."""
     return disposable_income / instalment
 
-def term_cap(requested_term: float) -> float:
-    return requested_term
+Affordability = module(disposable_income, ratio, params=AffordabilityParams)
 
-Affordability = module(
-    disposable_income, ratio, term_cap,
-    name="affordability",
-    params=AffordabilityParams,
-)
+# --- the term-cap waterfall: one rule, one function, one artefact each ---
 
-# --- module 2: one policy rule. term_cap -> term_cap, its own auditable unit. ---
+def term_cap(
+    requested_term: float,
+    product_ceiling: float = param(60.0, ge=6, le=84),
+) -> float:
+    """TERM-0040 — the product ceiling. Every application starts here."""
+    return min(requested_term, product_ceiling)
 
-@step(output="term_cap")
-def cap_by_income_band(term_cap: float, min_net_salary: float,
-                       params, shared) -> float:
-    """Cap term by income band."""
-    if min_net_salary < params.income_threshold * shared.base_rate:
-        return min(term_cap, params.cap)
+def cap_by_income_band(
+    term_cap: float,
+    min_net_salary: float,
+    cap:              float = param(48.0, ge=6, le=60),
+    income_threshold: float = param(5000.0, ge=0),
+) -> float:
+    """TERM-0042 — cap term below the income floor. Implements policy §7.4.2."""
+    if min_net_salary < income_threshold:
+        return min(term_cap, cap)
     return term_cap
 
-ApplyIncomeCap = module(cap_by_income_band, name="income_cap", params=IncomeCapParams)
+def cap_private_sector(
+    term_cap: float,
+    cap: float = param(54.0, ge=6, le=60),
+) -> float:
+    """TERM-0044 — private-sector employees."""
+    return min(term_cap, cap)
 
-# --- module 3: sector-dependent cap, as a branch ---
+def cap_public_sector(
+    term_cap: float,
+    cap: float = param(60.0, ge=6, le=60),
+) -> float:
+    """TERM-0045 — public-sector employees carry the product ceiling."""
+    return min(term_cap, cap)
 
-def is_private_sector(employer_sector_code: float) -> bool:
-    return employer_sector_code == 1.0
+def is_private_sector(employer_sector_code: int) -> bool:
+    return employer_sector_code == 1
 
 TermCapBySector = Branch(
-    is_private_sector, CapForPrivate, CapForPublic, modifies=["term_cap"],
+    is_private_sector, cap_private_sector, cap_public_sector,
+    modifies=["term_cap"],
 )
 
-# --- module 4: scoring ---
+# --- scoring ---
 
-def final_score(ratio: float, term_cap: float, params) -> float:
+def final_score(ratio: float, term_cap: float, params, shared) -> float:
+    """The offer score. Zero below the affordability floor."""
     if ratio < params.min_ratio:
         return 0.0
-    return ratio * params.weight + term_cap
+    return ratio * params.weight * shared.base_rate + term_cap
 
-Scoring = module(final_score, name="scoring", params=AffordabilityParams,
-                 taps=["term_cap"])
+Scoring = module(final_score, name="scoring", params=AffordabilityParams)
 
 # --- the pipeline: ordering is visible here, and only here ---
 
-pipeline = Affordability | ApplyIncomeCap | TermCapBySector | Scoring
+pipeline = (
+    Affordability | term_cap | cap_by_income_band | TermCapBySector | Scoring
+).emit("term_cap@*")         # every version — "which rule bit?"
 ```
 
 Invoked as:
 
 ```python
-pipeline.apply(frame, params={"affordability": {...}, "income_cap": {...}, "scoring": {...}},
+pipeline.apply(frame, shared={"base_rate": 5.0})       # defaults from param()
+pipeline.apply(frame, params=production_params,        # or a resolved document
                shared={"base_rate": 5.0})
 ```
 
 Every element on show: pure functions, name-based wiring, a pure DAG inside each
 module, `term_cap` overwritten at module *boundaries* only, a branch with declared
-`modifies`, per-module params, one shared bundle read at its point of use, a tap —
-and the waterfall order legible in one line.
+`modifies`, params declared where they are read, one shared bundle, an emitted column that
+answers which rule moved a value — and the waterfall order legible in one line.
 
-The four record-tier modules compile to four kernels — nothing is fused unless
-asked for. The style still costs almost nothing at runtime, **not because small
-modules fuse, but because boundary stores are near-free** (doc 01 §4c). E5 and E7
-falsified the fusion premise; the guidance survived it. If profiling later showed
-this waterfall was hot, the change would be one line —
-`fuse(ApplyIncomeCap | TermCapBySector)` — and it could not alter a decision.
+**Four of the six rules cost exactly one function each.** No `module(...)` call,
+no params model, no config entry, no registration: a bare function in a pipeline
+expression *is* a module (§5.3), and `param()` generates its params model (§4.4).
+`Affordability` and `Scoring` take the heavier form because they genuinely share
+knobs across steps, which is the rule §1.1 states — the simple case is not charged
+for the complex one.
+
+The rule id lives in the docstring, which is also what the reviewer reads (§1) and
+what `Implements:` joins against (§1.3). Nothing is written twice.
+
+Modules compile to one kernel each — nothing is fused unless asked for. The style
+costs almost nothing at runtime, **not because small modules fuse, but because
+boundary stores are near-free** (doc 01 §4c). §E and §E7 falsified the fusion
+premise; the guidance survived it. If profiling later showed this waterfall was
+hot, the change would be one line —
+`fuse(cap_by_income_band | TermCapBySector)` — and it could not alter a decision.
 
 Absent: registration boilerplate, UUIDs, ordering declarations, type
 discriminators, identity-passthrough functions, and `name_override`.
