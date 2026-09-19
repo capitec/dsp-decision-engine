@@ -92,6 +92,17 @@ default; and that a resolved bundle carries a non-empty `origin` token.
   framework records the `origin` token it was handed; it does not parse or verify
   it (doc 08 §2).
 - **Who may activate a staged pipeline.** Approval is the caller's policy (doc 08 §4).
+- **That a realtime request's raw payload params ever touched a reviewed
+  document at all.** Doc 02 §4 permits params "in a realtime request payload,"
+  which is a params document that never passed through a file a CODEOWNERS rule
+  could watch — the framework validates it (`resolve_params`) but has no
+  opinion on where the caller got the values. ✅ **Measured —
+  [EXPERIMENTS.md](EXPERIMENTS.md) §N3: this is not a performance restriction in
+  disguise.** Validating a realtime payload costs at most 1.28% of a 20 ms
+  budget even at 50 module instances, so restricting payload params to a
+  reference-by-id (rather than raw values) cannot be justified as "too
+  expensive to validate per request" — it would have to be justified as a
+  governance decision on its own terms, which is what this list already says.
 
 What the design provides is that the boundary is **visible and separable** —
 params and module interiors are data documents, the graph skeleton is Python — so

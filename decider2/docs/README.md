@@ -16,20 +16,40 @@ carried forward, and where these documents describe `decider`'s behaviour they d
 so as evidence about what a design compels, not as a base to extend. Doc 01 §5 is
 the concentrated version of that evidence.
 
-**Fifteen experiments have now been run against real numba** (EXPERIMENTS.md).
+**Nineteen experiments have now been run against real numba** (EXPERIMENTS.md).
 Most refuted or partially refuted a documented claim, and several changed a design
 decision rather than a number: fusion and `prange` became authored rather than
 inferred, per-node fallback turned out to be impossible inside a fused driver, the
-output convention moved to dtype-grouped 2D arrays, chunking became mandatory, and
-the compile lifecycle moved from a thread to a subprocess. Every correction is
-recorded in place rather than quietly fixed.
+output convention moved to dtype-grouped 2D arrays, chunking became mandatory, the
+compile lifecycle moved from a thread to a subprocess, and the single-record path
+turned out to cost a whole millisecond (4.9% of a 20 ms budget) as its own
+conventions most naturally imply implementing it — fixable to 0.73% by marshalling
+and reading the record a row at a time instead of a field at a time. N2 is a full
+reversal of doc 02 §3.5's own example at width: calling `score()` with 400 literal
+keyword arguments, as specified, costs 5.95% of a 20 ms budget on the calling
+convention alone — more than everything else in the framework combined — because
+CPython's keyword-argument binding scales close to quadratically with parameter
+count; a dict costs 20× less for the same data. `score()` now takes a dict. The
+newest one (N3) is a confirmation rather than a refutation: params validation on
+the request path (doc 02 §4's "params may arrive per invocation") costs at most
+1.28% of a 20 ms budget, even at 50 module instances — affordable as written, so
+the question of whether to restrict realtime payload params now rests on
+governance (doc 04 §2.1) alone, not performance. **N4, the last item in the
+single-record set, measured the tail** (p50–max, not just medians) for the first
+time: a config-generation swap under continuous traffic is confirmed cheap for
+serving (worst call across 30 swaps: 1.37% of budget), GC on/off/frozen makes no
+measurable tail difference, and the one finding that changes a recommendation is
+concurrency — serving kernels must compile `nogil=True` unconditionally, because
+the identical kernel compiled `nogil=False` hits a GIL convoy effect that blows
+the tail to **12.7× the entire 20 ms budget** at 16 concurrent threads, even
+though total throughput is unaffected either way. Every correction is recorded in
+place rather than quietly fixed.
 
 Still to run: **E1** (the polars↔numba boundary, "the one to build first"), E2
 (the graph model), E3 (the equivalence ladder), E4 (the reviewable artefact —
-people-blocked, and the top risk), E6 (param ergonomics), and **N1–N4**, the
-single-record request path — which doc 01 §6.1 makes the highest-value set, since
-the primary path has a 20–100 ms budget and nothing has measured the framework's
-per-request overhead.
+people-blocked, and the top risk), and E6 (param ergonomics). N1–N4, the whole
+single-record/tail/concurrency set doc 01 §6.1 called highest-value, are all
+now done.
 
 The highest remaining risk is not technical: it is whether a credit-risk reviewer
 can actually verify a rule from the generated view (doc 04 §6). That one is
@@ -51,11 +71,12 @@ people-blocked and should start before implementation.
 A standing review of this doc set, with findings ranked by cost of late
 discovery, is in [REVIEW.md](REVIEW.md). Items acted on are marked there.
 
-**[EXPERIMENTS.md](EXPERIMENTS.md) holds measured results** from fifteen
+**[EXPERIMENTS.md](EXPERIMENTS.md) holds measured results** from nineteen
 experiments run against real numba on this project's own environment. Most
 refuted or partially refuted a documented claim, and several changed a design
 decision rather than a number — fusion, `prange`, per-node fallback, the output
-convention and the compile lifecycle all moved. Every harness is checked in under
+convention, the compile lifecycle and the single-record marshal/readback shape
+all moved. Every harness is checked in under
 `experimentation/` and is runnable, unlike the figures in doc 01, which existed
 only as tables and could not be re-run on a different workload shape. Where a
 claim in docs 01–08 has been measured, an inline note points here.

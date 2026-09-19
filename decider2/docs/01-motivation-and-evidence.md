@@ -863,8 +863,28 @@ sets what is worth optimising — and it is ~1000× larger than the compiled pat
 > not where the budget goes.** Everything measured so far concerns a layer that
 > already fits ~1000× over. What fills a low-ms budget is the surrounding work —
 > params validation, request marshalling, the `score()` calling convention at 400
-> inputs, allocation, GC, and tail behaviour under concurrency — **none of which
-> has been measured.**
+> inputs, allocation, GC, and tail behaviour under concurrency — **all now
+> measured (N1–N4, below).**
+
+### N1 update — the surrounding work costs ~1 ms as naturally implemented, not "negligible"
+
+Measured directly (`experimentation/single-record-overhead/`, EXPERIMENTS.md §N1):
+the framework overhead around one `score()` call, at exactly this 400-in/633-out
+shape, is **971 µs p50 / 1048 µs p99 — 4.9–5.2% of a 20 ms budget** as the doc's
+own conventions (doc 03 §4's pydantic→NamedTuple params, doc 05 §3's record
+array) most naturally imply implementing it: kwargs in, then a 1-row record
+marshalled and read back **one named field at a time**, 400 fields in and 633
+out. That contradicts this section's working assumption that only the ~1 µs
+kernel matters — **92% of the 971 µs is two per-field Python loops, not the
+kernel** (confirmed separately: the njit call itself, isolated from a stray
+per-call `np.empty()` that had been hiding inside "kernel dispatch," is 1.38 µs —
+this section's 0.99 µs figure stands). Writing those two loops as one bulk
+call each (`rec[0] = tuple(...)` in, `row.item()` out — same record type, same
+output, assert-verified identical) cuts the total to **145 µs / 0.73% of budget**,
+a 6.7× reduction with no loss of readability either way. **Doc 05 §3 should
+specify whole-row marshal/readback for the realtime path, not per-field**, and
+this is the maintainability-neutral case the review criterion asks for: the
+faster form is not a less-readable one.
 
 Two consequences for the design:
 
@@ -877,5 +897,90 @@ Two consequences for the design:
    the `score()` side of that choice is worth ~2.7 µs per record, so it should be
    settled on whichever is simpler unless a request-path measurement says otherwise.
 
+### N2 update — doc 02 §3.5's literal kwargs convention costs more than everything else in this section combined
+
+Measured directly (`experimentation/n2-calling-convention/`, EXPERIMENTS.md §N2):
+N1's accept phase used a `**kwargs` catch-all as a cheap proxy (19.18 µs) for doc
+02 §3.5's literal example — a real 400-named-parameter signature
+(`score(net_income=42000.0, expenses=18000.0, ...)`) called with keyword
+arguments. That proxy understated the real cost by **~63×**. The literal form
+costs **1190 µs p50 at 400 inputs — 5.95% of a 20 ms budget**, on the calling
+convention alone, more than N1's entire measured framework overhead for
+everything downstream (971 µs). Isolated, the cost is CPython's
+keyword-argument **binding**, not dict construction (a body that only binds, no
+dict built, costs 1094 µs; the identical signature called *positionally* costs
+28.8 µs — 39× less, doing strictly more work), and it scales close to
+quadratically with parameter count, not linearly — confirmed independently
+outside the harness with `timeit`. Every alternative convention stays under 1.1%
+of budget at the same width: dict 60.1 µs (0.30%), a caller-reused record buffer
+39.8 µs (0.20%), positional 93.3 µs (0.47% — but a silent-transposition hazard,
+rejected on correctness grounds regardless of speed).
+
+**Consequence for doc 02 §3.5 / doc 03 §6: specify `score(request: dict, *,
+params)` as the primary realtime convention, not literal per-field keyword
+arguments at width.** Doc 02 §3.5's own example (3 named args) is not wrong —
+its unstated generalization to this document's own established realistic width
+(§4d: 400 inputs) is. At that width no caller hand-types the call anyway; a
+dict-shaped payload is what a real request already looks like, and spelling it
+as 400 keyword arguments costs 39× more to bind for the same data. kwargs syntax
+remains fine, and reads best, for small hand-written calls (tests, a low-arity
+module) where its cost is irrelevant. A reused record buffer is the cheapest
+option but should stay an explicit opt-in for a demonstrated hot loop, not the
+default — it is only 1.5× cheaper than a dict (a 0.1%-of-budget difference) for
+20× the caller-side complexity (buffer lifetime, field-order knowledge,
+staleness across a doc 08 §4 config swap).
+
 Both the ns/row figures behind row 5 and the dispatch share in row 3 are derived
 from batch runs and **need re-measuring at genuine N=1** before doc 05 §3 commits.
+
+### N3 update — params validation is affordable at every scale tested; the model→NamedTuple conversion, not validation, is the larger and cacheable cost
+
+Measured directly (`experimentation/params-validation-n3/`, EXPERIMENTS.md §N3):
+doc 02 §4's *"params may arrive per invocation, including in a realtime request
+payload"* costs **256.5 µs p50 — 1.28% of a 20 ms budget** for the full
+`resolve_params(doc, origin=..., complete=True)` path (doc 08 §6.2) at 50 module
+instances (doc 03 §4.1's "a realistic pipeline has many"), and proportionally
+less at 1 or 10 modules (9.7 µs / 0.05% and 56.7 µs / 0.28%). That is under the
+whole-millisecond flag this batch was told to raise, so the design question the
+task brief posed — must a realtime request reference a pre-validated bundle by id
+rather than carry raw params — **cannot be settled on performance grounds; it
+stands or falls on doc 04 §2.1's governance argument alone.** The model→NamedTuple
+conversion doc 03 §4 describes as happening "under the hood" is, at scale, the
+*larger* of the two costs (170.6 µs vs 78.3 µs validation at M=50) — and it is
+also the one worth caching: a content-memoized lookup is 726–765× cheaper, flat
+at ~0.23 µs regardless of module count, because a repeated params document
+collapses to one dict lookup. `ParamsCell.get()`/`.swap()` confirm doc 08 §4's
+batch-context figures hold at genuine N=1 (`get()` 0.159 µs; `swap()` 0.278 µs
+p50 vs the batch figure's 0.177 µs — same order of magnitude, p99s agree almost
+exactly at 0.363 vs 0.357 µs). Where the cheapest possible params path matters,
+one already exists at ~1,600× less cost than `resolve_params` at M=50:
+`ParamsCell.get()` on an already-swapped bundle — doc 08 §4's staged-swap model,
+not per-request validation.
+
+### N4 update — the tail is real (19.2% of budget, worst case) but GC is not its cause; concurrency is where the budget actually gets threatened
+
+Measured directly (`experimentation/n4-tail-concurrency-swap/`, EXPERIMENTS.md
+§N4): the first tail measurement in this document set. **Single-thread steady
+state** (30,000 `score()` calls): p50 1037.5 µs (5.2%), p99 1114.2 µs (5.6%),
+p99.9 1723.6 µs (8.6%), **max 3840.5 µs (19.2% of a 20 ms budget)** — a real tail,
+but not attributable to GC: the run saw one GC event total, coincident with zero
+of the calls at or above p99, and **`gc.disable()`/`gc.freeze()` produced no
+measurable tail difference against baseline** (M2) — refuting the brief's
+proposed GC-drives-the-tail mechanism at this allocation shape. **Config swap**
+(doc 08 §4's `activate()`) is confirmed cheap for in-flight serving, closing the
+gap doc 08 §4 left open: worst call anywhere across 758,215 calls and 30 swaps
+was 1.37% of budget; the specific first-call-after-swap cost is 2.1× the steady
+median but only 0.074% of budget in absolute terms.
+
+**The concurrency result is the one that changes a recommendation.** Serving the
+same compiled kernel from 1–16 concurrent threads (no background compile
+involved — a different scenario from EXPERIMENTS.md §H, which doc 08 §4 already
+acted on) shows `nogil=True` holding p99/max flat (4–12% of budget) across every
+thread count tested, while the identical kernel compiled `nogil=False` degrades
+from fine-at-1-thread to **p99 = 1270% of budget (12.7× the entire budget) and
+max = 378.7 ms at 16 threads** — a convoy effect from the GIL-holding kernel
+serializing calls under contention. **Doc 08 §4's existing `nogil` guidance is
+scenario-specific (compile-vs-serving) and reads, uncorrected, as a general
+recommendation against `nogil=True` — which this shows would be actively
+dangerous for concurrent request serving.** Doc 02 §3.5 / doc 08 §4 should state
+`nogil=True` as an unconditional requirement for serving kernels.

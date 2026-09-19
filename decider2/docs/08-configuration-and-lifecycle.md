@@ -368,6 +368,14 @@ Five properties:
    invocation.** ✅ **Measured — [EXPERIMENTS.md](EXPERIMENTS.md) §H: 0 straddled batches** of 1564,
    across 11,605 swaps in 3 s. `activate()` costs 0.177 µs.
 
+   §H measured the swap's own cost and atomicity, not its latency impact on an
+   in-flight single-record caller. ✅ **Now closed — EXPERIMENTS.md §N4:**
+   continuous single-record traffic through 30 repeated swaps (758,215 calls,
+   3 s) saw a worst-case call of **1.37% of a 20 ms budget**, and the
+   first-call-after-swap specifically costs 2.1× the steady-state median but
+   only **0.074% of budget** in absolute terms. A realtime endpoint swapping
+   config generations does not stall a client-visible request.
+
    The regression test is the *deliberately wrong* version: re-reading the pointer
    inside a chunk loop straddled **99.87%** of batches. Note what that models — a
    polars-style chunked `map_batches` apply re-reads per chunk by construction, so
@@ -387,12 +395,34 @@ Five properties:
    | `nogil=True` | 1.183 ms | 6.406 ms | **26%** |
    | `nogil=False` | 1.163 ms | 1.242 ms | **55%** |
 
-   **Releasing the GIL makes serving worse**, which inverts the obvious reasoning:
-   a `nogil` kernel re-acquires the GIL between dispatches and the compiler thread
-   is Python-level and GIL-greedy, so every call waits a full switch interval. The
-   penalty is a **fixed +5.2 ms per invocation** — unchanged at 10× the batch size
-   — so exposure is set by call granularity, not data volume. It tracks
-   `sys.setswitchinterval` (0.05 ms → +0.15 ms), which is a mitigation but not a fix.
+   **Releasing the GIL makes serving worse against a background *compile*
+   thread**, which inverts the obvious reasoning: a `nogil` kernel re-acquires
+   the GIL between dispatches and the compiler thread is Python-level and
+   GIL-greedy, so every call waits a full switch interval. The penalty is a
+   **fixed +5.2 ms per invocation** — unchanged at 10× the batch size — so
+   exposure is set by call granularity, not data volume. It tracks
+   `sys.setswitchinterval` (0.05 ms → +0.15 ms), which is a mitigation but not a
+   fix. This table is why compilation was moved to a subprocess below — and that
+   fix removes this scenario from the production path entirely.
+
+   ⚠ **This finding does not generalize to `nogil` in general — it is scoped to
+   "serving vs. one background compile thread." For concurrent *request* serving
+   (no compile involved, the actual production shape), the opposite holds and
+   the effect is two to three orders of magnitude larger.** ✅ **Measured —
+   [EXPERIMENTS.md](EXPERIMENTS.md) §N4:** 1–16 threads calling the same
+   compiled kernel concurrently, `nogil=True` vs a `nogil=False` twin. Total
+   throughput is GIL-bound and roughly flat either way (the surrounding Python
+   glue dominates and serializes regardless of the kernel's own flag), but the
+   **tail** diverges catastrophically: `nogil=True` holds p99/max flat at
+   4–12% of a 20 ms budget from 1 to 16 threads; `nogil=False` degrades from
+   fine-at-1-thread to **p99 = 1270% of budget (12.7× the entire budget) and
+   max = 378.7 ms at 16 threads** — a convoy effect, since a `nogil=False` call
+   holds the GIL for its own duration and calls queue up behind each other
+   under contention, where a `nogil=True` call releases it immediately and lets
+   the scheduler interleave fairly. **Serving kernels must be `nogil=True`,
+   unconditionally** — the table above is not a reason to reconsider that, since
+   the subprocess fix means serving never actually competes with a compile
+   thread in production.
 
    **And numba's compiler does not parallelise:** two compiles in separate threads
    run 1.036× faster than sequential, and a small compile started during a large

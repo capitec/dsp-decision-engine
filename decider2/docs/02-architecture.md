@@ -40,8 +40,18 @@ win decisively. The 400-in/633-out target shape is verified working.
 Two consequences to hold onto: extracted arrays are `writeable=False` so numba
 types them `readonly` — mixing readonly and writeable arrays silently produces
 two compiled specialisations — and record **write-back** becomes the dominant
-cost at high output counts (54.7% of total at 633 outputs), so that is the next
-optimisation target rather than the kernel itself.
+cost at high output counts.
+
+> **Superseded on the output side — doc 05 §3.1, [EXPERIMENTS.md](EXPERIMENTS.md) §J.** Write-back
+> measured at **64.0%** of batch total (E9 said 54.7%), and record output is
+> beaten on both axes by **dtype-grouped 2D arrays**: column-major for `apply()`
+> (write-back 775.6 → 5.7 ms, zero-copy to polars), row-major for `score()`
+> (fastest kernel). Both compile **42× faster** than a record. Doc 05 §3.1 is the
+> current spec; the input side is unchanged.
+>
+> And it is no longer "the next optimisation target" in general — that framing
+> was batch-only. On the primary single-record path, §N1 found **92% of framework
+> overhead is two per-field Python loops**, not write-back and not the kernel.
 
 **You cross the boundary once per kernel, not once per step.** This is why
 "all per-record logic in the record tier" holds even for plain arithmetic where
@@ -434,14 +444,50 @@ discovered as slow startups.
 ### 3.5 Two entry points, one kernel
 
 ```python
-Affordability.apply(frame, params=p)      # batch: polars in, polars out
-Affordability.score(net_income=…, params=p)   # realtime: scalars, no polars
+Affordability.apply(frame, params=p)              # batch: polars in, polars out
+Affordability.score({"net_income": 42000.0,        # realtime: a dict, no polars
+                      "expenses": 18000.0,
+                      "instalment": 3100.0, …}, params=p)
 ```
 
 The realtime path **bypasses polars entirely**. A single-record request is deep
 inside the regime where marshalling costs more than the work (viability floor
 ~10k rows), and polars' per-call dispatch floor alone would exceed the request
 budget.
+
+> **`score()` takes a dict, not per-field keyword arguments — measured, not a
+> style choice.** At the width this document's own §4d establishes as realistic
+> (400 inputs), a literal keyword-argument call (`score(net_income=…,
+> expenses=…, …)` with all 400 named) costs **1190 µs p50 — 5.95% of a 20 ms
+> budget — on the calling convention alone**, because CPython's keyword-argument
+> *binding* for a many-parameter signature scales close to quadratically with
+> parameter count. A dict costs **60.1 µs (0.30%)** for the same data — 20× less
+> — and is what a real caller already has (a validated request body, a
+> DataFrame row) rather than 400 hand-typed `name=value` pairs. kwargs syntax is
+> still fine, and reads best, for a small, hand-written call — a module with a
+> handful of inputs, a test, a doc example — where the cost is irrelevant either
+> way. A caller that has already profiled a hot loop may instead pass a
+> pre-built, reused numpy record buffer as an explicit opt-in fast path
+> (39.8 µs, 0.20%) — cheaper still, but the buffer's lifetime (field order,
+> dtype, staleness across a doc 08 §4 config swap) is the caller's to manage, so
+> this is not the default. `experimentation/n2-calling-convention/`,
+> EXPERIMENTS.md §N2.
+
+> **Serving kernels compile `nogil=True`, unconditionally — measured, not a
+> default left to the author.** A production endpoint serves concurrent
+> single-record requests through the same compiled kernel. At 1–16 concurrent
+> threads calling it, `nogil=True` holds tail latency flat (p99/max 4–12% of a
+> 20 ms budget) at every thread count; the identical kernel compiled
+> `nogil=False` degrades to **p99 = 1270% of budget (12.7× the entire budget)
+> at 16 threads** — a GIL convoy effect, calls queuing behind each other because
+> a `nogil=False` call holds the GIL for its own duration. Total throughput is
+> unaffected either way (Python-level glue dominates and serializes it
+> regardless), so this is purely a tail-latency requirement, easy to miss under
+> a median-only benchmark. Doc 08 §4 separately measured `nogil=True` losing to
+> `nogil=False` when competing against a background *compile* thread — a
+> different scenario, now moot in production since doc 08 §4's compile
+> subprocess never competes with a serving thread at all. `experimentation/n4-tail-concurrency-swap/`,
+> EXPERIMENTS.md §N4.
 
 ---
 
@@ -475,6 +521,16 @@ single concept. Doc 03 §8.
 free-changing values — so retuning never triggers recompilation. An invocation is
 1 row or N rows, which covers realtime payload params and batch alike. Business
 users tune params; engineers change structure.
+
+✅ **Measured — [EXPERIMENTS.md](EXPERIMENTS.md) §N3: affordable as written.**
+Full `resolve_params(doc, origin=..., complete=True)` validation of a realtime
+payload costs 9.7 µs at 1 module instance, 56.7 µs at 10, and 256.5 µs at 50
+(doc 03 §4.1's "a realistic pipeline has many") — 0.05–1.28% of a 20 ms budget,
+under the whole-millisecond flag. So a realtime request *may* carry raw params
+per this section, on performance grounds; whether it *should* is a governance
+question (doc 04 §2.1), not a performance one. The model→`NamedTuple` conversion
+below costs more than validation itself at scale (2.2× at 50 modules) and is the
+part worth caching by content if the same document recurs across requests.
 
 Params are **namespaced per module instance**, so composing `mod1 | mod2 | mod3`
 exposes the union without collisions, lets the same module appear twice with

@@ -536,23 +536,63 @@ Chunking is **mandatory**: 1 M rows at 400-in/633-out needs 16.2 GB (record) or
 **1.03–1.57×** end-to-end once per-chunk assembly and persistence are counted.
 [EXPERIMENTS.md](EXPERIMENTS.md) §J2.
 
-### N1–N4 — The single-record request path — **NEXT**
-**New, and now the highest-value set**, from doc 01 §6.1: the single-record path is
-primary, its budget is 20–100 ms, and the compiled path runs at ~1 µs — four
-orders of magnitude of headroom. So the open question is not how fast the kernel
-is, but **what fixed overhead the framework adds per request**.
+### ~~N1 — the single-record overhead budget~~ — **DONE**
+**Partial refutation of "stop optimising, it's negligible."** As doc 03 §4 /
+doc 05 §3's own conventions most naturally imply implementing it (kwargs → pydantic
+NamedTuple params → 1-row record marshalled/read back one named field at a time),
+total framework cost is **971 µs p50 / 1048 µs p99 — 4.9–5.2% of a 20 ms budget**,
+a whole millisecond. But 92% of it is two per-field Python loops (marshal 220 µs,
+readback 673 µs), not the kernel — the isolated njit call is **1.38 µs**, matching
+this doc's own §6.1 figure exactly. Writing both loops as one bulk call each
+(same record type, assert-verified identical output) cuts the total to **145 µs /
+0.73% of budget**, 6.7× less, and is not less readable. **Doc 05 §3 should specify
+whole-row marshal/readback, not per-field.** [EXPERIMENTS.md](EXPERIMENTS.md) §N1.
 
-- **N1 — the overhead budget.** Total framework cost for one `score()` call at 400
-  inputs, excluding user logic and I/O, phase by phase. If it is under ~1% of
-  20 ms, "stop optimising" is a legitimate and valuable result.
-- **N2 — the `score()` calling convention at width.** 400 keyword arguments means
-  per-request signature binding and dict construction. Compare kwargs / dict /
-  pre-built record, on latency **and** readability — this is a maintainability
-  question as much as a performance one.
-- **N3 — params validation per request.** E0 measured 58.5 µs to validate-and-bind
-  63 nodes; doc 02 §4 allows params in a realtime payload.
-- **N4 — tail latency.** p99 under concurrency and across a config swap. At a
-  20 ms SLA the tail *is* the SLA, and nothing has measured one.
+### ~~N2 — the `score()` calling convention at width~~ — **DONE**
+**Refutes doc 02 §3.5's literal kwargs example, generalized to 400 inputs — not
+the example's 3-arg illustration.** kwargs, called exactly as shown (400 named
+parameters, keyword call), costs **1190 µs p50 at width 400 — 5.95% of a 20 ms
+budget**, bigger than N1's *entire* measured overhead for everything else
+combined. Isolated: it is CPython's keyword-argument **binding**, not dict
+construction (body=`pass` costs 1094 µs; the same signature called positionally
+costs 28.8 µs — 39× less, for strictly more work) — and it scales close to
+quadratically with width, confirmed independently via `timeit`. Every
+alternative (dict 60.1 µs, reused record 39.8 µs, positional 93.3 µs) is
+12.7–29.8× cheaper. **Recommendation: `score(request: dict, *, params)` as the
+primary convention**, kwargs kept as syntax for small hand-written calls, a
+reused record offered as an explicit opt-in fast path.
+[EXPERIMENTS.md](EXPERIMENTS.md) §N2.
+
+### ~~N3 — Params validation per request~~ — **DONE**
+**Affordable as written — settled on performance grounds.**
+`resolve_params(doc, origin=..., complete=True)` (doc 08 §6.2) costs 256.5 µs at
+50 module instances — 1.28% of a 20 ms budget, under the whole-millisecond flag
+— so doc 02 §4's "params may arrive per invocation" does not need restricting on
+performance grounds; that question now rests entirely on doc 04 §2.1's
+governance argument. The model→`NamedTuple` conversion (doc 03 §4), not
+validation, turned out to be the larger and more cacheable of the two costs
+(2.2× validation's cost at M=50; 726–765× cheaper when memoized by content).
+`ParamsCell.get()`/`.swap()` (doc 08 §4) confirmed at genuine N=1, same order of
+magnitude as the batch-context figures. [EXPERIMENTS.md](EXPERIMENTS.md) §N3.
+
+### ~~N4 — Tail latency, concurrency, config-swap impact~~ — **DONE**
+**Partial — swap impact confirmed negligible; a new `nogil` requirement surfaced
+that doc 08 §4 did not state.** p50/p95/p99/p99.9/max measured for single-thread
+steady state, GC on/off/frozen, 1–16-thread concurrency at `nogil=True` vs
+`nogil=False`, and repeated config-generation swaps under continuous traffic.
+GC on vs off/frozen showed no measurable tail difference (refutes the
+GC-drives-the-tail hypothesis at this allocation shape). The config swap itself
+is confirmed cheap for serving (worst call in 758k calls across 30 swaps: 1.37%
+of a 20 ms budget; first-call-after-swap: 2.1× steady median but only 0.074% of
+budget in absolute terms). **The headline is concurrency: `nogil=False` kernels
+serving concurrent single-record requests hit a convoy effect that blows the
+tail to 12.7× the entire 20 ms budget at 16 threads (p99), while `nogil=True`
+stays flat at 4–12% of budget from 1 to 16 threads.** This does not contradict
+doc 08 §4's existing `nogil` table (§H) — that table measured serving against a
+background *compile* thread, a scenario the subprocess fix has since removed
+from production — but doc 08 §4 currently reads as a general anti-`nogil`
+recommendation, which this shows is only true in the compile-interference case
+and is backwards for concurrent request serving. [EXPERIMENTS.md](EXPERIMENTS.md) §N4.
 
 ## Sequencing
 
