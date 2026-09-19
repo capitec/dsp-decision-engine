@@ -49,12 +49,35 @@ Residual, and it is small: two ways to declare a param (lint forbids both in one
 module), direct-call substitution for tests, and confirming numba tolerates the
 generated signature — E11.
 
-### O3 — The reviewable artefact
-The weakest part of the design. Both existing representations fail
-non-programmer readability (doc 01 §6). The proposal — a generated view of the
-module data with descriptions, declared inputs/outputs, param bounds and version
-chains — is untested. **This is a requirement, not a nice-to-have**, and if it
-cannot be met the governance story collapses.
+### O3 — The reviewable artefact — **TESTED TWICE, BOTH FAILED; scope reduced**
+
+Doc 04 §6 has the full record. Two proxy-reviewer tests, both failed, and the
+second failed *after* the first's stated cause (cross-referencing) was removed.
+
+What they established, and it is narrower than the original question:
+
+- **A reviewer cannot adjudicate a mismatch they are shown**, only confirm a check
+  the system already made. No rendering fixes that; it is not a presentation
+  problem.
+- **The framework cannot close the gap either**, because knowing that policy's
+  *"verified net monthly income"* means `verified_net_income` rather than
+  `monthly_income` requires a human to write the mapping down — and that mapping
+  was rejected as overengineering, reasonably, since one rule-level test catches
+  the same bug for a fraction of the maintenance.
+- **So the framework does not attempt to verify that a rule implements a policy
+  clause.** It surfaces what a rule reads and what those values mean. Confirming
+  that against policy is human judgement supported by tests.
+
+**What survives is smaller and is independently corroborated**: a rule needs a
+**join key** to the clause it implements (`implements="§7.4.2"`, metadata only, no
+registry), so "which rules implement §7.4" is answerable mechanically. The
+cold-read study reached the same conclusion from the opposite direction — *"a rule
+carries no key to join to a policy document on"*.
+
+**Still genuinely open:** whether a *real* credit-risk reviewer, rather than a
+proxy, can work with trace-as-data plus a team-specific renderer (doc 04 §6.5).
+Both tests used a proxy who already knew the system existed. That is the remaining
+people-blocked question, and it is now a narrower one than "can a sheet work".
 
 ### O4 — Table/keyed-lookup interface — **partly answered by doc 08**
 Sketched provisionally in doc 03 §4. Dense array + present mask works in numba
