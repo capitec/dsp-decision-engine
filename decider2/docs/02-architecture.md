@@ -603,54 +603,120 @@ kills the silent-composition-failure class recorded in doc 01 §5.2.
 
 ## 6. Package layout
 
+Reconciled against every settled decision and measured result. §6.1 is the
+traceability table — if a decision has no home here, the layout is stale.
+
 ```
 decider2/
-  graph/         values.py    # value identity, boundary versioning, overwrite chains
-                 step.py      # a Step: declared inputs, output, params, taps
-                 module.py    # Module = pydantic INSTANCE describing the graph
-                 combinators.py  # | (sequence), Branch (n-way), Loop (bounded)
-                 schema.py    # declared in/out schemas and propagation
-                 lineage.py   # static "what can affect z" queries
-  params/        model.py     # pydantic model -> NamedTuple, validation
-                 tables.py    # keyed lookup tables as a declared kind
-  compile/       strategy.py  # THE SEAM: a strategy compiles a node
-                 numba/       kernel.py, fallback.py, variants.py
-                 boundary/    extract.py (zero-copy, arrow validity), writeback.py
+  graph/         values.py       # value identity, boundary versioning, overwrite chains
+                 step.py         # a Step: declared inputs, output, params, taps
+                 module.py       # Module = pydantic INSTANCE describing the graph
+                 interface.py    # interface INFERRED from steps, materialised as data;
+                                 #   contract= snapshot + breaking-change check (doc 03 §5.1)
+                 combinators.py  # | (sequence), Branch, Loop, fuse, parallel, Map (doc 03 §8)
+                 vocabulary.py   # project name map + .at() instance relabel (doc 03 §5.2)
+                 scope.py        # the five scopes; pipeline precedence; shadowing error (§2.1)
+                 resolve.py      # name binding, and the did-you-mean for an unbound one (O23)
+                 schema.py       # declared in/out schemas and propagation
+                 lineage.py      # static "what can affect z" — MUST descend into interiors (O22)
+  interiors/     kind.py         # the data-shaped module protocol: reads/writes declared in
+                                 #   code, body from a validated document (doc 08 §3)
+                 ruleset.py      # codegen kind — heterogeneous predicates (doc 08 §3.4)
+                 decision_table.py, scorecard.py   # generic-kernel kinds, zero recompile
+                 schema.py       # the closed node vocabulary (O15)
+                 fields.py       # per-FIELD change class; refuses an unclassified field (O21)
+  params/        model.py        # pydantic model -> NamedTuple; param() harvested from the
+                                 #   signature (doc 03 §4.4); conversion CACHED (§N3)
+                 tables.py       # keyed lookups — ONE spelling (O4; six were invented)
+                 cell.py         # ParamsCell: read once per invocation, atomic swap
+  money/         scaled.py       # int64 cents; Decimal never crosses the boundary
+                 rounding.py     # round_half_up, identical in every execution mode (doc 03 §1.2)
+  compile/       strategy.py     # THE SEAM: a strategy compiles a node
+                 emit.py         # deterministic codegen; stable topological tie-break
+                 naming.py       # content-addressed driver + sys.modules name (doc 05 §4.2)
+                 manifest.py     # build manifest; --verify checks hashes, not just compiles
+                 numba/          kernel.py, variants.py, fallback.py  # fallback splits the
+                                 #   KERNEL, never a node (§B)
+                 boundary/       dtypes.py    # admissibility gate, except BaseException (§1.5)
+                                 extract.py   # polars-native _get_buffers, never to_arrow
+                                 marshal.py   # WHOLE-ROW bulk, never per-field (§N1)
+                                 writeback.py # dtype-grouped 2D; layout per entry point (§3.1)
+                                 chunk.py     # mandatory above ~400k rows; default 100k (§3.2)
   frame/         join.py, aggregate.py, filter.py, opaque.py
   observe/       taps.py, trace.py, audit.py, otel.py
-  runtime/       invoke.py    # batch apply + single-record scalar path
-                 plan.py      # ordering DERIVED from the graph, never declared
-                 lifecycle.py # generations: stage -> compile -> activate -> rollback (doc 08 §4)
-  binding/       register.py  # generate a config model, stage it
-                 finalise.py  # assemble the union ONCE; after this the union is the index
-                 admit.py     # what a config document may contain (doc 08 §7)
-                 fingerprint.py  # content hash of structure + interiors
-                 errors.py    # wrap union_tag_invalid with difflib suggestions
+                 review.py       # THE REVIEWABLE ARTEFACT — renders authored vs in-force
+                                 #   value and why they differ (O3/E4; the top risk)
+                 blast_radius.py # what a governance-sensitive edit touches, BEFORE the edit
+                 consistency.py  # cross-artefact agreement as a build step
+  runtime/       invoke.py       # apply() batch + score() single record (dict, not kwargs)
+                 plan.py         # ordering DERIVED from the graph, never declared
+                 lifecycle.py    # generations: stage -> compile (SUBPROCESS) -> activate
+                 serve.py        # nogil=True unconditionally for serving kernels (§N4)
+  binding/       register.py, finalise.py, admit.py, fingerprint.py, errors.py
   testing/       assertions.py, equivalence.py, golden.py, impact.py
+                 corpus.py       # boundary-value generation; sampling misses overflow (§I)
 
 decider2_credit/     scorecard/, tree/, rule_table/, waterfall/, affordability/
 <client extensions>  same surface, registers into registry
 ```
 
-Five placements are deliberate:
+### 6.1 Where each settled decision lives
 
-- `compile/strategy.py` is the expression-tier seam (§1).
-- `runtime/plan.py` derives ordering from the graph, so it can never be
-  hand-maintained in JSON or asserted in a comment (doc 01 §5.2).
-- `testing/equivalence.py` enforces the ladder in §3.1 — what makes debugging in
-  `stepped` or `interpreted` trustworthy.
-- **`binding/`, not `config/`.** This package validates and binds *documents it is
-  handed*; it never fetches one. The name matters because `decider/config/`
-  accreted 553 lines of storage, semver and polling machinery once already
-  (doc 08 §6). There must be no `decider2/config/` package and no symbol named
-  `ConfigManager`, and a lint rule forbids importing `json`, `os`, `pathlib`,
-  `socket` or an HTTP client anywhere under `binding/` or `params/`.
-- `runtime/lifecycle.py` is where a new pipeline generation is compiled off the
-  request path and swapped atomically — the mechanism that lets config change
-  structure without putting a compile in a request (doc 08 §4).
+| decision | evidence | home |
+|---|---|---|
+| fusion and parallelism are **authored**, not inferred | §E, §F | `graph/combinators.py` |
+| per-node fallback is impossible; splitting the kernel is the mechanism | §B | `compile/numba/fallback.py` |
+| cache survival needs seven conditions + content addressing | §C, §K | `compile/naming.py`, `manifest.py` |
+| import the driver **by module name**, never `spec_from_file_location` | §J2 | `compile/naming.py` |
+| dtype-grouped 2D output; layout per entry point | §J | `boundary/writeback.py` |
+| whole-row bulk marshal/readback, never per-field | §N1 | `boundary/marshal.py` |
+| chunking is mandatory; default 100k | §J2 | `boundary/chunk.py` |
+| `score()` takes a dict, not 400 kwargs | §N2 | `runtime/invoke.py` |
+| serving kernels compile `nogil=True` | §N4 | `runtime/serve.py` |
+| compile in a **subprocess**, not a thread | §H, §K | `runtime/lifecycle.py` |
+| rule thresholds and enablement are **arguments** | §L | `interiors/ruleset.py` |
+| change class per **field** | O21 | `interiors/fields.py` |
+| lineage descends into interiors | O22 | `graph/lineage.py` + each kind |
+| an unbound name is a typo, everywhere | O23 | `graph/resolve.py` |
+| money is scaled int64; `round_half_up` | §I | `money/` |
+| corpus must include boundary values | §I | `testing/corpus.py` |
+| the reviewable artefact renders resolved values | O3, cold-read §5.1 | `observe/review.py` |
+| blast radius is visible **before** an edit | cold-read §5.2 | `observe/blast_radius.py` |
+| cross-artefact agreement is checked | cold-read §2 | `observe/consistency.py` |
+| interface inferred, materialised, freezable | REVIEW §5 | `graph/interface.py` |
+
+Placements that are deliberate rather than incidental:
+
+- **`observe/review.py` is not a documentation tool.** It is the artefact doc 04 §6
+  depends on, and the cold-read study found **9 of 11** independent designers
+  produced nothing like it. Giving it a home in the core library — rather than
+  leaving it to each project's README — is the structural answer to that.
+- **`observe/consistency.py` exists because six of eleven divergences had one
+  shape**: two artefacts asserting the same fact and disagreeing. Rule authoring
+  was near-perfect; cross-artefact agreement was not checked by anything.
+- **`interiors/` is a top-level package, not a corner of `graph/`.** It is where a
+  business user's edits land, so it carries the same obligations as the graph:
+  lineage, render, a closed vocabulary, and a declared change class per field.
+- **`money/` is its own package** because the failure it prevents is a wrong
+  answer to the cent, not a performance problem — and because `Decimal` cannot
+  cross the boundary at all.
+- **`binding/`, not `config/`.** This package validates and binds documents it is
+  *handed*; it never fetches one. `decider/config/` accreted 553 lines of storage,
+  semver and polling machinery once already (doc 08 §6). There must be no
+  `decider2/config/` package and no symbol named `ConfigManager`, and a lint rule
+  forbids importing `json`, `os`, `pathlib`, `socket` or an HTTP client anywhere
+  under `binding/` or `params/`.
+- `compile/strategy.py` remains the expression-tier seam (§1); `runtime/plan.py`
+  derives ordering from the graph so it can never be hand-maintained (doc 01 §5.2);
+  `testing/equivalence.py` enforces the ladder in §3.1.
 
 Three layers, as in `decider` today: core library → shared credit-granting
 modules → client-supplied extensions.
+
+**Still unhoused, deliberately:** nesting/grain (O5) has no package yet because it
+has no agreed name — nine were invented across six projects. It is the most-invented
+gap in the set and the next thing to design; when it lands it is a peer of
+`interiors/`, not a corner of it.
 
 ---
 
