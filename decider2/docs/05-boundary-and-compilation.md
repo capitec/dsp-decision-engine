@@ -345,7 +345,7 @@ PIDs in generated names, and stable naming derived from module ids.
 > even with `__pycache__/*.pyc` cleared and the source genuinely re-parsed.**
 > Change a numeric constant in a generated driver, keep the file size identical,
 > restore the mtime — numba reports a cache **hit** and returns the pre-edit
-> answer. `decider build --verify` counting zero compiles reports success on it.
+> answer. `decider2 build --verify` counting zero compiles reports success on it.
 >
 > Two consequences, both mandatory:
 >
@@ -610,7 +610,7 @@ This layer is done when:
    and §B measured the alternatives at 77× (`objmode` per row) and 23.5× (whole
    driver in Python). The blast radius of an un-njit-able node is its kernel, and
    the acceptance test is that the radius stops there (§6).
-7. `decider build --verify` reports zero runtime compilations.
+7. `decider2 build --verify` reports zero runtime compilations.
 8. A regression test guards the same-name-NamedTuple collision (doc 01 §4c) with
    an **exact structural assertion**, not a timing one: two distinct bundle
    classes must never share `__name__` + field names + field types, because that

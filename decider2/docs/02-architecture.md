@@ -451,7 +451,7 @@ to retrofit:
   0.80 s warm** (doc 01 §4d), converting the whole compile blowup into a
   build-time cost.
 
-`decider build --verify` should assert a runtime load triggers **zero**
+`decider2 build --verify` should assert a runtime load triggers **zero**
 compilations, so the cache silently ceasing to work is caught in CI rather than
 discovered as slow startups.
 
@@ -477,7 +477,7 @@ obvious — which matters more here than in a closed system, because **this libr
 is intended to be open-sourced** and other people's deployment targets will not
 resemble this one.
 
-`decider build --cpu generic` remains available for a genuinely mixed fleet. It
+`decider2 build --cpu generic` remains available for a genuinely mixed fleet. It
 forfeits CPU-specific vectorisation, which is what makes small kernels fast — but
 at a 20–100 ms single-record budget against a ~1 µs kernel (doc 01 §6.1), that is
 very unlikely to be the constraint.

@@ -234,7 +234,7 @@ change every decision.
 
 ### 3.1 Two related over-claims in the same section
 
-- **`decider build --verify` is credited with enforcing config completeness** (doc 04 §2.1,
+- **`decider2 build --verify` is credited with enforcing config completeness** (doc 04 §2.1,
   under "Enforced by the framework"). Doc 02 §3.4, doc 05 §8 and doc 05 §9.7 all define that
   flag as a numba-cache assertion and nothing else. Doc 07 §6 lists completeness as a *lint
   rule* — i.e. the CI-and-review category doc 04 §2.1 puts on the "not enforced" side of its

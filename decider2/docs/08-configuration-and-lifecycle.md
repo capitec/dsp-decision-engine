@@ -164,7 +164,7 @@ Completeness is computable without the framework owning storage: pydantic's
 `model_fields_set` distinguishes a field the document supplied from one that fell
 back to a code default, so `resolve_params(doc, complete=True)` can name every
 offending field. Doc 07 §2's "explicit and complete" requirement is enforced here,
-not by `decider build --verify` (which does a different job — doc 05 §8).
+not by `decider2 build --verify` (which does a different job — doc 05 §8).
 
 ---
 
@@ -588,7 +588,7 @@ conditions (doc 05 §4.2). Persist the generated `.py` and load it; do not
 regenerate it. The directory is configured explicitly, never defaulted to a temp
 directory — a cache that silently relocates is a cache that silently stops
 working, and a temp directory relocates on exactly the event that matters.
-`decider build --verify` asserts the baseline loads from it with zero
+`decider2 build --verify` asserts the baseline loads from it with zero
 compilations.
 
 ### 4.4 The interactive loop
