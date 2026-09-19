@@ -694,7 +694,7 @@ leaf ids are auto-generated and unstable, so path codes are not comparable
 across versions.
 
 > **Design response.** Diagnostics are a framework-level concept, declared as
-> data (`taps=[...]`), with deterministic node identity.
+> data (`.emit(...)`), with deterministic node identity.
 
 ### 5.5 They were already hand-rolling the record tier
 
@@ -799,7 +799,7 @@ does instead. All citations verified against source.
 | Per-step Python validation | `modules/primitives/sequential.py:75`, `:77-89` | Params inlined → native pydantic-core recursion |
 | Extension import/registration | `initialization.py:15`, `:44-62` | Same shape; must complete before first validation |
 | `debug` flag that does nothing | `executor.py:61` (vs `collect` at `:62`) | Four execution modes, equivalence-tested (doc 02 §3.1) |
-| Three inconsistent diagnostics | `modules/rules/flat_rules/module.py:173-175`; `modules/credit/scorecard/module.py:260`; `plan.py:35` | One framework-level concept: declared `taps` as data |
+| Three inconsistent diagnostics | `modules/rules/flat_rules/module.py:173-175`; `modules/credit/scorecard/module.py:260`; `plan.py:35` | One framework-level concept: declared `.emit()` values as data |
 | Branch merge upcasts to string | `modules/primitives/branching.py:96` (`how="diagonal_relaxed"`) | Declared output schemas; no implicit dtype reconciliation |
 | njit + codegen'd fused driver | `modules/record.py:45` (`jit: bool`), `:108-183` (`_build_jit_driver`) | Generalised: the default path, with kernel-boundary fallback and three modes |
 

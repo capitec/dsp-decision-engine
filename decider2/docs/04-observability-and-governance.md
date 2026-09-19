@@ -152,27 +152,28 @@ where lineage doesn't.
 
 Three tiers, by cost (doc 02 §3.1, §7):
 
-### 4.1 Taps — always-on, in production
+### 4.1 Emitted intermediates — always-on, in production
 
 ```python
-module(..., taps=["term_cap", "branch_path"])
+pipeline.emit("term_cap", "TermCapBySector_path")
 ```
 
-Each tap is an extra output column. Measured **+0.11 ns/row/tap** at 1 M rows,
-linear to at least 4 taps, and it **does not split the kernel** (a real split
-costs +2.0 ns/row — so a tap is ~17× cheaper).
+Diagnostics are not a separate mechanism: an intermediate you want to see in
+production is a **column you asked for** (doc 03 §7). Measured **+0.11 ns/row per
+value** at 1 M rows, linear to at least 4, and it **does not split the kernel** (a
+real split costs +2.0 ns/row — ~17× cheaper).
 
-`branch_path` is the cheapest and most useful: which branch fired, as one
+A branch's `_path` value is the cheapest and most useful: which arm fired, as one
 `int64`. It isn't *computed* — it's a compile-time immediate stored on whichever
-branch executes, so it is effectively free at any batch size.
+arm executes, so it is effectively free at any batch size.
 
 Version qualification matters in a waterfall (doc 03 §7): `term_cap` gives the
 **final** value, `term_cap@sector_cap` a specific module's, `term_cap@*` every version
 as its own column. Qualify by producing module, never by position — inserting a
-rule renumbers positions and silently repoints the tap.
+rule renumbers positions and silently repoints it.
 
 **Reason codes need no new machinery.** A reason code is a step output; "which
-rule fired" is `branch_path`. Worth stating explicitly because a legacy system
+rule fired" is the branch's `_path`. Worth stating explicitly because a legacy system
 being ported carried a substantial decline-reason taxonomy and **every one of
 those codes was dropped** in translation — the capability should be obvious
 enough that it doesn't get dropped again.
@@ -190,7 +191,7 @@ with pipeline.debug(net_income=42000.0, params=p) as dbg:
 
 Defaults to `stepped` — real compiled step code, so numerics match production.
 `mode="interpreted"` drops to Python steps when you need to see *inside* a step.
-Requires no taps and no redeploy.
+Requires no emitted columns and no redeploy.
 
 What makes this trustworthy is the **equivalence ladder**: `interpreted ≡ stepped
 ≡ fused` is an automated test, and a disagreement localises to a layer
@@ -208,7 +209,7 @@ Spans wrap **module and kernel boundaries**: a handful per invocation,
 negligible cost. Per-record spans would be millions per batch and are never
 emitted.
 
-> **OTel measures the pipeline; taps and traces explain the records.** Per-record
+> **OTel measures the pipeline; emitted columns and traces explain the records.** Per-record
 > diagnostics travel as columns.
 
 ---
@@ -247,7 +248,7 @@ reconstructed:
 | framework + module versions | build metadata |
 | inputs | the record as received |
 | outputs | final values |
-| tapped values | declared diagnostics, incl. `branch_path` |
+| emitted intermediates | declared diagnostics, incl. a branch's `_path` |
 
 "What were the parameters on 3 March" answers from one artefact. That is the
 whole reason production config must be explicit rather than inheriting defaults
@@ -431,7 +432,7 @@ So the framework owes three things, and a fourth is explicitly not its business:
 3. **Configurable verbosity**, because trace detail trades against speed. A
    production realtime path may emit only fired-rule ids and the values that
    moved; a dispute investigation may emit everything. The level is a parameter,
-   and what it costs is measurable (doc 02 §7: a tap is ~0.11 ns/row, a full
+   and what it costs is measurable (doc 02 §7: an emitted value is ~0.11 ns/row, a full
    trace ~4× materialisation).
 4. **Not the presentation.** Which columns, what wording, what a team's reviewers
    are used to — that is theirs. Same principle as doc 08 §6: the framework owns

@@ -86,7 +86,7 @@ a *safe* style — not because they fuse, but because **crossing a boundary cost
 almost nothing.**
 
 Two design claims this exonerates: per-module params bundles are *not* the cause
-(one merged bundle degrades identically), and a tap does *not* split a kernel
+(one merged bundle degrades identically), and an emitted value does *not* split a kernel
 (+0.11 ns/row versus +2.0 ns/row for a real split — ~17× cheaper).
 
 Consequence for the architecture — a clean separation rather than a compromise:
@@ -117,13 +117,23 @@ does not survive its own evidence and has been withdrawn:
 
 So there is no fusion optimiser and no cost model. Instead:
 
-| entry point | default | why |
-|---|---|---|
-| `apply()` — batch | **never fuse across module boundaries** | the predictable side: split cost is flat *within* a body-cost class, and a wrong split is recoverable with `fuse()` while a wrong fusion is not visible at all |
-| `score()` — single record | **fuse maximally** | N=1 is far below the ~10k break-even, where fusion wins purely by amortising per-call overhead (1.28–1.36× already at 1k rows) and `score()` has no polars boundary at all |
+**One grouping, both entry points: never fuse across module boundaries unless an
+author asks.** Split cost is flat *within* a body-cost class, a wrong split is
+recoverable with `fuse()`, and a wrong fusion is not visible at all.
 
-Both variants are compiled at build (§3.4) regardless, so carrying two costs
-nothing new.
+> **An earlier draft had `score()` "fuse maximally".** It cannot coexist with the
+> ~500-line cap (§1.2): §G measures **30 rules at 517 emitted lines**, and a
+> realistic realtime pipeline is ~30 rules (doc 04 §6) over a 400-in/633-out
+> boundary (doc 01 §4d). So the auto-fused kernel breaches the cap by
+> construction — leaving a choice between "nothing realistic builds" and waiving
+> the cap on the one kernel that **every interior edit recompiles in `live`
+> mode**, at ∝ lines^1.4.
+>
+> And it buys nothing. Dispatch is 0.44 µs/kernel, so 30 unfused kernels cost
+> ~13 µs — **0.07% of a 20 ms budget**. The 9.4–48× at N=1 is a large multiple of
+> a microsecond. Against a second codegen path, a second cache-condition surface
+> and an unbounded compile, it is not worth it. The measurement stands; the
+> conclusion drawn from it did not. Withdrawn.
 
 **Fusion is then something an author asks for**, with a combinator that composes
 like any other:
@@ -200,7 +210,7 @@ The concrete blocker is that rendering requires a *valid instance*:
 mean inventing valid params for every registered type.
 
 In `decider2` a module is a **pydantic instance describing the graph**: nodes,
-declared inputs and outputs, params schema, taps. Authoring ergonomics are
+declared inputs and outputs, params schema, emitted values. Authoring ergonomics are
 unchanged — you still write `module(fn1, fn2)` — but the result is inspectable
 data.
 
@@ -353,7 +363,7 @@ at the same pattern independently — its raw-Python path is described there as
 to maintain. It additionally provides batch-wide full tracing if ever wanted, at
 the measured ~4× materialisation cost.
 
-### 3.2 Graceful degradation, per node
+### 3.2 Graceful degradation, at the kernel boundary
 
 The compile mechanism has a precedent rather than a production pedigree. An
 unreleased branch of `decider` njits each function and codegens a fused row loop
@@ -371,14 +381,23 @@ has run in production, and no part of the old implementation is being carried
 forward. The prototypes show the mechanism works; they do not show it works at
 the scale, dtype coverage or governance surface this design requires.
 
-Nothing requires the author to write numba-friendly code. Two independent layers:
+Nothing requires the author to write numba-friendly code.
 
-1. **Per node.** Try the jitted version; the first time numba cannot compile it
-   for the given argument types, permanently fall back to plain Python for that
-   node only. Every other node is unaffected.
-2. **Per pipeline.** Try to compile the whole fused driver. If any node is not
-   nopython-compatible the fusion attempt fails as a whole; fall back to a Python
-   driver calling each node through its own best-available form.
+> **⚠ Superseded — [EXPERIMENTS.md](EXPERIMENTS.md) §B.** An earlier draft specified
+> *two* layers, the first being "per node: fall back to plain Python for that node
+> only, every other node unaffected." **That layer cannot exist.** A nopython
+> driver cannot call back into Python, so there is no per-node escape hatch inside
+> a compiled kernel. The measured alternatives are `objmode` per row at **77×**
+> (615× under `prange`) and running the whole driver in Python at **23.5×** — both
+> worse than the thing they were meant to rescue. Doc 05 §6 carries the
+> specification; this section is the one a `fallback.py` builder opens, so the
+> correction belongs here too.
+
+**One layer.** An un-njit-able node is a **kernel-boundary decision**: the
+compiler splits the group around it, that node runs in Python, and the nodes
+before and after it stay compiled. The blast radius is the kernel, not the
+pipeline and not the node. The decision is cached per node so a doomed compile is
+not retried every call, and the build names the split and its cause.
 
 Only `numba.core.errors.NumbaError` triggers fallback. A genuine runtime bug
 (e.g. `ZeroDivisionError`) always propagates, compiled or not, so it can never be
@@ -668,12 +687,12 @@ traceability table — if a decision has no home here, the layout is stale.
 ```
 decider2/
   graph/         values.py       # value identity, boundary versioning, overwrite chains
-                 step.py         # a Step: declared inputs, output, params, taps
+                 step.py         # a Step: declared inputs, output, params
                  module.py       # Module = pydantic INSTANCE describing the graph
                  interface.py    # interface INFERRED from steps, materialised as data;
                                  #   contract= snapshot + breaking-change check (doc 03 §5.1)
                  combinators.py  # | (sequence), Branch, Loop, fuse, parallel, Map (doc 03 §8)
-                 vocabulary.py   # project name map + .at() instance relabel (doc 03 §5.2)
+                 vocabulary.py   # project name map + .relabel() instance relabel (doc 03 §5.2)
                  scope.py        # the five scopes; pipeline precedence; shadowing error (§2.1)
                  resolve.py      # name binding, and the did-you-mean for an unbound one (O23)
                  schema.py       # declared in/out schemas and propagation
@@ -702,7 +721,7 @@ decider2/
                                  writeback.py # dtype-grouped 2D; layout per entry point (§3.1)
                                  chunk.py     # mandatory above ~400k rows; default 100k (§3.2)
   frame/         join.py, aggregate.py, filter.py, opaque.py
-  observe/       taps.py, trace.py, audit.py, otel.py
+  observe/       emit.py, trace.py, audit.py, otel.py
                  record.py       # the structured decision record — the ONLY guaranteed
                                  #   output; every rendering is built from it (doc 04 §6.5)
                  render/         # DEFAULT renderers over that record, replaceable without
@@ -794,8 +813,8 @@ gap in the set and the next thing to design; when it lands it is a peer of
 
 | need | mechanism | cost |
 |---|---|---|
-| which branch fired, in production | tap → one `int64` column; branch code is a compile-time immediate | effectively free |
-| specific intermediate values in production | declared taps → extra output columns | ~10 µs/col, row-count-independent |
+| which branch fired, in production | `.emit("<branch>_path")` → one `int64` column, a compile-time immediate | effectively free |
+| specific intermediate values in production | `.emit(...)` → extra output columns | ~10 µs/col, row-count-independent |
 | step through one record | `stepped` (compiled steps, Python driver) | irrelevant at one record |
 | inspect step internals | `interpreted` | irrelevant at one record |
 | what-if override mid-flow | `stepped` / `interpreted` | irrelevant at one record |
@@ -803,11 +822,11 @@ gap in the set and the next thing to design; when it lands it is a peer of
 | "step x changed y from 1 to 2" | value version chain + producer attribution | recorded in trace modes |
 | pipeline latency/throughput | OTel spans at **stage** granularity | negligible |
 
-**OTel measures the pipeline; taps and traces explain the records.** Per-record
+**OTel measures the pipeline; emitted columns and traces explain the records.** Per-record
 spans would be millions per batch and are never emitted — per-record diagnostics
 travel as columns.
 
-Diagnostics are declared as **data** (`taps=["term_cap"]`), never as a code
+Diagnostics are declared as **data** (`pipeline.emit("term_cap")`), never as a code
 pointer in config, and node identity is deterministic so path codes remain
 comparable across versions (doc 01 §5.4).
 
