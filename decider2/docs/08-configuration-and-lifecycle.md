@@ -491,6 +491,57 @@ This resolves the contradiction in doc 02 §3.4 / doc 05 §8: "a runtime load
 triggers zero compilations" is a statement about **the baseline**, not a
 prohibition on ever compiling.
 
+### 4.1b How the system knows — and what happens across a restart
+
+**The framework never polls, and never watches a file.** Config sourcing is yours
+(§6); your code calls `handle.stage(doc)` when your backend says there is a new
+version. What the framework owes is a *correct answer about what that document
+costs*, before you activate it:
+
+```python
+plan = handle.stage(doc)
+plan.klass          # -> ChangeClass.VALUES | INTERIORS_SHAPE | SKELETON
+plan.recompiles     # -> False | True
+plan.fingerprint    # -> the new structure fingerprint
+plan.eta            # -> ~0 s, or a compile estimate from emitted line count
+```
+
+The decision is **the structure fingerprint** (§8): a content hash over the
+structural elements only — rule shape, operators, wiring, nesting — with every
+*value* excluded. Same fingerprint as the running generation means values moved
+and nothing else, so it is a bundle swap at 3.36 µs. A different fingerprint means
+emitted code changes, so it compiles in a subprocess and activates only when
+ready. Nothing infers this from timestamps or from which file changed.
+
+**Most changes do not rebuild, and that is the design's central bet** — §2's first
+two rows (params, and a rule's thresholds and enabled flag) are the large majority
+of what a credit policy team actually does, and they are free because thresholds
+are arguments rather than emitted literals (§2.1). Adding or removing a *rule* is
+not free; it is one background compile, measured at 2.5–7.3 s change-to-serving
+and ≤10 s up to ~35 rules (§G). The bet is that the first kind happens weekly and
+the second monthly — worth checking against your own change log, because if rule
+addition turns out to be weekly then `live` mode's compile is on the critical path
+far more often than this design assumes.
+
+**Across a restart, and across scale-out.** A rule added through the UI at 10:00
+is compiled into the pod's writable cache. That cache must survive two events the
+rest of this document does not address:
+
+| event | without care | required |
+|---|---|---|
+| pod restarts | generated source is re-emitted, `(st_mtime, st_size)` differs → **100% cache miss** (§C condition 3), cold compile at startup | **persist the generated `.py`, do not regenerate it.** Content-addressed naming makes the path deterministic; on restart, load the existing file rather than re-emitting an identical one |
+| a replica scales up | new pod has an empty writable cache → cold compile before it can serve | the compiled artefact is fetched from shared storage keyed by `(fingerprint, magic_tuple)`, or the pod serves the **baked-in baseline** until it has compiled and only then activates |
+
+The second column is a requirement on `runtime/lifecycle.py`, not advice. The
+failure mode is quiet and badly timed: the fleet is scaling because it is under
+load, and that is exactly when every new pod pays a 2.5–7.3 s compile it should
+have inherited. `magic_tuple` must be part of the key because a cached artefact is
+CPU-feature-specific (§4.2, §C condition 5).
+
+> **`sealed` mode has neither problem**, because no artefact is ever produced after
+> image build. If a deployment does not need UI-driven rule edits, `sealed` removes
+> this entire class of failure — which is the reason the modes are separate.
+
 ### 4.2 What forces a recompile
 
 Enumerated, because "type fixed" is not a specification:
@@ -530,10 +581,15 @@ Enumerated, because "type fixed" is not a specification:
 `sealed`: generated sources and the numba cache are baked into the image and the
 filesystem may be read-only.
 
-`live`: both need a writable directory that survives for the process lifetime.
-It is configured explicitly, not defaulted to a temp directory — a cache that
-silently relocates is a cache that silently stops working. `decider build --verify`
-asserts the baseline loads from it with zero compilations.
+`live`: both need a writable directory that **survives the process**, not merely
+the process lifetime (§4.1b) — a restart that re-emits an identical source file
+still misses the cache, because `(st_mtime, st_size)` is one of the seven
+conditions (doc 05 §4.2). Persist the generated `.py` and load it; do not
+regenerate it. The directory is configured explicitly, never defaulted to a temp
+directory — a cache that silently relocates is a cache that silently stops
+working, and a temp directory relocates on exactly the event that matters.
+`decider build --verify` asserts the baseline loads from it with zero
+compilations.
 
 ### 4.4 The interactive loop
 
