@@ -161,6 +161,23 @@ strings. Name-based wiring (doc 03 §2) is the design's best asset precisely
 because names are greppable — and its failure mode is that an unbound name looks
 exactly like a bound one.
 
+### O24 — Boundary conditions in an impact report
+**New, from the reviewer test's Task C (doc 08 §5).** Asked what they would need to
+verify a policy change, the reviewer asked for something the design does not
+produce: *"if the input is between these values, before you would have X and now
+you have Y on all outputs affected."*
+
+For a threshold comparison this is a **solve**, not a sample — the set of inputs
+whose decision changes is an interval, computable exactly from the two threshold
+values. That is better than an impact count because it is exact at the edges,
+which is where policy arguments happen, and it does not depend on the sample
+containing a boundary case.
+
+Open: which rule shapes admit an exact interval (comparisons yes; a bounded search
+or an iterative solve, unclear), and what the report says when it cannot solve —
+it must degrade to sampling **and say so**, never silently report a narrower
+interval than the truth.
+
 ### O17 — Approval granularity
 **New.** Does activating a staged generation need per-rule approval, or is
 document-level enough? Framework-neutral — but it decides whether a rule carries
