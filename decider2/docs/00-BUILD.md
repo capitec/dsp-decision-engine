@@ -78,6 +78,26 @@ Twenty experiments, harnesses in `experimentation/`, results in
 
 ---
 
+## 2b. Decisions taken by the project owner
+
+These are facts about the deployment, not design choices, and they are settled:
+
+| question | answer | consequence |
+|---|---|---|
+| production hardware | Docker images, target normally known and constant | build for the target, but **record it in the manifest and check at startup**, logging loudly on a mismatch (doc 02 §3.4b) — this is being **open-sourced**, so other deployments will not resemble this one |
+| serving | decider2 **ships a server**, keeping `decider` 1's SageMaker conventions | `/ping` + `/invocations`, the overridable `Handler` protocol, swappable backends — and **nothing in the core may import it** (doc 02 §3.6) |
+| real data | **not available** — it would leak IP into a public repo | every shape assumption stays marked provisional; the input schema is bootstrappable from a sample frame so it is cheap to correct |
+| dtype strictness | **flexible by default; tighten for speed** | doc 05 §1.5 is a *ladder*, not a gate. Nothing is rejected; strings, lists and decimals are converted or the kernel splits around them |
+
+> **This repository is going public.** Before publication, scrub the internal
+> identifiers the review already flagged — `AliasCombineModule`
+> (doc 01 §5.2) and `_stage_00`–`_09` (docs 01, 03 §3.2, 04 §6) — or
+> relax the README's claim that none appear. `decider2/example_projects/` is
+> shaped on real internal systems and should be read with that in mind before it
+> ships.
+
+---
+
 ## 3. Build order
 
 Each layer lists what blocks it. **Do not start a layer whose blockers are open** —
