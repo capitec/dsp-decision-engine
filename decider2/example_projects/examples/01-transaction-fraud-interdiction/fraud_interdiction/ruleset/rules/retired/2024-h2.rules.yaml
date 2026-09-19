@@ -1,0 +1,99 @@
+# Retired register, second half of 2024 — 182 rules, two shown.
+#
+# WHY THIS FILE EXISTS AT ALL: a dispute can arrive 540 days after the event,
+# and a scheme representment later still. Replaying an event from October 2024
+# needs the rule set as it stood that minute, including rules that no longer
+# exist. "Retiring a rule removes it from effect going forward; it must not
+# remove the ability to say what it did" (spec §9.2).
+#
+# HOW IT IS NOT A LIABILITY: these rules are not in the live kernel. They are
+# compiled only into the generation that was live when they were, and that
+# generation is rebuilt on demand from pinned source. The replay harness
+# selects the generation by event_timestamp (core.dates), not by "the current
+# code with some rules added back".
+#
+# The register only grows: 1 360 rules and counting. It is a few hundred KB of
+# YAML and nobody ever reads it except a replay and an audit. That is the right
+# place for it to be.
+
+ruleset: retired_rules
+document_version: 1360
+schema: decider2/ruleset/v1
+sunset_policy:
+  # Physically dropped from the newest generation once no replay can need it.
+  # 540 days dispute window + 180 days recovery lag + 90 days margin.
+  retain_in_live_kernel_days: 0
+  retain_replayable_days: 2555        # 7 years, matching record retention
+
+rules:
+
+  - id: CF-0311
+    version: 22
+    shape_version: 9
+    status: retired
+    title: Card-not-present above segment ceiling with no 3-D Secure
+    describe:
+      internal: >
+        Retired when 3-D Secure coverage passed 94% and the rule's precision
+        fell below the family floor. Replaced by CF-0620 and CF-0621, which
+        split card-present and card-not-present.
+      client_safe_reason: 4102
+    owner: { team: fraud-strategy, individual: d.ferreira }
+    effective: { from: 2021-04-01T00:00:00Z, to: 2024-11-30T23:59:59Z }
+    applies_to: { event_types: [111], segments: all }
+    evaluate:
+      all:
+        - { feature: three_d_secure_outcome, op: is_in, values: [0, 2] }
+        - { feature: amount_zar_cents, op: gt, value: { tunable: min_amount } }
+    tunables:
+      min_amount: { default: 1500000, unit: amount_zar_cents, bounds: [100000, 50000000] }
+    on_absent: { three_d_secure_outcome: evaluate_false, amount_zar_cents: suppress }
+    outcome: { action: decline, severity: 4, priority: 180 }
+    flags: { critical: false, overlay_exempt: false, suppressible: true }
+    limits: { max_fire_rate_pct: 1.00 }
+    approval:
+      author: d.ferreira
+      approver: h.abrahams
+      approved_at: 2024-11-26T10:18:27Z
+      backtest_ref: BT-2024-1125-02
+      shape_change: false
+      retirement_evidence: DR-2024-1126-CF
+
+  - id: AA-0093
+    version: 5
+    shape_version: 3
+    status: retired
+    title: Structuring pattern below the reporting threshold
+    describe:
+      internal: >
+        Retired 30 June 2024 when the AML-adjacent family was restructured.
+        Internal Audit asked in March 2026 for proof that it stopped affecting
+        outcomes on that date; the per-minute firing aggregate for AA-0093 is
+        zero from 2024-06-30T23:59:59Z onward and the applicability digest on
+        every subsequent event excludes it. Neither answer required scanning a
+        record store.
+      client_safe_reason: 4801
+    owner: { team: financial-crime-compliance, individual: p.naidoo }
+    effective: { from: 2022-02-01T00:00:00Z, to: 2024-06-30T23:59:59Z }
+    applies_to: { event_types: [210, 211], segments: all }
+    evaluate:
+      all:
+        - { feature: client_count_24h, op: ge, value: { tunable: min_count } }
+        - { feature: client_amount_sum_24h, op: between,
+            value: { tunable: band_lo }, value_hi: { tunable: band_hi } }
+    tunables:
+      min_count: { default: 5,       unit: count,            bounds: [2, 50] }
+      band_lo:   { default: 2000000, unit: amount_zar_cents, bounds: [0, 100000000] }
+      band_hi:   { default: 2499900, unit: amount_zar_cents, bounds: [0, 100000000] }
+    on_absent: { client_count_24h: suppress, client_amount_sum_24h: suppress }
+    outcome: { action: monitor, severity: 2, priority: 610 }
+    flags: { critical: false, overlay_exempt: true, suppressible: false }
+    limits: { max_fire_rate_pct: 3.00 }
+    obligations: [suspicious_activity_report]
+    approval:
+      author: p.naidoo
+      approver: c.vandermerwe
+      approved_at: 2024-06-24T09:00:00Z
+      backtest_ref: BT-2024-0621-04
+      shape_change: false
+      retirement_evidence: DR-2024-0624-AA

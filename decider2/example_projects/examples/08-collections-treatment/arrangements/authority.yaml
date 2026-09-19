@@ -1,0 +1,68 @@
+# Arrangement authority matrix — 6 types x 5 levels x 4 concession dimensions.
+# Owner: Credit Risk Policy. Cadence: quarterly. Version 22, effective 2026-07-01.
+#
+# NOT an overlay surface. Authority is not a commercial dial: a weekly forum
+# cannot widen what an agent may concede, and there is no name an overlay can
+# write down that reaches this file (overlays/surfaces.py).
+
+version: 22
+effective_from: 2026-07-01
+owner: credit_risk_policy
+approval_reference: CRP-ARR-2026-06-24
+
+levels:
+  L1: {who: agent,                 label: "Within the grid"}
+  L2: {who: team_leader,           label: "Up to 15% below minimum; duration +3 months"}
+  L3: {who: collections_manager,   label: "Up to 25% below; duration +6 months; 4th arrangement"}
+  L4: {who: head_of_collections,   label: "Up to 40% below"}
+  L5: {who: credit_committee,      label: "Anything else, case by case"}
+
+concessions:
+  instalment_below_minimum_pct:
+    L1: 0
+    L2: 15
+    L3: 25
+    L4: 40
+    L5: null        # null = unbounded, case by case. Distinct from 0.
+  duration_extension_months:
+    L1: 0
+    L2: 3
+    L3: 6
+    L4: 6
+    L5: null
+  arrangement_count_override:
+    L1: false
+    L2: false
+    L3: true        # a 4th arrangement in 24 months
+    L4: true
+    L5: true
+  within_30d_of_failure:
+    L1: false
+    L2: true
+    L3: true
+    L4: true
+    L5: true
+
+types:
+  A1: {name: reduced_instalment,   max_duration_months: 6,  min_level: L1}
+  A2: {name: arrears_catch_up,     max_duration_months: 12, min_level: L1}
+  A3: {name: payment_holiday,      max_duration_months: 3,  min_level: L2,
+       note: "interest capitalised; L2 minimum because the balance grows"}
+  A4: {name: term_extension,       max_duration_months: 24, min_level: L2}
+  A5: {name: interest_concession,  max_duration_months: 12, min_level: L3,
+       note: "income foregone; Credit Risk Policy requires manager sight"}
+  A6: {name: hardship_plan,        max_duration_months: 12, min_level: L2,
+       mandatory_review_at_months: 6,
+       note: "activates suspension 111 while performing"}
+
+recorded_per_arrangement:
+  - arrangement_terms
+  - affordability_assessment_full          # with mode and norm versions
+  - affordability_profile_id               # core.affordability:distressed_collections@v4
+  - minimum_that_applied
+  - arrangement_minimums_grid_version
+  - required_authority_level
+  - obtained_authority_level
+  - approver_identity
+  - approver_timestamp
+  - justification_code

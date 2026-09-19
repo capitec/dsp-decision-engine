@@ -1,0 +1,264 @@
+# ============================================================================
+# The ownership map.  ONE declaration, for the whole project.
+#
+# Spec 5.26.1 gives twelve teams, 18 phases of which thirteen have two or more
+# owners and one has five, 47 tables, 340 parameters and 1 400 decision points
+# of which "every decision point has exactly one owner, so the last column sums
+# exactly".
+#
+# ----------------------------------------------------------------------------
+# WHY OWNERSHIP IS NOT IN THE DIRECTORY TREE
+# ----------------------------------------------------------------------------
+# The obvious layout is phases/p09_policy_gates/t4_credit_risk_policy/... .  It
+# is wrong, and spec 11 scenarios 4 and 5 are why:
+#
+#   scenario 4  T4 splits into Retail Policy and Portfolio Policy.  89 decision
+#               points, 13 tables and 88 parameters divide unevenly.
+#   scenario 5  T7 and T8 merge.
+#
+# If ownership is a path segment, both are repository-wide file moves: every
+# import breaks, every `decision_point_id` that is path-derived changes, every
+# archived reviewable rendering stops resolving, and N3 ("zero unresolvable
+# citations") fails for every decision made before the move.  A re-org would
+# be indistinguishable, in the record, from a logic change.
+#
+# So ownership is DATA.  It is declared here, carried as `owner=` on every
+# decision point, table and parameter, and checked three ways at build:
+#
+#   1. every decision point names a team that exists here;
+#   2. the per-team decision-point counts below are ASSERTIONS -- they must
+#      equal what the registry finds, and they must sum to 1 400;
+#   3. `.github/CODEOWNERS` is GENERATED from this file plus the registry, so
+#      review routing follows ownership automatically and cannot drift.
+#
+# Answer to spec 11.4 and 11.5: a team split or merge is a diff to THIS FILE
+# and to the `owner=` token on the affected decision points.  No logic moves,
+# no path changes, no id changes.  A merge is purely a re-attribution.
+#
+# ----------------------------------------------------------------------------
+# The directory tree is organised by PHASE, because the phase is the unit of
+# ordering, budget, degradation policy, blast radius and record citation.
+# Ownership crosses it thirteen times out of eighteen; subject does not.
+# ============================================================================
+
+[project]
+name          = "retail_credit"
+decision_points = 1400        # asserted against the registry at build
+phases          = 18
+tables          = 47
+parameters      = 340
+entry_points    = 8
+
+# ---------------------------------------------------------------------------
+# The twelve teams.  `param_classes` is the list of parameter classes this team
+# may author a document for (params/classes.py); a document carrying a key from
+# a class not listed here is REJECTED, not ignored.  That is how spec 10
+# criterion 4 -- "a statutory value is unreachable from a product team's change
+# surface, demonstrated by attempt, not by convention" -- is demonstrable.
+# ---------------------------------------------------------------------------
+
+[teams.T1]
+name = "Decision Platform Engineering"
+phases = ["P01", "P04", "P09", "P13", "P17", "P18"]
+tables = ["entry_point_registry"]
+param_classes = ["platform"]
+parameters = 21
+decision_points = 174
+cadence = "fortnightly"
+approval = "engineering"
+github = "@bank/decision-platform"
+
+[teams.T2]
+name = "Client Identity & Data Platform"
+phases = ["P02", "P04", "P06"]
+tables = ["vehicle_valuation_guide", "feature_band_definitions", "bureau_schema_map"]
+param_classes = ["platform"]
+parameters = 9
+decision_points = 152
+cadence = "weekly"
+approval = "data_owner"
+github = "@bank/client-data"
+
+[teams.T3]
+name = "Regulatory Compliance"
+phases = ["P03", "P09", "P12", "P17", "P18"]
+tables = ["reason_registry", "statutory_fee_caps", "expense_norms_statutory",
+          "tax_brackets", "credit_life_caps", "in_duplum", "disclosure_wording"]
+param_classes = ["statutory"]
+parameters = 41
+decision_points = 112
+cadence = "on_gazette"
+approval = "compliance"
+github = "@bank/regulatory-compliance"
+
+[teams.T4]
+name = "Credit Risk Policy"
+phases = ["P03", "P08", "P09", "P10", "P15"]
+tables = ["limit_assignment_matrix", "obligation_treatment_matrix", "buffer_grid",
+          "ratio_ceilings", "residual_floors", "grade_boundaries", "expense_norms_internal",
+          "settleability_matrix", "anti_harm_thresholds", "segment_definitions",
+          "appetite_grid", "concentration_policy"]
+param_classes = ["policy"]
+parameters = 79
+decision_points = 282
+cadence = "quarterly"
+approval = "credit_committee"
+github = "@bank/credit-risk-policy"
+
+[teams.T5]
+name = "Model Risk & Modelling"
+phases = ["P06", "P07", "P08"]
+tables = ["scorecard_definitions", "calibrations", "challenger_design", "model_features"]
+param_classes = ["model"]
+parameters = 8
+decision_points = 135
+cadence = "on_model_release"
+approval = "model_validation"
+github = "@bank/model-risk"
+
+[teams.T6]
+name = "Treasury / Pricing"
+phases = ["P12"]
+tables = ["rate_card_flex", "rate_card_drive", "rate_card_home", "rate_card_revolving",
+          "long_term_loading", "reference_rates"]
+param_classes = ["pricing"]
+parameters = 19
+decision_points = 44
+cadence = "monthly_plus_patch"
+patch_sla = "2h"
+approval = "treasury_committee"
+github = "@bank/treasury-pricing"
+
+[teams.T7]
+name = "Unsecured Lending Product"
+phases = ["P09", "P11", "P12", "P13", "P16"]
+tables = ["permitted_terms_unsecured", "cap_register_t7"]
+param_classes = ["product.unsecured"]
+parameters = 38
+decision_points = 76
+cadence = "weekly"
+approval = "product_owner"
+github = "@bank/unsecured-product"
+
+[teams.T8]
+name = "Cards & Revolving Product"
+phases = ["P09", "P11", "P12", "P15", "P16"]
+tables = ["limit_bands", "cap_register_t8"]
+param_classes = ["product.revolving"]
+parameters = 34
+decision_points = 78
+cadence = "weekly"
+approval = "product_owner"
+github = "@bank/cards-product"
+
+[teams.T9]
+name = "Secured Lending Product"
+phases = ["P09", "P11", "P12", "P16"]
+tables = ["ltv_policy", "cap_register_t9"]
+param_classes = ["product.secured"]
+parameters = 24
+decision_points = 39
+cadence = "monthly"
+approval = "product_owner"
+github = "@bank/secured-product"
+
+[teams.T10]
+name = "Financial Crime"
+phases = ["P05", "P09"]
+tables = ["fraud_rules", "concentration_watchlist", "exclusion_lists"]
+param_classes = ["crime"]
+parameters = 14
+decision_points = 216
+cadence = "weekly"
+emergency_path = "minutes"
+approval = "four_eyes_within_t10"
+github = "@bank/financial-crime"
+
+[teams.T11]
+name = "Campaign Analytics & Marketing"
+phases = ["P16"]
+tables = ["campaign_trees", "suppression_registry", "contact_fatigue", "arbitration_weights"]
+param_classes = ["campaign"]
+parameters = 19
+decision_points = 29          # + 2 900 campaign LEAVES: see deadlogic/candidates.py
+cadence = "weekly"
+approval = "campaign_forum"
+github = "@bank/campaign-analytics"
+
+[teams.T12]
+name = "Collections & Restructure"
+phases = ["P14"]
+tables = ["scenario_ordering"]
+param_classes = ["restructure"]
+parameters = 12
+decision_points = 63
+cadence = "quarterly"
+approval = "credit_committee"
+github = "@bank/collections-restructure"
+
+# Govern, own no phase and no decision point.
+[teams.ALCO]
+name = "Asset and Liability Committee"
+phases = []
+param_classes = ["portfolio"]
+parameters = 11
+decision_points = 0
+approval = "alco"
+github = "@bank/alco"
+
+[teams.CC]
+name = "Credit Committee"
+phases = []
+param_classes = ["overlay_governance"]
+parameters = 11
+decision_points = 0
+approval = "credit_committee"
+github = "@bank/credit-committee"
+
+# ---------------------------------------------------------------------------
+# Cross-ownership that must be VISIBLE rather than discovered.
+#
+# Spec 5.26.4: "T12 owns the phase and owns almost nothing the phase depends
+# on."  The blast-radius router reads this table, so a T6 rate-card change
+# notifies T12 automatically -- T6 cannot be expected to know that a card cell
+# participates in a consolidation objective.
+# ---------------------------------------------------------------------------
+
+[[depends_on]]
+owner = "T12"
+phase = "P14"
+reads_artefacts_owned_by = ["T6", "T4", "T3"]
+notify_on_change = true
+note = "P14 owns 63 decision points and none of the five artefact families it reads."
+
+[[depends_on]]
+owner = "T7"
+phase = "P13"
+reads_artefacts_owned_by = ["T6", "T4", "T3"]
+notify_on_change = true
+note = "The solve's correctness bound (19 evaluations/term) is a function of card shape."
+
+[[depends_on]]
+owner = "T11"
+phase = "P16"
+reads_artefacts_owned_by = ["T2"]
+notify_on_change = true
+note = "23 campaign tree nodes key off feature bands T2 edits on a Tuesday. Spec 5.28."
+
+# ---------------------------------------------------------------------------
+# Shared values with a delegated dimension.  Spec 5.26.3: T4 owns the
+# affordability buffer; T8 wants it to vary by channel for entry point 2.  The
+# flow widened the key to grade x product x channel and DELEGATED the channel
+# dimension to T8 within declared bounds.  Widening a key widens an ownership
+# boundary, so the delegation is declared here and nowhere else.
+# ---------------------------------------------------------------------------
+
+[[delegation]]
+artefact = "buffer_grid"
+owner = "T4"
+delegated_dimension = "channel_class"
+delegated_to = "T8"
+bounds = { min = 0.06, max = 0.24 }
+approval = "CC-2027-05"
+review_date = "2028-03-31"
+note = "T8 may move any cell within bounds along the channel axis only. T8 cannot add a dimension."

@@ -81,6 +81,14 @@ all moved. Every harness is checked in under
 only as tables and could not be re-run on a different workload shape. Where a
 claim in docs 01–08 has been measured, an inline note points here.
 
+**[COLD-READ.md](../example_projects/COLD-READ.md)** reports a comprehension study:
+sixteen readers (eight Sonnet, eight Haiku) given identical prompts, six reading one
+mock project each with no framework docs and no spec, then checked against the spec.
+Where a reader confidently concluded something the spec contradicts, the authoring
+surface failed to communicate — those divergences, not opinions, are its findings.
+It agrees with `example_projects/examples/FINDINGS.md` on four points by a method
+sharing none of its assumptions; where they disagree it says which to trust.
+
 **Read the performance findings against doc 01 §6.1.** The single-record path is
 primary, with a 20–100 ms budget, and the compiled path runs at ~1 µs — so fusion,
 output conventions and chunking are *batch* concerns with four orders of magnitude

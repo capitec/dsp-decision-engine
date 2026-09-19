@@ -1,0 +1,59 @@
+{
+  "artefact": "feature_band_definitions",
+  "band_set_version": "bands-2026-Q3",
+  "effective_from": "2026-07-01",
+  "owner": "campaign_analytics",
+  "cadence": "quarterly",
+
+  "identity_bearing": true,
+  "_identity_bearing": "THE MOST CONSEQUENTIAL FLAG IN THIS REPOSITORY. Doc 08 §4.2 classifies table contents as free - no compile, no review, a values change. That is wrong for this table. Canonicalisation RESOLVES a band reference to its boundary values, so editing an edge changes the node key of every node in every tree that tests a band whose edge moved. 38 trees reference income_band_code alone. A band edit is functionally a simultaneous edit to 38 trees (spec §6.1) and the framework must treat it as one: it participates in the content fingerprint, it produces an identity map per affected campaign, and every affected campaign owner signs before the band set publishes. See modules/tree/canonical.py and pipelines/publication.py:band_edit_impact, and FRAMEWORK-DEMANDS #22.",
+
+  "bands": {
+    "feat:income_band_code": {
+      "underlying": "feat:gross_monthly_income_cents",
+      "referenced_by_trees": 38,
+      "edges": [
+        {"code": 1, "from": 0,       "to": 350000},
+        {"code": 2, "from": 350000,  "to": 550000},
+        {"code": 3, "from": 550000,  "to": 800000},
+        {"code": 4, "from": 800000,  "to": 1200000},
+        {"code": 5, "from": 1200000, "to": 1800000},
+        {"code": 6, "from": 1800000, "to": 2600000},
+        {"code": 7, "from": 2600000, "to": 4000000},
+        {"code": 8, "from": 4000000, "to": 7000000},
+        {"code": 9, "from": 7000000, "to": null}
+      ]
+    },
+    "feat:tenure_band_code": {
+      "underlying": "feat:months_on_book",
+      "referenced_by_trees": 22,
+      "edges": [
+        {"code": 1, "from": 0,  "to": 6},
+        {"code": 2, "from": 6,  "to": 12},
+        {"code": 3, "from": 12, "to": 24},
+        {"code": 4, "from": 24, "to": 60},
+        {"code": 5, "from": 60, "to": null}
+      ]
+    }
+  },
+
+  "pending_edit": {
+    "_scenario": "The Q4 submission moves the band 5 lower edge from R12 000 to R12 800.",
+    "feature": "feat:income_band_code",
+    "code": 5,
+    "from_edge_cents": 1200000,
+    "to_edge_cents": 1280000,
+    "impact": {
+      "trees_affected": 38,
+      "nodes_affected": 114,
+      "clients_crossing": 412000,
+      "blocked_until": "all 38 campaign owners hold an identity map for their tree",
+      "example": {
+        "campaign_id": 23,
+        "node_key_from": "n_7d38c2a05f6941be",
+        "node_key_to": "n_1d94e0b5ac762f38",
+        "clients_crossing": 214000
+      }
+    }
+  }
+}

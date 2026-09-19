@@ -1,0 +1,426 @@
+{
+  "artefact": "campaign_tree",
+  "campaign_id": 23,
+  "tree_id": 23,
+  "tree_version": 12,
+  "variant_label": "champion",
+  "effective_from": "2026-10-01",
+  "effective_to": null,
+  "canon_version": 3,
+  "feature_registry_version": "mart-2026-09",
+  "band_set_version": "bands-2026-Q3",
+  "shape_fingerprint": "sf_0c7419ae63b8d25f",
+  "slot_count": 23,
+  "leaf_slot_count": 8,
+  "root": "n_9f2c41a7b0e35d18",
+  "reads": [
+    "feat:app_logins_90d",
+    "feat:behaviour_score",
+    "feat:bureau_enquiries_3m",
+    "feat:channel_preference_code",
+    "feat:current_flex_balance",
+    "feat:discretionary_income",
+    "feat:employment_type_code",
+    "feat:estimated_instalment_to_income",
+    "feat:external_unsecured_growth_6m",
+    "feat:flex_term_remaining_months",
+    "feat:has_active_flex_loan",
+    "feat:income_band_code",
+    "feat:months_on_book_flex",
+    "feat:months_since_last_arrears",
+    "feat:payments_missed_12m",
+    "feat:pre_assessed_amount",
+    "feat:prior_offer_declines_6m",
+    "feat:settlement_ratio",
+    "feat:sms_response_rate_12m",
+    "feat:worst_arrears_months_12m"
+  ],
+  "nodes": [
+    {
+      "node_key": "n_9f2c41a7b0e35d18",
+      "author_label": "L1 facility gate",
+      "condition": {
+        "all": [
+          {
+            "op": "ge",
+            "feature": "feat:flex_term_remaining_months",
+            "slot": "s:n_9f2c41a7b0e35d18:0"
+          },
+          {
+            "op": "is_true",
+            "feature": "feat:has_active_flex_loan"
+          },
+          {
+            "op": "ge",
+            "feature": "feat:months_on_book_flex",
+            "slot": "s:n_9f2c41a7b0e35d18:2"
+          }
+        ]
+      },
+      "slots": {
+        "s:n_9f2c41a7b0e35d18:0": 4.0,
+        "s:n_9f2c41a7b0e35d18:2": 6.0
+      },
+      "on_true": "n_4b71e0cd5a92f36c",
+      "on_false": "l_b82e47c105d3f69a"
+    },
+    {
+      "node_key": "n_4b71e0cd5a92f36c",
+      "author_label": "L2 settlement / arrears gate",
+      "condition": {
+        "all": [
+          {
+            "op": "eq",
+            "feature": "feat:payments_missed_12m",
+            "slot": "s:n_4b71e0cd5a92f36c:0"
+          },
+          {
+            "op": "le",
+            "feature": "feat:settlement_ratio",
+            "slot": "s:n_4b71e0cd5a92f36c:1"
+          }
+        ]
+      },
+      "slots": {
+        "s:n_4b71e0cd5a92f36c:0": 0.0,
+        "s:n_4b71e0cd5a92f36c:1": 0.65
+      },
+      "on_true": "n_c05a83d7146be2f9",
+      "on_false": "n_2e6f9b14a7c308d5"
+    },
+    {
+      "node_key": "n_c05a83d7146be2f9",
+      "author_label": "L3 risk gate, prime",
+      "condition": {
+        "all": [
+          {
+            "op": "ge",
+            "feature": "feat:behaviour_score",
+            "slot": "s:n_c05a83d7146be2f9:0"
+          },
+          {
+            "op": "le",
+            "feature": "feat:bureau_enquiries_3m",
+            "slot": "s:n_c05a83d7146be2f9:1"
+          },
+          {
+            "op": "le",
+            "feature": "feat:external_unsecured_growth_6m",
+            "slot": "s:n_c05a83d7146be2f9:2"
+          },
+          {
+            "op": "eq",
+            "feature": "feat:worst_arrears_months_12m",
+            "slot": "s:n_c05a83d7146be2f9:3"
+          }
+        ]
+      },
+      "slots": {
+        "s:n_c05a83d7146be2f9:0": 620.0,
+        "s:n_c05a83d7146be2f9:1": 2.0,
+        "s:n_c05a83d7146be2f9:2": 0.2,
+        "s:n_c05a83d7146be2f9:3": 0.0
+      },
+      "on_true": "n_7d38c2a05f6941be",
+      "on_false": "n_b7302ce8149fa65d"
+    },
+    {
+      "node_key": "n_2e6f9b14a7c308d5",
+      "author_label": "L3 risk gate, relaxed",
+      "condition": {
+        "all": [
+          {
+            "op": "ge",
+            "feature": "feat:behaviour_score",
+            "slot": "s:n_2e6f9b14a7c308d5:0"
+          },
+          {
+            "op": "ge",
+            "feature": "feat:months_since_last_arrears",
+            "slot": "s:n_2e6f9b14a7c308d5:1"
+          },
+          {
+            "op": "le",
+            "feature": "feat:worst_arrears_months_12m",
+            "slot": "s:n_2e6f9b14a7c308d5:2"
+          }
+        ]
+      },
+      "slots": {
+        "s:n_2e6f9b14a7c308d5:0": 580.0,
+        "s:n_2e6f9b14a7c308d5:1": 9.0,
+        "s:n_2e6f9b14a7c308d5:2": 1.0
+      },
+      "on_true": "n_b7302ce8149fa65d",
+      "on_false": "l_0d59a3f6c8b71e42"
+    },
+    {
+      "node_key": "n_7d38c2a05f6941be",
+      "author_label": "L4 affordability gate, prime",
+      "_comment": "in_band resolves to boundary values at bands-2026-Q3; the RESOLVED edges are what the node key covers, so a band edit that does not move these edges does not renumber this node.",
+      "condition": {
+        "all": [
+          {
+            "op": "ge",
+            "feature": "feat:discretionary_income",
+            "slot": "s:n_7d38c2a05f6941be:0"
+          },
+          {
+            "op": "le",
+            "feature": "feat:estimated_instalment_to_income",
+            "slot": "s:n_7d38c2a05f6941be:1"
+          },
+          {
+            "op": "in_band",
+            "feature": "feat:income_band_code",
+            "codes": [
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "resolved_edges": [
+              12000.0,
+              null
+            ]
+          }
+        ]
+      },
+      "slots": {
+        "s:n_7d38c2a05f6941be:0": 350000.0,
+        "s:n_7d38c2a05f6941be:1": 0.28
+      },
+      "on_true": "n_5c92b70e4a13fd28",
+      "on_false": "n_e83017bd6f2c94a5"
+    },
+    {
+      "node_key": "n_b7302ce8149fa65d",
+      "author_label": "L4 affordability gate, standard",
+      "_comment": "reached from BOTH n_c05a83d7146be2f9 (false) and n_2e6f9b14a7c308d5 (true). One node, two in-edges. The route records which edge.",
+      "condition": {
+        "all": [
+          {
+            "op": "ge",
+            "feature": "feat:discretionary_income",
+            "slot": "s:n_b7302ce8149fa65d:0"
+          },
+          {
+            "op": "in_set",
+            "feature": "feat:employment_type_code",
+            "codes": [
+              1,
+              2,
+              4
+            ]
+          },
+          {
+            "op": "le",
+            "feature": "feat:estimated_instalment_to_income",
+            "slot": "s:n_b7302ce8149fa65d:2"
+          }
+        ]
+      },
+      "slots": {
+        "s:n_b7302ce8149fa65d:0": 260000.0,
+        "s:n_b7302ce8149fa65d:2": 0.33
+      },
+      "on_true": "n_e83017bd6f2c94a5",
+      "on_false": "l_f47c81b2e50a9d63"
+    },
+    {
+      "node_key": "n_5c92b70e4a13fd28",
+      "author_label": "L5 amount floor, prime",
+      "condition": {
+        "all": [
+          {
+            "op": "ge",
+            "feature": "feat:pre_assessed_amount",
+            "slot": "s:n_5c92b70e4a13fd28:0"
+          },
+          {
+            "op": "linear_ge",
+            "feature": "feat:pre_assessed_amount",
+            "rhs_feature": "feat:current_flex_balance",
+            "coef_slot": "s:n_5c92b70e4a13fd28:1",
+            "const_slot": "s:n_5c92b70e4a13fd28:2"
+          }
+        ]
+      },
+      "slots": {
+        "s:n_5c92b70e4a13fd28:0": 4000000.0,
+        "s:n_5c92b70e4a13fd28:1": 1.5,
+        "s:n_5c92b70e4a13fd28:2": 0.0
+      },
+      "on_true": "n_31ac58f0d27b6e49",
+      "on_false": "n_6b4d2f9138ea07c5"
+    },
+    {
+      "node_key": "n_e83017bd6f2c94a5",
+      "author_label": "L5 amount floor, standard",
+      "condition": {
+        "all": [
+          {
+            "op": "ge",
+            "feature": "feat:pre_assessed_amount",
+            "slot": "s:n_e83017bd6f2c94a5:0"
+          }
+        ]
+      },
+      "slots": {
+        "s:n_e83017bd6f2c94a5:0": 1500000.0
+      },
+      "on_true": "n_6b4d2f9138ea07c5",
+      "on_false": "l_28a6d0c74f13b95e"
+    },
+    {
+      "node_key": "n_31ac58f0d27b6e49",
+      "author_label": "L6 channel split, digital",
+      "condition": {
+        "any": [
+          {
+            "op": "ge",
+            "feature": "feat:app_logins_90d",
+            "slot": "s:n_31ac58f0d27b6e49:0"
+          },
+          {
+            "op": "eq",
+            "feature": "feat:channel_preference_code",
+            "slot": "s:n_31ac58f0d27b6e49:1"
+          }
+        ]
+      },
+      "slots": {
+        "s:n_31ac58f0d27b6e49:0": 3.0,
+        "s:n_31ac58f0d27b6e49:1": 2.0
+      },
+      "on_true": "l_93e15b8a2c60f7d4",
+      "on_false": "l_7a0c64e9b13d582f"
+    },
+    {
+      "node_key": "n_6b4d2f9138ea07c5",
+      "author_label": "L6 channel split, SMS",
+      "condition": {
+        "all": [
+          {
+            "op": "le",
+            "feature": "feat:prior_offer_declines_6m",
+            "slot": "s:n_6b4d2f9138ea07c5:0"
+          },
+          {
+            "op": "ge",
+            "feature": "feat:sms_response_rate_12m",
+            "slot": "s:n_6b4d2f9138ea07c5:1"
+          }
+        ]
+      },
+      "slots": {
+        "s:n_6b4d2f9138ea07c5:0": 1.0,
+        "s:n_6b4d2f9138ea07c5:1": 0.04
+      },
+      "on_true": "l_cf2839a54e0b761d",
+      "on_false": "l_16d7b0f3928ac54e"
+    }
+  ],
+  "leaves": [
+    {
+      "leaf_key": "l_b82e47c105d3f69a",
+      "leaf_outcome_code": 0,
+      "offer_tier_code": null,
+      "reason_label": 4101,
+      "amount_rule": "none",
+      "channel_pref": [],
+      "priority_weight": 0.0
+    },
+    {
+      "leaf_key": "l_0d59a3f6c8b71e42",
+      "leaf_outcome_code": 0,
+      "offer_tier_code": null,
+      "reason_label": 4207,
+      "amount_rule": "none",
+      "channel_pref": [],
+      "priority_weight": 0.0
+    },
+    {
+      "leaf_key": "l_f47c81b2e50a9d63",
+      "leaf_outcome_code": 0,
+      "offer_tier_code": null,
+      "reason_label": 4312,
+      "amount_rule": "none",
+      "channel_pref": [],
+      "priority_weight": 0.0
+    },
+    {
+      "leaf_key": "l_28a6d0c74f13b95e",
+      "leaf_outcome_code": 0,
+      "offer_tier_code": null,
+      "reason_label": 4415,
+      "amount_rule": "none",
+      "channel_pref": [],
+      "priority_weight": 0.0
+    },
+    {
+      "leaf_key": "l_93e15b8a2c60f7d4",
+      "leaf_outcome_code": 1,
+      "offer_tier_code": 1,
+      "reason_label": 5102,
+      "amount_rule": "capped_preassessment",
+      "amount_cap_cents": 25000000,
+      "channel_pref": [
+        4,
+        3
+      ],
+      "priority_weight": 0.86
+    },
+    {
+      "leaf_key": "l_7a0c64e9b13d582f",
+      "leaf_outcome_code": 1,
+      "offer_tier_code": 1,
+      "reason_label": 5103,
+      "amount_rule": "capped_preassessment",
+      "amount_cap_cents": 25000000,
+      "channel_pref": [
+        2,
+        1
+      ],
+      "priority_weight": 0.81
+    },
+    {
+      "leaf_key": "l_cf2839a54e0b761d",
+      "leaf_outcome_code": 1,
+      "offer_tier_code": 2,
+      "reason_label": 5204,
+      "amount_rule": "capped_preassessment",
+      "amount_cap_cents": 12000000,
+      "channel_pref": [
+        1,
+        4
+      ],
+      "priority_weight": 0.58
+    },
+    {
+      "leaf_key": "l_16d7b0f3928ac54e",
+      "leaf_outcome_code": 1,
+      "offer_tier_code": 3,
+      "reason_label": 5307,
+      "amount_rule": "capped_preassessment",
+      "amount_cap_cents": 6000000,
+      "channel_pref": [
+        4
+      ],
+      "priority_weight": 0.34
+    }
+  ],
+  "source_export": {
+    "tool": "treefit",
+    "tool_version": "4.2.1",
+    "export_sha256": "3a91c0f4e27b58d6118ac93f0e4b7256d8c1f0a3b96e24587dcb1fa0e63925c7",
+    "exported_at": "2026-08-19T11:04:22Z",
+    "sample_window": [
+      "2024-08-01",
+      "2026-07-31"
+    ],
+    "fitted_by": "campaign_analytics.n.mokoena"
+  },
+  "_comment": "v12 differs from v11 in EXACTLY ONE NUMBER: node 6's discretionary_income threshold, 220000 cents -> 260000 cents, folding volume dial OV-2026-114 into the tree at the forum's request. Observe the three consequences, which are the whole design in one diff: (1) node 6's node_key changes, because identity covers the literal - March and April node-6 volumes are now visibly incomparable, which is spec 5.4.3 req 1; (2) every OTHER node key is byte identical, because identity has no ancestry - spec 5.4.3 req 3; (3) shape_fingerprint is UNCHANGED, so the artefact cache hits and nothing compiles - publication takes ninety seconds and no engineer is involved."
+}

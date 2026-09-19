@@ -1,0 +1,91 @@
+{
+  "$schema": "decider2://interior/waterfall/1",
+  "module": "cap_register",
+  "version": "2026-Q3.2",
+  "effective_from": "2026-07-01",
+  "effective_to": "2026-09-30",
+  "rule_count": 52,
+  "_comment": "Eight of the 52 rules. Sequence position is the `seq` field, NOT the array order, so a reorder is a diff on 52 integers rather than a 52-element array move -- which is what makes a four-team quarterly reorder reviewable. Duplicate or missing seq values fail interior validation.",
+  "rules": [
+    {
+      "rule_id": "CAP-0010", "seq": 1, "owner": "product", "class": "product",
+      "description": "Product maximum for Flex Loan.",
+      "acts_on": "amount_cap", "effect": {"reduce_to": {"param": "product_maximum"}},
+      "when": {"always": true},
+      "effective_from": "2024-01-01", "effective_to": "2099-12-31",
+      "approval_reference": "PRD-2024-002"
+    },
+    {
+      "rule_id": "CAP-0025", "seq": 2, "owner": "product", "class": "product",
+      "description": "Flex Loan is not written on a closed channel.",
+      "acts_on": null, "effect": {"decline": {"reason_code": 1102}},
+      "when": {"predicate": "channel_in", "args": {"values": [6]}},
+      "effective_from": "2026-03-01", "effective_to": "2099-12-31",
+      "approval_reference": "PRD-2026-017"
+    },
+    {
+      "rule_id": "CAP-0100", "seq": 3, "owner": "credit_risk_policy", "class": "appetite",
+      "description": "Maximum amount by risk grade, from the appetite grid.",
+      "acts_on": "amount_cap",
+      "effect": {"reduce_to": {"table": "appetite_grid", "value": "max_amount",
+                               "keys": ["risk_grade", "segment_code", "product_code"]}},
+      "when": {"always": true},
+      "effective_from": "2026-07-01", "effective_to": "2026-12-31",
+      "approval_reference": "CC-2026-09"
+    },
+    {
+      "rule_id": "CAP-0118", "seq": 4, "owner": "credit_risk_policy", "class": "appetite",
+      "description": "Maximum term by risk grade. Grades 1-4 84, 5-7 72, 8-9 60, 10-11 36.",
+      "acts_on": "term_cap",
+      "effect": {"reduce_to": {"table": "appetite_grid", "value": "max_term",
+                               "keys": ["risk_grade", "segment_code", "product_code"]}},
+      "when": {"always": true},
+      "effective_from": "2026-07-01", "effective_to": "2026-12-31",
+      "approval_reference": "CC-2026-09"
+    },
+    {
+      "rule_id": "CAP-0140", "seq": 9, "owner": "product", "class": "policy",
+      "description": "A first loan to a new-to-bank client is capped at R60 000.",
+      "acts_on": "amount_cap", "effect": {"reduce_to": {"param": "new_to_bank_first_loan_cap"}},
+      "when": {"predicate": "new_to_bank"},
+      "effective_from": "2025-04-01", "effective_to": "2099-12-31",
+      "approval_reference": "PRD-2025-031"
+    },
+    {
+      "rule_id": "CAP-0210", "seq": 17, "owner": "credit_risk_policy", "class": "policy",
+      "description": "Arrears history. Any account 3+ months in arrears in the last 12 caps at R40 000 and tightens to grade 8; any 2-month arrears in the last 24 caps at R120 000 and tightens to grade 9.",
+      "acts_on": ["amount_cap", "worst_acceptable_grade"],
+      "tiers": [
+        {"when": {"predicate": "arrears_in_window",
+                  "args": {"min_arrears_months": 3, "window_months": 12}},
+         "effect": {"amount_cap": {"reduce_to": {"param": "severe_arrears_cap"}},
+                    "worst_acceptable_grade": {"tighten_to": 8}}},
+        {"when": {"predicate": "arrears_in_window",
+                  "args": {"min_arrears_months": 2, "window_months": 24}},
+         "effect": {"amount_cap": {"reduce_to": {"param": "moderate_arrears_cap"}},
+                    "worst_acceptable_grade": {"tighten_to": 9}}}
+      ],
+      "tier_order": "first_match",
+      "effective_from": "2026-04-01", "effective_to": "2027-03-31",
+      "approval_reference": "CC-2026-04"
+    },
+    {
+      "rule_id": "CAP-0361", "seq": 38, "owner": "credit_systems", "class": "exposure",
+      "description": "Group exposure headroom: the group limit less existing internal exposure.",
+      "acts_on": "amount_cap",
+      "effect": {"reduce_to": {"predicate": "group_exposure_headroom"}},
+      "when": {"always": true},
+      "effective_from": "2024-01-01", "effective_to": "2099-12-31",
+      "approval_reference": "CS-2024-011"
+    },
+    {
+      "rule_id": "CAP-0420", "seq": 52, "owner": "credit_committee", "class": "campaign",
+      "description": "Pre-approved campaign uplift. The one rule permitted to raise a cap.",
+      "acts_on": "amount_cap",
+      "effect": {"raise_to_bounded": {"authority": "CAP-0420"}},
+      "when": {"predicate": "campaign_authorised"},
+      "effective_from": "2026-01-01", "effective_to": "2026-12-31",
+      "approval_reference": "CC-2026-14"
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+# Settlement discount authority grid — bucket x recovery band x authority level.
+# Owner: Credit Risk Policy. Quarterly. Version 14, effective 2026-07-01.
+# NOT an overlay surface (overlays/surfaces.py).
+#
+# `max_discount_pct` is the maximum discount on the outstanding balance that the
+# named authority level may approve. `instalment_variant_penalty_pp` is the
+# reduction in percentage points where settlement is taken over three instalments
+# within 90 days rather than immediately (spec §5.7).
+#
+# recovery_band 1 = highest expected recovery, 6 = lowest. Where recovery_band is
+# `*` the discount does not vary by it; the bands exist to stop a high-recovery
+# account in bucket 8 being settled at 75% because the bucket says so.
+#
+# Buckets 1-3 have no settlement authority at any level, and the absence of a row
+# is NOT how that is expressed — Grid.validate requires total coverage, so the
+# zero rows below are explicit.
+#
+bucket,recovery_band,authority_level,max_discount_pct,requires_justification,instalment_variant_penalty_pp,requires_l3_pre_prescription
+1,*,L1,0,false,0,false
+1,*,L2,0,false,0,false
+1,*,L3,0,false,0,false
+1,*,L4,0,false,0,false
+2,*,L1,0,false,0,false
+2,*,L2,0,false,0,false
+2,*,L3,0,false,0,false
+2,*,L4,0,false,0,false
+3,*,L1,0,false,0,false
+3,*,L2,0,false,0,false
+3,*,L3,5,true,8,false
+3,*,L4,10,true,8,false
+4,*,L1,5,true,8,true
+4,*,L2,10,true,8,true
+4,*,L3,15,true,8,true
+4,*,L4,20,true,8,true
+4,1-2,L1,3,true,8,true
+4,1-2,L2,6,true,8,true
+5,*,L1,10,true,8,true
+5,*,L2,15,true,8,true
+5,*,L3,22,true,8,true
+5,*,L4,30,true,8,true
+5,1-2,L1,6,true,8,true
+5,1-2,L2,10,true,8,true
+5,6,L4,36,true,8,true
+6,*,L1,15,true,8,true
+6,*,L2,22,true,8,true
+6,*,L3,30,true,8,true
+6,*,L4,40,true,8,true
+6,1-2,L1,9,true,8,true
+6,1-2,L2,14,true,8,true
+6,6,L4,48,true,8,true
+7,*,L1,25,true,8,true
+7,*,L2,35,true,8,true
+7,*,L3,45,true,8,true
+7,*,L4,55,true,8,true
+7,1-2,L1,15,true,8,true
+7,1-2,L2,22,true,8,true
+7,6,L4,62,true,8,true
+8,*,L1,40,true,8,true
+8,*,L2,50,true,8,true
+8,*,L3,62,true,8,true
+8,*,L4,75,true,8,true
+8,1-2,L1,25,true,8,true
+8,1-2,L2,34,true,8,true
+8,1,L3,45,true,8,true
+8,6,L4,82,true,8,true

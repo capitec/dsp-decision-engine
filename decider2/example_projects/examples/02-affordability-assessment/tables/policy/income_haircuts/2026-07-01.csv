@@ -1,0 +1,51 @@
+# income_haircuts
+# owner: credit_risk_policy   effective_from: 2026-07-01   approval: CRP-2026-Q3-004
+# REGULATORY CHANGE: effective 2026-09-23, tier 1 and 2 NOT_PERMITTED for pensioners (type 4) per regulator mandate.
+# Minimum haircut for pensioners raised to 10% (was 0% at tier 6).
+#
+# 6 tiers x 6 employment types = 36 cells, six of which are NOT_PERMITTED.
+# NOT_PERMITTED is not a haircut of 100%: it removes the tier from the evidence
+# contest in modules/income/waterfall.py, which produces a fall-through to a
+# weaker tier and a different evidence trail. A float column with -1 as a
+# sentinel would make that unrepresentable, which is why the behaviour is its
+# own column.
+#
+# employment_type_code: 1 permanent, 2 contract, 3 self-employed,
+#                       4 pensioner, 5 social grant, 6 informal
+income_source_tier,employment_type_code,behaviour,haircut_pct
+1,1,PCT,0.00
+1,2,PCT,0.02
+1,3,NOT_PERMITTED,
+1,4,NOT_PERMITTED,
+1,5,NOT_PERMITTED,
+1,6,NOT_PERMITTED,
+2,1,PCT,0.00
+2,2,PCT,0.03
+2,3,NOT_PERMITTED,
+2,4,NOT_PERMITTED,
+2,5,NOT_PERMITTED,
+2,6,NOT_PERMITTED,
+3,1,PCT,0.02
+3,2,PCT,0.05
+3,3,PCT,0.12
+3,4,PCT,0.10
+3,5,PCT,0.00
+3,6,PCT,0.15
+4,1,PCT,0.05
+4,2,PCT,0.08
+4,3,PCT,0.18
+4,4,PCT,0.10
+4,5,PCT,0.00
+4,6,PCT,0.22
+5,1,PCT,0.15
+5,2,PCT,0.20
+5,3,PCT,0.30
+5,4,PCT,0.15
+5,5,NOT_PERMITTED,
+5,6,NOT_PERMITTED,
+6,1,PCT,0.25
+6,2,PCT,0.30
+6,3,PCT,0.40
+6,4,PCT,0.10
+6,5,PCT,0.00
+6,6,PCT,0.35
