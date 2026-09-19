@@ -1,0 +1,11 @@
+# Channel Operations owns this.  Monthly cadence.  Scenario 7: outbound call
+# capacity falls from 260 000 to 150 000 for three months while a site relocates.
+# That is ONE VALUE in this file.  No campaign changes, no tree changes, no
+# recompile; `Arbitration` reallocates and the value of the refused demand is
+# reported to the campaign forum.
+channel_code,channel,monthly_capacity,daily_cap,per_client_cap_30d,cost_per_contact_cents,effective_from,effective_to,owner
+1,sms,4000000,260000,2,19,2026-09-01,,channel_operations
+2,outbound_call,260000,13000,1,1480,2026-09-01,2026-09-30,channel_operations
+2,outbound_call,150000,7500,1,1480,2026-10-01,2026-12-31,channel_operations
+3,email,6500000,400000,4,4,2026-09-01,,channel_operations
+4,in_app,999999999,999999999,6,0,2026-09-01,,channel_operations

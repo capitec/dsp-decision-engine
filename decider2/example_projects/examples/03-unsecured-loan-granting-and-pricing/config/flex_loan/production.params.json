@@ -1,0 +1,73 @@
+{
+  "$schema": "decider2://params/1",
+  "_comment": "Explicit and complete. Every parameter stated, none inherited from a code default -- so 'what were the parameters on 3 March' answers from this file alone. Produced by `decider export --params` and reviewed as a diff. `owner` is not in this document: it is declared on the param in code and drives CODEOWNERS, so a product manager's pull request touching `compliance.*` is rejected by the repository rather than by a reviewer's memory.",
+  "origin_hint": "file:config/flex_loan/production.params.json",
+  "shared": {
+    "product_code": 10,
+    "product_minimum": "2000.00",
+    "product_maximum": "500000.00",
+    "rounding_unit": "100.00",
+    "rounding_direction": "down"
+  },
+  "eligibility": {},
+  "consent": {},
+  "fraud_disposition": {
+    "bypass_amount_ceiling": "15000.00",
+    "bypass_tenure_floor": 24.0
+  },
+  "bureau_quality": {
+    "staleness_tolerance_days": 45
+  },
+  "segment": {
+    "challenger_share": 0.10
+  },
+  "calibration": {
+    "points_to_double_odds": 20.0,
+    "anchor_score": 600.0,
+    "anchor_odds": 30.0
+  },
+  "cap_register": {
+    "product_maximum": "500000.00",
+    "new_to_bank_first_loan_cap": "60000.00",
+    "severe_arrears_cap": "40000.00",
+    "moderate_arrears_cap": "120000.00",
+    "enquiry_velocity_cap": "30000.00",
+    "watchlist_employer_cap": "50000.00",
+    "uplift_maximum": 1.25,
+    "uplift_authority_ceiling": "250000.00"
+  },
+  "fees": {
+    "base": "180.00",
+    "marginal_rate": 0.10,
+    "ceiling": "1350.00",
+    "threshold": "1000.00",
+    "fee_excl_tax": "72.00",
+    "tax_rate": 0.15
+  },
+  "instalment": {
+    "tighten": 2
+  },
+  "max_affordable_amount": {
+    "probes": 24
+  },
+  "minimum_viable_offers": {
+    "minimum_offer_amount": "2000.00",
+    "minimum_instalment": "150.00",
+    "total_cost_ratio_threshold": 1.85,
+    "effective_rate_suppression_ceiling": 0.6000
+  },
+  "deduplicate": {
+    "instalment_tolerance": 0.02
+  },
+  "objective_index": {
+    "recommendation_objective": 1
+  },
+  "best_expected_value": {
+    "lgd": 0.72,
+    "average_ead": 0.55,
+    "funding_cost": 0.0875
+  },
+  "reasons": {
+    "reasons_communicated": 4
+  }
+}

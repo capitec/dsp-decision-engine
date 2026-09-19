@@ -1,0 +1,66 @@
+{
+  "$comment": [
+    "Action precedence. Seven rows, five tie-break levels, two override kinds.",
+    "",
+    "It is a DOCUMENT rather than Python for two reasons, and only the second is",
+    "about machinery. First: spec Q7 asks for precedence 'as something an",
+    "analyst can read and a regulator can be shown, rather than as ordering",
+    "logic', and a five-level tie-break written as nested ifs is precisely the",
+    "artefact doc 04 s6 says a reviewer cannot verify. Second: it is a",
+    "lexicographic argmax over fixed integer columns, which passes doc 08 s3.4's",
+    "generic-kernel test, so changing it costs no compile at all.",
+    "",
+    "Spec s6.3 calls changing this 'a major event'. It is: two approvers, an",
+    "impact report and a board note. What it is not is a deployment."
+  ],
+  "document": "precedence",
+  "precedence_version": 11,
+  "effective_from": "2026-01-01T00:00:00Z",
+  "owner": {"team": "fraud-leadership", "individual": "h.abrahams"},
+  "approval": {"author": "h.abrahams", "approvers": ["c.vandermerwe", "m.jacobs"],
+               "approved_at": "2025-12-11T09:00:00Z", "impact_ref": "IMP-2025-1210-07"},
+
+  "actions": [
+    {"rank": 1, "code": 70, "name": "freeze_account",  "client_visible": true,  "notify": true},
+    {"rank": 2, "code": 60, "name": "block_channel",   "client_visible": true,  "notify": true},
+    {"rank": 3, "code": 50, "name": "decline",         "client_visible": true,  "notify": true},
+    {"rank": 4, "code": 40, "name": "hold_for_review", "client_visible": true,  "notify": true},
+    {"rank": 5, "code": 30, "name": "step_up",         "client_visible": true,  "notify": false},
+    {"rank": 6, "code": 20, "name": "monitor",         "client_visible": false, "notify": false},
+    {"rank": 7, "code": 10, "name": "allow",           "client_visible": false, "notify": false}
+  ],
+
+  "stages": [
+    {"stage": 1, "name": "hard_block_floor",
+     "rule": "resolved action rank may not exceed hard_block_action_floor rank",
+     "overridable_by": null},
+
+    {"stage": 2, "name": "critical_binding",
+     "rule": "a fired rule with critical=true takes its action even where a less severe action would otherwise have won",
+     "overridable_by": null},
+
+    {"stage": 3, "name": "critical_allow_suppression",
+     "rule": "a fired critical rule with action=allow suppresses all non-critical firings in the families named by its critical_allow_families",
+     "note": "Suppressed firings are still RECORDED in live_fire_bits. They are removed from the resolution, not from the evidence."},
+
+    {"stage": 4, "name": "critical_collision",
+     "rule": "two or more fired critical rules asking for different actions: the more severe wins",
+     "emit": "governance_exception",
+     "route_to": "both_owners"},
+
+    {"stage": 5, "name": "most_severe",
+     "rule": "the most severe action among the remaining firings"},
+
+    {"stage": 6, "name": "tie_break",
+     "keys": [
+       {"field": "severity",          "dir": "desc"},
+       {"field": "priority",          "dir": "asc"},
+       {"field": "family_precedence", "dir": "asc", "source": "params.family_precedence"},
+       {"field": "rule_id",           "dir": "asc"}
+     ],
+     "note": "rule_id last guarantees determinism; the three before it guarantee it is not arbitrary."}
+  ],
+
+  "record": {"runners_up": 2, "record_discriminating_stage": true,
+             "record_counterfactual": true}
+}

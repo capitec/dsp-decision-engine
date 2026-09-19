@@ -67,6 +67,12 @@ and a `scorecard` are evaluated by a generic kernel rather than codegen
 (doc 08 §3.4). What stays open is the authoring and validation surface, and how a
 UI edits a table cell-wise.
 
+**The cost of leaving it "provisional" is now measured.** Seven of eleven mock
+projects needed a keyed lookup and spelled it **six different ways** — `Table`,
+`table`, `dated_table`, `versioned_table`, `lookup_table`, `bound_table`, plus
+`temporal_table`/`IntervalStore` ([COLD-READ.md](../example_projects/COLD-READ.md) §3.2). Tables are the second
+most-invented gap after nesting, and the one business users most want to edit.
+
 ### O15 — The interior document schema
 **New, from doc 08 §3.** The `when`/`then` sketch there is illustrative. The real
 schema is `flat_rules`' closed algebra — `LeafRule`, `UnaryRule`, `CasesRule`
@@ -127,6 +133,34 @@ that a real pipeline trips it constantly and authors learn to qualify reflexivel
 which would make the error noise rather than signal. Count the occurrences on a
 realistic pipeline before shipping it as an error rather than a warning.
 
+### O21 — Change class per FIELD, not per document
+**New, from [COLD-READ.md](../example_projects/COLD-READ.md) §6 Tier 1.** Doc 08 §2's three classes classify *documents*.
+The maintainer persona showed the work needs them to classify **fields**: a rule's
+`applies_to.segments` decides *who a control applies to* — at least as
+governance-sensitive as a threshold — and it falls through the gap, appearing in
+neither `shape_projection` nor the dated params entries. The framework should
+**refuse a rule document containing a field with no declared change class.**
+Corroborated independently by five sketches in `examples/FINDINGS.md` §2.1.
+
+### O22 — Lineage must descend into interiors
+**New, from [COLD-READ.md](../example_projects/COLD-READ.md) §1.1.** Four of six traces died at exactly the same
+architectural joint: `pipeline.lineage("action_code")` stops at the `ruleset(...)`
+box. Doc 04 §3 promises lineage answers questions "without running anything"; doc
+08 §3 puts the rules a business user edits *inside* that box. The two meet at a
+wall. Every interior kind needs to supply `lineage()` and `render()` over its rows,
+or the governance promise stops exactly where the governed content lives.
+
+### O23 — An unbound name is invisible to every check that currently runs
+**New, from [COLD-READ.md](../example_projects/COLD-READ.md) §1.1.** Five of six readers found a name with no producer
+anywhere in the tree — `overlay_scope_restriction_bits`, `rate_card.Lookup`,
+`FallbackGrade`, `ExecutionPackage`, `shipped_offer` — and **every one passed
+`ast.parse`**. Doc 03 §2.2 already treats an unbound *step parameter* as a typo;
+the evidence says that check must extend to `Branch` arms, `writes=` targets,
+`isolates(may_read=…)` names, interior file references and cross-phase seed
+strings. Name-based wiring (doc 03 §2) is the design's best asset precisely
+because names are greppable — and its failure mode is that an unbound name looks
+exactly like a bound one.
+
 ### O17 — Approval granularity
 **New.** Does activating a staged generation need per-rule approval, or is
 document-level enough? Framework-neutral — but it decides whether a rule carries
@@ -138,12 +172,19 @@ at *build* time only? Probably yes and probably the common case: UI-authored
 rules, compiled in CI, shipped in the image, with no compiler in production. If
 so it should be the default and `live` the exception.
 
-### O5 — Ragged per-record collections
-Deprioritised as workload-specific, but real: the large internal workload
-surveyed in doc 01 enumerates subsets of a
-variable-length candidate list per application. CSR offsets, polars `List`
-columns, or leave it to the author with graceful degradation (the stated
-preference). Deferred until a second workload needs it.
+### O5 — Ragged per-record collections — **UNDEPRIORITISED: the most-invented gap**
+
+Previously deferred "until a second workload needs it". Eleven independent mock
+projects needed it, and invented **nine different names** for it — `grain`,
+`Gather`, `Each`, `Enumerate`, `Map`, `Collection`, `Fanout`, `Explode`, `Cross` —
+across **six** projects ([COLD-READ.md](../example_projects/COLD-READ.md) §3.2). It is the single most-invented gap in
+the set by a wide margin, and a second study using an entirely different method
+(`examples/FINDINGS.md`) found `grain` independently.
+
+A business of entities, each with nested adverse events; a client's candidate
+consolidations; a campaign's tree nodes — nesting is not workload-specific, it is
+the shape of the domain. **Deferring it did not avoid the cost; it distributed
+it.** Give it one name and a lineage story before anything is built on top of it.
 
 ### ~~O14 — Does the calling convention survive width?~~ — **SETTLED by E9**
 
@@ -373,12 +414,35 @@ right rung.
 **Would invalidate:** `stepped` as a distinct mode, if it never catches anything
 `interpreted` does not.
 
-### E4 — The reviewable artefact
-Settles **O3**, and is the highest-risk-of-silent-failure item. Render a
-realistic waterfall module — ordered steps, descriptions, declared inputs and
-outputs, params with bounds, value-version chain — and **put it in front of an
-actual credit-risk or compliance reviewer** with a policy document, then see
-whether they can verify it unaided. No amount of internal opinion substitutes.
+### E4 — The reviewable artefact — **now has a starting point and a second task**
+Settles **O3**, and is the highest-risk-of-silent-failure item. Put a rendered
+artefact in front of an **actual credit-risk or compliance reviewer** with a policy
+document and see whether they can verify it unaided. No internal opinion substitutes.
+
+**Two changes from the cold-read study ([COLD-READ.md](../example_projects/COLD-READ.md) §5.1).**
+
+**Start from `examples/01-transaction-fraud-interdiction/artefacts/rule-sheet-MS-0208.md`.**
+It is the best artefact produced anywhere in that exercise and is closer to solved
+than doc 04 §6 assumes: it renders authored value *and* in-force value side by side
+with the reason they differ, names the overlay, its approvers and its expiry,
+distinguishes a threshold change from a shape change with different approval
+routes, states per-feature missing-input behaviour, and is **sized for 635 rules**
+— a one-page sheet per rule with a table as the index, rather than a waterfall
+diagram that does not scale.
+
+**Add a second task: ask the reviewer to check a decision record *against* the
+sheet.** That is the test that just failed. The same project's
+`decision-record.example.json` claims an overlay caused a rule to fire; checking
+all four predicates against all three threshold vintages by hand shows the rule
+fires identically either way, and the file's own prose contradicts its own field.
+Reading the sheet is necessary; **reconciling it against an actual decision is what
+governance requires**, and nothing in the current brief tests it.
+
+> **The starkest number in the study: 9 of 11 independent designers, each given a
+> spec demanding reviewability and told to design the surface they wished existed,
+> produced no reviewer-facing artefact at all.** Treat O3 as *unstarted* rather
+> than as weak — non-production is invisible to a satisfaction score and obvious to
+> a reader who goes looking for it.
 
 ### ~~E5 — Cross-module fusion~~ — **DONE**
 Settled O7. Every composition mechanism in doc 03 §4 verified: N distinct params

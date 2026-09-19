@@ -1,0 +1,12 @@
+country_code,iso_alpha3,name,risk_band,sanctions_adjacent,cnp_risk_band,effective_from,effective_to,changed_by,change_ref
+710,ZAF,South Africa,1,false,1,2026-01-01,,c.vandermerwe,CR-2026-01
+826,GBR,United Kingdom,1,false,1,2026-01-01,,c.vandermerwe,CR-2026-01
+840,USA,United States,1,false,2,2026-01-01,,c.vandermerwe,CR-2026-01
+566,NGA,Nigeria,4,false,4,2026-01-01,,c.vandermerwe,CR-2026-01
+586,PAK,Pakistan,4,false,4,2026-01-01,,c.vandermerwe,CR-2026-01
+764,THA,Thailand,3,false,4,2026-01-01,,c.vandermerwe,CR-2026-01
+704,VNM,Viet Nam,3,false,4,2026-01-01,,c.vandermerwe,CR-2026-01
+643,RUS,Russian Federation,4,true,5,2026-01-01,2026-09-11,c.vandermerwe,CR-2026-01
+643,RUS,Russian Federation,5,true,5,2026-09-12,,c.vandermerwe,CR-2026-09-EMERGENCY
+408,PRK,"Korea, Democratic People's Republic of",5,true,5,2026-01-01,,c.vandermerwe,CR-2026-01
+364,IRN,"Iran, Islamic Republic of",5,true,5,2026-01-01,,c.vandermerwe,CR-2026-01

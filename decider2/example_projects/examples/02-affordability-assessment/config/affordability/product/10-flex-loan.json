@@ -1,0 +1,44 @@
+{
+  "_document": "params",
+  "_owner_class": "consumer_local",
+  "_owner": "product.flex_loan",
+  "_pipeline": "affordability",
+  "_generated_by": "decider export --params --owner=product.flex_loan",
+  "_note": [
+    "The entire surface a product team may set. Six fields.",
+    "",
+    "That number is the answer to spec question 1: one calculation serves five",
+    "consumers without 'a parameter surface so wide that every consumer configures",
+    "a different calculation', because the consumer-facing surface is SIX FIELDS",
+    "and the other ~40 tunables are not merely discouraged -- they are not",
+    "emitted into this file and are rejected if written into it.",
+    "",
+    "A product team that needs a seventh field files a request against",
+    "credit-core. That is friction, and it is the right friction: every previous",
+    "widening of an interface started with somebody adding one field quietly."
+  ],
+
+  "product_code": 10,
+  "assessment_mode": "new_application",
+
+  "income": {
+    "weakest_permitted_tier": 4,
+    "weak_tier_max_share": 0.15
+  },
+
+  "obligations": {
+    "materialise_annotation": false
+  },
+
+  "outputs": {
+    "shape": "verdict_against_proposed_instalment"
+  },
+
+  "_rejected_examples": {
+    "_note": "Written here as documentation of what this file cannot contain. Each is a real error message.",
+    "expenses.absolute_ceiling_cents": "owner_class=policy. Owned by credit_risk_policy. Ask them.",
+    "deductions.paye_table_override": "owner_class=statutory. Owned by credit_systems, transcribing the gazette. Unreachable from a product configuration.",
+    "capacity.buffer_grid_name": "profile-bound. Set by the assessment mode (policy/modes.py), not by a product.",
+    "steps": "composition key. `resolve_params` rejects any document carrying `use`, `type`, `steps`, `arms` or `modifies` (doc 08 2.1)."
+  }
+}

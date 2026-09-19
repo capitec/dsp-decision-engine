@@ -1,0 +1,13 @@
+{
+  "artefact": "uif",
+  "owner": "credit_systems",
+  "owner_class": "statutory",
+  "effective_from": "2026-03-01",
+  "effective_to": null,
+  "content_hash": "sha256:1d03bb7f4e6a9c25801fbb3ca7e0d419852f6b3d0c47ae91f2b5804d6ec3a177",
+  "approval_reference": "COMP-2026-002",
+  "rate": 0.01,
+  "monthly_ceiling_cents": 17712,
+  "not_payable_on_employment_types": [4, 5],
+  "note": "The ceiling applies PER EMPLOYER. With two employers the household contribution can legitimately exceed 17712 cents. A single multiplication against household gross is wrong by up to one ceiling, and that is the defect spec 11.7 describes."
+}

@@ -1,0 +1,63 @@
+{
+  "//": "INTERIOR DOCUMENT for the data-shaped module `search.objective` (search/select.py).",
+  "//1": "Owned by the Credit Committee. Changing a weight is an INTERIOR change - staged compile,",
+  "//2": "no release, no engineer. It changes which scenario wins with every rule identical.",
+  "//3": "`measure` ids resolve through the registry to @measure steps in search/measures.py.",
+  "//4": "An id that is not registered fails validation with a did-you-mean, before any compile.",
+
+  "objective_set_id": "OBJ-2026-Q3",
+  "effective_from": "2026-07-01",
+  "effective_to": "2026-09-30",
+  "approval_ref": "CC-2026-07-03",
+
+  "measures": {
+    "OBJ-01": {"measure": "consol:new_money_ratio",        "description": "New money released, as a ratio of the requested amount."},
+    "OBJ-02": {"measure": "consol:commitment_ratio",       "description": "New instalment plus retained obligations, as a ratio of the baseline total commitment. Lower is better; the measure is expressed as 1 - ratio so every measure is maximised."},
+    "OBJ-03": {"measure": "consol:total_cost_ratio",       "description": "New total cost of credit plus retained remaining cost, as a ratio of the baseline total remaining cost. Expressed as 1 - ratio."},
+    "OBJ-04": {"measure": "consol:incremental_value_ratio","description": "The Bank's INCREMENTAL expected value: margin over cost of funds across expected life, less expected loss, LESS the margin forgone on the Bank's own accounts this scenario settles. Divided by the baseline exposure."},
+    "OBJ-05": {"measure": "consol:client_outcome",         "description": "Weighted score over instalment relief ratio, total cost increase ratio (negatively), proportion of accounts exited, reduction in weighted average rate, and reduction in provider count."}
+  },
+
+  "blends": [
+    {
+      "scope": {"channel_code": [1], "assessment_mode_code": [1, 2]},
+      "scope_name": "branch, consolidation on request or offered",
+      "weights": {"OBJ-01": 0.10, "OBJ-02": 0.60, "OBJ-03": 0.20, "OBJ-04": 0.05, "OBJ-05": 0.05},
+      "weights_note": "Post rate-increase weighting. Instalment relief at 0.6 is the overlay target named in the Q3 re-weight (overlays/register.json ADJ-OBJ-011); the BASE weights for this scope are OBJ-01 0.30 / OBJ-02 0.40 / OBJ-03 0.20 / OBJ-04 0.05 / OBJ-05 0.05 and both must appear in the selection record."
+    },
+    {
+      "scope": {"channel_code": [3], "assessment_mode_code": [1, 2]},
+      "scope_name": "contact centre",
+      "weights": {"OBJ-01": 0.20, "OBJ-02": 0.40, "OBJ-03": 0.25, "OBJ-04": 0.10, "OBJ-05": 0.05}
+    },
+    {
+      "scope": {"assessment_mode_code": [3]},
+      "scope_name": "restructure - sustainability, not appetite",
+      "weights": {"OBJ-05": 0.55, "consol:sustainability_12m": 0.45},
+      "constraint": {
+        "measure": "consol:expected_loss_vs_do_nothing",
+        "op": "le",
+        "value": 0.0,
+        "description": "The Bank's expected loss may not exceed the expected loss under the do-nothing path. Expressed as a CONSTRAINT rather than a negative weight: a constraint invalidates, a weight trades off, and trading this one off is how a restructure book is destroyed."
+      }
+    },
+    {
+      "scope": {"assessment_mode_code": [4]},
+      "scope_name": "batch identification - fixed per run, not per channel",
+      "weights": {"OBJ-02": 0.70, "OBJ-03": 0.30}
+    }
+  ],
+
+  "selection": {
+    "indifference_band_pct": 2.0,
+    "indifference_note": "Where the winner's score exceeds the runner-up's by less than this, both are presented as materially equivalent rather than ranked. A 0.4% difference in a modelled expected value is not a difference a consultant should defend to a client.",
+    "tie_break": ["total_cost_of_credit_asc", "accounts_settled_asc", "scenario_id_asc"],
+    "top_n": 3,
+    "distinct_on": ["settlement_set_mask", "product_code"],
+    "distinct_note": "At most one scenario per (settlement set, product). Three terms of the same product over the same accounts is one alternative presented three times.",
+    "shadow": "OBJ-05",
+    "shadow_note": "Whatever objective is in force, the best scenario under OBJ-05 is also identified and recorded. When the objective in force was OBJ-01 and the client complains, the question asked is 'what was the best outcome available to this client', and the only defensible position is to have known the answer at the time.",
+    "set_relative_measures_permitted": false,
+    "set_relative_note": "Enforced structurally, not by review: @measure steps may not declare a set-shaped input. A min-max scaled measure would make the winner depend on which losers were evaluated, which means the budget tier changes the answer and a replay with a larger budget produces a different winner from the same inputs."
+  }
+}

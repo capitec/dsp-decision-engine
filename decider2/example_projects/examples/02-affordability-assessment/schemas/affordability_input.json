@@ -1,0 +1,80 @@
+{
+  "_schema": "decider2 input schema",
+  "_pipeline": "affordability",
+  "_note": [
+    "`decider build` needs this: column dtypes and NULLABILITY determine the",
+    "record dtype, the numba signature and the float64-vs-Optional choice per",
+    "step (doc 05 8). It is also where the three null situations doc 00 7.4",
+    "distinguishes become machine-checkable -- not collected, collected as zero,",
+    "and could not be established are three different states and this file is",
+    "where they stop being a convention.",
+    "",
+    "`no_fill: true` is this project's addition. It forbids `missing_as(...)` on",
+    "that column anywhere in the pipeline. On `declared_category_cents` the fill",
+    "that makes every downstream step simpler is precisely the bug: a category",
+    "declared as zero and a category not asked are different, and zero across all",
+    "categories is a non-declaration rather than a low-expense applicant."
+  ],
+
+  "reserved": {
+    "decision_date": {
+      "dtype": "date",
+      "nullable": false,
+      "frame_only": true,
+      "producible_by_step": false,
+      "_note": "Nine effective-dated artefacts resolve against this. No step may produce it, so nothing can overwrite it mid-flow. There is no `.latest` accessor anywhere in the tree."
+    }
+  },
+
+  "columns": {
+    "application_id":            {"dtype": "int64",   "nullable": false},
+    "product_code":              {"dtype": "int16",   "nullable": false},
+    "channel_code":              {"dtype": "int8",    "nullable": false},
+    "assessment_mode_code":      {"dtype": "int8",    "nullable": false},
+    "is_joint_application":      {"dtype": "bool",    "nullable": false},
+    "risk_grade":                {"dtype": "int8",    "nullable": true,
+                                  "_note": "null in arrangement and scenario modes; resolves to the WORST grade, never the best"},
+    "bureau_as_of_date":         {"dtype": "date",    "nullable": false},
+    "proposed_instalment_cents": {"dtype": "int64",   "nullable": true,
+                                  "_note": "null when the caller wants shape (b). Null is not zero: zero is a proposal of nothing and passes trivially."},
+
+    "applicant_a_id":            {"dtype": "int64",   "nullable": false},
+    "applicant_b_id":            {"dtype": "int64",   "nullable": true},
+    "app_age_years":             {"dtype": "float64", "nullable": false,
+                                  "_note": "computed at decision_date by the caller, not at load time; the 65th-birthday-this-month case is real"},
+    "employment_type_code":      {"dtype": "int8",    "nullable": false},
+    "months_employed":           {"dtype": "float64", "nullable": true},
+
+    "income_sources":            {"dtype": "list[struct]", "max_len": 6,  "nullable": false,
+                                  "_note": "ragged; empty is legal and produces indeterminate, not zero"},
+    "component_months":          {"dtype": "list[struct]", "max_len": 12, "nullable": false, "nested_in": "income_sources"},
+    "employers":                 {"dtype": "list[struct]", "max_len": 4,  "nullable": false,
+                                  "_note": "the unemployment insurance ceiling applies per element, not to the sum"},
+    "expense_categories":        {"dtype": "list[struct]", "max_len": 14, "nullable": false},
+    "raw_accounts":              {"dtype": "list[struct]", "max_len": 105, "nullable": false,
+                                  "_note": "bureau (0..80) ++ internal (0..25), before dedup"},
+    "settlement_quotes":         {"dtype": "list[struct]", "max_len": 80, "nullable": false},
+    "court_orders":              {"dtype": "list[struct]", "max_len": 6,  "nullable": false},
+
+    "declared_category_cents":   {"dtype": "int64",   "nullable": true, "no_fill": true,
+                                  "_note": "zero and absent are different and must not be conflated"},
+    "statement_confidence":      {"dtype": "float64", "nullable": true, "no_fill": true,
+                                  "range": [0.0, 1.0],
+                                  "_note": [
+                                    "Spec change scenario 13: the aggregator changes its scale from 0..1 to",
+                                    "0..100 without telling anyone, and every affected assessment is plausible",
+                                    "and wrong. A declared range is what turns that from a silent",
+                                    "haircut-goes-to-zero into a loud boundary rejection on the first record.",
+                                    "It is three lines and it is the cheapest item in this whole design."
+                                  ]},
+    "statement_inflow_months":   {"dtype": "int8",    "nullable": true},
+    "payslip_count":             {"dtype": "int8",    "nullable": true},
+    "employer_is_on_verified_register": {"dtype": "bool", "nullable": true, "no_fill": true,
+                                  "_note": "three states: on the register, not on it, and not checked. A fill of false conflates the last two and silently downgrades a tier-1 applicant."}
+  },
+
+  "forbidden": {
+    "Decimal": "raises a Rust panic at the boundary that `except Exception` misses (doc 05 1.5)",
+    "float money": "doc 03 1.2. Every money column in this file is int64 cents. See vocabulary.py for the published-interface projection."
+  }
+}

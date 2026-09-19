@@ -1,0 +1,44 @@
+# Settleability rules. ~200 providers x 6 attributes = 1 200 cells.
+# Owner: Credit Risk Policy, with Settlements. Cadence: monthly, ad hoc on provider change.
+#
+# This is a TABLE (values), not an interior: the classification RULES live in
+# inventory/settleability.py as a nine-way ordered ruleset, and this file supplies
+# the per-provider facts those rules read. The distinction matters because change
+# scenario 7 - "a provider stops issuing settlement quotations, 3 400 accounts change
+# settleability overnight" - must be a free params swap, not a staged compile.
+#
+# UNKNOWN PROVIDER: code 0 is the sentinel and its row is deliberately hostile.
+# Change scenario 13 lands 1.1M acquired accounts with provider codes absent from
+# this table, and they must classify as UNKNOWN (settleability 7) rather than as
+# settleable. A missing row resolves to row 0, never to a default of "yes".
+provider_code,provider_name,issues_third_party_quotation,accepts_third_party_settlement,quotation_turnaround_days,security_release_days,payment_turnaround_days,electronic_exchange,early_settlement_rule_code
+0,UNKNOWN PROVIDER,false,false,99,99,99,false,0
+1,THE BANK (internal),true,true,0,0,0,true,1
+1041,Meridian Personal Finance,true,true,2,0,1,true,2
+1042,Meridian Vehicle Finance,true,true,2,10,1,true,3
+1107,Kestrel Retail Credit,true,true,5,0,3,false,2
+1108,Kestrel Store Card,true,true,5,0,3,false,2
+1203,Aloe Furnishers Credit,true,true,5,0,4,false,2
+1288,Tamboti Micro Lending,false,false,99,0,99,false,0
+1290,Tamboti Payroll Advances,false,false,99,0,99,false,0
+1311,Northvale Building Society,true,true,10,90,7,false,4
+1312,Northvale Vehicle,true,true,10,10,7,false,3
+1404,Silverbrook Card Services,true,true,2,0,1,true,2
+1490,Ridgeway Educational Loans,true,false,10,0,99,false,5
+1501,Umbra Telecoms Credit,false,false,99,0,99,false,0
+1602,Drakensberg Mutual Bond,true,true,10,90,10,false,4
+1770,Fourways Clothing Account,true,true,5,0,3,false,2
+1801,Emoluments Attachment (court),false,false,99,0,99,false,0
+1802,Maintenance Order (court),false,false,99,0,99,false,0
+1900,Revenue Authority,false,false,99,0,99,false,0
+#
+# early_settlement_rule_code resolves into the early settlement charge rules table
+# (6 agreement classes x 5 notice bands x 4 product classes = 120 cells), owned by
+# Compliance and changed only on legislative change:
+#   0 = not settleable, no charge computable
+#   1 = internal, no charge
+#   2 = small agreement, below the large-agreement threshold, no charge arises
+#   3 = large agreement, fixed rate, charge capped at N months' interest where notice not given
+#   4 = mortgage agreement, 90-day cancellation notice - THE SHARP CASE. The notice period is
+#       long enough that the charge is routinely incurred and routinely forgotten.
+#   5 = concessionary terms, settlement permitted but non-consolidatable by policy (CON class 5)
