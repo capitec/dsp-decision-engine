@@ -111,7 +111,7 @@ separate approval). Enforcement is CI and review policy; the framework's job is
 making the line unambiguous enough that policy can attach to it.
 
 > **Correction to an earlier draft.** This section previously credited
-> `decider build --verify` with enforcing config completeness. It does not —
+> `decider2 build --verify` with enforcing config completeness. It does not —
 > docs 02 §3.4 and 05 §8 define that flag as a numba-cache assertion and nothing
 > else. Completeness is computable from pydantic's `model_fields_set` and is
 > enforced by `resolve_params(..., complete=True)`; see doc 08 §2.

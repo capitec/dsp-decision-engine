@@ -219,7 +219,7 @@ a **cache HIT and returns the pre-edit answer** (49.39775 instead of 49.29765).
 The index key hashes `co_code`, which excludes `co_consts`.
 
 Doc 05 §4.2 mandates byte-identical deterministic codegen and doc 02 §3.4 stakes
-`decider build --verify` on "zero runtime compilations". **A build that normalises
+`decider2 build --verify` on "zero runtime compilations". **A build that normalises
 mtimes for reproducibility converts a stale-constant bug into a silent
 wrong-decision bug, and `--verify` reports success on it.**
 

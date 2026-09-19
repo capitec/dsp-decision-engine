@@ -30,7 +30,7 @@ pages later) by its correction. `EXPERIMENTS.md` always wins.
 | byte-identical generated source is enough for cache survival | necessary, not sufficient — **seven** conditions, and stale code can be served, **at both the CPython .pyc layer and numba's own cache layer independently, depending on edit shape** | 05 §4.2 → §C, §K, §L, §M |
 | compile in a background worker (read as: thread) | must be a **subprocess** — a thread retains 26–55% of serving throughput, a subprocess 97.9% | 08 §4 → §H, §K |
 | `score(net_income=…, expenses=…, …)` with keyword arguments | at 400 inputs that binds in **1190 µs — 5.95% of a 20 ms budget**. `score()` takes a dict | 02 §3.5 → §N2 |
-| `decider build --verify` enforces config completeness | it does not; it is a compile-count assertion. Completeness is `resolve_params(complete=True)` | 04 §2.1 → REVIEW §3.1 |
+| `decider2 build --verify` enforces config completeness | it does not; it is a compile-count assertion. Completeness is `resolve_params(complete=True)` | 04 §2.1 → REVIEW §3.1 |
 | a param change "provably cannot alter control flow" | false as stated — it cannot alter the **graph**; it absolutely can change which arm a record takes | 04 §2 → REVIEW §3 |
 | `explain_kernels()` should report vectorisation | withdrawn — anti-correlated with performance. This was a *review* proposal, not an original one | 02 §1.2 → §E |
 

@@ -83,7 +83,7 @@ Three mechanisms get there, none of them new machinery:
    the two lines above.
 2. **`param()` in the signature generates the params model** (§4.4). No separate
    model file for the common case.
-3. **The config entry is generated, not written** — `decider export --params`
+3. **The config entry is generated, not written** — `decider2 export --params`
    materialises it complete from the declared defaults (doc 07 §5).
 
 The module-plus-model form (§5) does not go away. It earns its place when several
