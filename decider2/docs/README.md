@@ -16,17 +16,20 @@ carried forward, and where these documents describe `decider`'s behaviour they d
 so as evidence about what a design compels, not as a base to extend. Doc 01 §5 is
 the concentrated version of that evidence.
 
-Ten experiments are defined (E0–E9, doc 06) and **five have been run**: E0, E5,
-E7, E8, E9. Five settled a structural question by measurement; **two returned
-negative results that changed the design** rather than confirming it — fusion
-turned out to be non-monotone, falsifying the stated reason for an authoring
-recommendation, and a null-handling performance claim written into doc 01 proved
-backwards. Both corrections are recorded in place rather than quietly fixed.
+**Fifteen experiments have now been run against real numba** (EXPERIMENTS.md).
+Most refuted or partially refuted a documented claim, and several changed a design
+decision rather than a number: fusion and `prange` became authored rather than
+inferred, per-node fallback turned out to be impossible inside a fused driver, the
+output convention moved to dtype-grouped 2D arrays, chunking became mandatory, and
+the compile lifecycle moved from a thread to a subprocess. Every correction is
+recorded in place rather than quietly fixed.
 
 Still to run: **E1** (the polars↔numba boundary, "the one to build first"), E2
 (the graph model), E3 (the equivalence ladder), E4 (the reviewable artefact —
-people-blocked, and the top risk), E6 (param ergonomics), **E10** (configuration
-lifecycle, doc 08 §9) and **E11** (`param()` in the signature, doc 06).
+people-blocked, and the top risk), E6 (param ergonomics), and **N1–N4**, the
+single-record request path — which doc 01 §6.1 makes the highest-value set, since
+the primary path has a 20–100 ms budget and nothing has measured the framework's
+per-request overhead.
 
 The highest remaining risk is not technical: it is whether a credit-risk reviewer
 can actually verify a rule from the generated view (doc 04 §6). That one is
@@ -102,9 +105,12 @@ Business logic is written as small, pure Python functions over scalars. Function
 are wired into a graph by matching parameter names to other functions' outputs.
 The graph is plain validated data, not generated classes — so it can be rendered,
 diffed and safely edited by tools. Steps compile to a single fused numba kernel
-applied over polars columns; anything numba can't compile degrades to plain
-Python per-node rather than failing. Tunable values live in one validated
+applied over polars columns; a step numba can't compile splits the kernel around
+it rather than failing, since a nopython driver cannot call back into Python
+(EXPERIMENTS.md §B). Tunable values live in one validated
 per-invocation `params` bundle, separate from graph structure, which makes the
 performance boundary and the governance boundary the same boundary. Four
 execution modes share one definition, from fully-fused production to a
 single-record step-through debugger, and their agreement is automatically tested.
+Fusion and parallelism are authored, not inferred — measurement showed no constant
+and no warmup heuristic can decide either one.
