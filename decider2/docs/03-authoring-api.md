@@ -569,11 +569,32 @@ def cap_by_income_band(
     return min(term_cap, cap) if min_net_salary < 5000 else term_cap
 ```
 
-`param()` takes exactly what `Field()` takes. At import the signature is
-harvested into a generated pydantic model — the same object a hand-written model
-produces, with the same namespace (`{"cap_by_income_band": {"cap": 48.0}}`), the
-same validators, the same fixed NamedTuple type, and therefore the same guarantee
-that retuning never recompiles.
+**`param()` is a thin adapter over pydantic's `Field`, not a parallel system.** It
+forwards every keyword verbatim and owns no validation vocabulary of its own:
+
+```python
+def param(default, **field_kwargs):
+    info = Field(default, **field_kwargs)          # pydantic's, untouched
+    return _carrier_for(type(default))(default, info)
+```
+
+```python
+create_model("CapByIncomeBandParams", cap=(float, info), ...)   # the harvest
+```
+
+So `ge`, `le`, `gt`, `multiple_of`, `description`, `alias`, `examples`,
+`deprecated` and anything pydantic adds later all work on day one, with pydantic's
+own error messages — the ones people already know — and **pydantic's JSON Schema
+for free**, which is precisely what a config UI needs to render a form without the
+framework shipping a form description of its own. There is no second validator to
+keep in step with the first, because there is no second validator.
+
+At import the signature is harvested into a generated pydantic model — the same
+object a hand-written model produces, with the same namespace
+(`{"cap_by_income_band": {"cap": 48.0}}`), the same validators, the same fixed
+NamedTuple type, and therefore the same guarantee that retuning never recompiles.
+A hand-written model and a harvested one are indistinguishable downstream; that is
+the property that lets §5.3's growth path be a pure move.
 
 **Why the signature and not the body.** O2 asked whether a literal could become a
 tunable *where it sits* — `p("income_cap", 48.0)` inline. Four reasons the
@@ -599,13 +620,14 @@ signature is the better slot:
 
 - **Two ways to declare a param.** Inline and explicit model must produce the
   same object, and a lint forbids both in one module (doc 07 §6).
-- **`param()` returns a real value, so nothing needs substituting.** `param(48.0,
-  ge=6, le=60)` returns a `float` **subclass** carrying the metadata — likewise
-  `int` and `str`. So `cap_by_income_band(term_cap=60.0, min_net_salary=4000.0)`
-  receives 48.0 and works, with no decorator, no registration and no import-order
-  dependence. The harvester finds params by `isinstance(default, ParamSpec)`;
-  codegen passes real arguments, so numba never sees the sentinel (§E11 confirms
-  the default may stay in place).
+- **`param()` returns a real value, so nothing needs substituting.** The carrier is
+  a **subclass of the default's own type** — `float`, `int`, `str`, `list`, `dict`,
+  `tuple` — holding the `FieldInfo` alongside. So
+  `cap_by_income_band(term_cap=60.0, min_net_salary=4000.0)` receives 48.0 and
+  works, with no decorator, no registration and no import-order dependence. The
+  harvester finds params by `isinstance(default, ParamSpec)`; codegen passes real
+  arguments, so numba never sees the carrier (§E11 confirms the default may stay
+  in place).
 
   > **An earlier draft had composition rewrite `__defaults__` at import.** That
   > made a step's behaviour depend on whether an unrelated line had executed:
@@ -614,9 +636,18 @@ signature is the better slot:
   > the same function object. A value that is already a value has none of those
   > failure modes. Withdrawn.
 
-  **`bool` cannot be subclassed in CPython.** A bool knob is an enable mask (doc 08
-  §2.1), so `param()` rejects `bool` and names the alternative rather than
-  silently returning an `int` that prints as `1`.
+  **Two types cannot carry metadata this way:** `bool` and `NoneType` are not
+  subclassable in CPython. A bool knob is an enable mask (doc 08 §2.1), so
+  `param()` rejects `bool` and names that alternative rather than silently
+  returning an `int` that prints as `1`. An optional knob declares
+  `float | None` with `missing_as(...)` (§1), which is the existing idiom.
+
+  **Containers subclass fine, but numba is the real constraint.** `param([1, 2, 3])`
+  carries metadata without difficulty; what it cannot do is cross into a kernel as
+  a Python list, since reflected lists are deprecated and `typed.List` is slow. A
+  list-valued knob is therefore a **table** (§4 Tables), represented as a dense
+  array plus a present mask. The subclassing question and the kernel question are
+  independent, and only the second one binds.
 - **numba and default arguments.** ✅ **Confirmed, [EXPERIMENTS.md](EXPERIMENTS.md) §E11.** The emitted step
   does *not* need its default stripped: emitted with the sentinel default, with it
   stripped, and called through a driver all produce an identical numba signature
