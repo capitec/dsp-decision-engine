@@ -243,7 +243,7 @@ reconstructed:
 
 | field | source |
 |---|---|
-| pipeline identity | hash of the exported JSON (doc 07 §5) |
+| pipeline identity | structure fingerprint + compiled artefact id (doc 08 §8) — **not** a hash of the params document, which identifies the values rather than the thing that ran |
 | resolved params | the explicit, complete config — *not* code defaults |
 | framework + module versions | build metadata |
 | inputs | the record as received |
