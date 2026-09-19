@@ -76,7 +76,7 @@ people-blocked and should start before implementation.
 | [01-motivation-and-evidence.md](01-motivation-and-evidence.md) | Why a new engine. Every measurement and observed failure mode that drove a decision. |
 | [02-architecture.md](02-architecture.md) | The tier model, execution modes, seams, package layout. |
 | [03-authoring-api.md](03-authoring-api.md) | The developer-facing interfaces. How people actually write logic. |
-| [04-observability-and-governance.md](04-observability-and-governance.md) | Who can change what, how a decision is explained, what survives an audit. Personas, the params/structure permission boundary, lineage, taps, trace, the audit record. |
+| [04-observability-and-governance.md](04-observability-and-governance.md) | Who can change what, how a decision is explained, what survives an audit. Personas, the params/structure permission boundary, lineage, emitted values, trace, the audit record. |
 | [05-boundary-and-compilation.md](05-boundary-and-compilation.md) | **Implementation spec for `compile/` — the first thing to build.** Extraction, nulls, calling convention, codegen, variants, fallback, fusion grouping, acceptance criteria. |
 | [06-open-questions-and-experiments.md](06-open-questions-and-experiments.md) | What's still undecided, what's been settled and by which experiment. |
 | [07-project-structure.md](07-project-structure.md) | How a project *using* the framework is laid out — modules, pipelines, config, defaults, the Python/JSON duality. |

@@ -56,9 +56,10 @@ Twenty experiments, harnesses in `experimentation/`, results in
 
 - **Extraction**: polars-native `_get_buffers()`; 6 of 26 dtype/nullability
   combinations are zero-copy; every nullable column copies (~600 µs/100k).
-- **Admissible dtypes**: strings and categoricals enter as *codes*; `Decimal` and
-  `List` are inadmissible; the gate must catch `BaseException` because `Decimal`
-  raises a Rust panic.
+- **Dtypes**: a *ladder*, not a gate — **nothing is rejected** (§2b). Strings and
+  categoricals enter as *codes*; `Decimal` and `List` sit on the slow tier, being
+  converted or split around. The gate must catch `BaseException` when it probes,
+  because `Decimal` raises a Rust panic that `except Exception` misses.
 - **Output**: dtype-grouped 2D arrays, column-major for `apply()`, row-major for
   `score()`. Both compile 42× faster than records.
 - **Chunking**: mandatory — 1 M rows at 400-in/633-out needs 16.2 GB unchunked.
@@ -154,7 +155,7 @@ Blockers, in order:
    neither descend nor aggregate. It no longer blocks the model's shape.
 2. **E2 has never been run.** Build the graph model *as* E2 rather than assuming
    it: scopes, the five-scope invariant, `|` as sequence, `Branch`/`Loop`,
-   interface inference and materialisation, `Vocabulary`/`.at()`, unbound-name
+   interface inference and materialisation, `Vocabulary`/`.relabel()`, unbound-name
    resolution (O23).
 3. **E3 follows immediately** — the equivalence ladder is the framework's core
    correctness claim and nobody has built three modes and compared them.
@@ -188,7 +189,7 @@ kernels over tabular data and the shape is clearer.
 
 ### Layer 5 — `observe/` — the top risk
 
-`taps.py`, `trace.py`, `audit.py` follow from Layer 3.
+`emit.py`, `trace.py`, `audit.py` follow from Layer 3.
 
 `record.py` + `render/` is **O3/E4, the highest-ranked risk, and it is unstarted.**
 Build the record first and a renderer second — doc 04 §6.5 guarantees the data, not
@@ -268,7 +269,7 @@ burden is to replace the guarantee, not to argue the syntax is noisy.
 |---|---|
 | `reads=` on `Resolve` | It is a **negative** declaration. It says the resolver does *not* contain `shadow_fire_bits`, and that is the entire shadow-isolation guarantee. Deleting it deletes the only statement of what shadow mode may not see. |
 | `reads=` on data-shaped interiors | An **upper bound checked at validation** (41 of 43 sites), not documentation. It is what makes a business-user edit checkable without running it. |
-| `taps=` | Editorial, not mechanical. In a verified case 4 of 15 steps were tapped; inferring "tap everything" would both cost more and say less. |
+| choosing what `.emit()`s | Editorial, not mechanical. In a verified case 4 of 15 steps were worth emitting; inferring "emit everything" would both cost more and say less. The *keyword* `taps=` is gone — an emitted value is just a column (doc 03 §7) — but the judgement it encoded is not automatable. |
 | `fuse()` *and* `parallel()` as separate combinators | Orthogonal, and composed as `parallel(fuse(...))`. Collapsing them into one annotation loses the composition. |
 | the rule id in the function name | The join key between code, the params document and the policy extract. It is what `implements="§7.4.2"` joins *to*. |
 
@@ -278,7 +279,8 @@ and should stay absent:
 - **`outputs=` on a module.** 0 of 204 module definitions in the corpus pass it.
   The inferred interface (doc 03 §5.1) is working; do not add a way to restate it.
 - **`@step` as a requirement.** It is optional by design (doc 03 §1) and carries
-  exactly one job: overriding a default, which 74 genuine renames need. It does
-  **not** substitute `param()` defaults for direct calls — that happens where the
-  interface is inferred, because doc 03 §1.1's flagship rule and every bare
-  function in §5.3 have no decorator at all (doc 03 §4.4).
+  exactly one job: overriding a default, which 74 genuine renames need. Nothing
+  substitutes `param()` defaults for direct calls, because nothing needs to:
+  `param()` returns a `float`/`int`/`str` subclass that already *is* its default
+  (doc 03 §4.4). A step is directly callable with no decorator, no pipeline and no
+  import order.

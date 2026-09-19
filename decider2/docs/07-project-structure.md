@@ -230,4 +230,4 @@ project (doc 01 §5):
 | no unused `from decider2 import step` | 35 files importing a decorator they no longer use |
 | a rule's first dated params entry agrees with its interior defaults | ~13 values hand-copied across two files with nothing checking them (§5, `config fill`) |
 | every rule function's name contains its policy rule id | the spec↔code join that made verification mechanical rather than interpretive — "the single biggest comprehension aid in the whole project" (COLD-READ §4.2) |
-| a name in `originates=` does not already exist upstream, and a name in `overwrites=` does | a module appearing to violate the project's own lineage guarantee (doc 08 §2, COLD-READ §6 item 13) |
+| a `ruleset` never reads or writes a name outside its declared bound | a config edit widening its own blast radius (doc 08 §2) |
