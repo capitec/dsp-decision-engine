@@ -1,0 +1,342 @@
+{
+  "A_unpinned": {
+    "pctiles": {
+      "p50_us": 1053.1185,
+      "p95_us": 1112.55505,
+      "p99_us": 1159.747889999999,
+      "p99_9_us": 2004.3834630000479,
+      "max_us": 3008.052,
+      "n": 20000
+    },
+    "correlation": {
+      "label": "A_unpinned",
+      "n": 20000,
+      "p99_ns": 1159747.889999999,
+      "p999_ns": 2004383.463000048,
+      "n_slow99": 200,
+      "n_slow999": 20,
+      "pearson_r_vs_latency": {
+        "minflt": 0.0,
+        "majflt": 0.0,
+        "nvcsw": 0.0,
+        "nivcsw": 0.05303811193376485,
+        "alloc_d": 0.0061678758026363,
+        "gc0_d": 0.00410632295151333,
+        "migration": 0.02471450394849097
+      },
+      "nonzero_rate_slow_vs_overall": {
+        "minflt": {
+          "overall_rate_nonzero": 0.0,
+          "slow99_rate_nonzero": 0.0,
+          "slow999_rate_nonzero": 0.0,
+          "relative_risk_99": 1.0,
+          "overall_mean": 0.0,
+          "slow99_mean": 0.0
+        },
+        "majflt": {
+          "overall_rate_nonzero": 0.0,
+          "slow99_rate_nonzero": 0.0,
+          "slow999_rate_nonzero": 0.0,
+          "relative_risk_99": 1.0,
+          "overall_mean": 0.0,
+          "slow99_mean": 0.0
+        },
+        "nvcsw": {
+          "overall_rate_nonzero": 0.0,
+          "slow99_rate_nonzero": 0.0,
+          "slow999_rate_nonzero": 0.0,
+          "relative_risk_99": 1.0,
+          "overall_mean": 0.0,
+          "slow99_mean": 0.0
+        },
+        "nivcsw": {
+          "overall_rate_nonzero": 0.0096,
+          "slow99_rate_nonzero": 0.055,
+          "slow999_rate_nonzero": 0.05,
+          "relative_risk_99": 5.729166666666667,
+          "overall_mean": 0.0097,
+          "slow99_mean": 0.065
+        },
+        "alloc_d": {
+          "overall_rate_nonzero": 0.0002,
+          "slow99_rate_nonzero": 0.0,
+          "slow999_rate_nonzero": 0.0,
+          "relative_risk_99": 0.0,
+          "overall_mean": 0.0009,
+          "slow99_mean": 0.0
+        },
+        "gc0_d": {
+          "overall_rate_nonzero": 5e-05,
+          "slow99_rate_nonzero": 0.0,
+          "slow999_rate_nonzero": 0.0,
+          "relative_risk_99": 0.0,
+          "overall_mean": 5e-05,
+          "slow99_mean": 0.0
+        },
+        "migration": {
+          "overall_rate_nonzero": 0.00025,
+          "slow99_rate_nonzero": 0.015,
+          "slow999_rate_nonzero": 0.0,
+          "relative_risk_99": 60.0,
+          "overall_mean": 0.00025,
+          "slow99_mean": 0.015
+        }
+      }
+    }
+  },
+  "B_pinned": {
+    "pctiles": {
+      "p50_us": 1052.3305,
+      "p95_us": 1110.0523,
+      "p99_us": 1162.7008899999994,
+      "p99_9_us": 3268.2898350000414,
+      "max_us": 4959.02,
+      "n": 20000
+    },
+    "correlation": {
+      "label": "B_pinned",
+      "n": 20000,
+      "p99_ns": 1162700.8899999994,
+      "p999_ns": 3268289.8350000414,
+      "n_slow99": 200,
+      "n_slow999": 20,
+      "pearson_r_vs_latency": {
+        "minflt": 0.0,
+        "majflt": 0.0,
+        "nvcsw": 0.0,
+        "nivcsw": 0.5598285258424772,
+        "alloc_d": -0.0019488118750752856,
+        "gc0_d": -0.0016489899665273556,
+        "migration": 0.0
+      },
+      "nonzero_rate_slow_vs_overall": {
+        "minflt": {
+          "overall_rate_nonzero": 0.0,
+          "slow99_rate_nonzero": 0.0,
+          "slow999_rate_nonzero": 0.0,
+          "relative_risk_99": 1.0,
+          "overall_mean": 0.0,
+          "slow99_mean": 0.0
+        },
+        "majflt": {
+          "overall_rate_nonzero": 0.0,
+          "slow99_rate_nonzero": 0.0,
+          "slow999_rate_nonzero": 0.0,
+          "relative_risk_99": 1.0,
+          "overall_mean": 0.0,
+          "slow99_mean": 0.0
+        },
+        "nvcsw": {
+          "overall_rate_nonzero": 0.0,
+          "slow99_rate_nonzero": 0.0,
+          "slow999_rate_nonzero": 0.0,
+          "relative_risk_99": 1.0,
+          "overall_mean": 0.0,
+          "slow99_mean": 0.0
+        },
+        "nivcsw": {
+          "overall_rate_nonzero": 0.0148,
+          "slow99_rate_nonzero": 0.25,
+          "slow999_rate_nonzero": 1.0,
+          "relative_risk_99": 16.89189189189189,
+          "overall_mean": 0.0498,
+          "slow99_mean": 3.745
+        },
+        "alloc_d": {
+          "overall_rate_nonzero": 0.00015,
+          "slow99_rate_nonzero": 0.0,
+          "slow999_rate_nonzero": 0.0,
+          "relative_risk_99": 0.0,
+          "overall_mean": 0.0009,
+          "slow99_mean": 0.0
+        },
+        "gc0_d": {
+          "overall_rate_nonzero": 5e-05,
+          "slow99_rate_nonzero": 0.0,
+          "slow999_rate_nonzero": 0.0,
+          "relative_risk_99": 0.0,
+          "overall_mean": 5e-05,
+          "slow99_mean": 0.0
+        },
+        "migration": {
+          "overall_rate_nonzero": 0.0,
+          "slow99_rate_nonzero": 0.0,
+          "slow999_rate_nonzero": 0.0,
+          "relative_risk_99": 1.0,
+          "overall_mean": 0.0,
+          "slow99_mean": 0.0
+        }
+      }
+    }
+  },
+  "C_noop_unpinned": {
+    "pctiles": {
+      "p50_us": 0.281,
+      "p95_us": 0.318,
+      "p99_us": 0.341,
+      "p99_9_us": 0.3900070000000269,
+      "max_us": 6.032,
+      "n": 20000
+    },
+    "correlation": {
+      "label": "C_noop_unpinned",
+      "n": 20000,
+      "p99_ns": 341.0,
+      "p999_ns": 390.0070000000269,
+      "n_slow99": 204,
+      "n_slow999": 20,
+      "pearson_r_vs_latency": {
+        "minflt": 0.0,
+        "majflt": 0.0,
+        "nvcsw": 0.0,
+        "nivcsw": 0.043921191851995195,
+        "alloc_d": 0.052371861564787056,
+        "gc0_d": 0.05237186156478754,
+        "migration": 0.11519686988074399
+      },
+      "nonzero_rate_slow_vs_overall": {
+        "minflt": {
+          "overall_rate_nonzero": 0.0,
+          "slow99_rate_nonzero": 0.0,
+          "slow999_rate_nonzero": 0.0,
+          "relative_risk_99": 1.0,
+          "overall_mean": 0.0,
+          "slow99_mean": 0.0
+        },
+        "majflt": {
+          "overall_rate_nonzero": 0.0,
+          "slow99_rate_nonzero": 0.0,
+          "slow999_rate_nonzero": 0.0,
+          "relative_risk_99": 1.0,
+          "overall_mean": 0.0,
+          "slow99_mean": 0.0
+        },
+        "nvcsw": {
+          "overall_rate_nonzero": 0.0,
+          "slow99_rate_nonzero": 0.0,
+          "slow999_rate_nonzero": 0.0,
+          "relative_risk_99": 1.0,
+          "overall_mean": 0.0,
+          "slow99_mean": 0.0
+        },
+        "nivcsw": {
+          "overall_rate_nonzero": 0.0004,
+          "slow99_rate_nonzero": 0.00980392156862745,
+          "slow999_rate_nonzero": 0.05,
+          "relative_risk_99": 24.509803921568626,
+          "overall_mean": 0.0004,
+          "slow99_mean": 0.00980392156862745
+        },
+        "alloc_d": {
+          "overall_rate_nonzero": 5e-05,
+          "slow99_rate_nonzero": 0.004901960784313725,
+          "slow999_rate_nonzero": 0.05,
+          "relative_risk_99": 98.0392156862745,
+          "overall_mean": 0.00015,
+          "slow99_mean": 0.014705882352941176
+        },
+        "gc0_d": {
+          "overall_rate_nonzero": 5e-05,
+          "slow99_rate_nonzero": 0.004901960784313725,
+          "slow999_rate_nonzero": 0.05,
+          "relative_risk_99": 98.0392156862745,
+          "overall_mean": 5e-05,
+          "slow99_mean": 0.004901960784313725
+        },
+        "migration": {
+          "overall_rate_nonzero": 5e-05,
+          "slow99_rate_nonzero": 0.004901960784313725,
+          "slow999_rate_nonzero": 0.05,
+          "relative_risk_99": 98.0392156862745,
+          "overall_mean": 5e-05,
+          "slow99_mean": 0.004901960784313725
+        }
+      }
+    }
+  },
+  "D_contended_unpinned": {
+    "pctiles": {
+      "p50_us": 2374.74,
+      "p95_us": 2454.62735,
+      "p99_us": 2686.0029000000004,
+      "p99_9_us": 2905.062137000006,
+      "max_us": 2995.912,
+      "n": 8000
+    },
+    "correlation": {
+      "label": "D_contended_unpinned",
+      "n": 8000,
+      "p99_ns": 2686002.9000000004,
+      "p999_ns": 2905062.1370000057,
+      "n_slow99": 80,
+      "n_slow999": 8,
+      "pearson_r_vs_latency": {
+        "minflt": 0.0,
+        "majflt": 0.0,
+        "nvcsw": 0.0,
+        "nivcsw": 0.2109651332485885,
+        "alloc_d": -0.013941981179307674,
+        "gc0_d": -0.009538127642293932,
+        "migration": -0.0007338954048248999
+      },
+      "nonzero_rate_slow_vs_overall": {
+        "minflt": {
+          "overall_rate_nonzero": 0.0,
+          "slow99_rate_nonzero": 0.0,
+          "slow999_rate_nonzero": 0.0,
+          "relative_risk_99": 1.0,
+          "overall_mean": 0.0,
+          "slow99_mean": 0.0
+        },
+        "majflt": {
+          "overall_rate_nonzero": 0.0,
+          "slow99_rate_nonzero": 0.0,
+          "slow999_rate_nonzero": 0.0,
+          "relative_risk_99": 1.0,
+          "overall_mean": 0.0,
+          "slow99_mean": 0.0
+        },
+        "nvcsw": {
+          "overall_rate_nonzero": 0.0,
+          "slow99_rate_nonzero": 0.0,
+          "slow999_rate_nonzero": 0.0,
+          "relative_risk_99": 1.0,
+          "overall_mean": 0.0,
+          "slow99_mean": 0.0
+        },
+        "nivcsw": {
+          "overall_rate_nonzero": 0.071375,
+          "slow99_rate_nonzero": 0.9875,
+          "slow999_rate_nonzero": 1.0,
+          "relative_risk_99": 13.835376532399302,
+          "overall_mean": 0.14975,
+          "slow99_mean": 3.0125
+        },
+        "alloc_d": {
+          "overall_rate_nonzero": 0.000375,
+          "slow99_rate_nonzero": 0.0,
+          "slow999_rate_nonzero": 0.0,
+          "relative_risk_99": 0.0,
+          "overall_mean": 0.00225,
+          "slow99_mean": 0.0
+        },
+        "gc0_d": {
+          "overall_rate_nonzero": 0.000125,
+          "slow99_rate_nonzero": 0.0,
+          "slow999_rate_nonzero": 0.0,
+          "relative_risk_99": 0.0,
+          "overall_mean": 0.000125,
+          "slow99_mean": 0.0
+        },
+        "migration": {
+          "overall_rate_nonzero": 0.000625,
+          "slow99_rate_nonzero": 0.0125,
+          "slow999_rate_nonzero": 0.0,
+          "relative_risk_99": 20.0,
+          "overall_mean": 0.000625,
+          "slow99_mean": 0.0125
+        }
+      }
+    }
+  }
+}

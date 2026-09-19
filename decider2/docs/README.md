@@ -16,7 +16,7 @@ carried forward, and where these documents describe `decider`'s behaviour they d
 so as evidence about what a design compels, not as a base to extend. Doc 01 §5 is
 the concentrated version of that evidence.
 
-**Nineteen experiments have now been run against real numba** (EXPERIMENTS.md).
+**Twenty experiments have now been run against real numba** (EXPERIMENTS.md).
 Most refuted or partially refuted a documented claim, and several changed a design
 decision rather than a number: fusion and `prange` became authored rather than
 inferred, per-node fallback turned out to be impossible inside a fused driver, the
@@ -42,8 +42,14 @@ measurable tail difference, and the one finding that changes a recommendation is
 concurrency — serving kernels must compile `nogil=True` unconditionally, because
 the identical kernel compiled `nogil=False` hits a GIL convoy effect that blows
 the tail to **12.7× the entire 20 ms budget** at 16 concurrent threads, even
-though total throughput is unaffected either way. Every correction is recorded in
-place rather than quietly fixed.
+though total throughput is unaffected either way. The twentieth (M) closes the
+one disagreement between two prior experiments: §K and §L attributed the same
+stale-constant hazard to different caches, and both were right — CPython's
+`__pycache__/*.pyc` and numba's own on-disk cache are each independently
+sufficient to serve a stale value, depending on whether the edited constant
+collides with another one in `co_consts`; content-addressed naming was always
+the fix either way, now confirmed against the layer actually responsible. Every
+correction is recorded in place rather than quietly fixed.
 
 Still to run: **E1** (the polars↔numba boundary, "the one to build first"), E2
 (the graph model), E3 (the equivalence ladder), E4 (the reviewable artefact —
@@ -58,7 +64,7 @@ people-blocked and should start before implementation.
 ## Read in this order
 
 > **Start with [00-BUILD.md](00-BUILD.md).** These documents were written over
-> several rounds and nineteen experiments later refuted a number of their claims.
+> several rounds and twenty experiments later refuted a number of their claims.
 > The corrections are recorded in place, so reading linearly you will meet a
 > confident wrong statement before its retraction. 00-BUILD lists every superseded
 > claim in one table, says what is settled, and gives the build order with the
@@ -79,7 +85,7 @@ people-blocked and should start before implementation.
 A standing review of this doc set, with findings ranked by cost of late
 discovery, is in [REVIEW.md](REVIEW.md). Items acted on are marked there.
 
-**[EXPERIMENTS.md](EXPERIMENTS.md) holds measured results** from nineteen
+**[EXPERIMENTS.md](EXPERIMENTS.md) holds measured results** from twenty
 experiments run against real numba on this project's own environment. Most
 refuted or partially refuted a documented claim, and several changed a design
 decision rather than a number — fusion, `prange`, per-node fallback, the output
