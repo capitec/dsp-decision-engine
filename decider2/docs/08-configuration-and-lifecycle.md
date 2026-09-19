@@ -110,7 +110,7 @@ Three classes replace it.
 | class | what it is | artefact | cost of a change | who |
 |---|---|---|---|---|
 | **values** | params; table contents | params document | **free** — swap a bundle, no compile | business user |
-| **interiors — values** | a rule's thresholds and its enabled flag | params document | **free** — they are arguments, not literals (§2.2) | business user |
+| **interiors — values** | a rule's thresholds and its enabled flag | params document | **free** — they are arguments, not literals (§2.1) | business user |
 | **interiors — shape** | rules added, removed or restructured; operators; nesting | interior document | **one background compile + swap** (§4) | business user, reviewed |
 | **skeleton** | which modules exist, how they wire, `Branch`/`Loop` composition, step logic | Python | **rebuild and redeploy** | engineer |
 
@@ -126,7 +126,7 @@ Three properties make this hold together:
    modules, or introduce a `Branch`. See §7 for why, and for how that could be
    widened later without rework.
 
-### 2.2 A rule's thresholds are arguments, not emitted literals
+### 2.1 A rule's thresholds are arguments, not emitted literals
 
 **Measured — [EXPERIMENTS.md](EXPERIMENTS.md) §L.** A rule set can be emitted with its thresholds baked
 into the source, or with them passed as an array argument. The argument form:
@@ -153,7 +153,7 @@ This is also what makes the stale-code hazard (doc 05 §4.2) structurally
 impossible on the path a business user edits: a threshold change writes no source
 at all.
 
-### 2.1 The params document rejects composition
+### 2.2 The params document rejects composition
 
 `resolve_params` **rejects any document carrying composition keys** (`use`,
 `type`, `steps`, `arms`, `modifies`). This is what makes doc 04 §2's structural-
