@@ -273,7 +273,81 @@ and bureau data. Tap columns are applicant data. So:
 
 ---
 
-## 6. The reviewable artefact — the weakest part of the design
+## 6. The reviewable artefact — TESTED, AND IT FAILED
+
+**Result first, because it is the design's top-ranked risk and it now has an
+answer.** A proxy reviewer was given a policy extract, a generated rule sheet and
+one decision record, and asked three questions (`decider2/reviewer-test/`).
+
+The documents contained **two deliberate compliance breaches**:
+
+1. The rule read `monthly_income` (`gross_salary + other_income_declared` =
+   R9 200) where policy §7.4.2 says **verified net monthly income** — which for
+   this applicant was R7 480, below the R8 000 floor. They should have been capped
+   at 48 months. They received 60.
+2. The adjustment ADJ-0117 raised the cap from 48 to 60, which §7.4.5 explicitly
+   forbids — *"no term reduction may be waived, overridden or extended by a
+   pricing, campaign or affordability adjustment"*. The sheet rendered a
+   non-compliant adjustment as a routine approved change.
+
+**Neither was found.** The reviewer instead reported a false positive on an
+unrelated rule, because the sheet's "In force now" column contained `60`, `60`
+and `unchanged` — three rows, two kinds of value, no explanation. Task A was
+completed but reported as "hard to follow".
+
+Three conclusions, and the third is the design change:
+
+**6.1 Displaying a value is not the same as making it checkable.** The sheet
+showed both the authored and in-force values and the reason they differed —
+which was the best idea in the eleven mock projects — and the reviewer still
+could not tell that the in-force value violated policy. **The sheet rendered the
+adjustment; it did not render the policy constraint the adjustment broke.**
+Anything a rule must not do has to appear on the sheet as a stated limit, not be
+absent because nothing violated it at authoring time.
+
+**6.2 The provenance section is where the first breach lived and it was not
+readable as provenance.** "Where `monthly_income` comes from" gave the definition
+correctly — `gross_salary + other_income_declared` — and the reviewer did not
+connect it to policy's "verified net". A definition renders as a formula; a
+reviewer needs the *policy term* it claims to implement, and a flag when a value
+named in policy exists in the pipeline and is **not** the one the rule reads.
+`verified_net_income` was right there in the decision record, unused.
+
+**6.3 There is no single reviewable artefact, and there should not be.** A
+single prescribed format was the wrong shape — see §6.4.
+
+### 6.4 Trace is data; every rendering is replaceable
+
+**Settled, and it corrects this section's original framing.** Doc 04 previously
+proposed *the* reviewable artefact, as though one format could serve a credit-risk
+reviewer, an operations agent under time pressure, a regulator doing an inventory,
+and a developer debugging. It cannot, and different teams will want different
+things from the same decision.
+
+So the framework owes three things, and a fourth is explicitly not its business:
+
+1. **A structured decision record**, emitted as data — every value, its producer,
+   its authored and in-force form, which rules were evaluated and which fired,
+   what each read, and the provenance of every threshold. This is the *only*
+   thing the framework guarantees, and it is what everything else is built from.
+2. **Renderers over that data**, shipped as defaults and **replaceable without
+   forking**. The rule sheet in `decider2/reviewer-test/` becomes one renderer,
+   not the artefact. A team that wants a different shape writes one.
+3. **Configurable verbosity**, because trace detail trades against speed. A
+   production realtime path may emit only fired-rule ids and the values that
+   moved; a dispute investigation may emit everything. The level is a parameter,
+   and what it costs is measurable (doc 02 §7: a tap is ~0.11 ns/row, a full
+   trace ~4× materialisation).
+4. **Not the presentation.** Which columns, what wording, what a team's reviewers
+   are used to — that is theirs. Same principle as doc 08 §6: the framework owns
+   the data and its guarantees, never the surface.
+
+> This is the same correction as config sourcing. Prescribing one format is how a
+> framework ends up with an artefact that serves nobody exactly, and it is why
+> nine of eleven mock projects produced no reviewer artefact at all — the ones
+> that tried were designing for an imagined single reader.
+
+### 6.5 What the original section got right, and the evidence for it
 
 **Requirement:** a credit-risk or compliance reviewer, who does not read code,
 can verify a rule against a policy document.

@@ -544,6 +544,37 @@ identical. What replaces it:
 decider2.impact(active, candidate, sample) -> ImpactReport
 ```
 
+**What the report must contain**, from the reviewer test's Task C — asked what
+they would need to confirm a policy change was made correctly and made nowhere
+else, the answer was three things, and the third is the one nothing in the design
+currently produces:
+
+1. **The change itself, before and after.** Not a diff of a config file — the
+   *resolved* before and after value, with its provenance, for every place the
+   changed thing is in force.
+2. **Downstream impact: which outputs can move.** Every value reachable from the
+   changed one, from static lineage (doc 04 §3), so the blast radius is known
+   without running anything.
+3. **Boundary conditions — the interesting one.** *"If the input is between these
+   values, before you would have X and now you have Y, on all outputs affected."*
+
+Item 3 is a **solve, not a sample**. A rule is a threshold comparison, so the set
+of inputs whose decision changes is an interval, and its edges are computable from
+the two threshold values rather than discovered by running records through. For a
+cap moving 48 → 36 months, the report should say: *applicants whose term_cap was
+previously governed by this rule and fell between 36 and 48 months now receive 36
+— that is this interval of income, and in the sample it is N applications.*
+
+That is strictly better than an impact count, because it is exact at the edges
+where policy arguments actually happen, and it does not depend on the sample
+containing a boundary case. Where a value is not reachable by a simple comparison
+— a search, an iterative solve — the report falls back to sampling and **says so**,
+rather than silently reporting a narrower interval than the truth.
+
+> **Open (O24):** boundary solving is exact for comparison-shaped rules and
+> undefined for the rest. Which rule shapes admit an exact interval, and what the
+> fallback reports, needs specifying before `observe/blast_radius.py` is built.
+
 Run both generations over a representative sample and report what moved: the
 fraction of records whose declared decision outputs changed, the distribution of
 each change, and which rules newly fired or stopped firing (from `branch_path` —
