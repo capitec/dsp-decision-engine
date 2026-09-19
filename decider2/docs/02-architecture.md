@@ -405,10 +405,11 @@ silently masked as "this needed a fallback".
 
 ### 3.3 Compiled variants, decided by the author
 
-Compile latency is a non-issue (long-lived processes only), so every variant is
-**compiled at image build** (§3.4) and *selected* at warmup by measurement. Note
-"warmup" here means measuring already-compiled variants, never compiling — §3.4
-requires a runtime load to trigger zero compilations.
+Compile latency is a non-issue (long-lived processes only), so every variant an
+author asked for is **compiled at image build** (§3.4). Nothing is selected by
+measurement at warmup: **one variant per kernel**, fixed by what the author wrote.
+An earlier draft had warmup measure between variants, which contradicts the very
+next bullet and would make the running shape unpredictable from the source.
 
 - **serial vs `prange`** — **authored, not inferred.** Serial is the default; an
   author writes `parallel(...)` around a region, exactly as with `fuse(...)`
@@ -431,7 +432,7 @@ pathological fully-branching one (doc 01 §4b). Since deployment is Docker image
 for long-lived batch jobs and endpoints, that cost belongs in the **build**:
 
 ```
-uv run decider build <pipeline>     # in the Dockerfile
+uv run decider2 build <pipeline>     # in the Dockerfile
 ```
 
 It generates the driver source files, compiles them, and leaves a warm numba

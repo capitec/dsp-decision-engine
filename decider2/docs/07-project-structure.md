@@ -160,12 +160,17 @@ stay pure Python forever and never pay it.
 ## 5. Running, exporting, and the audit artefact
 
 ```
-decider run     pipelines/term_loan.py --params config/term_loan/production.json
-decider export  pipelines/term_loan.py --params -o config/term_loan/production.json
-decider export  pipelines/term_loan.py --interiors -o config/term_loan/rules/
-decider build   term_loan --schema schemas/term_loan_input.json   # AOT, doc 02 §3.4
-decider config  fill config/term_loan/production.json --from term_loan
+decider2 run     pipelines/term_loan.py --params config/term_loan/production.json
+decider2 export  pipelines/term_loan.py --params -o config/term_loan/production.json
+decider2 export  pipelines/term_loan.py --interiors -o config/term_loan/rules/
+decider2 build   term_loan --schema schemas/term_loan_input.json   # AOT, doc 02 §3.4
+decider2 config  fill config/term_loan/production.json --from term_loan
 ```
+
+> **Naming.** The CLI is `decider2`, matching the package, so it cannot collide
+> with `decider` 1 during migration. Both should become `decider` once v1 is
+> retired and before the public release — the `2` is a migration artefact, not a
+> product name.
 
 Three things to note, all consequences of doc 08:
 

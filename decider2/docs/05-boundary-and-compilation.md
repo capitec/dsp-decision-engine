@@ -215,6 +215,39 @@ the runtime because it feeds §K's config-change latency.
 > 20–100 ms budget, so **settle it on whichever is simpler** unless a request-path
 > measurement says otherwise. The batch side is where the evidence bites.
 
+### 3.1b The single-record boundary — dict in, dict out
+
+**This is the serving path, and §1's polars specification does not cover it.**
+A realtime request arrives as a dict and never touches polars (doc 02 §3.4), so
+extraction, marshalling and write-back are all different code. §N1 measured where
+the time goes at realistic width (400 in / 633 out), and it is not the kernel:
+
+| stage | cost | share |
+|---|---|---|
+| per-field Python loop over the request dict | 673 µs | **92%** |
+| kernel | ~1 µs | 0.1% |
+| everything else | ~58 µs | 8% |
+
+Three requirements follow, and they are the difference between a 0.7 ms and a
+20 ms floor:
+
+- **Marshal whole-row, never per-field.** One bulk conversion into a preallocated
+  record buffer, not a Python loop assigning 400 attributes. This is the single
+  largest win available anywhere on the request path.
+- **Pool the output buffer.** Allocating a 633-wide output per request dominates
+  what is left. A pooled buffer is reused across requests; because it is written
+  rather than read, the kernel must be compiled against a **writeable** array
+  type — a readonly specialisation compiled from a frame-backed array will not
+  accept it, and the failure is a confusing typing error at first serve rather
+  than at build.
+- **Validate params once per generation, not per request.** §N3 found the
+  model→NamedTuple conversion, not validation, is where the cost concentrates.
+  Convert at `activate()` and hold the NamedTuple; the request path reads it.
+
+Row-major output (§3.1) is the right layout here for the same reason column-major
+is right for batch: there is no bulk write-back to amortise, so kernel locality is
+the whole cost.
+
 ### 3.2 Chunking is mandatory, not an optimisation
 
 **Measured — [EXPERIMENTS.md](EXPERIMENTS.md) §J2.** At 400-in/633-out, a 1 M-row batch **does not fit**:
@@ -538,8 +571,8 @@ An automatic cost model remains O12, explicitly out of scope for v1.
 ## 8. The build step
 
 ```
-uv run decider build <pipeline>     # in the Dockerfile
-decider build --verify              # asserts a runtime load triggers ZERO compiles
+uv run decider2 build <pipeline>     # in the Dockerfile
+decider2 build --verify              # asserts a runtime load triggers ZERO compiles
 ```
 
 Generates driver sources, compiles all variants, and leaves a warm numba cache in
