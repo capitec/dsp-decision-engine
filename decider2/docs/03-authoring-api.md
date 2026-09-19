@@ -139,7 +139,7 @@ numba int64 wraps silently, as does numpy.
 
 ### Null policy is declared in the signature
 
-Three tiers, all ordinary Python. **Most steps use the first two and never
+Four situations, all ordinary Python. **Most steps use the first two and never
 mention nulls at all** — handling missing data is a property of the *input*, so it
 belongs in the signature rather than in every function body.
 
@@ -182,6 +182,60 @@ Why this shape:
 > `Int64→float64` (lossy above 2⁵³) and `Boolean→object`. Also rejected: a
 > `.value`/`.valid` wrapper — fastest of the explicit options, but it exposes an
 > unchecked accessor and adds a concept Python developers don't already have.
+
+#### The fourth situation: not-applicable is not missing
+
+**Both studies converged on this independently** (COLD-READ §3.2; the mock-project
+findings, tier 1 item 8), which is the strongest evidence class in the programme.
+A spouse's income is *not applicable* when there is no spouse, and *missing* when
+there is a spouse and nobody captured it. Tiers 1–3 collapse them, and in credit
+they carry opposite meanings: not-applicable is a complete application, missing is
+an incomplete one, and filling both with 0.0 silently approves the second.
+
+```python
+def joint_affordability(spouse_income: float = not_applicable_as(0.0)) -> float:
+    ...
+```
+
+`not_applicable_as(...)` fills like `missing_as(...)` and **records a different
+reason code**, so the decision record distinguishes "this did not apply" from
+"this was absent" without the step body knowing the difference. The distinction is
+declared once, in the signature, and is visible to a reviewer there.
+
+#### A null must be able to produce a decision, not an exception
+
+**This is the highest-ranked production risk in the design.** On a 400-input
+realtime path, tier 1's "fail fast at the boundary" means a hard error per
+request, and real credit inputs are null-dense — bureau thin files, unverified
+declared income, applicants with no employer record. An applicant who cannot be
+scored is an ordinary business outcome; a 500 is not.
+
+So the boundary's null policy is a *routing* decision, and it is declared per
+pipeline rather than per column:
+
+```python
+pipeline.on_missing_input(
+    default=Decision.refer(reason=4101),        # scoreable outcome, not a raise
+    raise_for=["application_id", "product_code"],  # genuinely structural
+)
+```
+
+- **The default is `refer`, not `raise`.** A missing input is a fact about an
+  application, and the framework's job is to route it to a human, not to drop the
+  request. A column that genuinely cannot be absent — the application id — says so
+  by name, and that list is short and reviewable.
+- **The violation lands in the decision record** with the column, the reason code
+  and the count, so an operations team sees "412 referrals for missing
+  `bureau_score`" rather than an error-rate spike with no shape.
+- **It never reaches a kernel.** Routing happens at extraction, so the compiled
+  path still sees only values whose null policy is satisfied — tier 2's 256 µs/1 M
+  floor is unaffected, and nothing is checked per row that was not already checked.
+
+> **Widening a column to nullable must not require an engineer.** A column
+> changing nullability forces a recompile (doc 08 §4.2), which in `live` mode is
+> one background compile and a staged swap — the same path as adding a rule, and
+> **not** a redeploy. Upstream data going null-dense at 02:00 is a case the design
+> has to survive without a deploy, because it is the case that actually happens.
 
 ---
 
@@ -356,7 +410,7 @@ whose order changes behaviour breaks under innocuous reformatting).
 An earlier draft claimed adjacent modules fuse into one kernel so small modules
 cost nothing. E5 and E7 disproved that: fusion is non-monotone and past ~5
 modules a single fused kernel is *slower* than one per module, because register
-pressure stops it vectorising (doc 01 §4b–4c).
+pressure spills a dependent FMA chain (§E; doc 01 §4b–4c).
 
 What actually makes the style safe is that **boundary stores are near-free** —
 even with a full polars round-trip at every boundary, split beats fused at 1 M
@@ -370,7 +424,8 @@ rows / 10 modules. So:
 By default `apply()` emits one kernel per module and nothing is fused implicitly.
 If a group is hot, say so — `fuse(A | B | C)` is a combinator like any other, and
 it is guaranteed not to change the answer (doc 02 §1.2). `explain_kernels()`
-reports emitted lines and whether each kernel vectorised, so the question is
+reports emitted lines and measured cost per group — not vectorisation status,
+which §E showed is anti-correlated with performance — so the question is
 answered by observation rather than by a heuristic.
 
 It is also a better governance unit than the alternative. "A single policy rule" as a
@@ -1220,28 +1275,35 @@ and the value-version chain. Not raw code, not raw JSON.
 ## 10. Config
 
 ```json
-{"use": "credit:flow", "name": "cc_flow",
+{"pipeline": "term_loan",
  "params": {
-   "shared":        {"base_rate": 5.0},
-   "affordability": {"min_ratio": 0.35},
-   "income_cap":          {"cap": 48.0},
-   "sector_cap":          {"cap": 60.0}
- }}
+   "affordability":  {"min_ratio": 0.35},
+   "income_cap":     {"cap": 48.0},
+   "sector_cap":     {"cap": 60.0}
+ },
+ "shared": {"base_rate": 5.0}}
 ```
 
-Params are namespaced by module instance name, with `shared` holding globals
-(§4.1–4.2).
+Params are namespaced by module instance name. **`shared` is a sibling of
+`params`, not nested inside it** — the document mirrors the call signature
+(`apply(frame, params=…, shared=…)`) so there is one shape to learn, and a global
+is visibly not owned by any module (§4.1–4.2).
 
-**There are two config documents, with two lifetimes** (doc 08 §2):
+**Three document kinds, with three lifetimes** (doc 08 §2):
 
-| document | holds | changing it costs |
-|---|---|---|
-| **params** | values behind fixed types, and table contents | nothing — a bundle swap |
-| **interior** | the body of a data-shaped module: rules, bins, table rows | one background compile and a staged swap |
+| document | holds | admitted by | changing it costs |
+|---|---|---|---|
+| **params** | values behind fixed types, and table contents | `resolve_params` | nothing — a bundle swap |
+| **interior** | the body of one data-shaped module: rules, bins, table rows | `from_config(…, admit=Admit.INTERIORS)` | one background compile and a staged swap |
+| **structure** | which modules exist and how they wire | `from_config(…, admit=Admit.COMPOSITION)` — **not shipped in v1** | a rebuild; doc 08 §7 |
 
-Neither may carry **composition**. `resolve_params` rejects a document containing
-`use`, `type`, `steps`, `arms` or `modifies`, which is what makes the structural
-guarantee in doc 04 §2 true by construction rather than by convention. The
+A **params** document may not carry composition *or* an interior:
+`resolve_params` rejects `pipeline` fields it does not own and rejects `type`,
+`steps`, `arms`, `rules` or `modifies` outright. An **interior** document may not
+carry composition either — it is the body of one already-declared box. Only a
+**structure** document may wire modules, and v1 does not admit one, which is what
+makes the structural guarantee in doc 04 §2 true by construction rather than by
+convention. The
 pipeline skeleton — which modules exist and how they wire — is Python. Doc 08 §7
 records how that could be widened later without rework, and why generating Python
 is the better answer for a pipeline-building UI.

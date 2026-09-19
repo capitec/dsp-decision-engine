@@ -765,7 +765,10 @@ Four things must be true now or the option closes:
    `INTERIORS`. A round-trip test — `from_config(pipeline.to_dict()) == pipeline` —
    is what stops the data model drifting into something composition cannot
    express.
-3. **`reads`/`writes` are declared on every module**, not only data-shaped ones.
+3. **`reads`/`writes` stay a declared bound on data-shaped modules only.** A code
+   module's interface is *inferred* and materialised (doc 03 §5.1), and adding a
+   way to restate it would be the duplication doc 00 §6 exists to prevent. The
+   bound exists where config can reach inside a box; nowhere else needs one.
 4. **The lifecycle in §4 is generic over "a new pipeline object appeared"** and
    does not special-case "an interior changed".
 

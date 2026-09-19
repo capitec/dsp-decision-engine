@@ -267,7 +267,7 @@ burden is to replace the guarantee, not to argue the syntax is noisy.
 
 | construct | why it survives |
 |---|---|
-| `reads=` on `Resolve` | It is a **negative** declaration. It says the resolver does *not* contain `shadow_fire_bits`, and that is the entire shadow-isolation guarantee. Deleting it deletes the only statement of what shadow mode may not see. |
+| `reads=` on a shadow-isolated node (project 01's `Resolve`; not a decider2 symbol) | It is a **negative** declaration. It says the resolver does *not* contain `shadow_fire_bits`, and that is the entire shadow-isolation guarantee. Deleting it deletes the only statement of what shadow mode may not see. |
 | `reads=` on data-shaped interiors | An **upper bound checked at validation** (41 of 43 sites), not documentation. It is what makes a business-user edit checkable without running it. |
 | choosing what `.emit()`s | Editorial, not mechanical. In a verified case 4 of 15 steps were worth emitting; inferring "emit everything" would both cost more and say less. The *keyword* `taps=` is gone — an emitted value is just a column (doc 03 §7) — but the judgement it encoded is not automatable. |
 | `fuse()` *and* `parallel()` as separate combinators | Orthogonal, and composed as `parallel(fuse(...))`. Collapsing them into one annotation loses the composition. |
