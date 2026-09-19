@@ -826,6 +826,56 @@ default and builds the missing pieces around it.
   without needing their intermediates.
 - Deployment is batch and long-lived realtime endpoints only. Compile latency is
   therefore a non-issue and can be paid at warmup.
+- **The single-record path is the primary one.** Most invocations send one record
+  and need realtime latency. Batch runs at most once a day and may be materially
+  slower. This is a priority, not just a list of two modes, and it reweights
+  several results — see below.
 - Params may arrive per invocation, including in a realtime request payload.
 - The framework must not be prescriptive about types: if a step needs regex or
   awkward Python, it should work, just slower.
+
+### 6.1 What "single record first" reweights
+
+Most measurements in this document were taken on batches. Read against the stated
+priority, several change in importance or in sign:
+
+| finding | under batch | under N=1 (primary) |
+|---|---|---|
+| **fusion** (§4b, §4c) | non-monotone; 0.11–13× depending on body cost | fusion wins **9.4–48×** — per-call dispatch dominates, so it is nearly always right |
+| **`prange`** (§4) | an opt-in annotation | **irrelevant** — nothing to parallelise across one row |
+| **dispatch floor** (0.44 µs/kernel) | a rounding error | still small — see the budget note below |
+| **record write-back** (§4d, 54.7–64% of batch total) | the dominant cost | **absent** — there is no bulk write-back |
+| **output convention** | column-major 2D wins 1.74× end-to-end | column-major is **3.7× worse per record**; row-major is best |
+| **polars boundary** (§4) | ~600 µs per nullable column | **absent** — `score()` bypasses polars (doc 02 §3.5) |
+| **staged config swap** (doc 08 §4) | matters daily | matters continuously — the endpoint is long-lived |
+
+**The realtime budget is low single-digit milliseconds per record**, as low as
+achievable. That number is the most important one in this document, because it
+sets what is worth optimising — and it is ~1000× larger than the compiled path.
+
+| cost | measured | share of a 1 ms budget |
+|---|---|---|
+| single record through the kernel (400-in/633-out) | 0.99 µs | **0.1%** |
+| one kernel-boundary dispatch | 0.44 µs | **0.04%** |
+| fusion's n=1 advantage (9.4–48×) | saves ~tens of µs | **a few %** at most |
+
+> **So the compiled path is not the realtime problem, and optimising it further is
+> not where the budget goes.** Everything measured so far concerns a layer that
+> already fits ~1000× over. What fills a low-ms budget is the surrounding work —
+> params validation, request marshalling, the `score()` calling convention at 400
+> inputs, allocation, GC, and tail behaviour under concurrency — **none of which
+> has been measured.**
+
+Two consequences for the design:
+
+1. **Stop tuning the kernel for realtime; measure the request path.** Fusion,
+   `prange` and the output convention are *batch* optimisations. They should be
+   chosen on batch evidence and simply not regress the single-record path.
+2. **The output convention may still differ per entry point**, because the two
+   paths optimise opposite things — `score()` pays kernel time and no write-back,
+   `apply()` pays write-back and can afford a slower kernel. But at a low-ms budget
+   the `score()` side of that choice is worth ~2.7 µs per record, so it should be
+   settled on whichever is simpler unless a request-path measurement says otherwise.
+
+Both the ns/row figures behind row 5 and the dispatch share in row 3 are derived
+from batch runs and **need re-measuring at genuine N=1** before doc 05 §3 commits.

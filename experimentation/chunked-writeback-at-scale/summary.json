@@ -1,0 +1,149 @@
+{
+  "peak_fits": {
+    "record": {
+      "points_n_bytes": [
+        [
+          10000,
+          408989696
+        ],
+        [
+          50000,
+          1006145536
+        ],
+        [
+          100000,
+          1810685952
+        ],
+        [
+          250000,
+          4225695744
+        ]
+      ],
+      "fit_bytes_per_row": 15967.021008012094,
+      "fit_intercept_bytes": 226259578.6787603,
+      "predicted_bytes_at_1e6": 16193280586.690855,
+      "predicted_GB_at_1e6": 16.193280586690854,
+      "largest_n_under_6GB_cap": 389314
+    },
+    "col_major": {
+      "points_n_bytes": [
+        [
+          10000,
+          322940928
+        ],
+        [
+          50000,
+          829550592
+        ],
+        [
+          100000,
+          1364639744
+        ],
+        [
+          250000,
+          3133992960
+        ]
+      ],
+      "fit_bytes_per_row": 11653.179752683296,
+      "fit_intercept_bytes": 218330131.34996223,
+      "predicted_bytes_at_1e6": 11871509884.033258,
+      "predicted_GB_at_1e6": 11.871509884033259,
+      "largest_n_under_6GB_cap": 534113
+    }
+  },
+  "chunked": {
+    "checksum_compared": 134,
+    "checksum_mismatches": 0,
+    "by_config": [
+      {
+        "variant": "record",
+        "chunk_size": 10000,
+        "n_chunks": 100,
+        "wall_s": 19.743840704999457,
+        "kernel_pct": 5.170430425664667,
+        "writeback_pct": 12.697055929823115,
+        "boundary_pct": 81.06152699525883,
+        "peak_rss_GB": 0.448052,
+        "ns_per_row_kernel": 1020.8415470060572
+      },
+      {
+        "variant": "record",
+        "chunk_size": 50000,
+        "n_chunks": 20,
+        "wall_s": 21.079971246999776,
+        "kernel_pct": 4.553214227630283,
+        "writeback_pct": 36.41694692582275,
+        "boundary_pct": 57.934709876514205,
+        "peak_rss_GB": 1.048676,
+        "ns_per_row_kernel": 959.8162499987666
+      },
+      {
+        "variant": "record",
+        "chunk_size": 100000,
+        "n_chunks": 10,
+        "wall_s": 21.055037909998646,
+        "kernel_pct": 4.45443054534966,
+        "writeback_pct": 36.338115360822414,
+        "boundary_pct": 58.212587706530954,
+        "peak_rss_GB": 1.792236,
+        "ns_per_row_kernel": 937.8820399979304
+      },
+      {
+        "variant": "record",
+        "chunk_size": 250000,
+        "n_chunks": 4,
+        "wall_s": 25.238043997000204,
+        "kernel_pct": 3.8668558431654736,
+        "writeback_pct": 37.292374461022696,
+        "boundary_pct": 58.00370630046549,
+        "peak_rss_GB": 4.020304,
+        "ns_per_row_kernel": 975.9187789986755
+      },
+      {
+        "variant": "col_major",
+        "chunk_size": 10000,
+        "n_chunks": 100,
+        "wall_s": 19.204740733001017,
+        "kernel_pct": 15.390438746807966,
+        "writeback_pct": 2.4616139034368283,
+        "boundary_pct": 81.12720473872409,
+        "peak_rss_GB": 0.393696,
+        "ns_per_row_kernel": 2955.693858995801
+      },
+      {
+        "variant": "col_major",
+        "chunk_size": 50000,
+        "n_chunks": 20,
+        "wall_s": 15.686738893999063,
+        "kernel_pct": 21.554028774545984,
+        "writeback_pct": 0.6749584647032089,
+        "boundary_pct": 76.61006649759709,
+        "peak_rss_GB": 0.827824,
+        "ns_per_row_kernel": 3381.1242150004546
+      },
+      {
+        "variant": "col_major",
+        "chunk_size": 100000,
+        "n_chunks": 10,
+        "wall_s": 15.82858197600035,
+        "kernel_pct": 22.080810866680277,
+        "writeback_pct": 0.37045917374615694,
+        "boundary_pct": 76.3214606483047,
+        "peak_rss_GB": 1.3664,
+        "ns_per_row_kernel": 3495.0792489980813
+      },
+      {
+        "variant": "col_major",
+        "chunk_size": 250000,
+        "n_chunks": 4,
+        "wall_s": 16.03936452599919,
+        "kernel_pct": 20.76660497117575,
+        "writeback_pct": 0.1921345134770509,
+        "boundary_pct": 77.86450017864688,
+        "peak_rss_GB": 2.963064,
+        "ns_per_row_kernel": 3330.8314710011473
+      }
+    ]
+  },
+  "elapsed_s": 207.25308384100026
+}
