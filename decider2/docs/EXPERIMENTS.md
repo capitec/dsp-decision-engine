@@ -1,6 +1,6 @@
 # Measured results — 2026-09-18/19
 
-Nineteen experiments run against real numba, on the project's own environment:
+Twenty experiments run against real numba, on the project's own environment:
 **Python 3.14.5, numba 0.67.0, llvmlite 0.49.0, numpy 2.4.6, polars 1.41.2,
 pydantic 2.13.4** — which matches doc 01's stated benchmark environment on numpy,
 polars and pydantic exactly (numba differs: 0.67.0 here vs 0.66.0 there).
@@ -34,6 +34,8 @@ change a design decision rather than a number.
 | N2 | `score()` calling convention at width | **refuted** (doc 02 §3.5's literal kwargs example) | `experimentation/n2-calling-convention/` |
 | N3 | params validation on the request path | **confirmed** (affordable as written) | `experimentation/params-validation-n3/` |
 | N4 | tail latency, concurrency, config-swap impact | **partial** — swap impact confirmed negligible; concurrent-serving `nogil=True` requirement is new | `experimentation/n4-tail-concurrency-swap/` |
+| M | the K/L contradiction | **resolved — both correct, different edit shapes** | `experimentation/kl-contradiction-resolved/` |
+| N5 | N4's unexplained tail — root cause | **resolved — OS scheduler preemption (`ru_nivcsw`), not GC/allocator/dispatch; single-core pinning makes it worse** | `experimentation/n4-tail-cause/` |
 
 **G, H and K together settle whether a configuration UI is viable: it is.** A rule
 change lands in **2.5 s (10 rules) to 7.3 s (30 rules)**, end to end, with the
@@ -567,7 +569,7 @@ a mask, decisively.
 
 ---
 
-## The K/L contradiction — unresolved, and it matters for attribution
+## M — The K/L contradiction, resolved: both are right, about different edit shapes
 
 Both ran a controlled A/B on the stale-constant hazard and **got opposite results**:
 
@@ -580,13 +582,43 @@ Both ran a controlled A/B on the stale-constant hazard and **got opposite result
   to numba's own cache, since the edit changes `co_consts` without changing
   `co_code`'s `LOAD_CONST` operand index.
 
-They may both be right about different layers, or one harness may not have cleared
-what it thought it cleared. **Do not record a root cause until this is settled** —
-§C currently attributes it to numba alone, and that attribution is now in doubt.
+**Settled by `experimentation/kl-contradiction-resolved/`.** Neither harness had a
+bug — both cleared exactly what they said they cleared. A clean 2×2, run with real
+**subprocesses** (§K's own methodology, matching doc 08 §4's real compile/load
+process boundary — not §L's in-process `spec_from_file_location` reload) and
+module-name import (doc 05 §4.1's fix), on §L's single-occurrence-threshold driver:
 
-The practical consequence is unchanged either way: **content-addressed filenames
-kill both layers at once**, and K verified that unchanged content still hits
-(0 compile events) while changed content misses and returns the correct value.
+| arm | `.pyc` cleared | numba cache cleared | served | truth | stale? |
+|---|---|---|---|---|---|
+| both live | no | no | 0.1 | 0.15 | yes |
+| **`.pyc` only cleared** | **yes** | no | **0.1** | 0.15 | **yes** |
+| numba cache only cleared | no | yes | 0.1 | 0.15 | yes |
+| both cleared | yes | yes | 0.15 | 0.15 | no |
+
+The `.pyc`-only-cleared row is decisive: the child process's own dump of
+`co_consts` after that run shows `(0.595, ...)` — CPython genuinely re-parsed the
+*edited* source — yet the value served was still the pre-edit `0.1`. Only numba's
+own on-disk cache (left untouched in that arm) could have produced that.
+
+**Why K never saw this:** K's driver (`gen_driver.py`) shares one literal
+(`0.5`) across every branch; its same-byte-length edit changes only *one* of the
+16 occurrences, and the value is still needed at the other 15. Direct `co_consts`
+comparison (`verify_mechanism.py`) shows this is not a value-for-value swap: it
+**inserts** a new slot (`0.7`) while **keeping** the old one (`0.5`), which shifts
+every downstream `LOAD_CONST` operand — `co_code` changes, and numba correctly
+misses. Reproducing K's *actual* edit confirms it: `co_code` sha256 changes.
+Reproducing L's edit (the literal has no other occurrence — the real shape of a
+single rule's threshold) on the same machine confirms the opposite: `co_code`
+sha256 is byte-identical before and after. **Both attributions are correct; they
+are about edits with different `co_consts`-collision shapes, and K's driver
+structurally could not produce the shape that exposes numba's own cache.**
+
+**Practical consequence, now settled rather than assumed: content-addressed
+filenames kill both layers at once**, confirmed with *neither* cache cleared
+(`content_addressed.py`): an unchanged "redeploy" (same hash, same path, write
+skipped) still hits honestly and correctly; an edited one gets a structurally
+different path and recompiles correctly. This was always the fix either way, and
+now rests on a mechanism, not just an agreement between the two attributions.
 
 ---
 
@@ -1122,3 +1154,132 @@ framework-level and a noise-level explanation both plausible for the size of
 M1's p99.9/max specifically, though M3's `nogil=True` numbers (flat tail across
 1–16 threads) argue the *framework* is not the driver once the GIL-holding
 kernel variant is ruled out.
+
+---
+
+## N5 — N4's unexplained tail, root cause: OS scheduler preemption, not GC/allocator/dispatch
+
+N4/M1 explicitly named its own gaps: **"Not tested... core-pinning as a way
+to reduce M1's OS-jitter tail; a second, idle-machine run."** N5 closes both,
+by instrumenting every call directly instead of theorizing further.
+`experimentation/n4-tail-cause/`. Method: reuse N1's `score()`/`DRIVER`
+verbatim; time only the call itself (`t0`/`t1` wrap `score()`, nothing else),
+and capture — *outside* that window, so they don't contaminate the
+measurement — `resource.getrusage()` deltas (`ru_minflt`/`ru_majflt` page
+faults, `ru_nvcsw`/`ru_nivcsw` context switches), current CPU core (from
+`/proc/self/stat` field 39 — `os.sched_getcpu()` does not exist on this
+Python 3.14 build, confirmed `AttributeError`), and `sys.getallocatedblocks()`/
+`gc.get_count()[0]` deltas. Four configs, n=20,000 (A/B/C) or 8,000 (D):
+
+| config | p50 | p99.9 | max | % budget (max) |
+|---|---|---|---|---|
+| A — unpinned, ambient load | 1053.1µs | 2004.4µs | 3008.1µs | 15.04% |
+| B — pinned to one core | 1052.3µs | 3268.3µs | 4959.0µs | **24.80%** |
+| C — no-op control (same loop/instrumentation, no `score()`) | 0.281µs | 0.390µs | 6.032µs | 0.03% |
+| D — 14/28 cores externally busy (bounded, self-terminating stressors) | 2374.7µs | 2905.1µs | 2995.9µs | 14.98% |
+
+**Config C rules out the harness/timer itself as the explanation** (brief's
+hypothesis 5): an identically-instrumented no-op loop shows essentially no
+tail at all. Whatever produces A/B/D's multi-millisecond outliers is
+intrinsic to running `score()`, not an artifact of the measurement loop.
+
+**Correlation, not theory** — Pearson r between per-call latency and each
+signal, across all calls in each config:
+
+| signal | A (r) | B (r) | D (r) | measured behavior |
+|---|---|---|---|---|
+| `ru_minflt` / `ru_majflt` (page faults) | 0.0 | 0.0 | 0.0 | **exactly zero in every one of 48,000+ calls, all 4 configs.** Instrument validated separately: touching a fresh 64MiB buffer moved `ru_minflt` by 16385 (expected 16384) — the "always zero" reading is real, not a broken sensor. |
+| `ru_nvcsw` (voluntary ctx switch) | 0.0 | 0.0 | 0.0 | always zero — `score()` never blocks on I/O/a syscall mid-call |
+| `ru_nivcsw` (involuntary ctx switch — OS preempted the thread) | 0.053 | **0.560** | 0.211 | **the finding.** Nonzero in 0.96% (A) / 1.48% (B) / 7.14% (D) of all calls overall, but in 5.5%/25%/98.75% of the top-1%-slowest calls and **100%/100% of the top-0.1%-slowest calls in B and D** — i.e. every single one of the most extreme outliers in the pinned and contended configs coincides with the process being involuntarily preempted mid-call. |
+| CPU migration (core changed) | 0.025 (RR₉₉=60×, but only 5 raw events) | 0 (pinned — impossible) | ≈0 | rare (0.025–0.0625% of calls) and enriched when it happens, but explains only a handful of A's ~200-call top-1% bucket — not the primary driver |
+| `sys.getallocatedblocks()` delta | 0.006 | -0.002 | -0.014 | no relationship |
+| `gc.get_count()[0]` delta | 0.004 | -0.002 | -0.010 | no relationship — consistent with N4/M2's GC-off finding |
+
+**Allocator/mmap-threshold hypothesis, directly refuted.** Doc 01/N1 measured
+~49,764 bytes / ~215 blocks per `score()` call. A separate pure-Python sweep
+(`alloc_sweep.py`, no numba involved) allocated+touched+freed a single buffer
+8 sizes from 4KB to 1MB — bracketing glibc's 128KB default
+`M_MMAP_THRESHOLD` — n=3000/size (24,000 calls): `ru_minflt`/`ru_majflt` per
+call was **0.000 at every size tested**, and p50/p99.9/max scaled smoothly
+with size (p50: 0.53µs at 4KB → 34.41µs at 1MB) with no threshold cliff.
+Repeated same-size alloc/free in a steady-state loop is served from
+glibc's/pymalloc's already-faulted free lists, never re-faulting — this
+holds up to 80× decider2's actual per-call allocation volume.
+
+**numba dispatch-cache hypothesis, directly refuted for this deployment
+shape.** `DRIVER.overloads` has exactly 1 registered specialization, before
+and after 5000 additional calls. A single-signature dispatcher has nothing to
+miss on — this is measured (the count), though the claim that a
+single-signature dispatch structurally cannot incur a type-resolution miss is
+reasoned from how numba's dispatcher works, not traced through its C source.
+
+**Pinning to one core makes the tail *worse*, not better** (brief's
+hypothesis 4). B's p99.9 is 63% higher and max 65% higher than A's, with
+`ru_nivcsw` now explaining literally 100% of the extreme tail. Mechanism:
+unpinned, the OS scheduler can route the thread onto a *different, quieter*
+core when the current one gets momentarily busy; pinned, that escape hatch is
+gone and every bit of whatever else lands on that one core (kernel work,
+other processes, IRQ handling) queues up against `score()` directly, with
+nowhere else to go. **Do not recommend `sched_setaffinity`-style single-core
+pinning as a tail mitigation** — it measurably backfires here. Core isolation,
+if wanted, needs cgroup/`cpuset`-level exclusion of *other* processes from the
+reserved core(s), not merely pinning the serving process to one.
+
+**Does it scale with anything decider2's own design controls? No — measured,
+not inferred, on both axes tested.** Allocation volume: refuted above (0
+fault effect across an 80× size range). Contention: `contended_run.py` held
+14 of 28 cores busy with bounded (`timeout`-capped, self-terminating)
+busy-spin loops and re-ran config A. The median roughly **doubled** (1053µs →
+2375µs, 5.3% → 11.9% of a 20ms budget) — but the max/tail-to-median ratio
+**shrank** (2.86× → 1.26×), and the max itself (2996µs, 14.98% of budget) did
+not exceed A's own max. Under this one contention regime, load raises the
+*whole distribution* together rather than making rare outliers
+multiplicatively worse — a materially different, and materially less alarming,
+degradation shape than "19.2% max becomes 120%." **This is scoped to one
+moderate contention level (14/28 cores, bare busy-spin) on this box — full
+saturation and, especially, cgroup/Kubernetes-style `cpu.max` quota
+throttling (a harder-edged, periodic-freeze mechanism, not probabilistic
+preemption) were both dropped for the time budget and could behave
+differently.**
+
+**What remains genuinely unexplained:** in config A (unpinned, ambient load),
+~95% of the individual top-1%-slowest calls show **no** signal on any of the
+7 captured metrics — `ru_nivcsw` and migration together account for only a
+handful of A's ~200-call top-1% bucket. The leading explanation — brief
+interrupt/softirq handling that doesn't register as a `nivcsw`-counted
+context switch on this process, or a race in the sub-microsecond gap between
+an instrumentation read and the timed call itself — is **reasoned, not
+measured**; confirming it would need `perf`/`ftrace`-level tracing, dropped
+for the ~12-minute budget. Once contention is either concentrated (pinning,
+config B) or increased (config D), `ru_nivcsw` closes that gap almost
+completely (100%/98.75% of the extreme tail) — so the "no signal" residue in
+A looks like the same mechanism at a rate too low for this sample size to
+catch cleanly, not a distinct second cause, but that is inference from the
+pattern across configs, not a direct measurement on A alone.
+
+### What doc 02 / doc 08 should say
+
+1. **N4/M1's tail is now explained, not just "not GC."** It correlates with
+   `ru_nivcsw` (OS scheduler preemption) — up to r=0.56, and up to 100% of
+   the extreme (p99.9+) tail in two of three real-load configs. It is a
+   property of running on a shared/contended host, not of decider2's own
+   allocation shape, GC behavior, or numba dispatch — all three were directly
+   measured and ruled out (0 page faults across 48,000+ calls and a
+   24,000-call allocation sweep spanning 80× the real per-call volume; 1
+   dispatch signature, unchanged after 5000 more calls).
+2. **Do not add a core-pinning recommendation to doc 02/08.** It was tested
+   as a candidate mitigation and measured to make the tail *worse*
+   (p99.9 +63%, max +65%) by removing the OS's own contention-routing. If
+   dedicated capacity is wanted for a serving process, it is a cgroup/cpuset
+   deployment concern (excluding other processes from reserved cores), not a
+   `sched_setaffinity` call inside decider2.
+3. **Doc 02/08's SLA guidance should track median-under-load, not only max,
+   on a shared host.** The one contention regime tested here (14/28 cores
+   externally busy) roughly doubled the median (5.3% → 11.9% of a 20ms
+   budget) while leaving the max essentially flat (~15%) — under load, the
+   risk is the whole distribution shifting up, not a runaway outlier. This
+   finding is scoped to bare CPU contention on this box; cgroup/Kubernetes
+   `cpu.max` throttling was not tested and could behave differently (a
+   periodic hard freeze rather than probabilistic preemption), and full
+   28/28-core saturation was intentionally not run (bounded to 14/28 out of
+   consideration for other users of this shared box).

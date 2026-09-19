@@ -27,7 +27,7 @@ pages later) by its correction. `EXPERIMENTS.md` always wins.
 | extract via `series.to_arrow()` then a 2-tuple `buffers()` unpack | **cannot execute** (needs pyarrow, absent) and is wrong for Utf8 (3 buffers). Use polars-native `_get_buffers()` | 05 §1.2 → §A |
 | write-back is 54.7% of total; records are the convention both sides | 64.0% here, and record output is beaten on both axes by dtype-grouped 2D arrays | 01 §4d, 02 §1 → §J |
 | per-node fallback to Python inside a fused driver | **impossible** — a nopython driver cannot call Python. `objmode` per row is 77×; plain Python is 23.5×. Blast radius is the kernel | 02 §3.2, 05 §6 → §B |
-| byte-identical generated source is enough for cache survival | necessary, not sufficient — **seven** conditions, and stale code can be served | 05 §4.2 → §C, §K |
+| byte-identical generated source is enough for cache survival | necessary, not sufficient — **seven** conditions, and stale code can be served, **at both the CPython .pyc layer and numba's own cache layer independently, depending on edit shape** | 05 §4.2 → §C, §K, §L, §M |
 | compile in a background worker (read as: thread) | must be a **subprocess** — a thread retains 26–55% of serving throughput, a subprocess 97.9% | 08 §4 → §H, §K |
 | `score(net_income=…, expenses=…, …)` with keyword arguments | at 400 inputs that binds in **1190 µs — 5.95% of a 20 ms budget**. `score()` takes a dict | 02 §3.5 → §N2 |
 | `decider build --verify` enforces config completeness | it does not; it is a compile-count assertion. Completeness is `resolve_params(complete=True)` | 04 §2.1 → REVIEW §3.1 |
@@ -50,7 +50,7 @@ optimise the kernel for realtime.
 
 ## 2. What is actually settled
 
-Nineteen experiments, harnesses in `experimentation/`, results in
+Twenty experiments, harnesses in `experimentation/`, results in
 `EXPERIMENTS.md`. These are measured on this machine, this environment
 (Python 3.14.5, numba 0.67.0, numpy 2.4.6, polars 1.41.2, pydantic 2.13.4):
 
@@ -166,9 +166,13 @@ change's blast radius.
 
 O17 (approval granularity — policy, not design), O19/O20 (need a realistic
 pipeline that does not exist yet), O12 (fusion cost model — explicitly out of
-scope now that fusion is authored), O9 (stepping UX), the K/L attribution
-contradiction (mitigated by content-addressing either way), N4's unexplained
+scope now that fusion is authored), O9 (stepping UX), N4's unexplained
 3.8 ms max (inside budget, cause unknown).
+
+The K/L attribution contradiction is **no longer open** — settled by
+`experimentation/kl-contradiction-resolved/` (EXPERIMENTS.md §M): both caches are
+independently vulnerable, for different edit shapes, and content-addressing was
+never conditional on which one — see EXPERIMENTS.md §M and doc 05 §4.2.
 
 **Cannot be settled without a human:** O3/E4.
 

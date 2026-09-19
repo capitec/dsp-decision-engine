@@ -264,15 +264,24 @@ Plus the original requirements, which still apply: deterministic ordering (no
 set/dict iteration order dependence), no addresses, timestamps, `id()` values or
 PIDs in generated names, and stable naming derived from module ids.
 
-> **⚠ Compiled code can be served stale.** Condition 6 hashes `co_code`, which
-> **excludes `co_consts`** — but the layer responsible is **contested and must not
-> be recorded as settled** ([EXPERIMENTS.md](EXPERIMENTS.md) §K vs §L). §K found that clearing
-> CPython's `__pycache__/*.pyc` alone fixed it; §L found it still served stale with
-> the `.pyc` cleared and numba's own cache untouched. Two caches are keyed on
-> (mtime, size) and both are candidates. Change a numeric constant in a generated driver, keep
-> the file size identical, restore the mtime — numba reports a cache **hit** and
-> returns the pre-edit answer. `decider build --verify` counting zero compiles
-> reports success on it.
+> **⚠ Compiled code can be served stale — at either of two independent layers,
+> and both are real.** Condition 6 hashes `co_code`, which **excludes
+> `co_consts`**. **Settled** ([EXPERIMENTS.md](EXPERIMENTS.md) §M, resolving §K vs
+> §L): CPython's `__pycache__/*.pyc` cache and numba's own on-disk cache are
+> **each independently sufficient** to serve a stale value from a byte-identical,
+> mtime-preserved edit — which one fires depends on whether the edited constant
+> collides with another value in the function's `co_consts`, not on which harness
+> ran the test. If the edited literal is shared elsewhere in the function
+> (unchanged), the edit is a `co_consts` *insertion* that shifts every later
+> `LOAD_CONST` operand, so `co_code` changes and numba's cache misses correctly —
+> only CPython's `.pyc` can still serve the pre-edit function object in that case.
+> If the edited literal has **no other occurrence** — the shape of a single
+> rule's threshold, one value used once — the edit is a same-slot *replacement*,
+> `co_code` stays byte-identical, and **numba's own cache serves the stale value
+> even with `__pycache__/*.pyc` cleared and the source genuinely re-parsed.**
+> Change a numeric constant in a generated driver, keep the file size identical,
+> restore the mtime — numba reports a cache **hit** and returns the pre-edit
+> answer. `decider build --verify` counting zero compiles reports success on it.
 >
 > Two consequences, both mandatory:
 >
