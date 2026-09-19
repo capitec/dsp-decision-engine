@@ -330,7 +330,7 @@ one screen, with everything needed inlined** — the policy term, the value the 
 actually read, its provenance, and the limit it must respect, all rendered at the
 point of use rather than referenced.
 
-### 6.3b A reviewer cannot adjudicate a mismatch — the framework must assert it
+### 6.3b A reviewer cannot adjudicate a mismatch they are shown
 
 **Settled by a second, smaller test, and this supersedes the rendering approach.**
 
@@ -358,44 +358,55 @@ seeking.
 > a check the system already made.** No rendering fixes this, because it is not a
 > presentation problem.
 
-**The mechanism this requires.** A policy term becomes a first-class declared
-binding, not prose:
+**A mechanism was proposed and then withdrawn.** The first response to this was a
+declared policy-term binding — `PolicyTerm("§7.4.2", reads="verified_net_income")`
+— with a step declaring `implements="§7.4.2"` and the framework checking the
+signature against the binding at build time. It was rejected, correctly:
+
+> *"if we have to for every rule say what it reads that would be way too tedious…
+> it's already obvious from the function definition that the system only reads
+> `monthly_income`. I think this might be overengineering."*
+
+The objection is right about the part that matters. The step's signature is
+already the complete statement of what it reads, and `reads=` puts a value name in
+a **second place** that must be kept in sync and is only as good as whoever wrote
+it. That is a real cost for a mapping the framework cannot verify.
+
+### 6.3c What the framework can and cannot do here
+
+The distinction this exercise actually established:
+
+| | |
+|---|---|
+| **The framework can** | show what a rule reads, and the resolved definition of each value it reads, at the point of use |
+| **The framework cannot** | know that policy's phrase *"verified net monthly income"* means `verified_net_income` and not `monthly_income` — both are plausible readings of a real domain term, and both values legitimately exist |
+
+Closing that second gap requires a human to write the mapping down. **Writing it
+down is the registry that was just rejected as overengineering, and that rejection
+is reasonable** — it is one line per policy clause, permanently maintained, to
+catch a bug class that a single rule-level test also catches:
 
 ```python
-# policy_terms.py — reviewed once, by a human, and it is the whole review surface
-PolicyTerm("§7.4.2", reads="verified_net_income",
-           statement="verified net monthly income, after statutory deductions")
+def test_low_net_income_caps_term():
+    assert term_cap(verified_net_income=7_480.0, gross_salary=9_200.0) == 48
 ```
 
-```python
-@step(implements="§7.4.2")
-def cap_by_income_band(monthly_income: float, ...):   # ← BUILD ERROR
-    ...
-```
+That test fails the moment the rule reads the wrong income, costs one function,
+and is already the design's stated correctness mechanism (§7, doc 03 §11).
 
-> `cap_by_income_band` declares `implements="§7.4.2"`, which is bound to
-> `verified_net_income`. It reads `monthly_income`. These are different values and
-> both exist in this pipeline. Either read `verified_net_income`, or change the
-> binding, or drop the `implements` claim.
+> **Settled: the framework does not attempt to verify that a rule implements a
+> policy clause.** It surfaces what a rule reads and what those values mean;
+> confirming that against policy is a human judgement supported by tests, not a
+> build-time check. Two attempts to make a rendered artefact carry that judgement
+> both failed, and the mechanism that would have worked costs more than the bug.
 
-Three consequences, and they all make the governance story *smaller*:
-
-1. **The breach becomes a build error**, caught by CI, not a warning rendered into
-   a document that a reviewer must notice. The first test's breach could not have
-   shipped.
-2. **The review surface collapses to one line per policy clause.** A reviewer
-   confirms `§7.4.2 → verified_net_income` — a single binding, in their own
-   vocabulary, with no code and no tracing. That is a task a non-programmer can
-   actually do, and it is the only one this exercise found.
-3. **It generalises to the second breach too.** §7.4.5 said no pricing adjustment
-   may override a term reduction. As prose on a sheet, invisible. As a declared
-   property of the policy term — `adjustable=False` — ADJ-0117 fails at approval
-   rather than being rendered as routine.
-
-**What this costs.** Someone must write the policy-term bindings, and they are
-only as good as that mapping. But it is a mapping a credit-risk reviewer can read
-and correct, written once per clause rather than re-derived per review — which is
-the opposite of the position the two tests just failed from.
+**What survives, and it is the cold-read study's own finding independently:** a
+rule needs a **join key to the policy clause it implements** — `implements="§7.4.2"`
+as metadata, with no `reads=` and no registry. That is one string, it duplicates
+nothing, and it makes "which rules implement §7.4" answerable mechanically instead
+of by reading prose. The cold-read study reached the same conclusion from the
+opposite direction: *"the top-ranked risk is 'verify a rule against a policy
+document' and a rule carries no key to join to a policy document on."*
 
 **6.4 There is no single reviewable artefact, and there should not be.** A
 single prescribed format was the wrong shape — see §6.5.
