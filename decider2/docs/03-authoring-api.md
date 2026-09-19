@@ -383,6 +383,16 @@ Steps read named fields (`params.min_ratio`). Under the hood the model becomes a
 `NamedTuple` whose *type* is fixed, so changing *values* never recompiles
 anything — verified in prototype.
 
+✅ **Measured — [EXPERIMENTS.md](EXPERIMENTS.md) §N3.** "Under the hood" undersells
+this conversion: at 50 module instances it costs *more* than validating the raw
+document in the first place (170.6 µs conversion vs 78.3 µs validation) — both
+scale the same way with module count, but conversion pays a second full pass over
+the same data. Combined, validate-and-convert is still cheap in absolute terms
+(256.5 µs, 1.28% of a 20 ms budget at 50 modules), but if a params document
+recurs across requests, caching the *converted* `NamedTuple` bundle by content is
+worth far more than caching the validation result alone — a memoized lookup
+measured 726–765× cheaper at the same scale.
+
 Rules:
 
 - **Per invocation.** An invocation is 1 row or N rows, which covers realtime
@@ -768,11 +778,20 @@ count.
 ### Realtime, single record
 
 ```python
-score = Affordability.score(net_income=42000.0, expenses=18000.0,
-                            instalment=3100.0, params=p)
+score = Affordability.score(
+    {"net_income": 42000.0, "expenses": 18000.0, "instalment": 3100.0, …},
+    params=p,
+)
 ```
 
-Bypasses polars entirely (doc 02 §3.4).
+Bypasses polars entirely (doc 02 §3.4). Takes a **dict**, not 400 individual
+keyword arguments — measured, not a style choice: at this document's realistic
+width (400 inputs, doc 01 §4d), a literal keyword-argument call costs 5.95% of a
+20 ms budget on the calling convention alone (CPython's keyword-binding cost
+scales close to quadratically with parameter count), against 0.30% for a dict
+carrying the same data. See doc 02 §3.5 and EXPERIMENTS.md §N2. kwargs syntax
+remains fine for a small, hand-written call — a low-arity module, a test — where
+the width is small enough that the cost doesn't matter either way.
 
 ### Debugging one record
 
