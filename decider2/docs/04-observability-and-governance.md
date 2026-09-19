@@ -42,9 +42,26 @@ split too, which means **one mechanism serves both**:
 | **params** | values behind a fixed type | no recompile; graph unchanged; bounded by validators |
 | **structure** | which steps exist and how they wire | new graph, new compile, new review |
 
-So: business users move params, engineers move structure. A param change
-provably cannot alter control flow, because the compiled code is identical —
-the same machine code runs with different constants.
+So: business users move params, engineers move structure.
+
+**Be precise about what this guarantees, because the obvious phrasing is false.**
+A param change cannot alter the **graph** — which steps exist, how they wire,
+what can affect what. Static lineage, the rendered diagram and the schema are all
+invariant under it, and the compiled machine code is identical.
+
+It emphatically **can** alter which arm a given record takes. The branch
+instruction is in the code; the constant it compares against is the param. The
+worked example in doc 03 §12 is exactly this:
+
+```python
+if min_net_salary < params.income_threshold * shared.base_rate:
+```
+
+Moving `income_threshold` changes the outcome for every applicant near the
+boundary. So the guarantee is *structural invariance*, not *behavioural
+invariance*, and the honest consequence is that a param change needs **impact
+review** — what fraction of a representative sample changes decision — precisely
+because validators alone cannot bound that. Doc 08 §5 specifies the mechanism.
 
 Three mechanisms bound the blast radius:
 
@@ -60,20 +77,33 @@ Three mechanisms bound the blast radius:
 
 Worth being straight about this, because it's easy to over-claim.
 
-**Enforced by the framework:** value ranges (validators), that a param cannot
-change structure, that a step cannot see another module's params, that a
-misspelled param is an error rather than silence (`extra="forbid"`), and that
-production config must be complete rather than inheriting code defaults
-(`decider build --verify`).
+**Enforced by the framework:** value ranges (validators); that a step cannot see
+another module's params; that a misspelled param is an error rather than silence
+(`extra="forbid"`); that a **params document cannot carry composition**, because
+`resolve_params` rejects composition keys (doc 08 §2); that a params document
+resolves complete when asked, naming every field that fell back to a code
+default; and that a resolved bundle carries a non-empty `origin` token.
 
-**Not enforced by the framework:** that a business user edits
-`config/term_loan/production.json` and not `modules/policy_rules/params.py`.
-Nothing technically stops them. What the design provides is that the boundary is
-**visible and separable** — params live in config files, structure lives in
-Python — so repository policy can differ between the two paths (review rules,
-CODEOWNERS, separate approval). Enforcement is CI and review policy; the
-framework's job is making the line unambiguous enough that policy can attach to
-it.
+**Not enforced by the framework:**
+
+- That a business user edits a config document and not `modules/policy_rules/params.py`.
+  Nothing technically stops them.
+- **Where a params document came from**, or who was allowed to supply it. The
+  framework records the `origin` token it was handed; it does not parse or verify
+  it (doc 08 §2).
+- **Who may activate a staged pipeline.** Approval is the caller's policy (doc 08 §4).
+
+What the design provides is that the boundary is **visible and separable** —
+params and module interiors are data documents, the graph skeleton is Python — so
+repository policy can differ between the two paths (review rules, CODEOWNERS,
+separate approval). Enforcement is CI and review policy; the framework's job is
+making the line unambiguous enough that policy can attach to it.
+
+> **Correction to an earlier draft.** This section previously credited
+> `decider build --verify` with enforcing config completeness. It does not —
+> docs 02 §3.4 and 05 §8 define that flag as a numba-cache assertion and nothing
+> else. Completeness is computable from pydantic's `model_fields_set` and is
+> enforced by `resolve_params(..., complete=True)`; see doc 08 §2.
 
 ---
 

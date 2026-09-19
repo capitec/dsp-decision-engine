@@ -25,11 +25,18 @@ myproject/
   pipelines/
     term_loan.py                # composition
     access_facility.py
-  config/
-    shared.json                 # SharedParams values
-    term_loan/
-      production.json           # explicit and complete
-      staging.json
+  vocabulary.py                 # project name map, if the project's values differ
+                                # from a shared library's (doc 03 §5.2)
+  contracts/                    # frozen module interfaces, for published modules
+    affordability.json
+  config/                       # the DEFAULT layout the CLI assumes — one option,
+    term_loan/                  # not an interface. Any loader returning a dict
+      production.json           # works just as well (doc 08 §6).
+      staging.json              #   params: explicit and complete, incl. shared
+      rules/
+        policy_rules.json       #   interior: the body of one ruleset
+  schemas/
+    term_loan_input.json        # declared input-frame schema — `build` needs it
   tests/
     modules/                    # rule-level intent assertions
     pipelines/                  # end-to-end, golden traces
@@ -105,61 +112,83 @@ engine cannot tell the difference.
 inline in pipelines/x.py  →  modules/checks.py  →  modules/checks/
 ```
 
-The rule, which is cheaply lintable: **every `def` in a pipeline file must be
-referenced by a `module(...)` call in that file.** Steps may not float.
+The rule, which is cheaply lintable: **every `def` in a pipeline file must appear
+in the pipeline expression or in a `module(...)` call in that file.** Steps may
+not float.
+
+A bare function in the pipeline expression is itself a module (doc 03 §5.3), so
+the smallest useful thing is one function and one line — not a directory.
 
 ---
 
 ## 4. Pipelines as Python or as config
 
-Both are first-class and produce the same object, because structure is data
-(doc 02 §2). Python builds it with `module(...)` and `|`; JSON builds it with
-`{"use": <id>, ...}` resolved through the discriminated union (doc 02 §2.1).
+**The pipeline skeleton is Python.** Which modules exist and how they wire is
+composed with `module(...)` and `|`, reviewed in git, and changed by an engineer.
+Config fills in values and the interiors of data-shaped modules — doc 08 §2.
 
-Combinators serialise too, since they are structure rather than logic:
+| | compose modules | set params | edit rules in a `ruleset` | define new logic |
+|---|---|---|---|---|
+| `pipelines/term_loan.py` | yes | yes | yes | yes — inline modules |
+| params document | **no** | yes | no | no |
+| interior document | **no** | no | yes | no |
 
-```json
-{"type": "branch",
- "condition": "credit:is_private_sector",
- "arms": [{"use": "credit:cap_private"}, {"use": "credit:cap_public"}],
- "modifies": ["term_cap"]}
-```
+This is narrower than an earlier draft of this section, which granted JSON the
+power to compose modules and declare `Branch` nodes. That was withdrawn for three
+reasons, all in doc 08 §2: a composed graph arriving at runtime makes static
+lineage a promise about something nobody reviewed; it puts a graph nobody reviewed
+behind the audit hash; and it gains nothing a UI actually needs, because the
+UI-editable surfaces are params, tables and rules — all of which are *interiors*
+of a declared module.
 
-**One honest asymmetry:**
+**The option is deliberately left open.** The graph is a pydantic instance either
+way, so widening this is an *admission policy* rather than a redesign
+(doc 08 §7) — one call site, no new machinery, because interiors already require
+everything composition would. And if a pipeline-builder UI is wanted, the better
+answer is to have it **emit Python** and commit it: the graph stays in git, gets
+reviewed, gets a commit hash, and a generated pipeline is indistinguishable from
+a hand-written one.
 
-| | compose modules | set params | define new logic |
-|---|---|---|---|
-| `pipeline.py` | yes | yes | yes — inline modules |
-| `pipeline.json` | yes | yes | **no** |
-
-JSON cannot define logic; code is code. The useful consequence is that **an
-inline module is not addressable from JSON until it is registered** — which means
-importable, which means it lives in `modules/`.
-
-So "move it into `modules/` and register it" becomes the natural price of making
-something reusable from config. Proportionate, and it keeps the JSON surface
-referencing only properly packaged things. A small pipeline can stay Python
-forever and never pay it.
+The useful consequence of the module/interior split is unchanged: **an inline
+module has no interior document until it is registered** — which means importable,
+which means it lives in `modules/`. "Move it into `modules/` and register it"
+stays the natural price of making something configurable. A small pipeline can
+stay pure Python forever and never pay it.
 
 ---
 
 ## 5. Running, exporting, and the audit artefact
 
 ```
-decider run    pipelines/term_loan.py
-decider run    config/term_loan/production.json
-decider export pipelines/term_loan.py -o term_loan.json   # fails if any module is inline
-decider build  term_loan                                  # AOT compile, doc 02 §3.4
+decider run     pipelines/term_loan.py --params config/term_loan/production.json
+decider export  pipelines/term_loan.py --params -o config/term_loan/production.json
+decider export  pipelines/term_loan.py --interiors -o config/term_loan/rules/
+decider build   term_loan --schema schemas/term_loan_input.json   # AOT, doc 02 §3.4
+decider config  fill config/term_loan/production.json --from term_loan
 ```
 
-The workflow this supports: **prototype in Python, export to JSON for
-deployment.**
+Three things to note, all consequences of doc 08:
 
-And `export` output *is* the explicit, complete, fully-resolved config that §2
-argues production needs for auditability — one artefact serving both purposes
-rather than two that can drift. The export also mechanically proves every part of
-the pipeline is registered and addressable, which is a stronger guarantee than a
-review.
+- **`export` is split by document kind, not merged.** `--params` materialises
+  every parameter at its current resolved value; `--interiors` writes each
+  data-shaped module's body. They version independently: a params retune must not
+  change the structure fingerprint, and it would if they shared a file.
+- **`build` takes an input schema.** Column dtypes and nullability determine the
+  record dtype, the numba signature and the `float64`-vs-`Optional` choice per
+  step, so the pipeline alone is not enough to compile (doc 05 §8, O11).
+- **`config fill`** writes newly added params at their schema default and leaves
+  existing values untouched, so a library upgrade that adds a parameter lands as
+  a reviewable diff rather than as a simultaneous hard failure in every consuming
+  project.
+
+The workflow this supports: **prototype in Python, export the documents for
+deployment, keep the skeleton in git.**
+
+`export --params` output is the explicit, complete, fully-resolved params document
+that §2 argues production needs for auditability. Pipeline identity is *not* its
+hash — that is params identity. What identifies the thing that ran is the
+structure fingerprint plus the compiled artefact id (doc 08 §8), which is why the
+two are recorded separately rather than merged into one file.
 
 ---
 
@@ -170,8 +199,20 @@ project (doc 01 §5):
 
 | rule | prevents |
 |---|---|
-| every `def` in `pipelines/` is referenced by a `module(...)` in the same file | logic hiding in composition |
+| every `def` in `pipelines/` appears in the pipeline expression or in a `module(...)` in the same file | logic hiding in composition (doc 03 §5.3) |
+| a module does not mix `param()` defaults and an explicit params model | two declarations of the same knob (doc 03 §4.4) |
 | every module directory has a corresponding test | one test file for 66 modules |
 | no bare numeric literal in a step body where a param exists with that value | a parameter existing in two places with no link (§5.3 — `max_term: 84` in JSON *and* hardcoded in two modules) |
 | `grep -r "@breaks_lineage"` reviewed in CI | lineage gaps accumulating unnoticed |
-| production config is complete — no reliance on code defaults | audit requiring cross-reference to a commit |
+| production params document is complete — no reliance on code defaults | audit requiring cross-reference to a commit |
+| no I/O import (`json`, `os`, `pathlib`, `socket`, HTTP) under `binding/` or `params/` | the framework re-acquiring config sourcing (doc 08 §6) |
+| `origin=` is never a string literal at a serving or pipeline entry point | provenance degrading to `origin="prod"` |
+| `from_config(pipeline.to_dict()) == pipeline` round-trips in CI | the graph data model drifting into something config cannot express (doc 08 §7) |
+| no node id generated with `uuid` | path codes incomparable across versions, and non-deterministic codegen (doc 08 §3.1) |
+| no `{module_name, function_name}` pointer in any config document | code resolved by `getattr` with no declared interface or schema (doc 08 §1.1) |
+| no expression string in any config document | a second, unspecified way to write arithmetic (doc 08 §3.2) |
+| no bare `round()` in a step body — use `round_half_up` | njit and CPython round differently; one cent per disagreement (doc 03 §1.2) |
+| no `Decimal` in a step signature or an input schema | raises a Rust panic at the boundary that `except Exception` misses (doc 05 §1.5) |
+| no `int64` accumulator over a money column | wraps at 2,667 rows on realistic loan sizes (doc 03 §1.2) |
+| every published module has a frozen `contract=` file, checked in CI | a library interface changing without its consumers knowing (doc 03 §5.1) |
+| no identity-passthrough step (`return <param>`) | the workaround for a missing relabel — 79 of them in one project (doc 01 §5.1) |

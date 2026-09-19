@@ -1,0 +1,625 @@
+{
+  "python": "/home/sholto/Documents/Workspace/capitec/dsp-decision-engine/.venv/bin/python",
+  "numba": "0.67.0",
+  "workdir": "/tmp/claude-1000/-home-sholto-Documents-Workspace-capitec-dsp-decision-engine/e4ec032f-4ae9-45ee-be8a-e8c600b03a03/scratchpad/expC",
+  "n_args": 200,
+  "results": [
+    {
+      "scenario": "exec_cache_true",
+      "exec_probe": {
+        "stage": "decorate",
+        "exc_type": "RuntimeError",
+        "message": "cannot cache function 'f': no locator available for file '<string>'"
+      }
+    },
+    {
+      "scenario": "A1 cold (empty cache)",
+      "question": "does a first build compile?",
+      "ok": true,
+      "hits": 0,
+      "misses": 1,
+      "first_call_s": 5.13478280196432,
+      "process_wall_s": 5.867216772981919,
+      "source_sha256": "6a2e68d6a8aa908f75b2e4e2f822a08fc32dfa12f7dbd9075fbc81e1b28255d0",
+      "source_stamp": [
+        1789747256.8010466,
+        18956
+      ],
+      "index_path": "/tmp/claude-1000/-home-sholto-Documents-Workspace-capitec-dsp-decision-engine/e4ec032f-4ae9-45ee-be8a-e8c600b03a03/scratchpad/expC/build_a/__pycache__/drv.driver-5.py314.nbi",
+      "filename_base": "drv.driver-5.py314",
+      "locator": "InTreeCacheLocator",
+      "cpu_name": "<unset>",
+      "error": null
+    },
+    {
+      "scenario": "A2 warm, file untouched #1",
+      "question": "does an untouched file hit?",
+      "ok": true,
+      "hits": 1,
+      "misses": 0,
+      "first_call_s": 0.19271386798936874,
+      "process_wall_s": 0.8897912019165233,
+      "source_sha256": "6a2e68d6a8aa908f75b2e4e2f822a08fc32dfa12f7dbd9075fbc81e1b28255d0",
+      "source_stamp": [
+        1789747256.8010466,
+        18956
+      ],
+      "index_path": "/tmp/claude-1000/-home-sholto-Documents-Workspace-capitec-dsp-decision-engine/e4ec032f-4ae9-45ee-be8a-e8c600b03a03/scratchpad/expC/build_a/__pycache__/drv.driver-5.py314.nbi",
+      "filename_base": "drv.driver-5.py314",
+      "locator": "InTreeCacheLocator",
+      "cpu_name": "<unset>",
+      "error": null
+    },
+    {
+      "scenario": "A2 warm, file untouched #2",
+      "question": "does an untouched file hit?",
+      "ok": true,
+      "hits": 1,
+      "misses": 0,
+      "first_call_s": 0.182637510006316,
+      "process_wall_s": 0.8246944630518556,
+      "source_sha256": "6a2e68d6a8aa908f75b2e4e2f822a08fc32dfa12f7dbd9075fbc81e1b28255d0",
+      "source_stamp": [
+        1789747256.8010466,
+        18956
+      ],
+      "index_path": "/tmp/claude-1000/-home-sholto-Documents-Workspace-capitec-dsp-decision-engine/e4ec032f-4ae9-45ee-be8a-e8c600b03a03/scratchpad/expC/build_a/__pycache__/drv.driver-5.py314.nbi",
+      "filename_base": "drv.driver-5.py314",
+      "locator": "InTreeCacheLocator",
+      "cpu_name": "<unset>",
+      "error": null
+    },
+    {
+      "scenario": "A2 warm, file untouched #3",
+      "question": "does an untouched file hit?",
+      "ok": true,
+      "hits": 1,
+      "misses": 0,
+      "first_call_s": 0.17979545099660754,
+      "process_wall_s": 0.8169245140161365,
+      "source_sha256": "6a2e68d6a8aa908f75b2e4e2f822a08fc32dfa12f7dbd9075fbc81e1b28255d0",
+      "source_stamp": [
+        1789747256.8010466,
+        18956
+      ],
+      "index_path": "/tmp/claude-1000/-home-sholto-Documents-Workspace-capitec-dsp-decision-engine/e4ec032f-4ae9-45ee-be8a-e8c600b03a03/scratchpad/expC/build_a/__pycache__/drv.driver-5.py314.nbi",
+      "filename_base": "drv.driver-5.py314",
+      "locator": "InTreeCacheLocator",
+      "cpu_name": "<unset>",
+      "error": null
+    },
+    {
+      "scenario": "B byte-identical rewrite, same path",
+      "question": "REVIEW sec 7: does a new mtime miss?",
+      "ok": true,
+      "hits": 0,
+      "misses": 1,
+      "first_call_s": 4.669523665099405,
+      "process_wall_s": 5.3981041320366785,
+      "source_sha256": "6a2e68d6a8aa908f75b2e4e2f822a08fc32dfa12f7dbd9075fbc81e1b28255d0",
+      "source_stamp": [
+        1789747265.2520494,
+        18956
+      ],
+      "index_path": "/tmp/claude-1000/-home-sholto-Documents-Workspace-capitec-dsp-decision-engine/e4ec032f-4ae9-45ee-be8a-e8c600b03a03/scratchpad/expC/build_a/__pycache__/drv.driver-5.py314.nbi",
+      "filename_base": "drv.driver-5.py314",
+      "locator": "InTreeCacheLocator",
+      "cpu_name": "<unset>",
+      "error": null,
+      "identical_bytes": true,
+      "stamp_before": [
+        1789747256.8010466,
+        18956
+      ]
+    },
+    {
+      "scenario": "C identical rewrite + os.utime restore",
+      "question": "does restoring mtime rescue the cache?",
+      "ok": true,
+      "hits": 1,
+      "misses": 0,
+      "first_call_s": 0.17667459091171622,
+      "process_wall_s": 0.7723274789750576,
+      "source_sha256": "6a2e68d6a8aa908f75b2e4e2f822a08fc32dfa12f7dbd9075fbc81e1b28255d0",
+      "source_stamp": [
+        1789747265.2520494,
+        18956
+      ],
+      "index_path": "/tmp/claude-1000/-home-sholto-Documents-Workspace-capitec-dsp-decision-engine/e4ec032f-4ae9-45ee-be8a-e8c600b03a03/scratchpad/expC/build_a/__pycache__/drv.driver-5.py314.nbi",
+      "filename_base": "drv.driver-5.py314",
+      "locator": "InTreeCacheLocator",
+      "cpu_name": "<unset>",
+      "error": null,
+      "identical_bytes": true
+    },
+    {
+      "scenario": "D touch only (bytes unchanged)",
+      "question": "is mtime alone enough to invalidate?",
+      "ok": true,
+      "hits": 0,
+      "misses": 1,
+      "first_call_s": 4.803864158922806,
+      "process_wall_s": 5.492341727018356,
+      "source_sha256": "6a2e68d6a8aa908f75b2e4e2f822a08fc32dfa12f7dbd9075fbc81e1b28255d0",
+      "source_stamp": [
+        1789747275.2520494,
+        18956
+      ],
+      "index_path": "/tmp/claude-1000/-home-sholto-Documents-Workspace-capitec-dsp-decision-engine/e4ec032f-4ae9-45ee-be8a-e8c600b03a03/scratchpad/expC/build_a/__pycache__/drv.driver-5.py314.nbi",
+      "filename_base": "drv.driver-5.py314",
+      "locator": "InTreeCacheLocator",
+      "cpu_name": "<unset>",
+      "error": null,
+      "identical_bytes": true
+    },
+    {
+      "scenario": "E identical bytes, different dir",
+      "question": "does the cache follow the content?",
+      "ok": true,
+      "hits": 0,
+      "misses": 1,
+      "first_call_s": 4.608123588026501,
+      "process_wall_s": 5.278946912963875,
+      "source_sha256": "6a2e68d6a8aa908f75b2e4e2f822a08fc32dfa12f7dbd9075fbc81e1b28255d0",
+      "source_stamp": [
+        1789747276.9669895,
+        18956
+      ],
+      "index_path": "/tmp/claude-1000/-home-sholto-Documents-Workspace-capitec-dsp-decision-engine/e4ec032f-4ae9-45ee-be8a-e8c600b03a03/scratchpad/expC/build_e/__pycache__/drv.driver-5.py314.nbi",
+      "filename_base": "drv.driver-5.py314",
+      "locator": "InTreeCacheLocator",
+      "cpu_name": "<unset>",
+      "error": null,
+      "identical_bytes": true
+    },
+    {
+      "scenario": "F dir copied, mtimes preserved",
+      "question": "does a relocated build dir keep its cache?",
+      "ok": true,
+      "hits": 1,
+      "misses": 0,
+      "first_call_s": 0.17068534006830305,
+      "process_wall_s": 0.7750757799949497,
+      "source_sha256": "6a2e68d6a8aa908f75b2e4e2f822a08fc32dfa12f7dbd9075fbc81e1b28255d0",
+      "source_stamp": [
+        1789747275.2520494,
+        18956
+      ],
+      "index_path": "/tmp/claude-1000/-home-sholto-Documents-Workspace-capitec-dsp-decision-engine/e4ec032f-4ae9-45ee-be8a-e8c600b03a03/scratchpad/expC/build_f/__pycache__/drv.driver-5.py314.nbi",
+      "filename_base": "drv.driver-5.py314",
+      "locator": "InTreeCacheLocator",
+      "cpu_name": "<unset>",
+      "error": null,
+      "identical_bytes": true
+    },
+    {
+      "scenario": "G same content, renamed file",
+      "question": "is the filename part of the key?",
+      "ok": true,
+      "hits": 0,
+      "misses": 1,
+      "first_call_s": 4.804297724971548,
+      "process_wall_s": 5.460020079044625,
+      "source_sha256": "6a2e68d6a8aa908f75b2e4e2f822a08fc32dfa12f7dbd9075fbc81e1b28255d0",
+      "source_stamp": [
+        1789747275.2520494,
+        18956
+      ],
+      "index_path": "/tmp/claude-1000/-home-sholto-Documents-Workspace-capitec-dsp-decision-engine/e4ec032f-4ae9-45ee-be8a-e8c600b03a03/scratchpad/expC/build_g/__pycache__/driver_v2.driver-5.py314.nbi",
+      "filename_base": "driver_v2.driver-5.py314",
+      "locator": "InTreeCacheLocator",
+      "cpu_name": "<unset>",
+      "error": null,
+      "identical_bytes": true
+    },
+    {
+      "scenario": "H comment changed (bytes differ)",
+      "question": "doc 05 sec 4.2: do differing bytes miss?",
+      "ok": true,
+      "hits": 0,
+      "misses": 1,
+      "first_call_s": 4.644051599898376,
+      "process_wall_s": 5.333396510919556,
+      "source_sha256": "0abf70c559fb69d2c804e07a697322ed45e9807c276dc8f15dd05f887e53cfb9",
+      "source_stamp": [
+        1789747288.485305,
+        18968
+      ],
+      "index_path": "/tmp/claude-1000/-home-sholto-Documents-Workspace-capitec-dsp-decision-engine/e4ec032f-4ae9-45ee-be8a-e8c600b03a03/scratchpad/expC/build_h/__pycache__/drv.driver-5.py314.nbi",
+      "filename_base": "drv.driver-5.py314",
+      "locator": "InTreeCacheLocator",
+      "cpu_name": "<unset>",
+      "error": null,
+      "identical_bytes": false
+    },
+    {
+      "scenario": "I extra comment LINE prepended",
+      "question": "does a line shift change the cache FILE, not just the entry?",
+      "ok": true,
+      "hits": 0,
+      "misses": 1,
+      "first_call_s": 4.716775720007718,
+      "process_wall_s": 5.405438484973274,
+      "source_sha256": "a7b0caa436c1d39ab5058956a19c5dc9f69508f47c322e702977365a9e5cba18",
+      "source_stamp": [
+        1789747293.8208275,
+        18976
+      ],
+      "index_path": "/tmp/claude-1000/-home-sholto-Documents-Workspace-capitec-dsp-decision-engine/e4ec032f-4ae9-45ee-be8a-e8c600b03a03/scratchpad/expC/build_i/__pycache__/drv.driver-6.py314.nbi",
+      "filename_base": "drv.driver-6.py314",
+      "locator": "InTreeCacheLocator",
+      "cpu_name": "<unset>",
+      "error": null,
+      "identical_bytes": false
+    },
+    {
+      "scenario": "L1 cold",
+      "question": "baseline for the same-length comment test",
+      "ok": true,
+      "hits": 0,
+      "misses": 1,
+      "first_call_s": 4.66053358791396,
+      "process_wall_s": 5.398757382994518,
+      "source_sha256": "6a2e68d6a8aa908f75b2e4e2f822a08fc32dfa12f7dbd9075fbc81e1b28255d0",
+      "source_stamp": [
+        1789747299.2270503,
+        18956
+      ],
+      "index_path": "/tmp/claude-1000/-home-sholto-Documents-Workspace-capitec-dsp-decision-engine/e4ec032f-4ae9-45ee-be8a-e8c600b03a03/scratchpad/expC/build_l/__pycache__/drv.driver-5.py314.nbi",
+      "filename_base": "drv.driver-5.py314",
+      "locator": "InTreeCacheLocator",
+      "cpu_name": "<unset>",
+      "error": null
+    },
+    {
+      "scenario": "L2 comment differs, stamp identical",
+      "question": "doc 05 sec 4.2: is byte-identical actually required?",
+      "ok": true,
+      "hits": 1,
+      "misses": 0,
+      "first_call_s": 0.1786273430334404,
+      "process_wall_s": 0.7736944169737399,
+      "source_sha256": "a00ed17a3164f9933efc1cef915350638fc4f505e688023d9ba95b8beba93449",
+      "source_stamp": [
+        1789747299.2270503,
+        18956
+      ],
+      "index_path": "/tmp/claude-1000/-home-sholto-Documents-Workspace-capitec-dsp-decision-engine/e4ec032f-4ae9-45ee-be8a-e8c600b03a03/scratchpad/expC/build_l/__pycache__/drv.driver-5.py314.nbi",
+      "filename_base": "drv.driver-5.py314",
+      "locator": "InTreeCacheLocator",
+      "cpu_name": "<unset>",
+      "error": null,
+      "identical_bytes": false,
+      "sha_before": "6a2e68d6a8aa908f75b2e4e2f822a08fc32dfa12f7dbd9075fbc81e1b28255d0",
+      "value_cold": 49.39775000000002,
+      "value_after": 49.39775000000002
+    },
+    {
+      "scenario": "M1 cold",
+      "question": "baseline for the stale-constant test",
+      "ok": true,
+      "hits": 0,
+      "misses": 1,
+      "first_call_s": 4.706797129008919,
+      "process_wall_s": 5.3633662390057,
+      "source_sha256": "6a2e68d6a8aa908f75b2e4e2f822a08fc32dfa12f7dbd9075fbc81e1b28255d0",
+      "source_stamp": [
+        1789747305.4012253,
+        18956
+      ],
+      "index_path": "/tmp/claude-1000/-home-sholto-Documents-Workspace-capitec-dsp-decision-engine/e4ec032f-4ae9-45ee-be8a-e8c600b03a03/scratchpad/expC/build_m/__pycache__/drv.driver-5.py314.nbi",
+      "filename_base": "drv.driver-5.py314",
+      "locator": "InTreeCacheLocator",
+      "cpu_name": "<unset>",
+      "error": null
+    },
+    {
+      "scenario": "M2 constant changed, stamp identical",
+      "question": "can a forged stamp serve STALE machine code?",
+      "ok": true,
+      "hits": 1,
+      "misses": 0,
+      "first_call_s": 0.1706518060527742,
+      "process_wall_s": 0.776278770994395,
+      "source_sha256": "b2b81c05fb49413078d7de4a074bab68e0a136cdc8171b6b61c93ed2ae0d1c07",
+      "source_stamp": [
+        1789747305.4012253,
+        18956
+      ],
+      "index_path": "/tmp/claude-1000/-home-sholto-Documents-Workspace-capitec-dsp-decision-engine/e4ec032f-4ae9-45ee-be8a-e8c600b03a03/scratchpad/expC/build_m/__pycache__/drv.driver-5.py314.nbi",
+      "filename_base": "drv.driver-5.py314",
+      "locator": "InTreeCacheLocator",
+      "cpu_name": "<unset>",
+      "error": null,
+      "identical_bytes": false,
+      "edited_line_from": "acc -= a1 * 1.001 * 0.5",
+      "edited_line_to": "acc -= a1 * 1.001 * 0.7",
+      "value_before_edit": 49.39775000000002,
+      "value_served": 49.39775000000002,
+      "value_after_cache_wipe": 49.29765000000001,
+      "edit_changes_the_result": true,
+      "served_stale_code": true
+    },
+    {
+      "scenario": "index_contents",
+      "index_path": "/tmp/claude-1000/-home-sholto-Documents-Workspace-capitec-dsp-decision-engine/e4ec032f-4ae9-45ee-be8a-e8c600b03a03/scratchpad/expC/build_a/__pycache__/drv.driver-5.py314.nbi",
+      "index_version": "0.67.0",
+      "source_stamp": [
+        1789747275.2520494,
+        18956
+      ],
+      "n_entries": 1,
+      "entry_keys": [
+        [
+          "(float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64)",
+          [
+            "x86_64-unknown-linux-gnu",
+            "raptorlake",
+            "+64bit,+adx,+aes,-amx-avx512,-amx-bf16,-amx-complex,-amx-fp16,-amx-fp8,-amx-int8,-amx-movrs,-amx-tf32,-amx-tile,+avx,-avx10.1,-avx10.2,+avx2,-avx512bf16,-avx512bitalg,-avx512bw,-avx512cd,-avx512dq,-avx512f,-avx512fp16,-avx512ifma,-avx512vbmi,-avx512vbmi2,-avx512vl,-avx512vnni,-avx512vp2intersect,-avx512vpopcntdq,-avxifma,-avxneconvert,+avxvnni,-avxvnniint16,-avxvnniint8,+bmi,+bmi2,-ccmp,-cf,-cldemote,+clflushopt,+clwb,-clzero,+cmov,-cmpccxadd,+crc32,+cx16,+cx8,-egpr,-enqcmd,+f16c,+fma,-fma4,+fsgsbase,+fxsr,+gfni,+hreset,+invpcid,+kl,-lwp,+lzcnt,+mmx,+movbe,+movdir64b,+movdiri,-movrs,-mwaitx,-ndd,-nf,+pclmul,-pconfig,+pku,+popcnt,-ppx,-prefetchi,+prfchw,+ptwrite,-push2pop2,-raoint,+rdpid,-rdpru,+rdrnd,+rdseed,-rtm,+sahf,+serialize,-sgx,+sha,-sha512,+shstk,-sm3,-sm4,+sse,+sse2,+sse3,+sse4.1,+sse4.2,-sse4a,+ssse3,-tbm,-tsxldtrk,-uintr,-usermsr,+vaes,+vpclmulqdq,+waitpkg,-wbnoinvd,+widekl,-xop,+xsave,+xsavec,+xsaveopt,+xsaves,-zu"
+          ],
+          [
+            "4f9db235dbf77b2f4294c5d6c359703ecccd8d5ec729e766f47c9566642966b7",
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          ]
+        ]
+      ],
+      "entry_values": [
+        "drv.driver-5.py314.1.nbc"
+      ],
+      "files": [
+        "drv.cpython-314.pyc",
+        "drv.driver-5.py314.1.nbc",
+        "drv.driver-5.py314.nbi"
+      ]
+    },
+    {
+      "scenario": "J1 default CPU, cold",
+      "question": "baseline",
+      "ok": true,
+      "hits": 0,
+      "misses": 1,
+      "first_call_s": 4.799027826986276,
+      "process_wall_s": 5.46378501795698,
+      "source_sha256": "6a2e68d6a8aa908f75b2e4e2f822a08fc32dfa12f7dbd9075fbc81e1b28255d0",
+      "source_stamp": [
+        1789747316.833384,
+        18956
+      ],
+      "index_path": "/tmp/claude-1000/-home-sholto-Documents-Workspace-capitec-dsp-decision-engine/e4ec032f-4ae9-45ee-be8a-e8c600b03a03/scratchpad/expC/build_j/__pycache__/drv.driver-5.py314.nbi",
+      "filename_base": "drv.driver-5.py314",
+      "locator": "InTreeCacheLocator",
+      "cpu_name": "<unset>",
+      "error": null
+    },
+    {
+      "scenario": "J2 default CPU, warm",
+      "question": "baseline",
+      "ok": true,
+      "hits": 1,
+      "misses": 0,
+      "first_call_s": 0.17034835799131542,
+      "process_wall_s": 0.7760105720954016,
+      "source_sha256": "6a2e68d6a8aa908f75b2e4e2f822a08fc32dfa12f7dbd9075fbc81e1b28255d0",
+      "source_stamp": [
+        1789747316.833384,
+        18956
+      ],
+      "index_path": "/tmp/claude-1000/-home-sholto-Documents-Workspace-capitec-dsp-decision-engine/e4ec032f-4ae9-45ee-be8a-e8c600b03a03/scratchpad/expC/build_j/__pycache__/drv.driver-5.py314.nbi",
+      "filename_base": "drv.driver-5.py314",
+      "locator": "InTreeCacheLocator",
+      "cpu_name": "<unset>",
+      "error": null
+    },
+    {
+      "scenario": "J3 generic against native cache",
+      "question": "do CPU features change the key?",
+      "ok": true,
+      "hits": 0,
+      "misses": 1,
+      "first_call_s": 4.664367654942907,
+      "process_wall_s": 5.288033908000216,
+      "source_sha256": "6a2e68d6a8aa908f75b2e4e2f822a08fc32dfa12f7dbd9075fbc81e1b28255d0",
+      "source_stamp": [
+        1789747316.833384,
+        18956
+      ],
+      "index_path": "/tmp/claude-1000/-home-sholto-Documents-Workspace-capitec-dsp-decision-engine/e4ec032f-4ae9-45ee-be8a-e8c600b03a03/scratchpad/expC/build_j/__pycache__/drv.driver-5.py314.nbi",
+      "filename_base": "drv.driver-5.py314",
+      "locator": "InTreeCacheLocator",
+      "cpu_name": "generic",
+      "error": null
+    },
+    {
+      "scenario": "J4 generic, second run",
+      "question": "does generic cache on its own?",
+      "ok": true,
+      "hits": 1,
+      "misses": 0,
+      "first_call_s": 0.1778703919844702,
+      "process_wall_s": 0.8704800559207797,
+      "source_sha256": "6a2e68d6a8aa908f75b2e4e2f822a08fc32dfa12f7dbd9075fbc81e1b28255d0",
+      "source_stamp": [
+        1789747316.833384,
+        18956
+      ],
+      "index_path": "/tmp/claude-1000/-home-sholto-Documents-Workspace-capitec-dsp-decision-engine/e4ec032f-4ae9-45ee-be8a-e8c600b03a03/scratchpad/expC/build_j/__pycache__/drv.driver-5.py314.nbi",
+      "filename_base": "drv.driver-5.py314",
+      "locator": "InTreeCacheLocator",
+      "cpu_name": "generic",
+      "error": null
+    },
+    {
+      "scenario": "J5 back to default CPU",
+      "question": "do both entries coexist?",
+      "ok": true,
+      "hits": 1,
+      "misses": 0,
+      "first_call_s": 0.1713132670847699,
+      "process_wall_s": 0.7653739639790729,
+      "source_sha256": "6a2e68d6a8aa908f75b2e4e2f822a08fc32dfa12f7dbd9075fbc81e1b28255d0",
+      "source_stamp": [
+        1789747316.833384,
+        18956
+      ],
+      "index_path": "/tmp/claude-1000/-home-sholto-Documents-Workspace-capitec-dsp-decision-engine/e4ec032f-4ae9-45ee-be8a-e8c600b03a03/scratchpad/expC/build_j/__pycache__/drv.driver-5.py314.nbi",
+      "filename_base": "drv.driver-5.py314",
+      "locator": "InTreeCacheLocator",
+      "cpu_name": "<unset>",
+      "error": null
+    },
+    {
+      "scenario": "cpu_name_index",
+      "n_entries": 2,
+      "magic_tuples": [
+        [
+          "x86_64-unknown-linux-gnu",
+          "raptorlake",
+          "+64bit,+adx,+aes,-amx-avx512,-amx-bf16,-amx-complex,-amx-fp16,-amx-fp8,-amx-int8,-amx-movrs,-amx-tf32,-amx-tile,+avx,-avx10.1,-avx10.2,+avx2,-avx512bf16,-avx512bitalg,-avx512bw,-avx512cd,-avx512dq,-avx512f,-avx512fp16,-avx512ifma,-avx512vbmi,-avx512vbmi2,-avx512vl,-avx512vnni,-avx512vp2intersect,-avx512vpopcntdq,-avxifma,-avxneconvert,+avxvnni,-avxvnniint16,-avxvnniint8,+bmi,+bmi2,-ccmp,-cf,-cldemote,+clflushopt,+clwb,-clzero,+cmov,-cmpccxadd,+crc32,+cx16,+cx8,-egpr,-enqcmd,+f16c,+fma,-fma4,+fsgsbase,+fxsr,+gfni,+hreset,+invpcid,+kl,-lwp,+lzcnt,+mmx,+movbe,+movdir64b,+movdiri,-movrs,-mwaitx,-ndd,-nf,+pclmul,-pconfig,+pku,+popcnt,-ppx,-prefetchi,+prfchw,+ptwrite,-push2pop2,-raoint,+rdpid,-rdpru,+rdrnd,+rdseed,-rtm,+sahf,+serialize,-sgx,+sha,-sha512,+shstk,-sm3,-sm4,+sse,+sse2,+sse3,+sse4.1,+sse4.2,-sse4a,+ssse3,-tbm,-tsxldtrk,-uintr,-usermsr,+vaes,+vpclmulqdq,+waitpkg,-wbnoinvd,+widekl,-xop,+xsave,+xsavec,+xsaveopt,+xsaves,-zu"
+        ],
+        [
+          "x86_64-unknown-linux-gnu",
+          "generic",
+          ""
+        ]
+      ]
+    },
+    {
+      "scenario": "K1 unregistered, cold",
+      "question": "does the build-side compile+save work?",
+      "ok": true,
+      "hits": 0,
+      "misses": 1,
+      "first_call_s": 4.654991218005307,
+      "process_wall_s": 5.3337818189756945,
+      "source_sha256": "6a2e68d6a8aa908f75b2e4e2f822a08fc32dfa12f7dbd9075fbc81e1b28255d0",
+      "source_stamp": [
+        1789747329.999252,
+        18956
+      ],
+      "index_path": "/tmp/claude-1000/-home-sholto-Documents-Workspace-capitec-dsp-decision-engine/e4ec032f-4ae9-45ee-be8a-e8c600b03a03/scratchpad/expC/build_k/__pycache__/drv.driver-5.py314.nbi",
+      "filename_base": "drv.driver-5.py314",
+      "locator": "InTreeCacheLocator",
+      "cpu_name": "<unset>",
+      "error": null,
+      "registered": false
+    },
+    {
+      "scenario": "K2 unregistered, warm",
+      "question": "can the entry it wrote be loaded back?",
+      "ok": false,
+      "hits": null,
+      "misses": null,
+      "first_call_s": null,
+      "process_wall_s": 0.7686833910411224,
+      "source_sha256": "6a2e68d6a8aa908f75b2e4e2f822a08fc32dfa12f7dbd9075fbc81e1b28255d0",
+      "source_stamp": null,
+      "index_path": null,
+      "filename_base": null,
+      "locator": null,
+      "cpu_name": null,
+      "error": "ModuleNotFoundError: No module named '<dynamic>'",
+      "registered": false
+    },
+    {
+      "scenario": "K3 registered, poisoned cache kept",
+      "question": "does registering later fix the load?",
+      "ok": false,
+      "hits": null,
+      "misses": null,
+      "first_call_s": null,
+      "process_wall_s": 0.7494010420050472,
+      "source_sha256": "6a2e68d6a8aa908f75b2e4e2f822a08fc32dfa12f7dbd9075fbc81e1b28255d0",
+      "source_stamp": null,
+      "index_path": null,
+      "filename_base": null,
+      "locator": null,
+      "cpu_name": null,
+      "error": "ModuleNotFoundError: No module named '<dynamic>'",
+      "registered": true
+    },
+    {
+      "scenario": "K4 registered, cache wiped, cold",
+      "question": "is the reader or the stored entry at fault?",
+      "ok": true,
+      "hits": 0,
+      "misses": 1,
+      "first_call_s": 4.703531553037465,
+      "process_wall_s": 5.339725965983234,
+      "source_sha256": "6a2e68d6a8aa908f75b2e4e2f822a08fc32dfa12f7dbd9075fbc81e1b28255d0",
+      "source_stamp": [
+        1789747329.999252,
+        18956
+      ],
+      "index_path": "/tmp/claude-1000/-home-sholto-Documents-Workspace-capitec-dsp-decision-engine/e4ec032f-4ae9-45ee-be8a-e8c600b03a03/scratchpad/expC/build_k/__pycache__/drv.driver-5.py314.nbi",
+      "filename_base": "drv.driver-5.py314",
+      "locator": "InTreeCacheLocator",
+      "cpu_name": "<unset>",
+      "error": null,
+      "registered": true
+    },
+    {
+      "scenario": "K5 registered, warm",
+      "question": "does it cache normally once registered?",
+      "ok": true,
+      "hits": 1,
+      "misses": 0,
+      "first_call_s": 0.18493819807190448,
+      "process_wall_s": 0.7975971379783005,
+      "source_sha256": "6a2e68d6a8aa908f75b2e4e2f822a08fc32dfa12f7dbd9075fbc81e1b28255d0",
+      "source_stamp": [
+        1789747329.999252,
+        18956
+      ],
+      "index_path": "/tmp/claude-1000/-home-sholto-Documents-Workspace-capitec-dsp-decision-engine/e4ec032f-4ae9-45ee-be8a-e8c600b03a03/scratchpad/expC/build_k/__pycache__/drv.driver-5.py314.nbi",
+      "filename_base": "drv.driver-5.py314",
+      "locator": "InTreeCacheLocator",
+      "cpu_name": "<unset>",
+      "error": null,
+      "registered": true
+    },
+    {
+      "scenario": "scaling",
+      "rows": [
+        {
+          "n_args": 200,
+          "cold_s": 4.9315054370090365,
+          "warm_median_s": 0.17720825609285384,
+          "warm_samples_s": [
+            0.17720825609285384,
+            0.173841307987459,
+            0.18379399192053825
+          ],
+          "speedup": 27.828869521886265,
+          "nbc_bytes": 538719,
+          "run_median_s": 8.069910109043121e-06
+        },
+        {
+          "n_args": 400,
+          "cold_s": 14.748580222018063,
+          "warm_median_s": 0.1787686930038035,
+          "warm_samples_s": [
+            0.17651703907176852,
+            0.18268916092347354,
+            0.1787686930038035
+          ],
+          "speedup": 82.50091206799992,
+          "nbc_bytes": 1085348,
+          "run_median_s": 1.4381017535924911e-05
+        },
+        {
+          "n_args": 800,
+          "cold_s": 46.985872713965364,
+          "warm_median_s": 0.1968098538927734,
+          "warm_samples_s": [
+            0.1967636599438265,
+            0.1968098538927734,
+            0.19890806800685823
+          ],
+          "speedup": 238.73739949811846,
+          "nbc_bytes": 2180921,
+          "run_median_s": 2.8859940357506275e-05
+        }
+      ]
+    }
+  ]
+}

@@ -244,11 +244,29 @@ is an unavoidable control-flow join.
 `fastmath=True` is noise (±5%) — branches, not FP strictness, are the cost.
 
 `prange` **has no fixed row threshold.** An earlier ~50k figure was measured on
-one synthetic kernel; E7 shows the crossover is set by **per-row work**, not row
-count: a light body never wins (0.99× even at 1 M rows), while a body containing
-a 64-iteration inner loop crosses at ~5k rows and reaches 7.8× at 5 M. So the
-serial/parallel choice cannot be a constant — it needs either a per-kernel
-measurement at warmup or a heuristic on estimated body cost (doc 06 O6).
+one synthetic kernel; E7 concluded the crossover is set by **per-row work**, not
+row count: a light body never wins (0.99× even at 1 M rows), while a body
+containing a 64-iteration inner loop crosses at ~5k rows and reaches 7.8× at 5 M.
+
+> **⚠ Every figure in that paragraph was refuted — [EXPERIMENTS.md](EXPERIMENTS.md) §F**, across three
+> independent runs:
+>
+> | claim | measured |
+> |---|---|
+> | trivial body "never wins, 0.99× at 1 M" | **2.83–3.11× at 1 M** |
+> | 64-iteration body "crosses at ~5k rows" | **crosses at 500 rows** — 10× early |
+> | "7.8× at 5 M" | 7.5–7.7× at **100k**; at 5 M it is **11.4–12.0×** |
+>
+> The last row suggests a row count migrated between measurement and doc, so E7's
+> raw output is worth re-checking for others.
+>
+> **And "per-row work, not row count" is itself the wrong frame.** The crossover
+> invariant is **total serial wall-clock**: bodies spanning 1500× in per-row cost
+> (1.4 → 1267 ns/row) all cross between **85 and 239 µs** of serial time, and the
+> measured `prange` fork/join floor is **65–67 µs**. Crossover *row count* spans
+> 2000× across those bodies; crossover *time* barely moves. `prange` wins once the
+> work exceeds fork/join overhead — obvious in hindsight, and it collapses O6 from
+> a cost model into one calibrated constant.
 
 `parallel=True` compile cost is **1.2–2.6×, shape-dependent** — not the flat 3×
 recorded earlier. Worst observed was 100 flat branches at 9289 ms serial →
@@ -279,10 +297,20 @@ mismatches).
 | 16 modules | fused **0.17×** (58.7 ms vs 9.8 ms) |
 | 32 modules | fused **0.11×** |
 
-**Mechanism:** past ~3–4 branch groups the fused body **loses LLVM
-auto-vectorisation** (vector IR values drop to 0 at M≥4) and per-group cost rises
-0.6 → 1.9 ns/row *even with perfectly predictable routing*. Small per-module
-kernels keep getting if-converted and vectorised, so they scale linearly.
+**Mechanism as originally recorded:** past ~3–4 branch groups the fused body
+loses LLVM auto-vectorisation (vector IR values drop to 0 at M≥4) and per-group
+cost rises 0.6 → 1.9 ns/row even with perfectly predictable routing.
+
+> **⚠ Refuted by direct measurement — see [EXPERIMENTS.md](EXPERIMENTS.md) §E.**
+> Vector IR values **never drop to 0**. Across 54 fused kernels the packed-FP
+> count grows monotonically with M, opposite to performance; the worst regression
+> (0.18×) is fully vectorised with 791 packed ymm ops and zero scalar ops.
+>
+> The real mechanism is **row-loop unrolling collapse under register pressure**:
+> split unrolls ~5× using 7 of 16 ymm registers and spilling nothing; fused at
+> M=20 pins all 16, unrolls ~2× and spills 47×/iteration, making a long dependent
+> FMA chain latency-bound. The cause recorded in §4c ("register pressure") was
+> right; the observable named here was not.
 
 **But the sign flips with arm cost.** When arms are expensive, short-circuiting
 dominates — 1.62× at 3 arms, and 1071× when one heavy arm is skipped. So neither
@@ -297,6 +325,14 @@ dominates — 1.62× at 3 arms, and 1071× when one heavy arm is skipped. So nei
 ### Compile time is driven by emitted code size, not nesting depth
 
 **≈ 15 ms per emitted source line** is the single best predictor.
+
+> **⚠ Superseded — [EXPERIMENTS.md](EXPERIMENTS.md) §G.** Compile is **super-linear in emitted lines**,
+> ∝ lines^1.4 (R²=0.97), with the local exponent reaching **1.96** between 60 and
+> 100 rules. A linear 15 ms/line model over-states small rule sets by ~1.8×
+> (8.1–11.5 ms/line under 30 rules) and **under-states 100 rules by 2.3×** — it
+> predicts 24 s where the measurement is 57 s. The "~500 lines ≈ 10 s" guardrail
+> survives and is slightly conservative (the real crossover is 600–710 lines); the
+> linear constant does not.
 
 | shape | compile time |
 |---|---|
@@ -344,7 +380,22 @@ at 10 modules, 3× at 20, 4.5× at 40.
 
 **Mechanism: register pressure.** Split kernels hold a flat **0.20 ns/step**
 because each stays small enough to vectorise; the fused body's per-step cost
-climbs 0.22 → 0.61 ns as it grows. Crucially this is **not** caused by
+climbs 0.22 → 0.61 ns as it grows.
+
+> **⚠ Two figures here did not reproduce — [EXPERIMENTS.md](EXPERIMENTS.md) §E.**
+> Split ns/step measured **0.82–3.30 depending on body cost**, flat *within* a
+> body-cost class but never near 0.20 — which is below the floor of a single
+> kernel call on the test machine. And **there is no common break-even row
+> count**: a cheap straight-line body never crosses (fusion wins 2.1–13× at every
+> n ≥ 1000), a heavy branchy one crosses below 1000 rows, and at n=1 fusion wins
+> 9.4–48× rather than "≤1.4×".
+>
+> The discriminator is **per-step body cost relative to the boundary floor**
+> (~0.32–0.76 ns/row/kernel plus 0.44 µs dispatch), not module count and not row
+> count. Measured spread at fixed module count and fixed row count: **62×**,
+> 13.00× to 0.18×, with the sign of the decision flipping. So *"boundary stores
+> are genuinely near-free"* holds only relative to a body that costs more than
+> they do. Crucially this is **not** caused by
 per-module params bundles — a single merged bundle degrades identically (0.790
 vs 0.799 ns/block at 20 modules), so the params design is exonerated.
 
@@ -357,7 +408,16 @@ round-trip* at every boundary, split still wins at 1 M rows / 10 modules
 
 > So "many small modules" is safe — **but not because they fuse.** It is safe
 > because crossing a boundary costs almost nothing. Keep the guidance, reverse
-> the mechanism, and cap fused groups at **~6–9 steps**.
+> the mechanism.
+
+> **A later correction to this conclusion.** It originally ended "and cap fused
+> groups at ~6–9 steps." Read against the table above, 6 steps is 3 modules
+> (0.87–0.90) and 9 steps is 5 modules (0.72–0.76) — both already worse than not
+> fusing above 10k rows, so the cap named the range this section identifies as
+> harmful. More importantly, E7 puts the same decision at 1071× in the other
+> direction when a heavy arm is skipped, and no constant spans four orders of
+> magnitude. The cap is withdrawn in favour of explicit fusion (doc 02 §1.2).
+> The measurements are unchanged; the guidance drawn from them was wrong.
 
 ### Everything else about composition holds
 
@@ -381,6 +441,17 @@ Two **distinct** NamedTuple classes sharing the same `__name__` *and* the same
 field names blow per-call dispatch from ~1 µs to **15–24 µs — permanently, for
 every call involving that name.** The numba types print identically
 (`Z(float64 x 2)`) but compare unequal, so the dispatcher's cache thrashes.
+
+> **⚠ The magnitude did not reproduce on numba 0.67 —
+> [EXPERIMENTS.md](EXPERIMENTS.md) §D.** Measured **1.03×** (1.006 → 1.039 µs),
+> with 39 of 40 independent trials in 0.84–1.08×, and it does **not** persist: a
+> clean driver measured 1.02× after a colliding one ran 2000+ times.
+>
+> **The collision itself is real** — `compute_fingerprint` encodes only
+> `__name__` + field names + field types — so this is a **correctness** defect,
+> not a performance one. That inverts the guard: doc 05 §9 criterion 8's timing
+> assertion has *zero power* and would mark the bug green. It must be an exact
+> structural check.
 Different field names avoid it entirely.
 
 This silently contaminated E5's own first benchmark run (45 µs of phantom fixed
@@ -403,8 +474,14 @@ overhead at 5 modules) before being found.
 > it would bite, so a regression test asserting dispatch stays near 1 µs is worth
 > having.
 
-> **Conclusion.** Compile serial and `prange` variants at warmup, dispatch on
-> row count. Do not enable `fastmath` by default.
+> **Conclusion, superseded.** This originally read "compile serial and `prange`
+> variants at warmup, dispatch on row count". Both halves are withdrawn: the
+> figures above were refuted ([EXPERIMENTS.md](EXPERIMENTS.md) §F) and every automatic selection rule was
+> ruled out — a fixed row threshold scores 66.7%, a warmup probe 52.8%, and the
+> one rule that scores well (97.9%) was fitted on uniform bodies that credit
+> logic's early exits do not resemble. `prange` is now **authored**, via a
+> `parallel(...)` combinator, with serial the default and one variant compiled per
+> kernel (doc 05 §5.1). `fastmath` stays off by default.
 
 ---
 

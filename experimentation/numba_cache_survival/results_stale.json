@@ -1,0 +1,52 @@
+{
+  "numba": "0.67.0",
+  "n_args": 200,
+  "results": [
+    {
+      "scenario": "M1 cold",
+      "question": "baseline for the stale-constant test",
+      "ok": true,
+      "hits": 0,
+      "misses": 1,
+      "first_call_s": 4.778873111004941,
+      "process_wall_s": 5.397429742035456,
+      "source_sha256": "6a2e68d6a8aa908f75b2e4e2f822a08fc32dfa12f7dbd9075fbc81e1b28255d0",
+      "source_stamp": [
+        1789747227.8970587,
+        18956
+      ],
+      "index_path": "/tmp/claude-1000/-home-sholto-Documents-Workspace-capitec-dsp-decision-engine/e4ec032f-4ae9-45ee-be8a-e8c600b03a03/scratchpad/expC_stale/build_m/__pycache__/drv.driver-5.py314.nbi",
+      "filename_base": "drv.driver-5.py314",
+      "locator": "InTreeCacheLocator",
+      "cpu_name": "<unset>",
+      "error": null
+    },
+    {
+      "scenario": "M2 constant changed, stamp identical",
+      "question": "can a forged stamp serve STALE machine code?",
+      "ok": true,
+      "hits": 1,
+      "misses": 0,
+      "first_call_s": 0.17023429996334016,
+      "process_wall_s": 0.7604844180168584,
+      "source_sha256": "b2b81c05fb49413078d7de4a074bab68e0a136cdc8171b6b61c93ed2ae0d1c07",
+      "source_stamp": [
+        1789747227.8970587,
+        18956
+      ],
+      "index_path": "/tmp/claude-1000/-home-sholto-Documents-Workspace-capitec-dsp-decision-engine/e4ec032f-4ae9-45ee-be8a-e8c600b03a03/scratchpad/expC_stale/build_m/__pycache__/drv.driver-5.py314.nbi",
+      "filename_base": "drv.driver-5.py314",
+      "locator": "InTreeCacheLocator",
+      "cpu_name": "<unset>",
+      "error": null,
+      "identical_bytes": false,
+      "edited_line_from": "acc -= a1 * 1.001 * 0.5",
+      "edited_line_to": "acc -= a1 * 1.001 * 0.7",
+      "value_before_edit": 49.39775000000002,
+      "value_served": 49.39775000000002,
+      "value_after_cache_wipe": 49.29765000000001,
+      "edit_changes_the_result": true,
+      "served_stale_code": true
+    }
+  ]
+}

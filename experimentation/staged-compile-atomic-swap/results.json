@@ -1,0 +1,284 @@
+{
+ "env": {
+  "python": "3.14.5",
+  "gil_enabled": true,
+  "switchinterval_s": 0.005,
+  "cpus": 28,
+  "rows": 100000,
+  "numba": "0.67.0",
+  "numpy": "2.4.6"
+ },
+ "interference": {
+  "bg_rules": 30,
+  "serve_rules": 10,
+  "reps": 2,
+  "modes": {
+   "nogil=True": {
+    "serving_compile_s": 1.2507892129942775,
+    "baseline_calls": 1591,
+    "baseline_median_ms": 1.1834489414468408,
+    "baseline_p95_ms": 1.6375749837607145,
+    "baseline_calls_per_s": 795.8562724056135,
+    "runs": [
+     {
+      "compile_ok": true,
+      "compile_error": null,
+      "compile_s_during_serving": 5.162734730984084,
+      "bg_output_matches_singlethreaded": true,
+      "wall_s": 5.164677310967818,
+      "calls": 1066,
+      "median_ms": 6.385063519701362,
+      "p95_ms": 6.808797945268452,
+      "max_ms": 98.60614698845893,
+      "calls_per_s": 206.40205298716725
+     },
+     {
+      "compile_ok": true,
+      "compile_error": null,
+      "compile_s_during_serving": 5.147686462965794,
+      "bg_output_matches_singlethreaded": true,
+      "wall_s": 5.1494508140021935,
+      "calls": 1077,
+      "median_ms": 6.426975014619529,
+      "p95_ms": 6.938074016943574,
+      "max_ms": 69.6538690244779,
+      "calls_per_s": 209.14851678386015
+     }
+    ],
+    "baseline_calls_per_s_wall": 795.5,
+    "during_calls_per_s_median": 207.7752848855137,
+    "throughput_retained": 0.26118829023948925,
+    "latency_inflation_median": 5.4130085741837615,
+    "compile_slowdown_vs_alone": 1.03034752543694
+   },
+   "nogil=False": {
+    "serving_compile_s": 1.3245332399383187,
+    "baseline_calls": 1689,
+    "baseline_median_ms": 1.1627639178186655,
+    "baseline_p95_ms": 1.2467200867831707,
+    "baseline_calls_per_s": 845.1108677084864,
+    "runs": [
+     {
+      "compile_ok": true,
+      "compile_error": null,
+      "compile_s_during_serving": 12.058746352908202,
+      "bg_output_matches_singlethreaded": true,
+      "wall_s": 12.06059580296278,
+      "calls": 5579,
+      "median_ms": 1.234751078300178,
+      "p95_ms": 6.576697109267116,
+      "max_ms": 99.49993796180934,
+      "calls_per_s": 462.58079543876886
+     },
+     {
+      "compile_ok": true,
+      "compile_error": null,
+      "compile_s_during_serving": 11.976167157990858,
+      "bg_output_matches_singlethreaded": true,
+      "wall_s": 11.978100306005217,
+      "calls": 5512,
+      "median_ms": 1.2498959549702704,
+      "p95_ms": 6.536955013871193,
+      "max_ms": 91.79984300862998,
+      "calls_per_s": 460.17313757479224
+     }
+    ],
+    "baseline_calls_per_s_wall": 844.5,
+    "during_calls_per_s_median": 461.37696650678055,
+    "throughput_retained": 0.5463315174739852,
+    "latency_inflation_median": 1.0684228308062842,
+    "compile_slowdown_vs_alone": 2.401872163532693
+   }
+  },
+  "bg_emitted_lines": 493,
+  "serve_emitted_lines": 160,
+  "compile_alone_s": [
+   5.133795023080893,
+   4.8729463330237195
+  ],
+  "compile_alone_median_s": 5.003370678052306
+ },
+ "gilprobe": {
+  "runs": [
+   {
+    "label": "rows=100k switch=5ms",
+    "rows": 100000,
+    "switchinterval_s": 0.005,
+    "baseline_median_ms": 1.1591915390454233,
+    "during_median_ms": 6.397634046152234,
+    "during_p95_ms": 7.170594995841384,
+    "during_max_ms": 87.2325049713254,
+    "added_ms_per_call": 5.238442507106811,
+    "latency_inflation": 5.519048259634977
+   },
+   {
+    "label": "rows=100k switch=0.5ms",
+    "rows": 100000,
+    "switchinterval_s": 0.0005,
+    "baseline_median_ms": 1.1579639976844192,
+    "during_median_ms": 1.8383609713055193,
+    "during_p95_ms": 2.187510021030903,
+    "during_max_ms": 69.04567603487521,
+    "added_ms_per_call": 0.6803969736211002,
+    "latency_inflation": 1.587580421309894
+   },
+   {
+    "label": "rows=100k switch=0.05ms",
+    "rows": 100000,
+    "switchinterval_s": 5e-05,
+    "baseline_median_ms": 1.175457437057048,
+    "during_median_ms": 1.3246054877527058,
+    "during_p95_ms": 1.5240010106936097,
+    "during_max_ms": 82.21089700236917,
+    "added_ms_per_call": 0.14914805069565773,
+    "latency_inflation": 1.1268851138234954
+   },
+   {
+    "label": "rows=1M switch=5ms",
+    "rows": 1000000,
+    "switchinterval_s": 0.005,
+    "baseline_median_ms": 12.524197925813496,
+    "during_median_ms": 17.910975497215986,
+    "during_p95_ms": 22.08125393372029,
+    "during_max_ms": 89.96165101416409,
+    "added_ms_per_call": 5.38677757140249,
+    "latency_inflation": 1.4301095849259822
+   }
+  ]
+ },
+ "lockstep": {
+  "small_compile_alone_s": [
+   0.47591076802928,
+   0.49053583398927003
+  ],
+  "small_compile_alone_median_s": 0.483223301009275,
+  "small_compile_while_bg": [
+   {
+    "small_s": 5.023881793953478,
+    "bg_total_s": 5.5366079290397465
+   },
+   {
+    "small_s": 5.130510806920938,
+    "bg_total_s": 5.643642701092176
+   }
+  ],
+  "small_compile_while_bg_median_s": 5.077196300437208,
+  "small_blocking_factor": 10.506936006258018,
+  "two_compiles_sequential_s": 2.5171694040764123,
+  "two_compiles_parallel_s": 2.4285369309363887,
+  "parallel_speedup": 1.0364962426599167
+ },
+ "subproc": {
+  "child_wall_s": 6.140102036995813,
+  "child_rc": 0,
+  "child_stdout": "COMPILE_S 5.444666330004111\nSTATS _CompileStats(cache_path='/home/sholto/Documents/Workspace/capitec/dsp-decision-engine/experimentation/staged-compile-atomic-swap/_gen/__pycache__', cache_hits=Counter(), cache_misses=Counter({(Array(float64, 1, 'C', False, aligned=True), Array(float64, 1, 'C', False, aligned=True), Array(float64, 1, 'C', False, aligned=True), Array(float64, 1, 'C', False, aligned=True), Array(float64, 1, 'C', False, aligned=True), Array(float64, 1, 'C', False, aligned=True), Array(float64, 1, 'C', False, aligned=True), Array(float64, 1, 'C', False, aligned=True), Array(float64, 1, 'C', False, aligned=True), Array(float64, 1, 'C', False, aligned=True), Array(float64, 1, 'C', False, aligned=True), Array(float64, 1, 'C', False, aligned=True), Array(float64, 1, 'C', False, aligned=True), Array(float64, 1, 'C', False, aligned=True), Array(float64, 1, 'C', False, aligned=True), Array(float64, 1, 'C', False, aligned=True), Array(int64, 1, 'C', False, aligned=True), Array(int64, 1, 'C', False, aligned=True), Array(int64, 1, 'C', False, aligned=True), Array(int64, 1, 'C', False, aligned=True), Array(int64, 1, 'C', False, aligned=True), Array(int64, 1, 'C', False, aligned=True), Array(bool, 1, 'C', False, aligned=True), Array(bool, 1, 'C', False, aligned=True), Array(bool, 1, 'C', False, aligned=True), Array(int64, 1, 'C', False, aligned=True)): 1}))\nCHECKSUM 41951207",
+  "child_stderr": "",
+  "serving_baseline_median_ms": 1.1696614674292505,
+  "serving_during_median_ms": 1.172529999166727,
+  "serving_during_p95_ms": 1.3056719908490777,
+  "serving_during_max_ms": 1.8481570295989513,
+  "serving_latency_inflation": 1.0024524461285207,
+  "serving_calls": 5076,
+  "parent_cache_load_s": 0.010186859988607466,
+  "parent_stats": "_CompileStats(cache_path='/home/sholto/Documents/Workspace/capitec/dsp-decision-engine/experimentation/staged-compile-atomic-swap/_gen/__pycache__', cache_hits=Counter({(Array(float64, 1, 'C', False, aligned=True), Array(float64, 1, 'C', False, aligned=True), Array(float64, 1, 'C', False, aligned=True), Array(float64, 1, 'C', False, aligned=True), Array(float64, 1, 'C', False, aligned=True), Array(float64, 1, 'C', False, aligned=True), Array(float64, 1, 'C', False, aligned=True), Array(float64, 1, 'C', False, aligned=True), Array(float64, 1, 'C', False, aligned=True), Array(float64, 1, 'C', False, aligned=True), Array(float64, 1, 'C', False, aligned=True), Array(float64, 1, 'C', False, aligned=True), Array(float64, 1, 'C', False, aligned=True), Array(float64, 1, 'C', False, aligned=True), Array(float64, 1, 'C', False, aligned=True), Array(float64, 1, 'C', False, aligned=True), Array(int64, 1, 'C', False, aligned=True), Array(int64, 1, 'C', False, aligned=True), Array(int64, 1, 'C', False, aligned=True), Array(int64, 1, 'C', False, aligned=True), Array(int64, 1, 'C', False, aligned=True), Array(int64, 1, 'C', False, aligned=True), Array(bool, 1, 'C', False, aligned=True), Array(bool, 1, 'C', False, aligned=True), Array(bool, 1, 'C', False, aligned=True), Array(int64, 1, 'C', False, aligned=True)): 1}), cache_misses=Counter())",
+  "parent_checksum": 41951207
+ },
+ "swap": {
+  "rows_per_batch": 200000,
+  "workers": 4,
+  "duration_s": 3.0,
+  "swap_every_s": 0.0002,
+  "straddling_chunks": 10,
+  "generation_compile_s": [
+   0.13976370391901582,
+   0.11091958195902407
+  ],
+  "batch_ms": 0.5392805498559028,
+  "correct_read_once": {
+   "batches": 1564,
+   "straddled": 0,
+   "swaps": 11605
+  },
+  "straddling_control": {
+   "batches": 1578,
+   "straddled": 1576,
+   "swaps": 11636
+  },
+  "control_has_power": true,
+  "activate_latency_us_median": 0.17695128917694092,
+  "activate_latency_us_p99": 0.3400491550564766,
+  "rollback_us": 3.3620744943618774,
+  "rollback_numba_compiles": 0,
+  "rollback_serves_generation": 1,
+  "rollback_correct": true
+ },
+ "memory": {
+  "retain": {
+   "n_rules_per_generation": 30,
+   "retain": true,
+   "steps": [
+    {
+     "generations_resident": 1,
+     "emitted_lines": 471,
+     "compile_s": 5.222451249952428,
+     "rss_mb": 251.66796875,
+     "delta_vs_previous_mb": 131.78125,
+     "delta_vs_baseline_mb": 131.78125
+    },
+    {
+     "generations_resident": 2,
+     "emitted_lines": 556,
+     "compile_s": 6.61806120199617,
+     "rss_mb": 294.88671875,
+     "delta_vs_previous_mb": 43.21875,
+     "delta_vs_baseline_mb": 175.0
+    },
+    {
+     "generations_resident": 3,
+     "emitted_lines": 551,
+     "compile_s": 6.355773362913169,
+     "rss_mb": 296.484375,
+     "delta_vs_previous_mb": 1.59765625,
+     "delta_vs_baseline_mb": 176.59765625
+    }
+   ],
+   "rss_after_imports_and_data_mb": 119.88671875,
+   "rss_after_dropping_to_1_generation_mb": 296.484375,
+   "rss_reclaimed_mb": 0.0
+  },
+  "discard": {
+   "n_rules_per_generation": 30,
+   "retain": false,
+   "steps": [
+    {
+     "generations_resident": 1,
+     "emitted_lines": 471,
+     "compile_s": 5.226297416957095,
+     "rss_mb": 239.921875,
+     "delta_vs_previous_mb": 119.9921875,
+     "delta_vs_baseline_mb": 119.9921875
+    },
+    {
+     "generations_resident": 2,
+     "emitted_lines": 556,
+     "compile_s": 6.765931736910716,
+     "rss_mb": 293.54296875,
+     "delta_vs_previous_mb": 53.62109375,
+     "delta_vs_baseline_mb": 173.61328125
+    },
+    {
+     "generations_resident": 3,
+     "emitted_lines": 551,
+     "compile_s": 6.350288411951624,
+     "rss_mb": 294.140625,
+     "delta_vs_previous_mb": 0.59765625,
+     "delta_vs_baseline_mb": 174.2109375
+    }
+   ],
+   "rss_after_imports_and_data_mb": 119.9296875,
+   "rss_after_dropping_to_1_generation_mb": 294.140625,
+   "rss_reclaimed_mb": 0.0
+  }
+ },
+ "wall_s": 152.85483075503726
+}

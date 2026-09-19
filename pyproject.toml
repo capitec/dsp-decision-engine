@@ -9,6 +9,7 @@ dependencies = [
     "pydantic>=2",
     "pydantic-settings",
     "click",
+    "numba>=0.67.0",
 ]
 
 [project.optional-dependencies]

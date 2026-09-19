@@ -48,7 +48,7 @@ optimisation target rather than the kernel itself.
 polars is competitive: arithmetic riding inside a kernel that is already running
 costs register operations, not a boundary crossing.
 
-### 1.1 Fusion is a bounded compiler decision, not a promise
+### 1.1 Fusion is non-monotone
 
 An earlier version of this document said "make kernels few and large" and that
 adjacent modules always fuse profitably. **E7 and E5 independently disproved
@@ -73,7 +73,7 @@ dominates (1071× when a heavy arm is skipped).
 near-free: even with a full polars column round-trip at every boundary, split
 still wins at 1 M rows / 10 modules (4.1 ms vs 7.5 ms). So many small modules is
 a *safe* style — not because they fuse, but because **crossing a boundary costs
-almost nothing.** Cap fused groups at **~6–9 steps**.
+almost nothing.**
 
 Two design claims this exonerates: per-module params bundles are *not* the cause
 (one merged bundle degrades identically), and a tap does *not* split a kernel
@@ -82,23 +82,84 @@ Two design claims this exonerates: per-module params bundles are *not* the cause
 Consequence for the architecture — a clean separation rather than a compromise:
 
 > **The authoring unit (module) and the compilation unit (kernel) are
-> decoupled.** Authors write small modules for audit, reuse and readability. The
-> compiler chooses fusion groups, bounded by step count (~6–9), emitted code size
-> (~500 lines, since compile time runs ≈15 ms/line) and branch-group count.
+> decoupled.** Authors write small modules for audit, reuse and readability.
+> Kernel boundaries are a separate, explicit concern (§1.2).
 
-Because that introduces an optimiser whose choices affect performance, fusion
-grouping must be **inspectable and overridable**:
+Only a genuine frame-tier operation forces a *mandatory* crossing.
+
+### 1.2 Fusion is explicit, not inferred
+
+**Settled.** An earlier draft said "cap fused groups at ~6–9 steps". That number
+does not survive its own evidence and has been withdrawn:
+
+- **It is in the wrong unit and on the wrong side of the line.** The E5 table's
+  step counts are 3 modules = 6 steps and 5 modules = 9 steps, where the ratios
+  are 0.87–0.90 and 0.72–0.76 — fusion is already 10–28% *worse*. The cap named
+  the range the same paragraph identifies as harmful.
+- **No constant can be right.** The same experiments put fusion at **0.11×** (32
+  cheap modules) and **1071×** (one heavy arm skipped). Four orders of magnitude
+  on one decision. Doc 01 §4b says so directly — *"it depends on group count
+  **and** arm cost"* — and a constant in one variable cannot express that.
+- **It is second-order anyway.** The worst case in the table is
+  (0.61 − 0.20) ns/step × 39 steps × 1 M rows ≈ **16 ms**, against a record
+  write-back of **35–158 ms** at 633 outputs that doc 01 §4d already names as the
+  next optimisation target.
+
+So there is no fusion optimiser and no cost model. Instead:
+
+| entry point | default | why |
+|---|---|---|
+| `apply()` — batch | **never fuse across module boundaries** | the predictable side: split cost is flat *within* a body-cost class, and a wrong split is recoverable with `fuse()` while a wrong fusion is not visible at all |
+| `score()` — single record | **fuse maximally** | N=1 is far below the ~10k break-even, where fusion wins purely by amortising per-call overhead (1.28–1.36× already at 1k rows) and `score()` has no polars boundary at all |
+
+Both variants are compiled at build (§3.4) regardless, so carrying two costs
+nothing new.
+
+**Fusion is then something an author asks for**, with a combinator that composes
+like any other:
 
 ```python
-pipeline.explain_kernels()      # which modules landed in which kernel, and why
-pipeline.pin_kernel_boundary(after="sector_cap")   # override when the heuristic is wrong
+pipeline = Affordability | fuse(ApplyIncomeCap | ApplySectorCap | TermCapBySector) | Scoring
 ```
 
-Without that, "why is this pipeline slow" becomes unanswerable. The cost model
-itself is unresolved — doc 06 O12.
+Three properties make this safe:
 
-Only a genuine frame-tier operation forces a *mandatory* crossing; everything
-else is the optimiser's call.
+1. **`fuse()` is semantically transparent.** It changes codegen and nothing else.
+   This is assertable on the existing equivalence ladder (§3.1): a pipeline and
+   its `fuse()`-annotated variant must agree, and `testing/equivalence.py` checks
+   it. Performance annotation can therefore never change an answer — which is
+   what makes it safe for an agent or a non-specialist to add, move or remove.
+2. **It is a combinator, not a flag**, so it is data in the graph like `Branch`
+   and `Loop` — it renders, diffs and serialises, and the graph model gains no
+   new concept.
+3. **Nothing happens implicitly**, so "why is this slow" is answerable by reading
+   the pipeline. There is no optimiser whose choices need explaining.
+
+`explain_kernels()` survives as a *reporting* tool — which modules are in which
+kernel, and the emitted line count.
+
+> **Correction, from measurement.** A review draft of this section proposed that
+> `explain_kernels()` also report **whether the body vectorised**, read from
+> `.inspect_llvm()`, on the grounds that vectorisation loss was "the measured
+> mechanism behind the whole effect". **That is wrong and the proposal is
+> withdrawn.** Across 54 fused kernels the packed-FP count never reached zero; it
+> grows monotonically with M, in the *opposite* direction to performance. The
+> worst regression measured (ratio 0.18×) has a main loop of 791 packed ymm ops
+> and zero scalar ops — fully vectorised and 5.6× slower.
+>
+> What actually degrades is **row-loop unrolling**. A split kernel unrolls ~5× and
+> spills nothing, using 7 of 16 ymm registers; the fused M=20 kernel pins all 16,
+> unrolls ~2×, and spills 47 times per iteration, so a long dependent FMA chain
+> goes latency-bound. Doc 01 §4c named the right cause ("register pressure");
+> doc 01 §4b named the wrong observable. See [EXPERIMENTS.md](EXPERIMENTS.md).
+
+The residual question — a cost model good enough to fuse *automatically* — stays
+open as doc 06 O12, now explicitly out of scope for v1.
+
+One guard rail regardless of grouping: **emitted code size**, since compile time
+runs ≈15 ms/line and a fully-branching depth-10 nest costs 92 s (doc 01 §4b). A
+`fuse()` group whose emitted body exceeds ~500 lines is a build-time error naming
+the group, not a silent 90-second compile.
 
 ### Why the expression tier is gone
 
@@ -255,13 +316,26 @@ disagreement localises to a layer:
   precision, integer overflow, division)
 - `stepped` ≠ `fused` → **fusion or inlining changed something**
 
-This is not hypothetical: 1-ULP drift from `log` and from `fastmath` was observed
-during benchmarking. Without the middle rung you would see "compiled disagrees
-with Python" and have no way to tell which layer caused it.
+Without the middle rung you would see "compiled disagrees with Python" and have
+no way to tell which layer caused it.
 
-`interpreted` is the reference implementation. (a large internal workload independently arrived at
-the same pattern — its raw-Python path is described as "the correctness oracle
-the JIT backend is checked against".)
+> **Measured, [EXPERIMENTS.md](EXPERIMENTS.md) §I.** The `log` half of this did **not** reproduce: 0 of
+> 2,000,000 values differed between njit `math.log`, njit `np.log`, host `np.log`
+> and CPython `math.log` — 0 ULP, even with `fastmath=True` on the log itself.
+>
+> The `fastmath` half is real and larger than recorded: on a 16-term chain it
+> made **46–73% of rows differ, by up to 17 ULP**, while buying only 1.09×. With
+> `fastmath` off, agreement was **100.00% bit-exact** over 20,000 rows.
+>
+> So exact equality is the right acceptance criterion (doc 05 §9.1), and
+> `fastmath` is the one thing that breaks it: a kernel enabling it is **excluded
+> from the exact-agreement assertion** and must declare a tolerance. The
+> divergences that actually threaten the ladder are **integer overflow** and
+> **rounding**, not `log` — see doc 03 §1.2.
+
+`interpreted` is the reference implementation. A large internal workload arrived
+at the same pattern independently — its raw-Python path is described there as
+"the correctness oracle the JIT backend is checked against".
 
 `stepped` is *also* the fallback path (§3.2), so it is not a separate debug build
 to maintain — one mechanism, two purposes. It additionally provides batch-wide
@@ -269,13 +343,21 @@ full tracing if ever wanted, at the measured ~4× materialisation cost.
 
 ### 3.2 Graceful degradation, per node
 
-The compile mechanism itself is **not new** — `decider` already njits each
-function and codegens a fused row loop (`decider/modules/record.py:108-183`,
-`_build_jit_driver`), gated behind `jit: bool = False`
-(`modules/record.py:45`). What it lacks is everything around it: it is opt-in,
-available only for `kind="record"`, has no fallback, no observability, and no
-topological sort (`modules/record.py:18-20`). `decider2` makes it the default and
-supplies the missing pieces.
+The compile mechanism has a precedent rather than a production pedigree. An
+unreleased branch of `decider` njits each function and codegens a fused row loop
+(`decider/modules/record.py:108-183`, `_build_jit_driver`), gated behind
+`jit: bool = False` (`modules/record.py:45`); it is opt-in, available only for
+`kind="record"`, and has no fallback, no observability and no topological sort
+(`modules/record.py:18-20`). Two prototypes in this repo cover the rest:
+`experimentation/graph_poc/fallback_pipeline.py` implements exactly the two-layer
+degradation below, and `experimentation/jittree/test.py` benchmarks four
+compilation strategies for a rule tree.
+
+**Read that as a feasibility signal, not as de-risking.** `decider2` is a
+ground-up build: nothing in the released `decider` imports numba, none of this
+has run in production, and no part of the old implementation is being carried
+forward. The prototypes show the mechanism works; they do not show it works at
+the scale, dtype coverage or governance surface this design requires.
 
 Nothing requires the author to write numba-friendly code. Two independent layers:
 
@@ -290,14 +372,26 @@ Only `numba.core.errors.NumbaError` triggers fallback. A genuine runtime bug
 (e.g. `ZeroDivisionError`) always propagates, compiled or not, so it can never be
 silently masked as "this needed a fallback".
 
-### 3.3 Compiled variants, decided at warmup
+### 3.3 Compiled variants, decided by the author
 
-Compile latency is a non-issue (long-lived processes only), so variants are built
-eagerly at startup and dispatched per invocation:
+Compile latency is a non-issue (long-lived processes only), so every variant is
+**compiled at image build** (§3.4) and *selected* at warmup by measurement. Note
+"warmup" here means measuring already-compiled variants, never compiling — §3.4
+requires a runtime load to trigger zero compilations.
 
-- **serial vs `prange`** — dispatch on row count. `prange` is a pessimisation
-  below ~50k rows (~0.1–0.15 ms thread launch) and triples compile time.
-- **`fastmath` off by default** — measured as noise.
+- **serial vs `prange`** — **authored, not inferred.** Serial is the default; an
+  author writes `parallel(...)` around a region, exactly as with `fuse(...)`
+  (§1.2). One variant is compiled per kernel, not two. Rationale and the refuted
+  alternatives are in doc 05 §5.1; the short version is that real credit logic
+  short-circuits, so per-row work is a distribution rather than a constant, and
+  every automatic rule tested was fitted on uniform bodies that do not resemble
+  it. `parallel=True` costs 1.2–2.6× compile time, so compiling both variants
+  everywhere pays that on kernels that will never want it.
+- **`fastmath` off by default, enabled selectively.** Noise (±5%) on
+  branch-dominated logic, but worth **2–2.5×** on an arithmetic-heavy fused
+  driver (doc 01 §4c). Decide per kernel, not globally — and note it is a source
+  of 1-ULP drift, so an enabled kernel needs a tolerance policy in the
+  equivalence ladder (§3.1).
 
 ### 3.4 Compilation happens at image build, not at startup
 
@@ -357,10 +451,14 @@ Three distinct kinds, deliberately not conflated.
 
 **Values** flow through the graph, governed by one invariant: **every scope has a
 declared interface, names are distinct within a scope, and versioning happens only
-at scope boundaries.** The four scopes are step, module, branch arm and loop body.
+at scope boundaries.** The five scopes are step, module, branch arm, loop body and
+**pipeline**. A module's interface is *inferred* from its steps and then
+materialised into the module data, so it costs no ceremony to author and is still
+real enough to render, diff, freeze and rebind (doc 03 §5.1).
 
 So a module's interior is a pure order-independent DAG (no overwrite, distinct
-names), while overwrite at a *boundary* is the normal case and is how a waterfall
+names), while **`|` is a sequence** — written order is execution order — and
+overwrite at a *boundary* is the normal case and is how a waterfall
 is expressed — `SeedTermCap | ApplyIncomeCap | ApplySectorCap`, each rule an independently
 auditable unit. Ordering lives in `|`, never in source declaration order and never
 in an argument list. Each version has exactly one producer, so attribution is
@@ -396,6 +494,15 @@ mechanism, undermining the §3.1 equivalence ladder.
 > The performance boundary (type fixed → no recompile) and the governance
 > boundary (business user vs engineer) are **the same boundary**. One mechanism
 > enforces both.
+
+**Two refinements, both in doc 08.** First, params/structure is too coarse a
+binary — it has no row for a table and no row for a rule, and it puts "add a
+rule" in the same bucket as "write new Python". Doc 08 §2 replaces it with three
+change classes: **values** (free), **module interiors** (one background compile
+and a staged swap), **skeleton** (rebuild). Second, "type fixed" needs
+enumerating: a `float | None` field toggling between set and unset flips
+`float64` ↔ `Optional(float64)` and *does* recompile. Doc 08 §4.2 lists what
+forces one.
 
 **Tables** are lookups keyed by a record attribute — segment-varying cutoffs,
 term tables. Data, indexed, separately validated. Not params (params don't vary
@@ -457,22 +564,34 @@ decider2/
   observe/       taps.py, trace.py, audit.py, otel.py
   runtime/       invoke.py    # batch apply + single-record scalar path
                  plan.py      # ordering DERIVED from the graph, never declared
-  config/        register.py  # generate a config model, stage it
+                 lifecycle.py # generations: stage -> compile -> activate -> rollback (doc 08 §4)
+  binding/       register.py  # generate a config model, stage it
                  finalise.py  # assemble the union ONCE; after this the union is the index
+                 admit.py     # what a config document may contain (doc 08 §7)
+                 fingerprint.py  # content hash of structure + interiors
                  errors.py    # wrap union_tag_invalid with difflib suggestions
-  testing/       assertions.py, equivalence.py, golden.py
+  testing/       assertions.py, equivalence.py, golden.py, impact.py
 
 decider2_credit/     scorecard/, tree/, rule_table/, waterfall/, affordability/
 <client extensions>  same surface, registers into registry
 ```
 
-Three placements are deliberate:
+Five placements are deliberate:
 
 - `compile/strategy.py` is the expression-tier seam (§1).
 - `runtime/plan.py` derives ordering from the graph, so it can never be
   hand-maintained in JSON or asserted in a comment (doc 01 §5.2).
 - `testing/equivalence.py` enforces the ladder in §3.1 — what makes debugging in
   `stepped` or `interpreted` trustworthy.
+- **`binding/`, not `config/`.** This package validates and binds *documents it is
+  handed*; it never fetches one. The name matters because `decider/config/`
+  accreted 553 lines of storage, semver and polling machinery once already
+  (doc 08 §6). There must be no `decider2/config/` package and no symbol named
+  `ConfigManager`, and a lint rule forbids importing `json`, `os`, `pathlib`,
+  `socket` or an HTTP client anywhere under `binding/` or `params/`.
+- `runtime/lifecycle.py` is where a new pipeline generation is compiled off the
+  request path and swapped atomically — the mechanism that lets config change
+  structure without putting a compile in a request (doc 08 §4).
 
 Three layers, as in `decider` today: core library → shared credit-granting
 modules → client-supplied extensions.
