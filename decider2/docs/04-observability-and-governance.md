@@ -330,6 +330,73 @@ one screen, with everything needed inlined** — the policy term, the value the 
 actually read, its provenance, and the limit it must respect, all rendered at the
 point of use rather than referenced.
 
+### 6.3b A reviewer cannot adjudicate a mismatch — the framework must assert it
+
+**Settled by a second, smaller test, and this supersedes the rendering approach.**
+
+The first test was rejected as too much cross-referencing (§6.3), so it was rerun
+with everything on one screen: the policy clause, the value the rule read, its
+definition, the policy term it claims to implement, and a flagged near-miss value
+that existed but was not read. Roughly fifteen lines, one question.
+
+**It failed again**, and the reviewer's response is the result:
+
+> *"the income is 9200 so the rule shouldn't fire — why is there 2 sources of
+> income, where is the 7480 coming in, it's hard to know how that should interact.
+> Are you saying the 7480 is a better source than gross? Why do we have
+> contradicting sources?"*
+
+Every one of those is the right question. **Asking them is the finding.** A real
+application genuinely carries several income figures — gross, declared, verified
+net after statutory deductions — and they are not contradictory, they are
+different measurements. Policy names one. The rule read another. But deciding
+*which one policy meant* is precisely what the reviewer came to find out, so
+showing both and expecting adjudication asks them to supply the answer they are
+seeking.
+
+> **A reviewer cannot adjudicate a mismatch they are shown. They can only confirm
+> a check the system already made.** No rendering fixes this, because it is not a
+> presentation problem.
+
+**The mechanism this requires.** A policy term becomes a first-class declared
+binding, not prose:
+
+```python
+# policy_terms.py — reviewed once, by a human, and it is the whole review surface
+PolicyTerm("§7.4.2", reads="verified_net_income",
+           statement="verified net monthly income, after statutory deductions")
+```
+
+```python
+@step(implements="§7.4.2")
+def cap_by_income_band(monthly_income: float, ...):   # ← BUILD ERROR
+    ...
+```
+
+> `cap_by_income_band` declares `implements="§7.4.2"`, which is bound to
+> `verified_net_income`. It reads `monthly_income`. These are different values and
+> both exist in this pipeline. Either read `verified_net_income`, or change the
+> binding, or drop the `implements` claim.
+
+Three consequences, and they all make the governance story *smaller*:
+
+1. **The breach becomes a build error**, caught by CI, not a warning rendered into
+   a document that a reviewer must notice. The first test's breach could not have
+   shipped.
+2. **The review surface collapses to one line per policy clause.** A reviewer
+   confirms `§7.4.2 → verified_net_income` — a single binding, in their own
+   vocabulary, with no code and no tracing. That is a task a non-programmer can
+   actually do, and it is the only one this exercise found.
+3. **It generalises to the second breach too.** §7.4.5 said no pricing adjustment
+   may override a term reduction. As prose on a sheet, invisible. As a declared
+   property of the policy term — `adjustable=False` — ADJ-0117 fails at approval
+   rather than being rendered as routine.
+
+**What this costs.** Someone must write the policy-term bindings, and they are
+only as good as that mapping. But it is a mapping a credit-risk reviewer can read
+and correct, written once per clause rather than re-derived per review — which is
+the opposite of the position the two tests just failed from.
+
 **6.4 There is no single reviewable artefact, and there should not be.** A
 single prescribed format was the wrong shape — see §6.5.
 
