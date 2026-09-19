@@ -110,7 +110,8 @@ Three classes replace it.
 | class | what it is | artefact | cost of a change | who |
 |---|---|---|---|---|
 | **values** | params; table contents | params document | **free** — swap a bundle, no compile | business user |
-| **interiors** | the body of a data-shaped module: rules, bins, table rows, branch sets | interior document | **one background compile + swap** (§4) | business user, reviewed |
+| **interiors — values** | a rule's thresholds and its enabled flag | params document | **free** — they are arguments, not literals (§2.2) | business user |
+| **interiors — shape** | rules added, removed or restructured; operators; nesting | interior document | **one background compile + swap** (§4) | business user, reviewed |
 | **skeleton** | which modules exist, how they wire, `Branch`/`Loop` composition, step logic | Python | **rebuild and redeploy** | engineer |
 
 Three properties make this hold together:
@@ -124,6 +125,33 @@ Three properties make this hold together:
 3. **The skeleton is code.** A config document may not add a module, rewire two
    modules, or introduce a `Branch`. See §7 for why, and for how that could be
    widened later without rework.
+
+### 2.2 A rule's thresholds are arguments, not emitted literals
+
+**Measured — [EXPERIMENTS.md](EXPERIMENTS.md) §L.** A rule set can be emitted with its thresholds baked
+into the source, or with them passed as an array argument. The argument form:
+
+| | literal | argument |
+|---|---|---|
+| 8 threshold retunes | **8 full recompiles**, 343 ms each *at 5 rules* | **0 compile events**, `signatures` 1→1 |
+| runtime | baseline | **+1–4.5 ns/row** (2.5–11.2%) |
+| emitted lines | 11 / 25 / 65 | **identical** |
+
+**The runtime price is ~4.5 nanoseconds against a 20–100 ms single-record budget**
+(doc 01 §6.1) — free on the primary path, 3–11% on the daily batch. Adopt it.
+
+**Rule enablement should be a mask array too.** §G measured that a *disabled* rule
+still costs its full compile time; a mask costs −2.0% at 10 rules (noise) and
++5.4% at 30, and break-even against a single recompile is ~427 million rows.
+
+> **One claim withdrawn.** An earlier draft implied hoisting constants would also
+> reduce compile time by shrinking emitted code. It does not — line counts are
+> **identical** at every rule count and the compile-time delta has no consistent
+> sign. The case for arguments is *no recompile on retune*, and nothing else.
+
+This is also what makes the stale-code hazard (doc 05 §4.2) structurally
+impossible on the path a business user edits: a threshold change writes no source
+at all.
 
 ### 2.1 The params document rejects composition
 
@@ -370,9 +398,25 @@ Five properties:
    run 1.036× faster than sequential, and a small compile started during a large
    one took **10.5×** longer.
 
-   A subprocess compile of a 30-rule kernel measured 5.36 s with the serving
-   process untouched; the parent then loads from the pinned cache directory — so
-   this and doc 05 §4.2's six-condition cache contract must be designed together.
+   ✅ **The subprocess path is now measured end to end — [EXPERIMENTS.md](EXPERIMENTS.md) §K.** Serving
+   retains **97.9%** throughput during a child compile (against 26–55% for a
+   thread), the parent load triggers **zero** numba compile events in 9.3 ms, and
+   child and parent checksums are bit-identical.
+
+   | config change | compile | total, change-to-serving |
+   |---|---|---|
+   | 10 rules | 1.91 s | **2.56 s** |
+   | 30 rules | 6.66 s | **7.34 s** |
+
+   That is the number a configuration UI can honestly promise, and it corroborates
+   §G's "≤10 s up to ~35 rules".
+
+   Two contract requirements the handover added, both in doc 05 §4:
+   the generated module must be imported **by module name**, not via
+   `spec_from_file_location` (which loses the cache across processes entirely),
+   and the **`sys.modules` registration name** must be derived identically by the
+   compiling child and every later loader — a seventh cache condition whose
+   violation surfaces as a cryptic `ModuleNotFoundError('<dynamic>')`.
 
    A failed compile leaves the active generation untouched and surfaces on the
    handle — never as a swallowed exception. (Contrast `subscribe_version_updates`,

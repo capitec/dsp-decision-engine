@@ -1,6 +1,6 @@
 # Measured results — 2026-09-18/19
 
-Eleven experiments run against real numba, on the project's own environment:
+Fifteen experiments run against real numba, on the project's own environment:
 **Python 3.14.5, numba 0.67.0, llvmlite 0.49.0, numpy 2.4.6, polars 1.41.2,
 pydantic 2.13.4** — which matches doc 01's stated benchmark environment on numpy,
 polars and pydantic exactly (numba differs: 0.67.0 here vs 0.66.0 there).
@@ -26,8 +26,20 @@ change a design decision rather than a number.
 | G | ruleset compile latency (O16) | **partial** | `experimentation/` |
 | H | staged compile + atomic swap (doc 08 §4) | **partial** | `experimentation/` |
 
-All eleven ran. **G and H together settle whether a configuration UI is viable:
-it is, with one change to how compilation is hosted.**
+| J | output write-back convention | **partial** | `experimentation/output-writeback-convention/` |
+| K | subprocess compile + cache handover | **partial** | `experimentation/subprocess-handover/` |
+| L | rule constants as arguments | **partial** | `experimentation/` (rule-constants) |
+| J2 | chunked write-back at scale | **partial** | `experimentation/` (chunked) |
+
+**G, H and K together settle whether a configuration UI is viable: it is.** A rule
+change lands in **2.5 s (10 rules) to 7.3 s (30 rules)**, end to end, with the
+serving process retaining 97.9% throughput throughout.
+
+> **Read all batch figures against doc 01 §6.1.** The single-record path is the
+> primary one, with a 20–100 ms budget, and the compiled path runs at ~1 µs — so
+> fusion, output conventions and chunking are **batch** concerns with four orders
+> of magnitude of headroom at N=1. They should be chosen for maintainability
+> unless a request-path measurement says otherwise.
 
 ---
 
@@ -448,3 +460,167 @@ threads: **1.036× speedup** over sequential. A 3-rule compile started 0.5 s int
 > serving process untouched. The parent then loads from the pinned cache directory
 > — which is exactly the six-condition cache contract in doc 05 §4.2, so the two
 > mechanisms have to be designed together.
+
+
+---
+
+## J — Output write-back: column-major wins, but less than it first appears
+
+At 100k rows, 400 inputs / 633 outputs mixed. Shared: extract 6.1 ms + assemble 335.8 ms.
+
+| variant | compile | kernel | write-back | total | wb % | zero-copy |
+|---|---|---|---|---|---|---|
+| record → record *(doc 05 §3 as written)* | 11.31 s | 94.2 ms | **775.6 ms** | 1211.7 ms | **64.0%** | n/a |
+| record → col-major 2D | **0.27 s** | 349.7 ms | **5.7 ms** | **697.3 ms** | 0.8% | **all True** |
+| record → row-major 2D *(control)* | 0.25 s | 80.1 ms | 505.8 ms | 927.8 ms | 54.5% | all False |
+
+**1.74× end-to-end**, write-back 775.6 → 5.7 ms. E9's 54.7% figure is confirmed and
+is **64.0%** here.
+
+**The control is what makes it interpretable.** Row-major 2D has the *fastest
+kernel of the three* (80.1 ms) yet write-back stays at 505.8 ms and is not
+zero-copy. So the win is specifically **column-major**, not "2D instead of
+records" — and column-major genuinely pays for it in the kernel, 349.7 ms against
+80.1 ms, from losing write locality.
+
+Two things that matter more than the runtime:
+
+- **Compile collapses 11.31 s → 0.25–0.27 s, 42×**, for *both* 2D forms. Against
+  §G's compile ceiling and §K's config-UI latency, this is the larger result.
+- **At N=1 the ranking inverts**: per-row kernel cost is row-major 800.8 ns,
+  record 942.2 ns, col-major **3497.1 ns**. Column-major is 3.7× worse per record.
+  It optimises the daily batch at the primary path's expense — though at a 20 ms
+  budget the whole spread is 2.7 µs, i.e. 0.01%.
+
+**This experiment OOM-killed the machine twice** (18.7 GB, 20.8 GB RSS) by holding
+all three output variants *and* three result frames live for an equality check.
+The harness was the bug, not the design — but see §J2, because the underlying
+memory requirement is real.
+
+---
+
+## K — The subprocess lifecycle works; two new failure modes
+
+**Doc 08 §4's mechanism is confirmed.**
+
+| | thread (§H) | **subprocess (K)** |
+|---|---|---|
+| serving throughput retained | 26–55% | **97.9%** |
+| parent-side numba compile events | — | **0** |
+| parent load time | — | 9.3 ms |
+| child/parent checksums | — | bit-identical |
+
+**Wall clock, config change to serving:** 10 rules **2.56 s** (compile 1.91 s),
+30 rules **7.34 s** (compile 6.66 s). That is the number a configuration UI can
+honestly promise, and it corroborates §G's "≤10 s up to ~35 rules".
+
+### Most cache-condition violations fail safely
+
+| child/parent disagree on | result |
+|---|---|
+| filename | `FileNotFoundError` — **loud** |
+| cwd (relative path) | `FileNotFoundError` — **loud** |
+| `NUMBA_CACHE_DIR` | silent MISS → recompiles — **safe** |
+| `def` line number, mtime/size frozen | silent MISS → recompiles — **safe** |
+| **`sys.modules` registration name** | `ModuleNotFoundError('<dynamic>')` from inside `pickle.loads` — **loud but cryptic** |
+
+That last row is a **seventh condition** §C never found, because §C's harness always
+registered the module and never varied it. The failure surfaces deep in numba's
+`Environment` rebuild with no hint that a caching contract was violated.
+
+**Only the mtime/size coincidence produces a silent wrong answer.** The other
+violations degrade to a recompile, which is slow but correct — a materially better
+risk profile than §C implied.
+
+---
+
+## L — Rule thresholds should be arguments, for a different reason than assumed
+
+| measure | literal | argument |
+|---|---|---|
+| runtime, 10 rules @1M | 39.92 ns/row | 41.16 ns/row (**+3.1%**) |
+| runtime, 30 rules @100k | 40.05 ns/row | 44.53 ns/row (**+11.2%**) |
+| emitted lines, 3/10/30 rules | 11 / 25 / 65 | **identical** |
+| compile time | 0.475 / 0.444 / 1.081 s | 0.297 / 0.517 / 1.325 s — **no consistent sign** |
+| **8 threshold retunes** | **8 full recompiles, 343 ms each** | **0 compile events, signatures 1→1** |
+
+**Refuted:** the implied compile-time benefit. Hoisting thresholds does *not*
+reduce emitted lines (identical at every rule count) or reliably reduce compile
+time. Doc 08 §2 should not claim it.
+
+**Confirmed, and it is the whole case:** a threshold retune never recompiles.
+343 ms per retune at *five* rules, and §G's lines^1.4 scaling makes that far worse
+at thirty.
+
+**The price is 1–4.5 ns/row** — which under doc 01 §6.1's priority is
+**~4.5 nanoseconds against a 20 ms single-record budget**. Free at N=1, ~3–11% on
+the daily batch. Adopt it.
+
+**Rule enablement as a mask array is also nearly free:** −2.0% at 10 rules (noise,
+net faster) and +5.4% at 30. Break-even against a *single* literal-form recompile
+is ~427 million rows. So §G's "disabled rules cost full compile time" is solved by
+a mask, decisively.
+
+---
+
+## The K/L contradiction — unresolved, and it matters for attribution
+
+Both ran a controlled A/B on the stale-constant hazard and **got opposite results**:
+
+- **K:** deleting CPython's `__pycache__/*.pyc` alone fixed it — correct value served,
+  `STALE_CAUSED_BY_CPYTHON_PYC=True`. Attributes the hazard to CPython's bytecode
+  cache, which is *also* keyed on (mtime, size) and is consulted before numba's
+  decorator runs.
+- **L:** with the `.pyc` cleared and numba's `.nbi`/`.nbc` untouched, it **still
+  served the stale value** — `numba_cache_independently_stale=True`. Attributes it
+  to numba's own cache, since the edit changes `co_consts` without changing
+  `co_code`'s `LOAD_CONST` operand index.
+
+They may both be right about different layers, or one harness may not have cleared
+what it thought it cleared. **Do not record a root cause until this is settled** —
+§C currently attributes it to numba alone, and that attribution is now in doubt.
+
+The practical consequence is unchanged either way: **content-addressed filenames
+kill both layers at once**, and K verified that unchanged content still hits
+(0 compile events) while changed content misses and returns the correct value.
+
+---
+
+## J2 — Chunking is mandatory, and the 1.74× does not survive it
+
+**Peak RSS, unchunked, one variant per process:**
+
+| rows | record | col-major |
+|---|---|---|
+| 100k | 1.77 GB | 1.33 GB |
+| 250k | 4.13 GB | 3.06 GB |
+| **1M (fitted)** | **16.19 GB** | **11.87 GB** |
+
+Largest batch fitting a 6 GB cap: record ~389k rows, col-major ~534k. **So a 1M-row
+batch at this width does not fit, for either convention** — chunking is not an
+optimisation, it is a requirement, and doc 05 has no chunking section at all.
+
+**Chunked, 1M rows total:** peak RSS is **bounded by chunk size and flat against
+total rows** — 0.45/1.05/1.79/4.02 GB (record) at 10k/50k/100k/250k chunks. Column-
+major output survives chunking and stays bit-identical: **134/134 chunk checksums
+match**.
+
+> **Default chunk size: 100,000 rows** — the low end of the wall-time-optimal
+> 50k–100k band for both conventions, with ~4× the memory headroom of a 250k chunk
+> on a machine that must serve other work.
+
+**And an honesty correction to J.** End-to-end wall-time ratio under chunking is
+**1.03×–1.57×, never 1.74×**, because per-chunk input assembly and output
+persistence — costs the convention does not touch — are **58–82% of wall time**.
+On the portion the convention *does* control the win actually *grows* with chunk
+size, reaching **3.09×** at 250k. Doc 05 must state the measured range, not a flat
+1.74×.
+
+### A direct correction to doc 05 §4.1
+
+**The numba on-disk cache does not survive across fresh processes when the
+generated driver is imported with `spec_from_file_location`** — the pattern doc 05
+§4.1 recommends — even with a byte-identical file and preserved mtime. Importing
+**by module name** instead took the driver from **12.1 s cold to ~0.2 s** on every
+subsequent process. This compounds §K's seventh condition: both are about module
+identity, and doc 05 §4.1's recommended pattern gets it wrong.

@@ -155,12 +155,57 @@ The figure is interpolated between measurements at 50 and 200 — **not pinned**
 so make it a constant with a comment, not a magic number. If a single convention
 is preferred, records are never much worse.
 
-### Known bottleneck
+### 3.1 Output side: dtype-grouped 2D, layout per entry point
 
-**Record write-back dominates at high output counts** — gathering strided fields
-back out costs 35–158 ms, which is **54.7% of total time at 633 outputs**. It is
-still the best configuration measured, but optimisation effort belongs here, not
-in the kernel.
+**Measured — [EXPERIMENTS.md](EXPERIMENTS.md) §J.** Record write-back is confirmed as the dominant batch
+cost (**64.0%** of total at 633 outputs here, against E9's 54.7%), and **record
+output is dominated on both axes** by dtype-grouped 2D arrays — one
+`float64[cols, rows]`, one `int64[...]`, one `bool[...]`, so arity stays at three
+arguments.
+
+| output convention | ns/row kernel | write-back @100k | compile |
+|---|---|---|---|
+| dtype-grouped **row-major** 2D | **800.8** | 505.8 ms | 0.25 s |
+| record array *(previously specified)* | 942.2 | 775.6 ms | 11.31 s |
+| dtype-grouped **column-major** 2D | 3497.1 | **5.7 ms** | 0.27 s |
+
+Column-major reaches polars **zero-copy** (verified); the other two do not. A
+row-major 2D control proves the write-back win comes from *column-major*, not from
+"2D instead of records".
+
+**Both 2D forms compile 42× faster** (11.31 s → ~0.26 s), which matters more than
+the runtime because it feeds §K's config-change latency.
+
+> **Choose by entry point**, as with fusion (doc 02 §1.2):
+> `score()` → **row-major** (kernel time is the whole cost, and there is no bulk
+> write-back); `apply()` → **column-major** (write-back dominates).
+>
+> Per doc 01 §6.1 the `score()` side of that choice is worth ~2.7 µs against a
+> 20–100 ms budget, so **settle it on whichever is simpler** unless a request-path
+> measurement says otherwise. The batch side is where the evidence bites.
+
+### 3.2 Chunking is mandatory, not an optimisation
+
+**Measured — [EXPERIMENTS.md](EXPERIMENTS.md) §J2.** At 400-in/633-out, a 1 M-row batch **does not fit**:
+fitted peak RSS is **16.19 GB** (record) and **11.87 GB** (column-major). The
+largest batch inside a 6 GB cap is ~389k rows (record) or ~534k (column-major).
+
+Chunked, peak RSS is **bounded by chunk size and flat against total rows**, and
+column-major output stays bit-identical across chunks (134/134 checksums).
+
+> **Default chunk size: 100,000 rows** — the low end of the wall-time-optimal
+> 50k–100k band for both conventions, with ~4× the memory headroom of a 250k chunk.
+
+Two contract requirements:
+
+- **Resolve the driver, its coefficients and the generation pointer ONCE per
+  batch, outside the chunk loop.** Doc 08 §4 measured that re-reading the
+  generation pointer per chunk straddles config versions in **99.87%** of batches.
+- **Quote the honest ratio.** End-to-end, column-major beats record by
+  **1.03×–1.57×** under chunking, not the 1.74× measured unchunked — per-chunk
+  input assembly and output persistence are **58–82% of wall time** and the
+  convention touches neither. On the portion it does control the win *grows* with
+  chunk size, reaching 3.09×.
 
 Batch write-back via `hstack(pl.DataFrame(dict))` rather than chained
 `with_columns` (~2× cheaper; `with_columns` is ~24 µs fixed + ~10 µs/col,
@@ -176,7 +221,18 @@ independent of row count).
 without a source file (`RuntimeError: no locator available for file '<string>'`).
 Writing drivers to a real `.py` took a 1200-argument driver from **29.5 s cold to
 0.80 s warm** — which is what makes compile cost a build-time concern rather than
-a startup one.
+a startup one. Confirmed independently: 4.93 s → 0.177 s at 200 args, 46.99 s →
+0.197 s at 800, with **warm cost flat at ~0.18 s regardless of driver size**.
+
+> **⚠ But how you import it decides whether any of that works — [EXPERIMENTS.md](EXPERIMENTS.md) §J2.**
+> The cache **does not survive across fresh processes** when the generated driver
+> is loaded with `importlib.util.spec_from_file_location`, even with a
+> byte-identical file and a preserved mtime. Import it **by module name** (put its
+> directory on `sys.path` and use `importlib.import_module`): measured **12.1 s
+> cold → ~0.2 s** on every subsequent process.
+>
+> This is the same root as §K's seventh cache condition — both are about the
+> module's identity in `sys.modules`, not about its bytes.
 
 ### 4.2 Determinism is a hard requirement
 
@@ -194,13 +250,26 @@ runtime:
 4. same argument signature
 5. same `magic_tuple` = (LLVM triple, CPU name, CPU feature string)
 6. same sha256 of the function's `co_code` and pickled closure
+7. **same `sys.modules` registration name** — [EXPERIMENTS.md](EXPERIMENTS.md) §K. Violating it raises
+   `ModuleNotFoundError('<dynamic>')` from inside numba's `pickle.loads`, with no
+   hint that a caching contract was broken. Derive it from the same content hash
+   as the filename.
+
+**Most violations fail safely.** Measured across a real child/parent boundary
+(§K): a filename or cwd mismatch raises `FileNotFoundError` loudly; a cache-dir or
+`def`-line mismatch silently *misses* and recompiles — slow but correct. **Only
+the mtime/size coincidence produces a silent wrong answer.**
 
 Plus the original requirements, which still apply: deterministic ordering (no
 set/dict iteration order dependence), no addresses, timestamps, `id()` values or
 PIDs in generated names, and stable naming derived from module ids.
 
-> **⚠ numba will serve stale compiled code.** Condition 6 hashes `co_code`, which
-> **excludes `co_consts`**. Change a numeric constant in a generated driver, keep
+> **⚠ Compiled code can be served stale.** Condition 6 hashes `co_code`, which
+> **excludes `co_consts`** — but the layer responsible is **contested and must not
+> be recorded as settled** ([EXPERIMENTS.md](EXPERIMENTS.md) §K vs §L). §K found that clearing
+> CPython's `__pycache__/*.pyc` alone fixed it; §L found it still served stale with
+> the `.pyc` cleared and numba's own cache untouched. Two caches are keyed on
+> (mtime, size) and both are candidates. Change a numeric constant in a generated driver, keep
 > the file size identical, restore the mtime — numba reports a cache **hit** and
 > returns the pre-edit answer. `decider build --verify` counting zero compiles
 > reports success on it.
