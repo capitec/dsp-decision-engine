@@ -313,10 +313,27 @@ reviewer needs the *policy term* it claims to implement, and a flag when a value
 named in policy exists in the pipeline and is **not** the one the rule reads.
 `verified_net_income` was right there in the decision record, unused.
 
-**6.3 There is no single reviewable artefact, and there should not be.** A
-single prescribed format was the wrong shape — see §6.4.
+**6.3 The failure mode was cross-referencing, not comprehension.** Asked
+afterwards what made it hard, the reviewer said: *"I wasn't sure what the ask was
+and I found myself trying to keep context between different md files."* The sheet
+could not be read alone — answering "was this decision correct?" required holding
+a policy extract, a rule sheet and a decision record simultaneously and joining
+them by hand.
 
-### 6.4 Trace is data; every rendering is replaceable
+That is the whole problem, and it is a stronger result than "the sheet was
+confusing". **An artefact that requires the reviewer to join three documents has
+already failed, however good each document is.** The join is the work, and the
+join is exactly what the framework can do and a human cannot do reliably.
+
+So the unit is not "a sheet per rule". The unit is **one question, answerable from
+one screen, with everything needed inlined** — the policy term, the value the rule
+actually read, its provenance, and the limit it must respect, all rendered at the
+point of use rather than referenced.
+
+**6.4 There is no single reviewable artefact, and there should not be.** A
+single prescribed format was the wrong shape — see §6.5.
+
+### 6.5 Trace is data; every rendering is replaceable
 
 **Settled, and it corrects this section's original framing.** Doc 04 previously
 proposed *the* reviewable artefact, as though one format could serve a credit-risk
@@ -347,7 +364,7 @@ So the framework owes three things, and a fourth is explicitly not its business:
 > nine of eleven mock projects produced no reviewer artefact at all — the ones
 > that tried were designing for an imagined single reader.
 
-### 6.5 What the original section got right, and the evidence for it
+### 6.6 What the original section got right, and the evidence for it
 
 **Requirement:** a credit-risk or compliance reviewer, who does not read code,
 can verify a rule against a policy document.
