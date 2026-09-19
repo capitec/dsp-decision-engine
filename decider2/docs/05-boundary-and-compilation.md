@@ -264,7 +264,7 @@ a startup one. Confirmed independently: 4.93 s → 0.177 s at 200 args, 46.99 s 
 Byte-identical source is **necessary but not sufficient**, and normalising
 timestamps to get reproducibility introduces a silent wrong-answer bug. [EXPERIMENTS.md](EXPERIMENTS.md) §C.
 
-**Six conditions must all hold** for a build-time cache entry to be used at
+**Seven conditions must all hold** for a build-time cache entry to be used at
 runtime:
 
 1. same absolute directory (it selects `__pycache__`)
@@ -465,10 +465,16 @@ Cache the decision per node so a doomed compile isn't retried every call.
 
 ## 7. Fusion grouping
 
-Fusion is **non-monotone** (doc 01 §4b–4c): profitable at 1–2 modules
-(1.33–1.61×), harmful past ~5 (0.51× at 10 modules, 0.33× at 20) because register
-pressure stops the growing body vectorising. The sign flips back when arms are
-expensive, since short-circuiting then dominates.
+Fusion is **non-monotone, and its sign depends on body cost, not module count**
+([EXPERIMENTS.md](EXPERIMENTS.md) §E). At fixed module count and fixed rows, body cost alone spans
+**62×**: at 20 modules a cheap straight-line body gains 13.0× from fusion while a
+heavy one loses 4.5×. Doc 01 §4c's table is a slice through one body-cost class.
+
+The mechanism is **register pressure spilling a dependent FMA chain**, not lost
+vectorisation. The worst regression measured is *fully* vectorised — 791 packed
+ymm FP ops, zero scalar — and 5.6× slower: it pins all 16 ymm registers, unrolls
+~2× instead of ~5×, and spills 47 times per iteration, so it goes latency-bound.
+Packed-FP count *rises* with module count while performance falls.
 
 **There is no grouping heuristic to implement** (doc 02 §1.2). An earlier draft
 specified a ~6–9 step cap; it named a range its own evidence shows is already
@@ -477,16 +483,24 @@ from 0.11× to 1071×. Withdrawn.
 
 What `compile/` implements instead:
 
-- **`apply()` emits one kernel per module by default.** Split holds a flat
-  0.20 ns/step at every size measured; it is the predictable choice, and boundary
-  stores are near-free.
-- **`score()` emits one maximally-fused kernel.** N=1 is far below the ~10k
-  break-even, and there is no polars boundary on that path at all.
+- **`apply()` emits one kernel per module by default.** Split cost is flat
+  *within* a body-cost class (0.82–0.96 ns/step trivial, 1.56–2.38 medium,
+  0.85–3.30 heavy — not the 0.20 ns/step an earlier draft claimed, which is below
+  the floor of a single kernel call). Flat-in-size is what matters here: it is the
+  predictable choice, and boundary stores are near-free.
+- **`score()` emits one maximally-fused kernel.** At N=1 fusion wins **9.4–48×**
+  because per-call dispatch (0.44 µs/kernel) dominates everything else. There is no
+  common break-even to be below — `trivial/straight` never crosses at any size —
+  but N=1 is the one regime where fusion is unambiguous.
 - **A `fuse(...)` combinator in the graph** groups modules into one kernel
   explicitly. It is authored, not inferred.
 - **A hard cap on emitted lines (~500) per kernel**, enforced as a build error
-  naming the group. Compile runs ≈15 ms/line and a fully-branching depth-10 nest
-  costs 92 s, so this is the one bound that must not be advisory.
+  naming the group. Compile is **super-linear in emitted lines** — ∝ lines^1.4,
+  with the local exponent reaching 1.96 between 60 and 100 rules (§G) — and a
+  fully-branching depth-10 nest costs 92 s. Super-linearity is why this bound must
+  not be advisory: the cap is where cost is still recoverable. The ~500-line
+  guardrail survives and is slightly conservative; the real crossover is 600–710
+  lines.
 
 Two requirements this places on codegen:
 
@@ -500,13 +514,15 @@ Two requirements this places on codegen:
    boundary; this is the gap E1 must close.
 
 ```python
-pipeline.explain_kernels()   # kernels, emitted lines, and whether each vectorised
+pipeline.explain_kernels()   # kernels, emitted lines, measured cost per group
 ```
 
-Reporting only — it observes, it does not decide. Vectorisation status is read
-from `.inspect_llvm()`, which is the measured mechanism behind the entire effect
-(vector IR values drop to 0 at M≥4), so it answers "would fusing here help?"
-directly rather than by proxy.
+Reporting only — it observes, it does not decide. It reports **emitted lines and
+measured cost**, not vectorisation status: an earlier draft had it read
+`.inspect_llvm()` on the grounds that vectorisation was "the measured mechanism
+behind the whole effect", and §E refuted that — packed-FP count is anti-correlated
+with performance, so the proxy points the wrong way. Withdrawn. There is no static
+observable that answers "would fusing here help?"; measuring the group does.
 
 An automatic cost model remains O12, explicitly out of scope for v1.
 
@@ -526,9 +542,9 @@ being discovered later as slow startups.
 > **Choose the CPU target deliberately.** Numba's cache keys include CPU
 > features, so a cache built on a CI runner with AVX-512 misses on a smaller
 > deployment instance. `NUMBA_CPU_NAME=generic` at build *and* run makes entries
-> portable but forfeits the vectorisation that §7 shows is what makes small
-> kernels fast. Either build generic and accept slower kernels, or build in the
-> CPU family you deploy on.
+> portable but forfeits the instruction selection that makes small kernels fast.
+> Either build generic and accept slower kernels, or build in the CPU family you
+> deploy on.
 
 ---
 
