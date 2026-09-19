@@ -564,10 +564,15 @@ signature is the better slot:
 - **Two ways to declare a param.** Inline and explicit model must produce the
   same object, and a lint forbids both in one module (doc 07 §6).
 - **Direct calls need care.** `cap_by_income_band(term_cap=60.0,
-  min_net_salary=4000.0)` would otherwise receive the `param()` sentinel. `@step`
-  substitutes declared defaults so a plain call works, and a test passes
-  `params=` to override — doc 03 §11's testing story depends on steps staying
-  directly callable.
+  min_net_salary=4000.0)` would otherwise receive the `param()` sentinel.
+  Substitution happens where the interface is inferred (§5.1) — when the function
+  becomes a pipeline element, whether by appearing in a pipeline expression, in a
+  `module(...)` call, or under a decorator. It is **not** the decorator's job:
+  §1.1's flagship rule and every bare function in §5.3 carry `param()` defaults
+  with nothing attached to them, and those must be directly callable too. By the
+  time a test imports the module, the pipeline expression at its foot has already
+  run and the defaults are real. A test passes `params=` to override — doc 03
+  §11's testing story depends on steps staying directly callable.
 - **numba and default arguments.** ✅ **Confirmed, [EXPERIMENTS.md](EXPERIMENTS.md) §E11.** The emitted step
   does *not* need its default stripped: emitted with the sentinel default, with it
   stripped, and called through a driver all produce an identical numba signature
@@ -616,6 +621,13 @@ Affordability = module(
 class. It can be printed, rendered, diffed, serialised and validated. See doc 02
 §2.
 
+**`name=` is required only when it cannot be derived.** A single-step module takes
+its name from the step — `module(cap_by_income_band)` is named
+`cap_by_income_band`, which is what makes §5.3's bare function work and what keeps
+§1.1's rule at one artefact. A multi-step module like the one above has no single
+function to name it after, so it says so once. Writing
+`module(fn, name="fn")` is the same name twice and is a lint error (doc 07 §6).
+
 Two steps declaring the same output is a **build-time error** (§3.1), reported
 with both remedies: give them distinct names, or split them into modules composed
 with `|`.
@@ -650,13 +662,16 @@ exists as data rather than as an accident of function names:
 - **a library can freeze it**, so CI catches an interface change.
 
 ```python
-Affordability = module(..., contract="contracts/affordability.json")
+Affordability = module(..., contract=True)          # contracts/affordability.json
+Shared        = module(..., contract="shared/v2.json")   # only when it differs
 ```
 
-`contract=` snapshots the interface to a checked-in file. Changing the module
-without updating it fails the build, naming the field that moved. Opt-in per
-module — a shared library freezes its interfaces, a project's inline modules
-don't. Semver over that file is then a mechanical question: removing or renaming
+`contract=` snapshots the interface to a checked-in file. **`True` means
+`contracts/{module_name}.json`** — pass a path only where it genuinely differs,
+since spelling out the derivable name is the kind of duplication doc 01 §5.3 says
+does not survive contact with a real project. Changing the module without updating
+the file fails the build, naming the field that moved. Opt-in per module — a
+shared library freezes its interfaces, a project's inline modules don't. Semver over that file is then a mechanical question: removing or renaming
 anything, or tightening a validator, is major; adding an optional param is minor.
 
 ### 5.2 Adapting a module to different names — and keeping it rare
@@ -1119,9 +1134,10 @@ Affordability = module(
 
 # --- module 2: one policy rule. term_cap -> term_cap, its own auditable unit. ---
 
-@step(output="term_cap", description="cap term by income band")
+@step(output="term_cap")
 def cap_by_income_band(term_cap: float, min_net_salary: float,
                        params, shared) -> float:
+    """Cap term by income band."""
     if min_net_salary < params.income_threshold * shared.base_rate:
         return min(term_cap, params.cap)
     return term_cap

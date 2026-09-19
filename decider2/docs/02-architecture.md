@@ -167,9 +167,10 @@ The residual question — a cost model good enough to fuse *automatically* — s
 open as doc 06 O12, now explicitly out of scope for v1.
 
 One guard rail regardless of grouping: **emitted code size**, since compile time
-runs ≈15 ms/line and a fully-branching depth-10 nest costs 92 s (doc 01 §4b). A
-`fuse()` group whose emitted body exceeds ~500 lines is a build-time error naming
-the group, not a silent 90-second compile.
+is super-linear in emitted lines — ∝ lines^1.4 ([EXPERIMENTS.md](EXPERIMENTS.md) §G) — and a
+fully-branching depth-10 nest costs 92 s. A `fuse()` group whose emitted body
+exceeds ~500 lines is a build-time error naming the group, not a silent
+90-second compile.
 
 ### Why the expression tier is gone
 
@@ -306,17 +307,18 @@ Three constraints follow, all non-optional:
 
 ## 3. Execution
 
-### 3.1 Four modes, one definition
+### 3.1 Three modes, one definition
 
 | mode | steps | driver | use |
 |---|---|---|---|
 | `fused` | njit, inlined | njit | production, batch and realtime |
-| `fused` + taps | njit, inlined | njit | always-on production diagnostics |
 | `stepped` | **njit (real compiled code)** | Python, one step at a time | driver-level step-through; production numerics |
 | `interpreted` | Python | Python | full internals inspection; reference semantics |
 
-All four are generated from the same declared graph, so they cannot drift
-semantically.
+All three are generated from the same declared graph, so they cannot drift
+semantically. **Taps are orthogonal to the mode**, not a fourth one — any mode may
+carry them, at ~0.11 ns/row (§7), which is what makes always-on production
+diagnostics affordable.
 
 **The equivalence ladder.** Three-way agreement
 (`interpreted ≡ stepped ≡ fused`) is the framework's core correctness test, and
@@ -348,8 +350,8 @@ at the same pattern independently — its raw-Python path is described there as
 "the correctness oracle the JIT backend is checked against".
 
 `stepped` is *also* the fallback path (§3.2), so it is not a separate debug build
-to maintain — one mechanism, two purposes. It additionally provides batch-wide
-full tracing if ever wanted, at the measured ~4× materialisation cost.
+to maintain. It additionally provides batch-wide full tracing if ever wanted, at
+the measured ~4× materialisation cost.
 
 ### 3.2 Graceful degradation, per node
 
@@ -701,8 +703,10 @@ decider2/
                                  chunk.py     # mandatory above ~400k rows; default 100k (§3.2)
   frame/         join.py, aggregate.py, filter.py, opaque.py
   observe/       taps.py, trace.py, audit.py, otel.py
-                 review.py       # THE REVIEWABLE ARTEFACT — renders authored vs in-force
-                                 #   value and why they differ (O3/E4; the top risk)
+                 record.py       # the structured decision record — the ONLY guaranteed
+                                 #   output; every rendering is built from it (doc 04 §6.5)
+                 render/         # DEFAULT renderers over that record, replaceable without
+                                 #   forking. rule_sheet.py is one renderer, not the artefact
                  blast_radius.py # what a governance-sensitive edit touches, BEFORE the edit
                  consistency.py  # cross-artefact agreement as a build step
   runtime/       invoke.py       # apply() batch + score() single record (dict, not kwargs)
@@ -741,7 +745,7 @@ decider2_credit/     scorecard/, tree/, rule_table/, waterfall/, affordability/
 | an unbound name is a typo, everywhere | O23 | `graph/resolve.py` |
 | money is scaled int64; `round_half_up` | §I | `money/` |
 | corpus must include boundary values | §I | `testing/corpus.py` |
-| the reviewable artefact renders resolved values | O3, cold-read §5.1 | `observe/review.py` |
+| the decision record is data; renderings are replaceable | O3, cold-read §5.1, doc 04 §6.5 | `observe/record.py` + `observe/render/` |
 | flexible dtypes; tighten for speed, reject nothing | §A, §B, §O11 | `boundary/dtypes.py` |
 | serving is replaceable; SageMaker `/ping` + `/invocations` | decider 1 convention | `serving/` |
 | build target checked at startup, never assumed | §C | `compile/manifest.py` |
@@ -751,10 +755,12 @@ decider2_credit/     scorecard/, tree/, rule_table/, waterfall/, affordability/
 
 Placements that are deliberate rather than incidental:
 
-- **`observe/review.py` is not a documentation tool.** It is the artefact doc 04 §6
-  depends on, and the cold-read study found **9 of 11** independent designers
-  produced nothing like it. Giving it a home in the core library — rather than
-  leaving it to each project's README — is the structural answer to that.
+- **`observe/record.py` is not a documentation tool.** It emits the structured
+  decision record that doc 04 §6.5 makes the framework's *only* guarantee here, and
+  the cold-read study found **9 of 11** independent designers produced nothing like
+  it. Giving it a home in the core library — rather than leaving it to each
+  project's README — is the structural answer to that. `render/` ships defaults
+  over it; a team that wants a different shape writes a renderer, not a fork.
 - **`observe/consistency.py` exists because six of eleven divergences had one
   shape**: two artefacts asserting the same fact and disagreeing. Rule authoring
   was near-perfect; cross-artefact agreement was not checked by anything.

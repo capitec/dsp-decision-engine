@@ -178,7 +178,7 @@ or the governance promise stops exactly where the governed content lives.
 anywhere in the tree — `overlay_scope_restriction_bits`, `rate_card.Lookup`,
 `FallbackGrade`, `ExecutionPackage`, `shipped_offer` — and **every one passed
 `ast.parse`**. Doc 03 §2.2 already treats an unbound *step parameter* as a typo;
-the evidence says that check must extend to `Branch` arms, `writes=` targets,
+the evidence says that check must extend to `Branch` arms, `originates=`/`overwrites=` targets,
 `isolates(may_read=…)` names, interior file references and cross-phase seed
 strings. Name-based wiring (doc 03 §2) is the design's best asset precisely
 because names are greppable — and its failure mode is that an unbound name looks

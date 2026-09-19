@@ -111,7 +111,7 @@ Everything here is measured. Doc 05 §1–§3 is a real spec.
 path) → `marshal.py` (whole-row bulk) → `writeback.py` (dtype-grouped 2D, layout
 per entry point) → `chunk.py` (100k default).
 
-> **UNBLOCKED — O11 answered (EXPERIMENTS.md §O11).** The format now exists, and
+> **UNBLOCKED — O11 answered (06-open-questions-and-experiments.md §O11).** The format now exists, and
 > the finding that shapes it is a constraint rather than a choice: **polars cannot
 > supply nullability at all.** A clean and a null-bearing column of the same dtype
 > produce `==`-equal `Schema` objects, and `pl.DataType` has no `nullable`
@@ -137,7 +137,7 @@ combinator model"*.
 
 Blockers, in order:
 
-1. **O5 — nesting: largely answered (EXPERIMENTS.md §O5), and it is *not* a third
+1. **O5 — nesting: largely answered (06-open-questions-and-experiments.md §O5), and it is *not* a third
    kind.** The name is `grain` (a level declaration: key, parent, capacity) with
    two combinators over it — `Each(grain, body)` to descend, `Gather(child,
    into=parent, **folds)` to aggregate. Broadcast falls out of descend rather than
@@ -161,7 +161,7 @@ Blockers, in order:
 
 ### Layer 4 — `interiors/` — BLOCKED
 
-**UNBLOCKED — O15 answered (EXPERIMENTS.md §O15)**, derived from `flat_rules`'
+**UNBLOCKED — O15 answered (06-open-questions-and-experiments.md §O15)**, derived from `flat_rules`'
 real algebra plus five independently-authored rule documents across four projects.
 
 Keep the four-kind algebra, with three changes each backed by a count:
@@ -190,7 +190,9 @@ kernels over tabular data and the shape is clearer.
 
 `taps.py`, `trace.py`, `audit.py` follow from Layer 3.
 
-`review.py` is **O3/E4, the highest-ranked risk, and it is unstarted.** The
+`record.py` + `render/` is **O3/E4, the highest-ranked risk, and it is unstarted.**
+Build the record first and a renderer second — doc 04 §6.5 guarantees the data, not
+the format. The
 cold-read study found **9 of 11** independent designers produced no reviewer-facing
 artefact when left to themselves. Start from
 `example_projects/examples/01-transaction-fraud-interdiction/artefacts/rule-sheet-MS-0208.md`,
@@ -250,3 +252,33 @@ start in parallel with Layer 1 rather than waiting for Layer 5.
 projects implemented single-file rule sets essentially perfectly and produced six
 contradictions between artefacts that assert the same fact. Whatever else gets
 built, `observe/consistency.py` earns its place.
+
+---
+
+## 6. Do not "simplify" these — each looks redundant and is not
+
+A ceremony audit (four independent auditors over the spec and all eleven mock
+projects) found ~175 sites of genuine redundancy, now closed as lint rules in
+doc 07 §6. It also found five constructs that **read as boilerplate and are
+load-bearing**. Each was proposed for deletion by at least one auditor and each
+deletion would remove a named guarantee. If you are tempted to cut one, the
+burden is to replace the guarantee, not to argue the syntax is noisy.
+
+| construct | why it survives |
+|---|---|
+| `reads=` on `Resolve` | It is a **negative** declaration. It says the resolver does *not* contain `shadow_fire_bits`, and that is the entire shadow-isolation guarantee. Deleting it deletes the only statement of what shadow mode may not see. |
+| `reads=` on data-shaped interiors | An **upper bound checked at validation** (41 of 43 sites), not documentation. It is what makes a business-user edit checkable without running it. |
+| `taps=` | Editorial, not mechanical. In a verified case 4 of 15 steps were tapped; inferring "tap everything" would both cost more and say less. |
+| `fuse()` *and* `parallel()` as separate combinators | Orthogonal, and composed as `parallel(fuse(...))`. Collapsing them into one annotation loses the composition. |
+| the rule id in the function name | The join key between code, the params document and the policy extract. It is what `implements="§7.4.2"` joins *to*. |
+
+Two more, for the same reason but from the opposite direction — these are absent
+and should stay absent:
+
+- **`outputs=` on a module.** 0 of 204 module definitions in the corpus pass it.
+  The inferred interface (doc 03 §5.1) is working; do not add a way to restate it.
+- **`@step` as a requirement.** It is optional by design (doc 03 §1) and carries
+  exactly one job: overriding a default, which 74 genuine renames need. It does
+  **not** substitute `param()` defaults for direct calls — that happens where the
+  interface is inferred, because doc 03 §1.1's flagship rule and every bare
+  function in §5.3 have no decorator at all (doc 03 §4.4).

@@ -801,7 +801,7 @@ does instead. All citations verified against source.
 | `debug` flag that does nothing | `executor.py:61` (vs `collect` at `:62`) | Four execution modes, equivalence-tested (doc 02 §3.1) |
 | Three inconsistent diagnostics | `modules/rules/flat_rules/module.py:173-175`; `modules/credit/scorecard/module.py:260`; `plan.py:35` | One framework-level concept: declared `taps` as data |
 | Branch merge upcasts to string | `modules/primitives/branching.py:96` (`how="diagonal_relaxed"`) | Declared output schemas; no implicit dtype reconciliation |
-| njit + codegen'd fused driver | `modules/record.py:45` (`jit: bool`), `:108-183` (`_build_jit_driver`) | Generalised: the default path, with per-node fallback and four modes |
+| njit + codegen'd fused driver | `modules/record.py:45` (`jit: bool`), `:108-183` (`_build_jit_driver`) | Generalised: the default path, with kernel-boundary fallback and three modes |
 
 The last row matters most: **the mechanism `decider2` is built on already exists
 in `decider`** — `_build_jit_driver` njits each function and codegens a fused row
