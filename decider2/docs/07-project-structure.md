@@ -179,7 +179,14 @@ Three things to note, all consequences of doc 08:
 - **`config fill`** writes newly added params at their schema default and leaves
   existing values untouched, so a library upgrade that adds a parameter lands as
   a reviewable diff rather than as a simultaneous hard failure in every consuming
-  project.
+  project. **It also seeds a new rule's first dated entry from the rule's own
+  interior defaults**, which is otherwise the single largest source of hand-copied
+  duplication in the corpus: `rule-sheet-MS-0208` restates ~13 values — including
+  the entire `approval` block — across two files, with nothing checking that they
+  agree. A first entry is derivable from the interior; only *subsequent* dated
+  entries are genuine policy input. Seeding it is worth more than every other
+  redundancy in this document combined, because it is the one that silently goes
+  wrong rather than merely costing keystrokes.
 
 The workflow this supports: **prototype in Python, export the documents for
 deployment, keep the skeleton in git.**
@@ -216,3 +223,11 @@ project (doc 01 §5):
 | no `int64` accumulator over a money column | wraps at 2,667 rows on realistic loan sizes (doc 03 §1.2) |
 | every published module has a frozen `contract=` file, checked in CI | a library interface changing without its consumers knowing (doc 03 §5.1) |
 | no identity-passthrough step (`return <param>`) | the workaround for a missing relabel — 79 of them in one project (doc 01 §5.1) |
+| no `@step(output=...)` where the output equals the function name | 92 sites restating the default (doc 03 §1) |
+| no `description=` on `@step` — the docstring is the description | 107 sites populating the governance artefact from the one field the guidance tells you to omit (doc 03 §1) |
+| no `name=` on a single-step `module(...)` where it equals the function name | the same name written twice, 100 of 204 sites |
+| no `contract=` string that equals `contracts/{module_name}.json` | 26 of 44 sites spelling out the derivable default (doc 03 §5.1) |
+| no unused `from decider2 import step` | 35 files importing a decorator they no longer use |
+| a rule's first dated params entry agrees with its interior defaults | ~13 values hand-copied across two files with nothing checking them (§5, `config fill`) |
+| every rule function's name contains its policy rule id | the spec↔code join that made verification mechanical rather than interpretive — "the single biggest comprehension aid in the whole project" (COLD-READ §4.2) |
+| a name in `originates=` does not already exist upstream, and a name in `overwrites=` does | a module appearing to violate the project's own lineage guarantee (doc 08 §2, COLD-READ §6 item 13) |

@@ -241,6 +241,10 @@ same absolute directory, same basename, **same `def` line number** (it is in the
 `.nbi` filename), exact `(st_mtime, st_size)`, same argument signature, same
 `magic_tuple` (LLVM triple + CPU name + CPU features).
 
+> These are the six **this** experiment could reach. §K later adds a seventh — the
+> `sys.modules` registration name — found only once a real child/parent process
+> boundary was crossed. Doc 05 §4.2 carries the full seven.
+
 Confirmed, with better numbers than the doc's single point:
 
 | n_args | cold (miss) | warm (fresh process) | speedup |

@@ -180,10 +180,21 @@ from decider2 import ruleset
 PolicyRules = ruleset(
     name="policy_rules",
     reads=["term_cap", "min_net_salary", "employer_sector_code"],
-    writes=["term_cap", "decline_code"],
+    overwrites=["term_cap"],        # already exists upstream; this narrows it
+    originates=["decline_code"],    # this ruleset is where the name begins
     params=PolicyRuleParams,
 )
 ```
+
+> **Why two words and not `writes=`.** A single `writes=` covers both cases, and
+> a cold reader hit exactly that: they found a module declaring `writes=` for a
+> name it only *consumed*, and read it as a violation of the project's own lineage
+> guarantee (COLD-READ §6 item 13). `overwrites=` is the normal module-boundary
+> case (doc 03 §3.2); `originates=` is the one that answers "where does this value
+> come from?" — which is the question lineage exists to answer. Splitting them
+> costs one line and makes the declaration checkable: a name in `originates=` that
+> already exists upstream is a build error, and so is a name in `overwrites=` that
+> does not.
 
 ```json
 // config — a UI writes this. Cannot reach anything not declared above.
@@ -258,8 +269,8 @@ from a rule by id:
 
 ```python
 # modules/features/affordability.py — code, in an extension package
-@step(description="income remaining after committed expenses")
 def disposable_income(monthly_income: float, monthly_expenses: float) -> float:
+    """Income remaining after committed expenses."""
     return monthly_income - monthly_expenses
 ```
 
