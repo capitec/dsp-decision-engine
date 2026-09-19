@@ -57,8 +57,16 @@ people-blocked and should start before implementation.
 
 ## Read in this order
 
+> **Start with [00-BUILD.md](00-BUILD.md).** These documents were written over
+> several rounds and nineteen experiments later refuted a number of their claims.
+> The corrections are recorded in place, so reading linearly you will meet a
+> confident wrong statement before its retraction. 00-BUILD lists every superseded
+> claim in one table, says what is settled, and gives the build order with the
+> open question that blocks each layer.
+
 | Doc | What it covers |
 |---|---|
+| [00-BUILD.md](00-BUILD.md) | **Read first.** Superseded claims, what is settled, build order, and which open questions block which layer. |
 | [01-motivation-and-evidence.md](01-motivation-and-evidence.md) | Why a new engine. Every measurement and observed failure mode that drove a decision. |
 | [02-architecture.md](02-architecture.md) | The tier model, execution modes, seams, package layout. |
 | [03-authoring-api.md](03-authoring-api.md) | The developer-facing interfaces. How people actually write logic. |
