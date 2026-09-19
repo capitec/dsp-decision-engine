@@ -1,0 +1,64 @@
+{
+  "$comment": [
+    "THE most load-bearing artefact in this project.",
+    "",
+    "It is the frozen interface between enrichment and decision, and it is",
+    "simultaneously: the kernels' input schema, the decision record's schema,",
+    "and the backtest's input schema. One artefact, three consumers. That is",
+    "what makes spec s5.17's equivalence requirement a type rather than a",
+    "promise, and it is why this is a `contract=` file (doc 03 s5.1) rather",
+    "than an inferred interface.",
+    "",
+    "Changing it is a major version. CI fails if the enrichment modules produce",
+    "a different set, and fails separately if the decision modules read",
+    "anything not in it.",
+    "",
+    "~380 columns. Twelve shown."
+  ],
+  "contract": "feature_vector",
+  "version": "7.2.0",
+  "frozen_at": "2026-09-01T00:00:00Z",
+  "width_bytes_uncompressed": 3184,
+
+  "state_encoding": {
+    "$comment": "Observed[T] is two columns, value and state. Four states, and NOT_APPLICABLE is not a data-quality state — it means the field is structurally absent for this event type. Collapsing it into ABSENT makes an aggregate outage and a login indistinguishable.",
+    "FRESH": 0, "STALE": 1, "ABSENT": 2, "NOT_APPLICABLE": 3
+  },
+
+  "columns": [
+    {"name": "event_id", "dtype": "uint64", "observed": false, "producer": "normalise"},
+    {"name": "event_type_code", "dtype": "int16", "observed": false, "producer": "normalise"},
+    {"name": "event_timestamp", "dtype": "timestamp_us_utc", "observed": false, "producer": "message"},
+    {"name": "assessment_timestamp", "dtype": "timestamp_us_utc", "observed": false, "producer": "normalise"},
+    {"name": "amount_zar_cents", "dtype": "int64", "observed": true, "unit": "amount_zar_cents",
+     "producer": "normalise",
+     "$comment": "int64 cents. Never float, never Decimal (doc 03 s1.2, doc 05 s1.5)."},
+
+    {"name": "client_segment_bits", "dtype": "uint64", "observed": false, "producer": "client_context",
+     "$comment": "46 of 64 bits used. Segment definition version resolved at event_timestamp."},
+
+    {"name": "beneficiary_age_hours", "dtype": "float64", "observed": true, "unit": "hours",
+     "producer": "counterparty"},
+    {"name": "mule_list_membership", "dtype": "int32", "observed": true,
+     "producer": "counterparty", "temporal_source": "mule_watchlist",
+     "$comment": "The interval id, not a boolean. The dispute pack needs 'added 09:11 on 2 March by the consortium feed', which a boolean cannot carry."},
+
+    {"name": "client_count_1min", "dtype": "float64", "observed": true, "unit": "count",
+     "producer": "velocity", "watermark_column": "client_count_1min__watermark",
+     "stale_after_s": {"param": "shared.velocity_staleness_s.1min"},
+     "$comment": "One of 168. Watermark recorded, state derived from it before the kernel — the kernel sees the state, not the watermark, because a rule reasons about staleness and never about clocks."},
+
+    {"name": "card_model_score", "dtype": "float64", "observed": true, "unit": "score",
+     "producer": "model_score", "absence_reason_column": "card_model_score__absence_reason",
+     "$comment": "Absence carries a reason: timeout / error / circuit_open / not_requested. A replay reads the recorded absence, never re-requests."},
+
+    {"name": "degraded_mode_code", "dtype": "int8", "observed": false, "producer": "completeness"},
+    {"name": "enrichment_degradation_code", "dtype": "int16", "observed": false, "producer": "completeness"}
+  ],
+
+  "availability": {
+    "$comment": "Per-column, per-event-type, effective-dated. This is the check that makes 'a rule referencing a field its event type does not carry' a build error rather than a 02:00 page, and it is what lets a backtest over 18 months be honest about a field that did not exist before 2026-04-01 (spec s11.6).",
+    "source": "events/field_catalogue.csv",
+    "enforced_at": ["ruleset validation", "CI", "stage()"]
+  }
+}

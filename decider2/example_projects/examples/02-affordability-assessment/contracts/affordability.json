@@ -1,0 +1,100 @@
+{
+  "_contract": "frozen module interface",
+  "_module": "affordability",
+  "_version": "3.2.0",
+  "_frozen_at": "2026-07-14",
+  "_note": [
+    "Checked in CI. Changing the module without updating this file fails the",
+    "build, naming the field that moved. Semver over this file is mechanical:",
+    "removing or renaming anything, or tightening a validator, is major; adding",
+    "an optional param is minor.",
+    "",
+    "Two additions to what doc 03 5.1 freezes, both forced by this project:",
+    "",
+    "1. `owner_class` per param. A param moving from consumer_local to policy is a",
+    "   MAJOR change even though its name, type and bounds are unchanged -- a",
+    "   product team's config stops validating. Doc 03's frozen interface has no",
+    "   ownership axis, so it would call that change minor and break five",
+    "   consumers on a patch release.",
+    "",
+    "2. `domain` per output. `affordability_verdict_code` is not an int8; it is a",
+    "   closed four-member domain with no boolean context. Freezing the dtype",
+    "   without freezing the domain would let a consumer's compiled narrowing keep",
+    "   working while silently gaining a fifth member."
+  ],
+
+  "inputs": {
+    "required": [
+      {"name": "decision_date", "dtype": "date", "reserved": true},
+      {"name": "product_code", "dtype": "int16"},
+      {"name": "assessment_mode_code", "dtype": "int8"},
+      {"name": "is_joint_application", "dtype": "bool"},
+      {"name": "income_sources", "dtype": "list[struct]", "max_len": 6},
+      {"name": "raw_accounts", "dtype": "list[struct]", "max_len": 105},
+      {"name": "expense_categories", "dtype": "list[struct]", "max_len": 14}
+    ],
+    "optional": [
+      {"name": "proposed_instalment_cents", "dtype": "int64", "null_means": "the caller wants shape (b)"},
+      {"name": "risk_grade", "dtype": "int8", "null_means": "resolves to the worst grade"},
+      {"name": "settlement_quotes", "dtype": "list[struct]", "max_len": 80}
+    ]
+  },
+
+  "outputs": {
+    "always": [
+      {"name": "gross_monthly_income_cents", "dtype": "int64", "published_as": "gross_monthly_income"},
+      {"name": "income_source_code", "dtype": "int8"},
+      {"name": "income_verification_tier", "dtype": "int8"},
+      {"name": "income_haircut_applied", "dtype": "float64", "places": 4},
+      {"name": "income_variability_ratio", "dtype": "float64"},
+      {"name": "statutory_deductions_cents", "dtype": "int64"},
+      {"name": "court_ordered_deductions_cents", "dtype": "int64"},
+      {"name": "net_monthly_income_cents", "dtype": "int64"},
+      {"name": "living_expenses_cents", "dtype": "int64", "overlay_target": true},
+      {"name": "living_expenses_unadjusted_cents", "dtype": "int64"},
+      {"name": "expense_basis_code", "dtype": "int8", "domain": "ExpenseBasis"},
+      {"name": "norm_table_version", "dtype": "str", "auto_emitted_by": "dated_table"},
+      {"name": "existing_obligations_cents", "dtype": "int64"},
+      {"name": "obligations_internal_cents", "dtype": "int64"},
+      {"name": "obligations_external_cents", "dtype": "int64"},
+      {"name": "total_exposure_cents", "dtype": "int64"},
+      {"name": "revolving_utilisation", "dtype": "float64"},
+      {"name": "worst_arrears_months", "dtype": "int8"},
+      {"name": "accounts_in_arrears_count", "dtype": "int8"},
+      {"name": "discretionary_income_cents", "dtype": "int64", "floored_at_zero": false},
+      {"name": "max_affordable_instalment_cents", "dtype": "int64", "overlay_target": true},
+      {"name": "max_affordable_instalment_unadjusted_cents", "dtype": "int64"},
+      {"name": "affordability_buffer_applied", "dtype": "int64"},
+      {"name": "affordability_verdict_code", "dtype": "int8", "domain": "Verdict",
+       "domain_members": ["PASS", "MARGINAL", "FAIL", "INDETERMINATE"],
+       "boolean_context": false},
+      {"name": "evidence_sufficiency_code", "dtype": "int8", "domain": "Sufficiency",
+       "zero_means": "not indeterminate"},
+      {"name": "adjustment_set_id", "dtype": "int16"},
+      {"name": "adjustments_applied", "dtype": "list[int16]", "ordered": true}
+    ],
+    "on_request": [
+      {"name": "accounts_annotated", "dtype": "list[struct]", "max_len": 80,
+       "materialise_by_default": false,
+       "_note": "always computed; the scalar aggregates are reductions over it and cannot disagree"},
+      {"name": "evidence_ladder", "dtype": "rendered_document", "sensitivity": "applicant_financial"},
+      {"name": "discretionary_income_after_cents", "dtype": "int64", "requires": "proposed_instalment_cents"}
+    ]
+  },
+
+  "params": {
+    "_note": "Each carries its owner class. This is the governance boundary as data, and it is what `--owner=` filters on.",
+    "statutory": ["deductions.*", "expenses.statutory_*", "income.weakest_permitted_tier_source"],
+    "policy": ["income.*", "expenses.absolute_ceiling_cents", "obligations.*", "verdict.tolerance_pct", "capacity.*"],
+    "consumer_local": ["product_code", "assessment_mode", "obligations.materialise_annotation", "outputs.shape",
+                       "income.weakest_permitted_tier", "income.weak_tier_max_share"],
+    "overlay": ["_register"]
+  },
+
+  "declared_properties": [
+    {"property": "monotone_in", "of": "affordability_verdict_code", "in": "proposed_instalment_cents", "direction": "NON_INCREASING"},
+    {"property": "cut_equivalent", "cut": "evidence"},
+    {"property": "materialisation_neutral", "output": "accounts_annotated"},
+    {"property": "single_kernel_across_modes", "modes": 4}
+  ]
+}

@@ -1,0 +1,63 @@
+# The standing overlay register — every overlay in force, its age, its measured
+# effect and its days to expiry. Spec §6.5.5.
+#
+# THIS FILE IS THE CONTROL. The approval asymmetry — an overlay is live in 2
+# minutes on the duty officer's authority, a rule change takes 10 and four-eyes
+# from the family owner — is exactly why the faster path accumulates
+# unexplained residue. The register makes the residue visible and the expiry
+# makes it disappear on its own. An overlay reaching effective_to lapses within
+# one assessment, and the lapse is outcome-affecting and recorded on every event
+# after it.
+#
+# Composition order is `compose_at`, declared and unique. It is never insertion
+# order and never load order: "composition order changes the answer and is part
+# of the definition, not emergent" (spec §6.5.3).
+
+stack_version: 1187
+generated_at: 2026-11-29T08:00:00Z
+owner: { team: fraud-strategy, individual: h.abrahams }
+
+in_force:
+  - { adjustment_id: ADJ-0042, kind: sensitivity_dial, compose_at: 30,
+      families: [CF], expires: 2026-12-01T19:41:30Z, age_days: 0, renewals: 0,
+      days_to_expiry: 2, measured_incremental_catch: 61, status: healthy }
+
+  - { adjustment_id: ADJ-0031, kind: threshold_multiplier, compose_at: 20,
+      families: [MS], units: [amount_zar_cents], factor: 0.70,
+      title: "Festive mule/scam amount tightening",
+      expires: 2027-01-15T00:00:00Z, age_days: 41, renewals: 0,
+      days_to_expiry: 47, measured_incremental_catch: 412, status: healthy }
+
+  - { adjustment_id: ADJ-0038, kind: model_cutoff_shift, compose_at: 10,
+      scope: { rule_ids: "rules_referencing:card_model_score" },
+      from: 620, to: 540,
+      title: "Card model under-predicting on the web channel",
+      expires: 2026-12-20T00:00:00Z, age_days: 22, renewals: 1,
+      days_to_expiry: 21, measured_incremental_catch: 88, status: healthy }
+
+  - { adjustment_id: ADJ-0011, kind: threshold_multiplier, compose_at: 25,
+      families: [MS], units: [amount_zar_cents], factor: 0.62,
+      title: "Scam wave response, September 2025",
+      expires: 2026-12-09T00:00:00Z, age_days: 431, renewals: 2,
+      days_to_expiry: 10,
+      status: ESCALATED,
+      escalation: >
+        Applied 14 months ago during a scam wave and renewed twice by
+        re-signature without a fresh backtest. It is now part of the baseline
+        against which four subsequent MS rule changes were measured, so those
+        four must be re-costed against the base rule set before this can be
+        withdrawn. Third renewal triggers mandatory conversion to a rule
+        change. Spec §11.3 — this entry is that scenario, and the register is
+        how it was found rather than how it was hidden.
+      re_costing:
+        required_for: [MS-0208, MS-0311, MS-0455, MS-0498]
+        backtest_mode: overlay_stack_disabled
+        due: 2026-12-05 }
+
+lapsed_recently:
+  - { adjustment_id: ADJ-0039, lapsed_at: 2026-11-20T06:00:00Z,
+      reason: reached_effective_to, renewed: false,
+      # Provable by absence: every event from 06:00:00.000001Z onward records
+      # ADJ-0039 in `out_of_scope_adjustment_ids` -> not present at all, and
+      # the per-minute overlay aggregate is zero from that minute. Spec §9.3.
+      evidence: OVL-LAPSE-2026-1120-39 }

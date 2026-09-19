@@ -1,0 +1,76 @@
+{
+  "//": "FROZEN INTERFACE (doc 03 5.1 `contract=`) for the four product arms.",
+  "//1": "Doc 03 freezes a module's interface so a LIBRARY change is visible to CONSUMERS.",
+  "//2": "Here the same mechanism does a different job: it freezes the interface FOUR",
+  "//3": "IMPLEMENTATIONS MUST SHARE, so a Branch's arms cannot drift apart. Adding a fifth",
+  "//4": "product is: satisfy this file, add a routing row, add a rate card. Nothing in the",
+  "//5": "search, the objective, the interventions or the other four products moves (AC 15).",
+  "//6": "See FRAMEWORK-DEMANDS D11 - doc 03 has one contract per module, and what this",
+  "//7": "project needs is one contract per ARM POSITION, checked across four modules.",
+
+  "contract_id": "consol:product_offer",
+  "contract_version": "2.1.0",
+  "semver_note": "Removing or renaming anything, or tightening a validator, is major. Adding an optional output is minor. 2.0.0 -> 2.1.0 added `rate_basis_code` when product 40 arrived and an absolute rate stopped being a sufficient answer.",
+  "implemented_by": [
+    "products/flex_11/pricing.py::FlexConsolidation",
+    "products/card_20/pricing.py::CardBalanceTransfer",
+    "products/drive_30/pricing.py::DriveRefinance",
+    "products/bond_40/pricing.py::BondFurtherAdvance"
+  ],
+
+  "reads": {
+    "//": "Every arm receives the whole candidate row. An arm reads what it needs; an arm",
+    "//1": "that reads an input outside this list fails at composition, which is how a product",
+    "//2": "team is stopped from quietly making the search depend on something it does not carry.",
+    "settlement_set_mask": "uint64",
+    "settlement_total": "float64",
+    "settlement_buffer": "float64",
+    "new_money_requested": "float64",
+    "term_months": "int16 | NotApplicable",
+    "risk_grade": "int8",
+    "net_monthly_income": "float64",
+    "living_expenses": "float64",
+    "existing_obligations_after": "float64",
+    "settled_instalment_total": "float64",
+    "settled_remaining_cost_total": "float64",
+    "settled_weighted_rate": "float64",
+    "longest_settled_remaining_term": "int16",
+    "decision_date": "date",
+    "channel_code": "int8"
+  },
+
+  "writes": {
+    "//": "THE COMMENSURABLE SURFACE. The objective, the interventions, the before-and-after",
+    "//1": "comparison and the ranking all read these five and nothing product-specific.",
+    "//2": "That is the whole reason four heterogeneous products can be ranked against each",
+    "//3": "other at all. Where a product cannot produce one of them it writes na() - a",
+    "//4": "DECLARED not-applicable, which is neither a null nor a sentinel value.",
+    "committed_monthly": {"type": "float64", "meaning": "What the client is contractually committed to pay per month for this facility. Product 20 writes its STRESSED payment here, not its promotional minimum, because that is what the client is actually committed to once the promotion ends."},
+    "total_cost_of_credit": {"type": "float64", "meaning": "Every rand the client pays over the horizon, INCLUDING a balloon (product 30) and including the reversion period (product 20). The anti-harm rule reads this and can otherwise be defeated by structure rather than by argument."},
+    "horizon_months": {"type": "int16", "meaning": "Over how long total_cost_of_credit is measured. Product 20 writes 36 (the mandatory paydown). Product 40 writes 84 (the mandatory sub-term), NOT the bond's remaining term."},
+    "advance_or_limit": {"type": "float64", "meaning": "The amount advanced, or for product 20 the LIMIT approved. Which of the two is declared by `exposure_basis_code`."},
+    "nominal_annual_rate": {"type": "float64", "meaning": "Normalised to an absolute annual rate whatever the card's representation, with the raw representation retained in `rate_components`."},
+
+    "exposure_basis_code": {"type": "int8", "enum": ["ADVANCE", "LIMIT"]},
+    "rate_basis_code": {"type": "int8", "enum": ["ABSOLUTE", "PROMO_THEN_REVERSION", "MARGIN_OVER_REFERENCE"]},
+    "rate_components": {"type": "row", "meaning": "The card's own representation, unflattened: {promotional_rate, promotional_months, reversion_rate} or {margin_bps, reference_rate} or {rate}. Recorded, never read by the objective."},
+    "balloon_amount": {"type": "float64 | NotApplicable"},
+    "effective_annual_rate": {"type": "float64"},
+    "fee_breakdown": {"type": "row"},
+    "rate_cell_id": {"type": "string"},
+    "rate_card_version": {"type": "string"},
+    "solve_iterations": {"type": "int8"},
+    "solve_converged": {"type": "bool"},
+    "conditions_precedent": {"type": "list[int16]"},
+    "product_rejection_codes": {"type": "list[int16]", "meaning": "The arm's OWN rejections, distinct from the fourteen policy interventions. 'Vehicle not identifiable' is not a policy decision."}
+  },
+
+  "params_namespace_note": "Each arm has its OWN params namespace (doc 03 4.1), which is what lets four product teams edit four sets of caps on four cadences without a shared file and without a Credit Risk Policy cycle. It is also what gives four overlay stacks somewhere to land.",
+
+  "invariants_asserted_at_composition": [
+    "every arm writes every key in `writes`, or na() where the contract permits it",
+    "no arm writes a value read by the objective that the objective cannot interpret without knowing which arm produced it",
+    "no arm reads an input outside `reads`",
+    "committed_monthly is the figure the affordability test uses - an arm that tests affordability against a different figure from the one it publishes here is a defect, and this is the assertion that catches it"
+  ]
+}

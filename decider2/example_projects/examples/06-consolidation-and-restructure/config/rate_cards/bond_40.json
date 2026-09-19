@@ -1,0 +1,70 @@
+{
+  "//": "Rate card, Home Loan Further Advance (product 40). Owner: Treasury.",
+  "//1": "A THIRD REPRESENTATION: basis points OVER A REFERENCE RATE, not an absolute rate.",
+  "//2": "12 grades x 8 LTV bands x 6 term bands x 2 occupancy types = 1 152 cells.",
+  "//3": "The reference rate is a SHARED param (doc 03 4.2) - `shared.reference_rate` -",
+  "//4": "because it is genuinely global and must not be copied into four product bundles.",
+  "//5": "The card returns a margin; products/bond_40/pricing.py turns it into a rate and",
+  "//6": "records rate_basis_code=MARGIN_OVER_REFERENCE alongside both components. A record",
+  "//7": "showing only 12.35% cannot be replayed when the reference rate has moved twice.",
+
+  "card_id": "RC40",
+  "card_version": "2026.08",
+  "effective_from": "2026-08-01",
+  "representation": "margin_bps_over_reference",
+  "reference": {
+    "name": "shared.reference_rate",
+    "value_at_effective_from": 11.75,
+    "note": "Recorded, not read from here. The value in force at decision_date is resolved through core.dates and lands in the audit record beside the margin."
+  },
+
+  "key": ["risk_grade", "ltv_band", "term_band", "occupancy_type"],
+  "cells": [
+    {"risk_grade": 2, "ltv_band": "0_60",  "term_band": "61_120",  "occupancy_type": "owner",      "margin_bps": -25,  "cell_id": "RC40-2026.08-0213 1"},
+    {"risk_grade": 2, "ltv_band": "0_60",  "term_band": "121_180", "occupancy_type": "owner",      "margin_bps": 0,    "cell_id": "RC40-2026.08-021410"},
+    {"risk_grade": 2, "ltv_band": "60_70", "term_band": "121_180", "occupancy_type": "owner",      "margin_bps": 35,   "cell_id": "RC40-2026.08-022410"},
+    {"risk_grade": 6, "ltv_band": "60_70", "term_band": "121_180", "occupancy_type": "owner",      "margin_bps": 145,  "cell_id": "RC40-2026.08-062410"},
+    {"risk_grade": 6, "ltv_band": "70_80", "term_band": "121_180", "occupancy_type": "owner",      "margin_bps": 210,  "cell_id": "RC40-2026.08-063410"},
+    {"risk_grade": 6, "ltv_band": "70_80", "term_band": "181_240", "occupancy_type": "owner",      "margin_bps": 235,  "cell_id": "RC40-2026.08-063510"},
+    {"risk_grade": 6, "ltv_band": "70_80", "term_band": "121_180", "occupancy_type": "investment", "margin_bps": 320,  "cell_id": "RC40-2026.08-063420"},
+    {"risk_grade": 9, "ltv_band": "70_80", "term_band": "121_180", "occupancy_type": "owner",      "margin_bps": 340,  "cell_id": "RC40-2026.08-093410"},
+    {"risk_grade": 9, "ltv_band": "80_90", "term_band": "121_180", "occupancy_type": "owner",      "margin_bps": 425,  "cell_id": "RC40-2026.08-094410"},
+    {"risk_grade": 12,"ltv_band": "80_90", "term_band": "121_180", "occupancy_type": "owner",      "margin_bps": 560,  "cell_id": "RC40-2026.08-124410"}
+  ],
+
+  "ltv_caps": {
+    "owner_occupied": 90.0,
+    "investment": 75.0,
+    "bond_under_12_months": 80.0,
+    "note": "The binding cap is the lowest applicable, and which one bound is recorded."
+  },
+
+  "conveyancing_tariff": {
+    "//": "24 amount bands x 3 components. Owner: Compliance, from the published tariff.",
+    "//1": "Capitalised, so it feeds the circular solve: the cost depends on the advance,",
+    "//2": "and the advance depends on the cost.",
+    "bands": [
+      {"low": 0,      "high": 250000,  "attorney": 8450.0,  "deeds_office": 1150.0, "sundries": 1400.0, "cell_id": "CT-2026-04"},
+      {"low": 250000, "high": 500000,  "attorney": 12900.0, "deeds_office": 1550.0, "sundries": 1650.0, "cell_id": "CT-2026-06"},
+      {"low": 500000, "high": 1000000, "attorney": 19750.0, "deeds_office": 2100.0, "sundries": 1900.0, "cell_id": "CT-2026-09"}
+    ],
+    "applies_when": "advance exceeds bond_registered_amount and a NEW REGISTRATION is required"
+  },
+
+  "sub_term": {
+    "max_months": 84,
+    "mandatory": true,
+    "note": "THE CONSOLIDATED PORTION MUST BE CONTRACTUALLY AMORTISED OVER AT MOST 84 MONTHS, by way of a required additional payment above the bond instalment. The anti-harm rule is evaluated against that structure and not against the bond's remaining term. Without it the product's total cost is indefensible: R120 000 of card debt moved to a 240-month bond at 12% costs roughly R197 000 in interest against roughly R45 000 where it stood - a 337% increase, for a 71% instalment reduction. The instalment reduction is real, the client will want it, and it is still the wrong answer for most clients."
+  },
+
+  "warning": {
+    "warning_id": "WARN-HL-SEC",
+    "version": "3",
+    "effective_from": "2026-04-01",
+    "owner": "Regulatory Compliance",
+    "text": "You are securing debt that is currently unsecured against your home. If you do not keep up the payments, the consequence changes from a judgment against you to the loss of your property.",
+    "acknowledgement_required": true,
+    "capture": ["timestamp", "channel_code", "presenter_identity", "warning_version"],
+    "note": "NO SCENARIO ON PRODUCT 40 MAY BE SELECTED WITHOUT A RECORDED ACKNOWLEDGEMENT. Decisions taken before 2026-04-01 keep version 2 in evidence forever; the version is part of the record, not a lookup at read time."
+  }
+}

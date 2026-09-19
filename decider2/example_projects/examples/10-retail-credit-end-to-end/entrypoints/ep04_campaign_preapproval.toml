@@ -1,0 +1,63 @@
+# ===========================================================================
+# ENTRY POINT 4 -- CAMPAIGN PRE-APPROVAL.  SIXTEEN of eighteen.
+#
+# "It skips exactly two phases -- P02 (identity is pre-resolved in the mart) and
+#  P05 (fraud) -- and runs the other sixteen.  That makes it the most complete
+#  traversal of the flow in the estate, which surprises people who expect a
+#  marketing run to be shallow." (spec 4.1)
+#
+# BOTH SKIPS ARE DERIVED.  There is no line in this file, or anywhere else,
+# that says "skip fraud on batch".
+# ===========================================================================
+
+[entry_point]
+code = 4
+name = "campaign_preapproval"
+mode = "batch"
+volume = "14.2 M clients/month"
+owner = "T11"
+
+[budget]
+window = "6h"
+sustained_clients_per_second = 657
+tree_evaluations_per_second = 1_100_000
+pricing_evaluations_per_second = 94_000
+file = "budgets/ep04.toml"
+# A window budget, not a p99 budget.  The same declaration kind; a different
+# unit.  budgets/overrun.py is what makes the two comparable.
+restartable = true          # spec 8: a resumed cycle produces the same result
+
+[derived]
+expected_phase_count = 16
+skipped = ["P02", "P05"]
+expected_decision_points = 1162
+
+[derived.skips]
+P02 = { cause = "derivation",
+        reason = "identity is pre-resolved in the overnight snapshot; P02's outputs are inputs here",
+        equivalence_required = true,
+        note = "Spec 5.3: the reduced form must be PROVABLY EQUIVALENT to the full form, or the entry-point agreement criterion fails at the very first phase, before any credit logic has run. The proof is certification/strata.py:P02_EQUIVALENCE." }
+P05 = { cause = "derivation",
+        reason = "188 of 205 decision points read device, session and consortium signals absent from a batch cycle",
+        completeness_code = 2,
+        note = "219.6 M of 258 M annual records carry no fraud verdict. That absence is `record_completeness_code` 2 and must be distinguishable from verdict 4 (could not be established), which is degraded, and from a null, which is a defect. Spec 5.6." }
+
+[derived.reduced]
+P04 = { expected = 18, of = 47, cause = "derivation", note = "snapshot collation; zero external calls" }
+P10 = { expected = 71, of = 88, cause = "derivation", note = "evidence mode `campaign`; tier 5 only" }
+P14 = { expected = 63, of = 63, cause = "declared", declared_in = "manifest.py",
+        budget_override = { scenarios = 36, ms = 55 },
+        note = "Batch-identification variant for the 760 000 flagged candidates. Spec 4.1. Three budgets, ONE implementation -- see phases/p14_consolidation/scenarios.py." }
+P15 = { expected = 56, of = 66, cause = "declared", note = "allocation suppressed; proposals are indicative" }
+
+[campaigns]
+trees = 44
+nodes = 6800
+leaves = 2900
+# THIS PROJECT'S POSITION on spec 13 Q17: a campaign tree LEAF is a decision
+# point; an internal node is not.  See README 11 and deadlogic/candidates.py.
+# Consequence: the flow has 1 400 - 44 + 2 900 = 4 256 decision points, not
+# 1 400 and not 8 200.  The count below is the one this entry point's records
+# may cite.
+citable_decision_points = 2900
+path_capture = "first_class_output"

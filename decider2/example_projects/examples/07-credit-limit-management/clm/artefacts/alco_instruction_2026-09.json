@@ -1,0 +1,78 @@
+{
+  "document": "params",
+  "note": "The ALCO cycle instruction. This is a PARAMS document, not an artefact version: it carries values behind fixed types, so applying it is a bundle swap with no compile (doc 08 s2). It must be present by the 25th of the prior month, and the cycle does not run on last month's instruction -- which is why `cycle_month` is a validated field cross-checked against shared.decision_date, and not an opaque origin token.",
+  "origin": "alco-portal:instruction/2026-09@rev4",
+  "cycle_month": "2026-09-01",
+  "complete": true,
+
+  "shared": {
+    "decision_date": "2026-09-01",
+    "ranking_objective_code": 1,
+    "jurisdiction_default_code": 1
+  },
+
+  "budget_seed": {
+    "limit_budget_c": 240000000000,
+    "rwa_envelope_c": 115000000000,
+    "el_envelope_c": 4800000000,
+    "over_allocation_factor": 1.38,
+    "over_allocation_basis": "trailing 12-month take-up 72.4%",
+    "budget_instruction_id": 20260901
+  },
+
+  "allocate_one": {
+    "max_tail_skips": 2000
+  },
+
+  "fairness_reserve": {
+    "floor_ratio": 0.40,
+    "reserved_share": 0.15
+  },
+
+  "conditional_allocation": {
+    "charge_rate": 0.22
+  },
+
+  "hysteresis": {
+    "band": 0.05,
+    "bonus": 0.03
+  },
+
+  "rounding": {
+    "rounding_step_c": 50000
+  },
+
+  "affordability_route": {
+    "bureau_fresh": {"tolerance_days": 35},
+    "expenses_ok": {"refresh_months": 12},
+    "obligations_stable": {"growth_ceiling": 0.25}
+  },
+
+  "income_evidence": {
+    "variability_ceiling": 0.15,
+    "cpi_rate": 0.052
+  },
+
+  "exclusions": {
+    "dormant": {"window": 6},
+    "too_young": {"minimum": 6},
+    "inflight_application": {"window_days": 30}
+  },
+
+  "banding": {
+    "tolerance": 0.01
+  },
+
+  "total_unsecured": {
+    "absolute_ceiling_c": 45000000,
+    "net_income_exposure_multiple": 8.0
+  },
+
+  "request_head": {
+    "tolerance": 0.15
+  },
+
+  "offer_construct": {
+    "expiry_days": 30
+  }
+}

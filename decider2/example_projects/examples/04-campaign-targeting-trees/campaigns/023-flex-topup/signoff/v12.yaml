@@ -1,0 +1,61 @@
+# The sign-off artefact.  Spec §5.9: "Both sign the same artefact: the tree, the
+# node identity map against the prior version, the estimated population impact
+# with and without overlays, the disposition of every overlay in force over the
+# campaign, and the validation report."
+#
+# One bundle, one hash, two signatures.  Not five separate approvals of five
+# separate files, because what the client experiences is the combined effect.
+
+bundle_id: "SO-023-v12"
+campaign_id: 23
+tree_version: 12
+bundle_sha256: "9d40f12b7ae6c853021f6b4dca70e9185c3fb02746ad91e05f8cb3721d0a6e4f"
+
+contents:
+  tree:              "trees/v12.json"
+  identity_map:      "identity_maps/v11_to_v12.json"
+  validation_report: "validation/v12.report.json"
+  population_impact: "validation/v12.report.json#population_impact"
+  overlay_disposition:
+    - overlay_id: "OV-2026-114"
+      kind: threshold_shift
+      disposition: withdrawn
+      reason: "Folded into the published tree. Its target slot does not exist in v12."
+      withdrawal_approval: "CF-2026-09-31"
+    - overlay_id: "OV-2026-089"
+      kind: cut_off_shift
+      disposition: carried_forward
+      reason: "Scoped to minimum risk grade, not to a node. Unaffected by this publication."
+      expires: 2026-11-30
+
+combined_effect:
+  # Spec §5.9: "a tree change and an overlay change landing in the same cycle must
+  # be reviewable as one combined effect, because that is what the client
+  # experiences."
+  statement: >
+    Targeted volume is unchanged at ~350 100 for the October cycle. The tree
+    tightens by 15.1% and the dial holding the same 15.1% is withdrawn in the
+    same act. Node n_a1f45e9c2b70d863 ceases to exist and n_b7302ce8149fa65d
+    replaces it; its volume series breaks and no continuity assertion has been
+    recorded. From November the reported volume is the tree's own, with no stack
+    component, which is the outcome the forum asked for on 2026-09-18.
+
+signatures:
+  - role: campaign_owner
+    who: campaign_owner_11
+    at: 2026-09-24T15:02:11Z
+    statement: "Approved. Reviewed the identity map; accept the node-6 series break."
+  - role: credit_risk_policy
+    who: credit_risk.policy.a.dlamini
+    at: 2026-09-24T16:40:55Z
+    statement: >
+      Approved. Risk floors unchanged. Confirmed no leaf can advertise above the
+      appetite maximum for any grade this campaign reaches. Note for the
+      committee: the campaign's unadjusted volume has now moved permanently, so
+      the September/October comparison must not be read as population drift.
+
+# Deliberately NOT here: a continuity assertion. If the forum later wants the
+# node-6 series chained across the break, that is a separate, dated, approved
+# entry (modules/tree/identity_map.py:apply_continuity_assertions) and it
+# annotates the chart rather than merging the keys.
+continuity: []

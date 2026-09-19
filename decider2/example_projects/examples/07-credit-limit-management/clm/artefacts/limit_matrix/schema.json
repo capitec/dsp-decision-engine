@@ -1,0 +1,42 @@
+{
+  "$id": "clm.limit_matrix",
+  "title": "Limit assignment matrix",
+  "description": "12 behaviour grades x 8 utilisation bands x 6 months-on-book bands x 2 products = 1152 cells, 3456 values. Authored in a spreadsheet by Credit Risk Policy, quarterly. Every value on this sheet is typed by a human being.",
+  "format": "csv",
+  "keys": ["behaviour_grade", "utilisation_band", "mob_band", "product_code"],
+  "key_domain": {
+    "behaviour_grade": {"type": "integer", "minimum": 1, "maximum": 12},
+    "utilisation_band": {"type": "integer", "minimum": 1, "maximum": 8,
+                          "band_table": "clm.utilisation_bands"},
+    "mob_band": {"type": "integer", "minimum": 1, "maximum": 6,
+                  "band_table": "clm.mob_bands"},
+    "product_code": {"type": "integer", "enum": [20, 21]}
+  },
+  "values": {
+    "multiplier": {"type": "number", "minimum": 1.00, "maximum": 2.00,
+                    "unit": "ratio", "scale": 1,
+                    "description": "current_limit x multiplier is the uncapped target"},
+    "max_increase": {"type": "integer", "minimum": 0, "maximum": 60000,
+                      "unit": "ZAR", "scale": 100, "stored_as": "max_increase_c",
+                      "description": "ceiling on the rand increase from this cell"},
+    "min_increment": {"type": "integer", "exclusiveMinimum": 0, "maximum": 5000,
+                       "unit": "ZAR", "scale": 100, "stored_as": "min_increment_c",
+                       "description": "below this the cell yields no increase at all"}
+  },
+  "validate": [
+    {"rule": "dense", "severity": "error",
+     "message": "cell {keys} missing; the matrix must be complete before it is trusted"},
+    {"rule": "bounds", "severity": "error"},
+    {"rule": "monotone_in", "column": "multiplier", "key": "behaviour_grade",
+     "direction": "non_increasing", "holding": ["utilisation_band", "mob_band", "product_code"],
+     "severity": "warn", "code": "MTX-W01",
+     "message": "cell {cell}: grade {a} receives a larger multiplier ({ma}) than grade {b} ({mb}) at the same utilisation and tenure",
+     "note": "FLAGS rather than forbids (s6.3.2). The matrix is deliberately not monotonic in the obvious direction and a validator that can only reject cannot express that. Accepted warnings are recorded in the manifest with who accepted them."}
+  ],
+  "diff": {
+    "granularity": "cell",
+    "report": ["cells_changed", "rand_impact_per_cell", "accounts_affected_at_last_snapshot"],
+    "note": "'Policy sent a new spreadsheet' is not a reviewable change (s6.3.3)."
+  },
+  "unit_note": "Money is authored in whole rand and converted to int64 cents exactly once, at load. A spreadsheet in rand and an engine in cents that disagree by a factor of 100 is a silent 100x error; declaring the unit on the schema is what makes the conversion the loader's job rather than a convention someone remembers."
+}

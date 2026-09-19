@@ -1,0 +1,34 @@
+# Scenario: campaign 41 is retired on a Thursday.  This file is what retirement
+# leaves behind, and the answer to "what does retiring campaign 41 cost?"
+# (spec §13 Q11) is: one state change and nothing deleted, ever.
+
+campaign_id: 41
+name: "Everyday Card limit upgrade"
+state: retired
+retired_on: 2026-08-31
+retired_by: campaign_owner_7
+reason: "Superseded by project 07 limit management (scenario 13)."
+
+retained_indefinitely:
+  - "trees/v1.json .. trees/v19.json"
+  - "identity_maps/*"
+  - "routes/*"
+  - "node_meta/*"
+  - "validation/*"
+  - "signoff/*"
+
+retained_25_months_then_archived_7_years:
+  - "assignments, paths, suppression attributions, arbitration ledger"
+
+consequences:
+  - "campaign_id 41 is NEVER reused (spec §4.4)."
+  - "Internal Audit's §9.4 question - 'list every client excluded from campaign 41
+     in the March cycle, with the reason' - is answerable for the full retention
+     period from the suppression attributions and the arbitration ledger, with no
+     cycle re-run and with the campaign long gone."
+  - "Any overlay still scoped to campaign 41 now matches nothing, so the FIRST
+     cycle after retirement FAILS with MATCHES_NOTHING naming the overlay
+     (spec §5.3.4 req 6). That is the check working: a tightening scoped to a
+     retired campaign is caught rather than assumed to be working."
+  - "Its 190 node keys remain valid join keys in the warehouse forever. Node keys
+     are content-derived, so they survive the campaign that used them."

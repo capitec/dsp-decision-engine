@@ -1,0 +1,46 @@
+# ===========================================================================
+# ENTRY POINT 1 -- NEW CREDIT APPLICATION.  Sixteen of eighteen.
+# ===========================================================================
+
+[entry_point]
+code = 1
+name = "new_credit_application"
+mode = "realtime"
+volume = "55 000/day; peak 9/s sustained 20 min"
+owner = "T1"
+products = [10, 11, 20, 21, 30, 40]
+
+[budget]
+target_p99_ms = 120.0
+file = "budgets/ep01.toml"
+client_observed_p99_ms = 2350.0
+external_critical_path_ms = 2000.0
+# Two numbers, published separately, neither allowed to stand in for the other.
+# Spec 5.24.2: "excluding waiting from a latency target is exactly how a latency
+# target becomes unfalsifiable."
+
+[derived]
+expected_phases = ["P01","P02","P03","P04","P05","P06","P07","P08","P09","P10",
+                   "P11","P12","P13","P16","P17","P18"]
+expected_phase_count = 16
+expected_decision_points = 1271
+skipped = ["P15"]
+
+[derived.conditional]
+# P14 is conditional on L1's entry condition, which is a PROPERTY OF THE LOOP
+# and is declared once, in loops/l1_consolidation.py.  Two phase sets result.
+P14 = { condition = "l1.entered", share = 0.068, phase_set_when_absent = 1,
+        phase_set_when_present = 2, latency_class = "budgets/ep01_loop.toml" }
+
+[phase_sets]
+# Spec 4.6: `phase_set_id` is "NOT derivable from `entry_point_code` alone".
+# Enumerated at build, archived with it, and resolvable for seven years.
+1 = { phases = 16, decision_points = 1271, share = 0.932 }
+2 = { phases = 17, decision_points = 1334, share = 0.068, note = "P14 fired" }
+
+[record]
+shape = "FullAssessment"
+mean_bytes = 58000
+bureau_payload_bytes = 41000    # 71% of the record, 54% of the whole estate
+annual_volume = 20_100_000
+dedup = "content_addressed_bureau_view"   # -710 GB/yr; a purge must not orphan a decision

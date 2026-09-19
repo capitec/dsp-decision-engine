@@ -1,0 +1,67 @@
+{
+  "//": "PARAMS DOCUMENT for search/budget.py. Values only - a free swap, no compile.",
+  "//1": "The two bounds do different jobs and this file is where that is visible.",
+  "//2": "  `candidates` decides the ANSWER and must be reproducible.",
+  "//3": "  `wall_ms`    decides only whether we DEGRADE, and degradation is to a declared rung.",
+  "//4": "A wall-clock cut-off that stopped mid-plan at candidate 287 would be irreproducible.",
+  "//5": "Stopping at a declared rung is reproducible given the rung, and the rung is recorded.",
+
+  "origin_note": "supplied by the caller's loader as `file:config/search/budget.json@<git sha>`",
+
+  "search_budget": {
+    "interactive": {
+      "candidates": 400,
+      "wall_ms": 900,
+      "tiers": [120, 280, 400],
+      "tier_note": "Evaluation runs tier by tier. The clock is read BETWEEN tiers, never inside one. A tier is a whole polars frame through one kernel, so the unit of truncation is a tier, not a candidate.",
+      "on_wall_exhausted": "stop_at_completed_tier",
+      "on_candidates_exhausted": "space_exhausted",
+      "min_tier": 120,
+      "min_tier_note": "If tier 1 alone breaches wall_ms the assessment does NOT shrink below it; it completes late and records `latency_breach`. A search that returns three candidates is worse than a search that returns late."
+    },
+    "app": {
+      "candidates": 520,
+      "wall_ms": 1400,
+      "tiers": [120, 320, 520],
+      "on_wall_exhausted": "stop_at_completed_tier",
+      "min_tier": 120
+    },
+    "batch_identification": {
+      "candidates": 40,
+      "wall_ms": 60,
+      "tiers": [40],
+      "on_wall_exhausted": "stop_at_completed_tier",
+      "min_tier": 40,
+      "tier_note": "One tier. At 800 000 clients the per-client clock read costs more than it saves, and the run is wall-clocked as a whole rather than per client."
+    },
+    "restructure": {
+      "candidates": 260,
+      "wall_ms": 900,
+      "tiers": [90, 180, 260],
+      "on_wall_exhausted": "stop_at_completed_tier",
+      "min_tier": 90
+    }
+  },
+
+  "plan": {
+    "prefix_depth_rate": 8,
+    "prefix_depth_relief": 8,
+    "prefix_depth_term": 6,
+    "prefix_depth_arrears": 6,
+    "prefix_depth_quoted": 6,
+    "prefix_depth_provider": 5,
+    "prefix_depth_reaccum": 5,
+    "short_term_floor_months": 6,
+    "max_settleable_indexed": 64,
+    "max_settleable_note": "A settlement set is a uint64 bitmask over settleable-account index. Above 64 settleable accounts the plan keeps the top 64 by H2 and records `index_truncated` with the dropped account_refs. Observed maximum inventory is 61 accounts, of which far fewer are settleable; this is a declared bound, not a hope.",
+    "terms_per_product": {
+      "11": [12, 24, 36, 48, 60, 72, 84],
+      "20": [],
+      "30": [12, 24, 36, 48, 60],
+      "40": [60, 84, 120, 180, 240]
+    },
+    "terms_note": "Product 20 has no term. Its candidate axis is promotional duration, supplied by products/card_20/pricing.py, and the plan asks the product arm for its own axis rather than assuming every product has a term.",
+    "term_bracketing": "product_min, affordability_bracket_low, affordability_bracket_high, con_int_05_max",
+    "term_bracketing_note": "Nine candidate terms per set would be wasteful. The plan takes four: the product minimum, the two terms that bracket the affordability constraint under a closed-form first estimate, and the CON-INT-05 maximum. The bracket estimate is deterministic and its inputs are recorded."
+  }
+}

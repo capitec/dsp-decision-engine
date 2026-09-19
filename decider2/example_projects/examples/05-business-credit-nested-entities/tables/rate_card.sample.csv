@@ -1,0 +1,33 @@
+# business_rate_card -- 40 amount bands x 55 terms x 12 grades x 4 security types
+#   = 105 600 cells. Owner: Treasury. Cadence: monthly, occasionally patched.
+# Sample: amount bands 12-13, terms 36 and 60, grades 4-6, all four security types.
+#
+# Two properties the whole card must have (00 s8):
+#   * cell-level attribution -- rate_cell_id is emitted on every read and lands
+#     in the decision record, so "which cell of which version" is answerable
+#   * diffability -- a new version produces a review artefact showing which cells
+#     changed and the aggregate impact. "Treasury sent a new spreadsheet" is not
+#     a reviewable change.
+#
+# Overlay target, stack position 11: a basis-point add-on over a declared cell
+# RANGE, which is how Treasury reprices a grade band mid-month without reissuing
+# 105 600 cells. base_rate below is never edited by that overlay.
+rate_card_version,effective_from,effective_to,rate_cell_id,amount_band_index,band_floor,band_ceiling,term_months,risk_grade,security_type,base_rate
+2026-03,2026-03-01,2026-03-31,B-12-036-04-1,12,750000,999999,36,4,1,0.1125
+2026-03,2026-03-01,2026-03-31,B-12-036-04-2,12,750000,999999,36,4,2,0.1245
+2026-03,2026-03-01,2026-03-31,B-12-036-04-3,12,750000,999999,36,4,3,0.1360
+2026-03,2026-03-01,2026-03-31,B-12-036-04-4,12,750000,999999,36,4,4,0.1495
+2026-03,2026-03-01,2026-03-31,B-12-036-05-1,12,750000,999999,36,5,1,0.1195
+2026-03,2026-03-01,2026-03-31,B-12-036-05-2,12,750000,999999,36,5,2,0.1320
+2026-03,2026-03-01,2026-03-31,B-12-036-05-3,12,750000,999999,36,5,3,0.1440
+2026-03,2026-03-01,2026-03-31,B-12-036-05-4,12,750000,999999,36,5,4,0.1585
+2026-03,2026-03-01,2026-03-31,B-12-036-06-1,12,750000,999999,36,6,1,0.1280
+2026-03,2026-03-01,2026-03-31,B-12-036-06-2,12,750000,999999,36,6,2,0.1415
+2026-03,2026-03-01,2026-03-31,B-12-036-06-3,12,750000,999999,36,6,3,0.1545
+2026-03,2026-03-01,2026-03-31,B-12-036-06-4,12,750000,999999,36,6,4,0.1700
+2026-03,2026-03-01,2026-03-31,B-12-060-05-2,12,750000,999999,60,5,2,0.1395
+2026-03,2026-03-01,2026-03-31,B-12-060-05-4,12,750000,999999,60,5,4,0.1670
+2026-03,2026-03-01,2026-03-31,B-13-036-05-2,13,1000000,1249999,36,5,2,0.1290
+2026-03,2026-03-01,2026-03-31,B-13-036-05-4,13,1000000,1249999,36,5,4,0.1555
+2026-03,2026-03-01,2026-03-31,B-13-060-05-2,13,1000000,1249999,60,5,2,0.1365
+2026-03,2026-03-01,2026-03-31,B-13-060-05-4,13,1000000,1249999,60,5,4,0.1640

@@ -1,0 +1,51 @@
+# GENERATED. Do not edit by hand — this file is produced from OWNERS.toml
+# plus the built decision-point registry by ownership's codeowners generator,
+# and is regenerated on every build. Hand-editing it is indistinguishable, in
+# review routing, from an undeclared re-org (OWNERS.toml's own docstring:
+# "a re-org would be indistinguishable, in the record, from a logic change").
+#
+# THIS is the "ownership map richer than OWNERS.toml alone" the layout needs:
+# OWNERS.toml maps twelve teams to PHASES, TABLES and PARAM CLASSES — the
+# unit GitHub review routing actually needs is the FILE, and a file inside
+# phases/p09_policy_gates/ is jointly owned by five teams at the phase level
+# but its two files split three ways at the decision-point level (register.py
+# carries T4's 89, T7/T8/T9's 41 and T10's 11; the regulatory-seed function
+# group inside it is T3's alone). Nine of eighteen phase packages below
+# therefore list MORE reviewers than OWNERS.toml's own phase-to-team table
+# would suggest by itself, and two list FEWER, because a single file inside a
+# multi-owner phase can belong to one team's slice only.
+
+/phases/p01_admission/               @bank/decision-platform
+/phases/p02_identity/                @bank/client-data
+/phases/p03_consent_eligibility/consent.py   @bank/regulatory-compliance
+/phases/p03_consent_eligibility/gates.py     @bank/regulatory-compliance @bank/credit-risk-policy
+/phases/p04_acquisition/             @bank/decision-platform @bank/client-data
+/phases/p05_fraud/                   @bank/financial-crime
+/phases/p06_features/bureau_normalise.py     @bank/client-data
+/phases/p06_features/income.py               @bank/client-data @bank/model-risk
+/phases/p06_features/obligations.py          @bank/client-data
+/phases/p06_features/bands.py                @bank/client-data @bank/model-risk
+/phases/p07_scoring/                 @bank/model-risk
+/phases/p08_calibration_grading/     @bank/model-risk @bank/credit-risk-policy
+/phases/p09_policy_gates/register.py         @bank/credit-risk-policy @bank/unsecured-product @bank/cards-product @bank/secured-product @bank/regulatory-compliance @bank/decision-platform @bank/financial-crime
+/phases/p10_affordability/           @bank/credit-risk-policy @bank/regulatory-compliance
+/phases/p11_product_routing/         @bank/unsecured-product @bank/cards-product @bank/secured-product
+/phases/p12_pricing/                 @bank/treasury-pricing @bank/regulatory-compliance
+/phases/p13_solve/                   @bank/decision-platform @bank/unsecured-product
+/phases/p14_consolidation/           @bank/collections-restructure
+/phases/p15_limit_assignment/        @bank/cards-product @bank/credit-risk-policy
+/phases/p16_offer_assembly/          @bank/unsecured-product @bank/cards-product @bank/secured-product @bank/campaign-analytics
+/phases/p17_validation/              @bank/decision-platform @bank/regulatory-compliance
+/phases/p18_disclosure/              @bank/regulatory-compliance @bank/decision-platform
+
+# Cross-cutting artefacts, owned once, read everywhere -- see
+# navigability/blast_radius.py, which reads THIS table's mirror image
+# (OWNERS.toml's `depends_on`) to notify a reader who is not a code owner.
+/values/                             @bank/decision-platform
+/ordering.py                         @bank/decision-platform
+/flow.py                             @bank/decision-platform
+/loops/                              @bank/collections-restructure @bank/decision-platform
+/degradation/                        @bank/decision-platform
+/budgets/                            @bank/decision-platform
+/tables/cap_register/                @bank/credit-risk-policy
+/tables/rate_cards/                  @bank/treasury-pricing

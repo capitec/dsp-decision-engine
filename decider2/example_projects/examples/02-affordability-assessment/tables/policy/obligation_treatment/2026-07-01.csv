@@ -1,0 +1,34 @@
+# obligation_treatment
+# owner: credit_risk_policy   effective_from: 2026-07-01   supersedes: 2026-04-01.csv
+# approval: CRP-2026-Q3-011   cadence: quarterly
+#
+# The `behaviour` column has change_class=interior (reviewed, Credit Committee).
+# Every other column has change_class=value (Credit Risk Policy, quarterly).
+# A quarterly diff of this file is reviewed by somebody who needs to see WHAT
+# MOVED, so `decider tables diff` renders it as cell changes and refuses to
+# present it as a replacement file.
+#
+# 45 account types. Abridged to 20 here; the omitted rows are further instalment
+# and revolving types with no new behaviour.
+account_type_code,account_type_name,behaviour,rate,floor_cents,contingent_pct,min_pct,min_floor_cents
+101,Personal loan,STATED,,,,,
+102,Vehicle finance,STATED,,,,,
+103,Mortgage,STATED,,,,,
+104,Student loan,STATED,,,,,
+105,Furniture / instalment sale,STATED,,,,,
+201,Credit card,PCT_LIMIT,0.0500,,,,
+202,Store card,PCT_LIMIT,0.0500,,,,
+203,Overdraft,PCT_LIMIT,0.0300,,,,
+204,Revolving credit facility,GREATER_OF,0.0400,,,,
+205,Petrol / garage card,PCT_BALANCE,0.1000,20000,,,
+206,Charge card,MIN_PAYMENT,,,,0.0300,25000
+301,Telecoms contract,PCT_BALANCE,0.0800,15000,,,
+302,Insurance premium finance,STATED,,,,,
+401,Surety - instalment credit,CONTINGENT,,,0.2000,,
+402,Surety - revolving,CONTINGENT,,,0.2000,,
+403,Co-signatory,CONTINGENT,,,0.2000,,
+501,Settled,EXCLUDE_CLOSED,,,,,
+502,Closed,EXCLUDE_CLOSED,,,,,
+503,Written off,EXCLUDE_CLOSED,,,,,
+504,Paid up,EXCLUDE_CLOSED,,,,,
+601,Developmental credit - unclassified,REFER,,,,,

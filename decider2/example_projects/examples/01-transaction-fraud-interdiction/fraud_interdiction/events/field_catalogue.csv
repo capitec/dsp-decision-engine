@@ -1,0 +1,20 @@
+field_name,dtype,unit,nullable,event_types,available_from,available_to,source,description
+event_id,uint64,id,false,ALL,2019-01-01,,message,One assessable event. Globally unique.
+event_type_code,int16,code,false,ALL,2019-01-01,,message,Which of the twelve types.
+event_timestamp,timestamp_us_utc,instant,false,ALL,2019-01-01,,message,When the event occurred.
+client_id,string,id,false,ALL,2019-01-01,,message,core vocabulary.
+channel_code,int8,code,false,ALL,2019-01-01,,message,core vocabulary.
+amount_zar_cents,int64,amount_zar_cents,true,"110,111,210,211,220,315",2019-01-01,,normalised,Amount in reporting currency. int64 cents — never float (doc 03 §1.2).
+fx_rate_used,float64,rate,true,"110,111,210,211",2019-01-01,,message,Rate carried in the message; recorded for replay.
+mcc,int16,code,true,"110,111",2019-01-01,,message,Merchant category code.
+acquirer_country,int16,code,true,"110,111",2019-01-01,,message,ISO numeric.
+terminal_type,int8,code,true,110,2019-01-01,,message,Card-present only.
+three_d_secure_outcome,int8,code,true,111,2019-01-01,,message,CNP only.
+merchant_initiated_indicator,int8,code,true,"110,111",2026-04-01,,message,Scheme field addition — spec §11.6. Absent on all history before this date.
+beneficiary_id,string,id,true,"210,211,220,313",2019-01-01,,normalised,Counterparty identity.
+beneficiary_bank_code,int16,code,true,"210,211,313",2019-01-01,,message,
+device_id,string,id,true,"110,111,210,310,311,313,314,315",2019-01-01,,session,11% of card-present events legitimately have none.
+session_id,string,id,true,"210,310,311,313,314,315",2019-01-01,,session,
+sim_change_notified_at,timestamp_us_utc,instant,true,312,2019-01-01,,network,Arrives minutes to hours late.
+requested_limit_zar_cents,int64,amount_zar_cents,true,315,2019-01-01,,message,
+qr_merchant_reference,string,id,true,317,2027-01-01,,message,Merchant QR payments — spec §11.5. New type 317 plus 31 fields.

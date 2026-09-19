@@ -1,0 +1,194 @@
+{
+  "_comment": [
+    "Interior document for the `collections_path` Sequence. Collections Strategy",
+    "edits this; Compliance co-signs rules touching statutory codes. It is NOT a",
+    "params document: adding a rule recompiles (doc 08 §2, class 2), which is why",
+    "it lives in its own file with its own version and its own approval field.",
+    "",
+    "Every rule carries id + description because they are the join key and the",
+    "prose the reviewable artefact needs (doc 08 §3 property 3). `escalation_rule_id`",
+    "in the output IS one of these ids, which is how §9.1's 'the rule that",
+    "authorised each contact' is answered per contact rather than per policy.",
+    "",
+    "`then` may only use the seven declared effects. There is no expression",
+    "language here and there will not be one (doc 08 §3.2)."
+  ],
+  "version": 58,
+  "effective_from": "2026-09-01",
+  "approval_reference": "CS-PATH-2026-08-27",
+  "owner": "collections_strategy",
+  "rules": [
+
+    { "id": "RESET01",
+      "description": "A qualifying payment returns the account to the entry position of its current bucket, clears channel counters and drops the intensity ceiling by one.",
+      "priority": 10,
+      "when": {"op": "any_of", "conditions": [
+        {"op": "gte", "feature": "payment_since_last_run", "value": {"expr_ref": "half_instalment"}},
+        {"op": "gte", "feature": "payment_since_last_run", "value": {"expr_ref": "thirty_pct_arrears"}}
+      ]},
+      "then": [
+        {"reset_to": {"position": {"grid_ref": "bucket_entry_position"}}},
+        {"clear_counters": "all_channels"},
+        {"raise_to": {"intensity_ceiling": {"delta": -1, "floor": 1}}}
+      ],
+      "reset_event": "qualifying_payment",
+      "co_sign": null },
+
+    { "id": "RESET02",
+      "description": "A partial payment that does not qualify resets nothing. Stated explicitly because it is contested and Collections Strategy changes it.",
+      "priority": 11,
+      "when": {"op": "and", "conditions": [
+        {"op": "gt", "feature": "payment_since_last_run", "value": 0},
+        {"op": "lt", "feature": "payment_since_last_run", "value": {"expr_ref": "half_instalment"}}
+      ]},
+      "then": [{"hold": {"reason": "partial_payment_non_qualifying"}}],
+      "reset_event": null },
+
+    { "id": "RESET03",
+      "description": "A promise captured holds the sequence at its current position. Suspension 119 does the blocking; this rule only stops the position advancing.",
+      "priority": 12,
+      "when": {"op": "is_not_null", "feature": "open_promise_id"},
+      "then": [{"hold": {"reason": "promise_in_force"}}],
+      "reset_event": "promise_captured" },
+
+    { "id": "RESET04",
+      "description": "A dispute holds the sequence and moves the account to the dispute path. Legal and agency are blocked by suspension 110, not here.",
+      "priority": 13,
+      "when": {"op": "is_not_null", "feature": "open_dispute_ref"},
+      "then": [{"hold": {"reason": "dispute"}}],
+      "reset_event": "dispute_raised" },
+
+    { "id": "RESET05",
+      "description": "An activated arrangement suspends the sequence while it performs; the arrangement-servicing path applies.",
+      "priority": 14,
+      "when": {"op": "and", "conditions": [
+        {"op": "is_not_null", "feature": "arrangement_id"},
+        {"op": "eq", "feature": "arrangement_is_performing", "value": true}
+      ]},
+      "then": [{"hold": {"reason": "arrangement_performing"}}],
+      "reset_event": "arrangement_activated" },
+
+    { "id": "ROLL01",
+      "description": "A roll to a worse bucket moves the position to the new bucket's entry position, but channel counters and rolling-window counts CARRY ACROSS. Fatigue is a property of the client, not of the bucket.",
+      "priority": 20,
+      "when": {"op": "eq", "feature": "rolled_to_worse", "value": true},
+      "then": [
+        {"advance_to": {"position": {"grid_ref": "bucket_entry_position"}}},
+        {"carry_counters": "all_channels"},
+        {"raise_to": {"intensity_floor": {"grid_ref": "bucket_entry_intensity"}}}
+      ],
+      "reset_event": null,
+      "_note": "raise_to, not set_to. The new position's intensity is the GREATER of the new bucket's entry intensity and the intensity already delivered (spec §5.5). The monotone invariant is what makes this checkable rather than hoped for." },
+
+    { "id": "ROLL02",
+      "description": "A roll to a better bucket does not de-escalate on its own. Only a qualifying payment (RESET01) does.",
+      "priority": 21,
+      "when": {"op": "and", "conditions": [
+        {"op": "eq", "feature": "rolled_to_better", "value": true},
+        {"op": "lt", "feature": "payment_since_last_run", "value": {"expr_ref": "half_instalment"}}
+      ]},
+      "then": [{"hold": {"reason": "improved_bucket_without_qualifying_payment"}}],
+      "reset_event": null },
+
+    { "id": "ROLL03",
+      "description": "Cooling-off periods in flight are honoured across a roll.",
+      "priority": 22,
+      "when": {"op": "and", "conditions": [
+        {"op": "eq", "feature": "rolled_to_worse", "value": true},
+        {"op": "is_not_null", "feature": "cooling_off_until"}
+      ]},
+      "then": [{"set_cooling_off": {"carry": true}}],
+      "reset_event": null },
+
+    { "id": "PROM01",
+      "description": "A BROKEN promise is not the same as no contact. The sequence advances one position rather than retrying the current one, contact is attempted within one business day on a spoken channel where permitted, and a distinct script applies.",
+      "priority": 30,
+      "when": {"op": "eq", "feature": "promise_outcome_code", "value": 3},
+      "then": [
+        {"advance_to": {"position": {"delta": 1}}},
+        {"raise_to": {"intensity_ceiling": {"delta": 1, "ceiling": 5}}},
+        {"set_cooling_off": {"business_days": 1}}
+      ],
+      "reset_event": null,
+      "script_family": "broken_promise",
+      "_note": "Spec §5.8: treating a broken promise the same as no contact is 'the single most common complaint from Collections Operations about the system they have today'." },
+
+    { "id": "PROM02",
+      "description": "A partial promise outcome retries the current position once with a reduced-intensity script.",
+      "priority": 31,
+      "when": {"op": "eq", "feature": "promise_outcome_code", "value": 2},
+      "then": [{"hold": {"reason": "partial_promise"}}],
+      "reset_event": null,
+      "script_family": "partial_promise" },
+
+    { "id": "ESC01",
+      "description": "Where the permitted retries for the current position are exhausted and the outcome was non-engagement, the sequence advances.",
+      "priority": 40,
+      "when": {"op": "and", "conditions": [
+        {"op": "gte", "feature": "attempts_at_position", "value": {"cell_ref": "permitted_retries"}},
+        {"op": "is_in", "feature": "last_contact_outcome_code", "values": [1, 2, 8]}
+      ]},
+      "then": [
+        {"advance_to": {"position": {"delta": 1}}},
+        {"raise_to": {"intensity_ceiling": {"delta": 1, "ceiling": 5}}},
+        {"clear_counters": "position"}
+      ],
+      "reset_event": null },
+
+    { "id": "ESC02",
+      "description": "A wrong-number outcome does NOT count towards escalation. Three of them invalidate the contact point instead (suspension 120).",
+      "priority": 41,
+      "when": {"op": "eq", "feature": "last_contact_outcome_code", "value": 3},
+      "then": [{"hold": {"reason": "wrong_number_does_not_escalate"}}],
+      "reset_event": null },
+
+    { "id": "ESC03",
+      "description": "A null contact outcome — 4.1% of dialler records — is neither engagement nor non-engagement. The position holds and the attempt counter does not increment.",
+      "priority": 42,
+      "when": {"op": "is_null", "feature": "last_contact_outcome_code"},
+      "then": [{"hold": {"reason": "outcome_unknown"}}],
+      "reset_event": null },
+
+    { "id": "ESC04",
+      "description": "An account that has been placed with an agency does not return to the early contact path while the placement stands.",
+      "priority": 43,
+      "when": {"op": "eq", "feature": "agency_placement_active", "value": true},
+      "then": [{"raise_to": {"intensity_floor": 4}}],
+      "reset_event": null },
+
+    { "id": "ENTRY01",
+      "description": "No cure in twelve months: normal entry at position 1 of bucket 1.",
+      "priority": 50,
+      "when": {"op": "eq", "feature": "re_entry_class", "value": 0},
+      "then": [{"reset_to": {"position": 1}}],
+      "reset_event": "cure" },
+
+    { "id": "ENTRY02",
+      "description": "Cured once and re-defaulted within ninety days: enter at position 3, skipping automated-only positions.",
+      "priority": 51,
+      "when": {"op": "eq", "feature": "re_entry_class", "value": 1},
+      "then": [{"reset_to": {"position": 3}}, {"raise_to": {"intensity_ceiling": 3}}],
+      "reset_event": "cure" },
+
+    { "id": "ENTRY03",
+      "description": "Cured twice in twelve months: enter at position 3 with the bucket floored at 3 for matrix purposes. The floor itself lives in state/assembly.py because it changes the MATRIX KEY, not the path.",
+      "priority": 52,
+      "when": {"op": "eq", "feature": "re_entry_class", "value": 2},
+      "then": [{"reset_to": {"position": 3}}],
+      "reset_event": "cure" },
+
+    { "id": "ENTRY04",
+      "description": "Chronic re-ager — four or more episodes in twelve months. Agent contact from day one, an arrangement offered before escalation, promises limited.",
+      "priority": 53,
+      "when": {"op": "eq", "feature": "re_entry_class", "value": 3},
+      "then": [{"reset_to": {"position": 4}}, {"raise_to": {"intensity_ceiling": 3}}],
+      "reset_event": "cure",
+      "script_family": "chronic_reager" }
+  ],
+
+  "expressions": [
+    {"id": "half_instalment", "registered_step": "collections:half_contractual_instalment"},
+    {"id": "thirty_pct_arrears", "registered_step": "collections:thirty_pct_of_arrears"}
+  ],
+  "_expressions_note": "Registered steps referenced by id — never expression strings (doc 08 §3.2). Both appear in lineage() and render() as real nodes, and `collections_path`'s declared `reads` is checked to be a superset of their transitive inputs at config-validation time."
+}

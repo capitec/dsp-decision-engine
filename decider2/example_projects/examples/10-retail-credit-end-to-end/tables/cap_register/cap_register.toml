@@ -1,0 +1,146 @@
+# The cap register interior document. 118 entries in the real artefact;
+# eleven representative ones here (spec 5.10's own worked table, plus two
+# more cited elsewhere in this repo). Read and enforced by
+# phases/p09_policy_gates/register.py's `CapRegister` ruleset — this file is
+# the INTERIOR, that file is the INTERFACE (doc 08 §3's split).
+#
+# Every entry declares `narrows` (which values/ceilings.py object it targets)
+# and nothing else about direction: the ceiling's own `direction=` is what
+# gets checked, so an entry here cannot silently acquire a raise permission
+# by being written wrong. `sequence` is load-bearing (O-12 pins CAP-0118
+# last; worst_acceptable_grade's `order_is_load_bearing=True` note in
+# values/ceilings.py is about entries like CAP-0176 below).
+
+[[entry]]
+rule_id = "CAP-0011"
+sequence = 1
+owner = "T7"
+class = "product"
+narrows = "amount_cap"
+applies_to_products = [10, 11]
+condition = "always"
+effect = "seed 500000_00"
+
+[[entry]]
+rule_id = "CAP-0029"
+sequence = 2
+owner = "T8"
+class = "product"
+narrows = "decline"
+applies_to_products = [20, 21]
+condition = "channel_closed(channel_code, product_code)"
+effect = "decline"
+
+[[entry]]
+rule_id = "CAP-0104"
+sequence = 4
+owner = "T4"
+class = "appetite"
+narrows = "amount_cap"
+applies_to_products = [10, 11]
+condition = "always"
+effect = "by grade: 1->500000_00, 6->220000_00, 9->70000_00, 11->28000_00, 12->decline"
+
+[[entry]]
+rule_id = "CAP-0122"
+sequence = 5
+owner = "T4"
+class = "appetite"
+narrows = "term_cap"
+applies_to_products = [10, 11]
+condition = "always"
+effect = "by grade: 1-3->84, 4-6->72, 7-8->60, 9-10->48, 11->24"
+
+[[entry]]
+rule_id = "CAP-0131"
+sequence = 11
+owner = "T7"
+class = "policy"
+narrows = "amount_cap"
+applies_to_products = [10]
+condition = "employer_tenure_months < 24"
+effect = "< 24 -> 85000_00; < 9 -> 30000_00; < 4 -> decline"
+
+[[entry]]
+rule_id = "CAP-0158"
+sequence = 14
+owner = "T7"
+class = "policy"
+narrows = "amount_cap"
+applies_to_products = [10]
+condition = "is_new_to_bank(client_id)"
+effect = "70000_00"
+
+[[entry]]
+rule_id = "CAP-0176"
+sequence = 19
+owner = "T4"
+class = "policy"
+narrows = ["amount_cap", "worst_acceptable_grade"]
+applies_to_products = [10, 11]
+condition = "arrears history"
+effect = "3+ month arrears in 12 -> 35000_00, tighten to grade 9; 2-month in 24 -> 140000_00, tighten to grade 9"
+note = "L7 (spec 5.23): tightens worst_acceptable_grade AFTER CAP-0104 has already read the untightened appetite grid. Register is single-pass by declaration -- see values/ceilings.py's order_is_load_bearing note. 12 of the 31 shadowed decision points in deadlogic became shadowed when this entry was re-thresholded 18 months ago."
+
+[[entry]]
+rule_id = "CAP-0212"
+sequence = 23
+owner = "T4"
+class = "policy"
+narrows = "amount_cap"
+applies_to_products = [10, 11]
+condition = "enquiry velocity"
+effect = ">= 7 enquiries in 90 days -> 40000_00; >= 12 -> decline"
+
+[[entry]]
+rule_id = "CAP-0248"
+sequence = 31
+owner = "T7"
+class = "policy"
+narrows = ["amount_cap", "term_cap"]
+applies_to_products = [10]
+condition = "channel_code in (broker, partner)"
+effect = "broker -> 180000_00 and 60; partner -> 120000_00"
+
+[[entry]]
+rule_id = "CAP-0266"
+sequence = 38
+owner = "T10"
+class = "exposure"
+narrows = "amount_cap"
+applies_to_products = "*"
+condition = "employer_or_sector_on_watchlist(3150 identifiers)"
+effect = "60000_00"
+degrades_to = "blanket 60000_00 applied to every application when the watchlist is unreachable"
+
+[[entry]]
+rule_id = "CAP-0301"
+sequence = 44
+owner = "T1"
+class = "exposure"
+narrows = "amount_cap"
+applies_to_products = "*"
+condition = "always"
+effect = "group_limit - existing_internal_exposure(related_party_set)"
+note = "O-11 (ordering.py): P02's related_party_set must exist before this runs -- the graph query is expensive and set-shaped, this check is cheap and record-shaped."
+
+[[entry]]
+rule_id = "CAP-0118"
+sequence = 47
+owner = "CC"
+class = "campaign"
+position = "last_in_register"
+narrows = "amount_cap"
+may_raise = true
+applies_to_products = "*"
+condition = "valid campaign_id, Credit-Committee-authorised"
+effect = "raise by up to 20%, absolute authority ceiling 200000_00, never above a regulatory-class ceiling"
+note = "The ONLY entry permitted to raise. O-12 pins it last and after every regulatory-class entry -- raising before one would let a campaign authority exceed a statutory maximum, which is unlawful, not a policy error."
+
+[meta]
+total_entries = 118
+product_agnostic = 26
+product_specific = 92
+applicable_to_product_10 = 47
+applicable_to_product_21 = 38
+reorder_cadence = "quarterly, by four of five owning teams"

@@ -1,0 +1,143 @@
+# Shadow population — 114 rules under test on live traffic. Three shown.
+#
+# A shadow rule is not a live rule with a flag. It is compiled into a different
+# kernel, writes different columns, and is evaluated at a point in the pipeline
+# that is topologically after the action has already been decided. There is no
+# runtime path by which it could influence an outcome, so spec §10.4 ("no shadow
+# rule has ever changed an action_code") is not a property to be tested — it is
+# a property of the graph, asserted statically in CI over `lineage("action_code")`.
+#
+# Promotion to live moves the rule's document from this file to its family file.
+# That is a SHAPE change: it recompiles one live block and one shadow block, and
+# it is the correct cost, because promotion is precisely the change that starts
+# affecting outcomes. It takes ~4 seconds of machine time inside a 10-minute
+# approval window.
+#
+# The rule keeps its rule_id across the move, so its shadow firing history and
+# its live firing history join on the same key and the analyst's sentence —
+# "11 400 firings in shadow over six weeks, 340 later confirmed fraud" against
+# "its first six weeks live" — is one query, not two (spec §5.11).
+
+ruleset: shadow_rules
+document_version: 88
+schema: decider2/ruleset/v1
+
+rules:
+
+  - id: MS-0512
+    version: 4
+    shape_version: 2
+    status: shadow
+    shadow_since: 2026-08-04T00:00:00Z
+    title: Candidate — low-value test payment followed by a large one
+    describe:
+      internal: >
+        A payment under R50 to a beneficiary added in the last hour, followed
+        within 20 minutes by one above R5 000 to the same beneficiary. Tests
+        whether the test-payment pattern is worth a rule of its own or is
+        already covered by MS-0311.
+      client_safe_reason: 4412
+    owner: { team: fraud-strategy, individual: l.khumalo }
+    effective: { from: 2026-08-04T00:00:00Z, to: null }
+    applies_to: { event_types: [210], segments: all }
+    evaluate:
+      all:
+        - { feature: beneficiary_prior_payment_count_1h, op: ge, value: { tunable: min_prior } }
+        - { feature: beneficiary_amount_max_1h, op: lt, value: { tunable: max_test_amount } }
+        - { feature: amount_zar_cents, op: gt, value: { tunable: min_amount } }
+    tunables:
+      min_prior:       { default: 1,      unit: count,            bounds: [1, 10] }
+      max_test_amount: { default: 5000,   unit: amount_zar_cents, bounds: [100, 100000] }
+      min_amount:      { default: 500000, unit: amount_zar_cents, bounds: [100000, 50000000] }
+    on_absent:
+      beneficiary_prior_payment_count_1h: suppress
+      beneficiary_amount_max_1h: suppress
+      amount_zar_cents: suppress
+    # A shadow rule still declares the outcome it WOULD have asked for. That is
+    # what makes the backtest's action-churn metric computable for a candidate
+    # without promoting it.
+    outcome: { action: hold_for_review, severity: 4, priority: 240, queue: SCAM-1, sla_tier: T15 }
+    flags: { critical: false, overlay_exempt: false, suppressible: true }
+    limits: { max_fire_rate_pct: 0.60 }
+    approval:
+      author: l.khumalo
+      approver: n.dlamini
+      approved_at: 2026-08-03T15:44:19Z
+      backtest_ref: BT-2026-0803-11
+      shape_change: true
+
+  - id: AT-0219
+    version: 1
+    shape_version: 1
+    status: shadow
+    shadow_since: 2026-09-01T00:00:00Z
+    title: Candidate — SIM change then login from a new device
+    describe:
+      internal: >
+        SIM change within 24 hours and a login from a device first seen today,
+        at an IP distance band of 3 or worse. The SIM-change notification is
+        late by nature, so this rule fires on the login, not on the 312.
+      client_safe_reason: 4205
+    owner: { team: fraud-strategy, individual: s.botha }
+    effective: { from: 2026-09-01T00:00:00Z, to: null }
+    applies_to: { event_types: [310, 311], segments: all }
+    evaluate:
+      all:
+        - { feature: hours_since_sim_change, op: lt, value: { tunable: max_sim_age_h } }
+        - { feature: hours_since_device_first_seen, op: lt, value: { tunable: max_device_age_h } }
+        - { feature: ip_locus_distance_band, op: ge, value: { tunable: min_distance_band } }
+    tunables:
+      max_sim_age_h:      { default: 24, unit: hours, bounds: [1, 168] }
+      max_device_age_h:   { default: 24, unit: hours, bounds: [1, 168] }
+      min_distance_band:  { default: 3,  unit: band,  bounds: [1, 6] }
+    on_absent:
+      hours_since_sim_change: evaluate_false     # no SIM change on record = not recent
+      hours_since_device_first_seen: suppress
+      ip_locus_distance_band: evaluate_false
+    outcome: { action: step_up, severity: 3, priority: 330, challenge: in_app_push }
+    flags: { critical: false, overlay_exempt: false, suppressible: true }
+    limits: { max_fire_rate_pct: 1.50 }
+    approval:
+      author: s.botha
+      approver: t.mokoena
+      approved_at: 2026-08-31T12:10:55Z
+      backtest_ref: BT-2026-0830-03
+      shape_change: true
+
+  - id: CF-0904
+    version: 2
+    shape_version: 1
+    status: shadow
+    shadow_since: 2026-07-19T00:00:00Z
+    title: Candidate — card testing at an unrecognised merchant
+    describe:
+      internal: >
+        Authorisation decline ratio above 0.5 in ten minutes on one card, at a
+        merchant with no reputation record. Aimed at the card-testing pattern
+        in change scenario 1; if it performs, it replaces the emergency rule
+        written during the November attack.
+      client_safe_reason: 4102
+    owner: { team: fraud-strategy, individual: d.ferreira }
+    effective: { from: 2026-07-19T00:00:00Z, to: null }
+    applies_to: { event_types: [111], segments: all }
+    evaluate:
+      all:
+        - { feature: "feat:auth_decline_ratio_10min", op: gt, value: { tunable: min_ratio } }
+        - { feature: card_count_10min, op: ge, value: { tunable: min_attempts } }
+        - { feature: merchant_reputation_band, op: eq, value: 0 }   # UNKNOWN_BAND, a band not a null
+    tunables:
+      min_ratio:    { default: 0.50, unit: ratio, bounds: [0.1, 1.0] }
+      min_attempts: { default: 4,    unit: count, bounds: [2, 50] }
+    on_absent:
+      "feat:auth_decline_ratio_10min": suppress
+      card_count_10min: suppress
+      merchant_reputation_band: evaluate_false
+    outcome: { action: decline, severity: 4, priority: 120 }
+    flags: { critical: false, overlay_exempt: false, suppressible: true }
+    limits: { max_fire_rate_pct: 0.25 }
+    approval:
+      author: d.ferreira
+      approver: h.abrahams
+      approved_at: 2026-07-18T17:59:02Z
+      backtest_ref: BT-2026-0718-07
+      shape_change: true

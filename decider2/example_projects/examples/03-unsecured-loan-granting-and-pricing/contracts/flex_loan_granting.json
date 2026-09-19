@@ -1,0 +1,39 @@
+{
+  "$schema": "decider2://contract/1",
+  "pipeline": "flex_loan_granting",
+  "frozen_at": "2026-09-01",
+  "semver": "4.2.0",
+  "_comment": "`contract=` snapshots the interface to a checked-in file (doc 03 5.1). Changing the pipeline without updating it fails the build, naming the field that moved. Project 04 consumes the batch pre-assessment and 'cannot change the logic that produces it' -- this file is what makes that a build failure in THIS repository rather than a surprise in theirs.",
+  "outputs": [
+    {"name": "outcome_code", "dtype": "int8", "since": "1.0.0"},
+    {"name": "offers", "kind": "collection", "capacity": 9, "since": "1.0.0",
+     "fields": ["offered_amount", "term_months", "nominal_annual_rate",
+                "nominal_annual_rate_card_value", "rate_add_on_bp", "rate_cell_id",
+                "initiation_fee", "monthly_service_fee", "credit_life_premium",
+                "instalment", "total_cost_of_credit", "effective_annual_rate",
+                "is_recommended", "binding_constraint_code"]},
+    {"name": "decline_reason_codes", "kind": "collection", "capacity": 32, "since": "1.0.0"},
+    {"name": "primary_reason_code", "dtype": "int16", "since": "1.0.0"},
+    {"name": "referral_queue_code", "dtype": "int8", "since": "1.0.0"},
+    {"name": "risk_grade", "dtype": "int8", "since": "1.0.0"},
+    {"name": "risk_grade_unadjusted", "dtype": "int8", "since": "3.0.0"},
+    {"name": "probability_of_default", "dtype": "float64", "since": "1.0.0"},
+    {"name": "probability_of_default_unadjusted", "dtype": "float64", "since": "3.0.0"},
+    {"name": "score", "dtype": "float64", "since": "1.0.0"},
+    {"name": "score_unadjusted", "dtype": "float64", "since": "3.0.0"},
+    {"name": "adjustment_set_id", "dtype": "int16", "since": "3.0.0"},
+    {"name": "adjustments_applied", "kind": "collection", "capacity": 32, "since": "3.0.0"},
+    {"name": "max_affordable_instalment", "dtype": "int64_cents", "since": "1.0.0"},
+    {"name": "assessment_id", "dtype": "int64", "since": "1.0.0"}
+  ],
+  "table_versions_carried": [
+    "flex_rate_card", "flex_long_term_loading", "amount_band_definitions",
+    "statutory_rate_ceiling", "initiation_fee_schedule", "service_fee_cap",
+    "credit_life_rates", "credit_life_statutory_cap", "scorecard_definitions",
+    "challenger_scorecard", "calibration_parameters", "grade_boundaries",
+    "appetite_grid", "cap_register", "permitted_term_list", "channel_availability",
+    "minimum_viable_offer_thresholds", "exposure_watchlist", "reason_code_registry",
+    "expense_norm_table", "buffer_table", "obligation_treatment_matrix", "tax_table"
+  ],
+  "_versions_note": "Twenty-three, of which five are project 02's and carried verbatim. `carries_versions=` on the consumed capability is why the last five are here at all -- see modules/affordability.py."
+}
