@@ -91,10 +91,15 @@ Everything here is measured. Doc 05 §1–§3 is a real spec.
 path) → `marshal.py` (whole-row bulk) → `writeback.py` (dtype-grouped 2D, layout
 per entry point) → `chunk.py` (100k default).
 
-> **Blocked on one thing:** the **input-frame schema format is unspecified**
-> (referenced in doc 05 §8 and doc 07 §5, defined nowhere), and O11 requires it to
-> model nullability. You cannot construct a record dtype or pin a numba signature
-> without it. **Settle this first** — it is one decision, not an experiment.
+> **UNBLOCKED — O11 answered (EXPERIMENTS.md §O11).** The format now exists, and
+> the finding that shapes it is a constraint rather than a choice: **polars cannot
+> supply nullability at all.** A clean and a null-bearing column of the same dtype
+> produce `==`-equal `Schema` objects, and `pl.DataType` has no `nullable`
+> attribute. So `name` and `dtype` bootstrap from `collect_schema()`, and
+> **`nullable` must be hand-authored** — a governance fact like the
+> params/structure boundary, not a data fact. Measured propagation:
+> `inner`/`semi`/`anti` introduce no nulls, `left` nullifies the right side,
+> `full` nullifies both sides *including the join keys*.
 
 ### Layer 2 — `compile/` codegen + `runtime/` — READY once Layer 1 is
 
@@ -112,9 +117,21 @@ combinator model"*.
 
 Blockers, in order:
 
-1. **O5 — nesting has no name and no design.** Six of eleven mock projects needed
-   it; nine names were invented. Whether nesting is a combinator, a grain, or a
-   module kind changes the graph model. **Settle before writing `graph/`.**
+1. **O5 — nesting: largely answered (EXPERIMENTS.md §O5), and it is *not* a third
+   kind.** The name is `grain` (a level declaration: key, parent, capacity) with
+   two combinators over it — `Each(grain, body)` to descend, `Gather(child,
+   into=parent, **folds)` to aggregate. Broadcast falls out of descend rather than
+   being a third operation; enumerate happens at the **frame** tier before any
+   record-tier code runs. Folds are commutative-associative only (no `first`),
+   each carrying a free witness bitset up to capacity 64.
+
+   Measured in numba, nopython, no fallback: descend **14 ns/child**, aggregate
+   **35–38 ns/parent**, nested two-level CSR (Application→Entity→Event) at
+   **163 ns/application** over 1.86 M events.
+
+   **One shape still open:** project 02's `over(group=)` / `@rung` — a fold that
+   collapses duplicate children into fewer children *at the same grain*, which is
+   neither descend nor aggregate. It no longer blocks the model's shape.
 2. **E2 has never been run.** Build the graph model *as* E2 rather than assuming
    it: scopes, the five-scope invariant, `|` as sequence, `Branch`/`Loop`,
    interface inference and materialisation, `Vocabulary`/`.at()`, unbound-name
@@ -124,10 +141,27 @@ Blockers, in order:
 
 ### Layer 4 — `interiors/` — BLOCKED
 
-`ruleset.py` cannot be written: **O15, the interior document schema, is
-undefined.** Doc 08 §3's `when`/`then` is explicitly illustrative; open are the
-`then` side, `first_match` vs `all`, and whether a rule carries approval (O17).
-O21 (per-field change class) is also open.
+**UNBLOCKED — O15 answered (EXPERIMENTS.md §O15)**, derived from `flat_rules`'
+real algebra plus five independently-authored rule documents across four projects.
+
+Keep the four-kind algebra, with three changes each backed by a count:
+
+- **Respell comparison operators as words** (`lt`/`le`/`eq`/`ne`/`gt`/`ge`) — four
+  of four real projects invented word spellings; none used `flat_rules`' symbols.
+- **Add `Always`.** `flat_rules` cannot express an unconditional rule: an empty
+  `CompositeRule` evaluates to **FALSE**, and four of eight `cap_register` rules
+  need one. A genuine algebra gap, found by reading code.
+- **Add `Predicate`** — a named registered boolean check whose arguments are typed
+  as values, so they can be `{param: …}` rather than inlined literals. This extends
+  §L's arguments-not-literals rule one level deeper than doc 08 §3 states it.
+
+**The `then` side is a list of effects**, not a single value and not a single
+struct — none of the five real shapes can express the others, and a list expresses
+all five. Both `first_match` and `all` are needed; both already exist as working
+code paths in `flat_rules`.
+
+Still open: O17 (a policy call) and O21, though O15's field inventory is O21's
+input.
 
 `decision_table.py` and `scorecard.py` are *less* blocked — they are generic
 kernels over tabular data and the shape is clearer.
@@ -166,8 +200,16 @@ change's blast radius.
 
 O17 (approval granularity — policy, not design), O19/O20 (need a realistic
 pipeline that does not exist yet), O12 (fusion cost model — explicitly out of
-scope now that fusion is authored), O9 (stepping UX), N4's unexplained
-3.8 ms max (inside budget, cause unknown).
+scope now that fusion is authored), O9 (stepping UX), and project 02's same-grain fold (§O5's one unresolved shape).
+
+**N4's tail is no longer unexplained** — it is OS scheduler preemption
+(`ru_nivcsw`), nonzero in ~1% of calls but **100% of the top-0.1% slowest**. GC,
+allocator, page faults and dispatch misses were each measured and refuted
+(`ru_minflt`/`majflt`/`nvcsw` correlate at exactly 0.0 across 48,000 calls). It
+scales with the *environment*, not with anything the design controls — an 80×
+allocation-size range moved nothing. **Pinning to one core makes it worse**
+(p99.9 +63%), so `sched_setaffinity` is explicitly not the mitigation;
+cgroup/cpuset isolation is.
 
 The K/L attribution contradiction is **no longer open** — settled by
 `experimentation/kl-contradiction-resolved/` (EXPERIMENTS.md §M): both caches are
