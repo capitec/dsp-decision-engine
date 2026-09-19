@@ -18,13 +18,36 @@ finalisation step. Three non-optional constraints came out of it — build the
 union once, wrap `union_tag_invalid` with difflib suggestions, and set
 `extra="forbid"` on params models.
 
-### O2 — In-place param promotion
-Can a literal become a tunable *where it sits* (`p("income_cap", 48.0)`), harvested
-into the params model? The human-factors case is strong — whichever path is
-cheaper is the path taken, and 546 inline literals versus zero config uses is the
-evidence (doc 01 §5.3). The cost: a params model derived from source must stay
-stable across edits and remain diffable for audit. Also unclear how a business
-user browses knobs that live inside function bodies.
+### ~~O2 — In-place param promotion~~ — **SETTLED, in the signature not the body**
+
+The question was whether a literal could become a tunable *where it sits*
+(`p("income_cap", 48.0)` inline), harvested into the params model. The
+human-factors case was always strong — whichever path is cheaper is the path
+taken, and 546 inline literals against zero config uses is the evidence
+(doc 01 §5.3).
+
+**Answer: yes, but in the signature.** `cap: float = param(48.0, ge=6, le=60)`
+(doc 03 §4.4). That takes both of O2's stated objections off the table rather
+than accepting them:
+
+- *"A params model derived from source must stay stable across edits and remain
+  diffable."* A signature is a declaration; harvesting one is stable in a way
+  harvesting statements is not.
+- *"Unclear how a business user browses knobs that live inside function bodies."*
+  They do not live in bodies. `params_schema()` finds them by inspection, and a
+  reviewer reads them where they already read the null policy.
+
+It also avoids an AST rewrite that would have made step bodies stop being plain
+Python and forced `interpreted` mode to replicate the substitution — the exact
+kind of divergence between modes the equivalence ladder exists to catch.
+
+Together with bare functions as pipeline elements (doc 03 §5.3) and generated
+config (doc 07 §5), this takes one policy rule from **six artefacts across four
+files to one**. Doc 03 §1.1.
+
+Residual, and it is small: two ways to declare a param (lint forbids both in one
+module), direct-call substitution for tests, and confirming numba tolerates the
+generated signature — E11.
 
 ### O3 — The reviewable artefact
 The weakest part of the design. Both existing representations fail
@@ -33,13 +56,91 @@ module data with descriptions, declared inputs/outputs, param bounds and version
 chains — is untested. **This is a requirement, not a nice-to-have**, and if it
 cannot be met the governance story collapses.
 
-### O4 — Table/keyed-lookup interface
+### O4 — Table/keyed-lookup interface — **partly answered by doc 08**
 Sketched provisionally in doc 03 §4. Dense array + present mask works in numba
-(the a large internal workload port does exactly that), but the *authoring* surface is unclear, as
-is validation and whether tables are per-invocation like params or bound at build.
+(the port of a large internal workload does exactly that), but the *authoring*
+surface is unclear, as is validation.
+
+The build-vs-invocation half is now decided: **table contents are values** and
+ride in the params document, free of recompilation, because a `decision_table`
+and a `scorecard` are evaluated by a generic kernel rather than codegen
+(doc 08 §3.4). What stays open is the authoring and validation surface, and how a
+UI edits a table cell-wise.
+
+### O15 — The interior document schema
+**New, from doc 08 §3.** The `when`/`then` sketch there is illustrative. The real
+schema is `flat_rules`' closed algebra — `LeafRule`, `UnaryRule`, `CasesRule`
+(ranges / string-match / is-in), `CompositeRule` — plus a required id, a required
+description, and param references instead of inline literals. Needs writing
+before `ruleset` is built, because it is simultaneously the UI contract, the
+codegen input and the reviewable artefact's source.
+
+Two things are already decided by doc 08 §1, and constrain it: a rule's leaves are
+declared features or **registered** feature ids, never expression strings
+(`_ComputedFeature` goes — §3.2); and no node may carry a `DefinedFunction`-style
+`{module_name, function_name}` pointer (`output_fn` goes — doc 08 §1.1). What remains
+open is the shape of the `then` side, how `first_match` versus `all`
+prioritisation is expressed, and whether a rule carries an approval field (O17).
+
+### ~~O16 — Does a `ruleset` compile fast enough to stage?~~ — **SETTLED, [EXPERIMENTS.md](EXPERIMENTS.md) §G**
+
+**Yes, up to about 35 rules.** 3 rules = 0.63 s, 10 = 1.4 s, 30 = ~6 s, 40 = 9.4–10.9 s,
+100 = 48–57 s. **A UI can honestly promise "live in ≤10 seconds" below ~37 rules
+/ ~600 emitted lines.** Execution is flat at 1.8 ms per 100k rows for `first_match`
+regardless of rule count.
+
+Two consequences the question did not anticipate:
+
+- **The lever is splitting, not shrinking.** Compile is super-linear *within* a
+  unit (∝ lines^1.4, local exponent 1.96 at 60→100 rules), so four units of 25
+  rules cost ~18 s serial or ~4.5 s across four workers, against 48–57 s for one
+  unit of 100. Splitting a large `ruleset` into several compilation units is a
+  framework decision, not an authoring one.
+- **Disabled rules cost full compile time.** With every leaf disabled LLVM proves
+  the body dead and execution collapses to 0.031 ms, but compile is unchanged
+  (21.12 s vs 21.28 s at 60 rules). So O15's interior schema needs `enabled` to
+  mean **not emitted**, not "emitted and skipped" — otherwise a user who turns off
+  fifty rules pays for them on every activation, forever.
+
+The generic-kernel boundary in doc 08 §3.4 does **not** have to move.
+
+### O19 — Interface freezing and the vocabulary map
+**New, from doc 03 §5.1–5.2.** A module's interface is inferred from its steps and
+materialised into the module data — settled, because it costs no ceremony and is
+what makes an edit checkable without executing. Two parts are not settled:
+
+- **What exactly a frozen contract covers.** External vs wired inputs, per-input
+  null policy, output types, params schema, required `shared` fields, tap names —
+  and whether a step *body* change with an unchanged interface is breaking. It
+  can be, via numerics; the contract cannot see it.
+- **Whether the vocabulary map earns its place.** It exists because a project with
+  hundreds of values cannot carry a relabel at every call site, and because a
+  frame-boundary rename cannot address values produced mid-pipeline. But it is a
+  second place where a name can come from, which cuts against "one canonical
+  location". Measure it on a real project's naming spread before committing.
+
+### O20 — Does shadowing-as-an-error fire too often?
+**New, from doc 03 §2.1.** A module output shadowing an input column is a build
+error, because that is the silent-rebind bug. The rule is deliberately narrow —
+overwrite *between* modules stays silent, since that is the waterfall. The risk is
+that a real pipeline trips it constantly and authors learn to qualify reflexively,
+which would make the error noise rather than signal. Count the occurrences on a
+realistic pipeline before shipping it as an error rather than a warning.
+
+### O17 — Approval granularity
+**New.** Does activating a staged generation need per-rule approval, or is
+document-level enough? Framework-neutral — but it decides whether a rule carries
+an approval field, which is a schema question (O15).
+
+### O18 — Interiors in a `sealed` deployment
+**New, from doc 08 §4.1.** Can a `sealed` deployment consume an interior document
+at *build* time only? Probably yes and probably the common case: UI-authored
+rules, compiled in CI, shipped in the image, with no compiler in production. If
+so it should be the default and `live` the exception.
 
 ### O5 — Ragged per-record collections
-Deprioritised as workload-specific, but real: a large internal workload enumerates subsets of a
+Deprioritised as workload-specific, but real: the large internal workload
+surveyed in doc 01 enumerates subsets of a
 variable-length candidate list per application. CSR offsets, polars `List`
 columns, or leave it to the author with graceful degradation (the stated
 preference). Deferred until a second workload needs it.
@@ -59,16 +160,41 @@ Also produced the most valuable implementation finding so far: writing generated
 drivers to **real files instead of `exec`** takes a 1200-argument driver from
 29.5 s cold to **0.80 s warm**, turning compile cost into a build-time cost.
 
-### O6 — `prange` dispatch threshold — **reframed by E7**
-There is **no fixed row threshold.** The earlier ~50k figure was one synthetic
-kernel; E7 shows the crossover is set by **per-row work**: a light body never wins
-(0.99× at 1 M rows) while a body with a 64-iteration inner loop crosses at ~5k
-and reaches 7.8× at 5 M.
+### ~~O6 — `prange` dispatch threshold~~ — **SETTLED by measurement, [EXPERIMENTS.md](EXPERIMENTS.md) §F**
 
-So a constant is wrong. Options: measure both variants per kernel at warmup
-(affordable, since processes are long-lived and both are compiled anyway), or
-derive a heuristic from estimated body cost — which is the same estimation
-problem as O12, and probably should share its solution.
+Both the numbers and the proposed remedy were wrong.
+
+**Resolution: there is no automatic rule, because `prange` is authored.** Serial
+by default; `parallel(...)` opts in, mirroring `fuse(...)` (doc 05 §5.1).
+
+The measurements still settled the question, by ruling out every automatic option:
+
+- A fixed **row** threshold scores 66.7% — confirming doc 01's rejection of "~50k".
+- A **warmup measurement** is structurally impossible: the crossover depends on
+  batch size, which warmup does not know. A probe at n ≤ 10k predicting n ≥ 100k
+  was right 52.8% overall, 0% for medium bodies.
+- A **dispatch-time rule** (serial wall-clock > ~90 µs) scores 97.9% out of
+  sample — but only on uniform synthetic bodies. Credit logic short-circuits, so
+  per-row work is a distribution and `prange`'s static schedule load-imbalances
+  against it. Good enough to advise, not to decide silently.
+
+So the rule survives as a **diagnostic** in `explain_kernels()`, not a switch.
+
+**The warmup-measurement plan cannot work**, structurally: the crossover is set by
+total serial wall-clock = per-row work × row count, and warmup knows only the
+first factor. A probe at n ≤ 10k predicting n ≥ 100k was right **52.8%** of the
+time overall and **0%** for medium bodies.
+
+~90 µs tracks the fork/join floor (measured 65–67 µs) and is machine-specific, so
+it is a **startup calibration**, recorded in the audit record with the chosen
+variant (doc 08 §8) — which also makes the choice reproducible.
+
+**O6 no longer shares O12's problem.** It needs one scalar per kernel
+(`ns_per_row`), not a body-cost model.
+
+Three refuted figures are recorded in doc 01 §4, including a probable row-count
+transcription error: the doc's "7.8× at 5 M" matches the measured **100k** figure
+(7.5–7.7×), while 5 M measures 11.4–12.0×.
 
 ### ~~O13 — Taps must name a version~~ — **SETTLED**
 Default to the **final** version; qualify by **producing module name**
@@ -85,8 +211,13 @@ stable under insertion and reads meaningfully in an audit report.
 Fusion is non-monotone and harmful past ~5 modules (0.51× at 10, 0.33× at 20);
 break-even is ~10k rows; the cause is register pressure defeating vectorisation.
 **The guidance survives, the premise was wrong** — small modules are cheap
-because boundary stores are near-free, not because they fuse. Cap fused groups
-at ~6–9 steps. Doc 01 §4c.
+because boundary stores are near-free, not because they fuse. Doc 01 §4c.
+
+**The ~6–9 step cap that was written here has been withdrawn.** It sat inside the
+region the same table measures as 10–28% worse than not fusing, and no constant
+can span a decision ranging from 0.11× to 1071×. Fusion is now explicit:
+one kernel per module for `apply()`, maximal fusion for `score()`, and a
+`fuse(...)` combinator for anything else. Doc 02 §1.2.
 
 Exonerated by explicit controls: per-module params bundles are not the cause (a
 merged bundle degrades identically), and taps do not split kernels.
@@ -115,9 +246,18 @@ Estimating arm cost statically is the hard part and may not be reliable.
 Fallbacks: measure candidate groupings at warmup (affordable — long-lived
 processes), or require authors to hint expensive arms.
 
-Whatever the model, it must be **inspectable and overridable**
-(`explain_kernels()`, `pin_kernel_boundary()`), or "why is this slow" becomes
-unanswerable. Doc 02 §1.1.
+**Out of scope for v1.** Doc 02 §1.2 removes the need for a model by making
+fusion explicit: `apply()` emits one kernel per module, `score()` fuses
+maximally, and a `fuse(...)` combinator is how an author asks for more. Nothing
+is inferred, so nothing needs explaining. O12 is now the question of whether an
+automatic model would ever beat an explicit annotation by enough to be worth the
+unpredictability — and the honest answer may be no, given the effect is worth
+~16 ms against a 35–158 ms write-back cost.
+
+If it is revisited, the useful lead is that the mechanism is **directly
+observable** rather than needing estimation: vector IR values drop to 0 at M≥4,
+readable from `.inspect_llvm()`. That turns a static cost estimate into a
+build-time measurement.
 
 ### O9 — Stepping through control flow
 `stepped` and `interpreted` advance one step at a time, which is well defined for
@@ -274,8 +414,10 @@ delivers only ~47% of its theoretical saving because the exit test roughly
 doubles per-iteration cost.
 
 ### ~~E8 — Null mechanism for compiled steps~~ — **DONE**
-Settled O10. All five candidates compile; the NamedTuple form wins on both axes
-at once. See doc 01 §4.
+Settled O10. All five candidates compile. The `.value`/`.valid` NamedTuple is the
+fastest explicit form, and **the recommendation was reversed against it** in
+favour of plain `Optional` on readability and safety grounds — see O10 above and
+doc 01 §4 for the reasoning. Do not read this entry as endorsing the NamedTuple.
 
 It also produced two boundary rules that belong in `compile/boundary/`:
 
@@ -289,6 +431,43 @@ It also produced two boundary rules that belong in `compile/boundary/`:
 And it corrected a fact previously recorded in doc 01 §4, which is a useful
 reminder that a plausible mechanism ("bit tests are cheap") can be exactly
 backwards once branch prediction is involved.
+
+### E10 — Configuration lifecycle
+**New, from doc 08 §9.** Two to three days on top of the E1+E2+E3 vertical slice.
+Settles the staged-compile lifecycle and answers **O16**.
+
+One `ruleset` with three rules over the vertical slice's waterfall. Then: swap a
+params bundle mid-batch and assert no record straddles two bundles; add a fourth
+rule via an interior document and assert `stage` compiles in a worker while the
+active generation keeps serving, `activate` is atomic and `rollback` needs no
+compile; measure stage-to-active latency at 3, 10 and 30 rules; assert a failed
+compile leaves the active generation untouched; and confirm a params document
+carrying a `steps` key is rejected.
+
+**Would invalidate:** doc 08 §3, if declaring `reads`/`writes` in code constrains
+real rule sets unacceptably; or doc 08 §4, if staging a realistic `ruleset` is too
+slow for a UI to promise a bounded wait — in which case doc 08 §1.3's rejection of
+an interpreter gets revisited with a measurement instead of an argument.
+
+### E11 — `param()` in the signature survives the compiler
+**New, from doc 03 §4.4.** Small and gating, because doc 03 §1.1's whole
+one-artefact story rests on it.
+
+1. A step whose signature carries `param()` defaults compiles under `njit` once
+   the driver passes params explicitly (the emitted step should carry no default
+   at all — confirm that is what happens rather than assuming it).
+2. Harvesting the signature produces a model identical to the hand-written one:
+   same fields, same validators, same NamedTuple type, same namespace.
+3. Retuning leaves `driver.signatures` at length 1; changing a declared param's
+   *type* adds one (negative control).
+4. A direct Python call to the step works without a params bundle, and a test can
+   override with `params=`.
+5. The same-name NamedTuple trap (doc 01 §4c) is not reintroduced by generating a
+   model per function — per-call dispatch stays near 1 µs.
+
+**Would invalidate:** doc 03 §4.4, and with it §1.1's artefact count, if numba
+rejects the generated signature or if per-function model generation trips the
+dispatch trap.
 
 ### E6 — Param ergonomics and composition semantics
 Settles **O2**, and validates the composition rules in doc 03 §4.1–4.3, which are
@@ -331,18 +510,54 @@ graph model, then E3 (needs a graph to compile three ways). E4 should start earl
 on code. E6's part two is now largely answered by E5, leaving only the param
 ergonomics half.
 
-Open and unscheduled: **O2** (in-place param promotion), **O3/E4** (the
-reviewable artefact — still the weakest part of the design), **O4** (tables),
-**O5** (ragged collections — deferred by preference), **O6** (`prange`
-dispatch, now known to need a per-kernel measurement rather than a constant),
-**O9** (stepping UX, informed by E7), **O11** (nullability in schema
-propagation — decide alongside the settled O10), **O12** (the fusion cost
-model), **O13** (tap version qualification).
+**E10 rides on the same vertical slice** and should follow E3 immediately, because
+doc 08's lifecycle is what three of the four stated product goals depend on —
+UI-driven configuration, pluggable config sources and versioned config all resolve
+to "stage, activate, roll back" plus a JSON Schema export.
 
-Twelve of the original questions plus four new ones; five settled, all five by
+**Promoted: O2 (in-place param promotion) is no longer unscheduled.** With config
+sourcing out of the framework (doc 08 §6), authoring cost is the *only* remaining
+defence against repeating the outcome in doc 01 §5.3 — 546 inline literals against
+zero config uses, because the tunable form was more expensive to write than the
+literal. Under the style doc 03 §3.2 recommends, one policy rule costs a function,
+a `module(...)` call, an instance name, a params model, a pipeline entry and a
+config entry. E6's param-ergonomics half is the measurement that says whether that
+is survivable.
+
+Open and unscheduled: **O3/E4** (the reviewable artefact — still the weakest part
+of the design), **O4** (tables — build-vs-invocation now answered by doc 08 §3.4,
+authoring surface still open), **O5** (ragged collections — deferred by
+preference, but note doc 04 §4.1's reason-code taxonomy needs it), **O6**
+(`prange` dispatch, now known to need a per-kernel measurement rather than a
+constant), **O9** (stepping UX, informed by E7), **O11** (nullability in schema
+propagation — and `build` cannot construct a signature without it, so it gates E1
+rather than merely accompanying O10), **O12** (the fusion cost model), **O13**
+(tap version qualification), **O15–O18** (the interior document schema, ruleset
+compile latency, approval granularity, and interiors in a sealed deployment).
+
+Twelve of the original questions plus eight new ones; five settled, all five by
 measurement rather than argument.
 
 A vertical slice through E1 + E2 + E3 — one realistic waterfall, declared once,
 compiled three ways, applied to a batch and a single record, with a param retune
 proving no recompile and a tap proving cheap diagnostics — is the first
 implementation milestone. It needs no credit modules and no frame operations.
+
+**Three additions to that milestone**, each the smallest thing that would falsify
+a decision made without evidence:
+
+- **A second project reusing the same module under a different value
+  vocabulary** — settling O19. Compose the waterfall twice: once where names
+  match, once through a `Vocabulary`. Count how many relabels a realistic naming
+  spread actually needs; if it is more than a handful, the three-layer design in
+  doc 03 §5.2 has not solved the problem it exists for.
+- **Shadowing counted, not assumed** — settling O20. Build a realistic pipeline
+  and count how often a module output shadows an input column. If it is frequent,
+  doc 03 §2.1's build error is noise and has to become a warning plus a lint.
+- **E10's rule-set stage-and-activate**, which answers O16 and decides whether a
+  configuration UI can promise a bounded wait.
+
+All three are cheap, and all three are about **guardrails firing at the right
+rate** — which is the property that decides whether the framework guides people
+toward good practice or trains them to route around it. That is the same failure
+doc 01 §5.3 records: a mechanism that costs more than the shortcut is not used.

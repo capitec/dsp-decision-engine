@@ -1,0 +1,293 @@
+runs: results.json, results_run2.json
+python 3.14.5  numba 0.67.0  llvmlite 0.49.0  numpy 2.4.6
+cpus 28  NUMBA_NUM_THREADS 28  threading layer omp
+
+==============================================================================
+1. serial/prange speedup (>1 = prange wins).  median of trial medians.
+==============================================================================
+
+  body = trivial
+        rows     serial ms     prange ms   speedup      run2  ser ns/row
+       1,000        0.0014        0.0678    0.020x   0.019x       1.37
+       2,000        0.0022        0.0671    0.034x   0.032x       1.08
+       5,000        0.0035        0.0736    0.051x   0.068x       0.71
+      10,000        0.0062        0.0681    0.091x   0.095x       0.62
+      20,000        0.0112        0.0744    0.151x   0.168x       0.56
+      50,000        0.0266        0.0878    0.302x   0.369x       0.53
+     100,000        0.0833        0.0933    0.867x   1.125x       0.83
+     200,000        0.2061        0.0905    2.437x   2.135x       1.03
+     500,000        0.5542        0.2522    2.246x   2.449x       1.11
+   1,000,000        1.2634        0.4337    2.834x   2.882x       1.26
+   2,000,000        3.6514        1.0858    3.165x   3.250x       1.83
+   5,000,000        8.4278        4.9134    1.715x   1.763x       1.69
+
+  body = medium10
+        rows     serial ms     prange ms   speedup      run2  ser ns/row
+       1,000        0.0038        0.1639    0.029x   0.028x       3.77
+       2,000        0.0056        0.1207    0.049x   0.068x       2.79
+       5,000        0.0088        0.1137    0.078x   0.066x       1.77
+      10,000        0.0138        0.1040    0.143x   0.136x       1.38
+      20,000        0.0258        0.1018    0.242x   0.223x       1.29
+      50,000        0.0579        0.1005    0.532x   1.122x       1.16
+     100,000        0.1147        0.0990    1.183x   1.162x       1.15
+     200,000        0.2019        0.0906    2.206x   2.395x       1.01
+     500,000        0.5726        0.2717    2.148x   2.049x       1.15
+   1,000,000        1.2722        0.4310    2.952x   2.808x       1.27
+   2,000,000        3.1157        0.9729    3.166x   2.754x       1.56
+   5,000,000        8.2378        5.3251    1.590x   1.752x       1.65
+
+  body = inner64
+        rows     serial ms     prange ms   speedup      run2  ser ns/row
+         100        0.0555        0.1279    0.338x   0.302x     555.46
+         200        0.0690        0.1072    0.643x   0.644x     344.95
+         500        0.1559        0.1246    1.299x   1.758x     311.72
+       1,000        0.2657        0.1274    2.094x   2.268x     265.69
+       2,000        0.4485        0.2218    1.994x   1.757x     224.23
+       5,000        1.0992        0.3600    3.122x   3.106x     219.84
+      10,000        2.0650        0.5081    4.066x   4.565x     206.50
+      20,000        4.1408        0.7802    5.309x   5.443x     207.04
+      50,000       10.3421        1.5145    6.822x   6.958x     206.84
+     100,000       20.6722        2.7729    7.656x   7.481x     206.72
+   1,000,000      209.1567       18.7743   11.394x  10.929x     209.16
+   5,000,000     1046.1405       89.2254   11.631x  11.968x     209.23
+
+  body = inner256
+        rows     serial ms     prange ms   speedup      run2  ser ns/row
+         100        0.1267        0.1028    1.232x   1.195x    1266.72
+         200        0.2521        0.0863    3.006x   3.025x    1260.25
+         500        0.6049        0.2565    2.359x   2.460x    1209.87
+       1,000        1.2006        0.3675    3.272x   3.614x    1200.64
+       2,000        2.3910        0.4698    5.190x   4.970x    1195.51
+       5,000        5.9727        0.8486    7.195x   7.001x    1194.54
+      10,000       12.0128        1.3940    8.758x   8.488x    1201.28
+      20,000       23.9083        2.4904    9.600x   9.878x    1195.42
+      50,000       59.7779        5.7671   10.481x  10.440x    1195.56
+     100,000      119.9216        9.1441   13.190x  12.988x    1199.22
+   1,000,000     1207.0746       79.9412   15.170x  14.935x    1207.07
+   5,000,000     6063.3223      395.1329   15.220x  15.538x    1212.66
+
+==============================================================================
+2. crossover: lowest row count whose measured speedup exceeds 1.0
+==============================================================================
+        body     run1 rows     run2 rows  run1 serial@xover  run1 ns/row@xover
+     trivial       200,000       100,000           206.1 us              1.03
+    medium10       100,000        50,000           114.7 us              1.15
+     inner64           500           500           155.9 us            311.72
+    inner256           100           100           126.7 us           1266.72
+
+  'serial@xover' is total serial wall-clock of the kernel at the crossover row
+  count.  It is near-constant across bodies spanning 1500x in per-row cost.
+
+==============================================================================
+3. the prange fixed cost (OpenMP fork/join floor), measured
+==============================================================================
+
+  results.json: min prange time over all cells = 67.1 us
+   small-n prange times (us) — this is the floor, not work:
+       trivial n= 1,000      67.8
+       trivial n= 2,000      67.1
+      medium10 n= 1,000     163.9
+      medium10 n= 2,000     120.7
+       inner64 n=   100     127.9
+       inner64 n=   200     107.2
+       inner64 n=   500     124.6
+       inner64 n= 1,000     127.4
+       inner64 n= 2,000     221.8
+      inner256 n=   100     102.8
+      inner256 n=   200      86.3
+      inner256 n=   500     256.5
+      inner256 n= 1,000     367.5
+      inner256 n= 2,000     469.8
+
+  results_run2.json: min prange time over all cells = 65.0 us
+   small-n prange times (us) — this is the floor, not work:
+       trivial n= 1,000      70.9
+       trivial n= 2,000      69.7
+      medium10 n= 1,000     137.6
+      medium10 n= 2,000     143.4
+       inner64 n=   100     154.1
+       inner64 n=   200     127.3
+       inner64 n=   500     117.9
+       inner64 n= 1,000      96.3
+       inner64 n= 2,000     247.8
+      inner256 n=   100     106.8
+      inner256 n=   200      84.4
+      inner256 n=   500     250.7
+      inner256 n= 1,000     330.3
+      inner256 n= 2,000     480.8
+
+==============================================================================
+4. can a static rule 'prange iff predicted serial time > C' reproduce the picks?
+==============================================================================
+  96 (body, rows, run) cells total
+
+        C (us)     correct       wrong     acc %
+            20          86          10     89.6
+            50          90           6     93.8
+            75          94           2     97.9
+           100          94           2     97.9
+           125          92           4     95.8
+           150          90           6     93.8
+           200          88           8     91.7
+           300          80          16     83.3
+           500          78          18     81.2
+          1000          72          24     75.0
+
+  best threshold in this grid: C = 75 us  (97.9% of cells)
+
+  cells the best static rule gets wrong:
+          results.json   trivial n=  100,000  serial=     83.3us  speedup=0.867x
+     results_run2.json   inner64 n=      200  serial=     76.0us  speedup=0.644x
+
+==============================================================================
+5. what a warmup measurement costs
+==============================================================================
+
+  results.json
+   compile cost of the two variants (ms), phase 1:
+           trivial/serial     191.9
+           trivial/prange     451.1
+          medium10/serial     144.6
+          medium10/prange     411.0
+           inner64/serial     130.1
+           inner64/prange     454.1
+          inner256/serial     169.1
+          inner256/prange     336.0
+
+   probe cost = k reps of BOTH variants on a probe batch (ms):
+         body   probe n   k   probe cost     pick     ratio
+      trivial     1,000   1       0.32ms   serial    0.086x
+      trivial     1,000   3       0.86ms   serial    0.007x
+      trivial     1,000   5       1.13ms   serial    0.007x
+      trivial    10,000   1       0.17ms   serial    0.158x
+      trivial    10,000   3       0.59ms   serial    0.037x
+      trivial    10,000   5       0.56ms   serial    0.078x
+      trivial   100,000   1       0.29ms   prange    1.082x
+      trivial   100,000   3       0.53ms   prange    1.257x
+      trivial   100,000   5       1.00ms   serial    0.862x
+     medium10     1,000   1       0.07ms   serial    0.095x
+     medium10     1,000   3       0.18ms   serial    0.031x
+     medium10     1,000   5       0.33ms   serial    0.027x
+     medium10    10,000   1       0.07ms   serial    0.172x
+     medium10    10,000   3       0.21ms   serial    0.126x
+     medium10    10,000   5       0.51ms   serial    0.115x
+     medium10   100,000   1       0.21ms   prange    1.185x
+     medium10   100,000   3       0.53ms   prange    1.102x
+     medium10   100,000   5       0.79ms   prange    1.114x
+      inner64     1,000   1       0.30ms   prange    2.596x
+      inner64     1,000   3       0.97ms   prange    2.168x
+      inner64     1,000   5       1.53ms   prange    2.930x
+      inner64    10,000   1       2.50ms   prange    7.314x
+      inner64    10,000   3       8.16ms   prange    5.285x
+      inner64    10,000   5      13.18ms   prange    4.242x
+      inner64   100,000   1      23.61ms   prange    7.452x
+      inner64   100,000   3      70.09ms   prange    7.944x
+      inner64   100,000   5     118.83ms   prange    7.538x
+     inner256     1,000   1       1.78ms   prange    2.624x
+     inner256     1,000   3       5.02ms   prange    2.913x
+     inner256     1,000   5       8.33ms   prange    3.560x
+     inner256    10,000   1      15.12ms   prange    9.177x
+     inner256    10,000   3      40.29ms   prange    8.255x
+     inner256    10,000   5      66.65ms   prange    8.172x
+     inner256   100,000   1     129.57ms   prange   11.797x
+     inner256   100,000   3     385.87ms   prange   13.729x
+     inner256   100,000   5     646.30ms   prange   13.402x
+
+  results_run2.json
+   compile cost of the two variants (ms), phase 1:
+           trivial/serial     116.2
+           trivial/prange     395.0
+          medium10/serial     187.9
+          medium10/prange     412.3
+           inner64/serial     129.3
+           inner64/prange     429.7
+          inner256/serial     163.1
+          inner256/prange     334.6
+
+   probe cost = k reps of BOTH variants on a probe batch (ms):
+         body   probe n   k   probe cost     pick     ratio
+      trivial     1,000   1       0.35ms   serial    0.071x
+      trivial     1,000   3       1.02ms   serial    0.005x
+      trivial     1,000   5       1.09ms   serial    0.012x
+      trivial    10,000   1       0.20ms   serial    0.097x
+      trivial    10,000   3       0.49ms   serial    0.048x
+      trivial    10,000   5       0.69ms   serial    0.042x
+      trivial   100,000   1       0.30ms   serial    0.904x
+      trivial   100,000   3       0.85ms   serial    0.674x
+      trivial   100,000   5       1.12ms   serial    0.618x
+     medium10     1,000   1       0.08ms   serial    0.085x
+     medium10     1,000   3       0.29ms   serial    0.024x
+     medium10     1,000   5       0.40ms   serial    0.024x
+     medium10    10,000   1       0.09ms   serial    0.134x
+     medium10    10,000   3       0.95ms   serial    0.034x
+     medium10    10,000   5       0.45ms   serial    0.102x
+     medium10   100,000   1       0.22ms   serial    0.847x
+     medium10   100,000   3       0.54ms   serial    0.915x
+     medium10   100,000   5       0.89ms   serial    0.822x
+      inner64     1,000   1       0.33ms   prange    2.495x
+      inner64     1,000   3       0.96ms   prange    2.170x
+      inner64     1,000   5       1.79ms   prange    2.572x
+      inner64    10,000   1       2.59ms   prange    6.123x
+      inner64    10,000   3       7.83ms   prange    5.439x
+      inner64    10,000   5      13.28ms   prange    4.713x
+      inner64   100,000   1      23.39ms   prange    8.776x
+      inner64   100,000   3      70.00ms   prange    7.289x
+      inner64   100,000   5     116.82ms   prange    7.600x
+     inner256     1,000   1       1.94ms   prange    4.165x
+     inner256     1,000   3       5.39ms   prange    2.545x
+     inner256     1,000   5       8.34ms   prange    3.483x
+     inner256    10,000   1      13.81ms   prange   10.268x
+     inner256    10,000   3      40.06ms   prange    8.657x
+     inner256    10,000   5      66.31ms   prange    9.295x
+     inner256   100,000   1     129.76ms   prange   12.161x
+     inner256   100,000   3     391.23ms   prange   13.707x
+     inner256   100,000   5     654.79ms   prange   13.194x
+
+==============================================================================
+6. reproducibility of a cheap warmup pick (15 independent picks, k=3 reps)
+==============================================================================
+        body       rows   run1 %prange   run2 %prange   r1 ratio r1 spread%
+     trivial      1,000            0%             0%    0.039x       84.4
+     trivial    100,000            0%             7%    0.379x      155.8
+     trivial    200,000             -            47%         -        nan
+     trivial    500,000          100%              -    2.069x       92.4
+     trivial  5,000,000          100%           100%    2.305x       25.1
+    medium10      1,000            0%             0%    0.051x       80.3
+    medium10     50,000            0%            33%    0.405x      197.7
+    medium10    100,000           73%            87%    1.338x      114.9
+    medium10  5,000,000          100%           100%    2.164x       34.2
+     inner64        100            0%             0%    0.406x      120.8
+     inner64        200            0%             0%    0.627x       62.9
+     inner64        500          100%           100%    1.391x       44.8
+     inner64      2,000          100%           100%    3.633x       99.5
+     inner64    100,000          100%           100%    8.726x       32.2
+    inner256        100           13%            20%    0.592x      213.3
+    inner256        200          100%            73%    1.195x      137.0
+    inner256        500          100%           100%    2.598x       87.1
+    inner256     20,000          100%           100%    9.740x       50.6
+
+  run1: 2/17 cases flipped within one process.
+  their true ratios span 0.592x .. 1.338x
+    unanimous but near 1.0:   inner64 n=     200 ratio 0.627x  [0.451-0.846]
+    unanimous but near 1.0:  inner256 n=     200 ratio 1.195x  [1.009-2.647]
+    unanimous but near 1.0:   inner64 n=     500 ratio 1.391x  [1.188-1.812]
+
+==============================================================================
+7. parallel=True compile cost (doc 01 §4b claims 1.2-2.6x)
+==============================================================================
+         shape    serial (ms)    parallel (ms)     ratio      run2
+       trivial          124.7            371.7     2.98x    3.22x
+      medium10          132.5            419.1     3.16x    1.92x
+       inner64          120.4            430.0     3.57x    3.57x
+      inner256          121.6            358.4     2.95x    2.84x
+      branch10          233.1            710.1     3.05x    3.09x
+      branch25          436.1           1380.7     3.17x    3.13x
+      branch50          839.0           3535.2     4.21x    4.38x
+     branch100         1932.9          14239.6     7.37x    7.92x
+
+  observed ratio range over both runs: 1.92x .. 7.92x
+
+==============================================================================
+8. correctness: prange output vs serial output
+==============================================================================
+  96/96 cells bitwise identical.

@@ -18,6 +18,10 @@ def disposable_income(net_income: float, expenses: float) -> float:
 
 - The **function name** is the output name by default.
 - **Parameter names** declare inputs (§2).
+- The **docstring** is the description — the one a reviewer reads in the
+  generated artefact (doc 04 §6). It is not an optional decorator argument,
+  because the artefact that the entire governance story depends on must not be
+  populated from a field the authoring guidance tells you to omit.
 - Steps must be **pure**: same inputs → same outputs, no side effects, no I/O.
   This is what makes four execution modes, caching and what-if override possible.
 - Keep them small. A step you can read in ten seconds is one a credit-risk
@@ -28,8 +32,9 @@ def disposable_income(net_income: float, expenses: float) -> float:
 ```python
 from decider2 import step
 
-@step(output="term_cap", description="caps term by income band")
+@step(output="term_cap")
 def apply_income_cap(term_cap: float, min_net_salary: float, params) -> float:
+    """Cap the term where net salary falls below the income floor."""
     if min_net_salary < params.income_threshold:
         return min(term_cap, params.income_cap)
     return term_cap
@@ -38,6 +43,99 @@ def apply_income_cap(term_cap: float, min_net_salary: float, params) -> float:
 > **Proposed:** the decorator is optional. Plain functions keep the readable case
 > clean; the decorator appears only where metadata is genuinely needed. The
 > tradeoff is that tooling must handle both forms.
+
+### 1.1 One rule should cost one artefact
+
+**Settled — this is the design's own law applied to itself.** Doc 01 §5.3: *"the
+tunable form must be cheaper to write than the literal, or it will not be
+adopted. Whichever path is cheaper is the path people take."* The evidence is 546
+inline `pl.lit()` literals against zero uses of the config mechanism.
+
+An earlier draft of this document broke that law. Writing one policy rule cost a
+function, a `module(...)` call, an instance `name=`, a pydantic params model, an
+entry in the pipeline expression and an entry in a config file — **six artefacts
+across four files for one `if`**, against a rule set of roughly thirty
+(doc 04 §6). That is the shape that produced the 546 literals.
+
+The target is one artefact, in one file:
+
+```python
+# pipelines/term_loan.py — the entire rule
+def cap_by_income_band(
+    term_cap: float,
+    min_net_salary: float,
+    cap: float = param(48.0, ge=6, le=60),
+    income_threshold: float = param(5000.0, ge=0),
+) -> float:
+    """Cap term at 48 months below the income floor."""
+    if min_net_salary < income_threshold:
+        return min(term_cap, cap)
+    return term_cap
+
+pipeline = Affordability | cap_by_income_band | Scoring
+```
+
+Three mechanisms get there, none of them new machinery:
+
+1. **A bare function is a valid pipeline element** (§5.3). Used in a pipeline
+   expression it becomes a single-step module: name from the function, interface
+   inferred (§5.1), params namespace its own name. Collapses four artefacts into
+   the two lines above.
+2. **`param()` in the signature generates the params model** (§4.4). No separate
+   model file for the common case.
+3. **The config entry is generated, not written** — `decider export --params`
+   materialises it complete from the declared defaults (doc 07 §5).
+
+The module-plus-model form (§5) does not go away. It earns its place when several
+steps share params, when a validator is cross-field, or when a rule is big enough
+to want its own directory. The point is that the *simple* case is not charged for
+the complex one.
+
+### 1.2 Money, rounding and overflow
+
+**New, and measured — [EXPERIMENTS.md](EXPERIMENTS.md) §I.** The doc set did not
+mention money, rounding or integer range anywhere in 3,187 lines, while the
+engine's outputs are instalments, fees and offer amounts that must reconcile to
+the cent with a downstream ledger.
+
+Two divergences were measured, and both are wrong-answer bugs rather than
+performance issues.
+
+**1. `round()` does not mean the same thing in a step and in a test.**
+
+| x | Python `round(x,2)` | njit | `Decimal` HALF_UP |
+|---|---|---|---|
+| 2.675 | 2.67 | **2.68** | 2.68 |
+| 2.665 | 2.67 | **2.66** | 2.67 |
+| 1234.565 | 1234.57 | **1234.56** | 1234.57 |
+
+njit follows numpy; CPython uses banker's rounding; neither matches `Decimal`
+consistently. Every row above is one cent on an instalment, and the
+`interpreted`/`fused` disagreement is exactly what the equivalence ladder would
+report — correctly, but only if a test exercises a `.xx5` value.
+
+**2. int64 overflows at realistic loan sizes.** Fixed-point compound interest at
+rate scale 1e12 diverges from R27,431 upward; at R100,000 principal, CPython gives
+R336,241.93 and njit gives **−R90,971.75**. A sum-of-squares accumulator over loan
+amounts in cents **wraps at 2,667 rows**. CPython ints are arbitrary precision;
+numba int64 wraps silently, as does numpy.
+
+**Rules:**
+
+- **Money is a scaled `int64` of cents, never `float` and never `Decimal`.**
+  `Decimal` cannot cross the boundary at all — it raises a Rust panic (doc 05 §1.5).
+- **Never call bare `round()` in a step.** Use the framework's `round_half_up`,
+  which is defined to give the same answer in every execution mode. A lint
+  enforces it (doc 07 §6).
+- **Accumulate in float64, not int64**, where a running total can grow: float64 is
+  exact to 2⁵³, which in cents is about R90 trillion. An int64 cent accumulator is
+  not safe at batch scale.
+- **The corpus must include boundary values.** The overflow above was found by
+  binary search, not by sampling — random draws would never surface it. This is
+  the first concrete requirement on `corpus`, which §11 and doc 05 §9 depend on
+  and which no document has yet defined.
+
+---
 
 ### Null policy is declared in the signature
 
@@ -87,16 +185,22 @@ Why this shape:
 
 ---
 
-## 2. Four wiring rules
+## 2. Wiring rules
 
-All wiring is by name. There are exactly four rules:
+Wiring is by name, with two declared exceptions:
 
-| parameter name matches… | meaning |
+| parameter… | meaning |
 |---|---|
-| another step's output | wired to that step's value |
-| nothing in the module | a **leaf input** — a column (batch) or argument (realtime) |
-| the reserved name `params` | this module's per-invocation params bundle |
-| the reserved name `shared` | the pipeline-level shared params bundle (§4.2) |
+| name matches another step's output | wired to that step's value |
+| name matches nothing in the module | a **leaf input** — a column (batch) or argument (realtime) |
+| is named `params` | this module's per-invocation params bundle |
+| is named `shared` | the pipeline-level shared params bundle (§4.2) |
+| **has a `param()` default** | a **params field**, not an input (§4.4) |
+| **has a `missing_as()` default** | an input with a declared fill (§1) |
+
+The last two are keyed on the *default* rather than the name. That is not a new
+axis — `missing_as()` already worked this way, and both read in the place a
+reviewer looks for an interface rather than being buried in a body.
 
 ```python
 def disposable_income(net_income: float, expenses: float) -> float:   # two leaf inputs
@@ -106,8 +210,60 @@ def ratio(disposable_income: float, instalment: float) -> float:      # wired + 
     return disposable_income / instalment
 ```
 
-Ordering is **derived** by topological sort — you never declare execution order,
-and it is never stored in config (doc 01 §5.2).
+**Inside a module**, ordering is derived by topological sort — you never declare
+execution order, and it is never stored in config (doc 01 §5.2). **Between
+modules**, `|` is a sequence and written order is execution order (§8.1).
+
+### 2.1 Precedence, and the one error that matters
+
+Across a pipeline a name can be available from more than one place. The rule:
+
+| situation | resolution |
+|---|---|
+| a name is written by several modules in sequence | **most recent wins.** This is the waterfall, it is the designed semantic (§3.2), and the version chain records every step of it |
+| a name is available only from the input frame | the frame column |
+| a name is available from **both** an upstream module output and the input frame | **build error.** Qualify it |
+
+The third row is the whole point. Without it, this happens silently:
+
+```python
+A | B | Affordability              # net_income comes from the input frame
+A | B | NewThing | Affordability   # NewThing outputs net_income —
+                                   # Affordability now reads that instead
+```
+
+No error, different decisions. The same thing happens on an upgrade: a shared
+library adds a step that happens to be named `net_income`, and every consumer
+downstream rebinds. That is a wrong-answer bug with no signal, and it is the
+worst failure mode the design can have — for a person and much more so for an
+agent, whose only feedback is the error it did not get.
+
+So it is an error, and the message says what to do:
+
+```
+'affordability' input 'net_income' is ambiguous: produced by module 'new_thing'
+(added in decider2_credit 1.1.0) and present as an input column.
+Qualify it:  Affordability.at(inputs={"net_income": "frame:net_income"})
+        or:  Affordability.at(inputs={"net_income": "new_thing.net_income"})
+```
+
+Overwrite between modules stays silent because it is *intended* and *auditable*;
+shadowing between a module and the frame is never intended.
+
+### 2.2 An unbound input is a typo, and is treated as one
+
+Writing `disposible_income` does not fail — it quietly becomes a demand for a new
+input column, and surfaces much later as a missing-column error naming the wrong
+thing. It gets the same treatment as a misspelled param (§10):
+
+```
+step 'ratio' input 'disposible_income' is not produced by any step in scope and
+is not a declared input column. Did you mean 'disposable_income' (produced by
+step 'disposable_income' in this module)?
+```
+
+`pipeline.schema()` lists every unbound input at once, so a project adapting a
+library sees all of them in one place rather than discovering them one at a time.
 
 ---
 
@@ -118,7 +274,7 @@ The whole design rests on one invariant:
 > **Every scope has a declared interface. Names are distinct within a scope.
 > Versioning happens only at scope boundaries.**
 
-There are four scopes:
+There are **five** scopes:
 
 | scope | names distinct inside? | may overwrite at its boundary? |
 |---|---|---|
@@ -126,6 +282,13 @@ There are four scopes:
 | **module** | yes | yes — a declared output may shadow an input |
 | **branch arm** | yes | yes — the branch node's declared `modifies` |
 | **loop body** | yes | yes — declared `carries`, once per iteration |
+| **pipeline** | no — overwrite is the waterfall | yes — at each `\|` |
+
+> **Correction.** An earlier draft listed four scopes and omitted the pipeline,
+> which made `A \| B \| C` one unpoliced flat pool of names — hundreds of them
+> across sixty modules, with no collision rule, while duplicate outputs *inside*
+> one module were a hard error. The strictness was inverted relative to the risk.
+> The pipeline is a scope; §2.1 gives its rules.
 
 ### 3.1 Inside a module: no overwrite
 
@@ -164,12 +327,15 @@ even with a full polars round-trip at every boundary, split beats fused at 1 M
 rows / 10 modules. So:
 
 > **Keep writing small modules.** They are the unit of audit, reuse and
-> readability, and nothing about that changed. The compiler decides fusion
-> groups; the authoring unit is deliberately decoupled from the compilation unit
-> (doc 02 §1.1).
+> readability, and nothing about that changed. Kernel boundaries are a separate,
+> explicit concern — the authoring unit is deliberately decoupled from the
+> compilation unit (doc 02 §1.1).
 
-Use `pipeline.explain_kernels()` if performance matters, and pin a boundary if
-the heuristic chooses badly.
+By default `apply()` emits one kernel per module and nothing is fused implicitly.
+If a group is hot, say so — `fuse(A | B | C)` is a combinator like any other, and
+it is guaranteed not to change the answer (doc 02 §1.2). `explain_kernels()`
+reports emitted lines and whether each kernel vectorised, so the question is
+answered by observation rather than by a heuristic.
 
 It is also a better governance unit than the alternative. "A single policy rule" as a
 module with signature `term_cap → term_cap` is independently testable and
@@ -341,6 +507,67 @@ triggers recompilation and remains cheap.
 > is cheaper is the path people take — but harvesting means the params model is
 > derived from source, which must stay stable and diffable. Tracked in doc 06.
 
+### 4.4 Declaring a param in the signature
+
+**Proposed, and it settles O2.** A model in its own file is the right shape for a
+module with many params or a cross-field validator. It is the wrong shape for one
+rule with one knob, and doc 01 §5.3's law says the wrong shape does not get used.
+
+```python
+def cap_by_income_band(
+    term_cap: float,
+    min_net_salary: float,
+    cap: float = param(48.0, ge=6, le=60, description="Term cap in months"),
+) -> float:
+    """Cap term at 48 months below the income floor."""
+    return min(term_cap, cap) if min_net_salary < 5000 else term_cap
+```
+
+`param()` takes exactly what `Field()` takes. At import the signature is
+harvested into a generated pydantic model — the same object a hand-written model
+produces, with the same namespace (`{"cap_by_income_band": {"cap": 48.0}}`), the
+same validators, the same fixed NamedTuple type, and therefore the same guarantee
+that retuning never recompiles.
+
+**Why the signature and not the body.** O2 asked whether a literal could become a
+tunable *where it sits* — `p("income_cap", 48.0)` inline. Four reasons the
+signature is the better slot:
+
+1. **No AST rewriting.** A `p()` call inside a body would have to be rewritten to
+   `params.cap` at codegen, so step bodies would stop being plain Python and
+   `interpreted` mode would have to replicate the substitution — which is exactly
+   the kind of divergence between modes that the equivalence ladder exists to
+   prevent. In the signature the value arrives as an ordinary argument, which is
+   what the compiled calling convention already does.
+2. **It answers O2's own objection.** O2 records that it is *"unclear how a
+   business user browses knobs that live inside function bodies."* In the
+   signature they do not live in bodies, and `params_schema()` (doc 08 §6.2)
+   finds them by inspection.
+3. **A signature is a declaration; a body is not.** O2's other concern was that a
+   harvested model must stay stable across edits and remain diffable for audit.
+   Harvesting a declaration is stable in a way harvesting statements is not.
+4. **It reuses an idiom already in the design.** `missing_as(0.0)` occupies the
+   same slot and already changes what a parameter means (§1).
+
+**Three costs, stated plainly:**
+
+- **Two ways to declare a param.** Inline and explicit model must produce the
+  same object, and a lint forbids both in one module (doc 07 §6).
+- **Direct calls need care.** `cap_by_income_band(term_cap=60.0,
+  min_net_salary=4000.0)` would otherwise receive the `param()` sentinel. `@step`
+  substitutes declared defaults so a plain call works, and a test passes
+  `params=` to override — doc 03 §11's testing story depends on steps staying
+  directly callable.
+- **numba and default arguments.** ✅ **Confirmed, [EXPERIMENTS.md](EXPERIMENTS.md) §E11.** The emitted step
+  does *not* need its default stripped: emitted with the sentinel default, with it
+  stripped, and called through a driver all produce an identical numba signature
+  `(float64, float64, float64)` and identical results. Codegen may leave the
+  default in place. The only failure is calling the dispatcher *without* the
+  param — `ValueError: Cannot determine Numba type of <class 'ParamSpec'>` — which
+  is correct and loud.
+- **The dispatch risk did not materialise.** 20 steps each declaring a param named
+  `cap`, each generating its own bundle, left per-call dispatch unchanged.
+
 ### Tables (keyed lookups) — provisional
 
 Segment-varying cutoffs are **not** params. Sketch only; lowest-confidence part
@@ -382,6 +609,148 @@ class. It can be printed, rendered, diffed, serialised and validated. See doc 02
 Two steps declaring the same output is a **build-time error** (§3.1), reported
 with both remedies: give them distinct names, or split them into modules composed
 with `|`.
+
+### 5.1 The interface is inferred, and then it is real
+
+A module's interface is what it needs and what it produces. **You do not declare
+it** — it is inferred from the steps, exactly as today — but it is *materialised
+into the module data*:
+
+```python
+Affordability.interface
+# inputs   net_income          float   required   (leaf)
+#          expenses            float   required   (leaf)
+#          instalment          float   required   (leaf)
+# outputs  disposable_income   float
+#          ratio               float
+#          final_score         float
+# params   AffordabilityParams
+# shared   base_rate: float
+# taps     term_cap, branch_path
+```
+
+Nobody typed that, so authoring cost is unchanged — which matters, because doc 01
+§5.3's law is that the expensive path does not get used. But because it now
+exists as data rather than as an accident of function names:
+
+- **it renders, diffs and serialises**, so a breaking change is visible;
+- **a tool can read it without executing anything**, which is what makes an edit
+  checkable rather than runnable;
+- **`.at()` has something to rebind** (§5.2);
+- **a library can freeze it**, so CI catches an interface change.
+
+```python
+Affordability = module(..., contract="contracts/affordability.json")
+```
+
+`contract=` snapshots the interface to a checked-in file. Changing the module
+without updating it fails the build, naming the field that moved. Opt-in per
+module — a shared library freezes its interfaces, a project's inline modules
+don't. Semver over that file is then a mechanical question: removing or renaming
+anything, or tightening a validator, is major; adding an optional param is minor.
+
+### 5.2 Adapting a module to different names — and keeping it rare
+
+Name matching does the work. A relabel is only for the names that genuinely
+differ, and the design's job is to make that set as small as possible, because a
+project with hundreds of values cannot afford a mapping at every call site.
+
+**Three layers, cheapest first. Most projects never reach the third.**
+
+**1. Name matching.** No ceremony. This covers the overwhelming majority.
+
+**2. A project vocabulary map** — one declaration for systematic differences,
+rather than one per module:
+
+```python
+# vocabulary.py — declared once for the project
+vocabulary = Vocabulary(
+    {"net_income": "monthly_net_salary",          # explicit pairs
+     "instalment": "monthly_instalment"},
+    prefixes={"bureau_": "cb_"},                  # systematic families
+)
+
+pipeline = (Affordability | Underwriting | Scoring).with_vocabulary(vocabulary)
+```
+
+This is the layer that handles the hundreds-of-variables case. One place to read,
+one place to change, and it covers values produced *mid-pipeline* as well as
+input columns — which a rename-at-the-frame-boundary approach cannot.
+
+**3. Instance relabel**, for the genuinely local case — the same module used
+twice against different sources:
+
+```python
+AffordCurrent = Affordability.at(inputs={"net_income": "current_net_income"})
+AffordProposed = Affordability.at(inputs={"net_income": "proposed_net_income"})
+```
+
+`.at()` is declared data on the instance, exactly like `.bind()` (§4.3): applied
+at the scope boundary, so the module's interior is untouched, and it renders,
+diffs and serialises.
+
+**Three properties keep this from becoming mess:**
+
+- **A relabel is a diff, not a mapping.** You name only what differs. A module
+  with 15 inputs and one mismatch carries one entry.
+- **The rendered artefact shows resolved names.** A reviewer reading the
+  generated view sees `monthly_net_salary → afford_score`, never the indirection.
+  The relabel exists in the composition source only.
+- **The framework tells you when one is needed**, with a suggestion. You never
+  hunt for them:
+
+```
+'affordability' needs input 'net_income'; nothing in scope produces it and it is
+not a declared input column. Closest available: 'monthly_net_salary'.
+Add it to the project vocabulary, or:
+    Affordability.at(inputs={"net_income": "monthly_net_salary"})
+```
+
+> **Why not just rename at the frame boundary?** It is simpler, and it is the
+> right answer when one naming scheme can win. It breaks when two libraries
+> disagree about a name, and it cannot address a value produced mid-pipeline —
+> a waterfall output feeding a second library. The vocabulary map is the same
+> idea without either limit.
+
+> **Why not no rename at all?** Because the workaround is a passthrough function
+> per mismatched name, and doc 01 §5.1 counted **79** of those in one project,
+> plus five naming conventions invented to cope with the same pressure. That is
+> the outcome this mechanism exists to prevent.
+
+### 5.3 A bare function is a pipeline element
+
+**Proposed.** A function used directly in a pipeline expression *is* a module —
+a single-step one, with its name from the function, its interface inferred
+(§5.1), and its params namespace its own name:
+
+```python
+pipeline = Affordability | cap_by_income_band | cap_by_sector | Scoring
+```
+
+Nothing is special-cased. The engine cannot tell this from
+`module(cap_by_income_band, name="cap_by_income_band")`, which is what it desugars
+to — the same statement doc 07 §3 already makes about inline modules. Everything
+downstream is unchanged: it has an audit identity, a params namespace, a declared
+interface, a place in the version chain, and a tap surface.
+
+**The growth path stays a pure move, with no semantic change at any step:**
+
+```
+bare function in pipelines/x.py
+  →  module(fn, name=...)                 when it needs several steps or a model
+  →  modules/x.py                         when it needs its own file
+  →  modules/x/{steps,params,__init__}.py when it needs its own directory
+  →  registered                           when it must be addressable from config
+```
+
+Each move is mechanical and none of them changes behaviour. That matters more
+than it sounds: doc 01 §5.3's law is about the cost of the *first* step, and a
+framework whose first step is a four-file directory gets 546 inline literals
+instead.
+
+The lint from doc 07 §3 still holds, with one word changed: **every `def` in a
+pipeline file must appear in the pipeline expression or in a `module(...)` call
+in that file.** Steps may not float.
 
 ---
 
@@ -476,16 +845,29 @@ from decider2.frame import Join, Aggregate, Filter
 pipeline = (
     Join(bureau, on="client_id", how="left")
     | Affordability
-    | Underwriting                                   # fuses with Affordability
+    | Underwriting                                   # may fuse with Affordability
     | Filter(pl.col("decision") != "declined")
     | Aggregate(by="branch_id", metrics={"mean_score": pl.mean("final_score")})
 )
 ```
 
-- `|` builds a **dependency-resolved graph**, not a sequential stage list
-  (doc 01 §5.2).
-- **Adjacent record-tier modules fuse into one kernel** — one boundary crossing,
-  intermediates in registers.
+- **`|` is a sequence: written order is execution order.** Reordering two modules
+  changes behaviour, visibly and intentionally; inserting one affects only what
+  comes after it. Within a module the DAG is topologically sorted and order is
+  irrelevant (§2), so the two levels have one rule each and neither is implicit.
+
+  > **Correction.** An earlier draft said `|` builds "a dependency-resolved graph,
+  > not a sequential stage list", while §3.2 said "ordering lives in `|`". Those
+  > are different execution models and the doc set asserted both. The hybrid was
+  > the dangerous reading: it left undefined what happens when `A | B` has B
+  > producing a value A consumes, so an author could not tell whether written
+  > order was load-bearing. It is. What doc 01 §5.2 rejects is *hand-maintained*
+  > order in JSON or in a comment — order lives in the pipeline expression, where
+  > it is visible, diffable and derived from nothing.
+- **Each record-tier module is its own kernel by default** — nothing fuses
+  implicitly, because fusion is non-monotone and loses past ~3 modules with cheap
+  arms (doc 01 §4b–4c). Wrap a hot group in `fuse(...)` to ask for one kernel;
+  it changes codegen only, never the answer (doc 02 §1.2).
 - Frame operations declare schema transforms, so lineage and wiring validation
   survive.
 
@@ -547,11 +929,12 @@ iteration the scope invariant holds normally.
 
 **`max_iterations` is required, not optional.** An unbounded loop inside compiled
 code cannot be interrupted. Every real loop encountered so far is bounded with no
-convergence iteration (a large internal workload), and `steptree_poc` already modelled the bound.
+convergence iteration in the large internal workload surveyed in doc 01, and an
+in-repo prototype already modelled the bound.
 
 Loops get real `break`/`continue` early exit in the record tier — precisely what
 the polars port destroyed when it replaced a descending `while` with
-`filter → group_by(max) → join-back` (an internal file path), losing early exit
+`filter → group_by(max) → join-back`, losing early exit
 and evaluating every arm eagerly.
 
 ### 8.4 Why combinators rather than node kinds
@@ -559,9 +942,10 @@ and evaluating every arm eagerly.
 A module is a scope with an interface; a branch is a scope with an interface. They
 are structurally the same thing, so modelling them as one type plus combinators
 means the graph model, compiler, lineage, trace and audit machinery each handle
-**one** concept. Nested compilation is already proven feasible —
-`experimentation/steptree_poc/jit_codegen.py` recurses its emitter into
-`true_body`/`false_body`/`body` to generate nested compiled control flow.
+**one** concept. Nested compilation has a working precedent: a prototype emitter recurses into
+`true_body`/`false_body`/`body` to generate nested compiled control flow. It lives
+on an unpushed branch — see the citation note in the README — so treat it as a
+feasibility signal rather than as evidence, and re-establish it in E2.
 
 ### Escape hatch
 
@@ -617,8 +1001,34 @@ and the value-version chain. Not raw code, not raw JSON.
 Params are namespaced by module instance name, with `shared` holding globals
 (§4.1–4.2).
 
-Config supplies **params and composition**, never structure and never code
-pointers.
+**There are two config documents, with two lifetimes** (doc 08 §2):
+
+| document | holds | changing it costs |
+|---|---|---|
+| **params** | values behind fixed types, and table contents | nothing — a bundle swap |
+| **interior** | the body of a data-shaped module: rules, bins, table rows | one background compile and a staged swap |
+
+Neither may carry **composition**. `resolve_params` rejects a document containing
+`use`, `type`, `steps`, `arms` or `modifies`, which is what makes the structural
+guarantee in doc 04 §2 true by construction rather than by convention. The
+pipeline skeleton — which modules exist and how they wire — is Python. Doc 08 §7
+records how that could be widened later without rework, and why generating Python
+is the better answer for a pipeline-building UI.
+
+Neither document may **contain code**, and neither may carry an **unregistered
+pointer**. The governing rule is doc 08 §1: *code is a superset of config* — you
+go as far as config takes you, and at the point where you would be writing code
+in config, you write code, register it, and reference it by id.
+
+| | | |
+|---|---|---|
+| ✅ **reference** | `{"type": "credit_scorer", "dti_weight": 200.0}` | resolves through the union — id checked, params typed and bounded |
+| ❌ **pointer** | `{"module_name": "x", "function_name": "y"}` | `getattr` at runtime — no interface, no schema (`flat_rules`' `output_fn`, doc 01 §5.4) |
+| ❌ **code** | `{"expression": "a - b"}` | a second, unspecified way to write arithmetic (`_ComputedFeature`) |
+
+A derived value is therefore a **step**, written and registered like any other,
+and referenced from a rule by id. Extensions are how a project's config
+vocabulary grows without the framework shipping a release — doc 08 §7.1.
 
 Resolution is the hybrid design settled in doc 02 §2.1–2.2: a discriminated union
 of thin generated models validates the whole config tree in one native pydantic
@@ -735,8 +1145,12 @@ module, `term_cap` overwritten at module *boundaries* only, a branch with declar
 `modifies`, per-module params, one shared bundle read at its point of use, a tap —
 and the waterfall order legible in one line.
 
-All four record-tier modules **fuse into a single kernel**, so the small-module
-style costs nothing at runtime.
+The four record-tier modules compile to four kernels — nothing is fused unless
+asked for. The style still costs almost nothing at runtime, **not because small
+modules fuse, but because boundary stores are near-free** (doc 01 §4c). E5 and E7
+falsified the fusion premise; the guidance survived it. If profiling later showed
+this waterfall was hot, the change would be one line —
+`fuse(ApplyIncomeCap | TermCapBySector)` — and it could not alter a decision.
 
 Absent: registration boilerplate, UUIDs, ordering declarations, type
 discriminators, identity-passthrough functions, and `name_override`.
