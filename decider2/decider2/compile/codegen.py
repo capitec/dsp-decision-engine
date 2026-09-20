@@ -235,6 +235,11 @@ def emit_kernel_source(plan: KernelPlan) -> str:
 
     kernel_args = [r.text for r in roles]
     flags = ["cache=True"]
+    # Doc 00 §2b: authored per step, never inferred, off by default. A group
+    # releases the GIL only when every step in it asked to — one step that
+    # did not is enough to keep it held, because the kernel is one call.
+    if plan.steps and all(s.nogil for s in plan.steps):
+        flags.append("nogil=True")
     if plan.parallel:
         flags.append("parallel=True")
     if plan.fastmath:
