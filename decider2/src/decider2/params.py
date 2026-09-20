@@ -34,6 +34,7 @@ stack (doc 02 §2, "the graph is data").
 """
 from __future__ import annotations
 
+import dis
 import inspect
 import re
 import types as _pytypes
@@ -55,6 +56,8 @@ __all__ = [
     "harvest_step",
     "parse_docstring",
     "build_params_model",
+    "attrs_read_from_local",
+    "check_params_model_fields_are_read",
 ]
 
 
@@ -378,10 +381,34 @@ def harvest_signature(
             )
             continue
 
-        # Tier 1 (required), whether or not an ordinary Python default is
-        # also present. Pipeline execution always supplies leaf inputs
-        # explicitly (doc 03 §2); a plain default here only affects a
-        # direct call, same as it would on any other Python function.
+        # Review finding 5 (COLD-READ §1.3, "the Python default is a
+        # decoy"): a bare Python default here is ambiguous between a
+        # tunable knob and a fill-when-missing value, and doc 03 §4.4's
+        # whole argument is that a declaration must be visible — silently
+        # treating it as tier 1 (required) makes it LOOK optional at the
+        # call site while `score()`/`apply()` still demand it and raise a
+        # bare KeyError when it's absent, with nothing in the signature
+        # warning that would happen. Rejected at harvest instead, naming
+        # the two real spellings: `param()` for a tunable knob (the caller
+        # never has to supply it), `missing_as()` for a fill applied only
+        # when the value is absent/null. `p.default is inspect.Parameter.
+        # empty` (genuinely no default at all) is unaffected — that is
+        # ordinary tier 1, required with nothing to be ambiguous about.
+        if default is not inspect.Parameter.empty:
+            type_name = annotation.__name__ if annotation is not Any and hasattr(annotation, "__name__") else "..."
+            raise TypeError(
+                f"{getattr(fn, '__qualname__', fn)!s}: parameter '{pname}' "
+                f"has a bare Python default ({default!r}). decider2 rejects "
+                "this rather than silently treating it as required (doc 03 "
+                "§4.4): a bare default is ambiguous between a tunable knob "
+                "and a value to fill when the input is missing. Say which "
+                f"one you mean — `{pname}: {type_name} = param({default!r})` "
+                "for a tunable knob a caller never has to supply, or "
+                f"`{pname}: {type_name} = missing_as({default!r})` to fill "
+                "an absent/null value."
+            )
+
+        # Tier 1 (required): no default at all.
         inputs.append(Input(name=pname, annotation=annotation, null_policy=NullPolicy.REQUIRED))
 
     return tuple(inputs), tuple(params), reads_params, reads_shared
@@ -418,6 +445,117 @@ def build_params_model(name: str, params: Sequence[ParamDecl]) -> type[BaseModel
     return create_model(_model_name(name), __config__=ConfigDict(extra="forbid"), **fields)
 
 
+# ---------------------------------------------------------------------------
+# Bytecode introspection — review findings 6b/6c, checkable at composition
+# from the function objects already in hand, with no source file to open
+# (contrast finding 6a, `decider2.lint.check_pipeline_file`, which genuinely
+# needs one).
+# ---------------------------------------------------------------------------
+
+
+def _touched_local_names(code: Any) -> set[str]:
+    """Every local/cell/free-variable name `code` — or a nested code object
+    inside it (a lambda, a generator expression; an ordinary list/set/dict
+    comprehension is inlined into the enclosing frame since PEP 709 and
+    needs no recursion) — ever loads or stores.
+
+    Keyed off a substring of `opname` rather than a fixed, per-Python-
+    version opcode list: CPython 3.12+'s specializing interpreter fuses
+    adjacent loads into opcodes like `LOAD_FAST_BORROW_LOAD_FAST_BORROW`,
+    whose `argval` is a TUPLE of names rather than a single one, so every
+    variant of `LOAD`/`STORE` × `FAST`/`DEREF`/`CLOSURE` is covered by
+    matching on the fragment rather than enumerating exact opcode names.
+    """
+    names: set[str] = set()
+    for instr in dis.get_instructions(code):
+        opname = instr.opname
+        if "FAST" not in opname and "DEREF" not in opname and "CLOSURE" not in opname:
+            continue
+        val = instr.argval
+        if isinstance(val, tuple):
+            names.update(val)
+        elif isinstance(val, str):
+            names.add(val)
+    for const in code.co_consts:
+        if isinstance(const, type(code)):
+            names |= _touched_local_names(const)
+    return names
+
+
+def _check_every_input_is_referenced(fn: Callable, inputs: Sequence[Input]) -> None:
+    """Review finding 6c: a step parameter never referenced in the body is
+    an input the caller must still supply that nothing reads. Checked here,
+    once, at harvest — the same place doc 03 §2's wiring table is applied —
+    rather than left for a reviewer to notice by hand.
+    """
+    if not inputs:
+        return
+    touched = _touched_local_names(fn.__code__)
+    for inp in inputs:
+        if inp.name not in touched:
+            raise ValueError(
+                f"{getattr(fn, '__qualname__', fn)!s}: parameter "
+                f"'{inp.name}' is declared but never referenced in the "
+                "body. A caller must still supply it for nothing to ever "
+                "read (doc 03 §1, §2) — drop the parameter, or use it."
+            )
+
+
+def attrs_read_from_local(fn: Callable, local_name: str) -> frozenset[str]:
+    """Every attribute name `fn`'s body accesses on its `local_name`
+    argument (`params.cap`, `shared.base_rate`, ...) — bytecode scan, not
+    source text. `decider2.graph.module` uses this to check review finding
+    6b (a `params=` model field no step reads).
+
+    An ordinary LOAD of `local_name` immediately followed by a
+    `LOAD_ATTR`/`LOAD_METHOD` names the field actually consulted. A fused
+    load instruction (`LOAD_FAST_BORROW_LOAD_FAST_BORROW`, Python 3.13+)
+    applies the FOLLOWING attribute access to whichever of its two names was
+    pushed LAST — the rightmost element of its `argval` tuple, matching
+    source order for a left-to-right-evaluated call argument list such as
+    `min(term_cap, params.cap)`.
+    """
+    attrs: set[str] = set()
+    instrs = list(dis.get_instructions(fn.__code__))
+    for prev, cur in zip(instrs, instrs[1:]):
+        if cur.opname not in ("LOAD_ATTR", "LOAD_METHOD"):
+            continue
+        if "FAST" not in prev.opname and "DEREF" not in prev.opname:
+            continue
+        val = prev.argval
+        last = val[-1] if isinstance(val, tuple) else val
+        if last == local_name:
+            attrs.add(cur.argval)
+    return frozenset(attrs)
+
+
+def check_params_model_fields_are_read(module_name: str, steps: Sequence[Step], model: Any) -> None:
+    """Review finding 6b: a `params=` model field that no step reads is
+    advertised at `GET /params/schema`, accepted by `POST /params`, and
+    completely inert — doc 03 §4: "Exactly one canonical location per
+    parameter." `decider2.graph.module.module()` calls this for the
+    explicit `params=` model path (the harvested path can't have this bug:
+    every field it has came FROM a step declaring it, doc 03 §4.4).
+    """
+    fields = set(model.model_fields)
+    if not fields:
+        return
+    read: set[str] = set()
+    for s in steps:
+        if s.reads_params:
+            read |= attrs_read_from_local(s.fn, "params")
+    unread = sorted(fields - read)
+    if unread:
+        raise ValueError(
+            f"module '{module_name}' params= model declares field(s) "
+            f"{unread} that no step reads (doc 03 §4: 'exactly one "
+            "canonical location per parameter'). Advertised at GET "
+            "/params/schema and accepted by POST /params while being "
+            "completely inert — drop the field, or read it from a step's "
+            "bare `params` argument (`params.<field>`)."
+        )
+
+
 def harvest_step(fn: Callable, *, name: str | None = None) -> Step:
     """Build a fully-populated `Step` from a plain function.
 
@@ -429,6 +567,7 @@ def harvest_step(fn: Callable, *, name: str | None = None) -> Step:
     `module()`/`flow()`.
     """
     inputs, params, reads_params, reads_shared = harvest_signature(fn)
+    _check_every_input_is_referenced(fn, inputs)
     doc, implements = parse_docstring(fn.__doc__)
     return Step(
         name=name or fn.__name__,

@@ -161,11 +161,27 @@ def test_extract_frame_raise_for_fails_before_any_column_is_extracted():
         extract_frame(frame, inputs, policy=policy)
 
 
-def test_extract_frame_skips_unbound_inputs_rather_than_crashing():
+def test_extract_frame_synthesizes_a_required_column_entirely_absent_from_the_frame():
+    """Review finding 4: absent and null share one routing path. A REQUIRED
+    input with no matching frame column at all routes every row away
+    (mirroring `route_required_nulls`) rather than being silently skipped —
+    the old behaviour left nothing in `columns` for it, and the kernel
+    later raised a bare `KeyError` three frames deep."""
     frame = pl.DataFrame({"a": [1.0]})
     inputs = [
         Input(name="a", annotation=float, null_policy=NullPolicy.REQUIRED),
-        Input(name="typo", annotation=float, null_policy=NullPolicy.REQUIRED),
+        Input(name="missing_col", annotation=float, null_policy=NullPolicy.REQUIRED),
     ]
     result = extract_frame(frame, inputs)
-    assert set(result.columns) == {"a"}
+    assert set(result.columns) == {"a", "missing_col"}
+    assert result.routing.routed_count == 1
+    assert result.kernel_frame.height == 0
+    assert result.columns["missing_col"].values.tolist() == []
+
+
+def test_extract_frame_fills_a_missing_as_column_entirely_absent_from_the_frame():
+    decl = Input(name="bureau_score", annotation=float, null_policy=NullPolicy.MISSING_AS, fill=7.0)
+    frame = pl.DataFrame({"a": [1.0, 2.0, 3.0]})
+    result = extract_frame(frame, [Input(name="a", annotation=float, null_policy=NullPolicy.REQUIRED), decl])
+    assert result.columns["bureau_score"].values.tolist() == [7.0, 7.0, 7.0]
+    assert result.columns["bureau_score"].fill.filled_count == 3

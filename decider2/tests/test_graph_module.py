@@ -108,7 +108,10 @@ def test_all_four_null_tiers_are_classified():
         c: float | None = None,
         d: float = not_applicable_as(1.0),
     ) -> float:
-        return a
+        # every declared input referenced (review finding 6c) -- this test
+        # is about tier CLASSIFICATION, not about which of them the body
+        # actually needs.
+        return a + b + (c or 0.0) + d
 
     m = module(tiers)
     by_name = {i.name: i for i in m.interface.inputs}

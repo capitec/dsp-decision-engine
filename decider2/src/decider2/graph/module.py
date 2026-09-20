@@ -20,7 +20,7 @@ from pydantic import ConfigDict
 
 from decider2.graph.interface import effective_interface
 from decider2.graph.step import make_step
-from decider2.params import build_params_model
+from decider2.params import build_params_model, check_params_model_fields_are_read
 from decider2.types import Interface, Module, Step
 
 __all__ = ["module"]
@@ -92,6 +92,7 @@ def module(
                 "module, not both (doc 07 §6 lint)."
             )
         params_model = _forbid_extra_params(params)
+        check_params_model_fields_are_read(name, steps, params_model)
     else:
         _check_no_duplicate_param_names(name, steps)
         params_model = build_params_model(name, harvested_params)

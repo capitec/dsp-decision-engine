@@ -153,12 +153,26 @@ def test_first_match_wins_when_two_required_columns_are_both_null_on_one_row():
     assert routing.column[1] == "b"
 
 
-def test_a_column_not_present_in_the_frame_is_not_this_functions_problem():
-    """Unbound-input detection is graph/resolve.py's job (doc 03 §2.2, O23)."""
+def test_a_required_column_absent_from_the_frame_routes_every_row():
+    """Review finding 4: absent and null share one routing path. A REQUIRED
+    column that is not in `frame` at all routes every row exactly as a
+    REQUIRED column full of nulls would — not silently ignored (that was
+    the bug: a bare `KeyError` three frames deep in the kernel, since
+    nothing ever populated the registry for it)."""
     frame = pl.DataFrame({"a": [1.0, 2.0]})
-    inputs = [Input(name="typo_name", annotation=float, null_policy=NullPolicy.REQUIRED)]
+    inputs = [Input(name="missing_col", annotation=float, null_policy=NullPolicy.REQUIRED)]
     routing = route_required_nulls(frame, inputs)
-    assert routing.routed_count == 0
+    assert routing.routed_count == 2
+    assert routing.mask.tolist() == [True, True]
+    assert routing.column == ("missing_col", "missing_col")
+
+
+def test_a_required_raise_for_column_absent_from_the_frame_raises_by_name():
+    frame = pl.DataFrame({"a": [1.0, 2.0]})
+    inputs = [Input(name="missing_col", annotation=float, null_policy=NullPolicy.REQUIRED)]
+    policy = MissingInputPolicy(raise_for=("missing_col",))
+    with pytest.raises(ValueError, match="missing_col"):
+        route_required_nulls(frame, inputs, policy)
 
 
 def test_a_clean_required_column_routes_nothing():
