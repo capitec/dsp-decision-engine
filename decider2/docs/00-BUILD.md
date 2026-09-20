@@ -90,12 +90,13 @@ These are facts about the deployment, not design choices, and they are settled:
 | real data | **not available** — it would leak IP into a public repo | every shape assumption stays marked provisional; the input schema is bootstrappable from a sample frame so it is cheap to correct |
 | dtype strictness | **flexible by default; tighten for speed** | doc 05 §1.5 is a *ladder*, not a gate. Nothing is rejected; strings, lists and decimals are converted or the kernel splits around them |
 
-> **This repository is going public.** Before publication, scrub the internal
-> identifiers the review already flagged — `AliasCombineModule`
-> (doc 01 §5.2) and `_stage_00`–`_09` (docs 01, 03 §3.2, 04 §6) — or
-> relax the README's claim that none appear. `decider2/example_projects/` is
-> shaped on real internal systems and should be read with that in mind before it
-> ships.
+> **This repository is going public.** The internal identifiers the review
+> flagged have been **scrubbed** — the two module/function names that survived an
+> earlier pass are now the illustrative `AliasCombineModule` and `_stage_00`–`_09`,
+> so the README's claim that none appear is true rather than aspirational. They
+> were also present in one already-pushed commit, which was rewritten.
+> `decider2/example_projects/` is shaped on real internal systems and should be
+> read with that in mind before it ships.
 
 ---
 
