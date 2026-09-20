@@ -123,10 +123,16 @@ def _unknown_namespace_error(key: str, known: Sequence[str]) -> ValueError:
     has to cover the *namespace* too, or `params={"affordabilty": {...}}`
     returns the untuned answer with no signal (doc 03 §2.1: "no error,
     different decisions ... the worst failure mode the design can have").
-    Suggestions follow §10's own `use`-id message shape."""
-    import difflib
+    Suggestions follow §10's own `use`-id message shape.
 
-    near = difflib.get_close_matches(key, list(known), n=3, cutoff=0.6)
+    `decider2.resolve.suggest_names` — not `decider2.graph`'s did-you-mean —
+    is what this calls: this module must not import the graph layer (see
+    module docstring), and `decider2.resolve` is the one shared, dependency-
+    free implementation both layers use (over-engineering audit: there used
+    to be two, differently tuned)."""
+    from decider2.resolve import suggest_names
+
+    near = suggest_names(key, known, n=3)
     hint = f" Did you mean: {', '.join(near)}?" if near else ""
     return ValueError(
         f"params has no module instance {key!r} ({len(known)} tunable: "

@@ -93,6 +93,15 @@ class NotApplicableAs:
     """
 
 
+# `harvest_signature` below builds the same `Input(..., fill=plain)` shape for
+# either marker and only needs to know which `NullPolicy` tier it means — one
+# dict lookup instead of two near-identical `isinstance` branches.
+_NULL_POLICY_BY_MARKER: dict[type, "NullPolicy"] = {
+    MissingAs: NullPolicy.MISSING_AS,
+    NotApplicableAs: NullPolicy.NOT_APPLICABLE_AS,
+}
+
+
 def _carrier_for(kind: type, value: Any) -> Any:
     """Build an instance that is-a `value`'s own type *and* is-a `kind`.
 
@@ -154,6 +163,30 @@ def _reject_uncarriable(
         )
 
 
+# `missing_as()` and `not_applicable_as()` are byte-identical apart from which
+# marker class they attach (tier 2 vs tier 4, §1) — both refuse the same
+# `bool | None` alternative text, so that text is written once here and keyed
+# off `kind` rather than repeated at each call site.
+_NULL_FILL_ALTERNATIVES = dict(
+    bool_alternative="Declare `bool | None` directly (tier 3, doc 03 §1) instead.",
+    none_alternative=(
+        "Filling a null with null declares nothing — declare `T | None` "
+        "directly (tier 3, doc 03 §1) if the step must see the absence "
+        "itself."
+    ),
+)
+
+
+def _fill(kind: type, who: str, value: Any) -> Any:
+    """Shared body of `missing_as()`/`not_applicable_as()`: reject an
+    uncarriable value, then wrap `value` in `kind`'s carrier with `.fill`
+    set — the two functions differ only in which marker class `kind` is."""
+    _reject_uncarriable(value, who, **_NULL_FILL_ALTERNATIVES)
+    carrier = _carrier_for(kind, value)
+    carrier.fill = value
+    return carrier
+
+
 # ---------------------------------------------------------------------------
 # The three public constructors
 # ---------------------------------------------------------------------------
@@ -194,19 +227,7 @@ def missing_as(value: Any) -> Any:
 
         bureau_score: float = missing_as(0.0)
     """
-    _reject_uncarriable(
-        value,
-        "missing_as",
-        bool_alternative="Declare `bool | None` directly (tier 3, doc 03 §1) instead.",
-        none_alternative=(
-            "Filling a null with null declares nothing — declare `T | None` "
-            "directly (tier 3, doc 03 §1) if the step must see the absence "
-            "itself."
-        ),
-    )
-    carrier = _carrier_for(MissingAs, value)
-    carrier.fill = value
-    return carrier
+    return _fill(MissingAs, "missing_as", value)
 
 
 def not_applicable_as(value: Any) -> Any:
@@ -217,19 +238,7 @@ def not_applicable_as(value: Any) -> Any:
 
         spouse_income: float = not_applicable_as(0.0)
     """
-    _reject_uncarriable(
-        value,
-        "not_applicable_as",
-        bool_alternative="Declare `bool | None` directly (tier 3, doc 03 §1) instead.",
-        none_alternative=(
-            "Filling a null with null declares nothing — declare `T | None` "
-            "directly (tier 3, doc 03 §1) if the step must see the absence "
-            "itself."
-        ),
-    )
-    carrier = _carrier_for(NotApplicableAs, value)
-    carrier.fill = value
-    return carrier
+    return _fill(NotApplicableAs, "not_applicable_as", value)
 
 
 # ---------------------------------------------------------------------------
@@ -268,19 +277,16 @@ def parse_docstring(doc: str | None) -> tuple[str | None, str | None]:
     if doc is None:
         return None, None
 
+    # `inspect.cleandoc` already strips leading/trailing blank lines (verified:
+    # trailing all-whitespace lines never survive it), so the last element of
+    # `lines`, when non-empty, is already the last non-blank line — no
+    # walk-back needed to find it.
     lines = inspect.cleandoc(doc).splitlines()
-
-    # Walk back from the end past trailing blank lines to find the last
-    # non-blank line; if *that* is an `Implements:` line, it's the trailing
-    # one §1.3 describes and everything above it is the description.
-    i = len(lines) - 1
-    while i >= 0 and not lines[i].strip():
-        i -= 1
-    if i >= 0:
-        m = _IMPLEMENTS_RE.match(lines[i].strip())
+    if lines:
+        m = _IMPLEMENTS_RE.match(lines[-1].strip())
         if m:
             implements = m.group(1).strip()
-            description = "\n".join(lines[:i]).strip()
+            description = "\n".join(lines[:-1]).strip()
             return (description or None), implements
 
     description = "\n".join(lines).strip()
@@ -349,25 +355,18 @@ def harvest_signature(
             )
             continue
 
-        if isinstance(default, MissingAs):
+        null_policy = next(
+            (policy for marker_cls, policy in _NULL_POLICY_BY_MARKER.items()
+             if isinstance(default, marker_cls)),
+            None,
+        )
+        if null_policy is not None:
             plain = _unwrap(default)
             inputs.append(
                 Input(
                     name=pname,
                     annotation=annotation if annotation is not Any else type(plain),
-                    null_policy=NullPolicy.MISSING_AS,
-                    fill=plain,
-                )
-            )
-            continue
-
-        if isinstance(default, NotApplicableAs):
-            plain = _unwrap(default)
-            inputs.append(
-                Input(
-                    name=pname,
-                    annotation=annotation if annotation is not Any else type(plain),
-                    null_policy=NullPolicy.NOT_APPLICABLE_AS,
+                    null_policy=null_policy,
                     fill=plain,
                 )
             )

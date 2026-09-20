@@ -11,31 +11,21 @@ build order. Four modules, in dependency order:
 `marshal.py` (whole-row bulk request marshalling, doc 05 §3.1b) and
 `chunk.py` (doc 05 §3.2) are a different slice of Layer 1 and are not part of
 this package's surface.
+
+This package's re-exports are narrowed to what `decider2.runtime.invoke` —
+the only caller outside `boundary/` itself and its own tests (over-engineering
+audit) — actually imports via `from decider2.boundary import ...`. Everything
+else here (the dtype ladder, null routing, per-column extraction, etc.) is
+still public — import it from its own submodule
+(`decider2.boundary.dtypes`/`.nulls`/`.extract`/`.writeback`), exactly as
+every test in this package already does.
 """
 from __future__ import annotations
 
-from .dtypes import ColumnPlan, DtypeTier, EntryMode, explain_boundary, plan_column, probe_column
-from .extract import (
-    ExtractedColumn,
-    ExtractedFrame,
-    NeedsKernelSplit,
-    extract_column,
-    extract_frame,
-    is_clean,
-    rechunk_once,
-)
-from .nulls import FillInfo, FillReason, NullRouting, fill_column, route_required_nulls, validity_mask
-from .writeback import DtypeGroup, KernelOutputs, Layout, resolve_kept_input_columns, row_to_dict, to_series, write_back
+from .extract import extract_frame
+from .writeback import DtypeGroup, KernelOutputs, Layout, resolve_kept_input_columns, write_back
 
 __all__ = [
-    # dtypes
-    "DtypeTier", "EntryMode", "ColumnPlan", "plan_column", "probe_column", "explain_boundary",
-    # nulls
-    "FillReason", "FillInfo", "NullRouting", "fill_column", "route_required_nulls", "validity_mask",
-    # extract
-    "ExtractedColumn", "ExtractedFrame", "NeedsKernelSplit",
-    "rechunk_once", "is_clean", "extract_column", "extract_frame",
-    # writeback
-    "Layout", "DtypeGroup", "KernelOutputs", "to_series", "write_back", "row_to_dict",
-    "resolve_kept_input_columns",
+    "extract_frame",
+    "Layout", "DtypeGroup", "KernelOutputs", "write_back", "resolve_kept_input_columns",
 ]
