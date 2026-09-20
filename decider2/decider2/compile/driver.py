@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Any, Callable, Literal, Mapping, Sequence
 
 from numba import njit
+from numba.core import types as nbtypes
 from numba.core.errors import NumbaError, UnsupportedBytecodeError
 
 # doc 05 §6: "Catch numba.core.errors.NumbaError only — never bare Exception."
@@ -64,11 +65,22 @@ SegmentKind = Literal["compiled", "fallback"]
 # schema (doc 07 §5: "build takes an input schema... the pipeline alone is
 # not enough to compile"); this fallback exists so this module is usable
 # stand-alone, ahead of that CLI existing.
-_PROBE_BY_ANNOTATION: dict[Any, Any] = {bool: True, int: 1, float: 1.0}
+_NUMBA_BY_ANNOTATION: dict[Any, Any] = {
+    bool: nbtypes.boolean,
+    int: nbtypes.int64,
+    float: nbtypes.float64,
+}
 
 
-def _probe_value(annotation: Any) -> Any:
-    return _PROBE_BY_ANNOTATION.get(annotation, 1.0)
+def _numba_type(annotation: Any, *, optional: bool = False) -> Any:
+    """The numba type a declared annotation compiles against.
+
+    Unannotated falls back to float64, which is what the boundary supplies
+    for an undeclared column (doc 05 §1.5's ladder puts everything numeric
+    on float64 unless the author tightened it).
+    """
+    base = _NUMBA_BY_ANNOTATION.get(annotation, nbtypes.float64)
+    return nbtypes.Optional(base) if optional else base
 
 
 def _try_njit(step: Step, sample_values: Mapping[str, Any]) -> tuple[Callable, str | None]:
@@ -91,18 +103,22 @@ def _try_njit(step: Step, sample_values: Mapping[str, Any]) -> tuple[Callable, s
         sig = inspect.signature(step.fn)
         input_by_name = {i.name: i for i in step.inputs}
         param_by_name = {p.name: p for p in step.params}
-        kwargs: dict[str, Any] = {}
+        signature: list[Any] = []
         for pname in sig.parameters:
-            if pname in sample_values:
-                kwargs[pname] = sample_values[pname]
-            elif pname in input_by_name:
+            if pname in input_by_name:
                 inp = input_by_name[pname]
-                kwargs[pname] = (
-                    None if inp.null_policy is NullPolicy.OPTIONAL else _probe_value(inp.annotation)
-                )
+                signature.append(_numba_type(
+                    inp.annotation,
+                    optional=inp.null_policy is NullPolicy.OPTIONAL,
+                ))
             elif pname in param_by_name:
-                kwargs[pname] = param_by_name[pname].default
-        fn(**kwargs)
+                decl = param_by_name[pname]
+                signature.append(_numba_type(
+                    decl.annotation if decl.annotation is not Any else type(decl.default)
+                ))
+            else:
+                signature.append(nbtypes.float64)
+        fn.compile(tuple(signature))
         return fn, None
     except _FALLBACK_TRIGGERS as exc:
         return step.fn, str(exc)
@@ -193,6 +209,45 @@ class Driver:
         return out
 
 
+# A Driver is a compiled artefact, not a per-call object. Doc 02 §3.4:
+# "Compilation happens at image build, not at startup." Doc 05 §6: "Cache the
+# decision per node so a doomed compile isn't retried every call." Rebuilding
+# per call still *works* — numba's on-disk cache reloads rather than
+# recompiles — but it constructs a fresh dispatcher per step per call, which
+# measured at 81 ms p50 over 30 modules against a 20-100 ms budget, and it
+# discards the fallback decision the docstring above promises to keep.
+#
+# Keyed by the structural identity of the request: which steps, in which
+# order, in which fuse() groups, materialising which names. Params are NOT in
+# the key and must never be -- they arrive as kernel arguments, and a retune
+# reusing this entry is exactly the guarantee doc 08 §2 rests on.
+_DRIVER_CACHE: dict[tuple, "Driver"] = {}
+
+
+def _driver_key(
+    steps: Sequence[Step],
+    group_ids: Sequence[int],
+    build_dir: "str | Path",
+    terminal_names: frozenset,
+    parallel_group_ids: frozenset,
+    fastmath_group_ids: frozenset,
+) -> tuple:
+    return (
+        tuple((s.name, s.fn) for s in steps),
+        tuple(group_ids),
+        str(build_dir),
+        terminal_names,
+        parallel_group_ids,
+        fastmath_group_ids,
+    )
+
+
+def clear_driver_cache() -> None:
+    """Drop every memoised Driver. For tests, and for a generation swap that
+    must not inherit a predecessor's compiled artefacts."""
+    _DRIVER_CACHE.clear()
+
+
 def build_driver(
     steps: Sequence[Step],
     group_ids: Sequence[int],
@@ -216,6 +271,13 @@ def build_driver(
     """
     steps = list(steps)
     group_ids = list(group_ids)
+    key = _driver_key(
+        steps, group_ids, build_dir, terminal_names,
+        parallel_group_ids, fastmath_group_ids,
+    )
+    cached = _DRIVER_CACHE.get(key)
+    if cached is not None:
+        return cached
     if len(steps) != len(group_ids):
         raise ValueError("steps and group_ids must be the same length")
     build_dir = Path(build_dir)
@@ -282,4 +344,6 @@ def build_driver(
         )
         i = j
 
-    return Driver(segments=tuple(segments), step_fns=step_fns)
+    driver = Driver(segments=tuple(segments), step_fns=step_fns)
+    _DRIVER_CACHE[key] = driver
+    return driver
