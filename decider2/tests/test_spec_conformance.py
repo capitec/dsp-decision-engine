@@ -16,18 +16,24 @@ from decider2 import flow, module, param, step
 # B — the driver is built once per generation, and probing never runs a body
 # ---------------------------------------------------------------------------
 
+def inv(x: float) -> float:
+    """Reciprocal about 1.0. Singular at x == 1.0, which no caller supplies."""
+    return 1.0 / (x - 1.0)
+
+
 def test_a_probe_never_executes_the_authors_step_body():
     """Doc 05 §6: a genuine runtime bug 'must propagate identically in both
     compiled and fallback paths'. Probing with synthetic values raises errors
     on data the caller never supplied."""
-    def inv(x: float) -> float:
-        """Reciprocal about 1.0."""
-        return 1.0 / (x - 1.0)
-
     p = flow(inv)
     frame = pl.DataFrame({"x": [5.0, 3.0]})
     assert p.apply(frame, mode="interpreted")["inv"].to_list() == [0.25, 0.5]
     assert p.apply(frame, mode="fused")["inv"].to_list() == [0.25, 0.5]
+
+
+def _sub(x: float, y: float) -> float:
+    """Difference."""
+    return x - y
 
 
 def test_repeated_calls_do_not_rebuild_the_driver():
@@ -36,11 +42,7 @@ def test_repeated_calls_do_not_rebuild_the_driver():
     every call.'"""
     import numba
 
-    def a(x: float, y: float) -> float:
-        """A."""
-        return x - y
-
-    p = flow(a)
+    p = flow(_sub)
     frame = pl.DataFrame({"x": [1.0] * 64, "y": [2.0] * 64})
     p.apply(frame, mode="fused")          # warm
 
