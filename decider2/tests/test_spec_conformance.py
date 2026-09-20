@@ -197,7 +197,7 @@ def test_a_misspelled_param_is_rejected_for_a_hand_written_model():
         """Cap."""
         return min(term_cap, params.cap)
 
-    p = flow(module(capper, name="capper", params=CapParams))
+    p = flow(module(capper, params=CapParams))   # name derives from the function
     frame = pl.DataFrame({"term_cap": [60.0]})
 
     with pytest.raises(Exception):

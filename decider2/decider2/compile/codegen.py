@@ -113,6 +113,11 @@ class ArgRole:
     step_name: str | None = None
     param_name: str | None = None
     output_name: str | None = None
+    owner: str | None = None          # the step's owning module instance
+    # (doc 03 §4.1/§10: params are namespaced by MODULE instance, not step
+    # name — a step's OUTPUT name is not unique across modules, doc 03 §3.2's
+    # waterfall idiom. `decider2.runtime.modes` keys its params lookup by
+    # `(owner, step_name, param_name)` to survive that collision.)
 
 
 def _step_ident(step: Step) -> str:
@@ -143,6 +148,11 @@ class KernelPlan:
     steps: tuple[Step, ...]                 # already in execution order
     external_inputs: tuple[Input, ...]      # inputs this kernel reads from outside
     required_outputs: tuple[str, ...]       # step names this kernel must write out
+    owners: tuple[str, ...] = ()            # module instance name per `steps` entry,
+    # parallel to `steps` (doc 03 §4.1/§10) — empty means "not supplied",
+    # which `kernel_signature` treats as "each step is its own owner" so a
+    # caller bypassing the graph layer (a scratch test, `decider2.compile`
+    # used directly) keeps working exactly as before this field existed.
     reads_shared: bool = False
     parallel: bool = False                  # authored via parallel(...), never inferred
     fastmath: bool = False                  # authored per kernel, doc 05 §5.2
@@ -162,9 +172,16 @@ def kernel_signature(plan: KernelPlan) -> list[ArgRole]:
     for inp in plan.external_inputs:
         if inp.null_policy is NullPolicy.OPTIONAL:
             roles.append(ArgRole("valid", f"valid_{safe_ident(inp.name)}", input_name=inp.name))
-    for step in plan.steps:
+    # `plan.owners[i]` is the module instance that owns `plan.steps[i]`; a
+    # plan built without that info (owners left at its default `()`) falls
+    # back to "each step owns itself", matching the pre-owners behaviour
+    # exactly for every caller that never supplied one.
+    owners = plan.owners if len(plan.owners) == len(plan.steps) else tuple(s.name for s in plan.steps)
+    for step, owner in zip(plan.steps, owners):
         if step.reads_params:
-            roles.append(ArgRole("params_bundle", _params_arg_name(step), step_name=step.name))
+            roles.append(
+                ArgRole("params_bundle", _params_arg_name(step), step_name=step.name, owner=owner)
+            )
         for decl in step.params:
             roles.append(
                 ArgRole(
@@ -172,6 +189,7 @@ def kernel_signature(plan: KernelPlan) -> list[ArgRole]:
                     _param_arg_name(step, decl),
                     step_name=step.name,
                     param_name=decl.name,
+                    owner=owner,
                 )
             )
     if plan.reads_shared:
