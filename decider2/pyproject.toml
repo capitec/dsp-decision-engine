@@ -1,0 +1,38 @@
+[project]
+name = "decider2"
+version = "0.1.0"
+description = "A numba-first decision engine for credit and fraud logic"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "polars>=1.0",
+    "numpy",
+    "numba>=0.67.0",
+    "pydantic>=2",
+]
+
+[project.optional-dependencies]
+serve = ["starlette", "uvicorn"]
+dev   = ["pytest"]
+
+[project.scripts]
+decider2 = "decider2.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+# src/ layout, and it is load-bearing rather than convention.
+#
+# The project directory is named `decider2` and so is the package. With the
+# package at `decider2/decider2/`, anything that puts the REPO ROOT on
+# sys.path — decider 1's own editable install does exactly this — makes the
+# project DIRECTORY importable as an empty namespace package that shadows the
+# real one. `import decider2` then succeeds and `decider2.__file__` is None,
+# which presents as "the library has no exports" rather than as an ImportError.
+#
+# Under src/, the project directory contains no `decider2` subdirectory, so
+# there is nothing for the path finder to shadow it with.
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["decider2*"]
