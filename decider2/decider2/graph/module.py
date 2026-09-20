@@ -16,6 +16,8 @@ import json
 from pathlib import Path
 from typing import Any, Callable
 
+from pydantic import ConfigDict
+
 from decider2.graph.interface import effective_interface
 from decider2.graph.step import make_step
 from decider2.params import build_params_model
@@ -76,7 +78,7 @@ def module(
     elif derived is not None and name == derived:
         raise ValueError(
             f"module({derived}, name={name!r}) restates the derived "
-            "name — drop name= (doc 07 §6 lint: 'writing module(fn, "
+            "name \u2014 drop name= (doc 07 \u00a76 lint: 'writing module(fn, "
             "name=\"fn\") is the same name twice')."
         )
 
@@ -89,7 +91,7 @@ def module(
                 "Doc 03 §4.4 allows one way to declare a module's params per "
                 "module, not both (doc 07 §6 lint)."
             )
-        params_model = params
+        params_model = _forbid_extra_params(params)
     else:
         _check_no_duplicate_param_names(name, steps)
         params_model = build_params_model(name, harvested_params)
@@ -104,6 +106,23 @@ def module(
         _check_contract(built, contract)
 
     return built
+
+
+def _forbid_extra_params(model: Any) -> Any:
+    """Doc 03 §10, verbatim: "A misspelled param is a hard error
+    (`extra="forbid"`), not silence." `build_params_model` already sets
+    this for a harvested model; a hand-written one passed as `params=`
+    defaults to pydantic's own `extra="ignore"` unless the author
+    remembered to set it themselves. Doc 03 §4.4 promises the two are
+    "indistinguishable downstream", so this normalises a hand-written model
+    the same way, rather than trusting every author to opt in — subclassing
+    (not mutating the caller's class) keeps this side-effect-free for
+    anyone else still holding a reference to the original model.
+    """
+    existing = dict(model.model_config).get("extra")
+    if existing == "forbid":
+        return model
+    return type(model.__name__, (model,), {"model_config": ConfigDict(extra="forbid")})
 
 
 def _check_no_duplicate_param_names(module_name: str, steps: tuple[Step, ...]) -> None:

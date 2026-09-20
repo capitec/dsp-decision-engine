@@ -30,10 +30,65 @@ from typing import Any, Sequence
 import numpy as np
 
 from decider2.compile import codegen
-from decider2.compile.driver import Driver
+from decider2.compile.driver import Driver, numpy_dtype
 from decider2.types import Step
 
 Registry = dict  # name -> np.ndarray, plus "__valid__<name>" companions
+
+_MISSING = object()
+
+
+def _signature(fn) -> "inspect.Signature":
+    """`inspect.signature`, with the same `eval_str=True`-then-fall-back
+    `decider2.params.harvest_signature` already uses: a step's module using
+    `from __future__ import annotations` stringifies every annotation, and
+    without this a `-> int`/`-> bool` return type would compare equal to
+    nothing in `numpy_dtype`'s table and silently fall back to float64 —
+    exactly the bug this module exists to close."""
+    try:
+        return inspect.signature(fn, eval_str=True)
+    except (NameError, TypeError):
+        return inspect.signature(fn)
+
+
+def _return_dtype(fn) -> np.dtype:
+    """Doc 00 §2 / doc 03 §1 / doc 05 §9 criterion 4: a step's declared
+    return annotation decides the array dtype it is written into, so an
+    `-> int`/`-> bool` step survives the boundary as its own dtype instead
+    of being forced onto float64 (which silently degrades an Int64 above
+    2**53, and cannot hold a Boolean at all)."""
+    return numpy_dtype(_signature(fn).return_annotation)
+
+
+def _scalar_arg(resolved: "ResolvedParams", owner: str | None, step_name: str, param_name: str) -> Any:
+    """`(owner, step_name, param_name)` first — the collision-proof key
+    `resolve_params` now writes (doc 03 §4.1/§10: a step's OUTPUT name is
+    not unique across modules, the waterfall idiom, doc 03 §3.2). Falls
+    back to the plain `(step_name, param_name)` key for a caller that built
+    a `ResolvedParams` by hand without an owner in mind — every such caller
+    in this codebase has no name collision to begin with, so the fallback
+    is exact, not approximate."""
+    if owner is not None:
+        value = resolved.per_step_scalar.get((owner, step_name, param_name), _MISSING)
+        if value is not _MISSING:
+            return value
+    return resolved.per_step_scalar[(step_name, param_name)]
+
+
+def _bundle_arg(resolved: "ResolvedParams", owner: str | None, step_name: str) -> Any:
+    if owner is not None:
+        value = resolved.per_step_bundle.get((owner, step_name), _MISSING)
+        if value is not _MISSING:
+            return value
+    return resolved.per_step_bundle[step_name]
+
+
+def _step_fn(driver: Driver, owner: str | None, step_name: str) -> Any:
+    if owner is not None:
+        fn = driver.step_fns.get((owner, step_name), _MISSING)
+        if fn is not _MISSING:
+            return fn
+    return driver.step_fns[step_name]
 
 
 @dataclass(frozen=True)
@@ -58,6 +113,7 @@ class ResolvedParams:
 
 def _row_kwargs(
     step: Step,
+    owner: "str | None",
     sig: "inspect.Signature",
     registry: Registry,
     resolved: ResolvedParams,
@@ -67,11 +123,11 @@ def _row_kwargs(
     param_by_name = {d.name: d for d in step.params}
     for pname in sig.parameters:
         if pname == "params":
-            kwargs["params"] = resolved.per_step_bundle[step.name]
+            kwargs["params"] = _bundle_arg(resolved, owner, step.name)
         elif pname == "shared":
             kwargs["shared"] = resolved.shared
         elif pname in param_by_name:
-            kwargs[pname] = resolved.per_step_scalar[(step.name, pname)]
+            kwargs[pname] = _scalar_arg(resolved, owner, step.name, pname)
         else:
             valid_key = f"__valid__{pname}"
             if valid_key in registry and not bool(registry[valid_key][i]):
@@ -82,16 +138,26 @@ def _row_kwargs(
 
 
 def run_interpreted(
-    steps: Sequence[Step], registry: Registry, resolved: ResolvedParams, n: int
+    steps: Sequence[Step],
+    registry: Registry,
+    resolved: ResolvedParams,
+    n: int,
+    *,
+    owners: "Sequence[str] | None" = None,
 ) -> Registry:
     """Plain Python steps, plain Python driver — the reference semantics
     (doc 02 §3.1). No numba anywhere in this function."""
-    for step in steps:
-        sig = inspect.signature(step.fn)
-        out = np.empty(n, dtype=np.float64)
+    owners = list(owners) if owners is not None else [s.name for s in steps]
+    for step, owner in zip(steps, owners):
+        sig = _signature(step.fn)
+        out = np.empty(n, dtype=_return_dtype(step.fn))
         for i in range(n):
-            out[i] = step.fn(**_row_kwargs(step, sig, registry, resolved, i))
+            out[i] = step.fn(**_row_kwargs(step, owner, sig, registry, resolved, i))
         registry[step.name] = out
+        # Doc 03 §3.3/§7: every version of a waterfall value stays reachable
+        # by its producing module's name, alongside the plain "live" (most
+        # recent) value the next step's wiring actually reads.
+        registry[f"{step.name}@{owner}"] = out
     return registry
 
 
@@ -101,19 +167,23 @@ def run_stepped(
     registry: Registry,
     resolved: ResolvedParams,
     n: int,
+    *,
+    owners: "Sequence[str] | None" = None,
 ) -> Registry:
     """Njit'd steps (real compiled code), Python driver, one step at a time
     — driver-level step-through and production numerics without inlining
-    (doc 02 §3.1). `driver.step_fns[name]` is the plain function instead for
-    any step that didn't survive njit (doc 05 §6's fallback path, reused
-    verbatim rather than duplicated)."""
-    for step in steps:
-        fn = driver.step_fns[step.name]
-        sig = inspect.signature(step.fn)
-        out = np.empty(n, dtype=np.float64)
+    (doc 02 §3.1). `driver.step_fns[(owner, name)]` is the plain function
+    instead for any step that didn't survive njit (doc 05 §6's fallback
+    path, reused verbatim rather than duplicated)."""
+    owners = list(owners) if owners is not None else [s.name for s in steps]
+    for step, owner in zip(steps, owners):
+        fn = _step_fn(driver, owner, step.name)
+        sig = _signature(step.fn)
+        out = np.empty(n, dtype=_return_dtype(step.fn))
         for i in range(n):
-            out[i] = fn(**_row_kwargs(step, sig, registry, resolved, i))
+            out[i] = fn(**_row_kwargs(step, owner, sig, registry, resolved, i))
         registry[step.name] = out
+        registry[f"{step.name}@{owner}"] = out
     return registry
 
 
@@ -127,9 +197,9 @@ def _build_call_args(
         elif role.kind == "valid":
             args.append(registry[f"__valid__{role.input_name}"])
         elif role.kind == "param_scalar":
-            args.append(resolved.per_step_scalar[(role.step_name, role.param_name)])
+            args.append(_scalar_arg(resolved, role.owner, role.step_name, role.param_name))
         elif role.kind == "params_bundle":
-            args.append(resolved.per_step_bundle[role.step_name])
+            args.append(_bundle_arg(resolved, role.owner, role.step_name))
         elif role.kind == "shared":
             args.append(resolved.shared)
         elif role.kind == "output":
@@ -152,20 +222,29 @@ def run_fused(driver: Driver, registry: Registry, resolved: ResolvedParams, n: i
     only for the node that could not be compiled, never its neighbours.
     """
     for seg in driver.segments:
+        owner_by_name = dict(zip((s.name for s in seg.steps), seg.owners)) if seg.owners else {}
+
         if seg.kind == "fallback":
             step = seg.steps[0]
-            fn = driver.step_fns[step.name]
-            sig = inspect.signature(step.fn)
-            out = np.empty(n, dtype=np.float64)
+            owner = seg.owners[0] if seg.owners else step.name
+            fn = _step_fn(driver, owner, step.name)
+            sig = _signature(step.fn)
+            out = np.empty(n, dtype=_return_dtype(step.fn))
             for i in range(n):
-                out[i] = fn(**_row_kwargs(step, sig, registry, resolved, i))
+                out[i] = fn(**_row_kwargs(step, owner, sig, registry, resolved, i))
             registry[step.name] = out
+            registry[f"{step.name}@{owner}"] = out
             continue
 
         assert seg.plan is not None and seg.kernel_fn is not None
-        out_arrays = {name: np.empty(n, dtype=np.float64) for name in seg.required_outputs}
+        step_by_name = {s.name: s for s in seg.steps}
+        out_arrays = {
+            name: np.empty(n, dtype=_return_dtype(step_by_name[name].fn))
+            for name in seg.required_outputs
+        }
         args = _build_call_args(seg.plan, registry, resolved, out_arrays)
         seg.kernel_fn(*args)
         for name, arr in out_arrays.items():
             registry[name] = arr
+            registry[f"{name}@{owner_by_name.get(name, name)}"] = arr
     return registry

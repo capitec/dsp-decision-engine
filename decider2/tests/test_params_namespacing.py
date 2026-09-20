@@ -147,7 +147,7 @@ def test_binding_does_not_change_the_compiled_signature_count(tmp_path):
     from decider2.compile.driver import build_driver
 
     def build(mod):
-        steps, group_ids, _ = flow(mod).flatten_for_runtime()
+        steps, group_ids, _, _ = flow(mod).flatten_for_runtime()
         return build_driver(
             list(steps), list(group_ids), build_dir=tmp_path,
             terminal_names=frozenset({"cap"}),

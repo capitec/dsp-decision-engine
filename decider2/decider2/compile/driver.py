@@ -32,6 +32,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Literal, Mapping, Sequence
 
+import numpy as np
 from numba import njit
 from numba.core import types as nbtypes
 from numba.core.errors import NumbaError, UnsupportedBytecodeError
@@ -70,6 +71,26 @@ _NUMBA_BY_ANNOTATION: dict[Any, Any] = {
     int: nbtypes.int64,
     float: nbtypes.float64,
 }
+
+# The runtime-array counterpart of the table above (doc 00 §2: "money is
+# scaled int64"; doc 03 §1 names Int64->float64 above 2**53 a REJECTED
+# design; doc 05 §9 criterion 4 requires Boolean to round-trip). Kept next
+# to `_NUMBA_BY_ANNOTATION`, keyed on the same three annotations, so the
+# compile-time numba type and the runtime numpy dtype can never silently
+# disagree about what a step's `-> int`/`-> bool` annotation means.
+_NUMPY_BY_ANNOTATION: dict[Any, Any] = {
+    bool: np.bool_,
+    int: np.int64,
+    float: np.float64,
+}
+
+
+def numpy_dtype(annotation: Any) -> np.dtype:
+    """The numpy dtype a declared `int`/`bool`/`float` annotation crosses
+    the runtime boundary as; unannotated (or anything else) stays float64,
+    the boundary's existing default for an undeclared column (doc 05
+    §1.5)."""
+    return np.dtype(_NUMPY_BY_ANNOTATION.get(annotation, np.float64))
 
 
 def _numba_type(annotation: Any, *, optional: bool = False) -> Any:
@@ -176,6 +197,7 @@ class Segment:
     steps: tuple[Step, ...]
     external_inputs: tuple[Input, ...]
     required_outputs: tuple[str, ...]
+    owners: tuple[str, ...] = ()             # module instance name per `steps` entry
     kernel_fn: Callable | None = None       # set when kind == "compiled"
     plan: KernelPlan | None = None          # set when kind == "compiled"
     fallback_reason: str | None = None      # set when kind == "fallback"
@@ -227,6 +249,7 @@ _DRIVER_CACHE: dict[tuple, "Driver"] = {}
 def _driver_key(
     steps: Sequence[Step],
     group_ids: Sequence[int],
+    owners: Sequence[str],
     build_dir: "str | Path",
     terminal_names: frozenset,
     parallel_group_ids: frozenset,
@@ -235,6 +258,7 @@ def _driver_key(
     return (
         tuple((s.name, s.fn) for s in steps),
         tuple(group_ids),
+        tuple(owners),
         str(build_dir),
         terminal_names,
         parallel_group_ids,
@@ -257,6 +281,7 @@ def build_driver(
     parallel_group_ids: frozenset = frozenset(),
     fastmath_group_ids: frozenset = frozenset(),
     sample_values: Mapping[str, Any] | None = None,
+    owners: Sequence[str] | None = None,
 ) -> Driver:
     """Compile `steps` (already in valid execution order — topological
     sort/ordering is the graph layer's responsibility, doc 02 §6's
@@ -268,11 +293,29 @@ def build_driver(
     group, an un-njit-able step forces an additional, unrequested split —
     that is the fallback mechanism (doc 05 §6), not a second grouping
     policy.
+
+    `owners[i]` is the module instance name `steps[i]` belongs to (doc 03
+    §4.1/§10). Omitted (the default, for every caller that drives this
+    module directly without the graph layer — the scratch tests, a bare
+    `decider2.compile` user), each step is treated as its own owner, which
+    is exactly what a bare-function module already means (doc 03 §5.3) and
+    reproduces this function's behaviour from before `owners` existed. A
+    step's *output* name is not unique across modules — that is the
+    waterfall idiom, doc 03 §3.2 — so `compiled`/`step_fns` below are keyed
+    by `(owner, step.name)`, never `step.name` alone, or the second
+    module's entry silently overwrites the first's. The plain `step.name`
+    key is *also* written, for the same name, as a courtesy to a caller
+    that never supplied `owners` and only ever indexes `step_fns` by name
+    (there is no collision to resolve in that case: it is the same
+    fallback identity `_default_param_spaces` already assumes).
     """
     steps = list(steps)
     group_ids = list(group_ids)
+    owners = list(owners) if owners is not None else [s.name for s in steps]
+    if len(owners) != len(steps):
+        raise ValueError("owners and steps must be the same length")
     key = _driver_key(
-        steps, group_ids, build_dir, terminal_names,
+        steps, group_ids, owners, build_dir, terminal_names,
         parallel_group_ids, fastmath_group_ids,
     )
     cached = _DRIVER_CACHE.get(key)
@@ -284,22 +327,25 @@ def build_driver(
     sample_values = sample_values or {}
     terminal_names = frozenset(terminal_names)
 
-    compiled = {s.name: _try_njit(s, sample_values) for s in steps}
+    compiled = {(o, s.name): _try_njit(s, sample_values) for o, s in zip(owners, steps)}
 
     segments: list[Segment] = []
-    step_fns: dict[str, Callable] = {}
+    step_fns: dict[Any, Callable] = {}
     i = 0
     n = len(steps)
     while i < n:
         step = steps[i]
-        fn0, reason0 = compiled[step.name]
+        owner = owners[i]
+        fn0, reason0 = compiled[(owner, step.name)]
         if reason0 is not None:
             step_fns[step.name] = step.fn
+            step_fns[(owner, step.name)] = step.fn
             needed = _needed_from(steps, i + 1, terminal_names)
             segments.append(
                 Segment(
                     kind="fallback",
                     steps=(step,),
+                    owners=(owner,),
                     external_inputs=_external_inputs([step]),
                     required_outputs=(step.name,) if step.name in needed else (),
                     fallback_reason=reason0,
@@ -310,13 +356,21 @@ def build_driver(
 
         gid = group_ids[i]
         run: list[Step] = [step]
+        run_owners: list[str] = [owner]
         j = i + 1
-        while j < n and group_ids[j] == gid and compiled[steps[j].name][1] is None:
+        while (
+            j < n
+            and group_ids[j] == gid
+            and compiled[(owners[j], steps[j].name)][1] is None
+        ):
             run.append(steps[j])
+            run_owners.append(owners[j])
             j += 1
 
-        for s in run:
-            step_fns[s.name] = compiled[s.name][0]
+        for s, o in zip(run, run_owners):
+            fn = compiled[(o, s.name)][0]
+            step_fns[s.name] = fn
+            step_fns[(o, s.name)] = fn
 
         needed = _needed_from(steps, j, terminal_names)
         required = tuple(s.name for s in run if s.name in needed)
@@ -324,18 +378,56 @@ def build_driver(
         plan = KernelPlan(
             group_name=f"g{gid}_" + "_".join(s.name for s in run),
             steps=tuple(run),
+            owners=tuple(run_owners),
             external_inputs=external,
             required_outputs=required,
             reads_shared=any(s.reads_shared for s in run),
             parallel=gid in parallel_group_ids,
             fastmath=gid in fastmath_group_ids,
         )
-        source = codegen.emit_kernel_source(plan)
-        cached = cache.get_or_build(source, build_dir)
+        try:
+            source = codegen.emit_kernel_source(plan)
+            cached = cache.get_or_build(source, build_dir)
+        except ImportError as exc:
+            # The generated kernel FILE imports each step by
+            # `fn.__module__`/`fn.__name__` (doc 05 §4.1: "every generated
+            # driver is written to a real .py file before anything imports
+            # it" — required for numba's cache to survive a fresh process,
+            # EXPERIMENTS.md §J2). A step defined inside another function
+            # (a closure, e.g. a test helper) njit-compiles just fine on
+            # its own — `compiled[(o, s.name)]` above already proved that —
+            # but has no module-level name that import line can reach.
+            # That is a property of *this* fusion strategy, not a genuine
+            # runtime bug in the step, so it gets the same treatment doc 05
+            # §6 gives an un-njit-able step: split it out of the compiled
+            # kernel rather than fail the whole build. `step_fns` already
+            # holds each step's own (successfully compiled) dispatcher from
+            # the loop just above, so `stepped`/`fused`'s fallback path
+            # still runs compiled code per row, one step at a time — the
+            # only thing lost is fusing this run into one kernel call.
+            for s, o in zip(run, run_owners):
+                s_required = (s.name,) if s.name in needed else ()
+                segments.append(
+                    Segment(
+                        kind="fallback",
+                        steps=(s,),
+                        owners=(o,),
+                        external_inputs=_external_inputs([s]),
+                        required_outputs=s_required,
+                        fallback_reason=(
+                            f"kernel source could not import '{s.fn.__name__}' "
+                            f"from '{s.fn.__module__}' ({exc!r}); it is not "
+                            "reachable at module scope"
+                        ),
+                    )
+                )
+            i = j
+            continue
         segments.append(
             Segment(
                 kind="compiled",
                 steps=tuple(run),
+                owners=tuple(run_owners),
                 external_inputs=external,
                 required_outputs=required,
                 kernel_fn=cached.module.kernel,

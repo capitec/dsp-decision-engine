@@ -77,8 +77,10 @@ class Pipeline:
         §7)."""
         return _walk(self.elements)[1]
 
-    def flatten_for_runtime(self) -> tuple[tuple[Step, ...], tuple[int, ...], tuple[Any, ...]]:
-        """`(steps, group_ids, param_spaces)` in the shape
+    def flatten_for_runtime(
+        self,
+    ) -> tuple[tuple[Step, ...], tuple[int, ...], tuple[str, ...], tuple[Any, ...]]:
+        """`(steps, group_ids, step_owners, param_spaces)` in the shape
         `decider2.runtime.invoke.apply`/`score` take (doc 02 §3.5).
 
         Execution order is written order, module by module (doc 03 §8.1) —
@@ -101,17 +103,32 @@ class Pipeline:
         else. Keying this by step name instead — as an earlier draft of
         this contract did — made `params={"band": {"lo": 20.0}}` a silent
         no-op for every module whose steps are not named after it.
+
+        `step_owners[i]` is the module instance name that produced
+        `steps[i]` — `group_ids[i]` already encodes exactly this grouping,
+        but as an opaque int a runtime layer can't turn back into the
+        namespace a caller's `params={...}` is keyed by. A step's own
+        OUTPUT name is not unique across modules (that is the whole waterfall
+        idiom, doc 03 §3.2 — `@step(output="term_cap")` on two different
+        rules), so `runtime.invoke`/`compile.driver` key everything that
+        must survive that collision — which compiled function a step name
+        resolves to, which params bundle it receives — by `(owner, step
+        name)`, never `step name` alone. Module instance names are already
+        enforced unique per pipeline (`_check_unique_instance_names` above),
+        so `(owner, step.name)` is unique even when `step.name` is not.
         """
         from decider2.runtime.invoke import ParamSpace
 
         steps: list[Step] = []
         group_ids: list[int] = []
+        step_owners: list[str] = []
         param_spaces: list[ParamSpace] = []
         for gid, m in enumerate(self.elements):
             member_names: list[str] = []
             for s in topological_steps(m.steps):
                 steps.append(s)
                 group_ids.append(gid)
+                step_owners.append(m.name)
                 member_names.append(s.name)
             if m.params_model is not None or any(s.reads_params for s in m.steps):
                 param_spaces.append(
@@ -122,7 +139,7 @@ class Pipeline:
                         bound=dict(m.bound),
                     )
                 )
-        return tuple(steps), tuple(group_ids), tuple(param_spaces)
+        return tuple(steps), tuple(group_ids), tuple(step_owners), tuple(param_spaces)
 
     def emit(self, *names: str) -> "Pipeline":
         """Doc 03 §7. `name`, `name@module` or `name@*`; returns a NEW
@@ -181,11 +198,11 @@ class Pipeline:
         """
         from decider2.runtime.invoke import apply as _apply
 
-        steps, group_ids, param_spaces = self.flatten_for_runtime()
+        steps, group_ids, owners, param_spaces = self.flatten_for_runtime()
         return _apply(
-            steps, frame, interface=self.interface, group_ids=group_ids,
+            steps, frame, interface=self.interface, group_ids=group_ids, owners=owners,
             params=params, shared=shared, origin=origin, mode=mode,
-            emit=tuple(e.name for e in self.emits), drop=self.dropped,
+            emit=_emit_strings(self.emits, self.versions()), drop=self.dropped,
             param_spaces=param_spaces, policy=self.missing_input_policy,
         )
 
@@ -194,9 +211,9 @@ class Pipeline:
         EXPERIMENTS.md §N2)."""
         from decider2.runtime.invoke import score as _score
 
-        steps, group_ids, param_spaces = self.flatten_for_runtime()
+        steps, group_ids, owners, param_spaces = self.flatten_for_runtime()
         return _score(
-            steps, record, interface=self.interface, group_ids=group_ids,
+            steps, record, interface=self.interface, group_ids=group_ids, owners=owners,
             params=params, shared=shared, mode="fused",
             emit=tuple(e.name for e in self.emits), param_spaces=param_spaces,
             policy=self.missing_input_policy,
@@ -340,6 +357,27 @@ def _all_wired_names(elements: tuple[Module, ...]) -> set[str]:
 
 
 # --- .emit() parsing and validation -----------------------------------------
+
+
+def _emit_strings(emits: tuple[Emit, ...], versions: dict[str, tuple[str, ...]]) -> tuple[str, ...]:
+    """Doc 03 §7: an emit is `"name"`, `"name@module"` or `"name@*"` (every
+    version). `runtime.invoke` has no notion of the version chain — only
+    this layer does, via `versions()` — so the `@*` wildcard is expanded
+    here into the concrete `name@module` strings that match the per-owner
+    registry entries every runtime mode writes alongside a step's plain
+    'live' value (`runtime/modes.py`: `registry[f"{step.name}@{owner}"]`,
+    `owner` being the producing module's instance name — doc 03 §3.3's
+    audit trail, qualified "by producing module name", §7).
+    """
+    out: list[str] = []
+    for e in emits:
+        if e.at is None:
+            out.append(e.name)
+        elif e.at == "*":
+            out.extend(f"{e.name}@{producer}" for producer in versions.get(e.name, ()))
+        else:
+            out.append(f"{e.name}@{e.at}")
+    return tuple(out)
 
 
 def _parse_emit(spec: str) -> Emit:
