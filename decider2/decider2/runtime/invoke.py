@@ -135,6 +135,91 @@ def _unknown_namespace_error(key: str, known: Sequence[str]) -> ValueError:
     )
 
 
+def _check_str_inputs_are_covered_by_params(steps: Sequence[Step]) -> None:
+    """Doc 05 §1.5 + EXPERIMENTS.md §O: a `str`-typed input enters the kernel
+    as an int32 dictionary code, never as text (`compile.driver.numpy_dtype`).
+    The *only* thing a step can do with it is compare it against a `str`-typed
+    `param()` — whose value `resolve_params` below encodes through that same
+    column's categories, so the comparison the author wrote stays a plain
+    `==` on codes.
+
+    A step that reads a `str` input but declares no `str` param has no such
+    vehicle: any comparison against a literal in its body is code-vs-text
+    and evaluates to `False` on every row, silently — the one outcome doc 05
+    §9's acceptance bar forbids (`test_a_string_input_is_never_silently_
+    zeroed`). Checked here, once, before any row runs, independent of
+    whether an override was even supplied — `_default_param_spaces` skips a
+    step with no `param()` fields entirely, so nothing later in this
+    function would ever see it.
+    """
+    for step in steps:
+        str_inputs = tuple(inp for inp in step.inputs if inp.annotation is str)
+        if not str_inputs:
+            continue
+        if any(decl.annotation is str for decl in step.params):
+            continue
+        names = ", ".join(sorted(i.name for i in str_inputs))
+        example = str_inputs[0].name
+        raise ValueError(
+            f"step '{step.name}' reads str-typed input(s) {names} but "
+            f"declares no str-typed param() (doc 05 §1.5): '{example}' "
+            "enters the kernel as a dictionary code, never as text, so a "
+            "bare string literal in the step body (e.g. "
+            f"`{example} == \"private\"`) compares a code against text and "
+            "is silently False on every row. Declare the literal as a "
+            f"param instead — e.g. `private: str = param(\"private\")` — "
+            f"and compare {example} against that."
+        )
+
+
+def _resolve_str_param_code(
+    step: Step,
+    param_name: str,
+    value: str,
+    categories: Mapping[str, Sequence[str]] | None,
+) -> np.int32:
+    """§O: a `str`-typed param's *value* is resolved to its column's
+    dictionary code at param-resolution time — the kernel argument is an
+    `int32` code, never text, matching `compile.driver._numba_type(str)`.
+
+    - exactly one `str`-typed input on the step -> unambiguous, use it;
+    - none, or more than one -> a clear error (do not guess which column);
+    - the literal is absent from that column's categories -> `np.int32(-1)`,
+      a code no real row can ever carry, so the comparison the author wrote
+      is simply always `False` rather than raising (§O, verbatim: "a literal
+      absent from the data ... never matches").
+    """
+    str_inputs = tuple(inp for inp in step.inputs if inp.annotation is str)
+    if len(str_inputs) == 0:
+        raise ValueError(
+            f"step '{step.name}' param '{param_name}' is declared `str` "
+            "but the step reads no str-typed input for its literal to "
+            "compare against (doc 05 §1.5)."
+        )
+    if len(str_inputs) > 1:
+        names = ", ".join(sorted(i.name for i in str_inputs))
+        raise ValueError(
+            f"step '{step.name}' reads {len(str_inputs)} str-typed inputs "
+            f"({names}); param '{param_name}' doesn't say which column its "
+            "literal compares against, and decider2 will not guess. Split "
+            "the step so each str param has exactly one str input, or name "
+            "the column explicitly."
+        )
+    column = str_inputs[0].name
+    cats = (categories or {}).get(column)
+    if cats is None:
+        raise ValueError(
+            f"step '{step.name}' param '{param_name}' compares against "
+            f"column '{column}', but no dictionary categories were "
+            f"extracted for it — is '{column}' really a str-typed column?"
+        )
+    try:
+        code = tuple(cats).index(value)
+    except ValueError:
+        code = -1  # sentinel: no real row's code is ever -1 (§O)
+    return np.int32(code)
+
+
 def resolve_params(
     steps: Sequence[Step],
     overrides: Mapping[str, Mapping[str, Any]] | None,
@@ -142,6 +227,7 @@ def resolve_params(
     shared_overrides: Mapping[str, Any] | None = None,
     param_spaces: Sequence[ParamSpace] | None = None,
     owners: Sequence[str] | None = None,
+    categories: Mapping[str, Sequence[str]] | None = None,
 ) -> ResolvedParams:
     """Build one `ResolvedParams` bundle for this invocation.
 
@@ -170,7 +256,15 @@ def resolve_params(
     a kernel *argument* (doc 05 §4.2), never a literal in generated source,
     which is why retuning never recompiles (`Driver.signatures` staying the
     same length across a retune, doc 05 §9 acceptance criterion 5).
+
+    `categories` (column name -> its dictionary, `ExtractedFrame.
+    categories`) is what a `str`-typed param's literal is resolved against
+    (`_resolve_str_param_code`) — checked unconditionally, before the loop
+    below, because a step with no `param()` fields at all has no entry in
+    `spaces` to walk (`_default_param_spaces` skips it), so a bare string
+    literal in its body would otherwise never be checked here.
     """
+    _check_str_inputs_are_covered_by_params(steps)
     overrides = overrides or {}
     spaces = tuple(param_spaces) if param_spaces is not None else _default_param_spaces(steps)
     by_module = {sp.module: sp for sp in spaces}
@@ -243,6 +337,13 @@ def resolve_params(
             for decl in step.params:
                 if decl.name in values:
                     value = values[decl.name]
+                    if decl.annotation is str:
+                        # Doc 05 §1.5 + §O: the param stays a `str` in the
+                        # params document and the pydantic model (a business
+                        # user writes "government", never a code) — encoded
+                        # to its column's int32 code only here, at the
+                        # kernel-argument boundary.
+                        value = _resolve_str_param_code(step, decl.name, value, categories)
                     per_step_scalar[(sp.module, sname, decl.name)] = value
                     # The unqualified key is kept only for callers that drive
                     # runtime/ directly with no graph above them, where module
@@ -401,31 +502,22 @@ def apply(
     registry: dict[str, Any] = {}
     for name, ec in extracted.columns.items():
         annotation = input_by_name[name].annotation if name in input_by_name else float
-        if annotation is str:
-            # Doc 05 §1.5: "a string never enters a kernel as a string" —
-            # it enters as a dictionary code. A step declaring `sector: str`
-            # and comparing it against a literal ("private") is comparing a
-            # code to text that was never encoded to match; that silently
-            # evaluates to False every time rather than raising, which is
-            # the one outcome doc 05 §9's acceptance bar rules out. Full
-            # code-mapping (translating the literal into its column's code
-            # at compile time) is real work this pass doesn't do — loud
-            # failure naming the column, rather than a silent 0.0, is the
-            # honest interim answer.
-            raise NotImplementedError(
-                f"column '{name}' is declared `str` and enters the kernel "
-                "as a dictionary code, not literal text (doc 05 §1.5) — "
-                "decider2 does not yet rewrite a step's string comparisons "
-                "against those codes, so wiring it this way is not safe. "
-                "Compare against the pre-encoded numeric code instead of "
-                "the raw string, or drop the `str` annotation."
-            )
+        # Doc 05 §1.5: "a string never enters a kernel as a string" — a
+        # `str`-declared column already arrived as a dictionary code
+        # (`extract_frame`/`EntryMode.CODES`); this just settles it onto the
+        # int32 the kernel is typed against (`compile.driver.numpy_dtype`).
+        # A bare string literal in the step body still cannot be compared
+        # against that code (`resolve_params` below only encodes a
+        # *declared* `param()`), so that case still fails loudly rather
+        # than silently comparing wrong — see
+        # `test_a_string_input_is_never_silently_zeroed`.
         registry[name] = ec.values.astype(numpy_dtype(annotation), copy=False)
         if ec.validity is not None:
             registry[f"__valid__{name}"] = ec.validity
 
     resolved = resolve_params(
-        steps, params, shared_overrides=shared, param_spaces=param_spaces, owners=owners
+        steps, params, shared_overrides=shared, param_spaces=param_spaces, owners=owners,
+        categories=extracted.categories,
     )
     n = extracted.kernel_frame.height
     registry = _run(

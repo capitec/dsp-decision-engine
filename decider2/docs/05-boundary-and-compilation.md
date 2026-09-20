@@ -173,6 +173,14 @@ in the frame tier, pass the boolean or the code into the kernel; the kernel then
 reads it in 0.05 ms. A step that wants a regex is telling you it is a frame
 operation wearing a step's clothes.
 
+> **A bare literal must be a build error, because nothing downstream will catch
+> it.** `int32 == "private"` compiles in nopython and is silently `False` forever
+> — numba follows CPython's `int == str` semantics, so there is no `TypingError`
+> to rely on (§O). A step reading a `str` input and declaring no `str` `param()`
+> is therefore rejected at **param resolution, before anything compiles**, naming
+> the column and pointing at the param form. This guard cannot be inherited from
+> the type checker and cannot be deferred to codegen.
+
 **`typed.List[str]` remains available** for genuine per-row string manipulation
 that neither hoisting nor the frame tier covers — with its 31× cost stated up
 front rather than discovered in production.

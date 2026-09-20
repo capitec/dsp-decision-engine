@@ -13,7 +13,7 @@ null in each column means.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Sequence
 
 import numpy as np
@@ -65,6 +65,13 @@ class ExtractedColumn:
     unconditionally safe to read: `REQUIRED` nulls were routed away before
     this ran (see `extract_frame`), and `MISSING_AS`/`NOT_APPLICABLE_AS`
     nulls were filled.
+
+    `categories` is populated only for `EntryMode.CODES` columns (doc 05
+    §1.5's Utf8/Categorical/Enum row) — the dictionary a code is an index
+    into, in code order (`.cat.get_categories().to_list()`). This is what
+    lets a `str`-typed param be resolved to the matching code at
+    param-resolution time (`runtime.invoke.resolve_params`) instead of the
+    kernel ever seeing text.
     """
 
     name: str
@@ -72,6 +79,7 @@ class ExtractedColumn:
     validity: np.ndarray | None
     plan: ColumnPlan
     fill: FillInfo | None = None
+    categories: tuple[str, ...] | None = None
 
 
 def rechunk_once(frame: pl.DataFrame) -> pl.DataFrame:
@@ -116,17 +124,26 @@ def _extract_numeric_like(series: pl.Series) -> tuple[np.ndarray, bool]:
         return values.to_numpy(), False
 
 
-def _extract_codes(series: pl.Series) -> np.ndarray:
+def _extract_codes(series: pl.Series) -> tuple[np.ndarray, tuple[str, ...]]:
     """Categorical/Enum/Utf8 all enter as integer codes (doc 05 §1.5) — a
     string never enters a kernel as a string. Categorical/Enum already store
     codes; Utf8 is dictionary-encoded first (`cast(pl.Categorical)`), then
     the same code extraction applies.
+
+    Returns `(codes, categories)` — the category list is the dictionary a
+    code indexes into (doc 05 §1.5 "Strings in detail", EXPERIMENTS.md §O):
+    a `str`-typed param's literal is resolved against it at param-resolution
+    time, rather than discarded here as it used to be.
     """
     base = series.dtype.base_type()
     if base in (pl.Categorical, pl.Enum):
-        return _raw_values(series).to_numpy(allow_copy=False)
+        codes = _raw_values(series).to_numpy(allow_copy=False)
+        categories = tuple(series.cat.get_categories().to_list())
+        return codes, categories
     encoded = series.cast(pl.Categorical)
-    return _raw_values(encoded).to_numpy(allow_copy=False)
+    codes = _raw_values(encoded).to_numpy(allow_copy=False)
+    categories = tuple(encoded.cat.get_categories().to_list())
+    return codes, categories
 
 
 def extract_decimal_as_cents(series: pl.Series, *, money_scale: int = 2) -> np.ndarray:
@@ -182,11 +199,11 @@ def extract_column(series: pl.Series, decl: Input | None = None) -> ExtractedCol
         raise NeedsKernelSplit(series.name, series.dtype, reason=plan.note)
 
     if null_policy is NullPolicy.OPTIONAL:
-        values = _extract_by_plan(series, plan)
+        values, categories = _extract_by_plan(series, plan)
         validity = validity_mask(series)
         if validity is None:
             validity = np.ones(series.len(), dtype=bool)
-        return ExtractedColumn(series.name, values, validity, plan)
+        return ExtractedColumn(series.name, values, validity, plan, categories=categories)
 
     if null_policy in (NullPolicy.MISSING_AS, NullPolicy.NOT_APPLICABLE_AS):
         assert decl is not None
@@ -204,19 +221,23 @@ def extract_column(series: pl.Series, decl: Input | None = None) -> ExtractedCol
             f"{series.null_count()} null(s); route it with "
             "boundary.nulls.route_required_nulls first (doc 03 §1)"
         )
-    values = _extract_by_plan(series, plan)
-    return ExtractedColumn(series.name, values, None, plan)
+    values, categories = _extract_by_plan(series, plan)
+    return ExtractedColumn(series.name, values, None, plan, categories=categories)
 
 
-def _extract_by_plan(series: pl.Series, plan: ColumnPlan) -> np.ndarray:
+def _extract_by_plan(series: pl.Series, plan: ColumnPlan) -> tuple[np.ndarray, tuple[str, ...] | None]:
+    """Values, plus the category list for a `CODES` column (`None`
+    otherwise) — the pair `extract_column` needs to populate
+    `ExtractedColumn.categories`.
+    """
     mode = plan.entry_mode
     if mode in (EntryMode.NATIVE, EntryMode.COPY_VALIDITY, EntryMode.AS_INTEGER, EntryMode.BUFFER_COPY):
         values, _zero_copy = _extract_numeric_like(series)
-        return values
+        return values, None
     if mode is EntryMode.CODES:
         return _extract_codes(series)
     if mode is EntryMode.SCALED_INT64:
-        return extract_decimal_as_cents(series)
+        return extract_decimal_as_cents(series), None
     raise NeedsKernelSplit(series.name, series.dtype, reason=plan.note)  # pragma: no cover — guarded above
 
 
@@ -225,11 +246,18 @@ class ExtractedFrame:
     """The whole-frame result of `extract_frame`: every input column, ready
     for the calling convention, plus the routing decision for rows a
     `REQUIRED` null pulled out before the kernel ever saw them.
+
+    `categories` is the frame-level counterpart of `ExtractedColumn.
+    categories` — every `CODES`-entry-mode column's name mapped to its
+    category tuple, gathered here so a caller (`runtime.invoke.resolve_
+    params`) can resolve a `str`-typed param's literal without walking
+    `columns` itself.
     """
 
     columns: dict[str, ExtractedColumn]
     routing: NullRouting
     kernel_frame: pl.DataFrame  # the row subset actually handed to the kernel
+    categories: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
 
 def extract_frame(
@@ -272,4 +300,7 @@ def extract_frame(
             continue  # unbound input: graph/resolve.py's job (doc 03 §2.2), not this function's
         columns[decl.name] = extract_column(kernel_frame[decl.name], decl)
 
-    return ExtractedFrame(columns=columns, routing=routing, kernel_frame=kernel_frame)
+    categories = {
+        name: ec.categories for name, ec in columns.items() if ec.categories is not None
+    }
+    return ExtractedFrame(columns=columns, routing=routing, kernel_frame=kernel_frame, categories=categories)

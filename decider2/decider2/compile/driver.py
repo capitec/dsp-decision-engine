@@ -70,6 +70,13 @@ _NUMBA_BY_ANNOTATION: dict[Any, Any] = {
     bool: nbtypes.boolean,
     int: nbtypes.int64,
     float: nbtypes.float64,
+    # doc 05 §1.5 "Strings in detail": a string never enters a kernel as a
+    # string — it enters as its dictionary code (EXPERIMENTS.md §O measured
+    # the alternative, `typed.List[str]`, at 31x end to end). `str` maps to
+    # the same int32 both here and in `_NUMPY_BY_ANNOTATION` below, for an
+    # input column and for a `str`-declared param alike, so the two never
+    # silently disagree about what a step's `sector: str` means.
+    str: nbtypes.int32,
 }
 
 # The runtime-array counterpart of the table above (doc 00 §2: "money is
@@ -82,6 +89,9 @@ _NUMPY_BY_ANNOTATION: dict[Any, Any] = {
     bool: np.bool_,
     int: np.int64,
     float: np.float64,
+    # See `_NUMBA_BY_ANNOTATION` above: a `str` annotation is a dictionary
+    # code at the boundary, doc 05 §1.5.
+    str: np.int32,
 }
 
 
