@@ -127,6 +127,10 @@ numba int64 wraps silently, as does numpy.
 - **Never call bare `round()` in a step.** Use the framework's `round_half_up`,
   which is defined to give the same answer in every execution mode. A lint
   enforces it (doc 07 §6).
+  > **NOT BUILT (review finding 7, 2026-09-20).** `round_half_up` does not
+  > exist anywhere in the package, and no lint forbids a bare `round()`. The
+  > table above is still the correctness argument for why one is needed —
+  > only the function and the lint are missing.
 - **Accumulate in float64, not int64**, where a running total can grow: float64 is
   exact to 2⁵³, which in cents is about R90 trillion. An int64 cent accumulator is
   not safe at batch scale.
@@ -715,6 +719,18 @@ signature is the better slot:
 
 ### Tables (keyed lookups) — provisional
 
+> **BEING BUILT (review finding 7, 2026-09-20).** The exact sketch below
+> (`class TermTable(Table): ...`) does not exist — there is no `Table` base
+> class. A different, real implementation of the same need is being built
+> concurrently in `decider2.tables` (`tables/build.py`, `tables/codegen.py`,
+> `tables/schema.py`): a `DecisionTable` pydantic document plus
+> `table_module(doc)`, which returns an ordinary `Module` and hands its rows
+> across as the `shared` bundle (doc 03 §4.2) rather than as a `tables`
+> argument, so a row edit is free of compilation (doc 08 §3.4). See
+> `tests/test_tables.py` for its current shape; verify against the package
+> before relying on the sketch below, which may be superseded rather than
+> implemented as written.
+
 Segment-varying cutoffs are **not** params. Sketch only; lowest-confidence part
 of this document:
 
@@ -833,6 +849,13 @@ project with hundreds of values cannot afford a mapping at every call site.
 
 **2. A project vocabulary map** — one declaration for systematic differences,
 rather than one per module:
+
+> **NOT BUILT (review finding 7, 2026-09-20).** `Vocabulary` and
+> `.with_vocabulary()` do not exist. Layers 1 (name matching, §5.1) and 3
+> (`.relabel(reads=..., writes=...)`, below) are both real and tested today;
+> only this middle layer — for the hundreds-of-variables, systematic-rename
+> case — is unbuilt. A project with that shape currently has only layer 3's
+> per-instance relabel available, one mapping per module.
 
 ```python
 # vocabulary.py — declared once for the project
@@ -1137,6 +1160,13 @@ keeps the §3 scope invariant uniform.
 
 ### 8.1 Sequence — `|`
 
+> **NOT BUILT (review finding 7, 2026-09-20).** `decider2.frame` does not
+> exist — `Join`, `Aggregate` and `Filter` below are not implemented. `|` /
+> `flow()` / `compose()` (`decider2.graph.pipeline`) are real and are what
+> the rest of this section (written order is execution order, one kernel
+> per module by default) actually describes and is tested against; only the
+> frame-operation elements in the sample pipeline below are missing.
+
 ```python
 from decider2.frame import Join, Aggregate, Filter
 
@@ -1170,6 +1200,19 @@ pipeline = (
   survive.
 
 ### 8.2 Branch
+
+> **NOT BUILT (review finding 7, 2026-09-20).** `Branch` does not exist —
+> two evaluation agents planned around it and never discovered its absence.
+> A related but deliberately DIFFERENT mechanism is being built concurrently
+> in `decider2.trees` (`tree_module(doc)`, doc 08 §3's data-shaped
+> interior): `trees/build.py`'s own docstring is explicit that this is not
+> `Branch` and does not become it — a tree "routes between *leaf values* in
+> one closed vocabulary" via a document a UI writes, where `Branch` (below)
+> "routes between *modules* — arbitrary Python bodies, each its own scope."
+> Doc 08 §2 also forbids building `Branch` out of config, which is one
+> reason the tree work does not attempt to supersede it. Treat `Branch` as
+> unbuilt, not as "superseded by trees" — the two answer different
+> questions.
 
 ```python
 TermCapRules = Branch(
@@ -1212,6 +1255,10 @@ evaluate every arm and select.
 
 ### 8.3 Loop
 
+> **NOT BUILT (review finding 7, 2026-09-20).** `Loop` does not exist,
+> concurrently or otherwise. Verify against the package before relying on
+> this section.
+
 ```python
 BestOffer = Loop(
     should_continue,                   # (carried…, loop_idx) -> bool
@@ -1249,6 +1296,9 @@ feasibility signal rather than as evidence, and re-establish it in E2.
 
 ### Escape hatch
 
+> **NOT BUILT (review finding 7, 2026-09-20).** `decider2.frame` and
+> `breaks_lineage` do not exist.
+
 ```python
 from decider2.frame import breaks_lineage
 
@@ -1263,6 +1313,13 @@ survives.
 ---
 
 ## 9. Inspection
+
+> **NOT BUILT (review finding 7, 2026-09-20).** `.lineage()`, `.render()`
+> and `diff()` do not exist on `Module`/`Pipeline`. `.schema()` IS built and
+> tested (`Pipeline.schema()`, `decider2/graph/pipeline.py` — "lists every
+> unbound input at once", §2.2) — it returns
+> `{"inputs": ..., "outputs": ..., "terminals": ...}`, not the exact shape
+> the comment below implies, but the call itself works today.
 
 ```python
 Affordability.lineage("final_score")   # static: inputs + steps that can affect it

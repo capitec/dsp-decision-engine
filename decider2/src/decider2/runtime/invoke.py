@@ -624,13 +624,28 @@ def _scatter_back(
 
 def _extract_scalar(inp: Input, value: Any) -> tuple[np.ndarray, "np.ndarray | None"]:
     """MINIMAL BOUNDARY SHIM — see module docstring. Every input must
-    already be a plain Python number/bool; no dtype ladder (doc 05 §1.5)."""
+    already be a plain Python number/bool; no dtype ladder (doc 05 §1.5).
+
+    Doc 00 §2 / doc 03 §1 / doc 05 §9 criterion 4 (review finding 2): the
+    array dtype is the SAME `compile.driver.numpy_dtype(inp.annotation)`
+    `apply()` uses (`runtime.invoke.apply`, `annotation = input_by_name[name
+    ].annotation ...`), not a blanket `float64`. Forcing every input through
+    `float(value)` onto `np.float64` silently loses precision above 2**53
+    for an `int`-annotated input, and produces a `float64` argument for a
+    step that indexes a tuple/list by that same int — which numba refuses
+    (`getitem(..., float64)`) even though the identical step compiles fine
+    under `apply()`, where the column really is int64. Matching apply()'s
+    resolution here — instead of inventing a new, independently-correct one
+    — is the fix: whatever apply() would do for this annotation, score()
+    now does too.
+    """
+    dtype = numpy_dtype(inp.annotation)
     if value is not None:
-        arr = np.array([float(value)], dtype=np.float64)
+        arr = np.array([value], dtype=dtype)
         return (arr, np.array([True])) if inp.null_policy is NullPolicy.OPTIONAL else (arr, None)
     if inp.null_policy in (NullPolicy.MISSING_AS, NullPolicy.NOT_APPLICABLE_AS):
-        return np.array([float(inp.fill)], dtype=np.float64), None
-    return np.array([0.0], dtype=np.float64), np.array([False])
+        return np.array([inp.fill], dtype=dtype), None
+    return np.array([0], dtype=dtype), np.array([False])
 
 
 def score(
@@ -665,18 +680,41 @@ def score(
 
     routed_reason: str | None = None
     registry: dict[str, Any] = {}
+    record_categories: dict[str, tuple[str, ...]] = {}
     for inp in interface.inputs:
-        if inp.name not in record:
-            continue
-        value = record[inp.name]
+        # Doc 03 §1 (review finding 4): absent and null share one path. A
+        # key missing from `record` entirely used to `continue` past this
+        # input with nothing written to `registry` for it — the kernel then
+        # raised a bare `KeyError` three frames deep, in
+        # `modes._build_call_args`/`_row_kwargs`, naming no column and no
+        # policy. `record.get(inp.name)` folds "absent" and "present but
+        # None" into the same `value`, so `missing_as`/`not_applicable_as`
+        # fill an ABSENT key exactly as they fill a present null, and a
+        # REQUIRED input that is absent routes through `MissingInputPolicy`
+        # exactly like a REQUIRED null does — naming the column, never a
+        # raw exception from three frames away.
+        value = record.get(inp.name)
         if value is None and inp.null_policy is NullPolicy.REQUIRED:
             if inp.name in policy.raise_for:
                 raise ValueError(
                     f"step argument {inp.name!r} is declared required (no `| "
-                    f"None`) but the record's value for {inp.name!r} is null, "
-                    f"and {inp.name!r} is in raise_for (doc 03 §1)."
+                    f"None`) but the record has no usable value for "
+                    f"{inp.name!r} (absent or null), and {inp.name!r} is in "
+                    "raise_for (doc 03 §1)."
                 )
             routed_reason = routed_reason or inp.name
+            continue
+        if inp.annotation is str and isinstance(value, str):
+            # A str input enters the kernel as a dictionary code (doc 05
+            # §1.5). apply() takes the dictionary from the column; a single
+            # record has no column, so the record IS its own dictionary: this
+            # value is code 0, and _resolve_str_param_code then gives the
+            # literal 0 when it matches and -1 when it does not. `a == b` over
+            # one row is exactly `code(a) == code(b)` under that mapping, so
+            # score() and apply() agree without score() needing a declared
+            # vocabulary it has no way to know.
+            record_categories[inp.name] = (value,)
+            registry[inp.name] = np.array([0], dtype=np.int32)
             continue
         values, valid = _extract_scalar(inp, value)
         registry[inp.name] = values
@@ -694,7 +732,8 @@ def score(
         return out
 
     resolved = resolve_params(
-        steps, params, shared_overrides=shared, param_spaces=param_spaces, owners=owners
+        steps, params, shared_overrides=shared, param_spaces=param_spaces,
+        owners=owners, categories=record_categories,
     )
     registry = _run(
         steps, group_ids, owners, registry, resolved, 1,

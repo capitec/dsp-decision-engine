@@ -160,6 +160,19 @@ class NullRouting:
         return int(self.mask.sum())
 
 
+def _required_absent_message(name: str) -> str:
+    """Doc 05 §2's message shape, for a `raise_for` column that is not
+    merely null but entirely absent from the frame (review finding 4:
+    absent and null share one routing path, so a `raise_for` column being
+    absent gets the same hard, named failure a `raise_for` column full of
+    nulls gets — not a bare `KeyError` deep inside the kernel call)."""
+    return (
+        f"step argument '{name}' is declared required (no `| None`) but "
+        f"column '{name}' is not present in the input frame at all. Either "
+        f"supply the column or declare `{name}: <type> | None` (doc 03 §1)."
+    )
+
+
 def _required_null_message(name: str, series: pl.Series, bad_rows: np.ndarray) -> str:
     """Doc 05 §2's exact message shape, used only for `raise_for` columns."""
     n_bad = len(bad_rows)
@@ -190,16 +203,20 @@ def route_required_nulls(
     explicit that refer-not-raise is the default even with no pipeline-level
     `on_missing_input(...)` call at all.
 
-    Columns not present in `frame` are not this function's concern: an
-    unbound leaf input is a typo, caught by `graph/resolve.py` (doc 03 §2.2,
-    O23), not silently ignored here.
+    A column entirely absent from `frame` — not merely null on some rows —
+    is NOT a typo to leave for `graph/resolve.py` (doc 03 §2.2, O23): that
+    catches a WIRING mistake between modules at build time, over a fixed
+    set of declared names, never whether the actual `frame` handed to one
+    particular `.apply()` call happens to carry every declared leaf column.
+    Review finding 4: absent and null are the same situation from here on —
+    a `REQUIRED` column that simply is not in `frame` routes every row
+    exactly as if that column existed and were null in all of them (or, for
+    a `raise_for` column, fails the whole batch by name, same as a
+    `raise_for` column full of nulls does).
     """
     policy = policy or MissingInputPolicy()
     n = frame.height
-    required = [
-        decl for decl in inputs
-        if decl.null_policy is NullPolicy.REQUIRED and decl.name in frame.columns
-    ]
+    required = [decl for decl in inputs if decl.null_policy is NullPolicy.REQUIRED]
 
     # Structural columns first, and fully checked before any routing work is
     # done on the rest: a `raise_for` violation fails the whole batch, so
@@ -207,6 +224,8 @@ def route_required_nulls(
     for decl in required:
         if decl.name not in policy.raise_for:
             continue
+        if decl.name not in frame.columns:
+            raise ValueError(_required_absent_message(decl.name))
         series = frame[decl.name]
         if series.null_count() == 0:
             continue
@@ -220,6 +239,14 @@ def route_required_nulls(
     for decl in required:
         if decl.name in policy.raise_for:
             continue  # already cleared above
+        if decl.name not in frame.columns:
+            # The whole column is absent: every row is missing it, exactly
+            # as if every row's value were null (finding 4).
+            for i in range(n):
+                if not mask[i]:
+                    mask[i] = True
+                    column[i] = decl.name
+            continue
         series = frame[decl.name]
         if series.null_count() == 0:
             continue

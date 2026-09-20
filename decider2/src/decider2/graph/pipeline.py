@@ -316,6 +316,21 @@ def _walk(
     - a module's local leaf that nothing has produced yet is a genuine
       pipeline leaf (§2.2), unless it closely matches something already in
       scope, which is treated as the typo it almost certainly is;
+    - a leaf demanded here that a LATER module in the sequence goes on to
+      produce is a build error, not a silently-accepted leaf (review
+      finding 1, COLD-READ §1.4/§6.5): `|` order is execution order (§8.1),
+      so at the point this module ran, that later value did not exist yet —
+      the leaf it actually read came from the frame (or nowhere), while a
+      downstream consumer reading the SAME name after the later module runs
+      would silently get a different value. Distinguished from the legal
+      self-read waterfall (§3.2) by module identity, not by name: a module
+      reading the name it also writes registers the leaf and produces the
+      output in the SAME iteration of this loop (`leaf_owner[name] == m`),
+      whether that module is standalone (seeded from the frame) or is
+      itself a later link in a cross-module waterfall whose own leaf read
+      resolved against a still-earlier producer (never reaching `leaves` at
+      all, per the branch above). Only a DIFFERENT, EARLIER module having
+      already registered the same name as a leaf is the forward reference;
     - each production of a name resets its terminal flag — a fresh version
       is terminal again until *something after it* reads it, which is what
       lets a waterfall's intermediate versions still count as "consumed"
@@ -324,6 +339,7 @@ def _walk(
     produced_so_far: dict[str, list[str]] = {}
     terminal_flag: dict[str, bool] = {}
     leaves: dict[str, Input] = {}
+    leaf_owner: dict[str, Module] = {}
 
     for m in elements:
         iface = effective_interface(m)
@@ -344,7 +360,31 @@ def _walk(
                     f"'{near}'}}) (doc 03 §2.2, §5.2)."
                 )
             leaves[inp.name] = inp
+            leaf_owner[inp.name] = m
         for out in iface.outputs:
+            # Only the FIRST production of `out` can possibly be a forward
+            # reference: once `out` is in `produced_so_far`, every earlier
+            # `inp.name in produced_so_far` check above already resolves it
+            # via the waterfall (§2.1's "most recent wins") before `leaves`
+            # is ever consulted again, for every module from here on —
+            # including a chain of self-read waterfalls all narrowing the
+            # SAME name (`seed | income_cap | sector_cap`, each
+            # `@step(output="term_cap")` reading `term_cap`), which must
+            # keep working exactly as before.
+            if out not in produced_so_far and out in leaves and leaf_owner[out] is not m:
+                earlier = leaf_owner[out]
+                raise ValueError(
+                    f"module '{earlier.name}' reads '{out}' as a leaf input, "
+                    f"but module '{m.name}' — later in this pipeline — "
+                    f"produces '{out}' as an output. `|` order is execution "
+                    f"order (doc 03 §8.1): at the point '{earlier.name}' ran, "
+                    f"'{out}' did not exist yet as '{m.name}'s output, so "
+                    f"'{earlier.name}' silently read a different value (the "
+                    "input frame's column, or nothing at all) than a "
+                    f"consumer reading '{out}' after '{m.name}' would get. "
+                    f"Reorder the pipeline so '{m.name}' runs before "
+                    f"'{earlier.name}', or rename one of the two '{out}'s."
+                )
             produced_so_far.setdefault(out, []).append(m.name)
             terminal_flag[out] = True
 
