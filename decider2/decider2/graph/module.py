@@ -24,6 +24,18 @@ from decider2.types import Interface, Module, Step
 __all__ = ["module"]
 
 
+def _derived_name(steps: tuple) -> str | None:
+    """The name a single-step module takes from its function (doc 03 §5.3).
+
+    `Step.name` is the OUTPUT name, which `@step(output=...)` detaches from
+    the function name. The module is named after the function.
+    """
+    if len(steps) != 1:
+        return None
+    fn = steps[0].fn
+    return getattr(fn, "__name__", None) or steps[0].name
+
+
 def module(
     *elements: Callable | Step,
     name: str | None = None,
@@ -46,17 +58,24 @@ def module(
 
     steps = tuple(make_step(e) for e in elements)
 
+    # Doc 03 §5.3: a bare function used in a pipeline "becomes a single-step
+    # module, NAME FROM THE FUNCTION". The function's name, not the step's
+    # output name — those differ whenever @step(output=...) renames the
+    # output, which is exactly the waterfall idiom (§3.2). Deriving from the
+    # output made every `@step(output="term_cap")` rule a module called
+    # `term_cap`, so two rules narrowing the same value collided on their
+    # instance name and a legal waterfall could not be expressed at all.
+    derived = _derived_name(steps)
     if name is None:
-        if len(steps) == 1:
-            name = steps[0].name
-        else:
+        if derived is None:
             raise ValueError(
                 "module(...) with more than one step needs name= — there is "
                 "no single function to derive one from (doc 03 §5)."
             )
-    elif len(steps) == 1 and name == steps[0].name:
+        name = derived
+    elif derived is not None and name == derived:
         raise ValueError(
-            f"module({steps[0].name}, name={name!r}) restates the derived "
+            f"module({derived}, name={name!r}) restates the derived "
             "name — drop name= (doc 07 §6 lint: 'writing module(fn, "
             "name=\"fn\") is the same name twice')."
         )
