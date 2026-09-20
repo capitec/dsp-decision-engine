@@ -67,20 +67,22 @@ def test_repeated_calls_do_not_rebuild_the_driver():
 # A — the waterfall: a rule that narrows a value it also reads
 # ---------------------------------------------------------------------------
 
+@step(output="term_cap")
+def product_ceiling(requested_term: float,
+                    ceiling: float = param(60.0, ge=6, le=84)) -> float:
+    """TERM-0040 — the product ceiling."""
+    return min(requested_term, ceiling)
+
+
+@step(output="term_cap")
+def cap_by_income(term_cap: float, min_net_salary: float,
+                  cap: float = param(48.0, ge=6, le=60),
+                  floor: float = param(5000.0, ge=0)) -> float:
+    """TERM-0042 — cap below the income floor."""
+    return min(term_cap, cap) if min_net_salary < floor else term_cap
+
+
 def _waterfall():
-    @step(output="term_cap")
-    def product_ceiling(requested_term: float,
-                        ceiling: float = param(60.0, ge=6, le=84)) -> float:
-        """TERM-0040 — the product ceiling."""
-        return min(requested_term, ceiling)
-
-    @step(output="term_cap")
-    def cap_by_income(term_cap: float, min_net_salary: float,
-                      cap: float = param(48.0, ge=6, le=60),
-                      floor: float = param(5000.0, ge=0)) -> float:
-        """TERM-0042 — cap below the income floor."""
-        return min(term_cap, cap) if min_net_salary < floor else term_cap
-
     return product_ceiling, cap_by_income
 
 
@@ -115,12 +117,13 @@ def test_the_version_chain_matches_the_answer():
     assert out["term_cap@cap_by_income"].to_list() == [60.0, 48.0]
 
 
+def term_cap_a(term_cap: float) -> float:
+    """Narrow. Its own name resembles the input it legitimately reads."""
+    return term_cap - 1.0
+
+
 def test_a_legitimate_name_resembling_its_output_is_not_a_build_error():
     """Doc 03 §2.2's did-you-mean must not fire on a step's own output."""
-    def term_cap_a(term_cap: float) -> float:
-        """Narrow."""
-        return term_cap - 1.0
-
     out = flow(term_cap_a).apply(pl.DataFrame({"term_cap": [60.0]}))
     assert out["term_cap_a"].to_list() == [59.0]
 
