@@ -17,7 +17,7 @@ implementation starts, and says plainly which are cheap doc edits and which are 
 | finding | status |
 |---|---|
 | §1 citations | **noted.** The cited paths exist on an unpushed branch. A note in the README records which claims resolve only there, and doc 02 §3.2's "not new" de-risking claim is restated — `decider2` is a ground-up build, and the prototypes are a feasibility signal rather than a pedigree. Re-run the citation pass against a pushed commit and pin it. |
-| §1b scrub artefacts | **fixed.** Four ungrammatical substitutions repaired; an internal file path removed. `AliasCombineModule` and `_stage_*` remain — decide whether to keep them or relax the README claim. |
+| §1b scrub artefacts | **fixed.** Four ungrammatical substitutions repaired; one internal file path removed. `AliasCombineModule` and `_stage_*` are now scrubbed to illustrative names, so the README claim holds. |
 | §2.1 fusion (3 sites) | **fixed** in doc 03 §8.1, §12 and the inline comment. |
 | §2.2 E8 vs O10 | **fixed** in doc 06. |
 | §2.3 fourth null tier | **fixed** — doc 05 §2 is three tiers, with the rejection recorded. |
@@ -113,8 +113,8 @@ past end-of-file on the pushed tree (`functional.py:397`, `sequential.py:135`).
 ### 1b. Related: the confidentiality claim does not hold either
 
 README: *"no domain logic, field names, thresholds, rule identifiers or file paths from it
-appear here."* But doc 01 §5.2 names `AliasCombineModule`, doc 03 §8.3
-cites an internal file path, and `_stage_00`–`_09` appear in docs 01, 03 and 04.
+appear here."* **Resolved.** The two real identifiers that survived the first pass are now
+the illustrative `AliasCombineModule` and `_stage_00`–`_09`; an internal file path was removed earlier. The claim now holds.
 
 A scrub also left four sentences ungrammatical, where a project name was replaced with the
 phrase "a large internal workload": doc 02:262, doc 03:550, doc 06:38, doc 06:42. Example —
