@@ -21,8 +21,8 @@ import polars as pl
 
 from decider2.types import Input, MissingInputPolicy, NullPolicy
 
-from .dtypes import ColumnPlan, EntryMode, plan_column
-from .nulls import FillInfo, NullRouting, fill_column, route_required_nulls, validity_mask
+from .dtypes import ColumnPlan, DtypeTier, EntryMode, plan_column
+from .nulls import FillInfo, FillReason, NullRouting, fill_column, route_required_nulls, validity_mask
 
 __all__ = [
     "ExtractedColumn",
@@ -241,6 +241,53 @@ def _extract_by_plan(series: pl.Series, plan: ColumnPlan) -> tuple[np.ndarray, t
     raise NeedsKernelSplit(series.name, series.dtype, reason=plan.note)  # pragma: no cover — guarded above
 
 
+def _synthesize_absent_column(decl: Input, n: int) -> ExtractedColumn:
+    """Review finding 4: a declared input entirely absent from the frame —
+    not merely null on some rows — shares the same fill/route path a null
+    does; there is no polars `Series` to route/fill/mask against, so this
+    builds the placeholder `extract_column` would have produced had the
+    column existed and been null on every row.
+
+    A REQUIRED `decl` reaching here has already had every one of `n` rows
+    routed away by `route_required_nulls` (or the whole batch already
+    raised, for a `raise_for` column) — `n` is 0 in that case, and this only
+    has to produce a correctly-shaped EMPTY array so the compiled kernel's
+    calling convention still has something to bind its `array` argument
+    role against (without even an empty array in the registry, `fused` mode
+    raises a bare `KeyError` building the kernel call, three frames deep in
+    `modes._build_call_args` — the exact failure this finding names).
+    MISSING_AS/NOT_APPLICABLE_AS/OPTIONAL never route rows away, so `n` here
+    is the full `kernel_frame` height, filled/masked exactly as a genuinely
+    all-null column of that tier would be.
+
+    The synthesized dtype is a placeholder (`float64`), not `decl`'s
+    declared annotation: `runtime.invoke.apply` re-casts every column via
+    `numpy_dtype(annotation)` right after extraction regardless of what
+    dtype arrives here (see review finding 2's fix), so this only has to be
+    a valid, correctly-shaped numeric array, never the final typed one.
+    """
+    plan = ColumnPlan(
+        decl.name, pl.Null, DtypeTier.ZERO_COPY, EntryMode.NATIVE,
+        nullable=decl.null_policy is NullPolicy.OPTIONAL,
+        note="column absent from the input frame — synthesized placeholder (doc 03 §1)",
+    )
+    if decl.null_policy is NullPolicy.OPTIONAL:
+        values = np.zeros(n, dtype=np.float64)
+        validity = np.zeros(n, dtype=bool)
+        return ExtractedColumn(decl.name, values, validity, plan)
+    if decl.null_policy in (NullPolicy.MISSING_AS, NullPolicy.NOT_APPLICABLE_AS):
+        reason = (
+            FillReason.NOT_APPLICABLE if decl.null_policy is NullPolicy.NOT_APPLICABLE_AS
+            else FillReason.MISSING
+        )
+        values = np.full(n, decl.fill, dtype=np.float64)
+        fill = FillInfo(reason=reason, filled_count=n, filled_mask=np.ones(n, dtype=bool))
+        return ExtractedColumn(decl.name, values, None, plan, fill=fill)
+    # REQUIRED: every row was already routed away by route_required_nulls
+    # (or a raise_for violation already raised), so n must be 0 here.
+    return ExtractedColumn(decl.name, np.zeros(n, dtype=np.float64), None, plan)
+
+
 @dataclass(frozen=True)
 class ExtractedFrame:
     """The whole-frame result of `extract_frame`: every input column, ready
@@ -297,7 +344,15 @@ def extract_frame(
     columns: dict[str, ExtractedColumn] = {}
     for decl in inputs:
         if decl.name not in kernel_frame.columns:
-            continue  # unbound input: graph/resolve.py's job (doc 03 §2.2), not this function's
+            # Absent, not merely null (finding 4) — synthesize the same
+            # placeholder `route_required_nulls` already priced this
+            # column's absence in for (REQUIRED: every remaining row was
+            # already routed away, so `kernel_frame.height` is 0 here;
+            # MISSING_AS/NOT_APPLICABLE_AS/OPTIONAL: filled/masked over the
+            # full `kernel_frame` height, exactly as an all-null column
+            # would be).
+            columns[decl.name] = _synthesize_absent_column(decl, kernel_frame.height)
+            continue
         columns[decl.name] = extract_column(kernel_frame[decl.name], decl)
 
     categories = {
