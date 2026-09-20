@@ -18,7 +18,7 @@ from typing import Any, Callable, Sequence, Union
 
 from decider2.graph.interface import effective_interface, topological_steps
 from decider2.graph.module import module as _module
-from decider2.graph.resolve import suggest_name
+from decider2.resolve import suggest_name
 from decider2.types import Decision, Emit, Input, Interface, MissingInputPolicy, Module, Step
 
 __all__ = ["Pipeline", "flow", "compose"]
@@ -219,6 +219,23 @@ class Pipeline:
             policy=self.missing_input_policy,
         )
 
+    def serve(self, *, mode: str = "sealed") -> "ServeHandle":
+        """Doc 03 §6 — the long-running-service entry point: `handle =
+        pipeline.serve()`. The handle owns the params generation pointer
+        (`.stage()`/`.activate()`/`.rollback()`/`.pending`, doc 08 §4/§4.1b)
+        this pipeline is served under; `decider2/serving/` (doc 02 §3.6) is
+        built on top of it but nothing here imports that package, so a
+        handle works with no HTTP server present.
+
+        `mode` is doc 08 §4.1's deployment mode ("sealed" — the default,
+        highest assurance — or "live"): it governs whether a staged change
+        that would *recompile* is allowed to activate, not whether a params
+        retune is (a values-only change never recompiles either way).
+        """
+        from decider2.runtime.serve import ServeHandle
+
+        return ServeHandle(self, mode=mode)
+
 
 # --- construction -----------------------------------------------------------
 
@@ -415,21 +432,11 @@ def _check_emittable(e: Emit, versions: dict[str, tuple[str, ...]], leaf_names: 
 
 
 def _dedup_emits(emits: tuple[Emit, ...]) -> tuple[Emit, ...]:
-    seen: set[tuple[str, str | None]] = set()
-    out: list[Emit] = []
-    for e in emits:
-        key = (e.name, e.at)
-        if key not in seen:
-            seen.add(key)
-            out.append(e)
-    return tuple(out)
+    """Order-preserving de-dup. `Emit` is a frozen dataclass (`types.py`), so
+    it is hashable and `dict.fromkeys` (insertion-ordered) does this in one
+    line — no need for a hand-rolled `seen`-set walk."""
+    return tuple(dict.fromkeys(emits))
 
 
 def _dedup_strs(xs: tuple[str, ...]) -> tuple[str, ...]:
-    seen: set[str] = set()
-    out: list[str] = []
-    for x in xs:
-        if x not in seen:
-            seen.add(x)
-            out.append(x)
-    return tuple(out)
+    return tuple(dict.fromkeys(xs))
