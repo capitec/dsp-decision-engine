@@ -63,12 +63,29 @@ def raw_interface(module_name: str, steps: tuple[Step, ...], params_model: Any) 
 
     for s in steps:
         for inp in s.inputs:
+            # A step reading the name it also WRITES is the waterfall idiom
+            # (doc 03 §3.2: "A module may produce a value it also consumes.
+            # That is how a waterfall is expressed"). The value it reads is
+            # necessarily the *upstream* one, because §3.1 forbids a second
+            # producer of that name inside this module — so it is an external
+            # leaf, not an internal edge, and it does not make the name
+            # non-terminal. `topological_steps` already relies on the same
+            # `inp.name != s.name` distinction to avoid a false self-cycle.
+            if inp.name == s.name:
+                leaves.setdefault(inp.name, inp)
+                continue
             if inp.name in consumed_locally:
                 consumed_locally[inp.name] = True
                 continue
             if inp.name in leaves:
                 continue
-            near = suggest_name(inp.name, produced)
+            # Suggest only against names this step could legitimately have
+            # meant. Its own output is not one of them: a step never reads
+            # what it is in the middle of producing, and including it made
+            # the §2.2 did-you-mean fire on legitimate names that merely
+            # resemble their own output (`term_cap_a` reading `term_cap`).
+            candidates = tuple(n for n in produced if n != s.name)
+            near = suggest_name(inp.name, candidates)
             if near is not None:
                 raise _unbound_input_error(module_name, s.name, inp.name, near)
             leaves[inp.name] = inp
