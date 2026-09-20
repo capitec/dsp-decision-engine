@@ -1354,6 +1354,34 @@ numba's lack of `re` costs nothing: shape the string in the frame tier, pass the
 boolean or the code into the kernel. `str.contains` plus a kernel is 6.03 ms
 against 42.29 ms for `re` alone.
 
+### The compiler will never catch a bare literal — found during implementation
+
+`int32 == "private"` **compiles cleanly in nopython and evaluates to `False`
+forever.** No `TypingError`, no warning — numba simply follows CPython's own
+`int == str` semantics, where the comparison is legal and always false.
+
+```python
+@njit
+def f(codes):
+    return sum(1 for i in range(len(codes)) if codes[i] == "private")
+f(np.array([0, 1, 0, 2], dtype=np.int32))    # -> 0, silently
+```
+
+This matters more than it first reads. The rule "a string enters as a code"
+means an author who writes a bare literal is comparing a code against text that
+was never encoded to match it — and **every layer that could plausibly catch
+that, doesn't**. Not the type checker, because the types are legal. Not the
+kernel, because it runs. Not a test over real data, because the answer is a
+plausible-looking zero rather than a crash. It is doc 03 §2.1's worst failure
+mode arriving through the one door nobody is watching.
+
+So the guard cannot be inherited from numba and cannot wait for codegen. It is an
+explicit **signature-shape check at param resolution**, before anything compiles:
+a step reading a `str`-typed input and declaring no `str`-typed `param()` is a
+build error naming the column and pointing at the param form. An earlier comment
+in the implementation assumed numba's type checking would eventually supply this
+for free; it never will.
+
 ### What this settles
 
 1. Strings are **not** an unsupported dtype. They are a tier-2 dtype whose
