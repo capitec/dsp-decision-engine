@@ -234,3 +234,48 @@ def test_a_frame_column_shadowing_a_step_output_is_a_build_error():
     with pytest.raises(Exception) as exc:
         flow(disposable_income).apply(frame)
     assert "disposable_income" in str(exc.value)
+
+
+# ---------------------------------------------------------------------------
+# Strings — EXPERIMENTS.md §O. A string enters as a dictionary code, and the
+# literal it is compared against is a *param*, so changing it is a value change.
+# ---------------------------------------------------------------------------
+
+def sector_rate(
+    sector: str,
+    private: str = param("private"),
+    rate: float = param(0.9, gt=0),
+) -> float:
+    """Discount private-sector applicants.
+
+    Implements: Credit Policy §3.1
+    """
+    return rate if sector == private else 1.0
+
+
+SECTOR_FRAME = pl.DataFrame({"sector": ["private", "public", "private", "government"]})
+
+
+@pytest.mark.parametrize("mode", ["interpreted", "stepped", "fused"])
+def test_a_string_literal_declared_as_a_param_compares_correctly(mode):
+    """Doc 05 §1.5 + §O: the author compares against a declared literal; the
+    kernel compares int32 codes."""
+    out = flow(sector_rate).apply(SECTOR_FRAME, mode=mode)
+    assert out["sector_rate"].to_list() == [0.9, 1.0, 0.9, 1.0]
+
+
+def test_changing_a_string_literal_is_a_value_change():
+    """§O: the literal is a kernel argument, so a policy moving from 'private'
+    to 'government' is a params edit — doc 08 §2's guarantee, for strings."""
+    out = flow(sector_rate).apply(
+        SECTOR_FRAME, params={"sector_rate": {"private": "government"}}
+    )
+    assert out["sector_rate"].to_list() == [1.0, 1.0, 1.0, 0.9]
+
+
+def test_a_literal_absent_from_the_data_never_matches():
+    """§O: it resolves to a sentinel code rather than failing."""
+    out = flow(sector_rate).apply(
+        SECTOR_FRAME, params={"sector_rate": {"private": "martian"}}
+    )
+    assert out["sector_rate"].to_list() == [1.0, 1.0, 1.0, 1.0]

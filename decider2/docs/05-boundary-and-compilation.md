@@ -127,6 +127,56 @@ correctness rather than performance:
   code stability a declared property of the input schema rather than an accident
   of the data.
 
+#### Strings in detail — measured, §O
+
+**Numba is not the constraint.** In nopython mode `==`, `!=`, `len`,
+`startswith`, `endswith`, `in`, `find`, `split`, `upper` and
+`numba.typed.List[str]` all compile and run. Any design premised on "numba can't
+do strings" is solving the wrong problem. **The boundary is the constraint**:
+building a `typed.List` from a polars column means materialising N Python string
+objects and boxing each one — 1340 ms against 43 ms for dictionary codes at 200k
+rows, and **31× end-to-end, 438× in the kernel**. That is the whole reason for
+the rule above.
+
+**The author still writes ordinary Python.** For a comparison between a
+string-typed input and a string constant, codegen emits a kernel over `int32`
+codes and **hoists each distinct literal to a kernel argument** holding its code:
+
+```python
+def rate(sector: str) -> float:              # what the author writes
+    return 0.9 if sector == "private" else 1.0
+```
+
+```python
+def kernel(sector, out, _lit_private):       # what is emitted
+    for i in range(len(sector)):
+        out[i] = 0.9 if sector[i] == _lit_private else 1.0
+```
+
+0.16 ms at 200k rows, **115× faster** than the `typed.List` route. A literal
+absent from the data resolves to a `-1` sentinel and simply never matches, rather
+than failing. And because the literal is an *argument*:
+
+> **Changing a string literal is a value change, not a recompile.** Measured:
+> `len(kernel.signatures)` stays at **1** across three distinct literal sets. A
+> policy moving from `"private"` to `"self_employed"` is a params edit with a
+> 3.36 µs swap — the same guarantee doc 08 §2 gives a numeric threshold, which
+> an earlier draft assumed strings could not have.
+
+The transform is deliberately bounded to that one shape. It is not general AST
+rewriting.
+
+**`re` does not compile in nopython, and that costs nothing.** Regex is a
+**frame operation** (doc 02 §6's `frame/`), where polars' Rust `regex` crate beats
+Python's `re` by **7×** — 5.98 ms against 42.29 ms at 200k rows. Shape the string
+in the frame tier, pass the boolean or the code into the kernel; the kernel then
+reads it in 0.05 ms. A step that wants a regex is telling you it is a frame
+operation wearing a step's clothes.
+
+**`typed.List[str]` remains available** for genuine per-row string manipulation
+that neither hoisting nor the frame tier covers — with its 31× cost stated up
+front rather than discovered in production.
+
 ## 2. Nulls
 
 **The slot under a null contains leftover garbage, not zero.** A measured left

@@ -1287,3 +1287,80 @@ pattern across configs, not a direct measurement on A alone.
    periodic hard freeze rather than probabilistic preemption), and full
    28/28-core saturation was intentionally not run (bounded to 14/28 out of
    consideration for other users of this shared box).
+
+---
+
+## O — Strings: numba supports them, the boundary does not, and regex belongs elsewhere
+
+The doc said "strings enter as codes" without saying why, and the first
+implementation raised `NotImplementedError` on a string input. Both the capability
+claim and the cost were unmeasured. Numba 0.67, polars 1.41, 200k rows.
+
+### Numba's unicode support is real and wider than assumed
+
+In nopython mode, all of these compile and run: `==`, `!=`, `len`, `startswith`,
+`endswith`, `in`, `find`, `split`, `upper`, and `numba.typed.List[str]`. So
+"numba can't do strings" is false, and any design that assumes it is solving the
+wrong problem.
+
+**`re` does not compile.** `TypingError` in the nopython frontend. There is no
+regex inside a kernel, and no flag that changes that.
+
+### The boundary is what costs, and it costs 31×
+
+| route | boundary | kernel | total |
+|---|---|---|---|
+| `typed.List[str]` from a polars column | 1340.6 ms | 18.48 ms | **1359.1 ms** |
+| dictionary codes (`Categorical.to_physical()`) | 43.4 ms | 0.04 ms | **43.4 ms** |
+
+**31× end-to-end, 438× in the kernel.** Building a `typed.List` means
+materialising N Python string objects and boxing each into numba's runtime;
+dictionary codes are an `int32` buffer polars already has. This is the whole
+justification for doc 05 §1.5's "strings enter as codes" and it was never
+recorded.
+
+### Hoisting literals keeps the author's code natural — and makes a literal a *value*
+
+An author writes `sector == "private"`. Codegen emits a kernel over `int32` codes
+with each distinct literal hoisted to a kernel argument holding its code:
+
+| | |
+|---|---|
+| 200k rows, two literals | **0.16 ms** |
+| vs `typed.List` route | **115× faster** |
+| literal absent from the data | never matches; `-1` sentinel, no crash |
+| `len(kernel.signatures)` across three distinct literal sets | **1** |
+
+That last row is the one that matters beyond performance. **A string literal
+becomes a kernel argument, so changing it is a value change with no recompile** —
+the same guarantee doc 08 §2 gives a numeric threshold. A policy moving from
+`"private"` to `"self_employed"` is a params edit, not a deploy.
+
+The transform is bounded: it applies to a comparison between a string-typed input
+and a string constant. It is not general AST rewriting, and anything outside that
+shape falls to the routes below.
+
+### Regex belongs in the frame tier, and is faster there anyway
+
+| | 200k rows |
+|---|---|
+| `pl.col(x).str.contains(regex)` | **5.98 ms** |
+| `pl.col(x).str.extract(regex)` | 20.91 ms |
+| Python `re` loop | 42.29 ms |
+| kernel reading the resulting bool | 0.05 ms |
+
+Polars' regex is the Rust `regex` crate and beats Python's `re` by **7×**. So
+numba's lack of `re` costs nothing: shape the string in the frame tier, pass the
+boolean or the code into the kernel. `str.contains` plus a kernel is 6.03 ms
+against 42.29 ms for `re` alone.
+
+### What this settles
+
+1. Strings are **not** an unsupported dtype. They are a tier-2 dtype whose
+   boundary representation is dictionary codes (doc 05 §1.5).
+2. Equality and membership against literals work through hoisting, with the
+   author writing ordinary Python.
+3. Regex, and any per-row string manipulation, is a **frame operation** — which
+   is where it is faster regardless.
+4. `typed.List[str]` stays available as a documented escape hatch for genuine
+   per-row string work, with its 31× cost stated rather than discovered.
