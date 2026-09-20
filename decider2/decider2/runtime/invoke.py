@@ -39,6 +39,7 @@ by hand rather than reimplementing the frame-shaped functions over one row.
 from __future__ import annotations
 
 import collections
+import inspect
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -46,7 +47,7 @@ from typing import Any, Mapping, Sequence
 import numpy as np
 import polars as pl
 
-from decider2.compile.driver import build_driver
+from decider2.compile.driver import build_driver, numpy_dtype
 from decider2.runtime import modes
 from decider2.runtime.modes import ResolvedParams
 from decider2.types import Decision, Input, Interface, MissingInputPolicy, NullPolicy, Step
@@ -54,6 +55,12 @@ from decider2.types import Decision, Input, Interface, MissingInputPolicy, NullP
 DEFAULT_BUILD_DIR = Path(".decider2_cache")
 
 _VALID_MODES = ("interpreted", "stepped", "fused")
+
+
+def _plain_name(name: str) -> str:
+    """The un-qualified half of a possibly `name@module`-qualified emit
+    (doc 03 §7)."""
+    return name.split("@", 1)[0]
 
 
 # ---------------------------------------------------------------------------
@@ -134,6 +141,7 @@ def resolve_params(
     *,
     shared_overrides: Mapping[str, Any] | None = None,
     param_spaces: Sequence[ParamSpace] | None = None,
+    owners: Sequence[str] | None = None,
 ) -> ResolvedParams:
     """Build one `ResolvedParams` bundle for this invocation.
 
@@ -166,6 +174,19 @@ def resolve_params(
     overrides = overrides or {}
     spaces = tuple(param_spaces) if param_spaces is not None else _default_param_spaces(steps)
     by_module = {sp.module: sp for sp in spaces}
+    owners = list(owners) if owners is not None else [s.name for s in steps]
+    # Doc 03 §4.1/§10: a step's OUTPUT name is not unique across modules —
+    # that is the waterfall idiom (§3.2), `@step(output="term_cap")` on two
+    # different rules. A flat `{step.name: step}` map silently collapses
+    # them (the second module's Step overwrites the first's), so the wrong
+    # step's OWN `.params` gets consulted below and the first module's knob
+    # is never populated at all. `(owner, step.name)` is unique — module
+    # instance names are enforced unique per pipeline
+    # (`graph.pipeline._check_unique_instance_names`) — so key by that
+    # instead; `step_by_name` survives only as the fallback for a caller
+    # bypassing the graph layer, where no such collision exists to begin
+    # with (`_default_param_spaces`'s own module==step.name convention).
+    step_by_owner_name = {(o, s.name): s for o, s in zip(owners, steps)}
     step_by_name = {s.name: s for s in steps}
 
     for key in overrides:
@@ -173,6 +194,8 @@ def resolve_params(
             raise _unknown_namespace_error(key, tuple(by_module))
 
     per_step_scalar: dict = {}
+    _plain_owner: dict = {}
+    _ambiguous_plain: set = set()
     per_step_bundle: dict = {}
 
     for sp in spaces:
@@ -190,32 +213,73 @@ def resolve_params(
         values = sp.model(**merged).model_dump() if sp.model is not None else merged
 
         for sname in sp.step_names:
-            step = step_by_name.get(sname)
+            step = step_by_owner_name.get((sp.module, sname), step_by_name.get(sname))
             if step is None:
                 continue
             if step.reads_params:
                 fields = tuple(values.keys())
-                bundle_cls = collections.namedtuple(f"_{sname}_params", fields or ("_empty",))
-                per_step_bundle[sname] = (
-                    bundle_cls(**values) if fields else bundle_cls(_empty=None)
-                )
+                if not fields:
+                    # Doc 03 §4.2's contract applies to any bare bundle
+                    # argument, not only `shared`: a step reading `params`
+                    # needs at least one field, or there is nothing to hand
+                    # it — `namedtuple(..., ("_empty",))` used to be
+                    # attempted here and fail with a confusing "field names
+                    # cannot start with an underscore", naming an internal
+                    # placeholder rather than the module's actual problem.
+                    raise ValueError(
+                        f"module '{sp.module}' step '{sname}' reads a bare "
+                        "`params` argument, but the module declares no "
+                        "param() field and no params= model — there is "
+                        "nothing to pass it (doc 03 §4.2)."
+                    )
+                bundle_cls = collections.namedtuple(f"_{sname}_params", fields)
+                bundle = bundle_cls(**values)
+                per_step_bundle[sname] = bundle
+                per_step_bundle[(sp.module, sname)] = bundle
                 continue
             # A step reading named params takes only the fields it declared:
             # its siblings' knobs share the module's namespace but are not
             # arguments to this function (doc 03 §4.1).
             for decl in step.params:
                 if decl.name in values:
-                    per_step_scalar[(sname, decl.name)] = values[decl.name]
+                    value = values[decl.name]
+                    per_step_scalar[(sp.module, sname, decl.name)] = value
+                    # The unqualified key is kept only for callers that drive
+                    # runtime/ directly with no graph above them, where module
+                    # and step name coincide. In a waterfall two modules DO
+                    # share a step name (doc 03 §3.2), and this key is then
+                    # ambiguous. Poison it rather than let the last writer win
+                    # — a lookup that falls through to it would otherwise read
+                    # another rule's threshold and return a plausible wrong
+                    # number, which doc 03 §2.1 calls the worst failure mode
+                    # the design can have.
+                    plain = (sname, decl.name)
+                    if plain in _plain_owner and _plain_owner[plain] != sp.module:
+                        per_step_scalar.pop(plain, None)
+                        _ambiguous_plain.add(plain)
+                    elif plain not in _ambiguous_plain:
+                        _plain_owner[plain] = sp.module
+                        per_step_scalar[plain] = value
 
     shared = None
-    if any(s.reads_shared for s in steps):
-        # No SharedParams model is reachable from a flat step list (doc 03
-        # §4.2 wants one declared once per app/pipeline); unvalidated here —
-        # see module docstring / report.
+    shared_reading_steps = tuple(s.name for s in steps if s.reads_shared)
+    if shared_reading_steps:
         raw_shared = dict(shared_overrides or {})
+        if not raw_shared:
+            # Same "_empty" trap as the params bundle above, and the same
+            # fix: a bare `shared` argument declares a required-fields
+            # contract (doc 03 §4.2) — supplying none of it is a build-time
+            # authoring gap, not a namedtuple implementation detail.
+            raise ValueError(
+                f"step(s) {', '.join(shared_reading_steps)} read a bare "
+                "`shared` argument, but no shared={...} was supplied. Doc "
+                "03 §4.2: using `shared` declares a required-fields "
+                "contract, checked at composition — supply the field(s) "
+                "those steps read via apply(..., shared={...})."
+            )
         fields = tuple(raw_shared.keys())
-        shared_cls = collections.namedtuple("_shared_params", fields or ("_empty",))
-        shared = shared_cls(**raw_shared) if fields else shared_cls(_empty=None)
+        shared_cls = collections.namedtuple("_shared_params", fields)
+        shared = shared_cls(**raw_shared)
 
     return ResolvedParams(per_step_scalar, per_step_bundle, shared)
 
@@ -232,6 +296,7 @@ def _default_build_dir(build_dir: "str | Path | None") -> Path:
 def _run(
     steps: Sequence[Step],
     group_ids: Sequence[int],
+    owners: Sequence[str],
     registry: dict,
     resolved: ResolvedParams,
     n: int,
@@ -243,13 +308,14 @@ def _run(
     if mode not in _VALID_MODES:
         raise ValueError(f"unknown mode {mode!r}; expected one of {_VALID_MODES}")
     if mode == "interpreted":
-        return modes.run_interpreted(steps, registry, resolved, n)
+        return modes.run_interpreted(steps, registry, resolved, n, owners=owners)
 
     driver = build_driver(
-        list(steps), list(group_ids), build_dir=_default_build_dir(build_dir), terminal_names=terminal_names
+        list(steps), list(group_ids), owners=list(owners),
+        build_dir=_default_build_dir(build_dir), terminal_names=terminal_names,
     )
     if mode == "stepped":
-        return modes.run_stepped(driver, steps, registry, resolved, n)
+        return modes.run_stepped(driver, steps, registry, resolved, n, owners=owners)
     return modes.run_fused(driver, registry, resolved, n)
 
 
@@ -264,6 +330,7 @@ def apply(
     *,
     interface: Interface,
     group_ids: Sequence[int],
+    owners: Sequence[str] | None = None,
     params: Mapping[str, Mapping[str, Any]] | None = None,
     shared: Mapping[str, Any] | None = None,
     origin: str | None = None,
@@ -297,56 +364,156 @@ def apply(
 
     steps = list(steps)
     group_ids = list(group_ids)
+    owners = list(owners) if owners is not None else [s.name for s in steps]
+
+    # Doc 03 §2.1 row 3, "the one error that matters": a name available from
+    # both an upstream module output and the input frame is a build error,
+    # not a silent pick between them. A name that is ALSO one of this
+    # pipeline's own declared leaf inputs is exempted: that is the waterfall
+    # self-read idiom (§3.2) seeded straight from the frame, e.g. a
+    # standalone `cap_by_income`-style module applied directly — there the
+    # frame column is the intended, sole source of the first version, not
+    # an unintended second one competing with it.
+    leaf_names = {i.name for i in interface.inputs}
+    shadowed = (set(frame.columns) & set(interface.outputs)) - leaf_names
+    if shadowed:
+        name = sorted(shadowed)[0]
+        raise ValueError(
+            f"'{name}' is produced by this pipeline and is also a column "
+            "already present in the input frame. Doc 03 §2.1 row 3: a name "
+            "available from both an upstream module output and the input "
+            "frame is a build error — qualify it, e.g. rename/drop the "
+            f"frame column '{name}', or relabel the producing module's "
+            f"output (`module.relabel(writes={{'{name}': '{name}_2'}})`), "
+            "rather than silently shadowing one with the other."
+        )
+
     terminal_names = frozenset(interface.terminals) | frozenset(emit)
+    # `emit` may carry a `name@module` qualifier (doc 03 §7); the kernel
+    # plan below only knows plain step names (a step is never named with an
+    # "@" in it), so the qualifier has to come back off before deciding
+    # what a kernel segment must materialise as a required output.
+    plain_terminal_names = frozenset(_plain_name(n) for n in terminal_names)
 
     extracted = extract_frame(frame, interface.inputs, policy=policy)
 
+    input_by_name = {i.name: i for i in interface.inputs}
     registry: dict[str, Any] = {}
     for name, ec in extracted.columns.items():
-        registry[name] = ec.values.astype(np.float64, copy=False)
+        annotation = input_by_name[name].annotation if name in input_by_name else float
+        if annotation is str:
+            # Doc 05 §1.5: "a string never enters a kernel as a string" —
+            # it enters as a dictionary code. A step declaring `sector: str`
+            # and comparing it against a literal ("private") is comparing a
+            # code to text that was never encoded to match; that silently
+            # evaluates to False every time rather than raising, which is
+            # the one outcome doc 05 §9's acceptance bar rules out. Full
+            # code-mapping (translating the literal into its column's code
+            # at compile time) is real work this pass doesn't do — loud
+            # failure naming the column, rather than a silent 0.0, is the
+            # honest interim answer.
+            raise NotImplementedError(
+                f"column '{name}' is declared `str` and enters the kernel "
+                "as a dictionary code, not literal text (doc 05 §1.5) — "
+                "decider2 does not yet rewrite a step's string comparisons "
+                "against those codes, so wiring it this way is not safe. "
+                "Compare against the pre-encoded numeric code instead of "
+                "the raw string, or drop the `str` annotation."
+            )
+        registry[name] = ec.values.astype(numpy_dtype(annotation), copy=False)
         if ec.validity is not None:
             registry[f"__valid__{name}"] = ec.validity
 
-    resolved = resolve_params(steps, params, shared_overrides=shared, param_spaces=param_spaces)
+    resolved = resolve_params(
+        steps, params, shared_overrides=shared, param_spaces=param_spaces, owners=owners
+    )
     n = extracted.kernel_frame.height
     registry = _run(
-        steps, group_ids, registry, resolved, n, mode=mode, terminal_names=terminal_names, build_dir=build_dir
+        steps, group_ids, owners, registry, resolved, n,
+        mode=mode, terminal_names=plain_terminal_names, build_dir=build_dir,
     )
 
     names_tuple = tuple(name for name in sorted(terminal_names) if name in registry)
     routed = extracted.routing.routed_count > 0
-    if routed:
-        arrays = [_scatter_back(registry[name], extracted.routing.mask) for name in names_tuple]
-        base_frame = frame
-    else:
-        arrays = [registry[name] for name in names_tuple]
-        base_frame = extracted.kernel_frame
+    base_frame = frame if routed else extracted.kernel_frame
 
-    outputs = KernelOutputs()
-    if arrays:
+    # Doc 00 §2 / doc 03 §1 / doc 05 §9 criterion 4: each name keeps its
+    # step's own declared dtype rather than being forced onto one shared
+    # float64 group. A qualified `name@owner` (doc 03 §7's version chain)
+    # resolves against the step that specific owner produced; a plain name
+    # resolves against whichever step wrote it *last* — the same "most
+    # recent producer wins" rule that already decides its live value
+    # (doc 03 §2.1).
+    step_by_owner_name = {(o, s.name): s for o, s in zip(owners, steps)}
+    last_step_by_name = {s.name: s for s in steps}
+
+    def _step_for(name: str) -> Step | None:
+        if "@" in name:
+            plain, owner = name.split("@", 1)
+            return step_by_owner_name.get((owner, plain))
+        return last_step_by_name.get(name)
+
+    def _dtype_for(name: str) -> np.dtype:
+        step = _step_for(name)
+        if step is None:
+            return np.dtype(np.float64)
+        try:
+            sig = inspect.signature(step.fn, eval_str=True)
+        except (NameError, TypeError):
+            sig = inspect.signature(step.fn)
+        ann = sig.return_annotation
+        return numpy_dtype(ann if ann is not inspect.Signature.empty else float)
+
+    by_dtype: dict[np.dtype, list[str]] = {}
+    for name in names_tuple:
+        by_dtype.setdefault(_dtype_for(name), []).append(name)
+
+    def _group_for(dtype: np.dtype) -> "DtypeGroup | None":
+        names = by_dtype.get(dtype)
+        if not names:
+            return None
+        if routed:
+            arrays = [_scatter_back(registry[n], extracted.routing.mask, dtype) for n in names]
+        else:
+            arrays = [registry[n].astype(dtype, copy=False) for n in names]
         stacked = np.stack(arrays, axis=0)
-        outputs = KernelOutputs(float64=DtypeGroup(names=names_tuple, array=stacked, layout=Layout.COLUMN_MAJOR))
+        return DtypeGroup(names=tuple(names), array=stacked, layout=Layout.COLUMN_MAJOR)
+
+    outputs = KernelOutputs(
+        float64=_group_for(np.dtype(np.float64)),
+        int64=_group_for(np.dtype(np.int64)),
+        bool_=_group_for(np.dtype(np.bool_)),
+    )
 
     keep = resolve_kept_input_columns(base_frame.columns, overwritten=names_tuple, dropped=drop)
     return write_back(base_frame, outputs, keep=keep)
 
 
-def _scatter_back(kernel_values: np.ndarray, routed_mask: np.ndarray) -> np.ndarray:
+def _scatter_back(
+    kernel_values: np.ndarray, routed_mask: np.ndarray, dtype: "np.dtype | None" = None
+) -> np.ndarray:
     """Doc 03 §1: a routed row is never silently dropped from the batch
     result. `routed_mask[i]` True means row `i` never reached the kernel;
-    its slot here is left `nan` rather than the array being shorter than the
-    frame it is about to `hstack` onto.
+    its slot here is left as a placeholder rather than the array being
+    shorter than the frame it is about to `hstack` onto.
 
-    This is `nan`, not a genuine polars null, because
+    `nan` for a float terminal — not a genuine polars null, because
     `decider2.boundary.writeback.DtypeGroup` carries a plain numpy array
     with **no validity mask** — there is currently no way to write an actual
-    null through `write_back()` at all. That is adequate for a float
-    terminal (this module's own report flags it) but would not work for an
-    int64 or bool terminal, which have no NaN equivalent; closing that gap
-    means `DtypeGroup` growing an optional validity array, which is
-    `decider2.boundary`'s surface to extend, not this module's to route
-    around."""
-    full = np.full(len(routed_mask), np.nan, dtype=np.float64)
+    null through `write_back()` at all. An int64/bool terminal has no NaN
+    equivalent, so it gets 0/False instead: still a placeholder standing in
+    for "no genuine null yet", not a claim that 0/False is the routed row's
+    real answer. Closing that gap for real means `DtypeGroup` growing an
+    optional validity array, which is `decider2.boundary`'s surface to
+    extend, not this module's to route around."""
+    dtype = np.dtype(dtype) if dtype is not None else np.dtype(np.float64)
+    if np.issubdtype(dtype, np.floating):
+        fill_value: Any = np.nan
+    elif dtype == np.bool_:
+        fill_value = False
+    else:
+        fill_value = 0
+    full = np.full(len(routed_mask), fill_value, dtype=dtype)
     full[~routed_mask] = kernel_values
     return full
 
@@ -374,6 +541,7 @@ def score(
     *,
     interface: Interface,
     group_ids: Sequence[int],
+    owners: Sequence[str] | None = None,
     params: Mapping[str, Mapping[str, Any]] | None = None,
     shared: Mapping[str, Any] | None = None,
     origin: str | None = None,
@@ -393,6 +561,7 @@ def score(
     del origin
     steps = list(steps)
     group_ids = list(group_ids)
+    owners = list(owners) if owners is not None else [s.name for s in steps]
     policy = policy or MissingInputPolicy()
     terminal_names = frozenset(interface.terminals) | frozenset(emit)
 
@@ -426,9 +595,12 @@ def score(
         out["routed_on"] = routed_reason
         return out
 
-    resolved = resolve_params(steps, params, shared_overrides=shared, param_spaces=param_spaces)
+    resolved = resolve_params(
+        steps, params, shared_overrides=shared, param_spaces=param_spaces, owners=owners
+    )
     registry = _run(
-        steps, group_ids, registry, resolved, 1, mode=mode, terminal_names=terminal_names, build_dir=build_dir
+        steps, group_ids, owners, registry, resolved, 1,
+        mode=mode, terminal_names=terminal_names, build_dir=build_dir,
     )
 
     for name in terminal_names:
