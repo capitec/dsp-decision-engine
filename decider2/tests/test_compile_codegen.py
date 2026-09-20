@@ -7,6 +7,7 @@ import ast
 
 from decider2.compile import codegen
 from decider2.compile.codegen import ArgRole, KernelPlan
+from decider2.graph.interface import topological_steps
 from decider2.types import Input, NullPolicy, ParamDecl, Step
 
 
@@ -47,7 +48,16 @@ def test_safe_ident_handles_qualified_emit_style_names():
     assert codegen.safe_ident("class").isidentifier()
 
 
-def test_stable_topological_order_respects_dependencies():
+# `codegen.stable_topological_order` (Kahn's, hand-rolled) was deleted by the
+# over-engineering audit: it had no package caller — `graph/interface.py`'s
+# `topological_steps` is the ordering that actually reaches `build_driver`
+# (`Pipeline.flatten_for_runtime`). These three tests are retargeted to it
+# rather than dropped, since they exercise exactly the "stable topological
+# tie-break" doc 05 §4.2 requires, which `topological_steps` is now the sole
+# implementation of.
+
+
+def test_topological_steps_respects_dependencies():
     s_di = _step(disposable_income, inputs=(
         Input("net_income", float), Input("expenses", float),
     ))
@@ -55,29 +65,29 @@ def test_stable_topological_order_respects_dependencies():
         Input("disposable_income", float), Input("instalment", float),
     ))
     # deliberately passed out of dependency order
-    ordered = codegen.stable_topological_order([s_ar, s_di])
+    ordered = topological_steps((s_ar, s_di))
     assert [s.name for s in ordered] == ["disposable_income", "affordability_ratio"]
 
 
-def test_stable_topological_order_is_a_pure_function_of_its_input():
+def test_topological_steps_is_a_pure_function_of_its_input():
     s_di = _step(disposable_income, inputs=(
         Input("net_income", float), Input("expenses", float),
     ))
     s_ar = _step(affordability_ratio, inputs=(
         Input("disposable_income", float), Input("instalment", float),
     ))
-    first = [s.name for s in codegen.stable_topological_order([s_ar, s_di])]
-    second = [s.name for s in codegen.stable_topological_order([s_ar, s_di])]
+    first = [s.name for s in topological_steps((s_ar, s_di))]
+    second = [s.name for s in topological_steps((s_ar, s_di))]
     assert first == second
 
 
-def test_stable_topological_order_detects_a_cycle():
+def test_topological_steps_detects_a_cycle():
     a = Step(name="a", fn=disposable_income, inputs=(Input("b", float),), params=())
     b = Step(name="b", fn=affordability_ratio, inputs=(Input("a", float),), params=())
     try:
-        codegen.stable_topological_order([a, b])
+        topological_steps((a, b))
     except ValueError as exc:
-        assert "cyclic" in str(exc)
+        assert "cycle" in str(exc) or "cyclic" in str(exc)
     else:
         raise AssertionError("expected a ValueError for a cyclic dependency")
 

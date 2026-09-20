@@ -51,51 +51,6 @@ def safe_ident(name: str) -> str:
     return ident
 
 
-def stable_topological_order(steps: "list[Step] | tuple[Step, ...]") -> list[Step]:
-    """A module's interior is a pure, order-independent DAG (doc 02 §4); this
-    is the "stable topological tie-break" doc 05 §4.2 requires so that two
-    builds of the same unordered step set always emit byte-identical source.
-
-    Kahn's algorithm, but the ready queue always releases the ready step with
-    the *smallest original index* rather than, say, alphabetical order — that
-    keeps the author's declaration order wherever the dependency graph
-    doesn't force a different one, which is what "stable" buys over merely
-    "deterministic": a harmless edit far away in the file doesn't reshuffle
-    unrelated steps.
-    """
-    steps = list(steps)
-    index = {id(s): i for i, s in enumerate(steps)}
-    producer_of = {s.name: s for s in steps}
-    deps: dict[str, set[str]] = {}
-    for s in steps:
-        d = set()
-        for inp in s.inputs:
-            if inp.name in producer_of and inp.name != s.name:
-                d.add(inp.name)
-        deps[s.name] = d
-
-    remaining = {s.name: set(deps[s.name]) for s in steps}
-    done: set[str] = set()
-    ordered: list[Step] = []
-    by_name = {s.name: s for s in steps}
-
-    while len(ordered) < len(steps):
-        ready = [
-            by_name[name]
-            for name, d in remaining.items()
-            if name not in done and not (d - done)
-        ]
-        if not ready:
-            cyclic = sorted(n for n in remaining if n not in done)
-            raise ValueError(f"cyclic dependency among steps: {cyclic}")
-        ready.sort(key=lambda s: index[id(s)])
-        chosen = ready[0]
-        ordered.append(chosen)
-        done.add(chosen.name)
-
-    return ordered
-
-
 @dataclass(frozen=True)
 class ArgRole:
     """One argument of a generated kernel function, and what it means.

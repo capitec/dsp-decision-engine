@@ -16,9 +16,11 @@ Two entry points:
 """
 from __future__ import annotations
 
+import dataclasses
+import graphlib
 from typing import Any
 
-from decider2.graph.resolve import suggest_name
+from decider2.resolve import suggest_name
 from decider2.types import Input, Interface, Module, Step
 
 
@@ -113,41 +115,35 @@ def topological_steps(steps: tuple[Step, ...]) -> tuple[Step, ...]:
     the module has no duplicate outputs; this is the companion pass that
     turns "distinct names, no declared order" into a concrete execution
     order for `compile/driver.py` (doc 02 §6: "topological sort/ordering is
-    the graph layer's responsibility").
+    the graph layer's responsibility") — the ordering that actually reaches
+    `build_driver` (via `Pipeline.flatten_for_runtime`).
 
-    A depth-first post-order over declaration order, so two modules with the
-    same steps in the same DAG shape always compile to the same order
-    (doc 05 §4.2's "stable topological tie-break") regardless of how someone
-    happened to list independent steps.
+    Built on stdlib `graphlib.TopologicalSorter` rather than a hand-rolled
+    DFS (over-engineering audit — the hand-rolled version added its own
+    cycle detector for something the stdlib already does): `static_order()`
+    is deterministic for a fixed insertion order, which is what doc 05
+    §4.2's determinism requirement needs — two builds of the same declared
+    step sequence always emit byte-identical source. `graphlib.CycleError`
+    is caught and re-raised as a `ValueError` naming the actual cycle, so a
+    step depending (even transitively) on its own output still gets a
+    decider2 error rather than a bare stdlib one leaking through this layer.
     """
     by_name = {s.name: s for s in steps}
-    deps: dict[str, list[str]] = {
-        s.name: [inp.name for inp in s.inputs if inp.name in by_name and inp.name != s.name]
-        for s in steps
-    }
-
-    ordered: list[str] = []
-    state: dict[str, int] = {}  # 0 unseen (absent), 1 in progress, 2 done
-
-    def visit(name: str) -> None:
-        st = state.get(name, 0)
-        if st == 2:
-            return
-        if st == 1:
-            raise ValueError(
-                f"step '{name}' is part of a dependency cycle — a step "
-                "cannot (even transitively) need its own output as an input."
-            )
-        state[name] = 1
-        for dep in deps[name]:
-            visit(dep)
-        state[name] = 2
-        ordered.append(name)
-
+    sorter: graphlib.TopologicalSorter = graphlib.TopologicalSorter()
     for s in steps:
-        visit(s.name)
+        deps = [inp.name for inp in s.inputs if inp.name in by_name and inp.name != s.name]
+        sorter.add(s.name, *deps)
 
-    return tuple(by_name[n] for n in ordered)
+    try:
+        order = tuple(sorter.static_order())
+    except graphlib.CycleError as exc:
+        cycle = exc.args[1] if len(exc.args) > 1 else list(by_name)
+        raise ValueError(
+            f"step(s) {cycle} are part of a dependency cycle — a step cannot "
+            "(even transitively) need its own output as an input."
+        ) from exc
+
+    return tuple(by_name[n] for n in order)
 
 
 def effective_interface(module: Module) -> Interface:
@@ -174,21 +170,10 @@ def effective_interface(module: Module) -> Interface:
     writes = module.relabel_writes
 
     inputs = tuple(
-        Input(
-            name=reads.get(i.name, i.name),
-            annotation=i.annotation,
-            null_policy=i.null_policy,
-            fill=i.fill,
-        )
+        i if i.name not in reads else dataclasses.replace(i, name=reads[i.name])
         for i in raw.inputs
     )
     outputs = tuple(writes.get(o, o) for o in raw.outputs)
     terminals = tuple(writes.get(t, t) for t in raw.terminals)
 
-    return Interface(
-        inputs=inputs,
-        outputs=outputs,
-        terminals=terminals,
-        params_model=raw.params_model,
-        shared_fields=raw.shared_fields,
-    )
+    return dataclasses.replace(raw, inputs=inputs, outputs=outputs, terminals=terminals)
