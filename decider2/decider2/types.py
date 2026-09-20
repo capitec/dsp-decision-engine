@@ -52,6 +52,7 @@ class Step:
     implements: str | None = None      # parsed from the docstring's `Implements:` line
     reads_params: bool = False         # signature has a bare `params`
     reads_shared: bool = False         # signature has a bare `shared`
+    nogil: bool = False                # @step(nogil=True); authored, never inferred
 
 
 @dataclass(frozen=True)

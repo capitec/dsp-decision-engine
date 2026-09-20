@@ -39,7 +39,7 @@ single-record set, measured the tail** (p50–max, not just medians) for the fir
 time: a config-generation swap under continuous traffic is confirmed cheap for
 serving (worst call across 30 swaps: 1.37% of budget), GC on/off/frozen makes no
 measurable tail difference, and the one finding that changes a recommendation is
-concurrency — serving kernels must compile `nogil=True` unconditionally, because
+concurrency — serving kernels want `nogil=True` (authored per step, doc 00 §2c), because
 the identical kernel compiled `nogil=False` hits a GIL convoy effect that blows
 the tail to **12.7× the entire 20 ms budget** at 16 concurrent threads, even
 though total throughput is unaffected either way. The twentieth (M) closes the

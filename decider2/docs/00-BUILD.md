@@ -99,6 +99,32 @@ These are facts about the deployment, not design choices, and they are settled:
 
 ---
 
+### 2c. `nogil` is authored, not unconditional
+
+**Owner decision, and it overrides §2's "unconditionally".** `nogil=True` is
+declared per step and is **off by default**:
+
+```python
+@step(nogil=True)
+def score_band(ratio: float) -> float: ...
+```
+
+The reasoning is the library's own: ship the plain thing, and let an author reach
+for the optimisation when a measurement says to. A kernel that never runs under
+concurrency gains nothing from releasing a lock nobody is contending.
+
+A group releases the GIL only when **every** step in it asked to — the kernel is
+one call, so one step that did not is enough to keep it held.
+
+> **The measurement still stands, and serving must surface it.** §N4 measured
+> `nogil=False` at **p99 = 1270% of a 20 ms budget at 16 threads** — a GIL convoy,
+> not a slowdown. It is safe to set on any nopython step by construction, since
+> compiled code touches no Python objects. So the cost of leaving it off under
+> concurrent serving is large and the risk of turning it on is nil, which is an
+> unusual shape for a default. `serving/` therefore **reports which kernels hold
+> the GIL** at startup rather than deciding: the choice stays the author's, but it
+> is not made silently.
+
 ## 3. Build order
 
 Each layer lists what blocks it. **Do not start a layer whose blockers are open** —
