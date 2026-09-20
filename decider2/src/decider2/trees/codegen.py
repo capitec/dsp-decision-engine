@@ -323,8 +323,22 @@ class _Emitter:
         tests = [f"{var} == {i}" for i in slots]
         return "(" + " or ".join(tests) + ")" if len(tests) > 1 else tests[0]
 
-    def _unary_test(self, op: Any, node_id: str) -> str:
-        """One `TUnaryOp` as a boolean source expression."""
+    def _unary_test(self, op: Any, node_id: str, cond_idx: str | None = None) -> str:
+        """One `TUnaryOp` as a boolean source expression.
+
+        `cond_idx` disambiguates two-or-more `TUnaryOp`s that share the same
+        `node_id` — which happens for every condition inside a
+        `CompositeNode`/`CompositeCondition`'s `conditions` list, since they
+        are siblings of one node, not nodes of their own. Left `None` (its
+        default) for a lone `UnaryNode`, where `node_id` alone is already
+        unique and the role stays exactly `'thr'`/`'min'`/`'max'`/`'isin_0'`
+        (doc 05 §4.2's determinism: unchanged source for the shape that
+        already worked). Set by `_condition_test` to each condition's
+        position for the composite case — see that method for why this
+        matters: without it, two sibling conditions of the same shape (e.g.
+        `x > 5 and x < 10`) silently shared one `param()`, so the second
+        threshold was never read at all.
+        """
         if isinstance(op, UnaryStringMatch):
             return self._string_test(
                 op.feature, op.patterns, op.match_type, op.case_sensitive,
@@ -335,28 +349,43 @@ class _Emitter:
             return f"{var} != 0"
         if isinstance(op, UnaryIsFalse):
             return f"{var} == 0"
+        suffix = f"_{cond_idx}" if cond_idx is not None else ""
         if isinstance(op, UnaryBetween):
             # decider 1's UnaryBetween is inclusive at BOTH ends — deliberately
             # unlike RangeCondition, which follows the node's end_logic.
             parts = []
             if op.min is not None:
-                parts.append(f"{var} >= {self._threshold(op.min, node_id=node_id, role='min')}")
+                parts.append(f"{var} >= {self._threshold(op.min, node_id=node_id, role=f'min{suffix}')}")
             if op.max is not None:
-                parts.append(f"{var} <= {self._threshold(op.max, node_id=node_id, role='max')}")
+                parts.append(f"{var} <= {self._threshold(op.max, node_id=node_id, role=f'max{suffix}')}")
             return " and ".join(parts) if len(parts) > 1 else parts[0]
         if isinstance(op, UnaryIsIn):
-            return self._isin_test(var, op.values, node_id, 0)
+            return self._isin_test(var, op.values, node_id, cond_idx if cond_idx is not None else 0)
         # The six primitive comparisons share one shape.
-        return f"{var} {op.op} {self._threshold(op.threshold, node_id=node_id, role='thr')}"
+        return f"{var} {op.op} {self._threshold(op.threshold, node_id=node_id, role=f'thr{suffix}')}"
 
-    def _condition_test(self, cond: Any, node_id: str) -> str:
+    def _condition_test(self, cond: Any, node_id: str, cond_idx: str | None = None) -> str:
+        """One `TCondition` (a `TUnaryOp` or a nested `CompositeCondition`).
+
+        `cond_idx` is this condition's position among its siblings in the
+        enclosing conditions list, threaded down so `_unary_test` can give
+        each sibling's threshold(s) a distinct `param()` name — see that
+        method's docstring. A nested `CompositeCondition`'s own children
+        extend the path (`f'{cond_idx}_{j}'`) rather than restart it, so a
+        composite three levels deep still names every leaf threshold
+        uniquely.
+        """
         if isinstance(cond, CompositeCondition):
-            inner = [self._condition_test(c, node_id) for c in cond.conditions]
+            prefix = cond_idx if cond_idx is not None else "0"
+            inner = [
+                self._condition_test(c, node_id, f"{prefix}_{j}")
+                for j, c in enumerate(cond.conditions)
+            ]
             if cond.op is TLogicOp.NOT:
                 return f"(not ({inner[0]}))"
             joiner = " and " if cond.op is TLogicOp.AND else " or "
             return "(" + joiner.join(inner) + ")"
-        return self._unary_test(cond, node_id)
+        return self._unary_test(cond, node_id, cond_idx)
 
     # -- the tree walk ----------------------------------------------------
 
@@ -409,7 +438,10 @@ class _Emitter:
             if isinstance(data, UnaryNode):
                 test = self._unary_test(data.condition, node_id)
             else:
-                inner = [self._condition_test(c, node_id) for c in data.conditions]
+                inner = [
+                    self._condition_test(c, node_id, str(i))
+                    for i, c in enumerate(data.conditions)
+                ]
                 if data.op is TLogicOp.NOT:
                     test = f"not ({inner[0]})"
                 else:
