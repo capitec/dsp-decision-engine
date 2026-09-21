@@ -27,8 +27,8 @@ from decider2.trees import (
     RangeCondition,
     Tree,
     TreeOutput,
-    TreeTooLarge,
     UnaryBetween,
+    UnaryGreaterThan,
     UnaryGreaterThanEqual,
     UnaryIsTrue,
     UnaryLessThan,
@@ -291,6 +291,64 @@ def test_composite_and_between_and_isin_nodes(tmp_path):
     assert_equivalent(flow(built.module), frame)
 
 
+def test_two_same_shaped_sibling_thresholds_do_not_collide(tmp_path):
+    """The regression this whole migration exists for.
+
+    A generated-source codegen once emitted two sibling conditions of the
+    same shape under one collided parameter name, so `5 < x < 10` compiled
+    to `(x > root_thr) and (x < root_thr)` — never satisfiable, every AND of
+    two same-shaped conditions silently `False`. It was found only by
+    porting decider 1's own tests.
+
+    The array-encoded walker retires the whole defect CLASS rather than
+    patching the symptom: a condition is never a named identifier, only an
+    integer array slot (`decider2.trees.interpreter`'s module docstring), so
+    two same-shaped siblings cannot collide on a slot by construction. This
+    asserts both directions: the two thresholds show up as two distinct,
+    independently retunable params, AND the AND is genuinely satisfiable —
+    which the historical bug made impossible for exactly this shape (two
+    `_ThresholdedUnaryOp`s on the same feature, combined with AND).
+    """
+    tree = Tree(
+        name="band",
+        edges=[
+            MultiSourceEdge(source="root", target="leaf_in", data=MultiEdgeData(sourceIndex=[0])),
+            MultiSourceEdge(source="root", target="leaf_out", data=MultiEdgeData(sourceIndex=[1])),
+        ],
+        nodes=[
+            PositionedNode(id="root", data=CompositeNode(
+                op="and",
+                conditions=[
+                    UnaryGreaterThan(feature="x", threshold=5.0),
+                    UnaryLessThan(feature="x", threshold=10.0),
+                ],
+            )),
+            PositionedNode(id="leaf_in", data=LeafNode(result_idx=0)),
+            PositionedNode(id="leaf_out", data=LeafNode(result_idx=1)),
+        ],
+        output=TreeOutput(
+            data=[{"pts": 1.0}, {"pts": 0.0}],
+            default={"pts": -1.0}, dtypes=[("pts", "Float64")],
+        ),
+    )
+    built = tree_module(tree, build_dir=tmp_path)
+
+    schema = built.module.params_schema()
+    thresholds = {k: v for k, v in schema.items()}
+    assert len(thresholds) == 2  # two distinct params, not one collided name
+    assert set(thresholds.values()) == {5.0, 10.0}
+
+    frame = pl.DataFrame({"x": [7.0, 3.0, 12.0, 5.0, 10.0]})
+    out = flow(built.module).apply(frame)
+
+    # 7 is strictly between 5 and 10 -> in-band; 3 and 12 are outside;
+    # 5 and 10 are the (exclusive) boundaries themselves -> out-of-band.
+    # Every one of these being 0.0 (never 1.0) is exactly the historical
+    # bug: "never satisfiable".
+    assert out["pts"].to_list() == [1.0, 0.0, 0.0, 0.0, 0.0]
+    assert_equivalent(flow(built.module), frame)
+
+
 def test_a_tree_composes_with_ordinary_modules(tmp_path):
     """`flow(Affordability, my_tree, Scoring)` — the integration the task
     asks for. The tree is a `Module`; nothing else knows it is a tree."""
@@ -358,34 +416,51 @@ def _chain(length: int, *, arm: int) -> Tree:
     return Tree(name="chain", nodes=nodes, edges=edges)
 
 
-def test_a_tree_over_the_line_cap_is_a_build_error():
-    """Doc 05 §7: "a hard cap on emitted lines (~500) per kernel, enforced
-    as a build error naming the group"."""
-    with pytest.raises(TreeTooLarge, match="over the 500-line cap"):
-        emit_tree(_chain(400, arm=1))
+def test_a_very_large_tree_no_longer_hits_a_line_cap():
+    """Doc 05 §7's ~500-line cap existed because a tree's SHAPE was emitted
+    as nested `if`/`elif` source, and compile time was super-linear in
+    emitted lines (EXPERIMENTS.md §G). Once shape is DATA
+    (`decider2.trees.interpreter`), the wrapper this module renders is a
+    handful of lines regardless of node count — so the 400-node
+    otherwise-chain that used to be a hard `TreeTooLarge` build error now
+    just builds, and its emitted-line count does not grow with the chain.
+    """
+    small = emit_tree(_chain(5, arm=1))
+    large = emit_tree(_chain(400, arm=1))
+
+    assert large.emitted_lines < small.emitted_lines + 20
+    assert large.leaf_count == 400 + 1  # every node's other arm, plus the tail
 
 
 def test_an_otherwise_chain_costs_no_indentation():
-    """Every tree path ends in a `return`, so an `otherwise` arm needs no
-    `else:` — which is what keeps a long policy waterfall emittable at all.
-
-    Measured, not assumed: with a nested `else:` this shape hit CPython's
-    own "too many levels of indentation" limit at 128 nodes, before numba
-    was ever reached.
+    """Every tree path is now array data, not nested source — there is no
+    `if`/`elif` text at all for chain length to affect. What used to be "no
+    `else:` in the emitted body" now generalises to "no branching text in
+    the emitted body, period": the wrapper's own indentation is flat
+    regardless of chain length.
     """
     emitted = emit_tree(_chain(120, arm=1))
     body = emitted.source.split("-> int:", 1)[1].split("\ndef ", 1)[0]
     deepest = max((len(ln) - len(ln.lstrip())) for ln in body.splitlines() if ln.strip())
 
     assert "else:" not in body
+    assert "if " not in body
     assert deepest <= 8  # the function's own indent, plus one level
 
 
-def test_a_then_chain_deeper_than_cpython_allows_is_a_build_error():
-    """The one shape that still nests. Caught with the tree named, rather
-    than as an `IndentationError` pointing into a generated file."""
-    with pytest.raises(TreeTooLarge, match="levels of conditions"):
-        emit_tree(_chain(120, arm=0), line_cap=10**9)
+def test_a_then_chain_deeper_than_cpython_allows_now_just_builds():
+    """The one shape that used to still nest (a `then`-chain, one CPython
+    indentation level per node) and hit CPython's own "too many levels of
+    indentation" limit at 128 nodes, before numba was ever reached. There is
+    no source-level nesting left for that limit to apply to: a 120-deep
+    then-chain is array data, walked by one iterative loop
+    (`decider2.trees.interpreter.walk_tree`), same as an otherwise-chain of
+    the same length.
+    """
+    emitted = emit_tree(_chain(120, arm=0))
+
+    assert emitted.leaf_count == 121
+    assert emitted.max_depth == 121
 
 
 def test_a_computed_feature_now_compiles_instead_of_being_refused():
