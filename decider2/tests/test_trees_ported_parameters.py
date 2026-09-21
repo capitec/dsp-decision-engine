@@ -20,18 +20,24 @@ model is structurally different from decider 1's, not just renamed
   `test_inputref_cannot_vary_per_row_only_per_call` below rather than
   silently dropped.
 
-Computed features (`Feature(type="computed", expression=...)`) are a KNOWN
-GAP (doc 08 §3.2) — both tests that used one are ported as assertions that
-`ComputedFeatureRemoved` is raised, decider2's actual, deliberate refusal.
+Computed features (`Feature(type="computed", expression=...)`) are admitted
+again (`decider2.expr`, doc 08 §1.2/§3.2, doc 06 §O15) — both tests that used
+one are ported as assertions that decider2 evaluates the expression exactly
+as decider 1 did (`test_computed_feature_two_column_expression_compiles`), or
+as an assertion of the ONE narrower thing decider2 genuinely still refuses:
+decider 1's `p.bonus` attribute-access convention for a parameter inside an
+expression string, which `decider2.expr`'s closed grammar does not carry
+over — attribute access is unconditionally rejected, full stop
+(`test_computed_feature_p_dot_attribute_syntax_is_refused`).
 """
 from __future__ import annotations
 
 import polars as pl
+import pydantic
 import pytest
 
 from decider2 import flow
 from decider2.trees import (
-    ComputedFeatureRemoved,
     InputRef,
     LeafNode,
     MultiEdgeData,
@@ -170,29 +176,59 @@ def test_inputref_between_with_two_parameters(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Computed features — KNOWN GAP (doc 08 §3.2)
+# Computed features — admitted via decider2.expr (doc 08 §1.2/§3.2)
 # ---------------------------------------------------------------------------
 
 
-def test_computed_feature_two_column_expression_is_refused():
+def test_computed_feature_two_column_expression_compiles(tmp_path):
     """decider 1: a computed feature combining two columns
     (`"amount * quantity"`, evaluated with `simpleeval`) is evaluated
-    correctly. decider2 removes expression-string features entirely (doc
-    08 §3.2) — ported as the assertion decider2 actually makes:
-    `ComputedFeatureRemoved`, naming the replacement (a step before the
-    tree)."""
-    with pytest.raises(ComputedFeatureRemoved, match="amount \\* quantity"):
-        UnaryLessThan(
-            feature={"type": "computed", "expression": "amount * quantity"},
-            threshold=100.0,
-        )
+    correctly. decider2 no longer removes expression-string features (doc
+    08 §1.2/§3.2 revised, doc 06 §O15 revised): `decider2.expr` parses and
+    validates the same expression at load time and compiles it to numba
+    source at build time, so it now gives the SAME answer decider 1 gave,
+    with no runtime evaluator anywhere.
+    """
+    cond = UnaryLessThan(
+        feature={"type": "computed", "expression": "amount * quantity"},
+        threshold=100.0,
+    )
+    assert cond.feature.required_features() == {"amount", "quantity"}
+
+    tree = Tree(
+        name="line_total",
+        edges=[
+            MultiSourceEdge(source="root", target="cheap", data=MultiEdgeData(sourceIndex=[0])),
+            MultiSourceEdge(source="root", target="expensive", data=MultiEdgeData(sourceIndex=[1])),
+        ],
+        nodes=[
+            PositionedNode(id="root", data=UnaryNode(condition=cond)),
+            PositionedNode(id="cheap", data=LeafNode(result_idx=0)),
+            PositionedNode(id="expensive", data=LeafNode(result_idx=1)),
+        ],
+        output=TreeOutput(data=[{"r": "cheap"}, {"r": "expensive"}], dtypes=[("r", "String")]),
+    )
+    built = tree_module(tree, build_dir=tmp_path)
+    frame = pl.DataFrame({"amount": [10.0, 10.0], "quantity": [5.0, 50.0]})
+    # decider 1: amount*quantity < 100 -> 50 < 100 True ("cheap"),
+    # 500 < 100 False ("expensive") — the exact answer simpleeval gave.
+    result = built.decode(flow(built.module).apply(frame))["r"].to_list()
+    assert result == ["cheap", "expensive"]
 
 
-def test_computed_feature_using_a_parameter_is_refused():
-    """decider 1: a computed feature referencing `p.bonus` (a parameter
-    inside the expression string) is evaluated correctly. Same GAP as
-    above, same replacement named in the error."""
-    with pytest.raises(ComputedFeatureRemoved, match="amount \\+ p\\.bonus"):
+def test_computed_feature_p_dot_attribute_syntax_is_refused():
+    """decider 1: a computed feature referencing `p.bonus` (`common/
+    feature.py`'s convention for a parameter inside the expression string)
+    is evaluated correctly. decider2 still refuses this ONE thing — not
+    because computed features are gone, but because `decider2.expr`'s
+    closed grammar rejects attribute access unconditionally (doc 06 §O15's
+    ADMIT list has no `p.<name>` carve-out); a `p.bonus` reference is a plain
+    `ast.Attribute` node like any other. This is `expr.ExprError` (a
+    `ValueError`), so pydantic reports it as an ordinary `ValidationError`
+    naming the construct and its position — not `ComputedFeatureRemoved`,
+    which is no longer raised for anything.
+    """
+    with pytest.raises(pydantic.ValidationError, match="attribute access"):
         UnaryLessThan(
             feature={"type": "computed", "expression": "amount + p.bonus"},
             threshold=100.0,
