@@ -1388,10 +1388,14 @@ in config, you write code, register it, and reference it by id.
 |---|---|---|
 | ✅ **reference** | `{"type": "credit_scorer", "dti_weight": 200.0}` | resolves through the union — id checked, params typed and bounded |
 | ❌ **pointer** | `{"module_name": "x", "function_name": "y"}` | `getattr` at runtime — no interface, no schema (`flat_rules`' `output_fn`, doc 01 §5.4) |
-| ❌ **code** | `{"expression": "a - b"}` | a second, unspecified way to write arithmetic (`_ComputedFeature`) |
+| ✅ **closed expression** | `{"type": "computed", "expression": "a - b"}` | `decider2.expr`: a fixed, whitelisted grammar, validated at load time and compiled to numba source at build time — never evaluated at runtime (doc 08 §1.1/§3.2) |
 
-A derived value is therefore a **step**, written and registered like any other,
-and referenced from a rule by id. Extensions are how a project's config
+A closed expression is admitted for the "pity to write a step just for `a - b`"
+case; a derived value that needs its own null policy, its own test, or reuse
+across rules is still a **step**, written and registered like any other and
+referenced from a rule by id (doc 08 §3.2). What stays banned outright is an
+open, unbounded expression syntax evaluated live — the same objection as a
+pointer, not a milder version of it. Extensions are how a project's config
 vocabulary grows without the framework shipping a release — doc 08 §7.1.
 
 Resolution is the hybrid design settled in doc 02 §2.1–2.2: a discriminated union

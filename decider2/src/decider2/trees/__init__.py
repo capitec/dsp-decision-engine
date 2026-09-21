@@ -12,11 +12,15 @@ source (`codegen.py`) and wrapped as an ordinary `Module` (`build.py`).
 MIGRATION NOTES — what did not come across from decider 1, and why:
 
 * **`_ComputedFeature`** (`common/feature.py`): expression strings evaluated
-  with `simpleeval`. Removed by doc 08 §3.2 and recorded settled in doc 06
-  §O15 — "a rule's leaves are declared features or registered feature ids,
-  never expression strings". A document carrying one raises
-  `ComputedFeatureRemoved`, naming the replacement: compute the value as a
-  step in a module before the tree.
+  with `simpleeval` **at runtime**. That runtime step is what did not come
+  across — not the feature. `decider2.expr` parses and validates the same
+  wire format (`{"type": "computed", "expression": "x - y"}`) at document-load
+  time and compiles it to numba source once, at build time (doc 08
+  §1.1/§3.2, doc 06 §O15 — both revised from an earlier draft that removed
+  this outright). `ComputedFeatureRemoved` is kept only for import
+  compatibility; it is no longer raised. Prefer a step in a module before the
+  tree instead when the derived value needs its own null policy, its own
+  test, or reuse beyond one rule (doc 08 §3.2).
 * **`match_type` other than `exact`, `case_sensitive=False`,
   `trim_whitespace=True`** (`common/nodes/operators.UnaryStringMatch`): a
   string reaches a kernel as an int32 dictionary code (doc 05 §1.5), and a

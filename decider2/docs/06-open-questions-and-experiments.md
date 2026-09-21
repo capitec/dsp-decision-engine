@@ -104,12 +104,31 @@ description, and param references instead of inline literals. Needs writing
 before `ruleset` is built, because it is simultaneously the UI contract, the
 codegen input and the reviewable artefact's source.
 
-Two things are already decided by doc 08 §1, and constrain it: a rule's leaves are
-declared features or **registered** feature ids, never expression strings
-(`_ComputedFeature` goes — §3.2); and no node may carry a `DefinedFunction`-style
-`{module_name, function_name}` pointer (`output_fn` goes — doc 08 §1.1). What remains
-open is the shape of the `then` side, how `first_match` versus `all`
-prioritisation is expressed, and whether a rule carries an approval field (O17).
+Two things are already decided by doc 08 §1, and constrain it. **Revised**: a
+rule's leaves are declared features, **registered** feature ids, or a
+`decider2.expr` computed feature (`{"type": "computed", "expression": "x - y"}`,
+decider 1's own wire format) — never an OPEN expression string evaluated at
+runtime. An earlier revision of this line read "never expression strings
+(`_ComputedFeature` goes — §3.2)", which over-read doc 08 §1's "config may not
+contain code" as banning `_ComputedFeature` outright. It banned a narrower
+thing: an unvalidated `{module_name, function_name}` pointer, resolved live
+(see the very next clause of this same sentence). `_ComputedFeature` was
+already a closed, statically-validated grammar
+(`ALLOWED_POLARS_FUNCTIONS`/`extract_names_and_parameters`, decider 1's
+`common/feature.py:59`); its actual defect was that `simpleeval` evaluated it
+**at runtime**, which cannot produce numba-compilable source anyway.
+`decider2.expr` (`src/decider2/expr.py`) keeps the validation, drops the
+runtime step: `ast.parse` against a fixed grammar (names, numeric literals,
+`+ - * / // % **`, unary minus, comparisons, `and`/`or`/`not`, parentheses,
+`min`/`max`/`abs`, nothing else) at document-load time, compiled to numba
+source once, at build time — no evaluator anywhere at runtime, which is
+strictly safer than decider 1. See doc 08 §1.1/§3.2 (also revised) for the
+full distinction and why a future reader with only the old sentence in hand
+should not re-remove this. And no node may carry a `DefinedFunction`-style
+`{module_name, function_name}` pointer (`output_fn` goes — doc 08 §1.1) — that
+part is unchanged and still settled. What remains open is the shape of the
+`then` side, how `first_match` versus `all` prioritisation is expressed, and
+whether a rule carries an approval field (O17).
 
 ### ~~O16 — Does a `ruleset` compile fast enough to stage?~~ — **SETTLED, [EXPERIMENTS.md](EXPERIMENTS.md) §G**
 

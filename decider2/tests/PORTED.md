@@ -114,8 +114,8 @@ divergence found while porting the `None` case above:
 | `test_inputref_uses_runtime_struct_column` | Ported (adapted, renamed `test_inputref_uses_runtime_override`) | decider 1's fixture used ONE override value for every row, so despite the mechanism being different (a per-row struct column vs. a per-call `params=` kwarg), the two happen to produce the identical answer for this specific config. |
 | `test_inputref_runtime_overrides_default_per_row` | **Not ported (same-assertion)** | See "Divergences found" §4. Replaced by `test_inputref_cannot_vary_per_row_only_per_call`. |
 | `test_inputref_between_with_two_parameters` | Ported (adapted) | decider 1's fixture never actually overrides at runtime (no `parameters` column in its frame) — pure rename of the default-supplying mechanism, same as row 1. |
-| `test_computed_feature_two_column_expression` | Ported (divergence) | `Feature(type="computed", ...)` is a KNOWN GAP (doc 08 §3.2). Ported as a `ComputedFeatureRemoved` assertion. |
-| `test_computed_feature_uses_parameter` | Ported (divergence) | same |
+| `test_computed_feature_two_column_expression` | Ported (renamed `test_computed_feature_two_column_expression_compiles`) | `Feature(type="computed", ...)` is admitted again (`decider2.expr`, doc 08 §1.1/§3.2, doc 06 §O15) — now gives the SAME answer decider 1 gave, compiled to numba source at build time instead of evaluated with `simpleeval` at runtime. |
+| `test_computed_feature_uses_parameter` | Ported (divergence, renamed `test_computed_feature_p_dot_attribute_syntax_is_refused`) | decider 1's `p.bonus` attribute-access convention for a parameter inside the expression string does not carry over — `decider2.expr` rejects attribute access unconditionally. This is the one genuine remaining GAP; ported as a `pydantic.ValidationError` assertion naming the construct, not `ComputedFeatureRemoved` (no longer raised for anything). |
 
 ## `test_decision_table.py` -> `test_tables_ported.py` (5 -> 5 functions)
 

@@ -23,16 +23,21 @@ Four divergences, each deliberate and each narrow:
    byte-identical either way** — this changes how the union is resolved,
    not what it accepts.
 
-2. **`Feature` is a column name. `_ComputedFeature` is gone.** decider 1
-   lets a feature be an expression string evaluated with `simpleeval`
-   (`common/feature.py`). Doc 08 §3.2 removes it, and doc 06 §O15 records
-   the decision: "a rule's leaves are declared features or **registered**
-   feature ids, never expression strings (`_ComputedFeature` goes —
-   §3.2)". A derived value is a step in code, placed in a module *before*
-   the tree — `flow(Derived, my_tree)` — which is what decider2's pipeline
-   already does for free. A document carrying a computed feature gets a
-   load-time error naming that replacement rather than being silently
-   accepted or silently dropped.
+2. **`Feature` is a column name, or a computed feature.** decider 1 lets a
+   feature be an expression string, evaluated *at runtime* with `simpleeval`
+   (`common/feature.py`). An earlier draft of this module removed the
+   computed arm outright, citing doc 08 §1's "config may not contain code" —
+   doc 08 §1.1/§3.2 and doc 06 §O15 (both revised) now draw the line more
+   precisely: that rule bans an unvalidated code *pointer*
+   (`{module_name, function_name}`, resolved live), not a closed, statically
+   validated expression. `decider2.expr` parses and validates decider 1's
+   exact wire format at document-load time and compiles it to numba source
+   once, at build time — see `_ComputedFeature` below, and `expr.py`'s own
+   module docstring for the full grammar and the distinction from a pointer.
+   A derived value still belongs in a step, placed in a module *before* the
+   tree (`flow(Derived, my_tree)`), whenever it needs its own null policy,
+   its own test, or reuse beyond one rule; a computed feature is for the
+   inline-arithmetic case that used to require writing that step anyway.
 
 3. **`InputRef` is a param, not a struct column.** decider 1 resolves an
    `InputRef` as `parameters.struct.field(key)` — a *column*, so it can
@@ -55,7 +60,9 @@ from __future__ import annotations
 import enum
 import typing as t
 
-from pydantic import BaseModel, Discriminator, Field, RootModel, Tag, model_validator
+from pydantic import BaseModel, Discriminator, Field, PrivateAttr, RootModel, Tag, model_validator
+
+from decider2 import expr
 
 if t.TYPE_CHECKING:
     # Codegen-only: every node/condition class below calls back into this
@@ -186,60 +193,152 @@ class InputRef(BaseModel):
 
 
 class ComputedFeatureRemoved(Exception):
-    """Raised when a document carries decider 1's `_ComputedFeature`.
+    """No longer raised. Kept only so an old `except ComputedFeatureRemoved`
+    or `pytest.raises(ComputedFeatureRemoved)` still imports.
 
-    Doc 08 §3.2 removes the expression-string feature; doc 06 §O15 records
-    it as settled. This is a loud, named failure with the replacement in the
-    message, because the two silent alternatives are both wrong: accepting
-    it would put an interpreter in config (doc 08 §1.1 — "config may
-    reference code by registered id. It may not contain code"), and dropping
-    it would change the tree's answers without saying so.
+    Doc 08 §3.2 used to remove decider 1's `_ComputedFeature` outright,
+    citing doc 08 §1's "config may not contain code". That conflated a
+    `{module_name, function_name}` **pointer** (genuinely banned — no
+    declared interface, no schema, doc 01 §5.4) with a **restricted
+    expression, validated and statically analysed** — which
+    `_ComputedFeature` (`decider/modules/rules/common/feature.py:59`)
+    actually was: it already carried `ALLOWED_POLARS_FUNCTIONS` and
+    `extract_features_and_parameters`. The mechanical objection was
+    narrower — `simpleeval` produced a `polars.Expr` at *runtime*, which
+    cannot enter a numba kernel — and that objection is answered by
+    compiling to numba source at build time instead (`decider2.expr`), not
+    by refusing the feature. See that module's docstring and doc 08 §1.2,
+    §3.2 and doc 06 §O15, all updated to say so.
+
+    A computed feature can still fail to parse — `decider2.expr.parse`
+    raises `expr.ExprError` (a `ValueError`, so pydantic reports it as an
+    ordinary `ValidationError`) for anything outside the closed grammar,
+    e.g. decider 1's own `p.bonus` attribute-access convention for
+    referencing a parameter, which this module does not carry over
+    (attribute access is unconditionally rejected — see `expr.py`). That is
+    a grammar violation, not "computed features are removed"; it no longer
+    raises this class.
     """
 
 
-class Feature(RootModel[str]):
-    """A column name — decider 1's `common/feature.Feature`, narrowed.
+class _ComputedFeature(BaseModel):
+    """A validated, statically-analysable expression — decider 1's
+    `_ComputedFeature` (`common/feature.py:59`), decider 1's exact wire
+    format (`{"type": "computed", "expression": "..."}`), with the
+    `simpleeval`-at-runtime step replaced by `decider2.expr`: parsed and
+    validated against a closed grammar here, at document-load time, and
+    compiled to numba source once, at build time (see that module's
+    docstring, and doc 08 §1.2/§3.2).
 
-    decider 1's root union also admitted `_ComputedFeature`. See divergence
-    2 in the module docstring: a derived value is a step in a module before
-    the tree, not an expression in the document.
+    There is no `build_expression`/`simple_eval` here and nothing that runs
+    per row — `emit()` below is the entire runtime cost, and it runs once.
     """
 
-    root: str = Field(description="Feature name to test")
+    type: t.Literal["computed"] = "computed"
+    expression: str = Field(
+        description="A decider2.expr expression, e.g. 'monthly_income - monthly_expenses'"
+    )
+    _expr: expr.Expr = PrivateAttr()
 
-    @model_validator(mode="before")
-    @classmethod
-    def _reject_computed(cls, value: t.Any) -> t.Any:
-        is_computed = (
-            isinstance(value, dict) and value.get("type") == "computed"
-        ) or getattr(value, "type", None) == "computed"
-        if is_computed:
-            expression = (
-                value.get("expression")
-                if isinstance(value, dict)
-                else getattr(value, "expression", "?")
-            )
-            raise ComputedFeatureRemoved(
-                f"computed feature {expression!r} cannot be migrated as-is. "
-                "decider 1 evaluated this string with simpleeval; doc 08 §3.2 "
-                "removes expression-string features and doc 06 §O15 records "
-                "the decision ('a rule's leaves are declared features or "
-                "registered feature ids, never expression strings'). Compute "
-                "it as an ordinary step in a module before the tree — "
-                "`def my_feature(a, b): return a - b`, then "
-                "`flow(my_feature, my_tree)` — and reference the result by "
-                "name here."
-            )
-        return value
+    @model_validator(mode="after")
+    def _parse(self) -> "_ComputedFeature":
+        try:
+            self._expr = expr.parse(self.expression)
+        except expr.ExprError as e:
+            raise ValueError(
+                f"computed feature {self.expression!r} is not a valid decider2 "
+                f"expression: {e}"
+            ) from e
+        return self
 
     def __str__(self) -> str:
-        return self.root
+        return self.expression
 
     def required_features(self) -> set[str]:
-        return {self.root}
+        return set(self._expr.dependencies())
 
     def required_params(self) -> set[str]:
+        # Every name the expression reads is a dependency wired like any
+        # other feature (`required_features` above); every numeric literal
+        # it contains becomes its own anonymous, per-use param (see
+        # `_ExprEmitAdapter.constant`) rather than a *named*, shared one —
+        # the same distinction `_ThresholdedUnaryOp.required_params` draws
+        # between a literal `Threshold` (not tracked here) and an
+        # `InputRef` (tracked, because its name is the shared knob).
         return set()
+
+    def emit(self, ctx: "EmitContext", node_id: str) -> str:
+        return self._expr.emit(_ExprEmitAdapter(ctx, node_id))
+
+
+class _ExprEmitAdapter:
+    """Bridges `decider2.expr.ExprContext` to one tree's `EmitContext`, for
+    one computed feature's use at one node.
+
+    A computed feature's own free names become ordinary column arguments —
+    `ctx.column` is exactly `EmitContext`'s existing feature bookkeeping, so
+    two nodes both reading `income` (one directly, one inside `income - x`)
+    share the one signature argument. Its own numeric literals become
+    ordinary anonymous params through `EmitContext.threshold` — the same
+    machinery a literal `Threshold` already uses (`_ThresholdedUnaryOp.
+    test`) — so a constant buried inside an expression retunes exactly like
+    any other threshold, never recompiling. `_next` numbers them uniquely
+    within this one use so `"x * 2 + y * 2"` gets two distinct params, not
+    one collided name.
+    """
+
+    def __init__(self, ctx: "EmitContext", node_id: str) -> None:
+        self._ctx = ctx
+        self._node_id = node_id
+        self._next = 0
+
+    def name(self, ident: str) -> str:
+        return self._ctx.column(ident)
+
+    def constant(self, value: "int | float") -> str:
+        role = f"expr{self._next}"
+        self._next += 1
+        return self._ctx.threshold(float(value), node_id=self._node_id, role=role)
+
+
+class Feature(RootModel[t.Union[_ComputedFeature, str]]):
+    """A column name, or a computed feature — decider 1's
+    `common/feature.Feature`, in full: `root: Union[_ComputedFeature, str]`,
+    same two arms, same wire format either way.
+
+    decider2's divergence from decider 1 is only in how the computed arm is
+    realised (`decider2.expr`'s closed grammar and build-time compile, not
+    `simpleeval` at runtime) — never in whether it is admitted. See
+    `_ComputedFeature` and `expr.py`'s module docstring.
+    """
+
+    root: t.Union[_ComputedFeature, str] = Field(description="Feature name to test, or a computed feature")
+
+    def __str__(self) -> str:
+        if isinstance(self.root, str):
+            return self.root
+        return str(self.root)
+
+    def required_features(self) -> set[str]:
+        if isinstance(self.root, str):
+            return {self.root}
+        return self.root.required_features()
+
+    def required_params(self) -> set[str]:
+        if isinstance(self.root, str):
+            return set()
+        return self.root.required_params()
+
+    def emit(self, ctx: "EmitContext", node_id: str) -> str:
+        """This feature's numba-source token — a signature argument's
+        identifier for a plain column, or a computed feature's own inline
+        fragment (itself built entirely out of signature arguments — see
+        `_ComputedFeature.emit`). Either way the result substitutes
+        directly wherever a condition class currently does
+        `var = self.feature.emit(ctx, node_id)`."""
+        if isinstance(self.root, str):
+            return ctx.column(self.root)
+        return self.root.emit(ctx, node_id)
 
 
 Threshold = t.Union[float, int, InputRef]
@@ -301,7 +400,7 @@ class _ThresholdedUnaryOp(_BaseUnaryOp):
         """The six primitive comparisons share this one shape: they differ
         only in `self.op`, a plain comparison operator string, so one
         method on the shared base serves all six — no dispatch needed."""
-        var = ctx.use_feature(self.feature)
+        var = self.feature.emit(ctx, node_id)
         suffix = f"_{cond_idx}" if cond_idx is not None else ""
         return f"{var} {self.op} {ctx.threshold(self.threshold, node_id=node_id, role=f'thr{suffix}')}"
 
@@ -357,7 +456,7 @@ class UnaryBetween(_BaseUnaryOp):
         return params
 
     def test(self, ctx: "EmitContext", node_id: str, cond_idx: t.Optional[str] = None) -> str:
-        var = ctx.use_feature(self.feature)
+        var = self.feature.emit(ctx, node_id)
         suffix = f"_{cond_idx}" if cond_idx is not None else ""
         parts = []
         if self.min is not None:
@@ -398,7 +497,7 @@ class UnaryIsIn(_BaseUnaryOp):
         return params
 
     def test(self, ctx: "EmitContext", node_id: str, cond_idx: t.Optional[str] = None) -> str:
-        var = ctx.use_feature(self.feature)
+        var = self.feature.emit(ctx, node_id)
         return ctx.isin_test(var, self.values, node_id, cond_idx if cond_idx is not None else 0)
 
 
@@ -447,7 +546,7 @@ class UnaryIsTrue(_BaseUnaryOp):
     op: t.Literal["is_true"] = "is_true"
 
     def test(self, ctx: "EmitContext", node_id: str, cond_idx: t.Optional[str] = None) -> str:
-        var = ctx.use_feature(self.feature)
+        var = self.feature.emit(ctx, node_id)
         return f"{var} != 0"
 
 
@@ -455,7 +554,7 @@ class UnaryIsFalse(_BaseUnaryOp):
     op: t.Literal["is_false"] = "is_false"
 
     def test(self, ctx: "EmitContext", node_id: str, cond_idx: t.Optional[str] = None) -> str:
-        var = ctx.use_feature(self.feature)
+        var = self.feature.emit(ctx, node_id)
         return f"{var} == 0"
 
 
@@ -721,7 +820,7 @@ class _CasesNode(BaseModel):
         raise NotImplementedError
 
     def emit(self, ctx: "EmitContext", node_id: str, depth: int) -> list[str]:
-        var = ctx.use_feature(self.feature)  # type: ignore[attr-defined]
+        var = self.feature.emit(ctx, node_id)  # type: ignore[attr-defined]
         tests = [
             self._condition_test(ctx, var, node_id, i)
             for i in range(len(self.conditions))  # type: ignore[attr-defined]
