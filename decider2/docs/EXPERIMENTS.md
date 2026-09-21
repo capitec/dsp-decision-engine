@@ -1705,3 +1705,90 @@ single-row `collect()`, up to **14,790×** codegen, which is 0.4–39% of the en
   noise against the floor. **Marshal and readback are the entire problem**, which
   is §R's conclusion reached independently — two experiments, different
   instruments, same answer. Doc 05 §3.1b is the fix and it is unbuilt.
+
+
+---
+
+## T — Node representation, and where string matching should happen
+
+Prompted by the owner proposing a `jitclass` node list (`node = nodes[0]; while
+not node.isleaf(): ...`) and then asking whether string predicates could live in
+the interpreter rather than being pre-computed for every row.
+
+### jitclass node objects work, and cost 9.7×
+
+Full-binary depth 7, 100k rows, identical answers asserted.
+
+| | ns/row |
+|---|---|
+| struct-of-arrays walk | **73.3** |
+| `jitclass` node-object walk | 708.5 (**9.66×**) |
+
+jitclass instances are heap-allocated and reference-counted, so `nodes[i]` hands
+back a reference with incref/decref per access and every field read chases a
+pointer instead of indexing contiguous memory. At 100k rows that is 7.3 ms
+against 70.8 ms — most of a 20–100 ms budget spent on indirection.
+
+**`numba.typed.List` is homogeneous**, so `LTNode` and `LeafNode` cannot share
+one. Worse, appending the wrong type is a *warning*, not an error —
+`NumbaTypeSafetyWarning: unsafe cast from LeafNode to LTNode` — sitting exactly
+where the natural code would put it.
+
+> **The maintainability the proposal wants does not have to be the runtime
+> representation.** One class per node kind, each with an `encode()` that returns
+> its row of the flat arrays, gives one-class-in-one-file authoring *and* the
+> 73 ns/row path. Classes for authoring, arrays for execution.
+
+### Strings: pre-compute per CATEGORY, not per row
+
+The owner's objection to frame-tier pre-processing was exact: if one branch in a
+hundred needs a regex, pre-computing it for every row does 100× the necessary
+work. Correct — but lazy evaluation is not the best fix.
+
+| approach | regex calls | wall |
+|---|---|---|
+| regex per row (frame tier today) | 100,000 | 4.22 ms |
+| regex per **category**, then `table[code[i]]` | **12** | **0.12 ms** (33.8×) |
+
+And of that 0.12 ms, the regex is ~0.7 µs; the rest is the O(rows) lookup **the
+walker already performs**. So a per-category mask is close to free.
+
+It is also *better than lazy*: lazy is O(rows reaching the node), per-category is
+O(distinct values) — independent of tree selectivity and of row count. And it
+works for match types a kernel cannot do at all, because the matching happens in
+Python over the category list and only the answer crosses into the kernel. That
+lifts the migration's refusal of non-`exact` `match_type`.
+
+**Why the categories are knowable, which is not obvious.** A tree can be
+arbitrarily deep, so "know the categories first" sounds impossible. It is not,
+because **a step cannot produce a string** — verified: `-> str` fails with
+`No implementation of setitem(array(int32), int64, unicode_type)`. Every string a
+tree can test is therefore an *input column*, dictionary-encoded at the boundary.
+Depth does not change provenance.
+
+> **This is a contract, not a law.** If decider2 ever admits string-producing
+> steps, per-category masking breaks. Record it as a stated dependency.
+
+### C regex from nopython works — 60.3 ns/call
+
+For the case where per-category degenerates (cardinality ≈ row count: account
+numbers, free text, merchant descriptors), lazy in-kernel matching is the right
+answer, and numba can reach C for it:
+
+    njit -> libc regexec:  60.3 ns/call,  6.03 ms per 100k rows
+
+(`ctypes.c_char_p` is rejected by numba's ctypes bridge; `c_void_p` works. That
+detail alone reads as "impossible" if it is the first thing you hit.)
+
+Three caveats. glibc POSIX regex is **slower than polars' Rust `regex` crate**
+(6.03 ms vs 4.22 ms for the all-rows case), so a real implementation wants PCRE2
+or a vendored crate, not `libc`. `find_library("c")` plus POSIX regex is not a
+Windows story, which is a bundled-dependency decision for an open-source
+library. And it needs the bytes in-kernel — arrow offsets and data buffers
+sliced per row, zero-copy but real boundary work.
+
+### Conclusion
+
+Per-category masks as the default; a **measured cardinality threshold** switches
+a node to lazy in-kernel matching. The threshold is measurable rather than
+guessed, and the two mechanisms are not rivals — they split on cardinality.
