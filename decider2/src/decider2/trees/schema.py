@@ -57,6 +57,16 @@ import typing as t
 
 from pydantic import BaseModel, Discriminator, Field, RootModel, Tag, model_validator
 
+if t.TYPE_CHECKING:
+    # Codegen-only: every node/condition class below calls back into this
+    # for the cross-cutting concerns codegen owns (naming and de-duping
+    # kernel arguments, hoisting string tests, walking to a node's
+    # children). Import guarded so schema.py stays free of a runtime
+    # dependency on codegen.py — codegen.py already depends on this
+    # module, and a class owning its own emission is not the same claim as
+    # this module depending on codegen (see EmitContext's own docstring).
+    from decider2.trees.codegen import EmitContext
+
 __all__ = [
     "RangeEndLogic",
     "TStringMatchType",
@@ -256,6 +266,25 @@ class _BaseUnaryOp(BaseModel):
     def required_params(self) -> set[str]:
         return self.feature.required_params()
 
+    def test(self, ctx: "EmitContext", node_id: str, cond_idx: t.Optional[str] = None) -> str:
+        """Boolean source expression for this one condition.
+
+        decider 1's per-op `build_condition`, moved onto the class it
+        describes (the owner's own `TypeDiscriminatedBaseModule` pattern:
+        `decider/modules/credit/decision_table/config.py`'s
+        `Expression.__call__`). `codegen.EmitContext` is where the
+        cross-cutting bookkeeping (argument naming/de-duping, string-test
+        hoisting) lives; this method owns only what varies per op.
+
+        `cond_idx` is this condition's position among its siblings in an
+        enclosing `CompositeNode`/`CompositeCondition`'s `conditions` list —
+        `None` for a lone `UnaryNode`, where `node_id` alone already names a
+        unique argument. Threaded through so two same-shaped siblings (e.g.
+        `x > 5 and x < 10`) get distinct parameter names instead of
+        silently sharing one (see `CompositeCondition.test`).
+        """
+        raise NotImplementedError
+
 
 class _ThresholdedUnaryOp(_BaseUnaryOp):
     threshold: Threshold = Field(
@@ -267,6 +296,14 @@ class _ThresholdedUnaryOp(_BaseUnaryOp):
         if isinstance(self.threshold, InputRef):
             params.add(self.threshold.key)
         return params
+
+    def test(self, ctx: "EmitContext", node_id: str, cond_idx: t.Optional[str] = None) -> str:
+        """The six primitive comparisons share this one shape: they differ
+        only in `self.op`, a plain comparison operator string, so one
+        method on the shared base serves all six — no dispatch needed."""
+        var = ctx.use_feature(self.feature)
+        suffix = f"_{cond_idx}" if cond_idx is not None else ""
+        return f"{var} {self.op} {ctx.threshold(self.threshold, node_id=node_id, role=f'thr{suffix}')}"
 
 
 class UnaryLessThanEqual(_ThresholdedUnaryOp):
@@ -319,6 +356,16 @@ class UnaryBetween(_BaseUnaryOp):
                 params.add(bound.key)
         return params
 
+    def test(self, ctx: "EmitContext", node_id: str, cond_idx: t.Optional[str] = None) -> str:
+        var = ctx.use_feature(self.feature)
+        suffix = f"_{cond_idx}" if cond_idx is not None else ""
+        parts = []
+        if self.min is not None:
+            parts.append(f"{var} >= {ctx.threshold(self.min, node_id=node_id, role=f'min{suffix}')}")
+        if self.max is not None:
+            parts.append(f"{var} <= {ctx.threshold(self.max, node_id=node_id, role=f'max{suffix}')}")
+        return " and ".join(parts) if len(parts) > 1 else parts[0]
+
 
 class UnaryIsIn(_BaseUnaryOp):
     """Numeric set membership — decider 1's `UnaryIsIn`.
@@ -349,6 +396,10 @@ class UnaryIsIn(_BaseUnaryOp):
                 if isinstance(v, InputRef):
                     params.add(v.key)
         return params
+
+    def test(self, ctx: "EmitContext", node_id: str, cond_idx: t.Optional[str] = None) -> str:
+        var = ctx.use_feature(self.feature)
+        return ctx.isin_test(var, self.values, node_id, cond_idx if cond_idx is not None else 0)
 
 
 class UnaryStringMatch(_BaseUnaryOp):
@@ -382,13 +433,30 @@ class UnaryStringMatch(_BaseUnaryOp):
                 params.add(pattern.key)
         return params
 
+    def test(self, ctx: "EmitContext", node_id: str, cond_idx: t.Optional[str] = None) -> str:
+        # cond_idx is unused: a string test names its literals by the
+        # hoisted matcher step, not by node_id/role, so it never collides
+        # with a sibling the way a threshold param would.
+        return ctx.string_test(
+            self.feature, self.patterns, self.match_type, self.case_sensitive,
+            self.trim_whitespace, node_id,
+        )
+
 
 class UnaryIsTrue(_BaseUnaryOp):
     op: t.Literal["is_true"] = "is_true"
 
+    def test(self, ctx: "EmitContext", node_id: str, cond_idx: t.Optional[str] = None) -> str:
+        var = ctx.use_feature(self.feature)
+        return f"{var} != 0"
+
 
 class UnaryIsFalse(_BaseUnaryOp):
     op: t.Literal["is_false"] = "is_false"
+
+    def test(self, ctx: "EmitContext", node_id: str, cond_idx: t.Optional[str] = None) -> str:
+        var = ctx.use_feature(self.feature)
+        return f"{var} == 0"
 
 
 TUnaryOp = t.Annotated[
@@ -430,6 +498,23 @@ class RangeCondition(BaseModel):
     def required_params(self) -> set[str]:
         return {b.key for b in (self.min, self.max) if isinstance(b, InputRef)}
 
+    def test(
+        self, ctx: "EmitContext", var: str, end_logic: RangeEndLogic, node_id: str, idx: int
+    ) -> str:
+        """decider 1's `RangeCondition.build_range_condition`, as source.
+
+        `var`, `end_logic` and `idx` come from the enclosing `CasesRanges`
+        node — this condition owns the bound comparison, not the branching
+        the node builds around it (decider 1's own split between
+        `RangeCondition` and the node that holds a list of them)."""
+        lo_op, hi_op = (">=", "<") if end_logic is RangeEndLogic.lower_inclusive else (">", "<=")
+        parts = []
+        if self.min is not None:
+            parts.append(f"{var} {lo_op} {ctx.threshold(self.min, node_id=node_id, role=f'min_{idx}')}")
+        if self.max is not None:
+            parts.append(f"{var} {hi_op} {ctx.threshold(self.max, node_id=node_id, role=f'max_{idx}')}")
+        return " and ".join(parts) if len(parts) > 1 else parts[0]
+
 
 class StringMatchCondition(BaseModel):
     """One branch of a `CasesStringMatch`."""
@@ -447,6 +532,21 @@ class StringMatchCondition(BaseModel):
     def required_params(self) -> set[str]:
         return {p.key for p in self.patterns if isinstance(p, InputRef)}
 
+    def test(
+        self,
+        ctx: "EmitContext",
+        node_id: str,
+        *,
+        feature: Feature,
+        match_type: TStringMatchType,
+        case_sensitive: bool,
+        trim_whitespace: bool,
+    ) -> str:
+        """`feature`/`match_type`/`case_sensitive`/`trim_whitespace` are the
+        enclosing `CasesStringMatch` node's — a branch only ever carries its
+        own `patterns` (the wire format's shape, kept as-is)."""
+        return ctx.string_test(feature, self.patterns, match_type, case_sensitive, trim_whitespace, node_id)
+
 
 class IsInCondition(BaseModel):
     """One branch of a `CasesIsIn`."""
@@ -457,6 +557,9 @@ class IsInCondition(BaseModel):
         if isinstance(self.values, InputRef):
             return {self.values.key}
         return {v.key for v in self.values if isinstance(v, InputRef)}
+
+    def test(self, ctx: "EmitContext", var: str, node_id: str, idx: int) -> str:
+        return ctx.isin_test(var, self.values, node_id, idx)
 
 
 def _condition_tag(value: t.Any) -> str:
@@ -503,12 +606,47 @@ class CompositeCondition(BaseModel):
             out |= cond.required_params()
         return out
 
+    def test(self, ctx: "EmitContext", node_id: str, cond_idx: t.Optional[str] = None) -> str:
+        """A nested AND/OR/NOT, self-contained with its own parens so it
+        composes as one term wherever a sibling condition is expected
+        (unlike a top-level `CompositeNode`'s test, which is already the
+        whole `if` expression and does not need to — see
+        `CompositeNode._test`; the two shapes are deliberately not shared).
+
+        `cond_idx` is this condition's position among its own siblings; a
+        nested child's path extends it (`f'{prefix}_{j}'`) rather than
+        restarting it, so a composite three levels deep still names every
+        leaf threshold uniquely (see `_BaseUnaryOp.test`'s docstring for
+        why a repeated name would be the sibling-collision bug this
+        threading exists to prevent). `TCondition`'s two members —
+        this class and every `TUnaryOp` — share this exact signature, so a
+        caller holding a `TCondition` just calls `.test(...)`: no branch on
+        which one it got needed."""
+        prefix = cond_idx if cond_idx is not None else "0"
+        inner = [c.test(ctx, node_id, f"{prefix}_{j}") for j, c in enumerate(self.conditions)]
+        if self.op is TLogicOp.NOT:
+            return f"(not ({inner[0]}))"
+        joiner = " and " if self.op is TLogicOp.AND else " or "
+        return "(" + joiner.join(inner) + ")"
+
 
 CompositeCondition.model_rebuild()
 
 
 # ---------------------------------------------------------------------------
 # Nodes — decider 1's `tree/v3/nodes_ui.py`
+#
+# Each class below owns its own `emit(ctx, node_id, depth) -> list[str]`:
+# its source lines, recursing into its children through `ctx.child_lines`
+# (which calls back into whichever node type it finds there — no isinstance
+# needed, the discriminated union above already resolved it). `codegen.py`
+# no longer imports any of these classes; it holds only `EmitContext` and
+# the module-level scaffolding around `tree.root's .emit(ctx, ...)`.
+#
+# `_BinaryNode` and `_CasesNode` are the two shapes decider 1 also had two
+# of (a single test routing then/otherwise; a list of conditions routing
+# one-of-N-plus-otherwise) — factored once so `UnaryNode`/`CompositeNode`
+# and the three `Cases*` classes each implement only what varies for them.
 # ---------------------------------------------------------------------------
 
 
@@ -528,8 +666,31 @@ class LeafNode(BaseModel):
     def required_params(self) -> set[str]:
         return set()
 
+    def emit(self, ctx: "EmitContext", node_id: str, depth: int) -> list[str]:
+        ctx.leaf_count += 1
+        return [f"return {self.result_idx}"]
 
-class UnaryNode(BaseModel):
+
+class _BinaryNode(BaseModel):
+    """Shared shape for `UnaryNode` and `CompositeNode`: one boolean test,
+    `sourceIndex=0` is `then`, `1` is `otherwise`. No `else:` — see
+    `EmitContext.child_lines` for why the otherwise-arm can follow at the
+    same indentation instead."""
+
+    def _test(self, ctx: "EmitContext", node_id: str) -> str:
+        raise NotImplementedError
+
+    def emit(self, ctx: "EmitContext", node_id: str, depth: int) -> list[str]:
+        test = self._test(ctx, node_id)
+        then_lines = ctx.child_lines(node_id, 0, depth + 1)
+        else_lines = ctx.child_lines(node_id, 1, depth)
+        out = [f"if {test}:"]
+        out += [f"    {ln}" for ln in then_lines]
+        out += else_lines
+        return out
+
+
+class UnaryNode(_BinaryNode):
     """Single condition. Edge `sourceIndex=0` is `then`, `1` is `otherwise`."""
 
     type: t.Literal["unary"] = "unary"
@@ -546,8 +707,35 @@ class UnaryNode(BaseModel):
     def required_params(self) -> set[str]:
         return self.condition.required_params()
 
+    def _test(self, ctx: "EmitContext", node_id: str) -> str:
+        return self.condition.test(ctx, node_id)
 
-class CasesRanges(BaseModel):
+
+class _CasesNode(BaseModel):
+    """Shared shape for the three `Cases*` node types: `sourceIndex=0..N-1`
+    select `conditions[i]`, `sourceIndex=N` is `otherwise`. They differ
+    only in what one condition tests against `self.feature` — that part is
+    `_condition_test`, implemented per class."""
+
+    def _condition_test(self, ctx: "EmitContext", var: str, node_id: str, idx: int) -> str:
+        raise NotImplementedError
+
+    def emit(self, ctx: "EmitContext", node_id: str, depth: int) -> list[str]:
+        var = ctx.use_feature(self.feature)  # type: ignore[attr-defined]
+        tests = [
+            self._condition_test(ctx, var, node_id, i)
+            for i in range(len(self.conditions))  # type: ignore[attr-defined]
+        ]
+        out: list[str] = []
+        for i, test in enumerate(tests):
+            keyword_ = "if" if i == 0 else "elif"
+            out.append(f"{keyword_} {test}:")
+            out += [f"    {ln}" for ln in ctx.child_lines(node_id, i, depth + 1)]
+        out += ctx.child_lines(node_id, len(tests), depth)
+        return out
+
+
+class CasesRanges(_CasesNode):
     """Multi-way range branching. `sourceIndex=0..N-1` select
     `conditions[i]`; `sourceIndex=N` is `otherwise`."""
 
@@ -579,8 +767,11 @@ class CasesRanges(BaseModel):
             params |= cond.required_params()
         return params
 
+    def _condition_test(self, ctx: "EmitContext", var: str, node_id: str, idx: int) -> str:
+        return self.conditions[idx].test(ctx, var, self.end_logic, node_id, idx)
 
-class CasesStringMatch(BaseModel):
+
+class CasesStringMatch(_CasesNode):
     """Multi-way string matching."""
 
     type: t.Literal["cases"] = "cases"
@@ -607,8 +798,15 @@ class CasesStringMatch(BaseModel):
             params |= cond.required_params()
         return params
 
+    def _condition_test(self, ctx: "EmitContext", var: str, node_id: str, idx: int) -> str:
+        return self.conditions[idx].test(
+            ctx, node_id,
+            feature=self.feature, match_type=self.match_type,
+            case_sensitive=self.case_sensitive, trim_whitespace=self.trim_whitespace,
+        )
 
-class CasesIsIn(BaseModel):
+
+class CasesIsIn(_CasesNode):
     """Multi-way categorical branching over numeric value sets."""
 
     type: t.Literal["cases"] = "cases"
@@ -632,8 +830,11 @@ class CasesIsIn(BaseModel):
             params |= cond.required_params()
         return params
 
+    def _condition_test(self, ctx: "EmitContext", var: str, node_id: str, idx: int) -> str:
+        return self.conditions[idx].test(ctx, var, node_id, idx)
 
-class CompositeNode(BaseModel):
+
+class CompositeNode(_BinaryNode):
     """AND/OR/NOT over conditions. `sourceIndex=0` is `then`, `1` is
     `otherwise` (decider 1's `BaseCompositeNode`)."""
 
@@ -665,6 +866,16 @@ class CompositeNode(BaseModel):
         for cond in self.conditions:
             out |= cond.required_params()
         return out
+
+    def _test(self, ctx: "EmitContext", node_id: str) -> str:
+        """This is the WHOLE `if` expression (unlike `CompositeCondition.test`,
+        which must be self-contained to compose inside a further join) —
+        see that method's docstring for why the two shapes differ."""
+        inner = [c.test(ctx, node_id, str(i)) for i, c in enumerate(self.conditions)]
+        if self.op is TLogicOp.NOT:
+            return f"not ({inner[0]})"
+        joiner = " and " if self.op is TLogicOp.AND else " or "
+        return joiner.join(f"({i})" for i in inner) if len(inner) > 1 else inner[0]
 
 
 def validate_range_conditions(
