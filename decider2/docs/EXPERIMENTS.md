@@ -1904,3 +1904,74 @@ and none of its cost: a second language, a wheel matrix, a new
 
 Keep the crate as a **working, documented fallback**. If a throughput-bound
 batch case ever justifies it, it exists and it is measured.
+
+
+---
+
+## V — Rust through the C ABI, called from inside the kernel
+
+§U's correction, redone with real Rust instead of a C stand-in. A `cdylib` with
+no Python dependency, ten `extern "C"` entry points, loaded by `ctypes` and
+called from inside `@njit`.
+
+| shape | numba array walker | C-ABI per row |
+|---|---|---|
+| full-binary d7 | 85.0–105.1 | **66.5–73.7** |
+
+**12–35% faster than the numba walker at every shape measured.** Codegen still
+wins outright except at d9 (§Q).
+
+### Fusion holds — confirmed structurally, not inferred
+
+`build_driver` over a real 3-step pipeline with the C-ABI walk in the middle
+returns **exactly one `CompiledSegment`**, and the emitted source has exactly one
+`def kernel(...)` calling all three steps inline, including the `extern "C"`
+call. That is the claim §U got wrong, now verified against decider2's own
+unmodified compiler rather than a simulation.
+
+**The "fusion tax" is near zero.** Isolated call overhead is 2.4–3.84 ns against
+a 40–100 ns walk (3–9%), so per-row (fusable) sometimes *beats* per-batch
+outright — d9: 81.5 vs 88.2 ns/row — and is within noise elsewhere. The
+assumption that batching buys speed at the cost of fusion does not hold here.
+
+### The cost neither §U nor I anticipated
+
+> **Any kernel referencing a ctypes symbol can never be numba-disk-cached.**
+> `NumbaWarning: Cannot cache compiled function ... dynamic globals`. Confirmed
+> against a persistent build dir, not a tempdir artefact: a control pipeline goes
+> 0.30 s cold → 0.15 s cached, while the C-ABI pipeline costs ~0.47 s **every
+> run, forever**.
+
+This is the sharpest argument against the approach, and it is not about speed.
+Doc 05 §4.2's seven cache conditions, `decider2 build --verify`'s "a runtime load
+triggers ZERO compiles", and doc 08 §4.1's `sealed` mode all rest on the on-disk
+cache. A C-ABI tree **silently voids that guarantee for its whole kernel** — every
+process start recompiles, and the build-time verification that is supposed to
+catch exactly this would pass while the property is gone.
+
+### Panic safety and packaging
+
+rustc 1.95, well past 1.71's abort-at-boundary guarantee. Unprotected calls — a
+synthetic `panic!()` and a realistic corrupted-tree out-of-bounds — **reliably
+SIGABRT the whole process**. `catch_unwind`-wrapped calls return NaN and the same
+process serves the next good row correctly. Real graceful degradation, but only
+because every boundary function remembers to wrap itself; **nothing enforces it**.
+
+Packaging is genuinely better than PyO3, verified: the C-ABI `.so` has no
+`PyInit_*` symbol and loads under Python 3.12 with zero rebuild from a 3.14
+build, where the PyO3 `.so` fails with `undefined symbol: Py_TYPE`. So **one `.so`
+per platform, not per Python version**. Both share a `GLIBC_2.34` floor, so the
+OS axis is unchanged.
+
+### Verdict
+
+**Do not adopt by default; keep it as a documented working option.** It is
+faster, it fuses, and it packages better than PyO3 — all three of §U's
+objections answered. But it trades decider2's on-disk compile cache for that,
+which is a governance property rather than a performance one, and it adds a
+failure mode where a missing `catch_unwind` is a process abort inside a credit
+kernel.
+
+The numba array walker still delivers what the maintainability complaint actually
+asked for — one generic kernel, no line cap, no indentation limit, no per-shape
+compile — in one language, with the cache intact and no way to segfault.
