@@ -47,14 +47,12 @@ from typing import Any, Mapping, Sequence
 import numpy as np
 import polars as pl
 
-from decider2.compile.driver import build_driver, numpy_dtype
+from decider2.compile.driver import numpy_dtype
 from decider2.runtime import modes
 from decider2.runtime.modes import ResolvedParams
 from decider2.types import Decision, Input, Interface, MissingInputPolicy, NullPolicy, Step
 
 DEFAULT_BUILD_DIR = Path(".decider2_cache")
-
-_VALID_MODES = ("interpreted", "stepped", "fused")
 
 
 def _plain_name(name: str) -> str:
@@ -412,18 +410,18 @@ def _run(
     terminal_names: frozenset,
     build_dir: "str | Path | None",
 ) -> dict:
-    if mode not in _VALID_MODES:
-        raise ValueError(f"unknown mode {mode!r}; expected one of {_VALID_MODES}")
-    if mode == "interpreted":
-        return modes.run_interpreted(steps, registry, resolved, n, owners=owners)
-
-    driver = build_driver(
-        list(steps), list(group_ids), owners=list(owners),
-        build_dir=_default_build_dir(build_dir), terminal_names=terminal_names,
+    """Doc 02 §3.1: three modes, one shared kernel. Which one runs is a
+    lookup into `modes.MODES` (a registry of `Mode` classes, one per mode
+    name) rather than an if/elif over `mode ==`, so a fourth mode is one
+    class in `runtime/modes.py` and never a new branch here."""
+    try:
+        mode_cls = modes.MODES[mode]
+    except KeyError:
+        raise ValueError(f"unknown mode {mode!r}; expected one of {tuple(modes.MODES)}") from None
+    return mode_cls.run(
+        steps, group_ids, owners, registry, resolved, n,
+        terminal_names=terminal_names, build_dir=_default_build_dir(build_dir),
     )
-    if mode == "stepped":
-        return modes.run_stepped(driver, steps, registry, resolved, n, owners=owners)
-    return modes.run_fused(driver, registry, resolved, n)
 
 
 # ---------------------------------------------------------------------------

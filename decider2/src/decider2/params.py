@@ -73,7 +73,32 @@ _CARRIER_TYPES: tuple[type, ...] = (float, int, str, list, dict, tuple)
 _MUTABLE_CARRIER_TYPES: tuple[type, ...] = (list, dict)
 
 
-class ParamSpec:
+class Carrier:
+    """Base for every default `harvest_signature` recognises by type — a
+    `param()`/`missing_as()`/`not_applicable_as()` carrier, doc 03 §4.4.
+
+    Each subclass knows how to turn itself into the `Step`-signature element
+    it means — a `ParamDecl` for `param()`, an `Input` for a null-fill
+    marker — via `.contribute()`, so `harvest_signature` calls
+    `default.contribute(...)` once instead of `isinstance`-branching over the
+    three carrier kinds and then, for the null-fill two, a further lookup
+    keyed on which marker class matched. Doc 03 §4.4's own description —
+    "the harvester finds params by `isinstance(default, ParamSpec)`" —
+    generalises here to `isinstance(default, Carrier)`, since `MissingAs`/
+    `NotApplicableAs` get the identical "is this default even a carrier"
+    treatment before either is asked what kind it is.
+    """
+
+    def contribute(
+        self, name: str, annotation: Any, inputs: "list[Input]", params: "list[ParamDecl]"
+    ) -> None:
+        """Append this carrier's own `Input`/`ParamDecl` — built from
+        `name`/`annotation` and whatever this carrier itself knows — to
+        whichever of `inputs`/`params` it belongs in."""
+        raise NotImplementedError
+
+
+class ParamSpec(Carrier):
     """Marks a default as a `param()` carrier.
 
     Doc 03 §4.4, verbatim: "The harvester finds params by
@@ -81,12 +106,46 @@ class ParamSpec:
     which builtin type it subclasses — is an instance of this class.
     """
 
+    def contribute(self, name, annotation, inputs, params) -> None:
+        plain = _unwrap(self)
+        params.append(
+            ParamDecl(
+                name=name,
+                annotation=annotation if annotation is not Any else type(plain),
+                default=plain,
+                field_info=self.field_info,
+            )
+        )
 
-class MissingAs:
+
+class _NullFillCarrier(Carrier):
+    """Shared body of `MissingAs`/`NotApplicableAs` (doc 03 §1 tiers 2/4):
+    the two are byte-identical apart from which `null_policy` each records,
+    so that is the one thing each subclass sets — a carrier "knows its own
+    null policy" (rather than `harvest_signature` looking it up in a dict
+    keyed on which marker class matched) and this base does the rest."""
+
+    null_policy: "NullPolicy"  # set by MissingAs/NotApplicableAs below
+
+    def contribute(self, name, annotation, inputs, params) -> None:
+        plain = _unwrap(self)
+        inputs.append(
+            Input(
+                name=name,
+                annotation=annotation if annotation is not Any else type(plain),
+                null_policy=self.null_policy,
+                fill=plain,
+            )
+        )
+
+
+class MissingAs(_NullFillCarrier):
     """Marks a default as a `missing_as()` carrier — null-policy tier 2 (§1)."""
 
+    null_policy = NullPolicy.MISSING_AS
 
-class NotApplicableAs:
+
+class NotApplicableAs(_NullFillCarrier):
     """Marks a default as a `not_applicable_as()` carrier — tier 4 (§1).
 
     A distinct class from `MissingAs` on purpose: tiers 2 and 4 fill the same
@@ -95,14 +154,7 @@ class NotApplicableAs:
     approves an incomplete application.
     """
 
-
-# `harvest_signature` below builds the same `Input(..., fill=plain)` shape for
-# either marker and only needs to know which `NullPolicy` tier it means — one
-# dict lookup instead of two near-identical `isinstance` branches.
-_NULL_POLICY_BY_MARKER: dict[type, "NullPolicy"] = {
-    MissingAs: NullPolicy.MISSING_AS,
-    NotApplicableAs: NullPolicy.NOT_APPLICABLE_AS,
-}
+    null_policy = NullPolicy.NOT_APPLICABLE_AS
 
 
 def _carrier_for(kind: type, value: Any) -> Any:
@@ -346,33 +398,12 @@ def harvest_signature(
         annotation: Any = raw_annotation if raw_annotation is not inspect.Parameter.empty else Any
         default = p.default
 
-        if isinstance(default, ParamSpec):
-            plain = _unwrap(default)
-            params.append(
-                ParamDecl(
-                    name=pname,
-                    annotation=annotation if annotation is not Any else type(plain),
-                    default=plain,
-                    field_info=default.field_info,
-                )
-            )
-            continue
-
-        null_policy = next(
-            (policy for marker_cls, policy in _NULL_POLICY_BY_MARKER.items()
-             if isinstance(default, marker_cls)),
-            None,
-        )
-        if null_policy is not None:
-            plain = _unwrap(default)
-            inputs.append(
-                Input(
-                    name=pname,
-                    annotation=annotation if annotation is not Any else type(plain),
-                    null_policy=null_policy,
-                    fill=plain,
-                )
-            )
+        if isinstance(default, Carrier):
+            # `param()`/`missing_as()`/`not_applicable_as()` (doc 03 §4.4):
+            # each carrier knows its own null policy (or lack of one) and
+            # how to become a `ParamDecl` or an `Input` — see `Carrier.
+            # contribute` — so there is nothing left to branch on here.
+            default.contribute(pname, annotation, inputs, params)
             continue
 
         if _permits_none(raw_annotation):

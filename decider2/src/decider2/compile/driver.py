@@ -24,13 +24,25 @@ genuine bug gets silently relabelled as "the compiler couldn't handle this"
 (EXPERIMENTS.md §B: `objmode` per row measured 77x, per-row `prange` 615x — a
 per-node escape would be worse than the thing it rescues, which is why there
 isn't one).
+
+**A `Segment` runs itself.** `CompiledSegment`/`FallbackSegment` (a
+discriminated union on `.kind`) each own their own `.run()`, so
+`runtime.modes.run_fused` just calls it — no `seg.kind == "compiled"`
+branch out there, and no `kernel_fn: ... | None  # set when kind ==
+"compiled"` field shared by a kind that never sets it. The generic
+per-row/per-segment calling convention (`ResolvedParams`, `_row_kwargs`,
+`_build_call_args`, ...) lives here too, next to the classes that are the
+only callers of it now — `runtime.modes.run_interpreted`/`run_stepped`
+import it back for the two rungs of doc 02 §3.1's equivalence ladder that
+drive a step one at a time outside any `Segment`.
 """
 from __future__ import annotations
 
 import inspect
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Literal, Mapping, Sequence
+from typing import Any, Callable, ClassVar, Literal, Mapping, Sequence
 
 import numpy as np
 from numba import njit
@@ -195,22 +207,261 @@ def _needed_from(steps: Sequence[Step], j: int, terminal_names: frozenset) -> se
     return needed
 
 
-@dataclass(frozen=True)
-class Segment:
-    """One contiguous run within a fuse()-group: either fully compiled, or
-    (doc 05 §6) exactly one un-njit-able step running in Python. The blast
-    radius of a bad node is the kernel it was going into, never the whole
-    pipeline and never just that one node inside a still-compiled kernel —
-    there is no such thing as the latter (EXPERIMENTS.md §B)."""
 
-    kind: SegmentKind
+# ---------------------------------------------------------------------------
+# Per-row/per-segment calling convention — how a resolved params bundle and
+# a name -> array registry become one step's actual call, for whichever
+# step callable a `Segment` ends up holding (njit dispatcher or plain
+# Python fallback). Lives here, next to `Segment`, rather than in
+# `runtime.modes` (its previous home): now that a segment runs itself
+# (`Segment.run`, below), the calling convention is that method's own
+# implementation detail, not a caller's. `runtime.modes.run_interpreted`/
+# `run_stepped` still drive a step one at a time outside any `Segment`
+# (doc 02 §3.1's `interpreted`/`stepped` rungs), so they import these
+# straight back from here rather than a second copy existing.
+# ---------------------------------------------------------------------------
+
+_MISSING = object()
+
+
+def _signature(fn) -> "inspect.Signature":
+    """`inspect.signature`, with the same `eval_str=True`-then-fall-back
+    `decider2.params.harvest_signature` already uses: a step's module using
+    `from __future__ import annotations` stringifies every annotation, and
+    without this a `-> int`/`-> bool` return type would compare equal to
+    nothing in `numpy_dtype`'s table and silently fall back to float64 —
+    exactly the bug this module exists to close."""
+    try:
+        return inspect.signature(fn, eval_str=True)
+    except (NameError, TypeError):
+        return inspect.signature(fn)
+
+
+def _return_dtype(fn) -> np.dtype:
+    """Doc 00 §2 / doc 03 §1 / doc 05 §9 criterion 4: a step's declared
+    return annotation decides the array dtype it is written into, so an
+    `-> int`/`-> bool` step survives the boundary as its own dtype instead
+    of being forced onto float64 (which silently degrades an Int64 above
+    2**53, and cannot hold a Boolean at all)."""
+    return numpy_dtype(_signature(fn).return_annotation)
+
+
+@dataclass(frozen=True)
+class ResolvedParams:
+    """One validated bundle per invocation (doc 03 §4), already converted to
+    the shapes a step call needs — never a dict a step reads by string key,
+    which would defeat static typing under numba.
+
+    - `per_step_scalar[(step_name, param_name)]` — an individual
+      `param()`-declared field (doc 03 §4.4): the function is called with
+      this as an ordinary argument, exactly as a direct call would be.
+    - `per_step_bundle[step_name]` — a step with a bare `params` argument
+      (doc 03 §4.2) gets one NamedTuple.
+    - `shared` — the single reserved bundle (doc 03 §4.2), or `None` if
+      nothing in this pipeline reads it.
+    """
+
+    per_step_scalar: dict
+    per_step_bundle: dict
+    shared: Any | None = None
+
+
+def _scalar_arg(resolved: "ResolvedParams", owner: str | None, step_name: str, param_name: str) -> Any:
+    """`(owner, step_name, param_name)` first — the collision-proof key
+    `resolve_params` now writes (doc 03 §4.1/§10: a step's OUTPUT name is
+    not unique across modules, the waterfall idiom, doc 03 §3.2). Falls
+    back to the plain `(step_name, param_name)` key for a caller that built
+    a `ResolvedParams` by hand without an owner in mind — every such caller
+    in this codebase has no name collision to begin with, so the fallback
+    is exact, not approximate."""
+    if owner is not None:
+        value = resolved.per_step_scalar.get((owner, step_name, param_name), _MISSING)
+        if value is not _MISSING:
+            return value
+    return resolved.per_step_scalar[(step_name, param_name)]
+
+
+def _bundle_arg(resolved: "ResolvedParams", owner: str | None, step_name: str) -> Any:
+    if owner is not None:
+        value = resolved.per_step_bundle.get((owner, step_name), _MISSING)
+        if value is not _MISSING:
+            return value
+    return resolved.per_step_bundle[step_name]
+
+
+def _row_kwargs(
+    step: Step,
+    owner: "str | None",
+    sig: "inspect.Signature",
+    registry: dict,
+    resolved: ResolvedParams,
+    i: int,
+) -> dict:
+    kwargs: dict[str, Any] = {}
+    param_by_name = {d.name: d for d in step.params}
+    for pname in sig.parameters:
+        if pname == "params":
+            kwargs["params"] = _bundle_arg(resolved, owner, step.name)
+        elif pname == "shared":
+            kwargs["shared"] = resolved.shared
+        elif pname in param_by_name:
+            kwargs[pname] = _scalar_arg(resolved, owner, step.name, pname)
+        else:
+            valid_key = f"__valid__{pname}"
+            if valid_key in registry and not bool(registry[valid_key][i]):
+                kwargs[pname] = None
+            else:
+                kwargs[pname] = registry[pname][i]
+    return kwargs
+
+
+def _build_call_args(
+    plan: KernelPlan, registry: dict, resolved: ResolvedParams, out_arrays: dict
+) -> list:
+    args: list = []
+    for role in codegen.kernel_signature(plan):
+        if role.kind == "array":
+            args.append(registry[role.input_name])
+        elif role.kind == "valid":
+            args.append(registry[f"__valid__{role.input_name}"])
+        elif role.kind == "param_scalar":
+            args.append(_scalar_arg(resolved, role.owner, role.step_name, role.param_name))
+        elif role.kind == "params_bundle":
+            args.append(_bundle_arg(resolved, role.owner, role.step_name))
+        elif role.kind == "shared":
+            args.append(resolved.shared)
+        elif role.kind == "output":
+            args.append(out_arrays[role.output_name])
+        else:  # pragma: no cover - exhaustive over ArgRole.kind
+            raise AssertionError(f"unhandled arg role {role.kind!r}")
+    return args
+
+
+class Segment(ABC):
+    """One contiguous run within a fuse()-group: either fully compiled
+    (`CompiledSegment`) or (doc 05 §6) exactly one un-njit-able step
+    running in Python (`FallbackSegment`). The blast radius of a bad node
+    is the kernel it was going into, never the whole pipeline and never
+    just that one node inside a still-compiled kernel — there is no such
+    thing as the latter (EXPERIMENTS.md §B).
+
+    A discriminated union of the two variants below, each carrying only the
+    fields its own kind needs — no more `kernel_fn: Callable | None  # set
+    when kind == "compiled"` on a shared shape — and each running itself
+    (`.run`), so `runtime.modes.run_fused` and `runtime.serve.ServeHandle.
+    gil_report` no longer branch on `.kind` themselves; they call the
+    method. `.kind` survives as a plain string class attribute (not a type
+    check) purely because the driver cache key and a couple of tests still
+    read it that way (`seg.kind == "compiled"`).
+    """
+
+    kind: ClassVar[SegmentKind]
     steps: tuple[Step, ...]
     external_inputs: tuple[Input, ...]
     required_outputs: tuple[str, ...]
-    owners: tuple[str, ...] = ()             # module instance name per `steps` entry
-    kernel_fn: Callable | None = None       # set when kind == "compiled"
-    plan: KernelPlan | None = None          # set when kind == "compiled"
-    fallback_reason: str | None = None      # set when kind == "fallback"
+    owners: tuple[str, ...]                  # module instance name per `steps` entry
+
+    @abstractmethod
+    def run(self, registry: dict, resolved: ResolvedParams, n: int) -> None:
+        """Run this segment for `n` rows, writing its outputs — plain and
+        `name@owner`-qualified (doc 03 §3.3/§7) — into `registry` in
+        place. The *only* place `fused` mode (`runtime.modes.run_fused`)
+        executes plain Python is a `FallbackSegment`'s own override of
+        this, and only for the node that could not be compiled, never its
+        neighbours."""
+
+    @property
+    def signatures(self) -> tuple:
+        """This segment's contribution to `Driver.signatures` (doc 05 §9
+        criterion 5) — nothing, unless overridden. Only `CompiledSegment`
+        has any numba specialisations to report."""
+        return ()
+
+    @abstractmethod
+    def gil_report_entry(self) -> dict[str, Any]:
+        """This segment's one row of `ServeHandle.gil_report()` (doc 00
+        §2c)."""
+
+
+@dataclass(frozen=True)
+class CompiledSegment(Segment):
+    """A run of steps that all survived njit, fused into one compiled
+    kernel (doc 05 §7)."""
+
+    steps: tuple[Step, ...]
+    external_inputs: tuple[Input, ...]
+    required_outputs: tuple[str, ...]
+    owners: tuple[str, ...]
+    kernel_fn: Callable
+    plan: KernelPlan
+
+    kind: ClassVar[SegmentKind] = "compiled"
+
+    def run(self, registry: dict, resolved: ResolvedParams, n: int) -> None:
+        # Doc 05 §7: "intermediates ... stay in numpy, they do not
+        # round-trip through polars" — a value a later segment needs is
+        # looked up in `registry` regardless of whether it came from the
+        # original frame or an earlier segment's own output.
+        owner_by_name = dict(zip((s.name for s in self.steps), self.owners)) if self.owners else {}
+        step_by_name = {s.name: s for s in self.steps}
+        out_arrays = {
+            name: np.empty(n, dtype=_return_dtype(step_by_name[name].fn))
+            for name in self.required_outputs
+        }
+        args = _build_call_args(self.plan, registry, resolved, out_arrays)
+        self.kernel_fn(*args)
+        for name, arr in out_arrays.items():
+            registry[name] = arr
+            registry[f"{name}@{owner_by_name.get(name, name)}"] = arr
+
+    @property
+    def signatures(self) -> tuple:
+        return tuple(self.kernel_fn.signatures)
+
+    def gil_report_entry(self) -> dict[str, Any]:
+        names = [s.name for s in self.steps]
+        return {
+            "kernel": self.plan.group_name,
+            "steps": names,
+            # Doc 00 §2c: "a group releases the GIL only when every step in
+            # it asked to" — one step in the kernel that did not is enough
+            # to keep it held, because the kernel is one call.
+            "holds_gil": not all(s.nogil for s in self.steps),
+        }
+
+
+@dataclass(frozen=True)
+class FallbackSegment(Segment):
+    """Exactly one un-njit-able step, run row-by-row in plain Python (doc
+    05 §6) — a kernel-boundary decision, never a per-node one: the steps
+    before and after stay in their own `CompiledSegment`(s)."""
+
+    steps: tuple[Step, ...]
+    external_inputs: tuple[Input, ...]
+    required_outputs: tuple[str, ...]
+    owners: tuple[str, ...]
+    fallback_reason: str
+
+    kind: ClassVar[SegmentKind] = "fallback"
+
+    def run(self, registry: dict, resolved: ResolvedParams, n: int) -> None:
+        step = self.steps[0]
+        owner = self.owners[0] if self.owners else step.name
+        sig = _signature(step.fn)
+        out = np.empty(n, dtype=_return_dtype(step.fn))
+        for i in range(n):
+            out[i] = step.fn(**_row_kwargs(step, owner, sig, registry, resolved, i))
+        registry[step.name] = out
+        registry[f"{step.name}@{owner}"] = out
+
+    def gil_report_entry(self) -> dict[str, Any]:
+        names = [s.name for s in self.steps]
+        return {
+            "kernel": f"fallback:{names[0]}",
+            "steps": names,
+            "holds_gil": True,  # a fallback segment runs plain Python
+            "fallback_reason": self.fallback_reason,
+        }
 
 
 @dataclass(frozen=True)
@@ -236,8 +487,7 @@ class Driver:
         """
         out: list = []
         for seg in self.segments:
-            if seg.kind == "compiled" and seg.kernel_fn is not None:
-                out.extend(seg.kernel_fn.signatures)
+            out.extend(seg.signatures)
         return out
 
 
@@ -352,8 +602,7 @@ def build_driver(
             step_fns[(owner, step.name)] = step.fn
             needed = _needed_from(steps, i + 1, terminal_names)
             segments.append(
-                Segment(
-                    kind="fallback",
+                FallbackSegment(
                     steps=(step,),
                     owners=(owner,),
                     external_inputs=_external_inputs([step]),
@@ -418,8 +667,7 @@ def build_driver(
             for s, o in zip(run, run_owners):
                 s_required = (s.name,) if s.name in needed else ()
                 segments.append(
-                    Segment(
-                        kind="fallback",
+                    FallbackSegment(
                         steps=(s,),
                         owners=(o,),
                         external_inputs=_external_inputs([s]),
@@ -434,8 +682,7 @@ def build_driver(
             i = j
             continue
         segments.append(
-            Segment(
-                kind="compiled",
+            CompiledSegment(
                 steps=tuple(run),
                 owners=tuple(run_owners),
                 external_inputs=external,

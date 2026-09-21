@@ -353,10 +353,13 @@ class ServeHandle:
 
     def gil_report(self) -> list[dict[str, Any]]:
         """One entry per compiled kernel (fuse()-group) or fallback
-        segment. `holds_gil=True` means at least one step in that kernel
-        did not declare `@step(nogil=True)` — doc 00 §2c: "a group releases
-        the GIL only when every step in it asked to". A fallback segment
-        runs in plain Python and always holds the GIL.
+        segment — each segment builds its own entry
+        (`Segment.gil_report_entry`, `decider2.compile.driver`) rather than
+        this method branching on what kind it is. `holds_gil=True` means at
+        least one step in that kernel did not declare `@step(nogil=True)`
+        — doc 00 §2c: "a group releases the GIL only when every step in it
+        asked to". A fallback segment runs in plain Python and always
+        holds the GIL.
 
         Builds/loads the driver with the exact same key
         (`steps`/`group_ids`/`owners`/`build_dir`/`terminal_names`) that
@@ -375,24 +378,7 @@ class ServeHandle:
             list(steps), list(group_ids), owners=list(owners),
             build_dir=DEFAULT_BUILD_DIR, terminal_names=terminal_names,
         )
-        report: list[dict[str, Any]] = []
-        for seg in driver.segments:
-            names = [s.name for s in seg.steps]
-            if seg.kind == "compiled":
-                holds_gil = not all(s.nogil for s in seg.steps)
-                report.append({
-                    "kernel": seg.plan.group_name if seg.plan is not None else "+".join(names),
-                    "steps": names,
-                    "holds_gil": holds_gil,
-                })
-            else:
-                report.append({
-                    "kernel": f"fallback:{names[0]}",
-                    "steps": names,
-                    "holds_gil": True,
-                    "fallback_reason": seg.fallback_reason,
-                })
-        return report
+        return [seg.gil_report_entry() for seg in driver.segments]
 
     def health(self) -> dict[str, Any]:
         """`GET /health`'s body (doc 00 §2c + doc 08 §4.1b)."""
