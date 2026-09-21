@@ -1540,3 +1540,89 @@ So the trade is now measured and stateable: **~3 ms per 100k-row batch, against
 0.4–21 s per structural edit plus a cap plus unpredictability at scale.** Which
 side that favours depends on whether trees are edited by people or fixed at
 build time — which is a product decision, not a benchmark result.
+
+
+---
+
+## R — GoRules ZEN: closer than expected, and it exposes decider2's realtime overhead
+
+`zen-engine==2.0.2`, the identical 12-band income rule set built as a decider2
+`DecisionTable` and as a JDM `decisionTableNode`, plus an independent oracle. All
+three agree on every answer including boundary values, asserted before any timing.
+
+| | decider2 | ZEN | |
+|---|---|---|---|
+| batch, 100k rows | **6,166 ns/row** | 9,585 ns/row (`evaluate_batch`) | decider2 1.55× |
+| batch, naive per-row loop | — | 1,394,180 ns/row | **226× worse** |
+| single record | 352.7 µs (`score()`) | 1,264.3 µs (sync `evaluate`) | decider2 3.6× |
+| single record | 352.7 µs | **94.6 µs** (`async_evaluate`) | **ZEN 3.7×** |
+| cold start | ~1.01 s (numba JIT) | ~4.8 ms | ZEN 210× |
+
+### Two things this overturns
+
+**"Per-row FFI is fatal" was wrong.** The ~145× gap between ZEN's own two batch
+APIs is *Python binding call overhead*, not the FFI boundary. Crossing into Rust
+is cheap; crossing through pybind per row is not. That is a different problem
+with different fixes, and it means an out-of-process engine is not automatically
+disqualified the way §B's `objmode` result suggested.
+
+**decider2's realtime path is its weakest number, and ZEN beat it.** Measured
+directly here:
+
+| | score() p50 |
+|---|---|
+| 3 trivial steps | 243 µs |
+| 30 steps | 1,548 µs |
+
+Doc 05 §3.1b budgets the whole single-record path at **~60 µs** — kernel ~1 µs
+plus ~58 µs of everything else. We are **~25× over our own spec**. Confirmed
+pre-existing, not a regression: measured at 1,752 µs before the polymorphic
+refactor and 1,548 µs after, so the refactor slightly *improved* it.
+
+The cause is already documented and simply not built — `boundary/__init__.py`'s
+own docstring says whole-row bulk marshalling "is not part of this package's
+scope" yet. §N1 measured a per-field Python loop at **92% of request overhead**,
+and §3.1b names the three fixes: marshal whole-row not per-field, pool the
+output buffer, and convert params once per generation rather than per request.
+**This is the highest-value unbuilt item in the system**, and it took an outside
+engine beating us to make it visible.
+
+### JDM as an interchange format
+
+Converters both ways, run against real ZEN-repo fixtures rather than invented
+ones. Two of `credit-analysis.json`'s four tables converted cleanly and match
+live ZEN; two were refused with demonstrated reasons.
+
+> **A real expressiveness gap, proved live.** JDM's "Turnover" table has a row
+> closed on *both* ends — `[200_000..1_000_000]` — which **no single decider2
+> `BoundMode` can express**, because `BoundMode` deliberately omits
+> `both_inclusive`/`both_exclusive` to prevent overlaps and gaps. Evaluated
+> against real ZEN at turnover = 1,000,000 exactly: ZEN says **amber**, a naive
+> conversion says **green**. A silent converter would have shipped a
+> one-value boundary bug.
+
+decider2 trees are strictly single-parent (reusing a node raises "revisits
+node"); JDM is a genuine DAG. That is real expressiveness on JDM's side, traded
+against decider2's line-cap guarantee (doc 05 §7), which node reuse would break.
+
+Going the other way, the biggest loss is **decider2's params/values split**: in
+JDM a threshold is literal text, with no equivalent indirection, so doc 08 §4's
+hot-swap-without-recompile has nothing to map onto.
+
+### Verdict
+
+Take **specific ideas**, not the engine and not the format:
+
+1. **ZEN's per-column bitset row index** for large decision tables
+   (`core/engine/src/nodes/decision_table/index.rs`, gated at `MIN_INDEX_ROWS=8`).
+   It would live in decider2's `shared` arrays, so it does not disturb the
+   "editing rows is free" guarantee — and §P measured a 1000-row table at
+   ~1 µs/row precisely because it is a linear scan.
+2. **A `collect` hit policy** — a genuine feature gap.
+
+Explicitly **do not** take: `functionNode`/QuickJS (decider2 already refused
+embedded code, doc 08 §1.1), `customNode` (solved more simply by `step()`), the
+async-runtime dependency, `rand()`, or DAG node reuse for trees.
+
+JDM stays a **one-way partial export** for governance and visualisation, with the
+two-sided-bound case refused loudly rather than converted.
