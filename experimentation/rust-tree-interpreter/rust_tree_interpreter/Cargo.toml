@@ -1,0 +1,14 @@
+[package]
+name = "rust_tree_interpreter"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "rust_tree_interpreter"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.27", features = ["extension-module"] }
+numpy = "0.27"
+regex = "1.12"

@@ -1792,3 +1792,83 @@ sliced per row, zero-copy but real boundary work.
 Per-category masks as the default; a **measured cardinality threshold** switches
 a node to lazy in-kernel matching. The threshold is measurable rather than
 guessed, and the two mechanisms are not rivals — they split on cardinality.
+
+
+---
+
+## U — A Rust tree interpreter: works, is fast, and is not worth adopting
+
+PyO3 0.27 + numpy 0.27 + `regex` 1.13, built with maturin, called **once per
+batch** with the same struct-of-arrays encoding the numba walker uses — so the
+comparison isolates the engine. Answers asserted identical to numba on every
+shape and every run.
+
+| | batch ns/row (100k) |
+|---|---|
+| codegen | 20.7–127.0 (**unstable at d9**, §Q) |
+| Rust interpreter | 46.0–88.7 |
+| numba array walker | 52.5–120.7 |
+
+Rust beats the numba walker by **12–28%** and is far steadier at depth 9
+(86.2–88.7 ns/row, under 3% spread, against codegen's 82.8–127.0). Both genuine.
+But codegen still wins outright at every shape except d9.
+
+### Single-record: every engine is noise
+
+| | µs |
+|---|---|
+| Rust, tree resident in a `PyTree` (row only crosses) | **0.35–0.48** |
+| numba dispatch | 1.22–1.43 |
+| Rust, naive (marshals all 12 arrays per call) | 1.89–2.10 |
+| **decider2's actual `score()` floor** (§R, §S) | **350–1500** |
+
+All four are **150–1000× below the floor**. Engine choice is irrelevant on the
+realtime path; marshal and readback are the whole cost. Third experiment to
+reach that conclusion independently.
+
+### The architectural cost the experiment surfaced
+
+> **A Rust tree cannot be inlined into a fused njit kernel.** A numba
+> tree-walker step can be; a Rust call is a hard boundary. decider2's execution
+> model is fused kernels (doc 02 §1.2, doc 05 §7), so adopting Rust for trees
+> permanently fragments any pipeline containing one.
+
+That is a new cost, not a restatement of packaging concerns, and it is the one
+that decides this.
+
+### Regex: the crate wins, the binding gives it back
+
+| | ns/call |
+|---|---|
+| Rust `regex` crate, pure compute | **25.6** |
+| polars' internal Rust regex | 42.2 |
+| numba → libc POSIX (§T) | 60.3 |
+| Rust via naive binding, total | 104.4 |
+
+Marshalling a Python `list[str]` into `Vec<String>` costs **~79 ns/call — more
+than the match itself**. The compute win is real and the naive binding spends it.
+Fixable with Arrow-style zero-copy buffers, and it is the same lesson §R learned
+from ZEN: crossing into Rust is cheap, crossing through a Python binding is not.
+
+### Packaging and concurrency
+
+Cold `cargo build --release` 29.0 s, cached 14.7 s, incremental 0.9–1.5 s. The
+wheel is `cp314-cp314` — **not abi3** — at `manylinux_2_34`, so it is a wheel per
+Python version per platform, for a project being open-sourced with no
+wheel-matrix CI today.
+
+`walk_batch` releases the GIL in one line (`py.detach`) and scales near-linearly
+(1.89× / 3.37× / 6.42× at 2 / 4 / 8 threads). Real parallelism with no convoy —
+but the same ceiling numba's `nogil=True` already reaches (§N4), so it is not a
+reason to switch.
+
+### Verdict
+
+**Do not adopt.** The numba array walker delivers what the maintainability
+complaint actually asks for — one generic kernel, no ~500-line cap, no CPython
+indentation limit, no per-shape compile — for ~90% of Rust's measured benefit
+and none of its cost: a second language, a wheel matrix, a new
+`PanicException` failure mode, and a permanent barrier to kernel fusion.
+
+Keep the crate as a **working, documented fallback**. If a throughput-bound
+batch case ever justifies it, it exists and it is measured.
