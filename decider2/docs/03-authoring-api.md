@@ -1201,18 +1201,22 @@ pipeline = (
 
 ### 8.2 Branch
 
-> **NOT BUILT (review finding 7, 2026-09-20).** `Branch` does not exist —
-> two evaluation agents planned around it and never discovered its absence.
-> A related but deliberately DIFFERENT mechanism is being built concurrently
-> in `decider2.trees` (`tree_module(doc)`, doc 08 §3's data-shaped
-> interior): `trees/build.py`'s own docstring is explicit that this is not
-> `Branch` and does not become it — a tree "routes between *leaf values* in
-> one closed vocabulary" via a document a UI writes, where `Branch` (below)
-> "routes between *modules* — arbitrary Python bodies, each its own scope."
-> Doc 08 §2 also forbids building `Branch` out of config, which is one
-> reason the tree work does not attempt to supersede it. Treat `Branch` as
-> unbuilt, not as "superseded by trees" — the two answer different
-> questions.
+> **BUILT (2026-09-21), with a real scope cut.** `Branch` exists in
+> `decider2.graph.control_flow` and is exported from `decider2`. It compiles
+> to REAL inline source — an actual `if`/`elif` in the generated function,
+> njit'd through the exact same `decider2.compile.driver` path every other
+> step is — not a per-row delegate, which is what makes the "only the taken
+> arm executes in compiled machine code" claim below literally true. The
+> cut: **each arm, and the condition, must be exactly one step** in this
+> build (every example on this page already is). A multi-step arm is a
+> real, reported gap, not a spec requirement — see the implementing agent's
+> report for why (two arms with colliding *internal* step names, which
+> `decider2.trees.codegen` solves for a tree by qualifying every identifier;
+> this build takes the narrower cut instead of building that machinery).
+> Also resolved there, because the examples below never show it: `name=` is
+> **required** (no single function to derive one from), and the arm-index
+> convention for `<name>_path` is "position in the order given to `Branch`"
+> — `0` for the first arm, `1` for the second, etc.
 
 ```python
 TermCapRules = Branch(
@@ -1220,6 +1224,7 @@ TermCapRules = Branch(
     CapForPrivate,                     # arm for True
     CapForPublic,                      # arm for False
     modifies=["term_cap"],
+    name="term_cap_rules",             # required — see the note above
 )
 ```
 
@@ -1245,7 +1250,7 @@ Rules:
 
 ```python
 PriceByBand = Branch(risk_band_index, [BandA, BandB, BandC, BandD],
-                     modifies=["price_category"])
+                     modifies=["price_category"], name="price_by_band")
 ```
 
 In the record tier a branch compiles to a **real branch** — only the taken arm
@@ -1255,16 +1260,36 @@ evaluate every arm and select.
 
 ### 8.3 Loop
 
-> **NOT BUILT (review finding 7, 2026-09-20).** `Loop` does not exist,
-> concurrently or otherwise. Verify against the package before relying on
-> this section.
+> **BUILT (2026-09-21), with a real, load-bearing scope cut.** `Loop`
+> exists in `decider2.graph.control_flow` and is exported from `decider2`.
+> It compiles to a REAL `while`/`break` in the generated, njit'd source —
+> checked before every iteration, so an early exit at iteration 3 genuinely
+> stops at iteration 3 in compiled code, which is doc 08's own polars-port
+> regression this section warns about, undone. `name=` is required, same
+> reason as `Branch`. **The worked example immediately below carries TWO
+> names, and this build could not support that safely — it supports
+> exactly one `carries` name.** Every carry becomes its own generated step
+> (so a per-step-array-materialising execution mode never has to hold more
+> than one carry's own scalar type), and `should_continue` runs every
+> iteration regardless of which carry is the current target, so with 2+
+> carries EVERY carry's own generated step ends up needing every OTHER
+> carry's pre-loop value too — which `decider2.graph.interface` correctly
+> sees as an unbreakable same-module dependency cycle and refuses at build
+> time. A version that only ran the steps one target's own computation
+> needs was tried and reverted: it avoids the cycle, but then a
+> one-directional cross-carry read silently resolves against a sibling's
+> already-computed POST-loop value instead of the true pre-loop one — a
+> silent wrong answer, worse than the loud error this build raises
+> instead. See the implementing agent's report for the full account; this
+> is a genuine, previously-untested gap in this section, not a decision.
 
 ```python
 BestOffer = Loop(
     should_continue,                   # (carried…, loop_idx) -> bool
     OfferStep,                         # body module
-    carries=["best_offer", "best_score"],
+    carries=["best_offer"],            # exactly one, in this build — see above
     max_iterations=511,                # REQUIRED
+    name="best_offer",                 # required — no single function to derive it from
 )
 ```
 
@@ -1273,6 +1298,11 @@ iteration 3 *is* a new version of the one at iteration 2 — so it is made
 explicit rather than implicit. `carries` values are the body's inputs at
 iteration start and must be produced by the body at iteration end. Inside one
 iteration the scope invariant holds normally.
+
+`should_continue` may read a `carries` name, `loop_idx`, or a genuine leaf —
+never a body output that is NOT a carry, since `should_continue` runs before
+the body's very first iteration and that value would not exist yet
+(a build-time error, found implementing this rather than specified above).
 
 **`max_iterations` is required, not optional.** An unbounded loop inside compiled
 code cannot be interrupted. Every real loop encountered so far is bounded with no
