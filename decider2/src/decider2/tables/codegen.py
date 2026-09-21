@@ -7,6 +7,21 @@ it needs a `switch` over node types, codegen." A table is "N rows x M
 condition columns, uniform operators", so it gets the generic kernel, and
 §3.4's table lists its interior change as **free**.
 
+**This module has no `switch` over expression types either.** It used to:
+a `_to_dnf` dispatching on `isinstance(expr, OrExpression)`/`AndExpression`,
+and `_TableEmitter._emit_condition` dispatching on
+`isinstance(expr, BetweenExpression | InExpression | IsTrueExpression |
+EqExpression)`. Both are gone. `schema.Expression.to_dnf()` and
+`schema.Expression.emit()` are methods on those classes now — the And/Or
+flattening and the per-condition source-and-arrays are each expression's own
+behaviour, the same way decider 1's `BaseExpression.__call__` builds its own
+`pl.Expr` (`decider/modules/credit/decision_table/config.py`). What is left
+here is pure orchestration that does not care which expression kinds exist:
+call `to_dnf()`, hand each leaf an emitter and a fresh array prefix, ask it
+to `emit()`, and stitch the returned lines and arrays into one kernel file
+alongside the string matchers and output steps — neither of which is
+expression-shaped, so neither belongs on an expression class.
+
 Concretely, the split is:
 
 * **Rows are data.** Every bound, every value, every set lives in a numpy
@@ -38,38 +53,14 @@ property.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Sequence
+from dataclasses import dataclass
 
 import numpy as np
 
-from decider2.tables.schema import (
-    AndExpression,
-    BetweenExpression,
-    BoundMode,
-    DecisionTable,
-    EqExpression,
-    InExpression,
-    IsTrueExpression,
-    OrExpression,
-)
-from decider2.trees.codegen import LINE_CAP, TreeTooLarge, safe_ident
+from decider2.tables.schema import DecisionTable, ParametersConfig, TableTooComplex
+from decider2.trees.codegen import LINE_CAP, safe_ident
 
 __all__ = ["EmittedTable", "emit_table", "TableTooComplex"]
-
-
-class TableTooComplex(TreeTooLarge):
-    """The table's flattened expression exceeds the emitted-line cap."""
-
-
-@dataclass
-class _Cond:
-    """One condition column, already resolved to arrays plus a test."""
-
-    kind: str                     # between | eq | in | is_true
-    variable: str
-    arrays: dict[str, np.ndarray] = field(default_factory=dict)
-    lines: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -86,45 +77,18 @@ class EmittedTable:
     emitted_lines: int
 
 
-def _to_dnf(expr: Any) -> list[list[Any]]:
-    """Flatten an expression into OR-of-ANDs.
-
-    decider 1's table vocabulary has no NOT, so every expression is already
-    monotone and this terminates without negation pushing. `And` distributes
-    over `Or`, which is the one place this can grow: the guard below refuses
-    a distribution that would blow past the line cap rather than emitting it.
-    """
-    if isinstance(expr, OrExpression):
-        out: list[list[Any]] = []
-        for sub in expr.expressions:
-            out.extend(_to_dnf(sub))
-        return out
-    if isinstance(expr, AndExpression):
-        groups: list[list[Any]] = [[]]
-        for sub in expr.expressions:
-            sub_groups = _to_dnf(sub)
-            groups = [g + s for g in groups for s in sub_groups]
-            if len(groups) > 64:
-                raise TableTooComplex(
-                    "this table's And/Or nesting expands to more than 64 "
-                    "disjuncts in normal form, which would emit more source "
-                    f"than doc 05 §7's {LINE_CAP}-line cap allows. Split it "
-                    "into two tables composed with `|`, or lift the shared "
-                    "conditions out of the Or."
-                )
-        return groups
-    return [[expr]]
-
-
-def _f64(values: Sequence[Any], fill: float = 0.0) -> np.ndarray:
-    return np.array([fill if v is None else float(v) for v in values], dtype=np.float64)
-
-
-def _bool(values: Sequence[Any]) -> np.ndarray:
-    return np.array([bool(v) for v in values], dtype=np.bool_)
-
-
 class _TableEmitter:
+    """The one piece of per-table state `Expression.emit()` needs.
+
+    This is `schema.ConditionContext`'s implementation — structurally, not
+    by inheritance, so `schema.py` never imports this module. Everything
+    here is bookkeeping that has to be shared *across* conditions (which
+    input variables the kernel signature ends up with, which distinct
+    string literals a variable's matcher hoists, a strictly-increasing
+    array-name prefix) rather than anything specific to one expression
+    kind, which is why it stayed here instead of moving with `emit()`.
+    """
+
     def __init__(self, table: DecisionTable, name: str) -> None:
         self.table = table
         self.name = safe_ident(name)
@@ -135,25 +99,17 @@ class _TableEmitter:
         self.string_literals: dict[str, list[str]] = {}
         self._cond_seq = 0
 
-    def _use_var(self, name: str) -> str:
+    @property
+    def parameters(self) -> ParametersConfig:
+        return self.table.parameters
+
+    def use_var(self, name: str) -> str:
         if name not in self._var_set:
             self._var_set.add(name)
             self.variables.append(name)
         return safe_ident(name)
 
-    def _is_string_column(self, column: str) -> bool:
-        dtype = self.table.parameters.dtype_map.get(column)
-        if isinstance(dtype, str) and dtype in ("String", "Utf8"):
-            return True
-        for row in self.table.parameters.data:
-            value = row.get(column)
-            if isinstance(value, str):
-                return True
-            if isinstance(value, (list, tuple)) and any(isinstance(v, str) for v in value):
-                return True
-        return False
-
-    def _literal_index(self, variable: str, literal: str) -> int:
+    def literal_index(self, variable: str, literal: str) -> int:
         """Register a distinct string literal for `variable`, returning the
         code the table arrays will store."""
         literals = self.string_literals.setdefault(variable, [])
@@ -161,114 +117,28 @@ class _TableEmitter:
             literals.append(literal)
         return literals.index(literal)
 
-    def _matcher_name(self, variable: str) -> str:
+    def matcher_name(self, variable: str) -> str:
         return f"{self.name}__m_{safe_ident(variable)}"
 
-    def _emit_condition(self, expr: Any) -> _Cond:
+    def next_prefix(self) -> str:
+        """A fresh, strictly-increasing array-name prefix for one condition
+        (`{table}__c0`, `{table}__c1`, ...) — assigned in emission order, so
+        two runs over the same table shape assign the same prefixes and
+        therefore emit identical source (`test_editing_rows_never_
+        recompiles`)."""
         k = self._cond_seq
         self._cond_seq += 1
-        prefix = f"{self.name}__c{k}"
-        rows = self.table.parameters
-        n = len(rows)
-
-        if isinstance(expr, IsTrueExpression):
-            var = self._use_var(expr.variable)
-            return _Cond("is_true", expr.variable, {}, [f"if not ({var} != 0): ok = False"])
-
-        if isinstance(expr, BetweenExpression):
-            var = self._use_var(expr.variable)
-            bounds = expr.resolved_bounds(rows)
-            lo_op, hi_op = (
-                (">=", "<") if expr.mode is BoundMode.lower_inclusive else (">", "<=")
-            )
-            arrays = {
-                f"{prefix}_lo": _f64([lo for lo, _ in bounds]),
-                f"{prefix}_hi": _f64([hi for _, hi in bounds]),
-                f"{prefix}_has_lo": _bool([lo is not None for lo, _ in bounds]),
-                f"{prefix}_has_hi": _bool([hi is not None for _, hi in bounds]),
-            }
-            lines = [
-                f"if ok and {prefix}_has_lo[r] and not ({var} {lo_op} {prefix}_lo[r]): ok = False",
-                f"if ok and {prefix}_has_hi[r] and not ({var} {hi_op} {prefix}_hi[r]): ok = False",
-            ]
-            return _Cond("between", expr.variable, arrays, lines)
-
-        if isinstance(expr, EqExpression):
-            column = expr.value_column
-            values = rows.column(column)
-            if self._is_string_column(column):
-                var = self._matcher_name(expr.variable)
-                self._use_var(expr.variable)
-                codes = [
-                    -1 if v is None else self._literal_index(expr.variable, str(v))
-                    for v in values
-                ]
-                arrays = {
-                    f"{prefix}_code": np.array(codes, dtype=np.int64),
-                    f"{prefix}_has": _bool([v is not None for v in values]),
-                }
-                lines = [
-                    f"if ok and {prefix}_has[r] and not ({var} == {prefix}_code[r]): ok = False"
-                ]
-                return _Cond("eq", expr.variable, arrays, lines)
-            var = self._use_var(expr.variable)
-            arrays = {
-                f"{prefix}_val": _f64(values),
-                f"{prefix}_has": _bool([v is not None for v in values]),
-            }
-            lines = [
-                f"if ok and {prefix}_has[r] and not ({var} == {prefix}_val[r]): ok = False"
-            ]
-            return _Cond("eq", expr.variable, arrays, lines)
-
-        if isinstance(expr, InExpression):
-            column = expr.values_column
-            per_row = [rows.column(column)[i] or [] for i in range(n)]
-            is_string = self._is_string_column(column)
-            if is_string:
-                var = self._matcher_name(expr.variable)
-                self._use_var(expr.variable)
-                flat = [
-                    self._literal_index(expr.variable, str(v))
-                    for values in per_row
-                    for v in values
-                ]
-            else:
-                var = self._use_var(expr.variable)
-                flat = [float(v) for values in per_row for v in values]
-            offsets = np.zeros(n + 1, dtype=np.int64)
-            for i, values in enumerate(per_row):
-                offsets[i + 1] = offsets[i] + len(values)
-            arrays = {
-                f"{prefix}_off": offsets,
-                f"{prefix}_vals": np.array(
-                    flat, dtype=np.int64 if is_string else np.float64
-                ).reshape(-1),
-            }
-            # CSR membership: the set for row r is vals[off[r]:off[r+1]].
-            # Variable-length sets are exactly why the table's contents can
-            # stay data while a tree's would have to be unrolled.
-            lines = [
-                "if ok:",
-                "    hit = False",
-                f"    for j in range({prefix}_off[r], {prefix}_off[r + 1]):",
-                f"        if {var} == {prefix}_vals[j]:",
-                "            hit = True",
-                "            break",
-                f"    if not hit and {prefix}_off[r + 1] > {prefix}_off[r]: ok = False",
-                f"    if {prefix}_off[r + 1] == {prefix}_off[r]: ok = False",
-            ]
-            return _Cond("in", expr.variable, arrays, lines)
-
-        raise AssertionError(f"unhandled expression {type(expr)!r}")  # pragma: no cover
+        return f"{self.name}__c{k}"
 
 
 def emit_table(table: DecisionTable, *, name: str | None = None) -> EmittedTable:
     """Render one decision table as importable kernel source."""
     name = safe_ident(name or table.name or "decision_table")
     emitter = _TableEmitter(table, name)
-    groups = _to_dnf(table.expression)
-    emitted_groups = [[emitter._emit_condition(e) for e in group] for group in groups]
+    groups = table.expression.to_dnf()
+    emitted_groups = [
+        [e.emit(emitter, emitter.next_prefix()) for e in group] for group in groups
+    ]
 
     for group in emitted_groups:
         for cond in group:
@@ -294,7 +164,7 @@ def emit_table(table: DecisionTable, *, name: str | None = None) -> EmittedTable
     # Hoisted string matchers — same mechanism as a tree's.
     matcher_names: list[str] = []
     for variable, literals in emitter.string_literals.items():
-        fn_name = emitter._matcher_name(variable)
+        fn_name = emitter.matcher_name(variable)
         matcher_names.append(fn_name)
         ident = safe_ident(variable)
         param_names = [f"{ident}_lit_{i}" for i in range(len(literals))]
@@ -322,7 +192,7 @@ def emit_table(table: DecisionTable, *, name: str | None = None) -> EmittedTable
     sig_parts: list[str] = []
     for variable in emitter.variables:
         if variable in emitter.string_literals:
-            sig_parts.append(f"{emitter._matcher_name(variable)}: int")
+            sig_parts.append(f"{emitter.matcher_name(variable)}: int")
         else:
             sig_parts.append(f"{safe_ident(variable)}: float")
     sig_parts.append("shared")

@@ -8,6 +8,33 @@ Every type name, field name and default below is decider 1's, from
 `outputs`, `default`. A `DecisionTableModule` config that decider 1 accepts
 parses here with only its wrapper renamed.
 
+**Each expression class owns its own kernel emission.** decider 1's
+`decision_table/config.py` gives every `BaseExpression` a `__call__` that
+builds its own `pl.Expr` — the class *is* the behaviour, not a schema that a
+separate dispatcher pattern-matches on. `codegen.py` used to be that
+dispatcher: one `isinstance(expr, BetweenExpression)`/`isinstance(expr,
+EqExpression)`/... chain to decide how to flatten And/Or and another to
+decide what source a condition emits. Both chains are gone. `to_dnf()`
+(And/Or flattening) and `emit()` (one condition's source lines plus the
+`shared` arrays it reads them from) are methods on these classes instead,
+so `codegen.py` only *orchestrates* — walk the DNF groups, ask each leaf to
+emit itself, stitch the pieces into one kernel file. Adding a new
+expression kind is one class here, in this file: fields, `get_variables`,
+`validate_parameters`, `emit` (and `to_dnf` only if it is itself a
+connective like `AndExpression`/`OrExpression`) — plus one line adding it to
+the `Expression` union below. Nothing in `codegen.py` changes, because
+nothing in `codegen.py` knows the expression kinds by name any more.
+
+`emit()` needs a little more from the table's emitter than a bare
+`DecisionTable` gives it — a place to register which input variables the
+kernel signature needs, hoisted string-matcher bookkeeping, a unique array
+prefix per condition. `ConditionContext` (below `EmittedCondition`) is the
+small structural protocol that names exactly that, and
+`tables.codegen._TableEmitter` satisfies it without this module importing
+codegen — the one import that must not happen, or `codegen.py` (schema
+classes -> codegen orchestrator) and `schema.py` (orchestrator ->
+schema classes) would import each other.
+
 Two divergences:
 
 1. **`parameters` is rows + dtypes, not a polars `DataFrame` subclass.**
@@ -33,14 +60,20 @@ Two divergences:
 from __future__ import annotations
 
 import typing as t
+from dataclasses import dataclass, field
 
+import numpy as np
 from pydantic import BaseModel, Field, model_validator
 
+from decider2.trees.codegen import LINE_CAP, TreeTooLarge
 from decider2.trees.schema import RangeEndLogic
 
 __all__ = [
     "BoundMode",
     "ParametersConfig",
+    "EmittedCondition",
+    "ConditionContext",
+    "TableTooComplex",
     "AndExpression",
     "OrExpression",
     "BetweenExpression",
@@ -50,6 +83,63 @@ __all__ = [
     "Expression",
     "DecisionTable",
 ]
+
+
+class TableTooComplex(TreeTooLarge):
+    """The table's flattened expression exceeds the emitted-line cap.
+
+    Raised from `AndExpression.to_dnf()` when distributing And over Or
+    would blow past doc 05 §7's line cap before a single line is emitted —
+    the only place the expression *shape* can explode, so the only place
+    that needs to guard against it. `codegen.py` raises the sibling check
+    on the kernel's total emitted line count, once the whole table (every
+    condition's `emit()`, every output column) is known.
+    """
+
+
+def _f64(values: t.Sequence[t.Any], fill: float = 0.0) -> np.ndarray:
+    return np.array([fill if v is None else float(v) for v in values], dtype=np.float64)
+
+
+def _bool(values: t.Sequence[t.Any]) -> np.ndarray:
+    return np.array([bool(v) for v in values], dtype=np.bool_)
+
+
+@dataclass
+class EmittedCondition:
+    """One condition, already resolved to `shared` arrays plus source lines.
+
+    What `Expression.emit()` returns — decider2's analogue of decider 1's
+    `BaseExpression.__call__` returning a `pl.Expr`. `arrays` is this
+    condition's *data* (the table's rows: free to change, doc 08 §3.4);
+    `lines` is its *shape* (the expression: a compile if it changes).
+    `kind`/`variable` are carried through for introspection (`TableModule.
+    explain()`'s callers) but are not otherwise read by `codegen.py`.
+    """
+
+    kind: str
+    variable: str
+    arrays: t.Dict[str, np.ndarray] = field(default_factory=dict)
+    lines: t.List[str] = field(default_factory=list)
+
+
+class ConditionContext(t.Protocol):
+    """What a leaf expression's `emit()` needs from the table's emitter.
+
+    Structural, not a base class: `tables.codegen._TableEmitter` satisfies
+    this without either module importing the other. `parameters` is the
+    table's rows; `use_var` registers an input variable and returns its
+    kernel identifier; `matcher_name` and `literal_index` are the hoisted
+    string-matcher bookkeeping a string-valued `eq`/`in` condition needs
+    (doc 05 §1.5) — the same mechanism `decider2.trees.codegen` uses.
+    """
+
+    parameters: "ParametersConfig"
+
+    def use_var(self, variable: str) -> str: ...
+    def matcher_name(self, variable: str) -> str: ...
+    def literal_index(self, variable: str, literal: str) -> int: ...
+
 
 BoundMode = RangeEndLogic
 """decider 1's `BoundMode`, aliased onto the tree's `RangeEndLogic`.
@@ -86,6 +176,22 @@ class ParametersConfig(BaseModel):
     def column(self, name: str) -> list[t.Any]:
         return [row.get(name) for row in self.data]
 
+    def is_string_column(self, column: str) -> bool:
+        """Whether `column` holds strings (or lists of strings) — a kernel
+        cannot compare a string against an array of strings (doc 05 §1.5),
+        so `eq`/`in` conditions on a string column route through the
+        hoisted matcher instead of a plain numeric compare."""
+        dtype = self.dtype_map.get(column)
+        if isinstance(dtype, str) and dtype in ("String", "Utf8"):
+            return True
+        for row in self.data:
+            value = row.get(column)
+            if isinstance(value, str):
+                return True
+            if isinstance(value, (list, tuple)) and any(isinstance(v, str) for v in value):
+                return True
+        return False
+
     def __len__(self) -> int:
         return len(self.data)
 
@@ -96,12 +202,38 @@ class _BaseExpression(BaseModel):
     `get_variables()` is kept by name because it is the method decider 1's
     `DecisionTableModule.expand_nodes` calls to discover what the table
     reads; here it is what the generated kernel's signature is built from.
+
+    `to_dnf()` and `emit()` are decider2's own additions, in decider 1's
+    spirit (`BaseExpression.__call__` builds its own `pl.Expr`): every leaf
+    condition (`between`/`in`/`is_true`/`eq`) overrides `emit()` and takes
+    the inherited `to_dnf()`, which says "I am already one AND-of-leaves
+    group" — `[[self]]`. The two connectives, `AndExpression`/
+    `OrExpression`, override `to_dnf()` instead, to flatten themselves away,
+    and never override `emit()`, because after `to_dnf()` runs, no And/Or
+    node is left in any group for `codegen.py` to call it on.
     """
 
     def get_variables(self) -> list[str]:  # pragma: no cover - overridden
         raise NotImplementedError
 
     def validate_parameters(self, parameters: ParametersConfig) -> None:  # pragma: no cover
+        raise NotImplementedError
+
+    def to_dnf(self) -> list[list["Expression"]]:
+        """This expression, flattened into OR-of-ANDs.
+
+        The leaf default: an expression that is not itself a connective is
+        already a one-condition AND-group. `AndExpression`/`OrExpression`
+        override this to actually flatten; nothing else needs to.
+        """
+        return [[t.cast("Expression", self)]]
+
+    def emit(self, ctx: ConditionContext, prefix: str) -> EmittedCondition:  # pragma: no cover
+        """This leaf condition's `shared` arrays and kernel source lines.
+
+        Only a leaf (never `AndExpression`/`OrExpression`, which flatten
+        away in `to_dnf()` before `emit()` is ever called) overrides this.
+        """
         raise NotImplementedError
 
 
@@ -122,6 +254,29 @@ class AndExpression(_BaseExpression):
         for e in self.expressions:
             e.validate_parameters(parameters)
 
+    def to_dnf(self) -> list[list["Expression"]]:
+        """Distribute AND over each child's OR-of-ANDs (cartesian product).
+
+        decider 1's table vocabulary has no NOT, so every expression is
+        already monotone and this terminates without negation pushing.
+        Distributing And over Or is the one place this can grow, which is
+        why the guard is here rather than in `OrExpression.to_dnf`: an Or
+        alone only concatenates, it never multiplies.
+        """
+        groups: list[list[Expression]] = [[]]
+        for e in self.expressions:
+            sub_groups = e.to_dnf()
+            groups = [g + s for g in groups for s in sub_groups]
+            if len(groups) > 64:
+                raise TableTooComplex(
+                    "this table's And/Or nesting expands to more than 64 "
+                    "disjuncts in normal form, which would emit more source "
+                    f"than doc 05 §7's {LINE_CAP}-line cap allows. Split it "
+                    "into two tables composed with `|`, or lift the shared "
+                    "conditions out of the Or."
+                )
+        return groups
+
 
 class OrExpression(_BaseExpression):
     type: t.Literal["or"]
@@ -133,6 +288,13 @@ class OrExpression(_BaseExpression):
     def validate_parameters(self, parameters: ParametersConfig) -> None:
         for e in self.expressions:
             e.validate_parameters(parameters)
+
+    def to_dnf(self) -> list[list["Expression"]]:
+        """Concatenate each child's OR-of-ANDs — an Or of Ors is one Or."""
+        out: list[list[Expression]] = []
+        for e in self.expressions:
+            out.extend(e.to_dnf())
+        return out
 
 
 class BetweenExpression(_BaseExpression):
@@ -219,6 +381,24 @@ class BetweenExpression(_BaseExpression):
                         "are not contiguous. Set allow_gaps=True to permit this."
                     )
 
+    def emit(self, ctx: ConditionContext, prefix: str) -> EmittedCondition:
+        var = ctx.use_var(self.variable)
+        bounds = self.resolved_bounds(ctx.parameters)
+        lo_op, hi_op = (
+            (">=", "<") if self.mode is BoundMode.lower_inclusive else (">", "<=")
+        )
+        arrays = {
+            f"{prefix}_lo": _f64([lo for lo, _ in bounds]),
+            f"{prefix}_hi": _f64([hi for _, hi in bounds]),
+            f"{prefix}_has_lo": _bool([lo is not None for lo, _ in bounds]),
+            f"{prefix}_has_hi": _bool([hi is not None for _, hi in bounds]),
+        }
+        lines = [
+            f"if ok and {prefix}_has_lo[r] and not ({var} {lo_op} {prefix}_lo[r]): ok = False",
+            f"if ok and {prefix}_has_hi[r] and not ({var} {hi_op} {prefix}_hi[r]): ok = False",
+        ]
+        return EmittedCondition("between", self.variable, arrays, lines)
+
 
 class InExpression(_BaseExpression):
     """Set membership against a per-row list column — decider 1's
@@ -244,6 +424,46 @@ class InExpression(_BaseExpression):
                     f"holds {type(value).__name__}"
                 )
 
+    def emit(self, ctx: ConditionContext, prefix: str) -> EmittedCondition:
+        n = len(ctx.parameters)
+        column_values = ctx.parameters.column(self.values_column)
+        per_row = [column_values[i] or [] for i in range(n)]
+        is_string = ctx.parameters.is_string_column(self.values_column)
+        if is_string:
+            var = ctx.matcher_name(self.variable)
+            ctx.use_var(self.variable)
+            flat = [
+                ctx.literal_index(self.variable, str(v))
+                for values in per_row
+                for v in values
+            ]
+        else:
+            var = ctx.use_var(self.variable)
+            flat = [float(v) for values in per_row for v in values]
+        offsets = np.zeros(n + 1, dtype=np.int64)
+        for i, values in enumerate(per_row):
+            offsets[i + 1] = offsets[i] + len(values)
+        arrays = {
+            f"{prefix}_off": offsets,
+            f"{prefix}_vals": np.array(
+                flat, dtype=np.int64 if is_string else np.float64
+            ).reshape(-1),
+        }
+        # CSR membership: the set for row r is vals[off[r]:off[r+1]].
+        # Variable-length sets are exactly why the table's contents can
+        # stay data while a tree's would have to be unrolled.
+        lines = [
+            "if ok:",
+            "    hit = False",
+            f"    for j in range({prefix}_off[r], {prefix}_off[r + 1]):",
+            f"        if {var} == {prefix}_vals[j]:",
+            "            hit = True",
+            "            break",
+            f"    if not hit and {prefix}_off[r + 1] > {prefix}_off[r]: ok = False",
+            f"    if {prefix}_off[r + 1] == {prefix}_off[r]: ok = False",
+        ]
+        return EmittedCondition("in", self.variable, arrays, lines)
+
 
 class IsTrueExpression(_BaseExpression):
     """A boolean gate that consults no table column — decider 1's
@@ -258,6 +478,12 @@ class IsTrueExpression(_BaseExpression):
 
     def validate_parameters(self, parameters: ParametersConfig) -> None:
         return None
+
+    def emit(self, ctx: ConditionContext, prefix: str) -> EmittedCondition:
+        var = ctx.use_var(self.variable)
+        return EmittedCondition(
+            "is_true", self.variable, {}, [f"if not ({var} != 0): ok = False"]
+        )
 
 
 class EqExpression(_BaseExpression):
@@ -279,6 +505,31 @@ class EqExpression(_BaseExpression):
             raise ValueError(
                 f"Value column '{self.value_column}' not found in parameters columns"
             )
+
+    def emit(self, ctx: ConditionContext, prefix: str) -> EmittedCondition:
+        values = ctx.parameters.column(self.value_column)
+        if ctx.parameters.is_string_column(self.value_column):
+            var = ctx.matcher_name(self.variable)
+            ctx.use_var(self.variable)
+            codes = [
+                -1 if v is None else ctx.literal_index(self.variable, str(v))
+                for v in values
+            ]
+            arrays = {
+                f"{prefix}_code": np.array(codes, dtype=np.int64),
+                f"{prefix}_has": _bool([v is not None for v in values]),
+            }
+            lines = [
+                f"if ok and {prefix}_has[r] and not ({var} == {prefix}_code[r]): ok = False"
+            ]
+            return EmittedCondition("eq", self.variable, arrays, lines)
+        var = ctx.use_var(self.variable)
+        arrays = {
+            f"{prefix}_val": _f64(values),
+            f"{prefix}_has": _bool([v is not None for v in values]),
+        }
+        lines = [f"if ok and {prefix}_has[r] and not ({var} == {prefix}_val[r]): ok = False"]
+        return EmittedCondition("eq", self.variable, arrays, lines)
 
 
 Expression = t.Annotated[
