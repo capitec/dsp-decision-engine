@@ -2039,7 +2039,36 @@ Params behave: thresholds sit in fixed slots of a `param_template` array set onc
 per call, never per row, and a retune leaves both engines' signature counts at 1
 while the answers move together.
 
-### Verdict
+### ⚠ CORRECTION — 8.8× is an artefact of trivial step bodies
+
+The owner pushed back: "if the core of the code is large then the overhead of
+calling will be less." **Correct, and decisively so.** 8 steps, 200k rows, the
+same raw-pointer dispatch against inlined bodies, varying only how much work each
+step does:
+
+| body work | pointer-call ns/row | inlined ns/row | overhead |
+|---|---|---|---|
+| 0 (empty) | 38.7 | 0.7 | **59×** |
+| 5 | 255.9 | 251.6 | **1.02×** |
+| 50 | 5,058.9 | 5,041.2 | **1.00×** |
+| 500 | 54,189.0 | 54,182.7 | **1.00×** |
+
+**Five iterations of a `sqrt` loop is enough to amortise the call completely.**
+At any realistic step body — an affordability calculation, an income waterfall, a
+score band — pointer dispatch costs **2% or less**, not 8.8×.
+
+The 8.8× above is real but measures a pipeline of near-empty steps, where ~7 ns
+of call is the entire cost. It says the *benchmark* was dominated by dispatch, not
+that *decider2* would be. My verdict below generalised from the wrong end of this
+table and should not be read without this correction.
+
+> **This changes the recommendation.** Removing codegen in favour of pointer
+> dispatch costs approximately nothing on real work, and buys: one generic
+> kernel, no per-shape compile, no ~500-line cap, no fan-out wall, no CPython
+> indentation limit, and no generated identifiers to collide (the defect class
+> that made `5 < x < 10` silently always false).
+
+### Verdict (superseded — see the correction above)
 
 **Do not adopt this shape.** The mechanism is validated and the cache result is a
 real improvement on §V — both worth keeping. But end to end it is slower than
