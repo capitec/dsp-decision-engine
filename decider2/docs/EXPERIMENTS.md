@@ -1626,3 +1626,82 @@ async-runtime dependency, `rand()`, or DAG node reuse for trees.
 
 JDM stays a **one-way partial export** for governance and visualisation, with the
 two-sided-bound case refused loudly rather than converted.
+
+
+---
+
+## S — The cached-plan pattern: the optimizer was never the cost, and composed callables lose
+
+Prompted by the owner's `rtlf`/polars-lazy-plan question. Answers a strand of §R
+from the opposite direction and lands in the same place.
+
+### The optimizer is not what polars spends its time on
+
+Measured two independent supported ways — `collect()` against
+`collect(optimizations=QueryOptFlags.none())`, and an `explain(optimized=True/
+False)` delta — agreeing within a few percent once a formatting trap was
+corrected (`explain()` alone is dominated by string-formatting a deep expression
+tree, not by optimizing it).
+
+**The optimizer is 1–3% of per-call cost at realistic plan size**, up to ~15%
+only for trivially small trees. The dominant, super-linearly-growing cost is
+**physical-plan construction** (`create_physical_plan`).
+
+`rtlf`'s own published numbers decompose to say the same thing before anything
+was built: `RealtimeLazyFrame` (optimizer removed only) gives 1.0–4.1×;
+`CompiledRealtimeLazyFrame` (plan construction also removed) gives 23–54×. The
+win is in caching plan *construction*, not optimization.
+
+> **So doc 01's anti-polars premise stands — it was not measuring avoidable
+> optimizer overhead.** And no supported public polars API reaches physical-plan
+> construction; only `rtlf`'s internal, version-pinned APIs do. That is a real
+> polars API gap rather than a decider2 error.
+
+`rtlf` itself did not finish building (~17 min of a cold `lto="fat"` build over
+~20 patched polars crates before it was killed to free the shared box). Not a
+version failure — just large. The coupling risk stands regardless: it pins
+`polars==1.38.1` against decider2's 1.41.2, plus git-pinned internal crates.
+
+### Composed njit callables: the predicted risk, larger than predicted
+
+Dispatch through a `numba.typed.List[FunctionType]`, one generic kernel per node
+kind, compiled once ever (`.signatures` stayed at 1 across three tree shapes).
+
+| against | cost |
+|---|---|
+| vs codegen | **28–41× more per row** |
+| vs §Q's array interpreter | **14–20× more per row** |
+
+The interpreter comparison is the clean one: identical struct-of-arrays data,
+differing *only* in dispatch mechanism — direct branch versus indirect call. That
+isolates the mechanism, and the answer is that losing inlining costs far more
+than the pattern saves.
+
+Its one advantage over codegen — a structural edit costing 56–189 µs of array
+rebuild instead of a 375 ms–1.4 s compile — is **not** an advantage over §Q's
+interpreter, which has the same zero-recompile property *and* runs faster. So
+composed callables are **strictly dominated** for walking one tree. Their only
+plausible niche is composing heterogeneous interior *types*, which doc 08 §3.4
+already solves another way.
+
+### The surprise
+
+**Plain uncached polars beat composed njit callables on two of three shapes**
+(44.7–66.4 ns/row against 1044.5–1120.9). "Any numba beats polars" is not a safe
+prior once the numba approach gives up inlining.
+
+Polars stays categorically disqualified for `score()` though: 400 µs–7.8 ms per
+single-row `collect()`, up to **14,790×** codegen, which is 0.4–39% of the entire
+20–100 ms budget. No amount of plan caching closes that.
+
+### Recommendation, by entry point
+
+- **`apply()` (batch): keep codegen.** 25.4–32.0 ns/row, best everywhere tested.
+  Uncached polars is closer than expected on shallow trees and only collapses on
+  deep chains (177.2 ns/row) — a narrow, partial reopening of doc 01's premise
+  for this entry point alone.
+- **`score()` (realtime): the engine does not matter.** The kernel is ~1.4 µs of
+  a 145–971 µs framework cost, so every numba variant measured (0.5–4.5 µs) is
+  noise against the floor. **Marshal and readback are the entire problem**, which
+  is §R's conclusion reached independently — two experiments, different
+  instruments, same answer. Doc 05 §3.1b is the fix and it is unbuilt.
