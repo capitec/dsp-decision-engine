@@ -1402,6 +1402,14 @@ cold compile per shape. Recorded here because the numbers were previously only
 in a migration report, and §G's ruleset model turns out not to generalise to
 trees.
 
+> **These are §P's own trees, not comparable bit-for-bit with §Q's.** §Q builds
+> independently-generated trees of the same nominal shape (different feature
+> counts, different random structure) and measures 2–4× faster ns/row with
+> 1.3–2× more emitted lines. Neither is wrong; they are different trees. Use
+> §P for *absolute* cost against emitted lines, and §Q for the *relative*
+> codegen-vs-interpreted question, which it controls for by running both engines
+> over the identical tree and the identical rows.
+
 ### Trees — full-binary (fan-out)
 
 | depth | leaves | emitted lines | compile | ns/row |
@@ -1467,3 +1475,68 @@ otherwise-arm follows at the same indentation. That also **cut emitted lines
 > pending): an array-walking kernel has no line cap, no indentation limit, no
 > fan-out wall and no per-shape compile at all. If its ns/row is within noise of
 > codegen at a 20–100 ms budget, this entire class of limit disappears.
+
+
+---
+
+## Q — Codegen vs an interpreted tree walk: codegen wins small, and becomes *unpredictable* large
+
+Both engines over the **identical tree and identical rows**, `np.array_equal`
+asserted on every shape before any timing counted. 100k rows. Minimum of 4–5
+independent full reruns, with the observed range quoted — because the range
+turned out to be the finding.
+
+| shape | emitted lines | codegen ns/row | interpreted ns/row | codegen compile |
+|---|---|---|---|---|
+| credit tree (20 leaves) | — | **20.7–22.9** | 56.7–61.2 | 0.39–0.42 s |
+| full-binary d5 | — | **24.5–26.8** | 64.8–68.7 | 0.38–0.44 s |
+| full-binary d7 | 524 | **42.2–49.7** | 85.5–100.7 | 1.40–1.57 s |
+| full-binary d9 | 2,060 | 82.8–**127.0** | 123.0–127.4 | 7.25–8.12 s |
+| one-sided chain, 100 | — | **28.4–28.8** | 38.2–38.7 | 1.31–1.37 s |
+| full-binary d10 | 4,108 | 134.0–**241.9** | 138.4–141.0 | 20.6–21.2 s |
+
+**Codegen wins 2.0–2.7× through depth 7** — the range every realistic credit
+tree lives in. At d9 it is a coin flip (median 124.7 vs 125.5). At d10 the
+ranges fully overlap.
+
+### The finding that matters is variance, not the mean
+
+At d10, codegen measured **134.0, 141.3, 240.9, 241.9 ns/row across four
+otherwise-identical reruns — an 80% spread** — while the interpreted kernel gave
+138.4–141.0 across the same four runs, under 2%. This survived the seed fix
+below, so it is not a data artefact; the likely cause is code-layout and
+instruction-cache sensitivity in a multi-thousand-line JIT-compiled function.
+
+> **Past ~2,000 emitted lines, codegen's speed stops being predictable** — in
+> exactly the region where its compile cost is already becoming unbearable (20 s
+> at d10). For a system with latency budgets, an engine whose p99 depends on
+> code layout is a worse property than one that is uniformly slower.
+
+### A harness bug that invalidated an earlier pass
+
+The row generator seeded with `hash(shape.name) & 0xFFFF`. **CPython randomises
+string hashing per process**, so every run silently drew *different row data*.
+For the one-sided chain — whose per-row cost depends on average walk-to-leaf
+length — this produced a **2.15× swing between identical reruns** that read as
+system noise and was not. Fixed with `zlib.crc32`; post-fix reruns agree to
+~1.4%.
+
+Worth recording as a method note: a benchmark seeded from `hash()` of a string
+is not reproducible across processes, and the symptom is indistinguishable from
+scheduler noise.
+
+### What this does and does not settle
+
+It does **not** say codegen is wrong. For a realistic credit tree, codegen is
+genuinely ~2.7× faster per row, and at 100k rows that is ~2 ms against ~5.7 ms —
+both comfortably inside a 20–100 ms budget, but the difference is real at batch
+scale.
+
+What it buys against that is **zero compile**: one kernel, ever, for any tree.
+No ~500-line cap, no fan-out wall, no CPython indentation limit (§P), and a
+structural edit becomes a *values* change rather than a staged 0.4–21 s compile.
+
+So the trade is now measured and stateable: **~3 ms per 100k-row batch, against
+0.4–21 s per structural edit plus a cap plus unpredictability at scale.** Which
+side that favours depends on whether trees are edited by people or fixed at
+build time — which is a product decision, not a benchmark result.
