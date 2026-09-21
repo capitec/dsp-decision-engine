@@ -311,3 +311,46 @@ and should stay absent:
   `param()` returns a `float`/`int`/`str` subclass that already *is* its default
   (doc 03 §4.4). A step is directly callable with no decorator, no pipeline and no
   import order.
+
+
+---
+
+## 7. Known defects, found while building control flow
+
+Both reproduce in two lines, both pre-date `Branch`/`Loop`, neither is fixed.
+
+**`.relabel(reads=...)` does not thread through execution.** Doc 03 §5.2's layer
+3 (instance relabel) renames the boundary-facing declared name, but the step's
+own call still looks up the *original* parameter name in the row registry:
+
+```python
+module(double).relabel(reads={"x": "y"}).apply(pl.DataFrame({"y": [2.0]}))
+# KeyError: 'x'
+```
+
+So the third layer of the relabelling story is non-functional. Layers 1
+(name matching) and 2 (`Vocabulary`) are unaffected — and `Vocabulary` is itself
+NOT BUILT, which leaves only layer 1 actually working.
+
+**`write_back` fails when the pipeline overwrites every input column.**
+`frame.select(())` collapses to 0 rows in polars, and the following `hstack`
+raises `ShapeError`. Reproduces with a trivial self-read waterfall over a
+single-column frame. Workaround until fixed: keep one untouched column.
+
+### The `Loop` carries limit — a real gap, not an omission
+
+`Loop` accepts **exactly one** `carries` name. Doc 03 §8.3's own worked example
+carries two (`best_offer`, `best_score`), and that example does not work.
+
+The cause is structural rather than an oversight. Each carry becomes its own
+generated step, and `should_continue` runs every iteration regardless of target,
+so with two or more carries each carry's function needs every *other* carry's
+pre-loop value — which `graph/interface.py` correctly reads as a cycle. The
+attempted fix (slicing each target to only the body steps it transitively needs)
+avoids the cycle and then silently wires a cross-carry read to a sibling's
+**post-loop** value through the ordinary waterfall. A silent wrong answer is
+worse than a loud error, so it is a build-time `ValueError` with a test.
+
+Closing this properly needs either a different node representation or changes to
+`graph/interface.py`. Until then, doc 03 §8.3's example is aspirational and is
+marked as such.
