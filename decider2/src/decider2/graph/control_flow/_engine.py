@@ -14,9 +14,15 @@ slower than the sequential-both-arms code it is supposed to beat. Emitting
 real source instead means the generated functions njit-compile normally
 through the SAME `decider2.compile.driver._try_njit`/`build_driver` path
 every other step goes through — no changes to `decider2.compile`/
-`decider2.runtime` — and get real branching (`if`/`elif`) and a real
-bounded `while`/`break` in compiled machine code, exactly like
-`decider2.trees.codegen` already does for a tree's nested conditions.
+`decider2.runtime` — and get real branching and a real bounded loop with
+early exit in compiled machine code. What each construct's own file
+CONTAINS is no longer nested `if`/`elif`/`while` source, though (see
+`decider2.graph.control_flow.interpreter`'s module docstring): it is a flat
+DATA program, walked by one shared kernel — the same shape `decider2.trees.
+interpreter`/`decider2.tables.interpreter` give a tree's or table's own
+condition tests, generalised here to arbitrary condition/arm/body STEPS by
+a small, by-name `call_step`/`call_cond` switch (bounded by this
+construct's own step count) rather than an inline comparison.
 
 **Scope, stated once here.** Two arms with colliding internal names (doc 03
 §8.2: "each arm is its own scope") is the risk `decider2.trees.codegen`
@@ -44,8 +50,10 @@ from __future__ import annotations
 import inspect
 import keyword
 import re
+from dataclasses import dataclass
 from typing import Any, Sequence
 
+from decider2.graph.control_flow.interpreter import CALL_ARITY, COND, STEP, ProgramBuilder
 from decider2.graph.pipeline import Pipeline, flow
 from decider2.types import Input, NullPolicy, Step
 
@@ -59,8 +67,11 @@ __all__ = [
     "merge_inputs",
     "render_leaf_param",
     "render_prefixed_params",
-    "render_call_args",
-    "import_and_wrap",
+    "RegisterMap",
+    "call_arg_regs",
+    "encode_call",
+    "render_step_thunk",
+    "render_switch_branch",
 ]
 
 _IDENT_BAD = re.compile(r"[^0-9A-Za-z_]")
@@ -206,35 +217,160 @@ def render_prefixed_params(step: Step, prefix: str) -> tuple[list[str], list[str
     return sig_parts, call_names
 
 
-def render_call_args(step: Step, prefix: str) -> list[str]:
+@dataclass
+class RegisterMap:
+    """One Branch/Loop construct's name -> register-index assignment,
+    built incrementally as the construct is encoded (`encode_call` below) —
+    the data-walker's analogue of the local variable names a generated
+    `if`/`while`'s own source text used to carry every value under.
+    De-duplicates by name: a leaf input and a carry sharing one name (the
+    self-read waterfall idiom, doc 03 §3.2, one level up) share one
+    register, the same way they used to share one Python local.
+    """
+
+    names: "dict[str, int]" = None  # type: ignore[assignment]
+
+    def __post_init__(self) -> None:
+        if self.names is None:
+            self.names = {}
+
+    def index_of(self, name: str) -> int:
+        if name not in self.names:
+            self.names[name] = len(self.names)
+        return self.names[name]
+
+    def __contains__(self, name: str) -> bool:
+        return name in self.names
+
+    @property
+    def n_regs(self) -> int:
+        return max(len(self.names), 1)  # never zero (see interpreter.py's tuple note)
+
+
+def call_arg_regs(step: Step, prefix: str, rmap: RegisterMap) -> list[int]:
     """`step`'s own function's parameters, in its OWN declared order, as
-    the local names a generated caller should pass positionally: a leaf
-    input by its plain (shared-by-name) identifier, a `param()` field by
-    its `prefix`-qualified one (matching `render_prefixed_params`)."""
+    REGISTER INDICES: a leaf input (or `loop_idx`) by its plain
+    (shared-by-name) identifier, a `param()` field by its `prefix`-
+    qualified one (matching `render_prefixed_params`) — the register-array
+    analogue of the old `render_call_args`'s local-name list.
+
+    Raises when `step` needs more than `decider2.graph.control_flow.
+    interpreter.CALL_ARITY` arguments — `call_step`/`call_cond`
+    (`render_switch_branch`) share one fixed-width signature per
+    construct, a real, reported scope cut mirroring `single_step`'s
+    "exactly one step" limit.
+    """
     param_names = {p.name for p in step.params}
     try:
         sig = inspect.signature(step.fn, eval_str=True)
     except (NameError, TypeError):
         sig = inspect.signature(step.fn)
-    out: list[str] = []
+    out: list[int] = []
     for pname in sig.parameters:
         if pname in param_names:
-            out.append(safe_ident(f"{prefix}__{pname}"))
+            out.append(rmap.index_of(safe_ident(f"{prefix}__{pname}")))
         else:
-            out.append(safe_ident(pname))
+            out.append(rmap.index_of(safe_ident(pname)))
+    if len(out) > CALL_ARITY:
+        raise ValueError(
+            f"step '{step.name}' (as used in this Branch/Loop) takes "
+            f"{len(out)} arguments (leaf inputs plus param() fields "
+            f"combined), over this build's {CALL_ARITY}-argument limit per "
+            "condition/arm/body step — decider2.graph.control_flow."
+            "interpreter's call_step/call_cond dispatch shares one fixed-"
+            "width signature per construct. Split the step, or give it "
+            "fewer inputs/params."
+        )
     return out
 
 
-def import_and_wrap(step: Step, local_name: str) -> list[str]:
-    """Two lines: import a step's own function by its real module path and
-    wrap it with `njit(cache=True)` under `local_name` — the exact pattern
-    `decider2.compile.codegen.emit_kernel_source` already uses to call one
-    step's compiled dispatcher from another njit'd function. A step
-    defined as a closure (no module-level name) fails this import; that is
-    the same, pre-existing limitation `compile.codegen` has for a fused
-    kernel, not something new here.
+def encode_call(
+    builder: ProgramBuilder, rmap: RegisterMap, step: Step, prefix: str, step_idx: int,
+    *, is_cond: bool, dest: "int | None" = None,
+) -> int:
+    """Append one `STEP`/`COND` node calling `step` (already wired as case
+    `step_idx` of this construct's `call_step`/`call_cond` switch — see
+    `render_switch_branch`), reading its args from `rmap` and — for a
+    `STEP`, never a `COND`, which has no result to store — writing to
+    register `dest`. Args are padded to `CALL_ARITY` with register 0 (never
+    read: `render_switch_branch`'s own case only forwards as many
+    positional arguments as the step declares). Returns the new node's
+    index, with `next_`/`alt` left for the caller to wire via
+    `ProgramBuilder.set_next` (no back-patching needed the way
+    `decider2.trees.codegen` avoids it either: caller decides `next_`/`alt`
+    before or after this call as convenient, since a `Branch`/`Loop`
+    program's shape is built top-down from data already in hand, not from
+    a text walk that has to know a target's line number in advance).
+    """
+    arg_regs = call_arg_regs(step, prefix, rmap)
+    padded = arg_regs + [0] * (CALL_ARITY - len(arg_regs))
+    kwargs: dict = {f"arg{i}": r for i, r in enumerate(padded)}
+    op = COND if is_cond else STEP
+    if not is_cond:
+        kwargs["dest"] = dest
+    return builder.add(op=op, step_idx=step_idx, **kwargs)
+
+
+def render_step_thunk(step: Step, local_name: str) -> list[str]:
+    """One step's real function, imported and `njit`-wrapped (the same
+    pattern `decider2.compile.codegen.emit_kernel_source` uses to call one
+    step's compiled dispatcher from another njit'd function — a step
+    defined as a closure fails this import, the same pre-existing
+    limitation `compile.driver` has for a fused kernel). This is the
+    entirety of the ABI-bridging text this build emits per step-use —
+    bounded by step COUNT, never by program size, nesting depth or
+    iteration count — because `_{local_name}_njit` is called BY NAME from
+    `call_step`/`call_cond`'s own switch (`render_switch_branch`), never
+    through a pointer.
     """
     return [
         f"from {step.fn.__module__} import {step.fn.__name__} as _{local_name}_src",
-        f"{local_name} = njit(cache=True)(_{local_name}_src)",
+        f"_{local_name}_njit = njit(cache=True)(_{local_name}_src)",
     ]
+
+
+def render_switch_branch(step: Step, local_name: str, step_idx: int, *, is_cond: bool) -> str:
+    """One `elif step_idx == N: return ...` line of `call_step`'s or
+    `call_cond`'s own switch — casting each of `call_step`'s fixed `a0..
+    a{CALL_ARITY-1}` float64 arguments down to the step's own declared
+    type on the way in (only as many as the step actually declares — the
+    padded, unused trailing ones are never referenced), and the real
+    function's own return value back to float64 (or, for a COND, boolean —
+    already the right type, never cast) on the way out — the same
+    float64-in/float64-out convention `decider2.trees.interpreter` gives
+    every register.
+    """
+    try:
+        sig = inspect.signature(step.fn, eval_str=True)
+    except (NameError, TypeError):
+        sig = inspect.signature(step.fn)
+    param_by_name = {p.name: p for p in step.params}
+    input_by_name = {i.name: i for i in step.inputs}
+
+    arg_words: list[str] = []
+    for pname in sig.parameters:
+        if pname in param_by_name:
+            arg_words.append(type_word(param_by_name[pname].annotation))
+        else:
+            ann = input_by_name[pname].annotation if pname in input_by_name else Any
+            arg_words.append(type_word(ann))
+
+    thunk_args = [f"a{i}" for i in range(len(arg_words))]
+    cast_in = [
+        f"int({nm})" if w == "int" else (f"({nm} != 0.0)" if w == "bool" else nm)
+        for nm, w in zip(thunk_args, arg_words)
+    ]
+    call_expr = f"_{local_name}_njit({', '.join(cast_in)})"
+
+    if is_cond:
+        ret_expr = call_expr
+    else:
+        ret_word = return_type_word(step.fn)
+        if ret_word == "bool":
+            ret_expr = f"(1.0 if {call_expr} else 0.0)"
+        elif ret_word == "int":
+            ret_expr = f"types.float64({call_expr})"
+        else:
+            ret_expr = call_expr
+
+    return f"        return {ret_expr}"
