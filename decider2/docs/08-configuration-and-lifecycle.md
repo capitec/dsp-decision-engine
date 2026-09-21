@@ -39,6 +39,7 @@ difference is registration:
 |---|---|---|---|
 | **reference** ✅ | `{"type": "credit_scorer", "dti_weight": 200.0}` | the discriminated union — one native pydantic pass | yes: id checked with a did-you-mean, params typed and bounded, `extra="forbid"` |
 | **pointer** ❌ | `{"module_name": "x", "function_name": "y"}` | `import_module` + `getattr` at runtime | no: any importable attribute, no declared interface, no schema |
+| **closed expression** ✅ | `{"type": "computed", "expression": "x - y"}` | `decider2.expr`: `ast.parse` against a fixed, whitelisted grammar, **compiled to numba source at build time** | yes: every admitted construct is validated and every name statically extracted; anything else is rejected at parse, before a build ever starts |
 
 `decider`'s extension mechanism is the first shape — `register_graph_module(CreditScorer)`
 in an extension package, imported at startup by `initialize_decider`, addressed
@@ -53,6 +54,36 @@ Every reference therefore resolves to a definition with a declared interface and
 a schema, which is what keeps the whole config tree renderable, diffable and
 checkable without executing anything. `decider2` keeps the extension shape and
 drops `DefinedFunction`.
+
+**A closed expression is a third shape, not a loophole in the first two.** An
+earlier draft of this document read "config may not contain code" as banning
+`_ComputedFeature` (`decider/modules/rules/common/feature.py:59`) outright —
+§3.2 used to, and doc 06 §O15 recorded it settled. That conflated two things
+this table now keeps apart:
+
+- a **pointer** is dangerous because it is *unbounded and unvalidated*: any
+  importable dotted path, resolved live, with no schema and nothing to check
+  before it runs (doc 01 §5.4 records what that cost). Banning it is the actual
+  content of "config may not contain code."
+- `_ComputedFeature` was never that. It already carried `ALLOWED_POLARS_FUNCTIONS`
+  (a whitelist) and `extract_features_and_parameters` (static dependency
+  extraction) — the same shape as this table's **reference** row, just spelled as
+  an inline string instead of nested JSON. Its real defect was mechanical, not
+  architectural: `simple_eval` built a `polars.Expr` **at runtime, on every row
+  batch** — a live interpreter on the request path, and one whose output cannot
+  enter a numba kernel anyway.
+
+`decider2.expr` keeps the validation and drops the runtime step: `parse()` walks
+the expression once, at load time, against a grammar that is exactly as closed as
+the tree vocabulary §3 point 2 describes — every admitted `ast` node kind has a
+validator and an emitter, so there is no expression that validates and then fails
+to compile — and `emit()` renders numba source once, at build time. **There is no
+evaluator anywhere at runtime.** That is strictly safer than decider 1, which ran
+`simpleeval` on every call. What stays banned, unconditionally, is attribute
+access, a call to anything outside a three-function whitelist, and every other
+construct a pointer would need to do something this grammar cannot statically see
+— see `decider2/expr.py`'s module docstring for the exact admitted grammar and
+doc 06 §O15 for where it is wired in.
 
 ### 1.2 Why "config never changes structure" was never true
 
@@ -71,6 +102,13 @@ So the question was never *whether* config compiles into code. It is only that
 the target changed: a polars expression costs ~0 to build, a numba kernel costs
 200 ms–2 s. The design problem is **latency placement**, not representation.
 
+That is exactly where decider2 lands, and it is worth saying plainly since an
+earlier revision of this document did not: `_ComputedFeature`'s validated
+expression survives, unevaluated, into `decider2.expr` (§1.1's third table row,
+§3.2). Only the *when* moved — parsing and validation stay at document-load
+time, same as decider 1; compiling to numba source moved to build time, off the
+request path, same as every other interior in this document.
+
 ### 1.3 Why an interpreter is the wrong answer
 
 An earlier suggestion was to avoid recompilation with a generic compiled walker
@@ -86,8 +124,12 @@ configs are just new arrays."
 - three `cases` variants (ranges, string-match, is-in), each with N branches
 - `CompositeRule` — arbitrary AND/OR/NOT trees over conditions
 - variable-length `is_in` sets and string matching
-- `_ComputedFeature` — an open expression language (removed by §3.2, but it is
-  what a faithful port would have to carry)
+- `_ComputedFeature` — an expression language, admitted in decider2 too
+  (`decider2.expr`'s CLOSED grammar, §1.1/§3.2), but only because it compiles to
+  numba source once, at build time. A generic walker would have to carry a
+  *runtime* sub-expression evaluator for it — exactly the interpreter this
+  section argues against — which is a different question from whether the
+  expression syntax itself is admitted in config
 - `FlatRuleTree` with `first_match` and `all` prioritisation, and struct outputs
 
 A generic numba walker over that is an interpreter with a string path, a
@@ -223,9 +265,13 @@ Four properties, each load-bearing:
    `lineage("final_score")` return a different answer.
 2. **The vocabulary is closed.** Every node kind has an emitter, so codegen is
    *total* — there is no interior document that validates and then fails to
-   compile. This is the property an open expression language would destroy, which
-   is why §3.2 removes the one that exists. A rule's leaves are declared features
-   or **registered** feature ids (§1.1) — never expressions.
+   compile. This is the property an OPEN expression language (unbounded
+   functions, arbitrary attribute/subscript access, evaluated live) would
+   destroy. It is not a property a CLOSED one destroys — see §1.1's third table
+   row: `decider2.expr` is closed the same way this vocabulary is, construct for
+   construct, with its own emitter for every admitted one. A rule's leaf is a
+   declared feature, a **registered** feature id (§1.1), or a validated
+   `decider2.expr` expression (§3.2) — never an open one.
 3. **A rule carries an id and a description.** These are the join key and the
    prose that doc 04 §6's reviewable artefact needs, and the reason-code taxonomy
    that doc 04 §4.1 warns was dropped in a previous port. Making them required
@@ -262,14 +308,44 @@ Two things to fix in the port, both recorded as defects in doc 01 §5.4:
   project genuinely needs custom output assembly, that is a registered module
   referenced by id, not a dotted path resolved with `getattr`.
 
-### 3.2 Computed features are registered steps, not expression strings
+### 3.2 Computed features: a closed expression grammar, or a registered step
 
-**Settled by §1.** `_ComputedFeature` — an expression string in config, parsed and
-evaluated through `simpleeval` — is the one place the current design writes code
-in config. It goes.
+**Revised.** An earlier version of this section removed `_ComputedFeature`
+entirely, reasoning that an expression string in config, parsed and evaluated
+through `simpleeval`, was the one place the design wrote code in config. That
+reasoning conflated two different failure modes (see §1.1's third table row,
+added at the same time as this revision):
 
-A derived value is a **step in code**, registered like any other, and referenced
-from a rule by id:
+- a **pointer** (`output_fn`, §3.1) is dangerous because it is unbounded and
+  unvalidated — any importable dotted path, resolved live. Banning it is what
+  "config may not contain code" actually means, and it still applies in full.
+- `_ComputedFeature` was a **closed, validated expression** —
+  `ALLOWED_POLARS_FUNCTIONS` and `extract_features_and_parameters` were already
+  a whitelist and static dependency extraction. Its real defect was that
+  `simple_eval` ran **at runtime, on every row batch**, producing a
+  `polars.Expr` that cannot enter a numba kernel anyway. That is a mechanical
+  objection about *when* it runs, not an architectural one about whether the
+  syntax belongs in config at all.
+
+`decider2.expr` answers the mechanical objection directly: it parses and
+validates the identical wire format —
+
+```json
+{"when": {"op": "lt", "feature": {"type": "computed", "expression": "monthly_income - monthly_expenses"},
+          "value": {"param": "floor"}}, ...}
+```
+
+— at document-load time, against a small, closed grammar (names, numeric
+literals, `+ - * / // % **`, unary minus, `< <= > >= == !=`, `and`/`or`/`not`,
+parentheses, and `min`/`max`/`abs`), and compiles it to numba source **once, at
+build time**. Every name the expression reads is extracted statically
+(`Expr.dependencies()` — decider 1's own `extract_names_and_parameters`, kept)
+and wired exactly like a declared feature. There is no evaluator left at
+runtime at all, which is strictly safer than decider 1: `simpleeval` does not
+run even once per call, because it does not run at all.
+
+**A registered step is still the better answer past simple arithmetic**, and
+nothing above changes that:
 
 ```python
 # modules/features/affordability.py — code, in an extension package
@@ -283,33 +359,28 @@ def disposable_income(monthly_income: float, monthly_expenses: float) -> float:
           "value": {"param": "floor"}}, ...}
 ```
 
-Four things this buys over an expression string, and it costs less work, not
-more — there is no expression compiler to write:
+A step is a real node in `lineage()`/`render()`/the reviewable artefact
+(doc 04 §6); it has a declared signature, so its null policy is declared where
+doc 03 §1 puts it (a closed expression has none — every name it reads is a
+plain required input, doc 03 §1 tier 1, and a null in one propagates the
+ordinary way); and it is testable and reusable in isolation rather than copied
+between rule documents as a string. Reach for a computed feature for the
+"pity to write preprocessing code just to calculate `x - y`" case — an inline
+arithmetic or comparison combination of values already in scope — and reach
+for a step the moment the derived value needs its own null policy, its own
+test, or use across more than the one rule that first needed it. Both are
+config **as far as it goes**; a computed feature just goes a little further
+before it stops, because its grammar is closed enough to still be total.
 
-1. **It is a real node in the graph**, so it appears in `lineage()`, in
-   `render()` and in the reviewable artefact instead of hiding as a string inside
-   a rule. Doc 04 §6 is the top-ranked risk; this is free ground.
-2. **It has a declared signature**, so its inputs and dtype are known statically,
-   the null policy is declared where doc 03 §1 puts it, and it type-checks against
-   the rule that uses it.
-3. **It is testable in isolation** and reusable across rules and rulesets, rather
-   than being copied between rule documents as a string.
-4. **There is no expression language to specify, secure, version or explain** —
-   and no second way to write arithmetic.
-
-The cost is real and worth naming: adding a derived value now requires a code
-change, where today it is a config edit. That is the rule working as intended —
-an arithmetic expression *is* code, so it lives in code. What a UI can still do
-without a deploy is compose registered features into new rules, which is the
-common case.
-
-> **Consequence for §3's lineage guarantee.** A rule referencing a registered
-> feature means a `ruleset`'s interior can pull in inputs its own steps do not
-> name. So the module's declared `reads` becomes an **upper bound**, not a
-> description: the transitive closure of every referenced feature's inputs must
-> fit inside it, checked at config-validation time, before any compile. That
-> keeps "a UI edit cannot change what `lineage()` returns" a guarantee rather
-> than a hope, and it gives a good error — *"rule AFF01 references
+> **Consequence for §3's lineage guarantee, either way.** A rule referencing a
+> registered feature, or a `decider2.expr` expression, means a `ruleset`'s
+> interior can pull in inputs its own steps do not name. So the module's
+> declared `reads` becomes an **upper bound**, not a description: the
+> transitive closure of every referenced feature's inputs — or, for a computed
+> feature, `Expr.dependencies()` directly, no registry lookup needed — must fit
+> inside it, checked at config-validation time, before any compile. That keeps
+> "a UI edit cannot change what `lineage()` returns" a guarantee rather than a
+> hope, and it gives a good error — *"rule AFF01 references
 > `credit:bureau_delta`, which reads `bureau_score`; `policy_rules` does not
 > declare it. Add it to `reads`."*
 

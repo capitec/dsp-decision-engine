@@ -17,7 +17,6 @@ from decider2.testing import assert_equivalent
 from decider2.trees import (
     CasesIsIn,
     CasesRanges,
-    ComputedFeatureRemoved,
     CompositeNode,
     InputRef,
     IsInCondition,
@@ -389,15 +388,19 @@ def test_a_then_chain_deeper_than_cpython_allows_is_a_build_error():
         emit_tree(_chain(120, arm=0), line_cap=10**9)
 
 
-def test_a_computed_feature_is_refused_with_its_replacement_named():
-    """Doc 08 §3.2 removes `_ComputedFeature`; doc 06 §O15 records it
-    settled. The error has to name the route that works, or a migration
-    just stalls here."""
-    with pytest.raises(ComputedFeatureRemoved, match="before the tree"):
-        UnaryLessThan(
-            feature={"type": "computed", "expression": "income - expenses"},
-            threshold=1.0,
-        )
+def test_a_computed_feature_now_compiles_instead_of_being_refused():
+    """Doc 08 §1.2/§3.2 (revised) and doc 06 §O15 (revised): a computed
+    feature is a closed, statically-validated expression grammar
+    (`decider2.expr`), compiled to numba source at build time — not the
+    `_ComputedFeature`/`simpleeval` pointer-shaped objection doc 01 §5.4
+    actually recorded. `ComputedFeatureRemoved` is no longer raised for
+    this; the owner's own example (`x - y`, here `income - expenses`) just
+    works, with no preprocessing step required."""
+    cond = UnaryLessThan(
+        feature={"type": "computed", "expression": "income - expenses"},
+        threshold=1.0,
+    )
+    assert cond.feature.required_features() == {"income", "expenses"}
 
 
 @pytest.mark.parametrize(

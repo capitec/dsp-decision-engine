@@ -183,16 +183,23 @@ class EmitContext:
 
     # -- names, called from schema.py's node/condition classes ------------
 
-    def use_feature(self, feature: Any) -> str:
-        """Register a feature as read by this tree (idempotent) and return
-        its identifier. Order of first use is the traversal function's
-        signature order — doc 05 §4.2's determinism depends on callers
-        never re-ordering this themselves."""
-        fname = str(feature)
-        if fname not in self._feature_set:
-            self._feature_set.add(fname)
-            self.features.append(fname)
-        return safe_ident(fname)
+    def column(self, name: str) -> str:
+        """Register a plain named column as read by this tree (idempotent)
+        and return its identifier. Order of first use is the traversal
+        function's signature order — doc 05 §4.2's determinism depends on
+        callers never re-ordering this themselves.
+
+        This is `Feature.emit`'s plain-string arm, and it is also what a
+        computed feature's own free names resolve through
+        (`_ExprEmitAdapter.name`, `decider2.trees.schema`) — a plain column
+        `x` and the same `x` read inside `x - y` share the one signature
+        argument either way, because both paths end up calling this exact
+        method with the exact same string.
+        """
+        if name not in self._feature_set:
+            self._feature_set.add(name)
+            self.features.append(name)
+        return safe_ident(name)
 
     def _add_param(self, name: str, default: Any, annotation: str, origin: str) -> str:
         """Register a kernel argument, de-duplicating by name.
@@ -265,6 +272,15 @@ class EmitContext:
         be inlined. Shared by `UnaryStringMatch.test` and
         `StringMatchCondition.test`.
         """
+        root = getattr(feature, "root", feature)
+        if not isinstance(root, str):
+            raise UnsupportedInKernel(
+                f"node '{node_id}' string-matches a computed feature "
+                f"('{feature}'). A computed feature (decider2.expr) emits a "
+                "numeric expression, never a string column, so it has no "
+                "int32 dictionary code to match against (doc 05 §1.5). Give "
+                "the tree a named string column instead."
+            )
         if match_type is not TStringMatchType.exact:
             raise UnsupportedInKernel(
                 f"node '{node_id}' uses match_type={match_type.value!r} on feature "
@@ -293,7 +309,7 @@ class EmitContext:
             )
 
         fname = str(feature)
-        self.use_feature(feature)
+        self.column(fname)
         matcher = self.matchers.get(fname)
         if matcher is None:
             # The step's OUTPUT name is its function name (types.Step.name),
