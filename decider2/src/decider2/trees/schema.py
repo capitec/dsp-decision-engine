@@ -63,6 +63,7 @@ import typing as t
 from pydantic import BaseModel, Discriminator, Field, PrivateAttr, RootModel, Tag, model_validator
 
 from decider2 import expr
+from decider2.trees.interpreter import EQ, GE, GT, LE, LT, NE
 
 if t.TYPE_CHECKING:
     # Codegen-only: every node/condition class below calls back into this
@@ -71,8 +72,17 @@ if t.TYPE_CHECKING:
     # children). Import guarded so schema.py stays free of a runtime
     # dependency on codegen.py — codegen.py already depends on this
     # module, and a class owning its own emission is not the same claim as
-    # this module depending on codegen (see EmitContext's own docstring).
-    from decider2.trees.codegen import EmitContext
+    # this module depending on codegen (see EncodeContext's own docstring).
+    from decider2.trees.codegen import EncodeContext
+
+# decider2.trees.schema._ThresholdedUnaryOp's six operators -> the
+# interpreter's six comparison opcodes (decider2.trees.interpreter). One
+# fixed table, not a per-class dispatch: every subclass below sets `op` to
+# one of these six literal strings and this is the only place the string is
+# turned into an opcode.
+_OPCODE: dict[str, int] = {
+    "<=": LE, "<": LT, "==": EQ, ">": GT, ">=": GE, "!=": NE,
+}
 
 __all__ = [
     "RangeEndLogic",
@@ -267,27 +277,34 @@ class _ComputedFeature(BaseModel):
         # `InputRef` (tracked, because its name is the shared knob).
         return set()
 
-    def emit(self, ctx: "EmitContext", node_id: str) -> str:
+    def emit(self, ctx: "EncodeContext", node_id: str) -> str:
         return self._expr.emit(_ExprEmitAdapter(ctx, node_id))
 
 
 class _ExprEmitAdapter:
-    """Bridges `decider2.expr.ExprContext` to one tree's `EmitContext`, for
+    """Bridges `decider2.expr.ExprContext` to one tree's `EncodeContext`, for
     one computed feature's use at one node.
 
     A computed feature's own free names become ordinary column arguments —
-    `ctx.column` is exactly `EmitContext`'s existing feature bookkeeping, so
+    `ctx.column` is exactly `EncodeContext`'s existing feature bookkeeping, so
     two nodes both reading `income` (one directly, one inside `income - x`)
     share the one signature argument. Its own numeric literals become
-    ordinary anonymous params through `EmitContext.threshold` — the same
+    ordinary anonymous params through `EncodeContext.threshold` — the same
     machinery a literal `Threshold` already uses (`_ThresholdedUnaryOp.
-    test`) — so a constant buried inside an expression retunes exactly like
-    any other threshold, never recompiling. `_next` numbers them uniquely
-    within this one use so `"x * 2 + y * 2"` gets two distinct params, not
-    one collided name.
+    encode`) — so a constant buried inside an expression retunes exactly
+    like any other threshold, never recompiling. `_next` numbers them
+    uniquely within this one use so `"x * 2 + y * 2"` gets two distinct
+    params, not one collided name.
+
+    This is the one place a computed feature stays SOURCE TEXT rather than
+    array data (doc 08 §1.2/§3.2): its arithmetic is a value computation, not
+    a branch, and `decider2.expr` already compiles it to a numba expression
+    once, at build time — `EncodeContext` only has to fold that expression's
+    *result* into a local variable and give it a feature slot like any other
+    (`EncodeContext.computed_feature_index`).
     """
 
-    def __init__(self, ctx: "EmitContext", node_id: str) -> None:
+    def __init__(self, ctx: "EncodeContext", node_id: str) -> None:
         self._ctx = ctx
         self._node_id = node_id
         self._next = 0
@@ -329,16 +346,18 @@ class Feature(RootModel[t.Union[_ComputedFeature, str]]):
             return set()
         return self.root.required_params()
 
-    def emit(self, ctx: "EmitContext", node_id: str) -> str:
-        """This feature's numba-source token — a signature argument's
-        identifier for a plain column, or a computed feature's own inline
-        fragment (itself built entirely out of signature arguments — see
-        `_ComputedFeature.emit`). Either way the result substitutes
-        directly wherever a condition class currently does
-        `var = self.feature.emit(ctx, node_id)`."""
+    def feature_index(self, ctx: "EncodeContext", node_id: str) -> int:
+        """This feature's slot in the walker's `feats` tuple (doc 08 §3.4):
+        a plain column's own registered index, or a computed feature's
+        freshly-allocated local slot (its expression is evaluated once, into
+        a wrapper-local variable, before the tuple is built — see
+        `_ComputedFeature.emit` and `EncodeContext.computed_feature_index`).
+        Either way the result substitutes directly wherever a condition
+        class currently does
+        `feat_idx = self.feature.feature_index(ctx, node_id)`."""
         if isinstance(self.root, str):
-            return ctx.column(self.root)
-        return self.root.emit(ctx, node_id)
+            return ctx.plain_feature_index(self.root)
+        return ctx.computed_feature_index(self.root, node_id)
 
 
 Threshold = t.Union[float, int, InputRef]
@@ -365,22 +384,36 @@ class _BaseUnaryOp(BaseModel):
     def required_params(self) -> set[str]:
         return self.feature.required_params()
 
-    def test(self, ctx: "EmitContext", node_id: str, cond_idx: t.Optional[str] = None) -> str:
-        """Boolean source expression for this one condition.
-
-        decider 1's per-op `build_condition`, moved onto the class it
+    def encode(
+        self, ctx: "EncodeContext", node_id: str, *, then_pc: int, otherwise_pc: int,
+        cond_idx: t.Optional[str] = None,
+    ) -> int:
+        """Append this one condition's node(s) to the walker's flat arrays
+        and return its entry program-counter — a comparison that, once
+        entered, always reaches `then_pc` or `otherwise_pc` (never anything
+        else). decider 1's per-op `build_condition`, moved onto the class it
         describes (the owner's own `TypeDiscriminatedBaseModule` pattern:
         `decider/modules/credit/decision_table/config.py`'s
-        `Expression.__call__`). `codegen.EmitContext` is where the
-        cross-cutting bookkeeping (argument naming/de-duping, string-test
-        hoisting) lives; this method owns only what varies per op.
+        `Expression.__call__`), re-targeted from source text to array rows —
+        `codegen.EncodeContext` is where the cross-cutting bookkeeping
+        (argument naming/de-duping, string-test hoisting, node-array
+        appends) lives; this method owns only what varies per op.
 
-        `cond_idx` is this condition's position among its siblings in an
-        enclosing `CompositeNode`/`CompositeCondition`'s `conditions` list —
-        `None` for a lone `UnaryNode`, where `node_id` alone already names a
-        unique argument. Threaded through so two same-shaped siblings (e.g.
-        `x > 5 and x < 10`) get distinct parameter names instead of
-        silently sharing one (see `CompositeCondition.test`).
+        `then_pc`/`otherwise_pc` are passed DOWN rather than discovered —
+        the enclosing node already built both children's subtrees before
+        asking its own condition to encode itself (see `_BinaryNode.encode`),
+        so there is nothing to back-patch. `cond_idx` is this condition's
+        position among its siblings in an enclosing `CompositeNode`/
+        `CompositeCondition`'s `conditions` list — `None` for a lone
+        `UnaryNode`, where `node_id` alone already names a unique argument.
+        Threaded through so two same-shaped siblings (e.g. `x > 5 and x <
+        10`) get distinct PARAM NAMES — for `params_schema()` and
+        `POST /params` — instead of silently sharing one. Note this no
+        longer has any bearing on *correctness*: two conditions can never
+        collide on the same array SLOT regardless of naming, because a
+        slot is an integer position, never a generated identifier (see
+        `decider2.trees.interpreter`'s module docstring — this is the
+        historical defect class this migration exists to retire).
         """
         raise NotImplementedError
 
@@ -396,13 +429,19 @@ class _ThresholdedUnaryOp(_BaseUnaryOp):
             params.add(self.threshold.key)
         return params
 
-    def test(self, ctx: "EmitContext", node_id: str, cond_idx: t.Optional[str] = None) -> str:
+    def encode(
+        self, ctx: "EncodeContext", node_id: str, *, then_pc: int, otherwise_pc: int,
+        cond_idx: t.Optional[str] = None,
+    ) -> int:
         """The six primitive comparisons share this one shape: they differ
-        only in `self.op`, a plain comparison operator string, so one
-        method on the shared base serves all six — no dispatch needed."""
-        var = self.feature.emit(ctx, node_id)
+        only in `self.op`, a plain comparison operator string mapped once
+        (module-level `_OPCODE`) onto the interpreter's six opcodes — so one
+        method on the shared base serves all six, exactly one `CMP` node
+        each, no dispatch needed."""
+        feat_idx = self.feature.feature_index(ctx, node_id)
         suffix = f"_{cond_idx}" if cond_idx is not None else ""
-        return f"{var} {self.op} {ctx.threshold(self.threshold, node_id=node_id, role=f'thr{suffix}')}"
+        thr_slot = ctx.threshold_slot(self.threshold, node_id=node_id, role=f"thr{suffix}")
+        return ctx.add_cmp(feat_idx, _OPCODE[self.op], thr_slot, then_pc, otherwise_pc)
 
 
 class UnaryLessThanEqual(_ThresholdedUnaryOp):
@@ -455,15 +494,25 @@ class UnaryBetween(_BaseUnaryOp):
                 params.add(bound.key)
         return params
 
-    def test(self, ctx: "EmitContext", node_id: str, cond_idx: t.Optional[str] = None) -> str:
-        var = self.feature.emit(ctx, node_id)
+    def encode(
+        self, ctx: "EncodeContext", node_id: str, *, then_pc: int, otherwise_pc: int,
+        cond_idx: t.Optional[str] = None,
+    ) -> int:
+        """Two chained `CMP` nodes, min tested first — the same evaluation
+        order the old `" and ".join([min_expr, max_expr])` gave, built
+        inside-out: the max test (evaluated second) is appended first, so
+        the min test (evaluated first, the entry point returned) already
+        knows where to send a passing row."""
+        feat_idx = self.feature.feature_index(ctx, node_id)
         suffix = f"_{cond_idx}" if cond_idx is not None else ""
-        parts = []
-        if self.min is not None:
-            parts.append(f"{var} >= {ctx.threshold(self.min, node_id=node_id, role=f'min{suffix}')}")
+        entry = then_pc
         if self.max is not None:
-            parts.append(f"{var} <= {ctx.threshold(self.max, node_id=node_id, role=f'max{suffix}')}")
-        return " and ".join(parts) if len(parts) > 1 else parts[0]
+            slot = ctx.threshold_slot(self.max, node_id=node_id, role=f"max{suffix}")
+            entry = ctx.add_cmp(feat_idx, LE, slot, entry, otherwise_pc)
+        if self.min is not None:
+            slot = ctx.threshold_slot(self.min, node_id=node_id, role=f"min{suffix}")
+            entry = ctx.add_cmp(feat_idx, GE, slot, entry, otherwise_pc)
+        return entry
 
 
 class UnaryIsIn(_BaseUnaryOp):
@@ -496,9 +545,13 @@ class UnaryIsIn(_BaseUnaryOp):
                     params.add(v.key)
         return params
 
-    def test(self, ctx: "EmitContext", node_id: str, cond_idx: t.Optional[str] = None) -> str:
-        var = self.feature.emit(ctx, node_id)
-        return ctx.isin_test(var, self.values, node_id, cond_idx if cond_idx is not None else 0)
+    def encode(
+        self, ctx: "EncodeContext", node_id: str, *, then_pc: int, otherwise_pc: int,
+        cond_idx: t.Optional[str] = None,
+    ) -> int:
+        feat_idx = self.feature.feature_index(ctx, node_id)
+        idx = cond_idx if cond_idx is not None else 0
+        return _encode_isin(ctx, feat_idx, self.values, node_id, idx, then_pc, otherwise_pc)
 
 
 class UnaryStringMatch(_BaseUnaryOp):
@@ -532,30 +585,39 @@ class UnaryStringMatch(_BaseUnaryOp):
                 params.add(pattern.key)
         return params
 
-    def test(self, ctx: "EmitContext", node_id: str, cond_idx: t.Optional[str] = None) -> str:
+    def encode(
+        self, ctx: "EncodeContext", node_id: str, *, then_pc: int, otherwise_pc: int,
+        cond_idx: t.Optional[str] = None,
+    ) -> int:
         # cond_idx is unused: a string test names its literals by the
         # hoisted matcher step, not by node_id/role, so it never collides
         # with a sibling the way a threshold param would.
-        return ctx.string_test(
+        return ctx.encode_string_match(
             self.feature, self.patterns, self.match_type, self.case_sensitive,
-            self.trim_whitespace, node_id,
+            self.trim_whitespace, node_id, then_pc, otherwise_pc,
         )
 
 
 class UnaryIsTrue(_BaseUnaryOp):
     op: t.Literal["is_true"] = "is_true"
 
-    def test(self, ctx: "EmitContext", node_id: str, cond_idx: t.Optional[str] = None) -> str:
-        var = self.feature.emit(ctx, node_id)
-        return f"{var} != 0"
+    def encode(
+        self, ctx: "EncodeContext", node_id: str, *, then_pc: int, otherwise_pc: int,
+        cond_idx: t.Optional[str] = None,
+    ) -> int:
+        feat_idx = self.feature.feature_index(ctx, node_id)
+        return ctx.add_is_true(feat_idx, then_pc, otherwise_pc)
 
 
 class UnaryIsFalse(_BaseUnaryOp):
     op: t.Literal["is_false"] = "is_false"
 
-    def test(self, ctx: "EmitContext", node_id: str, cond_idx: t.Optional[str] = None) -> str:
-        var = self.feature.emit(ctx, node_id)
-        return f"{var} == 0"
+    def encode(
+        self, ctx: "EncodeContext", node_id: str, *, then_pc: int, otherwise_pc: int,
+        cond_idx: t.Optional[str] = None,
+    ) -> int:
+        feat_idx = self.feature.feature_index(ctx, node_id)
+        return ctx.add_is_false(feat_idx, then_pc, otherwise_pc)
 
 
 TUnaryOp = t.Annotated[
@@ -597,22 +659,26 @@ class RangeCondition(BaseModel):
     def required_params(self) -> set[str]:
         return {b.key for b in (self.min, self.max) if isinstance(b, InputRef)}
 
-    def test(
-        self, ctx: "EmitContext", var: str, end_logic: RangeEndLogic, node_id: str, idx: int
-    ) -> str:
-        """decider 1's `RangeCondition.build_range_condition`, as source.
+    def encode(
+        self, ctx: "EncodeContext", feat_idx: int, end_logic: RangeEndLogic, node_id: str,
+        idx: int, *, then_pc: int, otherwise_pc: int,
+    ) -> int:
+        """decider 1's `RangeCondition.build_range_condition`, as two chained
+        `CMP` nodes instead of source text.
 
-        `var`, `end_logic` and `idx` come from the enclosing `CasesRanges`
-        node — this condition owns the bound comparison, not the branching
-        the node builds around it (decider 1's own split between
-        `RangeCondition` and the node that holds a list of them)."""
-        lo_op, hi_op = (">=", "<") if end_logic is RangeEndLogic.lower_inclusive else (">", "<=")
-        parts = []
-        if self.min is not None:
-            parts.append(f"{var} {lo_op} {ctx.threshold(self.min, node_id=node_id, role=f'min_{idx}')}")
+        `feat_idx`, `end_logic` and `idx` come from the enclosing
+        `CasesRanges` node — this condition owns the bound comparison, not
+        the branching the node builds around it (decider 1's own split
+        between `RangeCondition` and the node that holds a list of them)."""
+        lo_op, hi_op = (GE, LT) if end_logic is RangeEndLogic.lower_inclusive else (GT, LE)
+        entry = then_pc
         if self.max is not None:
-            parts.append(f"{var} {hi_op} {ctx.threshold(self.max, node_id=node_id, role=f'max_{idx}')}")
-        return " and ".join(parts) if len(parts) > 1 else parts[0]
+            slot = ctx.threshold_slot(self.max, node_id=node_id, role=f"max_{idx}")
+            entry = ctx.add_cmp(feat_idx, hi_op, slot, entry, otherwise_pc)
+        if self.min is not None:
+            slot = ctx.threshold_slot(self.min, node_id=node_id, role=f"min_{idx}")
+            entry = ctx.add_cmp(feat_idx, lo_op, slot, entry, otherwise_pc)
+        return entry
 
 
 class StringMatchCondition(BaseModel):
@@ -631,20 +697,25 @@ class StringMatchCondition(BaseModel):
     def required_params(self) -> set[str]:
         return {p.key for p in self.patterns if isinstance(p, InputRef)}
 
-    def test(
+    def encode(
         self,
-        ctx: "EmitContext",
+        ctx: "EncodeContext",
         node_id: str,
         *,
         feature: Feature,
         match_type: TStringMatchType,
         case_sensitive: bool,
         trim_whitespace: bool,
-    ) -> str:
+        then_pc: int,
+        otherwise_pc: int,
+    ) -> int:
         """`feature`/`match_type`/`case_sensitive`/`trim_whitespace` are the
         enclosing `CasesStringMatch` node's — a branch only ever carries its
         own `patterns` (the wire format's shape, kept as-is)."""
-        return ctx.string_test(feature, self.patterns, match_type, case_sensitive, trim_whitespace, node_id)
+        return ctx.encode_string_match(
+            feature, self.patterns, match_type, case_sensitive, trim_whitespace, node_id,
+            then_pc, otherwise_pc,
+        )
 
 
 class IsInCondition(BaseModel):
@@ -657,8 +728,43 @@ class IsInCondition(BaseModel):
             return {self.values.key}
         return {v.key for v in self.values if isinstance(v, InputRef)}
 
-    def test(self, ctx: "EmitContext", var: str, node_id: str, idx: int) -> str:
-        return ctx.isin_test(var, self.values, node_id, idx)
+    def encode(
+        self, ctx: "EncodeContext", feat_idx: int, node_id: str, idx: int, *,
+        then_pc: int, otherwise_pc: int,
+    ) -> int:
+        return _encode_isin(ctx, feat_idx, self.values, node_id, idx, then_pc, otherwise_pc)
+
+
+def _encode_isin(
+    ctx: "EncodeContext", feat_idx: int, values: t.Any, node_id: str, idx: t.Any,
+    then_pc: int, otherwise_pc: int,
+) -> int:
+    """An OR-of-equalities chain — each value its own `CMP` node, tested in
+    declared order, first match wins. Shared by `UnaryIsIn.encode` and
+    `IsInCondition.encode` — the same `isinstance` check the OLD `isin_test`
+    made, kept for the same reason it stayed there: `values` is a
+    list-of-thresholds-or-a-reference, not a node/condition type this tree
+    dispatches on.
+
+    decider 1 also allows `values` to be a bare `InputRef`, treated as
+    *equality against that one parameter* (`UnaryIsIn.build_condition`), not
+    `is_in` — that exact behaviour is reproduced: one `CMP(EQ)` node, no
+    chain.
+
+    Built backward (highest index first) so the LAST-built node becomes the
+    FIRST tested: `entry` starts as `otherwise_pc` ("nothing left, fail"),
+    and each earlier value's node routes its own false-edge to whatever was
+    built so far — exactly the `" or ".join(...)` short-circuit order the
+    old source text gave, without ever writing a name.
+    """
+    if isinstance(values, InputRef):
+        slot = ctx.threshold_slot(values, node_id=node_id, role=f"isin_{idx}")
+        return ctx.add_cmp(feat_idx, EQ, slot, then_pc, otherwise_pc)
+    entry = otherwise_pc
+    for j in reversed(range(len(values))):
+        slot = ctx.threshold_slot(values[j], node_id=node_id, role=f"isin_{idx}_{j}")
+        entry = ctx.add_cmp(feat_idx, EQ, slot, then_pc, entry)
+    return entry
 
 
 def _condition_tag(value: t.Any) -> str:
@@ -705,42 +811,86 @@ class CompositeCondition(BaseModel):
             out |= cond.required_params()
         return out
 
-    def test(self, ctx: "EmitContext", node_id: str, cond_idx: t.Optional[str] = None) -> str:
-        """A nested AND/OR/NOT, self-contained with its own parens so it
-        composes as one term wherever a sibling condition is expected
-        (unlike a top-level `CompositeNode`'s test, which is already the
-        whole `if` expression and does not need to — see
-        `CompositeNode._test`; the two shapes are deliberately not shared).
+    def encode(
+        self, ctx: "EncodeContext", node_id: str, *, then_pc: int, otherwise_pc: int,
+        cond_idx: t.Optional[str] = None,
+    ) -> int:
+        """A nested AND/OR/NOT, encoded as a chain of its own sub-conditions
+        — no wrapping needed the way old source text needed its own parens,
+        because a chain composes into `then_pc`/`otherwise_pc` exactly like
+        any primitive comparison (unlike a top-level `CompositeNode`'s
+        encoding, which already targets the enclosing NODE's two children
+        rather than a further-composing pair — see `CompositeNode.
+        _encode_test`; the two call `_encode_logic` with the same op-chain
+        logic, but are not the same method, for that reason).
 
         `cond_idx` is this condition's position among its own siblings; a
         nested child's path extends it (`f'{prefix}_{j}'`) rather than
         restarting it, so a composite three levels deep still names every
-        leaf threshold uniquely (see `_BaseUnaryOp.test`'s docstring for
-        why a repeated name would be the sibling-collision bug this
-        threading exists to prevent). `TCondition`'s two members —
-        this class and every `TUnaryOp` — share this exact signature, so a
-        caller holding a `TCondition` just calls `.test(...)`: no branch on
-        which one it got needed."""
+        leaf threshold's PARAM uniquely (see `_BaseUnaryOp.encode`'s
+        docstring for why this no longer has any bearing on correctness —
+        only on how a threshold shows up in `params_schema()`).
+        `TCondition`'s two members — this class and every `TUnaryOp` — share
+        this exact signature, so a caller holding a `TCondition` just calls
+        `.encode(...)`: no branch on which one it got needed."""
         prefix = cond_idx if cond_idx is not None else "0"
-        inner = [c.test(ctx, node_id, f"{prefix}_{j}") for j, c in enumerate(self.conditions)]
-        if self.op is TLogicOp.NOT:
-            return f"(not ({inner[0]}))"
-        joiner = " and " if self.op is TLogicOp.AND else " or "
-        return "(" + joiner.join(inner) + ")"
+        return _encode_logic(
+            ctx, node_id, self.op, self.conditions, then_pc=then_pc, otherwise_pc=otherwise_pc,
+            prefix=prefix,
+        )
 
 
 CompositeCondition.model_rebuild()
 
 
+def _encode_logic(
+    ctx: "EncodeContext", node_id: str, op: TLogicOp, conditions: t.Sequence["TCondition"],
+    *, then_pc: int, otherwise_pc: int, prefix: str,
+) -> int:
+    """AND/OR/NOT over `conditions`, as a chain of their own `.encode(...)`
+    calls — shared by `CompositeCondition.encode` (a nested composite,
+    composing further) and `CompositeNode._encode_test` (a top-level
+    composite, the whole node). Both give this the same two-edge contract
+    every primitive condition gives: entered once, it always reaches
+    `then_pc` or `otherwise_pc`.
+
+    AND is built backward from `then_pc` — each earlier condition's
+    then-edge is "go test the rest", so the first-built (last-processed, at
+    the END of the loop) becomes the entry, evaluated first, short-circuiting
+    to `otherwise_pc` on its own false. OR is the mirror, built backward from
+    `otherwise_pc`. NOT (exactly one condition) is neither: it just swaps
+    which edge is which for its single child.
+    """
+    if op is TLogicOp.NOT:
+        return conditions[0].encode(
+            ctx, node_id, then_pc=otherwise_pc, otherwise_pc=then_pc, cond_idx=f"{prefix}_0"
+        )
+    if op is TLogicOp.AND:
+        entry = then_pc
+        for j in reversed(range(len(conditions))):
+            entry = conditions[j].encode(
+                ctx, node_id, then_pc=entry, otherwise_pc=otherwise_pc, cond_idx=f"{prefix}_{j}"
+            )
+        return entry
+    # OR
+    entry = otherwise_pc
+    for j in reversed(range(len(conditions))):
+        entry = conditions[j].encode(
+            ctx, node_id, then_pc=then_pc, otherwise_pc=entry, cond_idx=f"{prefix}_{j}"
+        )
+    return entry
+
+
 # ---------------------------------------------------------------------------
 # Nodes — decider 1's `tree/v3/nodes_ui.py`
 #
-# Each class below owns its own `emit(ctx, node_id, depth) -> list[str]`:
-# its source lines, recursing into its children through `ctx.child_lines`
+# Each class below owns its own `encode(ctx, node_id, depth) -> int`: it
+# appends its own row(s) to the walker's flat arrays and returns its entry
+# program-counter, recursing into its children through `ctx.child_entry`
 # (which calls back into whichever node type it finds there — no isinstance
 # needed, the discriminated union above already resolved it). `codegen.py`
-# no longer imports any of these classes; it holds only `EmitContext` and
-# the module-level scaffolding around `tree.root's .emit(ctx, ...)`.
+# no longer imports any of these classes; it holds only `EncodeContext` and
+# the module-level scaffolding around `tree.root's .encode(ctx, ...)`.
 #
 # `_BinaryNode` and `_CasesNode` are the two shapes decider 1 also had two
 # of (a single test routing then/otherwise; a list of conditions routing
@@ -765,28 +915,21 @@ class LeafNode(BaseModel):
     def required_params(self) -> set[str]:
         return set()
 
-    def emit(self, ctx: "EmitContext", node_id: str, depth: int) -> list[str]:
-        ctx.leaf_count += 1
-        return [f"return {self.result_idx}"]
+    def encode(self, ctx: "EncodeContext", node_id: str, depth: int) -> int:
+        return ctx.add_leaf(self.result_idx)
 
 
 class _BinaryNode(BaseModel):
     """Shared shape for `UnaryNode` and `CompositeNode`: one boolean test,
-    `sourceIndex=0` is `then`, `1` is `otherwise`. No `else:` — see
-    `EmitContext.child_lines` for why the otherwise-arm can follow at the
-    same indentation instead."""
+    `sourceIndex=0` is `then`, `1` is `otherwise`."""
 
-    def _test(self, ctx: "EmitContext", node_id: str) -> str:
+    def _encode_test(self, ctx: "EncodeContext", node_id: str, *, then_pc: int, otherwise_pc: int) -> int:
         raise NotImplementedError
 
-    def emit(self, ctx: "EmitContext", node_id: str, depth: int) -> list[str]:
-        test = self._test(ctx, node_id)
-        then_lines = ctx.child_lines(node_id, 0, depth + 1)
-        else_lines = ctx.child_lines(node_id, 1, depth)
-        out = [f"if {test}:"]
-        out += [f"    {ln}" for ln in then_lines]
-        out += else_lines
-        return out
+    def encode(self, ctx: "EncodeContext", node_id: str, depth: int) -> int:
+        then_pc = ctx.child_entry(node_id, 0, depth + 1)
+        otherwise_pc = ctx.child_entry(node_id, 1, depth)
+        return self._encode_test(ctx, node_id, then_pc=then_pc, otherwise_pc=otherwise_pc)
 
 
 class UnaryNode(_BinaryNode):
@@ -806,32 +949,39 @@ class UnaryNode(_BinaryNode):
     def required_params(self) -> set[str]:
         return self.condition.required_params()
 
-    def _test(self, ctx: "EmitContext", node_id: str) -> str:
-        return self.condition.test(ctx, node_id)
+    def _encode_test(self, ctx: "EncodeContext", node_id: str, *, then_pc: int, otherwise_pc: int) -> int:
+        return self.condition.encode(ctx, node_id, then_pc=then_pc, otherwise_pc=otherwise_pc)
 
 
 class _CasesNode(BaseModel):
     """Shared shape for the three `Cases*` node types: `sourceIndex=0..N-1`
     select `conditions[i]`, `sourceIndex=N` is `otherwise`. They differ
-    only in what one condition tests against `self.feature` — that part is
-    `_condition_test`, implemented per class."""
+    only in what one condition encodes against `self.feature` — that part is
+    `_encode_condition`, implemented per class."""
 
-    def _condition_test(self, ctx: "EmitContext", var: str, node_id: str, idx: int) -> str:
+    def _encode_condition(
+        self, ctx: "EncodeContext", feat_idx: int, node_id: str, idx: int, *,
+        then_pc: int, otherwise_pc: int,
+    ) -> int:
         raise NotImplementedError
 
-    def emit(self, ctx: "EmitContext", node_id: str, depth: int) -> list[str]:
-        var = self.feature.emit(ctx, node_id)  # type: ignore[attr-defined]
-        tests = [
-            self._condition_test(ctx, var, node_id, i)
-            for i in range(len(self.conditions))  # type: ignore[attr-defined]
-        ]
-        out: list[str] = []
-        for i, test in enumerate(tests):
-            keyword_ = "if" if i == 0 else "elif"
-            out.append(f"{keyword_} {test}:")
-            out += [f"    {ln}" for ln in ctx.child_lines(node_id, i, depth + 1)]
-        out += ctx.child_lines(node_id, len(tests), depth)
-        return out
+    def encode(self, ctx: "EncodeContext", node_id: str, depth: int) -> int:
+        feat_idx = self.feature.feature_index(ctx, node_id)  # type: ignore[attr-defined]
+        n = len(self.conditions)  # type: ignore[attr-defined]
+        # Build backward exactly like `_encode_logic`'s OR case: the LAST
+        # arm's failure falls through to the shared "otherwise" child, and
+        # each earlier arm's failure falls through to whatever was built so
+        # far — so arm 0 (`ctx.child_entry(node_id, 0, ...)`) is the entry,
+        # tested first, first match wins, matching decider 1's own
+        # `if/elif/.../else` semantics exactly.
+        otherwise_pc = ctx.child_entry(node_id, n, depth)
+        entry = otherwise_pc
+        for i in reversed(range(n)):
+            then_pc = ctx.child_entry(node_id, i, depth + 1)
+            entry = self._encode_condition(
+                ctx, feat_idx, node_id, i, then_pc=then_pc, otherwise_pc=entry
+            )
+        return entry
 
 
 class CasesRanges(_CasesNode):
@@ -866,8 +1016,13 @@ class CasesRanges(_CasesNode):
             params |= cond.required_params()
         return params
 
-    def _condition_test(self, ctx: "EmitContext", var: str, node_id: str, idx: int) -> str:
-        return self.conditions[idx].test(ctx, var, self.end_logic, node_id, idx)
+    def _encode_condition(
+        self, ctx: "EncodeContext", feat_idx: int, node_id: str, idx: int, *,
+        then_pc: int, otherwise_pc: int,
+    ) -> int:
+        return self.conditions[idx].encode(
+            ctx, feat_idx, self.end_logic, node_id, idx, then_pc=then_pc, otherwise_pc=otherwise_pc
+        )
 
 
 class CasesStringMatch(_CasesNode):
@@ -897,11 +1052,20 @@ class CasesStringMatch(_CasesNode):
             params |= cond.required_params()
         return params
 
-    def _condition_test(self, ctx: "EmitContext", var: str, node_id: str, idx: int) -> str:
-        return self.conditions[idx].test(
+    def _encode_condition(
+        self, ctx: "EncodeContext", feat_idx: int, node_id: str, idx: int, *,
+        then_pc: int, otherwise_pc: int,
+    ) -> int:
+        # feat_idx is unused: a string test re-derives its own feature slot
+        # from `feature=` (idempotent — `plain_feature_index` dedupes by
+        # name), because it must also register the hoisted matcher, which a
+        # plain numeric `feat_idx` alone does not carry.
+        del feat_idx
+        return self.conditions[idx].encode(
             ctx, node_id,
             feature=self.feature, match_type=self.match_type,
             case_sensitive=self.case_sensitive, trim_whitespace=self.trim_whitespace,
+            then_pc=then_pc, otherwise_pc=otherwise_pc,
         )
 
 
@@ -929,8 +1093,13 @@ class CasesIsIn(_CasesNode):
             params |= cond.required_params()
         return params
 
-    def _condition_test(self, ctx: "EmitContext", var: str, node_id: str, idx: int) -> str:
-        return self.conditions[idx].test(ctx, var, node_id, idx)
+    def _encode_condition(
+        self, ctx: "EncodeContext", feat_idx: int, node_id: str, idx: int, *,
+        then_pc: int, otherwise_pc: int,
+    ) -> int:
+        return self.conditions[idx].encode(
+            ctx, feat_idx, node_id, idx, then_pc=then_pc, otherwise_pc=otherwise_pc
+        )
 
 
 class CompositeNode(_BinaryNode):
@@ -966,15 +1135,15 @@ class CompositeNode(_BinaryNode):
             out |= cond.required_params()
         return out
 
-    def _test(self, ctx: "EmitContext", node_id: str) -> str:
-        """This is the WHOLE `if` expression (unlike `CompositeCondition.test`,
-        which must be self-contained to compose inside a further join) —
-        see that method's docstring for why the two shapes differ."""
-        inner = [c.test(ctx, node_id, str(i)) for i, c in enumerate(self.conditions)]
-        if self.op is TLogicOp.NOT:
-            return f"not ({inner[0]})"
-        joiner = " and " if self.op is TLogicOp.AND else " or "
-        return joiner.join(f"({i})" for i in inner) if len(inner) > 1 else inner[0]
+    def _encode_test(self, ctx: "EncodeContext", node_id: str, *, then_pc: int, otherwise_pc: int) -> int:
+        """This targets the enclosing NODE's own two children directly
+        (unlike `CompositeCondition.encode`, which must compose into a
+        further-enclosing pair) — see that method's docstring for why the
+        two shapes differ, even though both call the same `_encode_logic`."""
+        return _encode_logic(
+            ctx, node_id, self.op, self.conditions, then_pc=then_pc, otherwise_pc=otherwise_pc,
+            prefix="0",
+        )
 
 
 def validate_range_conditions(
