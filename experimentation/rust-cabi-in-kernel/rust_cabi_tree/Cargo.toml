@@ -1,0 +1,25 @@
+[package]
+name = "rust_cabi_tree"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Deliberately NOT setting `panic = "abort"` here. Keeping the crate-wide
+# default (`unwind`) is what makes `std::panic::catch_unwind` at each
+# `extern "C"` boundary meaningful — under `panic = "abort"`, catch_unwind
+# cannot catch anything (there is nothing to unwind), so the two options
+# the brief names ("panic=abort OR catch_unwind at every boundary") are not
+# independent knobs to turn on together; you pick one discipline. This crate
+# demonstrates catch_unwind, and separately demonstrates (via the
+# `_unprotected` entry points, used only in the panic-safety experiment)
+# what the *default* extern "C" behaviour is on rustc >= 1.71 without it.
+
+[lib]
+name = "rust_cabi_tree"
+crate-type = ["cdylib"]
+
+[dependencies]
+regex = "1.12"
+
+[profile.release]
+opt-level = 3

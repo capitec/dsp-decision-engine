@@ -16,10 +16,11 @@ audit).
 """
 from __future__ import annotations
 
-from decider2.graph import Pipeline, compose, flow, module, step
+from decider2.graph import Branch, Loop, Pipeline, compose, flow, module, step
 from decider2.params import missing_as, not_applicable_as, param
 
 __all__ = [
     "param", "missing_as", "not_applicable_as",
     "module", "flow", "step", "compose", "Pipeline",
+    "Branch", "Loop",
 ]

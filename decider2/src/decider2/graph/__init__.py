@@ -17,6 +17,7 @@ future caller genuinely needs them at that level.
 """
 from __future__ import annotations
 
+from decider2.graph.control_flow import Branch, Loop
 from decider2.graph.module import module
 from decider2.graph.pipeline import Pipeline, compose, flow
 from decider2.graph.step import step
@@ -27,4 +28,6 @@ __all__ = [
     "compose",
     "Pipeline",
     "step",
+    "Branch",
+    "Loop",
 ]

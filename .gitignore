@@ -180,3 +180,6 @@ decider/_version.py
 projects/*/configs/
 # decider2: content-addressed generated kernels (decider2.compile.cache)
 .decider2_cache/
+# experiment build artefacts
+experimentation/**/target/
+experimentation/**/_generated/

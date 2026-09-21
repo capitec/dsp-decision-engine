@@ -1705,3 +1705,273 @@ single-row `collect()`, up to **14,790×** codegen, which is 0.4–39% of the en
   noise against the floor. **Marshal and readback are the entire problem**, which
   is §R's conclusion reached independently — two experiments, different
   instruments, same answer. Doc 05 §3.1b is the fix and it is unbuilt.
+
+
+---
+
+## T — Node representation, and where string matching should happen
+
+Prompted by the owner proposing a `jitclass` node list (`node = nodes[0]; while
+not node.isleaf(): ...`) and then asking whether string predicates could live in
+the interpreter rather than being pre-computed for every row.
+
+### jitclass node objects work, and cost 9.7×
+
+Full-binary depth 7, 100k rows, identical answers asserted.
+
+| | ns/row |
+|---|---|
+| struct-of-arrays walk | **73.3** |
+| `jitclass` node-object walk | 708.5 (**9.66×**) |
+
+jitclass instances are heap-allocated and reference-counted, so `nodes[i]` hands
+back a reference with incref/decref per access and every field read chases a
+pointer instead of indexing contiguous memory. At 100k rows that is 7.3 ms
+against 70.8 ms — most of a 20–100 ms budget spent on indirection.
+
+**`numba.typed.List` is homogeneous**, so `LTNode` and `LeafNode` cannot share
+one. Worse, appending the wrong type is a *warning*, not an error —
+`NumbaTypeSafetyWarning: unsafe cast from LeafNode to LTNode` — sitting exactly
+where the natural code would put it.
+
+> **The maintainability the proposal wants does not have to be the runtime
+> representation.** One class per node kind, each with an `encode()` that returns
+> its row of the flat arrays, gives one-class-in-one-file authoring *and* the
+> 73 ns/row path. Classes for authoring, arrays for execution.
+
+### Strings: pre-compute per CATEGORY, not per row
+
+The owner's objection to frame-tier pre-processing was exact: if one branch in a
+hundred needs a regex, pre-computing it for every row does 100× the necessary
+work. Correct — but lazy evaluation is not the best fix.
+
+| approach | regex calls | wall |
+|---|---|---|
+| regex per row (frame tier today) | 100,000 | 4.22 ms |
+| regex per **category**, then `table[code[i]]` | **12** | **0.12 ms** (33.8×) |
+
+And of that 0.12 ms, the regex is ~0.7 µs; the rest is the O(rows) lookup **the
+walker already performs**. So a per-category mask is close to free.
+
+It is also *better than lazy*: lazy is O(rows reaching the node), per-category is
+O(distinct values) — independent of tree selectivity and of row count. And it
+works for match types a kernel cannot do at all, because the matching happens in
+Python over the category list and only the answer crosses into the kernel. That
+lifts the migration's refusal of non-`exact` `match_type`.
+
+**Why the categories are knowable, which is not obvious.** A tree can be
+arbitrarily deep, so "know the categories first" sounds impossible. It is not,
+because **a step cannot produce a string** — verified: `-> str` fails with
+`No implementation of setitem(array(int32), int64, unicode_type)`. Every string a
+tree can test is therefore an *input column*, dictionary-encoded at the boundary.
+Depth does not change provenance.
+
+> **This is a contract, not a law.** If decider2 ever admits string-producing
+> steps, per-category masking breaks. Record it as a stated dependency.
+
+### C regex from nopython works — 60.3 ns/call
+
+For the case where per-category degenerates (cardinality ≈ row count: account
+numbers, free text, merchant descriptors), lazy in-kernel matching is the right
+answer, and numba can reach C for it:
+
+    njit -> libc regexec:  60.3 ns/call,  6.03 ms per 100k rows
+
+(`ctypes.c_char_p` is rejected by numba's ctypes bridge; `c_void_p` works. That
+detail alone reads as "impossible" if it is the first thing you hit.)
+
+Three caveats. glibc POSIX regex is **slower than polars' Rust `regex` crate**
+(6.03 ms vs 4.22 ms for the all-rows case), so a real implementation wants PCRE2
+or a vendored crate, not `libc`. `find_library("c")` plus POSIX regex is not a
+Windows story, which is a bundled-dependency decision for an open-source
+library. And it needs the bytes in-kernel — arrow offsets and data buffers
+sliced per row, zero-copy but real boundary work.
+
+### Conclusion
+
+Per-category masks as the default; a **measured cardinality threshold** switches
+a node to lazy in-kernel matching. The threshold is measurable rather than
+guessed, and the two mechanisms are not rivals — they split on cardinality.
+
+
+---
+
+## U — A Rust tree interpreter: works, is fast, and is not worth adopting
+
+PyO3 0.27 + numpy 0.27 + `regex` 1.13, built with maturin, called **once per
+batch** with the same struct-of-arrays encoding the numba walker uses — so the
+comparison isolates the engine. Answers asserted identical to numba on every
+shape and every run.
+
+| | batch ns/row (100k) |
+|---|---|
+| codegen | 20.7–127.0 (**unstable at d9**, §Q) |
+| Rust interpreter | 46.0–88.7 |
+| numba array walker | 52.5–120.7 |
+
+Rust beats the numba walker by **12–28%** and is far steadier at depth 9
+(86.2–88.7 ns/row, under 3% spread, against codegen's 82.8–127.0). Both genuine.
+But codegen still wins outright at every shape except d9.
+
+### Single-record: every engine is noise
+
+| | µs |
+|---|---|
+| Rust, tree resident in a `PyTree` (row only crosses) | **0.35–0.48** |
+| numba dispatch | 1.22–1.43 |
+| Rust, naive (marshals all 12 arrays per call) | 1.89–2.10 |
+| **decider2's actual `score()` floor** (§R, §S) | **350–1500** |
+
+All four are **150–1000× below the floor**. Engine choice is irrelevant on the
+realtime path; marshal and readback are the whole cost. Third experiment to
+reach that conclusion independently.
+
+### The architectural cost the experiment surfaced
+
+> **A Rust tree cannot be inlined into a fused njit kernel.** A numba
+> tree-walker step can be; a Rust call is a hard boundary. decider2's execution
+> model is fused kernels (doc 02 §1.2, doc 05 §7), so adopting Rust for trees
+> permanently fragments any pipeline containing one.
+
+That is a new cost, not a restatement of packaging concerns, and it is the one
+that decides this.
+
+### Regex: the crate wins, the binding gives it back
+
+| | ns/call |
+|---|---|
+| Rust `regex` crate, pure compute | **25.6** |
+| polars' internal Rust regex | 42.2 |
+| numba → libc POSIX (§T) | 60.3 |
+| Rust via naive binding, total | 104.4 |
+
+Marshalling a Python `list[str]` into `Vec<String>` costs **~79 ns/call — more
+than the match itself**. The compute win is real and the naive binding spends it.
+Fixable with Arrow-style zero-copy buffers, and it is the same lesson §R learned
+from ZEN: crossing into Rust is cheap, crossing through a Python binding is not.
+
+### Packaging and concurrency
+
+Cold `cargo build --release` 29.0 s, cached 14.7 s, incremental 0.9–1.5 s. The
+wheel is `cp314-cp314` — **not abi3** — at `manylinux_2_34`, so it is a wheel per
+Python version per platform, for a project being open-sourced with no
+wheel-matrix CI today.
+
+`walk_batch` releases the GIL in one line (`py.detach`) and scales near-linearly
+(1.89× / 3.37× / 6.42× at 2 / 4 / 8 threads). Real parallelism with no convoy —
+but the same ceiling numba's `nogil=True` already reaches (§N4), so it is not a
+reason to switch.
+
+### ⚠ CORRECTION — the deciding argument was wrong
+
+The verdict below rests on "a Rust tree cannot be inlined into a fused njit
+kernel". **That is true of PyO3 and false of the C ABI**, and the owner caught
+it by asking about `cfunc`/C-ABI integration.
+
+A Rust `extern "C"` function in a `cdylib` is callable **from inside** an njit
+kernel through numba's ctypes bridge — the same mechanism §T used to reach libc's
+regex. The kernel is never fragmented at the Python level; the fused driver
+stays fused and simply makes a call at the tree node.
+
+Measured, full-binary depth 7, 100k rows, identical answers:
+
+| | ns/row |
+|---|---|
+| pure numba array walker | 71.1 |
+| **C-ABI walk called from inside njit** | **52.7** (0.74× — 26% *faster*) |
+| bare `njit` → `extern "C"` call overhead | **3.84 ns/call** |
+| bare `njit` → `njit` (fully inlinable) | 0.00 ns/call |
+
+So the boundary costs ~3.84 ns, which against a 71 ns walk is ~5% — and the
+compiled-by-gcc walk more than pays it back. What is genuinely lost is
+*inlining*: LLVM cannot constant-fold across the boundary. For a tree walk there
+is nothing to constant-fold, because the tree is data.
+
+**This does not automatically make Rust the answer** — the packaging cost
+(cp314-cp314 wheels, no abi3, a wheel matrix that does not exist yet), the
+second language, and the new panic-handling surface are all unchanged, and the
+measurement above is C standing in for Rust's identical ABI rather than Rust
+itself. But the *architectural* objection, which is what the verdict below
+turned on, does not hold. Re-decide on cost of ownership, not on fusion.
+
+### Verdict (superseded in part — see the correction above)
+
+**Do not adopt.** The numba array walker delivers what the maintainability
+complaint actually asks for — one generic kernel, no ~500-line cap, no CPython
+indentation limit, no per-shape compile — for ~90% of Rust's measured benefit
+and none of its cost: a second language, a wheel matrix, a new
+`PanicException` failure mode, and a permanent barrier to kernel fusion.
+
+Keep the crate as a **working, documented fallback**. If a throughput-bound
+batch case ever justifies it, it exists and it is measured.
+
+
+---
+
+## V — Rust through the C ABI, called from inside the kernel
+
+§U's correction, redone with real Rust instead of a C stand-in. A `cdylib` with
+no Python dependency, ten `extern "C"` entry points, loaded by `ctypes` and
+called from inside `@njit`.
+
+| shape | numba array walker | C-ABI per row |
+|---|---|---|
+| full-binary d7 | 85.0–105.1 | **66.5–73.7** |
+
+**12–35% faster than the numba walker at every shape measured.** Codegen still
+wins outright except at d9 (§Q).
+
+### Fusion holds — confirmed structurally, not inferred
+
+`build_driver` over a real 3-step pipeline with the C-ABI walk in the middle
+returns **exactly one `CompiledSegment`**, and the emitted source has exactly one
+`def kernel(...)` calling all three steps inline, including the `extern "C"`
+call. That is the claim §U got wrong, now verified against decider2's own
+unmodified compiler rather than a simulation.
+
+**The "fusion tax" is near zero.** Isolated call overhead is 2.4–3.84 ns against
+a 40–100 ns walk (3–9%), so per-row (fusable) sometimes *beats* per-batch
+outright — d9: 81.5 vs 88.2 ns/row — and is within noise elsewhere. The
+assumption that batching buys speed at the cost of fusion does not hold here.
+
+### The cost neither §U nor I anticipated
+
+> **Any kernel referencing a ctypes symbol can never be numba-disk-cached.**
+> `NumbaWarning: Cannot cache compiled function ... dynamic globals`. Confirmed
+> against a persistent build dir, not a tempdir artefact: a control pipeline goes
+> 0.30 s cold → 0.15 s cached, while the C-ABI pipeline costs ~0.47 s **every
+> run, forever**.
+
+This is the sharpest argument against the approach, and it is not about speed.
+Doc 05 §4.2's seven cache conditions, `decider2 build --verify`'s "a runtime load
+triggers ZERO compiles", and doc 08 §4.1's `sealed` mode all rest on the on-disk
+cache. A C-ABI tree **silently voids that guarantee for its whole kernel** — every
+process start recompiles, and the build-time verification that is supposed to
+catch exactly this would pass while the property is gone.
+
+### Panic safety and packaging
+
+rustc 1.95, well past 1.71's abort-at-boundary guarantee. Unprotected calls — a
+synthetic `panic!()` and a realistic corrupted-tree out-of-bounds — **reliably
+SIGABRT the whole process**. `catch_unwind`-wrapped calls return NaN and the same
+process serves the next good row correctly. Real graceful degradation, but only
+because every boundary function remembers to wrap itself; **nothing enforces it**.
+
+Packaging is genuinely better than PyO3, verified: the C-ABI `.so` has no
+`PyInit_*` symbol and loads under Python 3.12 with zero rebuild from a 3.14
+build, where the PyO3 `.so` fails with `undefined symbol: Py_TYPE`. So **one `.so`
+per platform, not per Python version**. Both share a `GLIBC_2.34` floor, so the
+OS axis is unchanged.
+
+### Verdict
+
+**Do not adopt by default; keep it as a documented working option.** It is
+faster, it fuses, and it packages better than PyO3 — all three of §U's
+objections answered. But it trades decider2's on-disk compile cache for that,
+which is a governance property rather than a performance one, and it adds a
+failure mode where a missing `catch_unwind` is a process abort inside a credit
+kernel.
+
+The numba array walker still delivers what the maintainability complaint actually
+asked for — one generic kernel, no line cap, no indentation limit, no per-shape
+compile — in one language, with the cache intact and no way to segfault.
