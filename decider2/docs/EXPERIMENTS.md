@@ -1862,7 +1862,39 @@ wheel-matrix CI today.
 but the same ceiling numba's `nogil=True` already reaches (§N4), so it is not a
 reason to switch.
 
-### Verdict
+### ⚠ CORRECTION — the deciding argument was wrong
+
+The verdict below rests on "a Rust tree cannot be inlined into a fused njit
+kernel". **That is true of PyO3 and false of the C ABI**, and the owner caught
+it by asking about `cfunc`/C-ABI integration.
+
+A Rust `extern "C"` function in a `cdylib` is callable **from inside** an njit
+kernel through numba's ctypes bridge — the same mechanism §T used to reach libc's
+regex. The kernel is never fragmented at the Python level; the fused driver
+stays fused and simply makes a call at the tree node.
+
+Measured, full-binary depth 7, 100k rows, identical answers:
+
+| | ns/row |
+|---|---|
+| pure numba array walker | 71.1 |
+| **C-ABI walk called from inside njit** | **52.7** (0.74× — 26% *faster*) |
+| bare `njit` → `extern "C"` call overhead | **3.84 ns/call** |
+| bare `njit` → `njit` (fully inlinable) | 0.00 ns/call |
+
+So the boundary costs ~3.84 ns, which against a 71 ns walk is ~5% — and the
+compiled-by-gcc walk more than pays it back. What is genuinely lost is
+*inlining*: LLVM cannot constant-fold across the boundary. For a tree walk there
+is nothing to constant-fold, because the tree is data.
+
+**This does not automatically make Rust the answer** — the packaging cost
+(cp314-cp314 wheels, no abi3, a wheel matrix that does not exist yet), the
+second language, and the new panic-handling surface are all unchanged, and the
+measurement above is C standing in for Rust's identical ABI rather than Rust
+itself. But the *architectural* objection, which is what the verdict below
+turned on, does not hold. Re-decide on cost of ownership, not on fusion.
+
+### Verdict (superseded in part — see the correction above)
 
 **Do not adopt.** The numba array walker delivers what the maintainability
 complaint actually asks for — one generic kernel, no ~500-line cap, no CPython
