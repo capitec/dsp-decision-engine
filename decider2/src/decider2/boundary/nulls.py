@@ -34,22 +34,42 @@ in the same review pass that produced doc 00-BUILD.md's "the fable review"
 commit, overrides that as the *default* pipeline behaviour and keeps doc 05
 §2's message for exactly the `raise_for` carve-out. That is what this module
 implements; see this package's report for the ambiguity flagged in full.
+
+**`NullPolicy` dispatch: a registry keyed on the fixed enum.**
+`decider2.types.NullPolicy` is a plain `Enum` in a fixed seam (`types.py`)
+this package never edits — it can't become a pydantic discriminated union
+itself. So the enum stays exactly the declaration value it always was, and
+the *behaviour* for each of its four members lives in one `NullTierStrategy`
+subclass apiece, looked up through the `NULL_TIER_STRATEGIES` registry below
+instead of an `if null_policy is X` / `elif null_policy is Y` chain at every
+call site that cares (this module had two such chains; `extract.py` had
+another two). The tier-2/tier-4 split doc 03 §1 calls "the fourth situation"
+is the one non-obvious case this buys: `_FillTier` is instantiated *twice*
+(once per `FillReason`) rather than branching internally, so the two tiers
+share every line of behaviour and differ only in the one constructor
+argument each registry entry supplies — exactly the shape a registry keyed
+on the enum is for, versus a hand-written `if`/`else` that a future edit
+could silently collapse.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Sequence
+from typing import ClassVar, NamedTuple, Sequence
 
 import numpy as np
 import polars as pl
 
 from decider2.types import Decision, Input, MissingInputPolicy, NullPolicy
 
+from .dtypes import ColumnPlan
+
 __all__ = [
     "FillReason",
     "FillInfo",
     "NullRouting",
+    "NullTierStrategy",
+    "NULL_TIER_STRATEGIES",
     "fill_column",
     "route_required_nulls",
     "validity_mask",
@@ -100,6 +120,108 @@ class FillInfo:
     filled_mask: np.ndarray | None  # True where a fill was substituted; None if nothing was
 
 
+class TierResult(NamedTuple):
+    """What one `NullTierStrategy` produces for a column: the pieces
+    `extract.py` assembles into an `ExtractedColumn` (`values` always;
+    `validity`/`fill`/`categories` only when that tier populates them —
+    `ExtractedColumn`'s own fields are already optional for exactly this
+    reason)."""
+
+    values: np.ndarray
+    validity: np.ndarray | None = None
+    fill: FillInfo | None = None
+    categories: tuple[str, ...] | None = None
+
+
+class NullTierStrategy:
+    """One of doc 03 §1's four situations. `NullPolicy` (the fixed enum)
+    only *names* a tier; a strategy instance, looked up from
+    `NULL_TIER_STRATEGIES`, is what actually knows what that tier does to a
+    column, both when the column is present (`extract_column`) and when a
+    declared input is entirely absent from the frame
+    (`synthesize_absent` — review finding 4's placeholder path).
+    """
+
+    routes_at_frame_level: ClassVar[bool] = False
+    reason: ClassVar[FillReason | None] = None  # only a fill tier sets this
+
+    def extract_column(self, series: pl.Series, decl: Input | None, plan: ColumnPlan) -> TierResult:
+        raise NotImplementedError
+
+    def synthesize_absent(self, decl: Input, n: int) -> TierResult:
+        raise NotImplementedError
+
+
+class _RequiredTier(NullTierStrategy):
+    """Tier 1 — routed away before extraction ever runs (`route_required_
+    nulls`), so by the time a column reaches `extract_column` it must
+    already be clean; if it isn't (this function called directly, outside
+    `extract_frame`'s routing pass), that is refused rather than silently
+    fed to a kernel."""
+
+    routes_at_frame_level = True
+
+    def extract_column(self, series: pl.Series, decl: Input | None, plan: ColumnPlan) -> TierResult:
+        if series.null_count() > 0:
+            raise ValueError(
+                f"extract_column('{series.name}') is REQUIRED and still has "
+                f"{series.null_count()} null(s); route it with "
+                "boundary.nulls.route_required_nulls first (doc 03 §1)"
+            )
+        values, categories = plan.extract(series)
+        return TierResult(values, categories=categories)
+
+    def synthesize_absent(self, decl: Input, n: int) -> TierResult:
+        # Every row was already routed away by route_required_nulls (or a
+        # raise_for violation already raised the whole batch), so `n` must
+        # be 0 here — this only has to be a validly-shaped empty array.
+        return TierResult(np.zeros(n, dtype=np.float64))
+
+
+class _OptionalTier(NullTierStrategy):
+    """Tier 3 — not filled: the raw values ride alongside a validity mask,
+    and the compiled driver builds a numba `Optional` per row (doc 05 §2)."""
+
+    def extract_column(self, series: pl.Series, decl: Input | None, plan: ColumnPlan) -> TierResult:
+        values, categories = plan.extract(series)
+        validity = validity_mask(series)
+        if validity is None:
+            validity = np.ones(series.len(), dtype=bool)
+        return TierResult(values, validity, categories=categories)
+
+    def synthesize_absent(self, decl: Input, n: int) -> TierResult:
+        values = np.zeros(n, dtype=np.float64)
+        validity = np.zeros(n, dtype=bool)
+        return TierResult(values, validity)
+
+
+class _FillTier(NullTierStrategy):
+    """Tiers 2 & 4 (`MISSING_AS`/`NOT_APPLICABLE_AS`) — identical filling,
+    a distinct `FillReason` per member (doc 03 §1's "fourth situation": the
+    one thing that must never drift between the two)."""
+
+    def __init__(self, reason: FillReason) -> None:
+        self.reason = reason
+
+    def extract_column(self, series: pl.Series, decl: Input | None, plan: ColumnPlan) -> TierResult:
+        assert decl is not None  # only reachable via a decl whose null_policy selected this tier
+        values, fill_info = fill_column(series, decl)
+        return TierResult(values, fill=fill_info)
+
+    def synthesize_absent(self, decl: Input, n: int) -> TierResult:
+        values = np.full(n, decl.fill, dtype=np.float64)
+        fill = FillInfo(reason=self.reason, filled_count=n, filled_mask=np.ones(n, dtype=bool))
+        return TierResult(values, fill=fill)
+
+
+NULL_TIER_STRATEGIES: dict[NullPolicy, NullTierStrategy] = {
+    NullPolicy.REQUIRED: _RequiredTier(),
+    NullPolicy.OPTIONAL: _OptionalTier(),
+    NullPolicy.MISSING_AS: _FillTier(FillReason.MISSING),
+    NullPolicy.NOT_APPLICABLE_AS: _FillTier(FillReason.NOT_APPLICABLE),
+}
+
+
 def fill_column(series: pl.Series, decl: Input) -> tuple[np.ndarray, FillInfo]:
     """Doc 03 §1 tiers 2 & 4: substitute at extraction so the kernel sees a
     plain number — the step body has nothing to check and nothing to forget.
@@ -109,17 +231,13 @@ def fill_column(series: pl.Series, decl: Input) -> tuple[np.ndarray, FillInfo]:
     `route_required_nulls`, for `REQUIRED` only) and never raises: a declared
     fill means the author already decided this null is not exceptional.
     """
-    if decl.null_policy not in (NullPolicy.MISSING_AS, NullPolicy.NOT_APPLICABLE_AS):
+    strategy = NULL_TIER_STRATEGIES.get(decl.null_policy)
+    if strategy is None or strategy.reason is None:
         raise ValueError(
             f"fill_column called on '{decl.name}' with null_policy="
             f"{decl.null_policy!r}; only MISSING_AS/NOT_APPLICABLE_AS are fillable here"
         )
-
-    reason = (
-        FillReason.NOT_APPLICABLE
-        if decl.null_policy is NullPolicy.NOT_APPLICABLE_AS
-        else FillReason.MISSING
-    )
+    reason = strategy.reason
 
     raw = series._get_buffers()["values"]
     valid = validity_mask(series)
@@ -216,7 +334,7 @@ def route_required_nulls(
     """
     policy = policy or MissingInputPolicy()
     n = frame.height
-    required = [decl for decl in inputs if decl.null_policy is NullPolicy.REQUIRED]
+    required = [decl for decl in inputs if NULL_TIER_STRATEGIES[decl.null_policy].routes_at_frame_level]
 
     # Structural columns first, and fully checked before any routing work is
     # done on the rest: a `raise_for` violation fails the whole batch, so
