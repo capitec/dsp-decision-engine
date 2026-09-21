@@ -157,3 +157,10 @@ execution modes share one definition, from fully-fused production to a
 single-record step-through debugger, and their agreement is automatically tested.
 Fusion and parallelism are authored, not inferred — measurement showed no constant
 and no warmup heuristic can decide either one.
+
+## Research
+
+[research/](research/README.md) holds the evidence that is not specification: a survey
+of 72 decision engines for bank credit granting and fraud, and a consolidated comparison
+of each group against decider2 with about 70 actionable recommendations. Start with
+[research/decider2-vs-landscape.md](research/decider2-vs-landscape.md).
