@@ -1392,3 +1392,78 @@ for free; it never will.
    is where it is faster regardless.
 4. `typed.List[str]` stays available as a documented escape hatch for genuine
    per-row string work, with its 31× cost stated rather than discovered.
+
+---
+
+## P — Tree and table compile cost, and where the line cap actually bites
+
+Measured during the decider 1 tree/table migration, 100k rows, 6 float features,
+cold compile per shape. Recorded here because the numbers were previously only
+in a migration report, and §G's ruleset model turns out not to generalise to
+trees.
+
+### Trees — full-binary (fan-out)
+
+| depth | leaves | emitted lines | compile | ns/row |
+|---|---|---|---|---|
+| 5 | 32 | 84 | 0.29 s | 45.6 |
+| 7 | 128 | 276 | 1.02 s | 123.8 |
+| 8 | 256 | **532** | 1.93 s | 197.7 |
+| 9 | 512 | 1044 | 4.32 s | 336.9 |
+
+One-sided chain: 128 nodes → 278 lines, 1.39 s, 116.6 ns/row.
+
+**A realistic credit tree** — 5 score bands × affordability gate × sector match ×
+AND-composite, 21 leaves, 23 thresholds, 10 string literals — is **120 emitted
+lines, 24% of the cap, 0.67 s cold compile, 104 ns/row.** Roughly 4× headroom.
+
+### Where the ~500-line cap bites
+
+| shape | reaches 500 lines at |
+|---|---|
+| flat ruleset | **~29–30 rules** (§G: 30 rules = 517 lines, ≈16.5 lines/rule) |
+| full-binary tree | **depth 8, ~256 leaves** |
+| one-sided waterfall | ~230 nodes |
+| realistic credit tree | not reached |
+
+A realistic flow is far from it; **30 rules in one fused group is not**, and 30
+rules is an ordinary credit rule set. That is what the cap is for.
+
+### §G's model does not generalise to trees
+
+Trees compile **3–5× cheaper per emitted line** than rulesets and scale
+≈ lines^1.0–1.2, not §G's ^1.4: 532 lines → 1.93 s here against §G's 517 lines →
+5.96 s, and 1044 → 4.32 s against 967 → 20.67 s. So for trees the 500-line cap is
+conservative by ~5× and could sit near 1500. It is left at 500 because doc 05 §7
+states that number uniformly; moving it is a decision, not a discovery.
+
+### Tables: compile cost is independent of row count
+
+| bands | emitted lines | compile | ns/row | source sha |
+|---|---|---|---|---|
+| 2 | 31 | 0.01 s | 70 | 93277fad |
+| 50 | 31 | 0.00 s | 125 | 93277fad |
+| 1000 | 31 | 0.00 s | 1045 | 93277fad |
+
+**Identical source from 2 bands to 1000** — everything after the first is a cache
+hit, because a table is a generic kernel over rows held in `shared` arrays. The
+trade is answer time: a table is a linear scan, so 1000 rows costs ~1 µs/row
+where a tree of equivalent selectivity is ~100 ns/row. **That is the real choice
+between the two engines**, and it is why they are two engines rather than one.
+
+### A hard CPython limit, found only by measuring
+
+**CPython refuses more than 100 levels of indentation.** A one-sided chain of 128
+nodes — an ordinary policy waterfall, and doc 01 §4b's *cheap* shape — died with
+`IndentationError` at import of the generated file, before numba saw it. No
+amount of reasoning about numba would have found it.
+
+Fixed by dropping `else:` entirely: every tree path ends in a `return`, so the
+otherwise-arm follows at the same indentation. That also **cut emitted lines
+~30%** (depth-7 full-binary: 403 → 276), which cut compile time with it.
+`_MAX_NESTING = 90` guards the nested *then*-chain case that remains.
+
+> **This is the strongest argument for the interpreted-tree alternative** (§Q,
+> pending): an array-walking kernel has no line cap, no indentation limit, no
+> fan-out wall and no per-shape compile at all. If its ns/row is within noise of
+> codegen at a 20–100 ms budget, this entire class of limit disappears.
