@@ -1,0 +1,243 @@
+{
+  "nodes": [
+    {
+      "id": "input",
+      "type": "inputNode",
+      "name": "Request"
+    },
+    {
+      "id": "n_gate",
+      "type": "switchNode",
+      "name": "n_gate",
+      "content": {
+        "hitPolicy": "first",
+        "statements": [
+          {
+            "id": "s0",
+            "condition": "(has_defaults == true) or (income < 0)"
+          },
+          {
+            "id": "s1",
+            "condition": "",
+            "isDefault": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "out_row_0",
+      "type": "expressionNode",
+      "name": "row 0",
+      "content": {
+        "expressions": [
+          {
+            "id": "out_row_0_tier_code",
+            "key": "tier_code",
+            "value": "0"
+          },
+          {
+            "id": "out_row_0_limit",
+            "key": "limit",
+            "value": "0"
+          }
+        ]
+      }
+    },
+    {
+      "id": "n_income",
+      "type": "switchNode",
+      "name": "n_income",
+      "content": {
+        "hitPolicy": "first",
+        "statements": [
+          {
+            "id": "s0",
+            "condition": "income < 5000"
+          },
+          {
+            "id": "s1",
+            "condition": "income >= 5000 and income < 50000"
+          },
+          {
+            "id": "s2",
+            "condition": "income >= 50000"
+          },
+          {
+            "id": "s3",
+            "condition": "",
+            "isDefault": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "n_region",
+      "type": "switchNode",
+      "name": "n_region",
+      "content": {
+        "hitPolicy": "first",
+        "statements": [
+          {
+            "id": "s0",
+            "condition": "region in [\"GP\", \"WC\"]"
+          },
+          {
+            "id": "s1",
+            "condition": "",
+            "isDefault": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "out_row_2",
+      "type": "expressionNode",
+      "name": "row 2",
+      "content": {
+        "expressions": [
+          {
+            "id": "out_row_2_tier_code",
+            "key": "tier_code",
+            "value": "2"
+          },
+          {
+            "id": "out_row_2_limit",
+            "key": "limit",
+            "value": "100000"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out_row_1",
+      "type": "expressionNode",
+      "name": "row 1",
+      "content": {
+        "expressions": [
+          {
+            "id": "out_row_1_tier_code",
+            "key": "tier_code",
+            "value": "2"
+          },
+          {
+            "id": "out_row_1_limit",
+            "key": "limit",
+            "value": "75000"
+          }
+        ]
+      }
+    },
+    {
+      "id": "out_row_3",
+      "type": "expressionNode",
+      "name": "row 3",
+      "content": {
+        "expressions": [
+          {
+            "id": "out_row_3_tier_code",
+            "key": "tier_code",
+            "value": "3"
+          },
+          {
+            "id": "out_row_3_limit",
+            "key": "limit",
+            "value": "250000"
+          }
+        ]
+      }
+    },
+    {
+      "id": "output",
+      "type": "outputNode",
+      "name": "Response"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "sourceId": "n_gate",
+      "targetId": "out_row_0",
+      "type": "edge",
+      "sourceHandle": "s0"
+    },
+    {
+      "id": "e2",
+      "sourceId": "n_income",
+      "targetId": "out_row_0",
+      "type": "edge",
+      "sourceHandle": "s0"
+    },
+    {
+      "id": "e3",
+      "sourceId": "n_region",
+      "targetId": "out_row_2",
+      "type": "edge",
+      "sourceHandle": "s0"
+    },
+    {
+      "id": "e4",
+      "sourceId": "n_region",
+      "targetId": "out_row_1",
+      "type": "edge",
+      "sourceHandle": "s1"
+    },
+    {
+      "id": "e5",
+      "sourceId": "n_income",
+      "targetId": "n_region",
+      "type": "edge",
+      "sourceHandle": "s1"
+    },
+    {
+      "id": "e6",
+      "sourceId": "n_income",
+      "targetId": "out_row_3",
+      "type": "edge",
+      "sourceHandle": "s2"
+    },
+    {
+      "id": "e7",
+      "sourceId": "n_income",
+      "targetId": "out_row_0",
+      "type": "edge",
+      "sourceHandle": "s3"
+    },
+    {
+      "id": "e8",
+      "sourceId": "n_gate",
+      "targetId": "n_income",
+      "type": "edge",
+      "sourceHandle": "s1"
+    },
+    {
+      "id": "e9",
+      "sourceId": "input",
+      "targetId": "n_gate",
+      "type": "edge"
+    },
+    {
+      "id": "e10",
+      "sourceId": "out_row_0",
+      "targetId": "output",
+      "type": "edge"
+    },
+    {
+      "id": "e11",
+      "sourceId": "out_row_2",
+      "targetId": "output",
+      "type": "edge"
+    },
+    {
+      "id": "e12",
+      "sourceId": "out_row_1",
+      "targetId": "output",
+      "type": "edge"
+    },
+    {
+      "id": "e13",
+      "sourceId": "out_row_3",
+      "targetId": "output",
+      "type": "edge"
+    }
+  ]
+}
