@@ -38,7 +38,6 @@ by hand rather than reimplementing the frame-shaped functions over one row.
 """
 from __future__ import annotations
 
-import collections
 import inspect
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -49,38 +48,31 @@ import polars as pl
 
 from decider2.compile.driver import numpy_dtype
 from decider2.runtime import modes
+from decider2.runtime.bundles import bundle_class
 from decider2.runtime.modes import ResolvedParams
 from decider2.types import Decision, Input, Interface, MissingInputPolicy, NullPolicy, Step
 
 DEFAULT_BUILD_DIR = Path(".decider2_cache")
 
 # `resolve_params` builds one namedtuple bundle per `params`-reading step
-# and (at most) one for `shared`, every single call — `collections.
-# namedtuple(...)` is not memoised by the stdlib, so calling it fresh each
-# time used to hand a `packed` step's `fn` (`types.Step.packed`, which
-# receives `shared`/a bare `params` bundle as a plain positional argument —
-# `decider2.compile.driver._call_step_row`/`PackedCompiledSegment.run`) a
-# STRUCTURALLY IDENTICAL BUT DISTINCT class object on every call. Measured
-# while building this stage: numba's own type-identity handling for that
-# pattern is NOT reliably stable under GC pressure from a long-lived
-# process (structurally identical namedtuple classes are supposed to type
-# as one thing, and mostly do, but a long test suite — or a long-running
-# server — eventually hits a case where they don't, and `Driver.signatures`
-# grows once per call, unboundedly, exactly the "retuning recompiles"
-# failure doc 08 §2 forbids). Memoising the class itself, keyed by its
-# field set, removes the reliance on that numba behaviour entirely: the
-# SAME Python class object reaches numba every time the field set is the
-# same, so there is only ever one type to begin with.
-_BUNDLE_CLASS_CACHE: dict[tuple[str, tuple[str, ...]], type] = {}
-
-
-def _bundle_class(prefix: str, fields: tuple[str, ...]) -> type:
-    key = (prefix, fields)
-    cls = _BUNDLE_CLASS_CACHE.get(key)
-    if cls is None:
-        cls = collections.namedtuple(prefix, fields)
-        _BUNDLE_CLASS_CACHE[key] = cls
-    return cls
+# and (at most) one for `shared`, every single call. The CLASS of that
+# bundle has two stability requirements, both met by `decider2.runtime.
+# bundles.bundle_class` (see its module docstring for the numba mechanics):
+#
+# - within a process: the SAME class object for the same field set, every
+#   call. `collections.namedtuple(...)` is not memoised by the stdlib, and
+#   handing a `packed` step's `fn` (`decider2.compile.driver._call_step_row`
+#   / `PackedCompiledSegment.run`) a structurally identical but distinct
+#   class per call made `Driver.signatures` grow once per call under GC
+#   pressure in a long-lived process — exactly the "retuning recompiles"
+#   failure doc 08 §2 forbids.
+# - across processes: a class the NEXT process can resolve to its own
+#   class for the same fields, because numba's on-disk cache key for a
+#   `shared`-taking kernel is the class's identity, pickled. Memoising per
+#   process was not enough for that — every process still recompiled every
+#   `shared`-reading table kernel, forever — so the class is now registered
+#   under a deterministic, self-describing name that pickles by reference.
+_bundle_class = bundle_class
 
 
 def _plain_name(name: str) -> str:
@@ -395,6 +387,7 @@ def resolve_params(
                         per_step_scalar[plain] = value
 
     shared = None
+    per_step_shared: dict = {}
     shared_reading_steps = tuple(s.name for s in steps if s.reads_shared)
     if shared_reading_steps:
         raw_shared = dict(shared_overrides or {})
@@ -414,7 +407,31 @@ def resolve_params(
         shared_cls = _bundle_class("_shared_params", fields)
         shared = shared_cls(**raw_shared)
 
-    return ResolvedParams(per_step_scalar, per_step_bundle, shared)
+        # A step that declares WHICH keys it reads (`types.Step.shared_
+        # fields` — a table's row/output steps) gets a bundle of exactly
+        # those, so its numba type is its own contract and never grows or
+        # changes identity with whatever else the caller merged into
+        # `shared=` (see `Step.shared_fields` for the measured reasons).
+        # Checked here, by name, rather than left to surface as a numba
+        # typing error from inside a kernel.
+        for owner, step in zip(owners, steps):
+            if not step.reads_shared or step.shared_fields is None:
+                continue
+            missing = [k for k in step.shared_fields if k not in raw_shared]
+            if missing:
+                raise ValueError(
+                    f"step '{step.name}' (module '{owner}') reads shared "
+                    f"field(s) {missing} that shared= does not supply. A "
+                    "table's rows travel in `shared` (doc 03 §4.2, doc 08 "
+                    "§3.4): pass its `.shared`, or several tables' merged "
+                    "(shared={**a.shared, **b.shared})."
+                )
+            proj_cls = _bundle_class("_shared_params", tuple(step.shared_fields))
+            bundle = proj_cls(*(raw_shared[k] for k in step.shared_fields))
+            per_step_shared[step.name] = bundle
+            per_step_shared[(owner, step.name)] = bundle
+
+    return ResolvedParams(per_step_scalar, per_step_bundle, shared, per_step_shared)
 
 
 # ---------------------------------------------------------------------------
