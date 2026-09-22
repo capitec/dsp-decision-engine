@@ -108,6 +108,31 @@ strings that actually occur here, and pattern complexity barely matters
 (`^dog`, `(?i)^dog`, `dog` all within ±5 ns). Fixed per-call overhead dominates
 short haystacks.
 
+### Checked independently — and the mask has a condition attached
+
+Both strands recommend the per-category mask, so I measured it myself, end to
+end, on a million rows over 12 distinct employers:
+
+| | ns per row |
+|---|---|
+| the lookup itself, inside the kernel | **0.94** |
+| building the mask from categories already in hand | 0.05 |
+| getting the int32 codes out | 0.03 |
+| **total, if the column already arrives dictionary-encoded** | **1.07** |
+| polars `str.contains` over every row — today's answer | 34.09 |
+| **total, if you must dictionary-encode the column yourself** | **50.53** |
+
+So the mask is a **32× win — but only on the condition that the column arrives
+already encoded.** If it does not, `unique()` plus the encode costs 47 ns/row
+and the mask *loses* to the frame tier it was meant to replace.
+
+decider2 satisfies the condition today: string columns are dictionary-encoded
+into int32 codes at the boundary, which is exactly why `match_type='exact'`
+works at all. The mask rides on work already paid for. That is the whole reason
+this is the right answer — and it is also the thing to re-check before adopting
+it, because if the encoding step is ever moved or made lazy, the recommendation
+inverts.
+
 ### What it did prove, and is worth keeping
 
 **Caching works.** Historically, calling out to a C or Rust symbol destroyed
