@@ -6,8 +6,9 @@
     risk = tree_module(Tree.model_validate(doc))
     pipeline = flow(Affordability, risk.module, Scoring).emit(risk.path_column)
 
-A tree is a pydantic document (`schema.py`), emitted as numba-compilable
-source (`codegen.py`) and wrapped as an ordinary `Module` (`build.py`).
+A tree is a pydantic document (`schema.py`), built directly into `Step`s
+whose `fn` is a pre-built njit closure over the tree's own arrays
+(`encode.py`) and wrapped as an ordinary `Module` (`build.py`).
 
 MIGRATION NOTES — what did not come across from decider 1, and why:
 
@@ -48,12 +49,12 @@ MIGRATION NOTES — what did not come across from decider 1, and why:
 from __future__ import annotations
 
 from decider2.trees.build import TreeModule, tree_module
-from decider2.trees.codegen import (
+from decider2.trees.encode import (
     LINE_CAP,
-    EmittedTree,
+    EncodedTree,
     TreeTooLarge,
     UnsupportedInKernel,
-    emit_tree,
+    encode_tree,
 )
 from decider2.trees.schema import (
     CasesIsIn,
@@ -98,8 +99,8 @@ __all__ = [
     "Tree",
     "tree_module",
     "TreeModule",
-    "emit_tree",
-    "EmittedTree",
+    "encode_tree",
+    "EncodedTree",
     "TreeTooLarge",
     "UnsupportedInKernel",
     "ComputedFeatureRemoved",

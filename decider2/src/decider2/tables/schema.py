@@ -65,7 +65,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from pydantic import BaseModel, Field, model_validator
 
-from decider2.trees.codegen import LINE_CAP, TreeTooLarge
+from decider2.trees.encode import LINE_CAP, TreeTooLarge
 from decider2.trees.interpreter import GE, GT, LE, LT
 from decider2.trees.schema import RangeEndLogic
 

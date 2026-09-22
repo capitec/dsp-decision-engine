@@ -107,6 +107,463 @@ _NUMPY_BY_ANNOTATION: dict[Any, Any] = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Packed-step kernels — a real, hand-written per-row compiled loop for a
+# `types.Step.packed` step (a tree/table/Branch/Loop `Step`, doc 08 §3.4),
+# built directly instead of through `decider2.compile.codegen`'s generated
+# source. `codegen.emit_kernel_source` imports a step's real function BY
+# NAME from its own module (`from {fn.__module__} import {fn.__name__}`) —
+# required so the generated kernel file, once written to disk, can be
+# `njit(cache=True)`'d and survive a fresh process (doc 05 §4.1). A packed
+# step's `fn` is a closure (`decider2.trees.encode`/`decider2.tables.
+# encode`/`decider2.graph.control_flow`), which has no such module-level
+# name — the SAME pre-existing limitation `build_driver`'s own `ImportError`
+# handler already names for a step defined inside another function. Rather
+# than let every packed step fall through to that path (a real per-row
+# PYTHON-level `FallbackSegment`, doc 05 §6 — no Python in `fused` mode is
+# the point that path exists to protect), this builds a genuinely compiled,
+# `@njit`'d row loop directly, closing over the already-njit'd `step.fn`
+# instead of re-importing it.
+#
+# **A real, reported scope cut, not full fusion.** Each packed step becomes
+# its OWN compiled segment — this does not fuse a tree's own matcher/path/
+# output steps into ONE kernel call the way `codegen.emit_kernel_source`
+# fuses several ordinary steps sharing a `fuse()` group. See this module's
+# report for the measured cost and why: building that fusion generically
+# needs a per-step arg-source map (external column vs. an earlier packed
+# step's own result) composed through the SAME closure machinery below, and
+# was judged too large an addition to risk finishing untested in this pass.
+# ---------------------------------------------------------------------------
+
+_PACKED_KERNEL_MAX_ARGS = 16
+
+
+@njit(cache=True)
+def _as_float(x):
+    return np.float64(x)
+
+
+@njit(cache=True)
+def _as_is(x):
+    return x
+
+
+# A packed step's `args`/`params` tuple must be exactly as wide as
+# `step.inputs`/`.params` (`_make_row_gatherer`'s own docstring), but it
+# also has a constraint an ordinary step's individually-named arguments
+# never did: `decider2.trees.encode`'s `feats` and `decider2.tables.
+# encode`'s `vars_` are each ONE homogeneous (UniTuple) float64 tuple —
+# `walk_tree`/`scan_table` index them with a RUNTIME int, which numba only
+# allows for a uniformly-typed tuple. A feature/variable fed by a hoisted
+# string-matcher step arrives as that matcher's own `int` output array
+# (`decider2.trees.encode`/`decider2.tables.encode` both declare it
+# `annotation=float` on the CONSUMING step's `Input` for exactly this
+# reason — "I need this AS a float", regardless of the producing step's own
+# dtype) — so every row-getter below casts to float64 when the declared
+# annotation says to, the same cast the previous, text-generating pass
+# spelled inline as `float(matcher_fn_name)`.
+def _row_getter(k: int, annotation: Any):
+    cast = _as_float if annotation is float else _as_is
+
+    @njit  # not cache=True: closure captures a Dispatcher (another
+    # njit closure), and repeated per-process factory calls with the SAME
+    # closure-equivalent capture were measured to append a FRESH index
+    # entry every time rather than hit an existing one -- unbounded growth,
+    # confirmed with NUMBA_DEBUG_CACHE=1 across repeated calls in one
+    # process. These are tiny (one array read, one cast), so paying a
+    # fresh per-process compile is cheap -- the same trade-off
+    # decider2.graph.control_flow.interpreter.run_program already makes,
+    # for the same reason.
+    def get(arrays, i):
+        return cast(arrays[k][i])
+    return get
+
+
+@njit(cache=True)
+def _compose_args0_fn(arrays, i):
+    return ()
+
+
+def _compose_args0(getters, dummy):
+    del getters, dummy
+    return _compose_args0_fn
+
+
+def _compose_args1(getters):
+    g0, = getters
+
+    @njit  # not cache=True: closure captures a Dispatcher (another
+    # njit closure), and repeated per-process factory calls with the SAME
+    # closure-equivalent capture were measured to append a FRESH index
+    # entry every time rather than hit an existing one -- unbounded growth,
+    # confirmed with NUMBA_DEBUG_CACHE=1 across repeated calls in one
+    # process. These are tiny (one array read, one cast), so paying a
+    # fresh per-process compile is cheap -- the same trade-off
+    # decider2.graph.control_flow.interpreter.run_program already makes,
+    # for the same reason.
+    def gather(arrays, i):
+        return (g0(arrays, i),)
+    return gather
+
+
+def _compose_args2(getters):
+    g0, g1 = getters
+
+    @njit  # not cache=True: closure captures a Dispatcher (another
+    # njit closure), and repeated per-process factory calls with the SAME
+    # closure-equivalent capture were measured to append a FRESH index
+    # entry every time rather than hit an existing one -- unbounded growth,
+    # confirmed with NUMBA_DEBUG_CACHE=1 across repeated calls in one
+    # process. These are tiny (one array read, one cast), so paying a
+    # fresh per-process compile is cheap -- the same trade-off
+    # decider2.graph.control_flow.interpreter.run_program already makes,
+    # for the same reason.
+    def gather(arrays, i):
+        return (g0(arrays, i), g1(arrays, i))
+    return gather
+
+
+def _compose_args3(getters):
+    g0, g1, g2 = getters
+
+    @njit  # not cache=True: closure captures a Dispatcher (another
+    # njit closure), and repeated per-process factory calls with the SAME
+    # closure-equivalent capture were measured to append a FRESH index
+    # entry every time rather than hit an existing one -- unbounded growth,
+    # confirmed with NUMBA_DEBUG_CACHE=1 across repeated calls in one
+    # process. These are tiny (one array read, one cast), so paying a
+    # fresh per-process compile is cheap -- the same trade-off
+    # decider2.graph.control_flow.interpreter.run_program already makes,
+    # for the same reason.
+    def gather(arrays, i):
+        return (g0(arrays, i), g1(arrays, i), g2(arrays, i))
+    return gather
+
+
+def _compose_args4(getters):
+    g0, g1, g2, g3 = getters
+
+    @njit  # not cache=True: closure captures a Dispatcher (another
+    # njit closure), and repeated per-process factory calls with the SAME
+    # closure-equivalent capture were measured to append a FRESH index
+    # entry every time rather than hit an existing one -- unbounded growth,
+    # confirmed with NUMBA_DEBUG_CACHE=1 across repeated calls in one
+    # process. These are tiny (one array read, one cast), so paying a
+    # fresh per-process compile is cheap -- the same trade-off
+    # decider2.graph.control_flow.interpreter.run_program already makes,
+    # for the same reason.
+    def gather(arrays, i):
+        return (g0(arrays, i), g1(arrays, i), g2(arrays, i), g3(arrays, i))
+    return gather
+
+
+def _compose_args5(getters):
+    g0, g1, g2, g3, g4 = getters
+
+    @njit  # not cache=True: closure captures a Dispatcher (another
+    # njit closure), and repeated per-process factory calls with the SAME
+    # closure-equivalent capture were measured to append a FRESH index
+    # entry every time rather than hit an existing one -- unbounded growth,
+    # confirmed with NUMBA_DEBUG_CACHE=1 across repeated calls in one
+    # process. These are tiny (one array read, one cast), so paying a
+    # fresh per-process compile is cheap -- the same trade-off
+    # decider2.graph.control_flow.interpreter.run_program already makes,
+    # for the same reason.
+    def gather(arrays, i):
+        return (g0(arrays, i), g1(arrays, i), g2(arrays, i), g3(arrays, i), g4(arrays, i))
+    return gather
+
+
+def _compose_args6(getters):
+    g0, g1, g2, g3, g4, g5 = getters
+
+    @njit  # not cache=True: closure captures a Dispatcher (another
+    # njit closure), and repeated per-process factory calls with the SAME
+    # closure-equivalent capture were measured to append a FRESH index
+    # entry every time rather than hit an existing one -- unbounded growth,
+    # confirmed with NUMBA_DEBUG_CACHE=1 across repeated calls in one
+    # process. These are tiny (one array read, one cast), so paying a
+    # fresh per-process compile is cheap -- the same trade-off
+    # decider2.graph.control_flow.interpreter.run_program already makes,
+    # for the same reason.
+    def gather(arrays, i):
+        return (
+            g0(arrays, i), g1(arrays, i), g2(arrays, i), g3(arrays, i), g4(arrays, i), g5(arrays, i),
+        )
+    return gather
+
+
+def _compose_args7(getters):
+    g0, g1, g2, g3, g4, g5, g6 = getters
+
+    @njit  # not cache=True: closure captures a Dispatcher (another
+    # njit closure), and repeated per-process factory calls with the SAME
+    # closure-equivalent capture were measured to append a FRESH index
+    # entry every time rather than hit an existing one -- unbounded growth,
+    # confirmed with NUMBA_DEBUG_CACHE=1 across repeated calls in one
+    # process. These are tiny (one array read, one cast), so paying a
+    # fresh per-process compile is cheap -- the same trade-off
+    # decider2.graph.control_flow.interpreter.run_program already makes,
+    # for the same reason.
+    def gather(arrays, i):
+        return (
+            g0(arrays, i), g1(arrays, i), g2(arrays, i), g3(arrays, i),
+            g4(arrays, i), g5(arrays, i), g6(arrays, i),
+        )
+    return gather
+
+
+def _compose_args8(getters):
+    g0, g1, g2, g3, g4, g5, g6, g7 = getters
+
+    @njit  # not cache=True: closure captures a Dispatcher (another
+    # njit closure), and repeated per-process factory calls with the SAME
+    # closure-equivalent capture were measured to append a FRESH index
+    # entry every time rather than hit an existing one -- unbounded growth,
+    # confirmed with NUMBA_DEBUG_CACHE=1 across repeated calls in one
+    # process. These are tiny (one array read, one cast), so paying a
+    # fresh per-process compile is cheap -- the same trade-off
+    # decider2.graph.control_flow.interpreter.run_program already makes,
+    # for the same reason.
+    def gather(arrays, i):
+        return (
+            g0(arrays, i), g1(arrays, i), g2(arrays, i), g3(arrays, i),
+            g4(arrays, i), g5(arrays, i), g6(arrays, i), g7(arrays, i),
+        )
+    return gather
+
+
+def _compose_args9(getters):
+    g0, g1, g2, g3, g4, g5, g6, g7, g8 = getters
+
+    @njit  # not cache=True: closure captures a Dispatcher (another
+    # njit closure), and repeated per-process factory calls with the SAME
+    # closure-equivalent capture were measured to append a FRESH index
+    # entry every time rather than hit an existing one -- unbounded growth,
+    # confirmed with NUMBA_DEBUG_CACHE=1 across repeated calls in one
+    # process. These are tiny (one array read, one cast), so paying a
+    # fresh per-process compile is cheap -- the same trade-off
+    # decider2.graph.control_flow.interpreter.run_program already makes,
+    # for the same reason.
+    def gather(arrays, i):
+        return (
+            g0(arrays, i), g1(arrays, i), g2(arrays, i), g3(arrays, i), g4(arrays, i),
+            g5(arrays, i), g6(arrays, i), g7(arrays, i), g8(arrays, i),
+        )
+    return gather
+
+
+def _compose_args10(getters):
+    g0, g1, g2, g3, g4, g5, g6, g7, g8, g9 = getters
+
+    @njit  # not cache=True: closure captures a Dispatcher (another
+    # njit closure), and repeated per-process factory calls with the SAME
+    # closure-equivalent capture were measured to append a FRESH index
+    # entry every time rather than hit an existing one -- unbounded growth,
+    # confirmed with NUMBA_DEBUG_CACHE=1 across repeated calls in one
+    # process. These are tiny (one array read, one cast), so paying a
+    # fresh per-process compile is cheap -- the same trade-off
+    # decider2.graph.control_flow.interpreter.run_program already makes,
+    # for the same reason.
+    def gather(arrays, i):
+        return (
+            g0(arrays, i), g1(arrays, i), g2(arrays, i), g3(arrays, i), g4(arrays, i),
+            g5(arrays, i), g6(arrays, i), g7(arrays, i), g8(arrays, i), g9(arrays, i),
+        )
+    return gather
+
+
+def _compose_args11(getters):
+    g0, g1, g2, g3, g4, g5, g6, g7, g8, g9, g10 = getters
+
+    @njit  # not cache=True: closure captures a Dispatcher (another
+    # njit closure), and repeated per-process factory calls with the SAME
+    # closure-equivalent capture were measured to append a FRESH index
+    # entry every time rather than hit an existing one -- unbounded growth,
+    # confirmed with NUMBA_DEBUG_CACHE=1 across repeated calls in one
+    # process. These are tiny (one array read, one cast), so paying a
+    # fresh per-process compile is cheap -- the same trade-off
+    # decider2.graph.control_flow.interpreter.run_program already makes,
+    # for the same reason.
+    def gather(arrays, i):
+        return (
+            g0(arrays, i), g1(arrays, i), g2(arrays, i), g3(arrays, i), g4(arrays, i),
+            g5(arrays, i), g6(arrays, i), g7(arrays, i), g8(arrays, i), g9(arrays, i), g10(arrays, i),
+        )
+    return gather
+
+
+def _compose_args12(getters):
+    g0, g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11 = getters
+
+    @njit  # not cache=True: closure captures a Dispatcher (another
+    # njit closure), and repeated per-process factory calls with the SAME
+    # closure-equivalent capture were measured to append a FRESH index
+    # entry every time rather than hit an existing one -- unbounded growth,
+    # confirmed with NUMBA_DEBUG_CACHE=1 across repeated calls in one
+    # process. These are tiny (one array read, one cast), so paying a
+    # fresh per-process compile is cheap -- the same trade-off
+    # decider2.graph.control_flow.interpreter.run_program already makes,
+    # for the same reason.
+    def gather(arrays, i):
+        return (
+            g0(arrays, i), g1(arrays, i), g2(arrays, i), g3(arrays, i),
+            g4(arrays, i), g5(arrays, i), g6(arrays, i), g7(arrays, i),
+            g8(arrays, i), g9(arrays, i), g10(arrays, i), g11(arrays, i),
+        )
+    return gather
+
+
+def _compose_args13(getters):
+    g0, g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12 = getters
+
+    @njit  # not cache=True: closure captures a Dispatcher (another
+    # njit closure), and repeated per-process factory calls with the SAME
+    # closure-equivalent capture were measured to append a FRESH index
+    # entry every time rather than hit an existing one -- unbounded growth,
+    # confirmed with NUMBA_DEBUG_CACHE=1 across repeated calls in one
+    # process. These are tiny (one array read, one cast), so paying a
+    # fresh per-process compile is cheap -- the same trade-off
+    # decider2.graph.control_flow.interpreter.run_program already makes,
+    # for the same reason.
+    def gather(arrays, i):
+        return (
+            g0(arrays, i), g1(arrays, i), g2(arrays, i), g3(arrays, i),
+            g4(arrays, i), g5(arrays, i), g6(arrays, i), g7(arrays, i),
+            g8(arrays, i), g9(arrays, i), g10(arrays, i), g11(arrays, i), g12(arrays, i),
+        )
+    return gather
+
+
+def _compose_args14(getters):
+    g0, g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13 = getters
+
+    @njit  # not cache=True: closure captures a Dispatcher (another
+    # njit closure), and repeated per-process factory calls with the SAME
+    # closure-equivalent capture were measured to append a FRESH index
+    # entry every time rather than hit an existing one -- unbounded growth,
+    # confirmed with NUMBA_DEBUG_CACHE=1 across repeated calls in one
+    # process. These are tiny (one array read, one cast), so paying a
+    # fresh per-process compile is cheap -- the same trade-off
+    # decider2.graph.control_flow.interpreter.run_program already makes,
+    # for the same reason.
+    def gather(arrays, i):
+        return (
+            g0(arrays, i), g1(arrays, i), g2(arrays, i), g3(arrays, i),
+            g4(arrays, i), g5(arrays, i), g6(arrays, i), g7(arrays, i),
+            g8(arrays, i), g9(arrays, i), g10(arrays, i), g11(arrays, i),
+            g12(arrays, i), g13(arrays, i),
+        )
+    return gather
+
+
+def _compose_args15(getters):
+    g0, g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13, g14 = getters
+
+    @njit  # not cache=True: closure captures a Dispatcher (another
+    # njit closure), and repeated per-process factory calls with the SAME
+    # closure-equivalent capture were measured to append a FRESH index
+    # entry every time rather than hit an existing one -- unbounded growth,
+    # confirmed with NUMBA_DEBUG_CACHE=1 across repeated calls in one
+    # process. These are tiny (one array read, one cast), so paying a
+    # fresh per-process compile is cheap -- the same trade-off
+    # decider2.graph.control_flow.interpreter.run_program already makes,
+    # for the same reason.
+    def gather(arrays, i):
+        return (
+            g0(arrays, i), g1(arrays, i), g2(arrays, i), g3(arrays, i),
+            g4(arrays, i), g5(arrays, i), g6(arrays, i), g7(arrays, i),
+            g8(arrays, i), g9(arrays, i), g10(arrays, i), g11(arrays, i),
+            g12(arrays, i), g13(arrays, i), g14(arrays, i),
+        )
+    return gather
+
+
+def _compose_args16(getters):
+    g0, g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13, g14, g15 = getters
+
+    @njit  # not cache=True: closure captures a Dispatcher (another
+    # njit closure), and repeated per-process factory calls with the SAME
+    # closure-equivalent capture were measured to append a FRESH index
+    # entry every time rather than hit an existing one -- unbounded growth,
+    # confirmed with NUMBA_DEBUG_CACHE=1 across repeated calls in one
+    # process. These are tiny (one array read, one cast), so paying a
+    # fresh per-process compile is cheap -- the same trade-off
+    # decider2.graph.control_flow.interpreter.run_program already makes,
+    # for the same reason.
+    def gather(arrays, i):
+        return (
+            g0(arrays, i), g1(arrays, i), g2(arrays, i), g3(arrays, i),
+            g4(arrays, i), g5(arrays, i), g6(arrays, i), g7(arrays, i),
+            g8(arrays, i), g9(arrays, i), g10(arrays, i), g11(arrays, i),
+            g12(arrays, i), g13(arrays, i), g14(arrays, i), g15(arrays, i),
+        )
+    return gather
+
+
+_COMPOSE_ARGS_BUILDERS: dict[int, Any] = {
+    1: _compose_args1, 2: _compose_args2, 3: _compose_args3, 4: _compose_args4,
+    5: _compose_args5, 6: _compose_args6, 7: _compose_args7, 8: _compose_args8,
+    9: _compose_args9, 10: _compose_args10, 11: _compose_args11, 12: _compose_args12,
+    13: _compose_args13, 14: _compose_args14, 15: _compose_args15, 16: _compose_args16,
+}
+
+
+def _make_row_gatherer(annotations: Sequence[Any]):
+    """`(arrays, i) -> tuple`, `cast(arrays[k][i])` for `k`, `annotation` in
+    `enumerate(annotations)` — the packed-kernel counterpart of
+    `decider2.tables.encode`'s `_composeN` family, EXACT arity (never
+    padded: `step.fn` needs `len(args) == len(step.inputs)` precisely — a
+    tree's `walk_tree` call, a table's `scan_table` call and a matcher's
+    `for i in range(len(params))` loop all size themselves off the tuple
+    they are actually handed)."""
+    n = len(annotations)
+    if n == 0:
+        return _compose_args0([], 0.0)
+    if n not in _COMPOSE_ARGS_BUILDERS:
+        raise ValueError(
+            f"packed step needs {n} row-level arguments, over this build's "
+            f"{_PACKED_KERNEL_MAX_ARGS}-argument limit "
+            "(decider2.compile.driver's fixed closure-arity family)."
+        )
+    getters = [_row_getter(k, ann) for k, ann in enumerate(annotations)]
+    return _COMPOSE_ARGS_BUILDERS[n](getters)
+
+
+def build_packed_kernel(step: Step) -> Callable:
+    """A genuinely compiled, `@njit`'d per-row loop for one packed step —
+    `kernel(arrays, params, n, out)` (or `kernel(arrays, params, shared, n,
+    out)` when `step.reads_shared`) — closing over `step.fn` (already an
+    njit dispatcher) directly rather than re-importing it from a generated
+    file. `arrays` is a tuple of this step's own external input arrays, in
+    `step.inputs` order; `params` is the already-resolved params tuple for
+    this one `apply()`/`score()` call (built once, doc 08 §2: retuning it
+    is a values change, so it is a plain argument here too, never baked
+    into the kernel)."""
+    n_inputs = len(step.inputs)
+    if n_inputs > _PACKED_KERNEL_MAX_ARGS:
+        raise ValueError(
+            f"step '{step.name}' has {n_inputs} inputs, over this build's "
+            f"{_PACKED_KERNEL_MAX_ARGS}-argument packed-kernel limit "
+            "(decider2.compile.driver.build_packed_kernel)."
+        )
+    gather = _make_row_gatherer(tuple(inp.annotation for inp in step.inputs))
+    fn = step.fn
+
+    if step.reads_shared:
+        @njit
+        def kernel(arrays, params, shared, n, out):
+            for i in range(n):
+                out[i] = fn(gather(arrays, i), params, shared)
+        return kernel
+
+    @njit
+    def kernel(arrays, params, n, out):
+        for i in range(n):
+            out[i] = fn(gather(arrays, i), params)
+    return kernel
+
+
 def numpy_dtype(annotation: Any) -> np.dtype:
     """The numpy dtype a declared `int`/`bool`/`float` annotation crosses
     the runtime boundary as; unannotated (or anything else) stays float64,
@@ -138,7 +595,23 @@ def _try_njit(step: Step, sample_values: Mapping[str, Any]) -> tuple[Callable, s
     reads a bare `params`/`shared` argument (doc 03 §4.2) can't be probed
     without a resolved bundle of the right NamedTuple type, so it is
     compiled lazily instead — still cached, just not verified at this call.
+
+    A `packed` step (`types.Step.packed`) arrives with `fn` ALREADY a real
+    njit dispatcher — `decider2.trees.encode`/`decider2.tables.encode`/
+    `decider2.graph.control_flow` build it that way directly, never a plain
+    function for this module to wrap. Re-`njit`-ing an already-jitted
+    dispatcher is a hard `TypeError` ("a jit decorator was called on an
+    already jitted function"), and probing it against a signature guessed
+    from its (generic, two-argument `(args, params)`) Python signature would
+    guess wrong — so this returns it as-is, un-probed: it was built
+    njit-compilable by construction (the only operations inside it are
+    array indexing and arithmetic over `decider2.trees.interpreter.
+    walk_tree`/`decider2.tables.interpreter.scan_table`, both already
+    `@njit(cache=True)`), so there is nothing here for `_FALLBACK_TRIGGERS`
+    to ever legitimately catch.
     """
+    if step.packed:
+        return step.fn, None
     fn = njit(cache=True)(step.fn)
     if step.reads_params or step.reads_shared:
         return fn, None
@@ -237,13 +710,30 @@ def _signature(fn) -> "inspect.Signature":
         return inspect.signature(fn)
 
 
-def _return_dtype(fn) -> np.dtype:
+def step_return_annotation(step: Step) -> Any:
+    """The declared return type a step's array should be materialised as —
+    `step.output_annotation` when the step is `packed` (its `fn` has the
+    generic `(args, params)` signature and no return annotation of its own
+    to read, `types.Step.packed`'s own docstring), else the ordinary
+    `inspect.signature(step.fn).return_annotation`."""
+    if step.output_annotation is not None:
+        return step.output_annotation
+    return _signature(step.fn).return_annotation
+
+
+def _return_dtype(fn_or_step) -> np.dtype:
     """Doc 00 §2 / doc 03 §1 / doc 05 §9 criterion 4: a step's declared
     return annotation decides the array dtype it is written into, so an
     `-> int`/`-> bool` step survives the boundary as its own dtype instead
     of being forced onto float64 (which silently degrades an Int64 above
-    2**53, and cannot hold a Boolean at all)."""
-    return numpy_dtype(_signature(fn).return_annotation)
+    2**53, and cannot hold a Boolean at all).
+
+    Accepts either a plain callable (every pre-existing caller) or a
+    `Step` (needed to see `packed`/`output_annotation` — a bare function
+    has no such thing to read)."""
+    if isinstance(fn_or_step, Step):
+        return numpy_dtype(step_return_annotation(fn_or_step))
+    return numpy_dtype(_signature(fn_or_step).return_annotation)
 
 
 @dataclass(frozen=True)
@@ -313,6 +803,59 @@ def _row_kwargs(
             else:
                 kwargs[pname] = registry[pname][i]
     return kwargs
+
+
+def _packed_row_args(
+    step: Step, owner: "str | None", registry: dict, resolved: ResolvedParams, i: int,
+) -> "tuple[tuple, tuple]":
+    """`(args, params)` for one row of a `packed` step (`types.Step.
+    packed`) — `args[k]` is `step.inputs[k]`'s value at row `i`,
+    `params[k]` is `step.params[k]`'s value, both in declared order. Every
+    packed `fn` (`decider2.trees.encode`, `decider2.tables.encode`,
+    `decider2.graph.control_flow`) pads an empty tuple internally where it
+    needs a non-empty one (numba's own "no element type" requirement), so
+    this never pads — it hands over exactly what `step.inputs`/`.params`
+    say, which is also what `Driver.step_fns`/`_try_njit` and every build-
+    time introspection (`params_schema()`, `.explain()`) already agree on.
+    A packed step never declares OPTIONAL/`reads_params` — doc 08 §3.4's
+    data-shaped interiors have no use for them — so this reads
+    `registry[inp.name][i]` directly, with no validity/bundle branching to
+    do. `reads_shared` IS used (a table's row/output steps, doc 08 §3.4's
+    free-interior row data) — see `_call_step_row`, which appends `shared`
+    as a third positional argument when `step.reads_shared`.
+    """
+    # `inp.annotation is float` on a wire fed by a hoisted string-matcher
+    # step (its own output is `int`) means "cast to float64 here" — see
+    # `decider2.compile.driver._row_getter`'s docstring, the fused kernel's
+    # equivalent of this same cast.
+    args = tuple(
+        float(registry[inp.name][i]) if inp.annotation is float else registry[inp.name][i]
+        for inp in step.inputs
+    )
+    params = tuple(_scalar_arg(resolved, owner, step.name, p.name) for p in step.params)
+    return args, params
+
+
+def _call_step_row(
+    fn: Callable,
+    step: Step,
+    owner: "str | None",
+    sig: "inspect.Signature",
+    registry: dict,
+    resolved: ResolvedParams,
+    i: int,
+) -> Any:
+    """One step, one row — `interpreted`/`stepped`/`fallback`'s shared call
+    site. Branches on `step.packed` so those three rungs (the only callers
+    that still drive a step one row at a time in plain Python) agree with
+    the fused kernel's own packed-call builder on what a packed `fn`
+    means."""
+    if step.packed:
+        args, params = _packed_row_args(step, owner, registry, resolved, i)
+        if step.reads_shared:
+            return fn(args, params, resolved.shared)
+        return fn(args, params)
+    return fn(**_row_kwargs(step, owner, sig, registry, resolved, i))
 
 
 def _build_call_args(
@@ -405,7 +948,7 @@ class CompiledSegment(Segment):
         owner_by_name = dict(zip((s.name for s in self.steps), self.owners)) if self.owners else {}
         step_by_name = {s.name: s for s in self.steps}
         out_arrays = {
-            name: np.empty(n, dtype=_return_dtype(step_by_name[name].fn))
+            name: np.empty(n, dtype=_return_dtype(step_by_name[name]))
             for name in self.required_outputs
         }
         args = _build_call_args(self.plan, registry, resolved, out_arrays)
@@ -431,6 +974,50 @@ class CompiledSegment(Segment):
 
 
 @dataclass(frozen=True)
+class PackedCompiledSegment(Segment):
+    """Exactly one `types.Step.packed` step (a tree/table/Branch/Loop
+    `Step`, doc 08 §3.4), run as a genuinely compiled, `@njit`'d per-row
+    loop (`build_packed_kernel`) — `kind == "compiled"`, never `"fallback"`:
+    no Python runs per row, unlike `FallbackSegment`. Not fused with
+    neighbouring steps — see `build_packed_kernel`'s own docstring for why,
+    and this module's report for the measured cost.
+    """
+
+    steps: tuple[Step, ...]
+    external_inputs: tuple[Input, ...]
+    required_outputs: tuple[str, ...]
+    owners: tuple[str, ...]
+    kernel_fn: Callable
+
+    kind: ClassVar[SegmentKind] = "compiled"
+
+    def run(self, registry: dict, resolved: ResolvedParams, n: int) -> None:
+        step = self.steps[0]
+        owner = self.owners[0] if self.owners else step.name
+        arrays = tuple(registry[inp.name] for inp in step.inputs)
+        params = tuple(_scalar_arg(resolved, owner, step.name, p.name) for p in step.params)
+        out = np.empty(n, dtype=_return_dtype(step))
+        if step.reads_shared:
+            self.kernel_fn(arrays, params, resolved.shared, n, out)
+        else:
+            self.kernel_fn(arrays, params, n, out)
+        registry[step.name] = out
+        registry[f"{step.name}@{owner}"] = out
+
+    @property
+    def signatures(self) -> tuple:
+        return tuple(self.kernel_fn.signatures)
+
+    def gil_report_entry(self) -> dict[str, Any]:
+        step = self.steps[0]
+        return {
+            "kernel": f"packed:{step.name}",
+            "steps": [step.name],
+            "holds_gil": not step.nogil,
+        }
+
+
+@dataclass(frozen=True)
 class FallbackSegment(Segment):
     """Exactly one un-njit-able step, run row-by-row in plain Python (doc
     05 §6) — a kernel-boundary decision, never a per-node one: the steps
@@ -448,9 +1035,9 @@ class FallbackSegment(Segment):
         step = self.steps[0]
         owner = self.owners[0] if self.owners else step.name
         sig = _signature(step.fn)
-        out = np.empty(n, dtype=_return_dtype(step.fn))
+        out = np.empty(n, dtype=_return_dtype(step))
         for i in range(n):
-            out[i] = step.fn(**_row_kwargs(step, owner, sig, registry, resolved, i))
+            out[i] = _call_step_row(step.fn, step, owner, sig, registry, resolved, i)
         registry[step.name] = out
         registry[f"{step.name}@{owner}"] = out
 
@@ -613,6 +1200,29 @@ def build_driver(
             i += 1
             continue
 
+        if step.packed:
+            # A tree/table/Branch/Loop step (doc 08 §3.4): `fn` is already
+            # a real njit dispatcher (`_try_njit` returned it unprobed —
+            # see that function's own docstring), so `compiled[(owner,
+            # step.name)]` above IS `(step.fn, None)`, never a fallback
+            # reason. Never joins a fusion run with a neighbour (see
+            # `build_packed_kernel`'s docstring): each becomes its own
+            # genuinely COMPILED (never Python-per-row) segment.
+            step_fns[step.name] = fn0
+            step_fns[(owner, step.name)] = fn0
+            kernel_fn = build_packed_kernel(step)
+            segments.append(
+                PackedCompiledSegment(
+                    steps=(step,),
+                    owners=(owner,),
+                    external_inputs=step.inputs,
+                    required_outputs=(step.name,),
+                    kernel_fn=kernel_fn,
+                )
+            )
+            i += 1
+            continue
+
         gid = group_ids[i]
         run: list[Step] = [step]
         run_owners: list[str] = [owner]
@@ -620,6 +1230,7 @@ def build_driver(
         while (
             j < n
             and group_ids[j] == gid
+            and not steps[j].packed
             and compiled[(owners[j], steps[j].name)][1] is None
         ):
             run.append(steps[j])
