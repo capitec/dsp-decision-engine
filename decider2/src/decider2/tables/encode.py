@@ -115,9 +115,20 @@ _OPCODE = {"between": BETWEEN, "eq": EQ, "is_true": IS_TRUE, "in": IN}
 
 
 # ---------------------------------------------------------------------------
-# Closure builders. Real, hand-written functions — the only "variable" is
-# which of a small, fixed family gets picked, decided in Python at build
-# time from the walk's own counts.
+# Row-data assembly — no per-condition-COUNT closure family any more
+# (replaces `_compose0`..`_compose8`, a wall at 8 conditions of one kind in
+# a whole table). `shared`'s row data is still read BY NAME at call time
+# (`_shared_get`, doc 08 §3.4's free interior: a table rebuilt with new row
+# data answers differently through the SAME compiled `row_fn`) — what
+# changes is what gets STORED there: one 2D array per (condition kind,
+# bound role), shape `(conditions of that kind, n_rows)`, built ONCE, in
+# plain Python, by stacking each condition's own 1D array (`decider2.
+# tables.schema.Expression.emit()`'s `EmittedCondition.arrays`, unchanged)
+# rather than composed by N closures called at scan time. `local` (`op_
+# local`, in `encode_table` below) becomes an ordinary array index into
+# dimension 0, so there is no condition count this raises past — see
+# `decider2.tables.interpreter.scan_table`'s own docstring for the read
+# side.
 # ---------------------------------------------------------------------------
 
 
@@ -131,181 +142,41 @@ def _shared_get(shared, key):
     return getattr(shared, key)
 
 
-# `_composeN`: real code, one body per getter-count 0..12 — comfortably
-# above any realistic table's per-condition-kind count in this codebase's
-# own examples and ported test suite. Each closes over N single-argument
-# getters (`shared -> array` or `shared -> tuple-of-arrays`, built by
-# `_make_group_getter`/`_shared_get` below) and returns their results as one
-# tuple, in order — the exact shape `scan_table` needs for
-# `between_bounds`/`eq_bounds`/`in_offsets`/`in_values`.
-def _compose0(getters, dummy):
-    @njit(cache=True)
-    def gather(shared):
-        return (dummy,)
-    return gather
+def _stack2d(shared: dict, ops: list, key_attr: str, n_rows: int) -> np.ndarray:
+    """`shared[getattr(op, key_attr)]` for each `op` in `ops`, stacked into
+    ONE 2D float64 array of shape `(len(ops), n_rows)` — a build-time,
+    plain-numpy operation (never inside njit: `ops`/`key_attr` are fixed
+    once the table's conditions are known, so nothing here needs to re-run
+    per call the way reading `shared` by name at scan time does)."""
+    if not ops:
+        return np.empty((0, n_rows), dtype=np.float64)
+    return np.stack([shared[getattr(op, key_attr)] for op in ops])
 
 
-def _compose1(getters):
-    g0, = getters
-
-    @njit  # not cache=True -- see decider2.compile.driver._row_getter
-    # (module docstring note): a factory-built closure capturing another
-    # Dispatcher, called multiple times per process (once per condition),
-    # was measured to grow numba's on-disk cache index unboundedly instead
-    # of hitting it. Tiny function, cheap to recompile.
-    def gather(shared):
-        return (g0(shared),)
-    return gather
-
-
-def _compose2(getters):
-    g0, g1 = getters
-
-    @njit  # not cache=True -- see decider2.compile.driver._row_getter
-    # (module docstring note): a factory-built closure capturing another
-    # Dispatcher, called multiple times per process (once per condition),
-    # was measured to grow numba's on-disk cache index unboundedly instead
-    # of hitting it. Tiny function, cheap to recompile.
-    def gather(shared):
-        return (g0(shared), g1(shared))
-    return gather
-
-
-def _compose3(getters):
-    g0, g1, g2 = getters
-
-    @njit  # not cache=True -- see decider2.compile.driver._row_getter
-    # (module docstring note): a factory-built closure capturing another
-    # Dispatcher, called multiple times per process (once per condition),
-    # was measured to grow numba's on-disk cache index unboundedly instead
-    # of hitting it. Tiny function, cheap to recompile.
-    def gather(shared):
-        return (g0(shared), g1(shared), g2(shared))
-    return gather
-
-
-def _compose4(getters):
-    g0, g1, g2, g3 = getters
-
-    @njit  # not cache=True -- see decider2.compile.driver._row_getter
-    # (module docstring note): a factory-built closure capturing another
-    # Dispatcher, called multiple times per process (once per condition),
-    # was measured to grow numba's on-disk cache index unboundedly instead
-    # of hitting it. Tiny function, cheap to recompile.
-    def gather(shared):
-        return (g0(shared), g1(shared), g2(shared), g3(shared))
-    return gather
-
-
-def _compose5(getters):
-    g0, g1, g2, g3, g4 = getters
-
-    @njit  # not cache=True -- see decider2.compile.driver._row_getter
-    # (module docstring note): a factory-built closure capturing another
-    # Dispatcher, called multiple times per process (once per condition),
-    # was measured to grow numba's on-disk cache index unboundedly instead
-    # of hitting it. Tiny function, cheap to recompile.
-    def gather(shared):
-        return (g0(shared), g1(shared), g2(shared), g3(shared), g4(shared))
-    return gather
-
-
-def _compose6(getters):
-    g0, g1, g2, g3, g4, g5 = getters
-
-    @njit  # not cache=True -- see decider2.compile.driver._row_getter
-    # (module docstring note): a factory-built closure capturing another
-    # Dispatcher, called multiple times per process (once per condition),
-    # was measured to grow numba's on-disk cache index unboundedly instead
-    # of hitting it. Tiny function, cheap to recompile.
-    def gather(shared):
-        return (g0(shared), g1(shared), g2(shared), g3(shared), g4(shared), g5(shared))
-    return gather
-
-
-def _compose7(getters):
-    g0, g1, g2, g3, g4, g5, g6 = getters
-
-    @njit  # not cache=True -- see decider2.compile.driver._row_getter
-    # (module docstring note): a factory-built closure capturing another
-    # Dispatcher, called multiple times per process (once per condition),
-    # was measured to grow numba's on-disk cache index unboundedly instead
-    # of hitting it. Tiny function, cheap to recompile.
-    def gather(shared):
-        return (g0(shared), g1(shared), g2(shared), g3(shared), g4(shared), g5(shared), g6(shared))
-    return gather
-
-
-def _compose8(getters):
-    g0, g1, g2, g3, g4, g5, g6, g7 = getters
-
-    @njit  # not cache=True -- see decider2.compile.driver._row_getter
-    # (module docstring note): a factory-built closure capturing another
-    # Dispatcher, called multiple times per process (once per condition),
-    # was measured to grow numba's on-disk cache index unboundedly instead
-    # of hitting it. Tiny function, cheap to recompile.
-    def gather(shared):
+def _stack_in(shared: dict, in_ops: list, n_rows: int) -> "tuple[np.ndarray, np.ndarray, np.ndarray]":
+    """The three arrays `scan_table`'s IN handling needs. `in_off`: each
+    condition's own CSR offsets array is `n_rows + 1` long (UNIFORM width
+    across conditions, unlike its values), so these stack into one 2D
+    array the same way `_stack2d` does. `in_vals`: every condition's own
+    (ragged-length) admitted-value array, concatenated end to end — a
+    per-condition value COUNT varies, and a 2D array can't hold a ragged
+    width. `in_vals_start`: condition `local`'s own base offset into that
+    flat array — a SECOND level of CSR (one layer already exists per row
+    within one condition, `decider2.tables.schema.InExpression`'s own
+    docstring; this adds one more, across conditions)."""
+    if not in_ops:
         return (
-            g0(shared), g1(shared), g2(shared), g3(shared),
-            g4(shared), g5(shared), g6(shared), g7(shared),
+            np.empty((0, n_rows + 1), dtype=np.int64),
+            np.empty(0, dtype=np.float64),
+            np.zeros(1, dtype=np.int64),
         )
-    return gather
-
-
-_COMPOSE_BUILDERS = (
-    _compose0, _compose1, _compose2, _compose3, _compose4,
-    _compose5, _compose6, _compose7, _compose8,
-)
-_MAX_CONDITIONS_PER_KIND = len(_COMPOSE_BUILDERS) - 1
-
-
-def _make_scalar_getter(key: str):
-    @njit  # not cache=True -- see decider2.compile.driver._row_getter
-    # (module docstring note): a factory-built closure capturing another
-    # Dispatcher, called multiple times per process (once per condition),
-    # was measured to grow numba's on-disk cache index unboundedly instead
-    # of hitting it. Tiny function, cheap to recompile.
-    def getter(shared):
-        return _shared_get(shared, key)
-    return getter
-
-
-def _make_pair_getter(key0: str, key1: str):
-    @njit  # not cache=True -- see decider2.compile.driver._row_getter
-    # (module docstring note): a factory-built closure capturing another
-    # Dispatcher, called multiple times per process (once per condition),
-    # was measured to grow numba's on-disk cache index unboundedly instead
-    # of hitting it. Tiny function, cheap to recompile.
-    def getter(shared):
-        return (_shared_get(shared, key0), _shared_get(shared, key1))
-    return getter
-
-
-def _make_quad_getter(key0: str, key1: str, key2: str, key3: str):
-    @njit  # not cache=True -- see decider2.compile.driver._row_getter
-    # (module docstring note): a factory-built closure capturing another
-    # Dispatcher, called multiple times per process (once per condition),
-    # was measured to grow numba's on-disk cache index unboundedly instead
-    # of hitting it. Tiny function, cheap to recompile.
-    def getter(shared):
-        return (
-            _shared_get(shared, key0), _shared_get(shared, key1),
-            _shared_get(shared, key2), _shared_get(shared, key3),
-        )
-    return getter
-
-
-def _compose(getters: list, dummy):
-    n = len(getters)
-    if n > _MAX_CONDITIONS_PER_KIND:
-        raise ValueError(
-            f"table has {n} conditions of one kind, over this build's "
-            f"{_MAX_CONDITIONS_PER_KIND}-per-kind limit "
-            "(decider2.tables.encode's fixed closure-arity family)."
-        )
-    if n == 0:
-        return _compose0(getters, dummy)
-    return _COMPOSE_BUILDERS[n](tuple(getters))
+    off_2d = np.stack([shared[op.off_key] for op in in_ops]).astype(np.int64)
+    vals_list = [shared[op.vals_key] for op in in_ops]
+    starts = np.zeros(len(in_ops) + 1, dtype=np.int64)
+    for j, vals in enumerate(vals_list):
+        starts[j + 1] = starts[j] + len(vals)
+    flat = np.concatenate(vals_list).astype(np.float64)
+    return off_2d, flat, starts
 
 
 def _build_matcher_fn():
@@ -401,19 +272,60 @@ def encode_table(table: DecisionTable, *, name: str | None = None) -> EncodedTab
     op_lo_op_arr = np.array(op_lo_op, dtype=np.int32)
     op_hi_op_arr = np.array(op_hi_op, dtype=np.int32)
 
-    between_getters = [
-        _make_quad_getter(op.lo_key, op.hi_key, op.has_lo_key, op.has_hi_key) for op in between_ops
-    ]
-    eq_getters = [_make_pair_getter(op.val_key, op.has_key) for op in eq_ops]
-    in_off_getters = [_make_scalar_getter(op.off_key) for op in in_ops]
-    in_vals_getters = [_make_scalar_getter(op.vals_key) for op in in_ops]
+    # One 2D array per (condition kind, bound role) — `_stack2d`/`_stack_in`
+    # above — stored into `shared` under a fixed, table-instance-qualified
+    # key, so `row_fn` below reads each with exactly one `_shared_get` call
+    # regardless of how many conditions of that kind this table has.
+    between_lo_key = f"{name}__between_lo"
+    between_hi_key = f"{name}__between_hi"
+    between_has_lo_key = f"{name}__between_has_lo"
+    between_has_hi_key = f"{name}__between_has_hi"
+    eq_val_key = f"{name}__eq_val"
+    eq_has_key = f"{name}__eq_has"
+    in_off_key = f"{name}__in_off"
+    in_vals_key = f"{name}__in_vals"
+    in_vals_start_key = f"{name}__in_vals_start"
 
-    dummy_f = np.zeros(1)
-    dummy_i = np.zeros(1, dtype=np.int64)
-    between_gather = _compose(between_getters, (dummy_f, dummy_f, dummy_f, dummy_f))
-    eq_gather = _compose(eq_getters, (dummy_f, dummy_f))
-    in_off_gather = _compose(in_off_getters, dummy_i)
-    in_vals_gather = _compose(in_vals_getters, dummy_f)
+    emitter.shared[between_lo_key] = _stack2d(emitter.shared, between_ops, "lo_key", n_rows)
+    emitter.shared[between_hi_key] = _stack2d(emitter.shared, between_ops, "hi_key", n_rows)
+    emitter.shared[between_has_lo_key] = _stack2d(emitter.shared, between_ops, "has_lo_key", n_rows)
+    emitter.shared[between_has_hi_key] = _stack2d(emitter.shared, between_ops, "has_hi_key", n_rows)
+    emitter.shared[eq_val_key] = _stack2d(emitter.shared, eq_ops, "val_key", n_rows)
+    emitter.shared[eq_has_key] = _stack2d(emitter.shared, eq_ops, "has_key", n_rows)
+    in_off_2d, in_vals_flat, in_vals_start = _stack_in(emitter.shared, in_ops, n_rows)
+    emitter.shared[in_off_key] = in_off_2d
+    emitter.shared[in_vals_key] = in_vals_flat
+    emitter.shared[in_vals_start_key] = in_vals_start
+
+    # The per-condition arrays `cond.arrays` deposited into `shared` above
+    # (`{prefix}_lo`, `{prefix}_hi`, ...) are now redundant: every one of
+    # them was read exactly once, by `_stack2d`/`_stack_in`, to build the
+    # 9 consolidated arrays just above. Drop them.
+    #
+    # This is not just tidying: EVERY key in `shared` becomes a FIELD of
+    # the runtime namedtuple `runtime.invoke._bundle_class` builds from it
+    # (`fields = tuple(raw_shared.keys())`) — regardless of whether any
+    # step's `row_fn` ever reads that particular field. Measured: with
+    # 1 field per condition still present (the pre-2D-array behaviour,
+    # unchanged by that migration step alone), a 16-BETWEEN-condition
+    # table's first `row_fn`/`kernel` compile took ~26s, almost all of it
+    # `_shared_get`'s 9 call sites each re-typing a 76-field namedtuple
+    # (~1.5s each); at 400 conditions (1600+ fields) it did not finish in
+    # any reasonable time and drove memory into the gigabytes — the SAME
+    # class of super-linear numba cost `_compose0`..`_compose8` existed to
+    # avoid by capping condition count, just moved from "one closure body
+    # per getter count" to "one struct field per condition". Dropping the
+    # redundant fields here keeps the namedtuple at a FIXED ~12 fields
+    # regardless of table width, so table width stops driving this cost at
+    # all — see this module's report.
+    for ops, key_attrs in (
+        (between_ops, ("lo_key", "hi_key", "has_lo_key", "has_hi_key")),
+        (eq_ops, ("val_key", "has_key")),
+        (in_ops, ("off_key", "vals_key")),
+    ):
+        for op in ops:
+            for key_attr in key_attrs:
+                emitter.shared.pop(getattr(op, key_attr), None)
 
     # -- matcher steps ------------------------------------------------------
     matcher_names: list[str] = []
@@ -444,9 +356,9 @@ def encode_table(table: DecisionTable, *, name: str | None = None) -> EncodedTab
             row_fn_inputs.append(
                 # `annotation=float`, not `int`: the matcher's own output
                 # really is an int, but `vars_` (`scan_table`'s own
-                # homogeneous tuple) needs every entry AS a float64 —
-                # `decider2.compile.driver._row_getter` reads this
-                # annotation to cast when gathering a row.
+                # homogeneous array) needs every entry AS a float64 —
+                # `decider2.compile.driver._packed_input_arrays` reads this
+                # annotation to cast when gathering a column.
                 Input(name=emitter.matcher_name(variable), annotation=float, null_policy=NullPolicy.REQUIRED)
             )
         else:
@@ -456,13 +368,14 @@ def encode_table(table: DecisionTable, *, name: str | None = None) -> EncodedTab
     def row_fn(args, params, shared):
         vars_ = args
         n = int(_shared_get(shared, n_rows_key)[0])
-        between_bounds = between_gather(shared)
-        eq_bounds = eq_gather(shared)
-        in_offsets = in_off_gather(shared)
-        in_values = in_vals_gather(shared)
         return scan_table(
             vars_, n, group_start_arr, group_end_arr, op_kind_arr, op_var_idx_arr,
-            op_local_arr, op_lo_op_arr, op_hi_op_arr, between_bounds, eq_bounds, in_offsets, in_values,
+            op_local_arr, op_lo_op_arr, op_hi_op_arr,
+            _shared_get(shared, between_lo_key), _shared_get(shared, between_hi_key),
+            _shared_get(shared, between_has_lo_key), _shared_get(shared, between_has_hi_key),
+            _shared_get(shared, eq_val_key), _shared_get(shared, eq_has_key),
+            _shared_get(shared, in_off_key), _shared_get(shared, in_vals_key),
+            _shared_get(shared, in_vals_start_key),
         )
 
     row_name = f"{name}_row"
