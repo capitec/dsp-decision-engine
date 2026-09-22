@@ -70,8 +70,11 @@ from __future__ import annotations
 import ast
 import typing as t
 from dataclasses import dataclass, field
+from functools import reduce
 
-__all__ = ["ExprError", "ExprContext", "Expr", "parse"]
+from numba import njit
+
+__all__ = ["ExprError", "ExprContext", "ExprCompileContext", "Expr", "parse"]
 
 # `ast.parse` itself will refuse something absurd long before this, but a
 # left-leaning chain of binary operators (`a + b + c + ...`) recurses once
@@ -115,6 +118,163 @@ class ExprContext(t.Protocol):
         caller registers `value` as a retunable kernel argument (a
         `param()`) and returns the name it was given."""
         ...
+
+
+class ExprCompileContext(t.Protocol):
+    """What `Expr.compile` needs from its caller — the closure-building
+    counterpart of `ExprContext` (above). Stage 2 of the codegen-elimination
+    migration: `.emit()` still renders numba SOURCE TEXT and is kept only so
+    nothing that already calls it breaks; `.compile()` is what
+    `decider2.trees.schema._ExprEmitAdapter` now actually uses, and it never
+    produces a string. `feats`/`thresholds` name the SAME two homogeneous
+    tuples `decider2.trees.interpreter.walk_tree` takes — both are UniTuples
+    (every entry is a plain `float64`), so numba indexes them with an
+    ordinary RUNTIME int with no "must be a compile-time constant" caveat
+    (unlike a heterogeneous tuple), which is what lets `.compile()` close
+    over a plain Python `int` slot rather than needing one hand-written
+    closure per slot position.
+    """
+
+    def name_index(self, ident: str) -> int:
+        """`ident`'s slot in the `feats` tuple a compiled expression will be
+        called with."""
+        ...
+
+    def constant_index(self, value: "int | float") -> int:
+        """`value`'s slot in the `thresholds` tuple a compiled expression
+        will be called with — registered as a retunable kernel argument
+        (never baked in as a literal), the same rule `ExprContext.constant`
+        documents for the text path."""
+        ...
+
+
+# ---------------------------------------------------------------------------
+# Real, hand-written njit closures for every admitted operator/function —
+# composed by `Expr.compile` below instead of spliced into source text.
+# Exactly the grammar `_BINOPS`/`_UNARYOPS`/`_CMPOPS`/`_WHITELISTED_FUNCS`
+# already admit; no operator reaches here that `parse()` didn't already
+# validate.
+# ---------------------------------------------------------------------------
+
+
+@njit(cache=True)
+def _op_add(a, b):
+    return a + b
+
+
+@njit(cache=True)
+def _op_sub(a, b):
+    return a - b
+
+
+@njit(cache=True)
+def _op_mul(a, b):
+    return a * b
+
+
+@njit(cache=True)
+def _op_div(a, b):
+    return a / b
+
+
+@njit(cache=True)
+def _op_floordiv(a, b):
+    return a // b
+
+
+@njit(cache=True)
+def _op_mod(a, b):
+    return a % b
+
+
+@njit(cache=True)
+def _op_pow(a, b):
+    return a ** b
+
+
+_BINOP_FNS: "dict[str, t.Any]" = {
+    "+": _op_add, "-": _op_sub, "*": _op_mul, "/": _op_div,
+    "//": _op_floordiv, "%": _op_mod, "**": _op_pow,
+}
+
+
+@njit(cache=True)
+def _op_neg(a):
+    return -a
+
+
+@njit(cache=True)
+def _op_not(a):
+    return 0.0 if a != 0.0 else 1.0
+
+
+_UNARYOP_FNS: "dict[str, t.Any]" = {"-": _op_neg, "not ": _op_not}
+
+
+@njit(cache=True)
+def _cmp_lt(a, b):
+    return 1.0 if a < b else 0.0
+
+
+@njit(cache=True)
+def _cmp_le(a, b):
+    return 1.0 if a <= b else 0.0
+
+
+@njit(cache=True)
+def _cmp_gt(a, b):
+    return 1.0 if a > b else 0.0
+
+
+@njit(cache=True)
+def _cmp_ge(a, b):
+    return 1.0 if a >= b else 0.0
+
+
+@njit(cache=True)
+def _cmp_eq(a, b):
+    return 1.0 if a == b else 0.0
+
+
+@njit(cache=True)
+def _cmp_ne(a, b):
+    return 1.0 if a != b else 0.0
+
+
+_CMPOP_FNS: "dict[str, t.Any]" = {
+    "<": _cmp_lt, "<=": _cmp_le, ">": _cmp_gt, ">=": _cmp_ge, "==": _cmp_eq, "!=": _cmp_ne,
+}
+
+
+@njit(cache=True)
+def _bool_and(a, b):
+    return 1.0 if (a != 0.0 and b != 0.0) else 0.0
+
+
+@njit(cache=True)
+def _bool_or(a, b):
+    return 1.0 if (a != 0.0 or b != 0.0) else 0.0
+
+
+_BOOLOP_FNS: "dict[str, t.Any]" = {"and": _bool_and, "or": _bool_or}
+
+
+@njit(cache=True)
+def _fn_min2(a, b):
+    return a if a < b else b
+
+
+@njit(cache=True)
+def _fn_max2(a, b):
+    return a if a > b else b
+
+
+@njit(cache=True)
+def _fn_abs(a):
+    return abs(a)
+
+
+_CALL_FNS: "dict[str, t.Any]" = {"min": _fn_min2, "max": _fn_max2, "abs": _fn_abs}
 
 
 # ---------------------------------------------------------------------------
@@ -214,7 +374,23 @@ class Expr:
     def emit(self, ctx: ExprContext) -> str:
         """This expression's numba-source fragment, resolving every name
         and every numeric literal through `ctx` — never a bare literal,
-        never an interpreter call."""
+        never an interpreter call.
+
+        Kept only so an existing caller of `.emit()` (this module's own
+        tests) still gets the same string back; `decider2.trees.schema` no
+        longer calls it — see `.compile()`, which is what a tree's own
+        kernel now uses."""
+        raise NotImplementedError
+
+    def compile(self, ctx: ExprCompileContext):
+        """A real `@njit` closure — `fn(feats, thresholds) -> float64` —
+        equivalent to `.emit()`'s string, built by composing this node's
+        children's own closures instead of splicing their text together.
+        `feats`/`thresholds` are the same two homogeneous tuples
+        `decider2.trees.interpreter.walk_tree` takes; every name and every
+        numeric literal is resolved through `ctx` to a slot in one of them
+        (never a Python literal baked into the closure), same rule as
+        `.emit()`."""
         raise NotImplementedError
 
 
@@ -244,6 +420,15 @@ class _NameExpr(Expr):
     def emit(self, ctx: ExprContext) -> str:
         return ctx.name(self.id)
 
+    def compile(self, ctx: ExprCompileContext):
+        idx = ctx.name_index(self.id)
+
+        @njit(cache=True)
+        def fn(feats, thresholds):
+            return feats[idx]
+
+        return fn
+
 
 @_admits(ast.Constant)
 @dataclass(frozen=True)
@@ -269,6 +454,15 @@ class _NumExpr(Expr):
 
     def emit(self, ctx: ExprContext) -> str:
         return ctx.constant(self.value)
+
+    def compile(self, ctx: ExprCompileContext):
+        idx = ctx.constant_index(self.value)
+
+        @njit(cache=True)
+        def fn(feats, thresholds):
+            return thresholds[idx]
+
+        return fn
 
 
 # ---------------------------------------------------------------------------
@@ -306,6 +500,17 @@ class _BinOpExpr(Expr):
     def emit(self, ctx: ExprContext) -> str:
         return f"({self.left.emit(ctx)} {self.op} {self.right.emit(ctx)})"
 
+    def compile(self, ctx: ExprCompileContext):
+        left_fn = self.left.compile(ctx)
+        right_fn = self.right.compile(ctx)
+        op_fn = _BINOP_FNS[self.op]
+
+        @njit(cache=True)
+        def fn(feats, thresholds):
+            return op_fn(left_fn(feats, thresholds), right_fn(feats, thresholds))
+
+        return fn
+
 
 _UNARYOPS: "dict[type[ast.unaryop], str]" = {ast.USub: "-", ast.Not: "not "}
 
@@ -333,6 +538,16 @@ class _UnaryOpExpr(Expr):
 
     def emit(self, ctx: ExprContext) -> str:
         return f"({self.op}{self.operand.emit(ctx)})"
+
+    def compile(self, ctx: ExprCompileContext):
+        operand_fn = self.operand.compile(ctx)
+        op_fn = _UNARYOP_FNS[self.op]
+
+        @njit(cache=True)
+        def fn(feats, thresholds):
+            return op_fn(operand_fn(feats, thresholds))
+
+        return fn
 
 
 _CMPOPS: "dict[type[ast.cmpop], str]" = {
@@ -372,6 +587,17 @@ class _CompareExpr(Expr):
     def emit(self, ctx: ExprContext) -> str:
         return f"({self.left.emit(ctx)} {self.op} {self.right.emit(ctx)})"
 
+    def compile(self, ctx: ExprCompileContext):
+        left_fn = self.left.compile(ctx)
+        right_fn = self.right.compile(ctx)
+        op_fn = _CMPOP_FNS[self.op]
+
+        @njit(cache=True)
+        def fn(feats, thresholds):
+            return op_fn(left_fn(feats, thresholds), right_fn(feats, thresholds))
+
+        return fn
+
 
 @_admits(ast.BoolOp)
 @dataclass(frozen=True)
@@ -393,6 +619,19 @@ class _BoolOpExpr(Expr):
 
     def emit(self, ctx: ExprContext) -> str:
         return "(" + f" {self.op} ".join(v.emit(ctx) for v in self.values) + ")"
+
+    def compile(self, ctx: ExprCompileContext):
+        op_fn = _BOOLOP_FNS[self.op]
+        value_fns = tuple(v.compile(ctx) for v in self.values)
+
+        def _pair(left_fn, right_fn):
+            @njit(cache=True)
+            def fn(feats, thresholds):
+                return op_fn(left_fn(feats, thresholds), right_fn(feats, thresholds))
+
+            return fn
+
+        return reduce(_pair, value_fns)
 
 
 # ---------------------------------------------------------------------------
@@ -450,6 +689,32 @@ class _CallExpr(Expr):
 
     def emit(self, ctx: ExprContext) -> str:
         return f"{self.func}({', '.join(a.emit(ctx) for a in self.args)})"
+
+    def compile(self, ctx: ExprCompileContext):
+        arg_fns = tuple(a.compile(ctx) for a in self.args)
+        if self.func == "abs":
+            (operand_fn,) = arg_fns
+            abs_fn = _CALL_FNS["abs"]
+
+            @njit(cache=True)
+            def fn(feats, thresholds):
+                return abs_fn(operand_fn(feats, thresholds))
+
+            return fn
+
+        # min/max: a 2-argument primitive (_fn_min2/_fn_max2), folded
+        # pairwise over however many arguments this call actually has —
+        # `_WHITELISTED_FUNCS["min"/"max"] = (2, None)` admits 2 or more.
+        pair_fn = _CALL_FNS[self.func]
+
+        def _pair(left_fn, right_fn):
+            @njit(cache=True)
+            def fn(feats, thresholds):
+                return pair_fn(left_fn(feats, thresholds), right_fn(feats, thresholds))
+
+            return fn
+
+        return reduce(_pair, arg_fns)
 
 
 # ---------------------------------------------------------------------------

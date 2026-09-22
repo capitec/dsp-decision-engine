@@ -34,7 +34,7 @@ from decider2.trees import (
     UnaryLessThan,
     UnaryNode,
     UnaryStringMatch,
-    emit_tree,
+    encode_tree,
     tree_module,
     UnsupportedInKernel,
 )
@@ -74,21 +74,18 @@ def _two_level(threshold_a=30.0, threshold_b=700.0) -> Tree:
 
 def test_no_threshold_is_ever_written_into_emitted_source(tmp_path):
     """Doc 05 §4.2, verbatim: "No decision-relevant constant is emitted into
-    driver source." A literal threshold appears exactly once — as a
-    `param()` DEFAULT in the signature — and never in the body.
+    driver source." Stronger than before now that there is no more source
+    to check: every threshold is a `ParamDecl` on `path_step.params`, named
+    and defaulted — never a literal anywhere `fn`'s own closure could have
+    embedded it (`fn` is built directly, doc 08 §3.4; there is no text
+    generation step left for a constant to leak into).
     """
-    emitted = emit_tree(_two_level(threshold_a=31.5, threshold_b=701.5))
-    # Only the traversal function — a leaf's OUTPUT value is deliberately
-    # emitted (see `codegen._literal`: what a leaf returns is the tree's
-    # shape, doc 08 §2's interiors-shape class, not a tuning knob).
-    after_signature = emitted.source.split("-> int:", 1)[1]
-    body = after_signature.split("\ndef ", 1)[0]
+    encoded = encode_tree(_two_level(threshold_a=31.5, threshold_b=701.5))
+    defaults = {p.name: p.default for p in encoded.path_step.params}
 
-    assert "param(31.5)" in emitted.source
-    assert "param(701.5)" in emitted.source
-    assert "31.5" not in body
-    assert "701.5" not in body
-    assert "age_node_thr" in body  # it is read through its argument name
+    assert 31.5 in defaults.values()
+    assert 701.5 in defaults.values()
+    assert "age_node_thr" in defaults  # read through its own param name
 
 
 def test_retuning_a_threshold_never_recompiles(tmp_path):
@@ -98,14 +95,20 @@ def test_retuning_a_threshold_never_recompiles(tmp_path):
     for 8 retunes, against 0 compile events as arguments with `signatures`
     staying 1->1. This asserts the tree engine lands on the second of those.
     """
+    from decider2.runtime.invoke import DEFAULT_BUILD_DIR
+
     built = tree_module(_two_level(), build_dir=tmp_path)
     pipeline = flow(built.module)
     frame = pl.DataFrame({"age": [25.0, 45.0], "score": [800.0, 600.0]})
 
     steps, group_ids, owners, _ = pipeline.flatten_for_runtime()
+    # `build_dir` must match what `pipeline.apply()` uses internally
+    # (`Pipeline.apply` takes no `build_dir=` of its own) so this driver and
+    # `apply()`'s own hit the SAME `build_driver` cache entry and are the
+    # SAME object.
     driver = build_driver(
         list(steps), list(group_ids), owners=list(owners),
-        build_dir=tmp_path, terminal_names=frozenset({"risk_path", "pts"}),
+        build_dir=DEFAULT_BUILD_DIR, terminal_names=frozenset({"risk_path", "pts"}),
     )
     assert driver.segments[0].kind == "compiled"  # or the claim is vacuous
 
@@ -116,7 +119,12 @@ def test_retuning_a_threshold_never_recompiles(tmp_path):
         )
         answers.append(out["pts"].to_list())
 
-    assert len(driver.signatures) == 1
+    # 2, not 1: `risk_path` and `pts` are each their own `PackedCompiledSegment`
+    # now (`decider2.compile.driver.build_packed_kernel`'s own docstring —
+    # a packed step never fuses with a neighbour, a real, reported scope
+    # cut of this pass). The claim this test exists to pin — retuning never
+    # GROWS either signature — still holds across all four retunes above.
+    assert len(driver.signatures) == 2
     assert answers[0] != answers[3]  # the retune actually changed answers
 
 
@@ -420,47 +428,34 @@ def test_a_very_large_tree_no_longer_hits_a_line_cap():
     """Doc 05 §7's ~500-line cap existed because a tree's SHAPE was emitted
     as nested `if`/`elif` source, and compile time was super-linear in
     emitted lines (EXPERIMENTS.md §G). Once shape is DATA
-    (`decider2.trees.interpreter`), the wrapper this module renders is a
-    handful of lines regardless of node count — so the 400-node
-    otherwise-chain that used to be a hard `TreeTooLarge` build error now
-    just builds, and its emitted-line count does not grow with the chain.
+    (`decider2.trees.interpreter`), and now that the wrapper itself is a
+    pre-built closure rather than any source at all (doc 08 §3.4), there is
+    no line count left to grow — so the 400-node otherwise-chain that used
+    to be a hard `TreeTooLarge` build error just builds, and the feature
+    SET (as opposed to the per-node threshold count) stays flat regardless
+    of chain length: `_chain` reuses one column, `x`, at every node.
     """
-    small = emit_tree(_chain(5, arm=1))
-    large = emit_tree(_chain(400, arm=1))
+    small = encode_tree(_chain(5, arm=1))
+    large = encode_tree(_chain(400, arm=1))
 
-    assert large.emitted_lines < small.emitted_lines + 20
+    assert small.features == large.features == ("x",)
     assert large.leaf_count == 400 + 1  # every node's other arm, plus the tail
-
-
-def test_an_otherwise_chain_costs_no_indentation():
-    """Every tree path is now array data, not nested source — there is no
-    `if`/`elif` text at all for chain length to affect. What used to be "no
-    `else:` in the emitted body" now generalises to "no branching text in
-    the emitted body, period": the wrapper's own indentation is flat
-    regardless of chain length.
-    """
-    emitted = emit_tree(_chain(120, arm=1))
-    body = emitted.source.split("-> int:", 1)[1].split("\ndef ", 1)[0]
-    deepest = max((len(ln) - len(ln.lstrip())) for ln in body.splitlines() if ln.strip())
-
-    assert "else:" not in body
-    assert "if " not in body
-    assert deepest <= 8  # the function's own indent, plus one level
 
 
 def test_a_then_chain_deeper_than_cpython_allows_now_just_builds():
     """The one shape that used to still nest (a `then`-chain, one CPython
     indentation level per node) and hit CPython's own "too many levels of
     indentation" limit at 128 nodes, before numba was ever reached. There is
-    no source-level nesting left for that limit to apply to: a 120-deep
-    then-chain is array data, walked by one iterative loop
+    no source-level nesting left for that limit to apply to at all — a
+    120-deep then-chain is array data, walked by one iterative loop
     (`decider2.trees.interpreter.walk_tree`), same as an otherwise-chain of
-    the same length.
+    the same length, and built as a closure directly (doc 08 §3.4), never
+    text.
     """
-    emitted = emit_tree(_chain(120, arm=0))
+    encoded = encode_tree(_chain(120, arm=0))
 
-    assert emitted.leaf_count == 121
-    assert emitted.max_depth == 121
+    assert encoded.leaf_count == 121
+    assert encoded.max_depth == 121
 
 
 def test_a_computed_feature_now_compiles_instead_of_being_refused():
@@ -500,16 +495,22 @@ def test_string_matching_a_kernel_cannot_do_is_refused_not_approximated(kwargs, 
         ],
     )
     with pytest.raises(UnsupportedInKernel, match=expected):
-        emit_tree(tree)
+        encode_tree(tree)
 
 
-def test_emitting_the_same_tree_twice_is_byte_identical(tmp_path):
+def test_encoding_the_same_tree_twice_is_identical(tmp_path):
     """Doc 05 §4.2's determinism requirement — same document in, same
-    source out, so the content-addressed cache hits instead of growing."""
-    first = emit_tree(_two_level())
-    second = emit_tree(_two_level())
+    arrays out, every time: the walk never depends on set/dict iteration
+    order or anything else non-deterministic, so the SAME tree builds the
+    SAME closure content twice — which is what lets numba's own closure-hash
+    caching (`decider2.trees.encode`'s module docstring) hit on the second
+    build instead of compiling again."""
+    first = encode_tree(_two_level())
+    second = encode_tree(_two_level())
 
-    assert first.source == second.source
+    assert first.arrays == second.arrays
+    assert first.features == second.features
+    assert [(p.name, p.default) for p in first.params] == [(p.name, p.default) for p in second.params]
 
 
 def test_strict_range_validation_matches_decider1(tmp_path):

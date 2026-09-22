@@ -37,14 +37,18 @@ from typing import Any, Mapping
 
 import polars as pl
 
-from decider2.compile import cache
 from decider2.graph.module import module
-from decider2.trees.codegen import EmittedTree, emit_tree
+from decider2.trees.encode import EncodedTree, encode_tree
 from decider2.trees.schema import Tree
 from decider2.types import Module
 
 __all__ = ["TreeModule", "tree_module", "DEFAULT_BUILD_DIR"]
 
+# Kept only for backward-compatible signatures (a `build_dir=` a caller
+# still passes) — nothing writes source under it any more (doc 05 §4.1's
+# whole reason for a content-addressed build dir was "numba cannot cache a
+# function with no source file"; a tree's Step.fn is a real njit closure
+# built directly, never written to disk).
 DEFAULT_BUILD_DIR = Path(".decider2_build")
 
 
@@ -55,13 +59,12 @@ class TreeModule:
     The `Module` is what a pipeline takes. This wrapper carries the two
     things that are true of the *document* rather than of the compiled
     steps: which string-valued output columns were not compiled (and so
-    need `decode`), and the codegen report `explain()` prints.
+    need `decode`), and the report `explain()` prints.
     """
 
     module: Module
     tree: Tree
-    emitted: EmittedTree
-    source_path: Path
+    encoded: EncodedTree
 
     @property
     def name(self) -> str:
@@ -71,7 +74,7 @@ class TreeModule:
     def path_column(self) -> str:
         """The column naming which leaf was reached — doc 03 §7's
         `<Name>_path`. Emit it like any other value: `.emit("risk_path")`."""
-        return self.emitted.path_fn_name
+        return self.encoded.path_column
 
     def decode(self, frame: pl.DataFrame) -> pl.DataFrame:
         """Add the string-valued output columns back.
@@ -108,27 +111,26 @@ class TreeModule:
         return frame.with_columns(exprs) if exprs else frame
 
     def explain(self) -> str:
-        """What was emitted, and how close it is to the cap (doc 05 §7).
-
-        The tree analogue of `pipeline.explain_kernels()`: reporting only,
-        and deliberately says nothing about vectorisation — doc 05 §7 notes
-        packed-FP count is anti-correlated with performance.
+        """What was built, for a reviewer — the tree analogue of
+        `pipeline.explain_kernels()`. No more "emitted lines"/"cap 500":
+        nothing is emitted any more (doc 08 §3.4) — `fn` is a pre-built
+        njit closure over the tree's own arrays, so there is no line count
+        or line cap left to report.
         """
-        e = self.emitted
+        e = self.encoded
         tunable = [p for p in e.params if p.annotation == "float"]
         literals = [p for p in e.params if p.annotation == "str"]
+        output_names = [s.name for s in e.output_steps]
         lines = [
             f"tree {self.tree.name!r} -> module {self.module.name!r}",
-            f"  emitted lines   : {e.emitted_lines} (cap 500, doc 05 §7)",
             f"  leaves          : {e.leaf_count}",
             f"  max depth       : {e.max_depth}",
             f"  features read   : {', '.join(e.features) or '(none)'}",
             f"  string features : {', '.join(e.string_features) or '(none)'}",
             f"  path column     : {self.path_column}",
-            f"  output steps    : {', '.join(e.output_fn_names) or '(none)'}",
+            f"  output steps    : {', '.join(output_names) or '(none)'}",
             f"  thresholds      : {len(tunable)} (kernel arguments, retune is free)",
             f"  string literals : {len(literals)} (int32 codes, retune is free)",
-            f"  source          : {self.source_path}",
         ]
         return "\n".join(lines)
 
@@ -148,29 +150,24 @@ def tree_module(
     `pipeline.apply(frame, params={"risk": {"score_thr": 700.0}})`, and the
     same names appear in `pipeline.params_schema()` and over the serving
     `/params` endpoint, with no extra wiring: they are `param()` fields on
-    generated steps, indistinguishable from hand-written ones (doc 03
-    §4.4).
+    the tree's own `Step`s, indistinguishable from hand-written ones (doc
+    03 §4.4).
+
+    `build_dir=` is accepted only for backward-compatible call sites; it is
+    unused (see `DEFAULT_BUILD_DIR`'s own docstring).
 
     `params=` pre-binds thresholds at composition (doc 03 §4.3's `.bind()`),
     for a value that is settled and should leave the caller-facing
     interface.
     """
-    emitted = emit_tree(tree, name=name)
-    build_dir = Path(build_dir) if build_dir is not None else DEFAULT_BUILD_DIR
-    cached = cache.get_or_build(emitted.source, build_dir)
+    del build_dir
+    encoded = encode_tree(tree, name=name)
 
-    fns = [getattr(cached.module, fn) for fn in emitted.matcher_fn_names]
-    fns.append(getattr(cached.module, emitted.path_fn_name))
-    fns += [getattr(cached.module, fn) for fn in emitted.output_fn_names]
+    steps = list(encoded.matcher_steps) + [encoded.path_step] + list(encoded.output_steps)
 
     instance_name = name or tree.name or "tree"
-    built = module(*fns, name=instance_name)
+    built = module(*steps, name=instance_name)
     if params:
         built = built.bind(**dict(params))
 
-    return TreeModule(
-        module=built,
-        tree=tree,
-        emitted=emitted,
-        source_path=Path(cached.path),
-    )
+    return TreeModule(module=built, tree=tree, encoded=encoded)

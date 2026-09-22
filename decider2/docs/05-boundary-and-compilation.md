@@ -630,12 +630,38 @@ An automatic cost model remains O12, explicitly out of scope for v1.
 
 ```
 uv run decider2 build <pipeline>     # in the Dockerfile
-decider2 build --verify              # asserts a runtime load triggers ZERO compiles
+decider2 build --verify              # asserts NO COMPILATION AFTER WARM-UP
 ```
 
-Generates driver sources, compiles all variants, and leaves a warm numba cache in
-the image. `--verify` in CI is what stops the cache silently ceasing to work and
-being discovered later as slow startups.
+**Revised.** This used to say "asserts a runtime load triggers ZERO compiles,
+ever" — that stopped being literally achievable once a data-shaped interior's
+step (a tree/table/Branch/Loop, doc 08 §3.4, `types.Step.packed`) and the
+fused driver itself (`decider2.compile.codegen`, still generated source for
+ordinary hand-written steps) both compile LAZILY, on their own first real
+call, rather than being eagerly probed at build time the way `decider2.
+compile.driver._try_njit` forces one plain step to be. The property people
+actually rely on is narrower and still exactly true: **no compilation happens
+on the request path.** `Pipeline.precompile()` (`decider2.graph.pipeline`)
+moves every specialisation to a controlled point — process start, image
+build, or `.serve()`'s own warm-up (`ServeHandle.warm()`, called by
+`serving/app.py`'s `app()` before it ever returns an app for a server to bind
+a socket on; `GET /ping` answers 503 until `handle.is_warm`, a second,
+independent guard) — and `decider2.testing.assert_no_compilation_after_
+warmup`/`decider2.testing.count_new_compiles` verify it by COUNTING numba's
+own `"numba:compile"` events, not by inference: a `precompile()` that misses
+a specialisation is worse than none, because it promises a guarantee it does
+not deliver, so this is checked directly rather than assumed.
+
+Measured on a realistic 24-step pipeline (one kernel per step, the doc 05 §7
+default — this stage's own report has the full numbers): **cold, no disk
+cache, ~4.6s** to first answer; **warm disk cache, ~0.4s**; with `precompile()`
+called explicitly at start-up, the compile cost is identical (~3.6s, paid
+once, before any request) and the first REAL request then answers in
+**~3ms**. Numba's on-disk cache still works wherever it worked before this
+pass (verified cold/warm, `NUMBA_DEBUG_CACHE=1`, persistent build dir); what
+changed is only that `--verify`'s own claim is now "zero after warm-up",
+checked directly, rather than "zero, ever", which was never quite true for
+the fused kernel itself.
 
 > **Choose the CPU target deliberately.** Numba's cache keys include CPU
 > features, so a cache built on a CI runner with AVX-512 misses on a smaller
@@ -668,7 +694,10 @@ This layer is done when:
    and §B measured the alternatives at 77× (`objmode` per row) and 23.5× (whole
    driver in Python). The blast radius of an un-njit-able node is its kernel, and
    the acceptance test is that the radius stops there (§6).
-7. `decider2 build --verify` reports zero runtime compilations.
+7. `decider2 build --verify` reports zero compilations AFTER `Pipeline.
+   precompile()`/`ServeHandle.warm()` has run (revised — §8 above) —
+   verified by counting numba's own compile events
+   (`decider2.testing.assert_no_compilation_after_warmup`), not assumed.
 8. A regression test guards the same-name-NamedTuple collision (doc 01 §4c) with
    an **exact structural assertion**, not a timing one: two distinct bundle
    classes must never share `__name__` + field names + field types, because that

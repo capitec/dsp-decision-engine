@@ -14,6 +14,7 @@ any one module, so neither belongs in `graph/interface.py`.
 from __future__ import annotations
 
 import dataclasses
+from time import perf_counter as _perf_counter
 from typing import Any, Callable, Sequence, Union
 
 from decider2.graph.interface import effective_interface, topological_steps
@@ -21,7 +22,55 @@ from decider2.graph.module import module as _module
 from decider2.resolve import suggest_name
 from decider2.types import Decision, Emit, Input, Interface, MissingInputPolicy, Module, Step
 
-__all__ = ["Pipeline", "flow", "compose"]
+__all__ = ["Pipeline", "flow", "compose", "PrecompileReport"]
+
+
+@dataclasses.dataclass(frozen=True)
+class PrecompileReport:
+    """`Pipeline.precompile()`'s own result — doc 05 §8's warm-up
+    guarantee, measured rather than assumed. `*_compile_events == 0` is the
+    thing to check: a non-zero count names a specialisation `precompile()`
+    itself just triggered, which means it is telling the truth about what
+    it warmed, not hiding a miss."""
+
+    apply_seconds: float
+    score_seconds: float
+    apply_compile_events: int
+    score_compile_events: int
+
+    @property
+    def total_compile_events(self) -> int:
+        return self.apply_compile_events + self.score_compile_events
+
+
+def _dummy_value(inp: Input) -> Any:
+    """An arbitrary, always-present value of `inp`'s own declared type —
+    enough to make `score()`/`apply()` actually reach a kernel call rather
+    than routing away via `MissingInputPolicy` (a routed row never calls
+    the kernel, and would warm nothing, doc 03 §1). `1`/`1.0`, not `0`/
+    `0.0`: a step computing a ratio (flagship's own `disposable_income /
+    instalment`) is common enough that a zero denominator would raise
+    `ZeroDivisionError` out of `precompile()` itself on an entirely
+    ordinary pipeline — a real failure found while building this stage.
+    `1` is still arbitrary (any non-zero value would do; it is not claimed
+    to be a realistic business value), just not degenerate."""
+    if inp.annotation is bool:
+        return False
+    if inp.annotation is int:
+        return 1
+    if inp.annotation is str:
+        return ""
+    return 1.0
+
+
+def _dummy_record(inputs: "tuple[Input, ...]") -> dict[str, Any]:
+    return {inp.name: _dummy_value(inp) for inp in inputs}
+
+
+def _dummy_frame(inputs: "tuple[Input, ...]"):
+    import polars as pl
+
+    return pl.DataFrame({inp.name: [_dummy_value(inp)] for inp in inputs})
 
 Element = Union[Module, Callable[..., Any], "Pipeline"]
 
@@ -217,6 +266,61 @@ class Pipeline:
             params=params, shared=shared, mode="fused",
             emit=tuple(e.name for e in self.emits), param_spaces=param_spaces,
             policy=self.missing_input_policy,
+        )
+
+    def precompile(self, *, shared: dict | None = None) -> "PrecompileReport":
+        """Force every numba specialisation this pipeline's `fused` mode
+        needs, at a controlled point — process start, image build, or
+        `serve()` — instead of on the first real request (doc 05 §8's
+        "a runtime load triggers ZERO compilations", now read as "zero
+        compilations after `precompile()`/`.serve()`'s own warm-up", not
+        "zero, ever": see doc 05 §8 and doc 08 §4.1's updated text, and this
+        stage's report for the number that motivated the change — the
+        driver built from `decider2.compile.codegen`'s generated source has
+        no eager, build-time signature the way an individual step's own
+        `_try_njit` probe does, and a `types.Step.packed` step's kernel
+        (`decider2.compile.driver.build_packed_kernel`, doc 08 §3.4) is
+        deliberately lazy, compiling on its own first real call — so
+        "decorated" is not "compiled" for either, and something has to
+        actually CALL the kernel once, with real argument types, before a
+        request does.
+
+        Drives both `apply()` (the batch/`fused` path) and `score()` (the
+        realtime path) with one synthetic all-present row built from this
+        pipeline's own declared `interface.inputs` — every REQUIRED input
+        gets a real, if arbitrary, value of its own declared type (doc 05
+        §9 criterion 4), so nothing routes away via `MissingInputPolicy`
+        before ever reaching a kernel (a routed row never calls the kernel
+        at all, and would warm nothing). `shared=` forwards to both, for a
+        pipeline that reads it (a table's row/output steps, doc 08 §3.4) —
+        omit it only when nothing in this pipeline needs it.
+
+        Returns a `PrecompileReport` naming which kernel each mode ended up
+        driving and how long each took; `ServeHandle`/`decider2 build
+        --verify`'s own zero-compilation check
+        (`assert_no_compilation_after_warmup`) is built on top of this,
+        not a separate mechanism.
+        """
+        from decider2.testing.recompile import count_new_compiles
+
+        record = _dummy_record(self.interface.inputs)
+        frame = _dummy_frame(self.interface.inputs)
+
+        with count_new_compiles() as apply_events:
+            t0 = _perf_counter()
+            self.apply(frame, shared=shared, mode="fused")
+            apply_seconds = _perf_counter() - t0
+
+        with count_new_compiles() as score_events:
+            t0 = _perf_counter()
+            self.score(record, shared=shared)
+            score_seconds = _perf_counter() - t0
+
+        return PrecompileReport(
+            apply_seconds=apply_seconds,
+            score_seconds=score_seconds,
+            apply_compile_events=apply_events.count,
+            score_compile_events=score_events.count,
         )
 
     def serve(self, *, mode: str = "sealed") -> "ServeHandle":
