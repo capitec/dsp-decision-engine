@@ -14,12 +14,64 @@ fixture.
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
+from dataclasses import dataclass, field
 from typing import Any, Mapping
 
 import polars as pl
+from numba.core import event as _nb_event
 
 from decider2.compile.driver import build_driver
 from decider2.runtime.invoke import DEFAULT_BUILD_DIR
+
+__all__ = [
+    "assert_no_recompile",
+    "count_new_compiles",
+    "CompileCount",
+    "assert_no_compilation_after_warmup",
+]
+
+
+@dataclass
+class CompileCount:
+    """How many GENUINE numba compilations happened while a
+    `count_new_compiles()` block was open — not "how many functions got
+    `@njit`-decorated" (decoration alone compiles nothing; numba is lazy by
+    default) and not "how many cache-hit dispatches happened" (a dispatch
+    served from an already-compiled specialisation, warm OR cold-but-cached,
+    fires no `"numba:compile"` event at all — verified empirically while
+    building this: a first call fires exactly one `START`/`END` pair per
+    specialisation actually compiled; a repeat call with the same argument
+    types fires zero). `.count` is the number of specialisations compiled;
+    Stage 2's own acceptance test (this module's report) is `.count == 0`
+    after `Pipeline.precompile()`.
+    """
+
+    count: int = 0
+    kinds: list = field(default_factory=list)
+
+
+@contextmanager
+def count_new_compiles():
+    """`with count_new_compiles() as counted: ...; counted.count` — the
+    number of numba specialisations ACTUALLY compiled (not merely
+    dispatched, cache-hit or otherwise) inside the block, via numba's own
+    `"numba:compile"` event (`numba.core.dispatcher._Dispatcher.get_call_
+    template`... in practice fired once per real `_compile_for_args`, the
+    same place `NUMBA_DEBUG_CACHE` logging hooks into). This is `Pipeline.
+    precompile()`'s own verification tool, and the acceptance test for the
+    whole feature (this stage's report): a `precompile()` that still leaves
+    something to compile on the real first request is worse than none,
+    because it promises a guarantee it does not deliver.
+    """
+    result = CompileCount()
+    with _nb_event.install_recorder("numba:compile") as recorder:
+        yield result
+    starts = [
+        ev for ev in recorder.buffer if ev[1].status is _nb_event.EventStatus.START
+    ]
+    result.count = len(starts)
+    result.kinds = [ev[1].data for ev in starts]
 
 
 def _driver_for(pipeline: Any) -> Any:
@@ -95,3 +147,60 @@ def assert_no_recompile(
             f"{dict(params_a or {})!r} built — build_driver's cache key "
             "must be structural, never params-dependent."
         )
+
+
+def assert_no_compilation_after_warmup(
+    pipeline: Any,
+    *,
+    shared: Mapping[str, Any] | None = None,
+    extra: "list[tuple[Any, ...]] | None" = None,
+) -> "CompileCount":
+    """Doc 05 §8's revised guarantee, as a first-class assertion: run
+    `pipeline.precompile(shared=shared)`, then drive the pipeline again
+    (`extra`, a list of `(frame_or_record, kwargs)` pairs — defaults to one
+    more `apply()`/`score()` pair with the same synthetic row `precompile()`
+    itself used) and assert that NOTHING compiles the second time.
+
+    This is Stage 2's own acceptance test (this stage's report): a
+    `precompile()` that still leaves something to compile on a real request
+    is worse than none, because it promises a guarantee it does not
+    deliver. Returns the `CompileCount` from the post-warm-up run, so a
+    caller that wants the detail (not just the boolean) can have it.
+    """
+    pipeline.precompile(shared=shared)
+
+    with count_new_compiles() as counted:
+        if extra:
+            for target, kwargs in extra:
+                if isinstance(target, pl.DataFrame):
+                    pipeline.apply(target, shared=shared, mode="fused", **kwargs)
+                else:
+                    pipeline.score(target, shared=shared, **kwargs)
+        else:
+            record = {inp.name: _warmup_value(inp) for inp in pipeline.interface.inputs}
+            frame = pl.DataFrame({k: [v] for k, v in record.items()})
+            pipeline.apply(frame, shared=shared, mode="fused")
+            pipeline.score(record, shared=shared)
+
+    if counted.count:
+        raise AssertionError(
+            "compilation happened AFTER precompile()/warm() "
+            f"({counted.count} numba specialisation(s): {counted.kinds!r}) — "
+            "precompile() missed a specialisation the real request path "
+            "still needed. A warm-up that misses one is worse than none: it "
+            "promises a guarantee it does not deliver."
+        )
+    return counted
+
+
+def _warmup_value(inp: Any) -> Any:
+    # 1/1.0, not 0/0.0 — see `decider2.graph.pipeline._dummy_value`'s
+    # docstring: a zero denominator is common enough in a real pipeline
+    # (a ratio) to raise `ZeroDivisionError` out of a warm-up call itself.
+    if inp.annotation is bool:
+        return False
+    if inp.annotation is int:
+        return 1
+    if inp.annotation is str:
+        return ""
+    return 1.0

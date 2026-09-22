@@ -35,11 +35,24 @@ def _starlette_available() -> bool:
     return importlib.util.find_spec("starlette") is not None
 
 
-def app(pipeline: Any, *, mode: str = "sealed") -> Any:
+def app(pipeline: Any, *, mode: str = "sealed", warm: bool = True) -> Any:
     """Build the ASGI app for `pipeline`. `mode` is doc 08 §4.1's deployment
     mode, forwarded straight to `pipeline.serve()` — reported back verbatim
-    on `GET /health`."""
+    on `GET /health`.
+
+    `warm=True` (the default) calls `handle.warm()` here, before this
+    function ever returns an app for a server to bind and accept
+    connections on — doc 05 §8's "no compilation after warm-up" only holds
+    if warm-up finishes before the first request can arrive, and `GET
+    /ping` (`serving/dispatch.py`) also refuses to answer 200 until
+    `handle.is_warm`, as a second, independent guard against a request
+    racing it. Pass `warm=False` only for a caller that wants to call
+    `handle.warm()` itself with a specific `shared=` (a table's own rows,
+    doc 08 §3.4) before serving traffic.
+    """
     handle = pipeline.serve(mode=mode)
+    if warm:
+        handle.warm()
     dispatcher = Dispatcher(handle)
     if _starlette_available():
         return _starlette_app(dispatcher)

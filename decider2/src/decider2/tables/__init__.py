@@ -33,7 +33,7 @@ MIGRATION NOTES — what did not come across from decider 1, and why:
 from __future__ import annotations
 
 from decider2.tables.build import TableModule, table_module
-from decider2.tables.codegen import EmittedTable, TableTooComplex, emit_table
+from decider2.tables.encode import EncodedTable, TableTooComplex, encode_table
 from decider2.tables.schema import (
     AndExpression,
     BetweenExpression,
@@ -51,8 +51,8 @@ __all__ = [
     "DecisionTable",
     "table_module",
     "TableModule",
-    "emit_table",
-    "EmittedTable",
+    "encode_table",
+    "EncodedTable",
     "TableTooComplex",
     "ParametersConfig",
     "BoundMode",

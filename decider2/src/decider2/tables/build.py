@@ -21,9 +21,8 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
-from decider2.compile import cache
 from decider2.graph.module import module
-from decider2.tables.codegen import EmittedTable, emit_table
+from decider2.tables.encode import EncodedTable, encode_table
 from decider2.tables.schema import DecisionTable
 from decider2.trees.build import DEFAULT_BUILD_DIR
 from decider2.types import Module
@@ -37,8 +36,7 @@ class TableModule:
 
     module: Module
     table: DecisionTable
-    emitted: EmittedTable
-    source_path: Path
+    encoded: EncodedTable
 
     @property
     def name(self) -> str:
@@ -46,18 +44,21 @@ class TableModule:
 
     @property
     def shared(self) -> dict[str, np.ndarray]:
-        """The table's rows, as the arrays the kernel reads.
+        """The table's rows, as the arrays the kernel reads BY NAME, at call
+        time (`decider2.tables.encode`'s module docstring).
 
         Rebuild this (via `table_module`) and the answers change with no
-        compilation — the property doc 08 §3.4 calls a free interior change.
+        compilation — the property doc 08 §3.4 calls a free interior change
+        — because the row/output steps read `shared` as a genuine runtime
+        argument, never a value captured into the closure.
         """
-        return dict(self.emitted.shared)
+        return dict(self.encoded.shared)
 
     @property
     def row_column(self) -> str:
         """The column naming which row matched — the table's path capture,
         -1 when nothing matched. Emit it like any other value."""
-        return self.emitted.row_fn_name
+        return self.encoded.row_column
 
     def decode(self, frame: pl.DataFrame) -> pl.DataFrame:
         """Add the string-valued output columns back.
@@ -90,19 +91,18 @@ class TableModule:
         return frame.with_columns(exprs) if exprs else frame
 
     def explain(self) -> str:
-        e = self.emitted
+        e = self.encoded
+        output_names = [s.name for s in e.output_steps]
         return "\n".join(
             [
                 f"decision table {self.table.name!r} -> module {self.module.name!r}",
                 f"  rows            : {e.n_rows} (arrays in shared — editing them is free)",
                 f"  conditions      : {e.n_conditions} (shape — editing these recompiles)",
-                f"  emitted lines   : {e.emitted_lines} (cap 500, doc 05 §7)",
                 f"  variables       : {', '.join(e.variables) or '(none)'}",
                 f"  string variables: {', '.join(e.string_variables) or '(none)'}",
                 f"  row column      : {self.row_column}",
-                f"  output steps    : {', '.join(e.output_fn_names) or '(none)'}",
+                f"  output steps    : {', '.join(output_names) or '(none)'}",
                 f"  shared keys     : {len(e.shared)}",
-                f"  source          : {self.source_path}",
             ]
         )
 
@@ -113,16 +113,14 @@ def table_module(
     name: str | None = None,
     build_dir: "str | Path | None" = None,
 ) -> TableModule:
-    """Compile a decision-table document into a pipeline element."""
-    emitted = emit_table(table, name=name)
-    build_dir = Path(build_dir) if build_dir is not None else DEFAULT_BUILD_DIR
-    cached = cache.get_or_build(emitted.source, build_dir)
+    """Compile a decision-table document into a pipeline element.
 
-    fns = [getattr(cached.module, fn) for fn in emitted.matcher_fn_names]
-    fns.append(getattr(cached.module, emitted.row_fn_name))
-    fns += [getattr(cached.module, fn) for fn in emitted.output_fn_names]
+    `build_dir=` is accepted only for backward-compatible call sites; it is
+    unused — nothing here writes source to disk any more.
+    """
+    del build_dir
+    encoded = encode_table(table, name=name)
 
-    built = module(*fns, name=name or table.name or "decision_table")
-    return TableModule(
-        module=built, table=table, emitted=emitted, source_path=Path(cached.path)
-    )
+    steps = list(encoded.matcher_steps) + [encoded.row_step] + list(encoded.output_steps)
+    built = module(*steps, name=name or table.name or "decision_table")
+    return TableModule(module=built, table=table, encoded=encoded)

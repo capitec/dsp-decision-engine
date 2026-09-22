@@ -66,14 +66,14 @@ from decider2 import expr
 from decider2.trees.interpreter import EQ, GE, GT, LE, LT, NE
 
 if t.TYPE_CHECKING:
-    # Codegen-only: every node/condition class below calls back into this
-    # for the cross-cutting concerns codegen owns (naming and de-duping
+    # Encoding-only: every node/condition class below calls back into this
+    # for the cross-cutting concerns encoding owns (naming and de-duping
     # kernel arguments, hoisting string tests, walking to a node's
     # children). Import guarded so schema.py stays free of a runtime
-    # dependency on codegen.py — codegen.py already depends on this
-    # module, and a class owning its own emission is not the same claim as
-    # this module depending on codegen (see EncodeContext's own docstring).
-    from decider2.trees.codegen import EncodeContext
+    # dependency on encode.py — encode.py already depends on this
+    # module, and a class owning its own encoding is not the same claim as
+    # this module depending on encode.py (see EncodeContext's own docstring).
+    from decider2.trees.encode import EncodeContext
 
 # decider2.trees.schema._ThresholdedUnaryOp's six operators -> the
 # interpreter's six comparison opcodes (decider2.trees.interpreter). One
@@ -277,45 +277,47 @@ class _ComputedFeature(BaseModel):
         # `InputRef` (tracked, because its name is the shared knob).
         return set()
 
-    def emit(self, ctx: "EncodeContext", node_id: str) -> str:
-        return self._expr.emit(_ExprEmitAdapter(ctx, node_id))
+    def compile(self, ctx: "EncodeContext", node_id: str):
+        """`decider2.trees.encode.EncodeContext.computed_feature_index`
+        calls this: a computed feature's arithmetic is built as a real
+        `@njit` closure (`decider2.expr.Expr.compile`), never text. There is
+        no `.emit()` counterpart here any more (the previous migration's
+        text-emitting one was removed with this one) — `decider2.expr.Expr`
+        itself still HAS an `.emit()` (kept only for `tests/test_expr.py`'s
+        own fast, numba-free unit-test harness, see that module's
+        docstring and this stage's report), but nothing in this package
+        calls it any more."""
+        return self._expr.compile(_ExprEmitAdapter(ctx, node_id))
 
 
 class _ExprEmitAdapter:
-    """Bridges `decider2.expr.ExprContext` to one tree's `EncodeContext`, for
-    one computed feature's use at one node.
+    """Bridges `decider2.expr.ExprCompileContext` to one tree's
+    `EncodeContext`, for one computed feature's use at one node.
 
     A computed feature's own free names become ordinary column arguments —
-    `ctx.column` is exactly `EncodeContext`'s existing feature bookkeeping, so
-    two nodes both reading `income` (one directly, one inside `income - x`)
-    share the one signature argument. Its own numeric literals become
-    ordinary anonymous params through `EncodeContext.threshold` — the same
-    machinery a literal `Threshold` already uses (`_ThresholdedUnaryOp.
-    encode`) — so a constant buried inside an expression retunes exactly
-    like any other threshold, never recompiling. `_next` numbers them
-    uniquely within this one use so `"x * 2 + y * 2"` gets two distinct
-    params, not one collided name.
-
-    This is the one place a computed feature stays SOURCE TEXT rather than
-    array data (doc 08 §1.2/§3.2): its arithmetic is a value computation, not
-    a branch, and `decider2.expr` already compiles it to a numba expression
-    once, at build time — `EncodeContext` only has to fold that expression's
-    *result* into a local variable and give it a feature slot like any other
-    (`EncodeContext.computed_feature_index`).
+    `ctx.plain_feature_index` is exactly `EncodeContext`'s existing feature
+    bookkeeping, so two nodes both reading `income` (one directly, one
+    inside `income - x`) share the one `feats`-tuple slot. Its own numeric
+    literals become ordinary anonymous params through `EncodeContext.
+    threshold_slot` — the same machinery a literal `Threshold` already uses
+    (`_ThresholdedUnaryOp.encode`) — so a constant buried inside an
+    expression retunes exactly like any other threshold, never recompiling.
+    `_next_compiled` numbers them uniquely within this one use so
+    `"x * 2 + y * 2"` gets two distinct params, not one collided name.
     """
 
     def __init__(self, ctx: "EncodeContext", node_id: str) -> None:
         self._ctx = ctx
         self._node_id = node_id
-        self._next = 0
+        self._next_compiled = 0
 
-    def name(self, ident: str) -> str:
-        return self._ctx.column(ident)
+    def name_index(self, ident: str) -> int:
+        return self._ctx.plain_feature_index(ident)
 
-    def constant(self, value: "int | float") -> str:
-        role = f"expr{self._next}"
-        self._next += 1
-        return self._ctx.threshold(float(value), node_id=self._node_id, role=role)
+    def constant_index(self, value: "int | float") -> int:
+        role = f"expr{self._next_compiled}"
+        self._next_compiled += 1
+        return self._ctx.threshold_slot(float(value), node_id=self._node_id, role=role)
 
 
 class Feature(RootModel[t.Union[_ComputedFeature, str]]):

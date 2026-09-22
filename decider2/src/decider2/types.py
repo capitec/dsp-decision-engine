@@ -53,6 +53,33 @@ class Step:
     reads_params: bool = False         # signature has a bare `params`
     reads_shared: bool = False         # signature has a bare `shared`
     nogil: bool = False                # @step(nogil=True); authored, never inferred
+    packed: bool = False               # fn(args, params) instead of fn(a, b, ...)
+    output_annotation: Any = None
+    # The declared return type for a `packed` step, whose `fn` is a generic
+    # closure with no `inspect.signature(fn).return_annotation` of its own
+    # to read (every packed `fn` has the literal signature `(args, params)`
+    # — see `packed` above). `None` means "read it off `fn`'s own signature
+    # as usual" (every hand-written, non-packed step). Every caller that
+    # used to do `inspect.signature(step.fn).return_annotation` — deciding
+    # a materialised array's numpy dtype (doc 00 §2 / doc 05 §9 criterion
+    # 4) — reads this first instead: `decider2.compile.driver.
+    # step_return_annotation`.
+    # `packed`: this Step's `fn` takes exactly two positional arguments —
+    # `args` (a tuple, one entry per `inputs`, in order) and `params` (a
+    # tuple, one entry per `params`, in order) — instead of one named
+    # argument per input/param. Every calling convention in the codebase
+    # (interpreted/stepped/fused/fallback) checks this flag and calls
+    # accordingly (`decider2.compile.driver`'s packed-call helpers).
+    #
+    # Exists because a data-shaped interior (a tree, a table, a Branch/Loop
+    # construct) has a SET of inputs/params only known once the document is
+    # walked — a real, per-instance Python function with that many
+    # individually-named parameters would have to be generated as source
+    # text to get the names right, which is exactly what these interiors no
+    # longer do (doc 08 §3.4). Fixing `fn`'s arity at two lets it be a
+    # hand-written closure instead: `Step.inputs`/`.params` still carry
+    # every name, type and null policy doc 03 §2's wiring table needs — only
+    # the mechanical "how does the call happen" collapses to one shape.
 
 
 @dataclass(frozen=True)

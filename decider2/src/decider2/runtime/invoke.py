@@ -54,6 +54,34 @@ from decider2.types import Decision, Input, Interface, MissingInputPolicy, NullP
 
 DEFAULT_BUILD_DIR = Path(".decider2_cache")
 
+# `resolve_params` builds one namedtuple bundle per `params`-reading step
+# and (at most) one for `shared`, every single call — `collections.
+# namedtuple(...)` is not memoised by the stdlib, so calling it fresh each
+# time used to hand a `packed` step's `fn` (`types.Step.packed`, which
+# receives `shared`/a bare `params` bundle as a plain positional argument —
+# `decider2.compile.driver._call_step_row`/`PackedCompiledSegment.run`) a
+# STRUCTURALLY IDENTICAL BUT DISTINCT class object on every call. Measured
+# while building this stage: numba's own type-identity handling for that
+# pattern is NOT reliably stable under GC pressure from a long-lived
+# process (structurally identical namedtuple classes are supposed to type
+# as one thing, and mostly do, but a long test suite — or a long-running
+# server — eventually hits a case where they don't, and `Driver.signatures`
+# grows once per call, unboundedly, exactly the "retuning recompiles"
+# failure doc 08 §2 forbids). Memoising the class itself, keyed by its
+# field set, removes the reliance on that numba behaviour entirely: the
+# SAME Python class object reaches numba every time the field set is the
+# same, so there is only ever one type to begin with.
+_BUNDLE_CLASS_CACHE: dict[tuple[str, tuple[str, ...]], type] = {}
+
+
+def _bundle_class(prefix: str, fields: tuple[str, ...]) -> type:
+    key = (prefix, fields)
+    cls = _BUNDLE_CLASS_CACHE.get(key)
+    if cls is None:
+        cls = collections.namedtuple(prefix, fields)
+        _BUNDLE_CLASS_CACHE[key] = cls
+    return cls
+
 
 def _plain_name(name: str) -> str:
     """The un-qualified half of a possibly `name@module`-qualified emit
@@ -330,7 +358,7 @@ def resolve_params(
                         "param() field and no params= model — there is "
                         "nothing to pass it (doc 03 §4.2)."
                     )
-                bundle_cls = collections.namedtuple(f"_{sname}_params", fields)
+                bundle_cls = _bundle_class(f"_{sname}_params", fields)
                 bundle = bundle_cls(**values)
                 per_step_bundle[sname] = bundle
                 per_step_bundle[(sp.module, sname)] = bundle
@@ -383,7 +411,7 @@ def resolve_params(
                 "those steps read via apply(..., shared={...})."
             )
         fields = tuple(raw_shared.keys())
-        shared_cls = collections.namedtuple("_shared_params", fields)
+        shared_cls = _bundle_class("_shared_params", fields)
         shared = shared_cls(**raw_shared)
 
     return ResolvedParams(per_step_scalar, per_step_bundle, shared)
@@ -553,6 +581,8 @@ def apply(
         step = _step_for(name)
         if step is None:
             return np.dtype(np.float64)
+        if step.output_annotation is not None:
+            return numpy_dtype(step.output_annotation)
         try:
             sig = inspect.signature(step.fn, eval_str=True)
         except (NameError, TypeError):

@@ -551,16 +551,28 @@ Five properties:
 
 | mode | structure source | `--verify` guarantees | use |
 |---|---|---|---|
-| **sealed** | fixed at image build | zero compilations, ever | highest assurance; batch |
-| **live** | may arrive from a config document | zero compilations **for the baked-in baseline** | UI-driven rule edits |
+| **sealed** | fixed at image build | zero compilations after `.warm()` | highest assurance; batch |
+| **live** | may arrive from a config document | zero compilations **for the baked-in baseline**, after `.warm()` | UI-driven rule edits |
 
 Both build the baseline at image build. `live` additionally carries a compiler
 and a writable cache directory. A deployment states which mode it is in; it is
 not inferred.
 
-This resolves the contradiction in doc 02 §3.4 / doc 05 §8: "a runtime load
-triggers zero compilations" is a statement about **the baseline**, not a
-prohibition on ever compiling.
+**Revised.** "Zero compilations, ever" for `sealed` mode is not literally
+achievable any more, and was quietly not quite true even before this revision
+(see doc 05 §8): a data-shaped interior's own step (a tree/table/Branch/Loop,
+doc 08 §3.4) and the fused driver itself both compile lazily, on their own
+first real call, not at image-build decoration time. `ServeHandle.warm()`
+(`Pipeline.precompile()` underneath) moves that first call to a controlled
+point — `serving/app.py`'s `app()` calls it before ever returning an app a
+server can bind a socket on, and `GET /ping` answers 503 until
+`handle.is_warm` — so the property that actually matters, **no compilation on
+the request path**, still holds exactly; only the mechanism (an explicit
+warm-up, checked by counting numba's own compile events) is now named rather
+than assumed. This also resolves the contradiction doc 02 §3.4 / doc 05 §8
+used to carry: "a runtime load triggers zero compilations" was a statement
+about **the baseline**, not a prohibition on ever compiling, and is now "zero
+compilations, after warm-up" throughout, for both modes.
 
 ### 4.1b How the system knows — and what happens across a restart
 

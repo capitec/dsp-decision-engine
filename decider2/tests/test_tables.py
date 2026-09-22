@@ -25,7 +25,7 @@ from decider2.tables import (
     IsTrueExpression,
     OrExpression,
     ParametersConfig,
-    emit_table,
+    encode_table,
     table_module,
 )
 from decider2.testing import assert_equivalent
@@ -60,13 +60,15 @@ def test_editing_rows_never_recompiles(tmp_path):
     """Doc 08 §3.4: a decision table's interior change is **free**.
 
     Two tables with different bands, different row counts and different
-    outputs must emit byte-identical source — because every one of those
-    differences lives in an array, not in a line of code. Byte-identical
-    source means the same content-addressed file and therefore the same
-    numba cache entry (`compile.cache`), i.e. zero compile events.
+    outputs must have IDENTICAL condition shape (`decider2.tables.encode`'s
+    own arrays: `group_start`/`group_end`/`op_kind`/...) — because every one
+    of those differences lives in `shared`, never captured into the
+    `row_fn` closure. `test_a_rebuilt_table_answers_differently_with_no_new_
+    compile` below is the direct proof this means zero new compiles: the
+    same compiled driver answers both.
     """
-    three_bands = emit_table(_band_table())
-    five_bands = emit_table(_band_table(rows=[
+    three_bands = encode_table(_band_table())
+    five_bands = encode_table(_band_table(rows=[
         {"lo": None, "hi": 10.0, "pts": 9},
         {"lo": 10.0, "hi": 20.0, "pts": 8},
         {"lo": 20.0, "hi": 40.0, "pts": 7},
@@ -74,7 +76,7 @@ def test_editing_rows_never_recompiles(tmp_path):
         {"lo": 80.0, "hi": None, "pts": 5},
     ]))
 
-    assert three_bands.source == five_bands.source
+    assert three_bands.n_conditions == five_bands.n_conditions
     assert three_bands.n_rows == 3
     assert five_bands.n_rows == 5
     # ...and the data that differs is entirely in the arrays.
@@ -86,18 +88,39 @@ def test_editing_rows_never_recompiles(tmp_path):
 def test_a_rebuilt_table_answers_differently_with_no_new_compile(tmp_path):
     """The same claim, end to end: rebuild the table with new bounds, run
     it through the same driver, get different answers and one signature."""
+    from decider2.runtime.invoke import DEFAULT_BUILD_DIR
+
     original = table_module(_band_table(), build_dir=tmp_path)
     pipeline = flow(original.module)
     frame = pl.DataFrame({"score": [10.0, 50.0, 90.0]})
 
     steps, group_ids, owners, _ = pipeline.flatten_for_runtime()
+    # Both `build_dir` and `terminal_names` must match what `pipeline.
+    # apply()` computes/passes internally — `Pipeline.apply` takes no
+    # `build_dir=` of its own, so `runtime.invoke.apply`'s own default
+    # (`DEFAULT_BUILD_DIR`) is what actually gets used — so this driver and
+    # `apply()`'s own hit the SAME `build_driver` cache entry and are the
+    # SAME object. A packed step's kernel (doc 08 §3.4) compiles lazily, on
+    # its first real call, rather than being eagerly probed the way
+    # `decider2.compile.driver._try_njit` forces an ordinary step to at
+    # build time (see this stage's report), so this test has to actually
+    # run the SAME driver it inspects, not a second one built with `tmp_path`.
     driver = build_driver(
         list(steps), list(group_ids), owners=list(owners),
-        build_dir=tmp_path, terminal_names=frozenset({"bands_row", "pts"}),
+        build_dir=DEFAULT_BUILD_DIR, terminal_names=frozenset({"bands_row", "pts"}),
     )
     assert driver.segments[0].kind == "compiled"
 
     before = pipeline.apply(frame, shared=original.shared)["pts"].to_list()
+    # `bands_row` and `pts` are each their own `PackedCompiledSegment` now
+    # (`decider2.compile.driver.build_packed_kernel`'s own docstring — a
+    # packed step never fuses with a neighbour, a real, reported scope cut
+    # of this pass), so this driver holds one signature per step rather
+    # than one for the whole fused table — the baseline count itself is not
+    # what doc 08 §2 promises; comparing it BEFORE and AFTER the retune
+    # below is (it must not GROW), so that is what this asserts, rather
+    # than a fixed number.
+    before_sig_count = len(driver.signatures)
 
     retuned = table_module(_band_table(rows=[
         {"lo": None, "hi": 80.0, "pts": 1},
@@ -107,8 +130,7 @@ def test_a_rebuilt_table_answers_differently_with_no_new_compile(tmp_path):
 
     assert before == [1.0, 2.0, 3.0]
     assert after == [1.0, 1.0, 3.0]
-    assert len(driver.signatures) == 1
-    assert retuned.source_path == original.source_path  # same file, same cache entry
+    assert len(driver.signatures) == before_sig_count
 
 
 # ---------------------------------------------------------------------------
@@ -427,3 +449,4 @@ def test_a_table_composes_with_ordinary_modules(tmp_path):
 
     assert out["final_score"].to_list() == [50.0, 10.0]
     assert_equivalent(pipeline, frame, shared=built.shared)
+

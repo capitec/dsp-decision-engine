@@ -41,8 +41,8 @@ import numpy as np
 from decider2.compile.driver import (
     Driver,
     ResolvedParams,
+    _call_step_row,
     _return_dtype,
-    _row_kwargs,
     _signature,
     build_driver,
 )
@@ -74,9 +74,9 @@ def run_interpreted(
     owners = list(owners) if owners is not None else [s.name for s in steps]
     for step, owner in zip(steps, owners):
         sig = _signature(step.fn)
-        out = np.empty(n, dtype=_return_dtype(step.fn))
+        out = np.empty(n, dtype=_return_dtype(step))
         for i in range(n):
-            out[i] = step.fn(**_row_kwargs(step, owner, sig, registry, resolved, i))
+            out[i] = _call_step_row(step.fn, step, owner, sig, registry, resolved, i)
         registry[step.name] = out
         # Doc 03 §3.3/§7: every version of a waterfall value stays reachable
         # by its producing module's name, alongside the plain "live" (most
@@ -103,9 +103,9 @@ def run_stepped(
     for step, owner in zip(steps, owners):
         fn = _step_fn(driver, owner, step.name)
         sig = _signature(step.fn)
-        out = np.empty(n, dtype=_return_dtype(step.fn))
+        out = np.empty(n, dtype=_return_dtype(step))
         for i in range(n):
-            out[i] = fn(**_row_kwargs(step, owner, sig, registry, resolved, i))
+            out[i] = _call_step_row(fn, step, owner, sig, registry, resolved, i)
         registry[step.name] = out
         registry[f"{step.name}@{owner}"] = out
     return registry
