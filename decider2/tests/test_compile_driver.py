@@ -1,8 +1,8 @@
 """Scratch tests for decider2.compile.driver — doc 05 §5 (variants), §6
 (fallback), §7 (fusion grouping); doc 05 §9 (acceptance criteria 5, 6).
 
-Real numba compilation happens in this file (unlike test_compile_codegen.py
-and test_compile_cache.py, which are pure-Python/text). Kept to a handful of
+Real numba compilation happens in this file (unlike test_compile_cache.py,
+which is pure-Python/text; test_compile_kernel.py compiles too). Kept to a handful of
 tiny, float64-only steps so the whole file compiles in well under a second
 after the first numba import.
 """
@@ -12,7 +12,7 @@ from decider2.compile.driver import build_driver
 from decider2.types import Input, ParamDecl, Step
 
 
-# --- module-level step functions (see test_compile_codegen.py for why) ----
+# --- module-level step functions ----------------------------------------
 
 
 def disposable_income(net_income: float, expenses: float) -> float:

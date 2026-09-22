@@ -65,8 +65,7 @@ from numba.core.errors import NumbaError, UnsupportedBytecodeError
 # module for the full note.
 _FALLBACK_TRIGGERS: tuple[type[BaseException], ...] = (NumbaError, UnsupportedBytecodeError)
 
-from decider2.compile import cache, codegen
-from decider2.compile.codegen import KernelPlan
+from decider2.compile.kernel import KernelPlan, build_fused_kernel, kernel_signature
 from decider2.types import Input, NullPolicy, Step
 
 SegmentKind = Literal["compiled", "fallback"]
@@ -109,31 +108,21 @@ _NUMPY_BY_ANNOTATION: dict[Any, Any] = {
 
 # ---------------------------------------------------------------------------
 # Packed-step kernels — a real, hand-written per-row compiled loop for a
-# `types.Step.packed` step (a tree/table/Branch/Loop `Step`, doc 08 §3.4),
-# built directly instead of through `decider2.compile.codegen`'s generated
-# source. `codegen.emit_kernel_source` imports a step's real function BY
-# NAME from its own module (`from {fn.__module__} import {fn.__name__}`) —
-# required so the generated kernel file, once written to disk, can be
-# `njit(cache=True)`'d and survive a fresh process (doc 05 §4.1). A packed
-# step's `fn` is a closure (`decider2.trees.encode`/`decider2.tables.
-# encode`/`decider2.graph.control_flow`), which has no such module-level
-# name — the SAME pre-existing limitation `build_driver`'s own `ImportError`
-# handler already names for a step defined inside another function. Rather
-# than let every packed step fall through to that path (a real per-row
-# PYTHON-level `FallbackSegment`, doc 05 §6 — no Python in `fused` mode is
-# the point that path exists to protect), this builds a genuinely compiled,
-# `@njit`'d row loop directly, closing over the already-njit'd `step.fn`
-# instead of re-importing it.
+# `types.Step.packed` step (a tree/table/Branch/Loop `Step`, doc 08 §3.4).
+# A packed `fn` has the generic `(args, params[, shared])` calling
+# convention rather than one named parameter per input, so it is driven by
+# the row-gathering machinery below instead of `decider2.compile.kernel`'s
+# fused kernel, which binds a step's arguments by its Python signature's
+# parameter names.
 #
 # **A real, reported scope cut, not full fusion.** Each packed step becomes
 # its OWN compiled segment — this does not fuse a tree's own matcher/path/
-# output steps into ONE kernel call the way `codegen.emit_kernel_source`
-# fuses several ordinary steps sharing a `fuse()` group. See this module's
-# report for the measured cost and why: building that fusion generically
-# needs a per-step arg-source map (external column vs. an earlier packed
-# step's own result) composed through the SAME row-gathering machinery
-# below, and was judged too large an addition to risk finishing untested in
-# this pass.
+# output steps into ONE kernel call the way `compile.kernel.
+# build_fused_kernel` fuses several ordinary steps sharing a `fuse()` group.
+# Building that fusion generically means teaching that kernel's row body a
+# second calling convention (fill a row buffer, call `fn(args, params)`),
+# and was judged too large an addition to risk finishing untested in the
+# pass that introduced packed steps.
 #
 # **Row gathering has no arity ceiling.** `args[k]` for `Step.inputs[k]`, `k`
 # a RUNTIME row index, used to be one hand-written closure body per input
@@ -656,25 +645,32 @@ def _call_step_row(
 
 
 def _build_call_args(
-    plan: KernelPlan, registry: dict, resolved: ResolvedParams, out_arrays: dict
-) -> list:
-    args: list = []
-    for role in codegen.kernel_signature(plan):
+    plan: KernelPlan, registry: dict, resolved: ResolvedParams, out_arrays: dict, n: int
+) -> tuple:
+    """`(n, cols, valids, params_all, outs)` — the fused kernel's five
+    arguments (`compile.kernel.build_fused_kernel`), each tuple packed in
+    `kernel_signature` order so the kernel's own argument-source map, built
+    from the same list, indexes the right element."""
+    cols: list = []
+    valids: list = []
+    params_all: list = []
+    outs: list = []
+    for role in kernel_signature(plan):
         if role.kind == "array":
-            args.append(registry[role.input_name])
+            cols.append(registry[role.input_name])
         elif role.kind == "valid":
-            args.append(registry[f"__valid__{role.input_name}"])
+            valids.append(registry[f"__valid__{role.input_name}"])
         elif role.kind == "param_scalar":
-            args.append(_scalar_arg(resolved, role.owner, role.step_name, role.param_name))
+            params_all.append(_scalar_arg(resolved, role.owner, role.step_name, role.param_name))
         elif role.kind == "params_bundle":
-            args.append(_bundle_arg(resolved, role.owner, role.step_name))
+            params_all.append(_bundle_arg(resolved, role.owner, role.step_name))
         elif role.kind == "shared":
-            args.append(resolved.shared)
+            params_all.append(resolved.shared)
         elif role.kind == "output":
-            args.append(out_arrays[role.output_name])
+            outs.append(out_arrays[role.output_name])
         else:  # pragma: no cover - exhaustive over ArgRole.kind
             raise AssertionError(f"unhandled arg role {role.kind!r}")
-    return args
+    return n, tuple(cols), tuple(valids), tuple(params_all), tuple(outs)
 
 
 class Segment(ABC):
@@ -748,8 +744,7 @@ class CompiledSegment(Segment):
             name: np.empty(n, dtype=_return_dtype(step_by_name[name]))
             for name in self.required_outputs
         }
-        args = _build_call_args(self.plan, registry, resolved, out_arrays)
-        self.kernel_fn(*args)
+        self.kernel_fn(*_build_call_args(self.plan, registry, resolved, out_arrays, n))
         for name, arr in out_arrays.items():
             registry[name] = arr
             registry[f"{name}@{owner_by_name.get(name, name)}"] = arr
@@ -864,10 +859,11 @@ class Driver:
 
         Doc 05 §9's acceptance criterion 5: retuning any params bundle must
         leave this at the same length — params arrive as *kernel arguments*
-        (`decider2.compile.codegen`), never baked into generated source, so a
-        value-only retune changes nothing this list depends on. Changing a
-        field's *type* (e.g. a param toggling `float` <-> `float | None`)
-        is the named negative control and *should* grow it by one.
+        (`decider2.compile.kernel`'s `params_all` tuple), never baked into
+        the kernel, so a value-only retune changes nothing this list depends
+        on. Changing a field's *type* (e.g. a param toggling `float` <->
+        `float | None`) is the named negative control and *should* grow it
+        by one.
         """
         out: list = []
         for seg in self.segments:
@@ -967,7 +963,10 @@ def build_driver(
         return cached
     if len(steps) != len(group_ids):
         raise ValueError("steps and group_ids must be the same length")
-    build_dir = Path(build_dir)
+    # `build_dir` no longer receives any file from this module (the fused
+    # kernel is built in memory, `decider2.compile.kernel`); it stays in the
+    # signature, and in `_driver_key` above, because every caller passes it
+    # and two builds against different directories were never one Driver.
     sample_values = sample_values or {}
     terminal_names = frozenset(terminal_names)
 
@@ -1052,50 +1051,23 @@ def build_driver(
             parallel=gid in parallel_group_ids,
             fastmath=gid in fastmath_group_ids,
         )
-        try:
-            source = codegen.emit_kernel_source(plan)
-            cached = cache.get_or_build(source, build_dir)
-        except ImportError as exc:
-            # The generated kernel FILE imports each step by
-            # `fn.__module__`/`fn.__name__` (doc 05 §4.1: "every generated
-            # driver is written to a real .py file before anything imports
-            # it" — required for numba's cache to survive a fresh process,
-            # EXPERIMENTS.md §J2). A step defined inside another function
-            # (a closure, e.g. a test helper) njit-compiles just fine on
-            # its own — `compiled[(o, s.name)]` above already proved that —
-            # but has no module-level name that import line can reach.
-            # That is a property of *this* fusion strategy, not a genuine
-            # runtime bug in the step, so it gets the same treatment doc 05
-            # §6 gives an un-njit-able step: split it out of the compiled
-            # kernel rather than fail the whole build. `step_fns` already
-            # holds each step's own (successfully compiled) dispatcher from
-            # the loop just above, so `stepped`/`fused`'s fallback path
-            # still runs compiled code per row, one step at a time — the
-            # only thing lost is fusing this run into one kernel call.
-            for s, o in zip(run, run_owners):
-                s_required = (s.name,) if s.name in needed else ()
-                segments.append(
-                    FallbackSegment(
-                        steps=(s,),
-                        owners=(o,),
-                        external_inputs=_external_inputs([s]),
-                        required_outputs=s_required,
-                        fallback_reason=(
-                            f"kernel source could not import '{s.fn.__name__}' "
-                            f"from '{s.fn.__module__}' ({exc!r}); it is not "
-                            "reachable at module scope"
-                        ),
-                    )
-                )
-            i = j
-            continue
+        # The kernel closes over each step's OWN dispatcher (the same one
+        # `step_fns` holds for `stepped` mode), so a step defined inside
+        # another function fuses like any other — the generated-source
+        # strategy's "not reachable at module scope" fallback no longer has
+        # a cause to exist.
+        kernel_fn = build_fused_kernel(
+            plan,
+            [compiled[(o, s.name)][0] for s, o in zip(run, run_owners)],
+            [_return_dtype(s) for s in run],
+        )
         segments.append(
             CompiledSegment(
                 steps=tuple(run),
                 owners=tuple(run_owners),
                 external_inputs=external,
                 required_outputs=required,
-                kernel_fn=cached.module.kernel,
+                kernel_fn=kernel_fn,
                 plan=plan,
             )
         )
