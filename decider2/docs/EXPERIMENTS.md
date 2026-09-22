@@ -2079,3 +2079,104 @@ or an untested exception-safety gap.
 
 **§Q remains the answer if codegen is retired.** This experiment settles that
 rather than reopening it.
+
+## X — Inlining the walkers: the 1.6–1.8× the typed-features strand reported was the inlining, not the types
+
+The typed-features strand (`.claude/worktrees/agent-a47fc4a23192c7421`, its
+`bench_typed_features.py`) built typed feature arrays and reported the tree
+getting 1.6–1.8× faster. A type discriminator cannot do that. It had changed two
+things at once: the representation, and `inline="always"` on `walk_tree` and the
+cached `path_fn`. The owner measured the cell it never ran — f90488c's untyped
+code with ONLY the inlining — and found the whole speedup there. This section is
+the independent re-verification of that, on the same benchmark, plus the same
+question asked of every other per-row walker.
+
+Harness: `experimentation/verification-probes/README.md` ("run3.sh +
+compile_cost.py"), the strand's `bench_typed_features.py` copied as `bench.py`,
+`git archive` of the pre-change source as `base/`, interleaved rounds, 200k rows,
+median of 7 reps after two warm-ups. Same 28-core box, other work running.
+
+### 1. The tree: reproduced
+
+`apply(mode="fused")` end to end, ns/row, three interleaved rounds:
+
+| tree | before (real call) | after (inlined) | walk alone before → after |
+|---|---|---|---|
+| single (16 Float64) | 187–218 | **100–118** | 170–197 → 81–89 |
+| mixed (10 Float64 + 4 Int64 + 2 Boolean) | 208–234 | **115–146** | 179–199 → 88–102 |
+
+Path-column sha256 digests identical before and after (`9bb615c22d15ee65`
+single, `1e94df1a63c1ba2c` mixed). `assert_equivalent` across
+interpreted/stepped/fused green. Ratio 1.6–1.9×, matching the owner's 247–262 →
+125–133 on the mixed tree under heavier load.
+
+**Mechanism, confirmed from numba's pipeline rather than inferred.**
+`inline="always"` is handled by `InlineInlinables`, an *untyped* pass (it runs
+before `LiteralUnroll` and before type inference): the callee's IR is spliced into
+the caller, so the callee is never compiled as a function of its own. Before:
+`kernel → path_fn → walk_tree`, two real calls per row, the second carrying
+eight arrays (seven scalars each) plus a tuple. After: one function. The
+structure arrays become constants of the loop; the row buffer stays in
+registers.
+
+### 2. Caching: intact, and where the body now lives
+
+Two processes, persistent `NUMBA_CACHE_DIR`, `NUMBA_DEBUG_CACHE=1`, counting
+numba's own lines:
+
+| | cold saved / loaded | warm saved / loaded | walk_tree.overloads | compile events, first fused apply |
+|---|---|---|---|---|
+| before | 8 / 0 | 0 / 5 | 1 | cold 13, warm 5 |
+| after | 7 / 0 | 0 / 7 | **0, every phase** | cold 11, warm 5 |
+
+- `walk_tree` has no cache entry any more and no overload in any process: its
+  body is in `path_fn`'s cached entry (`encode._build_path_fn.locals.path_fn`,
+  saved cold, loaded warm). The three entries "before" saved cold but never
+  loaded warm (`walk_tree`, `compare`, `_nonempty`) were callees linked into
+  `path_fn`'s entry — dead weight on disk.
+- In fused mode `path_fn.overloads == 0` after `apply()`: the driver's per-row
+  `kernel` absorbs `path_fn` too and compiles the whole thing per process (it
+  captures a Dispatcher, so it was never cached). `path_fn`'s cache entry serves
+  the interpreted/stepped modes, which call it from Python.
+- Retune (values-only param change): `assert_no_recompile` OK,
+  `count_new_compiles() == 0`; `assert_no_compilation_after_warmup` OK, cold and
+  warm. `decider2 build --verify`'s property holds.
+
+Compile cost (`compile_cost.py`, mixed tree): cold 1.96 s → **1.56 s**, warm
+0.85 s → **1.09 s**. Cold is cheaper (two fewer standalone compiles); warm is
+~0.2 s dearer because the per-process `kernel` now compiles the walk itself
+instead of linking a cached `walk_tree`. That is the one cost of this change.
+
+### 3. The other walkers, measured
+
+Same shape of benchmark (`bench_others.py`), each against the tree-inlined
+source, two interleaved rounds, digests identical in every row:
+
+| walker | baseline ns/row | inlined | verdict |
+|---|---|---|---|
+| decision table, `scan_table` (30 rows × 5 conditions) | 459–464 | 473–497 (`scan_table` only), 451–452 (+ `row_fn`) | **no** — 2%, inside noise; the per-record cost is the 150-cell scan, not the call |
+| Branch + Loop, `walk` | 627 | 503–524 (`walk`), **489–492** (`walk` + step `fn`), 492–495 (+ `call`) | **yes — 22%**, adopted (`walk` + `fn_int`/`fn_bool`/`fn_float`) |
+| hoisted string matcher, `matcher_fn` | 427–428 | 422–434 | **neutral** — its args are a 1-tuple and a tuple of int32 codes; nothing array-shaped crosses |
+| `n_computed > 0` `path_fn` (3 computed features) | 166–194 (five rounds; drifts up under load) | 149–167 | **small win, 3–10%**, adopted; never cached either way, so its cache discipline is untouched |
+
+Refuted along the way: inlining `_seed_regs` (its `literal_unroll` is over the
+runtime `params` argument) fails in numba's inline pass — "literal_unroll_
+subpipeline ... switch const list for tuples" — so the seed stays a real call;
+`call`'s `literal_unroll` over a *captured* tuple inlines fine but gains nothing.
+
+One side effect to know about: the suite's warning count rose 17 → 58, every
+one of them numba's existing `NumbaExperimentalFeatureWarning: First-class
+function type feature is experimental` from the `literal_unroll` over a tuple of
+Dispatchers (the computed-feature `path_fn`, the control-flow `call`). Inlining
+splices those bodies into more callers, so the same warning is now reported from
+more sites; nothing new is warned about.
+
+### 4. Rule
+
+**Do not put a non-inlined layer between the per-row kernel and a walker.** A
+numba array crossing a real call is seven scalars pushed and reloaded per call;
+a walker takes several. Any `@njit` function on the row path that takes a
+walker's arrays and calls it must be `inline="always"`, and the cached entry is
+then the outermost such closure that Python calls directly. Where the arguments
+are scalars or small tuples (the matcher) or the callee's own work dwarfs the
+call (the table scan) it does not matter and was left alone.
