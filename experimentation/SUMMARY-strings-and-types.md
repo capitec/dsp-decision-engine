@@ -46,13 +46,15 @@ meaningless.
 
 ## 3. What was actually tried
 
-Three independent strands, run overnight, each measured rather than argued:
+Four independent strands, run overnight, each measured rather than argued. The
+fourth was not in the original plan — the C work turned it up (section 5):
 
 | strand | question | status |
 |---|---|---|
 | **Rust** | match strings in Rust, called from inside the compiled kernel | **done** |
 | **Numba + C** | same, but C instead of Rust — no second language in the build | **done** |
-| **Typed features** | split the one array into float64 / int64 / bool / codes | *pending* |
+| **Typed features** | split the one array into float64 / int64 / bool / codes | **done** |
+| **Pure numba bytes** | prefix/suffix/substring over raw bytes, no C and no Rust | *running* |
 
 ---
 
@@ -86,7 +88,7 @@ High-cardinality column — a distinct string per row, e.g. merchant descriptors
 | frame tier, ns/row | ~35 | ~35 | ~35 | ~35 |
 
 Here lazy Rust **does** win — 4.5x at 1% selectivity, crossing over around 75%.
-That is the case the owner predicted, and it is real.
+That is the case you predicted, and it is real.
 
 ### Why it is still not worth adopting
 
@@ -95,7 +97,7 @@ or **35 ms per million rows**. A quarter of that is polars' own buffer
 conversion, which Rust does not avoid. Against that: a second language, a wheel
 per platform, and a new way to crash.
 
-### Two things I had told the owner that were wrong
+### Two things I had told you that were wrong
 
 **"polars string buffers are zero-copy, there is nothing to pack."** False on
 polars 1.41. A `String` column is stored as `Utf8View`, so asking for the
@@ -273,5 +275,132 @@ minutes.
 
 ---
 
-*Section 6 — typed feature arrays — and the combined recommendation to follow
-when that strand reports.*
+## 6. Typed feature arrays — built, green, and the headline needs unpicking
+
+### What it does
+
+Every feature a tree reads is no longer coerced into one `float64` array. A row
+is now six typed arrays — float64, int64, bool, category code, string spans,
+string bytes — and each node in the tree carries a small integer saying which
+one its feature lives in. That integer also picks which threshold tuple to
+compare against, so an int64 feature is compared against an int64 threshold.
+
+The int64 case from section 2 is now right:
+`[9007199254740992, 9007199254740993] == 9007199254740992` gives `[1, 0]`
+instead of `[1, 1]`, in every execution mode and in `score()`.
+
+Knowing a feature's type at build time also lets the encoder **refuse** things
+the single array could never see. `sector < 5` on a string column used to
+compile happily and compare dictionary codes — numbers with no order and no
+meaning. It is now a build error that names the tree, the node and the feature.
+So are: a threshold on a boolean, `is_true` on a string, `string_match` on a
+number, and a fractional threshold like `5000.5` on an integer feature.
+
+Existing documents encode byte-identically; the wire format is untouched;
+retuning an integer threshold still triggers zero recompiles; the 400-feature
+tree still builds. I ran the suite myself in the branch: **563 passed**.
+
+### One thing to be clear about: the fix is opt-in
+
+A feature only gets a real type if the tree **declares** one. Undeclared, it is
+still inferred `float`, exactly as today. I checked this end to end rather than
+read it:
+
+| | today | the branch |
+|---|---|---|
+| no declaration — *every document that exists* | `[1, 1]` wrong | `[1, 1]` **still wrong** |
+| declared `feature_types={'n': int}` | no such API | `[1, 0]` correct |
+
+So merging this does not fix the money trees you already have; it gives them a
+way to be fixed, one declaration at a time. The strand pins that behaviour with
+a deliberate negative-control test, which is the right call — silently
+retyping every existing document would change answers no one asked to change —
+but it means "the int64 bug is fixed" is only true of trees that opt in. If
+that is not what you want, the follow-up is inferring the kind from the
+*column's* dtype at the boundary rather than from the declaration, which is a
+bigger and more invasive change than this branch makes.
+
+### The headline says 1.6–1.8× faster. That is not the typed split.
+
+The strand reports the tree getting *faster* — 249–255 ns/row down to
+140–156. That was surprising, because a type discriminator per node should
+cost a little, not pay for itself. It turned out the strand changed two things
+at once: the typed representation, **and** marking the walker
+`inline="always"` so it compiles into the per-row loop instead of being called.
+
+So I measured the third option it never ran — the **old, untyped code with only
+the inlining change** — interleaved with the other two, twice, on the same box.
+All three produce byte-identical output:
+
+| mixed tree, 200k rows | end to end | the tree walk alone |
+|---|---|---|
+| today | 247 – 262 ns/row | 201 – 217 ns/row |
+| **today + inlining only (a two-line change)** | **125 – 133** | **96** |
+| typed features (inlining included) | 136 – 154 | 117 – 151 |
+
+**The entire speedup is the inlining.** It is available now, on the current
+code, without the typed split: roughly **2× on the tree path** from marking two
+functions inline. The typed representation, measured against that, *costs*
+about 12–35% — which is what it was always expected to cost, and matches the
+Numba+C strand's independent 5–20% for the same discriminator.
+
+This does not make the typed work wrong; it makes the case for it honest. It is
+a **correctness** change that costs roughly a fifth of the walk, not a
+performance change. That is a much easier thing to decide about.
+
+### The finding underneath, which is worth more than either
+
+The strand's first typed attempt was **2× slower** (441–464 ns/row), and
+chasing that turned up the real rule: **numba arrays crossing a genuine call
+boundary, per row, are expensive.** Each array is seven scalars; six of them
+plus the tree's own arrays is around ninety scalars pushed and reloaded on
+every row. One float64 array crossed that boundary nearly free, which is why
+nothing ever noticed. Inlining removes the boundary, so the row buffers stay in
+registers and the tree's arrays become compile-time constants.
+
+That is the same mechanism the Numba+C strand hit from a different direction
+(its 365 ns/row refcount trap), and the same one my own probe found does *not*
+bite decider2 today. Three independent encounters with one rule:
+
+> **Do not put a non-inlined layer between the per-row kernel and the walker.**
+
+It is now documented at both call sites in the strand's branch.
+
+### Compile cost, since inlining usually has one
+
+Measured cold and warm, fresh cache, separate processes:
+
+| | cold build | warm start | caches cleanly |
+|---|---|---|---|
+| today | 1.97 s | 0.89 s | yes |
+| today + inlining | **1.61 s** | 1.05 s | yes — 6 saved cold, 6 loaded warm, 0 re-saved |
+| typed features | 2.83 s | 1.55 s | yes — 14 saved cold, 14 loaded warm, 0 re-saved |
+
+Inlining costs nothing at build time. Typed features cost about 1.4× the cold
+compile and 1.5× the warm start, because there are more specialisations to
+load — a startup cost, which you said you can work around.
+
+### Caveats worth knowing before merging
+
+- A computed expression (`x - y > 10`) still cannot read an int-, bool- or
+  string-typed feature — arithmetic there is float64. It is a **loud error**,
+  not a silent widening, but it means money arithmetic inside an expression
+  needs the feature declared `float`.
+- A Float64 column handed to an int-declared feature is still truncated at the
+  boundary, the same rule every hand-written `-> int` step already lives under.
+- The raw-string slot is **reserved and driver-tested but not wired**: a
+  `bytes`-annotated input can carry polars' offsets and bytes into the kernel
+  zero-copy, and that is verified, but the boundary does not yet produce such a
+  column and the walker has no node kind that reads it. That is the hook the
+  string work would use.
+- Pre-existing and untouched: `expr.py`'s per-node closures are `cache=True`
+  while capturing other compiled functions — the pattern we established must
+  not be cached. It predates this work; flagged, not fixed.
+
+The branch is `worktree-agent-a47fc4a23192c7421`, uncommitted, with its own
+write-up at `TYPED_FEATURES.md`.
+
+---
+
+*The combined recommendation, and the fourth strand (pure-numba byte matching,
+no C at all), to follow.*
