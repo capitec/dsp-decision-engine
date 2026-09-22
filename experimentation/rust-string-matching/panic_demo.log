@@ -1,0 +1,59 @@
+
+=== oob_protected: returncode=0
+  [worker pid=1122585] oob_protected
+  match_one(idx=10**9) from inside njit, n_strings=1000 ...
+  returned -1
+  subsequent good call in the SAME process: match_one(idx=0) -> 0 (string='capitec bank')
+  worker exiting normally
+  stderr| thread '<unnamed>' (1122585) panicked at src/lib.rs:130:21:
+  stderr| index out of bounds: the len is 1001 but the index is 1000000000
+  stderr| note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+=== oob_unprotected: returncode=-6 KILLED by SIGABRT
+  [worker pid=1122713] oob_unprotected
+  match_one(idx=10**9) from inside njit, n_strings=1000 ...
+  stderr|   30:     0x55f91b9dd3d5 - _start
+  stderr|   31:                0x0 - <unknown>
+  stderr| thread caused non-unwinding panic. aborting.
+
+=== short_protected: returncode=0
+  [worker pid=1122761] short_protected
+  match_one(idx=999) with values_len=4 but offsets[999..1000]=12962..12977 ...
+  returned -1
+  subsequent good call in the SAME process: match_one(idx=0) -> 0 (string='capitec bank')
+  worker exiting normally
+  stderr| thread '<unnamed>' (1122761) panicked at src/lib.rs:132:21:
+  stderr| range start index 12962 out of range for slice of length 4
+  stderr| note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+=== short_unprotected: returncode=-6 KILLED by SIGABRT
+  [worker pid=1122872] short_unprotected
+  match_one(idx=999) with values_len=4 but offsets[999..1000]=12962..12977 ...
+  stderr|   30:     0x55b1331403d5 - _start
+  stderr|   31:                0x0 - <unknown>
+  stderr| thread caused non-unwinding panic. aborting.
+
+=== synthetic_protected: returncode=0
+  [worker pid=1123195] synthetic_protected
+  deliberately_panic(1) from inside njit ...
+  returned -1
+  subsequent good call in the SAME process: match_one(idx=0) -> 0 (string='capitec bank')
+  worker exiting normally
+  stderr| thread '<unnamed>' (1123195) panicked at src/lib.rs:247:13:
+  stderr| deliberate panic (protected boundary)
+  stderr| note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+=== synthetic_unprotected: returncode=-6 KILLED by SIGABRT
+  [worker pid=1123227] synthetic_unprotected
+  deliberately_panic(1) from inside njit ...
+  stderr|   30:     0x562e44e6f3d5 - _start
+  stderr|   31:                0x0 - <unknown>
+  stderr| thread caused non-unwinding panic. aborting.
+
+=== SUMMARY ===
+oob_protected          exited 0
+oob_unprotected        KILLED SIGABRT
+short_protected        exited 0
+short_unprotected      KILLED SIGABRT
+synthetic_protected    exited 0
+synthetic_unprotected  KILLED SIGABRT

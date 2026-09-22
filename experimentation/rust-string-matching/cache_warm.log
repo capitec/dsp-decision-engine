@@ -1,0 +1,3 @@
+[cache] index loaded from '/home/sholto/Documents/Workspace/capitec/dsp-decision-engine/experimentation/rust-string-matching/__pycache__/kernels.lazy_rust-72.py314.nbi'
+[cache] data loaded from '/home/sholto/Documents/Workspace/capitec/dsp-decision-engine/experimentation/rust-string-matching/__pycache__/kernels.lazy_rust-72.py314.1.nbc'
+[warm] import+build+first call: 553.2 ms; hits=1243; cache warnings=none; lazy_rust index files=['kernels.lazy_rust-72.py314.nbi']
