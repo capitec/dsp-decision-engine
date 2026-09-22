@@ -2086,8 +2086,8 @@ The typed-features strand (`.claude/worktrees/agent-a47fc4a23192c7421`, its
 `bench_typed_features.py`) built typed feature arrays and reported the tree
 getting 1.6–1.8× faster. A type discriminator cannot do that. It had changed two
 things at once: the representation, and `inline="always"` on `walk_tree` and the
-cached `path_fn`. The owner measured the cell it never ran — f90488c's untyped
-code with ONLY the inlining — and found the whole speedup there. This section is
+cached `path_fn`. That cell was then measured — f90488c's untyped
+code with ONLY the inlining — and the whole speedup is there. This section is
 the independent re-verification of that, on the same benchmark, plus the same
 question asked of every other per-row walker.
 
@@ -2107,8 +2107,9 @@ median of 7 reps after two warm-ups. Same 28-core box, other work running.
 
 Path-column sha256 digests identical before and after (`9bb615c22d15ee65`
 single, `1e94df1a63c1ba2c` mixed). `assert_equivalent` across
-interpreted/stepped/fused green. Ratio 1.6–1.9×, matching the owner's 247–262 →
-125–133 on the mixed tree under heavier load.
+interpreted/stepped/fused green. Ratio 1.6–1.9×, matching the attribution run's 247–262 →
+125–133 on the mixed tree under heavier load
+(`experimentation/verification-probes/`).
 
 **Mechanism, confirmed from numba's pipeline rather than inferred.**
 `inline="always"` is handled by `InlineInlinables`, an *untyped* pass (it runs
