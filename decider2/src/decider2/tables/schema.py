@@ -66,11 +66,13 @@ import numpy as np
 from pydantic import BaseModel, Field, model_validator
 
 from decider2.trees.codegen import LINE_CAP, TreeTooLarge
+from decider2.trees.interpreter import GE, GT, LE, LT
 from decider2.trees.schema import RangeEndLogic
 
 __all__ = [
     "BoundMode",
     "ParametersConfig",
+    "CondOp",
     "EmittedCondition",
     "ConditionContext",
     "TableTooComplex",
@@ -86,14 +88,19 @@ __all__ = [
 
 
 class TableTooComplex(TreeTooLarge):
-    """The table's flattened expression exceeds the emitted-line cap.
+    """The table's flattened expression explodes into an unreasonable
+    number of DNF disjuncts.
 
     Raised from `AndExpression.to_dnf()` when distributing And over Or
-    would blow past doc 05 §7's line cap before a single line is emitted —
-    the only place the expression *shape* can explode, so the only place
-    that needs to guard against it. `codegen.py` raises the sibling check
-    on the kernel's total emitted line count, once the whole table (every
-    condition's `emit()`, every output column) is known.
+    would blow the number of OR-groups past a sane bound. Before the
+    codegen->interpreter migration (`decider2.tables.interpreter`) this
+    guarded against emitted SOURCE exceeding doc 05 §7's line cap; a
+    table's expression shape is array data now; not source, so there is no
+    more line count to protect. The guard itself stays, for a narrower but
+    still real reason: `to_dnf()` duplicates any condition shared across
+    disjuncts once per disjunct, so an unbounded explosion still means
+    unboundedly more redundant per-row work at scan time, not just more
+    text.
     """
 
 
@@ -101,26 +108,65 @@ def _f64(values: t.Sequence[t.Any], fill: float = 0.0) -> np.ndarray:
     return np.array([fill if v is None else float(v) for v in values], dtype=np.float64)
 
 
-def _bool(values: t.Sequence[t.Any]) -> np.ndarray:
-    return np.array([bool(v) for v in values], dtype=np.bool_)
+def _flag(values: t.Sequence[bool]) -> np.ndarray:
+    """A boolean flag array, as float64 (1.0/0.0) rather than `np.bool_`.
+
+    `decider2.tables.interpreter.scan_table` reads a `has_lo`/`has_hi`/`has`
+    flag from the SAME homogeneous-tuple-of-`float64[:]`-arrays a
+    condition's real bound/value lives in (`between_bounds`/`eq_bounds`) —
+    numba's `UniTuple` requires one element TYPE, so a `bool_` array here
+    would not type-check next to a `float64` one. `!= 0.0` in the walker is
+    the read-side of this.
+    """
+    return np.array([1.0 if v else 0.0 for v in values], dtype=np.float64)
+
+
+@dataclass(frozen=True)
+class CondOp:
+    """One leaf condition's row in `decider2.tables.interpreter.
+    scan_table`'s flat op arrays — decider2's analogue of a source line,
+    now data. `kind` is one of `"between"`/`"eq"`/`"is_true"`/`"in"`
+    (`decider2.tables.interpreter`'s four fixed shapes, and no others —
+    `AndExpression`/`OrExpression` flatten away in `to_dnf()` before any
+    leaf reaches here). The `*_key` fields name entries of the SAME
+    `EmittedCondition.arrays` dict this condition already contributes —
+    `decider2.tables.codegen` resolves them to array-tuple slots once the
+    whole table's conditions are known; nothing here decides how they are
+    laid out, only which of them this ONE condition needs.
+    """
+
+    kind: str
+    variable: str
+    lo_key: t.Optional[str] = None
+    hi_key: t.Optional[str] = None
+    has_lo_key: t.Optional[str] = None
+    has_hi_key: t.Optional[str] = None
+    lo_op: int = 0
+    hi_op: int = 0
+    val_key: t.Optional[str] = None
+    has_key: t.Optional[str] = None
+    off_key: t.Optional[str] = None
+    vals_key: t.Optional[str] = None
 
 
 @dataclass
 class EmittedCondition:
-    """One condition, already resolved to `shared` arrays plus source lines.
+    """One condition, already resolved to `shared` arrays plus its scan op.
 
     What `Expression.emit()` returns — decider2's analogue of decider 1's
     `BaseExpression.__call__` returning a `pl.Expr`. `arrays` is this
     condition's *data* (the table's rows: free to change, doc 08 §3.4);
-    `lines` is its *shape* (the expression: a compile if it changes).
-    `kind`/`variable` are carried through for introspection (`TableModule.
-    explain()`'s callers) but are not otherwise read by `codegen.py`.
+    `op` is its *shape* (which of `decider2.tables.interpreter`'s four
+    kinds, and which of `arrays`' keys it reads — a structural edit, e.g.
+    changing `between` to `eq`, is what recompiles). `kind`/`variable` are
+    carried through for introspection (`TableModule.explain()`'s callers)
+    but are not otherwise read by `codegen.py`.
     """
 
     kind: str
     variable: str
     arrays: t.Dict[str, np.ndarray] = field(default_factory=dict)
-    lines: t.List[str] = field(default_factory=list)
+    op: "CondOp | None" = None
 
 
 class ConditionContext(t.Protocol):
@@ -382,22 +428,22 @@ class BetweenExpression(_BaseExpression):
                     )
 
     def emit(self, ctx: ConditionContext, prefix: str) -> EmittedCondition:
-        var = ctx.use_var(self.variable)
+        ctx.use_var(self.variable)
         bounds = self.resolved_bounds(ctx.parameters)
-        lo_op, hi_op = (
-            (">=", "<") if self.mode is BoundMode.lower_inclusive else (">", "<=")
-        )
+        lo_op, hi_op = (GE, LT) if self.mode is BoundMode.lower_inclusive else (GT, LE)
         arrays = {
             f"{prefix}_lo": _f64([lo for lo, _ in bounds]),
             f"{prefix}_hi": _f64([hi for _, hi in bounds]),
-            f"{prefix}_has_lo": _bool([lo is not None for lo, _ in bounds]),
-            f"{prefix}_has_hi": _bool([hi is not None for _, hi in bounds]),
+            f"{prefix}_has_lo": _flag([lo is not None for lo, _ in bounds]),
+            f"{prefix}_has_hi": _flag([hi is not None for _, hi in bounds]),
         }
-        lines = [
-            f"if ok and {prefix}_has_lo[r] and not ({var} {lo_op} {prefix}_lo[r]): ok = False",
-            f"if ok and {prefix}_has_hi[r] and not ({var} {hi_op} {prefix}_hi[r]): ok = False",
-        ]
-        return EmittedCondition("between", self.variable, arrays, lines)
+        op = CondOp(
+            "between", self.variable,
+            lo_key=f"{prefix}_lo", hi_key=f"{prefix}_hi",
+            has_lo_key=f"{prefix}_has_lo", has_hi_key=f"{prefix}_has_hi",
+            lo_op=lo_op, hi_op=hi_op,
+        )
+        return EmittedCondition("between", self.variable, arrays, op)
 
 
 class InExpression(_BaseExpression):
@@ -430,7 +476,7 @@ class InExpression(_BaseExpression):
         per_row = [column_values[i] or [] for i in range(n)]
         is_string = ctx.parameters.is_string_column(self.values_column)
         if is_string:
-            var = ctx.matcher_name(self.variable)
+            ctx.matcher_name(self.variable)
             ctx.use_var(self.variable)
             flat = [
                 ctx.literal_index(self.variable, str(v))
@@ -438,31 +484,26 @@ class InExpression(_BaseExpression):
                 for v in values
             ]
         else:
-            var = ctx.use_var(self.variable)
+            ctx.use_var(self.variable)
             flat = [float(v) for values in per_row for v in values]
         offsets = np.zeros(n + 1, dtype=np.int64)
         for i, values in enumerate(per_row):
             offsets[i + 1] = offsets[i] + len(values)
         arrays = {
             f"{prefix}_off": offsets,
-            f"{prefix}_vals": np.array(
-                flat, dtype=np.int64 if is_string else np.float64
-            ).reshape(-1),
+            # Always float64 — a matcher-resolved code (a small, exact
+            # integer) casts losslessly, and the walker's `in_values`
+            # tuple (decider2.tables.interpreter) is one homogeneous type
+            # regardless of whether the set is numeric or string-backed
+            # (same convention a tree's `feats` tuple uses for a matcher's
+            # int output).
+            f"{prefix}_vals": np.array(flat, dtype=np.float64).reshape(-1),
         }
         # CSR membership: the set for row r is vals[off[r]:off[r+1]].
         # Variable-length sets are exactly why the table's contents can
         # stay data while a tree's would have to be unrolled.
-        lines = [
-            "if ok:",
-            "    hit = False",
-            f"    for j in range({prefix}_off[r], {prefix}_off[r + 1]):",
-            f"        if {var} == {prefix}_vals[j]:",
-            "            hit = True",
-            "            break",
-            f"    if not hit and {prefix}_off[r + 1] > {prefix}_off[r]: ok = False",
-            f"    if {prefix}_off[r + 1] == {prefix}_off[r]: ok = False",
-        ]
-        return EmittedCondition("in", self.variable, arrays, lines)
+        op = CondOp("in", self.variable, off_key=f"{prefix}_off", vals_key=f"{prefix}_vals")
+        return EmittedCondition("in", self.variable, arrays, op)
 
 
 class IsTrueExpression(_BaseExpression):
@@ -480,10 +521,8 @@ class IsTrueExpression(_BaseExpression):
         return None
 
     def emit(self, ctx: ConditionContext, prefix: str) -> EmittedCondition:
-        var = ctx.use_var(self.variable)
-        return EmittedCondition(
-            "is_true", self.variable, {}, [f"if not ({var} != 0): ok = False"]
-        )
+        ctx.use_var(self.variable)
+        return EmittedCondition("is_true", self.variable, {}, CondOp("is_true", self.variable))
 
 
 class EqExpression(_BaseExpression):
@@ -509,27 +548,27 @@ class EqExpression(_BaseExpression):
     def emit(self, ctx: ConditionContext, prefix: str) -> EmittedCondition:
         values = ctx.parameters.column(self.value_column)
         if ctx.parameters.is_string_column(self.value_column):
-            var = ctx.matcher_name(self.variable)
+            ctx.matcher_name(self.variable)
             ctx.use_var(self.variable)
             codes = [
                 -1 if v is None else ctx.literal_index(self.variable, str(v))
                 for v in values
             ]
             arrays = {
-                f"{prefix}_code": np.array(codes, dtype=np.int64),
-                f"{prefix}_has": _bool([v is not None for v in values]),
+                # float64 — same reason InExpression's `_vals` is: one
+                # homogeneous walker type regardless of numeric/string.
+                f"{prefix}_code": np.array(codes, dtype=np.float64),
+                f"{prefix}_has": _flag([v is not None for v in values]),
             }
-            lines = [
-                f"if ok and {prefix}_has[r] and not ({var} == {prefix}_code[r]): ok = False"
-            ]
-            return EmittedCondition("eq", self.variable, arrays, lines)
-        var = ctx.use_var(self.variable)
+            op = CondOp("eq", self.variable, val_key=f"{prefix}_code", has_key=f"{prefix}_has")
+            return EmittedCondition("eq", self.variable, arrays, op)
+        ctx.use_var(self.variable)
         arrays = {
             f"{prefix}_val": _f64(values),
-            f"{prefix}_has": _bool([v is not None for v in values]),
+            f"{prefix}_has": _flag([v is not None for v in values]),
         }
-        lines = [f"if ok and {prefix}_has[r] and not ({var} == {prefix}_val[r]): ok = False"]
-        return EmittedCondition("eq", self.variable, arrays, lines)
+        op = CondOp("eq", self.variable, val_key=f"{prefix}_val", has_key=f"{prefix}_has")
+        return EmittedCondition("eq", self.variable, arrays, op)
 
 
 Expression = t.Annotated[

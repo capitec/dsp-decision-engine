@@ -1975,3 +1975,107 @@ kernel.
 The numba array walker still delivers what the maintainability complaint actually
 asked for — one generic kernel, no line cap, no indentation limit, no per-shape
 compile — in one language, with the cache intact and no way to segfault.
+
+
+---
+
+## W — `cfunc` pointer dispatch: the mechanism is free, the shape is not
+
+The owner's proposal: stop generating source text, pass the steps in as data, and
+have one generic kernel call out to them in a loop. §S measured the obvious
+version of that — dispatch through `numba.typed.List[FunctionType]` — at 28–41×
+slower than codegen. But §S measured function *values*; §V measured raw C-ABI
+*pointers* at a hundredth the cost. `@numba.cfunc` produces the second kind, and
+nobody had measured it.
+
+### The mechanism is free — and it corrects how I read §V
+
+A raw `@cfunc` address, read from a numpy array at a **runtime index** and called
+through an `@intrinsic` (`inttoptr` + `call`), costs **~7.2 ns/call** at
+decider2's actual float64 boundary type — identical to numba's own blessed
+`ctypes`-global mechanism. Confirmed across 8 combinations of signature
+(int32/float64) × callee (AOT gcc `.so` / JIT `@cfunc`) × dispatch
+(ctypes-global / raw address).
+
+> §V's 2.4–3.84 ns and this 7.2 ns are **the same mechanism**. The gap was a
+> signature and JIT-vs-AOT confound, isolated rather than waved at. Raw pointer
+> dispatch is not "near §S" — it is essentially free.
+
+### But end to end it is 8.8× slower than codegen
+
+Against decider2's real `Loop(Branch(steps1, Loop(steps2)))` from the playground,
+imported unmodified, 100k rows, 5 reruns, **bit-identical answers every run**
+(`np.array_equal`, not `isclose`):
+
+| | ns/row |
+|---|---|
+| decider2 codegen today | 25.0–27.4 |
+| generic `cfunc`-pointer interpreter | 222.4–256.4 (**8.8×**) |
+
+**The cause is frequency, not per-call cost.** This interpreter pays the ~7 ns
+tax **once per control-flow node** — 15–25 per row here — where §V's near-parity
+Rust result paid it **once per row**. Seven nanoseconds is nothing; seven
+nanoseconds twenty times is most of the budget.
+
+That also explains why §Q's plain array interpreter (2.0–2.7×) beats this one
+handily: §Q walks the tree with inline branching and only the *data* is dynamic,
+while this makes every node a call.
+
+### One genuine win over §V: the cache survives
+
+§V found that any kernel referencing a ctypes symbol can never be
+numba-disk-cached — which silently voids doc 05 §4.2's seven conditions and
+`decider2 build --verify`. **This interpreter does not have that problem.**
+Because `ptr_table` is an ordinary *argument* rather than a compile-time global,
+`run_program` caches normally: cold 1045 ms → warm 373 ms, no
+`Cannot cache compiled function` warning, real `.nbi`/`.nbc` hits across a
+process restart.
+
+So the distinction is precise and worth keeping: **a pointer passed as an
+argument caches; a symbol captured as a global does not.** That is a better
+answer than §V reached, and it applies to the Rust route too.
+
+Params behave: thresholds sit in fixed slots of a `param_template` array set once
+per call, never per row, and a retune leaves both engines' signature counts at 1
+while the answers move together.
+
+### ⚠ CORRECTION — 8.8× is an artefact of trivial step bodies
+
+The owner pushed back: "if the core of the code is large then the overhead of
+calling will be less." **Correct, and decisively so.** 8 steps, 200k rows, the
+same raw-pointer dispatch against inlined bodies, varying only how much work each
+step does:
+
+| body work | pointer-call ns/row | inlined ns/row | overhead |
+|---|---|---|---|
+| 0 (empty) | 38.7 | 0.7 | **59×** |
+| 5 | 255.9 | 251.6 | **1.02×** |
+| 50 | 5,058.9 | 5,041.2 | **1.00×** |
+| 500 | 54,189.0 | 54,182.7 | **1.00×** |
+
+**Five iterations of a `sqrt` loop is enough to amortise the call completely.**
+At any realistic step body — an affordability calculation, an income waterfall, a
+score band — pointer dispatch costs **2% or less**, not 8.8×.
+
+The 8.8× above is real but measures a pipeline of near-empty steps, where ~7 ns
+of call is the entire cost. It says the *benchmark* was dominated by dispatch, not
+that *decider2* would be. My verdict below generalised from the wrong end of this
+table and should not be read without this correction.
+
+> **This changes the recommendation.** Removing codegen in favour of pointer
+> dispatch costs approximately nothing on real work, and buys: one generic
+> kernel, no per-shape compile, no ~500-line cap, no fan-out wall, no CPython
+> indentation limit, and no generated identifiers to collide (the defect class
+> that made `5 < x < 10` silently always false).
+
+### Verdict (superseded — see the correction above)
+
+**Do not adopt this shape.** The mechanism is validated and the cache result is a
+real improvement on §V — both worth keeping. But end to end it is slower than
+§Q's much simpler plain-numba array walker, which already delivers the same
+property the owner is asking for — one generic kernel, zero recompiles, no line
+or depth caps — without an `@intrinsic`/LLVM-IR layer, a `@cfunc` ABI contract,
+or an untested exception-safety gap.
+
+**§Q remains the answer if codegen is retired.** This experiment settles that
+rather than reopening it.
