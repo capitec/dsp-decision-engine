@@ -47,3 +47,60 @@ total, if you must encode it yourself    : 50.53 ns/row
 The 32x win holds **only** while the column arrives already encoded — which
 decider2 does at the boundary today, and which is the precondition to re-check
 before adopting the mask.
+
+## `run3.sh` + `compile_cost.py` — the inline/typed attribution
+
+The typed-features strand reported a tree getting 1.6–1.8x *faster*, which a
+type discriminator should not do. It had changed two things at once: the typed
+representation, and `inline="always"` on `walk_tree`/`path_fn`. These scripts
+measure the third cell the strand never ran — the **old, untyped code with only
+the inlining change** — interleaved with the other two on the same box.
+
+Setup: extract `git archive f90488c` into `base/`, copy it to `base_inline/`,
+and in that copy change `interpreter.py`'s `@njit(cache=True)` on `walk_tree`
+to `@njit(inline="always")` and `encode.py`'s cached `path_fn` to
+`@njit(cache=True, inline="always")`. Copy the strand's
+`decider2/evaluation/typed-features/bench_typed_features.py` next to them as
+`bench.py`. Then `./run3.sh`.
+
+Result, mixed tree (10 Float64 + 4 Int64 + 2 Boolean), 200k rows, two rounds,
+byte-identical output digests across all three:
+
+| | apply() end to end | tree walk alone |
+|---|---|---|
+| f90488c as it stands | 247–262 ns/row | 201–217 ns/row |
+| f90488c + inlining only | **125–133** | **96** |
+| typed features (inlining included) | 136–154 | 117–151 |
+
+The whole speedup is the inlining, not the typed split; the typed
+representation costs ~12–35% against it, consistent with the numba+C strand's
+independent 5–20% for the same discriminator.
+
+`compile_cost.py <label>` measures the build-time side, with
+`NUMBA_CACHE_DIR` set and `NUMBA_DEBUG_CACHE=1` to count cache saves/loads:
+
+```
+today               cold 1.97 s  warm 0.89 s   8 saved /  5 loaded
+today + inlining    cold 1.61 s  warm 1.05 s   6 saved /  6 loaded
+typed features      cold 2.83 s  warm 1.55 s  14 saved / 14 loaded
+```
+
+Inlining costs nothing to compile and caches cleanly; the typed split costs
+~1.4x cold and ~1.5x warm start.
+
+## `probe_int64_fix.py` — how much of the int64 fix is opt-in
+
+The typed-features branch fixes the silent wrong answer above 2^53. This checks
+end to end, through the real pipeline in all three execution modes, how much of
+it applies without a declaration:
+
+```
+                                             today        the branch
+  no declaration (every existing document)    [1, 1]  wrong   [1, 1]  still wrong
+  declared feature_types={'n': int}           no API          [1, 0]  correct
+```
+
+Run it with `PYTHONPATH` pointed at each tree in turn. The opt-in behaviour is
+deliberate and pinned by a test in the branch — silently retyping existing
+documents would change answers nobody asked to change — but it means the bug
+stays live in every tree that does not declare.
