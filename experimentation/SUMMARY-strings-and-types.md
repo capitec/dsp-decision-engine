@@ -450,8 +450,14 @@ look at.
 - **Tables: no.** 2%, inside noise — a table's cost is the 150-cell scan, not
   the call. Left alone, correctly.
 - **The string matcher: no.** Neutral; nothing array-shaped crosses its call.
-- Output byte-identical on all five shapes; suite green; `build --verify`'s
-  "no compilation after warm-up" property still holds cold and warm.
+- Output byte-identical on all five shapes; `build --verify`'s "no
+  compilation after warm-up" property still holds cold and warm; and I ran the
+  suite on the branch myself — **549 passed**.
+- One cosmetic thing you would otherwise notice: the warning count in a test
+  run goes from 17 to 58. They are all the same pre-existing
+  `NumbaExperimentalFeatureWarning` about first-class function types, reported
+  from more call sites now that the inlined bodies land in more callers. No new
+  kind of warning appeared.
 
 It has nothing to do with strings or types — it fell out of the typed work —
 and it is the largest single number of the night.
