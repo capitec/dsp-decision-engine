@@ -10,7 +10,7 @@ found.*
 
 | | verdict |
 |---|---|
-| **Inline the tree walker** — two decorators, ~2× on the tree path, identical answers, free to compile | **take it** |
+| **Inline the walkers** — ready on a branch, 1.6–1.9× on trees and 22% on Branch/Loop, identical answers | **take it** |
 | **String matching past `exact`** — per-category mask, 1.07 ns/row against 34, no new dependency | **take it** |
 | **Typed feature arrays** — fixes a silent wrong answer on money columns, costs ~20% of the walk | **merge, as a correctness change** |
 | **Rust for string matching** — works, caches, 4.5× on a narrow case worth 35 ms per million rows | **no** |
@@ -398,9 +398,15 @@ Measured cold and warm, fresh cache, separate processes:
 | today + inlining | **1.61 s** | 1.05 s | yes — 6 saved cold, 6 loaded warm, 0 re-saved |
 | typed features | 2.83 s | 1.55 s | yes — 14 saved cold, 14 loaded warm, 0 re-saved |
 
-Inlining costs nothing at build time. Typed features cost about 1.4× the cold
-compile and 1.5× the warm start, because there are more specialisations to
-load — a startup cost, which you said you can work around.
+Inlining is **cheaper to compile cold and about 0.2 s dearer to start warm**.
+The reason is worth knowing: numba's inlining runs before type inference, so in
+`fused` mode the per-row kernel absorbs the walker *and* the tree's `path_fn`.
+`path_fn`'s cached entry still exists and is still used by the `interpreted`
+and `stepped` modes; in `fused` mode both bodies are compiled into the kernel,
+which was never cacheable anyway because it captures a compiled function. So
+nothing is lost that was being saved — but a warm `fused` start pays about
+0.2 s more than it did. Typed features cost about 1.4× the cold compile and
+1.5× the warm start, for the same reason plus more specialisations.
 
 ### Caveats worth knowing before merging
 
@@ -429,14 +435,26 @@ write-up at `TYPED_FEATURES.md`.
 Nothing here needs a decision before you have had coffee. This is the order I
 would take them in, cheapest and most certain first.
 
-### 1. Take the inlining. It is two decorators and about 2×.
+### 1. Take the inlining. It is ready, on a branch, and it is about 2×.
 
 `walk_tree` becomes `@njit(inline="always")`; the tree's `path_fn` becomes
-`@njit(cache=True, inline="always")`. Byte-identical output, cheaper to
-compile, cache discipline unchanged. It has nothing to do with strings or
-types — it fell out of the typed work — and it is the largest single number of
-the night. A branch is being prepared with the full suite, the cache check, and
-whether the table and control-flow walkers have the same win sitting in them.
+`@njit(cache=True, inline="always")`. Branch
+`worktree-agent-a4e1be627b635397e`, commit `cdabaf1` — about 100 lines of real
+change plus a new EXPERIMENTS.md §X. Not pushed, not merged; it is yours to
+look at.
+
+- **Tree: 1.6–1.9×** — measured there independently of me, three interleaved
+  rounds, and it agrees with mine.
+- **Branch/Loop: 22%** — 627 → 489 ns/row. The same rule applied to the
+  control-flow walker.
+- **Tables: no.** 2%, inside noise — a table's cost is the 150-cell scan, not
+  the call. Left alone, correctly.
+- **The string matcher: no.** Neutral; nothing array-shaped crosses its call.
+- Output byte-identical on all five shapes; suite green; `build --verify`'s
+  "no compilation after warm-up" property still holds cold and warm.
+
+It has nothing to do with strings or types — it fell out of the typed work —
+and it is the largest single number of the night.
 
 ### 2. Extend string matching past `exact` with the per-category mask.
 
