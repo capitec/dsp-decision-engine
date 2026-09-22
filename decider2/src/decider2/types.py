@@ -55,6 +55,23 @@ class Step:
     nogil: bool = False                # @step(nogil=True); authored, never inferred
     packed: bool = False               # fn(args, params) instead of fn(a, b, ...)
     output_annotation: Any = None
+    shared_fields: tuple[str, ...] | None = None
+    # `shared_fields`: the `shared` keys this `reads_shared` step actually
+    # reads, when it can say — a table's row/output steps read a fixed,
+    # build-time-known set (`decider2.tables.encode`). The runtime then
+    # hands the step a bundle of ONLY those fields (`decider2.runtime.
+    # invoke.resolve_params`), so what numba types is the step's own
+    # contract, never whatever else the caller merged into `shared=`.
+    # Two things depend on that (measured, `decider2.runtime.bundles`):
+    # numba's per-specialisation compile cost grows worse than linearly in
+    # a bundle's field count — ten 12-key tables merged into one 120-key
+    # `shared` had not finished their cold compile after the ten minutes
+    # they were given, against 17s once each step saw only its own keys —
+    # and a bundle's numba type IS its field set, so a step compiled
+    # against the full bundle is recompiled (and its on-disk cache entry
+    # missed) every time another table is added beside it. `None` (every
+    # hand-written step, whose `shared.x` reads are not declared anywhere)
+    # means the whole bundle, exactly as doc 03 §4.2 describes it.
     # The declared return type for a `packed` step, whose `fn` is a generic
     # closure with no `inspect.signature(fn).return_annotation` of its own
     # to read (every packed `fn` has the literal signature `(args, params)`

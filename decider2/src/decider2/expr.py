@@ -27,7 +27,7 @@ the expression with `ast`, validates it against the closed grammar below,
 and returns an `Expr` whose `.emit()` renders numba-compilable **source
 text** once, at build time. There is no interpreter left at all — every
 `Expr` becomes a fragment of a real `.py` file that gets `njit`'d, cached
-and imported like any other step (`decider2.compile.cache`). This is
+and imported like any other step. This is
 strictly safer than decider 1, which ran `simpleeval` on every call.
 
 **The grammar is closed, not open.** Every admitted `ast` node kind is one

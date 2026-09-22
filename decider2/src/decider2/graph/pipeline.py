@@ -276,7 +276,7 @@ class Pipeline:
         compilations after `precompile()`/`.serve()`'s own warm-up", not
         "zero, ever": see doc 05 §8 and doc 08 §4.1's updated text, and this
         stage's report for the number that motivated the change — the
-        driver built from `decider2.compile.codegen`'s generated source has
+        driver built by `decider2.compile.kernel`'s intrinsic (no generated source) has
         no eager, build-time signature the way an individual step's own
         `_try_njit` probe does, and a `types.Step.packed` step's kernel
         (`decider2.compile.driver.build_packed_kernel`, doc 08 §3.4) is
