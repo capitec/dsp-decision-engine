@@ -5,7 +5,7 @@ construct's condition/arm/body steps into something that walker can call
 
 **What changed from the previous build, and why.** `branch.py`/`loop.py`
 used to write a real, content-addressed `.py` file per construct
-(`decider2.compile.cache.get_or_build`) holding (a) a by-name `import` of
+(the since-deleted `compile.cache.get_or_build`) holding (a) a by-name `import` of
 every condition/arm/body function, (b) a hand-rendered `call_step`/
 `call_cond` `if`/`elif` switch casting each of a FIXED `CALL_ARITY` float
 arguments down to the callee's declared types, and (c) one wrapper `def`
