@@ -9,7 +9,9 @@ agent's own brief, verbatim).
 underscore.** Two real constraints discovered while writing this file, both
 now documented in this agent's report:
 
-- Branch/Loop generate real, content-addressed source that IMPORTS the
+- Branch/Loop generate NO source; they build an int32 opcode program walked
+  by one shared @njit kernel. Callees must still be module-level, but for
+  numba's own cache=True on the user function, not for an import. Formerly: the
   condition/arm/body functions by name (`decider2.compile.cache`, the same
   mechanism kernel/tree codegen already uses) — a function defined inside
   another function (a test-local closure) has no module-level name that
