@@ -392,8 +392,11 @@ def _try_njit(step: Step, sample_values: Mapping[str, Any]) -> tuple[Callable, s
     njit-compilable by construction (the only operations inside it are
     array indexing and arithmetic over `decider2.trees.interpreter.
     walk_tree`/`decider2.tables.interpreter.scan_table`, both already
-    `@njit(cache=True)`), so there is nothing here for `_FALLBACK_TRIGGERS`
-    to ever legitimately catch.
+    `@njit` — `scan_table` `cache=True`, `walk_tree` `inline="always"`, so
+    its body is spliced into the tree's `path_fn` and, from there, into
+    `build_packed_kernel`'s per-row loop; see `walk_tree`'s docstring), so
+    there is nothing here for `_FALLBACK_TRIGGERS` to ever legitimately
+    catch.
     """
     if step.packed:
         return step.fn, None
