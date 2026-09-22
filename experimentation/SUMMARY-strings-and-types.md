@@ -1,7 +1,29 @@
 # Strings and feature types in decider2 — where we got to
 
-*Written for someone who has not been following the detail. Read the first two
-sections and stop, unless you want the evidence.*
+*Written for someone who has not been following the detail. The box below is
+the whole answer; everything after it is the evidence, in the order it was
+found.*
+
+---
+
+## The short version
+
+| | verdict |
+|---|---|
+| **Inline the tree walker** — two decorators, ~2× on the tree path, identical answers, free to compile | **take it** |
+| **String matching past `exact`** — per-category mask, 1.07 ns/row against 34, no new dependency | **take it** |
+| **Typed feature arrays** — fixes a silent wrong answer on money columns, costs ~20% of the walk | **merge, as a correctness change** |
+| **Rust for string matching** — works, caches, 4.5× on a narrow case worth 35 ms per million rows | **no** |
+| **C (PCRE2) for string matching** — works, caches, 2.5–3.5× on a case worth 20–40 ns/row, and it backtracks | **no** |
+
+The one surprise: the typed-features branch reports itself 1.6–1.8× *faster*.
+It is not the typed split — it changed two things at once, and **all** of the
+speedup is the inlining, which you can have on its own today (section 6).
+
+Three things I had told you earlier are wrong, and are corrected in place with
+the measurements: polars string buffers are not zero-copy, the Rust regex crate
+is ~40 ns not 25.6, and "C regex is too slow" was a verdict on glibc rather
+than on C.
 
 ---
 
@@ -402,5 +424,80 @@ write-up at `TYPED_FEATURES.md`.
 
 ---
 
-*The combined recommendation, and the fourth strand (pure-numba byte matching,
-no C at all), to follow.*
+## 7. What I would do, in order
+
+Nothing here needs a decision before you have had coffee. This is the order I
+would take them in, cheapest and most certain first.
+
+### 1. Take the inlining. It is two decorators and about 2×.
+
+`walk_tree` becomes `@njit(inline="always")`; the tree's `path_fn` becomes
+`@njit(cache=True, inline="always")`. Byte-identical output, cheaper to
+compile, cache discipline unchanged. It has nothing to do with strings or
+types — it fell out of the typed work — and it is the largest single number of
+the night. A branch is being prepared with the full suite, the cache check, and
+whether the table and control-flow walkers have the same win sitting in them.
+
+### 2. Extend string matching past `exact` with the per-category mask.
+
+No new dependency, no C, no Rust, no crash surface, and at 1.07 ns/row against
+34 it is the fastest option for the columns real credit rules use — `sector`,
+`product_code`, `employer_type`. It works by running the pattern over the
+distinct values once per batch and having the kernel do one array lookup per
+row. **Check the precondition first**: it only wins while the column arrives
+already dictionary-encoded, which decider2 does today. There is a cardinality
+threshold past which it collapses (a million distinct strings cost more to
+encode than to match); keep the frame tier for those.
+
+### 3. Decide on typed features as a correctness change, not a speed one.
+
+It fixes a silent wrong answer on the column type doc 03 §1.2 mandates for
+money, and turns `sector < 5` on a string column from a meaningless comparison
+into a build error. It costs about a fifth of the walk and 1.4× the cold
+compile. Both those prices are worth paying. Two things to go in with your eyes
+open: the fix is **opt-in**, so existing trees keep the bug until they declare;
+and a computed expression still cannot read an int- or bool-typed feature,
+which is a loud error rather than a silent widening.
+
+My read: yes, merge it — but the reason is the wrong answer and the build-time
+rejections, not the benchmark in its write-up.
+
+### 4. Do not adopt Rust or C for string matching.
+
+Both work. Both cache correctly. Both are within noise of each other at 30–40 ns
+per regex call. Neither is worth it:
+
+- the entire prize is 20–40 ns/row, on a path where decider2's own marshalling
+  already costs 350–1500 µs per `score()` call;
+- C brings a backtracking engine, and a rule author writing `^(a+)+$` — which
+  looks innocent — costs 211 µs/row with a safety limit and 42 ms/row without;
+- Rust brings a wheel per platform and a failure mode that aborts the process
+  rather than raising.
+
+Keep both directories. They are documented, reproducible, and if a profile ever
+shows a selective regex over a high-cardinality column, the answer is already
+written — and on that day, pick Rust, because linear-time matching is the axis
+that matters, not speed.
+
+### 5. Then reconsider where the time actually goes.
+
+Every engine measured tonight sits 150–1000× below decider2's own `score()`
+floor. Marshalling a row in and reading an answer back is the whole cost on the
+realtime path, and doc 05 §3.1b's fix for it is still unbuilt. That is where
+the next real win is — not in the kernel.
+
+### What I got wrong, collected in one place
+
+- **"polars string buffers are zero-copy."** They are not, on polars 1.41.
+  Asking for them materialises them every call, at 7–11 ns/row. Both string
+  strands found this independently, and I verified it myself.
+- **"the Rust regex crate is 25.6 ns/call."** ~40 ns on realistic string
+  lengths; the fixed per-call overhead dominates short haystacks.
+- **"C regex is too slow from a kernel" (EXPERIMENTS.md §T).** That was glibc,
+  not C. PCRE2 with JIT is 2–7× faster and level with polars' own engine.
+
+---
+
+*Section 8 — the fourth strand, pure-numba byte matching with no C at all — to
+follow when it reports. If it works, it changes item 2: prefix, suffix and
+substring could go straight into the walk with no dependency at all.*
