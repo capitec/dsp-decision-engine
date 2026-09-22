@@ -79,9 +79,18 @@ def test_editing_rows_never_recompiles(tmp_path):
     assert three_bands.n_conditions == five_bands.n_conditions
     assert three_bands.n_rows == 3
     assert five_bands.n_rows == 5
-    # ...and the data that differs is entirely in the arrays.
+    # ...and the data that differs is entirely in the arrays. `bands__
+    # between_hi` is the one BETWEEN condition's upper-bound row, shape
+    # `(1, n_rows)` (`decider2.tables.encode._stack2d` — the per-condition
+    # `{prefix}_hi` key this used to read is dropped once consolidated,
+    # see that module's report): different row counts alone already make
+    # these unequal, so compare the shared first three rows on their
+    # merits, not just the shape.
+    assert three_bands.shared["bands__between_hi"].shape == (1, 3)
+    assert five_bands.shared["bands__between_hi"].shape == (1, 5)
     assert not np.array_equal(
-        three_bands.shared["bands__c0_hi"], five_bands.shared["bands__c0_hi"]
+        three_bands.shared["bands__between_hi"][0],
+        five_bands.shared["bands__between_hi"][0, :3],
     )
 
 
