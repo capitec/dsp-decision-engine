@@ -20,8 +20,8 @@ condition — is unchanged; only the tail that used to write
 boundaries, op kinds — genuinely fixed at build time, captured directly)
 and, for the table's ROW data (bounds/values/sets — the "free interior" doc
 08 §3.4 promises stays retunable without recompiling), a closure that reads
-it off the `shared` bundle **by name, at call time** — `_shared_get`,
-below: `getattr(shared, key)` with `key` a closure-captured string
+it off the `shared` bundle **by name, at call time** — `getattr(shared,
+key)` inline in the closure body, with `key` a closure-captured string
 constant, never spliced into source (numba accepts `getattr` with a
 constant-string argument; validated empirically before relying on it
 here). This is load-bearing, not cosmetic:
@@ -118,8 +118,8 @@ _OPCODE = {"between": BETWEEN, "eq": EQ, "is_true": IS_TRUE, "in": IN}
 # Row-data assembly — no per-condition-COUNT closure family any more
 # (replaces `_compose0`..`_compose8`, a wall at 8 conditions of one kind in
 # a whole table). `shared`'s row data is still read BY NAME at call time
-# (`_shared_get`, doc 08 §3.4's free interior: a table rebuilt with new row
-# data answers differently through the SAME compiled `row_fn`) — what
+# (`getattr(shared, key)`, doc 08 §3.4's free interior: a table rebuilt with
+# new row data answers differently through the SAME compiled `row_fn`) — what
 # changes is what gets STORED there: one 2D array per (condition kind,
 # bound role), shape `(conditions of that kind, n_rows)`, built ONCE, in
 # plain Python, by stacking each condition's own 1D array (`decider2.
@@ -132,14 +132,22 @@ _OPCODE = {"between": BETWEEN, "eq": EQ, "is_true": IS_TRUE, "in": IN}
 # ---------------------------------------------------------------------------
 
 
-@njit(cache=True)
-def _shared_get(shared, key):
-    """One row-data array, read off `shared` by name at call time — never a
-    captured constant, so a table rebuilt with new row data (same shape)
-    answers differently through the SAME compiled closure (doc 08 §3.4's
-    free interior), with `key` a closure-captured string constant (real
-    Python `getattr`, not text)."""
-    return getattr(shared, key)
+# Row data is read off `shared` by name at call time — `getattr(shared,
+# key)` INLINE in `row_fn`/`out_fn` below, with `key` a closure-captured
+# string constant (numba types a captured `str` as a literal, which is what
+# its `getattr` overload needs) — never a captured array, so a table rebuilt
+# with new row data (same shape) answers differently through the SAME
+# compiled closure (doc 08 §3.4's free interior).
+#
+# This used to go through a separate `@njit(cache=True) def _shared_get(
+# shared, key)` helper. Measured while fixing the cross-process cache: each
+# of its call sites became its OWN numba specialisation (12 per single-
+# output table, one per (bundle class, key) pair), each re-typing the whole
+# `shared` namedtuple from scratch. Inlining them took a 3-band table's
+# cold first `apply()` in a fresh process from ~5.6s to ~3.1s and its
+# on-disk cache entries from 18 to 6 (`tests/test_shared_bundle_cache.py`'s
+# child script, `NUMBA_DEBUG_CACHE=1`): the bundle is typed once per
+# function, and the helper's 12 compile pipelines do not exist.
 
 
 def _stack2d(shared: dict, ops: list, key_attr: str, n_rows: int) -> np.ndarray:
@@ -200,8 +208,8 @@ def _build_output_fn(shared_key: str, default_key: str):
     def out_fn(args, params, shared):
         row = args[0]
         if row < 0:
-            return _shared_get(shared, default_key)[0]
-        return _shared_get(shared, shared_key)[row]
+            return getattr(shared, default_key)[0]
+        return getattr(shared, shared_key)[row]
 
     return out_fn
 
@@ -274,7 +282,7 @@ def encode_table(table: DecisionTable, *, name: str | None = None) -> EncodedTab
 
     # One 2D array per (condition kind, bound role) — `_stack2d`/`_stack_in`
     # above — stored into `shared` under a fixed, table-instance-qualified
-    # key, so `row_fn` below reads each with exactly one `_shared_get` call
+    # key, so `row_fn` below reads each with exactly one `getattr` call
     # regardless of how many conditions of that kind this table has.
     between_lo_key = f"{name}__between_lo"
     between_hi_key = f"{name}__between_hi"
@@ -367,15 +375,15 @@ def encode_table(table: DecisionTable, *, name: str | None = None) -> EncodedTab
     @njit(cache=True)
     def row_fn(args, params, shared):
         vars_ = args
-        n = int(_shared_get(shared, n_rows_key)[0])
+        n = int(getattr(shared, n_rows_key)[0])
         return scan_table(
             vars_, n, group_start_arr, group_end_arr, op_kind_arr, op_var_idx_arr,
             op_local_arr, op_lo_op_arr, op_hi_op_arr,
-            _shared_get(shared, between_lo_key), _shared_get(shared, between_hi_key),
-            _shared_get(shared, between_has_lo_key), _shared_get(shared, between_has_hi_key),
-            _shared_get(shared, eq_val_key), _shared_get(shared, eq_has_key),
-            _shared_get(shared, in_off_key), _shared_get(shared, in_vals_key),
-            _shared_get(shared, in_vals_start_key),
+            getattr(shared, between_lo_key), getattr(shared, between_hi_key),
+            getattr(shared, between_has_lo_key), getattr(shared, between_has_hi_key),
+            getattr(shared, eq_val_key), getattr(shared, eq_has_key),
+            getattr(shared, in_off_key), getattr(shared, in_vals_key),
+            getattr(shared, in_vals_start_key),
         )
 
     row_name = f"{name}_row"
@@ -383,6 +391,16 @@ def encode_table(table: DecisionTable, *, name: str | None = None) -> EncodedTab
         name=row_name, fn=row_fn, inputs=tuple(row_fn_inputs), params=(),
         doc=f"Index of the first row of {table.name!r} that matches, or -1.",
         packed=True, output_annotation=int, reads_shared=True,
+        # Exactly the keys `row_fn` reads, in the order it reads them — the
+        # runtime builds this step's bundle from these alone (`types.Step.
+        # shared_fields`), so its numba type, compile cost and cache entry
+        # are this table's own, whatever else `shared=` carries.
+        shared_fields=(
+            n_rows_key,
+            between_lo_key, between_hi_key, between_has_lo_key, between_has_hi_key,
+            eq_val_key, eq_has_key,
+            in_off_key, in_vals_key, in_vals_start_key,
+        ),
     )
 
     # -- output steps ------------------------------------------------------
@@ -420,6 +438,7 @@ def encode_table(table: DecisionTable, *, name: str | None = None) -> EncodedTab
                 params=(),
                 doc=f"`{column}` for the matched row, read from the table.",
                 packed=True, output_annotation=output_annotation, reads_shared=True,
+                shared_fields=(values_key, default_key),
             )
         )
 
