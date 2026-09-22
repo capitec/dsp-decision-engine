@@ -40,7 +40,7 @@ from __future__ import annotations
 
 import inspect
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field as _dc_field
 from pathlib import Path
 from typing import Any, Callable, ClassVar, Literal, Mapping, Sequence
 
@@ -545,11 +545,16 @@ class ResolvedParams:
       (doc 03 §4.2) gets one NamedTuple.
     - `shared` — the single reserved bundle (doc 03 §4.2), or `None` if
       nothing in this pipeline reads it.
+    - `per_step_shared[step_name]` / `[(owner, step_name)]` — for a step
+      that declares `Step.shared_fields`, a bundle of ONLY those fields;
+      `_shared_arg` picks it over `shared` for that step. Absent for every
+      step that does not declare them (they get `shared` whole).
     """
 
     per_step_scalar: dict
     per_step_bundle: dict
     shared: Any | None = None
+    per_step_shared: dict = _dc_field(default_factory=dict)
 
 
 def _scalar_arg(resolved: "ResolvedParams", owner: str | None, step_name: str, param_name: str) -> Any:
@@ -573,6 +578,26 @@ def _bundle_arg(resolved: "ResolvedParams", owner: str | None, step_name: str) -
         if value is not _MISSING:
             return value
     return resolved.per_step_bundle[step_name]
+
+
+def _shared_arg(resolved: "ResolvedParams", owner: str | None, step: Step) -> Any:
+    """The `shared` bundle THIS step is called with: its own projection
+    (`Step.shared_fields`, built by `runtime.invoke.resolve_params`) when
+    it declares one, else the whole bundle. Same owner-first, plain-name
+    fallback as `_bundle_arg`, for the same reason."""
+    if step.shared_fields is None:
+        return resolved.shared
+    if owner is not None:
+        value = resolved.per_step_shared.get((owner, step.name), _MISSING)
+        if value is not _MISSING:
+            return value
+    value = resolved.per_step_shared.get(step.name, _MISSING)
+    if value is not _MISSING:
+        return value
+    # A `ResolvedParams` built by hand (a test driving `modes` directly)
+    # with only `shared=` set: fall back to the whole bundle rather than
+    # fail, since the whole bundle is a superset the step can read.
+    return resolved.shared
 
 
 def _row_kwargs(
@@ -650,7 +675,7 @@ def _call_step_row(
     if step.packed:
         args, params = _packed_row_args(step, owner, registry, resolved, i)
         if step.reads_shared:
-            return fn(args, params, resolved.shared)
+            return fn(args, params, _shared_arg(resolved, owner, step))
         return fn(args, params)
     return fn(**_row_kwargs(step, owner, sig, registry, resolved, i))
 
@@ -795,7 +820,7 @@ class PackedCompiledSegment(Segment):
         params = tuple(_scalar_arg(resolved, owner, step.name, p.name) for p in step.params)
         out = np.empty(n, dtype=_return_dtype(step))
         if step.reads_shared:
-            self.kernel_fn(arrays, params, resolved.shared, n, out)
+            self.kernel_fn(arrays, params, _shared_arg(resolved, owner, step), n, out)
         else:
             self.kernel_fn(arrays, params, n, out)
         registry[step.name] = out
