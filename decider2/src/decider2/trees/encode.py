@@ -71,7 +71,7 @@ from dataclasses import dataclass, field
 from typing import Any, Sequence
 
 import numpy as np
-from numba import njit
+from numba import literal_unroll, njit
 from pydantic import Field
 
 from decider2.trees.interpreter import EQ, walk_tree
@@ -530,123 +530,47 @@ class _StringMatcher:
 
 @njit(cache=True)
 def _nonempty(items: tuple) -> tuple:
-    """A numba-safe homogeneous-tuple value: never truly empty (`()` has no
+    """A numba-safe homogeneous-TUPLE value: never truly empty (`()` has no
     element type numba can infer for a dynamic-index read that is never
     actually reached — e.g. a single-leaf tree's `walk_tree` call still has
-    to TYPE-CHECK its unreachable `feats[feat_idx[pc]]`), so an empty tuple
-    gets one inert `0.0` sentinel no node ever indexes into. Called from
-    inside the njit'd `path_fn` closures below (every one of them: whether
-    a specific tree's `args`/`params` is ever actually empty is a per-tree,
-    build-time fact, but the closure family itself is written once and
-    shared, so it always guards)."""
+    to TYPE-CHECK its unreachable `thresholds[thr_slot[pc]]`), so an empty
+    tuple gets one inert `0.0` sentinel no node ever indexes into. Used for
+    `thresholds` (`params + literals`, still a plain tuple — see
+    `_build_path_fn`) only: `args`/`feats` is a numpy array below, whose
+    empty case (`decider2.compile.driver._gather0`) already has a real
+    dtype and needs no padding — wrapping an ARRAY in this same helper
+    would force numba to unify `(0.0,)` (a 1-tuple) against an `array(
+    float64, 1d)` return type, which does not type-check; that is why this
+    stayed tuple-only rather than growing to cover both."""
     if len(items) == 0:
         return (0.0,)
     return items
 
 
-# One body per computed-feature count 0..6 — comfortably above any tree in
-# this codebase's own examples or ported test suite. Each closes over the
-# tree's own structure arrays (real numpy arrays, never source literals)
-# and, for count > 0, the already-built computed-feature closures — real
-# functions, called by name, never spliced into text.
-#
-# `literals` is `EncodeContext._literals` — the ANONYMOUS threshold slots a
-# hoisted string matcher's "which pattern index" test uses (`literal_slot`,
-# never a `param()`: these are structural, part of the tree's own SHAPE,
-# not a tuning knob — the previous, text-generating pass spelled them as
-# `repr(v)` literals appended straight into the `thresholds` tuple-building
-# line). Captured as a plain closure constant and concatenated onto the
-# NAMED `params` tuple every `path_fn` is actually called with, so
-# `thresholds`'s slot layout matches `EncodeContext.resolve_arrays`'s own
-# `n_named_thresholds` offset exactly: named params first, then literals.
-def _path0(kind, feat_idx, op, thr_slot, then_, else_, leaf_value, start_pc, literals):
-    @njit(cache=True)
-    def path_fn(args, params):
-        feats = _nonempty(args)
-        thresholds = _nonempty(params + literals)
-        return walk_tree(feats, thresholds, kind, feat_idx, op, thr_slot, then_, else_, leaf_value, start_pc)
-    return path_fn
+def _build_path_fn(
+    arrays: dict, start_pc: int, n_args: int, computed: list, literals: Sequence[float],
+):
+    """One tree's `path_fn(args, params) -> int`. `args` is `decider2.
+    compile.driver`'s row-gather result for this tree's `n_args` PLAIN/
+    matcher-backed features — a float64 array, however wide (no per-count
+    closure family here any more: replaces `_path0`..`_path6`, which
+    raised past 6 computed features).
 
-
-def _path1(kind, feat_idx, op, thr_slot, then_, else_, leaf_value, start_pc, literals, computed):
-    (cf0,) = computed
-
-    @njit(cache=True)
-    def path_fn(args, params):
-        thresholds = _nonempty(params + literals)
-        feats = args + (cf0(args, thresholds),)
-        return walk_tree(feats, thresholds, kind, feat_idx, op, thr_slot, then_, else_, leaf_value, start_pc)
-    return path_fn
-
-
-def _path2(kind, feat_idx, op, thr_slot, then_, else_, leaf_value, start_pc, literals, computed):
-    cf0, cf1 = computed
-
-    @njit(cache=True)
-    def path_fn(args, params):
-        thresholds = _nonempty(params + literals)
-        feats = args + (cf0(args, thresholds), cf1(args, thresholds))
-        return walk_tree(feats, thresholds, kind, feat_idx, op, thr_slot, then_, else_, leaf_value, start_pc)
-    return path_fn
-
-
-def _path3(kind, feat_idx, op, thr_slot, then_, else_, leaf_value, start_pc, literals, computed):
-    cf0, cf1, cf2 = computed
-
-    @njit(cache=True)
-    def path_fn(args, params):
-        thresholds = _nonempty(params + literals)
-        feats = args + (cf0(args, thresholds), cf1(args, thresholds), cf2(args, thresholds))
-        return walk_tree(feats, thresholds, kind, feat_idx, op, thr_slot, then_, else_, leaf_value, start_pc)
-    return path_fn
-
-
-def _path4(kind, feat_idx, op, thr_slot, then_, else_, leaf_value, start_pc, literals, computed):
-    cf0, cf1, cf2, cf3 = computed
-
-    @njit(cache=True)
-    def path_fn(args, params):
-        thresholds = _nonempty(params + literals)
-        feats = args + (
-            cf0(args, thresholds), cf1(args, thresholds), cf2(args, thresholds), cf3(args, thresholds),
-        )
-        return walk_tree(feats, thresholds, kind, feat_idx, op, thr_slot, then_, else_, leaf_value, start_pc)
-    return path_fn
-
-
-def _path5(kind, feat_idx, op, thr_slot, then_, else_, leaf_value, start_pc, literals, computed):
-    cf0, cf1, cf2, cf3, cf4 = computed
-
-    @njit(cache=True)
-    def path_fn(args, params):
-        thresholds = _nonempty(params + literals)
-        feats = args + (
-            cf0(args, thresholds), cf1(args, thresholds), cf2(args, thresholds),
-            cf3(args, thresholds), cf4(args, thresholds),
-        )
-        return walk_tree(feats, thresholds, kind, feat_idx, op, thr_slot, then_, else_, leaf_value, start_pc)
-    return path_fn
-
-
-def _path6(kind, feat_idx, op, thr_slot, then_, else_, leaf_value, start_pc, literals, computed):
-    cf0, cf1, cf2, cf3, cf4, cf5 = computed
-
-    @njit(cache=True)
-    def path_fn(args, params):
-        thresholds = _nonempty(params + literals)
-        feats = args + (
-            cf0(args, thresholds), cf1(args, thresholds), cf2(args, thresholds),
-            cf3(args, thresholds), cf4(args, thresholds), cf5(args, thresholds),
-        )
-        return walk_tree(feats, thresholds, kind, feat_idx, op, thr_slot, then_, else_, leaf_value, start_pc)
-    return path_fn
-
-
-_PATH_BUILDERS = (_path0, _path1, _path2, _path3, _path4, _path5, _path6)
-_MAX_COMPUTED = len(_PATH_BUILDERS) - 1
-
-
-def _build_path_fn(arrays: dict, start_pc: int, computed: list, literals: Sequence[float]):
+    A computed feature's own arithmetic (`decider2.expr.Expr.compile`) is
+    ALREADY a real closure, composed once per expression regardless of
+    that expression's own depth — this only had a count ceiling on how
+    many SEPARATE computed features one tree could have, not on how
+    complex any one of them was. `numba.literal_unroll` iterates the
+    (heterogeneous — each computed feature is its own compiled Dispatcher)
+    tuple of them at whatever length it actually is, writing each result
+    into a preallocated `feats` array; see this module's report for the
+    measured cost (real but small: most trees have zero computed features,
+    so this path is rarely even reached) and the `NumbaExperimentalFeature
+    Warning` it emits (a mature, long-shipped numba feature despite the
+    label — weighed and accepted over hand-rolling an RPN interpreter for
+    `decider2.expr`, a materially larger and riskier change for the same
+    "no arity ceiling" outcome here).
+    """
     kind = np.array(arrays["kind"], dtype=np.int32)
     feat_idx = np.array(arrays["feat_idx"], dtype=np.int32)
     op = np.array(arrays["op"], dtype=np.int32)
@@ -656,18 +580,36 @@ def _build_path_fn(arrays: dict, start_pc: int, computed: list, literals: Sequen
     leaf_value = np.array(arrays["leaf_value"], dtype=np.int64)
     literals_t = tuple(float(v) for v in literals)
 
-    n = len(computed)
-    if n > _MAX_COMPUTED:
-        raise ValueError(
-            f"tree has {n} computed features, over this build's "
-            f"{_MAX_COMPUTED}-computed-feature limit per tree "
-            "(decider2.trees.encode's fixed closure-arity family)."
-        )
-    if n == 0:
-        return _path0(kind, feat_idx, op, thr_slot, then_, else_, leaf_value, start_pc, literals_t)
-    return _PATH_BUILDERS[n](
-        kind, feat_idx, op, thr_slot, then_, else_, leaf_value, start_pc, literals_t, tuple(computed)
-    )
+    n_computed = len(computed)
+    if n_computed == 0:
+        @njit(cache=True)
+        def path_fn(args, params):
+            thresholds = _nonempty(params + literals_t)
+            return walk_tree(
+                args, thresholds, kind, feat_idx, op, thr_slot, then_, else_, leaf_value, start_pc,
+            )
+        return path_fn
+
+    computed_t = tuple(computed)
+
+    @njit  # not cache=True: closure captures per-tree computed-feature
+    # Dispatchers (decider2.expr.Expr.compile's own closures, one per
+    # DISTINCT tree) -- the same trade-off decider2.compile.driver's
+    # row-gather closures document, for the same reason: repeated
+    # per-process factory calls (once per tree here, not once per row)
+    # each capturing a freshly-built, DIFFERENT Dispatcher were measured to
+    # grow numba's on-disk cache index rather than hit an existing entry.
+    def path_fn(args, params):
+        thresholds = _nonempty(params + literals_t)
+        feats = np.empty(n_args + n_computed, dtype=np.float64)
+        for k in range(n_args):
+            feats[k] = args[k]
+        j = n_args
+        for cf in literal_unroll(computed_t):
+            feats[j] = cf(args, thresholds)
+            j += 1
+        return walk_tree(feats, thresholds, kind, feat_idx, op, thr_slot, then_, else_, leaf_value, start_pc)
+    return path_fn
 
 
 def _build_matcher_fn(n_literals: int):
@@ -806,18 +748,18 @@ def encode_tree(tree: Tree, *, name: str | None = None) -> EncodedTree:
         )
 
     # -- path step ------------------------------------------------------
-    path_fn = _build_path_fn(arrays, start_pc, ctx._computed, ctx._literals)
+    path_fn = _build_path_fn(arrays, start_pc, len(ctx.features), ctx._computed, ctx._literals)
     path_inputs: list[Input] = []
     for feature in ctx.features:
         if feature in ctx.matchers:
             path_inputs.append(
                 # `annotation=float`, not `int`: the matcher step's OWN
                 # output really is an int, but `feats` (walk_tree's own
-                # homogeneous tuple) needs every entry AS a float64 — the
+                # homogeneous array) needs every entry AS a float64 — the
                 # same cast the previous, text-generating pass spelled
                 # inline as `float(matcher_fn_name)` (`_feature_expr`).
-                # `decider2.compile.driver._row_getter` reads this
-                # annotation to cast when gathering a row.
+                # `decider2.compile.driver._packed_input_arrays` reads this
+                # annotation to cast when gathering a column.
                 Input(name=ctx.matchers[feature].fn_name, annotation=float, null_policy=NullPolicy.REQUIRED)
             )
         else:
