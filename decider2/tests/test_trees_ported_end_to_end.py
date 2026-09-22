@@ -445,29 +445,36 @@ def test_multi_column_output_default_row_on_no_match(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# "Empty conditions" — decider 1 defines this as always-otherwise; decider2
-# accepts the SCHEMA but rejects the BUILD, which is the finding.
+# "Empty conditions" — decider 1 defines this as always-otherwise. Before
+# this migration, decider2 accepted the SCHEMA but rejected the BUILD
+# (PORTED.md divergence 2): `CasesRanges.required_features()` still counted
+# the node's feature as a required kernel argument even though the
+# (correctly empty) EMITTED SOURCE never read it, and codegen's own
+# "declared but never referenced" guard caught that mismatch and refused to
+# build. PORTED.md's own writeup called this "plausibly a small bug" and
+# named the fix as option (b): "special-case required_features()/codegen so
+# an empty Cases* node legitimately builds and always takes otherwise,
+# matching decider 1" — deliberately not done there, "a judgement call worth
+# a maintainer's sign-off, not something to change silently while porting
+# tests".
+#
+# This migration's redesign (`decider2.trees.codegen`/`interpreter`) makes
+# exactly that fix, as a structural consequence rather than a special case: a
+# registered feature is now always referenced, because it is always folded
+# into the walker's `feats` tuple — whether or not any node in the tree
+# happens to compare against it. There is no longer a "declared but the body
+# never reads it" state for a `Cases*` node's own feature to fall into. So
+# the divergence closes on its own, in decider 1's favour (matching its
+# documented "always otherwise" for empty conditions) rather than needing
+# the schema-level validator PORTED.md recommended.
 # ---------------------------------------------------------------------------
 
 
 def test_cases_ranges_empty_conditions_returns_otherwise(tmp_path):
     """decider 1: `CasesRanges` with zero conditions falls straight to
-    `otherwise` for every row — a legitimate, if degenerate, config.
-
-    decider2's schema accepts the same shape (`CasesRanges(conditions=[])`
-    is valid — `arity` is `len(conditions) + 1 == 1`, i.e. exactly the one
-    "otherwise" edge). But `tree_module()` then REJECTS it: the node's
-    feature is still counted into `required_features()` (schema.py's
-    `CasesRanges.required_features`), which becomes a declared kernel
-    parameter, yet the emitted body — correctly, since there are no
-    conditions to test — never reads it, and codegen's own "declared but
-    never referenced" guard (doc 03 §1, §2) catches that mismatch and
-    refuses to build. Not a decider2 bug in the sense of wrong answers —
-    there is no answer, the tree never compiles — but a real, confirmed
-    divergence from decider 1's silent "always otherwise": ported here as
-    the actual, reproducible behaviour rather than papered over. See
-    PORTED.md.
-    """
+    `otherwise` for every row — a legitimate, if degenerate, config, and
+    (PORTED.md divergence 2) now genuinely reproduced rather than refused at
+    build time."""
     tree = _tree(
         "empty_ranges",
         {
@@ -477,8 +484,8 @@ def test_cases_ranges_empty_conditions_returns_otherwise(tmp_path):
         [("root", 0, "otherwise")],
         _output("always"),
     )
-    with pytest.raises(ValueError, match="never referenced"):
-        tree_module(tree, build_dir=tmp_path)
+    out = _run(tree, pl.DataFrame({"x": [1.0, -99.0, 1e9]}), name="empty_ranges", tmp_path=tmp_path)
+    assert out["r"].to_list() == ["always", "always", "always"]
 
 
 def test_cases_string_match_empty_conditions_returns_otherwise(tmp_path):
@@ -493,8 +500,8 @@ def test_cases_string_match_empty_conditions_returns_otherwise(tmp_path):
         [("root", 0, "otherwise")],
         _output("always"),
     )
-    with pytest.raises(ValueError, match="never referenced"):
-        tree_module(tree, build_dir=tmp_path)
+    out = _run(tree, pl.DataFrame({"s": ["a", "b"]}), name="empty_strmatch", tmp_path=tmp_path)
+    assert out["r"].to_list() == ["always", "always"]
 
 
 def test_cases_isin_empty_conditions_returns_otherwise(tmp_path):
@@ -508,8 +515,8 @@ def test_cases_isin_empty_conditions_returns_otherwise(tmp_path):
         [("root", 0, "otherwise")],
         _output("always"),
     )
-    with pytest.raises(ValueError, match="never referenced"):
-        tree_module(tree, build_dir=tmp_path)
+    out = _run(tree, pl.DataFrame({"x": [1.0, 2.0]}), name="empty_isin", tmp_path=tmp_path)
+    assert out["r"].to_list() == ["always", "always"]
 
 
 def test_composite_rule_empty_conditions_evaluates_false(tmp_path):

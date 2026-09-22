@@ -243,32 +243,47 @@ routing design working as specified; the only rough edge (the placeholder
 terminal value) is explicitly flagged in the source as an intentional,
 narrow scope cut, not an oversight.
 
-### 2. An empty-conditions `Cases*` node: schema accepts it, build rejects it
+### 2. An empty-conditions `Cases*` node: schema accepts it, build rejects it — RESOLVED by the codegen->interpreter migration
 
 decider 1 defines `CasesRanges`/`CasesStringMatch`/`CasesIsIn` with zero
 conditions as legal and meaning "always `otherwise`" (three decider 1
 tests pin exactly this). decider2's schema also accepts the shape
 (`arity == len(conditions) + 1 == 1` when empty, i.e. exactly the one
-"otherwise" edge) — but `tree_module()` then rejects it at BUILD time with
-`ValueError: ... parameter 'x' is declared but never referenced in the
-body`, because `CasesRanges.required_features()` still reports the node's
-feature as a required kernel argument even though the (correctly) empty
-generated body never reads it.
+"otherwise" edge) — but, before the codegen->interpreter migration
+(EXPERIMENTS.md §Q/§W, `decider2.trees.interpreter`), `tree_module()` then
+rejected it at BUILD time with `ValueError: ... parameter 'x' is declared
+but never referenced in the body`, because `CasesRanges.
+required_features()` still reported the node's feature as a required
+kernel argument even though the (correctly) empty generated SOURCE TEXT
+never read it.
 
-**Is this a decider2 bug?** Plausibly a small one, but not fixed here —
-it needs a design call this task isn't positioned to make unilaterally:
-either (a) make the schema reject an empty `conditions` list outright,
-matching `CompositeNode`'s own explicit validator (see divergence 3,
-immediately below, which already does exactly this and produces a much
-clearer error at construction time instead of a confusing one at build
-time), or (b) special-case `required_features()`/codegen so an empty
-`Cases*` node legitimately builds and always takes `otherwise`, matching
-decider 1. Recommend (a) — it is a two-line validator matching a pattern
-that already exists next to it — but that is a judgement call worth a
-maintainer's sign-off, not something to change silently while porting
-tests. Ported as the actual, reproducible current behaviour (`pytest.
-raises(ValueError, match="never referenced")`) so the finding survives in
-the suite either way.
+This entry originally recommended fix (a) — reject an empty `conditions`
+list at the schema, matching `CompositeNode`'s own validator (divergence 3,
+below) — over fix (b), "special-case `required_features()`/codegen so an
+empty `Cases*` node legitimately builds and always takes `otherwise`,
+matching decider 1", calling (b) a judgement call needing a maintainer's
+sign-off.
+
+**That sign-off happened by way of a larger, independently-motivated
+change.** The codegen->interpreter migration replaces a tree's emitted
+`if`/`elif` SOURCE with flat arrays a generic walker reads
+(`decider2.trees.codegen.EncodeContext`, `decider2.trees.interpreter.
+walk_tree`). Under that design every registered feature is *always* folded
+into the walker's `feats` tuple, whether or not any node in the tree
+compares against it — there is no longer a "declared, but the emitted body
+never mentions it" state for a `Cases*` node's own feature to fall into.
+Fix (b) falls out as a structural consequence, not a special case anyone
+had to add: an empty `Cases*` node now genuinely builds and always takes
+`otherwise`, matching decider 1. `tests/test_trees_ported_end_to_end.py`'s
+three `test_cases_*_empty_conditions_returns_otherwise` tests were updated
+from `pytest.raises(ValueError, match="never referenced")` to asserting the
+correct decider-1-matching output, rather than the historical refusal.
+
+**Is this still a decider2 bug?** No — it no longer reproduces. The
+schema-level fix (a) this entry originally recommended was not additionally
+applied: `CasesRanges(conditions=[])` etc. remain legal input, now with a
+real, decider-1-matching build behind them, which is the more faithful of
+the two options this entry always said were both defensible.
 
 ### 3. `CompositeNode`/`CompositeCondition` with zero conditions: rejected at the schema, not evaluated as "always False"
 

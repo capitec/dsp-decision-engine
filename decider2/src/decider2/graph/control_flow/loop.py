@@ -11,10 +11,12 @@ BestOffer = Loop(
 ```
 
 Returns a plain `types.Module`, exactly like `Branch` — see `branch.py`'s
-docstring and `_engine.py`'s module docstring for why (doc 03 §8.4) and how
-(inline codegen: a real, bounded `while`/`break`, not a Python-level
-delegate — doc 03 §8.3's whole point is that this must be a REAL early
-exit in compiled code, the thing a previous polars port destroyed).
+docstring and `decider2.graph.control_flow.interpreter`'s module docstring
+for why (doc 03 §8.4) and how (a real, bounded loop walked in compiled
+code by ONE shared `@njit` kernel over a DATA program — `run_program`,
+lifted from EXPERIMENTS.md §W's own verified experiment — never a Python-
+level delegate: doc 03 §8.3's whole point is that this must be a REAL
+early exit in compiled code, the thing a previous polars port destroyed).
 
 `max_iterations` is a required, keyword-only, no-default parameter of this
 Python function — omitting it is a `TypeError` from Python itself before a
@@ -25,9 +27,10 @@ cannot be interrupted").
 `loop_idx` (doc 03 §2's wiring table, per this agent's report: not actually
 listed there yet) is reserved the same way this build treats it everywhere
 else a Loop touches: `should_continue`/`body` may declare an ordinary
-`loop_idx: int` parameter, and the generated `while` supplies the current
-iteration count for it directly, as a local variable — it is never read
-from the outer pipeline's frame or from `carries`.
+`loop_idx: int` parameter, and the generated program's own `SET_ZERO`/
+`INCR` opcodes supply the current iteration count for it directly, in a
+register — it is never read from the outer pipeline's frame or from
+`carries`.
 
 **In practice this build supports exactly one `carries` name.** Doc 03
 §8.3's own worked example carries two (`["best_offer", "best_score"]`);
@@ -54,16 +57,21 @@ from typing import Any, Sequence
 
 from decider2.compile import cache
 from decider2.graph.control_flow._engine import (
-    import_and_wrap,
+    RegisterMap,
+    encode_call,
     merge_inputs,
     normalize,
-    render_call_args,
     render_leaf_param,
     render_prefixed_params,
+    render_step_thunk,
+    render_switch_branch,
+    safe_ident,
     single_step,
 )
+from decider2.graph.control_flow.interpreter import CALL_ARITY, CMP_LIT, INCR, LEAF, SET_ZERO, ProgramBuilder
 from decider2.graph.interface import effective_interface, topological_steps
 from decider2.params import build_params_model, harvest_step
+from decider2.trees.interpreter import LT
 from decider2.types import Module
 
 __all__ = ["Loop"]
@@ -90,7 +98,14 @@ def Loop(
     arbitrary multi-step `Module`/`Pipeline` (no sibling to collide with,
     unlike a Branch arm) — nesting works because `Loop(...)` itself returns
     a plain `Module`, a valid `body` (or a valid arm of a `Branch`) for
-    another `Loop`/`Branch` in turn.
+    another `Loop`/`Branch` in turn: the nested construct's own single
+    generated step is just another by-name case in `call_step`'s switch,
+    exactly like a hand-written step (see `branch.py`'s `_register_thunk`/
+    this module's `_register_thunk`). Nesting a construct this way loses
+    numba's disk cache for that ONE wrapper specifically — a real, reported
+    narrowing found while building this, not a correctness gap; see this
+    agent's report and `decider2.graph.control_flow.interpreter`'s module
+    docstring.
 
     `carries` values are read by `body` (and typically by `should_continue`)
     as ordinary parameters and MUST be produced by `body` at iteration end
@@ -98,10 +113,10 @@ def Loop(
     waterfall idiom doc 03 §3.2 already describes for a plain module
     (`def best_offer(best_offer: float, ...) -> float: ...`), one level up.
 
-    Real early exit: `should_continue` is checked BEFORE each iteration (a
-    `while`, not a `for` that always runs `max_iterations` times), so a
-    condition that turns false at iteration 3 genuinely stops the loop at
-    iteration 3, in compiled code.
+    Real early exit: `should_continue` is checked BEFORE each iteration (an
+    actual conditional back-edge, not a fixed-trip-count loop that always
+    runs `max_iterations` times), so a condition that turns false at
+    iteration 3 genuinely stops the loop at iteration 3, in compiled code.
     """
     if not name:
         raise ValueError(
@@ -146,8 +161,8 @@ def Loop(
     # should_continue is checked BEFORE the body's first iteration ever
     # runs (doc 03 §8.3's real "while", not a "do-while") — so a body
     # output it reads that ISN'T a carry (never given an initial value)
-    # would read an undefined local on that very first check. A carry is
-    # exempt because it always gets one (the caller's own leaf argument).
+    # would read an undefined register on that very first check. A carry
+    # is exempt because it always gets one (the caller's own leaf argument).
     for inp in sc_step.inputs:
         if inp.name != _LOOP_IDX and inp.name in body_outputs and inp.name not in carries:
             raise ValueError(
@@ -166,16 +181,65 @@ def Loop(
     lines.append("")
     lines.append("Content-addressed, real source — decider2.compile.cache. Do not")
     lines.append("hand-edit; regenerate by rebuilding the Loop(...) call instead.")
+    lines.append("")
+    lines.append("This file holds ONLY per-step by-name imports (bounded by step COUNT)")
+    lines.append("and this Loop's DATA program arrays — the loop itself (head-check,")
+    lines.append("back-edge, early exit) is walked by ONE shared, hand-written kernel,")
+    lines.append("decider2.graph.control_flow.interpreter.run_program, which calls the")
+    lines.append("should_continue/body steps through THIS file's own call_step/")
+    lines.append("call_cond switch (passed in as ordinary njit function arguments —")
+    lines.append("never a global pointer table: see decider2.graph.control_flow.")
+    lines.append("interpreter's module docstring for why that distinction is")
+    lines.append("load-bearing here).")
     lines.append('"""')
     lines.append("from __future__ import annotations")
     lines.append("")
-    lines.append("from numba import njit")
+    lines.append("import numpy as np")
+    lines.append("from numba import njit, types")
+    lines.append("")
+    lines.append("from decider2.graph.control_flow.interpreter import run_program")
     lines.append("from decider2.params import param")
     lines.append("")
-    lines += import_and_wrap(sc_step, "_sc_c")
-    for i, s in enumerate(body_steps):
-        lines += import_and_wrap(s, f"_body{i}_c")
+
+    step_thunk_local: dict[int, tuple[str, int]] = {}
+    step_thunks: list[tuple[object, str]] = []
+    cond_thunk_local: dict[int, tuple[str, int]] = {}
+    cond_thunks: list[tuple[object, str]] = []
+
+    def _register_thunk(step, role_prefix: str, *, is_cond: bool) -> int:
+        table_local = cond_thunk_local if is_cond else step_thunk_local
+        table = cond_thunks if is_cond else step_thunks
+        key = id(step.fn)
+        if key in table_local:
+            return table_local[key][1]
+        local = f"{role_prefix}_{len(table)}"
+        lines.extend(render_step_thunk(step, local))
+        idx = len(table)
+        table.append((step, local))
+        table_local[key] = (local, idx)
+        return idx
+
+    sc_slot = _register_thunk(sc_step, "sc", is_cond=True)
+    body_slots = [
+        _register_thunk(s, f"body{i}", is_cond=False) for i, s in enumerate(body_steps)
+    ]
     lines.append("")
+
+    def _emit_switch(fn_name: str, table: list, *, is_cond: bool) -> None:
+        args = ", ".join(f"a{i}: float" for i in range(CALL_ARITY))
+        ret_type = "types.boolean" if is_cond else "types.float64"
+        lines.append("@njit(cache=True)")
+        lines.append(f"def {fn_name}(step_idx: int, {args}) -> {ret_type}:")
+        for i, (step, local) in enumerate(table):
+            branch_kw = "if" if i == 0 else "elif"
+            lines.append(f"    {branch_kw} step_idx == {i}:")
+            lines.append(render_switch_branch(step, local, i, is_cond=is_cond))
+        default = "False" if is_cond else "0.0"
+        lines.append(f"    return {default}")
+        lines.append("")
+
+    _emit_switch("call_step", step_thunks, is_cond=False)
+    _emit_switch("call_cond", cond_thunks, is_cond=True)
 
     # doc 03 §8.3's own worked example carries TWO names sharing one loop
     # run. This build cannot express that safely — see the module
@@ -190,11 +254,6 @@ def Loop(
     # correct trade against a sliced version that sometimes computes a
     # silently wrong answer.
     sc_leaf = [i for i in sc_step.inputs if i.name != _LOOP_IDX and i.name not in carries]
-    # An input name also produced by ANOTHER body step (e.g. a nested
-    # Branch's own `_path` output, read by its `modifies` step) is an
-    # internal wire, not a genuine leaf — excluded here, and threaded via
-    # the `_v_<name>` local the loop body below already builds for every
-    # name in `body_outputs`.
     body_leaf = [
         i for s in body_steps for i in s.inputs
         if i.name != _LOOP_IDX and i.name not in carries and i.name not in body_outputs
@@ -208,35 +267,78 @@ def Loop(
         p, _ = render_prefixed_params(s, body_owners[i])
         param_sig += p
 
+    # Every register that genuinely corresponds to a WRAPPER ARGUMENT
+    # (never a non-carry body output, which has no value until its own
+    # STEP node computes it, and never loop_idx, which SET_ZERO/INCR own
+    # outright) — `_emit_regs_build` seeds exactly this set from `_regs`,
+    # nothing else, so it never references an identifier the wrapper
+    # function does not actually have.
+    wrapper_arg_names = {safe_ident(i.name) for i in merged_inputs}
+    wrapper_arg_names |= {safe_ident(c) for c in carries}
+    wrapper_arg_names |= {safe_ident(f"{sc_step.name}__{d.name}") for d in sc_step.params}
+    for i, s in enumerate(body_steps):
+        wrapper_arg_names |= {safe_ident(f"{body_owners[i]}__{d.name}") for d in s.params}
+
     fn_names: dict[str, str] = {}
     for target in carries:
         fn_name = f"{name}_{target}"
         fn_names[target] = fn_name
+
+        rmap = RegisterMap()
+        builder = ProgramBuilder(n_regs=0)
+        loop_idx_reg = rmap.index_of(safe_ident(_LOOP_IDX))
+        # Every carry's own register, pre-registered (in carries= order) so
+        # its slot is stable regardless of which body step's dest touches
+        # it first below.
+        for c in carries:
+            rmap.index_of(safe_ident(c))
+
+        n_setzero = builder.add(op=SET_ZERO, dest=loop_idx_reg)
+        # doc 03 §8.3: max_iterations bounds the loop REGARDLESS of what
+        # should_continue itself checks — the old generated `while _i <
+        # {max_iterations}:` was a bound around should_continue's own
+        # check, never a substitute for it. `CMP_LIT` reused from
+        # decider2.trees.interpreter's six comparisons (`LT`) gives the
+        # exact same "loop_idx < max_iterations" test as data, checked
+        # first each iteration, before should_continue ever runs.
+        n_maxcheck = builder.add(op=CMP_LIT, arg0=loop_idx_reg, arg1=LT, lit=float(max_iterations))
+        n_cond = encode_call(builder, rmap, sc_step, sc_step.name, sc_slot, is_cond=True)
+        target_reg = rmap.index_of(safe_ident(target))
+        n_leaf = builder.add(op=LEAF, dest=target_reg)
+
+        body_pcs: list[int] = []
+        for i, s in enumerate(body_steps):
+            dest_reg = rmap.index_of(safe_ident(s.name))
+            n_body = encode_call(
+                builder, rmap, s, body_owners[i], body_slots[i], is_cond=False, dest=dest_reg,
+            )
+            body_pcs.append(n_body)
+        for j in range(len(body_pcs) - 1):
+            builder.set_next(body_pcs[j], next_=body_pcs[j + 1])
+
+        n_incr = builder.add(op=INCR, dest=loop_idx_reg)
+
+        builder.set_next(n_setzero, next_=n_maxcheck)
+        builder.set_next(n_maxcheck, next_=n_cond, alt=n_leaf)
+        builder.set_next(n_cond, next_=(body_pcs[0] if body_pcs else n_incr), alt=n_leaf)
+        if body_pcs:
+            builder.set_next(body_pcs[-1], next_=n_incr)
+        builder.set_next(n_incr, next_=n_maxcheck)
+
+        builder.n_regs = rmap.n_regs
+        prog = builder.build(start_pc=n_setzero)
+        _emit_program_arrays(lines, f"_{target}", prog)
+
         lines.append(f"def {fn_name}({', '.join(leaf_sig + param_sig)}) -> float:")
         lines.append(f'    """`{target}` after `{name}` runs to its bound (doc 03 §8.3)."""')
-        for c in carries:
-            lines.append(f"    _v_{c} = {c}")
-        lines.append("    _i = 0")
-        lines.append(f"    while _i < {max_iterations}:")
-        lines.append("        _loop_idx = _i")
-        # loop_idx and carries read the LOCAL, per-iteration variables;
-        # everything else reads the function's own leaf/param argument.
-        sc_args = [
-            "_loop_idx" if orig == _LOOP_IDX else (f"_v_{orig}" if orig in carries else a)
-            for a, orig in zip(render_call_args(sc_step, sc_step.name), _sig_names(sc_step))
-        ]
-        lines.append(f"        _cont = _sc_c({', '.join(sc_args)})")
-        lines.append("        if not _cont:")
-        lines.append("            break")
-        for i, s in enumerate(body_steps):
-            b_args = render_call_args(s, body_owners[i])
-            b_args = [
-                "_loop_idx" if orig == _LOOP_IDX else (f"_v_{orig}" if orig in body_outputs or orig in carries else a)
-                for a, orig in zip(b_args, _sig_names(s))
-            ]
-            lines.append(f"        _v_{s.name} = _body{i}_c({', '.join(b_args)})")
-        lines.append("        _i += 1")
-        lines.append(f"    return _v_{target}")
+        lines += _emit_regs_build(rmap, prog.n_regs, wrapper_arg_names)
+        arr_prefix = f"_{target}"
+        lines.append(
+            f"    return run_program({arr_prefix}__op, {arr_prefix}__step_idx, "
+            f"{arr_prefix}__arg0, {arr_prefix}__arg1, {arr_prefix}__arg2, {arr_prefix}__arg3, "
+            f"{arr_prefix}__arg4, {arr_prefix}__arg5, {arr_prefix}__lit, {arr_prefix}__dest, "
+            f"{arr_prefix}__next, {arr_prefix}__alt, {n_setzero}, call_step, call_cond, _regs)"
+        )
         lines.append("")
 
     source = "\n".join(lines) + "\n"
@@ -274,15 +376,33 @@ def Loop(
     return built
 
 
-def _sig_names(step) -> list[str]:
-    """`step`'s own parameter names, in declared order — used to line up
-    `render_call_args`'s output (which already resolved param() names to
-    their prefixed form) against the ORIGINAL name, so the loop body knows
-    which of `loop_idx`/a carry/a plain leaf each positional slot means."""
-    import inspect
+def _emit_program_arrays(lines: list[str], prefix: str, prog) -> None:
+    lines.append(f"{prefix}__op = np.array({list(int(v) for v in prog.op)!r}, dtype=np.int32)")
+    lines.append(f"{prefix}__step_idx = np.array({list(int(v) for v in prog.step_idx)!r}, dtype=np.int32)")
+    lines.append(f"{prefix}__arg0 = np.array({list(int(v) for v in prog.arg0)!r}, dtype=np.int32)")
+    lines.append(f"{prefix}__arg1 = np.array({list(int(v) for v in prog.arg1)!r}, dtype=np.int32)")
+    lines.append(f"{prefix}__arg2 = np.array({list(int(v) for v in prog.arg2)!r}, dtype=np.int32)")
+    lines.append(f"{prefix}__arg3 = np.array({list(int(v) for v in prog.arg3)!r}, dtype=np.int32)")
+    lines.append(f"{prefix}__arg4 = np.array({list(int(v) for v in prog.arg4)!r}, dtype=np.int32)")
+    lines.append(f"{prefix}__arg5 = np.array({list(int(v) for v in prog.arg5)!r}, dtype=np.int32)")
+    lines.append(f"{prefix}__lit = np.array({list(float(v) for v in prog.lit)!r}, dtype=np.float64)")
+    lines.append(f"{prefix}__dest = np.array({list(int(v) for v in prog.dest)!r}, dtype=np.int32)")
+    lines.append(f"{prefix}__next = np.array({list(int(v) for v in prog.next_)!r}, dtype=np.int32)")
+    lines.append(f"{prefix}__alt = np.array({list(int(v) for v in prog.alt)!r}, dtype=np.int32)")
+    lines.append("")
 
-    try:
-        sig = inspect.signature(step.fn, eval_str=True)
-    except (NameError, TypeError):
-        sig = inspect.signature(step.fn)
-    return list(sig.parameters)
+
+def _emit_regs_build(rmap: "RegisterMap", n_regs: int, wrapper_arg_names: "set[str]") -> list[str]:
+    """Build `_regs`, seeding every register that is genuinely one of the
+    wrapper function's own arguments (a carry's initial value, a plain
+    leaf input, or a `param()` field). Every other register — `loop_idx`
+    (owned by `SET_ZERO`/`INCR`) and every NON-carry body output (which has
+    no value until its own `STEP` node computes it, guaranteed by `Loop`'s
+    own validation above) — is deliberately left at its `np.zeros` default,
+    never referenced as if it were a local the wrapper actually has.
+    """
+    out = [f"    _regs = np.zeros({n_regs})"]
+    for reg_name, idx in rmap.names.items():
+        if reg_name in wrapper_arg_names:
+            out.append(f"    _regs[{idx}] = {reg_name}")
+    return out
