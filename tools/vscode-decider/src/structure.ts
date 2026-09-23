@@ -26,12 +26,15 @@ export class StructureProvider implements vscode.TreeDataProvider<IRNodeJson> {
 
   getTreeItem(node: IRNodeJson): vscode.TreeItem {
     const item = new vscode.TreeItem(
-      lastSegment(node.path),
+      node.path === "" ? this.describe?.pipeline ?? "pipeline" : lastSegment(node.path),
       node.kind === "call" ? vscode.TreeItemCollapsibleState.None : vscode.TreeItemCollapsibleState.Expanded,
     );
     item.id = node.path || "<root>";
-    item.description = node.kind === "call" ? `${names(node.inputs)} → ${names(node.outputs)}` : node.kind;
-    item.tooltip = `${node.path || "<root>"}\n${node.source}` + (node.kind === "call" ? `\nparams: ${JSON.stringify(node.params)}` : "");
+    // Only the writes fit beside the name; the tooltip has the full signature.
+    item.description = node.kind === "call" ? `→ ${names(node.outputs)}` : node.kind;
+    item.tooltip =
+      `${node.path || this.describe?.pipeline}\n${node.source}` +
+      (node.kind === "call" ? `\nreads ${names(node.inputs)}\nwrites ${names(node.outputs)}\nparams ${JSON.stringify(node.params)}` : "");
     item.iconPath = new vscode.ThemeIcon(
       this.current?.path === node.path ? "debug-stackframe" : this.finished.has(node.path) ? "pass" : ICONS[kindLabel(node)],
     );

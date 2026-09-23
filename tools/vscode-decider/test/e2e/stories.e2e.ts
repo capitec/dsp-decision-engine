@@ -86,6 +86,7 @@ describe("user stories", () => {
       await wv.locator("svg .node", { hasText: "cap_by_income" }).click();
       await shot("After clicking the cap_by_income step in the graph.");
       await c.page.locator(".activitybar .action-item a[aria-label*='decider']").first().click().catch(() => undefined);
+      await c.page.mouse.move(700, 450); // off the activity bar, so its hover label is gone
       await shot("The decider view in the activity bar: the structure as a tree.");
     });
   }, 180_000);
@@ -103,7 +104,7 @@ describe("user stories", () => {
       await shot("After clicking 'Run to here': the flow runs on the sample and pauses before cap_by_income.");
       await wv.locator("select[aria-label=record]").selectOption({ label: "client_id 1" });
       await wv.locator(".chip", { hasText: "term_cap" }).first().click();
-      await wv.locator("aside h4", { hasText: "Where term_cap comes from" }).waitFor();
+      await wv.locator(".how-title", { hasText: "How is term_cap" }).waitFor();
       await shot("After focusing client_id 1 in the header and clicking the term_cap chip.");
       await tab(c, "State");
       await shot("The State tab while focused on client_id 1.");

@@ -21,7 +21,7 @@ export function readEvents(events: SessionEvent[], nodes: Map<string, IRNodeJson
       case "node_finished": {
         const outs = Object.entries(ev.outputs as Record<string, Summary>);
         if (nodes.get(p)?.kind === "call") finishedPaths.push(p);
-        if (outs.length) read.lines.push([`${p}  ${outs.map(([n, s]) => `${n}=${previewOf(s)}`).join("  ")}\n`, "stdout"]);
+        if (outs.length) read.lines.push([`${p}:  ${outs.map(([n, s]) => `${n} = ${previewOf(s)}`).join(";  ")}\n`, "stdout"]);
         break;
       }
       case "overridden":

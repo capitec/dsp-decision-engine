@@ -54,7 +54,7 @@ describe("decider in VSCodium", () => {
     await wv.locator(".badge", { hasText: "term/by_sector/cap_public" }).waitFor({ timeout: 30_000 });
     await wv.locator("select[aria-label=record]").selectOption("1");
     await wv.locator(".chip", { hasText: "term_cap" }).first().click();
-    await wv.locator("aside h4", { hasText: "Where term_cap comes from for client_id 2" }).waitFor();
+    await wv.locator(".how-title", { hasText: "How is term_cap" }).waitFor();
     await c.shot("03-paused-record");
     await wv.locator("header nav button", { hasText: "State" }).click();
     await wv.locator("td", { hasText: "requested_amount" }).first().waitFor();
@@ -63,7 +63,7 @@ describe("decider in VSCodium", () => {
 
   it("runs a what-if on a param and shows where the runs diverge", async () => {
     const wv = c.webview();
-    await wv.locator("header nav button", { hasText: "Params" }).click();
+    await wv.locator("header nav button", { hasText: "What-if" }).click();
     await wv.locator('input[aria-label="term/cap_by_income cap"]').fill("24");
     await c.shot("05-params");
     await wv.locator("button", { hasText: "Compare with defaults" }).click();

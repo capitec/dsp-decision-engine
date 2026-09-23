@@ -118,10 +118,11 @@ export function recordLabel(row: number, key: RecordKey): string {
   return key ? `${key.name} ${formatValue(key.values[row])}` : `row ${row}`;
 }
 
-/** Values for people: no float noise (58113.073350000006 shows as 58113.0734). */
+/** Values for people: no float noise; amounts of 100 or more to two decimals (58113.07), smaller ones to four. */
 export function formatValue(v: unknown): string {
   if (v === undefined) return "—";
-  if (typeof v === "number") return Number.isInteger(v) ? String(v) : String(Number(v.toFixed(4)));
+  if (v === null) return "empty";
+  if (typeof v === "number") return Number.isInteger(v) ? String(v) : String(Number(v.toFixed(Math.abs(v) >= 100 ? 2 : 4)));
   return JSON.stringify(v);
 }
 
@@ -149,6 +150,7 @@ export type FromWebview =
   | { type: "restartWith"; params: unknown }
   | { type: "compareRevision" }
   | { type: "runTo"; path: string }
+  | { type: "maximise" }
   | { type: "openDiff"; path: string }
   | { type: "sweep"; scenarios: Scenario[]; fromHere: boolean };
 
@@ -174,6 +176,6 @@ export function kindLabel(n: IRNodeJson): string {
 }
 
 export function previewOf(c: Summary): string {
-  const shown = c.preview.map((v) => JSON.stringify(v)).join(", ");
-  return `[${shown}${c.rows > c.preview.length ? ", …" : ""}]${c.nulls ? ` ${c.nulls} null` : ""}`;
+  const shown = c.preview.map(formatValue).join(", ");
+  return `${shown}${c.rows > c.preview.length ? ", …" : ""}${c.nulls ? `  (${c.nulls} of ${c.rows} empty)` : ""}`;
 }

@@ -54,7 +54,7 @@ describe("decider debug adapter", () => {
     const s = await scopes();
     expect(s.map((x) => x.name)).toEqual(["Inputs", "Outputs", "State"]);
     const inputs = await vars(s[0].variablesReference);
-    expect(inputs.map((v) => [v.name, v.value])).toEqual([["term_cap", "[60, 36]"], ["min_net_salary", "[4000, null] 1 null"]]);
+    expect(inputs.map((v) => [v.name, v.value])).toEqual([["term_cap", "60, 36"], ["min_net_salary", "4000, empty  (1 of 2 empty)"]]);
   });
 
   it("setVariable overrides a column and the run continues with it", async () => {
@@ -62,7 +62,7 @@ describe("decider debug adapter", () => {
     await breakAt("term/cap_by_income");
     const s = await scopes();
     const set = await dc.setVariableRequest({ variablesReference: s[2].variablesReference, name: "term_cap", value: "12.0" });
-    expect(set.body.value).toBe("[12, 12]");
+    expect(set.body.value).toBe("12, 12");
     await Promise.all([dc.continueRequest({ threadId: 1 }), dc.waitForEvent("terminated")]);
   });
 
@@ -131,7 +131,7 @@ describe("decider debug adapter", () => {
     expect(describe.body.pipeline).toBe("pipeline");
     const state = await dc.customRequest("decider.state");
     expect(state.body.columns.map((c: { name: string }) => c.name)).toContain("bureau_score");
-    expect((await dc.evaluateRequest({ expression: "band" })).body.result).toBe("[1, 1]");
+    expect((await dc.evaluateRequest({ expression: "band" })).body.result).toBe("1, 1");
   });
 
   it("a step that raises stops with an exception", async () => {
