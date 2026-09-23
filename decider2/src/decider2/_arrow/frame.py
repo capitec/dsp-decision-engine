@@ -245,14 +245,20 @@ class FrameView:
             self.plan_addr, self.addrs.ctypes.data,
         )
         if rc != 0:
-            message = self._mismatch_message(-rc - 1)   # needs the bound schema
+            c = -rc - 1
+            name, kind = plan.names[c], FeatureKind(int(plan.kinds[c]))
+            arrow_type = self.arrow_type(name)                 # needs the bound schema
+            message = self._mismatch_message(name, kind, arrow_type)
             self.release()
-            raise ArrowKindError(message)
+            err = ArrowKindError(message)
+            # Structured, so a caller can act on WHICH column without
+            # parsing the message (boundary/extract.py reports a nested
+            # column as `NeedsKernelSplit` from these).
+            err.column, err.kind, err.arrow_type = name, kind, arrow_type
+            raise err
 
-    def _mismatch_message(self, c: int) -> str:
-        plan = self.plan
-        name, kind = plan.names[c], FeatureKind(int(plan.kinds[c]))
-        arrow_type = self.arrow_type(name)
+    @staticmethod
+    def _mismatch_message(name: str, kind: FeatureKind, arrow_type: str) -> str:
         hint = ""
         if arrow_type.startswith("decimal"):
             hint = " Cast Decimal to a scaled integer in the frame tier before the boundary (doc 03 §1.2)."
@@ -313,6 +319,24 @@ class FrameView:
         self._require_bound()
         k = self.plan.columns.index(name)
         return lib.sm_view_child(self._p[3], k)
+
+    def dictionary(self, name: str) -> tuple[str | None, ...] | None:
+        """The exported dictionary of a Categorical/Enum column, in index
+        order (a copy), or None for a column with no dictionary. This — not
+        `Series.cat.get_categories()` — is what a CODE index counts into:
+        polars' physical codes are process-global but its Arrow export
+        carries a per-batch dictionary (measured on polars 1.41.2 and
+        1.44.2, boundary/extract.py). One accessor call per category."""
+        self._require_bound()
+        d = lib.sm_view_dictionary(self.child_view(name))
+        if not d:
+            return None
+        p = ctypes.c_void_p()
+        out = []
+        for i in range(lib.sm_view_length(d)):
+            ln = lib.sm_get_string(d, i, ctypes.byref(p))
+            out.append(None if ln < 0 else ctypes.string_at(p.value, ln).decode("utf-8"))
+        return tuple(out)
 
     def describe(self) -> list[dict]:
         """One record per declared column: name, Arrow type, storage type,
@@ -386,6 +410,30 @@ class FrameView:
         )
         return out
 
+    def materialize_columns(self) -> "Columns":
+        """Every row through the C gather, scattered into one contiguous
+        1-D column per slot: `f64[j]` is F64 slot `j`'s whole column, and
+        so on — the shape `runtime.invoke.apply`'s registry wants (a fused
+        kernel indexes `cols[j][i]`, a packed step's `_fill_array` reads a
+        homogeneous tuple of C-contiguous columns). `span[j]` is an
+        `(n, 2)` table of `(address, length)`; `valid[c]` is per declared
+        column, in plan order. docs/BOUNDARY-REWORK.md §1.3b: one C call
+        per row, for every column at once, once per batch."""
+        self._require_bound()
+        n = self.n
+        nf, ni, nb, nc, ns = self.plan.counts
+        out = Columns(
+            f64=np.empty((nf, n), np.float64), i64=np.empty((ni, n), np.int64),
+            b8=np.empty((nb, n), np.bool_), i32=np.empty((nc, n), np.int32),
+            span=np.empty((ns, n, 2), np.int64), valid=np.empty((self.plan.ncols, n), np.bool_),
+        )
+        materialize_columns(
+            np.uint64(self.gather_addr), np.uint64(self.plan_addr), n,
+            self.f64, self.i64, self.b8, self.i32, self.span, self.valid,
+            out.f64, out.i64, out.b8, out.i32, out.span, out.valid,
+        )
+        return out
+
     def strings(self, slot: int) -> list[bytes | None]:
         """Every row's bytes for STR slot `slot` (copies), None for nulls."""
         rows = self.materialize()
@@ -424,6 +472,49 @@ def materialize_rows(gather_addr, plan_addr, n, f64, i64, b8, i32, span, valid,
         out_i32[i, :] = i32
         out_span[i, :] = span
         out_valid[i, :] = valid
+
+
+@dataclass
+class Columns:
+    """`FrameView.materialize_columns()`: `(slots, n)` per kind — each
+    `[j]` a C-contiguous column — `span` `(slots, n, 2)`, `valid`
+    `(ncols, n)` bool in plan order."""
+
+    f64: np.ndarray
+    i64: np.ndarray
+    b8: np.ndarray
+    i32: np.ndarray
+    span: np.ndarray
+    valid: np.ndarray
+
+
+@njit(cache=True)
+def materialize_columns(gather_addr, plan_addr, n, f64, i64, b8, i32, span, valid,
+                        out_f64, out_i64, out_b8, out_i32, out_span, out_valid):
+    """`materialize_rows` transposed: gather row `i` (one pointer call) and
+    scatter the typed row into per-slot columns. The `out_*` first axis is
+    the honest slot count (the row buffers are padded to >= 1), so a kind
+    with no inputs costs an empty loop. `cache=True` as `materialize_rows`:
+    both addresses are ARGUMENTS."""
+    nf, ni, nb, nc, ns, ncols = (
+        out_f64.shape[0], out_i64.shape[0], out_b8.shape[0], out_i32.shape[0],
+        out_span.shape[0], out_valid.shape[0],
+    )
+    for i in range(n):
+        call_gather(gather_addr, plan_addr, i)
+        for j in range(nf):
+            out_f64[j, i] = f64[j]
+        for j in range(ni):
+            out_i64[j, i] = i64[j]
+        for j in range(nb):
+            out_b8[j, i] = b8[j]
+        for j in range(nc):
+            out_i32[j, i] = i32[j]
+        for j in range(ns):
+            out_span[j, i, 0] = span[2 * j]
+            out_span[j, i, 1] = span[2 * j + 1]
+        for c in range(ncols):
+            out_valid[c, i] = valid[c] != 0
 
 
 @njit(cache=True)
