@@ -154,7 +154,9 @@ export function Scenarios({ schema, columns, pausedAt, record, keyCol, rows, res
 }
 
 function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row: number; rows: number; onRow: (r: number) => void; onOpen: (i: number) => void; open: number | null }) {
-  const cols = sweep.changedColumns;
+  // The outcomes that moved most come first, so the columns that matter survive a narrow panel.
+  const moved = (c: string) => sweep.comparisons.reduce((t, cmp) => t + (cmp.output.find((o) => o.name === c)?.changedRows.length ?? 0), 0);
+  const cols = [...sweep.changedColumns].sort((a, b) => moved(b) - moved(a));
   const knobCols = sweep.knobs.length ? sweep.knobs : [{ name: "scenario", values: sweep.labels }];
   const summary = row < 0;
   const recordsOf = (list: number[]) => list.map((r) => recordLabel(r, sweep.key)).join(", ");
@@ -177,7 +179,7 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
     return (
       <td key={c} className="changed mono" title={`changed for ${recordsOf(diff.changedRows)}; original: ${overall(sweep.base?.[c])}`}>
         {value}
-        <span className="up"> · {diff.changedRows.length} of {rows} changed</span>
+        <span className="up"> ({diff.changedRows.length}/{rows} changed)</span>
       </td>
     );
   };

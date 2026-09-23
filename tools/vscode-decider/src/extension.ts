@@ -22,7 +22,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   const showGraph = (file: string, describe: DescribeResult) => {
     shown = { file, pipeline: describe.pipeline };
     structure.setDescribe(describe);
-    GraphPanel.show(ctx, describe, (m) => onWebview(m, describe).catch((e) => vscode.window.showErrorMessage(`decider: ${(e as Error).message}`)));
+    return GraphPanel.show(ctx, describe, (m) => onWebview(m, describe).catch((e) => vscode.window.showErrorMessage(`decider: ${(e as Error).message}`)));
   };
 
   ctx.subscriptions.push(
@@ -45,7 +45,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       if (!doc) return;
       try {
         const d = await analyse(doc);
-        showGraph(doc.fileName, pipeline ? { ...d, pipeline } : d);
+        await showGraph(doc.fileName, pipeline ? { ...d, pipeline } : d);
       } catch (e) {
         vscode.window.showErrorMessage(`decider: ${(e as Error).message}`);
       }
@@ -78,7 +78,7 @@ export function activate(ctx: vscode.ExtensionContext) {
 
     vscode.commands.registerCommand("decider.whatIf", async (uri?: vscode.Uri) => {
       if (uri || !GraphPanel.current) await vscode.commands.executeCommand("decider.visualise", uri);
-      GraphPanel.current?.post({ type: "tab", tab: "params" });
+      GraphPanel.post({ type: "tab", tab: "params" });
     }),
 
     vscode.commands.registerCommand("decider.focusRecord", async () => {
@@ -114,22 +114,22 @@ export function activate(ctx: vscode.ExtensionContext) {
       if (e.session.type !== "decider" || e.event !== "decider.status") return;
       const body = e.body as RunStatus;
       structure.setStatus(body.current, body.finishedPaths);
-      GraphPanel.current?.post({ type: "status", ...body });
+      GraphPanel.post({ type: "status", ...body });
       const { columns, key } = (await e.session.customRequest("decider.state")) as { columns: ColumnSummary[] | null; key: RecordKey };
-      GraphPanel.current?.post({ type: "state", columns, rows: columns?.[0]?.rows ?? 0, key });
+      GraphPanel.post({ type: "state", columns, rows: columns?.[0]?.rows ?? 0, key });
     }),
 
     vscode.debug.onDidTerminateDebugSession((s) => {
       if (s.type !== "decider") return;
       structure.setStatus(null, []);
-      GraphPanel.current?.post({ type: "status", current: null, finished: true, finishedPaths: [], visits: {}, record: null });
-      GraphPanel.current?.post({ type: "state", columns: null, rows: 0, key: null });
+      GraphPanel.post({ type: "status", current: null, finished: true, finishedPaths: [], visits: {}, record: null });
+      GraphPanel.post({ type: "state", columns: null, rows: 0, key: null });
     }),
   );
 }
 
 function post(m: ToWebview) {
-  GraphPanel.current?.post(m);
+  GraphPanel.post(m);
 }
 
 async function onWebview(m: FromWebview, describe: DescribeResult) {

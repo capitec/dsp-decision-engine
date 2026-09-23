@@ -130,7 +130,7 @@ describe("user stories", () => {
       await wv.locator('input[aria-label="term/cap_by_income cap"]').fill("24");
       await shot("After typing 24 into term/cap_by_income · cap.");
       await wv.locator("button", { hasText: "Compare with defaults" }).click();
-      await wv.locator(".compare .summary").waitFor({ timeout: 90_000 });
+      await wv.locator(".compare .comparing").waitFor({ timeout: 90_000 });
       await shot("The comparison after clicking 'Compare with defaults'.");
       await tab(c, "Graph");
       await shot("The graph after the comparison.");
@@ -154,7 +154,7 @@ describe("user stories", () => {
       await wv.locator("table.sweep").waitFor({ timeout: 120_000 });
       await shot("The results table after running the 6 scenarios.");
       await wv.locator("table.sweep tr.clickable").nth(0).click();
-      await wv.locator(".inline-compare .compare .summary").waitFor();
+      await wv.locator(".inline-compare .compare .comparing").waitFor();
       await shot("After clicking the first scenario row: its comparison opens under the table.");
     });
   }, 240_000);
@@ -179,7 +179,7 @@ describe("user stories", () => {
       await shot("After clicking 'Compare with…' above the pipeline.");
       await c.page.keyboard.press("Enter");
       const wv = c.webview();
-      await wv.locator(".compare .summary", { hasText: "working tree" }).waitFor({ timeout: 120_000 });
+      await wv.locator(".compare .comparing", { hasText: "working tree" }).waitFor({ timeout: 120_000 });
       await shot("The comparison of HEAD against the working tree.");
       await tab(c, "Graph");
       await shot("The graph after the comparison.");

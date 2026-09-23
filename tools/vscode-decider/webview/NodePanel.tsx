@@ -45,8 +45,27 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
       <button className="close link" title="Hide details" onClick={onClose}>✕</button>
       {node ? (
         <>
-          <h3>{node.path}</h3>
+          <h3>{name} {node.path !== name && <span className="muted">in {node.path.slice(0, -(name?.length ?? 0) - 1)}</span>}</h3>
           <div className="muted" title={node.source}>{KIND[node.callKind]}</div>
+          {path && (
+            <>
+              <h4>Path for {who}</h4>
+              <div className="tree-path">
+                {path.visited.map((l, i) => (
+                  <span key={i}>
+                    {i > 0 && <span className="muted"> → </span>}
+                    <span className="mono">{l}</span>
+                  </span>
+                ))}
+                {path.result && (
+                  <span>
+                    {" → "}gives <strong>{(node.outputs ?? []).map((o, i) => `${o} = ${formatValue(path.result![i])}`).join(", ")}</strong>
+                  </span>
+                )}
+                <div className="muted small">with {(node.inputs ?? []).map((i) => `${i} = ${valueOf(i) ?? "?"}`).join(", ")}</div>
+              </div>
+            </>
+          )}
           <div className="actions">
             <button onClick={() => onReveal(node.path)}>Open source</button>
             {atThis ? (
@@ -76,25 +95,6 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
                 )),
               )}
             </div>
-          )}
-          {path && (
-            <>
-              <h4>Path for {who}</h4>
-              <div className="tree-path">
-                {path.visited.map((l, i) => (
-                  <span key={i}>
-                    {i > 0 && <span className="muted"> → </span>}
-                    <span className="mono">{l}</span>
-                  </span>
-                ))}
-                {path.result && (
-                  <span>
-                    {" → "}gives <strong>{(node.outputs ?? []).map((o, i) => `${o} = ${formatValue(path.result![i])}`).join(", ")}</strong>
-                  </span>
-                )}
-                <div className="muted small">with {(node.inputs ?? []).map((i) => `${i} = ${valueOf(i) ?? "?"}`).join(", ")}</div>
-              </div>
-            </>
           )}
           <h4>Reads{who && <span className="muted"> · values for {who}</span>}</h4>
           <Chips names={node.inputs} picked={column} onPick={onPick} valueOf={valueOf} />
@@ -143,7 +143,7 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
       )}
       {history && history.name === column && (
         <>
-          <h4>Every value of {column} so far</h4>
+          <h4>{column} history</h4>
           <ol className="history">
             {history.versions.map((v, i) => (
               <li key={i}>
@@ -157,8 +157,8 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
                   <span className="muted">{v.producer === "input" ? "input" : "set by you"}</span>
                 ) : (
                   <>
-                    <a onClick={() => onSelect(v.producer)}>{v.producer}</a>{" "}
-                    <button className="link" title="Re-run from this step with the current values" onClick={() => onRewind(v.producer)}>re-run from here</button>
+                    <span className="muted">set by </span><a onClick={() => onSelect(v.producer)}>{v.producer.split("/").pop()}</a>{" · "}
+                    <button className="link" title="Run the flow again from this step, keeping the values before it" onClick={() => onRewind(v.producer)}>re-run from {v.producer.split("/").pop()}</button>
                   </>
                 )}
               </li>
