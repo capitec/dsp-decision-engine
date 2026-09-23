@@ -4,9 +4,10 @@ import threading
 from typing import Iterator
 
 import numpy as np
+import polars as pl
 
 from decider.engine.boundary.nulls import MissingInputError
-from decider.engine.compile import Unit, compile_plan, numpy_dtype
+from decider.engine.compile import Fallback, Unit, compile_plan, numpy_dtype
 from decider.engine.ir.decls import Input, NullPolicy, base_annotation
 from decider.engine.run.params import RunParams
 from decider.engine.run.runners.base import Checkpoint
@@ -21,7 +22,10 @@ class SteppedRunner(InterpretedRunner):
     Pauses at every node, like the interpreted runner. Frame steps, branches
     and loops run in Python. A `str` value enters a kernel as an int32 code
     and a `str` param as the code of its literal, so a step compares a `str`
-    input against a `str` param exactly as it does in plain Python.
+    input against a `str` param exactly as it does in plain Python. A `bytes`
+    input enters as an `(address, byte length)` span of its UTF-8 bytes, and
+    then so does each `str` param of that node. A Python fallback gets plain
+    Python values.
 
     Example::
 
@@ -40,6 +44,8 @@ class SteppedRunner(InterpretedRunner):
         self._strs: dict[int, tuple[str, ...]] = {}
         self._converted: dict[tuple[str, int], tuple] = {}
         self._codes: dict[str, int] = {}
+        self._spans: set[int] = set()
+        self._alive: dict[tuple[str, int], dict] = {}
         self._lock = threading.Lock()
 
     def iterate(self, plan: Plan, state: State, params: RunParams) -> Iterator[Checkpoint]:
@@ -50,6 +56,10 @@ class SteppedRunner(InterpretedRunner):
 
     def _compile(self, plan: Plan) -> None:
         strs = {c.id: _str_params(c) for c in plan.calls if c.node.kind == "scalar"}
+        # A row node reading `bytes` compares bytes, so its `str` params go in as UTF-8 spans.
+        self._spans = {c.id for c in plan.calls if c.node.kind == "row" and _reads_bytes(c)}
+        strs |= {k: tuple(d.name for d in c.node.params if d.annotation is str)
+                 for c in plan.calls if (k := c.id) in self._spans}
         units = compile_plan(plan, fuse=self.fuse)
         reads = {}
         for unit in units.values():
@@ -71,15 +81,19 @@ class SteppedRunner(InterpretedRunner):
     def _run(self, unit: Unit, state: State, params: RunParams, scope: _Scope) -> None:
         rows = scope.rows
         n = scope.count(state.n)
+        # A fallback runs Python code, which takes Python values: strings, not codes.
+        python = isinstance(unit, Fallback)
         # Every call of a unit runs on every row the unit runs on, so validating
         # them all here is validating exactly the nodes that run.
-        bundles = {c.id: self._bundle(c.id, params, n) for c in unit.calls if c.node.params}
+        bundles = {c.id: params.bundle(c.id, n) if python else self._bundle(c.id, params, n)
+                   for c in unit.calls if c.node.params}
         values: dict[int, np.ndarray] = {}
         valid: dict[int, np.ndarray] = {}
+        alive: list = []
         for decl, v, path in self._reads[unit.calls[0].id]:
             x, mask = state.read(v, rows)
-            if x.dtype == object:
-                x = self._typed(x, mask, decl)
+            if x.dtype == object and not python:
+                x = self._typed(x, mask, decl, alive)
             if mask is not None and not mask.all():
                 if decl.null_policy is NullPolicy.REQUIRED:
                     raise MissingInputError(decl.name, path, int((~mask).sum()), len(mask), absent=_absent(state, v))
@@ -93,7 +107,12 @@ class SteppedRunner(InterpretedRunner):
             state.write(v, values[v.id], rows, valid.get(v.id))
             scope.names[v.name] = v
 
-    def _typed(self, x: np.ndarray, mask: np.ndarray | None, decl: Input) -> np.ndarray:
+    def _typed(self, x: np.ndarray, mask: np.ndarray | None, decl: Input, alive: list) -> np.ndarray:
+        if base_annotation(decl.annotation) is bytes:
+            try:
+                return _spans(x, mask, alive)
+            except TypeError as e:
+                raise TypeError(f"'{decl.name}' is a string input: {e}") from None
         if base_annotation(decl.annotation) is str:
             get = self._codes.get
             return np.fromiter((get(s, -1) for s in x), np.int32, len(x))
@@ -109,10 +128,41 @@ class SteppedRunner(InterpretedRunner):
         key = (params.key, call_id)
         converted = self._converted.get(key)
         if converted is None:
-            with self._lock:
-                codes = {k: np.int32(self._codes.setdefault(getattr(bundle, k), len(self._codes))) for k in names}
+            if call_id in self._spans:
+                utf8 = {k: np.frombuffer(getattr(bundle, k).encode(), np.uint8) for k in names}
+                # Kept with the cached bundle, whose spans point into them.
+                self._alive[key] = utf8
+                codes = {k: (b.ctypes.data, len(b)) for k, b in utf8.items()}
+            else:
+                with self._lock:
+                    codes = {k: np.int32(self._codes.setdefault(getattr(bundle, k), len(self._codes))) for k in names}
             converted = self._converted[key] = bundle._replace(**codes)
         return converted
+
+
+def _reads_bytes(call: Call) -> bool:
+    return any(base_annotation(i.annotation) is bytes for i in call.node.inputs)
+
+
+def _spans(x: np.ndarray, mask: np.ndarray | None, alive: list) -> np.ndarray:
+    # Strings reach a kernel as `(address, byte length)` spans into Arrow memory, -1 for a null.
+    # ponytail: copies the column into a new polars Series; read the input frame directly if it matters.
+    from decider.engine.boundary.extract import extract_frame
+
+    if mask is not None:
+        x = np.where(mask, x, None)
+    if len(x) <= 32:
+        # A few records (score): encoding them beats building a frame to export.
+        raw = [None if s is None else str.encode(s) for s in x]
+        buffer = np.frombuffer(b"".join(b for b in raw if b) or bytes(1), np.uint8)
+        alive.append(buffer)
+        lengths = np.array([-1 if b is None else len(b) for b in raw], np.int64)
+        starts = np.cumsum(np.maximum(lengths, 0)) - np.maximum(lengths, 0)
+        return np.stack([buffer.ctypes.data + starts, lengths], axis=1)
+    frame = pl.DataFrame({"s": pl.Series(x.tolist(), dtype=pl.String)})
+    extracted = extract_frame(frame, [Input("s", bytes, NullPolicy.OPTIONAL)])
+    alive.append(extracted.kernel_frame)
+    return extracted.columns["s"].values
 
 
 def _str_params(call: Call) -> tuple[str, ...]:

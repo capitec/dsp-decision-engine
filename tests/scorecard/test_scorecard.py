@@ -166,3 +166,13 @@ def test_gaps_are_allowed_when_not_strict():
 def test_a_variable_may_appear_only_once():
     with pytest.raises(ValueError, match="Duplicate variable_name 'age'"):
         _sc([_age(), AdjustedVariable(variable=_age())])
+
+
+@pytest.mark.parametrize("mode", ["stepped", "fused"])
+def test_value_bins_match_strings_in_compiled_modes(mode):
+    from decider.engine import Engine
+
+    sc = _sc([ScoredVariable(variable_name="status", bins=[ValuesBin(value=50.0, items=["vip"])],
+                             default=DefaultBin(value=0.0))])
+    out = Engine().bind(sc, mode=mode).run(pl.DataFrame({"status": ["vip", "other"]}))
+    assert out["score"].to_list() == [50.0, 0.0]
