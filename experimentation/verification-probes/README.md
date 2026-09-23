@@ -130,3 +130,35 @@ call, because it converts binview to a `large_utf8` offsets+values pair.
 
 So the accessor was the copy, not the memory. Anything reading polars strings
 from a kernel should take the C Data Interface route.
+
+## `profile_score.py` — where the single-record path actually goes
+
+The boundary-rework design found that `score()` spends most of its time on
+schema-invariant Python redone per call, and that neither Arrow nor Rust
+touches it. Profiled here independently, on the *simplest possible* pipeline —
+one tree, one feature, one node:
+
+```
+score() single record: 104.5 us/call   (spec 60 us)
+
+  300 calls  pipeline.interface -> _pipeline_interface
+  300 calls  flatten_for_runtime
+  300 calls  effective_interface / topological_steps / raw_interface
+  900 calls  graphlib.static_order          <- a topological sort, per record
+  300 calls  difflib.get_close_matches      <- fuzzy name matching, per record
+  300 calls  build_driver
+```
+
+Every one of those depends only on the pipeline's shape, which does not change
+between calls. On the simplest pipeline decider2 can build, `score()` is
+already 1.7x over its own 60 us spec and essentially none of that is the
+decision — the kernel is around 1.4 us.
+
+One detail of the design's attribution did NOT reproduce here: `inspect.
+signature` / typing `eval` was 0.0% of self-time in this pipeline (difflib
+~7%, `flatten_for_runtime` ~4%, the rest spread across the interface and graph
+walks). The mechanism is the same; the specific hot names differ by pipeline.
+
+The conclusion stands and is the most actionable finding of the whole
+investigation: **the 90% single-record case is fixed by caching per-pipeline
+Python, not by changing the engine, the language, or the data format.**
