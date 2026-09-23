@@ -1,0 +1,91 @@
+# Prototype: decider2's first compiled artefact, packaged with the backend
+# decider2 already uses (setuptools). Nothing here is a new build dependency.
+#
+# The only additions over decider2/pyproject.toml are the three blocks marked
+# "+ binary". Everything else is copied from decider2's layout.
+
+[project]
+name = "d2shim"
+version = "0.0.1"
+description = "Prototype packaging of the nanoarrow string shim (decider2's first binary)"
+requires-python = ">=3.10"
+dependencies = [
+    "polars>=1.0",
+    "numpy",
+    "numba>=0.67.0",
+]
+# + binary: Apache-2.0 §4(d) — the vendored nanoarrow's LICENSE and NOTICE
+# must travel with every redistribution. PEP 639 license-files puts them in
+# <dist>.dist-info/licenses/ of the wheel and at the sdist root.
+license-files = [
+    "src/d2shim/vendor/LICENSE.txt",
+    "src/d2shim/vendor/NOTICE.txt",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[build-system]
+# setuptools>=77 for PEP 639 license-files; >=74.1 for [[tool.setuptools.ext-modules]]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["d2shim*"]
+
+[tool.setuptools]
+# false: otherwise every ext source under src/d2shim/ (nanoarrow.c, the .h) is also
+# copied into the WHEEL as package data (+335 KB). The sdist still carries them.
+include-package-data = false
+
+[tool.setuptools.package-data]
+# the provenance record ships inside the package so `d2shim.diagnose()` can show it
+d2shim = ["vendor/VERSION", "vendor/SHA512SUMS", "vendor/LICENSE.txt", "vendor/NOTICE.txt"]
+
+# + binary: the one extension. Declarative (no setup.py): setuptools>=74.1.
+# Stable ABI (abi3, CPython>=3.10) so ONE wheel per platform covers every
+# supported interpreter: 5 wheels total, not 5 x (number of Python versions).
+[[tool.setuptools.ext-modules]]
+name = "d2shim._nashim"
+sources = [
+    "src/d2shim/c/nashim_module.c",   # PyInit + address table (this project, 90 lines)
+    "src/d2shim/c/nashim.c",          # the shim (this project, byte-identical to the experiment)
+    "src/d2shim/vendor/nanoarrow.c",  # vendored nanoarrow 0.9.0 amalgamation (Apache-2.0)
+]
+include-dirs = ["src/d2shim/vendor"]
+# `depends` is what puts the header into the SDIST: without it `uv build` (sdist -> wheel)
+# fails with "nanoarrow/nanoarrow.h: No such file" because sdists carry only ext sources.
+depends = ["src/d2shim/vendor/nanoarrow/nanoarrow.h"]
+# NANOARROW_DLL="" : nanoarrow.h otherwise marks its own API visibility("default"), which
+# overrides -fvisibility=hidden below and leaks 71 Arrow* symbols out of the module.
+define-macros = [["Py_LIMITED_API", "0x030A0000"], ["NANOARROW_DLL", ""]]
+py-limited-api = true
+# Hide nanoarrow's 71 Arrow* functions and the sm_* functions from the dynamic symbol
+# table: only PyInit__nashim is exported (measured: 89 -> 1 exported symbols, with NANOARROW_DLL above). Python loads
+# extensions RTLD_LOCAL so a collision with another nanoarrow copy in-process is unlikely,
+# but a binary that exports a third party's whole API is what a reviewer flags first.
+# MSVC ignores this flag with a D9002 warning (exports nothing by default anyway).
+extra-compile-args = ["-fvisibility=hidden"]
+# optional = true   # <- would turn a compile failure into a warning + pure-Python install; see RESULTS.md §4
+
+# + binary: tag the wheel cp310-abi3-<platform> instead of cp3XY-cp3XY-<platform>
+[tool.distutils.bdist_wheel]
+py-limited-api = "cp310"
+
+# + binary: the wheel matrix. One abi3 wheel per platform, built from cp310;
+# tested on the oldest and newest supported CPython. See ci/wheels.yml.
+[tool.cibuildwheel]
+build = "cp310-*"
+skip = "*-musllinux_* *-win32 *-manylinux_i686 pp*"
+build-verbosity = 1
+test-requires = "pytest"
+test-sources = ["tests"]          # copied into the test cwd on every platform (cibuildwheel >= 3)
+test-command = "python -m pytest tests -q"
+manylinux-x86_64-image = "manylinux_2_28"
+manylinux-aarch64-image = "manylinux_2_28"
+# (free-threaded cp3XYt builds are off by default in cibuildwheel 4; abi3 cannot serve them and numba does not support them)
+
+[tool.cibuildwheel.macos]
+# polars/numba wheels need 11.0+ on arm64 anyway; one floor for both arches
+environment = { MACOSX_DEPLOYMENT_TARGET = "11.0" }

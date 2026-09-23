@@ -66,14 +66,14 @@ from decider2 import expr
 from decider2.trees.interpreter import EQ, GE, GT, LE, LT, NE
 
 if t.TYPE_CHECKING:
-    # Codegen-only: every node/condition class below calls back into this
-    # for the cross-cutting concerns codegen owns (naming and de-duping
+    # Encoding-only: every node/condition class below calls back into this
+    # for the cross-cutting concerns encoding owns (naming and de-duping
     # kernel arguments, hoisting string tests, walking to a node's
     # children). Import guarded so schema.py stays free of a runtime
-    # dependency on codegen.py — codegen.py already depends on this
-    # module, and a class owning its own emission is not the same claim as
-    # this module depending on codegen (see EncodeContext's own docstring).
-    from decider2.trees.codegen import EncodeContext
+    # dependency on encode.py — encode.py already depends on this
+    # module, and a class owning its own encoding is not the same claim as
+    # this module depending on encode.py (see EncodeContext's own docstring).
+    from decider2.trees.encode import EncodeContext
 
 # decider2.trees.schema._ThresholdedUnaryOp's six operators -> the
 # interpreter's six comparison opcodes (decider2.trees.interpreter). One
@@ -158,13 +158,13 @@ class RangeEndLogic(str, enum.Enum):
 class TStringMatchType(str, enum.Enum):
     """decider 1's string matching strategies.
 
-    Only `exact` survives into a compiled kernel: doc 05 §1.5 is
-    unconditional that "a string never enters a kernel as a string" — it
-    enters as an int32 dictionary code, and a code comparison cannot express
-    a prefix, a suffix, a substring or a regex. `decider2.trees.codegen`
-    raises a named error for the other four rather than silently matching
-    something else; see this module's `MIGRATION NOTES` in the package
-    docstring.
+    `exact`, `starts_with`, `ends_with` and `contains` are matched in the
+    compiled kernel, at the node, on the string's own UTF-8 bytes
+    (docs/BOUNDARY-REWORK.md §3.1; `decider2.trees.interpreter.
+    match_bytes`). `regex` has no in-kernel form — there is no regex engine
+    in nopython numba — and `decider2.trees.encode` raises a named
+    `UnsupportedInKernel` for it, with the frame-tier route, rather than
+    silently matching something else.
     """
 
     exact = "exact"
@@ -277,45 +277,52 @@ class _ComputedFeature(BaseModel):
         # `InputRef` (tracked, because its name is the shared knob).
         return set()
 
-    def emit(self, ctx: "EncodeContext", node_id: str) -> str:
-        return self._expr.emit(_ExprEmitAdapter(ctx, node_id))
+    def compile(self, ctx: "EncodeContext", node_id: str):
+        """`decider2.trees.encode.EncodeContext.computed_feature_index`
+        calls this: a computed feature's arithmetic is built as a real
+        `@njit` closure (`decider2.expr.Expr.compile`), never text. There is
+        no `.emit()` counterpart here any more (the previous migration's
+        text-emitting one was removed with this one) — `decider2.expr.Expr`
+        itself still HAS an `.emit()` (kept only for `tests/test_expr.py`'s
+        own fast, numba-free unit-test harness, see that module's
+        docstring and this stage's report), but nothing in this package
+        calls it any more."""
+        return self._expr.compile(_ExprEmitAdapter(ctx, node_id))
 
 
 class _ExprEmitAdapter:
-    """Bridges `decider2.expr.ExprContext` to one tree's `EncodeContext`, for
-    one computed feature's use at one node.
+    """Bridges `decider2.expr.ExprCompileContext` to one tree's
+    `EncodeContext`, for one computed feature's use at one node.
 
     A computed feature's own free names become ordinary column arguments —
-    `ctx.column` is exactly `EncodeContext`'s existing feature bookkeeping, so
-    two nodes both reading `income` (one directly, one inside `income - x`)
-    share the one signature argument. Its own numeric literals become
-    ordinary anonymous params through `EncodeContext.threshold` — the same
-    machinery a literal `Threshold` already uses (`_ThresholdedUnaryOp.
-    encode`) — so a constant buried inside an expression retunes exactly
-    like any other threshold, never recompiling. `_next` numbers them
-    uniquely within this one use so `"x * 2 + y * 2"` gets two distinct
-    params, not one collided name.
-
-    This is the one place a computed feature stays SOURCE TEXT rather than
-    array data (doc 08 §1.2/§3.2): its arithmetic is a value computation, not
-    a branch, and `decider2.expr` already compiles it to a numba expression
-    once, at build time — `EncodeContext` only has to fold that expression's
-    *result* into a local variable and give it a feature slot like any other
-    (`EncodeContext.computed_feature_index`).
+    `ctx.plain_feature_index` is exactly `EncodeContext`'s existing feature
+    bookkeeping, so two nodes both reading `income` (one directly, one
+    inside `income - x`) share the one `feats`-tuple slot. Its own numeric
+    literals become ordinary anonymous params through `EncodeContext.
+    threshold_slot` — the same machinery a literal `Threshold` already uses
+    (`_ThresholdedUnaryOp.encode`) — so a constant buried inside an
+    expression retunes exactly like any other threshold, never recompiling.
+    `_next_compiled` numbers them uniquely within this one use so
+    `"x * 2 + y * 2"` gets two distinct params, not one collided name.
     """
 
     def __init__(self, ctx: "EncodeContext", node_id: str) -> None:
         self._ctx = ctx
         self._node_id = node_id
-        self._next = 0
+        self._next_compiled = 0
 
-    def name(self, ident: str) -> str:
-        return self._ctx.column(ident)
+    def name_index(self, ident: str) -> int:
+        # The slot in the FLOAT64 row array specifically (`decider2.types.
+        # FeatureKind.F64`) — an expression's closure reads `feats[idx]`
+        # off that array, so a feature it names must live there; the
+        # context rejects one declared `int`/`bool`/`str` (see
+        # `EncodeContext.expr_feature_index`).
+        return self._ctx.expr_feature_index(ident, self._node_id)
 
-    def constant(self, value: "int | float") -> str:
-        role = f"expr{self._next}"
-        self._next += 1
-        return self._ctx.threshold(float(value), node_id=self._node_id, role=role)
+    def constant_index(self, value: "int | float") -> int:
+        role = f"expr{self._next_compiled}"
+        self._next_compiled += 1
+        return self._ctx.threshold_slot(float(value), node_id=self._node_id, role=role)
 
 
 class Feature(RootModel[t.Union[_ComputedFeature, str]]):
@@ -440,7 +447,7 @@ class _ThresholdedUnaryOp(_BaseUnaryOp):
         each, no dispatch needed."""
         feat_idx = self.feature.feature_index(ctx, node_id)
         suffix = f"_{cond_idx}" if cond_idx is not None else ""
-        thr_slot = ctx.threshold_slot(self.threshold, node_id=node_id, role=f"thr{suffix}")
+        thr_slot = ctx.threshold_slot(self.threshold, node_id=node_id, role=f"thr{suffix}", feat_idx=feat_idx)
         return ctx.add_cmp(feat_idx, _OPCODE[self.op], thr_slot, then_pc, otherwise_pc)
 
 
@@ -507,10 +514,10 @@ class UnaryBetween(_BaseUnaryOp):
         suffix = f"_{cond_idx}" if cond_idx is not None else ""
         entry = then_pc
         if self.max is not None:
-            slot = ctx.threshold_slot(self.max, node_id=node_id, role=f"max{suffix}")
+            slot = ctx.threshold_slot(self.max, node_id=node_id, role=f"max{suffix}", feat_idx=feat_idx)
             entry = ctx.add_cmp(feat_idx, LE, slot, entry, otherwise_pc)
         if self.min is not None:
-            slot = ctx.threshold_slot(self.min, node_id=node_id, role=f"min{suffix}")
+            slot = ctx.threshold_slot(self.min, node_id=node_id, role=f"min{suffix}", feat_idx=feat_idx)
             entry = ctx.add_cmp(feat_idx, GE, slot, entry, otherwise_pc)
         return entry
 
@@ -555,13 +562,17 @@ class UnaryIsIn(_BaseUnaryOp):
 
 
 class UnaryStringMatch(_BaseUnaryOp):
-    """decider 1's `UnaryStringMatch`, restricted to `match_type="exact"`.
+    """decider 1's `UnaryStringMatch`: `exact`, `starts_with`, `ends_with`
+    and `contains` are matched in the kernel; `regex`, `case_sensitive=
+    False` and `trim_whitespace=True` are refused by name
+    (`UnsupportedInKernel`) with the frame-tier route.
 
-    `patterns` is an OR. Each pattern becomes its own `str`-typed `param()`,
-    resolved to the feature column's int32 dictionary code at param
-    resolution (`runtime.invoke._resolve_str_param_code`), exactly as
-    EXPERIMENTS.md §O describes — so a pattern is a kernel argument like any
-    threshold, and retuning it does not recompile.
+    `patterns` is an OR. The literal patterns become ONE `list[str]`-typed
+    `param()` named `<node_id>_patterns` (or `<node_id>_patterns_<i>` for
+    the i-th condition of a composite), an `InputRef` pattern a `str`
+    `param()` named by its key — all kernel arguments in the per-call
+    pattern table (`types.Step.typed_args`), so editing a pattern, adding
+    one or removing one is a value change that never recompiles.
     """
 
     op: t.Literal["string_match"] = "string_match"
@@ -589,12 +600,13 @@ class UnaryStringMatch(_BaseUnaryOp):
         self, ctx: "EncodeContext", node_id: str, *, then_pc: int, otherwise_pc: int,
         cond_idx: t.Optional[str] = None,
     ) -> int:
-        # cond_idx is unused: a string test names its literals by the
-        # hoisted matcher step, not by node_id/role, so it never collides
-        # with a sibling the way a threshold param would.
+        # `cond_idx` keeps two same-shaped siblings of a composite on
+        # distinct pattern-param NAMES, exactly as `_ThresholdedUnaryOp`
+        # does for thresholds.
+        role = f"patterns_{cond_idx}" if cond_idx is not None else "patterns"
         return ctx.encode_string_match(
             self.feature, self.patterns, self.match_type, self.case_sensitive,
-            self.trim_whitespace, node_id, then_pc, otherwise_pc,
+            self.trim_whitespace, node_id, then_pc, otherwise_pc, role=role,
         )
 
 
@@ -673,10 +685,10 @@ class RangeCondition(BaseModel):
         lo_op, hi_op = (GE, LT) if end_logic is RangeEndLogic.lower_inclusive else (GT, LE)
         entry = then_pc
         if self.max is not None:
-            slot = ctx.threshold_slot(self.max, node_id=node_id, role=f"max_{idx}")
+            slot = ctx.threshold_slot(self.max, node_id=node_id, role=f"max_{idx}", feat_idx=feat_idx)
             entry = ctx.add_cmp(feat_idx, hi_op, slot, entry, otherwise_pc)
         if self.min is not None:
-            slot = ctx.threshold_slot(self.min, node_id=node_id, role=f"min_{idx}")
+            slot = ctx.threshold_slot(self.min, node_id=node_id, role=f"min_{idx}", feat_idx=feat_idx)
             entry = ctx.add_cmp(feat_idx, lo_op, slot, entry, otherwise_pc)
         return entry
 
@@ -708,13 +720,16 @@ class StringMatchCondition(BaseModel):
         trim_whitespace: bool,
         then_pc: int,
         otherwise_pc: int,
+        role: str = "patterns",
     ) -> int:
         """`feature`/`match_type`/`case_sensitive`/`trim_whitespace` are the
         enclosing `CasesStringMatch` node's — a branch only ever carries its
-        own `patterns` (the wire format's shape, kept as-is)."""
+        own `patterns` (the wire format's shape, kept as-is). `role` names
+        this branch's literal-patterns param (`<node_id>_<role>`), so
+        sibling branches of one node get distinct params."""
         return ctx.encode_string_match(
             feature, self.patterns, match_type, case_sensitive, trim_whitespace, node_id,
-            then_pc, otherwise_pc,
+            then_pc, otherwise_pc, role=role,
         )
 
 
@@ -758,11 +773,11 @@ def _encode_isin(
     old source text gave, without ever writing a name.
     """
     if isinstance(values, InputRef):
-        slot = ctx.threshold_slot(values, node_id=node_id, role=f"isin_{idx}")
+        slot = ctx.threshold_slot(values, node_id=node_id, role=f"isin_{idx}", feat_idx=feat_idx)
         return ctx.add_cmp(feat_idx, EQ, slot, then_pc, otherwise_pc)
     entry = otherwise_pc
     for j in reversed(range(len(values))):
-        slot = ctx.threshold_slot(values[j], node_id=node_id, role=f"isin_{idx}_{j}")
+        slot = ctx.threshold_slot(values[j], node_id=node_id, role=f"isin_{idx}_{j}", feat_idx=feat_idx)
         entry = ctx.add_cmp(feat_idx, EQ, slot, then_pc, entry)
     return entry
 
@@ -966,8 +981,15 @@ class _CasesNode(BaseModel):
         raise NotImplementedError
 
     def encode(self, ctx: "EncodeContext", node_id: str, depth: int) -> int:
-        feat_idx = self.feature.feature_index(ctx, node_id)  # type: ignore[attr-defined]
         n = len(self.conditions)  # type: ignore[attr-defined]
+        if n == 0:
+            # No arm tests the feature, so the feature is not READ: do not
+            # register it as a tree input. Registering it used to declare
+            # e.g. a `string_match` column as `float` (nothing demanded
+            # `str`), which the Arrow boundary now refuses by name instead
+            # of silently reading a String column as dictionary codes.
+            return ctx.child_entry(node_id, 0, depth)
+        feat_idx = self.feature.feature_index(ctx, node_id)  # type: ignore[attr-defined]
         # Build backward exactly like `_encode_logic`'s OR case: the LAST
         # arm's failure falls through to the shared "otherwise" child, and
         # each earlier arm's failure falls through to whatever was built so
@@ -1058,14 +1080,13 @@ class CasesStringMatch(_CasesNode):
     ) -> int:
         # feat_idx is unused: a string test re-derives its own feature slot
         # from `feature=` (idempotent — `plain_feature_index` dedupes by
-        # name), because it must also register the hoisted matcher, which a
-        # plain numeric `feat_idx` alone does not carry.
+        # name), the same way `UnaryStringMatch.encode` does.
         del feat_idx
         return self.conditions[idx].encode(
             ctx, node_id,
             feature=self.feature, match_type=self.match_type,
             case_sensitive=self.case_sensitive, trim_whitespace=self.trim_whitespace,
-            then_pc=then_pc, otherwise_pc=otherwise_pc,
+            then_pc=then_pc, otherwise_pc=otherwise_pc, role=f"patterns_{idx}",
         )
 
 

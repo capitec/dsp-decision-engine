@@ -1,14 +1,19 @@
-"""`decider2 serve <pipeline.py>` — doc 02 §3.6: "keep it thin."
+"""`decider2 serve <pipeline.py>` and `decider2 build [--verify] <pipeline.py>`
+— doc 02 §3.6: "keep it thin."
 
 This module's only job is finding a `Pipeline` and handing it to
-`serving.app.app()` + `serving.server.run()`; everything that is actually
-serving lives in `decider2/serving/`, and everything that is the params
-lifecycle lives in `decider2/runtime/serve.py`. There is nothing here worth
-unit-testing beyond "did it find the right object", so that is the only
-thing `tests/test_cli.py` covers.
+`serving.app.app()` + `serving.server.run()` (serve) or to
+`Pipeline.precompile()` + `decider2.testing.assert_no_compilation_after_warmup`
+(build); everything that is actually serving lives in `decider2/serving/`,
+everything that is the params lifecycle lives in `decider2/runtime/serve.py`,
+and the warm-up guarantee lives in `decider2/testing/recompile.py`. There is
+nothing here worth unit-testing beyond "did it find the right object" and
+"does build --verify report what those functions found", so that is what
+`tests/test_cli.py` covers.
 
 Usage:
 
+    decider2 build --verify decider2/examples/flagship.py   # doc 05 §8's release gate
     decider2 serve decider2/examples/flagship.py
     decider2 serve decider2/examples/flagship.py:pipeline   # explicit name
     decider2 serve decider2.examples.flagship               # a dotted module path also works
@@ -107,6 +112,49 @@ def serve(target: str, mode: str, host: str, port: int) -> None:
     pipeline = load_pipeline(target)
     asgi_app = build_app(pipeline, mode=mode)
     run(asgi_app, host=host, port=port)
+
+
+@cli.command()
+@click.argument("target")
+@click.option(
+    "--verify", is_flag=True,
+    help="After warming, drive the pipeline again and fail if ANYTHING compiles "
+         "(doc 05 §8: no compilation on the request path); also require the "
+         "compiled Arrow shim to load.",
+)
+def build(target: str, verify: bool) -> None:
+    """Warm every numba specialisation TARGET needs (`Pipeline.precompile()`,
+    doc 05 §8) at a controlled point — an image build, a release gate —
+    instead of on the first real request, and report what compiled and how
+    long it took.
+
+    With --verify this is the release gate the docs call `decider2 build
+    --verify`: `decider2.testing.assert_no_compilation_after_warmup` drives
+    the pipeline once more and the command fails if a specialisation was
+    still missing, and it fails if decider2's compiled Arrow shim
+    (`decider2._arrow`) does not load on this interpreter and platform.
+    """
+    pipeline = load_pipeline(target)
+    report = pipeline.precompile()
+    click.echo(
+        f"precompile: apply {report.apply_seconds * 1000:.0f} ms "
+        f"({report.apply_compile_events} compile events), "
+        f"score {report.score_seconds * 1000:.0f} ms ({report.score_compile_events} compile events)"
+    )
+    if not verify:
+        return
+    import decider2._arrow as arrow
+    from decider2.testing import assert_no_compilation_after_warmup
+
+    shim = arrow.diagnose()
+    if shim["shim"] != "loaded":
+        raise click.ClickException(shim["error"])
+    click.echo(f"shim: loaded ({shim['extension']}, nanoarrow {shim['nanoarrow']})")
+    try:
+        assert_no_compilation_after_warmup(pipeline)
+    except AssertionError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo("verify: 0 compilations after warm-up")
 
 
 def main() -> None:

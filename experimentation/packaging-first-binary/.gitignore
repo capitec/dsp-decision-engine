@@ -1,0 +1,11 @@
+# throwaway venvs, wheels, build trees: everything under here is reproducible from the scripts
+.tmp/
+proto/build/
+proto/src/*.egg-info/
+proto/dist/
+alt-backends/*/dist/
+alt-backends/*/build/
+alt-backends/*/.venv-test/
+alt-backends/*/build.log
+alt-backends/*/src/*/*.so
+__pycache__/

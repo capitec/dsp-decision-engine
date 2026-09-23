@@ -80,11 +80,14 @@ class StagePlan:
 
 
 class SealedModeError(RuntimeError):
-    """Doc 08 §4.1: `sealed` mode's `--verify` guarantee is "zero
-    compilations, ever". Raised by `.stage()`/`.activate()` for a plan that
-    would recompile while a handle is in `sealed` mode. Unreachable today
-    (see module docstring) — kept so the guarantee is enforced in code the
-    day a doc-driven structure change exists, not left as a comment."""
+    """Doc 08 §4.1: `sealed` mode's `--verify` guarantee is "no compilation
+    occurs after `.warm()` has run" (revised — see this module's own report
+    for why "zero, ever" stopped being literally achievable, and doc 05 §8
+    for the updated text). Raised by `.stage()`/`.activate()` for a plan
+    that would recompile while a handle is in `sealed` mode. Unreachable
+    today (see module docstring) — kept so the guarantee is enforced in
+    code the day a doc-driven structure change exists, not left as a
+    comment."""
 
 
 def structure_fingerprint(pipeline: Any) -> str:
@@ -152,6 +155,7 @@ class ServeHandle:
         self._shared: dict[str, Any] | None = None
         self._history: list[tuple[dict, dict | None]] = []
         self._pending: StagePlan | None = None
+        self._warm_report: Any | None = None  # PrecompileReport, once warm() runs
 
     # --- read-only facts about this handle ----------------------------------
 
@@ -172,6 +176,32 @@ class ServeHandle:
         compiled `Driver` (see module docstring), so this counts retained
         params snapshots, not distinct compiled code."""
         return len(self._history) + 1
+
+    @property
+    def is_warm(self) -> bool:
+        """`True` once `.warm()` has run. `serving/dispatch.py`'s `/ping`
+        checks this and answers 503 (not 200) until it is — doc 05 §8's
+        "zero compilations" guarantee only holds AFTER warm-up (this
+        module's own report on why "zero, ever" stopped being literally
+        true); a `/ping` that says 200 before that would let a request
+        arrive first and pay the compile itself, which is the exact
+        failure this property exists to prevent."""
+        return self._warm_report is not None
+
+    def warm(self, *, shared: dict | None = None) -> Any:
+        """Force every numba specialisation this handle's `score()`/
+        `apply()` calls will need, once, before either is ever asked to
+        answer a real request — `Pipeline.precompile()`, called with
+        whatever `shared=` this deployment's tables (doc 08 §3.4) need.
+        Idempotent: calling it again just re-measures and re-stores the
+        report (harmless — every kernel it would compile is, by
+        definition, already compiled the second time).
+        """
+        with self._lock:
+            self._shared = dict(shared) if shared else self._shared
+            report = self.pipeline.precompile(shared=self._shared)
+            self._warm_report = report
+            return report
 
     # --- the parameter-play surface -----------------------------------------
 
@@ -280,7 +310,7 @@ class ServeHandle:
         if plan.recompiles and self.mode == "sealed":
             raise SealedModeError(
                 "this handle is serving in 'sealed' mode (doc 08 §4.1: "
-                "'zero compilations, ever'), and this change recompiles "
+                "'no compilation after warm-up'), and this change recompiles "
                 f"({plan.klass.value}). Serve in mode='live' to allow it."
             )
 
@@ -384,10 +414,12 @@ class ServeHandle:
         """`GET /health`'s body (doc 00 §2c + doc 08 §4.1b)."""
         with self._lock:
             generations = self.generations
+            warm = self.is_warm
         return {
             "status": "ok",
             "mode": self.mode,
             "fingerprint": self._fingerprint,
             "generations": generations,
             "kernels": self.gil_report(),
+            "warm": warm,
         }

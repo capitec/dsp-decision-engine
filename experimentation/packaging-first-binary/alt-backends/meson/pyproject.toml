@@ -1,0 +1,8 @@
+[project]
+name = "d2shim-mp"
+version = "0.0.1"
+requires-python = ">=3.10"
+
+[build-system]
+requires = ["meson-python>=0.16"]
+build-backend = "mesonpy"

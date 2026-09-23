@@ -39,8 +39,10 @@ drive a step one at a time outside any `Segment`.
 from __future__ import annotations
 
 import inspect
+import weakref
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field as _dc_field
+from functools import cached_property
 from pathlib import Path
 from typing import Any, Callable, ClassVar, Literal, Mapping, Sequence
 
@@ -65,8 +67,7 @@ from numba.core.errors import NumbaError, UnsupportedBytecodeError
 # module for the full note.
 _FALLBACK_TRIGGERS: tuple[type[BaseException], ...] = (NumbaError, UnsupportedBytecodeError)
 
-from decider2.compile import cache, codegen
-from decider2.compile.codegen import KernelPlan
+from decider2.compile.kernel import KernelPlan, build_fused_kernel, kernel_signature
 from decider2.types import Input, NullPolicy, Step
 
 SegmentKind = Literal["compiled", "fallback"]
@@ -138,7 +139,26 @@ def _try_njit(step: Step, sample_values: Mapping[str, Any]) -> tuple[Callable, s
     reads a bare `params`/`shared` argument (doc 03 §4.2) can't be probed
     without a resolved bundle of the right NamedTuple type, so it is
     compiled lazily instead — still cached, just not verified at this call.
+
+    A `packed` step (`types.Step.packed`) arrives with `fn` ALREADY a real
+    njit dispatcher — `decider2.trees.encode`/`decider2.tables.encode`/
+    `decider2.graph.control_flow` build it that way directly, never a plain
+    function for this module to wrap. Re-`njit`-ing an already-jitted
+    dispatcher is a hard `TypeError` ("a jit decorator was called on an
+    already jitted function"), and probing it against a signature guessed
+    from its (generic, two-argument `(args, params)`) Python signature would
+    guess wrong — so this returns it as-is, un-probed: it was built
+    njit-compilable by construction (the only operations inside it are
+    array indexing and arithmetic over `decider2.trees.interpreter.
+    walk_tree`/`decider2.tables.interpreter.scan_table`, both already
+    `@njit` — `scan_table` `cache=True`, `walk_tree` `inline="always"`, so
+    its body is spliced into the tree's `path_fn` and, from there, into
+    `build_packed_kernel`'s per-row loop; see `walk_tree`'s docstring), so
+    there is nothing here for `_FALLBACK_TRIGGERS` to ever legitimately
+    catch.
     """
+    if step.packed:
+        return step.fn, None
     fn = njit(cache=True)(step.fn)
     if step.reads_params or step.reads_shared:
         return fn, None
@@ -223,6 +243,18 @@ def _needed_from(steps: Sequence[Step], j: int, terminal_names: frozenset) -> se
 
 _MISSING = object()
 
+# `_signature`'s memo, keyed on the function OBJECT (weakly, so a step that
+# is garbage-collected takes its entry with it). Only a signature whose
+# annotations `eval`'d successfully is stored — the fallback result is
+# recomputed each time so a name that becomes resolvable later still gets
+# picked up, exactly as before the memo existed. What could make an entry
+# stale: rebinding `fn.__annotations__` after the first call, which nothing
+# in decider2 does (a `Step` is frozen and its `fn` is the author's own
+# function). Measured reason (BOUNDARY-REWORK.md Stage 4): `eval_str=True`
+# cost 11 `eval` calls per flagship `score()`, ~110 µs of a 420 µs call,
+# for a result that never changes.
+_SIGNATURES: "weakref.WeakKeyDictionary[Callable, inspect.Signature]" = weakref.WeakKeyDictionary()
+
 
 def _signature(fn) -> "inspect.Signature":
     """`inspect.signature`, with the same `eval_str=True`-then-fall-back
@@ -230,20 +262,47 @@ def _signature(fn) -> "inspect.Signature":
     `from __future__ import annotations` stringifies every annotation, and
     without this a `-> int`/`-> bool` return type would compare equal to
     nothing in `numpy_dtype`'s table and silently fall back to float64 —
-    exactly the bug this module exists to close."""
+    exactly the bug this module exists to close. Memoised per function
+    object (`_SIGNATURES`, above)."""
     try:
-        return inspect.signature(fn, eval_str=True)
+        return _SIGNATURES[fn]
+    except (KeyError, TypeError):
+        pass
+    try:
+        sig = inspect.signature(fn, eval_str=True)
     except (NameError, TypeError):
         return inspect.signature(fn)
+    try:
+        _SIGNATURES[fn] = sig
+    except TypeError:  # not weak-referenceable: served uncached, still correct
+        pass
+    return sig
 
 
-def _return_dtype(fn) -> np.dtype:
+def step_return_annotation(step: Step) -> Any:
+    """The declared return type a step's array should be materialised as —
+    `step.output_annotation` when the step is `packed` (its `fn` has the
+    generic `(args, params)` signature and no return annotation of its own
+    to read, `types.Step.packed`'s own docstring), else the ordinary
+    `inspect.signature(step.fn).return_annotation`."""
+    if step.output_annotation is not None:
+        return step.output_annotation
+    return _signature(step.fn).return_annotation
+
+
+def _return_dtype(fn_or_step) -> np.dtype:
     """Doc 00 §2 / doc 03 §1 / doc 05 §9 criterion 4: a step's declared
     return annotation decides the array dtype it is written into, so an
     `-> int`/`-> bool` step survives the boundary as its own dtype instead
     of being forced onto float64 (which silently degrades an Int64 above
-    2**53, and cannot hold a Boolean at all)."""
-    return numpy_dtype(_signature(fn).return_annotation)
+    2**53, and cannot hold a Boolean at all).
+
+    Accepts either a plain callable (every pre-existing caller) or a
+    `Step` (needed to see `packed`/`output_annotation` — a bare function
+    has no such thing to read)."""
+    if isinstance(fn_or_step, Step):
+        return numpy_dtype(step_return_annotation(fn_or_step))
+    return numpy_dtype(_signature(fn_or_step).return_annotation)
 
 
 @dataclass(frozen=True)
@@ -259,11 +318,16 @@ class ResolvedParams:
       (doc 03 §4.2) gets one NamedTuple.
     - `shared` — the single reserved bundle (doc 03 §4.2), or `None` if
       nothing in this pipeline reads it.
+    - `per_step_shared[step_name]` / `[(owner, step_name)]` — for a step
+      that declares `Step.shared_fields`, a bundle of ONLY those fields;
+      `_shared_arg` picks it over `shared` for that step. Absent for every
+      step that does not declare them (they get `shared` whole).
     """
 
     per_step_scalar: dict
     per_step_bundle: dict
     shared: Any | None = None
+    per_step_shared: dict = _dc_field(default_factory=dict)
 
 
 def _scalar_arg(resolved: "ResolvedParams", owner: str | None, step_name: str, param_name: str) -> Any:
@@ -287,6 +351,26 @@ def _bundle_arg(resolved: "ResolvedParams", owner: str | None, step_name: str) -
         if value is not _MISSING:
             return value
     return resolved.per_step_bundle[step_name]
+
+
+def _shared_arg(resolved: "ResolvedParams", owner: str | None, step: Step) -> Any:
+    """The `shared` bundle THIS step is called with: its own projection
+    (`Step.shared_fields`, built by `runtime.invoke.resolve_params`) when
+    it declares one, else the whole bundle. Same owner-first, plain-name
+    fallback as `_bundle_arg`, for the same reason."""
+    if step.shared_fields is None:
+        return resolved.shared
+    if owner is not None:
+        value = resolved.per_step_shared.get((owner, step.name), _MISSING)
+        if value is not _MISSING:
+            return value
+    value = resolved.per_step_shared.get(step.name, _MISSING)
+    if value is not _MISSING:
+        return value
+    # A `ResolvedParams` built by hand (a test driving `modes` directly)
+    # with only `shared=` set: fall back to the whole bundle rather than
+    # fail, since the whole bundle is a superset the step can read.
+    return resolved.shared
 
 
 def _row_kwargs(
@@ -315,26 +399,93 @@ def _row_kwargs(
     return kwargs
 
 
+# The row-gathering machinery for packed steps — `_packed_args_kind`, the
+# `_gather*`/`_fill_*` compiled gathers, the `_typed_*` family,
+# `_packed_input_arrays`, `build_packed_kernel`/`_build_typed_kernel` and
+# `_packed_row_args` — lives in `decider2.compile.gather` (docs/
+# BOUNDARY-REWORK.md, Stage 1b). It is imported HERE, mid-module, rather than
+# at the top because `gather._packed_row_args` calls `_scalar_arg` above and
+# is annotated with `ResolvedParams`, which `gather` imports back from this
+# module: both must already exist when `gather` first executes. Every moved
+# name is re-exported so `from decider2.compile.driver import <name>` keeps
+# working for the callers that predate the split.
+from decider2.compile.gather import (  # noqa: F401 — re-exported, see above
+    _TYPED_DTYPES,
+    _TYPED_DUMMIES,
+    _as_readonly,
+    _as_readonly_f64,
+    _build_typed_kernel,
+    _fill_array,
+    _fill_spans,
+    _gather0,
+    _gather1_raw,
+    _gather_array,
+    _make_row_gatherer,
+    _packed_args_kind,
+    _packed_input_arrays,
+    _packed_row_args,
+    _readonly_empty,
+    _typed_counts,
+    _typed_input_arrays,
+    _typed_layout,
+    _typed_params,
+    _typed_row_args,
+    build_packed_kernel,
+)
+
+
+def _call_step_row(
+    fn: Callable,
+    step: Step,
+    owner: "str | None",
+    sig: "inspect.Signature",
+    registry: dict,
+    resolved: ResolvedParams,
+    i: int,
+) -> Any:
+    """One step, one row — `interpreted`/`stepped`/`fallback`'s shared call
+    site. Branches on `step.packed` so those three rungs (the only callers
+    that still drive a step one row at a time in plain Python) agree with
+    the fused kernel's own packed-call builder on what a packed `fn`
+    means."""
+    if step.packed:
+        args, params = _packed_row_args(step, owner, registry, resolved, i)
+        if step.reads_shared:
+            return fn(args, params, _shared_arg(resolved, owner, step))
+        return fn(args, params)
+    return fn(**_row_kwargs(step, owner, sig, registry, resolved, i))
+
+
 def _build_call_args(
-    plan: KernelPlan, registry: dict, resolved: ResolvedParams, out_arrays: dict
-) -> list:
-    args: list = []
-    for role in codegen.kernel_signature(plan):
+    plan: KernelPlan, registry: dict, resolved: ResolvedParams, out_arrays: dict, n: int,
+    roles: "Sequence[Any] | None" = None,
+) -> tuple:
+    """`(n, cols, valids, params_all, outs)` — the fused kernel's five
+    arguments (`compile.kernel.build_fused_kernel`), each tuple packed in
+    `kernel_signature` order so the kernel's own argument-source map, built
+    from the same list, indexes the right element. `roles` is that same
+    list, precomputed by a caller that holds it (`CompiledSegment._call_plan`)
+    so it is not rebuilt per call; omitted, it is derived from `plan` here."""
+    cols: list = []
+    valids: list = []
+    params_all: list = []
+    outs: list = []
+    for role in (kernel_signature(plan) if roles is None else roles):
         if role.kind == "array":
-            args.append(registry[role.input_name])
+            cols.append(registry[role.input_name])
         elif role.kind == "valid":
-            args.append(registry[f"__valid__{role.input_name}"])
+            valids.append(registry[f"__valid__{role.input_name}"])
         elif role.kind == "param_scalar":
-            args.append(_scalar_arg(resolved, role.owner, role.step_name, role.param_name))
+            params_all.append(_scalar_arg(resolved, role.owner, role.step_name, role.param_name))
         elif role.kind == "params_bundle":
-            args.append(_bundle_arg(resolved, role.owner, role.step_name))
+            params_all.append(_bundle_arg(resolved, role.owner, role.step_name))
         elif role.kind == "shared":
-            args.append(resolved.shared)
+            params_all.append(resolved.shared)
         elif role.kind == "output":
-            args.append(out_arrays[role.output_name])
+            outs.append(out_arrays[role.output_name])
         else:  # pragma: no cover - exhaustive over ArgRole.kind
             raise AssertionError(f"unhandled arg role {role.kind!r}")
-    return args
+    return n, tuple(cols), tuple(valids), tuple(params_all), tuple(outs)
 
 
 class Segment(ABC):
@@ -397,22 +548,36 @@ class CompiledSegment(Segment):
 
     kind: ClassVar[SegmentKind] = "compiled"
 
+    @cached_property
+    def _call_plan(self) -> "tuple[tuple[Any, ...], tuple[tuple[str, np.dtype, str], ...]]":
+        """The schema-invariant half of `run`, computed once per segment:
+        `kernel_signature(self.plan)`'s roles, and `(name, dtype, owner)`
+        per required output. A segment is a frozen value built once per
+        `Driver`, so nothing this reads can change after construction;
+        `cached_property` writes straight into `__dict__`, which a frozen
+        dataclass permits. Before this (BOUNDARY-REWORK.md Stage 4) `run`
+        re-derived both per call, and `_return_dtype`'s `inspect.signature`
+        was the single largest cost of a single-record `score()`."""
+        owner_by_name = dict(zip((s.name for s in self.steps), self.owners)) if self.owners else {}
+        step_by_name = {s.name: s for s in self.steps}
+        outputs = tuple(
+            (name, _return_dtype(step_by_name[name]), owner_by_name.get(name, name))
+            for name in self.required_outputs
+        )
+        return tuple(kernel_signature(self.plan)), outputs
+
     def run(self, registry: dict, resolved: ResolvedParams, n: int) -> None:
         # Doc 05 §7: "intermediates ... stay in numpy, they do not
         # round-trip through polars" — a value a later segment needs is
         # looked up in `registry` regardless of whether it came from the
         # original frame or an earlier segment's own output.
-        owner_by_name = dict(zip((s.name for s in self.steps), self.owners)) if self.owners else {}
-        step_by_name = {s.name: s for s in self.steps}
-        out_arrays = {
-            name: np.empty(n, dtype=_return_dtype(step_by_name[name].fn))
-            for name in self.required_outputs
-        }
-        args = _build_call_args(self.plan, registry, resolved, out_arrays)
-        self.kernel_fn(*args)
-        for name, arr in out_arrays.items():
+        roles, outputs = self._call_plan
+        out_arrays = {name: np.empty(n, dtype=dtype) for name, dtype, _ in outputs}
+        self.kernel_fn(*_build_call_args(self.plan, registry, resolved, out_arrays, n, roles))
+        for name, _, owner in outputs:
+            arr = out_arrays[name]
             registry[name] = arr
-            registry[f"{name}@{owner_by_name.get(name, name)}"] = arr
+            registry[f"{name}@{owner}"] = arr
 
     @property
     def signatures(self) -> tuple:
@@ -427,6 +592,52 @@ class CompiledSegment(Segment):
             # it asked to" — one step in the kernel that did not is enough
             # to keep it held, because the kernel is one call.
             "holds_gil": not all(s.nogil for s in self.steps),
+        }
+
+
+@dataclass(frozen=True)
+class PackedCompiledSegment(Segment):
+    """Exactly one `types.Step.packed` step (a tree/table/Branch/Loop
+    `Step`, doc 08 §3.4), run as a genuinely compiled, `@njit`'d per-row
+    loop (`build_packed_kernel`) — `kind == "compiled"`, never `"fallback"`:
+    no Python runs per row, unlike `FallbackSegment`. Not fused with
+    neighbouring steps — see `build_packed_kernel`'s own docstring for why,
+    and this module's report for the measured cost.
+    """
+
+    steps: tuple[Step, ...]
+    external_inputs: tuple[Input, ...]
+    required_outputs: tuple[str, ...]
+    owners: tuple[str, ...]
+    kernel_fn: Callable
+
+    kind: ClassVar[SegmentKind] = "compiled"
+
+    def run(self, registry: dict, resolved: ResolvedParams, n: int) -> None:
+        step = self.steps[0]
+        owner = self.owners[0] if self.owners else step.name
+        arrays = _packed_input_arrays(step, registry)
+        params = tuple(_scalar_arg(resolved, owner, step.name, p.name) for p in step.params)
+        if step.typed_args:
+            params = _typed_params(step, params)
+        out = np.empty(n, dtype=_return_dtype(step))
+        if step.reads_shared:
+            self.kernel_fn(arrays, params, _shared_arg(resolved, owner, step), n, out)
+        else:
+            self.kernel_fn(arrays, params, n, out)
+        registry[step.name] = out
+        registry[f"{step.name}@{owner}"] = out
+
+    @property
+    def signatures(self) -> tuple:
+        return tuple(self.kernel_fn.signatures)
+
+    def gil_report_entry(self) -> dict[str, Any]:
+        step = self.steps[0]
+        return {
+            "kernel": f"packed:{step.name}",
+            "steps": [step.name],
+            "holds_gil": not step.nogil,
         }
 
 
@@ -448,9 +659,9 @@ class FallbackSegment(Segment):
         step = self.steps[0]
         owner = self.owners[0] if self.owners else step.name
         sig = _signature(step.fn)
-        out = np.empty(n, dtype=_return_dtype(step.fn))
+        out = np.empty(n, dtype=_return_dtype(step))
         for i in range(n):
-            out[i] = step.fn(**_row_kwargs(step, owner, sig, registry, resolved, i))
+            out[i] = _call_step_row(step.fn, step, owner, sig, registry, resolved, i)
         registry[step.name] = out
         registry[f"{step.name}@{owner}"] = out
 
@@ -480,10 +691,11 @@ class Driver:
 
         Doc 05 §9's acceptance criterion 5: retuning any params bundle must
         leave this at the same length — params arrive as *kernel arguments*
-        (`decider2.compile.codegen`), never baked into generated source, so a
-        value-only retune changes nothing this list depends on. Changing a
-        field's *type* (e.g. a param toggling `float` <-> `float | None`)
-        is the named negative control and *should* grow it by one.
+        (`decider2.compile.kernel`'s `params_all` tuple), never baked into
+        the kernel, so a value-only retune changes nothing this list depends
+        on. Changing a field's *type* (e.g. a param toggling `float` <->
+        `float | None`) is the named negative control and *should* grow it
+        by one.
         """
         out: list = []
         for seg in self.segments:
@@ -583,7 +795,10 @@ def build_driver(
         return cached
     if len(steps) != len(group_ids):
         raise ValueError("steps and group_ids must be the same length")
-    build_dir = Path(build_dir)
+    # `build_dir` no longer receives any file from this module (the fused
+    # kernel is built in memory, `decider2.compile.kernel`); it stays in the
+    # signature, and in `_driver_key` above, because every caller passes it
+    # and two builds against different directories were never one Driver.
     sample_values = sample_values or {}
     terminal_names = frozenset(terminal_names)
 
@@ -613,6 +828,29 @@ def build_driver(
             i += 1
             continue
 
+        if step.packed:
+            # A tree/table/Branch/Loop step (doc 08 §3.4): `fn` is already
+            # a real njit dispatcher (`_try_njit` returned it unprobed —
+            # see that function's own docstring), so `compiled[(owner,
+            # step.name)]` above IS `(step.fn, None)`, never a fallback
+            # reason. Never joins a fusion run with a neighbour (see
+            # `build_packed_kernel`'s docstring): each becomes its own
+            # genuinely COMPILED (never Python-per-row) segment.
+            step_fns[step.name] = fn0
+            step_fns[(owner, step.name)] = fn0
+            kernel_fn = build_packed_kernel(step)
+            segments.append(
+                PackedCompiledSegment(
+                    steps=(step,),
+                    owners=(owner,),
+                    external_inputs=step.inputs,
+                    required_outputs=(step.name,),
+                    kernel_fn=kernel_fn,
+                )
+            )
+            i += 1
+            continue
+
         gid = group_ids[i]
         run: list[Step] = [step]
         run_owners: list[str] = [owner]
@@ -620,6 +858,7 @@ def build_driver(
         while (
             j < n
             and group_ids[j] == gid
+            and not steps[j].packed
             and compiled[(owners[j], steps[j].name)][1] is None
         ):
             run.append(steps[j])
@@ -644,50 +883,23 @@ def build_driver(
             parallel=gid in parallel_group_ids,
             fastmath=gid in fastmath_group_ids,
         )
-        try:
-            source = codegen.emit_kernel_source(plan)
-            cached = cache.get_or_build(source, build_dir)
-        except ImportError as exc:
-            # The generated kernel FILE imports each step by
-            # `fn.__module__`/`fn.__name__` (doc 05 §4.1: "every generated
-            # driver is written to a real .py file before anything imports
-            # it" — required for numba's cache to survive a fresh process,
-            # EXPERIMENTS.md §J2). A step defined inside another function
-            # (a closure, e.g. a test helper) njit-compiles just fine on
-            # its own — `compiled[(o, s.name)]` above already proved that —
-            # but has no module-level name that import line can reach.
-            # That is a property of *this* fusion strategy, not a genuine
-            # runtime bug in the step, so it gets the same treatment doc 05
-            # §6 gives an un-njit-able step: split it out of the compiled
-            # kernel rather than fail the whole build. `step_fns` already
-            # holds each step's own (successfully compiled) dispatcher from
-            # the loop just above, so `stepped`/`fused`'s fallback path
-            # still runs compiled code per row, one step at a time — the
-            # only thing lost is fusing this run into one kernel call.
-            for s, o in zip(run, run_owners):
-                s_required = (s.name,) if s.name in needed else ()
-                segments.append(
-                    FallbackSegment(
-                        steps=(s,),
-                        owners=(o,),
-                        external_inputs=_external_inputs([s]),
-                        required_outputs=s_required,
-                        fallback_reason=(
-                            f"kernel source could not import '{s.fn.__name__}' "
-                            f"from '{s.fn.__module__}' ({exc!r}); it is not "
-                            "reachable at module scope"
-                        ),
-                    )
-                )
-            i = j
-            continue
+        # The kernel closes over each step's OWN dispatcher (the same one
+        # `step_fns` holds for `stepped` mode), so a step defined inside
+        # another function fuses like any other — the generated-source
+        # strategy's "not reachable at module scope" fallback no longer has
+        # a cause to exist.
+        kernel_fn = build_fused_kernel(
+            plan,
+            [compiled[(o, s.name)][0] for s, o in zip(run, run_owners)],
+            [_return_dtype(s) for s in run],
+        )
         segments.append(
             CompiledSegment(
                 steps=tuple(run),
                 owners=tuple(run_owners),
                 external_inputs=external,
                 required_outputs=required,
-                kernel_fn=cached.module.kernel,
+                kernel_fn=kernel_fn,
                 plan=plan,
             )
         )

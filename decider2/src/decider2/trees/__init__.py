@@ -3,11 +3,24 @@
     from decider2 import flow
     from decider2.trees import Tree, tree_module
 
-    risk = tree_module(Tree.model_validate(doc))
+    risk = tree_module(
+        Tree.model_validate(doc),
+        feature_types={"income_cents": int, "is_staff": bool},  # doc 03 §1.2
+    )
     pipeline = flow(Affordability, risk.module, Scoring).emit(risk.path_column)
 
-A tree is a pydantic document (`schema.py`), emitted as numba-compilable
-source (`codegen.py`) and wrapped as an ordinary `Module` (`build.py`).
+A tree is a pydantic document (`schema.py`), built directly into `Step`s
+whose `fn` is a pre-built njit closure over the tree's own arrays
+(`encode.py`) and wrapped as an ordinary `Module` (`build.py`).
+
+Features are read from typed arrays — float64, int64, bool, int32 codes —
+and each node's row says which (`feat_kind`, program data beside
+`feat_idx`), so an Int64 money column is compared as an int64 rather than
+rounded through float64 (which collapses every integer above 2**53). A
+feature's kind is `feature_types=` if declared, else inferred from use
+(`is_true`-only -> bool, `string_match` -> str, anything else -> float —
+the previous behaviour for every undeclared document). See
+`TYPED_FEATURES.md` at the repository root for what this changed and cost.
 
 MIGRATION NOTES — what did not come across from decider 1, and why:
 
@@ -48,12 +61,12 @@ MIGRATION NOTES — what did not come across from decider 1, and why:
 from __future__ import annotations
 
 from decider2.trees.build import TreeModule, tree_module
-from decider2.trees.codegen import (
+from decider2.trees.encode import (
     LINE_CAP,
-    EmittedTree,
+    EncodedTree,
     TreeTooLarge,
     UnsupportedInKernel,
-    emit_tree,
+    encode_tree,
 )
 from decider2.trees.schema import (
     CasesIsIn,
@@ -98,8 +111,8 @@ __all__ = [
     "Tree",
     "tree_module",
     "TreeModule",
-    "emit_tree",
-    "EmittedTree",
+    "encode_tree",
+    "EncodedTree",
     "TreeTooLarge",
     "UnsupportedInKernel",
     "ComputedFeatureRemoved",

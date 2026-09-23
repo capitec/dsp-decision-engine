@@ -14,14 +14,66 @@ any one module, so neither belongs in `graph/interface.py`.
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, Callable, Sequence, Union
+from time import perf_counter as _perf_counter
+from typing import TYPE_CHECKING, Any, Callable, Sequence, Union
 
 from decider2.graph.interface import effective_interface, topological_steps
 from decider2.graph.module import module as _module
 from decider2.resolve import suggest_name
 from decider2.types import Decision, Emit, Input, Interface, MissingInputPolicy, Module, Step
 
-__all__ = ["Pipeline", "flow", "compose"]
+if TYPE_CHECKING:
+    from decider2.runtime.plan import ScorePlan
+
+__all__ = ["Pipeline", "flow", "compose", "PrecompileReport"]
+
+
+@dataclasses.dataclass(frozen=True)
+class PrecompileReport:
+    """`Pipeline.precompile()`'s own result — doc 05 §8's warm-up
+    guarantee, measured rather than assumed. `*_compile_events == 0` is the
+    thing to check: a non-zero count names a specialisation `precompile()`
+    itself just triggered, which means it is telling the truth about what
+    it warmed, not hiding a miss."""
+
+    apply_seconds: float
+    score_seconds: float
+    apply_compile_events: int
+    score_compile_events: int
+
+    @property
+    def total_compile_events(self) -> int:
+        return self.apply_compile_events + self.score_compile_events
+
+
+def _dummy_value(inp: Input) -> Any:
+    """An arbitrary, always-present value of `inp`'s own declared type —
+    enough to make `score()`/`apply()` actually reach a kernel call rather
+    than routing away via `MissingInputPolicy` (a routed row never calls
+    the kernel, and would warm nothing, doc 03 §1). `1`/`1.0`, not `0`/
+    `0.0`: a step computing a ratio (flagship's own `disposable_income /
+    instalment`) is common enough that a zero denominator would raise
+    `ZeroDivisionError` out of `precompile()` itself on an entirely
+    ordinary pipeline — a real failure found while building this stage.
+    `1` is still arbitrary (any non-zero value would do; it is not claimed
+    to be a realistic business value), just not degenerate."""
+    if inp.annotation is bool:
+        return False
+    if inp.annotation is int:
+        return 1
+    if inp.annotation in (str, bytes):   # bytes: a tree's string feature (a span), fed as text
+        return ""
+    return 1.0
+
+
+def _dummy_record(inputs: "tuple[Input, ...]") -> dict[str, Any]:
+    return {inp.name: _dummy_value(inp) for inp in inputs}
+
+
+def _dummy_frame(inputs: "tuple[Input, ...]"):
+    import polars as pl
+
+    return pl.DataFrame({inp.name: [_dummy_value(inp)] for inp in inputs})
 
 Element = Union[Module, Callable[..., Any], "Pipeline"]
 
@@ -45,15 +97,78 @@ class Pipeline:
     dropped: tuple[str, ...] = ()
     missing_input_policy: MissingInputPolicy = MissingInputPolicy()
 
+    # The memo for everything derived from this pipeline's frozen structure
+    # (BOUNDARY-REWORK.md Stage 4): `_walk`'s result, the `Interface`, the
+    # flattened runtime shape and the single-record `ScorePlan`. Per
+    # instance and never copied: `dataclasses.replace` (which is how
+    # `.emit()`/`.drop()`/`.on_missing_input()` build their new pipeline)
+    # initialises an `init=False` field afresh, so a derived pipeline
+    # starts empty. Each entry records the exact field object(s) it was
+    # derived from and is served only while `is` still holds for them —
+    # the one way a frozen dataclass's fields can change after
+    # construction is `object.__setattr__`, and that is caught rather than
+    # trusted (`tests/test_score_plan.py`). What is NOT covered, by
+    # decision: mutating a `Module`'s `relabel_reads`/`relabel_writes`
+    # mapping in place after composition. Every public path
+    # (`Module.relabel()`/`.bind()`, `flow()`, `|`) returns a new object,
+    # and the driver cache and `serve.structure_fingerprint` already treat
+    # those mappings as immutable; `bound` is read live (see
+    # `flatten_for_runtime`).
+    _cache: dict = dataclasses.field(default_factory=dict, init=False, repr=False, compare=False)
+
     def __or__(self, other: "Element") -> "Pipeline":
         return compose(self, other)
 
     def __ror__(self, other: "Element") -> "Pipeline":
         return compose(other, self)
 
+    def _walked(self) -> tuple[dict[str, Input], dict[str, tuple[str, ...]], dict[str, bool]]:
+        """`_walk(self.elements)`, once per `elements` tuple."""
+        cached = self._cache.get("walk")
+        if cached is not None and cached[0] is self.elements:
+            return cached[1]
+        result = _walk(self.elements)
+        self._cache["walk"] = (self.elements, result)
+        return result
+
     @property
     def interface(self) -> Interface:
-        return _pipeline_interface(self)
+        """Inferred once from the sequence of modules and held (a frozen
+        `Interface` over frozen `Input`s); re-derived only if `elements`
+        is a different tuple object than the one it was inferred from."""
+        cached = self._cache.get("interface")
+        if cached is not None and cached[0] is self.elements:
+            return cached[1]
+        iface = _pipeline_interface(self)
+        self._cache["interface"] = (self.elements, iface)
+        return iface
+
+    def score_plan(self) -> "ScorePlan":
+        """The single-record plan `score()` runs — `decider2.runtime.plan.
+        ScorePlan`, built once from this pipeline's `elements`, `emits` and
+        `missing_input_policy` and held until any of those three is a
+        different object (checked by identity on every call, so a plan is
+        never served for a structure it was not built from). Public so the
+        cached state is inspectable: what `score()` skips per call is
+        exactly this object's fields."""
+        cached = self._cache.get("score_plan")
+        if (
+            cached is not None
+            and cached[0] is self.elements
+            and cached[1] is self.emits
+            and cached[2] is self.missing_input_policy
+        ):
+            return cached[3]
+        from decider2.runtime.plan import ScorePlan
+
+        steps, group_ids, owners, param_spaces = self.flatten_for_runtime()
+        plan = ScorePlan.build(
+            steps, interface=self.interface, group_ids=group_ids, owners=owners,
+            mode="fused", emit=tuple(e.name for e in self.emits), param_spaces=param_spaces,
+            policy=self.missing_input_policy,
+        )
+        self._cache["score_plan"] = (self.elements, self.emits, self.missing_input_policy, plan)
+        return plan
 
     def params_schema(self) -> dict[str, dict[str, Any]]:
         """Doc 03 §4.1 — the composed set, namespaced by module instance."""
@@ -75,7 +190,7 @@ class Pipeline:
         """The version chain for every produced name, in production order —
         the data `name@module` qualification resolves against (doc 03 §3.3,
         §7)."""
-        return _walk(self.elements)[1]
+        return self._walked()[1]
 
     def flatten_for_runtime(
         self,
@@ -116,7 +231,16 @@ class Pipeline:
         name)`, never `step name` alone. Module instance names are already
         enforced unique per pipeline (`_check_unique_instance_names` above),
         so `(owner, step.name)` is unique even when `step.name` is not.
+
+        Computed once per `elements` tuple and held (Stage 4): the result
+        is a pure function of the modules' frozen steps. `ParamSpace.bound`
+        is the module's own `bound` mapping, not a copy, so a value read
+        from it at resolve time is always the module's current one.
         """
+        cached = self._cache.get("flatten")
+        if cached is not None and cached[0] is self.elements:
+            return cached[1]
+
         from decider2.runtime.invoke import ParamSpace
 
         steps: list[Step] = []
@@ -136,10 +260,12 @@ class Pipeline:
                         module=m.name,
                         step_names=tuple(member_names),
                         model=m.params_model,
-                        bound=dict(m.bound),
+                        bound=m.bound,
                     )
                 )
-        return tuple(steps), tuple(group_ids), tuple(step_owners), tuple(param_spaces)
+        result = (tuple(steps), tuple(group_ids), tuple(step_owners), tuple(param_spaces))
+        self._cache["flatten"] = (self.elements, result)
+        return result
 
     def emit(self, *names: str) -> "Pipeline":
         """Doc 03 §7. `name`, `name@module` or `name@*`; returns a NEW
@@ -148,7 +274,7 @@ class Pipeline:
         much to one that resolves to nothing (§5.2's spirit, applied here).
         """
         parsed = tuple(_parse_emit(n) for n in names)
-        _, versions, _ = _walk(self.elements)
+        _, versions, _ = self._walked()
         leaf_names = {i.name for i in self.interface.inputs}
         for e in parsed:
             _check_emittable(e, versions, leaf_names)
@@ -208,15 +334,64 @@ class Pipeline:
 
     def score(self, record: dict, *, params: dict | None = None, shared: dict | None = None):
         """Doc 03 §6 — the realtime path. Takes a dict, not kwargs (measured:
-        EXPERIMENTS.md §N2)."""
-        from decider2.runtime.invoke import score as _score
+        EXPERIMENTS.md §N2). Runs the held `score_plan()`: everything that
+        depends only on this pipeline's structure was done when the plan
+        was built; `params=`/`shared=` are merged fresh on every call."""
+        return self.score_plan().run(record, params=params, shared=shared)
 
-        steps, group_ids, owners, param_spaces = self.flatten_for_runtime()
-        return _score(
-            steps, record, interface=self.interface, group_ids=group_ids, owners=owners,
-            params=params, shared=shared, mode="fused",
-            emit=tuple(e.name for e in self.emits), param_spaces=param_spaces,
-            policy=self.missing_input_policy,
+    def precompile(self, *, shared: dict | None = None) -> "PrecompileReport":
+        """Force every numba specialisation this pipeline's `fused` mode
+        needs, at a controlled point — process start, image build, or
+        `serve()` — instead of on the first real request (doc 05 §8's
+        "a runtime load triggers ZERO compilations", now read as "zero
+        compilations after `precompile()`/`.serve()`'s own warm-up", not
+        "zero, ever": see doc 05 §8 and doc 08 §4.1's updated text, and this
+        stage's report for the number that motivated the change — the
+        driver built by `decider2.compile.kernel`'s intrinsic (no generated source) has
+        no eager, build-time signature the way an individual step's own
+        `_try_njit` probe does, and a `types.Step.packed` step's kernel
+        (`decider2.compile.driver.build_packed_kernel`, doc 08 §3.4) is
+        deliberately lazy, compiling on its own first real call — so
+        "decorated" is not "compiled" for either, and something has to
+        actually CALL the kernel once, with real argument types, before a
+        request does.
+
+        Drives both `apply()` (the batch/`fused` path) and `score()` (the
+        realtime path) with one synthetic all-present row built from this
+        pipeline's own declared `interface.inputs` — every REQUIRED input
+        gets a real, if arbitrary, value of its own declared type (doc 05
+        §9 criterion 4), so nothing routes away via `MissingInputPolicy`
+        before ever reaching a kernel (a routed row never calls the kernel
+        at all, and would warm nothing). `shared=` forwards to both, for a
+        pipeline that reads it (a table's row/output steps, doc 08 §3.4) —
+        omit it only when nothing in this pipeline needs it.
+
+        Returns a `PrecompileReport` naming which kernel each mode ended up
+        driving and how long each took; `ServeHandle`/`decider2 build
+        --verify`'s own zero-compilation check
+        (`assert_no_compilation_after_warmup`) is built on top of this,
+        not a separate mechanism.
+        """
+        from decider2.testing.recompile import count_new_compiles
+
+        record = _dummy_record(self.interface.inputs)
+        frame = _dummy_frame(self.interface.inputs)
+
+        with count_new_compiles() as apply_events:
+            t0 = _perf_counter()
+            self.apply(frame, shared=shared, mode="fused")
+            apply_seconds = _perf_counter() - t0
+
+        with count_new_compiles() as score_events:
+            t0 = _perf_counter()
+            self.score(record, shared=shared)
+            score_seconds = _perf_counter() - t0
+
+        return PrecompileReport(
+            apply_seconds=apply_seconds,
+            score_seconds=score_seconds,
+            apply_compile_events=apply_events.count,
+            score_compile_events=score_events.count,
         )
 
     def serve(self, *, mode: str = "sealed") -> "ServeHandle":
@@ -393,7 +568,7 @@ def _walk(
 
 
 def _pipeline_interface(p: Pipeline) -> Interface:
-    leaves, versions, terminal_flag = _walk(p.elements)
+    leaves, versions, terminal_flag = p._walked()
     terminals = tuple(name for name, is_terminal in terminal_flag.items() if is_terminal)
     return Interface(
         inputs=tuple(leaves.values()),

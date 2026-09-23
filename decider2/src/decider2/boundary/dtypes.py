@@ -1,109 +1,82 @@
-"""The dtype ladder: classify every incoming column, reject nothing.
+"""The Arrow table: declared kind × polars dtype → what crosses, and how.
 
-Doc 05 §1.5 — **a ladder, not a gate.** An earlier draft called this "the
-admissible-dtype contract" and marked `Decimal`/`List` inadmissible; that was
-withdrawn as the wrong default (doc 00-BUILD.md §2b: "flexible by default,
-tighten for speed"). Real credit/fraud inputs are a mix of flat and deeply
-nested, mixed types, and everything should work — some things just cost more.
-Tightening a dtype is a performance choice an author makes deliberately, never
-a precondition for using the library.
+docs/BOUNDARY-REWORK.md §1.2. The dtype LADDER this module used to be —
+`DtypeTier`, `EntryMode`, five `ColumnPlan` classes discriminated on how a
+column was pulled out of polars, `probe_column` trying each conversion on
+real data — is gone. Nullability is not a tier any more (the C gather reads
+the validity bit, `_arrow/c/shim.c`), Boolean and the temporal types are
+not copies any more (nanoarrow decodes the bitmap and the storage integer),
+and nothing is probed because nothing is converted column by column any
+more: the whole frame crosses once through `__arrow_c_stream__()`.
 
-Three tiers (doc 05 §1.5, EXPERIMENTS.md §A):
+What is left is ONE decision per declared input, made from the frame's
+schema alone and cached per (inputs, frame schema) by `extract.py`:
 
-    1. zero-copy       — clean Float64/Int64/Int32/UInt8/Datetime/Duration
-    2. copies, compiled — nullable numeric, Boolean, Date/Datetime/Duration
-                          as integers, Categorical/Enum as codes
-    3. converted        — Utf8 (codes), Decimal (scaled int64 cents); anything
-                          else (List, Struct, ...) has no flat-array form yet
-                          and is reported for the kernel-split escape instead
-                          (compile/numba/fallback.py, never a per-row
-                          `objmode` — EXPERIMENTS.md §B)
+    kind    which typed-row buffer the column lands in (`types.FeatureKind`,
+            from the input's annotation via `types.feature_kind` — the same
+            table `compile.driver.numpy_dtype` reads, so `int | None` is F64
+            here because it is float64 there, and the two never disagree);
+    cast    the ONE explicit polars cast inserted in the frame tier before
+            export when the frame's dtype is not one the kind reads
+            natively — a Float64 column declared `int`, a String column
+            declared `str` (→ Categorical, the dictionary-code convention
+            hand-written `str` steps keep until Stage 7), a Decimal (→
+            scaled int64 cents, doc 03 §1.2, as before), an all-null `Null`
+            column (→ the kind's dtype, so its nulls fill or route like any
+            other column's);
+    reject  a column with no flat form — List, Array, Struct, Object,
+            Binary — raises `NeedsKernelSplit` before anything is exported:
+            the kernel-split escape one layer up, exactly as before (the
+            ladder rejects nothing; it reports), never a per-row `objmode`
+            escape (EXPERIMENTS.md §B: 77x).
 
-This is **not** the same "tier" word `decider2.types.NullPolicy` uses. That
-one is about which *values* are missing; this one is about which *dtypes* a
-compiled kernel can hold. A column has one of each, independently.
+Everything a kind reads natively — Float32/64, every Int/UInt width,
+Boolean, Date/Datetime/Duration/Time (their storage integer), String
+(Utf8View spans), Categorical/Enum (dictionary indices) — crosses with NO
+polars work at all: nanoarrow decodes it and `sm_gather_row` widens it per
+row. A pair this table has no cast for (a String column declared `float`,
+a Categorical declared `int`) is not guessed at: the import refuses it by
+name, Arrow type and kind (`_arrow.frame.ArrowKindError`).
 
-Two probing rules survive from the stricter draft because they are
-correctness, not performance (doc 05 §1.5, EXPERIMENTS.md §A, doc 00-BUILD.md
-§O11):
-
-    * probe with `except BaseException`, never `except Exception` — `Decimal`
-      fails as `pyo3_runtime.PanicException`, a Rust panic that inherits
-      `BaseException` directly, not `Exception`;
-    * the panic does not fire on `_get_buffers()` — that call succeeds and
-      hands back a usable `Int128` series. It fires one call deeper, on
-      `.to_numpy()`/an unchecked `.cast()` of that buffer. So the gate belongs
-      at the conversion, not at extraction.
-
-**A pydantic discriminated union, one class per row of the table.** Each
-`EntryMode` used to be a tag two other modules (`extract.py`'s
-`_extract_by_plan`, this module's own `_probe_extract`) switched on with an
-`if`/`elif` chain. Now a `ColumnPlan` is one of five variant classes —
-`ZeroCopyPlan`, `CopyPlan`, `CodesPlan`, `ScaledInt64Plan`, `KernelSplitPlan`
-— discriminated on `entry_mode`, and each one owns `.extract()`: how *that*
-variant gets its own column out of polars. Adding a sixth row to the ladder
-means writing one new class here and adding it to the `ColumnPlan` union —
-nothing downstream has a switch left to update.
+`explain_boundary` keeps its job (doc 05 §1.5, "what the framework owes the
+author"): one row per column with the Arrow type nanoarrow reports, the
+kind, and whether a frame-tier cast was inserted.
 """
 from __future__ import annotations
 
-from enum import Enum
-from typing import Annotated, Literal, Mapping, Union
+from dataclasses import dataclass
+from typing import Sequence
 
-import numpy as np
 import polars as pl
-from pydantic import BaseModel, ConfigDict, Field
+
+from decider2._arrow.frame import ArrowKindError
+from decider2.types import FeatureKind, Input, feature_kind
 
 __all__ = [
-    "DtypeTier",
-    "EntryMode",
+    "ArrowKindError",
     "ColumnPlan",
-    "ZeroCopyPlan",
-    "CopyPlan",
-    "CodesPlan",
-    "ScaledInt64Plan",
-    "KernelSplitPlan",
     "NeedsKernelSplit",
+    "kind_for",
     "plan_column",
-    "probe_column",
+    "cast_series",
+    "cast_frame",
     "explain_boundary",
 ]
 
-
-class DtypeTier(Enum):
-    """Doc 05 §1.5's three tiers — a cost story, not a rejection list."""
-
-    ZERO_COPY = 1
-    COPY = 2
-    CONVERT = 3
+F64, I64, BOOL, CODE, STR = (
+    FeatureKind.F64, FeatureKind.I64, FeatureKind.BOOL, FeatureKind.CODE, FeatureKind.STR,
+)
 
 
-class EntryMode(Enum):
-    """How a column actually reaches the compiled kernel. Doubles as the
-    discriminator tag on `ColumnPlan`'s union — each member names exactly
-    the variant class that knows how to act on it (`CopyPlan` claims three
-    of them at once: `COPY_VALIDITY`/`BUFFER_COPY`/`AS_INTEGER` all extract
-    identically — "get the values buffer as a numpy array" — and differ only
-    in *why* a copy was unavoidable, which is what `note` is for)."""
-
-    NATIVE = "native"                 # zero-copy, no conversion at all
-    COPY_VALIDITY = "copy_validity"   # nullable numeric: copy + a boolean mask
-    BUFFER_COPY = "buffer_copy"       # Boolean: arrow bitpacks it, never zero-copy
-    AS_INTEGER = "as_integer"         # Date/Datetime/Duration as their physical int
-    CODES = "codes"                   # Categorical/Enum/Utf8 as integer codes
-    SCALED_INT64 = "scaled_int64"     # Decimal -> money-scaled int64 cents
-    KERNEL_SPLIT = "kernel_split"     # no flat-array form here; escape one layer up
-
-
-class NeedsKernelSplit(Exception):
-    """Raised by a `KernelSplitPlan` — and by `ScaledInt64Plan` when a real
-    Decimal conversion fails — when a dtype has no flat-array representation
-    here (doc 05 §1.5: `List`, `Struct`, and anything else not yet on the
-    ladder). **Not a rejection** — the ladder rejects nothing — this is the
-    boundary handing the column to the escape mechanism one layer up:
-    `compile/numba/fallback.py` splits the *kernel* around the column, never
-    a per-row `objmode` escape (EXPERIMENTS.md §B measured that at 77x a pure
-    kernel, worse than falling back to plain Python for the whole driver).
+class NeedsKernelSplit(ArrowKindError):
+    """Raised for a declared input whose dtype has no flat-array form here
+    (`List`, `Struct`, `Array`, `Object`, `Binary` — and a Decimal whose
+    scaled-int64 cast overflows on real data). **Not a rejection** — the
+    table rejects nothing — this is the boundary handing the column to the
+    escape mechanism one layer up: the kernel splits around the column
+    (doc 05 §1.5), never a per-row `objmode` escape (EXPERIMENTS.md §B).
+    An `ArrowKindError`, so one `except` covers "the kernel cannot read
+    this column" whether the table or the import said so.
     """
 
     def __init__(self, name: str, dtype: pl.DataType, reason: str = ""):
@@ -115,335 +88,207 @@ class NeedsKernelSplit(Exception):
         super().__init__(message)
 
 
-def _raw_values(series: pl.Series) -> pl.Series:
-    """The values buffer, always — garbage under any null slot (doc 05 §2),
-    never returned to a caller that hasn't already handled validity.
-    """
-    return series._get_buffers()["values"]
-
-
-def _extract_numeric_like(series: pl.Series) -> tuple[np.ndarray, bool]:
-    """Zero-copy when polars allows it, an ordinary copy otherwise — tried
-    directly rather than assumed from the dtype/nullability table, because
-    which combinations are actually zero-copy is a fact about the installed
-    polars/numpy build (EXPERIMENTS.md §A pins it to this environment).
-    Shared by `ZeroCopyPlan` and `CopyPlan`: "get the values buffer as a
-    numpy array" is the same operation either way; they differ only in
-    whether that succeeds without a copy.
-    """
-    values = _raw_values(series)
-    try:
-        return values.to_numpy(allow_copy=False), True
-    except RuntimeError:
-        return values.to_numpy(), False
-
-
-def _extract_codes(series: pl.Series) -> tuple[np.ndarray, tuple[str, ...]]:
-    """Categorical/Enum/Utf8 all enter as integer codes (doc 05 §1.5) — a
-    string never enters a kernel as a string. Categorical/Enum already store
-    codes; Utf8 is dictionary-encoded first (`cast(pl.Categorical)`), then
-    the same code extraction applies.
-
-    Returns `(codes, categories)` — the category list is the dictionary a
-    code indexes into (doc 05 §1.5 "Strings in detail", EXPERIMENTS.md §O):
-    a `str`-typed param's literal is resolved against it at param-resolution
-    time, rather than discarded here as it used to be. `CodesPlan.extract`
-    is the only caller, and it returns the pair TOGETHER always: a codes
-    array without its matching category list is meaningless (and dangerous
-    — see the module docstring).
-    """
-    base = series.dtype.base_type()
-    if base in (pl.Categorical, pl.Enum):
-        codes = _raw_values(series).to_numpy(allow_copy=False)
-        categories = tuple(series.cat.get_categories().to_list())
-        return codes, categories
-    encoded = series.cast(pl.Categorical)
-    codes = _raw_values(encoded).to_numpy(allow_copy=False)
-    categories = tuple(encoded.cat.get_categories().to_list())
-    return codes, categories
-
-
-def _decimal_as_cents(series: pl.Series, *, money_scale: int = 2) -> np.ndarray:
-    """Doc 03 §1.2: `Decimal` converts to a money-scaled int64 at the
-    boundary — never crosses as `Decimal` itself.
-
-    Must run under `except BaseException`: `_get_buffers()` on a `Decimal`
-    column succeeds and hands back a usable `Int128` series (doc 00-BUILD.md
-    §O11) — the panic fires one call deeper, on `.to_numpy()`/an unchecked
-    `.cast()` of *that* buffer, as `pyo3_runtime.PanicException`, which does
-    not inherit `Exception` (EXPERIMENTS.md §A). The catch itself lives in
-    `ScaledInt64Plan.extract`, the one caller — this is the pure conversion.
-    """
-    dtype = series.dtype
-    if not isinstance(dtype, pl.Decimal):
-        raise TypeError(f"_decimal_as_cents expects a Decimal column, got {dtype}")
-
-    raw = _raw_values(series)  # Int128 series — the unscaled mantissa at `dtype.scale`
-    scale = dtype.scale if dtype.scale is not None else 0
-    cents = raw.cast(pl.Int64, strict=True)
-    shift = money_scale - scale
-    if shift > 0:
-        cents = cents * (10**shift)
-    elif shift < 0:
-        cents = cents // (10 ** (-shift))
-    return cents.to_numpy(allow_copy=False)
-
-
-class _PlanBase(BaseModel):
-    """One column's spot on the ladder (doc 05 §1.5's table, row by row) —
-    shared shape; each subclass adds only its own `entry_mode` tag and
-    `.extract()`.
-
-    `nullable` is supplied by the caller, never inferred from `dtype` alone:
-    a clean and a null-bearing column of the same dtype produce `==`-equal
-    `Schema` objects — polars has no `nullable` flag on a `DataType` at all
-    (doc 00-BUILD.md §O11) — so nullability is a governance fact the input
-    schema hand-authors, the same way the params/structure boundary is.
-    """
-
-    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+@dataclass(frozen=True)
+class ColumnPlan:
+    """One declared input's row of the table: where it lands (`kind`), the
+    frame-tier cast inserted before export (`cast`, `None` when nanoarrow
+    reads the frame's own dtype), and — from `explain_boundary` only, since
+    it needs a bound view — the Arrow type nanoarrow reported, or the
+    error the import raised."""
 
     name: str
-    dtype: pl.DataType
-    tier: DtypeTier
-    nullable: bool
+    dtype: pl.DataType          # the frame's dtype, as handed in
+    kind: FeatureKind
+    cast: pl.DataType | None    # the polars dtype exported instead, or None
     note: str = ""
-
-    def guard(self) -> None:
-        """Run before any null-policy-specific handling (`extract.py`'s
-        `extract_column`, before it even looks at the column's
-        `NullPolicy`): a no-op for every variant except `KernelSplitPlan`,
-        which raises here instead of letting a null-tier-specific path
-        (`fill_column`, say) try to make sense of a dtype it can't touch.
-        """
-        return None
-
-    def extract(self, series: pl.Series) -> tuple[np.ndarray, tuple[str, ...] | None]:
-        """Values, plus the category list for a `CodesPlan` (`None`
-        otherwise). Every variant implements this; nothing outside this
-        module switches on `entry_mode` to decide how to call it.
-        """
-        raise NotImplementedError
+    arrow_type: str | None = None
+    error: str | None = None
 
 
-class ZeroCopyPlan(_PlanBase):
-    """Clean Float64/Int64/Int32/UInt8/Datetime/Duration — one of the six
-    zero-copy dtype/nullability combinations (doc 05 §1.2)."""
-
-    entry_mode: Literal[EntryMode.NATIVE] = EntryMode.NATIVE
-
-    def extract(self, series: pl.Series) -> tuple[np.ndarray, None]:
-        values, _zero_copy = _extract_numeric_like(series)
-        return values, None
+def kind_for(annotation) -> FeatureKind:
+    """The kind a declared annotation lands in: `types.feature_kind`, whose
+    table (`float`→F64, `int`→I64, `bool`→BOOL, `str`→CODE, `bytes`→STR,
+    anything else — including an OPTIONAL input's `int | None` — →F64) is
+    row for row the one `compile.driver.numpy_dtype` types the kernel by."""
+    return feature_kind(annotation)
 
 
-class CopyPlan(_PlanBase):
-    """Nullable numeric, Boolean, or Date/Datetime/Duration: three different
-    reasons a column can't be zero-copy, one identical extraction — "get the
-    values buffer as a numpy array" (`_extract_numeric_like` tries zero-copy
-    first regardless; these three just never win that bet in practice)."""
-
-    entry_mode: Literal[EntryMode.COPY_VALIDITY, EntryMode.BUFFER_COPY, EntryMode.AS_INTEGER]
-
-    def extract(self, series: pl.Series) -> tuple[np.ndarray, None]:
-        values, _zero_copy = _extract_numeric_like(series)
-        return values, None
-
-
-class CodesPlan(_PlanBase):
-    """Categorical/Enum/Utf8 as integer codes (doc 05 §1.5). `tier` varies
-    by source dtype (Categorical/Enum are already `DtypeTier.COPY`; Utf8 is
-    `DtypeTier.CONVERT` — it has to be dictionary-encoded first), which is
-    why `tier` is a real field here rather than a fixed literal."""
-
-    entry_mode: Literal[EntryMode.CODES] = EntryMode.CODES
-
-    def extract(self, series: pl.Series) -> tuple[np.ndarray, tuple[str, ...]]:
-        return _extract_codes(series)
+# What each kind reads with no cast: the polars dtypes whose Arrow storage
+# `sm_resolve_col` accepts for it (shim.c). Temporal types are their
+# storage integer (`tdD` int32, `tsu:` int64, ...) — an I64 feature.
+_INTEGERS = (pl.Int8, pl.Int16, pl.Int32, pl.Int64, pl.UInt8, pl.UInt16, pl.UInt32, pl.UInt64)
+_TEMPORAL = (pl.Date, pl.Datetime, pl.Duration, pl.Time)
+_NATIVE: dict[FeatureKind, tuple] = {
+    F64: (pl.Float64, pl.Float32),
+    I64: _INTEGERS + _TEMPORAL,
+    BOOL: (pl.Boolean,),
+    CODE: (pl.Categorical, pl.Enum),
+    STR: (pl.String,),
+}
+# The dtype a kind is cast TO when the frame's dtype is castable but not native.
+_CANONICAL: dict[FeatureKind, pl.DataType] = {
+    F64: pl.Float64(), I64: pl.Int64(), BOOL: pl.Boolean(), CODE: pl.Categorical(), STR: pl.String(),
+}
+_NO_FLAT_FORM = (pl.Object, pl.Binary, pl.Unknown)
 
 
-class ScaledInt64Plan(_PlanBase):
-    """Decimal -> money-scaled int64 cents (doc 03 §1.2) — the money answer
-    anyway. The one variant whose `.extract()` can still fail on real data
-    even though `plan_column` already predicted it (a Rust-panic overflow on
-    `.cast(Int64)`), so it owns the `except BaseException` that downgrades
-    that failure into the kernel-split escape, exactly as `probe_column`
-    would have predicted had it run first."""
-
-    entry_mode: Literal[EntryMode.SCALED_INT64] = EntryMode.SCALED_INT64
-
-    def extract(self, series: pl.Series) -> tuple[np.ndarray, None]:
-        try:
-            return _decimal_as_cents(series), None
-        except BaseException as exc:  # noqa: BLE001 — doc 05 §1.5's hard requirement
-            raise NeedsKernelSplit(
-                self.name, self.dtype,
-                reason=f"Decimal->int64 cents conversion failed: {exc!r}",
-            ) from exc
-
-
-class KernelSplitPlan(_PlanBase):
-    """No flat-array form here yet (`List`, `Struct`, anything future) —
-    reported for the kernel-split escape rather than attempted and failed
-    loudly (doc 05 §1.5: the ladder rejects nothing)."""
-
-    entry_mode: Literal[EntryMode.KERNEL_SPLIT] = EntryMode.KERNEL_SPLIT
-
-    def guard(self) -> None:
-        raise NeedsKernelSplit(self.name, self.dtype, reason=self.note)
-
-    def extract(self, series: pl.Series) -> tuple[np.ndarray, None]:
-        raise NeedsKernelSplit(self.name, self.dtype, reason=self.note)
-
-
-ColumnPlan = Annotated[
-    Union[ZeroCopyPlan, CopyPlan, CodesPlan, ScaledInt64Plan, KernelSplitPlan],
-    Field(discriminator="entry_mode"),
-]
-
-
-# The four tier-1/2 base types that are zero-copy when clean (doc 05 §1.2:
-# "Only 6 of 26 dtype/nullability combinations are zero-copy — clean Float64,
-# Int64, Int32, UInt8, Datetime and Duration").
-_CLEAN_ZERO_COPY_NUMERIC: tuple[type, ...] = (pl.Float64, pl.Int64, pl.Int32, pl.UInt8)
-_TEMPORAL: tuple[type, ...] = (pl.Date, pl.Datetime, pl.Duration)
-_CATEGORY_LIKE: tuple[type, ...] = (pl.Categorical, pl.Enum)
-
-
-def plan_column(name: str, dtype: pl.DataType, *, nullable: bool) -> ColumnPlan:
-    """Classify one column by dtype and declared nullability alone — no data
-    is touched. Never raises: the ladder rejects nothing (§1.5).
-
-    This is the declarative half. `probe_column` is the other half: it
-    actually attempts the conversion this function predicts, on real data,
-    and downgrades to `KernelSplitPlan` if that attempt fails.
-    """
+def plan_column(name: str, dtype: pl.DataType, kind: FeatureKind) -> ColumnPlan:
+    """The table, one row. Decides from the dtype alone — no data is
+    touched — whether `kind` reads `dtype` natively, needs one frame-tier
+    cast, or (`NeedsKernelSplit`) has no flat form at all. A pair with no
+    cast here is left for the import to refuse by name and Arrow type."""
     base = dtype.base_type()
-
-    if base in _CLEAN_ZERO_COPY_NUMERIC:
-        if nullable:
-            return CopyPlan(
-                name=name, dtype=dtype, tier=DtypeTier.COPY, entry_mode=EntryMode.COPY_VALIDITY,
-                nullable=nullable,
-                note="nullable numeric — copies at extraction, ~550-630us/100k rows (doc 05 §1.2)",
+    if dtype.is_nested() or base in _NO_FLAT_FORM:
+        raise NeedsKernelSplit(name, dtype, reason="nested/object columns do not enter the kernel (doc 05 §1.5)")
+    if base in _NATIVE[kind]:
+        return ColumnPlan(name, dtype, kind, None, note="native: nanoarrow reads the frame's own buffers")
+    if base is pl.Decimal:
+        if kind in (F64, I64):
+            return ColumnPlan(
+                name, dtype, kind, _CANONICAL[kind],
+                note="Decimal → scaled int64 cents in the frame tier (doc 03 §1.2), then the declared kind",
             )
-        return ZeroCopyPlan(
-            name=name, dtype=dtype, tier=DtypeTier.ZERO_COPY, nullable=nullable,
-            note="clean — one of the six zero-copy dtype/nullability combinations (doc 05 §1.2)",
+    elif base is pl.Null:
+        return ColumnPlan(
+            name, dtype, kind, _CANONICAL[kind],
+            note="all-null Null column cast to the kind's dtype so its nulls fill/route like any other",
         )
-
-    if base is pl.Boolean:
-        return CopyPlan(
-            name=name, dtype=dtype, tier=DtypeTier.COPY, entry_mode=EntryMode.BUFFER_COPY,
-            nullable=nullable,
-            note="arrow bitpacks Boolean; allow_copy=False always fails (doc 05 §1.4)",
+    elif kind in (F64, I64, BOOL) and (dtype.is_numeric() or base is pl.Boolean or base in _TEMPORAL):
+        return ColumnPlan(
+            name, dtype, kind, _CANONICAL[kind],
+            note=f"frame-tier cast {dtype} → {_CANONICAL[kind]}: the declared kind is not the column's dtype",
         )
-
-    if base in _TEMPORAL:
-        return CopyPlan(
-            name=name, dtype=dtype, tier=DtypeTier.COPY, entry_mode=EntryMode.AS_INTEGER,
-            nullable=nullable,
-            note="enters as its physical int; datetime+datetime does not compile (doc 05 §1.5)",
+    elif kind is CODE and base is pl.String:
+        return ColumnPlan(
+            name, dtype, kind, _CANONICAL[kind],
+            note="String → Categorical: a `str` input enters as a dictionary code until Stage 7 (doc 05 §1.5)",
         )
-
-    if base in _CATEGORY_LIKE:
-        return CodesPlan(
-            name=name, dtype=dtype, tier=DtypeTier.COPY, nullable=nullable,
-            note="enters as codes; cross-frame code stability must be declared (doc 05 §1.5)",
+    elif kind is STR and base in (pl.Categorical, pl.Enum):
+        return ColumnPlan(
+            name, dtype, kind, _CANONICAL[kind],
+            note="Categorical/Enum → String for a `bytes` input; Stage 6 reads the dictionary instead",
         )
-
-    if base is pl.String:  # pl.Utf8 is pl.String in this polars version
-        return CodesPlan(
-            name=name, dtype=dtype, tier=DtypeTier.CONVERT, nullable=nullable,
-            note="dictionary-encoded to codes — a string never enters a kernel as a string (doc 05 §1.5)",
-        )
-
-    if isinstance(dtype, pl.Decimal) or base is pl.Decimal:
-        return ScaledInt64Plan(
-            name=name, dtype=dtype, tier=DtypeTier.CONVERT, nullable=nullable,
-            note="converted to scaled int64 cents — the money answer anyway (doc 03 §1.2)",
-        )
-
-    # Everything else (List, Struct, Array, Object, Binary, and anything
-    # future) is not rejected either — there is simply no flat-array
-    # conversion for it here yet. Reported for the kernel-split escape
-    # (compile/numba/fallback.py splits the KERNEL around the offending
-    # column; a per-row `objmode` escape is 77x a pure kernel and is refused
-    # — EXPERIMENTS.md §B) rather than attempted and failed loudly.
-    return KernelSplitPlan(
-        name=name, dtype=dtype, tier=DtypeTier.CONVERT, nullable=nullable,
-        note=f"{dtype} has no flat-array conversion yet; the kernel splits around it (doc 05 §1.5)",
+    return ColumnPlan(
+        name, dtype, kind, None,
+        note=f"no frame-tier cast from {dtype} to {kind.name}; the import refuses it by name and Arrow type",
     )
 
 
-def _probe_extract(series: pl.Series, plan: ColumnPlan) -> None:
-    """Actually attempt the conversion `plan` predicts, discarding the
-    result. This is the call that must survive under `except BaseException`
-    in `probe_column` — `Decimal`'s `.cast(Int64)` is the one that can panic.
+def _decimal_as_cents(series: pl.Series, *, money_scale: int = 2) -> pl.Series:
+    """Doc 03 §1.2: `Decimal` converts to a money-scaled int64 at the
+    boundary — never crosses as `Decimal` itself. `to_physical()` is the
+    unscaled Int128 mantissa at the column's own scale; the strict cast to
+    Int64 is the one step that can fail on real data (an overflow), and the
+    caller turns that into `NeedsKernelSplit`."""
+    scale = series.dtype.scale if series.dtype.scale is not None else 0
+    cents = series.to_physical().cast(pl.Int64, strict=True)
+    shift = money_scale - scale
+    if shift > 0:
+        cents = cents * (10 ** shift)
+    elif shift < 0:
+        cents = cents // (10 ** (-shift))
+    return cents
 
-    Delegates straight to `plan.extract()`: probing and extracting run the
-    identical conversion (previously an `if`/`elif` over `plan.entry_mode`,
-    duplicating `_extract_by_plan`'s own switch one module over) — only
-    whether the result is kept differs, and that's the one line below.
-    """
-    plan.extract(series)
+
+def cast_series(series: pl.Series, plan: ColumnPlan) -> pl.Series:
+    """Apply `plan.cast` to one column — the one explicit, reported polars
+    cast of the frame tier. Under `except BaseException`, as the old
+    Decimal probe was (EXPERIMENTS.md §A: a Rust panic is a `BaseException`,
+    not an `Exception`), so a failed cast reports the column by name."""
+    if plan.cast is None:
+        return series
+    try:
+        base = series.dtype.base_type()
+        if base is pl.Decimal:
+            out = _decimal_as_cents(series)
+            return out if plan.cast == pl.Int64() else out.cast(plan.cast, strict=True)
+        if base in _TEMPORAL:
+            return series.to_physical().cast(plan.cast, strict=True)
+        return series.cast(plan.cast, strict=True)
+    except BaseException as exc:  # noqa: BLE001 — doc 05 §1.5's hard requirement
+        raise NeedsKernelSplit(
+            plan.name, series.dtype, reason=f"frame-tier cast to {plan.cast} failed: {exc!r}",
+        ) from exc
 
 
-def probe_column(series: pl.Series, *, nullable: bool | None = None) -> ColumnPlan:
-    """`plan_column`, verified against real data — the actual admissibility
-    gate doc 00-BUILD.md's build order means by "`dtypes.py` (admissibility
-    gate)". Downgrades to a `KernelSplitPlan` if the predicted conversion
-    fails on this column's real values.
+def cast_frame(frame: pl.DataFrame, casts: Sequence[tuple[int, ColumnPlan]]) -> pl.DataFrame:
+    """`frame` with each `(position, plan)` column replaced by its cast, as
+    a NEW frame: the caller's columns are never re-typed under it. `clone`
+    + `replace_column` + `Series.cast` is ~10 µs per column at n=1 against
+    ~40 µs for `with_columns`, which goes through the lazy planner."""
+    out = frame.clone()
+    for pos, plan in casts:
+        out.replace_column(pos, cast_series(frame.get_column(plan.name), plan))
+    return out
 
-    Must catch `BaseException`: `Decimal`'s failure is
-    `pyo3_runtime.PanicException`, which does **not** inherit `Exception`
-    (EXPERIMENTS.md §A) — a narrower `except Exception` here lets the panic
-    escape and takes down the whole extraction, rather than reporting one
-    column's real tier.
-    """
-    if nullable is None:
-        nullable = series.null_count() > 0
-    plan = plan_column(series.name, series.dtype, nullable=nullable)
 
-    if plan.entry_mode in (EntryMode.NATIVE, EntryMode.KERNEL_SPLIT):
-        return plan  # zero-copy needs no probe; already-split has nothing to try
+def _kind_by_dtype(dtype: pl.DataType) -> FeatureKind:
+    """`explain_boundary`'s kind for a column nobody declared: what its
+    dtype would most naturally be read as."""
+    base = dtype.base_type()
+    if base in _NATIVE[STR]:
+        return STR
+    if base in _NATIVE[CODE]:
+        return CODE
+    if base in _NATIVE[BOOL]:
+        return BOOL
+    if base in _NATIVE[I64] or base is pl.Decimal:
+        return I64
+    return F64
+
+
+def explain_boundary(frame: pl.DataFrame, inputs: Sequence[Input] | None = None) -> list[ColumnPlan]:
+    """One row per column: the kind it lands in, the Arrow type nanoarrow
+    reports for what is actually exported, and whether a frame-tier cast
+    was inserted (doc 05 §1.5: "what the framework owes the author, since
+    nothing is rejected"). Reading this answers "why is my batch doing a
+    cast" from a table instead of a guess.
+
+    `inputs` (the pipeline's `interface.inputs`) decides the kinds; without
+    it every column is read as its dtype's natural kind. A column the
+    table rejects, or the import refuses, is reported with `error` set
+    rather than raised — this is diagnostics, it never fails."""
+    from decider2._arrow.frame import FramePlan, FrameView
+
+    if inputs is not None:
+        wanted = [(decl.name, kind_for(decl.annotation)) for decl in inputs if decl.name in frame.columns]
+    else:
+        wanted = [(name, _kind_by_dtype(dtype)) for name, dtype in zip(frame.columns, frame.dtypes)]
+    position = {name: k for k, name in enumerate(frame.columns)}
+    plans: list[ColumnPlan] = []
+    casts: list[tuple[int, ColumnPlan]] = []
+    for name, kind in wanted:
+        dtype = frame.dtypes[position[name]]
+        try:
+            plan = plan_column(name, dtype, kind)
+        except NeedsKernelSplit as exc:
+            plans.append(ColumnPlan(name, dtype, kind, None, note="", error=str(exc)))
+            continue
+        if plan.cast is not None:
+            casts.append((position[name], plan))
+        plans.append(plan)
 
     try:
-        _probe_extract(series, plan)
-    except BaseException as exc:  # noqa: BLE001 — doc 05 §1.5's hard requirement
-        return KernelSplitPlan(
-            name=plan.name, dtype=plan.dtype, tier=DtypeTier.CONVERT, nullable=plan.nullable,
-            note=f"planned {plan.entry_mode.value} failed to probe ({exc!r}); kernel splits around it",
-        )
-    return plan
-
-
-def explain_boundary(
-    frame: pl.DataFrame,
-    *,
-    nullable: Mapping[str, bool] | None = None,
-    probe: bool = True,
-) -> list[ColumnPlan]:
-    """One row per column: which tier it lands on and why (doc 05 §1.5:
-    "what the framework owes the author, since nothing is rejected"). Reading
-    this answers "why is my batch slow" from a table instead of a guess.
-
-    `nullable` overrides the declared-schema nullability per column (doc
-    00-BUILD.md §O11: it cannot be read off the polars dtype). Columns not
-    named there fall back to this frame's own `null_count()` — a convenience
-    for ad-hoc inspection, not a substitute for the hand-authored schema a
-    real pipeline runs against.
-
-    `probe=True` (the default) actually attempts each conversion (§ above);
-    `probe=False` gives the cheaper, purely declarative `plan_column` view.
-    """
-    nullable = nullable or {}
-    plans = []
-    for name in frame.columns:
-        series = frame[name]
-        is_nullable = nullable.get(name, series.null_count() > 0)
-        if probe:
-            plans.append(probe_column(series, nullable=is_nullable))
-        else:
-            plans.append(plan_column(name, series.dtype, nullable=is_nullable))
-    return plans
+        exported = cast_frame(frame, casts) if casts else frame
+    except NeedsKernelSplit as exc:
+        return [
+            ColumnPlan(p.name, p.dtype, p.kind, p.cast, p.note, error=str(exc)) if p.name == exc.column else p
+            for p in plans
+        ]
+    # Bind ONE column at a time so a refused column is reported on its own
+    # row and the others still get their Arrow type.
+    out: list[ColumnPlan] = []
+    for p in plans:
+        if p.error is not None:
+            out.append(p)
+            continue
+        view = FrameView(FramePlan([(p.name, p.kind)], exported.columns))
+        try:
+            view.bind(exported)
+            out.append(ColumnPlan(p.name, p.dtype, p.kind, p.cast, p.note, arrow_type=view.arrow_type(p.name)))
+        except ArrowKindError as exc:
+            out.append(ColumnPlan(p.name, p.dtype, p.kind, p.cast, p.note,
+                                  arrow_type=getattr(exc, "arrow_type", None), error=str(exc)))
+        finally:
+            view.release()
+    return out

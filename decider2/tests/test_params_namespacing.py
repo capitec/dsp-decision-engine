@@ -21,11 +21,12 @@ from decider2 import flow, module, param
 FRAME = pl.DataFrame({"term_cap": [60.0, 60.0]})
 
 
-# Steps live at module scope because `decider2.compile.codegen` emits
-# `from <fn.__module__> import <fn.__name__>` into each generated kernel — a
-# step defined inside a factory function is not importable by name and cannot
-# be compiled at all. See this run's report; it is a real limitation of the
-# codegen strategy, not of these tests.
+# Steps live at module scope out of habit from the generated-source kernel,
+# which imported each step by `<fn.__module__>.<fn.__name__>` and so could
+# not fuse a step defined inside a factory function. `decider2.compile.
+# kernel` closes over the step's own dispatcher instead, so that limitation
+# is gone (tests/test_compile_kernel.py covers the closure case); nothing
+# here depends on module scope any more.
 
 
 def cap(term_cap: float, cap: float = param(48.0, ge=6, le=60)) -> float:

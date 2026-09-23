@@ -20,6 +20,11 @@ The boundary values are the ones named in doc 05 §9 and doc 00 §2b:
 - **int64 near 2**53** — float64 exactly represents integers only up to
   2**53 (doc 00 §2b); one past it is where a silent int -> float64 cast
   first loses precision, so an `int`-declared column gets a value there.
+- **the string corpus** (`STRING_CORPUS`, docs/BOUNDARY-REWORK.md §8.2) —
+  for a `str`/`bytes` input, one row per case that would misread SILENTLY
+  if the Arrow boundary decoded a string wrong: 1, 12 and 13 bytes (the
+  Utf8View inline/out-of-line boundary), multi-byte UTF-8, a long value,
+  and two values sharing a 12-byte prefix.
 - **empty-frame** — zero rows, correct schema; doc 05 §9 wants this checked
   too, but it cannot share a frame with the row-based cases above, so it
   comes back as a second, separate frame.
@@ -39,6 +44,27 @@ _UNION_ORIGINS = (typing.Union, _pytypes.UnionType)
 
 _CASE_COLUMN = "case"
 
+# The string corpus every string-bearing pipeline is driven with
+# (docs/BOUNDARY-REWORK.md §8.2 item 2): the cases that misread SILENTLY if
+# the boundary decodes a Utf8View element wrong — the 12/13-byte inline /
+# out-of-line boundary, multi-byte UTF-8, and two values with identical
+# prefixes differing only after byte 12 (an inline-prefix comparison would
+# call them equal). Null and empty are the other two, generated as their
+# own cases below. (label, value)
+STRING_CORPUS: tuple[tuple[str, str], ...] = (
+    ("one_byte", "a"),
+    ("twelve_bytes", "twelve chars"),           # the LAST inline Utf8View length
+    ("thirteen_bytes", "thirteen char"),        # the FIRST out-of-line length
+    ("multibyte", "héllo wörld"),               # 13 bytes for 11 code points
+    ("cjk", "日本語のテキスト"),                  # 3 bytes per code point
+    ("emoji", "emoji 🚀🚀"),                     # 4-byte sequences
+    ("long", "x" * 100),
+    ("prefix12_a", "twelve charsA"),            # identical 12-byte prefix ...
+    ("prefix12_b", "twelve charsB"),            # ... differing only at byte 12
+)
+assert len("twelve chars".encode()) == 12 and len("thirteen char".encode()) == 13
+assert len("héllo wörld".encode()) == 13
+
 
 def _base_type(annotation: Any) -> type:
     """The concrete scalar type under a possibly-Optional annotation. Tier 3
@@ -51,6 +77,8 @@ def _base_type(annotation: Any) -> type:
         args = [a for a in typing.get_args(annotation) if a is not type(None)]
         if len(args) == 1:
             annotation = args[0]
+    if annotation is bytes:   # a string SPAN input (a tree's string feature) is fed as text
+        return str
     return annotation if annotation in _SCALAR_TYPES else float
 
 
@@ -146,6 +174,13 @@ def corpus(source: Any, *, baseline: float = 1.0) -> dict[str, pl.DataFrame]:
             row[inp.name] = _INT64_NEAR_2_53
             row[case_column] = f"int64_near_2**53:{inp.name}"
             rows.append(row)
+
+        if base_type is str:
+            for label, value in STRING_CORPUS:
+                row = dict(base_row)
+                row[inp.name] = value
+                row[case_column] = f"str_{label}:{inp.name}"
+                rows.append(row)
 
     boundary = pl.DataFrame(rows)
     empty = boundary.clear()
