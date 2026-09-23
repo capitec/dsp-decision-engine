@@ -37,6 +37,14 @@ class Session:
     runners that report positions, such as the interpreted one); a predicate
     is called with every checkpoint.
 
+    Every mode supports sessions. Interpreted and stepped pause at every
+    node. Fused pauses only at kernel boundaries: a kernel running several
+    steps is one checkpoint with its first step's path, and a breakpoint (or
+    `rewind`) on any of its steps stops just before the whole kernel, with
+    the kernel's steps in `Paused.kernel`. Values a kernel uses only inside
+    itself are never stored, so `value` and `set` on one raise a `KeyError`
+    that suggests `mode="stepped"`.
+
     Example::
 
         s = pipeline.session(df)
@@ -70,6 +78,16 @@ class Session:
         self._visited: set[str] = set()
         self._previous: Checkpoint | None = None
         self._start()
+        # A fused runner compiles on `iterate`, so its units exist once the run has started.
+        self._kernels: dict[str, tuple[str, ...]] = {}
+        self._internal: dict[int, tuple[str, ...]] = {}
+        for unit in getattr(self._runner, "units", {}).values():
+            if len(unit.calls) > 1:
+                kernel = tuple(c.node.origin.path for c in unit.calls)
+                kept = [v for v, _ in unit.writes]
+                self._kernels[kernel[0]] = kernel
+                self._produces[kernel[0]] = kept
+                self._internal.update((v.id, kernel) for c in unit.calls for v in c.writes if v not in kept)
         self._emit(RunStarted(self.state.n))
         self._log_params()
 
@@ -114,8 +132,6 @@ class Session:
             session.state.versions("disposable_income@*")[-1].producer   # "override@affordability_ratio"
         """
         targets = self._targets(name)
-        if not targets:
-            raise KeyError(f"{name!r} is neither an input column nor a value produced so far")
         dtype = dtype_of(base_annotation(targets[-1].annotation))
         values, valid = _cast(name, value, dtype, self.state.n)
         previous = summarize(self.value(name))
@@ -146,25 +162,17 @@ class Session:
         saved = self.state, self._params, self._iterator, self._logged
         self._start()
         for cp in self._iterator:
-            if cp.when == "before" and _under(cp.origin.path, path):
+            if cp.when == "before" and self._covers(cp, path):
                 break
         else:
             self.state, self._params, self._iterator, self._logged = saved
             raise ValueError(f"no node at or under {path!r} runs")
         # Upstream nodes ran again on the original inputs; the current values win.
         # ponytail: branch routing in the replay comes from the original values; re-route once runners can seek.
-        keep = set(self.state.values) | {v.id for v in plan.versions if v.producer is None}
-        for vid, values in old.values.items():
-            if vid in keep or vid >= len(plan.versions):
-                self.state.values[vid] = values
-                if vid in old.valid:
-                    self.state.valid[vid] = old.valid[vid]
-                else:
-                    self.state.valid.pop(vid, None)
-        self.state.chains, self.state._extra = old.chains, old._extra
+        self.state.restore(old, set(self.state.values) | {v.id for v in plan.versions if v.producer is None})
         self._visits.clear()
         self.current, self.finished = cp, False
-        self._emit(Paused(cp.origin, cp.when, "rewind"))
+        self._emit(Paused(cp.origin, cp.when, "rewind", self._kernels.get(cp.origin.path, ())))
         return cp
 
     def apply(self, command: Command) -> Any:
@@ -185,11 +193,10 @@ class Session:
             session.value("term_cap@term/cap_by_income")
         """
         if "@" in spec:
+            for v in self.state.versions(spec):
+                self._check_stored(spec, v)
             return self.state.column(spec)
-        targets = self._targets(spec)
-        if not targets:
-            raise KeyError(f"{spec!r} is neither an input column nor a value produced so far")
-        return self.state.column(spec, targets[-1])
+        return self.state.column(spec, self._targets(spec)[-1])
 
     def output(self) -> pl.DataFrame:
         """The frame `Executable.run` returns, overrides applied; only once the run has finished."""
@@ -212,7 +219,7 @@ class Session:
                 why = reason
             else:
                 continue
-            self._emit(Paused(cp.origin, cp.when, why))
+            self._emit(Paused(cp.origin, cp.when, why, self._kernels.get(cp.origin.path, ())))
             return cp
         return None
 
@@ -254,15 +261,29 @@ class Session:
             return cp.when == "after" and cp.origin.path == path and locator in self._visited
         # Only on entering the subtree, not at every node inside it.
         entering = self._previous is None or not _under(self._previous.origin.path, path)
-        return cp.when == "before" and _under(cp.origin.path, path) and entering
+        return cp.when == "before" and self._covers(cp, path) and entering
+
+    def _covers(self, cp: Checkpoint, prefix: str) -> bool:
+        return any(_under(p, prefix) for p in self._kernels.get(cp.origin.path, (cp.origin.path,)))
 
     def _targets(self, name: str) -> list[Version]:
         # Inputs, then what has been written so far in production order; the
         # override's own records are history, not a place later nodes read.
         inputs = [v for v in self.executable.plan.versions if v.producer is None and v.name == name]
-        written = [v for v in self.state.chains.get(name, ())
-                   if v.id in self.state.values and not v.producer.startswith("override@")]
+        chain = self.state.chains.get(name, ())
+        written = [v for v in chain if v.id in self.state.values and not v.producer.startswith("override@")]
+        if not inputs + written:
+            # ponytail: only when nothing of `name` is stored; a stored earlier version hides a later in-kernel one.
+            for v in chain:
+                self._check_stored(name, v)
+            raise KeyError(f"{name!r} is neither an input column nor a value produced so far")
         return inputs + written
+
+    def _check_stored(self, spec: str, v: Version) -> None:
+        kernel = self._internal.get(v.id)
+        if kernel is not None:
+            raise KeyError(f"{spec!r} is computed inside the fused kernel {list(kernel)} and never stored; "
+                           "open the session with mode='stepped' to inspect or set it")
 
     def _visit(self, locator: str) -> None:
         self._visits[locator] += 1

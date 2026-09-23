@@ -81,18 +81,28 @@ class InterpretedRunner:
         bundle = params.bundle(call.id, m)
         cols = [_argument(state, v, i, scope.rows, node.origin.path) for i, v in zip(node.inputs, call.reads)]
         rows = zip(*cols) if cols else repeat((), m)
-        if node.kind == "scalar":
-            args = [i.arg for i in node.inputs]
-            fixed = {**dict(node.consts), **{d.arg: b for d, b in zip(node.params, bundle)}}
-            results = [node.fn(**dict(zip(args, row)), **fixed) for row in rows]
-            if len(node.outputs) == 1:
-                results = [(r,) for r in results]
-        else:
-            consts = tuple(v for _, v in node.consts)
-            if node.reference is not None:
-                results = [node.reference(row, bundle, consts, self.visit) for row in rows]
+        results: list = []
+        append = results.append
+        try:
+            if node.kind == "scalar":
+                args = [i.arg for i in node.inputs]
+                fixed = {**dict(node.consts), **{d.arg: b for d, b in zip(node.params, bundle)}}
+                for row in rows:
+                    append(node.fn(**dict(zip(args, row)), **fixed))
             else:
-                results = [node.fn(row, bundle, consts) for row in rows]
+                consts = tuple(v for _, v in node.consts)
+                if node.reference is not None:
+                    for row in rows:
+                        append(node.reference(row, bundle, consts, self.visit))
+                else:
+                    for row in rows:
+                        append(node.fn(row, bundle, consts))
+        except Exception as e:
+            k = len(results)
+            _note(e, f"in step {node.origin.path}, row {k if scope.rows is None else int(scope.rows[k])}")
+            raise
+        if node.kind == "scalar" and len(node.outputs) == 1:
+            results = [(r,) for r in results]
         columns = list(zip(*results)) if results else [()] * len(node.outputs)
         if len(columns) != len(node.outputs):
             raise ValueError(f"{node.origin.path}: returned {len(columns)} values per row, "
@@ -155,6 +165,12 @@ def _ignore(locator: str) -> None:
     pass
 
 
+def _note(e: BaseException, text: str) -> None:
+    # The error keeps its type for `except`; the note shows under its traceback (Python 3.11+ only).
+    if hasattr(e, "add_note"):
+        e.add_note(text)
+
+
 def _argument(state: State, version: Version, decl: Input, rows: np.ndarray | None, path: str) -> np.ndarray:
     values, valid = state.read(version, rows)
     if valid is None or valid.all():
@@ -194,7 +210,11 @@ def _frame(call: Call, state: State, scope: _Scope) -> None:
     node = call.node
     path = node.origin.path
     df = state.frame_of(scope.base, scope.names, scope.rows)
-    out = node.fn(df)
+    try:
+        out = node.fn(df)
+    except Exception as e:
+        _note(e, f"in frame step {path}")
+        raise
     if not isinstance(out, pl.DataFrame):
         raise TypeError(f"frame step {path} returned {type(out).__name__}, not a polars DataFrame")
     if out.height != df.height:

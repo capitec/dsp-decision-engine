@@ -8,6 +8,20 @@ and the websocket adapter build on.
   nothing about which checkpoints a runner yields. A runner with fewer
   checkpoints (fused: kernel boundaries only) just pauses less often; a
   prefix breakpoint catches the first checkpoint under it that exists.
+- **Fused: a breakpoint inside a kernel pauses before the whole kernel.**
+  A kernel of several steps is one checkpoint pair with its first step's
+  origin. The session reads `runner.units` (if the runner has them) and
+  treats that `before` checkpoint as covering every step of the kernel, so a
+  breakpoint or `rewind` on any of them stops there; `Paused.kernel` lists
+  the steps. Reporting it unreachable was the alternative, but pausing before
+  the kernel is honest (nothing of it has run) and lets `set` on its inputs
+  work. A set there on a value computed by an earlier step of the same
+  kernel can't exist: values a kernel uses only inside itself are never
+  stored, and `value`/`set` on one raise a `KeyError` suggesting
+  `mode="stepped"`. `NodeFinished` for a kernel summarises what it stores.
+  Consequence: breaking on step 2 of a kernel and setting a value step 1
+  reads gives a different answer from interpreted mode, where step 1 has
+  already run; the same break/set on an input only later steps read agrees.
 - **Breakpoints fire on entry.** A path or prefix matches a `before`
   checkpoint whose previous checkpoint was outside that subtree, so `"term"`
   stops once when the run enters `term`, not at every node inside it (a loop

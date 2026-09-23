@@ -6,6 +6,8 @@ import operator
 import typing as t
 from dataclasses import dataclass
 
+from decider.exceptions import ExprError
+
 __all__ = ["Expr", "ExprError", "parse"]
 
 MAX_DEPTH = 200
@@ -42,10 +44,6 @@ _FRIENDLY = {
     ast.IfExp: "conditional expression (a ternary 'x if c else y')",
     ast.Await: "await",
 }
-
-
-class ExprError(ValueError):
-    """The expression is outside the admitted grammar."""
 
 
 @dataclass(frozen=True)

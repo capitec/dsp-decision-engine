@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from decider.engine.ir.context import IRContext
     from decider.engine.ir.nodes import IRNode
     from decider.engine.params.schema import ParamsSchema
+    from decider.engine.run.engine import Mode
     from decider.steps.sequential import SequentialStep
 
 
@@ -111,12 +112,14 @@ class Step(ABC):
 
         return Engine().bind(self).run(data, **kwargs)
 
-    def session(self, data: Any, params: Any = None, mode: str = "interpreted", **engine_kwargs: Any) -> Any:
+    def session(self, data: Any, params: Any = None, mode: Mode = "interpreted", **engine_kwargs: Any) -> Any:
         """Open a debug `Session` over a polars frame; `engine_kwargs` go to `Engine` (e.g. `params_validation=`).
+
+        `mode` is the `Engine.bind` mode; `"fused"` pauses at kernel boundaries only.
 
         Example::
 
-            s = pipeline.session(df)
+            s = pipeline.session(df, mode="stepped")
             s.break_at("term/cap_by_income")
             s.resume()
             s.set("term_cap", 36.0)

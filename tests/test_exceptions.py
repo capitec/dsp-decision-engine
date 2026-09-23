@@ -6,20 +6,23 @@ import pytest
 
 import decider
 from decider import branch, dag, flow, param, step
-from decider.engine import to_ir
+from decider.engine import Engine, to_ir
 from decider.engine.boundary._arrow.plan import ArrowKindError as ArrowKindFromPlan
 from decider.engine.boundary.dtypes import NeedsKernelSplit as NeedsKernelSplitFromDtypes
 from decider.engine.boundary.nulls import MissingInputError as MissingFromNulls
 from decider.engine.params import ParamsError as ParamsFromParams
 from decider.exceptions import (
-    ArrowImportError, ArrowKindError, DeciderError, IRError, MissingInputError, NeedsKernelSplit, ParamsError,
-    WiringError,
+    ArrowImportError, ArrowKindError, DeciderError, EngineError, ExprError, IRError, MissingInputError,
+    NeedsKernelSplit, ParamsError, RegistryError, WiringError,
 )
+from decider.steps import ConfigurableStep
+from decider.steps.expr import ExprError as ExprFromExpr, parse
 
 
 @pytest.mark.parametrize("error, builtin", [
     (WiringError, ValueError), (IRError, TypeError), (ParamsError, ValueError), (MissingInputError, ValueError),
     (ArrowKindError, TypeError), (NeedsKernelSplit, TypeError), (ArrowImportError, RuntimeError),
+    (EngineError, ValueError), (RegistryError, LookupError), (ExprError, ValueError),
 ])
 def test_each_library_error_is_a_decider_error_and_its_builtin(error, builtin):
     assert issubclass(error, DeciderError) and issubclass(error, builtin)
@@ -28,6 +31,7 @@ def test_each_library_error_is_a_decider_error_and_its_builtin(error, builtin):
 def test_the_old_import_locations_name_the_same_classes():
     assert ArrowKindFromPlan is ArrowKindError and NeedsKernelSplitFromDtypes is NeedsKernelSplit
     assert MissingFromNulls is MissingInputError and ParamsFromParams is ParamsError
+    assert ExprFromExpr is ExprError
 
 
 def ratio(income: float, debt: float) -> float:
@@ -61,3 +65,16 @@ def test_shared_params_of_different_types_are_an_ir_error():
 
 def test_the_package_docstring_is_a_quickstart():
     assert "flow" in decider.__doc__ and ".emit(" in decider.__doc__ and "session" in decider.__doc__
+
+
+def test_engine_registry_and_expression_failures_are_caught_by_decider_error():
+    with pytest.raises(EngineError, match="unknown mode 'jit'"):
+        Engine().bind(flow(ratio), mode="jit")
+    with pytest.raises(EngineError, match="params_validation"):
+        Engine(params_validation="sometimes")
+    with pytest.raises(EngineError, match="'ratio' is produced by this pipeline"):
+        flow(ratio).run(pl.DataFrame({"income": [1.0], "debt": [1.0], "ratio": [0.0]}))
+    with pytest.raises(RegistryError, match="not a registered"):
+        ConfigurableStep.resolve("no_such_step_type")
+    with pytest.raises(ExprError, match="not admitted"):
+        parse("__import__('os')")
