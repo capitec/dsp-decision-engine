@@ -19,9 +19,10 @@ def check_required(frame: pl.DataFrame, inputs: Sequence[Input], path: str = "")
     if not required:
         return
     # One null_count() over the whole frame is cheaper than one per column.
-    counts = dict(zip(frame.columns, frame.null_count().row(0))) if frame.height else {}
+    names = frame.columns
+    counts = dict(zip(names, frame.null_count().row(0))) if frame.height else {}
     for decl in required:
-        if decl.name not in frame.columns:
+        if decl.name not in names:
             raise MissingInputError(decl.name, path, frame.height, frame.height, absent=True)
         if counts.get(decl.name):
             raise MissingInputError(decl.name, path, counts[decl.name], frame.height)

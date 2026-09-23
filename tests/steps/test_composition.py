@@ -90,13 +90,14 @@ def test_plain_functions_have_no_pipe():
 def test_function_pipe_step_works():
     p = disposable_income | step(ratio)
     assert type(p) is SequentialStep
-    assert [s.name for s in p.steps] == ["disposable_income", "ratio"]
+    assert _paths(engine.to_ir(p)) == ["disposable_income", "ratio"]
 
 
 def test_a_pipe_chain_is_one_flow():
     p = step(disposable_income) | ratio | affordable
     assert type(p) is SequentialStep and p.name is None
-    assert [s.name for s in p.steps] == ["disposable_income", "ratio", "affordable"]
+    assert _paths(engine.to_ir(p)) == ["disposable_income", "ratio", "affordable"]
+    assert [path for path, _ in p.walk()] == ["disposable_income", "ratio", "affordable"]
 
 
 def test_a_named_flow_stays_a_unit():
@@ -108,12 +109,13 @@ def test_a_named_flow_stays_a_unit():
 
 def test_flow_and_pipe_agree():
     a, b = step(disposable_income), step(ratio)
-    assert flow(a, b).steps == (a | b).steps
+    assert engine.to_ir(flow(a, b)).children_ == engine.to_ir(a | b).children_
 
 
 def test_flow_merges_anonymous_flows():
-    inner = flow(disposable_income, ratio)
-    assert [s.name for s in flow(inner, affordable).steps] == ["disposable_income", "ratio", "affordable"]
+    inner = flow(disposable_income, ratio).emit("disposable_income")
+    ir = engine.to_ir(flow(inner, affordable))
+    assert _paths(ir) == ["disposable_income", "ratio", "affordable"] and ir.emits == ("disposable_income",)
 
 
 def test_flow_needs_a_step():
@@ -151,7 +153,7 @@ def test_emit_on_a_dag():
 
 def test_emits_of_a_merged_flow_carry_over():
     p = (step(disposable_income) | ratio).emit("disposable_income") | affordable
-    assert p.emits == ("disposable_income",)
+    assert engine.to_ir(p).emits == ("disposable_income",)
 
 
 # --- relabel ---
