@@ -323,7 +323,7 @@ class Bridge:
         self.session.replace(path, new)
         self.step = self.session.executable.step
         self.edits.append((path, new))
-        return _source_diff(old, texts, new, _TEXTS)
+        return {"diff": _source_diff(old, texts, new, _TEXTS), "formula": _formula(new.fn) if isinstance(new, FunctionStep) else None}
 
     def compare_edits(self, path=None):
         """The flow as started and with the edits made since (or only the one at `path`), each run start to end."""
@@ -385,8 +385,8 @@ class Bridge:
         if cmd == "debug_condition":
             return {"condition": debug_condition(s, **args)}
         if cmd in ("skip", "reload_step"):
-            diff = getattr(self, cmd)(**args)  # a WiringError changes nothing and comes back as the reply's error
-            return {**self.status(), "diff": diff or []}
+            edit = getattr(self, cmd)(**args) or {}  # a WiringError changes nothing and comes back as the reply's error
+            return {**self.status(), "diff": edit.get("diff", []), "formula": edit.get("formula")}
         if cmd in ("step", "step_into", "resume", "rewind", "break_at", "clear_break", "set"):
             try:
                 getattr(s, cmd)(**args)

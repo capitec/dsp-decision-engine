@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { describe, expect, it } from "vitest";
 import { compareTraces, diffDoc, paramChangeLines, paramReaders, same, type TraceResult } from "../src/compare";
-import { matchRow, substitute } from "../webview/Explain";
+import { clampNote, evaluate, matchRow, substitute } from "../webview/Explain";
 import { listRefs, materialise } from "../src/git";
 import { scenarios, summariseSweep } from "../src/sweep";
 
@@ -147,5 +147,17 @@ describe("explaining a value", () => {
     expect(diffDoc(a, b)).toEqual({ shared: { t: b.shared.t } });
     expect(paramChangeLines(diffDoc(a, b), a)).toEqual(["t row 2: r 0.3 → 0.25"]);
     expect(paramChangeLines({ shared: { repo_rate: 0.075 } }, a)).toEqual(["repo_rate: 7.75% → 7.5%"]);
+  });
+});
+
+describe("caps and floors", () => {
+  it("evaluates a limit's arithmetic and says how far off it was", () => {
+    expect(evaluate("repo_rate * cap_multiple + cap_margin", { repo_rate: 0.0775, cap_multiple: 1, cap_margin: 0.21 })).toBeCloseTo(0.2875);
+    expect(evaluate("(a + 1) * -2", { a: 2 })).toBe(-6);
+    expect(evaluate("f(a)", { a: 1 })).toBeNull();
+    const known = { pl_raw_rate: 0.252, repo_rate: 0.0775, cap_multiple: 1, cap_margin: 0.21 };
+    const inputs = [{ name: "pl_raw_rate", value: 0.252 }];
+    expect(clampNote("min(pl_raw_rate, repo_rate * cap_multiple + cap_margin)", inputs, 0.252, known)).toBe("cap 28.75%, not reached (3.55 pp below)");
+    expect(clampNote("min(pl_raw_rate, repo_rate * cap_multiple + cap_margin)", [{ name: "pl_raw_rate", value: 0.3 }], 0.2875, known)).toBe("the cap applied: 30% → 28.75%");
   });
 });

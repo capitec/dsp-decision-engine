@@ -3,12 +3,14 @@ import { same } from "../src/compare";
 import { formatValue, isRateName, recordLabel, type ParamInfo, type RecordKey } from "../src/protocol";
 import { scenarios, type Knob, type Scenario, type Sweep } from "../src/sweep";
 import { Compare } from "./Compare";
-import { parseValue } from "./Params";
+import { currentValue, parseValue } from "./Params";
 
 const MAX_SCENARIOS = 64;
 
 interface Props {
   schema: Record<string, Record<string, ParamInfo>>;
+  /** The flow's PARAMS document, to show what a param is now. */
+  values: Record<string, unknown>;
   /** Names an input knob can set: the state's columns when paused, the input columns otherwise. */
   columns: string[];
   /** The checkpoint scenarios fork from, when a session is paused. */
@@ -50,7 +52,7 @@ function knobOf(r: Row, schema: Props["schema"]): Knob | null {
 }
 
 /** Many what-ifs at once: every combination of the knobs, forked from the pause, next to the original. */
-export function Scenarios({ schema, columns, pausedAt, record, keyCol, rows, result, onRun, onOpen, onSelectStep, onCompareRevision, onOpenDiff }: Props) {
+export function Scenarios({ schema, values, columns, pausedAt, record, keyCol, rows, result, onRun, onOpen, onSelectStep, onCompareRevision, onOpenDiff }: Props) {
   const [knobs, setKnobs] = useState<Row[]>([{ kind: "param", key: "", values: "" }]);
   const [only, setOnly] = useState<number | null>(null);
   const [fromHere, setFromHere] = useState(true);
@@ -69,6 +71,10 @@ export function Scenarios({ schema, columns, pausedAt, record, keyCol, rows, res
     if (record !== null) setShownRow(record);
   }, [record]);
 
+  const currentOf = (key: string) => {
+    const [path, name] = key.split("|");
+    return currentValue(values, path, name, schema[path][name]);
+  };
   const paramKeys = Object.entries(schema).flatMap(([path, ps]) => Object.keys(ps).filter((n) => ps[n].type !== "table").map((n) => `${path}|${n}`));
   const labels = new Map(paramKeys.map((k) => [paramLabel(k), k]));
   const incomplete = knobs.map((k) => (k.text || k.key || k.values.trim() ? !knobOf(k, schema) : false));
@@ -132,7 +138,7 @@ export function Scenarios({ schema, columns, pausedAt, record, keyCol, rows, res
               aria-label="knob"
               list="knob-options"
               className={`picker ${incomplete[i] && !k.key ? "invalid" : ""}`}
-              placeholder={`type a parameter (${paramKeys.length}) or an input field (${columns.length})…`}
+              placeholder="type a parameter or an input field…"
               title={k.key.replace("|", " · ")}
               value={k.text ?? (k.kind === "param" && k.key ? paramLabel(k.key) : k.key ? `field · ${k.key}` : "")}
               onChange={(e) => {
@@ -143,6 +149,14 @@ export function Scenarios({ schema, columns, pausedAt, record, keyCol, rows, res
               }}
             />
             <button className="link" style={{ visibility: knobs.length > 1 ? "visible" : "hidden" }} onClick={() => setKnobs(knobs.filter((_, j) => j !== i))}>remove</button>
+            {knobOf(k, schema) && (
+              <div className="muted small knob-echo">tries {knobOf(k, schema)!.values.map((v) => formatValue(v, k.key.split("|").pop())).join(", ")}</div>
+            )}
+            {k.kind === "param" && k.key && (
+              <div className="muted small knob-now">
+                {k.key.split("|")[0]} · now {formatValue(currentOf(k.key), k.key.split("|")[1])}
+              </div>
+            )}
             <input aria-label="knob values" className={`values ${incomplete[i] && k.key ? "invalid" : ""}`} placeholder={k.key && isRateName(k.key.split("|").pop()) ? "values to try, e.g. 7%, 7.75%, 8.5%" : "values to try, e.g. 24, 36, 48"} value={k.values} onChange={(e) => set(i, { values: e.target.value })} />
           </div>
         ))}
@@ -213,7 +227,7 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
   const knobCols = sweep.knobs.length ? sweep.knobs : [{ name: "scenario", values: sweep.labels }];
   const summary = row === -1;
   const each = row === -2;
-  const cols = summary ? [...outcomes, ...changedCols.filter((c) => categorical(sweep.base?.[c])), ...changedCols.filter((c) => !categorical(sweep.base?.[c]))] : changedCols;
+  const cols = summary ? [...changedCols.filter((c) => categorical(sweep.base?.[c])), ...changedCols.filter((c) => !categorical(sweep.base?.[c]))] : changedCols;
   // Side by side, the records some scenario changed come first; a few fit.
   const hit = (r: number) => sweep.comparisons.some((cmp) => cmp.output.some((o) => o.changedRows.includes(r)));
   const everyRow = Array.from({ length: rows }, (_, i) => i);
@@ -259,7 +273,10 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
     return (
       <td key={c} className="changed mono" title={`changed for ${recordsOf(diff.changedRows)}; original: ${overall(sweep.base?.[c])}`}>
         {numeric ? (
-          `${diff.changedRows.length} · ${delta(c, i, diff.changedRows)}`
+          <>
+            <div>{diff.changedRows.length} rec.</div>
+            <div className="small">avg {delta(c, i, diff.changedRows)}</div>
+          </>
         ) : (
           overall(sweep.outputs[i]?.[c], sweep.base?.[c])
         )}
@@ -290,11 +307,12 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
         </select>
       </div>
       <p className="hint">
-        One row per scenario; click one to see what changed, step by step.{summary ? " A changed cell reads “records changed · average change of those records”." : ""}
+        One row per scenario; click one to see what changed, step by step.{summary ? " “3 rec. / avg −R 5,303.95” means 3 records changed, by −R 5,303.95 on average." : ""}
       </p>
       {cols.length === 0 ? (
         <div className="muted">No scenario changes any result.</div>
       ) : (
+        <div className="sweep-scroll">
         <table className="sweep">
           <thead>
             {each && (
@@ -313,7 +331,6 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
                 cols.map((c) => (
                   <th key={`${c}-${r}`}>
                     {c}
-                    {summary && !outcomes.includes(c) && !categorical(sweep.base?.[c]) && <div className="muted small">records changed · avg change</div>}
                   </th>
                 )),
               )}
@@ -337,10 +354,11 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
             ))}
           </tbody>
         </table>
+        </div>
       )}
-      {summary && outcomes.filter((c) => !sweep.comparisons.some((cmp) => cmp.output.some((o) => o.name === c))).map((c) => (
-        <div key={c} className="muted small">
-          <span className="mono">{c}</span> is the same in every scenario.
+      {summary && outcomes.map((c) => (
+        <div key={c} className="muted">
+          <span className="mono">{c}</span> is the same in every scenario: {overall(sweep.base?.[c])}.
         </div>
       ))}
     </section>
