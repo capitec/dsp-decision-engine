@@ -10,7 +10,10 @@ from decider.steps.trees.ops import EQ, GE, GT, LE, LT
 
 # Program row kinds, and the columns of a program row.
 LEAF, CMP_F, CMP_I, CMP_B, CMP_E, MATCH = range(6)
-KIND, FEAT, OP, THR, THEN, ELSE = range(6)
+KIND, FEAT, OP, THR, THEN, ELSE, UNKNOWN = range(7)
+WIDTH = 7
+# A null int feature arrives as this; a null float as NaN; a null bool as None.
+NULL_INT = -(2**63)
 # How a MATCH row compares a string with its patterns.
 EXACT, PREFIX, SUFFIX, CONTAINS = range(4)
 # Where each part of the program starts: the fields of `Program.layout`.
@@ -18,6 +21,8 @@ PROG, THR_I, ROOTS, N_ROOTS, EXPR_CODE, EXPR_STARTS, PAT_STARTS, PAT_GROUPS, THR
 
 
 def _kind(t) -> int:
+    if isinstance(t, types.Optional):
+        t = t.type
     if isinstance(t, types.Boolean):
         return 2
     if isinstance(t, types.Integer):
@@ -94,8 +99,6 @@ def _matches(s, n, p, m, mode):
 @njit
 def _match(op, span, g, ps, ints, chars, lay):
     addr, n = span
-    if n < 0:
-        return False
     if g < 0:
         p, m = ps[-g - 1]
         return _matches(addr, n, p, m, op)
@@ -111,17 +114,29 @@ def _match(op, span, g, ps, ints, chars, lay):
 def _walk(pc, ctx):
     f, i, b, s, pf, pi, ps, ints, floats, chars, lay = ctx
     while True:
-        row = lay[PROG] + 6 * pc
+        row = lay[PROG] + WIDTH * pc
         k = _i(ints, row + KIND)
         if k == LEAF:
             return _i(ints, row + FEAT)
         j, op, t = _i(ints, row + FEAT), _i(ints, row + OP), _i(ints, row + THR)
-        # A negative threshold slot is a param: slot -1 is the first of its kind.
+        # A null feature takes the row's UNKNOWN target, which the encoder points at
+        # the branch that null takes; a negative threshold slot is a param: -1 the first of its kind.
         if k == CMP_I:
-            r = _compare(op, i[j], _i(ints, lay[THR_I] + t) if t >= 0 else pi[-t - 1])
+            xi = i[j]
+            if xi == NULL_INT:
+                pc = _i(ints, row + UNKNOWN)
+                continue
+            r = _compare(op, xi, _i(ints, lay[THR_I] + t) if t >= 0 else pi[-t - 1])
         elif k == CMP_B:
-            r = _compare(op, b[j], _i(ints, lay[THR_I] + t) != 0)
+            y = b[j]
+            if y is None:
+                pc = _i(ints, row + UNKNOWN)
+                continue
+            r = _compare(op, y, _i(ints, lay[THR_I] + t) != 0)
         elif k == MATCH:
+            if s[j][1] < 0:
+                pc = _i(ints, row + UNKNOWN)
+                continue
             r = _match(op, s[j], t, ps, ints, chars, lay)
         else:
             if k == CMP_F:
@@ -130,6 +145,10 @@ def _walk(pc, ctx):
                 start = _i(ints, lay[EXPR_STARTS] + j)
                 x = evaluate(ints + 8 * lay[EXPR_CODE], start, _i(ints, lay[EXPR_STARTS] + j + 1),
                              floats + 8 * lay[EXPR_CONSTS], f, lay[EXPR_DEPTH])
+            # A null float, and so a computed feature over one, is NaN.
+            if x != x:
+                pc = _i(ints, row + UNKNOWN)
+                continue
             r = _compare(op, x, _f(floats, lay[THR_F] + t) if t >= 0 else pf[-t - 1])
         pc = _i(ints, row + THEN) if r else _i(ints, row + ELSE)
 
