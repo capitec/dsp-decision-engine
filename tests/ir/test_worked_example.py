@@ -1,37 +1,21 @@
-# The pipeline of the spec's worked example, verbatim apart from the tree:
-# trees arrive later, so `TreeConfig` here is a stub emitting one row node.
-# No `from __future__ import annotations`: the stub's pydantic fields are
-# resolved against its (fake) module, which doesn't exist.
+# The pipeline of the spec's worked example, verbatim; the tree document is inline.
 import json
 
 import polars as pl
 
 from decider import branch, dag, engine, flow, frame_step, missing_as, param, step
-from decider.engine.ir.decls import Input, Output, ParamDecl
 from decider.engine.ir.nodes import CallNode
-from decider.steps import ConfigurableStep, ParamRef, Value
+from decider.steps.trees import TreeConfig
 
-
-class TreeConfig(ConfigurableStep):
-    __module__ = "decider.steps.trees"
-    threshold: Value[float] = 0.5
-
-    def to_ir(self, ctx):
-        threshold = ctx.value(self.threshold, float)
-        params, consts = ((threshold,), ()) if isinstance(threshold, ParamDecl) else ((), (("threshold", threshold),))
-        return CallNode(
-            ctx.origin(self), "row", _tree_kernel, (Input("ratio", float),), (Output("risk_band", int),),
-            params, reference=_tree_reference, consts=consts,
-        )
-
-
-def _tree_kernel(row, params, consts):
-    return (int(row[0] > (params or consts)[0]),)
-
-
-def _tree_reference(row, params, consts, visit):
-    visit("n0")
-    return _tree_kernel(row, params, consts)
+RISK_TREE = """
+{"type": "tree", "name": "risk_tree", "tree": {
+  "nodes": [
+    {"id": "n0", "data": {"type": "unary", "condition":
+      {"op": ">", "feature": "ratio", "threshold": {"param": "hi_thresh", "default": 0.7}}}},
+    {"id": "n1", "data": {"type": "leaf", "result_idx": 0}}],
+  "edges": [{"source": "n0", "target": "n1", "data": {"sourceIndex": 0}}],
+  "output": {"data": [{"risk_band": 1}], "default": {"risk_band": 0}, "dtypes": [["risk_band", "Int64"]]}}}
+"""
 
 
 BUREAU = pl.DataFrame({"client_id": [1], "bureau_score": [700]})
@@ -99,10 +83,7 @@ for _fn in (disposable_income, ratio, affordable, term_cap, is_private, cap_by_i
             cap_public.fn, banding.fn, join_bureau.fn):
     _fn.__module__ = "app.pipeline"
 
-risk_tree = TreeConfig.model_validate_json(
-    '{"type": "decider.steps.trees:TreeConfig", "name": "risk_tree",'
-    ' "threshold": {"param": "hi_thresh", "default": 0.7}}'
-)
+risk_tree = TreeConfig.load(RISK_TREE)
 
 pipeline = (join_bureau | affordability | banding | term | risk_tree).emit("term_cap@*")
 
