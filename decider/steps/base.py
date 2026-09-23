@@ -111,9 +111,21 @@ class Step(ABC):
 
         return Engine().bind(self).run(data, **kwargs)
 
-    def session(self, data: Any, **kwargs: Any) -> Any:
-        """Open a debug session over a frame."""
-        raise NotImplementedError("debug sessions are not built yet")
+    def session(self, data: Any, params: Any = None, mode: str = "interpreted", **engine_kwargs: Any) -> Any:
+        """Open a debug `Session` over a polars frame; `engine_kwargs` go to `Engine` (e.g. `params_validation=`).
+
+        Example::
+
+            s = pipeline.session(df)
+            s.break_at("term/cap_by_income")
+            s.resume()
+            s.set("term_cap", 36.0)
+            s.resume()
+            s.output()
+        """
+        from decider.engine import Engine
+
+        return Engine(**engine_kwargs).bind(self, mode).session(data, params)
 
 
 def _walk(step: Step, parent: str) -> Iterator[tuple[str, Step]]:
