@@ -2,7 +2,9 @@ import { execFileSync } from "node:child_process";
 import * as path from "node:path";
 import { describe, expect, it } from "vitest";
 import type { DescribeResult } from "../src/protocol";
-import { dataEdges, layout, orderEdges } from "../webview/layout";
+import { callNodes } from "../src/protocol";
+import { findSteps } from "../webview/FindStep";
+import { dataEdges, fold, layout, orderEdges } from "../webview/layout";
 
 const ROOT = path.resolve(__dirname, "..");
 const ir: DescribeResult["ir"] = JSON.parse(
@@ -44,5 +46,26 @@ describe("graph edges", () => {
       expect(n.y + n.height).toBeLessThanOrEqual(cluster.y + cluster.height + 0.01);
     }
     expect(l.width).toBeGreaterThan(0);
+  });
+});
+
+describe("large flows", () => {
+  it("a folded group is one box, wired in order like a step", () => {
+    const folded = fold(ir, (p) => p !== "term");
+    const l = layout(folded);
+    expect(l.nodes.map((n) => n.path)).toContain("term");
+    expect(l.nodes.map((n) => n.path)).not.toContain("term/cap_by_income");
+    const box = l.nodes.find((n) => n.path === "term")!.node as { folded?: string[] };
+    expect(box.folded).toContain("term/by_sector/cap_public");
+    const edges = orderEdges(folded).map((e) => `${e.from} -> ${e.to}`);
+    expect(edges).toContain("banding -> term");
+    expect(edges).toContain("term -> sizing/offer");
+  });
+
+  it("find matches a step's description word by word, name hits first", () => {
+    const nodes = callNodes(ir).map((n) => (n.path === "term/cap_by_income" ? { ...n, doc: "Cap the term for low earners." } : n));
+    expect(findSteps(nodes, "low earners term")[0].path).toBe("term/cap_by_income");
+    expect(findSteps(nodes, "cap")[0].path.split("/").pop()).toMatch(/cap/);
+    expect(findSteps(nodes, "nothing like this")).toEqual([]);
   });
 });

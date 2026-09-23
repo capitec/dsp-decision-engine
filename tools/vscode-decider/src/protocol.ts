@@ -21,6 +21,8 @@ export interface CallNodeJson extends IRNodeBase {
   python: { file: string; line: number; bodyLine: number | null } | null;
   /** Changes when the code or config behind the node changes. */
   code: string;
+  /** The first line of the step's docstring. */
+  doc?: string;
 }
 
 export interface GroupNodeJson extends IRNodeBase {
@@ -29,6 +31,8 @@ export interface GroupNodeJson extends IRNodeBase {
   carries?: string[];
   maxIterations?: number;
   children: IRNodeJson[];
+  /** Set on a group drawn folded: the paths of the steps inside it. */
+  folded?: string[];
 }
 
 export type IRNodeJson = CallNodeJson | GroupNodeJson;
@@ -39,6 +43,8 @@ export interface DescribeResult {
   ir: IRNodeJson;
   /** Node path (or "shared") -> param name -> its type, default and bounds. */
   params: Record<string, Record<string, ParamInfo>>;
+  /** The module's `PARAMS` document: the values the flow runs with (tables' rows included). */
+  values?: Record<string, unknown>;
 }
 
 export interface ParamInfo {
@@ -102,6 +108,8 @@ export interface RunStatus {
   finishedPaths: string[];
   visits: Visits;
   record: number | null;
+  /** Steps edited in this run: path -> "delete" (skipped) or "replace" (swapped for edited code). */
+  edits?: Record<string, "delete" | "replace">;
 }
 
 export interface ColumnHistory {
@@ -147,6 +155,8 @@ export type FromWebview =
   | { type: "lineage"; name: string }
   | { type: "treePath"; path: string }
   | { type: "rewind"; path: string }
+  | { type: "skip"; path: string }
+  | { type: "reloadStep"; path: string }
   | { type: "whatIf"; params: unknown; overrides: Record<string, unknown>; row: number | null; label: string }
   | { type: "restartWith"; params: unknown }
   | { type: "compareRevision" }

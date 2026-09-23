@@ -77,6 +77,7 @@ export class DeciderDebugSession extends LoggingDebugSession {
   private finished = false;
   private finishedPaths: string[] = [];
   private visits: Visits = {};
+  private edits: Record<string, "delete" | "replace"> = {};
   private record: number | null = null;
   private handles = new Handles<VarRef>();
   private frameIds = new Map<number, string>();
@@ -152,6 +153,7 @@ export class DeciderDebugSession extends LoggingDebugSession {
     const a = this.launchArgs!;
     this.finishedPaths = [];
     this.visits = {};
+    this.edits = {};
     const status = await this.bridge!.request<Status>("start", {
       file: a.program,
       pipeline: a.pipeline,
@@ -219,7 +221,7 @@ export class DeciderDebugSession extends LoggingDebugSession {
   }
 
   private apply(status: Status, stop: boolean, reason?: string) {
-    const read = readEvents(status.events, this.nodes, this.visits, this.finishedPaths);
+    const read = readEvents(status.events, this.nodes, this.visits, this.finishedPaths, this.edits);
     for (const [text, category] of read.lines) this.sendEvent(new OutputEvent(text, category));
     const paused = reason ?? read.paused;
     this.current = status.current;
@@ -235,7 +237,7 @@ export class DeciderDebugSession extends LoggingDebugSession {
   private refresh() {
     this.stateCache = undefined;
     this.handles.reset();
-    const body: RunStatus = { current: this.current, finished: this.finished, finishedPaths: this.finishedPaths, visits: this.visits, record: this.record };
+    const body: RunStatus = { current: this.current, finished: this.finished, finishedPaths: this.finishedPaths, visits: this.visits, record: this.record, edits: this.edits };
     this.sendEvent(new Event("decider.status", body));
   }
 
@@ -461,6 +463,13 @@ export class DeciderDebugSession extends LoggingDebugSession {
         case "decider.column":
           response.body = await this.bridge!.request("column", { name: args.name, row: this.record });
           break;
+        case "decider.skip":
+        case "decider.reloadStep": {
+          // A wiring error rejects the request and leaves the run as it was.
+          const status = await this.bridge!.request<Status>(command === "decider.skip" ? "skip" : "reload_step", { path: args.path });
+          this.sendResponse(response);
+          return this.apply(status, true, "edit");
+        }
         case "decider.rewind":
           this.sendResponse(response);
           return void (await this.run("rewind", { path: args.path }));

@@ -22,10 +22,22 @@ interface Props {
   /** The comparison the graph is coloured by, if any: params show both sides. */
   comparison: Comparison | null;
   onOpenDiff: (path: string) => void;
+  /** The flow's PARAMS document, where lookup tables keep their rows. */
+  values: Record<string, unknown>;
+  onSkip: (path: string) => void;
+  onReload: (path: string) => void;
+}
+
+/** A decision table's rows, when `node` is one whose rows are a shared param. */
+function tableOf(node: CallNodeJson, values: Record<string, unknown>): { name: string; rows: Record<string, unknown>[] } | null {
+  if (!node.source.includes("DecisionTable")) return null;
+  const shared = (values.shared ?? {}) as Record<string, unknown>;
+  const name = Object.keys(node.params).find((k) => Array.isArray(shared[k]));
+  return name ? { name, rows: shared[name] as Record<string, unknown>[] } : null;
 }
 
 /** The details pane: the selected step, then the picked column's lineage and history. */
-export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, lineage, history, treePath, onPick, onSelect, onReveal, onRewind, onRunTo, onStep, comparison, onOpenDiff }: Props) {
+export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, lineage, history, treePath, onPick, onSelect, onReveal, onRewind, onRunTo, onStep, comparison, onOpenDiff, values, onSkip, onReload }: Props) {
   const visits = node && run.visits[node.path];
   const who = run.record === null ? null : recordLabel(run.record, keyCol);
   const valueOf = (name: string) => {
@@ -37,17 +49,30 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
   const paused = run.current && !run.finished;
   const ran = !!node && run.finishedPaths.includes(node.path);
   const card = lineage && lineage.name === column ? lineage : null;
+  const table = node ? tableOf(node, values) : null;
+  const pane = useRef<HTMLElement>(null);
+  // A newly selected step starts at the top of the pane, not where the last one was scrolled to.
+  useEffect(() => pane.current?.scrollTo(0, 0), [node?.path]);
   const atThis = !!node && run.current?.path === node.path && run.current.when === "before" && !run.finished;
   const name = node?.path.split("/").pop();
   const change = comparison && node ? comparison.steps.find((s) => s.path === node.path && s.status !== "same" && s.status !== "not run") : undefined;
   return (
-    <aside className={node || card ? "" : "strip"}>
+    <aside ref={pane} className={node || card ? "" : "strip"}>
       <button className="close link" title="Hide details" onClick={onClose}>✕</button>
       {node ? (
         <>
           <h3>{name} {node.path !== name && <span className="muted">in {node.path.slice(0, -(name?.length ?? 0) - 1)}</span>}</h3>
-          <div className="muted" title={node.source}>{KIND[node.callKind]}</div>
-          {path && (
+          <div className="muted" title={node.source}>{KIND[node.callKind]}{node.doc ? ` · ${node.doc}` : ""}</div>
+          {run.edits?.[node.path] && (
+            <div className="edited-note">{run.edits[node.path] === "delete" ? "Skipped in this run: the steps after it ran without it." : "Running your edited code in this run."}</div>
+          )}
+          {path && table && (
+            <>
+              <h4>Row for {who}</h4>
+              <TableMatch table={table} visited={path.visited} result={path.result} outputs={node.outputs ?? []} inputs={(node.inputs ?? []).map((i) => `${i} = ${valueOf(i) ?? "?"}`)} />
+            </>
+          )}
+          {path && !table && (
             <>
               <h4>Path for {who}</h4>
               <div className="tree-path">
@@ -68,7 +93,13 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
           )}
           <div className="actions">
             <button onClick={() => onReveal(node.path)}>Open source</button>
-            {atThis ? (
+            {paused && !run.edits?.[node.path] && (
+              <>
+                <button title="Take this step out of the paused run and re-run from where it was; the source is not changed" onClick={() => onSkip(node.path)}>Skip {name}</button>
+                <button title="Save your change to this step's code first: reloads the file and runs the edited step in its place, from here" onClick={() => onReload(node.path)}>Use edited code</button>
+              </>
+            )}
+            {run.edits?.[node.path] === "delete" ? null : atThis ? (
               <button className="primary" onClick={onStep} title="Run this step and pause just after it">Run through {name}</button>
             ) : ran && paused ? (
               <button onClick={() => onRewind(node.path)} title="Run the flow again from this step, keeping the values before it">Re-run from {name}</button>
@@ -111,6 +142,7 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
               <h4>Params</h4>
               {comparison && <div className="muted">baseline → variant</div>}
               {Object.entries(node.params).map(([k, v]) => {
+                if (table?.name === k) return <div key={k} className="mono">{k} = lookup table, {table.rows.length} rows <span className="muted small">(edit its rows in What-if)</span></div>;
                 const [a, b] = comparison ? sides(comparison, node, k, v) : [v, v];
                 return (
                   <div key={k} className="mono">
@@ -267,4 +299,39 @@ function sides(c: Comparison, node: CallNodeJson, name: string, value: unknown):
   };
   const [da, db] = declared ? declared.slice(name.length + 2).split(" → ").map(parse) : [value, value];
   return [pick(c.paramsDocs?.a)?.[name] ?? da, pick(c.paramsDocs?.b)?.[name] ?? db];
+}
+
+/** Which row of a lookup table a record matched, with the rows around it. */
+function TableMatch({ table, visited, result, outputs, inputs }: { table: { name: string; rows: Record<string, unknown>[] }; visited: string[]; result?: unknown[]; outputs: string[]; inputs: string[] }) {
+  const tried = visited.map(Number).filter((n) => !Number.isNaN(n));
+  const last = tried.length ? tried[tried.length - 1] : -1;
+  const row = table.rows[last];
+  // The reference stops at the first row that matches; if the result isn't that row's, no row matched.
+  const matched = row !== undefined && outputs.every((o, i) => result === undefined || same(row[o], result[i]));
+  const cols = Object.keys(table.rows[0] ?? {});
+  return (
+    <div className="table-match">
+      <div>
+        {matched ? <>Matched row <strong>{last + 1}</strong> of <span className="mono">{table.name}</span></> : <>No row of <span className="mono">{table.name}</span> matched: the default applies</>}
+        {result && <> → <strong>{outputs.map((o, i) => `${o} = ${formatValue(result[i])}`).join(", ")}</strong></>}
+      </div>
+      <div className="muted small">with {inputs.join(", ")}</div>
+      <table className="table-grid">
+        <thead>
+          <tr>
+            <th>#</th>
+            {cols.map((c) => <th key={c}>{c}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {table.rows.map((r, i) => (
+            <tr key={i} className={matched && i === last ? "matched" : tried.includes(i) ? "tried" : ""}>
+              <td className="muted small">{i + 1}</td>
+              {cols.map((c) => <td key={c} className="mono">{formatValue((r[c] ?? null) as never)}</td>)}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }

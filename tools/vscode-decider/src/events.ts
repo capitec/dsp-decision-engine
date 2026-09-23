@@ -7,7 +7,7 @@ export interface Read {
 }
 
 /** Fold session events into `visits` and `finishedPaths`, and render what the console shows. */
-export function readEvents(events: SessionEvent[], nodes: Map<string, IRNodeJson>, visits: Visits, finishedPaths: string[]): Read {
+export function readEvents(events: SessionEvent[], nodes: Map<string, IRNodeJson>, visits: Visits, finishedPaths: string[], edits: Record<string, "delete" | "replace"> = {}): Read {
   const read: Read = { lines: [] };
   for (const ev of events) {
     const p = ev.origin?.path ?? "";
@@ -38,6 +38,10 @@ export function readEvents(events: SessionEvent[], nodes: Map<string, IRNodeJson
         break;
       case "paused":
         read.paused ??= ev.reason as string;
+        break;
+      case "edited":
+        edits[ev.path as string] = ev.action as "delete" | "replace";
+        read.lines.push([`${ev.action === "delete" ? "skipped" : "swapped in edited code for"} ${ev.path}; re-running from there\n`, "console"]);
         break;
     }
   }

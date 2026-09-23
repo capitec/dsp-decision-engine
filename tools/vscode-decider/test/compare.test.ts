@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { describe, expect, it } from "vitest";
-import { compareTraces, same, type TraceResult } from "../src/compare";
+import { compareTraces, paramReaders, same, type TraceResult } from "../src/compare";
 import { listRefs, materialise } from "../src/git";
 import { scenarios, summariseSweep } from "../src/sweep";
 
@@ -112,5 +112,16 @@ describe("git revisions", () => {
     expect(fs.readFileSync(path.join(dir, "flow.py"), "utf8")).toBe("v = 1\n");
     expect(await materialise(repo, "v1", cache)).toBe(dir);
     expect(fs.readFileSync(path.join(repo, "flow.py"), "utf8")).toBe("v = 2\n");
+  });
+});
+
+describe("param readers", () => {
+  it("a shared param is read by the steps that declare it; a step param by its step", () => {
+    const doc = { shared: { repo_rate: 0.075, pl_base_rates: [{ rate: 1 }] }, term: { cap_by_income: { cap: 42 } } };
+    expect(paramReaders(doc, { repo_rate: ["a/x", "b/y"] })).toEqual([
+      { param: "repo_rate", steps: ["a/x", "b/y"] },
+      { param: "pl_base_rates", steps: [] },
+      { param: "cap", steps: ["term/cap_by_income"] },
+    ]);
   });
 });

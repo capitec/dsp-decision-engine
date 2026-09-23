@@ -47,6 +47,20 @@ const lens = (c: Codium, title: string) => c.page.locator(".codelens-decoration 
 const wv = (c: Codium) => c.webview();
 const tab = (c: Codium, name: string) => wv(c).locator("header nav button", { hasText: name }).click();
 
+/** Type into the graph's find box and take the first hit. */
+async function find(c: Codium, query: string) {
+  const box = wv(c).locator('input[aria-label="Find a step"]');
+  await box.fill(query);
+  await wv(c).locator(".find-hits li").first().waitFor({ timeout: 10_000 });
+  await box.press("Enter");
+}
+
+/** Run to the selected step and wait for the pause. */
+async function runTo(c: Codium) {
+  await wv(c).locator("aside button", { hasText: /^Run to/ }).first().click({ timeout: 10_000 });
+  await wv(c).locator(".pause-banner:not(.pending)").waitFor({ timeout: 180_000 });
+}
+
 /** Open the flow file and draw the flow. */
 async function visualise(c: Codium) {
   await keys(c, "Control+P", FILE);
@@ -69,13 +83,14 @@ describe("large flow stories", () => {
       async (c, shot) => {
         await visualise(c);
         await shot("After opening bank/pipeline.py and clicking 'Visualise flow' on the 1,000-step flow.");
-        await wv(c).locator(".find input, input[aria-label='Find a step']").first().fill("sector_4_max_loan").catch(() => undefined);
-        await shot("Looking for a way to find the rule by name (typed into a find box if there is one).");
-        const node = wv(c).locator("svg .node", { hasText: "pl_sector_4_max_loan_to_income" }).first();
-        await node.click({ timeout: 15_000 }).catch(() => undefined);
-        await shot("After trying to select pl_sector_4_max_loan_to_income.");
-        await wv(c).locator("aside button", { hasText: "Open source" }).first().click({ timeout: 10_000 }).catch(() => undefined);
-        await shot("After 'Open source' in the details, if the step could be selected.");
+        await wv(c).locator('input[aria-label="Find a step"]').fill("too large for income sector 4");
+        await wv(c).locator(".find-hits li").first().waitFor({ timeout: 10_000 });
+        await shot("Typed the words of the decline reason, 'too large for income sector 4', into the graph's find box.");
+        await wv(c).locator('input[aria-label="Find a step"]').press("Enter");
+        await shot("After pressing Enter on the first hit.");
+        await wv(c).locator("aside button", { hasText: "Open source" }).first().click({ timeout: 10_000 });
+        await c.page.waitForTimeout(1000);
+        await shot("After 'Open source' in the step's details.");
       },
     );
   }, 300_000);
@@ -89,16 +104,13 @@ describe("large flow stories", () => {
         await lens(c, "What-if").click({ timeout: 90_000 });
         await wv(c).locator(".params").waitFor({ timeout: 60_000 });
         await shot("After clicking 'What-if' above the pipeline: the params of the whole flow.");
-        await wv(c).locator(".params tr.group", { hasText: "pl_base_rates" }).first().scrollIntoViewIfNeeded({ timeout: 10_000 }).catch(() => undefined);
-        await shot("After scrolling to the pl_base_rates lookup table's parameters.");
-        const rows = wv(c).locator('input[aria-label="pl_base_rates rows"], textarea[aria-label="pl_base_rates rows"]').first();
-        const text = await rows.inputValue({ timeout: 10_000 }).catch(() => "");
-        if (text) await rows.fill(text.replace("0.255", "0.245"));
-        await wv(c).locator('[aria-label="pl_base_rates 49-84 rate"]').first().fill("0.245").catch(() => undefined);
-        await shot("After trying to change the 49 to 84 month rate from 0.255 to 0.245.");
-        await wv(c).locator("button", { hasText: "Compare with defaults" }).click({ timeout: 10_000 }).catch(() => undefined);
-        await wv(c).locator(".compare .verdict").waitFor({ timeout: 120_000 }).catch(() => undefined);
-        await shot("The comparison, if one ran.");
+        await wv(c).locator('input[aria-label="Filter params"]').fill("pl_base_rates");
+        await shot("Typed pl_base_rates into the params filter.");
+        await wv(c).locator('input[aria-label="pl_base_rates row 3 pl_base_rate"]').fill("0.245");
+        await shot("Changed the 49 to 84 month rate (row 3) from 0.255 to 0.245.");
+        await wv(c).locator("button", { hasText: "Run and compare" }).click({ timeout: 10_000 });
+        await wv(c).locator(".compare .verdict").waitFor({ timeout: 120_000 });
+        await shot("The comparison after 'Run and compare'.");
       },
     );
   }, 400_000);
@@ -109,18 +121,17 @@ describe("large flow stories", () => {
       "A credit analyst is asked why client 20400, a personal loan applicant, was quoted the rate she was: which row of the base rate table applied, what risk loading and discounts were added, and whether the regulatory cap kicked in.",
       async (c, shot) => {
         await visualise(c);
-        const node = wv(c).locator("svg .node", { hasText: "pl_regulated_rate" }).first();
-        await node.click({ timeout: 15_000 }).catch(() => undefined);
-        await shot("After trying to select the pl_regulated_rate step in the graph.");
-        await wv(c).locator("aside button", { hasText: /^Run to/ }).first().click({ timeout: 10_000 }).catch(() => undefined);
-        await wv(c).locator(".pause-banner").waitFor({ timeout: 120_000 }).catch(() => undefined);
-        await shot("After 'Run to pl_regulated_rate', if it could be selected.");
-        await wv(c).locator("select[aria-label=record]").selectOption({ label: "client_id 20400" }).catch(() => undefined);
-        await wv(c).locator(".chip", { hasText: "pl_raw_rate" }).first().click({ timeout: 10_000 }).catch(() => undefined);
-        await shot("After focusing client_id 20400 and clicking the pl_raw_rate input.");
-        await tab(c, "State");
-        await wv(c).locator(".state input").fill("pl_base_rates").catch(() => undefined);
-        await shot("The State tab filtered to pl_base_rates, looking for which table row matched.");
+        await find(c, "pl_regulated_rate");
+        await shot("Found pl_regulated_rate with the find box.");
+        await runTo(c);
+        await shot("After 'Run to pl_regulated_rate': the run paused there.");
+        await wv(c).locator("select[aria-label=record]").selectOption({ label: "client_id 20400" });
+        await wv(c).locator(".chip", { hasText: "pl_raw_rate" }).first().click({ timeout: 10_000 });
+        await wv(c).locator(".how").first().waitFor({ timeout: 20_000 }).catch(() => undefined);
+        await shot("Focused client_id 20400 and clicked the pl_raw_rate input: how it was computed.");
+        await find(c, "pl_base_rates");
+        await wv(c).locator(".table-match").waitFor({ timeout: 20_000 }).catch(() => undefined);
+        await shot("Selected the pl_base_rates lookup table step: which row matched for client_id 20400.");
       },
     );
   }, 400_000);
@@ -134,12 +145,12 @@ describe("large flow stories", () => {
         await lens(c, "What-if").click({ timeout: 90_000 });
         await wv(c).locator(".params").waitFor({ timeout: 60_000 });
         await shot("After clicking 'What-if': every parameter of the flow.");
-        const input = wv(c).locator('input[aria-label="shared repo_rate"]').first();
-        await input.scrollIntoViewIfNeeded({ timeout: 10_000 }).catch(() => undefined);
-        await shot("After scrolling to find repo_rate.");
-        await input.fill("0.075").catch(() => undefined);
-        await wv(c).locator("button", { hasText: "Compare with defaults" }).click({ timeout: 10_000 }).catch(() => undefined);
-        await wv(c).locator(".compare .verdict").waitFor({ timeout: 120_000 }).catch(() => undefined);
+        await wv(c).locator('input[aria-label="Filter params"]').fill("repo_rate");
+        await wv(c).locator("details.used-by summary").first().click();
+        await shot("Filtered to repo_rate and opened 'used by' to see which steps read it.");
+        await wv(c).locator('input[aria-label="shared repo_rate"]').first().fill("0.075");
+        await wv(c).locator("button", { hasText: "Run and compare" }).click({ timeout: 10_000 });
+        await wv(c).locator(".compare .verdict").waitFor({ timeout: 120_000 });
         await shot("The comparison after changing repo_rate to 0.075.");
       },
     );
@@ -153,17 +164,49 @@ describe("large flow stories", () => {
         await visualise(c);
         await tab(c, "Scenarios");
         await shot("The Scenarios tab on the large flow.");
-        await wv(c).locator('select[aria-label="knob"]').first().selectOption("shared|repo_rate").catch(() => undefined);
-        await wv(c).locator('input[aria-label="knob values"]').first().fill("0.07, 0.0775, 0.085").catch(() => undefined);
-        await wv(c).locator("button", { hasText: "+ add another" }).click().catch(() => undefined);
-        await wv(c).locator('select[aria-label="knob kind"]').nth(1).selectOption("param").catch(() => undefined);
-        await wv(c).locator('select[aria-label="knob"]').nth(1).selectOption("product/personal_loan/limits/pl_product_cap|cap").catch(() => undefined);
-        await wv(c).locator('input[aria-label="knob values"]').nth(1).fill("250000, 350000").catch(() => undefined);
-        await shot("After choosing repo_rate and the personal loan product cap as knobs.");
-        await wv(c).locator("button", { hasText: /^Run 6 scenarios/ }).click({ timeout: 10_000 }).catch(() => undefined);
-        await wv(c).locator("table.sweep").waitFor({ timeout: 180_000 }).catch(() => undefined);
+        await wv(c).locator('input[aria-label="knob"]').first().fill("repo_rate · shared");
+        await wv(c).locator('input[aria-label="knob values"]').first().fill("0.07, 0.0775, 0.085");
+        await wv(c).locator("button", { hasText: "+ add another" }).click();
+        await wv(c).locator('select[aria-label="knob kind"]').nth(1).selectOption("param");
+        await wv(c).locator('input[aria-label="knob"]').nth(1).fill("cap · pl_product_cap (personal_loan/limits)");
+        await wv(c).locator('input[aria-label="knob values"]').nth(1).fill("250000, 350000");
+        await shot("After typing repo_rate and the personal loan product cap into the two knob pickers, with values.");
+        await wv(c).locator("button", { hasText: /^Run 6 scenarios/ }).click({ timeout: 10_000 });
+        await wv(c).locator("table.sweep").waitFor({ timeout: 180_000 });
         await shot("The results of the six scenarios across 40 applications.");
       },
+    );
+  }, 500_000);
+
+  it("skip a step and swap in edited code mid-run", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "decider-bank-"));
+    fs.cpSync(path.join(ROOT, "examples", "bank"), path.join(dir, "bank"), { recursive: true });
+    fs.mkdirSync(path.join(dir, ".vscode"));
+    fs.writeFileSync(path.join(dir, ".vscode", "settings.json"), JSON.stringify({ "decider.python": ["uv", "run", "--project", path.resolve(ROOT, "..", ".."), "python"] }));
+    const pricing = path.join(dir, "bank", "products", "personal_loan", "pricing.py");
+    await story(
+      "L7-skip-and-swap-mid-run",
+      "A pricing developer is debugging the personal loan rate. Mid-run, without restarting the 1,000-step flow, she wants to see the offers without the rate floor step, then try a tighter cap by editing pl_regulated_rate's code and running the edited version from there.",
+      async (c, shot) => {
+        await visualise(c);
+        await find(c, "pl_rate_floor");
+        await runTo(c);
+        await shot("Paused before pl_rate_floor after 'Run to pl_rate_floor'.");
+        await wv(c).locator("aside button", { hasText: /^Skip / }).click();
+        await wv(c).locator(".pause-banner:not(.pending)").waitFor({ timeout: 60_000 });
+        await find(c, "pl_rate_floor");
+        await shot("After 'Skip pl_rate_floor': the run re-ran from there without it.");
+        fs.writeFileSync(pricing, fs.readFileSync(pricing, "utf8").replace("return min(pl_raw_rate, repo_rate * cap_multiple + cap_margin)", "return min(pl_raw_rate, repo_rate * cap_multiple + cap_margin - 0.01)"));
+        await find(c, "pl_regulated_rate");
+        await wv(c).locator("aside button", { hasText: "Use edited code" }).click();
+        await wv(c).locator(".pause-banner:not(.pending)").waitFor({ timeout: 60_000 });
+        await shot("Edited pl_regulated_rate's cap in pricing.py (1% tighter), saved, then clicked 'Use edited code'.");
+        await wv(c).locator("aside button", { hasText: /^Run through/ }).click({ timeout: 10_000 }).catch(() => undefined);
+        await wv(c).locator(".pause-banner:not(.pending)").waitFor({ timeout: 60_000 }).catch(() => undefined);
+        await wv(c).locator("select[aria-label=record]").selectOption({ label: "client_id 20400" }).catch(() => undefined);
+        await shot("After 'Run through pl_regulated_rate' with client_id 20400 focused.");
+      },
+      dir,
     );
   }, 500_000);
 

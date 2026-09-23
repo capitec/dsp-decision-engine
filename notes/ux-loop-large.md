@@ -5,9 +5,10 @@ The extension on `tools/vscode-decider/examples/bank` (about 1,000 steps in 40 f
 user stories and a fresh judge agent scores them from the screenshots alone (1-10 per story; a story whose
 goal isn't visibly met caps at 5). The loop stops above 8/10 or after 40 rounds.
 
-| Round | Overall | L1 find | L2 table | L3 why rate | L4 param | L5 sweep | L6 commit |
-|---|---|---|---|---|---|---|---|
-| 0 | 3.3 | 5 | 2 | 2 | 3 | 2 | 6 |
+| Round | Overall | L1 find | L2 table | L3 why rate | L4 param | L5 sweep | L6 commit | L7 skip/swap |
+|---|---|---|---|---|---|---|---|---|
+| 0 | 3.3 | 5 | 2 | 2 | 3 | 2 | 6 | |
+| 1 | 5.6 | 7 | 7 | 4 | 7 | 4 | 5 | 5 |
 
 ## Round 0 (baseline)
 
@@ -26,3 +27,29 @@ Judge's problems, most damaging first:
 10. "fit" on 1,000 steps shows a near-empty canvas; wants top-level groups collapsed with step counts.
 11. Compare spends the view on "Unchanged"; the changed-step navigator is truncated and doesn't scroll the graph.
 12. Panel title flips between the root flow and a sub-flow; data-link arcs hide the graph.
+
+## Round 1
+
+Changes: a find box (name, docstring, group; Ctrl+F); groups fold into boxes with step counts on flows over 80
+steps and open around the selection, the pause and compared changes; What-if has a filter, folding groups, lookup
+tables as editable grids filled from the module's PARAMS, "used by" for shared params; Compare lists changed results
+only (changed records first) and says when a changed param's readers wrote the same values; scenario knobs are a
+type-to-filter picker and a half-filled row blocks Run; a table step shows which row a record matched; the debugger
+can skip a step or swap in edited code mid-run (new story L7); the pipeline title is the file's own flow, not an
+imported sub-flow; the NCA cap in the example is repo + 21% so repo_rate moves offers; a paused step's source opens
+left of the panel instead of over it.
+
+Judge's problems, most damaging first:
+
+1. L3: no single "why this rate" breakdown; paused before the cap so whether it applied is unknown.
+2. L5: the sweep summary lacks approvals/offer amount; total_cost range identical in every row.
+3. L6: the pricing.py table-row edit doesn't appear in the comparison at all.
+4. L7: skip and swap never show their effect on offers.
+5. L3: the table step is labelled "decision tree"; the matched row is below the fold.
+6. Paused screens: the details pane is ~180px tall; the editor is squeezed.
+7. L1: after Enter the hit isn't centred or highlighted; no breadcrumb.
+8. L2: band edges overlap with no stated inclusivity; rates as decimals not %.
+9. L4/L2: results pad with unchanged records; "150 unchanged results" is confusing next to 40 records.
+10. What-if results land under "Compare with a git revision…".
+11. "used by 8 steps" tiny and far from the value.
+12. Scenario builder: truncated param field, raw money formatting.

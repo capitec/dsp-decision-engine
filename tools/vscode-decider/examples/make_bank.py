@@ -248,7 +248,7 @@ def product_files(product: str, p: str, code: int, doc: str) -> tuple[list[str],
     # Pricing: decision tables whose rows live in the params document, then the rate build-up.
     lo_hi = [(lo, hi + 1) for lo, hi in TERMS[p]]
     TABLE_ROWS[f"{p}_base_rates"] = [{"min_term": float(lo), "max_term": float(hi), f"{p}_base_rate": r} for (lo, hi), r in zip(lo_hi, BASE_RATES[p])]
-    TABLE_ROWS[f"{p}_risk_loadings"] = [{"grade_key": g, f"{p}_risk_loading": round(0.01 * (g - 1) * (1.5 if p != "hl" else 0.5), 4)} for g in range(1, 5)]
+    TABLE_ROWS[f"{p}_risk_loadings"] = [{"grade_key": g, f"{p}_risk_loading": round(0.01 * (g - 1) * (2.0 if p != "hl" else 0.5), 4)} for g in range(1, 5)]
     bands = [(0, 10001, 165.0), (10001, 50001, 690.0), (50001, 1e9, 1207.5)] if p != "hl" else [(0, 1_000_001, 6037.5), (1_000_001, 1e9, 6037.5)]
     TABLE_ROWS[f"{p}_fees"] = [{"min_amount": float(lo), "max_amount": float(hi), f"{p}_initiation_fee": fee, f"{p}_monthly_fee": 69.0} for lo, hi, fee in bands]
     tables = [f"{p}_base_rates", f"{p}_risk_loadings", f"{p}_fees"]
@@ -286,11 +286,15 @@ def product_files(product: str, p: str, code: int, doc: str) -> tuple[list[str],
     pricing += (f'def {p}_raw_rate({p}_base_rate: float, {p}_risk_loading: float, ' + ", ".join(f"{d}: float" for d in discounts + loadings) +
                 f') -> float:\n    return {p}_base_rate + {p}_risk_loading - ' + " - ".join(discounts) + " + " + " + ".join(loadings) + "\n\n\n")
     pricing += (f'@step(output="{p}_rate")\ndef {p}_regulated_rate({p}_raw_rate: float, repo_rate: float = param(0.0775, shared_key="repo_rate"),\n'
-                f'                        cap_multiple: float = param({2.2 if p != "hl" else 1.0}), cap_margin: float = param({0.20 if p != "hl" else 0.12})) -> float:\n'
-                f'    """The National Credit Act cap: repo times a multiple plus a margin."""\n'
+                f'                        cap_multiple: float = param(1.0), cap_margin: float = param({0.21 if p != "hl" else 0.12})) -> float:\n'
+                f'    """The National Credit Act cap: repo plus 21% for unsecured credit, 12% for mortgages."""\n'
                 f'    return min({p}_raw_rate, repo_rate * cap_multiple + cap_margin)\n\n\n')
+    pricing += (f'@step(output="{p}_rate")\ndef {p}_rate_floor({p}_rate: float, repo_rate: float = param(0.0775, shared_key="repo_rate"),\n'
+                f'                  margin: float = param(0.03)) -> float:\n'
+                f'    """Never price below repo plus a margin."""\n'
+                f'    return max({p}_rate, repo_rate + margin)\n\n\n')
     pricing += (f'def {p}_monthly_rate({p}_rate: float) -> float:\n    return {p}_rate / 12\n\n\n')
-    pricing_steps += [f"{p}_raw_rate", f"{p}_regulated_rate", f"{p}_monthly_rate"]
+    pricing_steps += [f"{p}_raw_rate", f"{p}_regulated_rate", f"{p}_rate_floor", f"{p}_monthly_rate"]
     pricing += f"{p}_pricing = flow(\n    {p}_base_rates,\n    {p}_risk_loadings,\n    {p}_fees,\n" + "".join(f"    {s},\n" for s in pricing_steps) + '    name="pricing",\n)\n'
     count += 3 + len(pricing_steps)
     write(f"products/{product}/pricing.py", pricing)

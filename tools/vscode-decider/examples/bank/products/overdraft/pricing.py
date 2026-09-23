@@ -57,9 +57,16 @@ def od_raw_rate(od_base_rate: float, od_risk_loading: float, od_salary_discount:
 
 @step(output="od_rate")
 def od_regulated_rate(od_raw_rate: float, repo_rate: float = param(0.0775, shared_key="repo_rate"),
-                        cap_multiple: float = param(2.2), cap_margin: float = param(0.2)) -> float:
-    """The National Credit Act cap: repo times a multiple plus a margin."""
+                        cap_multiple: float = param(1.0), cap_margin: float = param(0.21)) -> float:
+    """The National Credit Act cap: repo plus 21% for unsecured credit, 12% for mortgages."""
     return min(od_raw_rate, repo_rate * cap_multiple + cap_margin)
+
+
+@step(output="od_rate")
+def od_rate_floor(od_rate: float, repo_rate: float = param(0.0775, shared_key="repo_rate"),
+                  margin: float = param(0.03)) -> float:
+    """Never price below repo plus a margin."""
+    return max(od_rate, repo_rate + margin)
 
 
 def od_monthly_rate(od_rate: float) -> float:
@@ -78,6 +85,7 @@ od_pricing = flow(
     od_collections_loading,
     od_raw_rate,
     od_regulated_rate,
+    od_rate_floor,
     od_monthly_rate,
     name="pricing",
 )

@@ -158,13 +158,21 @@ async function onWebview(m: FromWebview, describe: DescribeResult) {
     case "rewind":
       await s?.customRequest("decider.rewind", { path: m.path });
       break;
+    case "skip":
+    case "reloadStep":
+      try {
+        await s?.customRequest(m.type === "skip" ? "decider.skip" : "decider.reloadStep", { path: m.path });
+      } catch (e) {
+        void vscode.window.showErrorMessage(`Couldn't ${m.type === "skip" ? "skip" : "swap in"} ${m.path.split("/").pop()}: ${(e as Error).message}`);
+      }
+      break;
     case "restartWith":
       await s?.customRequest("decider.restartWith", { params: m.params });
       break;
     case "whatIf": {
       if (!shown) return;
       await compare(
-        { label: "defaults", file: shown.file, pipeline: shown.pipeline },
+        { label: "current params", file: shown.file, pipeline: shown.pipeline },
         { label: m.label, file: shown.file, pipeline: shown.pipeline, params: m.params, overrides: m.overrides, row: m.row },
       );
       break;

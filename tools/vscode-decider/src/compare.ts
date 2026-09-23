@@ -47,6 +47,21 @@ export interface Comparison {
   files?: { a: string; b: string };
   /** The params documents each run used, when they differ (a what-if or a scenario). */
   paramsDocs?: { a: unknown; b: unknown };
+  /** Shared param -> the steps that read it. */
+  sharedUsers?: Record<string, string[]>;
+}
+
+/** Each param a params document sets, with the steps that read it. */
+export function paramReaders(doc: unknown, sharedUsers: Record<string, string[]> = {}): { param: string; steps: string[] }[] {
+  const out: { param: string; steps: string[] }[] = [];
+  const visit = (d: unknown, path: string[]) => {
+    for (const [k, v] of Object.entries((d ?? {}) as Record<string, unknown>)) {
+      if (v && typeof v === "object" && !Array.isArray(v)) visit(v, [...path, k]);
+      else out.push(path.length === 1 && path[0] === "shared" ? { param: k, steps: sharedUsers[k] ?? [] } : { param: k, steps: [path.join("/")] });
+    }
+  };
+  visit(doc, []);
+  return out;
 }
 
 const SAMPLES = 3;
@@ -150,5 +165,6 @@ export function compareTraces(a: TraceResult, b: TraceResult, labelA: string, la
     rows: b.data.length,
     key: b.key ?? null,
     outputColumns: Object.keys(b.output ?? a.output ?? {}),
+    sharedUsers: Object.fromEntries(Object.entries(b.params?.shared ?? {}).map(([k, info]) => [k, (info.used_by as string[] | undefined) ?? []])),
   };
 }

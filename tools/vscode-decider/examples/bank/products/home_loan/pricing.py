@@ -58,8 +58,15 @@ def hl_raw_rate(hl_base_rate: float, hl_risk_loading: float, hl_salary_discount:
 @step(output="hl_rate")
 def hl_regulated_rate(hl_raw_rate: float, repo_rate: float = param(0.0775, shared_key="repo_rate"),
                         cap_multiple: float = param(1.0), cap_margin: float = param(0.12)) -> float:
-    """The National Credit Act cap: repo times a multiple plus a margin."""
+    """The National Credit Act cap: repo plus 21% for unsecured credit, 12% for mortgages."""
     return min(hl_raw_rate, repo_rate * cap_multiple + cap_margin)
+
+
+@step(output="hl_rate")
+def hl_rate_floor(hl_rate: float, repo_rate: float = param(0.0775, shared_key="repo_rate"),
+                  margin: float = param(0.03)) -> float:
+    """Never price below repo plus a margin."""
+    return max(hl_rate, repo_rate + margin)
 
 
 def hl_monthly_rate(hl_rate: float) -> float:
@@ -78,6 +85,7 @@ hl_pricing = flow(
     hl_collections_loading,
     hl_raw_rate,
     hl_regulated_rate,
+    hl_rate_floor,
     hl_monthly_rate,
     name="pricing",
 )

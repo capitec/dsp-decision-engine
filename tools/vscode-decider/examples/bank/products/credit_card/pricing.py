@@ -57,9 +57,16 @@ def cc_raw_rate(cc_base_rate: float, cc_risk_loading: float, cc_salary_discount:
 
 @step(output="cc_rate")
 def cc_regulated_rate(cc_raw_rate: float, repo_rate: float = param(0.0775, shared_key="repo_rate"),
-                        cap_multiple: float = param(2.2), cap_margin: float = param(0.2)) -> float:
-    """The National Credit Act cap: repo times a multiple plus a margin."""
+                        cap_multiple: float = param(1.0), cap_margin: float = param(0.21)) -> float:
+    """The National Credit Act cap: repo plus 21% for unsecured credit, 12% for mortgages."""
     return min(cc_raw_rate, repo_rate * cap_multiple + cap_margin)
+
+
+@step(output="cc_rate")
+def cc_rate_floor(cc_rate: float, repo_rate: float = param(0.0775, shared_key="repo_rate"),
+                  margin: float = param(0.03)) -> float:
+    """Never price below repo plus a margin."""
+    return max(cc_rate, repo_rate + margin)
 
 
 def cc_monthly_rate(cc_rate: float) -> float:
@@ -78,6 +85,7 @@ cc_pricing = flow(
     cc_collections_loading,
     cc_raw_rate,
     cc_regulated_rate,
+    cc_rate_floor,
     cc_monthly_rate,
     name="pricing",
 )
