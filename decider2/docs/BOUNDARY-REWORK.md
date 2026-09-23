@@ -203,12 +203,54 @@ the Arrow type, the kind and whether a frame-tier cast was inserted.
 | `__arrow_c_stream__()` of the whole frame | 3 µs + ~1.5 µs/column of the *frame* (polars building the struct export; 27 µs at 17 columns, n=1). Child indices for the declared inputs are looked up in the per-schema plan (keyed on `tuple(df.columns)`); `df[cols]` (20 µs at 17 columns, no planner) only when the frame is more than ~2× wider than the input set. `df.select()` is refuted: ~400 µs at any size, it goes through the lazy planner. | per call |
 | `import_frame` (schema + first chunk + `ArrowArrayViewInitFromSchema` + `SetArrayMinimal`) and release | ≈ polars' own cost; 25–27 µs total at 17 columns incl. the line above | per call |
 | `resolve_all` | one ctypes call, ~1–2 µs | per call |
-| `gather_row` | ~3 ns call + ~2 ns/column | per row |
+| `gather_row` | ~~~3 ns call + ~2 ns/column~~ **REFUTED — 149–157 ns/row.** See §1.3a | per row |
 
 Today's equivalent — `_get_buffers()["values"].to_numpy(...)` per column plus
 `cast(pl.Categorical)` for every String — is 122 µs at 17 columns, n=1
 (probe). The Arrow route is 3× cheaper at one row and it is *flat* in rows
 (O(columns), never O(rows); `verification-probes/README.md`).
+
+### 1.3a The per-row C gather is refuted — load from the address table instead
+
+**Measured in Stage 1 and reproduced independently, 1M rows, 17 columns
+(10 f64, 4 i64, 2 bool, 1 str), kernel only:**
+
+| per-row shape | ns/row |
+|---|---|
+| one `sm_gather_row` C call per row — what §1.3 above assumed | **149 – 157** |
+| today's `_fill_array` into row buffers (numerics only) | 32 – 33 |
+| **numba loading from the resolved address table (`addrs`)** | **13.0 – 13.5** |
+| whole numpy columns indexed per row, no row buffers | 7.7 |
+| `call_get_string` for one string column | 5.3 |
+
+So the estimate in the table above was wrong by roughly 50×, and in the
+direction that matters: **a C call per row is 4.6× worse than what decider2
+does today**, not 6× better. The design probe's V2 (+44 ns over the whole
+loop) did not reproduce at scale.
+
+**The route that IS faster is the one where numba does the loading.**
+`resolve_all` already exports a flat `(data, validity, offset, view)` address
+table; numba reads it with `load_f64`/`load_i64`/`load_u8` intrinsics and never
+crosses a call boundary per row. At 13 ns/row that is **2.5× better than
+today's row-buffer fill**, and it is the same mechanism §X's inlining work
+found: the cost is the opaque call, not the work.
+
+**What Stages 2, 3 and 4 must therefore do:**
+
+- **numerics** — numba loads from `addrs`. No per-row C call.
+- **strings** — `call_get_string` (5.3 ns/row), which is one call but returns
+  `(address, length)` and cannot be inlined away.
+- **`gather_row`** — keep it only where it is ONE call for the whole request,
+  i.e. the single-record path. There it costs 149 ns once, which is invisible
+  against `score()`'s remaining budget.
+
+Both surfaces already come out of the same `resolve_all`, so this is a change
+of which one the kernels use, not new C.
+
+Scaling, same run: 1/2/4/8/16 f64 columns → 10/20/23/34/61 ns, i.e. ≈8 ns of
+call plus ≈3.5 ns per column, and +3.3 ns/column at 10% nulls. One bool
+column 6.3 ns; one string column 8.5 ns via the table, 5.3 via
+`call_get_string`.
 
 ### 1.4 Chunking
 
