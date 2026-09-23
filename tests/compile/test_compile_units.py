@@ -5,8 +5,10 @@ import numpy as np
 import pytest
 from numba.core.dispatcher import Dispatcher
 
-from decider import branch, flow, frame_step, step
+from decider import ConfigurableStep, branch, flow, frame_step, step
 from decider.engine.compile import Fallback, Kernel, compile_plan
+from decider.engine.ir.decls import Input, Output, ParamDecl
+from decider.engine.ir.nodes import CallNode
 from decider.engine.params import param
 from decider.engine.wiring import resolve
 
@@ -208,3 +210,22 @@ def test_origins_map_a_unit_back_to_its_nodes():
     plan = resolve(flow(flow(disposable_income, affordability_ratio, name="afford"), name="p"))
     (unit,) = _units(compile_plan(plan))
     assert [o.path for o in unit.origins] == ["p/afford/disposable_income", "p/afford/affordability_ratio"]
+
+
+def clipped(x, lo, hi):
+    return min(max(x, lo), hi)
+
+
+class Clip(ConfigurableStep):
+    def to_ir(self, ctx):
+        return CallNode(ctx.origin(self), "scalar", clipped, (Input("disposable_income", float, arg="x"),),
+                        (Output(self.name, float),), (ParamDecl("upper", float, 7000.0, arg="hi"),),
+                        consts=(("lo", 6500.0),))
+
+
+@pytest.mark.parametrize("fuse", [True, False])
+def test_a_param_reaches_its_argument_when_its_document_key_differs(run, fuse):
+    plan = resolve(flow(disposable_income, Clip(name="clip")))
+    a, _ = run(plan, INPUTS, fuse=fuse)
+    b, _ = run(plan, INPUTS, fuse=fuse, params={"clip": {"upper": 6000.0}})
+    assert (a["clip"].tolist(), b["clip"].tolist()) == ([6500.0] * 4, [6000.0] * 4)
