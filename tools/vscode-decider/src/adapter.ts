@@ -28,9 +28,9 @@ import {
   type Lineage,
   type RunStatus,
   type Status,
-  type Summary,
   type Visits,
 } from "./protocol";
+import { readEvents } from "./events";
 import { nodeAtLine } from "./sourceMap";
 
 export interface AdapterOptions {
@@ -217,39 +217,9 @@ export class DeciderDebugSession extends LoggingDebugSession {
   }
 
   private apply(status: Status, stop: boolean, reason?: string) {
-    let paused = reason;
-    for (const ev of status.events) {
-      const p = ev.origin?.path ?? "";
-      switch (ev.kind) {
-        case "node_started":
-          if (this.nodes.get(p)?.kind === "call") this.visits[p] = {};
-          break;
-        case "node_visited":
-          (this.visits[p] ??= {})[ev.origin!.locator!] = ev.rows as number;
-          break;
-        case "node_finished": {
-          const outs = Object.entries(ev.outputs as Record<string, Summary>);
-          if (this.nodes.get(p)?.kind === "call") this.finishedPaths.push(p);
-          if (outs.length) this.sendEvent(new OutputEvent(`${p}  ${outs.map(([n, s]) => `${n}=${previewOf(s)}`).join("  ")}\n`, "stdout"));
-          break;
-        }
-        case "overridden":
-          this.sendEvent(new OutputEvent(`set ${ev.name} (${ev.producer})\n`, "console"));
-          break;
-        case "warning":
-          this.sendEvent(new OutputEvent(`warning: ${ev.message}\n`, "console"));
-          break;
-        case "error":
-          this.sendEvent(new OutputEvent(`error in ${ev.path ?? "?"}: ${ev.message}\n`, "stderr"));
-          break;
-        case "run_finished":
-          this.sendEvent(new OutputEvent(`run finished; columns: ${Object.keys(ev.output as object).join(", ")}\n`, "console"));
-          break;
-        case "paused":
-          paused ??= ev.reason as string;
-          break;
-      }
-    }
+    const read = readEvents(status.events, this.nodes, this.visits, this.finishedPaths);
+    for (const [text, category] of read.lines) this.sendEvent(new OutputEvent(text, category));
+    const paused = reason ?? read.paused;
     this.current = status.current;
     this.finished = status.finished;
     this.refresh();
@@ -332,9 +302,12 @@ export class DeciderDebugSession extends LoggingDebugSession {
       const node = this.nodes.get(p);
       const id = frames.length + 1;
       this.frameIds.set(id, p);
-      const src = node?.file ? new Source(path.basename(node.file), node.file) : undefined;
+      // A step built inline (a branch inside flow(...)) has no line of its own; show where its parent is.
+      let at: IRNodeJson | undefined = node;
+      for (let up = p; at && !at.file && this.parents.has(up); up = this.parents.get(up)!) at = this.nodes.get(this.parents.get(up)!);
+      const src = at?.file ? new Source(path.basename(at.file), at.file) : undefined;
       const when = id === 1 ? `  ${this.current!.when}` : "";
-      frames.push(new StackFrame(id, `${lastSegment(p)}  [${node ? kindLabel(node) : "?"}]${when}`, src, node?.line ?? 0, 1));
+      frames.push(new StackFrame(id, `${lastSegment(p)}  [${node ? kindLabel(node) : "?"}]${when}`, src, at?.line ?? 0, 1));
       p = this.parents.get(p);
     }
     response.body = { stackFrames: frames, totalFrames: frames.length };
@@ -473,6 +446,23 @@ export class DeciderDebugSession extends LoggingDebugSession {
         case "decider.lineage":
           response.body = await this.lineage(args.name as string);
           break;
+        case "decider.treePath":
+          response.body = await this.bridge!.request("tree_path", { path: args.path, row: this.record ?? 0 });
+          break;
+        case "decider.debugCondition":
+          response.body = this.record === null ? { condition: null } : await this.bridge!.request("debug_condition", { path: args.path, row: this.record });
+          break;
+        case "decider.column":
+          response.body = await this.bridge!.request("column", { name: args.name, row: this.record });
+          break;
+        case "decider.rewind":
+          this.sendResponse(response);
+          return void (await this.run("rewind", { path: args.path }));
+        case "decider.restartWith":
+          this.launchArgs!.params = args.params;
+          this.sendResponse(response);
+          await this.startSession();
+          return void (await this.run("step_into", {}, "entry"));
         case "decider.setRecord":
           this.record = typeof args.row === "number" ? args.row : null;
           this.refresh();

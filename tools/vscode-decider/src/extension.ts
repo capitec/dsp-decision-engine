@@ -2,30 +2,25 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 import { DeciderDebugSession } from "./adapter";
 import { analyse, PipelineCodeLens } from "./analysis";
+import { listRefs, materialise, repoRoot } from "./git";
 import { GraphPanel } from "./graphPanel";
-import type { CallNodeJson, ColumnSummary, DescribeResult, Lineage, RunStatus } from "./protocol";
+import type { CallNodeJson, ColumnHistory, ColumnSummary, DescribeResult, FromWebview, Lineage, RunStatus, ToWebview } from "./protocol";
 import { debugpyLibs, pythonCommand } from "./python";
+import { runComparison, type Side } from "./scenarios";
 import { StructureProvider } from "./structure";
 
 let lineageChannel: vscode.OutputChannel | undefined;
+/** The pipeline the views show: its file and name. */
+let shown: { file: string; pipeline: string } | undefined;
 
 export function activate(ctx: vscode.ExtensionContext) {
   const structure = new StructureProvider();
   const tree = vscode.window.createTreeView("decider.structure", { treeDataProvider: structure, showCollapseAll: true });
-  const showGraph = (describe: DescribeResult) => {
+
+  const showGraph = (file: string, describe: DescribeResult) => {
+    shown = { file, pipeline: describe.pipeline };
     structure.setDescribe(describe);
-    GraphPanel.show(ctx, describe, async (m) => {
-      const s = deciderSession();
-      if (m.type === "reveal") {
-        const node = findNode(describe, m.path);
-        if (node?.file) reveal(node.file, node.line);
-      } else if (m.type === "record" && s) {
-        await s.customRequest("decider.setRecord", { row: m.row });
-      } else if (m.type === "lineage") {
-        const lineage = s ? ((await s.customRequest("decider.lineage", { name: m.name })) as Lineage) : null;
-        GraphPanel.current?.post({ type: "lineage", lineage });
-      }
-    });
+    GraphPanel.show(ctx, describe, (m) => onWebview(m, describe).catch((e) => vscode.window.showErrorMessage(`decider: ${(e as Error).message}`)));
   };
 
   ctx.subscriptions.push(
@@ -43,7 +38,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       if (!doc) return;
       try {
         const d = await analyse(doc);
-        showGraph(pipeline ? { ...d, pipeline } : d);
+        showGraph(doc.fileName, pipeline ? { ...d, pipeline } : d);
       } catch (e) {
         vscode.window.showErrorMessage(`decider: ${(e as Error).message}`);
       }
@@ -54,8 +49,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       if (!doc) return;
       const data = await pickData();
       if (data === undefined) return;
-      const folder = vscode.workspace.getWorkspaceFolder(doc.uri);
-      await vscode.debug.startDebugging(folder, {
+      await vscode.debug.startDebugging(vscode.workspace.getWorkspaceFolder(doc.uri), {
         type: "decider",
         request: "launch",
         name: `decider: ${pipeline ?? path.basename(doc.fileName)}`,
@@ -67,6 +61,16 @@ export function activate(ctx: vscode.ExtensionContext) {
     }),
 
     vscode.commands.registerCommand("decider.debugStep", debugStep),
+
+    vscode.commands.registerCommand("decider.compareRevision", async (uri?: vscode.Uri) => {
+      if (uri || !shown) await vscode.commands.executeCommand("decider.visualise", uri);
+      await compareRevision();
+    }),
+
+    vscode.commands.registerCommand("decider.whatIf", async (uri?: vscode.Uri) => {
+      if (uri || !GraphPanel.current) await vscode.commands.executeCommand("decider.visualise", uri);
+      GraphPanel.current?.post({ type: "tab", tab: "params" });
+    }),
 
     vscode.commands.registerCommand("decider.focusRecord", async () => {
       const s = deciderSession();
@@ -86,16 +90,15 @@ export function activate(ctx: vscode.ExtensionContext) {
       if (!name) return;
       const lineage = (await s.customRequest("decider.lineage", { name: name.label })) as Lineage;
       lineageChannel ??= vscode.window.createOutputChannel("decider lineage");
-      const out = lineageChannel;
-      out.clear();
-      out.appendLine(renderLineage(lineage));
-      out.show(true);
+      lineageChannel.clear();
+      lineageChannel.appendLine(renderLineage(lineage));
+      lineageChannel.show(true);
     }),
 
     vscode.debug.onDidStartDebugSession(async (s) => {
       if (s.type !== "decider") return;
       const d = (await s.customRequest("decider.describe")) as DescribeResult;
-      showGraph(d);
+      showGraph(s.configuration.program, d);
     }),
 
     vscode.debug.onDidReceiveDebugSessionCustomEvent(async (e) => {
@@ -111,13 +114,87 @@ export function activate(ctx: vscode.ExtensionContext) {
       if (s.type !== "decider") return;
       structure.setStatus(null, []);
       GraphPanel.current?.post({ type: "status", current: null, finished: true, finishedPaths: [], visits: {}, record: null });
+      GraphPanel.current?.post({ type: "state", columns: null, rows: 0 });
     }),
   );
 }
 
+function post(m: ToWebview) {
+  GraphPanel.current?.post(m);
+}
+
+async function onWebview(m: FromWebview, describe: DescribeResult) {
+  const s = deciderSession();
+  switch (m.type) {
+    case "reveal": {
+      const node = findNode(describe, m.path);
+      if (node?.file) await reveal(node.file, node.line);
+      break;
+    }
+    case "record":
+      await s?.customRequest("decider.setRecord", { row: m.row });
+      break;
+    case "lineage": {
+      if (!s) return post({ type: "lineage", lineage: null, history: null });
+      const [lineage, history] = await Promise.all([
+        s.customRequest("decider.lineage", { name: m.name }) as Thenable<Lineage>,
+        s.customRequest("decider.column", { name: m.name }) as Thenable<ColumnHistory>,
+      ]);
+      post({ type: "lineage", lineage, history });
+      break;
+    }
+    case "treePath":
+      if (s) post({ type: "treePath", ...((await s.customRequest("decider.treePath", { path: m.path })) as { path: string; row: number; visited: string[] }) });
+      break;
+    case "rewind":
+      await s?.customRequest("decider.rewind", { path: m.path });
+      break;
+    case "restartWith":
+      await s?.customRequest("decider.restartWith", { params: m.params });
+      break;
+    case "whatIf": {
+      if (!shown) return;
+      const who = m.row === null ? "all records" : `record ${m.row}`;
+      await compare(
+        { label: "defaults", file: shown.file, pipeline: shown.pipeline },
+        { label: `what-if (${who})`, file: shown.file, pipeline: shown.pipeline, params: m.params, overrides: m.overrides, row: m.row },
+      );
+      break;
+    }
+    case "compareRevision":
+      await compareRevision();
+      break;
+  }
+}
+
+async function compare(a: Side, b: Side) {
+  post({ type: "tab", tab: "compare" });
+  post({ type: "compare", comparison: null, busy: `Running ${a.label} and ${b.label}…` });
+  try {
+    post({ type: "compare", comparison: await runComparison(a, b, pythonCommand(), path.dirname(b.file)) });
+  } catch (e) {
+    post({ type: "compare", comparison: null, error: (e as Error).message });
+  }
+}
+
+/** Pick a tag, branch or commit, and compare the shown pipeline there against the working tree. */
+async function compareRevision() {
+  if (!shown) return vscode.window.showInformationMessage("decider: visualise a pipeline first");
+  const { file, pipeline } = shown;
+  const root = await repoRoot(file);
+  const pick = await vscode.window.showQuickPick(
+    (await listRefs(root)).map((r) => ({ label: r.label, description: r.description, ref: r.ref })),
+    { placeHolder: "Compare the working tree against…", matchOnDescription: true },
+  );
+  if (!pick) return;
+  const tree = await materialise(root, pick.ref);
+  await compare({ label: pick.label, file: path.join(tree, path.relative(root, file)), pipeline }, { label: "working tree", file, pipeline });
+}
+
 /**
  * Drop into the Python of the current node: attach debugpy to the bridge
- * process, break once on the function's first statement, then step the flow.
+ * process, break on the function's first statement (for the focused record
+ * only, when one is focused), then step the flow.
  */
 async function debugStep() {
   const s = deciderSession();
@@ -128,9 +205,9 @@ async function debugStep() {
   if (!py?.bodyLine || info.current?.when !== "before") {
     return vscode.window.showInformationMessage("decider: stop just before a step that runs Python (a function, frame or tree reference) first");
   }
-  // ponytail: stops on the first row the step runs; a per-record stop needs the row index passed into the call.
+  const { condition } = (await s.customRequest("decider.debugCondition", { path: info.node!.path })) as { condition: string | null };
   const location = new vscode.Location(vscode.Uri.file(py.file), new vscode.Position(py.bodyLine - 1, 0));
-  const bp = new vscode.SourceBreakpoint(location, true, undefined, "1");
+  const bp = new vscode.SourceBreakpoint(location, true, condition ?? undefined, condition ? undefined : "1");
   vscode.debug.addBreakpoints([bp]);
   const attached = await vscode.debug.startDebugging(
     s.workspaceFolder,
@@ -198,7 +275,7 @@ async function reveal(file: string, line: number | null) {
 }
 
 function findNode(d: DescribeResult, p: string) {
-  let found: CallNodeJson | { file: string | null; line: number | null } | undefined;
+  let found: { file: string | null; line: number | null } | undefined;
   const visit = (n: DescribeResult["ir"]) => {
     if (n.path === p) found = n;
     else if (n.kind !== "call") n.children.forEach(visit);

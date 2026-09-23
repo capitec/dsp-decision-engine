@@ -1,3 +1,5 @@
+import type { Comparison } from "./compare";
+
 // Shapes the Python bridge sends. Shared by the adapter, the tree and the webview.
 
 export interface IRNodeBase {
@@ -16,6 +18,8 @@ export interface CallNodeJson extends IRNodeBase {
   params: Record<string, unknown>;
   /** The Python that runs in interpreted mode: `fn`, or a row node's `reference`. */
   python: { file: string; line: number; bodyLine: number | null } | null;
+  /** Changes when the code or config behind the node changes. */
+  code: string;
 }
 
 export interface GroupNodeJson extends IRNodeBase {
@@ -32,6 +36,19 @@ export interface DescribeResult {
   pipelines: { name: string; line: number | null; kind: string }[];
   pipeline: string;
   ir: IRNodeJson;
+  /** Node path (or "shared") -> param name -> its type, default and bounds. */
+  params: Record<string, Record<string, ParamInfo>>;
+}
+
+export interface ParamInfo {
+  type: string;
+  default?: unknown;
+  required?: boolean;
+  ge?: number;
+  le?: number;
+  gt?: number;
+  lt?: number;
+  [k: string]: unknown;
 }
 
 export interface Checkpoint {
@@ -86,18 +103,34 @@ export interface RunStatus {
   record: number | null;
 }
 
+export interface ColumnHistory {
+  name: string;
+  /** `written` is false when a version never reached the focused record (a branch arm it did not take). */
+  versions: { producer: string; values: unknown[]; written?: boolean }[];
+}
+
+export type Tab = "graph" | "state" | "params" | "compare";
+
 /** Messages between the extension and the graph webview. */
 export type ToWebview =
   | { type: "describe"; describe: DescribeResult }
   | ({ type: "status" } & RunStatus)
   | { type: "state"; columns: ColumnSummary[] | null; rows: number }
-  | { type: "lineage"; lineage: Lineage | null };
+  | { type: "lineage"; lineage: Lineage | null; history: ColumnHistory | null }
+  | { type: "treePath"; path: string; row: number; visited: string[] }
+  | { type: "compare"; comparison: Comparison | null; busy?: string; error?: string }
+  | { type: "tab"; tab: Tab };
 
 export type FromWebview =
   | { type: "ready" }
   | { type: "reveal"; path: string }
   | { type: "record"; row: number | null }
-  | { type: "lineage"; name: string };
+  | { type: "lineage"; name: string }
+  | { type: "treePath"; path: string }
+  | { type: "rewind"; path: string }
+  | { type: "whatIf"; params: unknown; overrides: Record<string, unknown>; row: number | null }
+  | { type: "restartWith"; params: unknown }
+  | { type: "compareRevision" };
 
 export function walk(node: IRNodeJson, fn: (n: IRNodeJson, parent: IRNodeJson | null) => void, parent: IRNodeJson | null = null) {
   fn(node, parent);

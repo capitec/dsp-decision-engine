@@ -43,6 +43,8 @@ export class PipelineCodeLens implements vscode.CodeLensProvider {
         return [
           new vscode.CodeLens(range, { title: "$(play) Run flow", command: "decider.runFlow", arguments: args }),
           new vscode.CodeLens(range, { title: "$(type-hierarchy) Visualise flow", command: "decider.visualise", arguments: args }),
+          new vscode.CodeLens(range, { title: "$(beaker) What-if", command: "decider.whatIf", arguments: [doc.uri] }),
+          new vscode.CodeLens(range, { title: "$(git-compare) Compare with…", command: "decider.compareRevision", arguments: [doc.uri] }),
         ];
       });
     } catch (e) {

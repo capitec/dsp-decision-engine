@@ -255,3 +255,207 @@ header select {
   color: var(--vscode-dropdown-foreground);
   border: 1px solid var(--vscode-dropdown-border, transparent);
 }
+
+/* comparisons */
+.node.diff-changed rect {
+  fill: var(--vscode-diffEditor-insertedTextBackground, #9bb95533);
+  stroke: var(--vscode-charts-orange, orange);
+  stroke-width: 2;
+}
+.node.diff-added rect {
+  stroke: var(--vscode-charts-green, #89d185);
+  stroke-width: 2;
+  stroke-dasharray: 4 2;
+}
+.node.diff-same {
+  opacity: 0.55;
+}
+.compare,
+.params {
+  flex: 1;
+  overflow: auto;
+  padding: 8px 12px;
+}
+.compare .summary {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+.right {
+  margin-left: auto;
+}
+del {
+  color: var(--vscode-gitDecoration-deletedResourceForeground, #c74e39);
+  text-decoration: line-through;
+}
+ins {
+  color: var(--vscode-gitDecoration-addedResourceForeground, #81b88b);
+  text-decoration: none;
+}
+.badge-status {
+  font-size: 0.8em;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}
+.badge-status.changed {
+  background: var(--vscode-charts-orange, orange);
+  color: #000;
+}
+.badge-status.added {
+  background: var(--vscode-charts-green, #89d185);
+  color: #000;
+}
+.badge-status.removed {
+  background: var(--vscode-charts-red, #f14c4c);
+  color: #000;
+}
+.compare td {
+  white-space: normal;
+  vertical-align: top;
+}
+.vdiff.hit {
+  outline: 1px solid var(--vscode-focusBorder);
+}
+.chip.small {
+  font-size: 0.8em;
+  margin-left: 6px;
+  padding: 0 5px;
+}
+.error {
+  color: var(--vscode-errorForeground);
+}
+a {
+  cursor: pointer;
+  color: var(--vscode-textLink-foreground);
+}
+button.link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--vscode-textLink-foreground);
+  cursor: pointer;
+}
+.params section {
+  margin-bottom: 14px;
+}
+.params tr.group td {
+  font-weight: bold;
+  padding-top: 8px;
+}
+.params td.name {
+  padding-left: 18px;
+}
+.params tr.edited td.name {
+  color: var(--vscode-charts-orange, orange);
+}
+.params input,
+.params select {
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  padding: 2px 4px;
+}
+.override {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.scope {
+  display: flex;
+  gap: 14px;
+  margin-top: 6px;
+}
+.actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.actions button {
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  border: none;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.actions button.primary {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+.actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+ol.history {
+  margin: 0;
+  padding-left: 18px;
+}
+
+/* layout: content panes shrink; a narrow panel stacks the details under the content */
+main > * {
+  min-width: 0;
+}
+header {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+header nav {
+  display: flex;
+  gap: 2px;
+  white-space: nowrap;
+}
+header label {
+  white-space: nowrap;
+}
+.badge {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+aside {
+  flex: none;
+  width: 260px;
+}
+aside.collapsed {
+  display: none;
+}
+@media (max-width: 760px) {
+  main {
+    flex-direction: column;
+  }
+  aside {
+    width: auto;
+    max-height: 34vh;
+    border-left: none;
+    border-top: 1px solid var(--vscode-panel-border);
+  }
+  .badge {
+    flex-basis: 100%;
+    margin-left: 0;
+  }
+}
+.graph {
+  position: relative;
+}
+.zoom {
+  position: sticky;
+  float: right;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 2px;
+  z-index: 1;
+}
+.zoom button {
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  border: none;
+  min-width: 24px;
+  cursor: pointer;
+}
+.muted.small {
+  font-size: 0.8em;
+}

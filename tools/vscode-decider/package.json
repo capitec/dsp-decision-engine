@@ -40,9 +40,25 @@
       {
         "command": "decider.focusRecord",
         "title": "decider: Focus one record"
+      },
+      {
+        "command": "decider.compareRevision",
+        "title": "decider: Compare flow with a git revision…",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "decider.whatIf",
+        "title": "decider: What-if (params and inputs)"
       }
     ],
     "menus": {
+      "editor/title": [
+        {
+          "command": "decider.compareRevision",
+          "when": "resourceLangId == python",
+          "group": "navigation"
+        }
+      ],
       "debug/toolBar": [
         {
           "command": "decider.debugStep",
@@ -155,6 +171,7 @@
     "watch": "vite build --watch",
     "test": "pnpm build && vitest run",
     "test:vscode": "pnpm build && node dist/runVsCodeTests.js",
+    "test:e2e": "pnpm build && E2E=1 vitest run",
     "package": "pnpm build && vsce package --no-dependencies"
   },
   "devDependencies": {
@@ -171,6 +188,7 @@
     "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^4.0.0",
     "mocha": "^12.0.2",
+    "playwright-core": "^1.63.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "typescript": "^5.9.0",

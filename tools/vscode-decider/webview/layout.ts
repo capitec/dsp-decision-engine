@@ -16,7 +16,7 @@ export interface LaidEdge {
   id: string;
   from: string;
   to: string;
-  kind: "order" | "back" | "data";
+  kind: "order" | "back";
   label?: string;
   points: { x: number; y: number }[];
 }
@@ -100,7 +100,7 @@ export function orderEdges(ir: IRNodeJson): { from: string; to: string; label?: 
   return edges;
 }
 
-export function layout(ir: IRNodeJson, showData: boolean): Layout {
+export function layout(ir: IRNodeJson): Layout {
   const g = new dagre.graphlib.Graph({ compound: true, multigraph: true });
   g.setGraph({ rankdir: "TB", nodesep: 30, ranksep: 40, marginx: 16, marginy: 16 });
   g.setDefaultEdgeLabel(() => ({}));
@@ -110,7 +110,6 @@ export function layout(ir: IRNodeJson, showData: boolean): Layout {
     if (parent) g.setParent(n.path, parent.path);
   });
   const edges: Omit<LaidEdge, "points">[] = orderEdges(ir).map((e, i) => ({ id: `o${i}`, from: e.from, to: e.to, kind: e.back ? ("back" as const) : ("order" as const), label: e.label }));
-  if (showData) edges.push(...dataEdges(ir).map((e, i) => ({ id: `d${i}`, from: e.from, to: e.to, kind: "data" as const, label: e.column })));
   for (const e of edges) g.setEdge(e.from, e.to, { width: e.label ? e.label.length * 6 : 0, height: e.label ? 12 : 0 }, e.id);
   dagre.layout(g);
 

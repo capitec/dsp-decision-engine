@@ -35,7 +35,7 @@ describe("graph edges", () => {
   });
 
   it("lays out every call node inside its cluster", () => {
-    const l = layout(ir, true);
+    const l = layout(ir);
     expect(l.nodes.map((n) => n.path)).toContain("term/by_sector/cap_public");
     const cluster = l.clusters.find((c) => c.path === "term/by_sector")!;
     const inside = l.nodes.filter((n) => n.path.startsWith("term/by_sector/"));

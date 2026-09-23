@@ -154,3 +154,37 @@ def test_debugpy_flag_opens_an_attach_port():
         socket.create_connection(("127.0.0.1", 5689), 2).close()
     finally:
         p.kill()
+
+
+def test_describe_carries_the_params_schema_and_a_code_fingerprint():
+    d = Bridge().describe(LOAN)
+    assert d["params"]["term/cap_by_income"]["cap"]["default"] == 48.0
+    assert len(find(d["ir"], "term/cap_by_income")["code"]) == 12
+
+
+def test_trace_records_every_call_and_applies_params_and_overrides():
+    base = Bridge().trace(LOAN)
+    assert base["error"] is None
+    assert base["steps"]["term/cap_by_income"]["term_cap"] == [48.0, 36.0]
+    tuned = Bridge().trace(LOAN, params={"term": {"cap_by_income": {"cap": 24.0}}})
+    assert tuned["steps"]["term/cap_by_income"]["term_cap"] == [24.0, 24.0]  # a null salary is filled with 0
+    what_if = Bridge().trace(LOAN, overrides={"requested_amount": 10000.0}, row=0)
+    assert [r["requested_amount"] for r in what_if["data"]] == [10000.0, 90000.0]
+    assert what_if["output"]["offer"] == [10000.0, 90000.0]
+
+
+def test_tree_path_rewalks_one_record():
+    b = started()
+    b.handle({"cmd": "resume"})
+    assert b.handle({"cmd": "tree_path", "path": "risk_tree", "row": 0}) == {
+        "path": "risk_tree", "row": 0, "visited": ["root", "low_score"], "result": [1]}
+    assert b.handle({"cmd": "tree_path", "path": "risk_tree", "row": 1})["visited"] == ["root", "good_score"]
+
+
+def test_debug_condition_matches_only_the_focused_record():
+    b = started(breakpoints=["term/cap_by_income"])
+    b.handle({"cmd": "resume"})
+    cond = b.handle({"cmd": "debug_condition", "path": "term/cap_by_income", "row": 1})["condition"]
+    assert cond == "term_cap == 36.0 and min_net_salary == 0.0"  # the null arrives filled
+    assert eval(cond, {}, {"term_cap": 36.0, "min_net_salary": 0.0})
+    assert not eval(cond, {}, {"term_cap": 60.0, "min_net_salary": 4000.0})

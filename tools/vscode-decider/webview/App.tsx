@@ -1,19 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
+import type { Comparison } from "../src/compare";
 import {
   callNodes,
-  kindLabel,
+  type ColumnHistory,
   type ColumnSummary,
   type DescribeResult,
   type FromWebview,
   type Lineage,
   type RunStatus,
+  type Tab,
   type ToWebview,
 } from "../src/protocol";
+import { Compare } from "./Compare";
 import { Graph } from "./Graph";
+import { NodePanel } from "./NodePanel";
+import { Params } from "./Params";
 import { StateTable } from "./StateTable";
 
 declare function acquireVsCodeApi(): { postMessage(m: FromWebview): void };
 const vscode = acquireVsCodeApi();
+const send = (m: FromWebview) => vscode.postMessage(m);
 
 const IDLE: RunStatus = { current: null, finished: false, finishedPaths: [], visits: {}, record: null };
 
@@ -23,66 +29,115 @@ export function App() {
   const [columns, setColumns] = useState<ColumnSummary[] | null>(null);
   const [rows, setRows] = useState(0);
   const [lineage, setLineage] = useState<Lineage | null>(null);
+  const [history, setHistory] = useState<ColumnHistory | null>(null);
+  const [treePath, setTreePath] = useState<{ path: string; row: number; visited: string[] } | null>(null);
+  const [compare, setCompare] = useState<{ comparison: Comparison | null; busy?: string; error?: string }>({ comparison: null });
   const [selected, setSelected] = useState<string>();
   const [column, setColumn] = useState<string>();
-  const [showData, setShowData] = useState(true);
-  const [tab, setTab] = useState<"graph" | "state">("graph");
+  const [showData, setShowData] = useState(false);
+  const [showDiff, setShowDiff] = useState(true);
+  const [details, setDetails] = useState(true);
+  const [tab, setTab] = useState<Tab>("graph");
 
   useEffect(() => {
     const onMessage = (e: MessageEvent<ToWebview>) => {
       const m = e.data;
-      if (m.type === "describe") {
-        setDescribe(m.describe);
-        setSelected(undefined);
-        setColumns(null);
-        setRun(IDLE);
-      } else if (m.type === "status") {
-        setRun(m);
-        if (m.current) setSelected(m.current.path);
-      } else if (m.type === "state") {
-        setColumns(m.columns);
-        setRows(m.rows);
-      } else setLineage(m.lineage);
+      switch (m.type) {
+        case "describe":
+          setDescribe(m.describe);
+          setSelected(undefined);
+          setColumns(null);
+          setRun(IDLE);
+          break;
+        case "status":
+          setRun(m);
+          if (m.current) setSelected(m.current.path);
+          break;
+        case "state":
+          setColumns(m.columns);
+          setRows(m.rows);
+          break;
+        case "lineage":
+          setLineage(m.lineage);
+          setHistory(m.history);
+          break;
+        case "treePath":
+          setTreePath(m);
+          break;
+        case "compare":
+          setCompare(m);
+          break;
+        case "tab":
+          setTab(m.tab);
+          break;
+      }
     };
     window.addEventListener("message", onMessage);
-    vscode.postMessage({ type: "ready" });
+    send({ type: "ready" });
     return () => window.removeEventListener("message", onMessage);
   }, []);
 
-  // Lineage depends on the run's position and the focused record, so ask again whenever either moves.
+  // Lineage and history depend on the run's position and the focused record, so ask again when either moves.
   useEffect(() => {
-    if (column && columns?.some((c) => c.name === column)) vscode.postMessage({ type: "lineage", name: column });
-    else setLineage(null);
+    if (column && columns?.some((c) => c.name === column)) send({ type: "lineage", name: column });
+    else {
+      setLineage(null);
+      setHistory(null);
+    }
   }, [column, columns]);
 
-  const selectedNode = useMemo(() => describe && callNodes(describe.ir).find((n) => n.path === selected), [describe, selected]);
+  const nodes = useMemo(() => (describe ? callNodes(describe.ir) : []), [describe]);
+  const selectedNode = nodes.find((n) => n.path === selected);
+
+  // A tree's path for the focused record, once the tree has run.
+  useEffect(() => {
+    if (selectedNode?.callKind === "row" && run.record !== null && run.finishedPaths.includes(selectedNode.path)) send({ type: "treePath", path: selectedNode.path });
+  }, [selectedNode, run.record, run.finishedPaths]);
+
   const lineagePaths = useMemo(() => new Set(lineage ? producers(lineage) : []), [lineage]);
+  const inputColumns = useMemo(() => {
+    const written = new Set(nodes.flatMap((n) => n.outputs ?? []));
+    return [...new Set(nodes.flatMap((n) => n.inputs ?? []))].filter((c) => !written.has(c)).sort();
+  }, [nodes]);
+  const diff = useMemo(
+    () => (showDiff && compare.comparison ? new Map(compare.comparison.steps.map((s) => [s.path, s.status])) : undefined),
+    [compare.comparison, showDiff],
+  );
 
   if (!describe) return <div className="empty">Open a pipeline file and choose “Visualise flow”.</div>;
+
+  const tabButton = (t: Tab, label: string) => (
+    <button className={tab === t ? "active" : ""} onClick={() => setTab(t)}>{label}</button>
+  );
+  const select = (path: string) => {
+    setSelected(path);
+    setTab("graph");
+  };
 
   return (
     <div className="app">
       <header>
         <strong>{describe.pipeline}</strong>
         <nav>
-          <button className={tab === "graph" ? "active" : ""} onClick={() => setTab("graph")}>Graph</button>
-          <button className={tab === "state" ? "active" : ""} onClick={() => setTab("state")}>
-            State{columns ? ` (${columns.length})` : ""}
-          </button>
+          {tabButton("graph", "Graph")}
+          {tabButton("state", columns ? `State (${columns.length})` : "State")}
+          {tabButton("params", "Params")}
+          {tabButton("compare", compare.busy ? "Compare…" : "Compare")}
         </nav>
         {tab === "graph" && (
           <label>
-            <input type="checkbox" checked={showData} onChange={(e) => setShowData(e.target.checked)} /> data edges
+            <input type="checkbox" checked={showData} onChange={(e) => setShowData(e.target.checked)} /> all data edges
+          </label>
+        )}
+        {tab === "graph" && compare.comparison && (
+          <label>
+            <input type="checkbox" checked={showDiff} onChange={(e) => setShowDiff(e.target.checked)} /> diff
           </label>
         )}
         {columns && (
           <label>
             record{" "}
-            <select
-              aria-label="record"
-              value={run.record ?? ""}
-              onChange={(e) => vscode.postMessage({ type: "record", row: e.target.value === "" ? null : Number(e.target.value) })}
-            >
+            <select aria-label="record" value={run.record ?? ""} onChange={(e) => send({ type: "record", row: e.target.value === "" ? null : Number(e.target.value) })}>
               <option value="">all {rows}</option>
               {Array.from({ length: rows }, (_, i) => (
                 <option key={i} value={i}>{i}</option>
@@ -90,10 +145,13 @@ export function App() {
             </select>
           </label>
         )}
+        <label>
+          <input type="checkbox" checked={details} onChange={(e) => setDetails(e.target.checked)} /> details
+        </label>
         {run.current && <span className="badge">{run.current.when} {run.current.path || "<root>"}</span>}
       </header>
       <main>
-        {tab === "graph" ? (
+        {tab === "graph" && (
           <Graph
             ir={describe.ir}
             showData={showData}
@@ -101,47 +159,37 @@ export function App() {
             selected={selected}
             highlightColumn={column}
             lineage={lineagePaths}
+            diff={diff}
             onSelect={setSelected}
-            onOpen={(path) => vscode.postMessage({ type: "reveal", path })}
+            onOpen={(path) => send({ type: "reveal", path })}
           />
-        ) : (
-          <StateTable columns={columns} record={run.record} selected={selectedNode} onPick={setColumn} picked={column} />
         )}
-        <aside>
-          {selectedNode ? (
-            <>
-              <h3>{selectedNode.path}</h3>
-              <div className="muted">{kindLabel(selectedNode)} · {selectedNode.source}</div>
-              <button onClick={() => vscode.postMessage({ type: "reveal", path: selectedNode.path })}>Open source</button>
-              <h4>Reads</h4>
-              <Chips names={selectedNode.inputs} picked={column} onPick={setColumn} />
-              <h4>Writes</h4>
-              <Chips names={selectedNode.outputs} picked={column} onPick={setColumn} />
-              {Object.keys(selectedNode.params).length > 0 && (
-                <>
-                  <h4>Params</h4>
-                  <pre>{JSON.stringify(selectedNode.params, null, 1)}</pre>
-                </>
-              )}
-              {run.visits[selectedNode.path] && Object.keys(run.visits[selectedNode.path]).length > 0 && (
-                <>
-                  <h4>Visited</h4>
-                  {Object.entries(run.visits[selectedNode.path]).map(([loc, n]) => (
-                    <div key={loc} className="mono">#{loc} · {n} rows</div>
-                  ))}
-                </>
-              )}
-            </>
-          ) : (
-            <div className="muted">Select a node to see what it reads and writes.</div>
-          )}
-          {lineage && (
-            <>
-              <h4>Lineage of {lineage.name}{run.record !== null ? `, record ${run.record}` : ""}</h4>
-              <LineageTree entry={lineage} record={run.record} onSelect={setSelected} />
-            </>
-          )}
-        </aside>
+        {tab === "state" && <StateTable columns={columns} record={run.record} selected={selectedNode} onPick={setColumn} picked={column} />}
+        {tab === "params" && (
+          <Params
+            schema={describe.params}
+            inputColumns={inputColumns}
+            record={run.record}
+            sessionRunning={columns !== null}
+            onWhatIf={(params, overrides, row) => send({ type: "whatIf", params, overrides, row })}
+            onRestart={(params) => send({ type: "restartWith", params })}
+            onCompareRevision={() => send({ type: "compareRevision" })}
+          />
+        )}
+        {tab === "compare" && <Compare {...compare} record={run.record} onSelect={select} />}
+        <NodePanel
+          hidden={!details}
+          node={selectedNode}
+          run={run}
+          column={column}
+          lineage={lineage}
+          history={history}
+          treePath={treePath}
+          onPick={setColumn}
+          onSelect={setSelected}
+          onReveal={(path) => send({ type: "reveal", path })}
+          onRewind={(path) => send({ type: "rewind", path })}
+        />
       </main>
     </div>
   );
@@ -149,38 +197,4 @@ export function App() {
 
 function producers(l: Lineage): string[] {
   return [...(l.producer ? [l.producer] : []), ...l.inputs.flatMap(producers)];
-}
-
-function LineageTree({ entry, record, onSelect }: { entry: Lineage; record: number | null; onSelect: (p: string) => void }) {
-  return (
-    <ul className="lineage">
-      <li>
-        <span className="mono">{entry.name}</span>
-        {record !== null && <span className="mono"> = {JSON.stringify(entry.value)}</span>}
-        {" ← "}
-        {entry.producer ? (
-          <a onClick={() => onSelect(entry.producer!)}>{entry.producer}</a>
-        ) : (
-          <span className="muted">input</span>
-        )}
-        {entry.via && <span className="muted"> ({entry.via})</span>}
-        {entry.inputs.map((i, k) => (
-          <LineageTree key={k} entry={i} record={record} onSelect={onSelect} />
-        ))}
-      </li>
-    </ul>
-  );
-}
-
-function Chips({ names, picked, onPick }: { names: string[] | null; picked?: string; onPick: (n?: string) => void }) {
-  if (names === null) return <div className="muted">unknown until it runs</div>;
-  return (
-    <div className="chips">
-      {names.map((n) => (
-        <button key={n} className={`chip ${picked === n ? "picked" : ""}`} onClick={() => onPick(picked === n ? undefined : n)}>
-          {n}
-        </button>
-      ))}
-    </div>
-  );
 }
