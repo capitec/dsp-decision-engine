@@ -9,7 +9,7 @@ import { afterAll, describe, it } from "vitest";
 import { launch, ROOT, SHOTS, type Codium } from "./codium";
 
 const OUT = path.join(SHOTS, "large");
-const FILE = "bank_flow.py";
+const FILE = "bank/pipeline.py";
 const manifest: { story: string; goal: string; shots: { file: string; caption: string }[] }[] = [];
 
 async function story(name: string, goal: string, body: (c: Codium, shot: (caption: string) => Promise<void>) => Promise<void>, folder?: string) {
@@ -68,7 +68,7 @@ describe("large flow stories", () => {
       "A policy analyst was told that the personal loan rule 'loan too large for income in sector 4' declined an applicant. The flow has about 1,000 steps in 40 files. She wants to find that rule, see where it sits in the flow, and open its code.",
       async (c, shot) => {
         await visualise(c);
-        await shot("After opening bank_flow.py and clicking 'Visualise flow' on the 1,000-step flow.");
+        await shot("After opening bank/pipeline.py and clicking 'Visualise flow' on the 1,000-step flow.");
         await wv(c).locator(".find input, input[aria-label='Find a step']").first().fill("sector_4_max_loan").catch(() => undefined);
         await shot("Looking for a way to find the rule by name (typed into a find box if there is one).");
         const node = wv(c).locator("svg .node", { hasText: "pl_sector_4_max_loan_to_income" }).first();
@@ -170,7 +170,6 @@ describe("large flow stories", () => {
   it("see what a two-file commit changed", async () => {
     const repo = fs.mkdtempSync(path.join(os.tmpdir(), "decider-bank-"));
     fs.cpSync(path.join(ROOT, "examples", "bank"), path.join(repo, "bank"), { recursive: true });
-    fs.copyFileSync(path.join(ROOT, "examples", FILE), path.join(repo, FILE));
     fs.mkdirSync(path.join(repo, ".vscode"));
     fs.writeFileSync(path.join(repo, ".vscode", "settings.json"), JSON.stringify({ "decider.python": ["uv", "run", "--project", path.resolve(ROOT, "..", ".."), "python"] }));
     const g = (...a: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...a], { cwd: repo });
