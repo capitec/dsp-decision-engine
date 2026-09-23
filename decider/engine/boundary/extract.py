@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from functools import lru_cache
-from typing import Sequence
+from typing import NamedTuple, Sequence
 
 import numpy as np
 import polars as pl
@@ -15,15 +15,16 @@ from decider.engine.boundary.nulls import check_required
 from decider.engine.ir.decls import FeatureKind, Input, NullPolicy, feature_kind
 
 
-@dataclass(frozen=True)
-class ExtractedColumn:
+# A NamedTuple: a frozen dataclass costs a microsecond more a column on a one-row call.
+class ExtractedColumn(NamedTuple):
     """One input column, read-only and C-contiguous, in the dtype the kernel is typed against.
 
     Args:
         values: float64 / int64 / bool / int32 codes, or an `(n, 2)` int64 table
             of `(address, byte length)` spans for a `bytes` input (length -1 for a null).
-        validity: the per-row mask, set only for an OPTIONAL input.
+        validity: the per-row mask, set only for an OPTIONAL input (all True when it has no nulls).
         categories: the exported dictionary a `str` input's codes index, when it has one.
+        has_nulls: whether the frame's column had a null.
     """
 
     name: str
@@ -31,6 +32,7 @@ class ExtractedColumn:
     validity: np.ndarray | None
     plan: ColumnPlan
     categories: tuple[str | None, ...] | None = None
+    has_nulls: bool = False
 
 
 @dataclass(frozen=True)
@@ -38,13 +40,11 @@ class ExtractedFrame:
     """Every declared input of `extract_frame`, plus the frame the kernel reads.
 
     `kernel_frame` is the frame after casts; it keeps the memory a `bytes`
-    input's spans point into alive. `categories` maps each `str` input with a
-    dictionary to its categories.
+    input's spans point into alive.
     """
 
     columns: dict[str, ExtractedColumn]
     kernel_frame: pl.DataFrame
-    categories: dict[str, tuple[str | None, ...]] = field(default_factory=dict)
 
 
 class _SchemaPlan:
@@ -114,31 +114,34 @@ def extract_frame(frame: pl.DataFrame, inputs: Sequence[Input], *, path: str = "
         ex.columns["income"].values   # float64, read-only
     """
     check_required(frame, inputs, path)
-    absent = [d.name for d in inputs if d.name not in frame.columns]
+    names = frame.columns
+    absent = [d.name for d in inputs if d.name not in names]
     if absent:
         # An absent column is an all-null one, so it takes the same fill/mask path.
         frame = frame.with_columns(pl.lit(None).alias(name) for name in absent)
-    sp = _schema_plan(tuple(inputs), tuple(frame.columns), tuple(frame.dtypes))
+        names = frame.columns
+    sp = _schema_plan(tuple(inputs), tuple(names), tuple(frame.dtypes))
     kernel_frame = cast_frame(frame, sp.casts) if sp.casts else frame
     columns: dict[str, ExtractedColumn] = {}
-    categories: dict[str, tuple[str | None, ...]] = {}
     fp = sp.frame_plan
     if fp is None:
-        return ExtractedFrame(columns, kernel_frame, categories)
+        return ExtractedFrame(columns, kernel_frame)
     view = _checkout(fp)
     try:
         view.bind(kernel_frame)
-        cols = view.materialize_columns()
-        by_kind = (cols.f64, cols.i64, cols.b8, cols.i32, cols.span)
-        for c, decl in enumerate(inputs):
-            kind = FeatureKind(int(fp.kinds[c]))
-            values = by_kind[kind][int(fp.slots[c])]
-            values.flags.writeable = False
-            validity = cols.valid[c] if decl.null_policy is NullPolicy.OPTIONAL else None
-            cats = view.dictionary(decl.name) if kind is FeatureKind.CODE else None
-            if cats is not None:
-                categories[decl.name] = cats
-            columns[decl.name] = ExtractedColumn(decl.name, values, validity, sp.plans[decl.name], cats)
+        values, masks = view.columns()
+        everywhere = None
+        for decl, x, nulls, (kind, _) in zip(inputs, values, masks, fp.places):
+            mask = nulls
+            if decl.null_policy is not NullPolicy.OPTIONAL:
+                mask = None
+            elif nulls is None:
+                if everywhere is None:
+                    everywhere = np.ones(len(x), bool)
+                    everywhere.flags.writeable = False
+                mask = everywhere
+            cats = view.dictionary(decl.name) if kind == FeatureKind.CODE else None
+            columns[decl.name] = ExtractedColumn(decl.name, x, mask, sp.plans[decl.name], cats, nulls is not None)
     finally:
         _checkin(fp, view)
-    return ExtractedFrame(columns, kernel_frame, categories)
+    return ExtractedFrame(columns, kernel_frame)

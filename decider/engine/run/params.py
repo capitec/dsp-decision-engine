@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping
 
 from decider.engine.params import NodeParams, ParamsCache, ParamsError, Status, bundle_class, document_key
-from decider.registry.resolve import suggest_names
+from decider.registry.resolve import hint
 
 _NO_PARAMS = bundle_class(())()
 _EMPTY_KEY = document_key({})
@@ -80,7 +80,7 @@ def check_namespaces(doc: Mapping[str, Any], nodes: dict[int, NodeParams]) -> No
     given = doc.get("shared", {})
     for key in given if isinstance(given, Mapping) else ():
         if key not in shared:
-            raise ParamsError(f"params document: no step uses shared param '{key}'.{_hint(key, shared)}")
+            raise ParamsError(f"params document: no step uses shared param '{key}'.{hint(key, shared)}")
     _walk({k: v for k, v in doc.items() if k != "shared"}, "", paths)
 
 
@@ -95,10 +95,6 @@ def _walk(level: Mapping[str, Any], prefix: str, paths: set[str]) -> None:
         siblings = {p[len(prefix):].split("/")[0] for p in paths if p.startswith(prefix)}
         raise ParamsError(
             f"params document: no step with params at '{path}'."
-            + _hint(key, siblings, prefix)
+            + hint(key, siblings, prefix)
         )
 
-
-def _hint(name: str, candidates, prefix: str = "") -> str:
-    near = suggest_names(name, candidates)
-    return f" Did you mean '{prefix}{near[0]}'?" if near else ""

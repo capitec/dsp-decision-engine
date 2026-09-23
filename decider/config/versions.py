@@ -5,13 +5,26 @@ import typing as t
 
 
 class VersionPart(enum.Enum):
+    """Which part of a `Version` a new config version bumps.
+
+    Example::
+
+        store.create_version(config, bump=VersionPart.MAJOR)
+    """
+
     MAJOR = "major"
     MINOR = "minor"
     PATCH = "patch"
 
 
 class Version(t.NamedTuple):
-    """A `major.minor.patch` config version; compares and sorts numerically."""
+    """A `major.minor.patch` config version; compares and sorts numerically.
+
+    Example::
+
+        Version.parse("0.10.0") > Version(0, 9, 0)        # True
+        str(Version(1, 2, 0).bump(VersionPart.PATCH))     # "1.2.1"
+    """
 
     major: int
     minor: int
@@ -39,7 +52,13 @@ class Version(t.NamedTuple):
 
 
 class VersionedConfig(t.NamedTuple):
-    """One stored version: `config` maps a key (`"params"`, `"tree"`) to its document."""
+    """One stored version: `config` maps a key (`"params"`, `"tree"`) to its document.
+
+    Example::
+
+        versioned = store.read("1.2.0")
+        versioned.config["params"]
+    """
 
     version: Version
     config: dict[str, t.Any]

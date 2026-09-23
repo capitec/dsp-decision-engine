@@ -229,3 +229,14 @@ def test_cases_string_match_folds_trims_and_matches_regexes(run, kw):
         "trim_whitespace": ["hit", "miss", "hit", "miss", "miss"],
     }[next(iter(kw))]
     assert got == expected
+
+
+@pytest.mark.parametrize("mode", ["stepped", "fused"])
+def test_a_long_string_column_is_read_in_place_and_an_override_replaces_it(mode):
+    frame = pl.DataFrame({"s": ["gold card", "silver", None] * 20})
+    exe = Engine().bind(flow(_matcher("starts_with", ["gold"])), mode=mode)
+    assert exe.run(frame)["hit"].to_list() == [1, 0, 0] * 20
+    s = exe.session(frame)
+    s.set("s", "gold")
+    s.resume()
+    assert s.output()["hit"].to_list() == [1] * 60
