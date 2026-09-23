@@ -15,6 +15,8 @@ interface Props {
   back?: { label: string; go: () => void };
   /** Shown above the comparison, e.g. a scenario pager. */
   header?: ReactNode;
+  /** Focus a record in the paused debugger; absent when no session is running. */
+  onFocus?: (row: number) => void;
   /** Offer "Compare with a git revision…" (the Compare tab does; an inline scenario comparison doesn't). */
   withRevision?: boolean;
 }
@@ -33,7 +35,7 @@ function Diffs({ diffs, record, keyCol, results }: { diffs: ValueDiff[]; record:
                 {results && d.name in results.b && !(same(results.a[d.name]?.[s.row], s.a) && same(results.b[d.name]?.[s.row], s.b)) && (
                   <span> · final <strong className="mono">{formatValue(results.b[d.name]?.[s.row], d.name)}</strong> <span className="muted">(was {formatValue(results.a[d.name]?.[s.row], d.name)})</span></span>
                 )}
-                {i === 0 && d.changedRows.length > d.samples.length && <span className="muted"> · +{d.changedRows.length - d.samples.length} more records</span>}
+                {i === d.samples.length - 1 && d.changedRows.length > d.samples.length && <span className="muted"> (and {d.changedRows.length - d.samples.length} more)</span>}
               </td>
             </tr>
           )),
@@ -45,7 +47,7 @@ function Diffs({ diffs, record, keyCol, results }: { diffs: ValueDiff[]; record:
 
 /** The result columns that changed, for the records they changed on; the unchanged ones on request. */
 /** Two runs side by side, step by step, in execution order. */
-export function Compare({ comparison: c, busy, error, record, onSelect, onCompareRevision, onOpenDiff, back, header, withRevision = true }: Props) {
+export function Compare({ comparison: c, busy, error, record, onSelect, onCompareRevision, onOpenDiff, back, header, withRevision = true, onFocus }: Props) {
   const [onlyChanges, setOnlyChanges] = useState(true);
   const revisionButton = <button onClick={onCompareRevision}>Compare with a git revision…</button>;
   if (busy) return <div className="compare"><div className="empty">{busy}</div></div>;
@@ -79,7 +81,8 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
   ];
   // The edited steps are the causes; the rest only follow from them.
   const touched = c.steps.filter((s) => s.status !== "same" && s.status !== "not run");
-  const causes = touched.filter(edited);
+  const idleReaders = readers.flatMap((r) => r.steps).filter((p) => !touched.some((s) => s.path === p));
+  const causes = [...touched.filter(edited), ...c.steps.filter((s) => idleReaders.includes(s.path))];
   const downstream = touched.length - causes.length;
   // A changed param whose readers all wrote the same values: say so, or "nothing changed" reads as a bug.
   const idle = readers.filter((p) => p.steps.length && !p.steps.some((s) => c.steps.find((x) => x.path === s)?.outputs.length));
@@ -106,7 +109,7 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
           {causes.length === 1 ? " it makes" : " they make"} no difference for these {c.rows} records.
         </div>
       )}
-      {idle.map((p) => (
+      {!causes.length && idle.map((p) => (
         <div key={p.param} className="note">
           <span className="mono">{p.param}</span> is read by{" "}
           {p.steps.slice(0, 6).map((s, i) => (
@@ -126,7 +129,7 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
         </div>
       )}
       <h4>Results</h4>
-      <ResultCards c={c} record={record} />
+      <ResultCards c={c} record={record} onFocus={onFocus} />
       {(paramLines.length > 0 || c.changedInputs.length > 0 || causes.length > 0) && <h4>What changed</h4>}
       {paramLines.map((l) => (
         <div key={l} className="mono">{l}</div>
@@ -136,6 +139,14 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
       ))}
       {causes.length > 0 && (
         <table className="changed-table">
+          <thead>
+            <tr>
+              <th>step</th>
+              <th>in</th>
+              <th>what changed</th>
+              <th>records changed</th>
+            </tr>
+          </thead>
           <tbody>
             {causes.map((s) => (
               <tr key={s.path}>
@@ -144,13 +155,13 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
                 <td>
                   {[
                     ...s.paramChanges,
-                    ...readers.filter((r) => r.steps.includes(s.path)).map((r) => `${r.param} param`),
+                    ...readers.filter((r) => r.steps.includes(s.path)).map((r) => `reads ${r.param}`),
                     ...s.structural.filter((x) => x !== "params").map((x) => (x === "code" ? "code changed" : `${x} changed`)),
                     ...(s.status === "removed" ? ["skipped / removed"] : s.status === "added" ? ["added"] : []),
                   ].join(", ")}
                   {s.structural.includes("code") && c.files && <> · <a onClick={() => onOpenDiff(s.path)}>view diff</a></>}
                 </td>
-                <td className="mono">{new Set(s.outputs.flatMap((o) => o.changedRows)).size || "—"}</td>
+                <td className="mono">{new Set(s.outputs.flatMap((o) => o.changedRows)).size}</td>
               </tr>
             ))}
           </tbody>

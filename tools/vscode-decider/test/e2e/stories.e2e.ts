@@ -144,7 +144,7 @@ describe("user stories", () => {
       await wv.locator(".pause-banner", { hasText: "cap_by_income" }).waitFor({ timeout: 30_000 });
       await tab(c, "Scenarios");
       await shot("The Scenarios tab while paused before cap_by_income.");
-      await wv.locator('input[aria-label="knob"]').first().fill("cap · cap_by_income (term)");
+      await wv.locator('input[aria-label="knob"]').first().fill("cap_by_income (cap) in term");
       await wv.locator('input[aria-label="knob values"]').first().fill("24, 36, 48");
       await wv.locator("button", { hasText: "+ add another" }).click();
       await wv.locator('input[aria-label="knob"]').nth(1).fill("field · requested_amount");

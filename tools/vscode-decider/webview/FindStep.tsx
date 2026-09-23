@@ -18,6 +18,8 @@ export function findSteps(nodes: CallNodeJson[], query: string): CallNodeJson[] 
 export function FindStep({ nodes, onPick }: { nodes: CallNodeJson[]; onPick: (path: string) => void }) {
   const [query, setQuery] = useState("");
   const [at, setAt] = useState(0);
+  // After a pick the list closes but the hits stay, to step through with ◀ ▶.
+  const [picked, setPicked] = useState<number | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const hits = findSteps(nodes, query);
   useEffect(() => {
@@ -30,11 +32,13 @@ export function FindStep({ nodes, onPick }: { nodes: CallNodeJson[]; onPick: (pa
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
-  const pick = (n: CallNodeJson | undefined) => {
+  const pick = (i: number) => {
+    const n = hits[i];
     if (!n) return;
     onPick(n.path);
-    setQuery("");
+    setPicked(i);
   };
+  const step = (d: number) => pick(((picked ?? 0) + d + hits.length) % hits.length);
   return (
     <span className="find">
       <input
@@ -45,18 +49,29 @@ export function FindStep({ nodes, onPick }: { nodes: CallNodeJson[]; onPick: (pa
         onChange={(e) => {
           setQuery(e.target.value);
           setAt(0);
+          setPicked(null);
         }}
         onKeyDown={(e) => {
           if (e.key === "ArrowDown") setAt(Math.min(at + 1, Math.min(hits.length, MAX_HITS) - 1));
           else if (e.key === "ArrowUp") setAt(Math.max(at - 1, 0));
-          else if (e.key === "Enter") pick(hits[at]);
-          else if (e.key === "Escape") setQuery("");
+          else if (e.key === "Enter") picked === null ? pick(at) : step(e.shiftKey ? -1 : 1);
+          else if (e.key === "Escape") {
+            setQuery("");
+            setPicked(null);
+          }
         }}
       />
-      {query && (
+      {query && picked !== null && hits.length > 1 && (
+        <span className="find-nav">
+          <button title="Previous hit (Shift+Enter)" onClick={() => step(-1)}>◀</button>
+          {picked + 1} of {hits.length}
+          <button title="Next hit (Enter)" onClick={() => step(1)}>▶</button>
+        </span>
+      )}
+      {query && picked === null && (
         <ul className="find-hits" role="listbox">
           {hits.slice(0, MAX_HITS).map((n, i) => (
-            <li key={n.path} role="option" aria-selected={i === at} className={i === at ? "at" : ""} onMouseDown={() => pick(n)}>
+            <li key={n.path} role="option" aria-selected={i === at} className={i === at ? "at" : ""} onMouseDown={() => pick(i)}>
               <strong>{n.path.slice(n.path.lastIndexOf("/") + 1)}</strong>
               {n.doc && <span> · {n.doc}</span>}
               <div className="muted small">in {n.path.slice(0, n.path.lastIndexOf("/"))}</div>
