@@ -8,7 +8,7 @@ import pytest
 from numba.core import event
 
 from decider import flow, step
-from decider.engine.debug import Edited, Error, Paused
+from decider.engine.debug import Edited, Paused, ReloadFailed
 from decider.engine.debug.hot import ModuleWatcher
 from decider.testing import MODES
 
@@ -122,7 +122,7 @@ def test_a_notebook_cell_redefining_a_helper_is_picked_up_by_a_watch_that_rebuil
         assert s.output()["ratio"].to_list() == [6100 / 1200 * 10, 2600 / 800 * 10]
         # A cell that breaks the pipeline: logged, and the session keeps what it had.
         shell.run_cell("del ratio")
-        assert isinstance(s.events[-1], Error)
+        assert isinstance(s.events[-1], ReloadFailed) and "NameError" in s.events[-1].error
         assert s.output()["ratio"].to_list() == [6100 / 1200 * 10, 2600 / 800 * 10]
     finally:
         shell.events.callbacks["post_run_cell"].clear()
@@ -180,4 +180,59 @@ def test_editing_an_imported_module_on_disk_reloads_the_pipeline_without_stale_r
     finally:
         for name in [n for n in sys.modules if n.startswith(pkg)]:
             del sys.modules[name]
+
+
+DATA = """
+import numpy as np
+import polars as pl
+from decider import flow, frame_step
+
+BUREAU = pl.DataFrame({{"client_id": [1, 2], "bureau_score": [{scores}]}})
+WEIGHTS = np.array([1.0, 2.0])
+
+
+@frame_step(reads=["client_id"], writes=["bureau_score"])
+def join_bureau(df: pl.DataFrame) -> pl.DataFrame:
+    return df.join(BUREAU, on="client_id", how="left")
+
+
+def weighted(bureau_score: int) -> float:
+    return bureau_score * WEIGHTS[0]
+
+pipeline = flow(join_bureau, weighted)
+"""
+
+
+def test_re_importing_an_unchanged_data_constant_changes_nothing_and_a_changed_one_re_runs(tmp_path, monkeypatch):
+    root = tmp_path / "hot_data"
+    root.mkdir()
+    (root / "__init__.py").write_text("")
+    _write(root / "pipeline.py", DATA.format(scores="700, 650"))
+    monkeypatch.syspath_prepend(str(tmp_path))
+    try:
+        watcher = ModuleWatcher("hot_data.pipeline:pipeline")
+        s = watcher.get().session(pl.DataFrame({"client_id": [1, 2]}))
+        s.resume()
+        n = len(s.events)
+        _write(root / "pipeline.py", "# a comment\n" + DATA.format(scores="700, 650"))
+        assert s.reload(watcher.poll()) is None and len(s.events) == n
+        _write(root / "pipeline.py", DATA.format(scores="700, 600"))
+        s.reload(watcher.poll())
+        assert Edited("replace", "join_bureau") in s.events[n:]
+        s.resume()
+        assert s.output()["weighted"].to_list() == [700.0, 600.0]
+    finally:
+        for name in [n for n in sys.modules if n.startswith("hot_data")]:
+            del sys.modules[name]
+
+
+def test_structure_follows_added_and_deleted_steps():
+    s = flow(disposable_income, ratio, headroom).session(FRAME)
+    assert [(n["path"], n["kind"]) for n in s.structure()] == [
+        ("", "sequence"), ("disposable_income", "scalar"), ("ratio", "scalar"), ("headroom", "scalar")]
+    assert s.structure()[2]["source"].endswith(":ratio")
+    s.reload(flow(disposable_income, ratio, headroom, buffer))
+    assert s.structure()[-1]["path"] == "buffer"
+    s.delete("buffer")
+    assert "buffer" not in {n["path"] for n in s.structure()}
 
