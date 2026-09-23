@@ -22,7 +22,15 @@ const shared = (values: Record<string, unknown>) => (values.shared ?? {}) as Rec
 export function substitute(formula: string, known: Record<string, unknown>): string {
   const filled = formula.replace(/\b[A-Za-z_]\w*\b/g, (name) => (name in known ? formatValue(known[name] as never, name) : name));
   // A sum of many terms reads better without the ones that are zero.
-  return filled.replace(/ [+-] 0%?(?![.\d%])/g, "");
+  return filled.replace(/ [+-] 0%?(?![.\d%])/g, "").replace(/ \* 1(?![.\d%])/g, "").replace(/(^|[(\s])1 \* /g, "$1");
+}
+
+/** A formula that only adds and subtracts names, as signed terms: `a + b - c` gives `[["+", "a"], ["+", "b"], ["-", "c"]]`. */
+export function sumTerms(formula: string): ["+" | "-", string][] | null {
+  if (!/^\s*[A-Za-z_]\w*(\s*[+-]\s*[A-Za-z_]\w*)+\s*$/.test(formula)) return null;
+  const terms: ["+" | "-", string][] = [];
+  for (const m of formula.matchAll(/([+-]?)\s*([A-Za-z_]\w*)/g)) terms.push([m[1] === "-" ? "-" : "+", m[2]]);
+  return terms;
 }
 
 /** `+ - * /` and parentheses over numbers and known names; null when it can't (a call, a comparison…). */
@@ -155,8 +163,15 @@ function summary(entry: Lineage, nodes: CallNodeJson[], values: Record<string, u
       at = at.inputs.find((i) => i.name === first);
       continue;
     }
-    const zeros = at.inputs.filter((i) => i.value === 0).map((i) => i.name);
-    parts.push(`${at.name} = ${substitute(node.formula, known)}${zeros.length ? ` (at 0: ${zeros.join(", ")})` : ""}`);
+    const terms = sumTerms(node.formula);
+    if (terms) {
+      const value = (name: string) => at!.inputs.find((i) => i.name === name)?.value;
+      const moving = terms.filter(([, n]) => value(n) !== 0);
+      const zeros = terms.length - moving.length;
+      parts.push(
+        `${at.name} ${formatValue(at.value, at.name)} = ${moving.map(([sign, n], i) => `${i ? (sign === "-" ? "− " : "+ ") : ""}${n} ${formatValue(value(n), n)}`).join(" ")}${zeros ? ` (${zeros} other part${zeros === 1 ? " is" : "s are"} 0)` : ""}`,
+      );
+    } else parts.push(`${at.name} = ${substitute(node.formula, known)}`);
     break;
   }
   return parts.length > 1 ? parts.join(" · ") : null;
@@ -174,6 +189,9 @@ function Level({ entry, depth, nodes, values, who, onPick, onSelect }: { entry: 
   const rows = node?.table ? (Object.keys(node.params).map((k) => shared(values)[k]).find(Array.isArray) as Record<string, unknown>[] | undefined) : undefined;
   const match = node?.table && rows && entry.inputs[0] ? matchRow(node.table, rows, entry.inputs[0].value) : null;
   const expandable = entry.producer !== null && (entry.inputs.length > 0 || !!node?.formula);
+  // A sum shows as a waterfall, which already names each part; its inputs' own breakdowns open on request.
+  const terms = node?.formula ? sumTerms(node.formula) : null;
+  const [partsOpen, setPartsOpen] = useState(false);
   return (
     <li>
       {expandable ? (
@@ -189,7 +207,35 @@ function Level({ entry, depth, nodes, values, who, onPick, onSelect }: { entry: 
         {entry.via === "merge" && " (the branch arm this record took)"}
         {entry.via === "carry" && " (the loop's last iteration)"}
       </span>
-      {open && node?.formula && who && (
+      {open && who && terms && (
+        <table className="waterfall">
+          <tbody>
+            {terms.map(([sign, n], k) => {
+              const part = entry.inputs.find((i) => i.name === n);
+              const from = nodes.find((x) => x.path === part?.producer);
+              const partRows = from?.table ? (Object.keys(from.params).map((p) => shared(values)[p]).find(Array.isArray) as Record<string, unknown>[] | undefined) : undefined;
+              const row = from?.table && partRows && part?.inputs[0] ? matchRow(from.table, partRows, part.inputs[0].value) : null;
+              return (
+                <tr key={n} className={part?.value === 0 ? "zero" : ""}>
+                  <td className="sign">{k === 0 ? "" : sign === "-" ? "−" : "+"}</td>
+                  <td>
+                    <a title={part?.producer ? `Show ${short(part.producer)} in the graph` : n} onClick={() => part?.producer && onSelect(part.producer)}>{n}</a>
+                  </td>
+                  <td className="mono num">{formatValue(part?.value as never, n)}</td>
+                  <td className="muted small">{row ? `row ${row[0] + 1} of ${short(from!.path)}: ${row[1]}` : ""}</td>
+                </tr>
+              );
+            })}
+            <tr className="total">
+              <td className="sign">=</td>
+              <td>{entry.name}</td>
+              <td className="mono num">{formatValue(entry.value, entry.name)}</td>
+              <td />
+            </tr>
+          </tbody>
+        </table>
+      )}
+      {open && node?.formula && who && !terms && (
         <div className="formula mono" title={node.formula}>
           = {substitute(node.formula, known)}
           {clampNote(node.formula, entry.inputs, entry.value, known) && <div className="clamp">{clampNote(node.formula, entry.inputs, entry.value, known)}</div>}
@@ -200,7 +246,13 @@ function Level({ entry, depth, nodes, values, who, onPick, onSelect }: { entry: 
           row {match[0] + 1} of <span className="mono">{short(node!.path)}</span>: {match[1]}
         </div>
       )}
-      {open && entry.inputs.length > 0 && (
+      {open && terms && entry.inputs.length > 0 && !partsOpen && (
+        <div className="small">
+          <span className="twisty" />
+          <a onClick={() => setPartsOpen(true)}>▸ how each part was computed</a>
+        </div>
+      )}
+      {open && entry.inputs.length > 0 && (!terms || partsOpen) && (
         <ul>
           {entry.inputs.filter((i) => !zero(i) || showZeros).map((i, k) => (
             <Level key={k} entry={i} depth={depth + 1} nodes={nodes} values={values} who={who} onPick={onPick} onSelect={onSelect} />
