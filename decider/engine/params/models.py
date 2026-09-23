@@ -39,7 +39,7 @@ def _placeholder(annotation: Any) -> Any:
     # value of the right type so a compiled kernel sees one signature.
     try:
         return annotation()
-    except TypeError:
+    except (TypeError, ValueError):
         return None
 
 

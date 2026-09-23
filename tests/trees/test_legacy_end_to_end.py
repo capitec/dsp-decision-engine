@@ -162,8 +162,10 @@ def test_a_cases_rule_visits_the_branch_of_the_matched_condition_or_otherwise():
     assert [_visits(tree, {"code": c})[-1] for c in (1.0, 2.0, 9.0)] == ["0.0", "0.1", "0.2"]
 
 
-def test_a_missing_numeric_input_is_an_error_not_a_silent_otherwise():
-    tree = flat(unary(lt("v", 50.0), leaf(0), leaf(-1)), output("low", default="other"))
+def test_a_missing_numeric_input_is_an_error_under_strict_null_handling():
+    tree = TreeConfig(name="t", null_handling="error", tree={
+        "type": "flat_rule", "rule": {"rule": unary(lt("v", 50.0), leaf(0), leaf(-1))},
+        "output": output("low", default="other")})
     for mode in ("interpreted", "stepped", "fused"):
         with pytest.raises(MissingInputError):
             Engine().bind(tree, mode=mode).run(pl.DataFrame({"v": pl.Series([30.0, None], dtype=pl.Float64)}))

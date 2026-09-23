@@ -20,6 +20,7 @@ Decision records for the consolidated `decider`, each with its measured reason.
 - `lazy-validation-fused.md`: lazy validation in fused mode validates a kernel's nodes as it launches; no kernel suspend, because a kernel has no control flow.
 - `packed-control-flow.md`: in fused mode a branch or loop of plain scalar steps is one kernel with LLVM control flow; the packing rules, when a launch runs unpacked, and throughput against decider2.
 - `tree-walker.md`: a tree is one row node walked by one njit function over packed arrays passed by address, with an independent Python reference; string outputs are `Literal` indices; strings are matched as byte spans in the kernel, regex/case/trim in Python.
+- `decision-tables.md`: a table is one row node, a jump program plus packed rows read by one njit matcher; rows inline or from a table param checked and packed when the document arrives; String outputs of param rows are Enum columns; decider_old's null semantics.
 - `wiring-scopes.md`: how names bind to versions: input columns, typo and forward-reference errors, branch/loop scopes, frame barriers, outputs.
 - `vscode-extension-testing.md`: how the VS Code prototype is tested at four levels (pytest, DebugClient, in-editor mocha, Playwright on the Electron binary), and the traps found on the way.
 
