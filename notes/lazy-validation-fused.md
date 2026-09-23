@@ -20,10 +20,19 @@ nodes that ran (checked in stepped and fused by
 `tests/run/test_params_validation.py` and
 `tests/run/test_compiled_modes.py`).
 
-**Revisit when** a kernel gains control flow (a fused branch, or a tree whose
-internal nodes carry params): then a node inside the kernel may run on no row,
-and suspend/resume (status array in, `(node, row)` out, relaunch from the row)
-is the way to keep "only nodes that run can fail".
+**Packed branches and loops** (fused mode, `packed-control-flow.md`) do have
+control flow: an arm or a loop body may run on no row. With lazy validation, a
+branch or loop packs only when no call in it but its own condition (which runs
+whenever the branch or loop does) has params; otherwise it runs the
+Python-driven path, which validates each call as it runs. Eager validation has
+checked every node before any kernel launches, so it packs regardless. This is
+decided once per executable, so a session's checkpoints don't depend on the
+params document.
+
+**Revisit when** that costs too much (a lazy pipeline whose hot branch has
+params in its arms) or a tree's internal nodes carry params: then
+suspend/resume inside the kernel (status array in, `(node, row)` out, relaunch
+from the row) keeps "only nodes that run can fail" while packing everything.
 
 **One difference:** when one node of a kernel has invalid params and an
 earlier node of the same kernel would raise a runtime error, fused mode reports

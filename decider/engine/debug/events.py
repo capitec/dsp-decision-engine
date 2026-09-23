@@ -41,9 +41,11 @@ class RunStarted:
 
 @dataclass(frozen=True, slots=True)
 class NodeStarted:
-    """A node is about to run."""
+    """A node is about to run; `arm` and `iteration` place it inside a branch arm or loop iteration, as on `Checkpoint`."""
 
     origin: Origin
+    arm: int | None = None
+    iteration: int | None = None
     kind: Literal["node_started"] = "node_started"
 
 
@@ -70,13 +72,17 @@ class Paused:
     """The session stopped at a checkpoint; `reason` is `"breakpoint"`, `"step"`, `"pause"` or `"rewind"`.
 
     `kernel` lists the steps a fused kernel runs when the checkpoint is one
-    (the first is `origin`); a breakpoint on any of them pauses here.
+    (the first is `origin`); a breakpoint on any of them pauses here. `arm`
+    and `iteration` are the checkpoint's: which branch arm and which loop
+    iteration (from 1) it is inside.
     """
 
     origin: Origin
     when: Literal["before", "after"]
     reason: str
     kernel: tuple[str, ...] = ()
+    arm: int | None = None
+    iteration: int | None = None
     kind: Literal["paused"] = "paused"
 
 

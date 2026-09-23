@@ -43,7 +43,15 @@ class Session:
     `rewind`) on any of its steps stops just before the whole kernel, with
     the kernel's steps in `Paused.kernel`. Values a kernel uses only inside
     itself are never stored, so `value` and `set` on one raise a `KeyError`
-    that suggests `mode="stepped"`.
+    that suggests `mode="stepped"`. A fused branch or loop of plain scalar
+    steps is one such kernel, with the branch's or loop's own path.
+
+    Branches and loops: `step()` runs one whole; `step_into()` enters it.
+    Each step is one node over every row that reaches it, so entering a
+    branch whose rows go both ways visits the first taken arm, then the next
+    one, in arm order; an arm no row takes is skipped. A loop is entered
+    once per iteration, over the rows still looping. Checkpoints and
+    `NodeStarted`/`Paused` events carry `arm` and `iteration` (from 1).
 
     Example::
 
@@ -88,6 +96,11 @@ class Session:
                 self._kernels[kernel[0]] = kernel
                 self._produces[kernel[0]] = kept
                 self._internal.update((v.id, kernel) for c in unit.calls for v in c.writes if v not in kept)
+        # A packed branch or loop is one checkpoint pair with its own path; nothing inside it is stored.
+        for path, unit in getattr(self._runner, "packed", {}).items():
+            kernel = (path, *(c.node.origin.path for c in unit.calls))
+            self._kernels[path] = kernel
+            self._internal.update((vid, kernel) for vid in unit.inner if vid not in {v.id for v, _ in unit.writes})
         self._emit(RunStarted(self.state.n))
         self._log_params()
 
@@ -107,7 +120,7 @@ class Session:
         return self._go("step", lambda cp: True)
 
     def step_into(self) -> Checkpoint | None:
-        """Advance to the very next checkpoint: into a sequence, the taken arm or the next iteration."""
+        """Advance to the very next checkpoint: into a sequence, each taken arm in turn, or the next iteration."""
         return self._go("step", lambda cp: True)
 
     def resume(self) -> Checkpoint | None:
@@ -172,7 +185,7 @@ class Session:
         self.state.restore(old, set(self.state.values) | {v.id for v in plan.versions if v.producer is None})
         self._visits.clear()
         self.current, self.finished = cp, False
-        self._emit(Paused(cp.origin, cp.when, "rewind", self._kernels.get(cp.origin.path, ())))
+        self._emit(Paused(cp.origin, cp.when, "rewind", self._kernels.get(cp.origin.path, ()), cp.arm, cp.iteration))
         return cp
 
     def apply(self, command: Command) -> Any:
@@ -219,7 +232,7 @@ class Session:
                 why = reason
             else:
                 continue
-            self._emit(Paused(cp.origin, cp.when, why, self._kernels.get(cp.origin.path, ())))
+            self._emit(Paused(cp.origin, cp.when, why, self._kernels.get(cp.origin.path, ()), cp.arm, cp.iteration))
             return cp
         return None
 
@@ -242,7 +255,7 @@ class Session:
         self._previous, self.current = self.current, cp
         self._log_params()
         if cp.when == "before":
-            self._emit(NodeStarted(cp.origin))
+            self._emit(NodeStarted(cp.origin, cp.arm, cp.iteration))
             return cp
         o = cp.origin
         for locator, rows in self._visits.items():
@@ -281,7 +294,8 @@ class Session:
 
     def _check_stored(self, spec: str, v: Version) -> None:
         kernel = self._internal.get(v.id)
-        if kernel is not None:
+        # Stored after all when a packed branch or loop took the unpacked path (a null it can't carry).
+        if kernel is not None and v.id not in self.state.values:
             raise KeyError(f"{spec!r} is computed inside the fused kernel {list(kernel)} and never stored; "
                            "open the session with mode='stepped' to inspect or set it")
 
