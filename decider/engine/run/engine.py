@@ -125,7 +125,7 @@ class Executable:
             )
 
     def _params(self, params: Mapping[str, Any] | None, n: int) -> RunParams:
-        run = RunParams(self.nodes, {} if params is None else params, self.cache)
+        run = RunParams(self.nodes, {} if params is None else params, self.cache, self.lazy)
         self.report = run.report
         if run.key not in self._checked:
             check_namespaces(run.doc, self.nodes)

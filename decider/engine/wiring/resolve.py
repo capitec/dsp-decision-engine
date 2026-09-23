@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from decider.engine.ir.decls import Input
+from decider.engine.ir.decls import Input, base_annotation
 from decider.engine.ir.nodes import BranchNode, CallNode, IRNode, LoopNode, SequenceNode, iter_nodes
 from decider.engine.wiring.plan import Branch, Call, Carry, Loop, Merge, Plan, Resolved, Sequence, Version
 from decider.exceptions import WiringError
@@ -171,8 +171,9 @@ class _Resolver:
         return v
 
     def hidden(self, name: str) -> tuple[Version, str] | None:
-        """The last version of `name` written inside a finished branch or loop, and that branch or loop."""
-        for v in reversed(self.chains.get(name, ())):
+        """The last version of `name`, if it was written inside a finished branch or loop, and that branch or loop."""
+        # Only the last: an earlier one may have been passed on, into a sibling arm's scope say.
+        for v in self.chains.get(name, ())[-1:]:
             owners = [p for p in self.closed if v.producer.startswith(p + "/")]
             if owners:
                 return v, self.closed[max(owners, key=len)]
@@ -199,6 +200,11 @@ class _Resolver:
             written = [v for v in finals if v is not None]
             if not written:
                 raise WiringError(f"branch {path}: modifies {name!r}, but no arm writes it")
+            # Rows of one merged column come from different arms, so they must agree on its type.
+            kinds = {v.producer: base_annotation(v.annotation) for v in written if v.annotation not in (None, Any)}
+            if len(set(kinds.values())) > 1:
+                raise WiringError(f"branch {path}: the arms disagree on the type of {name!r}: "
+                                  + ", ".join(f"{p} writes {getattr(t, '__name__', t)}" for p, t in kinds.items()))
             prior = self.lookup(name, cond, path) if None in finals else None
             merges.append(Merge(self.new(name, path, written[0].annotation), prior, finals))
         for s in (cond, *arm_scopes):
@@ -224,6 +230,9 @@ class _Resolver:
             if last is None:
                 raise WiringError(f"loop {path}: carries {c!r}, but the body never writes it")
             carries.append(Carry(v, initial, last))
+            # What the loop hands on comes after its body's versions, as a branch's merge follows its arms'.
+            self.chains[c].remove(v)
+            self.chains[c].append(v)
         scope.absorb(inner)
         self.closed[path] = f"loop {path}, which passes on only carries={list(node.carries)}"
         # Reads inside the loop don't consume the value the loop hands on.
