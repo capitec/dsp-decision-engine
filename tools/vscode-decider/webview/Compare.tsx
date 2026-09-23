@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { same, type Comparison, type ValueDiff } from "../src/compare";
 import { formatValue, recordLabel, type RecordKey } from "../src/protocol";
 
@@ -12,6 +12,10 @@ interface Props {
   onOpenDiff: (path: string) => void;
   /** Set when the comparison was opened from somewhere to go back to, e.g. "6 scenarios". */
   back?: { label: string; go: () => void };
+  /** Shown above the comparison, e.g. a scenario pager. */
+  header?: ReactNode;
+  /** Offer "Compare with a git revision…" (the Compare tab does; an inline scenario comparison doesn't). */
+  withRevision?: boolean;
 }
 
 function Diffs({ diffs, record, keyCol, results }: { diffs: ValueDiff[]; record: number | null; keyCol: RecordKey; results?: Comparison["results"] }) {
@@ -22,15 +26,13 @@ function Diffs({ diffs, record, keyCol, results }: { diffs: ValueDiff[]; record:
           d.samples.map((s, i) => (
             <tr key={`${d.name}-${s.row}`} className={record === s.row ? "hit" : ""}>
               <td className="mono">{i === 0 ? d.name : ""}</td>
-              <td>{recordLabel(s.row, keyCol)}</td>
-              <td className="mono before">{formatValue(s.a)}</td>
-              <td className="arrow">→</td>
-              <td className="mono after">{formatValue(s.b)}</td>
-              <td className="muted">
-                {i === 0 && d.changedRows.length > d.samples.length ? `+${d.changedRows.length - d.samples.length} more ` : ""}
-                {results && d.name in results.b && !(same(results.a[d.name]?.[s.row], s.a) && same(results.b[d.name]?.[s.row], s.b))
-                  ? `later steps change it again; final result ${formatValue(results.a[d.name]?.[s.row])} → ${formatValue(results.b[d.name]?.[s.row])}`
-                  : ""}
+              <td className="nowrap">{recordLabel(s.row, keyCol)}:</td>
+              <td>
+                step wrote <strong className="mono">{formatValue(s.b)}</strong> <span className="muted">(was {formatValue(s.a)})</span>
+                {results && d.name in results.b && !(same(results.a[d.name]?.[s.row], s.a) && same(results.b[d.name]?.[s.row], s.b)) && (
+                  <span> · final <strong className="mono">{formatValue(results.b[d.name]?.[s.row])}</strong> <span className="muted">(was {formatValue(results.a[d.name]?.[s.row])})</span></span>
+                )}
+                {i === 0 && d.changedRows.length > d.samples.length && <span className="muted"> · +{d.changedRows.length - d.samples.length} more records</span>}
               </td>
             </tr>
           )),
@@ -44,11 +46,12 @@ function Diffs({ diffs, record, keyCol, results }: { diffs: ValueDiff[]; record:
 function Results({ c, record }: { c: Comparison; record: number | null }) {
   const all = record === null ? Array.from({ length: c.rows }, (_, i) => i) : [record];
   const rows = all.slice(0, 4);
-  const names = Object.keys(c.results.b).filter((n) => rows.some((r) => !same(c.results.a[n]?.[r], c.results.b[n]?.[r])));
-  const unchanged = Object.keys(c.results.b).filter((n) => !names.includes(n));
+  // Changed outcomes first, then the rest with their values: "did the decision move?" needs both.
+  const changed = (n: string) => rows.some((r) => !same(c.results.a[n]?.[r], c.results.b[n]?.[r]));
+  const names = [...Object.keys(c.results.b).filter(changed), ...Object.keys(c.results.b).filter((n) => !changed(n))];
   return (
     <>
-    {names.length === 0 && <div>No result changes{record === null ? "" : ` for ${recordLabel(record, c.key)}`}.</div>}
+    {!names.some(changed) && <div>No result changes{record === null ? "" : ` for ${recordLabel(record, c.key)}`}.</div>}
     {names.length > 0 && (
     <table className="results">
       <thead>
@@ -67,9 +70,9 @@ function Results({ c, record }: { c: Comparison; record: number | null }) {
               const a = c.results.a[n]?.[r];
               const b = c.results.b[n]?.[r];
               return same(a, b) ? (
-                <td key={r} className="mono unchanged-cell" title="same in both runs">{formatValue(b)}</td>
+                <td key={r} className="mono unchanged-cell" title="same in both runs">= {formatValue(b)}</td>
               ) : (
-                <td key={r} className="mono changed-cell"><span className="before">{formatValue(a)}</span> → <span className="after">{formatValue(b)}</span></td>
+                <td key={r} className="mono changed-cell"><s className="before">{formatValue(a)}</s> <span className="after">{formatValue(b)}</span></td>
               );
             })}
           </tr>
@@ -78,13 +81,12 @@ function Results({ c, record }: { c: Comparison; record: number | null }) {
     </table>
     )}
     {all.length > rows.length && <div className="muted">Showing {rows.length} of {all.length} records; focus a record to see it here.</div>}
-    {unchanged.length > 0 && <div className="muted">Unchanged: {unchanged.join(", ")}</div>}
     </>
   );
 }
 
 /** Two runs side by side, step by step, in execution order. */
-export function Compare({ comparison: c, busy, error, record, onSelect, onCompareRevision, onOpenDiff, back }: Props) {
+export function Compare({ comparison: c, busy, error, record, onSelect, onCompareRevision, onOpenDiff, back, header, withRevision = true }: Props) {
   const [onlyChanges, setOnlyChanges] = useState(true);
   const revisionButton = <button onClick={onCompareRevision}>Compare with a git revision…</button>;
   if (busy) return <div className="compare"><div className="empty">{busy}</div></div>;
@@ -102,12 +104,28 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
     return record === null || s.status !== "changed" || s.structural.length > 0 || s.outputs.some((o) => o.changedRows.includes(record));
   });
   const count = (st: string) => c.steps.filter((s) => s.status === st).length;
+  // A step is "edited" when its code or params differ; otherwise it only moved because its inputs did.
+  const docHas = (path: string) => path.split("/").reduce<unknown>((d, part) => (d as Record<string, unknown> | undefined)?.[part], c.paramsDocs?.b) !== undefined;
+  const edited = (s: (typeof c.steps)[number]) => s.status !== "changed" || s.structural.length > 0 || s.paramChanges.length > 0 || docHas(s.path);
+  const label = (s: (typeof c.steps)[number]) => (edited(s) ? s.status : "affected");
+  const outcomes = Object.keys(c.results.b);
+  const movedOut = outcomes
+    .map((n) => ({ n, k: Array.from({ length: c.rows }, (_, r) => r).filter((r) => !same(c.results.a[n]?.[r], c.results.b[n]?.[r])).length }))
+    .filter((x) => x.k > 0);
+  const stayed = outcomes.filter((n) => !movedOut.some((m) => m.n === n));
   return (
     <div className="compare">
       {back && <a className="back" onClick={back.go}>← Back to {back.label}</a>}
+      {withRevision && <div className="actions top-actions">{revisionButton}</div>}
       <div className="comparing">
         Comparing <strong>{c.a}</strong> → <strong>{c.b}</strong>
         <span className="muted"> · {c.rows} records · {count("changed")} steps changed{count("added") ? `, ${count("added")} added` : ""}{count("removed") ? `, ${count("removed")} removed` : ""}</span>
+      </div>
+      <div className="verdict">
+        {movedOut.length === 0
+          ? "No final output changes."
+          : `${movedOut.map((m) => `${m.n} changes for ${m.k} of ${c.rows} records`).join("; ")}.`}
+        {stayed.length > 0 && movedOut.length > 0 && <span className="muted"> Unchanged: {stayed.join(", ")}.</span>}
       </div>
       {c.steps.some((s) => s.status !== "same" && s.status !== "not run") && (
         <div className="changed-list">
@@ -123,7 +141,7 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
             ))}
         </div>
       )}
-      <div className="actions">{revisionButton}</div>
+      {header}
       {(c.errors.a || c.errors.b) && (
         <div className="error">
           {c.errors.a && <div>{c.a}: {c.errors.a}</div>}
@@ -150,12 +168,12 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
       {steps.length === 0 ? (
         <div className="muted">Every step produces the same values.</div>
       ) : (
-        <div className="muted">Values are what each step wrote. A later step may change them again; the Results table above has the final values.</div>
+        <div className="muted">What each changed step wrote, and the final value where a later step changed it again.</div>
       )}
       {steps.map((s) => (
         <div key={s.path} className={`step-diff ${s.status}`}>
           <div>
-            <span className={`badge-status ${s.status}`}>{s.status}</span> <a onClick={() => onSelect(s.path)}>{s.path}</a>
+            <span className={`badge-status ${label(s)}`} title={label(s) === "affected" ? "Not edited: it changed because a value it reads changed" : undefined}>{label(s)}</span> <a onClick={() => onSelect(s.path)}>{s.path}</a>
             {s.paramChanges.map((p) => (
               <span key={p} className="chip small">{p}</span>
             ))}

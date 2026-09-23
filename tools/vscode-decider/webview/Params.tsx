@@ -71,8 +71,8 @@ export function Params({ schema, inputColumns, record, keyCol, sessionRunning, o
         <table>
           <tbody>
             {Object.entries(schema).map(([path, params]) => [
-              <tr key={path} className="group">
-                <td colSpan={4}>{path}</td>
+              <tr key={path} className="group" title={path}>
+                <td colSpan={3}>{path.split("/").pop()} <span className="muted">{path.includes("/") ? `in ${path.slice(0, path.lastIndexOf("/"))}` : ""}</span></td>
               </tr>,
               ...Object.entries(params).map(([name, info]) => {
                 const key = `${path}|${name}`;
@@ -84,7 +84,7 @@ export function Params({ schema, inputColumns, record, keyCol, sessionRunning, o
                     <td>
                       <input aria-label={`${path} ${name}`} value={text} onChange={(e) => setEdits({ ...edits, [key]: e.target.value })} />
                     </td>
-                    <td className="muted">{info.type}{bounds(info) && ` · ${bounds(info)}`}</td>
+                    {bounds(info) && <td className="muted" title={info.type}>{bounds(info)}</td>}
                     <td>
                       {edited ? (
                         <button className="link" onClick={() => setEdits({ ...edits, [key]: shownDefault(info) })}>reset to {shownDefault(info)}</button>
