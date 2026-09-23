@@ -858,6 +858,44 @@ agreement unchanged); `assert_no_compilation_after_warmup` green;
 touches the latter's input building; coordinate on that one method or
 sequence 4 after 3.
 
+*Landed (Stage 4 commit).* `decider2/runtime/plan.py`: `ScorePlan`, built
+once per `Pipeline` by `Pipeline.score_plan()` and run by `score()`. It
+holds the flattened steps/groups/owners, the `Interface`, one `InputSlot`
+per input (name, resolved numpy dtype, null policy, fill, `raise_for`
+membership), a `ParamsPlan` (the structural half of `resolve_params`,
+split out in `runtime/invoke.py`; `resolve_params()` is now
+`params_plan(...).resolve(...)` so `apply()` runs the same merge), the
+terminal names, the mode class and build dir — and per-thread pooled
+1-row input buffers (`threading.local`; a busy pool is never shared with
+a re-entrant call). `Pipeline` gained a memo slot (`_cache`, `init=False`,
+so `dataclasses.replace` starts a derived pipeline empty) that holds
+`_walk`, `interface`, `flatten_for_runtime()` and the plan, each served
+only while `elements`/`emits`/`missing_input_policy` are the same objects
+it was built from — an `object.__setattr__` swap is detected and rebuilt,
+not served stale. `compile/driver.py` got the smallest edits that unlock
+this: `_signature` memoised per function object (a weak-keyed dict;
+`eval_str=True` was 11 `eval`s per flagship call), `_build_call_args`
+takes precomputed roles, and `CompiledSegment` computes its roles and
+output dtypes once (`_call_plan`, a `cached_property`); `Packed
+CompiledSegment.run`/`FallbackSegment.run` are untouched. Output buffers
+are not pooled: a fresh `np.empty(1)` per terminal is ~0.3 µs, and §N1's
+36.9 µs was a 633-field structured record, not this shape.
+Measured on the merge box, interleaved in one session: flagship `score()`
+p50 **421 → 27 µs** (p95 29 µs, 2000 calls, GC on); the one-tree probe
+(`experimentation/verification-probes/profile_score.py`) **120 → 33
+µs/call**. What remains on the flagship is three kernel dispatches with
+their argument tuples (~12 µs), `build_driver`'s key + cache lookup
+(~3 µs), the per-call pydantic validate/dump of the one params model
+(~4 µs) and the marshal/read-back loops (~5 µs); on a packed (tree)
+segment, `_packed_input_arrays`' per-call read-only views (~10 µs) are
+the floor and belong to Stage 3's hunk. Tests: `tests/test_score_plan.py`
+— plan identity and contents, every public mutator and the hostile
+`__setattr__` swap invalidate, 16 threads × 3200 records with no
+cross-talk and one pool per thread, pooled validity/fill state never
+leaks, retune and `ServeHandle` generation swap take effect with
+`count_new_compiles() == 0`, the four-rung ladder on the flagship and an
+OPTIONAL input, and flagship p50 ≤ 60 µs.
+
 ### Stage 5 — tables (§3.2). Acceptance: `test_tables*.py` green with the
 matcher steps gone from `interface.outputs`; `assert_equivalent` on a table
 with string `eq`/`in` cells including nulls and >12-byte cells.

@@ -39,8 +39,10 @@ drive a step one at a time outside any `Segment`.
 from __future__ import annotations
 
 import inspect
+import weakref
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field as _dc_field
+from functools import cached_property
 from pathlib import Path
 from typing import Any, Callable, ClassVar, Literal, Mapping, Sequence
 
@@ -674,6 +676,18 @@ def _needed_from(steps: Sequence[Step], j: int, terminal_names: frozenset) -> se
 
 _MISSING = object()
 
+# `_signature`'s memo, keyed on the function OBJECT (weakly, so a step that
+# is garbage-collected takes its entry with it). Only a signature whose
+# annotations `eval`'d successfully is stored — the fallback result is
+# recomputed each time so a name that becomes resolvable later still gets
+# picked up, exactly as before the memo existed. What could make an entry
+# stale: rebinding `fn.__annotations__` after the first call, which nothing
+# in decider2 does (a `Step` is frozen and its `fn` is the author's own
+# function). Measured reason (BOUNDARY-REWORK.md Stage 4): `eval_str=True`
+# cost 11 `eval` calls per flagship `score()`, ~110 µs of a 420 µs call,
+# for a result that never changes.
+_SIGNATURES: "weakref.WeakKeyDictionary[Callable, inspect.Signature]" = weakref.WeakKeyDictionary()
+
 
 def _signature(fn) -> "inspect.Signature":
     """`inspect.signature`, with the same `eval_str=True`-then-fall-back
@@ -681,11 +695,21 @@ def _signature(fn) -> "inspect.Signature":
     `from __future__ import annotations` stringifies every annotation, and
     without this a `-> int`/`-> bool` return type would compare equal to
     nothing in `numpy_dtype`'s table and silently fall back to float64 —
-    exactly the bug this module exists to close."""
+    exactly the bug this module exists to close. Memoised per function
+    object (`_SIGNATURES`, above)."""
     try:
-        return inspect.signature(fn, eval_str=True)
+        return _SIGNATURES[fn]
+    except (KeyError, TypeError):
+        pass
+    try:
+        sig = inspect.signature(fn, eval_str=True)
     except (NameError, TypeError):
         return inspect.signature(fn)
+    try:
+        _SIGNATURES[fn] = sig
+    except TypeError:  # not weak-referenceable: served uncached, still correct
+        pass
+    return sig
 
 
 def step_return_annotation(step: Step) -> Any:
@@ -870,17 +894,20 @@ def _call_step_row(
 
 
 def _build_call_args(
-    plan: KernelPlan, registry: dict, resolved: ResolvedParams, out_arrays: dict, n: int
+    plan: KernelPlan, registry: dict, resolved: ResolvedParams, out_arrays: dict, n: int,
+    roles: "Sequence[Any] | None" = None,
 ) -> tuple:
     """`(n, cols, valids, params_all, outs)` — the fused kernel's five
     arguments (`compile.kernel.build_fused_kernel`), each tuple packed in
     `kernel_signature` order so the kernel's own argument-source map, built
-    from the same list, indexes the right element."""
+    from the same list, indexes the right element. `roles` is that same
+    list, precomputed by a caller that holds it (`CompiledSegment._call_plan`)
+    so it is not rebuilt per call; omitted, it is derived from `plan` here."""
     cols: list = []
     valids: list = []
     params_all: list = []
     outs: list = []
-    for role in kernel_signature(plan):
+    for role in (kernel_signature(plan) if roles is None else roles):
         if role.kind == "array":
             cols.append(registry[role.input_name])
         elif role.kind == "valid":
@@ -958,21 +985,36 @@ class CompiledSegment(Segment):
 
     kind: ClassVar[SegmentKind] = "compiled"
 
+    @cached_property
+    def _call_plan(self) -> "tuple[tuple[Any, ...], tuple[tuple[str, np.dtype, str], ...]]":
+        """The schema-invariant half of `run`, computed once per segment:
+        `kernel_signature(self.plan)`'s roles, and `(name, dtype, owner)`
+        per required output. A segment is a frozen value built once per
+        `Driver`, so nothing this reads can change after construction;
+        `cached_property` writes straight into `__dict__`, which a frozen
+        dataclass permits. Before this (BOUNDARY-REWORK.md Stage 4) `run`
+        re-derived both per call, and `_return_dtype`'s `inspect.signature`
+        was the single largest cost of a single-record `score()`."""
+        owner_by_name = dict(zip((s.name for s in self.steps), self.owners)) if self.owners else {}
+        step_by_name = {s.name: s for s in self.steps}
+        outputs = tuple(
+            (name, _return_dtype(step_by_name[name]), owner_by_name.get(name, name))
+            for name in self.required_outputs
+        )
+        return tuple(kernel_signature(self.plan)), outputs
+
     def run(self, registry: dict, resolved: ResolvedParams, n: int) -> None:
         # Doc 05 §7: "intermediates ... stay in numpy, they do not
         # round-trip through polars" — a value a later segment needs is
         # looked up in `registry` regardless of whether it came from the
         # original frame or an earlier segment's own output.
-        owner_by_name = dict(zip((s.name for s in self.steps), self.owners)) if self.owners else {}
-        step_by_name = {s.name: s for s in self.steps}
-        out_arrays = {
-            name: np.empty(n, dtype=_return_dtype(step_by_name[name]))
-            for name in self.required_outputs
-        }
-        self.kernel_fn(*_build_call_args(self.plan, registry, resolved, out_arrays, n))
-        for name, arr in out_arrays.items():
+        roles, outputs = self._call_plan
+        out_arrays = {name: np.empty(n, dtype=dtype) for name, dtype, _ in outputs}
+        self.kernel_fn(*_build_call_args(self.plan, registry, resolved, out_arrays, n, roles))
+        for name, _, owner in outputs:
+            arr = out_arrays[name]
             registry[name] = arr
-            registry[f"{name}@{owner_by_name.get(name, name)}"] = arr
+            registry[f"{name}@{owner}"] = arr
 
     @property
     def signatures(self) -> tuple:
