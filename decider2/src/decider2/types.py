@@ -7,7 +7,7 @@ importable without the heavy stack (doc 02 §2 — the graph is data).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import Enum, IntEnum
 from typing import Any, Callable, Mapping, Sequence
 
 
@@ -18,6 +18,46 @@ class NullPolicy(Enum):
     MISSING_AS = "missing_as"          # tier 2: filled at extraction
     OPTIONAL = "optional"              # tier 3: step sees `| None`
     NOT_APPLICABLE_AS = "not_applicable_as"  # tier 4: filled, distinct reason code
+
+
+class FeatureKind(IntEnum):
+    """Which typed row array a value of a declared annotation lives in when a
+    `Step.typed_args` step is called (doc 03 §1.2: an Int64 must stay an
+    int64 end to end — a float64 collapses every integer above 2**53 and
+    a comparison against one silently answers wrong).
+
+    The integer VALUES are program data: a tree node's `feat_kind` entry
+    is one of these, and `decider2.trees.interpreter.walk_tree` switches
+    on it at runtime, so they are fixed here (no numba import needed to
+    read them) and never renumbered.
+
+    `STR` is the reserved slot for a RAW string (polars' own
+    `offsets: int64` / `values: uint8` buffers, zero-copy from
+    `_get_buffers()`): the row carries `(start, end)` byte offsets in the
+    `int64` span array and the whole-column byte buffer travels alongside,
+    so a lazy matcher can read actual bytes inside the kernel. The
+    boundary does not yet produce such a column (`boundary.dtypes` still
+    dictionary-encodes every string to `CODE`); the driver side of the
+    slot is built and tested so that when it does, nothing here changes.
+    """
+
+    F64 = 0     # float
+    I64 = 1     # int
+    BOOL = 2    # bool
+    CODE = 3    # str   — an int32 dictionary code (doc 05 §1.5)
+    STR = 4     # bytes — raw string spans (reserved; see above)
+
+
+_KIND_BY_ANNOTATION = {float: FeatureKind.F64, int: FeatureKind.I64, bool: FeatureKind.BOOL,
+                       str: FeatureKind.CODE, bytes: FeatureKind.STR}
+
+
+def feature_kind(annotation: Any) -> FeatureKind:
+    """The `FeatureKind` a declared annotation gathers into. Unannotated
+    (or anything else) is `F64`, the boundary's default for an undeclared
+    column (doc 05 §1.5) — the same fallback `compile.driver.numpy_dtype`
+    applies, so the two never disagree about where a value lands."""
+    return _KIND_BY_ANNOTATION.get(annotation, FeatureKind.F64)
 
 
 @dataclass(frozen=True)
@@ -56,6 +96,20 @@ class Step:
     packed: bool = False               # fn(args, params) instead of fn(a, b, ...)
     output_annotation: Any = None
     shared_fields: tuple[str, ...] | None = None
+    typed_args: bool = False           # packed fn gets args split by FeatureKind
+    # `typed_args`: this packed Step's `fn` receives `args` as a 6-tuple of
+    # per-kind row arrays — `(f64[:], i64[:], bool[:], int32[:], str_spans
+    # int64[:], str_bytes)` in `FeatureKind` order — and `params` as a pair
+    # `(floats..., ints...)` grouped by `ParamDecl.annotation`, instead of
+    # one float64 array and one flat tuple. Input `k` of kind `K` is slot
+    # `j` of that kind's array where `j` counts the kind-`K` inputs before
+    # it in `inputs` order; the producer (`decider2.trees.encode`) and the
+    # driver (`decider2.compile.driver._typed_layout`) both derive `j` from
+    # `inputs` alone, so they cannot disagree. Exists so a tree's Int64
+    # feature is compared as an int64 and its Boolean as a bool (doc 03
+    # §1.2) — the one-float64-array convention (`packed` alone) forced
+    # every input through float64, which collapses integers above 2**53.
+    # A step that is `typed_args` is also `packed`.
     # `shared_fields`: the `shared` keys this `reads_shared` step actually
     # reads, when it can say — a table's row/output steps read a fixed,
     # build-time-known set (`decider2.tables.encode`). The runtime then

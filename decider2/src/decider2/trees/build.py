@@ -118,18 +118,22 @@ class TreeModule:
         or line cap left to report.
         """
         e = self.encoded
-        tunable = [p for p in e.params if p.annotation == "float"]
+        tunable = [p for p in e.params if p.annotation in ("float", "int")]
+        int_thresholds = [p for p in e.params if p.annotation == "int"]
         literals = [p for p in e.params if p.annotation == "str"]
         output_names = [s.name for s in e.output_steps]
+        typed = ", ".join(f"{f}: {e.feature_kinds[f]}" for f in e.features)
         lines = [
             f"tree {self.tree.name!r} -> module {self.module.name!r}",
             f"  leaves          : {e.leaf_count}",
             f"  max depth       : {e.max_depth}",
             f"  features read   : {', '.join(e.features) or '(none)'}",
+            f"  feature kinds   : {typed or '(none)'}",
             f"  string features : {', '.join(e.string_features) or '(none)'}",
             f"  path column     : {self.path_column}",
             f"  output steps    : {', '.join(output_names) or '(none)'}",
-            f"  thresholds      : {len(tunable)} (kernel arguments, retune is free)",
+            f"  thresholds      : {len(tunable)} (kernel arguments, retune is free; "
+            f"{len(int_thresholds)} int64)",
             f"  string literals : {len(literals)} (int32 codes, retune is free)",
         ]
         return "\n".join(lines)
@@ -141,6 +145,7 @@ def tree_module(
     name: str | None = None,
     build_dir: "str | Path | None" = None,
     params: Mapping[str, Any] | None = None,
+    feature_types: Mapping[str, Any] | None = None,
 ) -> TreeModule:
     """Compile a tree document into a pipeline element.
 
@@ -159,9 +164,19 @@ def tree_module(
     `params=` pre-binds thresholds at composition (doc 03 §4.3's `.bind()`),
     for a value that is settled and should leave the caller-facing
     interface.
+
+    `feature_types=` declares which typed array each feature is read from
+    (`decider2.trees.encode.encode_tree`): `{"income_cents": int,
+    "is_staff": bool, "score": float}` — Python types, or decider 1's polars
+    spellings (`"Int64"`, `"Boolean"`, `"Float64"`, `"String"`). A feature
+    not named here is inferred from how the tree uses it (`is_true`/
+    `is_false` only -> bool; `string_match` -> str; anything else -> float,
+    exactly the previous behaviour). Doc 03 §1.2: a money column is a
+    scaled int64 — declare it `int` and it is compared as one, never
+    rounded through float64.
     """
     del build_dir
-    encoded = encode_tree(tree, name=name)
+    encoded = encode_tree(tree, name=name, feature_types=feature_types)
 
     steps = list(encoded.matcher_steps) + [encoded.path_step] + list(encoded.output_steps)
 

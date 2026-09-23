@@ -312,7 +312,12 @@ class _ExprEmitAdapter:
         self._next_compiled = 0
 
     def name_index(self, ident: str) -> int:
-        return self._ctx.plain_feature_index(ident)
+        # The slot in the FLOAT64 row array specifically (`decider2.types.
+        # FeatureKind.F64`) — an expression's closure reads `feats[idx]`
+        # off that array, so a feature it names must live there; the
+        # context rejects one declared `int`/`bool`/`str` (see
+        # `EncodeContext.expr_feature_index`).
+        return self._ctx.expr_feature_index(ident, self._node_id)
 
     def constant_index(self, value: "int | float") -> int:
         role = f"expr{self._next_compiled}"
@@ -442,7 +447,7 @@ class _ThresholdedUnaryOp(_BaseUnaryOp):
         each, no dispatch needed."""
         feat_idx = self.feature.feature_index(ctx, node_id)
         suffix = f"_{cond_idx}" if cond_idx is not None else ""
-        thr_slot = ctx.threshold_slot(self.threshold, node_id=node_id, role=f"thr{suffix}")
+        thr_slot = ctx.threshold_slot(self.threshold, node_id=node_id, role=f"thr{suffix}", feat_idx=feat_idx)
         return ctx.add_cmp(feat_idx, _OPCODE[self.op], thr_slot, then_pc, otherwise_pc)
 
 
@@ -509,10 +514,10 @@ class UnaryBetween(_BaseUnaryOp):
         suffix = f"_{cond_idx}" if cond_idx is not None else ""
         entry = then_pc
         if self.max is not None:
-            slot = ctx.threshold_slot(self.max, node_id=node_id, role=f"max{suffix}")
+            slot = ctx.threshold_slot(self.max, node_id=node_id, role=f"max{suffix}", feat_idx=feat_idx)
             entry = ctx.add_cmp(feat_idx, LE, slot, entry, otherwise_pc)
         if self.min is not None:
-            slot = ctx.threshold_slot(self.min, node_id=node_id, role=f"min{suffix}")
+            slot = ctx.threshold_slot(self.min, node_id=node_id, role=f"min{suffix}", feat_idx=feat_idx)
             entry = ctx.add_cmp(feat_idx, GE, slot, entry, otherwise_pc)
         return entry
 
@@ -675,10 +680,10 @@ class RangeCondition(BaseModel):
         lo_op, hi_op = (GE, LT) if end_logic is RangeEndLogic.lower_inclusive else (GT, LE)
         entry = then_pc
         if self.max is not None:
-            slot = ctx.threshold_slot(self.max, node_id=node_id, role=f"max_{idx}")
+            slot = ctx.threshold_slot(self.max, node_id=node_id, role=f"max_{idx}", feat_idx=feat_idx)
             entry = ctx.add_cmp(feat_idx, hi_op, slot, entry, otherwise_pc)
         if self.min is not None:
-            slot = ctx.threshold_slot(self.min, node_id=node_id, role=f"min_{idx}")
+            slot = ctx.threshold_slot(self.min, node_id=node_id, role=f"min_{idx}", feat_idx=feat_idx)
             entry = ctx.add_cmp(feat_idx, lo_op, slot, entry, otherwise_pc)
         return entry
 
@@ -760,11 +765,11 @@ def _encode_isin(
     old source text gave, without ever writing a name.
     """
     if isinstance(values, InputRef):
-        slot = ctx.threshold_slot(values, node_id=node_id, role=f"isin_{idx}")
+        slot = ctx.threshold_slot(values, node_id=node_id, role=f"isin_{idx}", feat_idx=feat_idx)
         return ctx.add_cmp(feat_idx, EQ, slot, then_pc, otherwise_pc)
     entry = otherwise_pc
     for j in reversed(range(len(values))):
-        slot = ctx.threshold_slot(values[j], node_id=node_id, role=f"isin_{idx}_{j}")
+        slot = ctx.threshold_slot(values[j], node_id=node_id, role=f"isin_{idx}_{j}", feat_idx=feat_idx)
         entry = ctx.add_cmp(feat_idx, EQ, slot, then_pc, entry)
     return entry
 
