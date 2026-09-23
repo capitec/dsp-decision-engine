@@ -109,11 +109,15 @@ export function summariseSweep(r: SweepResponse, scenarioList: Scenario[] = []):
   const withInputs = (c: Comparison, s: Scenario | undefined): Comparison => ({
     ...c,
     paramsDocs: { a: {}, b: s?.params ?? {} },
-    changedInputs: Object.entries(s?.overrides ?? {}).map(([name, after]) => ({
-      name,
-      after,
-      scope: s?.row == null ? "every record" : r.key ? `${r.key.name} ${String(r.key.values[s.row])}` : `row ${s.row}`,
-    })),
+    changedInputs: [
+      ...Object.entries(knobValues({ label: "", params: s?.params }))
+        .map(([name, after]) => ({ name, after, scope: "steps after the pause" })),
+      ...Object.entries(s?.overrides ?? {}).map(([name, after]) => ({
+        name,
+        after,
+        scope: s?.row == null ? "every record" : r.key ? `${r.key.name} ${String(r.key.values[s.row])}` : `row ${s.row}`,
+      })),
+    ],
   });
   return {
     key: r.key,

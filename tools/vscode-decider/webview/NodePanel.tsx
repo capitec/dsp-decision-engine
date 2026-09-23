@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { same, type Comparison } from "../src/compare";
 import { formatValue, recordLabel, type CallNodeJson, type ColumnHistory, type ColumnSummary, type Lineage, type RecordKey, type RunStatus } from "../src/protocol";
 
@@ -20,10 +21,11 @@ interface Props {
   onStep: () => void;
   /** The comparison the graph is coloured by, if any: params show both sides. */
   comparison: Comparison | null;
+  onOpenDiff: (path: string) => void;
 }
 
 /** The details pane: the selected step, then the picked column's lineage and history. */
-export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, lineage, history, treePath, onPick, onSelect, onReveal, onRewind, onRunTo, onStep, comparison }: Props) {
+export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, lineage, history, treePath, onPick, onSelect, onReveal, onRewind, onRunTo, onStep, comparison, onOpenDiff }: Props) {
   const visits = node && run.visits[node.path];
   const who = run.record === null ? null : recordLabel(run.record, keyCol);
   const valueOf = (name: string) => {
@@ -36,6 +38,8 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
   const ran = !!node && run.finishedPaths.includes(node.path);
   const card = lineage && lineage.name === column ? lineage : null;
   const atThis = !!node && run.current?.path === node.path && run.current.when === "before" && !run.finished;
+  const name = node?.path.split("/").pop();
+  const change = comparison && node ? comparison.steps.find((s) => s.path === node.path && s.status !== "same" && s.status !== "not run") : undefined;
   return (
     <aside>
       <button className="close link" title="Hide details" onClick={onClose}>✕</button>
@@ -46,15 +50,33 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
           <div className="actions">
             <button onClick={() => onReveal(node.path)}>Open source</button>
             {atThis ? (
-              <button className="primary" onClick={onStep} title="Run this step and pause after it">Run this step</button>
+              <button className="primary" onClick={onStep} title="Run this step and pause just after it">Run through {name}</button>
             ) : ran && paused ? (
-              <button onClick={() => onRewind(node.path)} title="Run the flow again from this step, keeping the values before it">Re-run from here</button>
+              <button onClick={() => onRewind(node.path)} title="Run the flow again from this step, keeping the values before it">Re-run from {name}</button>
             ) : (
-              <button onClick={() => onRunTo(node.path)} title="Add a breakpoint here and run the flow to it">
-                {paused ? "Continue to here" : "Run to here"}
-              </button>
+              <button className="primary" onClick={() => onRunTo(node.path)} title="Run the flow and pause just before this step">Run to {name}</button>
             )}
           </div>
+          {change && (
+            <div className="changed-box">
+              <div className="how-title">Changed in this comparison</div>
+              {change.paramChanges.map((p) => (
+                <div key={p} className="mono">{p}</div>
+              ))}
+              {change.structural.includes("code") && (
+                <div>
+                  code changed{comparison!.files && <> · <a onClick={() => onOpenDiff(node.path)}>view diff</a></>}
+                </div>
+              )}
+              {change.outputs.flatMap((o) =>
+                o.samples.map((sm) => (
+                  <div key={`${o.name}-${sm.row}`} className="mono">
+                    {o.name} for {recordLabel(sm.row, keyCol ?? comparison!.key)}: {formatValue(sm.a)} → <strong>{formatValue(sm.b)}</strong>
+                  </div>
+                )),
+              )}
+            </div>
+          )}
           {path && (
             <>
               <h4>Path for {who}</h4>
@@ -151,8 +173,10 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
 /** "term_cap = 60, written by term/term_cap from requested_term = 72 and ceiling = 60". */
 function HowComputed({ entry, who, role, nodes, onPick, onSelect }: { entry: Lineage; who: string | null; role: string; nodes: CallNodeJson[]; onPick: (n?: string) => void; onSelect: (p: string) => void }) {
   const producer = nodes.find((n) => n.path === entry.producer);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => box.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }), [entry]);
   return (
-    <div className="how">
+    <div className="how" ref={box}>
       <div className="how-title">
         <span className="mono">{entry.name}{who ? ` = ${formatValue(entry.value)}` : ""}</span>
         {role && <span className="muted"> ({role})</span>} comes from{who ? ` for ${who}` : ""}:

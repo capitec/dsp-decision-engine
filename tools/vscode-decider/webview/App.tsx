@@ -84,6 +84,10 @@ export function App() {
         case "sweep":
           setSweep(m);
           break;
+        case "select":
+          setSelected(m.path);
+          setTab("graph");
+          break;
       }
     };
     window.addEventListener("message", onMessage);
@@ -171,14 +175,20 @@ export function App() {
       </header>
       {tab === "graph" && (
         <div className="subbar">
-          <span className="edge-key" title="Solid arrows: the order steps run in. Dotted: which step's output another reads (shown for the selected step).">
-            <span className="line solid" /> runs next <span className="line dotted" /> data
-          </span>
-          <label><input type="checkbox" checked={showData} onChange={(e) => setShowData(e.target.checked)} /> show every data dependency</label>
-          <label><input type="checkbox" checked={details} onChange={(e) => setDetails(e.target.checked)} /> details pane</label>
-          <span className="legend">
-            <span className="swatch paused" /> paused here <span className="swatch lineage" /> feeds the picked value <span>✓ ran</span>
-          </span>
+          <details className="legend-pop">
+            <summary>Legend</summary>
+            <div className="legend-body">
+              <span><span className="line solid" /> runs next</span>
+              <span><span className="line dotted" /> passes data (for the selected step)</span>
+              <span><span className="swatch paused" /> paused here</span>
+              <span><span className="swatch lineage" /> inputs of the picked value</span>
+              <span>✓ has run</span>
+              <span>◇ decision tree</span>
+              <span>⊞ data frame step</span>
+            </div>
+          </details>
+          <label><input type="checkbox" checked={showData} onChange={(e) => setShowData(e.target.checked)} /> show all data links</label>
+          <label><input type="checkbox" checked={details} onChange={(e) => setDetails(e.target.checked)} /> details</label>
           {compare.comparison && (
             <span className="legend">
               <label><input type="checkbox" checked={showDiff} onChange={(e) => setShowDiff(e.target.checked)} /> compared:</label>
@@ -271,6 +281,7 @@ export function App() {
             onRunTo={(path) => send({ type: "runTo", path })}
             onStep={() => send({ type: "step" })}
             comparison={showDiff ? compare.comparison : null}
+            onOpenDiff={(path) => send({ type: "openDiff", path })}
           />
         )}
       </main>

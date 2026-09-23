@@ -9,7 +9,13 @@ export class GraphPanel {
   private queue: ToWebview[] = [];
 
   static show(ctx: vscode.ExtensionContext, describe: DescribeResult, onMessage: (m: FromWebview) => void): GraphPanel {
-    GraphPanel.current ??= new GraphPanel(ctx, onMessage);
+    if (!GraphPanel.current) {
+      const besideTheCode = vscode.window.tabGroups.all.length === 1;
+      GraphPanel.current = new GraphPanel(ctx, onMessage);
+      // Beside the code, the flow gets 60% of the width: at half, its text and tables don't fit.
+      // The command runs after the panel's group exists: both go to the workbench in order.
+      if (besideTheCode) void vscode.commands.executeCommand("vscode.setEditorLayout", { orientation: 0, groups: [{ size: 0.4 }, { size: 0.6 }] });
+    }
     GraphPanel.current.panel.reveal(vscode.ViewColumn.Beside, true);
     GraphPanel.current.post({ type: "describe", describe });
     return GraphPanel.current;

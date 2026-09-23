@@ -35,6 +35,11 @@ export function activate(ctx: vscode.ExtensionContext) {
 
     vscode.commands.registerCommand("decider.reveal", reveal),
 
+    vscode.commands.registerCommand("decider.selectStep", async (nodePath: string, file: string | null, line: number | null) => {
+      post({ type: "select", path: nodePath });
+      if (file) await reveal(file, line);
+    }),
+
     vscode.commands.registerCommand("decider.visualise", async (uri?: vscode.Uri, pipeline?: string) => {
       const doc = await pickDocument(uri);
       if (!doc) return;

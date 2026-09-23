@@ -112,7 +112,7 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
       )}
       {c.changedInputs.length > 0 && (
         <>
-          <h4>Changed inputs</h4>
+          <h4>Changed params and inputs</h4>
           {c.changedInputs.map((i) => (
             <div key={i.name} className="mono">{i.name} → {formatValue(i.after)} <span className="muted">for {i.scope}</span></div>
           ))}
