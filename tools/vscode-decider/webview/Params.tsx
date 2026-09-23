@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { paramChangeLines } from "../src/compare";
+import { paramChangeLines, same } from "../src/compare";
 import { formatValue, recordLabel, type ParamInfo, type RecordKey } from "../src/protocol";
 import { TableGrid, tableRows } from "./TableGrid";
 
@@ -29,7 +29,7 @@ export function currentValue(values: Record<string, unknown>, path: string, name
   return at === undefined ? info.default ?? null : at;
 }
 
-const shown = (v: unknown) => (Array.isArray(v) ? JSON.stringify(v) : formatValue(v));
+const shown = (v: unknown, name?: string) => (Array.isArray(v) ? JSON.stringify(v) : formatValue(v, name));
 
 /** An edit's value: a table's typed cells converted to their columns' types, anything else parsed by type. */
 function editValue(text: string, info: ParamInfo): unknown {
@@ -43,7 +43,7 @@ export function paramsDocument(schema: Schema, edits: Edits, values: Record<stri
   for (const [key, text] of Object.entries(edits)) {
     const [path, name] = key.split("|");
     const info = schema[path]?.[name];
-    if (text.trim() === "" || !info || shown(editValue(text, info)) === shown(currentValue(values, path, name, info))) continue;
+    if (text.trim() === "" || !info || same(editValue(text, info), currentValue(values, path, name, info))) continue;
     let target = doc as Record<string, Record<string, unknown>>;
     for (const part of path.split("/")) target = (target[part] ??= {}) as Record<string, Record<string, unknown>>;
     (target as Record<string, unknown>)[name] = editValue(text, info);
@@ -52,6 +52,7 @@ export function paramsDocument(schema: Schema, edits: Edits, values: Record<stri
 }
 
 export function parseValue(text: string, type?: string): unknown {
+  if (/^\s*-?[\d.]+\s*%\s*$/.test(text)) return Number(text.replace("%", "")) / 100;
   if (type === "float" || type === "int" || type === "number" || type === "integer") {
     const n = Number(text);
     if (!Number.isNaN(n)) return n;
@@ -101,7 +102,7 @@ export function Params({ schema, values, inputColumns, record, keyCol, sessionRu
   const isEdited = (path: string, name: string) => {
     const text = edits[`${path}|${name}`];
     const info = schema[path][name];
-    return text !== undefined && shown(editValue(text, info)) !== shown(currentValue(values, path, name, info));
+    return text !== undefined && !same(editValue(text, info), currentValue(values, path, name, info));
   };
   const visible = (path: string, name: string) => (!changedOnly || isEdited(path, name)) && (!ws.length || matches(`${path} ${name}`, ws));
 
@@ -111,7 +112,7 @@ export function Params({ schema, values, inputColumns, record, keyCol, sessionRu
     const edited = isEdited(path, name);
     const usedBy = (info.used_by as string[] | undefined) ?? [];
     const label = path === "shared" ? name : `${path.split("/").pop()} · ${name}`;
-    const reset = <button className="link" onClick={() => setEdits({ ...edits, [key]: shown(base) })}>undo</button>;
+    const reset = <button className="link" onClick={() => setEdits({ ...edits, [key]: shown(base, name) })}>undo</button>;
     if (info.type === "table") {
       const rows = (edits[key] !== undefined ? parseValue(edits[key]) : base) as Record<string, unknown>[] | null;
       return (
@@ -132,17 +133,19 @@ export function Params({ schema, values, inputColumns, record, keyCol, sessionRu
         </tr>
       );
     }
-    const text = edits[key] ?? shown(base);
-    return (
+    const text = edits[key] ?? shown(base, name);
+    // Filtered down, a shared param's readers show as chips under it; otherwise behind a link.
+    const chips = ws.length > 0 && usedBy.length > 0;
+    return [
       <tr key={key} className={edited ? "edited" : ""}>
         <td className="name" title={path}>{label}</td>
         <td>
           <input aria-label={`${path} ${name}`} value={text} onChange={(e) => setEdits({ ...edits, [key]: e.target.value })} />
         </td>
         <td className="muted small">
-          {edited ? <>was {shown(base)} · {reset}</> : bounds(info)}
-          {usedBy.length > 0 && (
-            <details className="used-by" open={ws.length > 0}>
+          {edited ? <>was {shown(base, name)} · {reset}</> : bounds(info)}
+          {usedBy.length > 0 && !chips && (
+            <details className="used-by">
               <summary>used by {usedBy.length} step{usedBy.length === 1 ? "" : "s"}</summary>
               {usedBy.map((u) => (
                 <div key={u}>
@@ -152,8 +155,20 @@ export function Params({ schema, values, inputColumns, record, keyCol, sessionRu
             </details>
           )}
         </td>
-      </tr>
-    );
+      </tr>,
+      chips && (
+        <tr key={`${key}-used`} className="used-by-row">
+          <td colSpan={3}>
+            <span className="muted">read by {usedBy.length} step{usedBy.length === 1 ? "" : "s"}: </span>
+            {usedBy.map((u) => (
+              <button key={u} className="chip" title={`${u}: show it in the graph`} onClick={() => onSelectStep(u)}>
+                {u.split("/").pop()} <span className="muted small">{u.split("/").slice(-3, -2)}</span>
+              </button>
+            ))}
+          </td>
+        </tr>
+      ),
+    ];
   };
 
   return (
