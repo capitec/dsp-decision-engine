@@ -44,7 +44,8 @@ export function Scenarios({ schema, columns, pausedAt, record, keyCol, rows, res
   const [only, setOnly] = useState<number | null>(null);
   const [fromHere, setFromHere] = useState(true);
   const [editing, setEditing] = useState(true);
-  const [shownRow, setShownRow] = useState<number>(record ?? -1);
+  // A few records fit side by side; with more, a summary per scenario.
+  const [shownRow, setShownRow] = useState<number>(record ?? (rows <= 3 ? -2 : -1));
   const [open, setOpen] = useState<number | null>(null);
   useEffect(() => {
     if (result.sweep) setEditing(false);
@@ -84,6 +85,15 @@ export function Scenarios({ schema, columns, pausedAt, record, keyCol, rows, res
         {open !== null && (
           <div className="inline-compare" ref={(el) => el?.scrollIntoView({ block: "start", behavior: "smooth" })}>
             <Compare
+              withRevision={false}
+              header={
+                <div className="pager">
+                  <button title="Previous scenario" onClick={() => { const i = (open + result.sweep!.labels.length - 1) % result.sweep!.labels.length; setOpen(i); onOpen(i); }}>◀</button>
+                  <strong>Scenario {open + 1} of {result.sweep.labels.length}</strong>
+                  <button title="Next scenario" onClick={() => { const i = (open + 1) % result.sweep!.labels.length; setOpen(i); onOpen(i); }}>▶</button>
+                  <a onClick={() => setOpen(null)}>back to all scenarios</a>
+                </div>
+              }
               comparison={result.sweep.comparisons[open]}
               record={shownRow < 0 ? null : shownRow}
               onSelect={onSelectStep}
@@ -109,7 +119,7 @@ export function Scenarios({ schema, columns, pausedAt, record, keyCol, rows, res
             <select aria-label="knob" value={k.key} onChange={(e) => set(i, { key: e.target.value })}>
               <option value="">{k.kind === "param" ? "choose a parameter…" : "choose a field…"}</option>
               {(k.kind === "param" ? paramKeys : columns).map((key) => (
-                <option key={key} value={key}>{key.replace("|", " · ")}</option>
+                <option key={key} value={key} title={key.replace("|", " · ")}>{k.kind === "param" ? `${key.split("|")[0].split("/").pop()} · ${key.split("|")[1]}` : key}</option>
               ))}
             </select>
             <input aria-label="knob values" className="grow" placeholder="values to try, e.g. 24, 36, 48" value={k.values} onChange={(e) => set(i, { values: e.target.value })} />
@@ -158,11 +168,13 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
   const moved = (c: string) => sweep.comparisons.reduce((t, cmp) => t + (cmp.output.find((o) => o.name === c)?.changedRows.length ?? 0), 0);
   const cols = [...sweep.changedColumns].sort((a, b) => moved(b) - moved(a));
   const knobCols = sweep.knobs.length ? sweep.knobs : [{ name: "scenario", values: sweep.labels }];
-  const summary = row < 0;
+  const summary = row === -1;
+  const each = row === -2;
+  const shown = each ? Array.from({ length: rows }, (_, i) => i) : [row];
   const recordsOf = (list: number[]) => list.map((r) => recordLabel(r, sweep.key)).join(", ");
   const baseKnob = (name: string) => {
     const values = sweep.knobBase[name] ?? [];
-    if (!summary) return formatValue(values[row]);
+    if (!summary && !each) return formatValue(values[row]);
     return values.every((v) => same(v, values[0])) ? formatValue(values[0]) : values.map(formatValue).join(" / ");
   };
   // The mean over all records, or the single value when every record agrees.
@@ -170,7 +182,7 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
     const v = values ?? [];
     if (v.every((x) => same(x, v[0]))) return formatValue(v[0]);
     const nums = v.filter((x): x is number => typeof x === "number");
-    return nums.length === v.length ? `avg ${formatValue(nums.reduce((t, x) => t + x, 0) / nums.length)}` : "varies";
+    return nums.length === v.length ? `${formatValue(Math.min(...nums))}–${formatValue(Math.max(...nums))}` : "varies";
   };
   const summaryCell = (i: number, c: string) => {
     const diff = sweep.comparisons[i].output.find((o) => o.name === c);
@@ -183,16 +195,14 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
       </td>
     );
   };
-  const recordCell = (i: number | null, c: string) => {
-    const before = sweep.base?.[c]?.[row];
-    if (i === null) return <td key={c} className="mono">{formatValue(before)}</td>;
-    const after = sweep.outputs[i]?.[c]?.[row];
+  const recordCell = (i: number | null, c: string, r: number) => {
+    const before = sweep.base?.[c]?.[r];
+    if (i === null) return <td key={`${c}-${r}`} className="mono">{formatValue(before)}</td>;
+    const after = sweep.outputs[i]?.[c]?.[r];
     const changed = !same(before, after);
-    const delta = changed && typeof before === "number" && typeof after === "number" ? after - before : null;
     return (
-      <td key={c} className={`mono ${changed ? "changed" : "unchanged"}`} title={changed ? `original run: ${formatValue(before)}` : "same as the original run"}>
-        {formatValue(after)}
-        {delta !== null && <span className="up"> ({delta > 0 ? "+" : ""}{formatValue(delta)})</span>}
+      <td key={`${c}-${r}`} className={`mono ${changed ? "changed" : "unchanged"}`} title={changed ? `original run: ${formatValue(before)}` : "same as the original run"}>
+        {changed ? <><s className="before">{formatValue(before)}</s> {formatValue(after)}</> : `= ${formatValue(after)}`}
       </td>
     );
   };
@@ -201,7 +211,8 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
       <div className="summary">
         <span>Show</span>
         <select aria-label="scenario record" value={row} onChange={(e) => onRow(Number(e.target.value))}>
-          <option value={-1}>a summary of all {rows} records</option>
+          <option value={-2}>each record side by side</option>
+          <option value={-1}>a summary of all {rows} records (ranges)</option>
           {Array.from({ length: rows }, (_, i) => (
             <option key={i} value={i}>the values for {recordLabel(i, sweep.key)}</option>
           ))}
@@ -213,13 +224,19 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
       ) : (
         <table className="sweep">
           <thead>
+            {each && (
+              <tr>
+                <th colSpan={knobCols.length} />
+                {shown.map((r) => (
+                  <th key={r} colSpan={cols.length} className="group-head">{recordLabel(r, sweep.key)}</th>
+                ))}
+              </tr>
+            )}
             <tr>
               {knobCols.map((k) => (
                 <th key={k.name} className="knob-col" title={k.name}>{k.name.split(" · ").pop()}</th>
               ))}
-              {cols.map((c) => (
-                <th key={c}>{c}</th>
-              ))}
+              {(summary ? [0] : shown).flatMap((r) => cols.map((c) => <th key={`${c}-${r}`}>{c}</th>))}
             </tr>
           </thead>
           <tbody>
@@ -227,14 +244,14 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
               <td className="knob-col" colSpan={knobCols.length} title={knobCols.map((k) => `${k.name} = ${baseKnob(k.name)}`).join("\n")}>
                 original run ({knobCols.filter((k) => k.name !== "scenario").map((k) => `${k.name.split(" · ").pop()} ${baseKnob(k.name)}`).join(", ")})
               </td>
-              {summary ? cols.map((c) => <td key={c} className="mono">{overall(sweep.base?.[c])}</td>) : cols.map((c) => recordCell(null, c))}
+              {summary ? cols.map((c) => <td key={c} className="mono">{overall(sweep.base?.[c])}</td>) : shown.flatMap((r) => cols.map((c) => recordCell(null, c, r)))}
             </tr>
             {sweep.labels.map((label, i) => (
               <tr key={i} className={`clickable ${open === i ? "open" : ""}`} title={`${label}: see what changed, step by step`} onClick={() => onOpen(i)}>
                 {knobCols.map((k) => (
                   <td key={k.name} className="mono knob-col">{formatValue(k.values[i])}</td>
                 ))}
-                {cols.map((c) => (summary ? summaryCell(i, c) : recordCell(i, c)))}
+                {summary ? cols.map((c) => summaryCell(i, c)) : shown.flatMap((r) => cols.map((c) => recordCell(i, c, r)))}
                 {sweep.errors[i] && <td className="error small">{sweep.errors[i]}</td>}
               </tr>
             ))}

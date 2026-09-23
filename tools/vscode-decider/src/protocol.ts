@@ -115,14 +115,14 @@ export type RecordKey = { name: string; values: unknown[] } | null;
 
 /** "client_id 2", or "row 1" when the data has no id column. */
 export function recordLabel(row: number, key: RecordKey): string {
-  return key ? `${key.name} ${formatValue(key.values[row])}` : `row ${row}`;
+  return key ? `${key.name} ${String(key.values[row])}` : `row ${row}`;
 }
 
 /** Values for people: no float noise; amounts of 100 or more to two decimals (58113.07), smaller ones to four. */
 export function formatValue(v: unknown): string {
   if (v === undefined) return "—";
   if (v === null) return "empty";
-  if (typeof v === "number") return Number.isInteger(v) ? String(v) : String(Number(v.toFixed(Math.abs(v) >= 100 ? 2 : 4)));
+  if (typeof v === "number") return v.toLocaleString("en-US", { maximumFractionDigits: Math.abs(v) >= 100 ? 2 : 4 });
   return JSON.stringify(v);
 }
 

@@ -19,6 +19,7 @@ import { Bridge, freePort } from "./bridge";
 import {
   kindLabel,
   lastSegment,
+  formatValue,
   previewOf,
   walk,
   type Checkpoint,
@@ -353,7 +354,7 @@ export class DeciderDebugSession extends LoggingDebugSession {
   }
 
   private shown(c: ColumnSummary): string {
-    return this.record === null ? previewOf(c) : JSON.stringify(c.value);
+    return this.record === null ? previewOf(c) : formatValue(c.value);
   }
 
   private async variablesFor(ref: VarRef): Promise<Variable[]> {

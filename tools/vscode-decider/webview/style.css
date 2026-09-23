@@ -1109,3 +1109,64 @@ aside h3 .muted {
   font-weight: normal;
   font-size: 0.85em;
 }
+
+/* round 7 review */
+.node text.sub,
+.edge text,
+.cluster text,
+.cluster text .kind {
+  opacity: 1;
+}
+aside.strip {
+  flex: none !important;
+  min-height: 0 !important;
+  max-height: 2.4em;
+  overflow: hidden;
+}
+.pager {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 4px 0 8px;
+}
+.top-actions {
+  margin-bottom: 6px;
+}
+s.before {
+  opacity: 0.75;
+}
+.nowrap {
+  white-space: nowrap;
+}
+.unchanged-cell {
+  opacity: 0.9;
+}
+aside h3 {
+  position: sticky;
+  top: 0;
+  background: var(--vscode-editor-background);
+  padding: 2px 0;
+  z-index: 1;
+}
+
+/* round 8 review */
+.verdict {
+  margin: 4px 0 6px;
+  font-weight: 600;
+}
+.verdict .muted {
+  font-weight: normal;
+}
+.badge-status.affected {
+  background: color-mix(in srgb, var(--changed) 45%, transparent);
+  color: var(--vscode-foreground);
+}
+.pause-banner {
+  padding: 3px 10px;
+  background: color-mix(in srgb, var(--paused) 25%, transparent);
+  border-bottom: 2px solid var(--paused);
+}
+
+aside h3 {
+  position: static;
+}

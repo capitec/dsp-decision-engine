@@ -41,7 +41,7 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
   const name = node?.path.split("/").pop();
   const change = comparison && node ? comparison.steps.find((s) => s.path === node.path && s.status !== "same" && s.status !== "not run") : undefined;
   return (
-    <aside>
+    <aside className={node || card ? "" : "strip"}>
       <button className="close link" title="Hide details" onClick={onClose}>✕</button>
       {node ? (
         <>
@@ -96,7 +96,7 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
               )}
             </div>
           )}
-          <h4>Reads{who && <span className="muted"> · values for {who}</span>}</h4>
+          <h4>Reads{who && <span className="muted"> · values for {who} · click one to see where it came from</span>}</h4>
           <Chips names={node.inputs} picked={column} onPick={onPick} valueOf={valueOf} />
           {card && (node.inputs ?? []).includes(card.name) && (
             <HowComputed entry={card} who={who} role="an input to this step" nodes={nodes} onPick={onPick} onSelect={onSelect} />
@@ -178,15 +178,16 @@ function HowComputed({ entry, who, role, nodes, onPick, onSelect }: { entry: Lin
   return (
     <div className="how" ref={box}>
       <div className="how-title">
+        {who ? `For ${who}, ` : ""}
         <span className="mono">{entry.name}{who ? ` = ${formatValue(entry.value)}` : ""}</span>
-        {role && <span className="muted"> ({role})</span>} comes from{who ? ` for ${who}` : ""}:
+        {role && <span className="muted"> ({role})</span>}
       </div>
       {entry.producer === null ? (
         <div>It is an input: it arrives with the data.</div>
       ) : (
         <>
           <div>
-            Written by <a onClick={() => onSelect(entry.producer!)}>{entry.producer}</a>
+            was written by <a onClick={() => onSelect(entry.producer!)}>{entry.producer}</a>
             {entry.via === "merge" && <span className="muted"> (the branch arm this record took)</span>}
             {entry.via === "carry" && <span className="muted"> (the loop's last iteration)</span>}
             {entry.inputs.length > 0 && " from:"}
