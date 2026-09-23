@@ -7,13 +7,13 @@ from pydantic import TypeAdapter
 
 from decider.engine.ir.decls import ParamDecl
 from decider.engine.ir.nodes import CallNode, IRNode, iter_nodes
-from decider.engine.params.models import _type_name
+from decider.engine.params.models import type_name
 
 
 def _info(decl: ParamDecl) -> dict[str, Any]:
     if decl.schema is not None:
-        return {"type": "table", "schema": decl.schema}
-    info: dict[str, Any] = {"type": _type_name(decl.annotation)}
+        return {"type": "table", "schema": dict(decl.schema)}
+    info: dict[str, Any] = {"type": type_name(decl.annotation)}
     if decl.required:
         info["required"] = True
     else:
@@ -26,7 +26,7 @@ def _info(decl: ParamDecl) -> dict[str, Any]:
 
 def _json_schema(decl: ParamDecl) -> dict[str, Any]:
     if decl.schema is not None:
-        return {"type": "array", "items": {"type": "object", "required": list(decl.schema)}}
+        return {"type": "array", "items": {"type": "object", "required": [column for column, _ in decl.schema]}}
     # ponytail: types that need $defs (enums, models) keep dangling refs; hoist $defs when such a param appears.
     if decl.field_info is not None:
         return TypeAdapter(Annotated[decl.annotation, decl.field_info]).json_schema()

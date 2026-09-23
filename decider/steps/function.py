@@ -34,6 +34,7 @@ class FunctionStep(Step):
     bound: tuple[tuple[str, Any], ...] = ()
 
     def __post_init__(self) -> None:
+        Step.__post_init__(self)
         harvest(self.fn, self.outputs)
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
@@ -102,6 +103,6 @@ def step(
 
     def make(fn: Callable) -> FunctionStep:
         names = (output,) if output is not None else tuple(outputs) if outputs is not None else (fn.__name__,)
-        return FunctionStep(name or fn.__name__, fn, names, nogil)
+        return FunctionStep(fn.__name__ if name is None else name, fn, names, nogil)
 
     return make if fn is None else make(fn)

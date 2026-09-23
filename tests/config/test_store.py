@@ -20,7 +20,7 @@ class Cutoff(ConfigurableStep):
         return CallNode(ctx.origin(self), "row", _above, (Input(self.column, float),), (Output(self.name, bool),), ())
 
 
-def _above(row, params):
+def _above(row, params, consts):
     return (row[0] > 0.5,)
 
 

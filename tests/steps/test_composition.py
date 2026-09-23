@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from decider import branch, dag, engine, flow, frame_step, loop, step
+from decider import branch, dag, engine, flow, frame_step, loop, missing_as, param, step
 from decider.engine.ir.nodes import BranchNode, CallNode, LoopNode, SequenceNode
 from decider.steps import DagStep, FunctionStep, SequentialStep
 
@@ -294,3 +294,14 @@ def test_run_and_session_wait_for_the_runner():
         step(ratio).run(None)
     with pytest.raises(NotImplementedError):
         step(ratio).session(None)
+
+
+def test_relabel_keeps_the_argument_each_input_feeds():
+    def capped(a: float, cap: float = param(1.0), *, x: float = missing_as(0.0)) -> float:
+        return min(a + x, cap)
+
+    node = engine.to_ir(step(capped).relabel(reads={"a": "amount", "x": "extra"}))
+    assert [(i.name, i.arg) for i in node.inputs] == [("amount", "a"), ("extra", "x")]
+    row = {"amount": 0.25, "extra": 0.5}
+    args = {i.arg: row[i.name] for i in node.inputs}
+    assert node.fn(**args, **dict(node.consts), **{p.name: p.default for p in node.params}) == 0.75
