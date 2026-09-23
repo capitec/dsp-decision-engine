@@ -12,15 +12,19 @@ from bank.products.credit_card import credit_card
 from bank.products.home_loan import home_loan
 from bank.products.overdraft import overdraft
 from bank.products.personal_loan import personal_loan
+from bank.shared_tables import channel_discounts, credit_life_rates
 from bank.trees import bureau_grade, collections_risk, fraud_screen
 
 features = flow(income, debt, stability, behaviour, household, derived, name="features")
 risk = flow(bureau_grade, fraud_screen, collections_risk, name="risk")
+pricing_inputs = flow(channel_discounts, credit_life_rates, name="pricing_inputs")
 product = branch(
     product_arm, personal_loan, credit_card, overdraft, home_loan,
     modifies=["offer_amount", "offer_term", "offer_rate", "monthly_instalment", "declined", "decline_reason"],
     name="product",
 )
-origination = flow(features, risk, product, decision, name="origination")
+origination = flow(features, risk, pricing_inputs, product, decision, name="origination")
 
 SAMPLE = json.loads((Path(__file__).parent / "applications.json").read_text())
+# The rate, fee and discount tables, as the config store holds them.
+PARAMS = json.loads((Path(__file__).parent / "params.json").read_text())
