@@ -1,26 +1,26 @@
 # Old test coverage map (for T7.1)
 
-Before `decider_old/` and `decider2/src` are deleted: does every old test's
-behaviour have a test under `tests/` (excluding `tests/_legacy`)? Old tests are
-every test function in `decider2/tests/*.py` and `tests/_legacy/**` (decider_old's
-tests; `decider_old/` itself has none). Matched by behaviour, not name.
+Before `decider_old/`, `decider2/` and `tests/_legacy/` were deleted (T7.1):
+does every old test's behaviour have a test under `tests/`? Old tests are every
+test function in `decider2/tests/*.py` and `tests/_legacy/**` (decider_old's
+tests; `decider_old/` itself had none). Matched by behaviour, not name. The
+paths on the left no longer exist; the history is in git.
 
-**Summary: 639 old tests: 509 PORTED, 95 DROPPED, 35 PENDING-T4.3, 0 GAP** (the 24 GAPs were closed by G1: 14 ported, 10 dropped as triaged in `notes/progress.md`).
+**Summary: 639 old tests: 543 PORTED, 96 DROPPED, 0 PENDING, 0 GAP** (the 24 GAPs were closed by G1: 14 ported, 10 dropped as triaged in `notes/progress.md`; the 35 decision-table rows pending T4.3 were resolved in T7.1: 32 covered by T4.3's `tests/tables/`, 2 wide-table tests ported by T7.1, 1 dropped).
 
-| Source | Tests | Ported | Dropped | Pending T4.3 | Gap |
-|---|---|---|---|---|---|
-| decider2 boundary + shim (7 files) | 104 | 87 | 17 | 0 | 0 |
-| decider2 compile/runtime/serving/cli/arity (9 files) | 99 | 68 | 29 | 2 | 0 |
-| decider2 graph/params/registry/testing (8 files) | 110 | 88 | 21 | 1 | 0 |
-| decider2 control flow/flagship/spec/review (5 files) | 73 | 64 | 9 | 0 | 0 |
-| decider2 trees/expr/tables (11 files) | 155 | 122 | 6 | 27 | 0 |
-| tests/_legacy (decider_old, 10 files) | 98 | 80 | 13 | 5 | 0 |
+| Source | Tests | Ported | Dropped | Gap |
+|---|---|---|---|---|
+| decider2 boundary + shim (7 files) | 104 | 87 | 17 | 0 |
+| decider2 compile/runtime/serving/cli/arity (9 files) | 99 | 70 | 29 | 0 |
+| decider2 graph/params/registry/testing (8 files) | 110 | 89 | 21 | 0 |
+| decider2 control flow/flagship/spec/review (5 files) | 73 | 64 | 9 | 0 |
+| decider2 trees/expr/tables (11 files) | 155 | 148 | 7 | 0 |
+| tests/_legacy (decider_old, 10 files) | 98 | 85 | 13 | 0 |
 
 Classes: PORTED = a new test covers the same behaviour (possibly adapted to a
 design change, noted in the line); DROPPED = behaviour removed, reason quoted
 from notes/progress.md, notes/spec-amendments.md, notes/*.md or a task commit;
-PENDING-T4.3 = decision tables, being ported by T4.3; GAP = no new test and no
-recorded drop.
+GAP = no new test and no recorded drop.
 
 ## GAPs (closed by G1; kept for the record)
 
@@ -336,8 +336,8 @@ One line per old test: `old test | class | new test or reason`.
 
 - test_a_400_feature_tree_builds_and_answers_correctly | PORTED | tests/trees/test_trees.py::test_a_400_feature_tree_builds_and_answers_correctly
 - test_more_than_six_computed_features_in_one_tree | PORTED | tests/trees/test_trees.py::test_more_than_six_computed_features_in_one_tree
-- test_a_table_of_comparable_width_builds_and_answers_correctly | PENDING-T4.3 | decision table
-- test_more_than_eight_eq_and_in_conditions_in_one_table | PENDING-T4.3 | decision table
+- test_a_table_of_comparable_width_builds_and_answers_correctly | PORTED | tests/tables/test_tables.py::test_a_400_condition_table_builds_and_answers_correctly (every mode; ported by T7.1)
+- test_more_than_eight_eq_and_in_conditions_in_one_table | PORTED | tests/tables/test_tables.py::test_twenty_eq_and_twenty_in_conditions_in_one_table (every mode; ported by T7.1)
 
 ### `decider2/tests/test_graph_module.py` (17)
 
@@ -423,7 +423,7 @@ One line per old test: `old test | class | new test or reason`.
 
 - test_base_types_register_the_same_way_a_third_party_would | PORTED | tests/trees/test_tree_config.py::test_a_tree_config_loads_by_alias_and_round_trips_with_node_positions (tree loads through ConfigurableStep.load by alias like any subclass)
 - test_from_config_decision_tree_builds_a_working_module | PORTED | tests/trees/test_tree_config.py::test_a_tree_config_loads_by_alias_and_round_trips_with_node_positions (+ tree runs in tests/trees/*)
-- test_from_config_decision_table_builds_a_structurally_equivalent_module | PENDING-T4.3 | decision tables
+- test_from_config_decision_table_builds_a_structurally_equivalent_module | PORTED | tests/tables/test_tables.py::test_a_table_round_trips_through_json (loads by the `decision_table` alias; same answers)
 - test_third_party_extension_needs_one_class_in_one_file | PORTED | tests/steps/test_configurable_integration.py::test_loads_through_a_step_ref_by_alias_or_import_path (ThresholdRule user subclass)
 - test_register_rejects_a_mismatched_type_literal | DROPPED | progress T2.1 "Import-path tags plus Literal aliases" (the alias is the `type` Literal; no separate id to mismatch)
 - test_register_rejects_reusing_an_id_for_a_different_class | PORTED | tests/registry/test_registry.py::test_two_classes_claiming_one_alias_is_an_error_naming_both
@@ -657,13 +657,13 @@ One line per old test: `old test | class | new test or reason`.
 - test_v3_cases_ranges_bands_exactly_as_decider1 | PORTED | tests/trees/test_tree_migration.py::test_v3_range_cases_band_exactly_as_decider_old
 - test_v1_string_match_subtree_exactly_as_decider1 | PORTED | tests/trees/test_tree_migration.py::test_a_string_match_subtree_exactly_as_decider_old (v1 logic as v3; v1 format deprecated)
 - test_nested_unary_then_cases_ranges_exactly_as_decider1 | PORTED | tests/trees/test_tree_migration.py::test_a_unary_node_leading_to_range_cases_exactly_as_decider_old
-- test_between_maps_ranges_to_output_labels | PENDING-T4.3 | decision table
-- test_between_default_when_outside_all_ranges | PENDING-T4.3 | decision table
-- test_in_expression_categorical_lookup | PENDING-T4.3 | decision table
-- test_and_expression_requires_all_conditions | PENDING-T4.3 | decision table
-- test_multiple_output_columns_all_populated | PENDING-T4.3 | decision table
+- test_between_maps_ranges_to_output_labels | PORTED | tests/tables/test_legacy.py::test_between_maps_ranges_to_output_labels (every mode)
+- test_between_default_when_outside_all_ranges | PORTED | tests/tables/test_legacy.py::test_between_default_when_outside_all_ranges (every mode)
+- test_in_expression_categorical_lookup | PORTED | tests/tables/test_legacy.py::test_in_expression_categorical_lookup (every mode)
+- test_and_expression_requires_all_conditions | PORTED | tests/tables/test_legacy.py::test_and_expression_requires_all_conditions (every mode)
+- test_multiple_output_columns_all_populated | PORTED | tests/tables/test_legacy.py::test_multiple_output_columns_all_populated (every mode)
 - test_a_migrated_tree_agrees_across_all_three_modes | PORTED | tests/trees/test_tree_migration.py::test_a_migrated_numeric_tree_agrees_in_every_mode
-- test_a_migrated_table_agrees_across_all_three_modes | PENDING-T4.3 | decision table
+- test_a_migrated_table_agrees_across_all_three_modes | PORTED | tests/tables/test_legacy.py (every test runs through assert_equivalent: all modes, score, session)
 
 ### `decider2/tests/test_trees_ported_conditions.py` (17)
 
@@ -724,30 +724,30 @@ One line per old test: `old test | class | new test or reason`.
 
 ### `decider2/tests/test_tables.py` (16)
 
-- test_editing_rows_never_recompiles | PENDING-T4.3 | decision table
-- test_a_rebuilt_table_answers_differently_with_no_new_compile | PENDING-T4.3 | decision table
-- test_a_table_reports_which_row_matched | PENDING-T4.3 | decision table
-- test_no_match_takes_the_default | PENDING-T4.3 | decision table
-- test_upper_inclusive_moves_the_closed_end | PENDING-T4.3 | decision table
-- test_bound_mode_is_the_trees_range_end_logic | PENDING-T4.3 | decision table
-- test_or_of_two_bands | PENDING-T4.3 | decision table
-- test_eq_on_a_string_column | PENDING-T4.3 | decision table
-- test_score_takes_a_string_input_and_agrees_with_apply | PENDING-T4.3 | decision table
-- test_a_string_literal_in_a_table_is_a_retunable_param | PENDING-T4.3 | decision table
-- test_in_on_numeric_sets | PENDING-T4.3 | decision table
-- test_and_of_between_and_is_true | PENDING-T4.3 | decision table
-- test_non_contiguous_rows_are_rejected_unless_gaps_are_allowed | PENDING-T4.3 | decision table
-- test_an_output_column_absent_from_the_table_is_rejected | PENDING-T4.3 | decision table
-- test_a_default_of_the_wrong_length_is_rejected | PENDING-T4.3 | decision table
-- test_a_table_composes_with_ordinary_modules | PENDING-T4.3 | decision table
+- test_editing_rows_never_recompiles | PORTED | tests/tables/test_table_params.py::test_editing_inline_rows_rebuilds_the_node_but_never_recompiles
+- test_a_rebuilt_table_answers_differently_with_no_new_compile | PORTED | tests/tables/test_table_params.py::test_editing_inline_rows_rebuilds_the_node_but_never_recompiles, ::test_retuning_rows_and_their_count_never_recompiles
+- test_a_table_reports_which_row_matched | DROPPED | notes/decision-tables.md "Decision tables have no matched-row output ... waits for someone to ask"; rows tried are visits: tests/tables/test_tables.py::test_the_python_matcher_visits_each_row_it_tries
+- test_no_match_takes_the_default | PORTED | tests/tables/test_tables.py::test_no_match_takes_the_default
+- test_upper_inclusive_moves_the_closed_end | PORTED | tests/tables/test_tables.py::test_upper_inclusive_moves_the_closed_end
+- test_bound_mode_is_the_trees_range_end_logic | PORTED | tests/tables/test_tables.py::test_bound_mode_is_the_trees_range_end_logic
+- test_or_of_two_bands | PORTED | tests/tables/test_tables.py::test_or_of_two_bands
+- test_eq_on_a_string_column | PORTED | tests/tables/test_tables.py::test_eq_on_a_string_column
+- test_score_takes_a_string_input_and_agrees_with_apply | PORTED | tests/tables/test_tables.py::test_score_takes_a_string_input (+ score==run per row via the `run` fixture)
+- test_a_string_literal_in_a_table_is_a_retunable_param | PORTED | tests/tables/test_table_params.py::test_retuning_rows_and_their_count_never_recompiles (adapted: rows, strings included, retune through a table param, notes/decision-tables.md "Rows inline or from params"; no per-literal str params)
+- test_in_on_numeric_sets | PORTED | tests/tables/test_tables.py::test_in_on_numeric_sets
+- test_and_of_between_and_is_true | PORTED | tests/tables/test_tables.py::test_and_of_between_and_is_true
+- test_non_contiguous_rows_are_rejected_unless_gaps_are_allowed | PORTED | tests/tables/test_tables.py::test_a_malformed_table_is_rejected_when_it_loads[ranges are not contiguous] (allow_gaps accepted: test_no_match_takes_the_default)
+- test_an_output_column_absent_from_the_table_is_rejected | PORTED | tests/tables/test_tables.py::test_a_malformed_table_is_rejected_when_it_loads[not found in parameters columns]
+- test_a_default_of_the_wrong_length_is_rejected | PORTED | tests/tables/test_tables.py::test_a_malformed_table_is_rejected_when_it_loads[must match outputs length]
+- test_a_table_composes_with_ordinary_modules | PORTED | tests/tables/test_tables.py::test_a_table_composes_with_ordinary_steps
 
 ### `decider2/tests/test_tables_ported.py` (5)
 
-- test_between_maps_ranges_to_output_labels | PENDING-T4.3 | decision table
-- test_between_default_when_outside_all_ranges | PENDING-T4.3 | decision table
-- test_in_expression_categorical_lookup | PENDING-T4.3 | decision table
-- test_and_expression_requires_all_conditions | PENDING-T4.3 | decision table
-- test_multiple_output_columns_all_populated | PENDING-T4.3 | decision table
+- test_between_maps_ranges_to_output_labels | PORTED | tests/tables/test_legacy.py::test_between_maps_ranges_to_output_labels (every mode)
+- test_between_default_when_outside_all_ranges | PORTED | tests/tables/test_legacy.py::test_between_default_when_outside_all_ranges (every mode)
+- test_in_expression_categorical_lookup | PORTED | tests/tables/test_legacy.py::test_in_expression_categorical_lookup (every mode)
+- test_and_expression_requires_all_conditions | PORTED | tests/tables/test_legacy.py::test_and_expression_requires_all_conditions (every mode)
+- test_multiple_output_columns_all_populated | PORTED | tests/tables/test_legacy.py::test_multiple_output_columns_all_populated (every mode)
 
 ### `tests/_legacy/test_config_roundtrip.py` (5)
 
@@ -862,11 +862,11 @@ One line per old test: `old test | class | new test or reason`.
 
 ### `tests/_legacy/credit/decision_table/test_decision_table.py` (5)
 
-- test_between_maps_ranges_to_output_labels | PENDING-T4.3 | decision tables
-- test_between_default_when_outside_all_ranges | PENDING-T4.3 | decision tables
-- test_in_expression_categorical_lookup | PENDING-T4.3 | decision tables
-- test_and_expression_requires_all_conditions | PENDING-T4.3 | decision tables
-- test_multiple_output_columns_all_populated | PENDING-T4.3 | decision tables
+- test_between_maps_ranges_to_output_labels | PORTED | tests/tables/test_legacy.py::test_between_maps_ranges_to_output_labels (every mode)
+- test_between_default_when_outside_all_ranges | PORTED | tests/tables/test_legacy.py::test_between_default_when_outside_all_ranges (every mode)
+- test_in_expression_categorical_lookup | PORTED | tests/tables/test_legacy.py::test_in_expression_categorical_lookup (every mode)
+- test_and_expression_requires_all_conditions | PORTED | tests/tables/test_legacy.py::test_and_expression_requires_all_conditions (every mode)
+- test_multiple_output_columns_all_populated | PORTED | tests/tables/test_legacy.py::test_multiple_output_columns_all_populated (every mode)
 
 ### `tests/_legacy/credit/scorecard/test_scorecard.py` (6)
 

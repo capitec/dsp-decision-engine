@@ -46,7 +46,7 @@ class DecisionTableConfig(ConfigurableStep):
     A null input never matches. `rows` are the rows inline, or
     `{"table": "bands"}` to read them from the params document, where they
     are checked against `columns` when the document arrives. Editing rows,
-    or how many there are, never recompiles. decider_old's
+    or how many there are, never recompiles. decider 0.3's
     `"parameters": {"data": [...], "dtypes": {...}}` spelling loads too.
 
     Row `r` is the locator `<name>#<r>` a session breaks on.
@@ -79,7 +79,7 @@ class DecisionTableConfig(ConfigurableStep):
     @model_validator(mode="before")
     @classmethod
     def _legacy(cls, data: t.Any) -> t.Any:
-        # decider_old kept columns and rows in one `parameters` frame and could unnest a struct output.
+        # decider 0.3 kept columns and rows in one `parameters` frame and could unnest a struct output.
         if not isinstance(data, dict) or "parameters" not in data:
             return data
         frame = data["parameters"]

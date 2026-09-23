@@ -16,7 +16,7 @@ __all__ = ["TreeConfig", *_schema]
 
 
 class TreeConfig(ConfigurableStep):
-    """A decision tree as a step: a v3 tree document or decider_old flat rules, run once per row.
+    """A decision tree as a step: a v3 tree document or decider 0.3 flat rules, run once per row.
 
     The tree's output columns are the step's outputs (`<rule>.<column>` per
     rule in a prioritized document with `mode: "all"`). A threshold, bound,
@@ -27,7 +27,7 @@ class TreeConfig(ConfigurableStep):
     in `feature_types` to compare an int64 column exactly.
 
     `null_handling` says what a null numeric or boolean feature does.
-    `"otherwise"` (the default, as decider_old trees behave): a test on it
+    `"otherwise"` (the default, as decider 0.3 trees behave): a test on it
     is unknown, NOT keeps it unknown, AND/OR follow three-valued logic and
     the node takes its otherwise branch (a cases node tries its next case).
     `"error"`: a null is a `MissingInputError`. A string match has its own
