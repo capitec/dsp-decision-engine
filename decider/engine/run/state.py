@@ -55,7 +55,8 @@ class State:
                 col = extracted[v.name]
                 state.write(v, col.values, valid=col.validity)
             elif v.name in frame.columns:
-                state.write(v, *from_series(frame[v.name]))
+                values, valid = from_series(frame[v.name])
+                state.write(v, values, valid=valid)
         return state
 
     def write(self, version: Version, values: np.ndarray, rows: np.ndarray | None = None,
