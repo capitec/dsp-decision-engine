@@ -104,3 +104,29 @@ Run it with `PYTHONPATH` pointed at each tree in turn. The opt-in behaviour is
 deliberate and pinned by a test in the branch — silently retyping existing
 documents would change answers nobody asked to change — but it means the bug
 stays live in every tree that does not declare.
+
+## `probe_arrow_zerocopy.py` — which polars accessor copies a String column
+
+The overnight strands all concluded "polars string buffers are not zero-copy",
+measured through `Series._get_buffers()`. The Arrow strand then found the
+memory *is* reachable without a copy, through the Arrow C Data Interface. This
+settles it with two witnesses that need no knowledge of the layout — cost
+scaling, and resident memory:
+
+```
+      rows   arrow_c_stream     _get_buffers    ns/row (stream)  ns/row (buffers)
+   100,000            1.2us         1469.8us            0.012             14.7
+ 1,000,000            1.3us        18925.0us            0.001             18.9
+ 4,000,000            1.2us        77526.1us            0.000             19.4
+
+4,000,000 rows x 19 bytes = ~76 MB of string data
+  after 5x __arrow_c_stream__()     : delta   +0.0 MB
+  after 5x _get_buffers()           : delta +222.0 MB   (~44 MB per call)
+```
+
+`__arrow_c_stream__()` is flat at ~1.2 us however many rows there are and adds
+no resident memory. `_get_buffers()` is O(rows) and allocates a fresh copy every
+call, because it converts binview to a `large_utf8` offsets+values pair.
+
+So the accessor was the copy, not the memory. Anything reading polars strings
+from a kernel should take the C Data Interface route.
