@@ -25,6 +25,18 @@ class StringMatchType(str, enum.Enum):
     regex = "regex"
 
 
+class NullHandling(str, enum.Enum):
+    """What a string match does with a null string.
+
+    `no_match` (the default): the match is false. `match`: the match is true.
+    `error`: a null in the column is a `MissingInputError`.
+    """
+
+    match = "match"
+    no_match = "no_match"
+    error = "error"
+
+
 class LogicOp(str, enum.Enum):
     AND = "and"
     OR = "or"
@@ -178,6 +190,7 @@ class UnaryStringMatch(_UnaryOp):
     match_type: StringMatchType = StringMatchType.exact
     case_sensitive: bool = True
     trim_whitespace: bool = False
+    null_handling: NullHandling = NullHandling.no_match
 
 
 class UnaryIsTrue(_UnaryOp):

@@ -5,6 +5,7 @@ import pytest
 from decider import engine
 from decider.engine import Engine
 from decider.engine.compile import kernel
+from decider.engine.ir.decls import base_annotation
 from decider.steps.trees import TreeConfig, walker
 
 BIG = 9007199254740992  # 2**53: the first integer float64 can't tell from its successor
@@ -39,7 +40,7 @@ def chain(conds: list, name: str = "chain", **kw) -> TreeConfig:
 
 
 def kinds(tree: TreeConfig) -> dict:
-    return {i.name: i.annotation for i in engine.to_ir(tree).inputs}
+    return {i.name: base_annotation(i.annotation) for i in engine.to_ir(tree).inputs}
 
 
 def test_int64_above_2_53_is_compared_exactly_in_every_mode(run):
@@ -87,7 +88,7 @@ def test_a_mixed_tree_agrees_across_every_mode(run):
         {"op": "isin", "feature": "defaults", "values": [0, 1]},
     ], name="mixed", feature_types={"income_cents": "int", "defaults": "int"})
     assert kinds(tree) == {"score": float, "burden": float, "income_cents": int, "defaults": int,
-                           "is_staff": bool, "sector": bytes | None}
+                           "is_staff": bool, "sector": bytes}
     # Row i fails at node i (its false branch is leaf i); row 6 passes every node.
     frame = pl.DataFrame({
         "score": [720.0, 650.0, 650.0, 650.0, 650.0, 650.0, 650.0],
