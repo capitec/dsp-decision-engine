@@ -32,6 +32,12 @@ tasks build on.
   kernel is split after a nullable output that a later step of the same run
   reads, so that reader's null policy is applied by the driver, as in
   interpreted mode.
+- **Errors from step functions carry the step.** The runner adds a note
+  (`exc.add_note`, Python 3.11+; nothing on 3.10) naming the step path, and in
+  interpreted mode the frame row, keeping the exception's type. A fused
+  kernel can't tell which of its steps raised, so the note lists them all
+  and suggests stepped mode. Row indices aren't reported from kernels or
+  Python fallbacks.
 - **`score()` without frame steps skips polars.** The record goes into one
   read-only array per dtype, viewed per input (one `np.array` per input cost
   about 8 µs of a 36 µs call), and the output dict is built from the state. A

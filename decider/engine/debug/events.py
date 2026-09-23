@@ -67,11 +67,16 @@ class NodeVisited:
 
 @dataclass(frozen=True, slots=True)
 class Paused:
-    """The session stopped at a checkpoint; `reason` is `"breakpoint"`, `"step"`, `"pause"` or `"rewind"`."""
+    """The session stopped at a checkpoint; `reason` is `"breakpoint"`, `"step"`, `"pause"` or `"rewind"`.
+
+    `kernel` lists the steps a fused kernel runs when the checkpoint is one
+    (the first is `origin`); a breakpoint on any of them pauses here.
+    """
 
     origin: Origin
     when: Literal["before", "after"]
     reason: str
+    kernel: tuple[str, ...] = ()
     kind: Literal["paused"] = "paused"
 
 
