@@ -5,23 +5,7 @@ from typing import Sequence
 import polars as pl
 
 from decider.engine.ir.decls import Input, NullPolicy
-
-
-class MissingInputError(ValueError):
-    """A required input (no `missing_as()`, no `| None`) is null or absent in the data.
-
-    `input`, `path` and `null_count` say which input of which step, and on how many rows.
-    """
-
-    def __init__(self, input: str, path: str, null_count: int, n_rows: int, absent: bool = False):
-        self.input, self.path, self.null_count = input, path, null_count
-        where = f"step '{path}'" if path else "the pipeline"
-        found = ("is not in the input frame" if absent
-                 else f"has {null_count} null row(s) of {n_rows}")
-        super().__init__(
-            f"input '{input}' of {where} is required but column '{input}' {found}. "
-            f"Fix the data, or declare `{input}: T = missing_as(fill)` or `{input}: T | None`."
-        )
+from decider.exceptions import MissingInputError
 
 
 def check_required(frame: pl.DataFrame, inputs: Sequence[Input], path: str = "") -> None:
