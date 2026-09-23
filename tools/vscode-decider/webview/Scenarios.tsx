@@ -128,32 +128,30 @@ export function Scenarios({ schema, columns, pausedAt, record, keyCol, rows, res
         <h4>Try every combination of</h4>
         {knobs.map((k, i) => (
           <div className="knob" key={i}>
-            <select aria-label="knob kind" value={k.kind} onChange={(e) => set(i, { kind: e.target.value as Row["kind"], key: "", text: "" })}>
-              <option value="param">parameter</option>
-              <option value="value">input field</option>
-            </select>
             <input
               aria-label="knob"
-              list={`knob-options-${i}`}
+              list="knob-options"
               className={`picker ${incomplete[i] && !k.key ? "invalid" : ""}`}
-              placeholder={k.kind === "param" ? `type to find one of ${paramKeys.length} parameters…` : "type to find a field…"}
+              placeholder={`type a parameter (${paramKeys.length}) or an input field (${columns.length})…`}
               title={k.key.replace("|", " · ")}
-              value={k.text ?? (k.kind === "param" && k.key ? paramLabel(k.key) : k.key)}
+              value={k.text ?? (k.kind === "param" && k.key ? paramLabel(k.key) : k.key ? `field · ${k.key}` : "")}
               onChange={(e) => {
                 const text = e.target.value;
-                set(i, { text, key: k.kind === "param" ? labels.get(text) ?? "" : columns.includes(text) ? text : "" });
+                const field = text.startsWith("field · ") ? text.slice("field · ".length) : "";
+                if (labels.has(text)) set(i, { text, kind: "param", key: labels.get(text)! });
+                else set(i, { text, kind: "value", key: columns.includes(field) ? field : "" });
               }}
             />
-            <datalist id={`knob-options-${i}`}>
-              {(k.kind === "param" ? [...labels.keys()] : columns).map((label) => (
-                <option key={label} value={label} />
-              ))}
-            </datalist>
-            <input aria-label="knob values" className={`grow ${incomplete[i] && k.key ? "invalid" : ""}`} placeholder="values to try, e.g. 24, 36, 48" value={k.values} onChange={(e) => set(i, { values: e.target.value })} />
             <button className="link" style={{ visibility: knobs.length > 1 ? "visible" : "hidden" }} onClick={() => setKnobs(knobs.filter((_, j) => j !== i))}>remove</button>
+            <input aria-label="knob values" className={`values ${incomplete[i] && k.key ? "invalid" : ""}`} placeholder={k.key && isRateName(k.key.split("|").pop()) ? "values to try, e.g. 7%, 7.75%, 8.5%" : "values to try, e.g. 24, 36, 48"} value={k.values} onChange={(e) => set(i, { values: e.target.value })} />
           </div>
         ))}
-        <button className="link" onClick={() => setKnobs([...knobs, { kind: "value", key: "", values: "" }])}>+ add another</button>
+        <datalist id="knob-options">
+          {[...labels.keys(), ...columns.map((c) => `field · ${c}`)].map((label) => (
+            <option key={label} value={label} />
+          ))}
+        </datalist>
+        <button className="link" onClick={() => setKnobs([...knobs, { kind: "param", key: "", values: "" }])}>+ add another</button>
         {built.some((k) => k.kind === "value") && (
           <div className="scope">
             <span className="muted">Input fields change for</span>
@@ -249,8 +247,8 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
     const ds = changedRows.map((r) => (sweep.outputs[i]?.[c]?.[r] as number) - (sweep.base?.[c]?.[r] as number)).filter((d) => !Number.isNaN(d));
     if (!ds.length) return "";
     const d = ds.reduce((t, x) => t + x, 0) / ds.length;
-    const size = isRateName(c) && Math.abs(d) < 1 ? `${Number((Math.abs(d) * 100).toFixed(2))} pp` : formatValue(Math.abs(d));
-    return `avg ${d > 0 ? "+" : "−"}${size}`;
+    const size = isRateName(c) && Math.abs(d) < 1 ? `${Number((Math.abs(d) * 100).toFixed(2))} pp` : formatValue(Math.abs(d), c);
+    return `${d > 0 ? "+" : "−"}${size} on average`;
   };
   const summaryCell = (i: number, c: string) => {
     const diff = sweep.comparisons[i].output.find((o) => o.name === c);
@@ -258,7 +256,14 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
     const numeric = !categorical(sweep.base?.[c]);
     return (
       <td key={c} className="changed mono" title={`changed for ${recordsOf(diff.changedRows)}; original: ${overall(sweep.base?.[c])}`}>
-        {numeric ? `${diff.changedRows.length} of ${rows} · ${delta(c, i, diff.changedRows)}` : overall(sweep.outputs[i]?.[c], sweep.base?.[c])}
+        {numeric ? (
+          <>
+            <div>{diff.changedRows.length} of {rows} records changed</div>
+            <div className="small">{delta(c, i, diff.changedRows)}</div>
+          </>
+        ) : (
+          overall(sweep.outputs[i]?.[c], sweep.base?.[c])
+        )}
       </td>
     );
   };

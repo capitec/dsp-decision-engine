@@ -1438,3 +1438,64 @@ aside .actions {
   font-weight: normal;
   margin-top: 2px;
 }
+
+.edit-list {
+  font-weight: normal;
+  margin-top: 2px;
+}
+.edit-chip {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 6px;
+  border: 1px solid var(--changed, orange);
+  border-radius: 8px;
+}
+
+.results-scroll {
+  max-height: 45vh;
+  overflow: auto;
+  margin: 4px 0;
+}
+.results-scroll table.results th {
+  position: sticky;
+  top: 0;
+  background: var(--vscode-editor-background);
+}
+table.results td.unchanged-cell {
+  opacity: 0.6;
+  background: none;
+}
+
+.params tr.used-by-row td {
+  white-space: normal;
+}
+.params td input {
+  width: 110px;
+}
+table.sweep td.changed .small {
+  opacity: 0.85;
+}
+
+.scenarios .knob {
+  flex-wrap: wrap;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed var(--vscode-panel-border);
+  margin-bottom: 6px;
+}
+.scenarios .knob input.picker {
+  flex: 1 1 80%;
+  min-width: 0;
+}
+.scenarios .knob input.values {
+  flex: 1 1 100%;
+}
+
+@media (max-width: 760px) {
+  main.detailed.explaining .graph {
+    height: 24vh;
+  }
+}
+
+.nowrap {
+  white-space: nowrap;
+}

@@ -49,51 +49,50 @@ function Results({ c, record }: { c: Comparison; record: number | null }) {
   const cols = Object.keys(c.results.b);
   const everyRow = Array.from({ length: c.rows }, (_, i) => i);
   const hit = everyRow.filter((r) => cols.some((n) => moved(n, r)));
-  // Only the records whose results moved: they are the answer. The rest on request.
-  const rest = showSame || !hit.length ? [...hit, ...everyRow.filter((r) => !hit.includes(r))] : hit;
-  const all = record !== null ? [record, ...rest.filter((r) => r !== record)] : rest;
-  const rows = all.slice(0, 4);
-  const changed = (n: string) => rows.some((r) => moved(n, r));
-  const unchanged = cols.filter((n) => !changed(n));
-  const names = [...cols.filter(changed), ...(showSame ? unchanged : [])];
+  const changedCols = cols.filter((n) => hit.some((r) => moved(n, r)));
+  // The decision reads first, changed or not: "still declined" and "now approved" are the point.
+  const lead = cols.filter((n) => /^decision$/.test(n) && !changedCols.includes(n));
+  const shownCols = showSame ? [...lead, ...changedCols, ...cols.filter((n) => !changedCols.includes(n) && !lead.includes(n))] : [...lead, ...changedCols];
+  // One row per changed record, the focused one first; unchanged records on request.
+  const rest = showSame ? [...hit, ...everyRow.filter((r) => !hit.includes(r))] : hit;
+  const rows = record !== null ? [record, ...rest.filter((r) => r !== record)] : rest;
+  if (!hit.length) return <div>No result changes for any of the {c.rows} records.</div>;
   return (
     <>
-    {!hit.length && <div>No result changes for any of the {c.rows} records.</div>}
-    {record !== null && hit.length > 0 && !hit.includes(record) && <div className="muted">{recordLabel(record, c.key)} (focused) is unchanged; the records that changed follow it.</div>}
-    {(unchanged.length > 0 || hit.length < c.rows) && cols.some(changed) && (
-      <label className="small muted">
-        <input type="checkbox" checked={showSame} onChange={(e) => setShowSame(e.target.checked)} /> also show unchanged: {c.rows - hit.length} records, {unchanged.length} result fields
-      </label>
-    )}
-    {names.length > 0 && (
-    <table className="results">
-      <thead>
-        <tr>
-          <th />
-          {rows.map((r) => (
-            <th key={r}>{recordLabel(r, c.key)}</th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {names.map((n) => (
-          <tr key={n}>
-            <td className="mono">{n}</td>
-            {rows.map((r) => {
-              const a = c.results.a[n]?.[r];
-              const b = c.results.b[n]?.[r];
-              return same(a, b) ? (
-                <td key={r} className="mono unchanged-cell" title="same in both runs">= {formatValue(b, n)}</td>
-              ) : (
-                <td key={r} className="mono changed-cell"><s className="before">{formatValue(a, n)}</s> <span className="after">{formatValue(b, n)}</span></td>
-              );
-            })}
-          </tr>
-        ))}
-      </tbody>
-    </table>
-    )}
-    {all.length > rows.length && <div className="muted">Showing {rows.length} of {all.length} {showSame || !hit.length ? "" : "changed "}records; focus a record to see another.</div>}
+      <div className="muted small">
+        {hit.length} of {c.rows} records changed.{record !== null && !hit.includes(record) ? ` ${recordLabel(record, c.key)} (focused) is unchanged; it is pinned first.` : ""}{" "}
+        <label>
+          <input type="checkbox" checked={showSame} onChange={(e) => setShowSame(e.target.checked)} /> also show the {c.rows - hit.length} unchanged records and {cols.length - changedCols.length} unchanged fields
+        </label>
+      </div>
+      <div className="results-scroll">
+        <table className="results">
+          <thead>
+            <tr>
+              <th>record</th>
+              {shownCols.map((n) => (
+                <th key={n} className="mono">{n}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r} className={r === record ? "hit" : ""}>
+                <td className="nowrap">{recordLabel(r, c.key)}</td>
+                {shownCols.map((n) => {
+                  const a = c.results.a[n]?.[r];
+                  const b = c.results.b[n]?.[r];
+                  return same(a, b) ? (
+                    <td key={n} className="mono unchanged-cell" title="same in both runs">{formatValue(b, n)}</td>
+                  ) : (
+                    <td key={n} className="mono changed-cell"><s className="before">{formatValue(a, n)}</s> <span className="after">{formatValue(b, n)}</span></td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </>
   );
 }
@@ -141,6 +140,7 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
     <div className="compare">
       {back && <a className="back" onClick={back.go}>← Back to {back.label}</a>}
       <h3 className="compare-title">{c.b}</h3>
+      {c.note && <div className="muted">{c.note}</div>}
       <div className="comparing">
         Compared with <strong>{c.a}</strong>
         <span className="muted"> · {c.rows} records · {count("changed")} steps changed{count("added") ? `, ${count("added")} added` : ""}{count("removed") ? `, ${count("removed")} removed` : ""}</span>

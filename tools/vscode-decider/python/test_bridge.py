@@ -257,5 +257,20 @@ def test_edits_compare_against_the_flow_as_started():
     assert "term/cap_by_income" in r["a"]["steps"] and "term/cap_by_income" not in r["b"]["steps"]
 
 
+def test_each_edit_compares_on_its_own(tmp_path):
+    loan = tmp_path / "loan.py"
+    loan.write_text(open(LOAN).read())
+    b = Bridge()
+    b.start(str(loan), breakpoints=["term/cap_by_income"])
+    b.handle({"cmd": "resume"})
+    b.handle({"cmd": "skip", "path": "term/cap_by_income"})
+    loan.write_text(loan.read_text().replace("cap: float = param(54.0)", "cap: float = param(50.0)"))
+    b.handle({"cmd": "reload_step", "path": "term/by_sector/cap_private"})
+    only_skip = b.handle({"cmd": "compare_edits", "path": "term/cap_by_income"})["b"]["output"]["term_cap"]
+    only_edit = b.handle({"cmd": "compare_edits", "path": "term/by_sector/cap_private"})["b"]["output"]["term_cap"]
+    both = b.handle({"cmd": "compare_edits"})["b"]["output"]["term_cap"]
+    assert (only_skip, only_edit, both) == ([54.0, 36.0], [48.0, 36.0], [50.0, 36.0])
+
+
 def test_a_one_line_step_reports_its_formula():
     assert find(Bridge().describe(LOAN)["ir"], "term/term_cap")["formula"] == "min(requested_term, ceiling)"

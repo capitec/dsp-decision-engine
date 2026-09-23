@@ -212,18 +212,28 @@ export function App() {
           {run.record !== null && <span> · focused on {recordLabel(run.record, keyCol)}</span>}
           {note && <div className="banner-note">{note}</div>}
           {Object.keys(run.edits ?? {}).length > 0 && (
-            <>
-              <span> · {Object.keys(run.edits!).length} step{Object.keys(run.edits!).length === 1 ? "" : "s"} edited </span>
-              <button title="Run the flow as started and as edited to the end, and compare every result" onClick={() =>
+            <div className="edit-list">
+              Edits in this run:{" "}
+              {Object.entries(run.edits!).map(([p, a]) => (
+                <span key={p} className="edit-chip">
+                  {p.split("/").pop()} {a === "delete" ? "skipped" : "edited"}
+                  {Object.keys(run.edits!).length > 1 && (
+                    <button className="link" title="Compare the flow as started with only this edit" onClick={() => send({ type: "compareEdits", label: `${p.split("/").pop()} ${a === "delete" ? "skipped" : "edited"}`, edits: run.edits!, path: p })}>
+                      compare
+                    </button>
+                  )}
+                </span>
+              ))}
+              <button title="Run the flow as started and as edited, start to end, and compare every result" onClick={() =>
                   send({
                     type: "compareEdits",
                     label: Object.entries(run.edits!).map(([p, a]) => `${p.split("/").pop()} ${a === "delete" ? "skipped" : "edited"}`).join(", "),
                     edits: run.edits!,
                   })
                 }>
-                Compare with the flow as started
+                {Object.keys(run.edits!).length > 1 ? "Compare all edits with the flow as started" : "Compare with the flow as started"}
               </button>
-            </>
+            </div>
           )}
         </div>
       )}
@@ -278,7 +288,7 @@ export function App() {
           ))}
         </div>
       )}
-      <main className={withDetails && selectedNode ? "detailed" : ""}>
+      <main className={withDetails && selectedNode ? (lineage && column ? "detailed explaining" : "detailed") : ""}>
         {tab === "graph" && (
           <Graph
             ir={graphIr!}
