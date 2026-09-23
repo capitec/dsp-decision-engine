@@ -101,6 +101,14 @@
     NaN in the data is therefore a null. Bool features have
     no spare value, so they stay `bool | None` (`split` groups an
     `Optional` by its base type).
+- **Outputs are laid out per leaf, not per output row.** A LEAF program
+  row holds the leaf's ordinal (-1 for a `result_idx: -1` leaf and a missing
+  branch), and each output's values repeat the row every leaf selects. Then
+  the index a walk ends at also names the leaf, so `path_output` (the leaf
+  id as a `Literal` String output, per rule in `mode: "all"`) is one more
+  output with values `0..n-1`, and the walker didn't change at all. The
+  cost is a few more values when several leaves share a row. A leaf that
+  selects the default row reports a null path, as the default answered.
 - A numeric output column holding `None` is declared `T | None`.
 - **`mode: "all"`** writes `<rule name>.<column>` per rule (`rule_<i>` when
   unnamed), since a row node writes flat columns, not decider_old's structs.

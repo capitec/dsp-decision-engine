@@ -109,6 +109,21 @@ def test_a_bundle_is_converted_once_per_document_and_node(monkeypatch):
     assert sorted(seen) == ["high_cap", "high_cap", "low_cap", "low_cap"]
 
 
+def test_a_reused_document_object_is_hashed_once(monkeypatch):
+    hashed = []
+    original = validate.document_key
+    monkeypatch.setattr(validate, "document_key", lambda doc: hashed.append(1) or original(doc))
+    exe = Engine().bind(flow(low_cap, high_cap), mode="fused")
+    doc = {"shared": {"rate": 0.25}}
+    for _ in range(3):
+        assert exe.score({"x": 2.0}, doc)["low_cap"] == 0.5
+    exe.run(FRAME, doc)
+    assert len(hashed) == 1
+    assert exe.score({"x": 2.0}, {"shared": {"rate": 0.5}})["low_cap"] == 1.0
+    assert exe.score({"x": 2.0}, doc)["low_cap"] == 0.5
+    assert len(hashed) == 3
+
+
 def test_two_nodes_sharing_a_key_agree_across_modes():
     out = assert_equivalent(flow(low_cap, high_cap), FRAME, params={"shared": {"rate": 0.5}, "high_cap": {"k": 2.0}})
     assert out["low_cap"].to_list() == [0.5, 1.0, 1.5]

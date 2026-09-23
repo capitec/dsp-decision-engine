@@ -7,6 +7,7 @@ from decider import engine, flow
 from decider.engine import Engine
 from decider.engine.compile import kernel
 from decider.steps.trees import TreeConfig, walker
+from decider.testing import assert_equivalent
 
 
 def v3(nodes: dict, edges: list, output: dict) -> dict:
@@ -164,6 +165,32 @@ def chain(length: int, arm: int) -> TreeConfig:
 def test_a_very_large_tree_builds_and_runs(run):
     # x < 0 fails, x < 1 holds: leaf 0. Past the end of the chain: the default row.
     assert run(chain(400, arm=1), pl.DataFrame({"x": [0.5, 1000.0]}))["pts"].to_list() == [1.0, 0.0]
+
+
+def gauntlet(features: list) -> TreeConfig:
+    """Node i tests `features[i] > 0`: false ends at leaf i (pts i), passing every node gives pts n."""
+    n = len(features)
+    nodes = {f"n{i}": unary(">", f, 0.0) for i, f in enumerate(features)}
+    nodes |= {f"leaf{i}": leaf(i) for i in range(n + 1)}
+    edges = [(f"n{i}", f"leaf{i}", 1) for i in range(n)]
+    edges += [(f"n{i}", f"n{i + 1}" if i + 1 < n else f"leaf{n}", 0) for i in range(n)]
+    return TreeConfig(name="gauntlet", tree=v3(nodes, edges, pts(*map(float, range(n + 1)), default=-1.0)))
+
+
+def test_a_400_feature_tree_builds_and_answers_correctly():
+    # Each row fails at a different node, so a feature read from the wrong slot shows as a wrong answer.
+    names = [f"f{i}" for i in range(400)]
+    rows = [dict.fromkeys(names, 1.0) for _ in range(4)]
+    rows[1]["f0"], rows[2]["f250"], rows[3]["f399"] = 0.0, 0.0, 0.0
+    out = assert_equivalent(gauntlet(names), pl.DataFrame(rows))
+    assert out["pts"].to_list() == [400.0, 0.0, 250.0, 399.0]
+
+
+def test_more_than_six_computed_features_in_one_tree():
+    tree = gauntlet([{"type": "computed", "expression": f"a{i} - b{i}"} for i in range(10)])
+    passing = {**{f"a{i}": 1.0 for i in range(10)}, **{f"b{i}": 0.0 for i in range(10)}}
+    frame = pl.DataFrame([passing, {**passing, "a7": 0.0, "b7": 1.0}, {**passing, "b2": 5.0}])
+    assert assert_equivalent(tree, frame)["pts"].to_list() == [10.0, 7.0, 2.0]
 
 
 def test_a_then_chain_thousands_deep_builds_and_runs(run):
