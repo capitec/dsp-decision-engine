@@ -181,6 +181,32 @@ def test_tree_path_rewalks_one_record():
     assert b.handle({"cmd": "tree_path", "path": "risk_tree", "row": 1})["visited"] == ["root", "good_score"]
 
 
+def test_scenarios_fork_from_the_pause_and_keep_earlier_overrides():
+    b = started(breakpoints=["term/cap_by_income"])
+    b.handle({"cmd": "resume"})
+    b.handle({"cmd": "set", "name": "requested_amount", "value": 120000.0})
+    r = b.handle({"cmd": "sweep", "scenarios": [
+        {"label": "ceiling 10", "params": {"term": {"term_cap": {"ceiling": 10.0}}}},
+        {"label": "cap 6", "params": {"term": {"cap_by_income": {"cap": 6.0}}}},
+        {"label": "record 1 term 12", "overrides": {"term_cap": 12.0}, "row": 1},
+    ]})
+    assert r["at"] == {"path": "term/cap_by_income", "when": "before", "n": 1}
+    base = r["baseline"]["output"]
+    assert base["term_cap"] == [48.0, 36.0] and base["offer"][1] == 120000.0  # the earlier override replays
+    ceiling, cap, record = (x["output"] for x in r["results"])
+    assert ceiling["term_cap"] == [48.0, 36.0]  # term_cap already ran: a param upstream of the pause changes nothing
+    assert cap["term_cap"] == [6.0, 6.0]
+    assert record["term_cap"] == [48.0, 12.0]
+    assert b.handle({"cmd": "resume"})["finished"]  # the original session is untouched
+
+
+def test_scenarios_from_the_start_without_a_session():
+    r = Bridge().sweep([{"label": "cap 24", "params": {"term": {"cap_by_income": {"cap": 24.0}}}}],
+                       from_here=False, file=LOAN)
+    assert r["at"] is None
+    assert r["results"][0]["output"]["term_cap"] == [24.0, 24.0]
+
+
 def test_debug_condition_matches_only_the_focused_record():
     b = started(breakpoints=["term/cap_by_income"])
     b.handle({"cmd": "resume"})

@@ -5,6 +5,7 @@ import * as path from "node:path";
 import { describe, expect, it } from "vitest";
 import { compareTraces, same, type TraceResult } from "../src/compare";
 import { listRefs, materialise } from "../src/git";
+import { scenarios, summariseSweep } from "../src/sweep";
 
 const ROOT = path.resolve(__dirname, "..");
 const LOAN = path.join(ROOT, "examples", "loan.py");
@@ -54,6 +55,39 @@ describe("comparing two runs", () => {
     expect(same(0.1 + 0.2, 0.3)).toBe(true);
     expect(same(1, 1.001)).toBe(false);
     expect(same(null, 0)).toBe(false);
+  });
+});
+
+describe("scenario sweeps", () => {
+  it("every combination of knobs becomes a scenario with nested params and overrides", () => {
+    const sc = scenarios(
+      [
+        { kind: "param", key: "term/cap_by_income|cap", values: [24, 36] },
+        { kind: "value", key: "requested_amount", values: [1000, 2000] },
+      ],
+      1,
+    );
+    expect(sc.map((s) => s.label)).toEqual([
+      "term/cap_by_income.cap=24, requested_amount=1000",
+      "term/cap_by_income.cap=24, requested_amount=2000",
+      "term/cap_by_income.cap=36, requested_amount=1000",
+      "term/cap_by_income.cap=36, requested_amount=2000",
+    ]);
+    expect(sc[3]).toMatchObject({ params: { term: { cap_by_income: { cap: 36 } } }, overrides: { requested_amount: 2000 }, row: 1 });
+    expect(scenarios([], null)).toEqual([]);
+  });
+
+  it("summarises forks against the original: changed columns and a step diff each", () => {
+    const script = `import sys, json; sys.path.insert(0, ${JSON.stringify(path.join(ROOT, "python"))})
+from bridge import Bridge
+b = Bridge(); b.start(${JSON.stringify(LOAN)}, breakpoints=["term/cap_by_income"]); b.handle({"cmd": "resume"})
+print(json.dumps(b.sweep([{"label": "cap 6", "params": {"term": {"cap_by_income": {"cap": 6.0}}}}]), default=str))`;
+    const r = JSON.parse(execFileSync("uv", ["run", "python", "-c", script], { cwd: ROOT }).toString());
+    const s = summariseSweep(r);
+    expect(s.at).toBe("before term/cap_by_income");
+    expect(s.changedColumns).toEqual(["term_cap"]);
+    expect(s.outputs[0]!.term_cap).toEqual([6, 6]);
+    expect(s.comparisons[0].firstDivergence).toBe("term/cap_by_income");
   });
 });
 
