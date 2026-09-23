@@ -61,3 +61,21 @@ and the websocket adapter build on.
   `"error"`, which is already the run-error event. Tests drive the ASGI app
   directly because starlette's `TestClient` needs httpx, which no extra
   includes; `starlette` is in the dev group.
+- **`replace`/`delete` rebuild, carry over, replay without re-running.**
+  The edit swaps one subtree of the authoring tree (parents along the path
+  rebuilt; everything else the same object, so `to_ir` hits its cache),
+  re-resolves and binds a fresh `Executable` on a copy of the runner (the
+  stepped runner recompiles for the new plan; unchanged kernels come from
+  the content-keyed dispatcher cache). Version ids are positional, so values
+  move across by `(name, producer)`; overrides are re-recorded. The replay
+  stops at the edited node, or at the old pause if that comes first; nodes
+  that end before that point are handed to the runner's `skip` map and not
+  run again: their values are already carried over, so branch routing reads
+  the current (possibly overridden) values. Exceptions: a loop around the
+  stop point runs again from its first iteration (iterations can't be
+  skipped), and an unknown-lineage frame step runs again (it replaces the
+  frame later nodes see). The replacement takes the old step's name, so
+  params, breakpoints and `name@path` keep working. A name that only the
+  old step produced and a later step still reads would silently become an
+  input column, so that is a `WiringError` before anything changes.
+  `Replace` carries a Python object, so it has no JSON form; `Delete` does.

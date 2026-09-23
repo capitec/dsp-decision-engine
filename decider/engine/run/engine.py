@@ -65,13 +65,14 @@ class Engine:
         runner = RUNNERS.get(mode)
         if runner is None:
             raise EngineError(f"unknown mode {mode!r}; expected one of {sorted(RUNNERS)}")
-        return Executable(resolve(step_or_ir), runner(), self.params_validation == "lazy")
+        return Executable(resolve(step_or_ir), runner(), self.params_validation == "lazy", step_or_ir)
 
 
 class Executable:
     """A bound pipeline: `run` a frame, or `score` one record.
 
-    `report` describes the params validation of the latest call.
+    `report` describes the params validation of the latest call; `step` is
+    what it was bound from (a step, a function or an IR).
 
     Example::
 
@@ -80,8 +81,9 @@ class Executable:
         exe.score({"net_income": 4100.0, ...})   # a dict
     """
 
-    def __init__(self, plan: Plan, runner: Runner, lazy: bool):
+    def __init__(self, plan: Plan, runner: Runner, lazy: bool, step: Any = None):
         self.plan = plan
+        self.step = step
         self.runner = runner
         self.lazy = lazy
         self.nodes = {c.id: NodeParams(c.node.origin.path, c.node.params) for c in plan.calls if c.node.params}
