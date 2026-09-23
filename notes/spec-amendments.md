@@ -123,3 +123,16 @@ where they disagree, this file wins.
 - **Lambda outputs.** `step(lambda ..., name="dbl")` writes `dbl`. Named
   functions keep the `(fn.__name__,)` default.
 - **`ConfigurableStep.load`** also accepts JSON text (a string starting with `{`).
+
+## 2026-09-23, T4.2 (trees)
+
+- **`Literal[...]` string outputs.** A row node's compiled `fn` returns the
+  index of a `Literal` choice; the unit decodes it to `str` (-1 = null). The
+  Python `reference` returns the string itself.
+- **`bytes` inputs are raw string spans** gathered through the Arrow shim
+  (`(address, length)`, length -1 = null). A byte-reading row node's `str`
+  params arrive as UTF-8 spans. Strings are never preprocessed into codes for
+  trees.
+- **Regex, case-insensitive and whitespace-trimming matches** run the tree's
+  Python walker as a `Fallback` in compiled modes, on raw strings.
+- **Tree literals are consts; only `ParamRef`s are params.**
