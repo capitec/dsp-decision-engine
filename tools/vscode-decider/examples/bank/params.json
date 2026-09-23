@@ -24,15 +24,15 @@
    },
    {
     "grade_key": 2,
-    "pl_risk_loading": 0.015
+    "pl_risk_loading": 0.02
    },
    {
     "grade_key": 3,
-    "pl_risk_loading": 0.03
+    "pl_risk_loading": 0.04
    },
    {
     "grade_key": 4,
-    "pl_risk_loading": 0.045
+    "pl_risk_loading": 0.06
    }
   ],
   "pl_fees": [
@@ -74,15 +74,15 @@
    },
    {
     "grade_key": 2,
-    "cc_risk_loading": 0.015
+    "cc_risk_loading": 0.02
    },
    {
     "grade_key": 3,
-    "cc_risk_loading": 0.03
+    "cc_risk_loading": 0.04
    },
    {
     "grade_key": 4,
-    "cc_risk_loading": 0.045
+    "cc_risk_loading": 0.06
    }
   ],
   "cc_fees": [
@@ -119,15 +119,15 @@
    },
    {
     "grade_key": 2,
-    "od_risk_loading": 0.015
+    "od_risk_loading": 0.02
    },
    {
     "grade_key": 3,
-    "od_risk_loading": 0.03
+    "od_risk_loading": 0.04
    },
    {
     "grade_key": 4,
-    "od_risk_loading": 0.045
+    "od_risk_loading": 0.06
    }
   ],
   "od_fees": [

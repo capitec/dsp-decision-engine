@@ -129,9 +129,9 @@ describe("user stories", () => {
       await shot("After clicking 'What-if' above the pipeline.");
       await wv.locator('input[aria-label="term/cap_by_income cap"]').fill("24");
       await shot("After typing 24 into term/cap_by_income · cap.");
-      await wv.locator("button", { hasText: "Compare with defaults" }).click();
+      await wv.locator("button", { hasText: "Run and compare" }).click();
       await wv.locator(".compare .comparing").waitFor({ timeout: 90_000 });
-      await shot("The comparison after clicking 'Compare with defaults'.");
+      await shot("The comparison after clicking 'Run and compare'.");
       await tab(c, "Graph");
       await shot("The graph after the comparison.");
     });
@@ -144,10 +144,10 @@ describe("user stories", () => {
       await wv.locator(".pause-banner", { hasText: "cap_by_income" }).waitFor({ timeout: 30_000 });
       await tab(c, "Scenarios");
       await shot("The Scenarios tab while paused before cap_by_income.");
-      await wv.locator('select[aria-label="knob"]').first().selectOption("term/cap_by_income|cap");
+      await wv.locator('input[aria-label="knob"]').first().fill("cap · cap_by_income (term)");
       await wv.locator('input[aria-label="knob values"]').first().fill("24, 36, 48");
       await wv.locator("button", { hasText: "+ add another" }).click();
-      await wv.locator('select[aria-label="knob"]').nth(1).selectOption("requested_amount");
+      await wv.locator('input[aria-label="knob"]').nth(1).fill("requested_amount");
       await wv.locator('input[aria-label="knob values"]').nth(1).fill("50000, 150000");
       await shot("Two rows filled in: the cap parameter and the requested_amount input field.");
       await wv.locator("button", { hasText: /^Run 6 scenarios/ }).click();

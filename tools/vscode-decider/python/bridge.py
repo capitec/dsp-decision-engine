@@ -73,10 +73,10 @@ def _assignment_lines(file):
 
 
 def find_pipelines(mod, file):
-    """Module-level combinator and config steps that no other module-level step contains."""
-    steps = {k: v for k, v in vars(mod).items() if isinstance(v, Step) and not k.startswith("_")}
+    """Combinator and config steps assigned at the top of `file` that no other one there contains."""
+    lines = _assignment_lines(file)  # imported sub-flows aren't this file's pipelines
+    steps = {k: v for k, v in vars(mod).items() if isinstance(v, Step) and not k.startswith("_") and k in lines}
     contained = {id(s) for top in steps.values() for _, s in top.walk() if s is not top}
-    lines = _assignment_lines(file)
     return [{"name": k, "line": lines.get(k), "kind": type(v).__name__} for k, v in steps.items()
             if id(v) not in contained and not isinstance(v, (FunctionStep, FrameStep))]
 
@@ -121,6 +121,7 @@ def node_json(node, steps, located):
                 "inputs": None if node.inputs is None else [i.name for i in node.inputs],
                 "outputs": None if node.outputs is None else [x.name for x in node.outputs],
                 "params": {d.name: d.default for d in node.params}, "code": _fingerprint(python, step_),
+                "doc": (inspect.getdoc(python) or "").split("\n")[0],
                 "python": {"file": rf, "line": rl, "bodyLine": _first_statement(python)} if rf else None}
     kind = "branch" if isinstance(node, BranchNode) else "loop" if isinstance(node, LoopNode) else "sequence"
     extra = {"modifies": list(node.modifies)} if kind == "branch" else {}
@@ -159,15 +160,23 @@ class Bridge:
         self.step = getattr(self.mod, self.name)
         self.ir = to_ir(self.step)
         steps = step_map(self.step)
-        lines = _assignment_lines(file)
-        located = {id(v): (str(Path(file).resolve()), lines[k]) for k, v in vars(self.mod).items()
-                   if isinstance(v, Step) and k in lines}
+        located = {}
+        # Steps assigned in any module of the pipeline's package, the pipeline file first.
+        top = self.mod.__name__.split(".")[0]
+        mods = [self.mod] + [m for n, m in list(sys.modules.items())
+                             if (n == top or n.startswith(top + ".")) and m is not self.mod and getattr(m, "__file__", None)]
+        for m in mods:
+            lines = _assignment_lines(m.__file__)
+            for k, v in vars(m).items():
+                if isinstance(v, Step) and k in lines:
+                    located.setdefault(id(v), (str(Path(m.__file__).resolve()), lines[k]))
         self.parents = {}
         tree = node_json(self.ir, steps, located)
         self._index(tree, None)
-        params = {path: {k: {kk: vv for kk, vv in info.items() if kk != "used_by"} for k, info in ps.items()}
+        params = {path: {k: {kk: vv for kk, vv in info.items() if kk != "used_by" or path == "shared"} for k, info in ps.items()}
                   for path, ps in self.step.parameters().items()}
-        self.described = {"pipelines": pipelines, "pipeline": self.name, "ir": tree, "params": params}
+        self.described = {"pipelines": pipelines, "pipeline": self.name, "ir": tree, "params": params,
+                          "values": getattr(self.mod, "PARAMS", None) or {}}
         return self.described
 
     def trace(self, file, pipeline=None, data=None, params=None, overrides=None, row=None):

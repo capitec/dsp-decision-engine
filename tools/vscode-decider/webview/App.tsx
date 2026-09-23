@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Comparison } from "../src/compare";
 import {
   callNodes,
@@ -15,7 +15,9 @@ import {
 } from "../src/protocol";
 import type { Sweep } from "../src/sweep";
 import { Compare } from "./Compare";
+import { FindStep } from "./FindStep";
 import { Graph } from "./Graph";
+import { fold } from "./layout";
 import { NodePanel } from "./NodePanel";
 import { Params } from "./Params";
 import { Scenarios } from "./Scenarios";
@@ -27,6 +29,8 @@ const send = (m: FromWebview) => vscode.postMessage(m);
 
 const IDLE: RunStatus = { current: null, finished: false, finishedPaths: [], visits: {}, record: null };
 type TreePath = { path: string; row: number; visited: string[]; result?: unknown[] };
+// Flows up to this many steps draw fully open; bigger ones start with their groups folded.
+const OPEN_ALL = 80;
 
 export function App() {
   const [describe, setDescribe] = useState<DescribeResult>();
@@ -46,6 +50,10 @@ export function App() {
   const [details, setDetails] = useState(true);
   const [tab, setTab] = useState<Tab>("graph");
   const [zoom, setZoom] = useState<number | "auto">("auto");
+  const [opened, setOpened] = useState<Set<string>>(new Set());
+  // Said while a run is starting or re-running, until the next status arrives.
+  const [pending, setPending] = useState<string>();
+  const shown = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     const onMessage = (e: MessageEvent<ToWebview>) => {
@@ -53,12 +61,18 @@ export function App() {
       switch (m.type) {
         case "describe":
           setDescribe(m.describe);
-          setSelected(undefined);
-          setColumns(null);
-          setRun(IDLE);
+          // Starting a run describes the flow again: keep what the user was looking at.
+          if (shown.current !== m.describe.pipeline) {
+            setSelected(undefined);
+            setColumns(null);
+            setRun(IDLE);
+            setOpened(new Set());
+          }
+          shown.current = m.describe.pipeline;
           break;
         case "status":
           setRun(m);
+          setPending(undefined);
           if (m.current) setSelected(m.current.path);
           break;
         case "state":
@@ -131,6 +145,20 @@ export function App() {
     () => (showDiff && compare.comparison ? new Map(compare.comparison.steps.map((s) => [s.path, s.status])) : undefined),
     [compare.comparison, showDiff],
   );
+  // Groups drawn open: the ones the user opened, and every one around the selection, the pause and the changes.
+  const graphIr = useMemo(() => {
+    if (!describe || nodes.length <= OPEN_ALL) return describe?.ir;
+    const keep = [selected, run.current?.path, ...(diff ? [...diff].filter(([, s]) => s === "changed" || s === "added").map(([p]) => p) : [])].filter(Boolean) as string[];
+    return fold(describe.ir, (p) => opened.has(p) || keep.some((k) => k.startsWith(`${p}/`)));
+  }, [describe, nodes, opened, selected, run.current?.path, diff]);
+  const toggle = (path: string) => {
+    const next = new Set(opened);
+    if (next.has(path) || [selected, run.current?.path].some((k) => k?.startsWith(`${path}/`))) {
+      for (const p of next) if (p === path || p.startsWith(`${path}/`)) next.delete(p);
+      if (selected?.startsWith(`${path}/`)) setSelected(undefined);
+    } else next.add(path);
+    setOpened(next);
+  };
   const changedSteps = compare.comparison ? compare.comparison.steps.filter((s) => s.status === "changed" || s.status === "added").map((s) => s.path) : [];
   const changedAt = changedSteps.indexOf(selected ?? "");
   const goChanged = (dir: 1 | -1) => setSelected(changedSteps[(changedAt + dir + changedSteps.length) % changedSteps.length]);
@@ -172,7 +200,8 @@ export function App() {
           </label>
         )}
       </header>
-      {pausedAt && run.current && (
+      {pending && <div className="pause-banner pending">⏳ {pending}</div>}
+      {!pending && pausedAt && run.current && (
         <div className="pause-banner" title={run.current.path}>
           ⏸ Paused {run.current.when} <strong>{run.current.path.split("/").pop() || "the start"}</strong>
           {run.record !== null && <span> · focused on {recordLabel(run.record, keyCol)}</span>}
@@ -180,6 +209,10 @@ export function App() {
       )}
       {tab === "graph" && (
         <div className="subbar">
+          <FindStep nodes={nodes} onPick={setSelected} />
+          {nodes.length > OPEN_ALL && opened.size > 0 && (
+            <button className="link" title="Fold every group back into one box" onClick={() => setOpened(new Set())}>fold all</button>
+          )}
           <details className="legend-pop">
             <summary>Legend</summary>
             <div className="legend-body">
@@ -201,7 +234,7 @@ export function App() {
               {showDiff && changedSteps.length > 0 && (
                 <>
                   <button title="Previous changed step" onClick={() => goChanged(-1)}>◀</button>
-                  <span>{changedAt >= 0 ? `${changedAt + 1} of ${changedSteps.length}: ${changedSteps[changedAt]}` : `${changedSteps.length} changed`}</span>
+                  <span title={changedSteps[changedAt]}>{changedAt >= 0 ? `${changedAt + 1} of ${changedSteps.length}: ${changedSteps[changedAt].split("/").pop()}` : `${changedSteps.length} changed`}</span>
                   <button title="Next changed step" onClick={() => goChanged(1)}>▶</button>
                 </>
               )}
@@ -217,7 +250,7 @@ export function App() {
       <main>
         {tab === "graph" && (
           <Graph
-            ir={describe.ir}
+            ir={graphIr!}
             showData={showData}
             run={run}
             selected={selected}
@@ -228,18 +261,21 @@ export function App() {
             zoom={zoom}
             onSelect={setSelected}
             onOpen={(path) => send({ type: "reveal", path })}
+            onToggle={toggle}
           />
         )}
         {tab === "state" && <StateTable columns={columns} record={run.record} keyCol={keyCol} selected={selectedNode} order={columnOrder} onPick={setColumn} picked={column} />}
         {tab === "params" && (
           <Params
             schema={describe.params}
+            values={describe.values ?? {}}
             inputColumns={inputColumns}
             record={run.record}
             keyCol={keyCol}
             sessionRunning={columns !== null}
             onWhatIf={(params, overrides, row, label) => send({ type: "whatIf", params, overrides, row, label })}
             onRestart={(params) => send({ type: "restartWith", params })}
+            onSelectStep={select}
           />
         )}
         {tab === "scenarios" && (
@@ -283,10 +319,22 @@ export function App() {
             onSelect={setSelected}
             onReveal={(path) => send({ type: "reveal", path })}
             onRewind={(path) => send({ type: "rewind", path })}
-            onRunTo={(path) => send({ type: "runTo", path })}
+            onRunTo={(path) => {
+              setPending(`Running the flow to ${path.split("/").pop()}…`);
+              send({ type: "runTo", path });
+            }}
             onStep={() => send({ type: "step" })}
             comparison={showDiff ? compare.comparison : null}
             onOpenDiff={(path) => send({ type: "openDiff", path })}
+            values={describe.values ?? {}}
+            onSkip={(path) => {
+              setPending(`Skipping ${path.split("/").pop()} and re-running from there…`);
+              send({ type: "skip", path });
+            }}
+            onReload={(path) => {
+              setPending(`Reloading ${path.split("/").pop()} and re-running from there…`);
+              send({ type: "reloadStep", path });
+            }}
           />
         )}
       </main>
