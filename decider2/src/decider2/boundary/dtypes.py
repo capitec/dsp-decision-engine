@@ -48,11 +48,11 @@ nothing downstream has a switch left to update.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Annotated, Literal, Mapping, Union
+from typing import Annotated, Any, Literal, Mapping, Union
 
 import numpy as np
 import polars as pl
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 __all__ = [
     "DtypeTier",
@@ -61,6 +61,7 @@ __all__ = [
     "ZeroCopyPlan",
     "CopyPlan",
     "CodesPlan",
+    "SpanPlan",
     "ScaledInt64Plan",
     "KernelSplitPlan",
     "NeedsKernelSplit",
@@ -91,6 +92,7 @@ class EntryMode(Enum):
     BUFFER_COPY = "buffer_copy"       # Boolean: arrow bitpacks it, never zero-copy
     AS_INTEGER = "as_integer"         # Date/Datetime/Duration as their physical int
     CODES = "codes"                   # Categorical/Enum/Utf8 as integer codes
+    SPANS = "spans"                   # String as (address, length) spans through the Arrow shim
     SCALED_INT64 = "scaled_int64"     # Decimal -> money-scaled int64 cents
     KERNEL_SPLIT = "kernel_split"     # no flat-array form here; escape one layer up
 
@@ -262,6 +264,46 @@ class CodesPlan(_PlanBase):
         return _extract_codes(series)
 
 
+class SpanPlan(_PlanBase):
+    """A String column declared `bytes` (a tree's string feature, `types.
+    FeatureKind.STR`): every row becomes an `(address, byte length)` SPAN
+    pointing straight into polars' own memory, read through the compiled
+    Arrow shim (`decider2._arrow`, docs/BOUNDARY-REWORK.md §1–§2); length
+    `-1` is a null. Zero-copy: the `(n, 2)` int64 table is the only
+    allocation. Chosen by `extract_column` from the DECLARATION, never by
+    dtype alone — a `str`-declared input of a hand-written step still
+    dictionary-encodes (`CodesPlan`) until Stage 7.
+
+    Stage 2's minimal boundary (§7): one Series imported through
+    `FrameView` per column. The spans are valid only while that view holds
+    polars' buffers, so the view lives on this plan (`_view`) for as long
+    as the `ExtractedColumn` that carries the plan does — `runtime.invoke.
+    apply` holds its `ExtractedFrame` through the whole run. Stage 3 folds
+    this into the whole-frame import.
+    """
+
+    entry_mode: Literal[EntryMode.SPANS] = EntryMode.SPANS
+    _view: Any = PrivateAttr(default=None)
+
+    def extract(self, series: pl.Series) -> tuple[np.ndarray, None]:
+        from decider2._arrow.frame import ColumnSpec, FramePlan, FrameView
+        from decider2.types import FeatureKind
+
+        frame = series.to_frame()
+        view = FrameView(FramePlan([ColumnSpec(series.name, FeatureKind.STR)], frame.columns))
+        view.bind(frame)   # ArrowKindError names the column and its Arrow type if not a String
+        if view.n_chunks != 1 or view.n != series.len():
+            view.release()
+            raise NeedsKernelSplit(
+                self.name, self.dtype,
+                reason=f"the Arrow export of '{series.name}' arrived as {view.n_chunks} chunk(s) "
+                       f"totalling {view.n} rows for a {series.len()}-row Series; polars is expected "
+                       "to rechunk on export (docs/BOUNDARY-REWORK.md §1.4)",
+            )
+        self._view = view
+        return view.spans(), None
+
+
 class ScaledInt64Plan(_PlanBase):
     """Decimal -> money-scaled int64 cents (doc 03 §1.2) — the money answer
     anyway. The one variant whose `.extract()` can still fail on real data
@@ -297,7 +339,7 @@ class KernelSplitPlan(_PlanBase):
 
 
 ColumnPlan = Annotated[
-    Union[ZeroCopyPlan, CopyPlan, CodesPlan, ScaledInt64Plan, KernelSplitPlan],
+    Union[ZeroCopyPlan, CopyPlan, CodesPlan, SpanPlan, ScaledInt64Plan, KernelSplitPlan],
     Field(discriminator="entry_mode"),
 ]
 

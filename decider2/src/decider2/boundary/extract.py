@@ -21,7 +21,7 @@ import polars as pl
 
 from decider2.types import Input, MissingInputPolicy, NullPolicy
 
-from .dtypes import ColumnPlan, DtypeTier, NeedsKernelSplit, ZeroCopyPlan, plan_column
+from .dtypes import ColumnPlan, DtypeTier, NeedsKernelSplit, SpanPlan, ZeroCopyPlan, plan_column
 from .nulls import NULL_TIER_STRATEGIES, FillInfo, NullRouting, route_required_nulls
 
 __all__ = [
@@ -107,6 +107,13 @@ def extract_column(series: pl.Series, decl: Input | None = None) -> ExtractedCol
     nullable = not is_clean(series)
     plan = plan_column(series.name, series.dtype, nullable=nullable)
     null_policy = decl.null_policy if decl is not None else NullPolicy.REQUIRED
+    if decl is not None and decl.annotation is bytes:
+        # Declared as a STRING SPAN (a tree's string feature, docs/BOUNDARY-
+        # REWORK.md §2.1): the column crosses as (address, length) pairs
+        # through the Arrow shim, not as dictionary codes. Decided by the
+        # declaration, since a `str`-declared input still takes `CodesPlan`.
+        plan = SpanPlan(name=series.name, dtype=series.dtype, tier=plan.tier, nullable=nullable,
+                        note="string spans through the Arrow shim (BOUNDARY-REWORK.md §2.1)")
 
     plan.guard()
 
@@ -146,6 +153,18 @@ def _synthesize_absent_column(decl: Input, n: int) -> ExtractedColumn:
     mask against) — previously its own second copy of the tier-2/4 reason
     ternary `boundary.nulls.fill_column` already had one of.
     """
+    if decl.annotation is bytes:
+        # A string-span input (a tree's string feature) has a fixed shape,
+        # `(n, 2)` int64 with length -1 for a null, that no float64
+        # placeholder re-cast can produce — so the placeholder is built in
+        # that shape here (REQUIRED: every row already routed, n == 0).
+        plan = SpanPlan(
+            name=decl.name, dtype=pl.Null(), tier=DtypeTier.ZERO_COPY,
+            nullable=decl.null_policy is NullPolicy.OPTIONAL,
+            note="column absent from the input frame — synthesized null spans (doc 03 §1)",
+        )
+        values = np.tile(np.array([0, -1], dtype=np.int64), (n, 1))
+        return ExtractedColumn(decl.name, values, None, plan)
     plan = ZeroCopyPlan(
         name=decl.name, dtype=pl.Null(), tier=DtypeTier.ZERO_COPY,
         nullable=decl.null_policy is NullPolicy.OPTIONAL,
