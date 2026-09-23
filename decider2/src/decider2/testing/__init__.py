@@ -20,6 +20,18 @@ from __future__ import annotations
 
 from decider2.testing.corpus import corpus
 from decider2.testing.equivalence import assert_equivalent
-from decider2.testing.recompile import assert_no_recompile
+from decider2.testing.recompile import (
+    CompileCount,
+    assert_no_compilation_after_warmup,
+    assert_no_recompile,
+    count_new_compiles,
+)
 
-__all__ = ["assert_equivalent", "assert_no_recompile", "corpus"]
+__all__ = [
+    "assert_equivalent",
+    "assert_no_recompile",
+    "assert_no_compilation_after_warmup",
+    "count_new_compiles",
+    "CompileCount",
+    "corpus",
+]
