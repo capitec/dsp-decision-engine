@@ -16,6 +16,7 @@ class ServeSettings(BaseModel):
     # None means use _default_workers() at serve time so nproc is evaluated
     # on the target machine, not at settings-parse time.
     workers: t.Optional[int] = None
+    server: t.Literal["starlette", "sanic"] = "starlette"
 
 
 class APISettings(BaseModel):
