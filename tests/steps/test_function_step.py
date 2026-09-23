@@ -134,3 +134,9 @@ def test_named_renames_a_copy():
     again = s.named("again")
     assert (again.name, s.name) == ("again", "cap_by_income_band")
     assert again.fn is s.fn
+
+
+def test_a_named_lambda_writes_its_name_while_a_named_function_keeps_its_own():
+    assert step(lambda x: x * 2, name="dbl").outputs == ("dbl",)
+    assert step(lambda x: x * 2, name="dbl", output="twice").outputs == ("twice",)
+    assert step(affordability_ratio, name="ratio").outputs == ("affordability_ratio",)

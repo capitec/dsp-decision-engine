@@ -9,12 +9,14 @@ import numpy as np
 import polars as pl
 
 from decider.engine.debug.commands import Command
+from decider.engine.debug.edit import Edits
 from decider.engine.debug.events import (Error, Event, NodeFinished, NodeStarted, NodeVisited, Overridden,
                                          ParamsValidated, Paused, RunFinished, RunStarted, Warning, summarize)
 from decider.engine.ir.nodes import SequenceNode, iter_nodes
 from decider.engine.ir.origin import Origin
 from decider.engine.run.runners.base import Checkpoint
-from decider.engine.run.state import _base, dtype_of
+from decider.engine.ir.decls import base_annotation
+from decider.engine.run.state import dtype_of
 from decider.engine.wiring.plan import Version
 
 if TYPE_CHECKING:
@@ -23,7 +25,7 @@ if TYPE_CHECKING:
 Breakpoint = str | Callable[[Checkpoint], bool]
 
 
-class Session:
+class Session(Edits):
     """Run a pipeline one checkpoint at a time: break, inspect, override, resume.
 
     Nothing runs until a command moves the session. Each command runs
@@ -35,6 +37,25 @@ class Session:
     after the row node `risk_tree` if any row reached `n17` inside it (only
     runners that report positions, such as the interpreted one); a predicate
     is called with every checkpoint.
+
+    Every mode supports sessions. Interpreted and stepped pause at every
+    node. Fused pauses only at kernel boundaries: a kernel running several
+    steps is one checkpoint with its first step's path, and a breakpoint (or
+    `rewind`) on any of its steps stops just before the whole kernel, with
+    the kernel's steps in `Paused.kernel`. Values a kernel uses only inside
+    itself are never stored, so `value` and `set` on one raise a `KeyError`
+    that suggests `mode="stepped"`. A fused branch or loop of plain scalar
+    steps is one such kernel, with the branch's or loop's own path.
+
+    Branches and loops: `step()` runs one whole; `step_into()` enters it.
+    Each step is one node over every row that reaches it, so entering a
+    branch whose rows go both ways visits the first taken arm, then the next
+    one, in arm order; an arm no row takes is skipped. A loop is entered
+    once per iteration, over the rows still looping. Checkpoints and
+    `NodeStarted`/`Paused` events carry `arm` and `iteration` (from 1).
+
+    `replace(path, step)` and `delete(path)` edit the pipeline mid-run and
+    re-run from the edit, keeping every value upstream of it.
 
     Example::
 
@@ -59,44 +80,75 @@ class Session:
         self._runner = copy.copy(executable.runner)
         if hasattr(self._runner, "visit"):
             self._runner.visit = self._visit
-        plan = executable.plan
-        self._sequences = {n.origin.path for n in iter_nodes(plan.root.node) if isinstance(n, SequenceNode)}
-        self._produces: dict[str, list[Version]] = {}
-        for v in plan.versions:
-            self._produces.setdefault(v.producer, []).append(v)
         self._pause = False
         self._visits: Counter[str] = Counter()
         self._visited: set[str] = set()
         self._previous: Checkpoint | None = None
         self._start()
+        self._index()
         self._emit(RunStarted(self.state.n))
         self._log_params()
 
     def break_at(self, target: Breakpoint) -> None:
-        """Add a breakpoint: a path, a prefix, `path#locator`, or a predicate on each `Checkpoint`."""
+        """Add a breakpoint: a path, a prefix, `path#locator`, or a predicate on each `Checkpoint`.
+
+        Example::
+
+            s.break_at("term/cap_by_income")
+            s.break_at("risk_tree#n17")
+            s.break_at(lambda cp: cp.when == "after" and cp.origin.path.startswith("term/"))
+        """
         self.breakpoints.append(target)
 
     def clear_break(self, target: Breakpoint) -> None:
-        """Remove a breakpoint added with the same target."""
+        """Remove a breakpoint added with the same target.
+
+        Example::
+
+            s.clear_break("term/cap_by_income")
+        """
         self.breakpoints.remove(target)
 
     def step(self) -> Checkpoint | None:
-        """Advance one node: from just before a call, branch or loop, run it and stop just after it."""
+        """Advance one node: from just before a call, branch or loop, run it and stop just after it.
+
+        Example::
+
+            cp = s.step()   # Checkpoint(origin=..., when="after"), or None at the end
+        """
         at = self.current
         if at is not None and at.when == "before" and at.origin.path not in self._sequences:
             return self._go("step", lambda cp: cp.when == "after" and cp.origin == at.origin)
         return self._go("step", lambda cp: True)
 
     def step_into(self) -> Checkpoint | None:
-        """Advance to the very next checkpoint: into a sequence, the taken arm or the next iteration."""
+        """Advance to the very next checkpoint: into a sequence, each taken arm in turn, or the next iteration.
+
+        Example::
+
+            s.step_into().arm   # the arm a branch is running, when inside one
+        """
         return self._go("step", lambda cp: True)
 
     def resume(self) -> Checkpoint | None:
-        """Run to the next breakpoint, or to the end."""
+        """Run to the next breakpoint, or to the end.
+
+        Example::
+
+            s.break_at("term")
+            s.resume()        # paused before "term"
+            s.resume()        # None: the run finished
+        """
         return self._go("breakpoint", lambda cp: False)
 
     def pause(self) -> None:
-        """Stop at the next checkpoint; safe to call while another thread is inside `resume`."""
+        """Stop at the next checkpoint; safe to call while another thread is inside `resume`.
+
+        Example::
+
+            threading.Thread(target=s.resume).start()
+            s.pause()
+        """
         self._pause = True
 
     def set(self, name: str, value: Any) -> None:
@@ -113,9 +165,7 @@ class Session:
             session.state.versions("disposable_income@*")[-1].producer   # "override@affordability_ratio"
         """
         targets = self._targets(name)
-        if not targets:
-            raise KeyError(f"{name!r} is neither an input column nor a value produced so far")
-        dtype = dtype_of(_base(targets[-1].annotation))
+        dtype = dtype_of(base_annotation(targets[-1].annotation))
         values, valid = _cast(name, value, dtype, self.state.n)
         previous = summarize(self.value(name))
         # Every version written so far, not only the latest: a loop or branch
@@ -145,25 +195,17 @@ class Session:
         saved = self.state, self._params, self._iterator, self._logged
         self._start()
         for cp in self._iterator:
-            if cp.when == "before" and _under(cp.origin.path, path):
+            if cp.when == "before" and self._covers(cp, path):
                 break
         else:
             self.state, self._params, self._iterator, self._logged = saved
             raise ValueError(f"no node at or under {path!r} runs")
         # Upstream nodes ran again on the original inputs; the current values win.
         # ponytail: branch routing in the replay comes from the original values; re-route once runners can seek.
-        keep = set(self.state.values) | {v.id for v in plan.versions if v.producer is None}
-        for vid, values in old.values.items():
-            if vid in keep or vid >= len(plan.versions):
-                self.state.values[vid] = values
-                if vid in old.valid:
-                    self.state.valid[vid] = old.valid[vid]
-                else:
-                    self.state.valid.pop(vid, None)
-        self.state.chains, self.state._extra = old.chains, old._extra
+        self.state.restore(old, set(self.state.values) | {v.id for v in plan.versions if v.producer is None})
         self._visits.clear()
         self.current, self.finished = cp, False
-        self._emit(Paused(cp.origin, cp.when, "rewind"))
+        self._emit(Paused(cp.origin, cp.when, "rewind", self._kernels.get(cp.origin.path, ()), cp.arm, cp.iteration))
         return cp
 
     def apply(self, command: Command) -> Any:
@@ -184,14 +226,19 @@ class Session:
             session.value("term_cap@term/cap_by_income")
         """
         if "@" in spec:
+            for v in self.state.versions(spec):
+                self._check_stored(spec, v)
             return self.state.column(spec)
-        targets = self._targets(spec)
-        if not targets:
-            raise KeyError(f"{spec!r} is neither an input column nor a value produced so far")
-        return self.state.column(spec, targets[-1])
+        return self.state.column(spec, self._targets(spec)[-1])
 
     def output(self) -> pl.DataFrame:
-        """The frame `Executable.run` returns, overrides applied; only once the run has finished."""
+        """The frame `Executable.run` returns, overrides applied; only once the run has finished.
+
+        Example::
+
+            s.resume()
+            s.output()["term_cap"]
+        """
         if not self.finished:
             raise RuntimeError("the run hasn't finished; resume() it first")
         return self.executable.output(self.state)
@@ -200,6 +247,28 @@ class Session:
         self.state, self._params = self.executable.prepare(self.frame, self.params)
         self._iterator = self._runner.iterate(self.executable.plan, self.state, self._params)
         self._logged = (0, 0, 0)
+
+    def _index(self) -> None:
+        # A fused runner compiles on `iterate`, so call this once the run has started.
+        plan = self.executable.plan
+        self._sequences = {n.origin.path for n in iter_nodes(plan.root.node) if isinstance(n, SequenceNode)}
+        self._produces: dict[str, list[Version]] = {}
+        for v in plan.versions:
+            self._produces.setdefault(v.producer, []).append(v)
+        self._kernels: dict[str, tuple[str, ...]] = {}
+        self._internal: dict[int, tuple[str, ...]] = {}
+        for unit in getattr(self._runner, "units", {}).values():
+            if len(unit.calls) > 1:
+                kernel = tuple(c.node.origin.path for c in unit.calls)
+                kept = [v for v, _ in unit.writes]
+                self._kernels[kernel[0]] = kernel
+                self._produces[kernel[0]] = kept
+                self._internal.update((v.id, kernel) for c in unit.calls for v in c.writes if v not in kept)
+        # A packed branch or loop is one checkpoint pair with its own path; nothing inside it is stored.
+        for path, unit in getattr(self._runner, "packed", {}).items():
+            kernel = (path, *(c.node.origin.path for c in unit.calls))
+            self._kernels[path] = kernel
+            self._internal.update((vid, kernel) for vid in unit.inner if vid not in {v.id for v, _ in unit.writes})
 
     def _go(self, reason: str, until: Callable[[Checkpoint], bool]) -> Checkpoint | None:
         while (cp := self._next()) is not None:
@@ -211,7 +280,7 @@ class Session:
                 why = reason
             else:
                 continue
-            self._emit(Paused(cp.origin, cp.when, why))
+            self._emit(Paused(cp.origin, cp.when, why, self._kernels.get(cp.origin.path, ()), cp.arm, cp.iteration))
             return cp
         return None
 
@@ -234,7 +303,7 @@ class Session:
         self._previous, self.current = self.current, cp
         self._log_params()
         if cp.when == "before":
-            self._emit(NodeStarted(cp.origin))
+            self._emit(NodeStarted(cp.origin, cp.arm, cp.iteration))
             return cp
         o = cp.origin
         for locator, rows in self._visits.items():
@@ -253,15 +322,30 @@ class Session:
             return cp.when == "after" and cp.origin.path == path and locator in self._visited
         # Only on entering the subtree, not at every node inside it.
         entering = self._previous is None or not _under(self._previous.origin.path, path)
-        return cp.when == "before" and _under(cp.origin.path, path) and entering
+        return cp.when == "before" and self._covers(cp, path) and entering
+
+    def _covers(self, cp: Checkpoint, prefix: str) -> bool:
+        return any(_under(p, prefix) for p in self._kernels.get(cp.origin.path, (cp.origin.path,)))
 
     def _targets(self, name: str) -> list[Version]:
         # Inputs, then what has been written so far in production order; the
         # override's own records are history, not a place later nodes read.
         inputs = [v for v in self.executable.plan.versions if v.producer is None and v.name == name]
-        written = [v for v in self.state.chains.get(name, ())
-                   if v.id in self.state.values and not v.producer.startswith("override@")]
+        chain = self.state.chains.get(name, ())
+        written = [v for v in chain if v.id in self.state.values and not v.producer.startswith("override@")]
+        if not inputs + written:
+            # ponytail: only when nothing of `name` is stored; a stored earlier version hides a later in-kernel one.
+            for v in chain:
+                self._check_stored(name, v)
+            raise KeyError(f"{name!r} is neither an input column nor a value produced so far")
         return inputs + written
+
+    def _check_stored(self, spec: str, v: Version) -> None:
+        kernel = self._internal.get(v.id)
+        # Stored after all when a packed branch or loop took the unpacked path (a null it can't carry).
+        if kernel is not None and v.id not in self.state.values:
+            raise KeyError(f"{spec!r} is computed inside the fused kernel {list(kernel)} and never stored; "
+                           "open the session with mode='stepped' to inspect or set it")
 
     def _visit(self, locator: str) -> None:
         self._visits[locator] += 1

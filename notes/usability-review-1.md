@@ -49,3 +49,31 @@ Wrote `ThresholdRule(column, threshold: Value[float])` and loaded it with `{"thr
 3. **Stop silently discarding branch-arm writes.** Raise an error when an arm writes a name not in `modifies`, and make condition outputs emittable.
 4. **Give errors one base and add context.** Have every library error inherit from `decider.exceptions.DeciderError` and re-export it there. Wrap exceptions raised by user functions with the step path, row index and input values, chaining the original.
 5. **Clean up the front door.** Add a package docstring with a 15-line quickstart. Export `Engine`, `Value` and `ParamRef` from the top level. Hide `Step.session()` until it works. Type `bind(mode=)` as a `Literal`. Default a lambda step's output to its `name`. Let `ConfigurableStep.load` accept JSON text. Fix the `TreeConfig` example.
+
+## Triage (T2.3b)
+
+| Finding | Outcome |
+|---|---|
+| IR classes not exported; params/consts split by hand (blocker) | **Fixed.** `decider.engine.ir` exports `CallNode`, `Input`, `Output`, `ParamDecl`, `IRContext` and the node types. `ctx.call(self, fn, inputs=..., outputs=..., values=...)` reads `fn`'s signature and splits literals/refs once. `ConfigurableStep` docstring and the `ThresholdRule` test use it with public imports only. |
+| Intermediates silently dropped; `emit`/`drop` undiscoverable | **Fixed.** `flow`, `dag` and the package docstring explain the default and show `.emit`/`.drop`. |
+| `emit` only on flows/dags, no top-level `emit` | **Deferred.** `flow(step).emit(...)` covers it; add `Step.emit` if users still miss it. |
+| Emit paths relative, everything else absolute | **Fixed.** `name@path` takes either; did-you-mean covers both forms. |
+| Arm write outside `modifies` silently lost; condition output not emittable | **Fixed.** Reading such a name after the branch (or loop), or bare-emitting it, is a `WiringError` naming the writer and `modifies`/`carries`; `name@path` emits arm writes and the condition output (it already could, now documented). |
+| Arm write shadowing a name that exists before the branch | **Deferred.** Still reads the pre-branch value; the brief limited the error to the only-producer case. Revisit if it bites. |
+| bool vs int condition arm order | **Fixed** (documented in `branch`). |
+| No common error base | **Fixed.** `WiringError`, `IRError`, `ParamsError`, `MissingInputError`, `ArrowKindError`/`NeedsKernelSplit`, `ArrowImportError` derive from `DeciderError` and keep their builtin base; all in `decider.exceptions`. |
+| Errors left on builtins | **Deferred.** API-argument misuse (`step(output=, outputs=)`, `param()`, `missing_as(None)`, `as_step`) stays `TypeError` like Python's own; registry load errors (`decider/registry`), `Engine.bind` unknown mode and input-shadowing `ValueError`s (`engine.py`, being edited by the compiled-modes task) and `ExprError` (`steps/expr`) were outside this task's files. |
+| User-function exceptions lack step path/row/inputs | **Deferred** to after T3.3 (touches runners). |
+| `Engine`, `Value`, `ParamRef` not top-level | **Fixed.** |
+| No package docstring; `help(decider)` ~900 lines | **Fixed** (quickstart docstring now leads `help(decider)`). The pydantic methods of `ConfigurableStep`/`ParamRef` still follow it; `help(decider.flow)` etc. are short. |
+| `bind(mode=)` typed `str` | **Deferred.** `engine.py` belongs to the compiled-modes task, which adds the modes; one-line `Literal` there. |
+| `Step.session()` raises `NotImplementedError` | **Resolved** by T1.5 (sessions exist). |
+| `step(lambda, name="dbl")` writes `<lambda>` | **Fixed** for lambdas; named functions keep `fn.__name__` as IR.md pins. |
+| `ConfigurableStep.load(json_text)` → `FileNotFoundError` | **Fixed.** |
+| `TreeConfig.load` example; trees module claims a step | **Fixed** (example replaced; trees docstring describes documents only). |
+| `ParamsError` header `(2 rows)` | **Fixed:** `(affects 2 rows)` / `(affects 1 row)`. |
+| Retuning by argument name gives no hint | **Fixed:** points at the document key (`did you mean 'min_ratio' (it feeds argument 'threshold')?`), otherwise lists the node's params. |
+| `score()` missing key says "input frame" | **Fixed:** "not in the input frame or record". |
+| Config repr shows `reads=() writes=()` | **Fixed** (`repr=False`). |
+| Dumps include `"shared": false` | **Deferred.** Needs `Field(exclude_if=...)` (pydantic ≥ 2.12, we pin `>=2`) or a custom serializer; noise only. |
+| Trees: `required_params()` names only; union-title validation errors; no tree step | **Deferred** to T4.2 (tree step). |

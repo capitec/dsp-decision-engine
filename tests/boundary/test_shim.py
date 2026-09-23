@@ -115,6 +115,33 @@ def test_a_sliced_frame_carries_its_offset_on_each_child_and_reads_correctly(a, 
         assert _nullable(rows.b8[:, 0].tolist(), rows.valid[:, 3]) == df["b"].to_list()[a:b]
 
 
+@pytest.mark.parametrize("n", [12, 5000])
+def test_columns_hold_what_the_row_gather_reads_and_outlive_the_frame(n):
+    df = pl.DataFrame({
+        "f": [None if i % 4 == 1 else i * 1.5 for i in range(n)],
+        "g": [i * 0.25 for i in range(n)],
+        "i": [i * 1_000_000_007 for i in range(n)],
+        "j": pl.Series([i for i in range(n)], dtype=pl.Int32),
+        "b": [None if i % 3 == 0 else (i % 2 == 0) for i in range(n)],
+        "s": [None if i % 5 == 0 else "x" * (i % 20) for i in range(n)],
+    })[3:]
+    kinds = {"f": K.F64, "g": K.F64, "i": K.I64, "j": K.I64, "b": K.BOOL, "s": K.STR}
+    with _view(df, kinds) as fv:
+        rows = fv.materialize()
+        values, masks = fv.columns()
+        assert values[5].tolist() == rows.span.tolist()
+    f, g, i, j, b = (x.copy() for x in values[:5])
+    assert [m is None for m in masks] == [False, True, True, True, False, False]
+    assert np.array_equal(f, rows.f64[:, 0], equal_nan=True) and g.tolist() == rows.f64[:, 1].tolist()
+    assert i.tolist() == rows.i64[:, 0].tolist() and j.tolist() == rows.i64[:, 1].tolist()
+    assert b.tolist() == rows.b8[:, 0].astype(bool).tolist()
+    assert masks[0].tolist() == rows.valid[:, 0].astype(bool).tolist()
+    assert not any(x.flags.writeable for x in values)
+    del df, fv, rows
+    # A large clean int64/float64 column is read in place, so it must keep its Arrow buffer alive.
+    assert values[1].tolist() == g.tolist() and values[2].tolist() == i.tolist()
+
+
 def test_a_multi_chunk_frame_imports_as_one_struct_and_polars_rechunks_the_caller():
     a = pl.DataFrame({"s": ["a", None], "f": [1.0, 2.0]})
     b = pl.DataFrame({"s": ["bb" * 7, "c"], "f": [3.0, None]})

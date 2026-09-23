@@ -28,13 +28,6 @@ class DataFrame(BaseModel):
 
     _pl_df: pl.DataFrame = PrivateAttr()
 
-    @classmethod
-    def from_dataframe(cls, df: pl.DataFrame):
-        data = df.to_dicts()
-        ret = cls(data=data)
-        ret.infer_schema()
-        return ret
-
     @model_validator(mode="before")
     @staticmethod
     def enable_raw_data(data: t.Any):
@@ -52,9 +45,6 @@ class DataFrame(BaseModel):
         if self.dtypes is None:
             return self.data
         return {"data": self.data, "schema": self.dtypes.model_dump()}
-
-    def infer_schema(self):
-        self.dtypes = PolarsSchema.from_polars_schema(self.df.collect_schema())
 
     @property
     def df(self):

@@ -4,6 +4,7 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Sequence
 
 from decider.engine.ir.nodes import IRNode, SequenceNode
+from decider.exceptions import WiringError
 from decider.steps.base import Step, as_step
 
 if TYPE_CHECKING:
@@ -27,11 +28,17 @@ class SequentialStep(Step):
     writes: tuple[tuple[str, str], ...] = ()
 
     def emit(self, *names: str) -> SequentialStep:
-        """A copy that also outputs these values: `name`, `name@path` (one version) or `name@*` (every version).
+        """A copy that also outputs these values, which would otherwise be dropped as intermediates.
+
+        `name` is the final value; `name@path` the value one step wrote, with
+        `path` relative to this flow (`cap_by_income`) or absolute as in
+        `step_map`, run reports and the params document
+        (`term/cap_by_income`); `name@*` every version. Values written inside
+        a branch arm or by its condition are emitted by path.
 
         Example::
 
-            pipeline.emit("disposable_income", "term_cap@*")
+            pipeline.emit("disposable_income", "term_cap@*", "term_cap@term/by_sector/cap_private")
         """
         return replace(self, emits=tuple(dict.fromkeys(self.emits + names)))
 
@@ -69,20 +76,15 @@ def flow(*steps: Any, name: str | None = None) -> SequentialStep:
     functions have no `|`, so a flow of only functions is written `flow(f, g)`
     or `step(f) | g`.
 
+    The output holds the input columns plus the values nothing reads;
+    intermediates are dropped. `.emit(...)` keeps them (one version or every
+    version of a name) and `.drop(...)` removes columns.
+
     Example::
 
         term = flow(term_cap, cap_by_income, cap_by_sector, name="term")
+        term.emit("term_cap@*").drop("requested_term").run(df)
     """
     if not steps:
-        raise ValueError("flow() needs at least one step")
-    members: list[Step] = []
-    emits: tuple[str, ...] = ()
-    drops: tuple[str, ...] = ()
-    for s in map(as_step, steps):
-        if type(s) is SequentialStep and s.name is None and not s.reads and not s.writes:
-            members += s.steps
-            emits += s.emits
-            drops += s.drops
-        else:
-            members.append(s)
-    return SequentialStep(tuple(members), name, tuple(dict.fromkeys(emits)), tuple(dict.fromkeys(drops)))
+        raise WiringError("flow() needs at least one step")
+    return SequentialStep(tuple(map(as_step, steps)), name)

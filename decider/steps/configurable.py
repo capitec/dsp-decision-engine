@@ -20,13 +20,17 @@ class ConfigurableStep(Step, BaseRegistryModule, root=True):
     are frozen: changing one means a new object, whose IR is built afresh.
 
     A `Value[T]` field holds a literal (`2.0`) or a `ParamRef`
-    (`{"param": "factor", "default": 2.0}`); `ctx.value` turns it into a
-    const or a param, so retuning a ref never rebuilds anything. To build a
-    config from other steps instead, return `ctx.expand(self, helper_step)`.
+    (`{"param": "factor", "default": 2.0}`). `ctx.call` passes a literal as
+    is and turns a ref into a param, so retuning it never rebuilds anything.
+    To build a config from other steps instead, return
+    `ctx.expand(self, helper_step)`.
 
     Example::
 
-        def scale(x, factor):
+        from typing import Literal
+        from decider import ConfigurableStep, Value
+
+        def scale(x: float, factor: float) -> float:
             return x * factor
 
         class Scaled(ConfigurableStep):
@@ -35,35 +39,40 @@ class ConfigurableStep(Step, BaseRegistryModule, root=True):
             factor: Value[float] = 1.0
 
             def to_ir(self, ctx):
-                factor = ctx.value(self.factor, float, arg="factor")
-                params, consts = ((factor,), ()) if isinstance(factor, ParamDecl) else ((), (("factor", factor),))
-                return CallNode(ctx.origin(self), "scalar", scale, (Input(self.column, float, arg="x"),),
-                                (Output(self.name, float),), params, consts=consts)
+                return ctx.call(self, scale, inputs={"x": self.column}, values={"factor": self.factor})
 
-        cfg = ConfigurableStep.load({"type": "scaled", "name": "doubled", "column": "income", "factor": 2.0})
-        (prepare | cfg).run(df)
-        cfg.model_dump_json()   # the same document back
+        cfg = ConfigurableStep.load({"type": "scaled", "name": "doubled", "column": "income",
+                                     "factor": {"param": "factor", "default": 2.0}})
+        cfg.run(df)                                                # writes column "doubled"
+        cfg.run(df, params={"doubled": {"factor": 3.0}})           # retuned, nothing rebuilt
+        ConfigurableStep.load(cfg.model_dump_json()) == cfg        # True
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     name: str
     # Relabels are placement, set in Python like the pipeline itself, so never dumped.
-    reads: SkipJsonSchema[tuple[tuple[str, str], ...]] = Field((), exclude=True)
-    writes: SkipJsonSchema[tuple[tuple[str, str], ...]] = Field((), exclude=True)
+    reads: SkipJsonSchema[tuple[tuple[str, str], ...]] = Field((), exclude=True, repr=False)
+    writes: SkipJsonSchema[tuple[tuple[str, str], ...]] = Field((), exclude=True, repr=False)
 
     @classmethod
     def load(cls, source: str | Path | Mapping[str, Any]) -> Any:
-        """A config from a JSON file path or an already-parsed dict, loaded as the class its `type` names.
+        """A config from a JSON file path, JSON text or a parsed dict, loaded as the class its `type` names.
 
         On a subclass the tag may be left out, and must name that subclass (or one of its own) if given.
 
         Example::
 
-            risk_tree = TreeConfig.load("trees/risk.json")
+            rules = ConfigurableStep.load("rules/risk.json")
             rule = ConfigurableStep.load({"type": "threshold_rule", "name": "hi", ...})
+            same = ConfigurableStep.load(rule.model_dump_json())
         """
-        doc = source if isinstance(source, Mapping) else json.loads(Path(source).read_text())
+        if isinstance(source, Mapping):
+            doc = source
+        elif isinstance(source, str) and source.lstrip().startswith("{"):
+            doc = json.loads(source)
+        else:
+            doc = json.loads(Path(source).read_text())
         tag = doc.get("type")
         return (cls if tag is None else cls.resolve(tag)).model_validate(doc)
 

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Sequence
 
 from decider.engine.ir.nodes import LoopNode
+from decider.exceptions import WiringError
 from decider.steps.base import Step, as_step
 from decider.steps.branch import condition_node
 
@@ -32,22 +33,38 @@ class LoopStep(Step):
 
 
 def loop(condition: Any, body: Any, *, carries: Sequence[str], max_iterations: int, name: str) -> LoopStep:
-    """Run `body` while `condition` holds, checked before each iteration.
+    """Run `body` while `condition` holds, checked per row before each iteration.
+
+    The body may be one step or a flow of several. A row that reaches
+    `max_iterations` stops there, without an error.
 
     Args:
-        carries: the names the body reads at the start of an iteration and
-            writes by its end.
+        carries: the names each iteration updates: the condition and body
+            see the latest values, the body writes every one of them, and
+            they are all that leaves the loop.
         max_iterations: the most iterations any row may take; required, since
             compiled code can't be interrupted.
 
     Example::
 
-        best = loop(should_continue, improve_offer, carries=["best_offer"], max_iterations=50, name="best")
+        def unpaid(balance: float) -> bool:
+            return balance > 0.0
+
+        @step(output="balance")
+        def pay(balance: float, payment: float) -> float:
+            return balance * 1.01 - payment
+
+        @step(output="months")
+        def tick(months: int) -> int:
+            return months + 1
+
+        repay = loop(unpaid, flow(pay, tick, name="month"), carries=["balance", "months"],
+                     max_iterations=360, name="repay")
     """
     if not carries:
-        raise ValueError(f"loop {name!r} needs carries=[...]: the names each iteration updates")
+        raise WiringError(f"loop {name!r} needs carries=[...]: the names each iteration updates")
     if type(max_iterations) is not int or max_iterations < 1:
-        raise ValueError(f"loop {name!r}: max_iterations must be a positive int, got {max_iterations!r}")
+        raise WiringError(f"loop {name!r}: max_iterations must be a positive int, got {max_iterations!r}")
     body = as_step(body)
     # An anonymous body would share the loop's path.
     if body.name is None:

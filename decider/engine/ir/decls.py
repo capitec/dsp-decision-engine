@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum, IntEnum
+import types
+import typing
 from typing import Any, Literal
+
+import numpy as np
 
 OnInvalid = Literal["error", "warn", "default"]
 
@@ -34,6 +38,16 @@ class FeatureKind(IntEnum):
     STR = 4  # bytes: a raw string span (address, byte length; -1 for null)
 
 
+# The array dtype of each kind; a STR value is two of them, (address, byte length).
+KIND_DTYPES: dict[FeatureKind, np.dtype] = {
+    FeatureKind.F64: np.dtype(np.float64), FeatureKind.I64: np.dtype(np.int64),
+    FeatureKind.BOOL: np.dtype(np.bool_), FeatureKind.CODE: np.dtype(np.int32),
+    FeatureKind.STR: np.dtype(np.int64),
+}
+
+# Annotations whose values live in typed arrays; anything else is a Python object.
+TYPED = (float, int, bool)
+
 _KIND_BY_ANNOTATION = {float: FeatureKind.F64, int: FeatureKind.I64, bool: FeatureKind.BOOL,
                        str: FeatureKind.CODE, bytes: FeatureKind.STR}
 
@@ -45,6 +59,28 @@ def feature_kind(annotation: Any) -> FeatureKind:
     <FeatureKind.I64: 1>
     """
     return _KIND_BY_ANNOTATION.get(annotation, FeatureKind.F64)
+
+
+def base_annotation(annotation: Any) -> Any:
+    """`T` for an optional `T | None`, else the annotation itself.
+
+    >>> base_annotation(int | None)
+    <class 'int'>
+    """
+    if typing.get_origin(annotation) in (typing.Union, types.UnionType):
+        args = [a for a in typing.get_args(annotation) if a is not type(None)]
+        if len(args) == 1:
+            return args[0]
+    return annotation
+
+
+def nullable(annotation: Any) -> bool:
+    """Whether a value declared `annotation` may be `None` (`T | None`).
+
+    >>> nullable(float | None), nullable(float)
+    (True, False)
+    """
+    return typing.get_origin(annotation) in (typing.Union, types.UnionType) and type(None) in typing.get_args(annotation)
 
 
 @dataclass(frozen=True, slots=True)
