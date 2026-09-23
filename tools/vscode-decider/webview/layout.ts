@@ -16,7 +16,7 @@ export interface LaidEdge {
   id: string;
   from: string;
   to: string;
-  kind: "order" | "data";
+  kind: "order" | "back" | "data";
   label?: string;
   points: { x: number; y: number }[];
 }
@@ -61,8 +61,8 @@ export function dataEdges(ir: IRNodeJson): { from: string; to: string; column: s
   const seen: CallNodeJson[] = [];
   const edges: { from: string; to: string; column: string }[] = [];
   for (const node of callNodes(ir)) {
-    for (const input of node.inputs) {
-      const writer = [...seen].reverse().find((w) => w.outputs.includes(input) && !exclusive(arms.get(w.path)!, arms.get(node.path)!));
+    for (const input of node.inputs ?? []) {
+      const writer = [...seen].reverse().find((w) => (w.outputs ?? []).includes(input) && !exclusive(arms.get(w.path)!, arms.get(node.path)!));
       if (writer) edges.push({ from: writer.path, to: node.path, column: input });
     }
     seen.push(node);
@@ -77,12 +77,13 @@ function firstLeaf(n: IRNodeJson): string {
 function lastLeaves(n: IRNodeJson): string[] {
   if (n.kind === "call") return [n.path];
   if (n.kind === "branch") return n.children.slice(1).flatMap(lastLeaves);
+  if (n.kind === "loop") return [n.children[0].path]; // the loop exits from its condition
   return lastLeaves(n.children[n.children.length - 1]);
 }
 
-/** Control-flow edges: siblings in order; a branch condition into each arm. */
-export function orderEdges(ir: IRNodeJson): { from: string; to: string; label?: string }[] {
-  const edges: { from: string; to: string; label?: string }[] = [];
+/** Control-flow edges: siblings in order; a branch condition into each arm; a loop body back to its condition. */
+export function orderEdges(ir: IRNodeJson): { from: string; to: string; label?: string; back?: boolean }[] {
+  const edges: { from: string; to: string; label?: string; back?: boolean }[] = [];
   walk(ir, (n) => {
     if (n.kind === "sequence") {
       for (let i = 1; i < n.children.length; i++) {
@@ -90,6 +91,10 @@ export function orderEdges(ir: IRNodeJson): { from: string; to: string; label?: 
       }
     } else if (n.kind === "branch") {
       n.children.slice(1).forEach((arm, i) => edges.push({ from: n.children[0].path, to: firstLeaf(arm), label: `arm ${i}` }));
+    } else if (n.kind === "loop") {
+      const [cond, body] = n.children;
+      edges.push({ from: cond.path, to: firstLeaf(body), label: "while" });
+      for (const from of lastLeaves(body)) edges.push({ from, to: cond.path, label: "repeat", back: true });
     }
   });
   return edges;
@@ -104,7 +109,7 @@ export function layout(ir: IRNodeJson, showData: boolean): Layout {
     else g.setNode(n.path, { clusterLabelPos: "top" });
     if (parent) g.setParent(n.path, parent.path);
   });
-  const edges: Omit<LaidEdge, "points">[] = orderEdges(ir).map((e, i) => ({ id: `o${i}`, from: e.from, to: e.to, kind: "order", label: e.label }));
+  const edges: Omit<LaidEdge, "points">[] = orderEdges(ir).map((e, i) => ({ id: `o${i}`, from: e.from, to: e.to, kind: e.back ? ("back" as const) : ("order" as const), label: e.label }));
   if (showData) edges.push(...dataEdges(ir).map((e, i) => ({ id: `d${i}`, from: e.from, to: e.to, kind: "data" as const, label: e.column })));
   for (const e of edges) g.setEdge(e.from, e.to, { width: e.label ? e.label.length * 6 : 0, height: e.label ? 12 : 0 }, e.id);
   dagre.layout(g);
