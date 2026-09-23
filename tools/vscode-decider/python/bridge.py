@@ -38,6 +38,7 @@ from decider.steps import FrameStep, FunctionStep, Step
 sys.path.insert(0, os.path.dirname(__file__))
 from lineage import latest, lineage  # noqa: E402
 from runs import apply_overrides, debug_condition, trace, tree_path  # noqa: E402
+from forks import checkpoint_key, merge, sweep  # noqa: E402
 
 
 def load_module(file):
@@ -143,7 +144,8 @@ class Bridge:
         self._index(tree, None)
         params = {path: {k: {kk: vv for kk, vv in info.items() if kk != "used_by"} for k, info in ps.items()}
                   for path, ps in self.step.parameters().items()}
-        return {"pipelines": pipelines, "pipeline": self.name, "ir": tree, "params": params}
+        self.described = {"pipelines": pipelines, "pipeline": self.name, "ir": tree, "params": params}
+        return self.described
 
     def trace(self, file, pipeline=None, data=None, params=None, overrides=None, row=None):
         """Describe and run `file` to the end on `data` (default: its SAMPLE), with `overrides` applied."""
@@ -167,6 +169,8 @@ class Bridge:
             raise ValueError("no data: pass `data` (rows or a JSON file) or define SAMPLE in the module")
         self.session = Engine().bind(self.step).session(_load_rows(data), params)
         self.sent = 0
+        # Overrides made so far and where, so forks can replay them; a rewind breaks the replay.
+        self.history, self.rewound = [], False
         for b in breakpoints:
             self.session.break_at(b)
         return self.status()
@@ -191,6 +195,34 @@ class Bridge:
             s.resume()
         finally:
             s.clear_break(target)
+
+    def sweep(self, scenarios, from_here=True, file=None, pipeline=None, data=None, params=None):
+        """Run every scenario from the paused point (or from the start) next to the unchanged run.
+
+        Each scenario is `{"label", "params", "overrides", "row"}`. From the start,
+        overrides apply to the input rows; from here, to the values at the pause.
+        """
+        s = self.session
+        if from_here and s is not None:
+            if self.rewound:
+                raise RuntimeError("scenarios can't replay a session that was rewound; restart it first")
+            at = checkpoint_key(s)
+            result = sweep(self.step, s.frame, s.params, self.history, at, scenarios)
+        else:
+            self.describe(file, pipeline)
+            rows = data if data is not None else getattr(self.mod, "SAMPLE", None)
+            frame = _load_rows(rows)
+            at = None
+            base = trace(self.step, frame, params)
+            results = []
+            for sc in scenarios:
+                doc = merge(params, sc.get("params"))
+                results.append({"label": sc.get("label"),
+                                **trace(self.step, apply_overrides(frame, sc.get("overrides"), sc.get("row")), doc or None)})
+            result = {"baseline": base, "results": results}
+        data_rows = (s.frame if from_here and s is not None else frame).to_dicts()
+        return {**result, "describe": self.described, "data": data_rows,
+                "at": None if at is None else {"path": at[0], "when": at[1], "n": at[2]}}
 
     def _names(self):
         plan = self.session.executable.plan
@@ -229,7 +261,7 @@ class Bridge:
     def handle(self, req):
         cmd = req["cmd"]
         args = {k: v for k, v in req.items() if k not in ("id", "cmd")}
-        if cmd in ("describe", "start", "state", "column", "step_out", "trace"):
+        if cmd in ("describe", "start", "state", "column", "step_out", "trace", "sweep"):
             result = getattr(self, cmd)(**args)
             return self.status() if cmd == "step_out" else result
         s = self.session
@@ -246,6 +278,9 @@ class Bridge:
                 getattr(s, cmd)(**args)
             except Exception as e:  # a step raised: the events hold the Error, the reply the message
                 return {**self.status(), "error": f"{type(e).__name__}: {e}"}
+            if cmd == "set":
+                self.history.append((checkpoint_key(s), args["name"], args["value"]))
+            self.rewound |= cmd == "rewind"
             return self.status()
         if cmd == "exit":
             return {}

@@ -30,6 +30,11 @@ def trace(step, frame: pl.DataFrame, params: dict | None) -> dict:
             session.resume()
     except Exception as e:  # the trace up to the failing step is still worth comparing
         error = f"{type(e).__name__}: {e}"
+    return collect(session, error)
+
+
+def collect(session, error):
+    """What every call of a run wrote, and the output if it finished."""
     state = session.state
     steps = {}
     for call in session.executable.plan.calls:

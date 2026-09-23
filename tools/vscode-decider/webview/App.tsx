@@ -15,6 +15,8 @@ import { Compare } from "./Compare";
 import { Graph } from "./Graph";
 import { NodePanel } from "./NodePanel";
 import { Params } from "./Params";
+import { Scenarios } from "./Scenarios";
+import type { Sweep } from "../src/sweep";
 import { StateTable } from "./StateTable";
 
 declare function acquireVsCodeApi(): { postMessage(m: FromWebview): void };
@@ -32,6 +34,7 @@ export function App() {
   const [history, setHistory] = useState<ColumnHistory | null>(null);
   const [treePath, setTreePath] = useState<{ path: string; row: number; visited: string[] } | null>(null);
   const [compare, setCompare] = useState<{ comparison: Comparison | null; busy?: string; error?: string }>({ comparison: null });
+  const [sweep, setSweep] = useState<{ sweep: Sweep | null; busy?: string; error?: string }>({ sweep: null });
   const [selected, setSelected] = useState<string>();
   const [column, setColumn] = useState<string>();
   const [showData, setShowData] = useState(false);
@@ -69,6 +72,9 @@ export function App() {
           break;
         case "tab":
           setTab(m.tab);
+          break;
+        case "sweep":
+          setSweep(m);
           break;
       }
     };
@@ -122,6 +128,7 @@ export function App() {
           {tabButton("graph", "Graph")}
           {tabButton("state", columns ? `State (${columns.length})` : "State")}
           {tabButton("params", "Params")}
+          {tabButton("scenarios", sweep.busy ? "Scenarios…" : "Scenarios")}
           {tabButton("compare", compare.busy ? "Compare…" : "Compare")}
         </nav>
         {tab === "graph" && (
@@ -174,6 +181,21 @@ export function App() {
             onWhatIf={(params, overrides, row) => send({ type: "whatIf", params, overrides, row })}
             onRestart={(params) => send({ type: "restartWith", params })}
             onCompareRevision={() => send({ type: "compareRevision" })}
+          />
+        )}
+        {tab === "scenarios" && (
+          <Scenarios
+            schema={describe.params}
+            columns={columns ? columns.map((c) => c.name) : inputColumns}
+            pausedAt={run.current && !run.finished ? `${run.current.when} ${run.current.path || "<root>"}` : null}
+            record={run.record}
+            rows={rows}
+            result={sweep}
+            onRun={(scenarios, fromHere) => send({ type: "sweep", scenarios, fromHere })}
+            onOpen={(i) => {
+              setCompare({ comparison: sweep.sweep!.comparisons[i] });
+              setTab("compare");
+            }}
           />
         )}
         {tab === "compare" && <Compare {...compare} record={run.record} onSelect={select} />}
