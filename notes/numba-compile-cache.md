@@ -1,9 +1,11 @@
 # Numba compile cache
 
-**Decision:** Anything compiled with `cache=True` lives in a real `.py` file,
-never `exec`, and is imported by module name. Generated code is byte-identical
-across runs, and its file and module names come from a hash of its content. Record
-the CPU target with the cache and check it at startup.
+**Decision:** No source code is generated, ever (user constraint, 2026-09-23).
+The only things disk-cached with `cache=True` are user step functions, which
+already live in real `.py` files. Fused kernels are assembled with a numba
+`intrinsic` over fixed tuple signatures and compile once per process; they are
+never written to disk. Record the CPU target with the cache and check it at
+startup. The facts below explain why `exec`/generated files were abandoned.
 
 **Why:**
 - `exec`'d code can't be cached at all. It fails when decorated:

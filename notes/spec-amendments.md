@@ -30,3 +30,27 @@ where they disagree, this file wins.
   what it does, non-obvious arguments, a short example. No references to docs,
   chapters, sections, stages or experiments. Design rationale goes here in
   `notes/`.
+
+## 2026-09-23, after Phase 0
+
+- **Autonomy.** The orchestrator runs every phase to completion without
+  stopping at checkpoints; it still never pushes or opens PRs.
+- **No code generation.** Nothing renders Python source, writes generated
+  `.py` files or calls `exec`/`eval`. Fused kernels use decider2's
+  `numba.extending.intrinsic` approach (fixed `kernel(n, cols, valids,
+  params_all, outs)` signature, tuples for every count); trees and tables are
+  data walked by generic kernels. Overrides any "real files" wording in
+  Prompt.md or Design.md.
+- **Performance.** A slight regression against decider2 is acceptable; a large
+  one is not. T3.3 reports batch throughput and `score()` latency against
+  decider2.
+- **Kernel grouping default.** One kernel per innermost sequence of `scalar`
+  CallNodes (a named `dag`/`flow` of plain function steps); outer sequences
+  are a Python loop over kernels. Nothing wider is fused implicitly.
+- **Python fallback** catches `NumbaError` and `UnsupportedBytecodeError`
+  (compile-time only); runtime errors propagate.
+- **Compile content key** includes constants (`co_consts`), not only
+  `co_code`.
+- **Trees** accept both decider_old's flat rules format and its v3 format
+  through one `TreeConfig` interface. v1/v2 documents raise a clear
+  deprecation error naming the version.
