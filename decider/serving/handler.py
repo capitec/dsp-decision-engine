@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-import asyncio
 import importlib.util
 import typing as t
 
@@ -15,11 +14,9 @@ from .media_types import MediaType
 class RequestHandler:
     config_manager: t.Any
     root_module: str = "main"
-    _update_task: asyncio.Task = None
 
     async def init_fn(self):
-        await self.config_manager.get_latest()
-        self._update_task = asyncio.create_task(self.config_manager.subscribe_version_updates())
+        self.config_manager.get_latest()
 
     def module_fn(self) -> t.Tuple[t.Callable[[t.Any], pl.DataFrame], ParserConfig]:
         # TODO: import the pipeline from code and load its params from the config store.
@@ -57,11 +54,7 @@ class RequestHandler:
         return self.output_fn(result_df, accept)
 
     async def shutdown_fn(self):
-        self._update_task.cancel()
-        try:
-            await self._update_task
-        except asyncio.CancelledError:
-            pass
+        pass
 
 
 def construct_handler_from_settings() -> RequestHandler:

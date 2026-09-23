@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum, IntEnum
 from typing import Any, Literal
 
@@ -49,12 +49,25 @@ def feature_kind(annotation: Any) -> FeatureKind:
 
 @dataclass(frozen=True, slots=True)
 class Input:
-    """One declared input of a step. `fill` is set only for `MISSING_AS`."""
+    """One declared input of a step. `fill` is set only for `MISSING_AS`.
+
+    `name` is the column it reads, which a relabel may change; `arg` is the
+    function argument it feeds, which never changes (default: `name`).
+
+    Example::
+
+        Input("monthly_net_salary", float, arg="net_income")
+    """
 
     name: str
     annotation: Any
     null_policy: NullPolicy = NullPolicy.REQUIRED
     fill: Any = None
+    arg: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.arg is None:
+            object.__setattr__(self, "arg", self.name)
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,16 +90,28 @@ class ParamDecl:
             `None` for a param local to its node.
         on_invalid: what an invalid value does: `"error"` fails, `"warn"` and
             `"default"` fall back to the default (with and without a warning).
+        schema: for a table-valued param, its `(column, dtype)` pairs
+            (`(("product", "str"), ("rate", "float"))`); `None` otherwise.
+        arg: the function argument a scalar call passes it as (default:
+            `name`), for a config param whose document key differs from it.
 
     Example::
 
         ParamDecl("base_rate", float, 5.0, shared_key="base_rate", on_invalid="warn")
+        ParamDecl("hi_thresh", float, 0.7, arg="threshold")   # {"hi_thresh": ...} feeds `threshold`
     """
 
     name: str
     annotation: Any
-    default: Any = None
-    field_info: Any = None
+    # Defaults and FieldInfo may be unhashable (lists, dicts), so they stay out of hash and ==.
+    default: Any = field(default=None, compare=False, hash=False)
+    field_info: Any = field(default=None, compare=False, hash=False)
     required: bool = False
     shared_key: str | None = None
     on_invalid: OnInvalid = "error"
+    schema: tuple[tuple[str, str], ...] | None = None
+    arg: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.arg is None:
+            object.__setattr__(self, "arg", self.name)

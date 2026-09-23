@@ -54,3 +54,41 @@ where they disagree, this file wins.
 - **Trees** accept both decider_old's flat rules format and its v3 format
   through one `TreeConfig` interface. v1/v2 documents raise a clear
   deprecation error naming the version.
+
+## 2026-09-23, T1.1b
+
+- **`Input.arg`.** `Input` gains `arg: str`, the function argument it feeds
+  (defaults to `name`). `name` is the resolved column and is the only field a
+  relabel changes.
+- **`CallNode.consts`.** `CallNode` gains `consts: tuple[tuple[str, Any], ...] = ()`:
+  named literal arguments, e.g. a config's inline `Value[T]`. They are runtime
+  arguments like params, never baked into compiled code, so changing one never
+  recompiles. `params` holds only `ParamDecl`s; `to_ir` rejects anything else.
+- **Call conventions** (replace the IR.md §4.2 table):
+  - `scalar`: `fn(**{i.arg: value for i in inputs}, **dict(consts), **params)`.
+  - `row`: always `fn(row, params, consts)`, three tuples in declared order
+    (`consts` holds the values only); `reference(row, params, consts, visit)`.
+    One signature for every row node, empty tuples when there is nothing.
+  - `frame`: unchanged, `fn(df) -> df`.
+- **`ParamDecl.schema`** is a tuple of `(column, dtype)` pairs, and `default`
+  / `field_info` are left out of `==` and `hash`, so a `ParamDecl` is hashable.
+  `parameters()` still reports the schema as a dict.
+- **Step names** must be non-empty and contain no `/` or `#`; checked when a
+  step is made or renamed and when a path is joined.
+- **`IRContext.expand(owner, helper)`** is how a `ConfigurableStep` builds
+  helper steps: the helper's nodes sit under the owner's name and the root
+  node takes the owner's origin.
+- **`IRContext` has no `shared` field** (IR.md §4.3). Shared param types are
+  checked once over the finished IR in `to_ir`, which sees every node, so the
+  context carries only `path` and the path → Step map it collects.
+- **`engine.step_map(step)`** returns the `path → Step` map of IR.md §4.1,
+  including branch conditions, arms and loop bodies. `Step.walk()` stays the
+  authoring tree (named members of flows and dags).
+
+## 2026-09-23, T2.2
+
+- **`ParamDecl.arg`.** Like `Input.arg`: the function argument a param feeds,
+  defaulting to `name`. `name` stays the key in the params document. Needed so
+  a config field (`threshold`) can be fed by a local `ParamRef`
+  (`{"param": "hi_cut"}`). Scalar calls pass params as `**{d.arg: value}`.
+- **`ConfigurableStep.load(path_or_dict)`** loads a document by its `type` tag.
