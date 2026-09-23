@@ -7,6 +7,8 @@ from abc import ABC
 
 from pydantic import BaseModel, SerializeAsAny, WrapValidator, model_validator
 
+from decider.exceptions import RegistryError
+
 from .resolve import suggest_names
 
 R = t.TypeVar("R", bound="BaseRegistryModule")
@@ -114,7 +116,7 @@ class BaseRegistryModule(BaseModel, ABC):
         can't name arbitrary code (`"os:system"` is rejected).
 
         Raises:
-            LookupError: unknown tag, with a did-you-mean when one is close.
+            RegistryError: (a `LookupError`) unknown tag, with a did-you-mean when one is close.
         """
         registry = cls._root()._registry
         if tag not in registry and ":" in tag:
@@ -129,7 +131,7 @@ class BaseRegistryModule(BaseModel, ABC):
         message = f"{tag!r} is not a registered {cls.__name__} type."
         for hint in suggest_names(tag, known):
             message += f" Did you mean {hint!r}?"
-        raise LookupError(message)
+        raise RegistryError(message)
 
     @classmethod
     def json_schema(cls) -> dict[str, dict[str, t.Any]]:
