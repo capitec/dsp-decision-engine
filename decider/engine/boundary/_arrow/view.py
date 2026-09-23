@@ -6,11 +6,11 @@ import numpy as np
 
 from decider.engine.boundary._arrow import _shim
 from decider.engine.boundary._arrow._shim import GATHER_ADDR, STORAGE_TYPE_NAMES, lib, stream_pointer
-from decider.engine.boundary._arrow.kernels import Columns, Rows, materialize_columns, materialize_rows
+from decider.engine.boundary._arrow.kernels import Rows, materialize_rows
 from decider.engine.boundary._arrow.plan import (
-    BOOL, CODE, F64, I64, ROW_DTYPES, STR, ArrowImportError, ArrowKindError, FramePlan,
+    BOOL, CODE, F64, I64, STR, ArrowImportError, ArrowKindError, FramePlan,
 )
-from decider.engine.ir.decls import FeatureKind
+from decider.engine.ir.decls import KIND_DTYPES, FeatureKind
 
 
 class _RowPlan(ctypes.Structure):
@@ -24,6 +24,30 @@ class _RowPlan(ctypes.Structure):
 assert ctypes.sizeof(_RowPlan) == _shim.PLAN_SIZE, (ctypes.sizeof(_RowPlan), _shim.PLAN_SIZE)
 
 
+_BORROW_ROWS = 4096
+
+
+class _Export:
+    # Takes over an exported Arrow array, so the columns read in place from it keep it alive.
+    __slots__ = ("array",)
+
+    def __init__(self, src: int) -> None:
+        self.array = ctypes.create_string_buffer(_shim.ARRAY_SIZE)
+        lib.sm_array_move(src, ctypes.addressof(self.array))
+
+    def __del__(self, release=lib.sm_array_release) -> None:
+        release(ctypes.addressof(self.array))
+
+
+class _Borrowed:
+    # A read-only numpy view of `n` values at `addr`, holding what owns them.
+    __slots__ = ("__array_interface__", "owner")
+
+    def __init__(self, addr: int, n: int, dtype: np.dtype, owner: _Export) -> None:
+        self.__array_interface__ = {"data": (addr, True), "shape": (n,), "typestr": dtype.str, "version": 3}
+        self.owner = owner
+
+
 class FrameView:
     """Reusable import state for one `FramePlan`: binds one polars frame at a time.
 
@@ -35,7 +59,7 @@ class FrameView:
     Example::
 
         with FrameView(FramePlan([("income", FeatureKind.F64)], df.columns)).bind(df) as fv:
-            cols = fv.materialize_columns()
+            (income,), (valid,) = fv.columns()
     """
 
     def __init__(self, plan: FramePlan) -> None:
@@ -51,11 +75,11 @@ class FrameView:
         self._cols = ctypes.create_string_buffer(_shim.COLDESC_SIZE * max(n, 1))
         # One buffer per kind, never zero-length: numba types a 0-d and a 1-d array differently.
         nf, ni, nb, nc, ns = plan.counts
-        self.f64 = np.zeros(max(nf, 1), dtype=ROW_DTYPES[F64])
-        self.i64 = np.zeros(max(ni, 1), dtype=ROW_DTYPES[I64])
-        self.b8 = np.zeros(max(nb, 1), dtype=ROW_DTYPES[BOOL])
-        self.i32 = np.zeros(max(nc, 1), dtype=ROW_DTYPES[CODE])
-        self.span = np.zeros(max(2 * ns, 2), dtype=ROW_DTYPES[STR])
+        self.f64 = np.zeros(max(nf, 1), dtype=KIND_DTYPES[F64])
+        self.i64 = np.zeros(max(ni, 1), dtype=KIND_DTYPES[I64])
+        self.b8 = np.zeros(max(nb, 1), dtype=KIND_DTYPES[BOOL])
+        self.i32 = np.zeros(max(nc, 1), dtype=KIND_DTYPES[CODE])
+        self.span = np.zeros(max(2 * ns, 2), dtype=KIND_DTYPES[STR])
         self.valid = np.zeros(max(n, 1), dtype=np.uint8)
         self._rowplan = _RowPlan(
             n, 0, ctypes.addressof(self._cols),
@@ -65,9 +89,11 @@ class FrameView:
         # Per column: (data address advanced by offset, validity address, offset, child view).
         self.addrs = np.zeros((max(n, 1), 4), dtype=np.uint64)
         self.plan_addr: int = ctypes.addressof(self._rowplan)
+        self._resolve_args = (*plan.addresses, n, self.plan_addr, self.addrs.ctypes.data)
         self.gather_addr: int = GATHER_ADDR
         self.n = 0
         self._capsule = None
+        self._owner: _Export | None = None
         self.bound = False
 
     def bind(self, df) -> FrameView:
@@ -95,18 +121,14 @@ class FrameView:
             # ponytail: polars always sends one chunk; read each chunk if a polars upgrade stops that.
             raise ArrowImportError("the Arrow stream has more than one chunk; rechunk the frame first")
         self._resolve(v)
-        self.n = lib.sm_view_length(v)
+        self.n = df.height
         return self
 
     def _resolve(self, view_addr: int) -> None:
-        plan = self.plan
-        rc = lib.sm_resolve_all(
-            view_addr, plan.kinds.ctypes.data, plan.slots.ctypes.data, plan.child_idx.ctypes.data,
-            plan.fill_f64.ctypes.data, plan.fill_i64.ctypes.data, plan.ncols,
-            self.plan_addr, self.addrs.ctypes.data,
-        )
+        rc = lib.sm_resolve_all(view_addr, *self._resolve_args)
         if rc == 0:
             return
+        plan = self.plan
         c = -rc - 1
         name, kind = plan.names[c], FeatureKind(int(plan.kinds[c]))
         arrow_type = self.arrow_type(name)
@@ -119,11 +141,8 @@ class FrameView:
         """Hand polars its buffers back. Idempotent."""
         if not self.bound:
             return
-        s, a, a2, v, _ = self._p
-        lib.sm_view_reset(v)
-        lib.sm_array_release(a)
-        lib.sm_array_release(a2)
-        lib.sm_schema_release(s)
+        lib.sm_release(*self._p[:4])
+        self._owner = None
         self._capsule = None
         self.bound = False
         self.n = 0
@@ -224,22 +243,39 @@ class FrameView:
         )
         return out
 
-    def materialize_columns(self) -> Columns:
-        """Every row, as one C-contiguous column per slot: `f64[j]` is F64 slot `j`, and so on."""
+    def columns(self) -> tuple[list[np.ndarray], list[np.ndarray | None]]:
+        """Every declared column in plan order, and each one's validity mask (`None` when it has no nulls).
+
+        One C call for the whole frame. Values are read-only and C-contiguous,
+        in the kind's dtype; a STR column is an `(n, 2)` table of spans. A
+        large column already in the kind's dtype, with no nulls, is not
+        copied: it is a view of the exported buffer, which it keeps alive.
+        """
         self._require_bound()
-        n = self.n
-        nf, ni, nb, nc, ns = self.plan.counts
-        out = Columns(
-            f64=np.empty((nf, n), np.float64), i64=np.empty((ni, n), np.int64),
-            b8=np.empty((nb, n), np.bool_), i32=np.empty((nc, n), np.int32),
-            span=np.empty((ns, n, 2), np.int64), valid=np.empty((self.plan.ncols, n), np.bool_),
-        )
-        materialize_columns(
-            np.uint64(self.gather_addr), np.uint64(self.plan_addr), n,
-            self.f64, self.i64, self.b8, self.i32, self.span, self.valid,
-            out.f64, out.i64, out.b8, out.i32, out.span, out.valid,
-        )
-        return out
+        n, plan = self.n, self.plan
+        nc = plan.ncols
+        # One allocation and one C call: a numpy call costs about a microsecond.
+        buf = np.empty(24 * nc + n * plan.row_bytes, np.uint8)
+        # Below this a copy is cheaper than wrapping a buffer.
+        borrow = n >= _BORROW_ROWS
+        lib.sm_columns(self.plan_addr, n, buf.ctypes.data, borrow)
+        header = np.frombuffer(buf, np.int64, 3 * nc).tolist()
+        valid_at = len(buf) - nc * n
+        # Masks stay writeable (a run writes a row subset's nulls into them); values don't.
+        masks = [np.frombuffer(buf, np.bool_, n, valid_at + c * n) if header[c] else None for c in range(nc)]
+        buf.flags.writeable = False
+        values, owner = [], None
+        for c, (kind, _) in enumerate(plan.places):
+            dtype = KIND_DTYPES[kind]
+            if header[2 * nc + c]:
+                # Held by the view too, so its own reads stay valid until release().
+                owner = self._owner = owner or _Export(self._p[1])
+                values.append(np.asarray(_Borrowed(header[2 * nc + c], n, dtype, owner)))
+            elif kind == STR:
+                values.append(np.ndarray((n, 2), dtype, buf, header[nc + c]))
+            else:
+                values.append(np.frombuffer(buf, dtype, n, header[nc + c]))
+        return values, masks
 
     def strings(self, slot: int) -> list[bytes | None]:
         """Every row's bytes for STR slot `slot` (copies), `None` for a null."""

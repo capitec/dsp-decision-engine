@@ -121,7 +121,7 @@ def test_on_invalid_is_recorded_on_the_param_decl():
 def test_on_invalid_error_raises_naming_the_node_path_and_param():
     result = validate_node(_policy_node("error"), BAD)
     assert result.status is Status.INVALID and result.bundle is None
-    with pytest.raises(ParamsError, match=r"\(10 rows\).*\nterm/f: param 'cap'"):
+    with pytest.raises(ParamsError, match=r"\(affects 10 rows\).*\nterm/f: param 'cap'"):
         result.check(rows=10)
 
 
@@ -225,3 +225,23 @@ def test_an_invalid_result_is_cached_as_invalid():
     key = document_key(BAD)
     cache.validate(key, BAD, node)
     assert cache.status(key, "term/f") is Status.INVALID
+
+
+def test_an_unknown_param_with_no_close_match_lists_the_nodes_params():
+    result = validate_node(node_for("cap", cap_by_income), {"cap": {"ceiling": 12.0}})
+    assert result.errors == ("cap: unknown param 'ceiling'; its params are ['cap']",)
+
+
+def test_a_param_given_by_the_argument_it_feeds_points_at_its_document_key():
+    node = NodeParams("rule", (ParamDecl("min_ratio", float, 2.0, arg="threshold"),))
+    assert validate_node(node, {"rule": {"threshold": 10.0}}).errors == (
+        "rule: unknown param 'threshold'; did you mean 'min_ratio' (it feeds argument 'threshold')?",
+    )
+
+
+def test_the_params_error_header_says_how_many_rows_it_affects():
+    invalid = validate_node(node_for("cap", cap_by_income), {"cap": {"cap": 100.0}})
+    with pytest.raises(ParamsError, match=r"^invalid params \(affects 1 row\):"):
+        invalid.check(rows=1)
+    with pytest.raises(ParamsError, match=r"^invalid params \(affects 3 rows\):"):
+        invalid.check(rows=3)

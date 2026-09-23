@@ -5,7 +5,7 @@ import threading
 
 import polars as pl
 
-from decider import flow
+from decider import flow, step
 from decider.serving.session_ws import session_app
 
 
@@ -113,4 +113,18 @@ async def test_pause_interrupts_a_running_resume():
     assert (paused["origin"]["path"], paused["when"], paused["reason"]) == ("slow", "after", "pause")
     await ws.send({"kind": "resume"})
     await ws.until("run_finished")
+    await ws.close()
+
+
+@step(output="affordability_ratio")
+def halved_ratio(disposable_income: float, instalment: float) -> float:
+    return disposable_income / instalment / 2.0
+
+
+async def test_a_delete_over_the_socket_re_runs_from_the_deleted_step():
+    ws = Socket(session_app(lambda: flow(disposable_income, affordability_ratio, halved_ratio).session(FRAME)))
+    await ws.send({"kind": "resume"})
+    assert (await ws.until("run_finished"))[-1]["output"]["affordability_ratio"]["preview"] == [2.5416666666666665, 1.625]
+    await ws.send({"kind": "delete", "path": "halved_ratio"})
+    assert {"kind": "edited", "action": "delete", "path": "halved_ratio"} in await ws.until("run_finished")
     await ws.close()

@@ -1,9 +1,4 @@
-"""numba intrinsics that load from, and call through, raw addresses.
-
-Every address is an integer argument, never a captured constant, so a
-`cache=True` kernel using them holds no process-specific value and disk-caches.
-Importing this module does not load the compiled shim.
-"""
+"""numba intrinsics that load from, and call through, raw addresses."""
 from __future__ import annotations
 
 from llvmlite import ir

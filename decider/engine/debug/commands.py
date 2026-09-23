@@ -67,4 +67,24 @@ class Rewind:
     kind: Literal["rewind"] = "rewind"
 
 
-Command = Union[BreakAt, ClearBreak, StepOver, StepInto, Resume, Pause, SetValue, Rewind]
+@dataclass(frozen=True, slots=True)
+class Delete:
+    """Remove the step at `path` and re-run from where it was."""
+
+    path: str
+    kind: Literal["delete"] = "delete"
+
+
+@dataclass(frozen=True, slots=True)
+class Replace:
+    """Put `step` in place of the step at `path` and re-run from it.
+
+    `step` is a Python object, so this command isn't part of `Command` and has no JSON form.
+    """
+
+    path: str
+    step: Any
+    kind: Literal["replace"] = "replace"
+
+
+Command = Union[BreakAt, ClearBreak, StepOver, StepInto, Resume, Pause, SetValue, Rewind, Delete]

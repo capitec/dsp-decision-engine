@@ -3,8 +3,27 @@
 **Decision:**
 - The data boundary reads a polars frame through one `__arrow_c_stream__()`
   export, decoded by vendored nanoarrow 0.9.0 behind a small C shim
-  (`engine/boundary/_arrow/c/shim.c`). One C call per row gathers every
-  declared column into a typed row.
+  (`engine/boundary/_arrow/c/shim.c`). One C call (`sm_columns`) reads every
+  declared column of the batch, one column at a time, into one buffer.
+- A column the kernel can read as it is (float64 as F64, int64 as I64,
+  int32 as CODE) with no nulls, in a batch of 4096 rows or more, is not
+  copied: its numpy array is a read-only view of the exported Arrow buffer.
+  The exported `ArrowArray` is moved (a bitwise move, which the C data
+  interface allows) into a small Python owner that every such view holds, so
+  the buffer lives exactly as long as the last array reading it, whatever
+  happens to the frame. Below 4096 rows a copy is cheaper than wrapping.
+- The per-row gather (`sm_gather_row`, `FrameView.gather`/`materialize`) is
+  kept as the reference the column path is tested against, and for callers
+  that want one row at a time.
+- String (`bytes`) inputs reach a kernel as `(address, length)` spans from the
+  same call. A compiled run reads the input frame's own column when the state
+  still holds the values read from it (`State.source`); an override or a row
+  subset is copied into a new Series first.
+- Nothing is re-exported from `engine/boundary`, so importing it never builds
+  the shim: `extract`, `dtypes.explain_boundary` and `_arrow.view`/`kernels`
+  need the compiled shim; the rest of `dtypes`, `nulls`, `_arrow.plan`,
+  `_arrow.intrinsics` and `_arrow.diagnose()` don't. The tree walker imports
+  the `load_*` intrinsics without loading the shim.
 - The shim is a plain shared library loaded with `ctypes`, not a CPython
   extension. It is compiled with `$CC` (default `cc`) on first import into
   `$XDG_CACHE_HOME/decider/arrow-shim/shim-<hash>.so`. The hash covers the C
@@ -27,10 +46,15 @@
   source avoids a second build backend and needs only a compiler, not the
   CPython headers (the system Python on the dev box has none).
 - Kernels take the shim's function addresses as arguments, never as captured
-  constants, so `cache=True` kernels that call it still disk-cache.
-- The gather is O(rows × columns), one C call per row (~149 ns/row at 17
-  columns in decider2), about 4.6× slower than per-column numpy paths. It was
-  accepted for one code path across every mode and dtype.
+  constants, so `cache=True` kernels that call it still disk-cache. The same
+  holds for the `load_*` intrinsics: every address is an integer argument.
+- The row gather this replaced was O(rows × columns) with one C call per row
+  (through a numba loop) plus a copy of every column: fused `run()` on the
+  flagship took 97.6 ms at 1M rows against 3.1 ms reading `to_numpy()`
+  columns. A one-row call spent most of its time in numpy and ctypes calls
+  (about a microsecond each): one allocation for the whole batch, one C call,
+  and addresses taken once per plan fixed that. Measured before and after in
+  `single-record-path.md`.
 
 **Open:** a deployment image with a read-only home or no compiler needs the
 `.so` built at image build time (import the boundary once) or a prebuilt wheel.

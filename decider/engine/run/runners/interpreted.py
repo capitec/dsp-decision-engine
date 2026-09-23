@@ -7,7 +7,7 @@ import numpy as np
 import polars as pl
 
 from decider.engine.boundary.nulls import MissingInputError
-from decider.engine.ir.decls import Input, NullPolicy
+from decider.engine.ir.decls import Input, NullPolicy, base_annotation
 from decider.engine.run.params import RunParams
 from decider.engine.run.runners.base import Checkpoint
 from decider.engine.run.state import State, dtype_of, from_series
@@ -17,30 +17,35 @@ from decider.engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, Seque
 class _Scope:
     """The rows a node runs on, the frame a frame step sees on them, and the names in sight."""
 
-    __slots__ = ("rows", "base", "names")
+    __slots__ = ("rows", "base", "names", "arm", "iteration")
 
-    def __init__(self, rows: np.ndarray | None, base: pl.DataFrame, names: dict[str, Version]):
+    def __init__(self, rows: np.ndarray | None, base: pl.DataFrame, names: dict[str, Version],
+                 arm: int | None = None, iteration: int | None = None):
         self.rows = rows
         self.base = base
         self.names = names
+        self.arm = arm
+        self.iteration = iteration
 
     def count(self, n: int) -> int:
         return n if self.rows is None else len(self.rows)
 
     def child(self, keep: np.ndarray | None = None) -> _Scope:
         if keep is None:
-            return _Scope(self.rows, self.base, dict(self.names))
+            return _Scope(self.rows, self.base, dict(self.names), self.arm, self.iteration)
         rows = np.flatnonzero(keep) if self.rows is None else self.rows[keep]
         base = self.base.filter(pl.Series(keep)) if self.base.width else self.base
-        return _Scope(rows, base, dict(self.names))
+        return _Scope(rows, base, dict(self.names), self.arm, self.iteration)
+
+    def checkpoint(self, origin, when: str) -> Checkpoint:
+        return Checkpoint(origin, when, self.arm, self.iteration)
 
 
 class InterpretedRunner:
     """Runs every node in plain Python, row by row; row nodes call their Python `reference`.
 
-    Args:
-        visit: called with each locator a row node's `reference` reports
-            (a tree's internal nodes); ignored by default.
+    `visit` is called with each locator a row node's `reference` reports (a
+    tree's internal nodes); set it to watch them.
 
     Example::
 
@@ -48,8 +53,12 @@ class InterpretedRunner:
             ...
     """
 
-    def __init__(self, visit: Callable[[str], None] | None = None):
-        self.visit = visit or _ignore
+    # Nodes to pass over as already run, each with the versions it passes on; their values are in the
+    # state already. A debug session sets it while it replays a run up to an edit.
+    skip: dict[Resolved, list[Version]] = {}
+
+    def __init__(self) -> None:
+        self.visit: Callable[[str], None] = _ignore
 
     def iterate(self, plan: Plan, state: State, params: RunParams) -> Iterator[Checkpoint]:
         root = _Scope(None, state.frame, {})
@@ -57,18 +66,24 @@ class InterpretedRunner:
         state.frame = root.base
 
     def _node(self, r: Resolved, state: State, params: RunParams, scope: _Scope) -> Iterator[Checkpoint]:
+        if self.skip and (passed := self.skip.get(r)) is not None:
+            scope.names.update((v.name, v) for v in passed)
+            return
         origin = r.node.origin
-        yield Checkpoint(origin, "before")
+        yield scope.checkpoint(origin, "before")
         if isinstance(r, Call):
             self._call(r, state, params, scope)
         elif isinstance(r, Sequence):
-            for child in r.children:
-                yield from self._node(child, state, params, scope)
+            yield from self._sequence(r, state, params, scope)
         elif isinstance(r, Branch):
             yield from self._branch(r, state, params, scope)
         else:
             yield from self._loop(r, state, params, scope)
-        yield Checkpoint(origin, "after")
+        yield scope.checkpoint(origin, "after")
+
+    def _sequence(self, seq: Sequence, state: State, params: RunParams, scope: _Scope) -> Iterator[Checkpoint]:
+        for child in seq.children:
+            yield from self._node(child, state, params, scope)
 
     def _call(self, call: Call, state: State, params: RunParams, scope: _Scope) -> None:
         node = call.node
@@ -76,26 +91,38 @@ class InterpretedRunner:
             return _frame(call, state, scope)
         m = scope.count(state.n)
         bundle = params.bundle(call.id, m)
-        cols = [_argument(state, v, i, scope.rows, node.origin.path) for i, v in zip(node.inputs, call.reads)]
+        # Plain Python scalars, not numpy ones: `x / 0.0` must raise here as it does in a kernel.
+        cols = [_argument(state, v, i, scope.rows, node.origin.path).tolist() for i, v in zip(node.inputs, call.reads)]
         rows = zip(*cols) if cols else repeat((), m)
-        if node.kind == "scalar":
-            args = [i.arg for i in node.inputs]
-            fixed = {**dict(node.consts), **{d.arg: b for d, b in zip(node.params, bundle)}}
-            results = [node.fn(**dict(zip(args, row)), **fixed) for row in rows]
-            if len(node.outputs) == 1:
-                results = [(r,) for r in results]
-        else:
-            consts = tuple(v for _, v in node.consts)
-            if node.reference is not None:
-                results = [node.reference(row, bundle, consts, self.visit) for row in rows]
+        results: list = []
+        append = results.append
+        try:
+            if node.kind == "scalar":
+                args = [i.arg for i in node.inputs]
+                fixed = {**dict(node.consts), **{d.arg: b for d, b in zip(node.params, bundle)}}
+                for row in rows:
+                    append(node.fn(**dict(zip(args, row)), **fixed))
             else:
-                results = [node.fn(row, bundle, consts) for row in rows]
+                consts = tuple(v for _, v in node.consts)
+                if node.reference is not None:
+                    for row in rows:
+                        append(node.reference(row, bundle, consts, self.visit))
+                else:
+                    for row in rows:
+                        append(node.fn(row, bundle, consts))
+        except Exception as e:
+            k = len(results)
+            _note(e, f"in step {node.origin.path}, row {k if scope.rows is None else int(scope.rows[k])}")
+            raise
+        if node.kind == "scalar" and len(node.outputs) == 1:
+            results = [(r,) for r in results]
         columns = list(zip(*results)) if results else [()] * len(node.outputs)
         if len(columns) != len(node.outputs):
             raise ValueError(f"{node.origin.path}: returned {len(columns)} values per row, "
                              f"but declares {len(node.outputs)} outputs")
         for v, out, values in zip(call.writes, node.outputs, columns):
-            state.write(v, _array(values, dtype_of(out.annotation)), scope.rows)
+            array, valid = _array(values, dtype_of(base_annotation(out.annotation)))
+            state.write(v, array, scope.rows, valid)
             scope.names[v.name] = v
 
     def _branch(self, branch: Branch, state: State, params: RunParams, scope: _Scope) -> Iterator[Checkpoint]:
@@ -114,6 +141,7 @@ class InterpretedRunner:
             if not keep.any():
                 continue
             inner = cond.child(keep)
+            inner.arm = k
             yield from self._node(resolved, state, params, inner)
             taken.append((k, inner.rows))
         for merge in branch.merges:
@@ -131,7 +159,8 @@ class InterpretedRunner:
             state.write(carry.version, values.copy(), scope.rows, valid)
             active.names[carry.version.name] = carry.version
         # ponytail: rows still looping at max_iterations stop silently; raise or flag them if that hides bugs.
-        for _ in range(loop.node.max_iterations):
+        for i in range(1, loop.node.max_iterations + 1):
+            active.iteration = i
             cond = active.child()
             yield from self._node(loop.condition, state, params, cond)
             going, _ = state.read(loop.condition.writes[0], active.rows)
@@ -151,14 +180,19 @@ def _ignore(locator: str) -> None:
     pass
 
 
+def _note(e: BaseException, text: str) -> None:
+    # The error keeps its type for `except`; the note shows under its traceback (Python 3.11+ only).
+    if hasattr(e, "add_note"):
+        e.add_note(text)
+
+
 def _argument(state: State, version: Version, decl: Input, rows: np.ndarray | None, path: str) -> np.ndarray:
     values, valid = state.read(version, rows)
     if valid is None or valid.all():
         return values
     missing = ~valid
     if decl.null_policy is NullPolicy.REQUIRED:
-        absent = version.producer is None and version.name not in state.frame.columns
-        raise MissingInputError(decl.name, path, int(missing.sum()), len(valid), absent=absent)
+        raise MissingInputError(decl.name, path, int(missing.sum()), len(valid), absent=_absent(state, version))
     if decl.null_policy is NullPolicy.MISSING_AS:
         return np.where(valid, values, decl.fill)
     values = values.astype(object)
@@ -166,21 +200,36 @@ def _argument(state: State, version: Version, decl: Input, rows: np.ndarray | No
     return values
 
 
-def _array(values: tuple, dtype: np.dtype) -> np.ndarray:
+def _absent(state: State, version: Version) -> bool:
+    # A state stores every input column it was given, so one never written was absent.
+    return version.producer is None and version.id not in state.values
+
+
+def _array(values: tuple, dtype: np.dtype) -> tuple[np.ndarray, np.ndarray | None]:
+    # A step returning None writes a null, which later readers see through their null policy.
+    valid = np.array([x is not None for x in values], bool)
+    if valid.all():
+        valid = None
+    elif dtype != object:
+        values = tuple(0 if x is None else x for x in values)
     if dtype != object:
-        return np.array(values, dtype)
+        return np.array(values, dtype), valid
     # Filled one by one so a tuple or list value stays one element.
     out = np.empty(len(values), object)
     for i, v in enumerate(values):
         out[i] = v
-    return out
+    return out, valid
 
 
 def _frame(call: Call, state: State, scope: _Scope) -> None:
     node = call.node
     path = node.origin.path
     df = state.frame_of(scope.base, scope.names, scope.rows)
-    out = node.fn(df)
+    try:
+        out = node.fn(df)
+    except Exception as e:
+        _note(e, f"in frame step {path}")
+        raise
     if not isinstance(out, pl.DataFrame):
         raise TypeError(f"frame step {path} returned {type(out).__name__}, not a polars DataFrame")
     if out.height != df.height:

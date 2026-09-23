@@ -21,8 +21,8 @@
 
 /* ---- one column, resolved once per batch --------------------------------
  * Filled by sm_resolve_col from nanoarrow's decoded ArrowArrayView; read by
- * sm_gather_row once per row. `fill_*` is the value written to the row slot
- * when the validity bit is clear (a MISSING_AS fill rides here); the
+ * sm_columns for the whole batch, or sm_gather_row one row at a time.
+ * `fill_*` is the value written when the validity bit is clear (a MISSING_AS fill rides here); the
  * defaults are NaN / 0 / -1 (CODE).                                     */
 struct SmColDesc {
   const uint8_t* validity;            /* buffer_views[0]; NULL when absent */
@@ -63,9 +63,8 @@ const char* sm_error_message(const struct ArrowError* err) { return err->message
  * Pull the schema and the first chunk from the ArrowArrayStream, init the
  * view from the schema and set the first array (SetArrayMinimal: no buffer
  * walk). Returns 0 for a single-chunk stream, 1 when the stream had a
- * second chunk (left in `array2`; the caller keeps pulling with
- * sm_stream_get_next and builds one view per chunk with sm_view_set), or a
- * negative code with the message in `err`.                               */
+ * second chunk (left in `array2`, which the caller refuses), or a negative
+ * code with the message in `err`.                                        */
 int sm_import_frame(struct ArrowArrayStream* stream, struct ArrowSchema* schema,
                     struct ArrowArray* array, struct ArrowArray* array2,
                     struct ArrowArrayView* view, struct ArrowError* err) {
@@ -95,35 +94,6 @@ int sm_import_frame(struct ArrowArrayStream* stream, struct ArrowSchema* schema,
   return array2->release != NULL ? 1 : 0;
 }
 
-/* Next chunk of a multi-chunk stream. 0 on success; `array->release == NULL`
- * (sm_array_is_valid == 0) means the stream is exhausted.                */
-int sm_stream_get_next(struct ArrowArrayStream* stream, struct ArrowArray* array,
-                       struct ArrowError* err) {
-  int rc = stream->get_next(stream, array);
-  if (rc != 0) {
-    ArrowErrorSet(err, "get_next: %s", stream->get_last_error(stream));
-    return -2;
-  }
-  return 0;
-}
-int sm_array_is_valid(const struct ArrowArray* array) { return array->release != NULL; }
-
-/* Per-chunk view for the multi-chunk path: schema already read. */
-int sm_view_set(struct ArrowArrayView* view, const struct ArrowSchema* schema,
-                const struct ArrowArray* array, struct ArrowError* err) {
-  int rc = ArrowArrayViewInitFromSchema(view, schema, err);
-  if (rc != NANOARROW_OK) return -5;
-  rc = ArrowArrayViewSetArrayMinimal(view, array, err);
-  if (rc != NANOARROW_OK) return -6;
-  return 0;
-}
-
-/* nanoarrow validation: 1 minimal, 2 default, 3 full (diagnostics only;
- * the request path never validates).                                     */
-int sm_view_validate(struct ArrowArrayView* view, int level, struct ArrowError* err) {
-  return ArrowArrayViewValidate(view, (enum ArrowValidationLevel)level, err);
-}
-
 /* ---- view accessors ---------------------------------------------------- */
 int sm_view_storage_type(const struct ArrowArrayView* v) { return (int)v->storage_type; }
 int64_t sm_view_length(const struct ArrowArrayView* v) { return v->length; }
@@ -131,7 +101,6 @@ int64_t sm_view_offset(const struct ArrowArrayView* v) { return v->offset; }
 int64_t sm_view_null_count(const struct ArrowArrayView* v) {
   return v->null_count >= 0 ? v->null_count : ArrowArrayViewComputeNullCount(v);
 }
-int64_t sm_view_n_children(const struct ArrowArrayView* v) { return v->n_children; }
 const struct ArrowArrayView* sm_view_child(const struct ArrowArrayView* v, int64_t k) {
   return (k >= 0 && k < v->n_children) ? v->children[k] : NULL;
 }
@@ -143,36 +112,25 @@ int sm_view_has_validity(const struct ArrowArrayView* v) {
   return v->buffer_views[0].data.as_uint8 != NULL;
 }
 
-void sm_view_reset(struct ArrowArrayView* view) { ArrowArrayViewReset(view); }
 void sm_array_release(struct ArrowArray* array) {
   if (array->release != NULL) ArrowArrayRelease(array);
 }
-void sm_schema_release(struct ArrowSchema* schema) {
+/* Everything sm_import_frame took, in one call. */
+void sm_release(struct ArrowSchema* schema, struct ArrowArray* array, struct ArrowArray* array2,
+                struct ArrowArrayView* view) {
+  ArrowArrayViewReset(view);
+  sm_array_release(array);
+  sm_array_release(array2);
   if (schema->release != NULL) ArrowSchemaRelease(schema);
 }
+/* Bitwise move, as the C data interface allows: `dst` owns the array and `src` is released. */
+void sm_array_move(struct ArrowArray* src, struct ArrowArray* dst) { ArrowArrayMove(src, dst); }
 
 /* ---- schema accessors (names and types for the plan and for messages) -- */
-int64_t sm_schema_n_children(const struct ArrowSchema* s) { return s->n_children; }
-const char* sm_schema_format(const struct ArrowSchema* s) { return s->format; }
-const char* sm_schema_child_name(const struct ArrowSchema* s, int64_t k) {
-  return (k >= 0 && k < s->n_children) ? s->children[k]->name : NULL;
-}
-const char* sm_schema_child_format(const struct ArrowSchema* s, int64_t k) {
-  return (k >= 0 && k < s->n_children) ? s->children[k]->format : NULL;
-}
 /* Human-readable type of child k ("string_view", "dictionary(...)", ...). */
 int64_t sm_schema_child_to_string(const struct ArrowSchema* s, int64_t k, char* out, int64_t n) {
   if (k < 0 || k >= s->n_children) return -1;
   return ArrowSchemaToString(s->children[k], out, n, 0);
-}
-
-/* ---- per-row scalar accessors (Python-side tests and diagnostics) ------ */
-int sm_is_null(const struct ArrowArrayView* v, int64_t i) { return ArrowArrayViewIsNull(v, i); }
-double sm_get_f64(const struct ArrowArrayView* v, int64_t i) {
-  return ArrowArrayViewGetDoubleUnsafe(v, i);
-}
-int64_t sm_get_i64(const struct ArrowArrayView* v, int64_t i) {
-  return ArrowArrayViewGetIntUnsafe(v, i);
 }
 
 /* One string, one call: nanoarrow's own accessor, which handles utf8 ("u"),
@@ -208,7 +166,7 @@ static int sm_int_width(enum ArrowType t, int32_t* width, int32_t* is_signed) {
   }
 }
 
-int sm_resolve_col(const struct ArrowArrayView* v, int32_t kind, int32_t slot,
+static int sm_resolve_col(const struct ArrowArrayView* v, int32_t kind, int32_t slot,
                    double fill_f64, int64_t fill_i64, struct SmColDesc* d) {
   d->view = v;
   d->offset = v->offset;
@@ -331,5 +289,108 @@ void sm_gather_row(const struct SmRowPlan* p, int64_t i) {
       default:
         break;
     }
+  }
+}
+
+/* ---- the whole batch, one column at a time: ONE C call per batch --------
+ * `out` is one buffer: an int64 header of three rows of `ncols` (null
+ * count, byte offset of the column's values in `out`, in-place address),
+ * then the F64, I64, STR, CODE and BOOL columns (`n` values each; a STR
+ * value is an (address, length) pair of int64s), then one validity row of
+ * `n` bytes per column. A null takes the fill, the same values
+ * sm_gather_row writes row by row; only a column with nulls gets its
+ * validity row. With `borrow` set, a column the kernel can read in place
+ * (doubles as F64, int64 as I64, int32 as CODE, no nulls) is not copied:
+ * its in-place address is set instead (0 for a copied column).          */
+void sm_columns(const struct SmRowPlan* p, int64_t n, uint8_t* buf, int32_t borrow) {
+  static const int64_t size[5] = {8, 8, 1, 4, 16};  /* by SM_KIND_* */
+  static const int order[5] = {SM_KIND_F64, SM_KIND_I64, SM_KIND_STR, SM_KIND_CODE, SM_KIND_BOOL};
+  int32_t ncols = p->ncols;
+  int64_t count[5] = {0, 0, 0, 0, 0}, start[5];
+  for (int32_t c = 0; c < ncols; c++) count[p->cols[c].kind]++;
+  int64_t at = 24 * (int64_t)ncols;
+  for (int k = 0; k < 5; k++) {
+    start[order[k]] = at;
+    at += count[order[k]] * n * size[order[k]];
+  }
+  uint8_t* valid = buf + at;
+  int64_t* nulls = (int64_t*)buf;
+  int64_t* where = nulls + ncols;
+  uint64_t* in_place = (uint64_t*)(where + ncols);
+  for (int32_t c = 0; c < ncols; c++) {
+    const struct SmColDesc* d = &p->cols[c];
+    int64_t nn = d->validity == NULL ? 0 : sm_view_null_count(d->view);
+    const uint8_t* bits = nn ? d->validity : NULL;
+    int64_t o = d->offset;
+    nulls[c] = nn;
+    where[c] = start[d->kind] + (int64_t)d->slot * n * size[d->kind];
+    in_place[c] = 0;
+    void* dst = buf + where[c];
+    if (borrow && nn == 0 && d->is_signed &&
+        ((d->kind == SM_KIND_F64 && d->width == 8) || (d->kind == SM_KIND_I64 && d->width == 8) ||
+         (d->kind == SM_KIND_CODE && d->width == 4))) {
+      in_place[c] = (uint64_t)(uintptr_t)((const uint8_t*)d->data + o * d->width);
+      continue;
+    }
+    if (bits != NULL) {
+      uint8_t* vc = valid + (int64_t)c * n;
+      for (int64_t i = 0; i < n; i++) vc[i] = (uint8_t)ArrowBitGet(bits, o + i);
+    }
+#define SM_NULL(i) (bits != NULL && !ArrowBitGet(bits, o + (i)))
+    switch (d->kind) {
+      case SM_KIND_F64: {
+        double* out = (double*)dst;
+        if (d->width == 8 && bits == NULL) {
+          memcpy(out, (const double*)d->data + o, (size_t)n * sizeof(double));
+        } else if (d->width == 8) {
+          const double* x = (const double*)d->data + o;
+          for (int64_t i = 0; i < n; i++) out[i] = SM_NULL(i) ? d->fill_f64 : x[i];
+        } else {
+          const float* x = (const float*)d->data + o;
+          for (int64_t i = 0; i < n; i++) out[i] = SM_NULL(i) ? d->fill_f64 : (double)x[i];
+        }
+        break;
+      }
+      case SM_KIND_I64: {
+        int64_t* out = (int64_t*)dst;
+        if (bits == NULL && d->width == 8 && d->is_signed)
+          memcpy(out, (const int64_t*)d->data + o, (size_t)n * sizeof(int64_t));
+        else
+          for (int64_t i = 0; i < n; i++)
+            out[i] = SM_NULL(i) ? d->fill_i64 : sm_load_int(d->data, d->width, d->is_signed, o + i);
+        break;
+      }
+      case SM_KIND_BOOL: {
+        uint8_t* out = (uint8_t*)dst;
+        for (int64_t i = 0; i < n; i++)
+          out[i] = SM_NULL(i) ? (uint8_t)(d->fill_i64 != 0)
+                              : (uint8_t)ArrowBitGet((const uint8_t*)d->data, o + i);
+        break;
+      }
+      case SM_KIND_CODE: {
+        int32_t* out = (int32_t*)dst;
+        for (int64_t i = 0; i < n; i++)
+          out[i] = SM_NULL(i) ? (int32_t)d->fill_i64
+                              : (int32_t)sm_load_int(d->data, d->width, d->is_signed, o + i);
+        break;
+      }
+      case SM_KIND_STR: {
+        int64_t* out = (int64_t*)dst;
+        for (int64_t i = 0; i < n; i++) {
+          if (SM_NULL(i)) {
+            out[2 * i] = 0;
+            out[2 * i + 1] = -1;
+          } else {
+            struct ArrowStringView sv = ArrowArrayViewGetStringUnsafe(d->view, i);
+            out[2 * i] = (int64_t)(intptr_t)sv.data;
+            out[2 * i + 1] = sv.size_bytes;
+          }
+        }
+        break;
+      }
+      default:
+        break;
+    }
+#undef SM_NULL
   }
 }

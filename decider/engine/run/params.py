@@ -4,9 +4,10 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping
 
 from decider.engine.params import NodeParams, ParamsCache, ParamsError, Status, bundle_class, document_key
-from decider.registry.resolve import suggest_names
+from decider.registry.resolve import hint
 
 _NO_PARAMS = bundle_class(())()
+_EMPTY_KEY = document_key({})
 
 
 @dataclass
@@ -34,16 +35,19 @@ class RunReport:
 class RunParams:
     """One run's view of a params document: each node's bundle, validated on first use and cached.
 
+    `lazy` says the run validates a node only when it runs.
+
     Example::
 
         params = RunParams(nodes, doc, ParamsCache())
         params.bundle(call.id, rows=len(df)).cap
     """
 
-    def __init__(self, nodes: dict[int, NodeParams], doc: Mapping[str, Any], cache: ParamsCache):
+    def __init__(self, nodes: dict[int, NodeParams], doc: Mapping[str, Any], cache: ParamsCache, lazy: bool = False):
         self.nodes = nodes
+        self.lazy = lazy
         self.doc = doc
-        self.key = document_key(doc)
+        self.key = document_key(doc) if doc else _EMPTY_KEY
         self.cache = cache
         self.report = RunReport()
 
@@ -76,7 +80,7 @@ def check_namespaces(doc: Mapping[str, Any], nodes: dict[int, NodeParams]) -> No
     given = doc.get("shared", {})
     for key in given if isinstance(given, Mapping) else ():
         if key not in shared:
-            raise ParamsError(f"params document: no step uses shared param '{key}'.{_hint(key, shared)}")
+            raise ParamsError(f"params document: no step uses shared param '{key}'.{hint(key, shared)}")
     _walk({k: v for k, v in doc.items() if k != "shared"}, "", paths)
 
 
@@ -91,10 +95,6 @@ def _walk(level: Mapping[str, Any], prefix: str, paths: set[str]) -> None:
         siblings = {p[len(prefix):].split("/")[0] for p in paths if p.startswith(prefix)}
         raise ParamsError(
             f"params document: no step with params at '{path}'."
-            + _hint(key, siblings, prefix)
+            + hint(key, siblings, prefix)
         )
 
-
-def _hint(name: str, candidates, prefix: str = "") -> str:
-    near = suggest_names(name, candidates)
-    return f" Did you mean '{prefix}{near[0]}'?" if near else ""

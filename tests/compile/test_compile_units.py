@@ -206,10 +206,10 @@ def test_a_fallback_writes_every_output_with_its_declared_dtype(run):
     assert out["flagged"].dtype == np.bool_ and out["flagged"].tolist() == [False, True]
 
 
-def test_origins_map_a_unit_back_to_its_nodes():
+def test_a_unit_maps_back_to_its_nodes():
     plan = resolve(flow(flow(disposable_income, affordability_ratio, name="afford"), name="p"))
     (unit,) = _units(compile_plan(plan))
-    assert [o.path for o in unit.origins] == ["p/afford/disposable_income", "p/afford/affordability_ratio"]
+    assert [c.node.origin.path for c in unit.calls] == ["p/afford/disposable_income", "p/afford/affordability_ratio"]
 
 
 def clipped(x, lo, hi):

@@ -41,9 +41,11 @@ class RunStarted:
 
 @dataclass(frozen=True, slots=True)
 class NodeStarted:
-    """A node is about to run."""
+    """A node is about to run; `arm` and `iteration` place it inside a branch arm or loop iteration, as on `Checkpoint`."""
 
     origin: Origin
+    arm: int | None = None
+    iteration: int | None = None
     kind: Literal["node_started"] = "node_started"
 
 
@@ -67,11 +69,20 @@ class NodeVisited:
 
 @dataclass(frozen=True, slots=True)
 class Paused:
-    """The session stopped at a checkpoint; `reason` is `"breakpoint"`, `"step"`, `"pause"` or `"rewind"`."""
+    """The session stopped at a checkpoint; `reason` is `"breakpoint"`, `"step"`, `"pause"`, `"rewind"` or `"edit"`.
+
+    `kernel` lists the steps a fused kernel runs when the checkpoint is one
+    (the first is `origin`); a breakpoint on any of them pauses here. `arm`
+    and `iteration` are the checkpoint's: which branch arm and which loop
+    iteration (from 1) it is inside.
+    """
 
     origin: Origin
     when: Literal["before", "after"]
     reason: str
+    kernel: tuple[str, ...] = ()
+    arm: int | None = None
+    iteration: int | None = None
     kind: Literal["paused"] = "paused"
 
 
@@ -113,6 +124,15 @@ class Error:
 
 
 @dataclass(frozen=True, slots=True)
+class Edited:
+    """The step at `path` was replaced or deleted; the run goes on from there (a `Paused` follows)."""
+
+    action: Literal["replace", "delete"]
+    path: str
+    kind: Literal["edited"] = "edited"
+
+
+@dataclass(frozen=True, slots=True)
 class RunFinished:
     """The run reached the end; `output` summarises every column of `session.output()`."""
 
@@ -121,4 +141,4 @@ class RunFinished:
 
 
 Event = Union[RunStarted, NodeStarted, NodeFinished, NodeVisited, Paused, Overridden,
-              ParamsValidated, Warning, Error, RunFinished]
+              ParamsValidated, Warning, Error, Edited, RunFinished]
