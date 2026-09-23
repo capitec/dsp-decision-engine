@@ -108,6 +108,7 @@ export function summariseSweep(r: SweepResponse, scenarioList: Scenario[] = []):
   // A fork sets inputs mid-run, so its output still shows the input as it arrived; name the change instead.
   const withInputs = (c: Comparison, s: Scenario | undefined): Comparison => ({
     ...c,
+    paramsDocs: { a: {}, b: s?.params ?? {} },
     changedInputs: Object.entries(s?.overrides ?? {}).map(([name, after]) => ({
       name,
       after,

@@ -104,7 +104,7 @@ describe("user stories", () => {
       await shot("After clicking 'Run to here': the flow runs on the sample and pauses before cap_by_income.");
       await wv.locator("select[aria-label=record]").selectOption({ label: "client_id 1" });
       await wv.locator(".chip", { hasText: "term_cap" }).first().click();
-      await wv.locator(".how-title", { hasText: "How is term_cap" }).waitFor();
+      await wv.locator(".how-title", { hasText: "comes from" }).waitFor();
       await shot("After focusing client_id 1 in the header and clicking the term_cap chip.");
       await tab(c, "State");
       await shot("The State tab while focused on client_id 1.");
@@ -112,10 +112,10 @@ describe("user stories", () => {
       await wv.locator("svg .node", { hasText: "risk_tree" }).click();
       await wv.locator("aside button", { hasText: "Continue to here" }).click();
       await wv.locator(".badge", { hasText: "before risk_tree" }).waitFor({ timeout: 30_000 });
-      await c.page.keyboard.press("F10");
+      await wv.locator("aside button", { hasText: "Run this step" }).click();
       await wv.locator(".badge", { hasText: "after risk_tree" }).waitFor({ timeout: 30_000 });
       await wv.locator("aside h4", { hasText: "Path for client_id 1" }).waitFor({ timeout: 10_000 });
-      await shot("After clicking risk_tree, 'Continue to here', then F10 to step over the tree: the path client_id 1 took.");
+      await shot("After clicking risk_tree, 'Continue to here', then 'Run this step': the path client_id 1 took.");
     });
   }, 180_000);
 
@@ -154,8 +154,8 @@ describe("user stories", () => {
       await wv.locator("table.sweep").waitFor({ timeout: 120_000 });
       await shot("The results table after running the 6 scenarios.");
       await wv.locator("table.sweep tr.clickable").nth(0).click();
-      await wv.locator(".compare .summary").waitFor();
-      await shot("After clicking the first scenario: its step-by-step comparison.");
+      await wv.locator(".inline-compare .compare .summary").waitFor();
+      await shot("After clicking the first scenario row: its comparison opens under the table.");
     });
   }, 240_000);
 

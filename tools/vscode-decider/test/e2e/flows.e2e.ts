@@ -54,7 +54,7 @@ describe("decider in VSCodium", () => {
     await wv.locator(".badge", { hasText: "term/by_sector/cap_public" }).waitFor({ timeout: 30_000 });
     await wv.locator("select[aria-label=record]").selectOption("1");
     await wv.locator(".chip", { hasText: "term_cap" }).first().click();
-    await wv.locator(".how-title", { hasText: "How is term_cap" }).waitFor();
+    await wv.locator(".how-title", { hasText: "comes from" }).waitFor();
     await c.shot("03-paused-record");
     await wv.locator("header nav button", { hasText: "State" }).click();
     await wv.locator("td", { hasText: "requested_amount" }).first().waitFor();

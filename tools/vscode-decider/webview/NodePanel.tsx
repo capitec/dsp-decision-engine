@@ -1,4 +1,5 @@
-import { formatValue, kindLabel, recordLabel, type CallNodeJson, type ColumnHistory, type ColumnSummary, type Lineage, type RecordKey, type RunStatus } from "../src/protocol";
+import { same, type Comparison } from "../src/compare";
+import { formatValue, recordLabel, type CallNodeJson, type ColumnHistory, type ColumnSummary, type Lineage, type RecordKey, type RunStatus } from "../src/protocol";
 
 interface Props {
   node?: CallNodeJson;
@@ -17,10 +18,12 @@ interface Props {
   onRewind: (path: string) => void;
   onRunTo: (path: string) => void;
   onStep: () => void;
+  /** The comparison the graph is coloured by, if any: params show both sides. */
+  comparison: Comparison | null;
 }
 
 /** The details pane: the selected step, then the picked column's lineage and history. */
-export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, lineage, history, treePath, onPick, onSelect, onReveal, onRewind, onRunTo, onStep }: Props) {
+export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, lineage, history, treePath, onPick, onSelect, onReveal, onRewind, onRunTo, onStep, comparison }: Props) {
   const visits = node && run.visits[node.path];
   const who = run.record === null ? null : recordLabel(run.record, keyCol);
   const valueOf = (name: string) => {
@@ -39,11 +42,13 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
       {node ? (
         <>
           <h3>{node.path}</h3>
-          <div className="muted">{kindLabel(node)} step · {node.source}</div>
+          <div className="muted" title={node.source}>{KIND[node.callKind]}</div>
           <div className="actions">
             <button onClick={() => onReveal(node.path)}>Open source</button>
             {atThis ? (
               <button className="primary" onClick={onStep} title="Run this step and pause after it">Run this step</button>
+            ) : ran && paused ? (
+              <button onClick={() => onRewind(node.path)} title="Run the flow again from this step, keeping the values before it">Re-run from here</button>
             ) : (
               <button onClick={() => onRunTo(node.path)} title="Add a breakpoint here and run the flow to it">
                 {paused ? "Continue to here" : "Run to here"}
@@ -71,15 +76,27 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
           )}
           <h4>Reads{who && <span className="muted"> · values for {who}</span>}</h4>
           <Chips names={node.inputs} picked={column} onPick={onPick} valueOf={valueOf} />
+          {card && (node.inputs ?? []).includes(card.name) && (
+            <HowComputed entry={card} who={who} role="an input to this step" nodes={nodes} onPick={onPick} onSelect={onSelect} />
+          )}
           <h4>Writes{who && !ran && <span className="muted"> · not run yet</span>}</h4>
           <Chips names={node.outputs} picked={column} onPick={onPick} valueOf={ran ? valueOf : () => undefined} />
-          {card && <HowComputed entry={card} who={who} nodes={nodes} onPick={onPick} onSelect={onSelect} />}
+          {card && !(node.inputs ?? []).includes(card.name) && (
+            <HowComputed entry={card} who={who} role={ran ? "written by this step" : "the value so far"} nodes={nodes} onPick={onPick} onSelect={onSelect} />
+          )}
           {Object.keys(node.params).length > 0 && (
             <>
               <h4>Params</h4>
-              {Object.entries(node.params).map(([k, v]) => (
-                <div key={k} className="mono">{k} = {formatValue(v)}</div>
-              ))}
+              {comparison && <div className="muted">baseline → variant</div>}
+              {Object.entries(node.params).map(([k, v]) => {
+                const [a, b] = comparison ? sides(comparison, node, k, v) : [v, v];
+                return (
+                  <div key={k} className="mono">
+                    {k} = {formatValue(a)}
+                    {!same(a, b) && <strong> → {formatValue(b)}</strong>}
+                  </div>
+                );
+              })}
             </>
           )}
           {!path && visits && Object.keys(visits).length > 0 && (
@@ -95,7 +112,7 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
       ) : (
         <div className="muted">Click a step in the graph to see what it reads and writes.</div>
       )}
-      {!node && card && <HowComputed entry={card} who={who} nodes={nodes} onPick={onPick} onSelect={onSelect} />}
+      {!node && card && <HowComputed entry={card} who={who} role="" nodes={nodes} onPick={onPick} onSelect={onSelect} />}
       {card && (
         <details>
           <summary>Full lineage of {card.name}</summary>
@@ -132,12 +149,13 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
 }
 
 /** "term_cap = 60, written by term/term_cap from requested_term = 72 and ceiling = 60". */
-function HowComputed({ entry, who, nodes, onPick, onSelect }: { entry: Lineage; who: string | null; nodes: CallNodeJson[]; onPick: (n?: string) => void; onSelect: (p: string) => void }) {
+function HowComputed({ entry, who, role, nodes, onPick, onSelect }: { entry: Lineage; who: string | null; role: string; nodes: CallNodeJson[]; onPick: (n?: string) => void; onSelect: (p: string) => void }) {
   const producer = nodes.find((n) => n.path === entry.producer);
   return (
     <div className="how">
       <div className="how-title">
-        How is <span className="mono">{entry.name}{who ? ` = ${formatValue(entry.value)}` : ""}</span> computed{who ? ` for ${who}` : ""}?
+        <span className="mono">{entry.name}{who ? ` = ${formatValue(entry.value)}` : ""}</span>
+        {role && <span className="muted"> ({role})</span>} comes from{who ? ` for ${who}` : ""}:
       </div>
       {entry.producer === null ? (
         <div>It is an input: it arrives with the data.</div>
@@ -203,4 +221,25 @@ function Chips({ names, picked, onPick, valueOf }: { names: string[] | null; pic
       })}
     </div>
   );
+}
+
+const KIND: Record<CallNodeJson["callKind"], string> = {
+  scalar: "Python step, run once per record",
+  row: "decision tree, walked once per record",
+  frame: "data frame step, run on the whole batch",
+};
+
+/** A param's value in the baseline and the variant: from the params documents, or the defaults each side declared. */
+function sides(c: Comparison, node: CallNodeJson, name: string, value: unknown): [unknown, unknown] {
+  const pick = (doc: unknown) => node.path.split("/").reduce<unknown>((d, part) => (d as Record<string, unknown> | undefined)?.[part], doc) as Record<string, unknown> | undefined;
+  const declared = c.steps.find((s) => s.path === node.path)?.paramChanges.find((p) => p.startsWith(`${name}: `));
+  const parse = (x: string) => {
+    try {
+      return JSON.parse(x);
+    } catch {
+      return x;
+    }
+  };
+  const [da, db] = declared ? declared.slice(name.length + 2).split(" → ").map(parse) : [value, value];
+  return [pick(c.paramsDocs?.a)?.[name] ?? da, pick(c.paramsDocs?.b)?.[name] ?? db];
 }

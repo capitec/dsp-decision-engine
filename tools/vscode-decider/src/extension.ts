@@ -224,6 +224,7 @@ async function compare(a: Side, b: Side) {
   post({ type: "compare", comparison: null, busy: `Running ${a.label} and ${b.label}…` });
   try {
     const comparison = await runComparison(a, b, pythonCommand(), path.dirname(b.file));
+    comparison.paramsDocs = { a: a.params ?? {}, b: b.params ?? {} };
     if (a.file !== b.file) {
       comparison.files = { a: a.file, b: b.file };
       lastFiles = { ...comparison.files, label: a.label };

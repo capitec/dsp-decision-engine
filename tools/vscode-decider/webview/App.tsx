@@ -45,7 +45,7 @@ export function App() {
   const [showDiff, setShowDiff] = useState(true);
   const [details, setDetails] = useState(true);
   const [tab, setTab] = useState<Tab>("graph");
-  const [compareFrom, setCompareFrom] = useState<Tab | null>(null);
+  const [zoom, setZoom] = useState<number | "auto">("auto");
 
   useEffect(() => {
     const onMessage = (e: MessageEvent<ToWebview>) => {
@@ -75,7 +75,6 @@ export function App() {
           break;
         case "compare":
           setCompare(m);
-          setCompareFrom(null);
           // Start where the runs first differ.
           if (m.comparison) setSelected(m.comparison.firstDivergence ?? m.comparison.steps.find((s) => s.status !== "same" && s.status !== "not run")?.path);
           break;
@@ -177,9 +176,12 @@ export function App() {
           </span>
           <label><input type="checkbox" checked={showData} onChange={(e) => setShowData(e.target.checked)} /> show every data dependency</label>
           <label><input type="checkbox" checked={details} onChange={(e) => setDetails(e.target.checked)} /> details pane</label>
+          <span className="legend">
+            <span className="swatch paused" /> paused here <span className="swatch lineage" /> feeds the picked value <span>✓ ran</span>
+          </span>
           {compare.comparison && (
             <span className="legend">
-              <label><input type="checkbox" checked={showDiff} onChange={(e) => setShowDiff(e.target.checked)} /> colour by comparison:</label>
+              <label><input type="checkbox" checked={showDiff} onChange={(e) => setShowDiff(e.target.checked)} /> compared:</label>
               <span className="swatch changed" /> changed <span className="swatch added" /> added <span className="swatch same" /> same
               {showDiff && changedSteps.length > 0 && (
                 <>
@@ -190,6 +192,11 @@ export function App() {
               )}
             </span>
           )}
+          <span className="zoom-bar">
+            <button title="Zoom out" onClick={() => setZoom((z) => Math.max(0.3, (z === "auto" ? 1 : z) / 1.25))}>−</button>
+            <button title="Fit the width, keeping text readable" className={zoom === "auto" ? "primary" : ""} onClick={() => setZoom("auto")}>fit</button>
+            <button title="Zoom in" onClick={() => setZoom((z) => Math.min(3, (z === "auto" ? 1 : z) * 1.25))}>+</button>
+          </span>
         </div>
       )}
       <main>
@@ -203,6 +210,7 @@ export function App() {
             lineage={lineagePaths}
             diff={diff}
             treePath={shownTreePath}
+            zoom={zoom}
             onSelect={setSelected}
             onOpen={(path) => send({ type: "reveal", path })}
           />
@@ -229,11 +237,10 @@ export function App() {
             rows={rows}
             result={sweep}
             onRun={(scenarios, fromHere) => send({ type: "sweep", scenarios, fromHere })}
-            onOpen={(i) => {
-              setCompare({ comparison: sweep.sweep!.comparisons[i] });
-              setCompareFrom("scenarios");
-              setTab("compare");
-            }}
+            onOpen={(i) => setCompare({ comparison: sweep.sweep!.comparisons[i] })}
+            onSelectStep={select}
+            onCompareRevision={() => send({ type: "compareRevision" })}
+            onOpenDiff={(path) => send({ type: "openDiff", path })}
           />
         )}
         {tab === "compare" && (
@@ -243,7 +250,6 @@ export function App() {
             onSelect={select}
             onCompareRevision={() => send({ type: "compareRevision" })}
             onOpenDiff={(path) => send({ type: "openDiff", path })}
-            back={compareFrom ? { label: `${sweep.sweep?.labels.length ?? ""} scenarios`, go: () => setTab(compareFrom) } : undefined}
           />
         )}
         {withDetails && (
@@ -264,6 +270,7 @@ export function App() {
             onRewind={(path) => send({ type: "rewind", path })}
             onRunTo={(path) => send({ type: "runTo", path })}
             onStep={() => send({ type: "step" })}
+            comparison={showDiff ? compare.comparison : null}
           />
         )}
       </main>
