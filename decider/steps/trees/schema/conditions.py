@@ -4,7 +4,7 @@ from __future__ import annotations
 import enum
 import typing as t
 
-from pydantic import BaseModel, BeforeValidator, Discriminator, Field, RootModel, Tag, model_validator
+from pydantic import BaseModel, BeforeValidator, Discriminator, Field, PrivateAttr, RootModel, Tag, model_validator
 
 from decider.steps import expr
 from decider.steps.values import ParamRef, Value
@@ -42,7 +42,19 @@ Number = t.Union[int, float]
 Threshold = t.Annotated[Value[Number], BeforeValidator(_input_ref)]
 """A literal number or a `ParamRef`; `{"key": "x"}` is read as `{"param": "x"}`."""
 Pattern = t.Annotated[Value[str], BeforeValidator(_input_ref)]
-Values = t.Annotated[t.Union[t.List[Threshold], ParamRef], BeforeValidator(_input_ref)]
+Patterns = t.Annotated[t.List[Pattern], Field(min_length=1)]
+Values = t.Annotated[
+    t.Union[t.Annotated[t.List[Threshold], Field(min_length=1)], ParamRef], BeforeValidator(_input_ref)
+]
+
+
+def get_field(value: t.Any, key: str, default: t.Any = None) -> t.Any:
+    """`value[key]` for a dict, `value.key` otherwise; for discriminating raw and validated input alike.
+
+    >>> get_field({"type": "leaf"}, "type"), get_field(object(), "type", "unary")
+    ('leaf', 'unary')
+    """
+    return value.get(key, default) if isinstance(value, dict) else getattr(value, key, default)
 
 
 def find(obj: t.Any, kind: type) -> t.Iterator[t.Any]:
@@ -76,17 +88,19 @@ class ComputedFeature(BaseModel):
     type: t.Literal["computed"] = "computed"
     expression: str
 
+    _expr: expr.Expr = PrivateAttr()
+
     @model_validator(mode="after")
     def _parse(self) -> ComputedFeature:
         try:
-            expr.parse(self.expression)
+            self._expr = expr.parse(self.expression)
         except expr.ExprError as e:
             raise ValueError(f"computed feature {self.expression!r} is not a valid expression: {e}") from e
         return self
 
     @property
     def expr(self) -> expr.Expr:
-        return expr.parse(self.expression)
+        return self._expr
 
 
 class Feature(RootModel[t.Union[ComputedFeature, str]]):
@@ -132,18 +146,21 @@ class UnaryNotEqual(_Thresholded):
     op: t.Literal["!="] = "!="
 
 
-class UnaryBetween(_UnaryOp):
-    """`min <= x <= max`, closed at both ends; either bound may be left out."""
-
-    op: t.Literal["between"] = "between"
+class _Bounds(SchemaModel):
     min: t.Optional[Threshold] = None
     max: t.Optional[Threshold] = None
 
     @model_validator(mode="after")
-    def _bounds(self) -> UnaryBetween:
+    def _bounds(self) -> _Bounds:
         if self.min is None and self.max is None:
             raise ValueError("At least one of min or max must be specified")
         return self
+
+
+class UnaryBetween(_UnaryOp, _Bounds):
+    """`min <= x <= max`, closed at both ends; either bound may be left out."""
+
+    op: t.Literal["between"] = "between"
 
 
 class UnaryIsIn(_UnaryOp):
@@ -152,27 +169,15 @@ class UnaryIsIn(_UnaryOp):
     op: t.Literal["isin"] = "isin"
     values: Values
 
-    @model_validator(mode="after")
-    def _non_empty(self) -> UnaryIsIn:
-        if isinstance(self.values, list) and not self.values:
-            raise ValueError("values list must contain at least one element")
-        return self
-
 
 class UnaryStringMatch(_UnaryOp):
     """`x` matches any of `patterns`."""
 
     op: t.Literal["string_match"] = "string_match"
-    patterns: t.List[Pattern]
+    patterns: Patterns
     match_type: StringMatchType = StringMatchType.exact
     case_sensitive: bool = True
     trim_whitespace: bool = False
-
-    @model_validator(mode="after")
-    def _non_empty(self) -> UnaryStringMatch:
-        if not self.patterns:
-            raise ValueError("patterns list must contain at least one pattern")
-        return self
 
 
 class UnaryIsTrue(_UnaryOp):
@@ -192,27 +197,12 @@ TUnaryOp = t.Annotated[
 ]
 
 
-class RangeCondition(SchemaModel):
+class RangeCondition(_Bounds):
     """One band of a `CasesRanges`; which end is closed is the node's `end_logic`."""
-
-    min: t.Optional[Threshold] = None
-    max: t.Optional[Threshold] = None
-
-    @model_validator(mode="after")
-    def _bounds(self) -> RangeCondition:
-        if self.min is None and self.max is None:
-            raise ValueError("At least one of min or max must be specified")
-        return self
 
 
 class StringMatchCondition(SchemaModel):
-    patterns: t.List[Pattern]
-
-    @model_validator(mode="after")
-    def _non_empty(self) -> StringMatchCondition:
-        if not self.patterns:
-            raise ValueError("patterns list must contain at least one pattern")
-        return self
+    patterns: Patterns
 
 
 class IsInCondition(SchemaModel):
@@ -220,19 +210,11 @@ class IsInCondition(SchemaModel):
 
 
 def _condition_tag(value: t.Any) -> str:
-    kind = value.get("type") if isinstance(value, dict) else getattr(value, "type", None)
-    return kind or "unary"
-
-
-def check_logic(op: LogicOp, conditions: list) -> None:
-    if op == LogicOp.NOT and len(conditions) != 1:
-        raise ValueError("NOT operator must have exactly 1 condition")
-    if not conditions:
-        raise ValueError("a composite needs at least one condition")
+    return get_field(value, "type") or "unary"
 
 
 class CompositeCondition(SchemaModel):
-    """AND/OR/NOT over nested conditions."""
+    """AND/OR/NOT over nested conditions. As a tree node, branch 0 is taken when it holds, branch 1 otherwise."""
 
     type: t.Literal["composite"] = "composite"
     id: t.Optional[str] = None
@@ -241,7 +223,10 @@ class CompositeCondition(SchemaModel):
 
     @model_validator(mode="after")
     def _logic(self) -> CompositeCondition:
-        check_logic(self.op, self.conditions)
+        if self.op == LogicOp.NOT and len(self.conditions) != 1:
+            raise ValueError("NOT operator must have exactly 1 condition")
+        if not self.conditions:
+            raise ValueError("a composite needs at least one condition")
         return self
 
 
