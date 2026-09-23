@@ -34,6 +34,27 @@ from numba import njit
 
 import decider2
 import decider2._arrow as arrow
+
+# The compiled shim is REQUIRED at runtime -- decider2 has no pure-Python path
+# for it, by design. But importing it at collection time makes the whole suite
+# unrunnable on a box without a C toolchain: the ImportError aborts collection
+# and the other 563 tests never run. So this module skips when the extension is
+# genuinely absent, and CI sets DECIDER2_REQUIRE_SHIM=1 so that a build which
+# silently failed to produce the .so fails the run instead of quietly skipping.
+# Skipping a test module is not a runtime fallback; nothing here weakens the
+# "no fallback" decision.
+if arrow.diagnose()["shim"] != "loaded":
+    if os.environ.get("DECIDER2_REQUIRE_SHIM"):
+        raise RuntimeError(
+            "DECIDER2_REQUIRE_SHIM is set but the compiled shim is not loaded:\n"
+            + json.dumps(arrow.diagnose(), indent=1)
+        )
+    pytest.skip(
+        "decider2._arrow._nashim is not built here (no C toolchain or headers); "
+        "set DECIDER2_REQUIRE_SHIM=1 to make this an error instead",
+        allow_module_level=True,
+    )
+
 from decider2._arrow import (
     GATHER_ADDR,
     GET_STRING_ADDR,
