@@ -1202,11 +1202,12 @@ pipeline = (
 ### 8.2 Branch
 
 > **BUILT (2026-09-21), with a real scope cut.** `Branch` exists in
-> `decider2.graph.control_flow` and is exported from `decider2`. It compiles
-> to REAL inline source — an actual `if`/`elif` in the generated function,
-> njit'd through the exact same `decider2.compile.driver` path every other
-> step is — not a per-row delegate, which is what makes the "only the taken
-> arm executes in compiled machine code" claim below literally true. The
+> `decider2.graph.control_flow` and is exported from `decider2`. **No source
+> is generated** (2026-09-22): a Branch is a *data program* — an int32 opcode
+> array — walked by one shared `@njit` kernel, with each arm reached through a
+> typed adapter closure. It is not a per-row delegate, which is what makes the
+> "only the taken arm executes in compiled machine code" claim below literally
+> true; measured at 412 ns/row against 440 for the source-generating build. The
 > cut: **each arm, and the condition, must be exactly one step** in this
 > build (every example on this page already is). A multi-step arm is a
 > real, reported gap, not a spec requirement — see the implementing agent's
@@ -1262,17 +1263,19 @@ evaluate every arm and select.
 
 > **BUILT (2026-09-21), with a real, load-bearing scope cut.** `Loop`
 > exists in `decider2.graph.control_flow` and is exported from `decider2`.
-> It compiles to a REAL `while`/`break` in the generated, njit'd source —
-> checked before every iteration, so an early exit at iteration 3 genuinely
-> stops at iteration 3 in compiled code, which is doc 08's own polars-port
-> regression this section warns about, undone. `name=` is required, same
+> **No source is generated** (2026-09-22): the loop is `CMP_LIT`/`COND`/`INCR`
+> nodes in an int32 opcode array, walked by one shared `@njit` kernel. The
+> early exit is real and in compiled code — `should_continue` is checked before
+> every iteration, so stopping at iteration 3 genuinely stops there, which is
+> doc 08's own polars-port regression this section warns about, undone.
+> `name=` is required, same
 > reason as `Branch`. **The worked example immediately below carries TWO
 > names, and this build could not support that safely — it supports
-> exactly one `carries` name.** Every carry becomes its own generated step
+> exactly one `carries` name.** Every carry becomes its own step
 > (so a per-step-array-materialising execution mode never has to hold more
 > than one carry's own scalar type), and `should_continue` runs every
 > iteration regardless of which carry is the current target, so with 2+
-> carries EVERY carry's own generated step ends up needing every OTHER
+> carries EVERY carry's own step ends up needing every OTHER
 > carry's pre-loop value too — which `decider2.graph.interface` correctly
 > sees as an unbreakable same-module dependency cycle and refuses at build
 > time. A version that only ran the steps one target's own computation

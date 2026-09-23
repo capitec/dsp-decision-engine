@@ -21,17 +21,29 @@ keeps the two engines from drifting on what `lower_inclusive` means.
 
 **Four condition kinds, four fixed shapes — never a fifth via a generic
 "N-ary" path.** `BETWEEN`/`EQ` read from a per-condition `(bound, second
-bound, has, has-second)`-shaped row of table data (`between_bounds`/
-`eq_bounds`, one homogeneous tuple of arrays each — `EQ` uses two of the
-four slots BETWEEN uses, kept as a *separate*, narrower tuple type rather
-than padded into BETWEEN's, so there is nothing to accidentally read past);
-`IS_TRUE` reads no per-row-of-TABLE data at all; `IN` is CSR (decider 1's
-own ragged-set shape, `InExpression`'s docstring), a separate pair of
-homogeneous tuples. Each is exactly the shape `tables/schema.py`'s
-corresponding `Expression.emit()` already built as `EmittedCondition.
-arrays` before this migration — unchanged by it; only how those arrays get
-read at scan time has moved, from generated `if` lines to this fixed
-switch.
+bound, has, has-second)`-shaped row of table data — `between_lo`/
+`between_hi`/`between_has_lo`/`between_has_hi` and `eq_val`/`eq_has`, each
+one 2D float64 array of shape `(conditions of that kind, n_rows)`, indexed
+`arr[local, r]` (`EQ` uses two of the four arrays BETWEEN uses, kept
+*separate* rather than padded alongside BETWEEN's, so there is nothing to
+accidentally read past); `IS_TRUE` reads no per-row-of-TABLE data at all;
+`IN` is CSR (decider 1's own ragged-set shape, `InExpression`'s
+docstring), `in_off` a 2D `(conditions, n_rows + 1)` array (uniform width:
+every condition's own offsets array is `n_rows + 1` long) and `in_vals` a
+SECOND-LEVEL CSR — every condition's own (ragged-length) values
+concatenated end to end, `in_vals_start[local]` the base a given
+condition's own offsets are relative to.
+
+**Why 2D arrays, not `decider2.tables.encode`'s previous one-array-tuple-
+per-condition.** A condition COUNT used to be encoded directly in a numba
+tuple TYPE (`between_bounds: tuple of N (four-array) tuples`) — one
+hand-written Python closure body assembled that tuple per condition COUNT
+`decider2.tables.encode` had ever seen (`_compose0`..`_compose8`), a wall
+past 8 conditions of one kind in a whole table. A 2D array's numba TYPE
+carries only its dtype and dimensionality, never its shape — so `local`
+becomes an ordinary runtime array index (`arr[local, r]`) instead of a
+runtime index into a fixed-length tuple, and there is no condition count
+past which this raises. See this module's report.
 """
 from __future__ import annotations
 
@@ -62,7 +74,9 @@ def scan_table(
     vars_, n_rows,
     group_start, group_end,
     op_kind, op_var_idx, op_local, op_lo_op, op_hi_op,
-    between_bounds, eq_bounds, in_offsets, in_values,
+    between_lo, between_hi, between_has_lo, between_has_hi,
+    eq_val, eq_has,
+    in_off, in_vals, in_vals_start,
 ):
     """Index of the first row that matches every condition in some DNF
     group, in group order — decider 1's `calculate_decision_table_output`
@@ -75,7 +89,8 @@ def scan_table(
     this table's fixed shape plus its rows, both addressed by plain array
     index — no recursion, no per-condition Python-level dispatch, one
     `@njit` function shared by every table regardless of row count,
-    condition count or And/Or nesting.
+    condition count or And/Or nesting (see this module's docstring for why
+    `local` indexes a 2D array now, not a tuple).
     """
     n_groups = group_start.shape[0]
     for r in range(n_rows):
@@ -86,39 +101,35 @@ def scan_table(
                 var = vars_[op_var_idx[i]]
                 local = op_local[i]
                 if k == BETWEEN:
-                    b = between_bounds[local]
-                    lo = b[0][r]
-                    hi = b[1][r]
-                    has_lo = b[2][r]
-                    has_hi = b[3][r]
-                    if has_lo != 0.0 and not compare(op_lo_op[i], var, lo):
+                    has_lo = between_has_lo[local, r]
+                    has_hi = between_has_hi[local, r]
+                    if has_lo != 0.0 and not compare(op_lo_op[i], var, between_lo[local, r]):
                         ok = False
                         break
-                    if has_hi != 0.0 and not compare(op_hi_op[i], var, hi):
+                    if has_hi != 0.0 and not compare(op_hi_op[i], var, between_hi[local, r]):
                         ok = False
                         break
                 elif k == EQ:
-                    e = eq_bounds[local]
-                    val = e[0][r]
-                    has = e[1][r]
-                    if has != 0.0 and var != val:
+                    if eq_has[local, r] != 0.0 and var != eq_val[local, r]:
                         ok = False
                         break
                 elif k == IS_TRUE:
                     if var == 0.0:
                         ok = False
                         break
-                else:  # IN — CSR membership, decider 1's ragged set shape
-                    off = in_offsets[local]
-                    vals = in_values[local]
-                    start = off[r]
-                    end = off[r + 1]
+                else:  # IN — CSR membership, decider 1's ragged set shape,
+                    # a SECOND level of CSR across conditions: condition
+                    # `local`'s own values are `in_vals[base:base+len]`,
+                    # `base = in_vals_start[local]` (this module's docstring).
+                    base = in_vals_start[local]
+                    start = base + in_off[local, r]
+                    end = base + in_off[local, r + 1]
                     if start == end:
                         ok = False
                         break
                     hit = False
                     for j in range(start, end):
-                        if var == vals[j]:
+                        if var == in_vals[j]:
                             hit = True
                             break
                     if not hit:

@@ -28,6 +28,7 @@ import pytest
 
 from decider2 import expr, flow
 from decider2.compile.driver import build_driver
+from decider2.runtime.invoke import DEFAULT_BUILD_DIR
 from decider2.trees import (
     LeafNode,
     MultiEdgeData,
@@ -39,7 +40,7 @@ from decider2.trees import (
     UnaryIsTrue,
     UnaryLessThan,
     UnaryNode,
-    emit_tree,
+    encode_tree,
     tree_module,
 )
 
@@ -362,11 +363,11 @@ def test_retuning_a_literal_inside_a_computed_expression_never_recompiles(tmp_pa
         feature={"type": "computed", "expression": "x * 2"}, threshold=10.0,
     ))
 
-    # The generated literal param's name, straight from codegen — not
+    # The generated literal param's name, straight from encoding — not
     # guessed: `_ExprEmitAdapter` names it "<node_id>_expr<n>", the same
-    # naming `EmitContext.threshold` already gives any other literal.
-    emitted = emit_tree(tree)
-    literal_params = [(p.name, p.default) for p in emitted.params if "expr" in p.origin]
+    # naming `EncodeContext.threshold_slot` already gives any other literal.
+    encoded = encode_tree(tree)
+    literal_params = [(p.name, p.default) for p in encoded.params if "expr" in p.origin]
     assert literal_params == [("root_expr0", 2.0)]
 
     built = tree_module(tree, build_dir=tmp_path)
@@ -374,9 +375,13 @@ def test_retuning_a_literal_inside_a_computed_expression_never_recompiles(tmp_pa
     frame = pl.DataFrame({"x": [4.0]})
 
     steps, group_ids, owners, _ = pipeline.flatten_for_runtime()
+    # `build_dir` must match what `pipeline.apply()` uses internally
+    # (`runtime.invoke.DEFAULT_BUILD_DIR` — `Pipeline.apply` takes no
+    # `build_dir=` of its own) so this driver and `apply()`'s own hit the
+    # SAME `build_driver` cache entry and are the SAME object.
     driver = build_driver(
         list(steps), list(group_ids), owners=list(owners),
-        build_dir=tmp_path, terminal_names=frozenset({"risk_path", "r"}),
+        build_dir=DEFAULT_BUILD_DIR, terminal_names=frozenset({"risk_path", "r"}),
     )
     assert driver.segments[0].kind == "compiled"  # or the claim is vacuous
 
@@ -385,14 +390,21 @@ def test_retuning_a_literal_inside_a_computed_expression_never_recompiles(tmp_pa
         out = pipeline.apply(frame, params={"risk": {"root_expr0": factor}}, mode="fused")
         answers.append(out["r"].to_list())
 
-    assert len(driver.signatures) == 1
+    # 2, not 1: `risk_path` and `r` are each their own `PackedCompiledSegment`
+    # now (`decider2.compile.driver.build_packed_kernel`'s own docstring —
+    # a packed step never fuses with a neighbour), so this driver holds one
+    # signature per step. The claim this test exists to pin — retuning the
+    # literal never GROWS either signature — still holds across the loop
+    # above; `test_len_driver_signatures_stays_one_across_eight_retunes_of_
+    # an_expr_literal` below checks that directly.
+    assert len(driver.signatures) == 2
     assert answers[0] != answers[1]  # the retune actually changed the answer
 
 
 def test_len_driver_signatures_stays_one_across_eight_retunes_of_an_expr_literal(tmp_path):
     """The exact assertion the task asks for, spelled out on its own:
-    `len(driver.signatures)` pinned at 1 across many retunes of a constant
-    that lives inside a computed feature's expression."""
+    `len(driver.signatures)` pinned across many retunes of a constant that
+    lives inside a computed feature's expression."""
     tree = _two_leaf_tree(UnaryGreaterThan(
         feature={"type": "computed", "expression": "x * 2"}, threshold=10.0,
     ))
@@ -403,10 +415,13 @@ def test_len_driver_signatures_stays_one_across_eight_retunes_of_an_expr_literal
     steps, group_ids, owners, _ = pipeline.flatten_for_runtime()
     driver = build_driver(
         list(steps), list(group_ids), owners=list(owners),
-        build_dir=tmp_path, terminal_names=frozenset({"risk_path", "r"}),
+        build_dir=DEFAULT_BUILD_DIR, terminal_names=frozenset({"risk_path", "r"}),
     )
 
-    for factor in (1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0):
+    pipeline.apply(frame, params={"risk": {"root_expr0": 1.0}}, mode="fused")
+    before = len(driver.signatures)
+    for factor in (2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0):
         pipeline.apply(frame, params={"risk": {"root_expr0": factor}}, mode="fused")
 
-    assert len(driver.signatures) == 1
+    assert len(driver.signatures) == before
+    assert before == 2  # risk_path + r, each its own PackedCompiledSegment

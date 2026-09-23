@@ -53,9 +53,21 @@ class Dispatcher:
     # --- SageMaker convention (doc 02 §3.6) ---------------------------------
 
     def ping(self, _body: Any = None) -> tuple[int, dict]:
-        """200 iff the model is loaded and ready. Reaching this code at all
-        already proves that (the pipeline is compiled/compilable, the
-        handle exists), so there is nothing further to check."""
+        """200 iff the model is loaded AND warm — `handle.is_warm`
+        (`ServeHandle.warm()`, doc 05 §8's revised guarantee). Reaching
+        this code used to be treated as proof enough (the pipeline is
+        compiled/compilable, the handle exists) — it is not: numba compiles
+        a kernel lazily, on its own first real call, unless something
+        already forced it. `serving/app.py`'s `app()` calls `handle.warm()`
+        before ever returning an app a server can bind and accept
+        connections on, so in the ordinary path this is already `True` by
+        the time anything can reach `/ping` at all; this check exists for a
+        caller that built the app with `warm=False` or is racing warm-up
+        some other way — 503, not 200, until it finishes, so a request
+        never lands on the first-real-call compile `precompile()` exists to
+        avoid."""
+        if not self.handle.is_warm:
+            return 503, {"status": "warming up"}
         return 200, {"status": "ok"}
 
     def invocations(self, record: dict) -> tuple[int, dict]:
