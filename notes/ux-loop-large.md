@@ -17,6 +17,7 @@ goal isn't visibly met caps at 5). The loop stops above 8/10 or after 40 rounds.
 | 7 | 7.4 | 8 | 8 | 8 | 7 | 6 | 8 | 7 |
 | 8 | 7.4 | 8 | 8 | 7 | 8 | 6 | 8 | 7 |
 | 9 | 7.4 | 8 | 8 | 7 | 8 | 7 | 8 | 6 |
+| 10 | 7.6 | 8 | 8 | 7 | 8 | 7 | 8 | 7 |
 
 ## Round 0 (baseline)
 
@@ -259,3 +260,26 @@ Judge's problems, most damaging first:
 10. The file column says "PARAMS", not the file.
 11. Changed records truncated at 3 with "(and 1 more)".
 12. L4: the floor is tagged "changed" though it only passed its input through.
+
+## Round 10
+
+Changes: the step list no longer hides steps when the focused record is unchanged (the round 9 contradiction); the
+panel keeps one width on every tab; the rate breakdown shows a sum as a waterfall (each part, its value, and for a
+lookup table the row that matched), with the summary in words; "* 1" drops out of filled formulas; a two-knob sweep
+is a grid, one metric at a time, with ▲▼ instead of red/green; the banner's edits sit behind one chip; "and N more"
+in the step list expands.
+
+Judge's problems, most damaging first:
+
+1. L7: the edits menu overflows the panel sideways and stays open over the report.
+2. The graph shows 3-4 nodes; the editor beside it holds an irrelevant file.
+3. L3: the breakdown is cramped; its +/− read as expand toggles.
+4. L3: the matched row is below the fold; the find box keeps a stale query.
+5. L7: Skip is hidden in "Change the run".
+6. L5: nothing says the cap made no difference; the hint's example doesn't match the metric.
+7. L4: the floor is badged "changed" though it only passed its input through.
+8. L7: a step about to re-run still shows its ✓; the edited cap's result doesn't say whether it bound.
+9. Compare headers: which side is the baseline; process chatter above the answer.
+10. L1: the opened rule is cut off in the narrow editor.
+11. L5: knob hints out of order; "(cap)" jargon; money unformatted.
+12. L6: "PARAMS" instead of params.json; duplicate "in its code"; "working tree" means little to an analyst.

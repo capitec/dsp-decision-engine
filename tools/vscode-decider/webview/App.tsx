@@ -53,8 +53,6 @@ export function App() {
   const [opened, setOpened] = useState<Set<string>>(new Set());
   // Said while a run is starting or re-running, until the next status arrives.
   const [pending, setPending] = useState<string>();
-  // The graph sits beside the code; the other tabs are wide tables and get more of the window.
-  useEffect(() => send({ type: "layout", wide: tab !== "graph" }), [tab]);
   // What the last skip or swap did, said in the pause banner until the run moves on.
   const [note, setNote] = useState<string>();
   const noteNext = useRef<string | undefined>(undefined);
@@ -256,22 +254,29 @@ export function App() {
           ⏸ Paused {run.current.when} <strong>{run.current.path.split("/").pop() || "the start"}</strong>
           {run.record !== null && <span> · focused on {recordLabel(run.record, keyCol)}</span>}
           {edits.length > 0 && (
-            <span className="edit-list">
+            <>
               {" · "}
-              {edits.map(([p, a]) => (
-                <span key={p} className="edit-chip">
-                  {editLabel([p, a])}
-                  {edits.length > 1 && (
-                    <button className="link" title="Compare the flow as started with only this edit" onClick={() => compareEdits(p)}>
-                      compare
-                    </button>
-                  )}
-                </span>
-              ))}
+              <span className="edit-dropdown">
+                <button className="link" aria-expanded={editsOpen} title="The steps skipped or swapped in this run" onClick={() => setEditsOpen(!editsOpen)}>
+                  {edits.length} edit{edits.length === 1 ? "" : "s"} {editsOpen ? "▴" : "▾"}
+                </button>
+                {editsOpen && (
+                  <span className="edit-menu-pop">
+                    {edits.map(([p, a]) => (
+                      <div key={p}>
+                        {editLabel([p, a])}{" "}
+                        {edits.length > 1 && (
+                          <button className="link" title="Compare the flow as started with only this edit" onClick={() => compareEdits(p)}>compare this one</button>
+                        )}
+                      </div>
+                    ))}
+                  </span>
+                )}
+              </span>{" "}
               <button className="banner-button" title="Run the flow as started and as edited, start to end, and compare every result" onClick={() => compareEdits()}>
-                {edits.length > 1 ? "Compare all edits with the flow as started" : "Compare with the flow as started"}
+                {edits.length > 1 ? "Compare all edits" : "Compare with the flow as started"}
               </button>
-            </span>
+            </>
           )}
           {note && <div className="banner-note">{note}</div>}
 

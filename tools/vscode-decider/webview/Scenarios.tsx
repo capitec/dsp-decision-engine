@@ -263,11 +263,12 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
     const ds = changedRows.map((r) => (sweep.outputs[i]?.[c]?.[r] as number) - (sweep.base?.[c]?.[r] as number)).filter((d) => !Number.isNaN(d));
     return ds.length ? ds.reduce((t, x) => t + x, 0) / ds.length : 0;
   };
+  const [metric, setMetric] = useState<string>();
   const delta = (c: string, i: number, changedRows: number[]) => {
     const d = avgDelta(c, i, changedRows);
     if (!d) return "";
     const size = isRateName(c) && Math.abs(d) < 1 ? `${Number((Math.abs(d) * 100).toFixed(2))} pp` : formatValue(Math.abs(d), c);
-    return `${d > 0 ? "+" : "−"}${size}`;
+    return `${d > 0 ? "▲ +" : "▼ −"}${size}`;
   };
   // A scenario whose knobs equal the original run's: it is the setting in force now.
   const isCurrent = (i: number) => knobCols.every((k) => k.name === "scenario" || (sweep.knobBase[k.name] ?? []).every((v) => same(v, k.values[i])));
@@ -313,6 +314,63 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
       </td>
     );
   };
+  // With exactly two knobs, a grid: one knob down, the other across, one result in each cell.
+  const grid = summary && knobCols.length === 2 && knobCols.every((k) => k.name !== "scenario");
+  // Offers first: they are what a sweep of rates and caps is usually about.
+  const numericCols = cols.filter((c) => !categorical(sweep.base?.[c]));
+  const shownMetric = metric && cols.includes(metric) ? metric : numericCols.find((c) => /offer/.test(c)) ?? numericCols[0] ?? cols[0];
+  const uniq = (vs: unknown[]) => vs.filter((v, i) => vs.findIndex((w) => same(v, w)) === i);
+  const cellText = (i: number, c: string) => {
+    const diff = sweep.comparisons[i].output.find((o) => o.name === c);
+    if (!diff) return "no change";
+    return categorical(sweep.base?.[c]) ? overall(sweep.outputs[i]?.[c], sweep.base?.[c]) : `${delta(c, i, diff.changedRows)} (${diff.changedRows.length} rec.)`;
+  };
+  const matrix = grid && (
+    <div className="sweep-scroll">
+      <div className="summary">
+        <span>Showing</span>
+        <select aria-label="grid metric" value={shownMetric} onChange={(e) => setMetric(e.target.value)}>
+          {cols.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+        <span className="muted small">original run: {overall(sweep.base?.[shownMetric], undefined, shownMetric)}</span>
+      </div>
+      <table className="sweep grid">
+        <thead>
+          <tr>
+            <th>{knobShort(knobCols[0].name)} ↓ · {knobShort(knobCols[1].name)} →</th>
+            {uniq(knobCols[1].values).map((v, j) => (
+              <th key={j} className="mono">{formatValue(v, knobShort(knobCols[1].name))}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {uniq(knobCols[0].values).map((a, r) => (
+            <tr key={r}>
+              <th className="mono">{formatValue(a, knobShort(knobCols[0].name))}</th>
+              {uniq(knobCols[1].values).map((b, j) => {
+                const i = sweep.labels.findIndex((_, k) => same(knobCols[0].values[k], a) && same(knobCols[1].values[k], b));
+                return i < 0 ? (
+                  <td key={j} />
+                ) : (
+                  <td key={j} className={`mono clickable ${open === i ? "open" : ""} ${cellText(i, shownMetric) === "no change" ? "unchanged" : "changed"}`} title="See what changed, step by step" onClick={() => onOpen(i)}>
+                    {cellText(i, shownMetric)}
+                    {isCurrent(i) && <div className="current-tag">current</div>}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {outcomes.map((c) => (
+        <div key={c} className="muted small">
+          <span className="mono">{c}</span> is the same in every scenario: {overall(sweep.base?.[c])}.
+        </div>
+      ))}
+    </div>
+  );
   return (
     <section>
       <div className="summary">
@@ -326,10 +384,12 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
         </select>
       </div>
       <p className="hint">
-        One row per scenario; click one to see what changed, step by step.{summary ? " “−R 5,303.95 (3 rec.)” means 3 records changed, by −R 5,303.95 on average." : ""}
+        {grid ? "One cell per combination; click one to see what changed, step by step." : "One row per scenario; click one to see what changed, step by step."}{summary ? " “−R 5,303.95 (3 rec.)” means 3 records changed, by −R 5,303.95 on average." : ""}
       </p>
       {cols.length === 0 ? (
         <div className="muted">No scenario changes any result.</div>
+      ) : grid ? (
+        matrix
       ) : (
         <div className="sweep-scroll">
         <table className="sweep">

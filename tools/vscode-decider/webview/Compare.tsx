@@ -22,11 +22,14 @@ interface Props {
 }
 
 function Diffs({ diffs, record, keyCol, results }: { diffs: ValueDiff[]; record: number | null; keyCol: RecordKey; results?: Comparison["results"] }) {
+  const [all, setAll] = useState(false);
+  // The first few records of each output are sampled; "and N more" fills in the rest from the final results.
+  const rowsOf = (d: ValueDiff) => (all && results ? d.changedRows.map((row) => d.samples.find((s) => s.row === row) ?? { row, a: results.a[d.name]?.[row], b: results.b[d.name]?.[row] }) : d.samples);
   return (
     <table className="vdiffs">
       <tbody>
         {diffs.flatMap((d) =>
-          d.samples.map((s, i) => (
+          rowsOf(d).map((s, i) => (
             <tr key={`${d.name}-${s.row}`} className={record === s.row ? "hit" : ""}>
               <td className="mono">{i === 0 ? d.name : ""}</td>
               <td className="nowrap">{recordLabel(s.row, keyCol)}:</td>
@@ -35,7 +38,9 @@ function Diffs({ diffs, record, keyCol, results }: { diffs: ValueDiff[]; record:
                 {results && d.name in results.b && !(same(results.a[d.name]?.[s.row], s.a) && same(results.b[d.name]?.[s.row], s.b)) && (
                   <span> · final <strong className="mono">{formatValue(results.b[d.name]?.[s.row], d.name)}</strong> <span className="muted">(was {formatValue(results.a[d.name]?.[s.row], d.name)})</span></span>
                 )}
-                {i === d.samples.length - 1 && d.changedRows.length > d.samples.length && <span className="muted"> (and {d.changedRows.length - d.samples.length} more)</span>}
+                {!all && i === d.samples.length - 1 && d.changedRows.length > d.samples.length && (
+                  <a className="small" onClick={() => setAll(true)}> and {d.changedRows.length - d.samples.length} more</a>
+                )}
               </td>
             </tr>
           )),
@@ -59,10 +64,11 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
         <div className="actions">{revisionButton}</div>
       </div>
     );
+  const focusChanged = record !== null && c.steps.some((s) => s.outputs.some((o) => o.changedRows.includes(record)));
   const steps = c.steps.filter((s) => {
     if (!onlyChanges) return true;
     if (s.status === "same" || s.status === "not run") return false;
-    return record === null || s.status !== "changed" || s.structural.length > 0 || s.outputs.some((o) => o.changedRows.includes(record));
+    return !focusChanged || s.status !== "changed" || s.structural.length > 0 || s.outputs.some((o) => o.changedRows.includes(record!));
   });
   const count = (st: string) => c.steps.filter((s) => s.status === st).length;
   // A step is "edited" when its code or params differ; otherwise it only moved because its inputs did.

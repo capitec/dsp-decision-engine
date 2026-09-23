@@ -129,8 +129,9 @@ describe("large flow stories", () => {
         await wv(c).locator(".chip", { hasText: "pl_rate" }).first().click({ timeout: 10_000 });
         await wv(c).locator(".how .formula").first().waitFor({ timeout: 20_000 });
         await shot("Ran to pl_monthly_rate, focused client_id 20400 and clicked its pl_rate input: how the rate was computed.");
-        await wv(c).locator("ul.explain a.mono", { hasText: /^pl_base_rate$/ }).first().click({ timeout: 10_000 });
-        await shot("Opened pl_base_rate in the breakdown: which table row it came from.");
+        await wv(c).locator("table.waterfall a", { hasText: /^pl_base_rate$/ }).first().click({ timeout: 10_000 });
+        await wv(c).locator(".table-match").waitFor({ timeout: 20_000 }).catch(() => undefined);
+        await shot("Clicked pl_base_rate in the breakdown: its lookup table step, with the row client_id 20400 matched.");
         await find(c, "pl_base_rates");
         await wv(c).locator(".table-match").waitFor({ timeout: 20_000 }).catch(() => undefined);
         await shot("Selected the pl_base_rates lookup table step: which row matched for client_id 20400.");
@@ -197,7 +198,7 @@ describe("large flow stories", () => {
         await wv(c).locator(".pause-banner:not(.pending)").waitFor({ timeout: 60_000 });
         await find(c, "pl_rate_floor");
         await shot("After 'Skip pl_rate_floor': the run re-ran from there without it.");
-        await wv(c).locator(".pause-banner button", { hasText: "Compare with the flow as started" }).click();
+        await wv(c).locator(".pause-banner button.banner-button").click();
         await wv(c).locator(".compare .verdict").waitFor({ timeout: 120_000 });
         await shot("Clicked 'Compare with the flow as started' in the pause banner.");
         await tab(c, "Graph");
@@ -211,10 +212,11 @@ describe("large flow stories", () => {
         await wv(c).locator(".pause-banner:not(.pending)").waitFor({ timeout: 60_000 }).catch(() => undefined);
         await wv(c).locator("select[aria-label=record]").selectOption({ label: "client_id 20400" }).catch(() => undefined);
         await shot("After 'Run through pl_regulated_rate' with client_id 20400 focused.");
-        await wv(c).locator(".edit-chip", { hasText: "pl_regulated_rate" }).locator("button", { hasText: "compare" }).click();
+        await wv(c).locator(".pause-banner button[aria-expanded]").click();
+        await wv(c).locator(".edit-menu-pop div", { hasText: "pl_regulated_rate" }).locator("button", { hasText: "compare" }).click();
         await wv(c).locator(".compare .compare-title", { hasText: "pl_regulated_rate edited" }).waitFor({ timeout: 120_000 });
         await shot("Clicked 'compare' on the pl_regulated_rate edit alone: the tighter cap on its own.");
-        await wv(c).locator(".pause-banner button", { hasText: "Compare all edits" }).click();
+        await wv(c).locator(".pause-banner button.banner-button").click();
         await wv(c).locator(".compare .compare-title", { hasText: "skipped" }).waitFor({ timeout: 120_000 });
         await shot("Clicked 'Compare all edits with the flow as started': the skipped floor and the tighter cap together.");
       },
