@@ -51,3 +51,30 @@ than validating it:
 `decider2/docs/05-boundary-and-compilation.md` (§3.1b);
 `experimentation/n2-calling-convention/`; `experimentation/params-validation-n3/`;
 `experimentation/single-record-overhead/`
+
+**The frame boundary** (a one-row `run(df)`, and batches). Fused mode,
+`benchmarks/modes_vs_decider2.py` flagship and `trees_vs_decider2.py` trees,
+before and after the column-at-a-time boundary (see `arrow-shim-build.md`);
+20k `score` calls, 5k one-row runs (median), 100k and 1M rows (median of
+15 and 7). Dev box under load average ~10 with swap full, so p99 and 1M
+times move ±50% between runs; `score` doesn't touch the boundary, and nine
+alternating before/after runs put tree `score` p50 at 59 against 61 µs.
+
+| pipeline | engine | score p50 | score p99 | run 1 row | run 100k | run 1M |
+|---|---|---|---|---|---|---|
+| flagship | decider2 | 26.6 µs | 42.3 µs | 851 µs | 12.1 ms | 231 ms |
+| flagship | decider before | 32.2 µs | 94.6 µs | 225 µs | 5.8 ms | 231 ms |
+| flagship | decider after | 29.0 µs | 36.1 µs | 122 µs | 0.73 ms | 5.7 ms |
+| tree | decider2 | 215 µs | 391 µs | 3388 µs | 45.3 ms | 1216 ms |
+| tree | decider before | 60 µs | 148 µs | 480 µs | 38.5 ms | 1140 ms |
+| tree | decider after | 66 µs | 257 µs | 239 µs | 22.6 ms | 227 ms |
+| string-gated tree | decider2 | 259 µs | 556 µs | 3493 µs | 45.3 ms | 1018 ms |
+| string-gated tree | decider before | 106 µs | 217 µs | 531 µs | 51.6 ms | 944 ms |
+| string-gated tree | decider after | 104 µs | 271 µs | 292 µs | 32.4 ms | 360 ms |
+
+Where a one-row flagship run went, before: `State.from_frame` 105 µs (the
+Arrow import and release ~30 µs as six ctypes calls, the numba gather loop
+~8 µs, a frozen dataclass per column, `frame.columns` rebuilt per input),
+the output frame 33 µs (`pl.DataFrame` of every column rather than
+`hstack`). Now `from_frame` is about 60 µs, of which the polars export
+itself (`get_schema` + `get_next`) is ~10 µs.

@@ -90,30 +90,65 @@ class Session(Edits):
         self._log_params()
 
     def break_at(self, target: Breakpoint) -> None:
-        """Add a breakpoint: a path, a prefix, `path#locator`, or a predicate on each `Checkpoint`."""
+        """Add a breakpoint: a path, a prefix, `path#locator`, or a predicate on each `Checkpoint`.
+
+        Example::
+
+            s.break_at("term/cap_by_income")
+            s.break_at("risk_tree#n17")
+            s.break_at(lambda cp: cp.when == "after" and cp.origin.path.startswith("term/"))
+        """
         self.breakpoints.append(target)
 
     def clear_break(self, target: Breakpoint) -> None:
-        """Remove a breakpoint added with the same target."""
+        """Remove a breakpoint added with the same target.
+
+        Example::
+
+            s.clear_break("term/cap_by_income")
+        """
         self.breakpoints.remove(target)
 
     def step(self) -> Checkpoint | None:
-        """Advance one node: from just before a call, branch or loop, run it and stop just after it."""
+        """Advance one node: from just before a call, branch or loop, run it and stop just after it.
+
+        Example::
+
+            cp = s.step()   # Checkpoint(origin=..., when="after"), or None at the end
+        """
         at = self.current
         if at is not None and at.when == "before" and at.origin.path not in self._sequences:
             return self._go("step", lambda cp: cp.when == "after" and cp.origin == at.origin)
         return self._go("step", lambda cp: True)
 
     def step_into(self) -> Checkpoint | None:
-        """Advance to the very next checkpoint: into a sequence, each taken arm in turn, or the next iteration."""
+        """Advance to the very next checkpoint: into a sequence, each taken arm in turn, or the next iteration.
+
+        Example::
+
+            s.step_into().arm   # the arm a branch is running, when inside one
+        """
         return self._go("step", lambda cp: True)
 
     def resume(self) -> Checkpoint | None:
-        """Run to the next breakpoint, or to the end."""
+        """Run to the next breakpoint, or to the end.
+
+        Example::
+
+            s.break_at("term")
+            s.resume()        # paused before "term"
+            s.resume()        # None: the run finished
+        """
         return self._go("breakpoint", lambda cp: False)
 
     def pause(self) -> None:
-        """Stop at the next checkpoint; safe to call while another thread is inside `resume`."""
+        """Stop at the next checkpoint; safe to call while another thread is inside `resume`.
+
+        Example::
+
+            threading.Thread(target=s.resume).start()
+            s.pause()
+        """
         self._pause = True
 
     def set(self, name: str, value: Any) -> None:
@@ -197,7 +232,13 @@ class Session(Edits):
         return self.state.column(spec, self._targets(spec)[-1])
 
     def output(self) -> pl.DataFrame:
-        """The frame `Executable.run` returns, overrides applied; only once the run has finished."""
+        """The frame `Executable.run` returns, overrides applied; only once the run has finished.
+
+        Example::
+
+            s.resume()
+            s.output()["term_cap"]
+        """
         if not self.finished:
             raise RuntimeError("the run hasn't finished; resume() it first")
         return self.executable.output(self.state)
