@@ -105,6 +105,11 @@ export function App() {
     if (selectedNode?.callKind === "row" && run.record !== null && run.finishedPaths.includes(selectedNode.path)) send({ type: "treePath", path: selectedNode.path });
   }, [selectedNode, run.record, run.finishedPaths]);
 
+  const columnOrder = useMemo(() => {
+    const seen: string[] = [];
+    for (const n of nodes) for (const c of [...(n.inputs ?? []), ...(n.outputs ?? [])]) if (!seen.includes(c)) seen.push(c);
+    return seen;
+  }, [nodes]);
   const lineagePaths = useMemo(() => new Set(lineage ? producers(lineage) : []), [lineage]);
   const inputColumns = useMemo(() => {
     const written = new Set(nodes.flatMap((n) => n.outputs ?? []));
@@ -126,7 +131,7 @@ export function App() {
   };
   const pausedAt = run.current && !run.finished ? `${run.current.when} ${run.current.path || "the start"}` : null;
   const shownTreePath = treePath && run.record === treePath.row ? treePath : null;
-  const withDetails = details && (tab === "graph" || tab === "state");
+  const withDetails = details && tab === "graph";
 
   return (
     <div className="app">
@@ -135,10 +140,11 @@ export function App() {
         <nav>
           {tabButton("graph", "Graph")}
           {tabButton("state", "State")}
-          {tabButton("params", "Params")}
+          {tabButton("params", "What-if")}
           {tabButton("scenarios", sweep.busy ? "Scenarios…" : "Scenarios")}
           {tabButton("compare", compare.busy ? "Compare…" : "Compare")}
         </nav>
+        <button className="icon" title="Maximise the flow panel (again to restore)" onClick={() => send({ type: "maximise" })}>⤢</button>
         {columns && (
           <label title="Show values for one record instead of the whole batch">
             Focus{" "}
@@ -152,7 +158,7 @@ export function App() {
         )}
         {pausedAt && <span className="badge" title="Where the debug run is paused">⏸ {pausedAt}</span>}
       </header>
-      {(tab === "graph" || tab === "state") && (
+      {tab === "graph" && (
         <div className="subbar">
           {tab === "graph" && (
             <label><input type="checkbox" checked={showData} onChange={(e) => setShowData(e.target.checked)} /> all data edges</label>
@@ -160,7 +166,7 @@ export function App() {
           {tab === "graph" && compare.comparison && (
             <label><input type="checkbox" checked={showDiff} onChange={(e) => setShowDiff(e.target.checked)} /> colour by last comparison</label>
           )}
-          <label><input type="checkbox" checked={details} onChange={(e) => setDetails(e.target.checked)} /> details</label>
+          {tab === "graph" && <label><input type="checkbox" checked={details} onChange={(e) => setDetails(e.target.checked)} /> details</label>}
         </div>
       )}
       <main>
@@ -178,7 +184,7 @@ export function App() {
             onOpen={(path) => send({ type: "reveal", path })}
           />
         )}
-        {tab === "state" && <StateTable columns={columns} record={run.record} keyCol={keyCol} selected={selectedNode} onPick={setColumn} picked={column} />}
+        {tab === "state" && <StateTable columns={columns} record={run.record} keyCol={keyCol} selected={selectedNode} order={columnOrder} onPick={setColumn} picked={column} />}
         {tab === "params" && (
           <Params
             schema={describe.params}
@@ -218,6 +224,8 @@ export function App() {
         {withDetails && (
           <NodePanel
             node={selectedNode}
+            nodes={nodes}
+            onClose={() => setDetails(false)}
             run={run}
             columns={columns}
             keyCol={keyCol}

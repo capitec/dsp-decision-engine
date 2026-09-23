@@ -628,3 +628,110 @@ table.vdiffs tr.hit td {
 .params td input {
   width: 90px;
 }
+
+/* round 2 review */
+.node.diff-same {
+  opacity: 1;
+}
+.node.diff-same rect {
+  stroke-dasharray: 2 3;
+}
+.node.selected rect {
+  stroke: var(--vscode-focusBorder);
+  stroke-width: 3;
+}
+.legend {
+  position: sticky;
+  top: 6px;
+  left: 6px;
+  float: left;
+  z-index: 1;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 2px 6px;
+  background: var(--vscode-editorWidget-background);
+  border: 1px solid var(--vscode-panel-border);
+  font-size: 0.9em;
+}
+.legend button,
+button.icon {
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  border: none;
+  cursor: pointer;
+  padding: 1px 6px;
+}
+.swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 2px solid;
+}
+.swatch.changed {
+  border-color: var(--vscode-charts-orange, orange);
+  background: var(--vscode-diffEditor-insertedTextBackground, #9bb95533);
+}
+.swatch.added {
+  border-color: var(--vscode-charts-green, #89d185);
+  border-style: dashed;
+}
+.swatch.same {
+  border-color: var(--vscode-panel-border);
+  border-style: dotted;
+}
+aside {
+  position: relative;
+}
+aside .close {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+}
+.how {
+  margin: 0 0 10px;
+  padding: 6px 8px;
+  background: var(--vscode-editorWidget-background);
+  border-left: 3px solid var(--vscode-charts-orange, orange);
+}
+.how-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.how ul {
+  margin: 4px 0;
+  padding-left: 16px;
+}
+table.results {
+  width: auto;
+}
+table.results td,
+table.results th {
+  white-space: nowrap;
+}
+.changed-cell {
+  background: var(--vscode-diffEditor-insertedTextBackground, #9bb95522);
+}
+.changed-cell .before {
+  color: var(--vscode-gitDecoration-deletedResourceForeground, #c74e39);
+}
+.changed-cell .after {
+  color: var(--vscode-gitDecoration-addedResourceForeground, #81b88b);
+  font-weight: bold;
+}
+.compare h4 {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+details summary {
+  cursor: pointer;
+  margin: 8px 0 4px;
+  font-size: 0.9em;
+  opacity: 0.8;
+}
+
+.hint {
+  margin: 2px 0 6px;
+  opacity: 0.85;
+}

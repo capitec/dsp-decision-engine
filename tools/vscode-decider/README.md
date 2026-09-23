@@ -46,6 +46,19 @@ link that re-runs from that step. With a record focused, a branch's lineage
 follows the arm that record took, and selecting a tree shows that record's path
 through it.
 
+**Scenarios** runs many what-ifs at once. Pick parameters and input fields, and
+give each a list of values to try. Every combination runs next to the original,
+from the paused point (or from the start). The original is the run as it would
+continue unchanged, including any values you already set. A parameter only
+changes steps after the pause; an input field replaces the value there now. The
+results table shows each scenario's knob values and outputs for one record,
+with the change from the original; a row opens that scenario's step-by-step
+comparison. A fork replays the session to the same checkpoint in a fresh
+session, so it can't follow a session that was rewound.
+
+Records are named by their id column (the first column called `id`, `*_id` or
+`id_*`), so views say "client_id 2" rather than "row 1".
+
 **Compare** lines two runs up step by step in execution order: each step's
 status (same, changed, added, removed), what changed in the step itself (code,
 params, reads, writes), which of its outputs differ on which rows, and where
@@ -76,12 +89,16 @@ uv run pytest tools/vscode-decider/python -q   # bridge, lineage, traces on the 
 pnpm test                                      # adapter over stdio (DebugClient), layout, comparisons, git
 pnpm test:vscode                               # extension API inside VSCodium (mocha)
 pnpm test:e2e                                  # Playwright drives VSCodium's UI and takes screenshots
+pnpm test:stories                              # five user stories, captioned screenshots for a review
 ```
 
 `pnpm test:e2e` launches the editor through Playwright's Electron support, with
 no window on the desktop (`E2E_HEADED=1` shows it). It clicks the lenses and
 quick picks, reaches into the webview's frames, and saves a small JPEG per step
-in `test/e2e/shots/`. Those screenshots are how the layout was tuned. Both
+in `test/e2e/shots/`. `pnpm test:stories` runs five user stories, each in a
+fresh editor, and writes `test/e2e/shots/stories/manifest.json`: the story's
+goal and a caption per screenshot. A reviewer (a person, or an agent with no
+other context) scores each story and lists fixes; the UI was iterated this way. Both
 editor runs launch `/usr/share/codium/codium`; set `VSCODE_EXE` for another.
 
 ## Not built yet

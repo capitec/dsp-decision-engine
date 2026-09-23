@@ -22,8 +22,8 @@ describe("graph edges", () => {
   it("order edges follow written order and fan out of a branch condition", () => {
     const edges = orderEdges(ir).map((e) => `${e.from} -> ${e.to}${e.label ? ` (${e.label})` : ""}`);
     expect(edges).toContain("affordability/affordable -> banding");
-    expect(edges).toContain("term/by_sector/is_private -> term/by_sector/cap_private (arm 0)");
-    expect(edges).toContain("term/by_sector/is_private -> term/by_sector/cap_public (arm 1)");
+    expect(edges).toContain("term/by_sector/is_private -> term/by_sector/cap_private (is_private = true)");
+    expect(edges).toContain("term/by_sector/is_private -> term/by_sector/cap_public (is_private = false)");
     expect(edges).toContain("sizing/shrink_offer/too_big -> sizing/shrink_offer/shrink (while)");
     expect(edges).toContain("sizing/shrink_offer/shrink -> sizing/shrink_offer/too_big (repeat)");
     expect(edges).toContain("sizing/shrink_offer/too_big -> risk_tree");

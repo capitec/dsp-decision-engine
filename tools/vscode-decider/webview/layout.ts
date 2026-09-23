@@ -29,7 +29,7 @@ export interface Layout {
   edges: LaidEdge[];
 }
 
-const NODE_W = 170;
+const NODE_W = 210;
 const NODE_H = 44;
 
 /** Which branch arms a node sits in, so alternatives never feed each other. */
@@ -90,7 +90,11 @@ export function orderEdges(ir: IRNodeJson): { from: string; to: string; label?: 
         for (const from of lastLeaves(n.children[i - 1])) edges.push({ from, to: firstLeaf(n.children[i]) });
       }
     } else if (n.kind === "branch") {
-      n.children.slice(1).forEach((arm, i) => edges.push({ from: n.children[0].path, to: firstLeaf(arm), label: `arm ${i}` }));
+      const cond = n.children[0];
+      const out = cond.kind === "call" ? cond.outputs?.[0] ?? "condition" : "condition";
+      const arms = n.children.slice(1);
+      // A bool condition picks arm 0 when true; an int one picks by index.
+      arms.forEach((arm, i) => edges.push({ from: cond.path, to: firstLeaf(arm), label: arms.length === 2 ? `${out} = ${i === 0}` : `${out} = ${i}` }));
     } else if (n.kind === "loop") {
       const [cond, body] = n.children;
       edges.push({ from: cond.path, to: firstLeaf(body), label: "while" });

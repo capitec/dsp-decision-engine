@@ -59,6 +59,8 @@ export function activate(ctx: vscode.ExtensionContext) {
         pipeline,
         data: data === "SAMPLE" ? undefined : data,
         stopOnEntry: true,
+        // The flow panel shows what the console would; keep the editor's height for the code.
+        internalConsoleOptions: "neverOpen",
       });
     }),
 
@@ -171,6 +173,9 @@ async function onWebview(m: FromWebview, describe: DescribeResult) {
     case "runTo":
       await runTo(m.path);
       break;
+    case "maximise":
+      await vscode.commands.executeCommand("workbench.action.toggleMaximizeEditorGroup");
+      break;
     case "openDiff":
       if (lastFiles) {
         const node = findNode(describe, m.path);
@@ -208,7 +213,7 @@ async function runTo(nodePath: string) {
   const s = deciderSession();
   if (s) await s.customRequest("continue", { threadId: 1 });
   else if (shown)
-    await vscode.debug.startDebugging(undefined, { type: "decider", request: "launch", name: `decider: ${shown.pipeline}`, program: shown.file, pipeline: shown.pipeline, stopOnEntry: false });
+    await vscode.debug.startDebugging(undefined, { type: "decider", request: "launch", name: `decider: ${shown.pipeline}`, program: shown.file, pipeline: shown.pipeline, stopOnEntry: false, internalConsoleOptions: "neverOpen" });
 }
 
 async function compare(a: Side, b: Side) {
