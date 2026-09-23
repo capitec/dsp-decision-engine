@@ -102,7 +102,7 @@ def test_a_str_input_arrives_as_dictionary_codes_with_the_exported_dictionary():
     col = ex.columns["s"]
     cats = col.categories
     assert [None if c < 0 else cats[c] for c in col.values.tolist()] == ["public", "private", None, "public", "state"]
-    assert ex.categories == {"s": cats} and len(cats) == 3
+    assert len(cats) == 3
     assert frame.schema["s"] == pl.String                                # the caller's column was not re-typed
 
 

@@ -149,6 +149,6 @@ def test_configs_and_params_from_the_config_store_run_the_same(tmp_path):
         "steps.risk": risk.model_dump(mode="json"), "steps.bands": bands.model_dump(mode="json"), "params": params,
     })
     fresh = JsonFileStore(basepath=str(tmp_path))
-    config = fresh.get_latest().config
+    config = fresh.read(fresh.latest_version()).config
     loaded = pipeline(ConfigurableStep.load(config["steps.risk"]), ConfigurableStep.load(config["steps.bands"]))
     assert_frame_equal(loaded.run(DF, params=config["params"]), expected)

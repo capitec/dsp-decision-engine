@@ -18,7 +18,6 @@ from decider.engine.ir.decls import base_annotation
 from decider.engine.run import Executable
 from decider.steps import ConfigurableStep, Step
 from .format import DEFAULT_OUTPUT_FORMATTERS, Response
-from .media_types import MediaType
 from .parse import DEFAULT_INPUT_HANDLERS
 
 
@@ -88,7 +87,13 @@ class RequestHandler:
         return live.version if live is not None else None
 
     def stage(self, version: str | Version | None = None) -> Version:
-        """Build and warm `version` (default: the store's latest) without serving it."""
+        """Build and warm `version` (default: the store's latest) without serving it.
+
+        Example::
+
+            handler.stage("1.3.0")
+            handler.activate()
+        """
         with self._lock:
             if version is None:
                 version = self.store.latest_version()
@@ -102,7 +107,13 @@ class RequestHandler:
             return versioned.version
 
     def activate(self) -> Version:
-        """Serve the staged version; the one it replaces is kept for `rollback()`."""
+        """Serve the staged version; the one it replaces is kept for `rollback()`.
+
+        Example::
+
+            handler.stage()
+            handler.activate()   # Version(1, 3, 0), now answering requests
+        """
         with self._lock:
             if self._staged is None:
                 raise RuntimeError("nothing staged; call stage() before activate().")
@@ -113,7 +124,12 @@ class RequestHandler:
             return self._active.version
 
     def rollback(self) -> Version:
-        """Serve the previously active version again."""
+        """Serve the previously active version again.
+
+        Example::
+
+            handler.rollback()   # Version(1, 2, 0)
+        """
         with self._lock:
             if not self._history:
                 raise RuntimeError("no previously active version to roll back to.")
@@ -154,21 +170,15 @@ class RequestHandler:
 
     def output_fn(self, output: dict[str, t.Any] | pl.DataFrame, accept: str) -> Response:
         if isinstance(output, dict):
-            if accept in (MediaType.ANY.value, MediaType.APPLICATION_JSON.value):
-                return Response(to_json(output), MediaType.APPLICATION_JSON.value)
+            if accept in ("*/*", "application/json"):
+                return Response(to_json(output), "application/json")
             output = pl.DataFrame([output])
         formatter = DEFAULT_OUTPUT_FORMATTERS.get(accept)
         if formatter is None:
             raise exc.UnsupportedAcceptError(f"Unsupported Accept type: {accept!r}")
+        media_type, write = formatter
         try:
-            response = formatter(output)
-            if response.media_type is None:
-                if accept == MediaType.ANY.value:
-                    raise exc.DeciderRuntimeError("Configured Format for MediaType.ANY must return a Response with a specific media_type, got None")
-                response = Response(content=response.content, media_type=accept)
-            return response
-        except exc.DeciderError:
-            raise
+            return Response(write(output), media_type)
         except Exception as e:
             raise exc.OutputFormattingError(str(e))
 

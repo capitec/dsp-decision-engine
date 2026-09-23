@@ -1,15 +1,13 @@
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import Any
 
 import numpy as np
 import polars as pl
 
-from decider.engine.ir.decls import Input, NullPolicy, base_annotation
+from decider.engine.ir.decls import TYPED, Input, NullPolicy, base_annotation
 from decider.engine.wiring.plan import Plan, Version
-
-# Kinds the boundary reads into typed arrays; anything else stays a Python object.
-_TYPED = (float, int, bool)
 
 
 class State:
@@ -36,6 +34,7 @@ class State:
         self.valid: dict[int, np.ndarray] = {}
         self.chains: dict[str, list[Version]] = {k: list(v) for k, v in plan.chains.items()}
         self._extra = 0
+        self._sources: dict[int, tuple[np.ndarray, pl.Series]] = {}
 
     @classmethod
     def from_frame(cls, plan: Plan, frame: pl.DataFrame, n: int | None = None) -> State:
@@ -43,18 +42,22 @@ class State:
         from decider.engine.boundary.extract import extract_frame
 
         state = cls(plan, frame, n)
-        typed = [Input(i.name, base_annotation(i.annotation), NullPolicy.OPTIONAL) for i in plan.inputs
-                 if base_annotation(i.annotation) in _TYPED and i.name in frame.columns]
+        names = frame.columns
+        typed = [i for i in _typed(plan) if i.name in names]
         extracted = extract_frame(frame, typed).columns if typed else {}
         for v in plan.versions:
             if v.producer is not None:
                 continue
-            if v.name in extracted:
-                col = extracted[v.name]
-                state.write(v, col.values, valid=col.validity)
-            elif v.name in frame.columns:
-                values, valid = from_series(frame[v.name])
+            col = extracted.get(v.name)
+            if col is not None:
+                state.write(v, col.values, valid=col.validity if col.has_nulls else None)
+            elif v.name in names:
+                # ponytail: a string column becomes Python objects even when only kernels read it
+                # (as spans, from `source`); convert on first Python read if big string batches matter.
+                series = frame.get_column(v.name)
+                values, valid = from_series(series)
                 state.write(v, values, valid=valid)
+                state._sources[v.id] = (values, series)
         return state
 
     def write(self, version: Version, values: np.ndarray, rows: np.ndarray | None = None,
@@ -94,6 +97,18 @@ class State:
         if rows is None:
             return values, valid
         return values[rows], None if valid is None else valid[rows]
+
+    def source(self, version: Version) -> pl.Series | None:
+        """The input frame column `version` was read from, while its values are still that column's.
+
+        Lets a compiled step read an object column's Arrow buffers in place.
+
+        Example::
+
+            state.source(state.versions("channel")[0])   # the frame's "channel" Series
+        """
+        values, series = self._sources.get(version.id, (None, None))
+        return series if values is not None and self.values.get(version.id) is values else None
 
     def record(self, name: str, producer: str, values: np.ndarray, valid: np.ndarray | None = None) -> Version:
         """Store `values` as a new version of `name`, appended to its chain; for overrides.
@@ -153,6 +168,13 @@ class State:
         """`base` with the current value of every name in `names` on `rows`, for a frame step."""
         cols = [_series(name, *self.read(v, rows)) for name, v in names.items()]
         return base.with_columns(cols) if cols else base
+
+
+# Keyed by the plan's identity; a fill value may not be hashable.
+@lru_cache(maxsize=64)
+def _typed(plan: Plan) -> tuple[Input, ...]:
+    # The inputs the boundary reads into typed arrays, nulls kept as a mask.
+    return tuple(Input(i.name, t, NullPolicy.OPTIONAL) for i in plan.inputs if (t := base_annotation(i.annotation)) in TYPED)
 
 
 def _series(name: str, values: np.ndarray, valid: np.ndarray | None) -> pl.Series:

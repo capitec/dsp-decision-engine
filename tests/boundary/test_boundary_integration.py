@@ -12,7 +12,6 @@ pytest.importorskip("decider.engine.boundary._arrow._shim", exc_type=ImportError
 from decider.engine.boundary._arrow.plan import ArrowKindError  # noqa: E402
 from decider.engine.boundary.dtypes import NeedsKernelSplit  # noqa: E402
 from decider.engine.boundary.extract import extract_frame  # noqa: E402
-from decider.engine.boundary.writeback import DtypeGroup, KernelOutputs, Layout, write_back  # noqa: E402
 from decider.engine.ir.decls import Input, NullPolicy  # noqa: E402
 
 
@@ -22,8 +21,8 @@ def _disposable_income_kernel(net_income, expenses, out):
         out[i] = net_income[i] - expenses[i]
 
 
-def test_extracted_readonly_arrays_feed_a_real_njit_kernel_and_write_back_matches_polars():
-    n = 1000
+@pytest.mark.parametrize("n", [1000, 10_000])
+def test_extracted_readonly_arrays_feed_a_real_njit_kernel_matching_polars(n):
     rng = np.random.default_rng(0)
     frame = pl.DataFrame({"net_income": rng.uniform(2000, 20000, n), "expenses": rng.uniform(500, 6000, n)})
     extracted = extract_frame(frame, [Input("net_income", float), Input("expenses", float)])
@@ -33,12 +32,7 @@ def test_extracted_readonly_arrays_feed_a_real_njit_kernel_and_write_back_matche
 
     out = np.empty(n, dtype=np.float64)
     _disposable_income_kernel(net_income, expenses, out)
-    result = write_back(frame, KernelOutputs(
-        float64=DtypeGroup(("disposable_income",), out.reshape(1, n), Layout.COLUMN_MAJOR)))
-
-    expected = (frame["net_income"] - frame["expenses"]).to_numpy()
-    assert np.allclose(result["disposable_income"].to_numpy(), expected)
-    assert result.columns == ["net_income", "expenses", "disposable_income"]
+    assert np.array_equal(out, (frame["net_income"] - frame["expenses"]).to_numpy())
 
 
 def _mixed_inputs():

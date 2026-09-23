@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import difflib
 import hashlib
 import json
 from dataclasses import dataclass
@@ -11,6 +10,7 @@ from pydantic import ValidationError
 
 from decider.engine.params.models import NodeParams
 from decider.exceptions import ParamsError
+from decider.registry.resolve import suggest
 
 
 class Status(Enum):
@@ -85,9 +85,9 @@ def validate_node(node: NodeParams, doc: Mapping) -> Validation:
     by_arg = {d.arg: d.name for d in node.decls if d.shared_key is None and d.arg != d.name}
     for key in local:
         if key not in node.local_names:
-            close = difflib.get_close_matches(key, node.local_names, n=1)
+            close = suggest(key, node.local_names)
             hint = (f"; did you mean '{by_arg[key]}' (it feeds argument '{key}')?" if key in by_arg
-                    else f"; did you mean '{close[0]}'?" if close
+                    else f"; did you mean '{close}'?" if close
                     else f"; its params are {sorted(node.local_names)}")
             errors.append(f"{node.path}: unknown param '{key}'{hint}")
     values = {d.name: local[d.name] for d in node.decls if d.shared_key is None and d.name in local}

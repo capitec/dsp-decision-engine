@@ -88,7 +88,7 @@ class SteppedRunner(InterpretedRunner):
         for decl, v, path in self._reads[id(unit)]:
             x, mask = state.read(v, rows)
             if x.dtype == object and not python:
-                x = self._typed(x, mask, decl, alive)
+                x = self._typed(x, mask, decl, alive, None if rows is not None else state.source(v))
             if mask is not None and not mask.all():
                 if decl.null_policy is NullPolicy.REQUIRED:
                     raise MissingInputError(decl.name, path, int((~mask).sum()), len(mask), absent=_absent(state, v))
@@ -108,10 +108,11 @@ class SteppedRunner(InterpretedRunner):
             state.write(v, values[v.id], rows, valid.get(v.id))
             scope.names[v.name] = v
 
-    def _typed(self, x: np.ndarray, mask: np.ndarray | None, decl: Input, alive: list) -> np.ndarray:
+    def _typed(self, x: np.ndarray, mask: np.ndarray | None, decl: Input, alive: list,
+               source: pl.Series | None) -> np.ndarray:
         if base_annotation(decl.annotation) is bytes:
             try:
-                return _spans(x, mask, alive)
+                return _spans(x, mask, alive, source)
             except TypeError as e:
                 raise TypeError(f"'{decl.name}' is a string input: {e}") from None
         if base_annotation(decl.annotation) is str:
@@ -154,9 +155,8 @@ def _reads_bytes(call: Call) -> bool:
     return any(base_annotation(i.annotation) is bytes for i in call.node.inputs)
 
 
-def _spans(x: np.ndarray, mask: np.ndarray | None, alive: list) -> np.ndarray:
+def _spans(x: np.ndarray, mask: np.ndarray | None, alive: list, source: pl.Series | None) -> np.ndarray:
     # Strings reach a kernel as `(address, byte length)` spans into Arrow memory, -1 for a null.
-    # ponytail: copies the column into a new polars Series; read the input frame directly if it matters.
     from decider.engine.boundary.extract import extract_frame
 
     if mask is not None:
@@ -169,8 +169,10 @@ def _spans(x: np.ndarray, mask: np.ndarray | None, alive: list) -> np.ndarray:
         lengths = np.array([-1 if b is None else len(b) for b in raw], np.int64)
         starts = np.cumsum(np.maximum(lengths, 0)) - np.maximum(lengths, 0)
         return np.stack([buffer.ctypes.data + starts, lengths], axis=1)
-    frame = pl.DataFrame({"s": pl.Series(x.tolist(), dtype=pl.String)})
-    extracted = extract_frame(frame, [Input("s", bytes, NullPolicy.OPTIONAL)])
+    # The input frame's own column when it holds these values, else a copy (an override, a row subset).
+    if source is None or source.dtype != pl.String:
+        source = pl.Series(x.tolist(), dtype=pl.String)
+    extracted = extract_frame(source.to_frame("s"), [Input("s", bytes, NullPolicy.OPTIONAL)])
     alive.append(extracted.kernel_frame)
     return extracted.columns["s"].values
 

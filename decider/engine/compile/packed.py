@@ -4,11 +4,9 @@ from typing import Iterator
 
 from decider.engine.compile.kernel import Fork, Repeat, fused_kernel
 from decider.engine.compile.njit import compile_call
-from decider.engine.compile.units import Kernel, Layout, nullable, output_dtype
-from decider.engine.ir.decls import NullPolicy, base_annotation
+from decider.engine.compile.units import Kernel, Layout, output_dtype
+from decider.engine.ir.decls import TYPED, NullPolicy, base_annotation, nullable
 from decider.engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, Sequence, Version
-
-_TYPED = (float, int, bool)
 
 
 class Packed(Kernel):
@@ -109,7 +107,7 @@ def _pack(top: Branch | Loop, outputs: set[int], lazy: bool) -> Packed:
     passthrough: list[Version] = []
 
     def var(v: Version) -> int:
-        if base_annotation(v.annotation) not in _TYPED:
+        if base_annotation(v.annotation) not in TYPED:
             raise _Unpackable
         inner.add(v.id)
         lay.produced[v.id] = ("var", len(variables))

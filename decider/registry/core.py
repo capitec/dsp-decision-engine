@@ -9,7 +9,7 @@ from pydantic import BaseModel, SerializeAsAny, WrapValidator, model_validator
 
 from decider.exceptions import RegistryError
 
-from .resolve import suggest_names
+from .resolve import hint
 
 R = t.TypeVar("R", bound="BaseRegistryModule")
 
@@ -103,11 +103,6 @@ class BaseRegistryModule(BaseModel, ABC):
         )
 
     @classmethod
-    def registered_extensions(cls) -> dict[str, type[BaseRegistryModule]]:
-        """Every tag (aliases and import paths) registered under this class's root."""
-        return dict(cls._root()._registry)
-
-    @classmethod
     def resolve(cls: type[R], tag: str) -> type[R]:
         """The registered subclass of `cls` for an alias or import path.
 
@@ -128,10 +123,7 @@ class BaseRegistryModule(BaseModel, ABC):
         if found is not None and issubclass(found, cls):
             return found
         known = sorted(k for k, c in registry.items() if issubclass(c, cls))
-        message = f"{tag!r} is not a registered {cls.__name__} type."
-        for hint in suggest_names(tag, known):
-            message += f" Did you mean {hint!r}?"
-        raise RegistryError(message)
+        raise RegistryError(f"{tag!r} is not a registered {cls.__name__} type.{hint(tag, known)}")
 
     @classmethod
     def json_schema(cls) -> dict[str, dict[str, t.Any]]:

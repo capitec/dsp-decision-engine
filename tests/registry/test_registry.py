@@ -101,7 +101,8 @@ def test_import_path_to_a_non_registered_class_is_rejected(tag):
 def test_independent_roots_never_share_entries():
     with pytest.raises(LookupError):
         ConfigurableStep.resolve(import_path(Plain))
-    assert "aliased" not in ConfigurableStep.registered_extensions()
+    with pytest.raises(LookupError):
+        ConfigurableStep.resolve("aliased")
 
 
 def test_two_classes_claiming_one_alias_is_an_error_naming_both():
@@ -163,7 +164,8 @@ def test_abstract_subclasses_are_not_registered():
         @abstractmethod
         def extra(self) -> int: ...
 
-    assert import_path(Family) not in Root.registered_extensions()
+    with pytest.raises(LookupError):
+        Root.resolve(import_path(Family))
 
     class AliasedFamily(Root):
         type: t.Literal["family_member"] = "family_member"

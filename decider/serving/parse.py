@@ -3,8 +3,6 @@ import typing as t
 
 import polars as pl
 
-from .media_types import MediaType
-
 
 def parse_application_json(data: bytes) -> t.Union[t.Dict[str, t.Any], pl.DataFrame]:
     # An object is one record for the single-record path; an array of objects is a frame.
@@ -15,10 +13,10 @@ def parse_application_json(data: bytes) -> t.Union[t.Dict[str, t.Any], pl.DataFr
 
 
 DEFAULT_INPUT_HANDLERS = {
-    MediaType.APPLICATION_JSON.value: parse_application_json,
-    MediaType.APPLICATION_JSONL.value: pl.read_ndjson,
-    MediaType.APPLICATION_X_PARQUET.value: pl.read_parquet,
-    MediaType.TEXT_CSV.value: pl.read_csv,
-    MediaType.APPLICATION_EXCEL.value: pl.read_excel,
-    MediaType.APPLICATION_VND_MS_EXCEL.value: pl.read_excel,
+    "application/json": parse_application_json,
+    "application/jsonl": pl.read_ndjson,
+    "application/x-parquet": pl.read_parquet,
+    "text/csv": pl.read_csv,
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": pl.read_excel,
+    "application/vnd.ms-excel": pl.read_excel,
 }
