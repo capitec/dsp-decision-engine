@@ -4,12 +4,12 @@ import gc
 
 import pytest
 
-from decider import branch, dag, engine, flow, param, step
+from decider import branch, dag, engine, flow, loop, param, step
 from decider.engine.ir.context import _BUILT, IRContext
-from decider.engine.ir.decls import Output, ParamDecl
+from decider.engine.ir.decls import Input, Output, ParamDecl
 from decider.engine.ir.nodes import CallNode, SequenceNode, iter_nodes
 from decider.serializable.dataframe import DataFrame
-from decider.steps import ConfigurableStep, ParamRef, Step, TableRef, TableValue
+from decider.steps import ConfigurableStep, ParamRef, Step, TableRef, TableValue, Value
 
 
 def ratio(disposable_income: float, instalment: float) -> float:
@@ -40,7 +40,7 @@ class PriceTable(ConfigurableStep):
     def to_ir(self, ctx):
         rows = ctx.table(self.rows, {"product": "str", "rate": "float"})
         params = (rows,) if isinstance(rows, ParamDecl) else ()
-        return CallNode(ctx.origin(self), "row", lambda row, params: (0.0,), (), (Output("rate", float),), params)
+        return CallNode(ctx.origin(self), "row", lambda row, params, consts: (0.0,), (), (Output("rate", float),), params)
 
 
 # --- origins and paths ---
@@ -128,7 +128,7 @@ def test_table_turns_inline_rows_or_a_ref_into_rows_or_decl():
     rows = DataFrame(data=[{"product": "a", "rate": 1.0}])
     assert ctx.table(rows, {"product": "str"}) is rows
     decl = ctx.table(TableRef(table="prices"), {"product": "str", "rate": "float"})
-    assert (decl.name, decl.required, decl.schema) == ("prices", True, {"product": "str", "rate": "float"})
+    assert (decl.name, decl.required, decl.schema) == ("prices", True, (("product", "str"), ("rate", "float")))
 
 
 def test_a_table_param_reports_its_schema():
@@ -192,3 +192,95 @@ def test_a_branch_arm_placed_in_two_branches_gets_two_nodes():
     assert [n.origin.path for n in iter_nodes(node) if n.origin.path.endswith("cap_by_income")] == [
         "one/cap_by_income", "two/cap_by_income"
     ]
+
+
+# --- literal config values ---
+
+
+class Cut(ConfigurableStep):
+    cut: Value[float] = 0.5
+
+    def to_ir(self, ctx):
+        cut = ctx.value(self.cut, float)
+        params, consts = ((cut,), ()) if isinstance(cut, ParamDecl) else ((), (("cut", cut),))
+        return CallNode(ctx.origin(self), "row", _above, (Input("x", float),), (Output(self.name, bool),), params,
+                        consts=consts)
+
+
+def _above(row, params, consts):
+    return (row[0] > (params or consts)[0],)
+
+
+def test_a_literal_value_is_a_const_not_a_param():
+    node = engine.to_ir(Cut(name="c", cut=0.9))
+    assert node.consts == (("cut", 0.9),) and node.params == ()
+    assert Cut(name="c", cut=0.9).parameters() == {}
+    assert node.fn((1.0,), (), tuple(v for _, v in node.consts)) == (True,)
+
+
+def test_a_literal_in_params_is_rejected():
+    class Bad(ConfigurableStep):
+        def to_ir(self, ctx):
+            return CallNode(ctx.origin(self), "row", _above, (), (Output(self.name, bool),), (0.5,))
+
+    with pytest.raises(TypeError, match="not a ParamDecl.*consts"):
+        engine.to_ir(Bad(name="bad"))
+
+
+def test_param_decls_hash_even_with_unhashable_defaults():
+    decl = ParamDecl("tiers", list, [1, 2], schema=(("product", "str"),))
+    assert hash(decl) == hash(ParamDecl("tiers", list, [3], schema=(("product", "str"),)))
+    assert {IRContext().table(TableRef(table="prices"), {"product": "str"})}
+
+
+# --- step names ---
+
+
+@pytest.mark.parametrize("bad", ["", "a/b", "a#b"])
+def test_a_name_that_breaks_paths_is_rejected(bad):
+    with pytest.raises(ValueError, match="without '/' or '#'"):
+        step(ratio, name=bad)
+    with pytest.raises(ValueError, match="without '/' or '#'"):
+        step(ratio).named(bad)
+    with pytest.raises(ValueError, match="without '/' or '#'"):
+        flow(ratio, name=bad)
+    with pytest.raises(ValueError, match="without '/' or '#'"):
+        engine.to_ir(Cut(name=bad))
+
+
+# --- configs built from other steps ---
+
+
+class Afford(ConfigurableStep):
+    def to_ir(self, ctx):
+        return ctx.expand(self, flow(ratio, affordable))
+
+
+def test_a_config_expanding_helper_steps_owns_their_path():
+    node = engine.to_ir(flow(Afford(name="cfg"), name="outer"))
+    cfg = node.children()[0]
+    assert (cfg.origin.path, cfg.origin.source) == ("outer/cfg", f"{__name__}:Afford")
+    assert [n.origin.path for n in cfg.children()] == ["outer/cfg/ratio", "outer/cfg/affordable"]
+    assert isinstance(engine.step_map(flow(Afford(name="cfg"), name="outer"))["outer/cfg"], Afford)
+
+
+# --- path -> step map ---
+
+
+def test_the_step_map_covers_conditions_arms_and_loop_bodies():
+    def is_private(sector_code: int) -> bool:
+        return sector_code == 1
+
+    def more(term_cap: float) -> bool:
+        return term_cap < 10
+
+    by_sector = branch(is_private, cap_by_income, cap_again, modifies=["term_cap"], name="by_sector")
+    grow = loop(more, cap_again, carries=["term_cap"], max_iterations=3, name="grow")
+    p = flow(by_sector, grow, name="p")
+    engine.to_ir(p)  # cached subtrees must still report their steps
+    steps = engine.step_map(p)
+    assert steps["p"] is p and steps["p/by_sector"] is by_sector and steps["p/grow"] is grow
+    assert steps["p/by_sector/is_private"].fn is is_private
+    assert steps["p/by_sector/cap_by_income"] is cap_by_income
+    assert steps["p/grow/more"].fn is more and steps["p/grow/cap_again"] is cap_again
+    assert set(steps) == {n.origin.path for n in iter_nodes(engine.to_ir(p))}

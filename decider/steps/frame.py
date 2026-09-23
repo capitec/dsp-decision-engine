@@ -57,7 +57,7 @@ def frame_step(
 
     def make(fn: Callable) -> FrameStep:
         return FrameStep(
-            name or fn.__name__, fn,
+            fn.__name__ if name is None else name, fn,
             None if reads is None else tuple(reads), None if writes is None else tuple(writes),
         )
 

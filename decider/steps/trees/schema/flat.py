@@ -4,7 +4,7 @@ from __future__ import annotations
 import enum
 import typing as t
 
-from pydantic import BaseModel, Discriminator, Field, PrivateAttr, Tag, model_validator
+from pydantic import BaseModel, Discriminator, Field, Tag, model_validator
 
 from decider.steps.trees.schema.conditions import IsInCondition, RangeCondition, StringMatchCondition
 from decider.steps.trees.schema.nodes import (
@@ -19,7 +19,7 @@ from decider.steps.trees.schema.nodes import (
     _StringMatch,
     node_tag,
 )
-from decider.steps.trees.schema.tree import Node, ParameterInfo, Rule, Tree, TreeOutput, add_node
+from decider.steps.trees.schema.tree import BaseTreeDocument, Node, Rule, Tree, TreeOutput, add_node
 
 LeafRule = LeafNode
 
@@ -135,12 +135,8 @@ class PrioritizationMode(str, enum.Enum):
 _CODE_FIELDS = ("output_fn", "post_process_fn", "format_prioritized_fn")
 
 
-class _FlatDocument(BaseModel):
-    name: str = "output"
+class _FlatDocument(BaseTreeDocument):
     output: TreeOutput
-    parameters: t.Dict[str, ParameterInfo] = Field(default_factory=dict)
-
-    _tree: Tree = PrivateAttr()
 
     @model_validator(mode="before")
     @classmethod
@@ -151,7 +147,7 @@ class _FlatDocument(BaseModel):
 
     @model_validator(mode="after")
     def _normalise(self) -> _FlatDocument:
-        defaults = {k: p.default_value for k, p in self.parameters.items() if p.default_value is not None}
+        defaults = self._param_defaults()
         nodes: dict[str, Node] = {}
         rules = tuple(
             Rule(root=_flatten(root.rule, str(i), nodes, defaults), name=root.meta.name)
@@ -159,10 +155,6 @@ class _FlatDocument(BaseModel):
         )
         self._tree = Tree(name=self.name, mode=self._mode(), rules=rules, nodes=nodes, output=self.output)
         return self
-
-    def to_tree(self) -> Tree:
-        """This document as the format-independent `Tree`."""
-        return self._tree
 
 
 class FlatRuleDocument(_FlatDocument):

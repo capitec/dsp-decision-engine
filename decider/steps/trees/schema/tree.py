@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import typing as t
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
 from decider.serializable.schema import TStruct
 from decider.steps.trees.schema.conditions import SchemaModel
@@ -15,6 +15,10 @@ class TreeOutput(BaseModel):
     """The rows a tree's leaves select: `data[result_idx]`, or `default` for -1.
 
     `dtypes` names each output column and its type, e.g. `[("band", "String")]`.
+
+    Example::
+
+        TreeOutput(data=[{"band": "low"}], default={"band": "high"}, dtypes=[("band", "String")])
     """
 
     data: t.List[t.Dict[str, t.Any]] = Field(default_factory=list)
@@ -70,6 +74,11 @@ class Tree(SchemaModel):
     that reaches a leaf other than the default wins; with `mode="all"` every
     rule's result is returned. A v3 tree document is a single rule.
     Get one from a document with `to_tree()`.
+
+    Example::
+
+        tree = load_document(document).to_tree()
+        [tree.nodes[rule.root].data for rule in tree.rules]
     """
 
     name: str = "output"
@@ -101,6 +110,29 @@ class Tree(SchemaModel):
         if cyclic := sorted(nid for nid, n in indegree.items() if n > 0):
             raise ValueError(f"tree has a cycle through node(s) {cyclic}")
         return self
+
+
+class BaseTreeDocument(BaseModel):
+    """What every tree document format shares: its name, output table, legacy `parameters` block and `to_tree()`.
+
+    Example::
+
+        load_document(document).to_tree()
+    """
+
+    name: str = "output"
+    output: TreeOutput = Field(default_factory=TreeOutput)
+    parameters: t.Dict[str, ParameterInfo] = Field(default_factory=dict)
+
+    # Set by each format's after-validator, so a document is normalised once.
+    _tree: Tree = PrivateAttr()
+
+    def to_tree(self) -> Tree:
+        """This document as the format-independent `Tree`."""
+        return self._tree
+
+    def _param_defaults(self) -> dict[str, t.Any]:
+        return {k: p.default_value for k, p in self.parameters.items() if p.default_value is not None}
 
 
 def with_defaults(obj: t.Any, defaults: dict[str, t.Any]) -> t.Any:
