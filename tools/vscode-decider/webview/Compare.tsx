@@ -81,15 +81,31 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
   ];
   // The edited steps are the causes; the rest only follow from them.
   const touched = c.steps.filter((s) => s.status !== "same" && s.status !== "not run");
-  const idleReaders = readers.flatMap((r) => r.steps).filter((p) => !touched.some((s) => s.path === p));
-  const causes = [...touched.filter(edited), ...c.steps.filter((s) => idleReaders.includes(s.path))];
+  // Readers of a changed param that wrote the same values: one line, not rows of zeros.
+  const idleReaders = [...new Set(readers.flatMap((r) => r.steps))].filter((p) => !touched.some((s) => s.path === p));
+  const causes = touched.filter(edited);
+  // When no approved applicant's offer moved, say where the change went instead.
+  const decision = c.results.b.decision;
+  const approved = decision ? decision.map((d, r) => (d !== "decline" ? r : -1)).filter((r) => r >= 0) : [];
+  const touchedApproved = new Set(touched.flatMap((s) => s.outputs.flatMap((o) => o.changedRows)).filter((r) => approved.includes(r)));
+  const whyNoOffer =
+    decision && readers.length && touched.length && !touchedApproved.size
+      ? `For the ${approved.length} approved applicants, none of the ${[...new Set(readers.flatMap((r) => r.steps))].length} steps that read ${readers.map((r) => r.param).join(", ")} changed a value; only declined records moved.`
+      : null;
+  const rowEdits = (param: string) =>
+    paramChangeLines(c.paramsDocs?.b, c.values?.a)
+      .filter((l) => l.startsWith(`${param} row`))
+      .map((l) => `${l.split(":")[0].slice(param.length + 1)} edited`);
   const downstream = touched.length - causes.length;
   // A changed param whose readers all wrote the same values: say so, or "nothing changed" reads as a bug.
   const idle = readers.filter((p) => p.steps.length && !p.steps.some((s) => c.steps.find((x) => x.path === s)?.outputs.length));
   return (
     <div className="compare">
       {back && <a className="back" onClick={back.go}>← Back to {back.label}</a>}
-      <h3 className="compare-title">{c.b}</h3>
+      <div className="compare-top">
+        <h3 className="compare-title">{c.b}</h3>
+        {withRevision && <a className="small" onClick={onCompareRevision}>compare with a git revision…</a>}
+      </div>
       {c.note && <div className="muted">{c.note}</div>}
       <div className="comparing">
         Compared with <strong>{c.a}</strong>
@@ -100,9 +116,7 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
           ? `No final output changes: every one of the ${c.rows} records ends the same.`
           : `${movedOut.map((m) => `${m.n} changes for ${m.k} of ${c.rows} records`).join("; ")}.`)}
       </div>
-      {headline(c) && movedOut.length > 0 && (
-        <div className="muted small">{movedOut.map((m) => `${m.n}: ${m.k}`).join(" · ")} of {c.rows} records changed</div>
-      )}
+      {whyNoOffer && <div className="note">{whyNoOffer}</div>}
       {movedOut.length === 0 && causes.length > 0 && (
         <div className="note">
           Nothing changed: with {causes.map((s) => s.path.split("/").pop()).join(" and ")} {causes.some((s) => s.status === "removed") ? "left out" : "changed"}, every record ends the same, so
@@ -155,7 +169,7 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
                 <td>
                   {[
                     ...s.paramChanges,
-                    ...readers.filter((r) => r.steps.includes(s.path)).map((r) => `reads ${r.param}`),
+                    ...readers.filter((r) => r.steps.includes(s.path)).flatMap((r) => (rowEdits(r.param).length ? rowEdits(r.param) : [`reads ${r.param}`])),
                     ...s.structural.filter((x) => x !== "params").map((x) => (x === "code" ? "code changed" : `${x} changed`)),
                     ...(s.status === "removed" ? ["skipped / removed"] : s.status === "added" ? ["added"] : []),
                   ].join(", ")}
@@ -166,6 +180,17 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
             ))}
           </tbody>
         </table>
+      )}
+      {idleReaders.length > 0 && (
+        <div className="muted small">
+          {idleReaders.length} more step{idleReaders.length === 1 ? "" : "s"} read {readers.map((r) => r.param).join(", ")} but changed no record:{" "}
+          {idleReaders.map((p, i) => (
+            <span key={p}>
+              {i > 0 && ", "}
+              <a onClick={() => onSelect(p)}>{p.split("/").pop()}</a>
+            </span>
+          ))}
+        </div>
       )}
       {downstream > 0 && <div className="muted small">and {downstream} downstream step{downstream === 1 ? "" : "s"} changed as a result: see Step by step below.</div>}
       <h4>
@@ -200,7 +225,6 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
           {s.outputs.length > 0 && <Diffs diffs={s.outputs} record={record} keyCol={c.key} results={c.results} />}
         </div>
       ))}
-      {withRevision && <div className="actions">{revisionButton}</div>}
     </div>
   );
 }

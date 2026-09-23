@@ -153,8 +153,8 @@ export function Scenarios({ schema, values, columns, pausedAt, record, keyCol, r
               <div className="muted small knob-echo">tries {knobOf(k, schema)!.values.map((v) => formatValue(v, k.key.split("|").pop())).join(", ")}</div>
             )}
             {k.kind === "param" && k.key && (
-              <div className="muted small knob-now">
-                {k.key.split("|")[0]} · now {formatValue(currentOf(k.key), k.key.split("|")[1])}
+              <div className="muted small knob-now" title={k.key.replace("|", " · ")}>
+                {k.key.split("|")[0].split("/").slice(-3).join("/")} · now {formatValue(currentOf(k.key), k.key.split("|")[1])}
               </div>
             )}
             <input aria-label="knob values" className={`values ${incomplete[i] && k.key ? "invalid" : ""}`} placeholder={k.key && isRateName(k.key.split("|").pop()) ? "values to try, e.g. 7%, 7.75%, 8.5%" : "values to try, e.g. 24, 36, 48"} value={k.values} onChange={(e) => set(i, { values: e.target.value })} />
@@ -227,7 +227,7 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
   const knobCols = sweep.knobs.length ? sweep.knobs : [{ name: "scenario", values: sweep.labels }];
   const summary = row === -1;
   const each = row === -2;
-  const cols = summary ? [...changedCols.filter((c) => categorical(sweep.base?.[c])), ...changedCols.filter((c) => !categorical(sweep.base?.[c]))] : changedCols;
+  const cols = summary ? [...outcomes, ...changedCols.filter((c) => categorical(sweep.base?.[c])), ...changedCols.filter((c) => !categorical(sweep.base?.[c]))] : changedCols;
   // Side by side, the records some scenario changed come first; a few fit.
   const hit = (r: number) => sweep.comparisons.some((cmp) => cmp.output.some((o) => o.changedRows.includes(r)));
   const everyRow = Array.from({ length: rows }, (_, i) => i);
@@ -259,10 +259,13 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
     return `avg ${formatValue(avg(nums), name)}${Math.abs(d) > 1e-12 ? ` (${d > 0 ? "+" : "−"}${formatValue(Math.abs(d), name)})` : ""}`;
   };
   // A number's change is averaged over the records it moved, so a 3-record effect isn't diluted by 37 that didn't move.
-  const delta = (c: string, i: number, changedRows: number[]) => {
+  const avgDelta = (c: string, i: number, changedRows: number[]) => {
     const ds = changedRows.map((r) => (sweep.outputs[i]?.[c]?.[r] as number) - (sweep.base?.[c]?.[r] as number)).filter((d) => !Number.isNaN(d));
-    if (!ds.length) return "";
-    const d = ds.reduce((t, x) => t + x, 0) / ds.length;
+    return ds.length ? ds.reduce((t, x) => t + x, 0) / ds.length : 0;
+  };
+  const delta = (c: string, i: number, changedRows: number[]) => {
+    const d = avgDelta(c, i, changedRows);
+    if (!d) return "";
     const size = isRateName(c) && Math.abs(d) < 1 ? `${Number((Math.abs(d) * 100).toFixed(2))} pp` : formatValue(Math.abs(d), c);
     return `${d > 0 ? "+" : "−"}${size}`;
   };
@@ -271,12 +274,13 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
     if (!diff) return <td key={c} className="unchanged mono" title="same as the original run for every record">{outcomes.includes(c) ? overall(sweep.outputs[i]?.[c]) : "no change"}</td>;
     const numeric = !categorical(sweep.base?.[c]);
     return (
-      <td key={c} className="changed mono" title={`changed for ${recordsOf(diff.changedRows)}; original: ${overall(sweep.base?.[c])}`}>
+      <td
+        key={c}
+        className={`changed mono ${numeric ? (avgDelta(c, i, diff.changedRows) < 0 ? "down" : "up") : ""}`}
+        title={`changed for ${recordsOf(diff.changedRows)}; original: ${overall(sweep.base?.[c])}`}
+      >
         {numeric ? (
-          <>
-            <div>{diff.changedRows.length} rec.</div>
-            <div className="small">avg {delta(c, i, diff.changedRows)}</div>
-          </>
+          `${delta(c, i, diff.changedRows)} (${diff.changedRows.length})`
         ) : (
           overall(sweep.outputs[i]?.[c], sweep.base?.[c])
         )}
@@ -307,7 +311,7 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
         </select>
       </div>
       <p className="hint">
-        One row per scenario; click one to see what changed, step by step.{summary ? " “3 rec. / avg −R 5,303.95” means 3 records changed, by −R 5,303.95 on average." : ""}
+        One row per scenario; click one to see what changed, step by step.{summary ? " “−R 5,303.95 (3)” means 3 records changed, by −R 5,303.95 on average." : ""}
       </p>
       {cols.length === 0 ? (
         <div className="muted">No scenario changes any result.</div>
@@ -339,7 +343,8 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
           <tbody>
             <tr className="original">
               <td className="knob-col" colSpan={knobCols.length} title={knobCols.map((k) => `${k.name} = ${baseKnob(k.name)}`).join("\n")}>
-                original run ({knobCols.filter((k) => k.name !== "scenario").map((k) => `${knobShort(k.name)} ${baseKnob(k.name)}`).join(", ")})
+                original run
+                <div className="muted small">{knobCols.filter((k) => k.name !== "scenario").map((k) => baseKnob(k.name)).join(" · ")}</div>
               </td>
               {summary ? cols.map((c) => <td key={c} className="mono">{overall(sweep.base?.[c], undefined, c)}</td>) : shown.flatMap((r) => cols.map((c) => recordCell(null, c, r)))}
             </tr>
@@ -356,11 +361,7 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
         </table>
         </div>
       )}
-      {summary && outcomes.map((c) => (
-        <div key={c} className="muted">
-          <span className="mono">{c}</span> is the same in every scenario: {overall(sweep.base?.[c])}.
-        </div>
-      ))}
+
     </section>
   );
 }
