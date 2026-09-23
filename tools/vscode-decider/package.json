@@ -173,6 +173,7 @@
     "test:vscode": "pnpm build && node dist/runVsCodeTests.js",
     "test:e2e": "pnpm build && E2E=1 vitest run",
     "test:stories": "pnpm build && E2E=stories vitest run",
+    "test:large": "pnpm build && E2E=large vitest run",
     "package": "pnpm build && vsce package --no-dependencies"
   },
   "devDependencies": {
