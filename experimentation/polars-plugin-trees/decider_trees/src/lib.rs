@@ -12,6 +12,7 @@ use pyo3_polars::derive::polars_expr;
 use rayon::prelude::*;
 use regex::Regex;
 use serde::Deserialize;
+use serde_pickle as _;
 
 /// One node on the wire. A leaf has `leaf` (and optionally `value`); a test
 /// node has `col`, `op`, exactly one of `f`/`i`/`b`/`s`, and `then`/`else`.
@@ -191,6 +192,69 @@ fn run<T: Send + Copy>(inputs: &[Series], kw: &TreeKwargs, pick: impl Fn(Option<
     })
 }
 
+/// The same tree, shipped as one fixed-width binary blob (36 bytes per node,
+/// little-endian) plus a string table, instead of a list of dicts. serde-pickle
+/// then deserialises ONE bytes value and ONE list of strings; the nodes are
+/// decoded here with `from_le_bytes` (RESULTS.md §4c measures the difference).
+#[derive(Deserialize)]
+struct PackedKwargs {
+    #[serde(with = "serde_bytes_compat")]
+    blob: Vec<u8>,
+    strs: Vec<String>,
+    #[serde(default)]
+    parallel: bool,
+}
+mod serde_bytes_compat {
+    use serde::{Deserialize, Deserializer};
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<u8>, D::Error> {
+        serde_pickle::Value::deserialize(d).and_then(|v| match v {
+            serde_pickle::Value::Bytes(b) => Ok(b),
+            _ => Err(serde::de::Error::custom("blob must be bytes")),
+        })
+    }
+}
+
+fn unpack(kw: &PackedKwargs) -> PolarsResult<TreeKwargs> {
+    polars_ensure!(kw.blob.len() % 36 == 0, ComputeError: "decider_trees: packed blob is not a multiple of 36 bytes");
+    let rd32 = |b: &[u8]| u32::from_le_bytes(b.try_into().unwrap()) as usize;
+    let mut nodes = Vec::with_capacity(kw.blob.len() / 36);
+    for n in kw.blob.chunks_exact(36) {
+        let (kind, op) = (n[0], n[1]);
+        let (col, then, otherwise, sidx) = (rd32(&n[4..8]), rd32(&n[8..12]), rd32(&n[12..16]), rd32(&n[16..20]));
+        let ival = i64::from_le_bytes(n[20..28].try_into().unwrap());
+        let fval = f64::from_le_bytes(n[28..36].try_into().unwrap());
+        let opname = ["<", "<=", ">", ">=", "==", "!=", "prefix", "regex"].get(op as usize).copied()
+            .ok_or_else(|| polars_err!(ComputeError: "decider_trees: packed op code {op}"))?.to_string();
+        let mut w = WireNode { leaf: None, value: None, col: None, op: None, f: None, i: None, b: None, s: None, then: None, otherwise: None };
+        match kind {
+            0 => { w.leaf = Some(ival as i32); w.value = Some(fval); }
+            k => {
+                w.col = Some(col); w.op = Some(opname); w.then = Some(then); w.otherwise = Some(otherwise);
+                match k {
+                    1 => w.f = Some(fval), 2 => w.i = Some(ival), 3 => w.b = Some(ival != 0),
+                    4 => w.s = Some(kw.strs.get(sidx).cloned().ok_or_else(|| polars_err!(ComputeError: "decider_trees: packed string index {sidx}"))?),
+                    _ => polars_bail!(ComputeError: "decider_trees: packed node kind {k}"),
+                }
+            }
+        }
+        nodes.push(w);
+    }
+    Ok(TreeKwargs { nodes, parallel: kw.parallel })
+}
+
+#[polars_expr(output_type=Float64)]
+fn walk_value_packed(inputs: &[Series], kwargs: PackedKwargs) -> PolarsResult<Series> {
+    let kw = unpack(&kwargs)?;
+    let v = run(inputs, &kw, |r| r.map(|(_, x)| x))?;
+    Ok(Float64Chunked::from_iter_options(PlSmallStr::from_static("value"), v.into_iter()).into_series())
+}
+
+#[polars_expr(output_type=Int32)]
+fn noop_packed(inputs: &[Series], kwargs: PackedKwargs) -> PolarsResult<Series> {
+    let kw = unpack(&kwargs)?;
+    Ok(Int32Chunked::full(PlSmallStr::from_static("noop"), kw.nodes.len() as i32, inputs[0].len()).into_series())
+}
+
 /// Leaf index reached, as Int32 (null if a tested feature was null).
 #[polars_expr(output_type=Int32)]
 fn walk(inputs: &[Series], kwargs: TreeKwargs) -> PolarsResult<Series> {
@@ -212,6 +276,19 @@ fn panic_demo(inputs: &[Series]) -> PolarsResult<Series> {
     let xs: Vec<i64> = Vec::new();
     let _ = xs[inputs.len() + 10]; // index out of bounds -> panic
     unreachable!()
+}
+
+/// kwargs deserialised into the typed struct, then nothing: the cost of getting the tree across.
+#[polars_expr(output_type=Int32)]
+fn noop_kwargs(inputs: &[Series], kwargs: TreeKwargs) -> PolarsResult<Series> {
+    Ok(Int32Chunked::full(PlSmallStr::from_static("noop"), kwargs.nodes.len() as i32, inputs[0].len()).into_series())
+}
+
+/// kwargs deserialised AND compiled (dtype checks, regex), then nothing.
+#[polars_expr(output_type=Int32)]
+fn noop_compile(inputs: &[Series], kwargs: TreeKwargs) -> PolarsResult<Series> {
+    let nodes = compile(&kwargs, inputs)?;
+    Ok(Int32Chunked::full(PlSmallStr::from_static("noop"), nodes.len() as i32, inputs[0].len()).into_series())
 }
 
 /// Zero-work expression: the floor for "one plugin call".

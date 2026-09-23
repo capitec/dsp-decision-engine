@@ -1,0 +1,234 @@
+{"probe": "bench", "n": 1, "stage": "polars.__arrow_c_stream__", "median_us": 0.5163765, "min_us": 0.485515, "blocks": 25, "k": 2000, "ts": 1790147093.3197877}
+{"probe": "bench", "n": 1, "stage": "A.export (arrowc, ctypes loop)", "median_us": 26.2313365, "min_us": 26.079493, "blocks": 25, "k": 2000, "ts": 1790147094.6513777}
+{"probe": "bench", "n": 1, "stage": "A.kernel (walk_chunk, tables prebuilt)", "median_us": 3.2994195, "min_us": 3.270105, "blocks": 25, "k": 2000, "ts": 1790147094.8275623}
+{"probe": "bench", "n": 1, "stage": "A.dispatch floor (walk_chunk n=0)", "median_us": 3.258318, "min_us": 3.2334815, "blocks": 25, "k": 2000, "ts": 1790147094.9908519}
+{"probe": "bench", "n": 1, "stage": "A.string_tables (python glue)", "median_us": 4.478810999999999, "min_us": 4.452748, "blocks": 25, "k": 2000, "ts": 1790147095.2152352}
+{"probe": "bench", "n": 1, "stage": "A.pattern_table (python glue)", "median_us": 2.9710365000000003, "min_us": 2.9568815, "blocks": 25, "k": 2000, "ts": 1790147095.3639278}
+{"probe": "bench", "n": 1, "stage": "A.end_to_end", "median_us": 45.106799, "min_us": 43.549375999999995, "blocks": 25, "k": 2000, "ts": 1790147097.6970172}
+{"probe": "bench", "n": 1, "stage": "B.import (NanoView: stream+init+SetArrayMinimal)", "median_us": 12.029128, "min_us": 11.566694, "blocks": 25, "k": 2000, "ts": 1790147098.305627}
+{"probe": "bench", "n": 1, "stage": "B.kernel (walk_chunk_b, prebuilt)", "median_us": 2.2602474999999997, "min_us": 2.2200365, "blocks": 25, "k": 2000, "ts": 1790147098.4194674}
+{"probe": "bench", "n": 1, "stage": "B.dispatch floor (walk_chunk_b n=0)", "median_us": 2.2369515, "min_us": 2.195784, "blocks": 25, "k": 2000, "ts": 1790147098.5315487}
+{"probe": "bench", "n": 1, "stage": "validate.minimal", "median_us": 1.480633, "min_us": 1.469962, "blocks": 25, "k": 2000, "level": 1, "ts": 1790147098.606217}
+{"probe": "bench", "n": 1, "stage": "validate.default", "median_us": 1.4858695, "min_us": 1.4769855, "blocks": 25, "k": 2000, "level": 2, "ts": 1790147098.6819754}
+{"probe": "bench", "n": 1, "stage": "validate.full", "median_us": 1.529464, "min_us": 1.4876935, "blocks": 25, "k": 2000, "level": 3, "ts": 1790147098.7585642}
+{"probe": "bench", "n": 1, "stage": "B.end_to_end", "median_us": 20.5798545, "min_us": 20.197411, "blocks": 25, "k": 2000, "ts": 1790147099.7886786}
+{"probe": "bench", "n": 1, "stage": "B-checked.end_to_end", "median_us": 20.5368365, "min_us": 19.78034, "blocks": 25, "k": 2000, "ts": 1790147100.8110332}
+{"probe": "bench", "n": 1, "stage": "C-none.end_to_end (import only, no validate)", "median_us": 33.660275999999996, "min_us": 32.655765, "blocks": 25, "k": 2000, "ts": 1790147102.5058908}
+{"probe": "bench", "n": 1, "stage": "C-minimal.end_to_end", "median_us": 35.0176475, "min_us": 34.2887825, "blocks": 25, "k": 2000, "ts": 1790147104.27601}
+{"probe": "bench", "n": 1, "stage": "C-default.end_to_end", "median_us": 35.424946000000006, "min_us": 34.3423565, "blocks": 25, "k": 2000, "ts": 1790147106.0689244}
+{"probe": "bench", "n": 1, "stage": "C-full.end_to_end", "median_us": 35.925843, "min_us": 34.447337, "blocks": 25, "k": 2000, "ts": 1790147107.9209223}
+{"probe": "bench", "n": 10, "stage": "polars.__arrow_c_stream__", "median_us": 0.511682, "min_us": 0.483569, "blocks": 25, "k": 1000, "ts": 1790147107.9947307}
+{"probe": "bench", "n": 10, "stage": "A.export (arrowc, ctypes loop)", "median_us": 31.691714, "min_us": 31.180134, "blocks": 25, "k": 1000, "ts": 1790147108.790965}
+{"probe": "bench", "n": 10, "stage": "A.kernel (walk_chunk, tables prebuilt)", "median_us": 3.5453159999999997, "min_us": 3.4644589999999997, "blocks": 25, "k": 1000, "ts": 1790147108.8929305}
+{"probe": "bench", "n": 10, "stage": "A.dispatch floor (walk_chunk n=0)", "median_us": 3.292038, "min_us": 3.2429050000000004, "blocks": 25, "k": 1000, "ts": 1790147108.9757862}
+{"probe": "bench", "n": 10, "stage": "A.string_tables (python glue)", "median_us": 4.840421, "min_us": 4.733937, "blocks": 25, "k": 1000, "ts": 1790147109.097418}
+{"probe": "bench", "n": 10, "stage": "A.pattern_table (python glue)", "median_us": 2.977672, "min_us": 2.958786, "blocks": 25, "k": 1000, "ts": 1790147109.1723285}
+{"probe": "bench", "n": 10, "stage": "A.end_to_end", "median_us": 50.292796, "min_us": 49.687152000000005, "blocks": 25, "k": 1000, "ts": 1790147110.4491508}
+{"probe": "bench", "n": 10, "stage": "B.import (NanoView: stream+init+SetArrayMinimal)", "median_us": 11.796207, "min_us": 11.459169, "blocks": 25, "k": 1000, "ts": 1790147110.759466}
+{"probe": "bench", "n": 10, "stage": "B.kernel (walk_chunk_b, prebuilt)", "median_us": 2.417164, "min_us": 2.387239, "blocks": 25, "k": 1000, "ts": 1790147110.8202877}
+{"probe": "bench", "n": 10, "stage": "B.dispatch floor (walk_chunk_b n=0)", "median_us": 2.3152579999999996, "min_us": 2.1967280000000002, "blocks": 25, "k": 1000, "ts": 1790147110.8776014}
+{"probe": "bench", "n": 10, "stage": "validate.minimal", "median_us": 1.475567, "min_us": 1.467447, "blocks": 25, "k": 1000, "level": 1, "ts": 1790147110.914595}
+{"probe": "bench", "n": 10, "stage": "validate.default", "median_us": 1.490435, "min_us": 1.4731489999999998, "blocks": 25, "k": 1000, "level": 2, "ts": 1790147110.9523878}
+{"probe": "bench", "n": 10, "stage": "validate.full", "median_us": 1.491107, "min_us": 1.478831, "blocks": 25, "k": 1000, "level": 3, "ts": 1790147110.9898403}
+{"probe": "bench", "n": 10, "stage": "B.end_to_end", "median_us": 20.759373, "min_us": 20.566159, "blocks": 25, "k": 1000, "ts": 1790147111.5108857}
+{"probe": "bench", "n": 10, "stage": "B-checked.end_to_end", "median_us": 21.801716, "min_us": 20.843546, "blocks": 25, "k": 1000, "ts": 1790147112.0547376}
+{"probe": "bench", "n": 10, "stage": "C-none.end_to_end (import only, no validate)", "median_us": 40.683682999999995, "min_us": 38.478896, "blocks": 25, "k": 1000, "ts": 1790147113.085185}
+{"probe": "bench", "n": 10, "stage": "C-minimal.end_to_end", "median_us": 40.13496, "min_us": 39.87723200000001, "blocks": 25, "k": 1000, "ts": 1790147114.1056793}
+{"probe": "bench", "n": 10, "stage": "C-default.end_to_end", "median_us": 39.950790999999995, "min_us": 39.732613, "blocks": 25, "k": 1000, "ts": 1790147115.1318583}
+{"probe": "bench", "n": 10, "stage": "C-full.end_to_end", "median_us": 41.504404, "min_us": 40.001564, "blocks": 25, "k": 1000, "ts": 1790147116.1834316}
+{"probe": "bench", "n": 100, "stage": "polars.__arrow_c_stream__", "median_us": 0.464286, "min_us": 0.459822, "blocks": 21, "k": 500, "ts": 1790147116.3429298}
+{"probe": "bench", "n": 100, "stage": "A.export (arrowc, ctypes loop)", "median_us": 31.780136, "min_us": 30.847418, "blocks": 21, "k": 500, "ts": 1790147116.6794434}
+{"probe": "bench", "n": 100, "stage": "A.kernel (walk_chunk, tables prebuilt)", "median_us": 7.101064, "min_us": 6.926006, "blocks": 21, "k": 500, "ts": 1790147116.7606158}
+{"probe": "bench", "n": 100, "stage": "A.dispatch floor (walk_chunk n=0)", "median_us": 3.9073960000000003, "min_us": 3.85365, "blocks": 21, "k": 500, "ts": 1790147116.8018658}
+{"probe": "bench", "n": 100, "stage": "A.string_tables (python glue)", "median_us": 5.451890000000001, "min_us": 5.317224, "blocks": 21, "k": 500, "ts": 1790147116.8595653}
+{"probe": "bench", "n": 100, "stage": "A.pattern_table (python glue)", "median_us": 3.165694, "min_us": 3.1363000000000003, "blocks": 21, "k": 500, "ts": 1790147116.893452}
+{"probe": "bench", "n": 100, "stage": "A.end_to_end", "median_us": 55.56741, "min_us": 55.023343999999994, "blocks": 21, "k": 500, "ts": 1790147117.4871294}
+{"probe": "bench", "n": 100, "stage": "B.import (NanoView: stream+init+SetArrayMinimal)", "median_us": 11.399078, "min_us": 11.289974, "blocks": 21, "k": 500, "ts": 1790147117.6123335}
+{"probe": "bench", "n": 100, "stage": "B.kernel (walk_chunk_b, prebuilt)", "median_us": 5.734514, "min_us": 4.878348, "blocks": 21, "k": 500, "ts": 1790147117.670706}
+{"probe": "bench", "n": 100, "stage": "B.dispatch floor (walk_chunk_b n=0)", "median_us": 2.5829079999999998, "min_us": 2.557608, "blocks": 21, "k": 500, "ts": 1790147117.6981587}
+{"probe": "bench", "n": 100, "stage": "validate.minimal", "median_us": 1.76347, "min_us": 1.746194, "blocks": 21, "k": 500, "level": 1, "ts": 1790147117.716798}
+{"probe": "bench", "n": 100, "stage": "validate.default", "median_us": 1.771824, "min_us": 1.749904, "blocks": 21, "k": 500, "level": 2, "ts": 1790147117.7360947}
+{"probe": "bench", "n": 100, "stage": "validate.full", "median_us": 1.785142, "min_us": 1.762698, "blocks": 21, "k": 500, "level": 3, "ts": 1790147117.7550092}
+{"probe": "bench", "n": 100, "stage": "B.end_to_end", "median_us": 31.373402, "min_us": 27.60998, "blocks": 21, "k": 500, "ts": 1790147118.0740654}
+{"probe": "bench", "n": 100, "stage": "B-checked.end_to_end", "median_us": 27.810396, "min_us": 27.574806, "blocks": 21, "k": 500, "ts": 1790147118.3903549}
+{"probe": "bench", "n": 100, "stage": "C-none.end_to_end (import only, no validate)", "median_us": 47.290322, "min_us": 44.831956, "blocks": 21, "k": 500, "ts": 1790147118.9271922}
+{"probe": "bench", "n": 100, "stage": "C-minimal.end_to_end", "median_us": 45.570028, "min_us": 45.073182, "blocks": 21, "k": 500, "ts": 1790147119.417262}
+{"probe": "bench", "n": 100, "stage": "C-default.end_to_end", "median_us": 45.32433, "min_us": 44.72753, "blocks": 21, "k": 500, "ts": 1790147119.905198}
+{"probe": "bench", "n": 100, "stage": "C-full.end_to_end", "median_us": 47.674816, "min_us": 44.900174, "blocks": 21, "k": 500, "ts": 1790147120.411999}
+{"probe": "bench", "n": 1000, "stage": "polars.__arrow_c_stream__", "median_us": 0.44398000000000004, "min_us": 0.43619, "blocks": 21, "k": 100, "ts": 1790147120.692834}
+{"probe": "bench", "n": 1000, "stage": "A.export (arrowc, ctypes loop)", "median_us": 31.835759999999997, "min_us": 31.083779999999997, "blocks": 21, "k": 100, "ts": 1790147120.7603183}
+{"probe": "bench", "n": 1000, "stage": "A.kernel (walk_chunk, tables prebuilt)", "median_us": 31.37493, "min_us": 30.5589, "blocks": 21, "k": 100, "ts": 1790147120.827919}
+{"probe": "bench", "n": 1000, "stage": "A.dispatch floor (walk_chunk n=0)", "median_us": 3.46781, "min_us": 3.38502, "blocks": 21, "k": 100, "ts": 1790147120.8353713}
+{"probe": "bench", "n": 1000, "stage": "A.string_tables (python glue)", "median_us": 5.15406, "min_us": 5.02491, "blocks": 21, "k": 100, "ts": 1790147120.8462749}
+{"probe": "bench", "n": 1000, "stage": "A.pattern_table (python glue)", "median_us": 3.14801, "min_us": 3.09119, "blocks": 21, "k": 100, "ts": 1790147120.8529851}
+{"probe": "bench", "n": 1000, "stage": "A.end_to_end", "median_us": 114.24089, "min_us": 109.64095, "blocks": 21, "k": 100, "ts": 1790147121.0919237}
+{"probe": "bench", "n": 1000, "stage": "B.import (NanoView: stream+init+SetArrayMinimal)", "median_us": 11.494309999999999, "min_us": 11.34477, "blocks": 21, "k": 100, "ts": 1790147121.117375}
+{"probe": "bench", "n": 1000, "stage": "B.kernel (walk_chunk_b, prebuilt)", "median_us": 33.45778, "min_us": 32.45884, "blocks": 21, "k": 100, "ts": 1790147121.1884522}
+{"probe": "bench", "n": 1000, "stage": "B.dispatch floor (walk_chunk_b n=0)", "median_us": 2.1505199999999998, "min_us": 2.12561, "blocks": 21, "k": 100, "ts": 1790147121.1930685}
+{"probe": "bench", "n": 1000, "stage": "validate.minimal", "median_us": 1.46116, "min_us": 1.43791, "blocks": 21, "k": 100, "level": 1, "ts": 1790147121.1962109}
+{"probe": "bench", "n": 1000, "stage": "validate.default", "median_us": 1.4701300000000002, "min_us": 1.44622, "blocks": 21, "k": 100, "level": 2, "ts": 1790147121.1993558}
+{"probe": "bench", "n": 1000, "stage": "validate.full", "median_us": 1.47931, "min_us": 1.46519, "blocks": 21, "k": 100, "level": 3, "ts": 1790147121.2025187}
+{"probe": "bench", "n": 1000, "stage": "B.end_to_end", "median_us": 88.91107000000001, "min_us": 84.65742, "blocks": 21, "k": 100, "ts": 1790147121.3898342}
+{"probe": "bench", "n": 1000, "stage": "B-checked.end_to_end", "median_us": 89.29321, "min_us": 87.67835000000001, "blocks": 21, "k": 100, "ts": 1790147121.5803692}
+{"probe": "bench", "n": 1000, "stage": "C-none.end_to_end (import only, no validate)", "median_us": 103.27651, "min_us": 100.74734, "blocks": 21, "k": 100, "ts": 1790147121.798308}
+{"probe": "bench", "n": 1000, "stage": "C-minimal.end_to_end", "median_us": 105.30117, "min_us": 100.048, "blocks": 21, "k": 100, "ts": 1790147122.0320473}
+{"probe": "bench", "n": 1000, "stage": "C-default.end_to_end", "median_us": 106.05128, "min_us": 100.84512, "blocks": 21, "k": 100, "ts": 1790147122.2839506}
+{"probe": "bench", "n": 1000, "stage": "C-full.end_to_end", "median_us": 101.84688, "min_us": 99.52433, "blocks": 21, "k": 100, "ts": 1790147122.4995952}
+{"probe": "bench", "n": 1000000, "stage": "polars.__arrow_c_stream__", "median_us": 1.515, "min_us": 0.981, "blocks": 5, "k": 1, "ts": 1790147128.1407638}
+{"probe": "bench", "n": 1000000, "stage": "A.export (arrowc, ctypes loop)", "median_us": 43.553, "min_us": 39.612, "blocks": 5, "k": 1, "ts": 1790147128.1414435}
+{"probe": "bench", "n": 1000000, "stage": "A.kernel (walk_chunk, tables prebuilt)", "median_us": 63458.068, "min_us": 62262.805, "blocks": 5, "k": 1, "ts": 1790147128.5446835}
+{"probe": "bench", "n": 1000000, "stage": "A.dispatch floor (walk_chunk n=0)", "median_us": 9.006, "min_us": 7.376, "blocks": 5, "k": 1, "ts": 1790147128.5453393}
+{"probe": "bench", "n": 1000000, "stage": "A.string_tables (python glue)", "median_us": 13.217, "min_us": 12.859, "blocks": 5, "k": 1, "ts": 1790147128.545693}
+{"probe": "bench", "n": 1000000, "stage": "A.pattern_table (python glue)", "median_us": 7.52, "min_us": 7.078, "blocks": 5, "k": 1, "ts": 1790147128.545969}
+{"probe": "bench", "n": 1000000, "stage": "A.end_to_end", "median_us": 65973.429, "min_us": 65748.952, "blocks": 5, "k": 1, "ts": 1790147128.878418}
+{"probe": "bench", "n": 1000000, "stage": "B.import (NanoView: stream+init+SetArrayMinimal)", "median_us": 20.886, "min_us": 14.514, "blocks": 5, "k": 1, "ts": 1790147128.8788588}
+{"probe": "bench", "n": 1000000, "stage": "B.kernel (walk_chunk_b, prebuilt)", "median_us": 70474.188, "min_us": 68112.687, "blocks": 5, "k": 1, "ts": 1790147129.2998412}
+{"probe": "bench", "n": 1000000, "stage": "B.dispatch floor (walk_chunk_b n=0)", "median_us": 3.327, "min_us": 3.023, "blocks": 5, "k": 1, "ts": 1790147129.3002028}
+{"probe": "bench", "n": 1000000, "stage": "validate.minimal", "median_us": 2.611, "min_us": 2.059, "blocks": 5, "k": 1, "level": 1, "ts": 1790147129.300337}
+{"probe": "bench", "n": 1000000, "stage": "validate.default", "median_us": 3.898, "min_us": 3.868, "blocks": 5, "k": 1, "level": 2, "ts": 1790147129.3004708}
+{"probe": "bench", "n": 1000000, "stage": "validate.full", "median_us": 2.199, "min_us": 2.024, "blocks": 5, "k": 1, "level": 3, "ts": 1790147129.3005779}
+{"probe": "bench", "n": 1000000, "stage": "B.end_to_end", "median_us": 81123.66, "min_us": 68403.897, "blocks": 5, "k": 1, "ts": 1790147129.6910253}
+{"probe": "bench", "n": 1000000, "stage": "B-checked.end_to_end", "median_us": 68384.306, "min_us": 67777.483, "blocks": 5, "k": 1, "ts": 1790147130.038124}
+{"probe": "bench", "n": 1000000, "stage": "C-none.end_to_end (import only, no validate)", "median_us": 66572.36, "min_us": 65605.191, "blocks": 5, "k": 1, "ts": 1790147130.3738506}
+{"probe": "bench", "n": 1000000, "stage": "C-minimal.end_to_end", "median_us": 63377.699, "min_us": 60744.064, "blocks": 5, "k": 1, "ts": 1790147130.689392}
+{"probe": "bench", "n": 1000000, "stage": "C-default.end_to_end", "median_us": 60806.487, "min_us": 60280.089, "blocks": 5, "k": 1, "ts": 1790147130.9944038}
+{"probe": "bench", "n": 1000000, "stage": "C-full.end_to_end", "median_us": 60612.15, "min_us": 60065.014, "blocks": 5, "k": 1, "ts": 1790147131.2983563}
+{"probe": "corrupt", "case": "clean", "approach": "A", "returncode": 0, "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147225.6019416}
+{"probe": "corrupt", "case": "clean", "approach": "B", "returncode": 0, "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147226.549922}
+{"probe": "corrupt", "case": "clean", "approach": "B-checked", "returncode": 0, "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147227.4707127}
+{"probe": "corrupt", "case": "clean", "approach": "C-full", "returncode": 0, "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147228.4405837}
+{"probe": "corrupt", "case": "clean", "approach": "C-trusting", "returncode": 0, "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147229.3683922}
+{"probe": "corrupt", "case": "sliced_offset", "approach": "A", "returncode": 0, "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147230.3106854}
+{"probe": "corrupt", "case": "sliced_offset", "approach": "B", "returncode": 0, "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147231.235522}
+{"probe": "corrupt", "case": "sliced_offset", "approach": "B-checked", "returncode": 0, "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147232.1320574}
+{"probe": "corrupt", "case": "sliced_offset", "approach": "C-full", "returncode": 0, "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147233.0562263}
+{"probe": "corrupt", "case": "sliced_offset", "approach": "C-trusting", "returncode": 0, "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147233.992382}
+{"probe": "corrupt", "case": "bad_buffer_index", "approach": "A", "returncode": 0, "outcome": "error_leaf", "detail": "[1, -1, 0, 0, 1, 1]", "ts": 1790147234.8947477}
+{"probe": "corrupt", "case": "bad_buffer_index", "approach": "B", "returncode": -11, "outcome": "crash", "detail": "signal 11", "ts": 1790147236.9229162}
+{"probe": "corrupt", "case": "bad_buffer_index", "approach": "B-checked", "returncode": 0, "outcome": "error_leaf", "detail": "[1, -1, 0, 0, 1, 1]", "ts": 1790147237.8631058}
+{"probe": "corrupt", "case": "bad_buffer_index", "approach": "C-full", "returncode": 0, "outcome": "error_leaf", "detail": "[1, -1, 0, 0, 1, 1]", "ts": 1790147238.7874432}
+{"probe": "corrupt", "case": "bad_buffer_index", "approach": "C-trusting", "returncode": -11, "outcome": "crash", "detail": "signal 11", "ts": 1790147240.8974962}
+{"probe": "corrupt", "case": "bad_offset", "approach": "A", "returncode": 0, "outcome": "error_leaf", "detail": "[1, -1, 0, 0, 1, 1]", "ts": 1790147241.8215551}
+{"probe": "corrupt", "case": "bad_offset", "approach": "B", "returncode": -11, "outcome": "crash", "detail": "signal 11", "ts": 1790147243.8587606}
+{"probe": "corrupt", "case": "bad_offset", "approach": "B-checked", "returncode": 0, "outcome": "error_leaf", "detail": "[1, -1, 0, 0, 1, 1]", "ts": 1790147244.8065922}
+{"probe": "corrupt", "case": "bad_offset", "approach": "C-full", "returncode": 0, "outcome": "error_leaf", "detail": "[1, -1, 0, 0, 1, 1]", "ts": 1790147245.7405314}
+{"probe": "corrupt", "case": "bad_offset", "approach": "C-trusting", "returncode": -11, "outcome": "crash", "detail": "signal 11", "ts": 1790147247.8141053}
+{"probe": "corrupt", "case": "bad_length", "approach": "A", "returncode": 0, "outcome": "error_leaf", "detail": "[1, -1, 0, 0, 1, 1]", "ts": 1790147248.7697592}
+{"probe": "corrupt", "case": "bad_length", "approach": "B", "returncode": 0, "outcome": "wrong_answer", "detail": "returned clean answer [1, 1, 0, 0, 1, 1] on corrupt data", "ts": 1790147249.7403007}
+{"probe": "corrupt", "case": "bad_length", "approach": "B-checked", "returncode": 0, "outcome": "error_leaf", "detail": "[1, -1, 0, 0, 1, 1]", "ts": 1790147250.726857}
+{"probe": "corrupt", "case": "bad_length", "approach": "C-full", "returncode": 0, "outcome": "error_leaf", "detail": "[1, -1, 0, 0, 1, 1]", "ts": 1790147251.6532896}
+{"probe": "corrupt", "case": "bad_length", "approach": "C-trusting", "returncode": 0, "outcome": "wrong_answer", "detail": "returned clean answer [1, 1, 0, 0, 1, 1] on corrupt data", "ts": 1790147252.5722997}
+{"probe": "corrupt", "case": "null_validity_nonzero_null_count", "approach": "A", "returncode": 0, "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147253.5113754}
+{"probe": "corrupt", "case": "null_validity_nonzero_null_count", "approach": "B", "returncode": 1, "outcome": "refused", "detail": "nashim.NanoError: import refused rc=-6: Expected string_view array buffer 0 to have size >= 1 bytes but found buffer with 0 bytes", "ts": 1790147254.1684678}
+{"probe": "corrupt", "case": "null_validity_nonzero_null_count", "approach": "B-checked", "returncode": 1, "outcome": "refused", "detail": "nashim.NanoError: import refused rc=-6: Expected string_view array buffer 0 to have size >= 1 bytes but found buffer with 0 bytes", "ts": 1790147254.8481472}
+{"probe": "corrupt", "case": "null_validity_nonzero_null_count", "approach": "C-full", "returncode": 1, "outcome": "refused", "detail": "nashim.NanoError: import refused rc=-6: Expected string_view array buffer 0 to have size >= 1 bytes but found buffer with 0 bytes", "ts": 1790147255.5255415}
+{"probe": "corrupt", "case": "null_validity_nonzero_null_count", "approach": "C-trusting", "returncode": 1, "outcome": "refused", "detail": "nashim.NanoError: import refused rc=-6: Expected string_view array buffer 0 to have size >= 1 bytes but found buffer with 0 bytes", "ts": 1790147256.1973999}
+{"probe": "corrupt", "case": "n_buffers_truncated", "approach": "A", "returncode": 0, "outcome": "error_leaf", "detail": "[1, -1, 0, 0, -1, 1]", "ts": 1790147257.130311}
+{"probe": "corrupt", "case": "n_buffers_truncated", "approach": "B", "returncode": 0, "outcome": "wrong_answer", "detail": "returned clean answer [1, 1, 0, 0, 1, 1] on corrupt data", "ts": 1790147258.0656025}
+{"probe": "corrupt", "case": "n_buffers_truncated", "approach": "B-checked", "returncode": 0, "outcome": "error_leaf", "detail": "[1, -1, 0, 0, -1, 1]", "ts": 1790147258.9960778}
+{"probe": "corrupt", "case": "n_buffers_truncated", "approach": "C-full", "returncode": 1, "outcome": "refused", "detail": "ValueError: Array length must be >= 0, not -1", "ts": 1790147259.6846218}
+{"probe": "corrupt", "case": "n_buffers_truncated", "approach": "C-trusting", "returncode": 1, "outcome": "refused", "detail": "ValueError: Array length must be >= 0, not -1", "ts": 1790147260.375824}
+{"probe": "corrupt", "case": "lying_sizes_buffer", "approach": "A", "returncode": 0, "outcome": "error_leaf", "detail": "[1, -1, 0, 0, 1, 1]", "ts": 1790147261.3062346}
+{"probe": "corrupt", "case": "lying_sizes_buffer", "approach": "B", "returncode": 0, "outcome": "wrong_answer", "detail": "[1, 0, 0, 0, 1, 1]", "ts": 1790147262.2701359}
+{"probe": "corrupt", "case": "lying_sizes_buffer", "approach": "B-checked", "returncode": 0, "outcome": "wrong_answer", "detail": "[1, 0, 0, 0, 1, 1]", "ts": 1790147263.1837568}
+{"probe": "corrupt", "case": "lying_sizes_buffer", "approach": "C-full", "returncode": 0, "outcome": "wrong_answer", "detail": "[1, 0, 0, 0, 1, 1]", "ts": 1790147264.1239831}
+{"probe": "corrupt", "case": "lying_sizes_buffer", "approach": "C-trusting", "returncode": 0, "outcome": "wrong_answer", "detail": "[1, 0, 0, 0, 1, 1]", "ts": 1790147265.055866}
+{"probe": "validate_cost", "n": 1, "level": "minimal", "median_us": 1.4251415, "min_us": 1.4192485, "ns_per_row": 1425.1415, "ts": 1790147378.9186738}
+{"probe": "validate_cost", "n": 1, "level": "default", "median_us": 1.4318440000000001, "min_us": 1.428768, "ns_per_row": 1431.844, "ts": 1790147378.961862}
+{"probe": "validate_cost", "n": 1, "level": "full", "median_us": 1.437757, "min_us": 1.433934, "ns_per_row": 1437.757, "ts": 1790147379.0051103}
+{"probe": "validate_cost", "n": 1, "level": "ctypes_call_floor", "median_us": 0.7097815000000001, "min_us": 0.706215, "ts": 1790147379.0264676}
+{"probe": "validate_cost", "n": 10, "level": "minimal", "median_us": 1.4243569999999999, "min_us": 1.418215, "ns_per_row": 142.4357, "ts": 1790147379.0696292}
+{"probe": "validate_cost", "n": 10, "level": "default", "median_us": 1.4333755000000001, "min_us": 1.426141, "ns_per_row": 143.33755000000002, "ts": 1790147379.1130822}
+{"probe": "validate_cost", "n": 10, "level": "full", "median_us": 1.438556, "min_us": 1.428747, "ns_per_row": 143.8556, "ts": 1790147379.1568801}
+{"probe": "validate_cost", "n": 10, "level": "ctypes_call_floor", "median_us": 0.7087859999999999, "min_us": 0.704757, "ts": 1790147379.1781998}
+{"probe": "validate_cost", "n": 100, "level": "minimal", "median_us": 1.4257725, "min_us": 1.4172525, "ns_per_row": 14.257725, "ts": 1790147379.2215376}
+{"probe": "validate_cost", "n": 100, "level": "default", "median_us": 1.4319005, "min_us": 1.42616, "ns_per_row": 14.319004999999999, "ts": 1790147379.264637}
+{"probe": "validate_cost", "n": 100, "level": "full", "median_us": 1.438167, "min_us": 1.4283775, "ns_per_row": 14.38167, "ts": 1790147379.3086948}
+{"probe": "validate_cost", "n": 100, "level": "ctypes_call_floor", "median_us": 0.707841, "min_us": 0.7032695, "ts": 1790147379.3300226}
+{"probe": "validate_cost", "n": 1000, "level": "minimal", "median_us": 1.4245150000000002, "min_us": 1.4176469999999999, "ns_per_row": 1.4245150000000002, "ts": 1790147379.3755999}
+{"probe": "validate_cost", "n": 1000, "level": "default", "median_us": 1.4320235000000001, "min_us": 1.424093, "ns_per_row": 1.4320235000000001, "ts": 1790147379.418619}
+{"probe": "validate_cost", "n": 1000, "level": "full", "median_us": 1.4357229999999999, "min_us": 1.4304815000000002, "ns_per_row": 1.4357229999999999, "ts": 1790147379.4617512}
+{"probe": "validate_cost", "n": 1000, "level": "ctypes_call_floor", "median_us": 0.72691, "min_us": 0.722025, "ts": 1790147379.483596}
+{"probe": "validate_cost", "n": 10000, "level": "minimal", "median_us": 1.406895, "min_us": 1.3942999999999999, "ns_per_row": 0.1406895, "ts": 1790147379.51319}
+{"probe": "validate_cost", "n": 10000, "level": "default", "median_us": 1.4099249999999999, "min_us": 1.40112, "ns_per_row": 0.1409925, "ts": 1790147379.5175154}
+{"probe": "validate_cost", "n": 10000, "level": "full", "median_us": 1.42469, "min_us": 1.4074749999999998, "ns_per_row": 0.142469, "ts": 1790147379.5218441}
+{"probe": "validate_cost", "n": 10000, "level": "ctypes_call_floor", "median_us": 0.713365, "min_us": 0.70876, "ts": 1790147379.5240405}
+{"probe": "validate_cost", "n": 100000, "level": "minimal", "median_us": 1.408345, "min_us": 1.39709, "ns_per_row": 0.01408345, "ts": 1790147379.782694}
+{"probe": "validate_cost", "n": 100000, "level": "default", "median_us": 1.4077449999999998, "min_us": 1.39912, "ns_per_row": 0.014077449999999998, "ts": 1790147379.787106}
+{"probe": "validate_cost", "n": 100000, "level": "full", "median_us": 1.420715, "min_us": 1.40732, "ns_per_row": 0.01420715, "ts": 1790147379.7914393}
+{"probe": "validate_cost", "n": 100000, "level": "ctypes_call_floor", "median_us": 0.7159650000000001, "min_us": 0.70953, "ts": 1790147379.7936566}
+{"probe": "validate_cost", "n": 1000000, "level": "minimal", "median_us": 1.6192, "min_us": 1.583, "ns_per_row": 0.0016192000000000001, "ts": 1790147382.315888}
+{"probe": "validate_cost", "n": 1000000, "level": "default", "median_us": 1.576, "min_us": 1.5534000000000001, "ns_per_row": 0.001576, "ts": 1790147382.316212}
+{"probe": "validate_cost", "n": 1000000, "level": "full", "median_us": 1.5784, "min_us": 1.5495999999999999, "ns_per_row": 0.0015784, "ts": 1790147382.3164053}
+{"probe": "validate_cost", "n": 1000000, "level": "ctypes_call_floor", "median_us": 0.8538, "min_us": 0.8264, "ts": 1790147382.3165338}
+{"probe": "ablate_import", "n": 1, "stage": "stream: __arrow_c_stream__()", "median_us": 0.4857835, "min_us": 0.48166950000000003, "ts": 1790147383.1295733}
+{"probe": "ablate_import", "n": 1, "stage": "+ PyCapsule_GetPointer", "median_us": 1.310567, "min_us": 1.3033855, "ts": 1790147383.184812}
+{"probe": "ablate_import", "n": 1, "stage": "+ ctypes stream loop (schema, 2x get_next, buffers, release)", "median_us": 14.276548, "min_us": 14.228949, "ts": 1790147383.784894}
+{"probe": "ablate_import", "n": 1, "stage": "+ np.ctypeslib.as_array over the sizes buffer", "median_us": 22.3594325, "min_us": 22.251449, "ts": 1790147384.7273395}
+{"probe": "ablate_import", "n": 1, "stage": "  (alt: sizes via (c_int64*n).from_address)", "median_us": 15.7593725, "min_us": 15.6380275, "ts": 1790147385.3963413}
+{"probe": "ablate_import", "n": 1, "stage": "arrowc.export + release (as written)", "median_us": 26.1782245, "min_us": 25.9178305, "ts": 1790147386.4980502}
+{"probe": "ablate_import", "n": 1, "stage": "NanoView(s) + release (as written)", "median_us": 11.6675795, "min_us": 11.5927505, "ts": 1790147386.9896924}
+{"probe": "ablate_import", "n": 1, "stage": "pooled: stream + capsule + sm_import_single + 3 releases", "median_us": 6.225471, "min_us": 6.183827, "ts": 1790147387.2515907}
+{"probe": "ablate_import", "n": 1, "stage": "ctypes object churn: 3 structs + 2 buffers per call", "median_us": 1.729429, "min_us": 1.7197755, "ts": 1790147387.3248556}
+{"probe": "spec_change", "format": "u", "approach": "A", "outcome": "refused", "detail": "ValueError: expected Arrow Utf8View ('vu') from polars, got 'u'; this kernel reads the binview layout only", "ts": 1790147388.0017576}
+{"probe": "spec_change", "format": "u", "approach": "B", "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147388.1832824}
+{"probe": "spec_change", "format": "u", "approach": "B-checked", "outcome": "refused", "detail": "NanoError: sm_view_set rc=-5: Expected non-released schema", "ts": 1790147388.1834788}
+{"probe": "spec_change", "format": "u", "approach": "C-full", "outcome": "refused", "detail": "NanoError: sm_view_set rc=-5: Expected non-released schema", "ts": 1790147388.1835692}
+{"probe": "spec_change", "format": "U", "approach": "A", "outcome": "refused", "detail": "ValueError: expected Arrow Utf8View ('vu') from polars, got 'U'; this kernel reads the binview layout only", "ts": 1790147388.1838174}
+{"probe": "spec_change", "format": "U", "approach": "B", "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147388.1839654}
+{"probe": "spec_change", "format": "U", "approach": "B-checked", "outcome": "refused", "detail": "NanoError: sm_view_set rc=-5: Expected non-released schema", "ts": 1790147388.184036}
+{"probe": "spec_change", "format": "U", "approach": "C-full", "outcome": "refused", "detail": "NanoError: sm_view_set rc=-5: Expected non-released schema", "ts": 1790147388.1840856}
+{"probe": "spec_change", "format": "vz", "approach": "A", "outcome": "refused", "detail": "ValueError: expected Arrow Utf8View ('vu') from polars, got 'vz'; this kernel reads the binview layout only", "ts": 1790147388.184232}
+{"probe": "cache", "run": "cold", "returncode": 0, "data_saved": 3, "data_loaded": 0, "result": "RESULT [1, 0, 0, 0, 1] [1, 0, 0, 0, 1] [1, 0, 0, 0, 1] [1, 0, 0, 0, 1] fnaddr 0x7fec3c0d69e0", "ts": 1790147393.3355803}
+{"probe": "cache", "run": "warm", "returncode": 0, "data_saved": 0, "data_loaded": 3, "result": "RESULT [1, 0, 0, 0, 1] [1, 0, 0, 0, 1] [1, 0, 0, 0, 1] [1, 0, 0, 0, 1] fnaddr 0x7f19bd2d69e0", "ts": 1790147394.317915}
+{"probe": "cache", "run": "warm2", "returncode": 0, "data_saved": 0, "data_loaded": 3, "result": "RESULT [1, 0, 0, 0, 1] [1, 0, 0, 0, 1] [1, 0, 0, 0, 1] [1, 0, 0, 0, 1] fnaddr 0x7f11468d69e0", "ts": 1790147395.2458873}
+{"probe": "build", "run": 1, "seconds": 1.633622581, "bytes": 76296, "stripped_bytes": 68080, "compiler": "gcc (GCC) 16.1.1 20260515 (Red Hat 16.1.1-2)", "ts": 1790147396.9855378}
+{"probe": "build", "run": 2, "seconds": 1.661197353, "bytes": 76296, "stripped_bytes": 68080, "compiler": "gcc (GCC) 16.1.1 20260515 (Red Hat 16.1.1-2)", "ts": 1790147398.7100973}
+{"probe": "build", "run": 3, "seconds": 1.641335947, "bytes": 76296, "stripped_bytes": 68080, "compiler": "gcc (GCC) 16.1.1 20260515 (Red Hat 16.1.1-2)", "ts": 1790147400.4151225}
+{"probe": "corrupt", "case": "clean", "approach": "A", "returncode": 0, "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147402.9374297}
+{"probe": "corrupt", "case": "clean", "approach": "B", "returncode": 0, "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147403.8615458}
+{"probe": "corrupt", "case": "clean", "approach": "B-checked", "returncode": 0, "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147404.8253784}
+{"probe": "corrupt", "case": "clean", "approach": "C-full", "returncode": 0, "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147405.753458}
+{"probe": "corrupt", "case": "clean", "approach": "C-trusting", "returncode": 0, "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147406.6748538}
+{"probe": "corrupt", "case": "sliced_offset", "approach": "A", "returncode": 0, "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147407.61197}
+{"probe": "corrupt", "case": "sliced_offset", "approach": "B", "returncode": 0, "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147408.5583725}
+{"probe": "corrupt", "case": "sliced_offset", "approach": "B-checked", "returncode": 0, "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147409.492301}
+{"probe": "corrupt", "case": "sliced_offset", "approach": "C-full", "returncode": 0, "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147410.4485343}
+{"probe": "corrupt", "case": "sliced_offset", "approach": "C-trusting", "returncode": 0, "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147411.3790689}
+{"probe": "corrupt", "case": "bad_buffer_index", "approach": "A", "returncode": 0, "outcome": "error_leaf", "detail": "[1, -1, 0, 0, 1, 1]", "ts": 1790147412.3041165}
+{"probe": "corrupt", "case": "bad_buffer_index", "approach": "B", "returncode": -11, "outcome": "crash", "detail": "signal 11", "ts": 1790147414.3411818}
+{"probe": "corrupt", "case": "bad_buffer_index", "approach": "B-checked", "returncode": 0, "outcome": "error_leaf", "detail": "[1, -1, 0, 0, 1, 1]", "ts": 1790147415.2928286}
+{"probe": "corrupt", "case": "bad_buffer_index", "approach": "C-full", "returncode": 0, "outcome": "error_leaf", "detail": "[1, -1, 0, 0, 1, 1]", "ts": 1790147416.269997}
+{"probe": "corrupt", "case": "bad_buffer_index", "approach": "C-trusting", "returncode": -11, "outcome": "crash", "detail": "signal 11", "ts": 1790147418.2581754}
+{"probe": "corrupt", "case": "bad_offset", "approach": "A", "returncode": 0, "outcome": "error_leaf", "detail": "[1, -1, 0, 0, 1, 1]", "ts": 1790147419.213151}
+{"probe": "corrupt", "case": "bad_offset", "approach": "B", "returncode": -11, "outcome": "crash", "detail": "signal 11", "ts": 1790147421.217163}
+{"probe": "corrupt", "case": "bad_offset", "approach": "B-checked", "returncode": 0, "outcome": "error_leaf", "detail": "[1, -1, 0, 0, 1, 1]", "ts": 1790147422.1583998}
+{"probe": "corrupt", "case": "bad_offset", "approach": "C-full", "returncode": 0, "outcome": "error_leaf", "detail": "[1, -1, 0, 0, 1, 1]", "ts": 1790147423.0896952}
+{"probe": "corrupt", "case": "bad_offset", "approach": "C-trusting", "returncode": -11, "outcome": "crash", "detail": "signal 11", "ts": 1790147425.1507401}
+{"probe": "corrupt", "case": "bad_length", "approach": "A", "returncode": 0, "outcome": "error_leaf", "detail": "[1, -1, 0, 0, 1, 1]", "ts": 1790147426.0956094}
+{"probe": "corrupt", "case": "bad_length", "approach": "B", "returncode": 0, "outcome": "answered by luck", "detail": "[1, 1, 0, 0, 1, 1]: match found before the 1 GB overrun was walked", "ts": 1790147427.0691226}
+{"probe": "corrupt", "case": "bad_length", "approach": "B-checked", "returncode": 0, "outcome": "error_leaf", "detail": "[1, -1, 0, 0, 1, 1]", "ts": 1790147427.9951613}
+{"probe": "corrupt", "case": "bad_length", "approach": "C-full", "returncode": 0, "outcome": "error_leaf", "detail": "[1, -1, 0, 0, 1, 1]", "ts": 1790147428.9189017}
+{"probe": "corrupt", "case": "bad_length", "approach": "C-trusting", "returncode": 0, "outcome": "answered by luck", "detail": "[1, 1, 0, 0, 1, 1]: match found before the 1 GB overrun was walked", "ts": 1790147429.846573}
+{"probe": "corrupt", "case": "bad_length_scan", "approach": "A", "returncode": 0, "outcome": "error_leaf", "detail": "[0, -1, 0, 0, 0, 0]", "ts": 1790147430.779896}
+{"probe": "corrupt", "case": "bad_length_scan", "approach": "B", "returncode": 0, "outcome": "wrong_answer", "detail": "[0, 1, 0, 0, 0, 0]", "ts": 1790147431.7295089}
+{"probe": "corrupt", "case": "bad_length_scan", "approach": "B-checked", "returncode": 0, "outcome": "error_leaf", "detail": "[0, -1, 0, 0, 0, 0]", "ts": 1790147432.681689}
+{"probe": "corrupt", "case": "bad_length_scan", "approach": "C-full", "returncode": 0, "outcome": "error_leaf", "detail": "[0, -1, 0, 0, 0, 0]", "ts": 1790147433.633868}
+{"probe": "corrupt", "case": "bad_length_scan", "approach": "C-trusting", "returncode": 0, "outcome": "wrong_answer", "detail": "[0, 1, 0, 0, 0, 0]", "ts": 1790147434.5891132}
+{"probe": "corrupt", "case": "null_validity_nonzero_null_count", "approach": "A", "returncode": 0, "outcome": "answered (null_count ignored)", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147435.5368547}
+{"probe": "corrupt", "case": "null_validity_nonzero_null_count", "approach": "B", "returncode": 1, "outcome": "refused", "detail": "nashim.NanoError: import refused rc=-6: Expected string_view array buffer 0 to have size >= 1 bytes but found buffer with 0 bytes", "ts": 1790147436.2156243}
+{"probe": "corrupt", "case": "null_validity_nonzero_null_count", "approach": "B-checked", "returncode": 1, "outcome": "refused", "detail": "nashim.NanoError: import refused rc=-6: Expected string_view array buffer 0 to have size >= 1 bytes but found buffer with 0 bytes", "ts": 1790147436.895024}
+{"probe": "corrupt", "case": "null_validity_nonzero_null_count", "approach": "C-full", "returncode": 1, "outcome": "refused", "detail": "nashim.NanoError: import refused rc=-6: Expected string_view array buffer 0 to have size >= 1 bytes but found buffer with 0 bytes", "ts": 1790147437.6642509}
+{"probe": "corrupt", "case": "null_validity_nonzero_null_count", "approach": "C-trusting", "returncode": 1, "outcome": "refused", "detail": "nashim.NanoError: import refused rc=-6: Expected string_view array buffer 0 to have size >= 1 bytes but found buffer with 0 bytes", "ts": 1790147438.3408363}
+{"probe": "corrupt", "case": "n_buffers_truncated", "approach": "A", "returncode": 0, "outcome": "error_leaf", "detail": "[1, -1, 0, 0, -1, 1]", "ts": 1790147439.267116}
+{"probe": "corrupt", "case": "n_buffers_truncated", "approach": "B", "returncode": 0, "outcome": "wrong_answer", "detail": "returned the clean answer [1, 1, 0, 0, 1, 1] on corrupt data (read out of bounds silently)", "ts": 1790147440.2254763}
+{"probe": "corrupt", "case": "n_buffers_truncated", "approach": "B-checked", "returncode": 0, "outcome": "error_leaf", "detail": "[1, -1, 0, 0, -1, 1]", "ts": 1790147441.170358}
+{"probe": "corrupt", "case": "n_buffers_truncated", "approach": "C-full", "returncode": 1, "outcome": "refused", "detail": "ValueError: Array length must be >= 0, not -1", "ts": 1790147441.862795}
+{"probe": "layout_lines", "A (hand-decoded numba)": 42, "B (nanoarrow per row, unsafe accessor)": 0, "B-checked (nanoarrow + hand-written bounds check in C)": 37, "C (nanoarrow validate + A's numba decode)": 42}
+{"probe": "corrupt", "case": "n_buffers_truncated", "approach": "C-trusting", "returncode": 1, "outcome": "refused", "detail": "ValueError: Array length must be >= 0, not -1", "ts": 1790147442.5565968}
+{"probe": "corrupt", "case": "lying_sizes_buffer", "approach": "A", "returncode": 0, "outcome": "error_leaf", "detail": "[1, -1, 0, 0, 1, 1]", "ts": 1790147443.510289}
+{"probe": "corrupt", "case": "lying_sizes_buffer", "approach": "B", "returncode": 0, "outcome": "wrong_answer", "detail": "[1, 0, 0, 0, 1, 1]", "ts": 1790147444.4299834}
+{"probe": "corrupt", "case": "lying_sizes_buffer", "approach": "B-checked", "returncode": 0, "outcome": "wrong_answer", "detail": "[1, 0, 0, 0, 1, 1]", "ts": 1790147445.3614666}
+{"probe": "corrupt", "case": "lying_sizes_buffer", "approach": "C-full", "returncode": 0, "outcome": "wrong_answer", "detail": "[1, 0, 0, 0, 1, 1]", "ts": 1790147446.2980485}
+{"probe": "corrupt", "case": "lying_sizes_buffer", "approach": "C-trusting", "returncode": 0, "outcome": "wrong_answer", "detail": "[1, 0, 0, 0, 1, 1]", "ts": 1790147447.2019713}
+{"probe": "layout_lines", "A (hand-decoded numba)": 42, "B (nanoarrow per row, unsafe accessor)": 0, "B-checked (nanoarrow + hand-written bounds check in C)": 37, "C (nanoarrow validate + A's numba decode)": 42}

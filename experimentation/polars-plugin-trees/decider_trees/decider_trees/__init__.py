@@ -55,8 +55,49 @@ def walk_value(*cols, tree: list[dict], parallel: bool = False) -> pl.Expr:
     return _call("walk_value", cols, tree, parallel)
 
 
+_OPS = {"<": 0, "<=": 1, ">": 2, ">=": 3, "==": 4, "!=": 5, "prefix": 6, "regex": 7}
+
+
+def pack(tree: list[dict]) -> tuple[bytes, list[str]]:
+    """The same node list as a 36-byte-per-node blob + string table (see Rust `unpack`)."""
+    import struct
+    strs, out = [], []
+    for n in tree:
+        if "leaf" in n:
+            out.append(struct.pack("<BBHIIIIqd", 0, 0, 0, 0, 0, 0, 0, n["leaf"], n["value"]))
+            continue
+        op = _OPS[n["op"]]
+        if "f" in n:
+            out.append(struct.pack("<BBHIIIIqd", 1, op, 0, n["col"], n["then"], n["else"], 0, 0, n["f"]))
+        elif "i" in n:
+            out.append(struct.pack("<BBHIIIIqd", 2, op, 0, n["col"], n["then"], n["else"], 0, n["i"], 0.0))
+        elif "b" in n:
+            out.append(struct.pack("<BBHIIIIqd", 3, op, 0, n["col"], n["then"], n["else"], 0, int(n["b"]), 0.0))
+        else:
+            strs.append(n["s"])
+            out.append(struct.pack("<BBHIIIIqd", 4, op, 0, n["col"], n["then"], n["else"], len(strs) - 1, 0, 0.0))
+    return b"".join(out), strs
+
+
+def walk_value_packed(*cols, tree: list[dict], parallel: bool = False) -> pl.Expr:
+    blob, strs = pack(tree)
+    return register_plugin_function(plugin_path=LIB, function_name="walk_value_packed", args=list(cols),
+                                    kwargs={"blob": blob, "strs": strs, "parallel": parallel}, is_elementwise=True)
+
+
+def noop_packed(*cols, tree: list[dict]) -> pl.Expr:
+    blob, strs = pack(tree)
+    return register_plugin_function(plugin_path=LIB, function_name="noop_packed", args=list(cols),
+                                    kwargs={"blob": blob, "strs": strs}, is_elementwise=True)
+
+
 def noop(col) -> pl.Expr:
     return register_plugin_function(plugin_path=LIB, function_name="noop", args=[col], is_elementwise=True)
+
+
+def noop_kwargs(*cols, tree, compile: bool = False) -> pl.Expr:
+    """Deserialise (and optionally compile) the tree, do no work: the per-call cost of shipping it."""
+    return _call("noop_compile" if compile else "noop_kwargs", cols, tree, False)
 
 
 def panic_demo(col) -> pl.Expr:
