@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 from typing import TYPE_CHECKING, Any, Callable
 
-from decider.engine.debug.events import Edited, Error, Paused
+from decider.engine.debug.events import Edited, Paused, ReloadFailed
 from decider.engine.debug.hot import ModuleWatcher, keys, same
 from decider.engine.ir.nodes import CallNode, iter_nodes
 from decider.engine.wiring import resolve
@@ -72,13 +72,17 @@ class Edits:
         (reason `"edit"`) or where it was paused if that comes first. One
         `Edited` event per changed path (`"replace"`, `"add"` or `"delete"`);
         nothing happens if nothing changed. Raises, and changes nothing, if
-        `pipeline` doesn't wire.
+        `pipeline` doesn't wire. `watch` calls it after each notebook cell;
+        for files on disk, feed it from a `ModuleWatcher`.
 
         Example::
 
+            s = flow(disposable_income, ratio, affordable).session(df)
             s.resume()
-            s.reload(flow(disposable_income, ratio_v2, affordable))
+            s.reload(flow(disposable_income, step(ratio_v2, name="ratio", output="ratio"), affordable))
+            # Edited("replace", "ratio"), then Paused before ratio (reason "edit")
             s.resume()
+            s.output()["affordable"]
         """
         from decider.engine import step_map
         from decider.steps.base import as_step
@@ -104,13 +108,25 @@ class Edits:
         builds the pipeline (`lambda: flow(income, ratio)`) also picks up a
         re-run cell that only redefines `ratio`. A string re-imports the
         module and everything it imports from its directory once a file
-        changes. A failed reload is logged as an `Error` and raised; the
-        session keeps the pipeline it had. Returns the IPython callback.
+        changes. A failed reload is logged as `ReloadFailed` and raised; the
+        session keeps the pipeline it had and carries on. Returns the IPython
+        callback.
 
         Example::
 
-            s = pipeline.session(df)
-            s.watch(lambda: pipeline)
+            # notebook cell 1
+            def ratio(disposable_income: float, instalment: float) -> float:
+                return disposable_income / instalment
+
+            # cell 2
+            s = flow(disposable_income, ratio).session(df)
+            s.resume()
+            s.watch(lambda: flow(disposable_income, ratio))
+
+            # re-run cell 1 with an edited ratio: the session re-runs from ratio
+            s.resume()
+
+            # or follow files on disk instead of cells
             s.watch("credit.pipeline:pipeline")
         """
         from IPython import get_ipython
@@ -118,16 +134,20 @@ class Edits:
         get = ModuleWatcher(source).poll if isinstance(source, str) else source
 
         def hook(*_: Any) -> None:
-            try:
-                new = get()
-                if new is not None:
-                    self.reload(new)
-            except Exception as e:
-                self._emit(Error(f"reload failed: {type(e).__name__}: {e}", None))
-                raise
+            self._reload_from(get)
 
         get_ipython().events.register("post_run_cell", hook)
         return hook
+
+    def _reload_from(self, get: Callable[[], Any]) -> None:
+        # `get` returns the edited pipeline, or None when nothing changed.
+        try:
+            new = get()
+            if new is not None:
+                self.reload(new)
+        except Exception as e:
+            self._emit(ReloadFailed(f"{type(e).__name__}: {e}"))
+            raise
 
     def _edit(self, action: str, path: str, new: Step | None) -> Checkpoint | None:
         from decider.steps.base import as_step

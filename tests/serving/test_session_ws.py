@@ -127,4 +127,58 @@ async def test_a_delete_over_the_socket_re_runs_from_the_deleted_step():
     assert (await ws.until("run_finished"))[-1]["output"]["affordability_ratio"]["preview"] == [2.5416666666666665, 1.625]
     await ws.send({"kind": "delete", "path": "halved_ratio"})
     assert {"kind": "edited", "action": "delete", "path": "halved_ratio"} in await ws.until("run_finished")
+    await ws.send({"kind": "structure"})
+    steps = (await ws.until("structure"))[-1]["steps"]
+    assert [s["path"] for s in steps] == ["", "disposable_income", "affordability_ratio"]
+    assert steps[1] == {"path": "disposable_income", "kind": "scalar", "source": f"{__name__}:disposable_income"}
     await ws.close()
+
+
+WATCHED = """
+from decider import flow
+
+
+def disposable_income(net_income: float, expenses: float) -> float:
+    return net_income - expenses
+
+
+def affordability_ratio(disposable_income: float, instalment: float) -> float:
+    return disposable_income / instalment{tail}
+
+
+pipeline = flow(disposable_income, affordability_ratio)
+"""
+
+
+async def test_a_watched_file_edit_reloads_the_session_and_a_broken_one_is_reported(tmp_path, monkeypatch):
+    import os
+    import pkgutil
+    import sys
+
+    target = tmp_path / "hot_ws.py"
+
+    def save(text):
+        target.write_text(text)
+        st = os.stat(target)
+        os.utime(target, ns=(st.st_atime_ns, st.st_mtime_ns + 2_000_000_000))
+
+    save(WATCHED.format(tail=""))
+    monkeypatch.syspath_prepend(str(tmp_path))
+    try:
+        app = session_app(lambda: pkgutil.resolve_name("hot_ws:pipeline").session(FRAME), watch="hot_ws:pipeline",
+                          interval=0.01)
+        ws = Socket(app)
+        await ws.send({"kind": "resume"})
+        await ws.until("run_finished")
+        save(WATCHED.format(tail=" / 2.0"))
+        assert (await ws.until("edited"))[-1] == {"kind": "edited", "action": "replace", "path": "affordability_ratio"}
+        await ws.send({"kind": "resume"})
+        assert (await ws.until("run_finished"))[-1]["output"]["affordability_ratio"]["preview"] == [6100 / 1200 / 2,
+                                                                                                    2600 / 800 / 2]
+        save("def broken(:\n")
+        assert "SyntaxError" in (await ws.until("reload_failed"))[-1]["error"]
+        await ws.send({"kind": "value", "spec": "affordability_ratio"})
+        assert (await ws.until("value"))[-1]["values"] == [6100 / 1200 / 2, 2600 / 800 / 2]
+        await ws.close()
+    finally:
+        sys.modules.pop("hot_ws", None)
