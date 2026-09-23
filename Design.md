@@ -2,8 +2,7 @@
 
 Status: **agreed**. Companion documents:
 - `IR.md`: the step and IR contract, signed off;
-- `Plan.md`: the task breakdown;
-- `Prompt.md`: the orchestrator handover.
+- `notes/`: decision records, the migration log (`progress.md`) and agreed amendments to both documents (`spec-amendments.md`).
 
 Edit inline; mark feedback with `>>> ... <<<`.
 
