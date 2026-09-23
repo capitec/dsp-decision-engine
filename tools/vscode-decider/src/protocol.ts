@@ -158,6 +158,7 @@ export type ToWebview =
   | { type: "compare"; comparison: Comparison | null; busy?: string; error?: string }
   | { type: "tab"; tab: Tab }
   | { type: "select"; path: string }
+  | { type: "edited"; path: string; diff: string[] }
   | { type: "sweep"; sweep: Sweep | null; busy?: string; error?: string };
 
 export type FromWebview =

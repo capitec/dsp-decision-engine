@@ -1,0 +1,79 @@
+import { useState } from "react";
+import { same, type Comparison } from "../src/compare";
+import { formatValue, recordLabel } from "../src/protocol";
+
+// Records shown before "show more": enough to scan, few enough to keep the steps in reach.
+const FIRST = 12;
+
+/** The records whose results changed, one card each: approved first, declined ones grouped after. */
+export function ResultCards({ c, record }: { c: Comparison; record: number | null }) {
+  const [more, setMore] = useState(false);
+  const moved = (n: string, r: number) => !same(c.results.a[n]?.[r], c.results.b[n]?.[r]);
+  const cols = Object.keys(c.results.b);
+  const hit = Array.from({ length: c.rows }, (_, r) => r).filter((r) => cols.some((n) => moved(n, r)));
+  const decision = c.results.b.decision ? "decision" : null;
+  // A declined record has no offer, so its changed rates and amounts are not a changed offer.
+  const declined = (r: number) => decision !== null && c.results.b[decision][r] === "decline" && c.results.a[decision][r] === "decline";
+  const offered = hit.filter((r) => !declined(r));
+  const noOffer = hit.filter(declined);
+  const ordered = record !== null && offered.includes(record) ? [record, ...offered.filter((r) => r !== record)] : offered;
+  if (!hit.length) return <div>No result changes for any of the {c.rows} records.</div>;
+  const card = (r: number) => (
+    <div key={r} className={`result-card ${r === record ? "hit" : ""}`}>
+      <div className="result-head">
+        <strong>{recordLabel(r, c.key)}</strong>
+        {decision && (
+          <span className={`decision ${c.results.b[decision][r]}`}>
+            {moved(decision, r) ? `${formatValue(c.results.a[decision][r])} → ${formatValue(c.results.b[decision][r])}` : formatValue(c.results.b[decision][r])}
+          </span>
+        )}
+        {r === record && <span className="muted small"> (focused)</span>}
+      </div>
+      {cols
+        .filter((n) => n !== decision && moved(n, r))
+        .map((n) => (
+          <div key={n} className="result-line">
+            <span className="mono">{n}</span> <s className="before">{formatValue(c.results.a[n]?.[r], n)}</s> → <strong className="after">{formatValue(c.results.b[n]?.[r], n)}</strong>
+          </div>
+        ))}
+    </div>
+  );
+  return (
+    <>
+      {record !== null && !hit.includes(record) && <div className="muted">{recordLabel(record, c.key)} (focused) is unchanged.</div>}
+      {(more ? ordered : ordered.slice(0, FIRST)).map(card)}
+      {ordered.length > FIRST && (
+        <button className="link" onClick={() => setMore(!more)}>{more ? "show fewer" : `show all ${ordered.length} changed records`}</button>
+      )}
+      {noOffer.length > 0 && (
+        <details className="no-offer">
+          <summary>
+            {noOffer.length} declined record{noOffer.length === 1 ? "" : "s"} with changed values but no offer
+          </summary>
+          {noOffer.map(card)}
+        </details>
+      )}
+    </>
+  );
+}
+
+/** "Decisions changed: 0 · offers changed for 3 approved applicants · 2 declined records changed values only". */
+export function headline(c: Comparison): string | null {
+  const b = c.results.b.decision;
+  if (!b) return null;
+  const a = c.results.a.decision ?? [];
+  const cols = Object.keys(c.results.b).filter((n) => n !== "decision");
+  const rows = Array.from({ length: c.rows }, (_, r) => r);
+  const decided = rows.filter((r) => !same(a[r], b[r]));
+  const changed = rows.filter((r) => cols.some((n) => !same(c.results.a[n]?.[r], c.results.b[n]?.[r])));
+  const offers = changed.filter((r) => b[r] !== "decline" || a[r] !== "decline");
+  const flips = decided.map((r) => `${formatValue(a[r])} → ${formatValue(b[r])}`);
+  const counts = [...new Set(flips)].map((f) => `${flips.filter((x) => x === f).length} ${f}`).join(", ");
+  return [
+    decided.length ? `Decisions changed for ${decided.length} of ${c.rows} (${counts})` : `No decision changed`,
+    `offers changed for ${offers.length} applicant${offers.length === 1 ? "" : "s"}`,
+    changed.length > offers.length ? `${changed.length - offers.length} declined record${changed.length - offers.length === 1 ? "" : "s"} changed values only` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}

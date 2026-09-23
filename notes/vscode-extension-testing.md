@@ -37,3 +37,22 @@ the editor tab before using editor shortcuts.
 The screenshots showed layout bugs that no assertion caught. Flex children
 wouldn't shrink, so the graph was pushed out of view. Data edges in the layout
 graph made it sprawl. Both were fixed from the images.
+
+**At scale.** `pnpm test:large` runs seven stories on `examples/bank` (about
+1,000 steps, 1,400 params, 14 lookup tables; see `notes/ux-loop-large.md`).
+What the small example never showed:
+
+- **Stale bytecode after a quick edit.** Python keys cached bytecode on the
+  source file's mtime in whole seconds and its size. An edit saved within the
+  same second as the last load, at the same length, ran the old code. The
+  bridge now compiles every load into a fresh `sys.pycache_prefix`.
+- **`inspect.getsource` reads the file as it is now**, so diffing a step
+  before and after an edit needs the text as it was loaded, kept per file.
+- **A custom DAP request without arguments arrives with `args` undefined.**
+  Default it to `{}`.
+- **The debugger opens a paused step's source in the active editor group**,
+  which is the flow panel's once the user has clicked in it. The panel moves
+  such a tab to the first group while a decider session runs.
+- **A test's `locator(..., { hasText })` matches ancestors too**: a nested
+  list item's text is in every item above it, so clicking "the first match"
+  hit the outermost one.
