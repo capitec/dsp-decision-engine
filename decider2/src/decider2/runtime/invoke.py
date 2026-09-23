@@ -632,20 +632,21 @@ def apply(
 
     extracted = extract_frame(frame, interface.inputs, policy=policy)
 
-    input_by_name = {i.name: i for i in interface.inputs}
     registry: dict[str, Any] = {}
     for name, ec in extracted.columns.items():
-        annotation = input_by_name[name].annotation if name in input_by_name else float
-        # Doc 05 §1.5: "a string never enters a kernel as a string" — a
-        # `str`-declared column already arrived as a dictionary code
-        # (`extract_frame`/`EntryMode.CODES`); this just settles it onto the
-        # int32 the kernel is typed against (`compile.driver.numpy_dtype`).
-        # A bare string literal in the step body still cannot be compared
-        # against that code (`resolve_params` below only encodes a
-        # *declared* `param()`), so that case still fails loudly rather
-        # than silently comparing wrong — see
-        # `test_a_string_input_is_never_silently_zeroed`.
-        registry[name] = ec.values.astype(numpy_dtype(annotation), copy=False)
+        # Every column arrives already in the dtype the kernel is typed
+        # against: the boundary's kind table (`boundary.dtypes.kind_for`)
+        # is row for row `compile.driver.numpy_dtype`'s, so there is no
+        # `astype` here any more (docs/BOUNDARY-REWORK.md §1.2). Doc 05
+        # §1.5: "a string never enters a kernel as a string" — a
+        # `str`-declared column arrived as an int32 dictionary code, whose
+        # dictionary is `extracted.categories` below. A bare string
+        # literal in the step body still cannot be compared against that
+        # code (`resolve_params` below only encodes a *declared*
+        # `param()`), so that case still fails loudly rather than silently
+        # comparing wrong — see `test_a_string_input_is_never_silently_
+        # zeroed`.
+        registry[name] = ec.values
         if ec.validity is not None:
             registry[f"__valid__{name}"] = ec.validity
 

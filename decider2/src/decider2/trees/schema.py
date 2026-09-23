@@ -973,8 +973,15 @@ class _CasesNode(BaseModel):
         raise NotImplementedError
 
     def encode(self, ctx: "EncodeContext", node_id: str, depth: int) -> int:
-        feat_idx = self.feature.feature_index(ctx, node_id)  # type: ignore[attr-defined]
         n = len(self.conditions)  # type: ignore[attr-defined]
+        if n == 0:
+            # No arm tests the feature, so the feature is not READ: do not
+            # register it as a tree input. Registering it used to declare
+            # e.g. a `string_match` column as `float` (nothing demanded
+            # `str`), which the Arrow boundary now refuses by name instead
+            # of silently reading a String column as dictionary codes.
+            return ctx.child_entry(node_id, 0, depth)
+        feat_idx = self.feature.feature_index(ctx, node_id)  # type: ignore[attr-defined]
         # Build backward exactly like `_encode_logic`'s OR case: the LAST
         # arm's failure falls through to the shared "otherwise" child, and
         # each earlier arm's failure falls through to whatever was built so

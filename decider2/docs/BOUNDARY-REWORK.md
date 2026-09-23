@@ -835,7 +835,37 @@ Acceptance:
 Single-record: `apply()` on a one-row frame drops ~80 µs of boundary; `score()`
 untouched.
 
-### Stage 4 — the single-record plan
+*Landed (Stage 3 commit).* `boundary/extract.py` is route → frame-tier
+casts (`dtypes.plan_column`, one table: native / one cast / `NeedsKernelSplit`)
+→ `FrameView.bind` of the whole frame → `FrameView.materialize_columns()` (a
+new `cache=True` kernel in `_arrow/frame.py`: `sm_gather_row` once per row,
+the typed row scattered into one C-contiguous column per input — §1.3b,
+disk-cache hit verified in a fresh process) → release. `DtypeTier`,
+`EntryMode`, the five plan classes, `probe_column`, `validity_mask`,
+`fill_column` and `NULL_TIER_STRATEGIES` are gone; `_get_buffers()` no longer
+appears in the boundary. Interpreted and stepped read the same columns
+(§1.6). `FrameView`s are pooled per thread. Two things the design did not
+say: (1) a CODE column's categories come from the **exported dictionary**
+(`FrameView.dictionary`), not `cat.get_categories()` — polars' physical codes
+are process-global, its Arrow dictionary is per batch (measured 1.41.2 and
+1.44.2); (2) a String column declared `float` is now refused by name and
+Arrow type instead of silently becoming dictionary codes cast to float, which
+surfaced one tree-encoder bug (a zero-condition `Cases*` node registered its
+feature as a read; fixed in `trees/schema.py::_CasesNode.encode`).
+Measured, 1M rows, 16 columns (10 f64, 4 i64, 2 bool): `sm_gather_row`
+alone 89 ns/row; gather + column scatter into preallocated output 141 ns/row
+(the §1.3b number); into freshly allocated output **~300 ns/row**, the
+difference being first-touch page faults on the 128 MB of new arrays.
+End to end: flagship `apply()` 33.8 → 43.4 ms/1M; the typed-features mixed
+tree 242 → 326 ms/1M; a 17-column hand-written step 74 → 430 ms/1M. That
+last is the honest batch regression (today's clean numerics were zero-copy;
+they are a gather + a copy now); pooling the output columns per thread
+would remove the page-fault half and is not done here because the columns
+escape into the registry. At n=1: `extract_frame` 17 columns 373 → 213 µs
+(the export + `materialize_columns` dispatch are ~60 µs of that; the rest is
+`route_required_nulls`, the schema-plan lookup and the per-column
+`ExtractedColumn` build in Python — Stage 4's hoisting territory);
+flagship 3 columns 102 → 132 µs (a 3-column frame has nothing to save).
 
 Not an Arrow change; the stage that meets the constraint. Build once per
 `Pipeline` (or per `ServeHandle` generation) a `ScorePlan`: the flattened
