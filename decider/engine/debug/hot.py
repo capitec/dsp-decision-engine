@@ -62,11 +62,19 @@ class ModuleWatcher:
     afresh, so a `from features import ratio` elsewhere never keeps the old
     function. A failed import puts the old modules back.
 
+    In a notebook, `session.watch("credit.pipeline:pipeline")` polls one
+    after every cell; the debug websocket takes `watch=` and polls one for
+    its client. In a script, poll it yourself.
+
     Example::
 
         watcher = ModuleWatcher("credit.pipeline:pipeline")
+        s = watcher.get().session(df)
+        s.resume()
+        # ... edit credit/features.py and save ...
         if (new := watcher.poll()) is not None:
-            session.reload(new)
+            s.reload(new)       # re-runs from the first changed step
+            s.resume()
     """
 
     def __init__(self, target: str, root: str | None = None):
