@@ -629,8 +629,9 @@ An automatic cost model remains O12, explicitly out of scope for v1.
 ## 8. The build step
 
 ```
-uv run decider2 build <pipeline>     # in the Dockerfile
-decider2 build --verify              # asserts NO COMPILATION AFTER WARM-UP
+uv run decider2 build <pipeline>            # in the Dockerfile: precompile() and report
+decider2 build --verify <pipeline>          # asserts NO COMPILATION AFTER WARM-UP,
+                                            # and that the compiled Arrow shim loads
 ```
 
 **Revised.** This used to say "asserts a runtime load triggers ZERO compiles,
