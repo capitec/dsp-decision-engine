@@ -6,6 +6,7 @@ from typing import Any, Iterable, Sequence
 import numpy as np
 
 from decider.engine.ir.decls import FeatureKind
+from decider.exceptions import ArrowImportError, ArrowKindError  # noqa: F401  (re-exported)
 
 F64, I64, BOOL, CODE, STR = (
     FeatureKind.F64, FeatureKind.I64, FeatureKind.BOOL, FeatureKind.CODE, FeatureKind.STR,
@@ -19,18 +20,6 @@ ROW_DTYPES: dict[FeatureKind, np.dtype] = {
     CODE: np.dtype(np.int32),
     STR: np.dtype(np.int64),
 }
-
-
-class ArrowKindError(TypeError):
-    """A column's Arrow type can't be read as its declared kind.
-
-    Carries `column`, `kind` and `arrow_type` when the import (rather than the
-    dtype table) refused it.
-    """
-
-
-class ArrowImportError(RuntimeError):
-    """nanoarrow refused what `__arrow_c_stream__()` handed over."""
 
 
 @dataclass(frozen=True)

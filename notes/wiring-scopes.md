@@ -15,7 +15,10 @@ runner (T1.4), compiler (T3.2) and session (T1.5) rely on:
 - **Branch arms and loop bodies are scopes.** Only `modifies` (branch) and
   `carries` (loop) leave them, as one new version produced by the branch or
   loop path. Arm-internal names and the condition's output stay inside, but are
-  still in `chains`, so `name@path` can emit them.
+  still in `chains`, so `name@path` can emit them. Reading one after its
+  branch or loop (when nothing outside wrote it), or emitting it by bare name,
+  is an error rather than an input-column read: the arm write would otherwise
+  be lost silently. A scope still hides a name that also exists outside it.
 - **Branch merge:** `Merge.prior` is read only when some arm leaves the name
   alone, so a name every arm writes needn't be an input column.
 - **Loop carry:** one version, produced by the loop, is what the condition and
@@ -28,7 +31,7 @@ runner (T1.4), compiler (T3.2) and session (T1.5) rely on:
   are never typo errors.
 - **Outputs:** input columns (always), root-scope values nothing reads, emitted
   values. `name@path` qualifiers are relative to the flow that declares the
-  emit (the full path at the root). A drop of an unknown name is kept for frame
+  emit, or absolute (the node path). A drop of an unknown name is kept for frame
   columns no step reads, unless it is a close match for a known name.
 - **Ids** are positions (calls in walk order, versions in creation order), so
   they depend on structure, never on path text.

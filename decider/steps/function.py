@@ -82,8 +82,9 @@ def step(
 
     Args:
         name: the step's name in paths (default: the function's name).
-        output: the one name it writes (default: the function's name). Several
-            steps writing one name in a `flow` is a waterfall: later wins.
+        output: the one name it writes (default: the function's name, or
+            `name` for a lambda). Several steps writing one name in a `flow`
+            is a waterfall: later wins.
         outputs: several names it writes; the return annotation must be a
             `tuple[...]` of the same length.
         nogil: release the GIL in compiled code.
@@ -97,12 +98,16 @@ def step(
         @step(outputs=("band", "band_score"))
         def banding(ratio: float) -> tuple[int, float]:
             return (1, 10.0) if ratio > 2 else (0, 0.0)
+
+        double = step(lambda x: x * 2, name="dbl")   # writes "dbl"
     """
     if output is not None and outputs is not None:
         raise TypeError("step() takes output= or outputs=, not both")
 
     def make(fn: Callable) -> FunctionStep:
-        names = (output,) if output is not None else tuple(outputs) if outputs is not None else (fn.__name__,)
+        # A lambda's __name__ is "<lambda>", never a useful column name.
+        default = name if name is not None and fn.__name__ == "<lambda>" else fn.__name__
+        names = (output,) if output is not None else tuple(outputs) if outputs is not None else (default,)
         return FunctionStep(fn.__name__ if name is None else name, fn, names, nogil)
 
     return make if fn is None else make(fn)

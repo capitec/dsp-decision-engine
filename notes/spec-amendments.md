@@ -92,3 +92,34 @@ where they disagree, this file wins.
   a config field (`threshold`) can be fed by a local `ParamRef`
   (`{"param": "hi_cut"}`). Scalar calls pass params as `**{d.arg: value}`.
 - **`ConfigurableStep.load(path_or_dict)`** loads a document by its `type` tag.
+
+## 2026-09-23, T2.3b
+
+- **`IRContext.call(owner, fn, inputs=None, outputs=None, values=None) -> CallNode`.**
+  Builds a scalar `CallNode` from `fn`'s signature, as `step(fn)` does (types,
+  null policies, multiple outputs). `inputs` maps argument -> column,
+  `outputs` defaults to `(owner.name,)`, `values` maps argument -> a config's
+  `Value[T]`: literals go to `consts`, `ParamRef`s become `ParamDecl`s with
+  `arg` set. An argument `fn` lacks is an `IRError`. `decider.engine.ir`
+  exports `CallNode`, `Input`, `Output`, `ParamDecl`, `IRContext` and the
+  other node types.
+- **Emit paths.** `name@path` accepts the path relative to the declaring flow
+  (as before) or the absolute node path used by `step_map`, `RunReport`,
+  `State` and the params document. The output column is named as written.
+- **Branch/loop scopes.** Unchanged: only `modifies`/`carries` leave. New:
+  reading a name after a branch or loop, when its only writer is inside that
+  branch (arm or condition) or loop body, is a `WiringError` naming the
+  writer and the `modifies`/`carries` list, instead of silently becoming an
+  input column. A bare `emit("name")` of such a name is the same error,
+  pointing at `name@<absolute path>`. Scoped intermediates nothing reads stay
+  legal, and every one is emittable by path.
+- **Errors.** Library errors derive from `decider.exceptions.DeciderError`
+  and keep their builtin base: `WiringError(ValueError)` for wiring, names,
+  paths, dag/branch/loop shape; `IRError(TypeError)` for malformed steps or IR
+  (signature, condition, origin, shared-param type conflicts);
+  `ParamsError(ValueError)`, `MissingInputError(ValueError)` (HTTP 400),
+  `ArrowKindError(TypeError)`, `NeedsKernelSplit`, `ArrowImportError(RuntimeError)`.
+  All defined in `decider.exceptions`; old import locations still work.
+- **Lambda outputs.** `step(lambda ..., name="dbl")` writes `dbl`. Named
+  functions keep the `(fn.__name__,)` default.
+- **`ConfigurableStep.load`** also accepts JSON text (a string starting with `{`).

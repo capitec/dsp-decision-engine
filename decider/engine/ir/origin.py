@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from decider.exceptions import WiringError
+
 
 @dataclass(frozen=True, slots=True)
 class Origin:
@@ -33,7 +35,7 @@ def check_name(name: str) -> str:
         check_name("a/b")            # ValueError
     """
     if not isinstance(name, str) or not name or "/" in name or "#" in name:
-        raise ValueError(
+        raise WiringError(
             f"step name {name!r} must be a non-empty string without '/' or '#': "
             "paths join names with '/' and mark positions inside a node with '#'"
         )

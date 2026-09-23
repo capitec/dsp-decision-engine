@@ -10,6 +10,7 @@ from typing import Any, Mapping
 from pydantic import ValidationError
 
 from decider.engine.params.models import NodeParams
+from decider.exceptions import ParamsError
 
 
 class Status(Enum):
@@ -18,10 +19,6 @@ class Status(Enum):
     UNKNOWN = "unknown"
     OK = "ok"
     INVALID = "invalid"
-
-
-class ParamsError(ValueError):
-    """A node's params are invalid for the params document in use."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,7 +43,7 @@ class Validation:
             bundle = validate_node(node, doc).check(rows=len(df)).bundle
         """
         if self.status is Status.INVALID:
-            suffix = f" ({rows} rows)" if rows is not None else ""
+            suffix = f" (affects {rows} row{'' if rows == 1 else 's'})" if rows is not None else ""
             raise ParamsError("invalid params" + suffix + ":\n" + "\n".join(self.errors))
         return self
 
@@ -85,10 +82,14 @@ def validate_node(node: NodeParams, doc: Mapping) -> Validation:
         return Validation(Status.INVALID, None, (f"{node.path}: expected a mapping of params, got {local!r}",))
     shared = doc.get("shared", {})
     errors = []
+    by_arg = {d.arg: d.name for d in node.decls if d.shared_key is None and d.arg != d.name}
     for key in local:
         if key not in node.local_names:
             close = difflib.get_close_matches(key, node.local_names, n=1)
-            errors.append(f"{node.path}: unknown param '{key}'" + (f"; did you mean '{close[0]}'?" if close else ""))
+            hint = (f"; did you mean '{by_arg[key]}' (it feeds argument '{key}')?" if key in by_arg
+                    else f"; did you mean '{close[0]}'?" if close
+                    else f"; its params are {sorted(node.local_names)}")
+            errors.append(f"{node.path}: unknown param '{key}'{hint}")
     values = {d.name: local[d.name] for d in node.decls if d.shared_key is None and d.name in local}
     values |= {d.name: shared[d.shared_key] for d in node.decls if d.shared_key is not None and d.shared_key in shared}
 

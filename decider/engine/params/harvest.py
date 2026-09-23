@@ -7,6 +7,7 @@ from typing import Any, Callable
 
 from decider.engine.ir.decls import Input, NullPolicy, Output, ParamDecl
 from decider.engine.params.declare import MissingAs, ParamSpec, is_plain_marker
+from decider.exceptions import IRError
 
 _EMPTY = inspect.Parameter.empty
 
@@ -20,7 +21,7 @@ def _outputs(fn: Callable, names: tuple[str, ...], ret: Any) -> tuple[Output, ..
         return (Output(names[0], ret),)
     args = typing.get_args(ret) if typing.get_origin(ret) is tuple else ()
     if len(args) != len(names) or Ellipsis in args:
-        raise TypeError(
+        raise IRError(
             f"{fn.__qualname__}: outputs {names} need a return annotation tuple[...] "
             f"of {len(names)} types, got {ret!r}"
         )
@@ -47,7 +48,7 @@ def harvest(
     params: list[ParamDecl] = []
     for name, p in sig.parameters.items():
         if p.kind in (p.VAR_POSITIONAL, p.VAR_KEYWORD):
-            raise TypeError(f"{fn.__qualname__}: *args/**kwargs can't be step inputs; inputs are wired by name")
+            raise IRError(f"{fn.__qualname__}: *args/**kwargs can't be step inputs; inputs are wired by name")
         ann = Any if p.annotation is _EMPTY else p.annotation
         d = p.default
         if isinstance(d, ParamSpec):
@@ -60,7 +61,7 @@ def harvest(
             inputs.append(Input(name, ann, NullPolicy.OPTIONAL, arg=name))
         elif d is not _EMPTY:
             # A bare default could mean a tunable knob or a fill for nulls; make the author say which.
-            raise TypeError(
+            raise IRError(
                 f"{fn.__qualname__}: parameter '{name}' has a bare default ({d!r}). "
                 f"Use param({d!r}) for a tunable param or missing_as({d!r}) to fill nulls."
             )

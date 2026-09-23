@@ -48,7 +48,7 @@ def test_lazy_runs_when_the_invalid_node_is_never_reached():
 
 def test_lazy_raises_when_a_row_reaches_the_invalid_node_naming_its_rows():
     exe = Engine(params_validation="lazy").bind(pipeline)
-    with pytest.raises(ParamsError, match=r"\(2 rows\)"):
+    with pytest.raises(ParamsError, match=r"\(affects 2 rows\)"):
         exe.run(MIXED, params=BAD_BIG)
     assert exe.report.invalid == ["by/big"]
 

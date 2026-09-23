@@ -112,3 +112,20 @@ def test_a_misspelled_drop_is_an_error_with_a_suggestion():
 def test_drop_of_an_unrelated_name_is_kept_for_frame_columns():
     plan = resolve(flow(a, b).drop("client_notes"))
     assert plan.drops == ("client_notes",)
+
+
+def test_emit_accepts_the_absolute_path_that_step_map_and_reports_use():
+    term = flow(product_ceiling, cap_by_income, name="term")
+    pipeline = flow(term.emit("term_cap@app/term/product_ceiling"), name="app")
+    plan = resolve(pipeline)
+    assert plan.outputs["term_cap@app/term/product_ceiling"] is plan.chains["term_cap"][0]
+    root = resolve(flow(product_ceiling, cap_by_income, name="term").emit("term_cap@term/cap_by_income"))
+    assert root.outputs["term_cap@term/cap_by_income"] is root.chains["term_cap"][1]
+
+
+def test_emit_of_an_unknown_path_suggests_the_nearest_relative_or_absolute_one():
+    term = flow(product_ceiling, cap_by_income, name="term")
+    with pytest.raises(ValueError, match="Did you mean 'term/cap_by_income'"):
+        resolve(term.emit("term_cap@term/cap_by_incme"))
+    with pytest.raises(ValueError, match="Did you mean 'cap_by_income'"):
+        resolve(term.emit("term_cap@cap_by_incme"))

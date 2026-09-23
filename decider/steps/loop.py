@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Sequence
 
 from decider.engine.ir.nodes import LoopNode
+from decider.exceptions import WiringError
 from decider.steps.base import Step, as_step
 from decider.steps.branch import condition_node
 
@@ -45,9 +46,9 @@ def loop(condition: Any, body: Any, *, carries: Sequence[str], max_iterations: i
         best = loop(should_continue, improve_offer, carries=["best_offer"], max_iterations=50, name="best")
     """
     if not carries:
-        raise ValueError(f"loop {name!r} needs carries=[...]: the names each iteration updates")
+        raise WiringError(f"loop {name!r} needs carries=[...]: the names each iteration updates")
     if type(max_iterations) is not int or max_iterations < 1:
-        raise ValueError(f"loop {name!r}: max_iterations must be a positive int, got {max_iterations!r}")
+        raise WiringError(f"loop {name!r}: max_iterations must be a positive int, got {max_iterations!r}")
     body = as_step(body)
     # An anonymous body would share the loop's path.
     if body.name is None:
