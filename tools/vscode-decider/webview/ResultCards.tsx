@@ -14,8 +14,10 @@ export function ResultCards({ c, record, onFocus }: { c: Comparison; record: num
   const decision = c.results.b.decision ? "decision" : null;
   // A declined record has no offer, so its changed rates and amounts are not a changed offer.
   const declined = (r: number) => decision !== null && c.results.b[decision][r] === "decline" && c.results.a[decision][r] === "decline";
-  const offered = hit.filter((r) => !declined(r));
-  const noOffer = hit.filter(declined);
+  // A decline for a new reason is the policy change itself, so it gets a card like a changed offer.
+  const reasonMoved = (r: number) => !!c.results.b.reason_code && moved("reason_code", r);
+  const offered = hit.filter((r) => !declined(r) || reasonMoved(r));
+  const noOffer = hit.filter((r) => declined(r) && !reasonMoved(r));
   const ordered = record !== null && offered.includes(record) ? [record, ...offered.filter((r) => r !== record)] : offered;
   if (!hit.length) return <div>No result changes for any of the {c.rows} records.</div>;
   const card = (r: number) => (
@@ -47,7 +49,7 @@ export function ResultCards({ c, record, onFocus }: { c: Comparison; record: num
       {record !== null && !hit.includes(record) && <div className="muted">{recordLabel(record, c.key)} (focused) is unchanged; the records below changed.</div>}
       {!offered.length && noOffer.length > 0 && (
         <div className="note">
-          Only declined applicants were affected ({noOffer.map((r) => recordLabel(r, c.key)).join(", ")}): their values changed, but they get no offer either way.
+          Every record this moved is declined ({noOffer.map((r) => recordLabel(r, c.key)).join(", ")}): their internal values changed, but they get no offer either way, so no offer changed.
         </div>
       )}
       {(more ? ordered : ordered.slice(0, FIRST)).map(card)}
@@ -55,7 +57,7 @@ export function ResultCards({ c, record, onFocus }: { c: Comparison; record: num
         <button className="link" onClick={() => setMore(!more)}>{more ? "show fewer" : `show all ${ordered.length} changed records`}</button>
       )}
       {noOffer.length > 0 && (
-        <details className="no-offer" open={!offered.length}>
+        <details className="no-offer">
           <summary>
             {noOffer.length} declined record{noOffer.length === 1 ? "" : "s"} with changed values but no offer
           </summary>

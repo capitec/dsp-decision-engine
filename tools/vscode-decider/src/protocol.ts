@@ -25,6 +25,8 @@ export interface CallNodeJson extends IRNodeBase {
   doc?: string;
   /** What a one-line step returns, e.g. `min(pl_raw_rate, repo_rate + cap_margin)`. */
   formula?: string | null;
+  /** Set once the step's code was edited mid-run: the formula it had before. */
+  formulaBefore?: string | null;
   /** A lookup table's match, e.g. `{type: "between", variable, lower_bound_column, upper_bound_column}`. */
   table?: Record<string, unknown> | null;
 }
@@ -158,7 +160,7 @@ export type ToWebview =
   | { type: "compare"; comparison: Comparison | null; busy?: string; error?: string }
   | { type: "tab"; tab: Tab }
   | { type: "select"; path: string }
-  | { type: "edited"; path: string; diff: string[] }
+  | { type: "edited"; path: string; diff: string[]; formula: string | null }
   | { type: "sweep"; sweep: Sweep | null; busy?: string; error?: string };
 
 export type FromWebview =

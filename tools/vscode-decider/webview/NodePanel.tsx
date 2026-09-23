@@ -64,7 +64,17 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
         <>
           <h3>{name} {node.path !== name && <span className="muted">in {node.path.slice(0, -(name?.length ?? 0) - 1)}</span>}</h3>
           <div className="muted" title={node.source}>{node.table ? "lookup table, matched once per record" : KIND[node.callKind]}{node.doc ? ` · ${node.doc}` : ""}</div>
-          {node.formula && <div className="step-formula mono" title="What the step returns">returns {node.formula}</div>}
+          {node.formula && (
+            <div className="step-formula mono" title="What the step returns">
+              returns {node.formula}
+              {node.formulaBefore !== undefined && (
+                <>
+                  <span className="edit-mark"> edited</span>
+                  <div className="before">was: <s>{node.formulaBefore}</s></div>
+                </>
+              )}
+            </div>
+          )}
           {run.edits?.[node.path] && (
             <div className="edited-note">{run.edits[node.path] === "delete" ? "Skipped in this run: the steps after it ran without it." : "Running your edited code in this run."}</div>
           )}

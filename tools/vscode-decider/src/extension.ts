@@ -166,7 +166,9 @@ async function onWebview(m: FromWebview, describe: DescribeResult) {
       try {
         const r = (await s.customRequest("decider.compareEdits", { path: m.path })) as { a: TraceResult; b: TraceResult };
         const comparison = compareTraces(r.a, r.b, "the flow as started", m.label);
-        comparison.note = "Both runs went from the start to the end on the same records; the paused debug run is left where it is.";
+        const all = Object.keys(m.edits).length;
+        const scope = m.path ? (all > 1 ? `Only this edit is applied; the other ${all - 1} ${all === 2 ? "is" : "are"} left out.` : "") : all > 1 ? `All ${all} edits are applied.` : "";
+        comparison.note = `${scope} Both runs went from the start to the end on the same records; the paused debug run is left where it is.`.trim();
         // Both runs share one description, so a swapped step's new code shows only through the edits made.
         for (const st of comparison.steps) if (m.edits[st.path] === "replace" && (!m.path || m.path === st.path)) st.structural.push("code");
         post({ type: "compare", comparison });
@@ -178,8 +180,8 @@ async function onWebview(m: FromWebview, describe: DescribeResult) {
     case "skip":
     case "reloadStep":
       try {
-        const r = (await s?.customRequest(m.type === "skip" ? "decider.skip" : "decider.reloadStep", { path: m.path })) as { diff?: string[] } | undefined;
-        if (r?.diff?.length) post({ type: "edited", path: m.path, diff: r.diff });
+        const r = (await s?.customRequest(m.type === "skip" ? "decider.skip" : "decider.reloadStep", { path: m.path })) as { diff?: string[]; formula?: string | null } | undefined;
+        if (m.type === "reloadStep" && r) post({ type: "edited", path: m.path, diff: r.diff ?? [], formula: r.formula ?? null });
       } catch (e) {
         void vscode.window.showErrorMessage(`Couldn't ${m.type === "skip" ? "skip" : "swap in"} ${m.path.split("/").pop()}: ${(e as Error).message}`);
       }

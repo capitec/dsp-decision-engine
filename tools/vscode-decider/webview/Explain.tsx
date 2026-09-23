@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { formatValue, type CallNodeJson, type Lineage } from "../src/protocol";
+import { formatValue, isRateName, type CallNodeJson, type Lineage } from "../src/protocol";
 
 interface Props {
   entry: Lineage;
@@ -25,15 +25,61 @@ export function substitute(formula: string, known: Record<string, unknown>): str
   return filled.replace(/ [+-] 0%?(?![.\d%])/g, "");
 }
 
-/** For `min(x, …)` / `max(x, …)`: whether the limit changed `x`, e.g. "the cap did not apply: pl_raw_rate passed through". */
-export function clampNote(formula: string, inputs: { name: string; value: unknown }[], result: unknown): string | null {
-  const m = /^(min|max)\((\w+),/.exec(formula);
+/** `+ - * /` and parentheses over numbers and known names; null when it can't (a call, a comparison…). */
+export function evaluate(expr: string, known: Record<string, unknown>): number | null {
+  const tokens = expr.match(/\d+\.?\d*(?:e[+-]?\d+)?|[A-Za-z_]\w*|[-+*/()]/g) ?? [];
+  if (tokens.join("") !== expr.replace(/\s+/g, "")) return null;
+  let i = 0;
+  const atom = (): number | null => {
+    const t = tokens[i++];
+    if (t === "(") {
+      const v = sum();
+      return tokens[i++] === ")" ? v : null;
+    }
+    if (t === "-") {
+      const v = atom();
+      return v === null ? null : -v;
+    }
+    if (t !== undefined && /^\d/.test(t)) return Number(t);
+    return t !== undefined && typeof known[t] === "number" ? (known[t] as number) : null;
+  };
+  const product = (): number | null => {
+    let v = atom();
+    while (v !== null && (tokens[i] === "*" || tokens[i] === "/")) {
+      const op = tokens[i++];
+      const r = atom();
+      v = r === null ? null : op === "*" ? v * r : v / r;
+    }
+    return v;
+  };
+  const sum = (): number | null => {
+    let v = product();
+    while (v !== null && (tokens[i] === "+" || tokens[i] === "-")) {
+      const op = tokens[i++];
+      const r = product();
+      v = r === null ? null : op === "+" ? v + r : v - r;
+    }
+    return v;
+  };
+  const v = sum();
+  return i === tokens.length ? v : null;
+}
+
+/** For `min(x, limit)` / `max(x, limit)`: the limit and whether it changed `x`, e.g. "cap 28.75%, not reached (3.55 pp below)". */
+export function clampNote(formula: string, inputs: { name: string; value: unknown }[], result: unknown, known: Record<string, unknown> = {}): string | null {
+  const m = /^(min|max)\((\w+),\s*(.*)\)$/.exec(formula);
   const first = m && inputs.find((i) => i.name === m[2]);
   if (!m || !first || typeof result !== "number" || typeof first.value !== "number") return null;
-  const limit = m[1] === "min" ? "cap" : "floor";
-  return Math.abs(result - first.value) < 1e-12
-    ? `the ${limit} did not apply: ${first.name} passed through`
-    : `the ${limit} applied: ${formatValue(first.value, first.name)} → ${formatValue(result, first.name)}`;
+  const kind = m[1] === "min" ? "cap" : "floor";
+  const limit = evaluate(m[3], known);
+  const shown = (v: number) => formatValue(v, first.name);
+  const gap = (a: number, b: number) => (isRateName(first.name) ? `${Number((Math.abs(a - b) * 100).toFixed(2))} pp` : formatValue(Math.abs(a - b)));
+  if (Math.abs(result - first.value) < 1e-12) {
+    return limit === null
+      ? `the ${kind} did not apply: ${first.name} passed through`
+      : `${kind} ${shown(limit)}, not reached (${gap(limit, first.value)} ${kind === "cap" ? "below" : "above"})`;
+  }
+  return `the ${kind} applied: ${shown(first.value)} → ${shown(result)}`;
 }
 
 /** The row of a lookup table a value falls in, and why: `[2, "49 ≤ requested_term 60 < 85"]`. */
@@ -65,7 +111,7 @@ export function matchRow(expr: Record<string, unknown>, rows: Record<string, unk
 /** How a value was computed for the focused record: each step's formula with the values it had, level by level. */
 export function Explain({ entry, who, role, nodes, values, onPick, onSelect }: Props) {
   const box = useRef<HTMLDivElement>(null);
-  useEffect(() => box.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }), [entry]);
+  useEffect(() => box.current?.scrollIntoView({ block: "start", behavior: "smooth" }), [entry.name, entry.producer]);
   return (
     <div className="how" ref={box}>
       <div className="how-title">
@@ -93,16 +139,16 @@ function summary(entry: Lineage, nodes: CallNodeJson[], values: Record<string, u
   for (let depth = 0; at && depth < 6; depth++) {
     const node = nodes.find((n) => n.path === at!.producer);
     if (!node?.formula) break;
-    const note = clampNote(node.formula, at.inputs, at.value);
+    const known: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(node.params)) known[k] = shared(values)[k] ?? v;
+    for (const i of at.inputs) known[i.name] = i.value;
+    const note = clampNote(node.formula, at.inputs, at.value, known);
     if (note) {
-      parts.push(note.split(":")[0]);
+      parts.push(note.replace(/: .*$/, ""));
       const first = /^(?:min|max)\((\w+),/.exec(node.formula)![1];
       at = at.inputs.find((i) => i.name === first);
       continue;
     }
-    const known: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(node.params)) known[k] = shared(values)[k] ?? v;
-    for (const i of at.inputs) known[i.name] = i.value;
     parts.push(`${at.name} = ${substitute(node.formula, known)}`);
     break;
   }
@@ -136,7 +182,7 @@ function Level({ entry, depth, nodes, values, who, onPick, onSelect }: { entry: 
       {open && node?.formula && who && (
         <div className="formula mono" title={node.formula}>
           = {substitute(node.formula, known)}
-          {clampNote(node.formula, entry.inputs, entry.value) && <div className="clamp">{clampNote(node.formula, entry.inputs, entry.value)}</div>}
+          {clampNote(node.formula, entry.inputs, entry.value, known) && <div className="clamp">{clampNote(node.formula, entry.inputs, entry.value, known)}</div>}
         </div>
       )}
       {open && match && (

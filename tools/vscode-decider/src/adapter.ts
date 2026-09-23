@@ -34,22 +34,9 @@ import {
 } from "./protocol";
 import { readEvents } from "./events";
 import { nodeAtLine } from "./sourceMap";
+import { optionsFromEnv, type AdapterOptions, type LaunchArgs } from "./launchArgs";
 
-export interface AdapterOptions {
-  python: string[];
-  debugpyLibs?: string;
-}
-
-export interface LaunchArgs extends DebugProtocol.LaunchRequestArguments {
-  program: string;
-  pipeline?: string;
-  data?: unknown;
-  params?: unknown;
-  /** Show this record's values instead of batch previews. */
-  record?: number;
-  stopOnEntry?: boolean;
-  cwd?: string;
-}
+export type { AdapterOptions, LaunchArgs };
 
 type VarRef =
   | { kind: "scope"; names: string[] | "all" }
@@ -466,8 +453,8 @@ export class DeciderDebugSession extends LoggingDebugSession {
         case "decider.skip":
         case "decider.reloadStep": {
           // A wiring error rejects the request and leaves the run as it was.
-          const status = await this.bridge!.request<Status & { diff: string[] }>(command === "decider.skip" ? "skip" : "reload_step", { path: args.path });
-          response.body = { diff: status.diff };
+          const status = await this.bridge!.request<Status & { diff: string[]; formula: string | null }>(command === "decider.skip" ? "skip" : "reload_step", { path: args.path });
+          response.body = { diff: status.diff, formula: status.formula };
           this.sendResponse(response);
           return this.apply(status, true, "edit");
         }
@@ -500,8 +487,4 @@ export class DeciderDebugSession extends LoggingDebugSession {
       this.sendErrorResponse(response, 5, (e as Error).message);
     }
   }
-}
-
-function optionsFromEnv(): AdapterOptions {
-  return { python: (process.env.DECIDER_PYTHON ?? "python3").split(" "), debugpyLibs: process.env.DECIDER_DEBUGPY_LIBS };
 }

@@ -1615,3 +1615,33 @@ details.edit-menu .edit-menu-body {
 .scenarios .knob input.picker {
   flex: 1 1 100%;
 }
+
+.step-formula .edit-mark {
+  color: var(--changed, orange);
+  font-family: var(--vscode-font-family);
+}
+.step-formula .before {
+  opacity: 0.6;
+}
+
+.sweep-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+.knob-now,
+.knob-echo {
+  flex: 1 1 100%;
+}
+
+@media (max-width: 760px) {
+  main.detailed .graph {
+    height: 48vh;
+  }
+  main.detailed.explaining .graph {
+    height: 30vh;
+  }
+}
+
+.how {
+  scroll-margin-top: 48px;
+}

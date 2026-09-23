@@ -58,6 +58,8 @@ export function App() {
   const noteNext = useRef<string | undefined>(undefined);
   const [codeDiff, setCodeDiff] = useState<string[]>([]);
   const [editsOpen, setEditsOpen] = useState(false);
+  // Steps whose code was swapped mid-run: path -> the formula now running.
+  const [formulas, setFormulas] = useState<Record<string, string | null>>({});
   const shown = useRef<string | undefined>(undefined);
 
   useEffect(() => {
@@ -68,6 +70,7 @@ export function App() {
           setDescribe(m.describe);
           // Starting a run describes the flow again: keep what the user was looking at.
           if (shown.current !== m.describe.pipeline) {
+            setFormulas({});
             setSelected(undefined);
             setColumns(null);
             setRun(IDLE);
@@ -108,6 +111,7 @@ export function App() {
           break;
         case "edited":
           setCodeDiff(m.diff);
+          setFormulas((f) => ({ ...f, [m.path]: m.formula }));
           break;
         case "select":
           setSelected(m.path);
@@ -129,7 +133,10 @@ export function App() {
     }
   }, [column, columns]);
 
-  const nodes = useMemo(() => (describe ? callNodes(describe.ir) : []), [describe]);
+  const nodes = useMemo(
+    () => (describe ? callNodes(describe.ir) : []).map((n) => (n.path in formulas ? { ...n, formula: formulas[n.path], formulaBefore: n.formula } : n)),
+    [describe, formulas],
+  );
   const selectedNode = nodes.find((n) => n.path === selected);
 
   // A lineage card about a column the newly selected step doesn't touch is stale; close it.
@@ -341,6 +348,7 @@ export function App() {
         {tab === "scenarios" && (
           <Scenarios
             schema={describe.params}
+            values={describe.values ?? {}}
             columns={columns ? columns.map((c) => c.name) : inputColumns}
             pausedAt={pausedAt}
             record={run.record}
