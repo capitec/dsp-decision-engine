@@ -582,7 +582,16 @@ def _build_path_fn(
 
     n_computed = len(computed)
     if n_computed == 0:
-        @njit(cache=True)
+        # `inline="always"` alongside `cache=True`. `walk_tree` is itself
+        # `inline="always"`, so THIS closure is where its body is compiled
+        # and cached (the interpreted/stepped modes call `path_fn` from
+        # Python); in fused mode `compile.driver.build_packed_kernel`'s
+        # per-row loop absorbs `path_fn` in turn, and neither is compiled
+        # as a function of its own there. DO NOT put a non-inlined layer
+        # between the per-row kernel and the walker: eight arrays crossing
+        # a real call per row cost ~1.8x on `apply()` end to end
+        # (EXPERIMENTS.md §X; `walk_tree`'s docstring for the mechanism).
+        @njit(cache=True, inline="always")
         def path_fn(args, params):
             thresholds = _nonempty(params + literals_t)
             return walk_tree(
@@ -592,7 +601,14 @@ def _build_path_fn(
 
     computed_t = tuple(computed)
 
-    @njit  # not cache=True: closure captures per-tree computed-feature
+    # `inline="always"` here too: `walk_tree` is already spliced into this
+    # closure, and inlining the closure itself into the driver's per-row
+    # loop removes the last real call on the row path (measured 166-194 ->
+    # 149-167 ns/row on a 3-computed-feature tree, a small but consistent
+    # win, EXPERIMENTS.md §X). It does not touch the cache discipline
+    # below: this closure is never cached, and inlining a never-cached
+    # closure creates no cache entry.
+    @njit(inline="always")  # not cache=True: closure captures per-tree computed-feature
     # Dispatchers (decider2.expr.Expr.compile's own closures, one per
     # DISTINCT tree) -- the same trade-off decider2.compile.driver's
     # row-gather closures document, for the same reason: repeated
