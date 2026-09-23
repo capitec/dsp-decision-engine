@@ -1071,3 +1071,41 @@ table.sweep tr.open td:first-child {
   background: var(--changed-bg);
   border-left: 3px solid var(--changed);
 }
+
+/* round 6 review: nothing scrolls sideways in a narrow panel */
+.knob {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+.knob button.link {
+  justify-self: start;
+}
+.comparing {
+  margin-bottom: 4px;
+  overflow-wrap: anywhere;
+}
+.changed-list {
+  margin: 4px 0 6px;
+  overflow-wrap: anywhere;
+}
+.scenarios,
+.compare,
+.params {
+  overflow-x: hidden;
+}
+table.sweep,
+table.results {
+  max-width: 100%;
+}
+table.sweep td,
+table.results td {
+  white-space: normal;
+}
+@media (max-width: 520px) {
+  .params td:nth-child(3) {
+    display: none;
+  }
+}
+aside h3 .muted {
+  font-weight: normal;
+  font-size: 0.85em;
+}

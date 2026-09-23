@@ -42,9 +42,14 @@ function Diffs({ diffs, record, keyCol, results }: { diffs: ValueDiff[]; record:
 
 /** Each result column, changed or not, with its values: the answer to "did the decision move?". */
 function Results({ c, record }: { c: Comparison; record: number | null }) {
-  const rows = record === null ? Array.from({ length: c.rows }, (_, i) => i) : [record];
-  const names = Object.keys(c.results.b);
+  const all = record === null ? Array.from({ length: c.rows }, (_, i) => i) : [record];
+  const rows = all.slice(0, 4);
+  const names = Object.keys(c.results.b).filter((n) => rows.some((r) => !same(c.results.a[n]?.[r], c.results.b[n]?.[r])));
+  const unchanged = Object.keys(c.results.b).filter((n) => !names.includes(n));
   return (
+    <>
+    {names.length === 0 && <div>No result changes{record === null ? "" : ` for ${recordLabel(record, c.key)}`}.</div>}
+    {names.length > 0 && (
     <table className="results">
       <thead>
         <tr>
@@ -71,6 +76,10 @@ function Results({ c, record }: { c: Comparison; record: number | null }) {
         ))}
       </tbody>
     </table>
+    )}
+    {all.length > rows.length && <div className="muted">Showing {rows.length} of {all.length} records; focus a record to see it here.</div>}
+    {unchanged.length > 0 && <div className="muted">Unchanged: {unchanged.join(", ")}</div>}
+    </>
   );
 }
 
@@ -96,14 +105,25 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
   return (
     <div className="compare">
       {back && <a className="back" onClick={back.go}>← Back to {back.label}</a>}
-      <div className="summary">
-        <div className="sides">
-          <div><span className="side-label">Baseline</span> <strong>{c.a}</strong></div>
-          <div><span className="side-label">Variant</span> <strong>{c.b}</strong></div>
-        </div>
-        <span className="right">{revisionButton}</span>
+      <div className="comparing">
+        Comparing <strong>{c.a}</strong> → <strong>{c.b}</strong>
+        <span className="muted"> · {c.rows} records · {count("changed")} steps changed{count("added") ? `, ${count("added")} added` : ""}{count("removed") ? `, ${count("removed")} removed` : ""}</span>
       </div>
-      <div className="muted">{c.rows} records · {count("changed")} steps changed{count("added") ? `, ${count("added")} added` : ""}{count("removed") ? `, ${count("removed")} removed` : ""}</div>
+      {c.steps.some((s) => s.status !== "same" && s.status !== "not run") && (
+        <div className="changed-list">
+          Changed:{" "}
+          {c.steps
+            .filter((s) => s.status !== "same" && s.status !== "not run")
+            .map((s, i) => (
+              <span key={s.path}>
+                {i > 0 && ", "}
+                <a onClick={() => onSelect(s.path)}>{s.path.split("/").pop()}</a>
+                <span className="muted"> ({[...s.paramChanges.map((p) => p.split(":")[0] + " param"), ...s.structural.filter((x) => x !== "params"), ...(s.outputs.length ? ["values"] : [])].join(", ") || s.status})</span>
+              </span>
+            ))}
+        </div>
+      )}
+      <div className="actions">{revisionButton}</div>
       {(c.errors.a || c.errors.b) && (
         <div className="error">
           {c.errors.a && <div>{c.a}: {c.errors.a}</div>}

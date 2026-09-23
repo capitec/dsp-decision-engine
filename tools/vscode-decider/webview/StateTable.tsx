@@ -36,7 +36,7 @@ export function StateTable({ columns, record, keyCol, selected, order, picked, o
             {step && <th title={`How ${selected!.path} uses the column`}>used by {step}</th>}
             <th>written by</th>
             <th>type</th>
-            <th title="Null values across all records">nulls</th>
+            {record === null && <th title="Null values across all records">nulls</th>}
           </tr>
         </thead>
         <tbody>
@@ -49,7 +49,7 @@ export function StateTable({ columns, record, keyCol, selected, order, picked, o
               {step && <td className="role">{role(c.name)}</td>}
               <td className="muted" title={c.producer}>{c.producer.split("/").pop()}{c.versions > 1 ? ` (${c.versions} versions)` : ""}</td>
               <td className="muted">{c.dtype}</td>
-              <td>{c.nulls || ""}</td>
+              {record === null && <td>{c.nulls || ""}</td>}
             </tr>
           ))}
         </tbody>

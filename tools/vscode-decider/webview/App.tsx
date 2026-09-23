@@ -188,7 +188,7 @@ export function App() {
             </div>
           </details>
           <label><input type="checkbox" checked={showData} onChange={(e) => setShowData(e.target.checked)} /> show all data links</label>
-          <label><input type="checkbox" checked={details} onChange={(e) => setDetails(e.target.checked)} /> details</label>
+          <label><input type="checkbox" checked={details} onChange={(e) => setDetails(e.target.checked)} /> step details</label>
           {compare.comparison && (
             <span className="legend">
               <label><input type="checkbox" checked={showDiff} onChange={(e) => setShowDiff(e.target.checked)} /> compared:</label>

@@ -4,26 +4,44 @@ import type { DescribeResult, FromWebview, ToWebview } from "./protocol";
 /** The graph view: one React webview panel, fed the IR and the session position. */
 export class GraphPanel {
   static current: GraphPanel | undefined;
+  /** Messages sent while the panel is being opened. */
+  private static early: ToWebview[] = [];
+  private static opening: Promise<void> | undefined;
   private panel: vscode.WebviewPanel;
   private ready = false;
   private queue: ToWebview[] = [];
 
-  static show(ctx: vscode.ExtensionContext, describe: DescribeResult, onMessage: (m: FromWebview) => void): GraphPanel {
-    if (!GraphPanel.current) {
-      const besideTheCode = vscode.window.tabGroups.all.length === 1;
-      GraphPanel.current = new GraphPanel(ctx, onMessage);
-      // Beside the code, the flow gets 60% of the width: at half, its text and tables don't fit.
-      // The command runs after the panel's group exists: both go to the workbench in order.
-      if (besideTheCode) void vscode.commands.executeCommand("vscode.setEditorLayout", { orientation: 0, groups: [{ size: 0.4 }, { size: 0.6 }] });
-    }
-    GraphPanel.current.panel.reveal(vscode.ViewColumn.Beside, true);
-    GraphPanel.current.post({ type: "describe", describe });
-    return GraphPanel.current;
+  /** Send to the panel, or hold the message until it has opened. */
+  static post(m: ToWebview) {
+    if (GraphPanel.current) GraphPanel.current.post(m);
+    else GraphPanel.early.push(m);
   }
 
-  private constructor(ctx: vscode.ExtensionContext, onMessage: (m: FromWebview) => void) {
+  static async show(ctx: vscode.ExtensionContext, describe: DescribeResult, onMessage: (m: FromWebview) => void): Promise<void> {
+    if (!GraphPanel.current) {
+      GraphPanel.opening ??= (async () => {
+        let column = vscode.ViewColumn.Beside;
+        if (vscode.window.tabGroups.all.length === 1) {
+          // Beside the code the flow gets 60% of the width: at half or less, its text and tables don't fit.
+          // Lay out the groups first and then open the panel in the second, so the order is certain.
+          await vscode.commands.executeCommand("vscode.setEditorLayout", { orientation: 0, groups: [{ size: 0.4 }, { size: 0.6 }] });
+          column = vscode.ViewColumn.Two;
+        }
+        GraphPanel.current = new GraphPanel(ctx, onMessage, column);
+        // The flow first, then anything sent meanwhile: a describe resets the run state it would carry.
+        GraphPanel.current.post({ type: "describe", describe });
+        for (const m of GraphPanel.early.splice(0)) GraphPanel.current.post(m);
+      })().finally(() => (GraphPanel.opening = undefined));
+      await GraphPanel.opening;
+      return;
+    }
+    GraphPanel.current.panel.reveal(undefined, true);
+    GraphPanel.current.post({ type: "describe", describe });
+  }
+
+  private constructor(ctx: vscode.ExtensionContext, onMessage: (m: FromWebview) => void, column: vscode.ViewColumn) {
     const dist = vscode.Uri.joinPath(ctx.extensionUri, "dist", "webview");
-    this.panel = vscode.window.createWebviewPanel("decider.graph", "decider: flow", vscode.ViewColumn.Beside, {
+    this.panel = vscode.window.createWebviewPanel("decider.graph", "decider: flow", { viewColumn: column, preserveFocus: true }, {
       enableScripts: true,
       retainContextWhenHidden: true,
       localResourceRoots: [dist],
