@@ -13,6 +13,7 @@ goal isn't visibly met caps at 5). The loop stops above 8/10 or after 40 rounds.
 | 3 | 6.4 | 7 | 8 | 6 | 6 | 6 | 7 | 5 |
 | 4 | 7.1 | 8 | 7 | 8 | 7 | 7 | 7 | 6 |
 | 5 | 7.6 | 8 | 8 | 8 | 7 | 7 | 8 | 7 |
+| 6 | 7.3 | 8 | 8 | 8 | 7 | 6 | 7 | 7 |
 
 ## Round 0 (baseline)
 
@@ -155,3 +156,29 @@ Judge's problems, most damaging first:
 10. "What changed" table: no header on the count, duplicate lines, wrapping headings.
 11. Run-changing buttons sit inside the read-only explanation.
 12. The find query clears after Enter, losing the other hits.
+
+## Round 6
+
+Changes: the pause banner is one line ("2 edits ▾" and the compare button), with the note and code diff only right
+after an edit; run-changing buttons moved into "Change the run ▾"; the find box keeps its hits ("1 of 4 ◀ ▶");
+record names in results focus that record; every reader of a changed param is listed, with 0 when nothing moved;
+"N declines now for a different reason" in the headline; the step's formula shows in its details; scenario knobs
+read "pl_product_cap (cap) in personal_loan/limits"; outcome counts are sweep columns.
+
+The score dipped (7.6 to 7.3) with a fresh judge; several points contradict round 5 (declined records expanded or
+collapsed). One is a real bug: after "Use edited code" the details still show the old formula.
+
+Judge's problems, most damaging first:
+
+1. L7: details say "running your edited code" above the old formula.
+2. L5: the sweep table clips offer_amount; no horizontal scroll.
+3. L5: cells need a legend; no book-level total.
+4. L6: "2 declines now for a different reason" never names them or the reasons.
+5. L4: no reason given for why a repo move changes no approved offer.
+6. Declined records' value changes clutter results next to "0 offers changed".
+7. L7: one-edit and all-edit comparisons look the same; no scope chip.
+8. The details pane takes half the panel; the graph is small.
+9. L3: the breakdown opens scrolled to the middle.
+10. L3: the cap and floor values and the headroom are never computed.
+11. L5: picker narrow; the chosen param's current value not shown; values not echoed.
+12. What-if tables clip their last column; filter placeholder cut off.

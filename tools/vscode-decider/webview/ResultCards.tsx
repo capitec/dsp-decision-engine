@@ -6,7 +6,7 @@ import { formatValue, recordLabel } from "../src/protocol";
 const FIRST = 12;
 
 /** The records whose results changed, one card each: approved first, declined ones grouped after. */
-export function ResultCards({ c, record }: { c: Comparison; record: number | null }) {
+export function ResultCards({ c, record, onFocus }: { c: Comparison; record: number | null; onFocus?: (row: number) => void }) {
   const [more, setMore] = useState(false);
   const moved = (n: string, r: number) => !same(c.results.a[n]?.[r], c.results.b[n]?.[r]);
   const cols = Object.keys(c.results.b);
@@ -21,7 +21,11 @@ export function ResultCards({ c, record }: { c: Comparison; record: number | nul
   const card = (r: number) => (
     <div key={r} className={`result-card ${r === record ? "hit" : ""}`}>
       <div className="result-head">
-        <strong>{recordLabel(r, c.key)}</strong>
+        {onFocus && r !== record ? (
+          <a title="Focus this record in the debugger" onClick={() => onFocus(r)}><strong>{recordLabel(r, c.key)}</strong></a>
+        ) : (
+          <strong>{recordLabel(r, c.key)}</strong>
+        )}
         {decision && (
           <span className={`decision ${c.results.b[decision][r]}`}>
             {moved(decision, r) ? `${formatValue(c.results.a[decision][r])} → ${formatValue(c.results.b[decision][r])}` : formatValue(c.results.b[decision][r])}
@@ -40,13 +44,18 @@ export function ResultCards({ c, record }: { c: Comparison; record: number | nul
   );
   return (
     <>
-      {record !== null && !hit.includes(record) && <div className="muted">{recordLabel(record, c.key)} (focused) is unchanged.</div>}
+      {record !== null && !hit.includes(record) && <div className="muted">{recordLabel(record, c.key)} (focused) is unchanged; the records below changed.</div>}
+      {!offered.length && noOffer.length > 0 && (
+        <div className="note">
+          Only declined applicants were affected ({noOffer.map((r) => recordLabel(r, c.key)).join(", ")}): their values changed, but they get no offer either way.
+        </div>
+      )}
       {(more ? ordered : ordered.slice(0, FIRST)).map(card)}
       {ordered.length > FIRST && (
         <button className="link" onClick={() => setMore(!more)}>{more ? "show fewer" : `show all ${ordered.length} changed records`}</button>
       )}
       {noOffer.length > 0 && (
-        <details className="no-offer">
+        <details className="no-offer" open={!offered.length}>
           <summary>
             {noOffer.length} declined record{noOffer.length === 1 ? "" : "s"} with changed values but no offer
           </summary>
@@ -69,8 +78,11 @@ export function headline(c: Comparison): string | null {
   const offers = changed.filter((r) => b[r] !== "decline" || a[r] !== "decline");
   const flips = decided.map((r) => `${formatValue(a[r])} → ${formatValue(b[r])}`);
   const counts = [...new Set(flips)].map((f) => `${flips.filter((x) => x === f).length} ${f}`).join(", ");
+  const reason = c.results.b.reason_code;
+  const reasons = reason ? rows.filter((r) => a[r] === "decline" && b[r] === "decline" && !same(c.results.a.reason_code?.[r], reason[r])).length : 0;
   return [
     decided.length ? `Decisions changed for ${decided.length} of ${c.rows} (${counts})` : `No decision changed`,
+    reasons ? `${reasons} decline${reasons === 1 ? "" : "s"} now for a different reason` : "",
     `offers changed for ${offers.length} applicant${offers.length === 1 ? "" : "s"}`,
     changed.length > offers.length ? `${changed.length - offers.length} declined record${changed.length - offers.length === 1 ? "" : "s"} changed values only` : "",
   ]

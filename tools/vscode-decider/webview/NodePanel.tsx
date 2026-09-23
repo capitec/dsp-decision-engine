@@ -64,6 +64,7 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
         <>
           <h3>{name} {node.path !== name && <span className="muted">in {node.path.slice(0, -(name?.length ?? 0) - 1)}</span>}</h3>
           <div className="muted" title={node.source}>{node.table ? "lookup table, matched once per record" : KIND[node.callKind]}{node.doc ? ` · ${node.doc}` : ""}</div>
+          {node.formula && <div className="step-formula mono" title="What the step returns">returns {node.formula}</div>}
           {run.edits?.[node.path] && (
             <div className="edited-note">{run.edits[node.path] === "delete" ? "Skipped in this run: the steps after it ran without it." : "Running your edited code in this run."}</div>
           )}
@@ -94,18 +95,20 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
           )}
           <div className="actions">
             <button onClick={() => onReveal(node.path)}>Open source</button>
-            {paused && !run.edits?.[node.path] && (
-              <>
-                <button title="Take this step out of the paused run and re-run from where it was; the source is not changed" onClick={() => onSkip(node.path)}>Skip {name}</button>
-                <button title="Save your change to this step's code first: reloads the file and runs the edited step in its place, from here" onClick={() => onReload(node.path)}>Use edited code</button>
-              </>
-            )}
             {run.edits?.[node.path] === "delete" ? null : atThis ? (
               <button className="primary" onClick={onStep} title="Run this step and pause just after it">Run through {name}</button>
-            ) : ran && paused ? (
-              <button onClick={() => onRewind(node.path)} title="Run the flow again from this step, keeping the values before it">Re-run from {name}</button>
-            ) : (
+            ) : ran && paused ? null : (
               <button className="primary" onClick={() => onRunTo(node.path)} title="Run the flow and pause just before this step">Run to {name}</button>
+            )}
+            {paused && !run.edits?.[node.path] && (
+              <details className="edit-menu">
+                <summary>Change the run ▾</summary>
+                <div className="edit-menu-body">
+                  {ran && <button onClick={() => onRewind(node.path)} title="Run the flow again from this step, keeping the values before it">Re-run from {name}</button>}
+                  <button title="Take this step out of the paused run and re-run from where it was; the source is not changed" onClick={() => onSkip(node.path)}>Skip {name}</button>
+                  <button title="Save your change to this step's code first: reloads the file and runs the edited step in its place, from here" onClick={() => onReload(node.path)}>Use edited code</button>
+                </div>
+              </details>
             )}
           </div>
           {change && (
