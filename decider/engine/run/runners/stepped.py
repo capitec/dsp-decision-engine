@@ -45,21 +45,14 @@ class SteppedRunner(InterpretedRunner):
     def iterate(self, plan: Plan, state: State, params: RunParams) -> Iterator[Checkpoint]:
         # Not a generator itself: one generator frame less per checkpoint on the single-record path.
         if plan is not self._plan:
-            self._compile(plan)
+            self._compile(plan, params.lazy)
         return super().iterate(plan, state, params)
 
-    def _compile(self, plan: Plan) -> None:
+    def _compile(self, plan: Plan, lazy: bool) -> None:
         strs = {c.id: _str_params(c) for c in plan.calls if c.node.kind == "scalar"}
-        units = compile_plan(plan, fuse=self.fuse)
-        reads = {}
-        for unit in units.values():
-            inside: set[int] = set()
-            ext = []
-            for c in unit.calls:
-                ext += [(i, v, c.node.origin.path) for i, v in zip(c.node.inputs, c.reads) if v.id not in inside]
-                inside |= {v.id for v in c.writes}
-            reads[unit.calls[0].id] = tuple(ext)
-        self.units, self._reads, self._strs = units, reads, {k: v for k, v in strs.items() if v}
+        self.units = compile_plan(plan, fuse=self.fuse)
+        self._reads = {id(unit): _external(unit) for unit in self.units.values()}
+        self._strs = {k: v for k, v in strs.items() if v}
         self._plan = plan
 
     def _call(self, call: Call, state: State, params: RunParams, scope: _Scope) -> None:
@@ -76,7 +69,7 @@ class SteppedRunner(InterpretedRunner):
         bundles = {c.id: self._bundle(c.id, params, n) for c in unit.calls if c.node.params}
         values: dict[int, np.ndarray] = {}
         valid: dict[int, np.ndarray] = {}
-        for decl, v, path in self._reads[unit.calls[0].id]:
+        for decl, v, path in self._reads[id(unit)]:
             x, mask = state.read(v, rows)
             if x.dtype == object:
                 x = self._typed(x, mask, decl)
@@ -119,6 +112,15 @@ class SteppedRunner(InterpretedRunner):
                 codes = {k: np.int32(self._codes.setdefault(getattr(bundle, k), len(self._codes))) for k in names}
             converted = self._converted[key] = bundle._replace(**codes)
         return converted
+
+
+def _external(unit: Unit) -> tuple[tuple[Input, Version, str], ...]:
+    # What a unit reads from outside itself, with the null policy that applies.
+    inside = {v.id for c in unit.calls for v in c.writes} | getattr(unit, "inner", set())
+    reads = [(i, v, c.node.origin.path) for c in unit.calls for i, v in zip(c.node.inputs, c.reads) if v.id not in inside]
+    # A value a packed branch or loop only copies needs no policy: a null in it sends the run down the unpacked path.
+    reads += [(Input(v.name, base_annotation(v.annotation)), v, "") for v in getattr(unit, "passthrough", ())]
+    return tuple(reads)
 
 
 def _str_params(call: Call) -> tuple[str, ...]:
