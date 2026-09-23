@@ -210,7 +210,7 @@ Today's equivalent — `_get_buffers()["values"].to_numpy(...)` per column plus
 (probe). The Arrow route is 3× cheaper at one row and it is *flat* in rows
 (O(columns), never O(rows); `verification-probes/README.md`).
 
-### 1.3a The per-row C gather is refuted — load from the address table instead
+### 1.3a The per-row C gather is refuted (superseded by §1.3b — kept for its numbers)
 
 **Measured in Stage 1 and reproduced independently, 1M rows, 17 columns
 (10 f64, 4 i64, 2 bool, 1 str), kernel only:**
@@ -251,6 +251,65 @@ Scaling, same run: 1/2/4/8/16 f64 columns → 10/20/23/34/61 ns, i.e. ≈8 ns of
 call plus ≈3.5 ns per column, and +3.3 ns/column at 10% nulls. One bool
 column 6.3 ns; one string column 8.5 ns via the table, 5.3 via
 `call_get_string`.
+
+### 1.3b Batch scope — use `gather_row` everywhere; the address table is dropped
+
+**Owner's decision.** Batches run "once a day at most", and "if a batch
+finishes in a few extra seconds it's not a big deal"; performance only becomes
+a concern above ~0.5 ms. Under that, §1.3a's optimisation is not worth its
+complexity:
+
+| | ns/row | 1M-row batch | 10M-row batch |
+|---|---|---|---|
+| `gather_row`, one C call per row | 149 | 149 ms | 1.5 s |
+| numba loads from the address table | 13 | 13 ms | 0.13 s |
+| *today's `_fill_array`, for reference* | 32 | 32 ms | 0.32 s |
+
+The whole argument is ~120 ms on a job that runs daily. Against that, the
+address-table path is **decider2's own numba code** doing per-column pointer
+loads, where `gather_row` is one call into C that Apache's library and a
+349-line shim already implement. The owner's stated metric is "less from us,
+more from existing tooling".
+
+**So: `gather_row` everywhere — batch and single-record. The address-table
+load path is not built.** `load_f64`/`load_i64`/`load_u8` and the `addrs`
+table stay exported from `resolve_all` (they cost nothing, they are already
+tested) but nothing in `decider2/src` uses them.
+
+**Stated honestly: this is a ~4.6× batch regression against today** (32 →
+149 ns/row, +117 ms per million rows). It is accepted deliberately, not
+overlooked. If a batch profile ever makes that matter, §1.3a records the
+measurement and the faster path is a localised change — the surface is already
+there.
+
+### 1.6 Interpreted mode goes through Arrow too (revises §8.1)
+
+**Superseded:** §8.1 below has interpreted/stepped build string spans from
+Python `bytes` via `str.encode("utf-8")`, deliberately *not* using the Arrow
+import, so that `interpreted ≡ fused` compares two independent producers.
+
+**Revised, on the owner's objection that this is a less faithful
+representation:** interpreted and stepped use the SAME Arrow import as fused,
+then convert the decoded values back to Python types before calling step
+functions. One import path in the codebase, not two, and interpreted mode
+exercises the real boundary — so a decode bug surfaces while someone is
+debugging in the mode built for debugging, instead of only as a cross-mode
+disagreement.
+
+**The independence property is not lost, because it never depended on
+interpreted mode.** `testing/equivalence.py`'s FOURTH rung,
+`_assert_score_agrees_with_apply`, feeds `score()` a plain Python `dict` and
+compares it with `apply()`. `score()` takes Python-native values and never
+builds a frame, so it is already the independent, non-Arrow producer. The
+ladder still asserts that nanoarrow's decode of polars' memory agrees with
+Python's own values — the assertion simply lives in the rung that was always
+Python-native, rather than in an execution mode contorted to provide it.
+
+Consequences: §8.1's table changes so interpreted/stepped read "the Arrow
+view, converted to Python types"; §8.2 item 5's injected-drift test must move
+to the `score()` rung (corrupt a span and it must fail score↔apply, not
+interpreted↔stepped, which are no longer independent); and `score()` keeps
+building its own values from the input dict, which it already does.
 
 ### 1.4 Chunking
 
