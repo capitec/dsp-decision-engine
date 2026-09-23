@@ -12,6 +12,7 @@ goal isn't visibly met caps at 5). The loop stops above 8/10 or after 40 rounds.
 | 2 | 6.4 | 7 | 8 | 6 | 5 | 7 | 8 | 4 |
 | 3 | 6.4 | 7 | 8 | 6 | 6 | 6 | 7 | 5 |
 | 4 | 7.1 | 8 | 7 | 8 | 7 | 7 | 7 | 6 |
+| 5 | 7.6 | 8 | 8 | 8 | 7 | 7 | 8 | 7 |
 
 ## Round 0 (baseline)
 
@@ -130,3 +131,27 @@ Judge's problems, most damaging first:
 10. No one-line summary on the rate breakdown.
 11. After "Use edited code" nothing shows what changed in the code.
 12. Whether the relaxed rule changed any decision is unclear.
+
+## Round 5
+
+Changes: Compare leads with decisions ("No decision changed · offers changed for 3 applicants · 2 declined records
+changed values only"), then one card per changed record (approved first, declined grouped), then what changed
+(params, inputs, the edited steps; downstream steps folded into one line), then step by step; when nothing changed it
+says the edit made no difference; lookup tables put the output column first; the breakdown opens with a one-line
+summary; "Use edited code" shows the lines that changed (diffed against the text as it was loaded, since
+`inspect.getsource` reads the file as it is now); scenario cells read "3 · −R 5,303.95".
+
+Judge's problems, most damaging first:
+
+1. The pause banner (status, diff, edit pills) plus details crush the graph to 170-280px.
+2. "Offers changed for 0 applicants" above an empty Results section looks broken.
+3. Only 2 of repo_rate's 8 readers are listed; the other 6 aren't said to have had no effect.
+4. The focused record is unaffected, with no route to the affected ones.
+5. The editor beside the panel cuts the rule's condition; table columns clip.
+6. Sweep cells cryptic; approvals only a footnote.
+7. Knob pickers cramped; the "from the pause" option shows when nothing is paused.
+8. Decline-reason changes are buried.
+9. Step counts differ between the one-edit and all-edits comparisons.
+10. "What changed" table: no header on the count, duplicate lines, wrapping headings.
+11. Run-changing buttons sit inside the read-only explanation.
+12. The find query clears after Enter, losing the other hits.

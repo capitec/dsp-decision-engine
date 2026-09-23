@@ -178,7 +178,8 @@ async function onWebview(m: FromWebview, describe: DescribeResult) {
     case "skip":
     case "reloadStep":
       try {
-        await s?.customRequest(m.type === "skip" ? "decider.skip" : "decider.reloadStep", { path: m.path });
+        const r = (await s?.customRequest(m.type === "skip" ? "decider.skip" : "decider.reloadStep", { path: m.path })) as { diff?: string[] } | undefined;
+        if (r?.diff?.length) post({ type: "edited", path: m.path, diff: r.diff });
       } catch (e) {
         void vscode.window.showErrorMessage(`Couldn't ${m.type === "skip" ? "skip" : "swap in"} ${m.path.split("/").pop()}: ${(e as Error).message}`);
       }

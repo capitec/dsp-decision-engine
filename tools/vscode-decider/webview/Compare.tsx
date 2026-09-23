@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { paramChangeLines, paramReaders, same, type Comparison, type ValueDiff } from "../src/compare";
 import { formatValue, recordLabel, type RecordKey } from "../src/protocol";
+import { headline, ResultCards } from "./ResultCards";
 
 interface Props {
   comparison: Comparison | null;
@@ -43,63 +44,6 @@ function Diffs({ diffs, record, keyCol, results }: { diffs: ValueDiff[]; record:
 }
 
 /** The result columns that changed, for the records they changed on; the unchanged ones on request. */
-function Results({ c, record }: { c: Comparison; record: number | null }) {
-  const [showSame, setShowSame] = useState(false);
-  const moved = (n: string, r: number) => !same(c.results.a[n]?.[r], c.results.b[n]?.[r]);
-  const cols = Object.keys(c.results.b);
-  const everyRow = Array.from({ length: c.rows }, (_, i) => i);
-  const hit = everyRow.filter((r) => cols.some((n) => moved(n, r)));
-  const changedCols = cols.filter((n) => hit.some((r) => moved(n, r)));
-  // The decision reads first, changed or not: "still declined" and "now approved" are the point.
-  const lead = cols.filter((n) => /^decision$/.test(n) && !changedCols.includes(n));
-  const shownCols = showSame ? [...lead, ...changedCols, ...cols.filter((n) => !changedCols.includes(n) && !lead.includes(n))] : [...lead, ...changedCols];
-  // One row per changed record, the focused one first; unchanged records on request.
-  const rest = showSame ? [...hit, ...everyRow.filter((r) => !hit.includes(r))] : hit;
-  const rows = record !== null ? [record, ...rest.filter((r) => r !== record)] : rest;
-  if (!hit.length) return <div>No result changes for any of the {c.rows} records.</div>;
-  return (
-    <>
-      <div className="muted small">
-        {hit.length} of {c.rows} records changed.{record !== null && !hit.includes(record) ? ` ${recordLabel(record, c.key)} (focused) is unchanged; it is pinned first.` : ""}{" "}
-        <label>
-          <input type="checkbox" checked={showSame} onChange={(e) => setShowSame(e.target.checked)} /> also show the {c.rows - hit.length} unchanged records and {cols.length - changedCols.length} unchanged fields
-        </label>
-      </div>
-      <div className="results-scroll">
-        <table className="results">
-          <thead>
-            <tr>
-              <th>record</th>
-              {shownCols.map((n) => (
-                <th key={n} className="mono">{n}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r} className={r === record ? "hit" : ""}>
-                <td className="nowrap">{recordLabel(r, c.key)}</td>
-                {shownCols.map((n) => {
-                  const a = c.results.a[n]?.[r];
-                  const b = c.results.b[n]?.[r];
-                  return same(a, b) ? (
-                    <td key={n} className="mono unchanged-cell" title="same in both runs">{formatValue(b, n)}</td>
-                  ) : (
-                    <td key={n} className="mono changed-cell"><s className="before">{formatValue(a, n)}</s> <span className="after">{formatValue(b, n)}</span></td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </>
-  );
-}
-
-// Steps named in the summary line; the step-by-step list below has them all.
-const LIST = 8;
-
 /** Two runs side by side, step by step, in execution order. */
 export function Compare({ comparison: c, busy, error, record, onSelect, onCompareRevision, onOpenDiff, back, header, withRevision = true }: Props) {
   const [onlyChanges, setOnlyChanges] = useState(true);
@@ -129,11 +73,14 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
   const movedOut = outcomes
     .map((n) => ({ n, k: Array.from({ length: c.rows }, (_, r) => r).filter((r) => !same(c.results.a[n]?.[r], c.results.b[n]?.[r])).length }))
     .filter((x) => x.k > 0);
-  const stayed = outcomes.filter((n) => !movedOut.some((m) => m.n === n));
   const paramLines = [
     ...paramChangeLines(c.paramsDocs?.b, c.values?.a),
     ...c.steps.flatMap((s) => s.paramChanges.map((p) => `${s.path.split("/").pop()} ${p} (in its code)`)),
   ];
+  // The edited steps are the causes; the rest only follow from them.
+  const touched = c.steps.filter((s) => s.status !== "same" && s.status !== "not run");
+  const causes = touched.filter(edited);
+  const downstream = touched.length - causes.length;
   // A changed param whose readers all wrote the same values: say so, or "nothing changed" reads as a bug.
   const idle = readers.filter((p) => p.steps.length && !p.steps.some((s) => c.steps.find((x) => x.path === s)?.outputs.length));
   return (
@@ -146,11 +93,19 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
         <span className="muted"> · {c.rows} records · {count("changed")} steps changed{count("added") ? `, ${count("added")} added` : ""}{count("removed") ? `, ${count("removed")} removed` : ""}</span>
       </div>
       <div className="verdict">
-        {movedOut.length === 0
+        {headline(c) ?? (movedOut.length === 0
           ? `No final output changes: every one of the ${c.rows} records ends the same.`
-          : `${movedOut.map((m) => `${m.n} changes for ${m.k} of ${c.rows} records`).join("; ")}.`}
-        {stayed.length > 0 && movedOut.length > 0 && stayed.length <= 8 && <span className="muted"> Unchanged: {stayed.join(", ")}.</span>}
+          : `${movedOut.map((m) => `${m.n} changes for ${m.k} of ${c.rows} records`).join("; ")}.`)}
       </div>
+      {headline(c) && movedOut.length > 0 && (
+        <div className="muted small">{movedOut.map((m) => `${m.n}: ${m.k}`).join(" · ")} of {c.rows} records changed</div>
+      )}
+      {movedOut.length === 0 && causes.length > 0 && (
+        <div className="note">
+          Nothing changed: with {causes.map((s) => s.path.split("/").pop()).join(" and ")} {causes.some((s) => s.status === "removed") ? "left out" : "changed"}, every record ends the same, so
+          {causes.length === 1 ? " it makes" : " they make"} no difference for these {c.rows} records.
+        </div>
+      )}
       {idle.map((p) => (
         <div key={p.param} className="note">
           <span className="mono">{p.param}</span> is read by{" "}
@@ -163,43 +118,6 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
           {p.steps.length > 6 && ` and ${p.steps.length - 6} more`}, but none of {p.steps.length === 1 ? "its" : "their"} outputs changed for any of the {c.rows} records.
         </div>
       ))}
-      {c.steps.some((s) => s.status !== "same" && s.status !== "not run") && (
-        <table className="changed-table">
-          <thead>
-            <tr>
-              <th>step</th>
-              <th>in</th>
-              <th>what changed</th>
-              <th>records</th>
-            </tr>
-          </thead>
-          <tbody>
-            {c.steps
-              .filter((s) => s.status !== "same" && s.status !== "not run")
-              // Edited steps first: they are the cause, the rest only follow from them.
-              .sort((x, y) => Number(edited(y)) - Number(edited(x)))
-              .slice(0, LIST)
-              .map((s) => (
-                <tr key={s.path}>
-                  <td><a onClick={() => onSelect(s.path)}>{s.path.split("/").pop()}</a></td>
-                  <td className="muted small">{s.path.split("/").slice(-3, -1).join("/")}</td>
-                  <td>
-                    {[
-                      ...s.paramChanges,
-                      ...readers.filter((r) => r.steps.includes(s.path)).map((r) => `${r.param} param`),
-                      ...s.structural.filter((x) => x !== "params").map((x) => (x === "code" ? "code changed" : `${x} changed`)),
-                      ...(s.status === "removed" ? ["skipped / removed"] : s.status === "added" ? ["added"] : []),
-                    ].join(", ") || <span className="muted">follows from the above</span>}
-                  </td>
-                  <td className="mono">{new Set(s.outputs.flatMap((o) => o.changedRows)).size || "—"}</td>
-                </tr>
-              ))}
-          </tbody>
-        </table>
-      )}
-      {count("changed") + count("added") + count("removed") > LIST && (
-        <div className="muted small">and {count("changed") + count("added") + count("removed") - LIST} more steps that follow from these; see Step by step below</div>
-      )}
       {header}
       {(c.errors.a || c.errors.b) && (
         <div className="error">
@@ -207,24 +125,38 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
           {c.errors.b && <div>{c.b}: {c.errors.b}</div>}
         </div>
       )}
-      {paramLines.length > 0 && (
-        <>
-          <h4>Changed params</h4>
-          {paramLines.map((l) => (
-            <div key={l} className="mono">{l}</div>
-          ))}
-        </>
-      )}
-      {c.changedInputs.length > 0 && (
-        <>
-          <h4>Changed inputs</h4>
-          {c.changedInputs.map((i) => (
-            <div key={i.name} className="mono">{i.name} → {formatValue(i.after)} <span className="muted">for {i.scope}</span></div>
-          ))}
-        </>
-      )}
       <h4>Results</h4>
-      <Results c={c} record={record} />
+      <ResultCards c={c} record={record} />
+      {(paramLines.length > 0 || c.changedInputs.length > 0 || causes.length > 0) && <h4>What changed</h4>}
+      {paramLines.map((l) => (
+        <div key={l} className="mono">{l}</div>
+      ))}
+      {c.changedInputs.map((i) => (
+        <div key={i.name} className="mono">{i.name} → {formatValue(i.after, i.name)} <span className="muted">for {i.scope}</span></div>
+      ))}
+      {causes.length > 0 && (
+        <table className="changed-table">
+          <tbody>
+            {causes.map((s) => (
+              <tr key={s.path}>
+                <td><a onClick={() => onSelect(s.path)}>{s.path.split("/").pop()}</a></td>
+                <td className="muted small">{s.path.split("/").slice(-3, -1).join("/")}</td>
+                <td>
+                  {[
+                    ...s.paramChanges,
+                    ...readers.filter((r) => r.steps.includes(s.path)).map((r) => `${r.param} param`),
+                    ...s.structural.filter((x) => x !== "params").map((x) => (x === "code" ? "code changed" : `${x} changed`)),
+                    ...(s.status === "removed" ? ["skipped / removed"] : s.status === "added" ? ["added"] : []),
+                  ].join(", ")}
+                  {s.structural.includes("code") && c.files && <> · <a onClick={() => onOpenDiff(s.path)}>view diff</a></>}
+                </td>
+                <td className="mono">{new Set(s.outputs.flatMap((o) => o.changedRows)).size || "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {downstream > 0 && <div className="muted small">and {downstream} downstream step{downstream === 1 ? "" : "s"} changed as a result: see Step by step below.</div>}
       <h4>
         Step by step
         {c.firstDivergence && (

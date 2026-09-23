@@ -56,6 +56,7 @@ export function App() {
   // What the last skip or swap did, said in the pause banner until the run moves on.
   const [note, setNote] = useState<string>();
   const noteNext = useRef<string | undefined>(undefined);
+  const [codeDiff, setCodeDiff] = useState<string[]>([]);
   const shown = useRef<string | undefined>(undefined);
 
   useEffect(() => {
@@ -77,6 +78,7 @@ export function App() {
           setRun(m);
           setPending(undefined);
           setNote(noteNext.current);
+          if (noteNext.current === undefined) setCodeDiff([]);
           noteNext.current = undefined;
           if (m.current) setSelected(m.current.path);
           break;
@@ -102,6 +104,9 @@ export function App() {
           break;
         case "sweep":
           setSweep(m);
+          break;
+        case "edited":
+          setCodeDiff(m.diff);
           break;
         case "select":
           setSelected(m.path);
@@ -211,6 +216,13 @@ export function App() {
           ⏸ Paused {run.current.when} <strong>{run.current.path.split("/").pop() || "the start"}</strong>
           {run.record !== null && <span> · focused on {recordLabel(run.record, keyCol)}</span>}
           {note && <div className="banner-note">{note}</div>}
+          {codeDiff.length > 0 && (
+            <pre className="banner-diff">
+              {codeDiff.slice(0, 6).map((l, i) => (
+                <div key={i} className={l.startsWith("+") ? "added" : "removed"}>{l.replace(/^([+-])\s+/, "$1 ")}</div>
+              ))}
+            </pre>
+          )}
           {Object.keys(run.edits ?? {}).length > 0 && (
             <div className="edit-list">
               Edits in this run:{" "}
@@ -371,12 +383,12 @@ export function App() {
             values={describe.values ?? {}}
             onSkip={(path) => {
               setPending(`Skipping ${path.split("/").pop()} and re-running from there…`);
-              noteNext.current = `Skipped ${path.split("/").pop()}: the run re-ran from where it was and paused at the next step. Values before it were kept.`;
+              noteNext.current = `Skipped ${path.split("/").pop()}; re-ran from there, keeping everything before it.`;
               send({ type: "skip", path });
             }}
             onReload={(path) => {
               setPending(`Reloading ${path.split("/").pop()} and re-running from there…`);
-              noteNext.current = `Loaded your edited ${path.split("/").pop()}: the run went back to just before it, keeping every value upstream. Continue to run the new code.`;
+              noteNext.current = `Loaded your edited ${path.split("/").pop()} and went back to just before it; continue to run the new code:`;
               send({ type: "reloadStep", path });
             }}
           />
