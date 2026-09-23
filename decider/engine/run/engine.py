@@ -15,9 +15,12 @@ from decider.engine.ir.decls import base_annotation
 from decider.engine.run.state import State, dtype_of
 from decider.engine.wiring import Plan, resolve
 from decider.engine.wiring.plan import Version
+from decider.exceptions import EngineError
 
 if TYPE_CHECKING:
     from decider.engine.debug import Session
+
+Mode = Literal["interpreted", "stepped", "fused"]
 
 # Mode name -> runner class; a new mode is one entry here.
 RUNNERS: dict[str, type] = {"interpreted": InterpretedRunner, "stepped": SteppedRunner, "fused": FusedRunner}
@@ -42,10 +45,10 @@ class Engine:
 
     def __init__(self, params_validation: Literal["eager", "lazy"] = "eager"):
         if params_validation not in ("eager", "lazy"):
-            raise ValueError(f"params_validation must be 'eager' or 'lazy', not {params_validation!r}")
+            raise EngineError(f"params_validation must be 'eager' or 'lazy', not {params_validation!r}")
         self.params_validation = params_validation
 
-    def bind(self, step_or_ir: Any, mode: str = "interpreted") -> Executable:
+    def bind(self, step_or_ir: Any, mode: Mode = "interpreted") -> Executable:
         """An `Executable` running `step_or_ir` in `mode`.
 
         Args:
@@ -61,7 +64,7 @@ class Engine:
         """
         runner = RUNNERS.get(mode)
         if runner is None:
-            raise ValueError(f"unknown mode {mode!r}; expected one of {sorted(RUNNERS)}")
+            raise EngineError(f"unknown mode {mode!r}; expected one of {sorted(RUNNERS)}")
         return Executable(resolve(step_or_ir), runner(), self.params_validation == "lazy")
 
 
@@ -115,7 +118,7 @@ class Executable:
         shadowed = sorted(self._produced.intersection(columns))
         if shadowed:
             name = shadowed[0]
-            raise ValueError(
+            raise EngineError(
                 f"'{name}' is produced by this pipeline and is also a column of the input frame. "
                 f"Drop or rename the frame column '{name}', or relabel the step that writes it "
                 f"(`.relabel(writes={{'{name}': '{name}_2'}})`), so neither silently shadows the other."

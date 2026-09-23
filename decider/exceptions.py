@@ -169,6 +169,29 @@ class ArrowImportError(DeciderError, RuntimeError):
     """nanoarrow refused what `__arrow_c_stream__()` handed over."""
 
 
+class EngineError(DeciderError, ValueError):
+    """An `Engine` can't run as asked: an unknown mode or validation setting, or an input frame
+    holding a column the pipeline itself produces.
+
+    Example::
+
+        Engine().bind(pipeline, mode="jit")   # EngineError: unknown mode 'jit'; expected one of [...]
+    """
+
+
+class RegistryError(DeciderError, LookupError):
+    """A config's `type` tag names no class registered under the registry it is loaded into.
+
+    Example::
+
+        ConfigurableStep.resolve("tre")   # RegistryError: 'tre' is not a registered ... Did you mean 'tree'?
+    """
+
+
+class ExprError(DeciderError, ValueError):
+    """An expression is outside the admitted grammar; the message names the offending construct."""
+
+
 @contextmanager
 def wrap_import_errors(optional_source: str = None, raise_error=True):
     try:

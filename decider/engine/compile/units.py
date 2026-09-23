@@ -7,7 +7,7 @@ from typing import Any, Iterator, Mapping, Union
 import numpy as np
 
 from decider.engine.compile.kernel import Spec, fused_kernel
-from decider.engine.compile.njit import compile_call, numpy_dtype, parameters
+from decider.engine.compile.njit import FALLBACK_ERRORS, compile_call, numpy_dtype, parameters
 from decider.engine.ir.decls import NullPolicy, base_annotation
 from decider.engine.ir.origin import Origin
 from decider.engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, Sequence, Version
@@ -23,7 +23,8 @@ class Kernel:
     each call's validated params bundle from `bundles[call.id]` (nodes
     without params need none), and stores the versions it keeps in `values`.
     Values only used inside the kernel are never stored. A version declared
-    `T | None` also stores its validity mask in `valid`.
+    `T | None` also stores its validity mask in `valid`. If numba can't
+    compile the calls together, they run one by one in Python from then on.
 
     Example::
 
@@ -33,7 +34,7 @@ class Kernel:
         [o.path for o in unit.origins]
     """
 
-    __slots__ = ("calls", "fn", "reads", "optional", "writes", "_masked", "_layout")
+    __slots__ = ("calls", "fn", "reads", "optional", "writes", "_masked", "_layout", "_python")
 
     def __init__(self, calls, fn, reads, optional, writes, masked, layout):
         self.calls: tuple[Call, ...] = calls
@@ -43,12 +44,17 @@ class Kernel:
         self.writes: tuple[tuple[Version, np.dtype], ...] = writes
         self._masked: tuple[int, ...] = masked
         self._layout = layout
+        self._python: tuple[Fallback, ...] = ()
 
     @property
     def origins(self) -> tuple[Origin, ...]:
         return tuple(c.node.origin for c in self.calls)
 
     def run(self, values: Values, valid: Values, bundles: Mapping[int, tuple], n: int) -> None:
+        if self._python:
+            for fallback in self._python:
+                fallback.run(values, valid, bundles, n)
+            return
         cols = tuple([values[v.id] for v in self.reads])
         valids = tuple([valid[v.id] if v.id in valid else np.ones(n, np.bool_) for v in self.optional])
         params: list[Any] = []
@@ -61,7 +67,14 @@ class Kernel:
                 params += consts
         outs = [np.empty(n, dtype) for _, dtype in self.writes]
         masks = [np.empty(n, np.bool_) for _ in self._masked]
-        self.fn(n, cols, valids, tuple(params), tuple(outs + masks))
+        try:
+            self.fn(n, cols, valids, tuple(params), tuple(outs + masks))
+        except FALLBACK_ERRORS as e:
+            # Each call compiled alone, but not together (a value numba can't
+            # type only reaches it here), so run them one by one in Python.
+            reason = f"{type(e).__name__}: {e}"
+            self._python = tuple(Fallback(c, getattr(c.node.fn, "py_func", c.node.fn), reason) for c in self.calls)
+            return self.run(values, valid, bundles, n)
         for (v, _), out in zip(self.writes, outs):
             values[v.id] = out
         for k, mask in zip(self._masked, masks):
