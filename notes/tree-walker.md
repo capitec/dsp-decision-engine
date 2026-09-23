@@ -70,11 +70,38 @@
   anything else `float`. An int feature is compared against int64
   thresholds; a fractional literal on it is an error. Computed features are
   float arithmetic and may only read float features.
-- **Nulls.** Numeric features are required (a null raises
-  `MissingInputError`); decider_old routed a null comparison to the
-  otherwise branch, which made `NOT` disagree with its own negation. A null
-  string never matches. A numeric output column holding `None` is declared
-  `T | None`.
+- **Nulls follow decider_old unless the config asks for strict.** decider_old
+  built every tree as polars `when/then/otherwise`, so a comparison with a
+  null was null (three-valued logic: NOT keeps it null, AND/OR are Kleene)
+  and a null condition took the otherwise branch; a cases node tried its
+  next case. `TreeConfig.null_handling="otherwise"` (the default, so every
+  decider_old document answers as before) reproduces that;
+  `null_handling="error"` makes numeric and boolean features required
+  inputs (`MissingInputError`). A string match
+  has decider_old's own per-condition `null_handling`: `no_match` (default)
+  is a plain false, `match` a plain true (both flip under NOT), and `error`
+  makes that string column a required input, since decider_old evaluated
+  every condition for every row.
+  - **One extra target per program row, no duplicated rows.** A null test
+    is "unknown", which only a NOT tells apart from false. Starting from a
+    node (unknown goes where false goes) and pushing through AND/OR/NOT,
+    unknown always ends at the same place as false, or, under an odd number
+    of NOTs, as true. So each comparison row carries an `UNKNOWN` target
+    (its `else` or its `then`) and the walker jumps there on a null; no
+    Kleene state is carried and no subtree is encoded twice.
+  - **A null number is a fill, not an Optional.** A float feature is
+    `missing_as(NaN)` and an int feature `missing_as(-2**63)`; the walker
+    treats NaN and that sentinel as unknown, so a computed feature over a
+    null (NaN) is unknown too, and the Python walker reads both as `None`.
+    Declaring them `T | None` instead cost one mask array per feature per
+    launch: on the 18-feature benchmark tree `score()` p50 went from 63 to
+    102 µs (to 75 µs with one shared all-valid mask); with fills it is back
+    at 58-61 µs. Back to back at load ~3: before 550 ns/row and p50 64 µs,
+    after 490 ns/row and 56 µs (decider2: 539-611 ns/row, 200-218 µs). A
+    NaN in the data is therefore a null. Bool features have
+    no spare value, so they stay `bool | None` (`split` groups an
+    `Optional` by its base type).
+- A numeric output column holding `None` is declared `T | None`.
 - **`mode: "all"`** writes `<rule name>.<column>` per rule (`rule_<i>` when
   unnamed), since a row node writes flat columns, not decider_old's structs.
 - **Expressions evaluate both sides of `and`/`or`**, so a guard such as

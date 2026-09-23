@@ -197,8 +197,8 @@ def test_infinities_and_nan_fail_a_finite_range(run):
     assert _results(run, rule, _out("match", default="no"), df) == ["match", "no", "no", "no"]
 
 
-def test_a_null_number_is_a_missing_input_not_a_silent_miss():
-    tree = TreeConfig(name="t", tree=FlatRuleDocument(
+def test_a_null_number_is_a_missing_input_under_strict_null_handling():
+    tree = TreeConfig(name="t", null_handling="error", tree=FlatRuleDocument(
         rule=RuleRoot(rule=_if(UnaryBetween(feature="v", min=0.0, max=100.0))), output=_out("match", default="no")))
     with pytest.raises(MissingInputError):
         tree.run(pl.DataFrame({"v": pl.Series([1.0, None], dtype=pl.Float64)}))
