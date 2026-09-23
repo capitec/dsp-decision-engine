@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { describe, expect, it } from "vitest";
 import { compareTraces, diffDoc, paramChangeLines, paramReaders, same, type TraceResult } from "../src/compare";
-import { clampNote, evaluate, matchRow, substitute } from "../webview/Explain";
+import { clampNote, evaluate, matchRow, substitute, sumTerms } from "../webview/Explain";
 import { listRefs, materialise } from "../src/git";
 import { scenarios, summariseSweep } from "../src/sweep";
 
@@ -130,7 +130,7 @@ describe("param readers", () => {
 describe("explaining a value", () => {
   it("fills a formula with the record's values", () => {
     expect(substitute("min(pl_raw_rate, repo_rate * cap_multiple + cap_margin)", { pl_raw_rate: 0.252, repo_rate: 0.0775, cap_multiple: 1, cap_margin: 0.21 }))
-      .toBe("min(25.2%, 7.75% * 1 + 21%)");
+      .toBe("min(25.2%, 7.75% + 21%)");
     expect(substitute("pl_base_rate + pl_risk_loading - pl_loyalty_discount", { pl_base_rate: 0.255, pl_risk_loading: 0, pl_loyalty_discount: 0.001 })).toBe("25.5% - 0.1%");
   });
 
@@ -159,5 +159,14 @@ describe("caps and floors", () => {
     const inputs = [{ name: "pl_raw_rate", value: 0.252 }];
     expect(clampNote("min(pl_raw_rate, repo_rate * cap_multiple + cap_margin)", inputs, 0.252, known)).toBe("cap 28.75%, not reached (3.55 pp below)");
     expect(clampNote("min(pl_raw_rate, repo_rate * cap_multiple + cap_margin)", [{ name: "pl_raw_rate", value: 0.3 }], 0.2875, known)).toBe("the cap applied: 30% → 28.75%");
+  });
+});
+
+describe("sums as waterfalls", () => {
+  it("reads a plus/minus chain of names as signed terms, and nothing else", () => {
+    expect(sumTerms("pl_base_rate + pl_risk_loading - pl_loyalty_discount")).toEqual([["+", "pl_base_rate"], ["+", "pl_risk_loading"], ["-", "pl_loyalty_discount"]]);
+    expect(sumTerms("min(a, b)")).toBeNull();
+    expect(sumTerms("a * b")).toBeNull();
+    expect(sumTerms("a")).toBeNull();
   });
 });

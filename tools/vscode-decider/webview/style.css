@@ -1789,3 +1789,66 @@ aside .wrote {
   padding: 6px 0;
   border-top: 1px solid var(--vscode-panel-border);
 }
+
+.edit-dropdown {
+  position: relative;
+}
+.edit-menu-pop {
+  position: absolute;
+  z-index: 10;
+  top: 100%;
+  left: 0;
+  min-width: 18em;
+  padding: 4px 8px;
+  font-weight: normal;
+  background: var(--vscode-editorWidget-background);
+  border: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border));
+  box-shadow: 0 2px 8px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.4));
+}
+
+table.waterfall {
+  margin: 2px 0 4px 1.2em;
+  border-collapse: collapse;
+}
+table.waterfall td {
+  padding: 0 6px 0 0;
+  vertical-align: baseline;
+}
+table.waterfall td.sign {
+  width: 1em;
+  text-align: center;
+}
+table.waterfall td.num {
+  text-align: right;
+}
+table.waterfall tr.zero {
+  opacity: 0.55;
+}
+table.waterfall tr.total td {
+  border-top: 1px solid var(--vscode-panel-border);
+  font-weight: 600;
+}
+table.waterfall a {
+  cursor: pointer;
+  color: var(--vscode-textLink-foreground);
+}
+
+table.sweep td.changed.down,
+table.sweep td.changed.up,
+table.sweep td.stack .changed.down .mono,
+table.sweep td.stack .changed.up .mono {
+  color: inherit;
+}
+table.sweep.grid td {
+  text-align: right;
+  padding: 4px 8px;
+}
+table.sweep.grid th {
+  text-align: right;
+}
+table.sweep.grid tbody th {
+  text-align: left;
+}
+table.sweep.grid td.unchanged {
+  opacity: 0.55;
+}
