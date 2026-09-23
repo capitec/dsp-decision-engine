@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ctypes
+import os
 
 import numpy as np
 
@@ -24,7 +25,9 @@ class _RowPlan(ctypes.Structure):
 assert ctypes.sizeof(_RowPlan) == _shim.PLAN_SIZE, (ctypes.sizeof(_RowPlan), _shim.PLAN_SIZE)
 
 
-_BORROW_ROWS = 4096
+_BORROW_ROWS = int(os.environ.get("DECIDER_BORROW_ROWS", 4096))
+# Prototype switch: read nullable and bool columns in place too (bitmaps go to the kernel).
+ZERO_COPY = os.environ.get("DECIDER_ZERO_COPY") == "1"
 
 
 class _Export:
@@ -46,6 +49,10 @@ class _Borrowed:
     def __init__(self, addr: int, n: int, dtype: np.dtype, owner: _Export) -> None:
         self.__array_interface__ = {"data": (addr, True), "shape": (n,), "typestr": dtype.str, "version": 3}
         self.owner = owner
+
+
+def _bitmap(addr: int, off: int, n: int, owner: _Export) -> np.ndarray:
+    return np.asarray(_Borrowed(addr, (off + n + 7) >> 3, np.dtype(np.uint8), owner))
 
 
 class FrameView:
@@ -255,26 +262,35 @@ class FrameView:
         n, plan = self.n, self.plan
         nc = plan.ncols
         # One allocation and one C call: a numpy call costs about a microsecond.
-        buf = np.empty(24 * nc + n * plan.row_bytes, np.uint8)
+        buf = np.empty(40 * nc + n * plan.row_bytes, np.uint8)
         # Below this a copy is cheaper than wrapping a buffer.
-        borrow = n >= _BORROW_ROWS
+        # With ZERO_COPY a BOOL column is always a bitmap, whatever the size, so kernels see one type.
+        borrow = (2 if ZERO_COPY else 1) if n >= _BORROW_ROWS else (3 if ZERO_COPY else 0)
         lib.sm_columns(self.plan_addr, n, buf.ctypes.data, borrow)
-        header = np.frombuffer(buf, np.int64, 3 * nc).tolist()
+        header = np.frombuffer(buf, np.int64, 5 * nc).tolist()
         valid_at = len(buf) - nc * n
         # Masks stay writeable (a run writes a row subset's nulls into them); values don't.
         masks = [np.frombuffer(buf, np.bool_, n, valid_at + c * n) if header[c] else None for c in range(nc)]
         buf.flags.writeable = False
-        values, owner = [], None
+        values, bits, owner = [], [None] * nc, None
         for c, (kind, _) in enumerate(plan.places):
             dtype = KIND_DTYPES[kind]
             if header[2 * nc + c]:
                 # Held by the view too, so its own reads stay valid until release().
                 owner = self._owner = owner or _Export(self._p[1])
-                values.append(np.asarray(_Borrowed(header[2 * nc + c], n, dtype, owner)))
+                off = header[4 * nc + c]
+                if kind == BOOL:
+                    values.append((_bitmap(header[2 * nc + c], off, n, owner), off))
+                else:
+                    values.append(np.asarray(_Borrowed(header[2 * nc + c], n, dtype, owner)))
+                if header[3 * nc + c]:
+                    bits[c] = (_bitmap(header[3 * nc + c], off, n, owner), off, header[c])
             elif kind == STR:
                 values.append(np.ndarray((n, 2), dtype, buf, header[nc + c]))
             else:
                 values.append(np.frombuffer(buf, dtype, n, header[nc + c]))
+        # With ZERO_COPY: per column, `(validity bitmap, bit offset, null count)` when read in place with nulls.
+        self.bits = bits
         return values, masks
 
     def strings(self, slot: int) -> list[bytes | None]:

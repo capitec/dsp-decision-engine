@@ -15,7 +15,9 @@ class Spec(NamedTuple):
 
     `args` holds one source per positional argument of `fn`:
     `("col", j)` is element i of input column j; `("opt", j, m)` is the same
-    element, or `None` where validity mask m is false; `("res", s, k)` is
+    element, or `None` where validity bitmap m is clear; `("fill", j, m, x)`
+    is the element, or `x` there. A column or validity may be a
+    `(uint8 bitmap, bit offset)` pair, read one bit per row; `("res", s, k)` is
     output k of call s of this kernel; `("var", v)` is variable v (set by a
     `Fork` or `Repeat`); `("par", p)` is `params[p]`;
     `("row", (source, ...))` is a tuple of sources. `dtypes` are the declared
@@ -129,6 +131,15 @@ def _row_body(program: tuple, outputs: tuple[tuple, ...], variables: tuple[np.dt
 
             def element(tup, tup_v, j):
                 arr = tup.types[j]
+                if isinstance(arr, types.BaseTuple):
+                    # A `(bitmap, bit offset)` pair: a validity or bool column read in place from Arrow.
+                    pair = builder.extract_value(tup_v, j)
+                    k = builder.add(builder.extract_value(pair, 1), i_v)
+                    getitem = context.get_function(operator.getitem, signature(types.uint8, arr.types[0], i))
+                    byte = getitem(builder, (builder.extract_value(pair, 0), builder.ashr(k, k.type(3))))
+                    shift = builder.trunc(builder.and_(k, k.type(7)), byte.type)
+                    bit = builder.and_(builder.lshr(byte, shift), byte.type(1))
+                    return builder.icmp_unsigned("!=", bit, byte.type(0)), types.boolean
                 if arr.ndim == 2:
                     # A `bytes` column: row i is its `(address, byte length)` span.
                     span = types.UniTuple(types.int64, 2)
@@ -150,6 +161,11 @@ def _row_body(program: tuple, outputs: tuple[tuple, ...], variables: tuple[np.dt
                     ok, _ = element(valids, valids_v, src[2])
                     some = context.make_optional_value(builder, t, v)
                     return builder.select(ok, some, context.make_optional_none(builder, t)), types.Optional(t)
+                if kind == "fill":
+                    v, t = element(cols, cols_v, src[1])
+                    ok, _ = element(valids, valids_v, src[2])
+                    fill = context.cast(builder, context.get_constant(typeof(src[3]), src[3]), typeof(src[3]), t)
+                    return builder.select(ok, v, fill), t
                 if kind == "res":
                     return results[src[1]][src[2]]
                 if kind == "var":

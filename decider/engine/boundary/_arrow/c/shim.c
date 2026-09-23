@@ -301,14 +301,18 @@ void sm_gather_row(const struct SmRowPlan* p, int64_t i) {
  * sm_gather_row writes row by row; only a column with nulls gets its
  * validity row. With `borrow` set, a column the kernel can read in place
  * (doubles as F64, int64 as I64, int32 as CODE, no nulls) is not copied:
- * its in-place address is set instead (0 for a copied column).          */
+ * its in-place address is set instead (0 for a copied column).
+ * `borrow == 2` also reads in place a column with nulls and a BOOL column
+ * (`borrow == 3`: only a BOOL column, for a small batch):
+ * two more header rows give its validity bitmap's byte address (0 = no
+ * nulls) and the bit offset of row 0 in it (and in a BOOL value bitmap). */
 void sm_columns(const struct SmRowPlan* p, int64_t n, uint8_t* buf, int32_t borrow) {
   static const int64_t size[5] = {8, 8, 1, 4, 16};  /* by SM_KIND_* */
   static const int order[5] = {SM_KIND_F64, SM_KIND_I64, SM_KIND_STR, SM_KIND_CODE, SM_KIND_BOOL};
   int32_t ncols = p->ncols;
   int64_t count[5] = {0, 0, 0, 0, 0}, start[5];
   for (int32_t c = 0; c < ncols; c++) count[p->cols[c].kind]++;
-  int64_t at = 24 * (int64_t)ncols;
+  int64_t at = 40 * (int64_t)ncols;
   for (int k = 0; k < 5; k++) {
     start[order[k]] = at;
     at += count[order[k]] * n * size[order[k]];
@@ -317,6 +321,8 @@ void sm_columns(const struct SmRowPlan* p, int64_t n, uint8_t* buf, int32_t borr
   int64_t* nulls = (int64_t*)buf;
   int64_t* where = nulls + ncols;
   uint64_t* in_place = (uint64_t*)(where + ncols);
+  uint64_t* vbits = in_place + ncols;
+  int64_t* boff = (int64_t*)(vbits + ncols);
   for (int32_t c = 0; c < ncols; c++) {
     const struct SmColDesc* d = &p->cols[c];
     int64_t nn = d->validity == NULL ? 0 : sm_view_null_count(d->view);
@@ -325,8 +331,18 @@ void sm_columns(const struct SmRowPlan* p, int64_t n, uint8_t* buf, int32_t borr
     nulls[c] = nn;
     where[c] = start[d->kind] + (int64_t)d->slot * n * size[d->kind];
     in_place[c] = 0;
+    vbits[c] = 0;
+    boff[c] = o & 7;
     void* dst = buf + where[c];
-    if (borrow && nn == 0 && d->is_signed &&
+    if ((borrow >= 2 && d->kind == SM_KIND_BOOL) || (borrow == 2 && d->is_signed &&
+        ((d->kind == SM_KIND_F64 && d->width == 8) || (d->kind == SM_KIND_I64 && d->width == 8) ||
+         (d->kind == SM_KIND_CODE && d->width == 4)))) {
+      in_place[c] = d->kind == SM_KIND_BOOL ? (uint64_t)(uintptr_t)((const uint8_t*)d->data + (o >> 3))
+                                            : (uint64_t)(uintptr_t)((const uint8_t*)d->data + o * d->width);
+      if (bits != NULL) vbits[c] = (uint64_t)(uintptr_t)(bits + (o >> 3));
+      continue;
+    }
+    if ((borrow == 1 || borrow == 2) && nn == 0 && d->is_signed &&
         ((d->kind == SM_KIND_F64 && d->width == 8) || (d->kind == SM_KIND_I64 && d->width == 8) ||
          (d->kind == SM_KIND_CODE && d->width == 4))) {
       in_place[c] = (uint64_t)(uintptr_t)((const uint8_t*)d->data + o * d->width);
