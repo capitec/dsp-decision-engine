@@ -33,9 +33,9 @@ class Kernel:
         [o.path for o in unit.origins]
     """
 
-    __slots__ = ("calls", "fn", "reads", "optional", "writes", "_masked", "_layout")
+    __slots__ = ("calls", "fn", "reads", "optional", "writes", "_masked", "_layout", "_choices")
 
-    def __init__(self, calls, fn, reads, optional, writes, masked, layout):
+    def __init__(self, calls, fn, reads, optional, writes, masked, layout, choices):
         self.calls: tuple[Call, ...] = calls
         self.fn = fn
         self.reads: tuple[Version, ...] = reads
@@ -43,6 +43,7 @@ class Kernel:
         self.writes: tuple[tuple[Version, np.dtype], ...] = writes
         self._masked: tuple[int, ...] = masked
         self._layout = layout
+        self._choices: tuple[tuple | None, ...] = choices
 
     @property
     def origins(self) -> tuple[Origin, ...]:
@@ -62,8 +63,8 @@ class Kernel:
         outs = [np.empty(n, dtype) for _, dtype in self.writes]
         masks = [np.empty(n, np.bool_) for _ in self._masked]
         self.fn(n, cols, valids, tuple(params), tuple(outs + masks))
-        for (v, _), out in zip(self.writes, outs):
-            values[v.id] = out
+        for (v, _), out, choices in zip(self.writes, outs, self._choices):
+            values[v.id] = out if choices is None else _decode(out, choices, valid, v.id)
         for k, mask in zip(self._masked, masks):
             valid[self.writes[k][0].id] = mask
 
@@ -80,7 +81,11 @@ class Fallback:
         self.calls = (call,)
         self.fn = fn
         self.reason = reason
-        self.writes = tuple((v, output_dtype(o.annotation)) for v, o in zip(call.writes, call.node.outputs))
+        # Python values come back as they are: a `str` output is stored as an object, not a code.
+        self.writes = tuple(
+            (v, np.dtype(object) if base_annotation(o.annotation) is str else output_dtype(o.annotation))
+            for v, o in zip(call.writes, call.node.outputs)
+        )
 
     @property
     def origins(self) -> tuple[Origin, ...]:
@@ -108,10 +113,13 @@ class Fallback:
                 if x is None:
                     mask[r], x = False, 0
                 out[r] = x
-        for v, out, mask in zip(call.writes, outs, masks):
+        for v, out, mask, o in zip(call.writes, outs, masks, node.outputs):
             values[v.id] = out
             if not mask.all():
                 valid[v.id] = mask
+            choices = literal_choices(o.annotation)
+            if choices is not None:
+                values[v.id] = _decode(out, choices, valid, v.id)
 
 
 Unit = Union[Kernel, Fallback]
@@ -206,10 +214,36 @@ def nullable(annotation: Any) -> bool:
 def output_dtype(annotation: Any) -> np.dtype:
     """The dtype a kernel stores an output declared `annotation` in: `numpy_dtype` of `T` for `T | None`.
 
+    A `Literal` of strings is stored as the int64 index of its value.
+
     >>> output_dtype(int | None)
     dtype('int64')
     """
+    if literal_choices(annotation) is not None:
+        return np.dtype(np.int64)
     return numpy_dtype(base_annotation(annotation))
+
+
+def literal_choices(annotation: Any) -> tuple[str, ...] | None:
+    """The values of a `Literal` of strings, else `None`.
+
+    A row node's output declared `Literal["low", "high"]` is returned by its
+    compiled `fn` as the index of the value (-1 for null) and stored as the
+    string; its `reference` returns the string itself.
+
+    >>> literal_choices(typing.Literal["low", "high"]), literal_choices(str)
+    (('low', 'high'), None)
+    """
+    if typing.get_origin(annotation) is typing.Literal and all(isinstance(a, str) for a in typing.get_args(annotation)):
+        return typing.get_args(annotation)
+    return None
+
+
+def _decode(codes: np.ndarray, choices: tuple[str, ...], valid: Values, vid: int) -> np.ndarray:
+    strings = np.array((*choices, None), object)[codes]
+    if (codes < 0).any():
+        valid[vid] = codes >= 0
+    return strings
 
 
 def _kept(plan: Plan) -> tuple[set[int], dict[int, set[int]]] | None:
@@ -246,7 +280,7 @@ def _kernel(compiled: list, keep) -> Kernel:
     reads: list[Version] = []
     optional: list[Version] = []
     produced: dict[int, tuple[int, int]] = {}
-    specs, layout, outputs, writes, masked = [], [], [], [], []
+    specs, layout, outputs, writes, masked, choices = [], [], [], [], [], []
     p = 0
     for s, (call, key, fn, _) in enumerate(compiled):
         node = call.node
@@ -258,7 +292,7 @@ def _kernel(compiled: list, keep) -> Kernel:
             if v.id not in cols:
                 cols[v.id] = len(reads)
                 reads.append(v)
-            if inp.null_policy is NullPolicy.OPTIONAL:
+            if inp.null_policy is NullPolicy.OPTIONAL and base_annotation(inp.annotation) is not bytes:
                 if v.id not in masks:
                     masks[v.id] = len(optional)
                     optional.append(v)
@@ -291,5 +325,7 @@ def _kernel(compiled: list, keep) -> Kernel:
                     masked.append(len(writes))
                 outputs.append((s, k))
                 writes.append((v, dtypes[k]))
+                choices.append(literal_choices(node.outputs[k].annotation))
     fn = fused_kernel(tuple(specs), tuple(outputs))
-    return Kernel(calls, fn, tuple(reads), tuple(optional), tuple(writes), tuple(masked), tuple(layout))
+    return Kernel(calls, fn, tuple(reads), tuple(optional), tuple(writes), tuple(masked), tuple(layout),
+                  tuple(choices))
