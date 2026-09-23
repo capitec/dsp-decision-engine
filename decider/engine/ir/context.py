@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import weakref
 from dataclasses import dataclass, field, replace
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 
 from pydantic import BaseModel
 
@@ -10,6 +10,7 @@ from decider.engine.ir.decls import ParamDecl
 from decider.engine.ir.nodes import BranchNode, CallNode, IRNode, LoopNode, SequenceNode, iter_nodes
 from decider.engine.ir.origin import Origin, check_name
 from decider.engine.params.models import record_shared_type
+from decider.exceptions import IRError, WiringError
 from decider.registry import import_path
 
 if TYPE_CHECKING:
@@ -30,15 +31,17 @@ def _join(parent: str, name: str) -> str:
 class IRContext:
     """What a step's `to_ir` knows about where it is placed: the path of its parent.
 
+    A `ConfigurableStep` usually needs one of two helpers: `ctx.call` for one
+    function called per row, or `ctx.expand` to assemble other steps.
+
     Example::
 
         class Scaled(ConfigurableStep):
+            column: str
             factor: Value[float]
 
             def to_ir(self, ctx):
-                factor = ctx.value(self.factor, float)
-                ...
-                return CallNode(ctx.origin(self), "row", ...)
+                return ctx.call(self, scale, inputs={"x": self.column}, values={"factor": self.factor})
     """
 
     path: str = ""
@@ -122,6 +125,57 @@ class IRContext:
             shared_key=value.param if value.shared else None, arg=arg,
         )
 
+    def call(
+        self,
+        owner: Step,
+        fn: Callable,
+        inputs: Mapping[str, str] | None = None,
+        outputs: Sequence[str] | None = None,
+        values: Mapping[str, Any] | None = None,
+    ) -> CallNode:
+        """A scalar `CallNode` for `owner` calling `fn` per row, read from `fn`'s signature like `step(fn)`.
+
+        Args:
+            inputs: function argument -> column it reads, for arguments not
+                reading the column of their own name.
+            outputs: the names `fn` writes (default: `owner.name`); several
+                need a `tuple[...]` return annotation.
+            values: function argument -> a config's `Value[T]` field. A
+                literal is passed as is; a `ParamRef` becomes a param, so
+                retuning it never rebuilds anything.
+
+        Example::
+
+            def threshold(x: float, cut: float) -> bool:
+                return x > cut
+
+            class Threshold(ConfigurableStep):
+                column: str
+                cut: Value[float]
+
+                def to_ir(self, ctx):
+                    return ctx.call(self, threshold, inputs={"x": self.column}, values={"cut": self.cut})
+        """
+        from decider.engine.params.harvest import harvest
+
+        inputs, values = dict(inputs or {}), dict(values or {})
+        declared, params, outs = harvest(fn, tuple(outputs or (owner.name,)))
+        args = {i.arg: i for i in declared}
+        unknown = sorted((set(inputs) | set(values)) - set(args))
+        if unknown:
+            raise IRError(f"{self.child(owner.name).path}: {fn.__qualname__} has no argument(s) {unknown}; "
+                          f"its inputs are {sorted(args)}")
+        wired = tuple(replace(i, name=inputs.get(i.arg, i.arg)) for i in declared if i.arg not in values)
+        consts = []
+        for arg, value in values.items():
+            annotation = args[arg].annotation
+            value = self.value(value, None if annotation is Any else annotation, arg=arg)
+            if isinstance(value, ParamDecl):
+                params += (value,)
+            else:
+                consts.append((arg, value))
+        return CallNode(self.origin(owner), "scalar", fn, wired, outs, params, consts=tuple(consts))
+
     def table(self, value: Any, schema: dict[str, str]) -> Any:
         """A `TableValue`: inline rows as given, or a required table `ParamDecl` for a `TableRef`.
 
@@ -183,13 +237,13 @@ def _check(root: IRNode) -> None:
     for node in iter_nodes(root):
         origin = getattr(node, "origin", None)
         if not isinstance(origin, Origin) or not origin.source:
-            raise TypeError(f"{type(node).__name__} {origin!r} has no origin; build it with ctx.origin(step)")
+            raise IRError(f"{type(node).__name__} {origin!r} has no origin; build it with ctx.origin(step)")
         path = origin.path
         if "shared" in path.split("/"):
-            raise ValueError(f"{path}: no step may be named 'shared'; that key holds the shared params")
+            raise WiringError(f"{path}: no step may be named 'shared'; that key holds the shared params")
         if path in seen:
             name = path.rpartition("/")[2]
-            raise ValueError(
+            raise WiringError(
                 f"two nodes have path {path!r} ({seen[path].source} and {origin.source}); "
                 f"did you mean to name one of them, e.g. .named({name + '_2'!r})?"
             )
@@ -197,7 +251,7 @@ def _check(root: IRNode) -> None:
         if isinstance(node, CallNode):
             for decl in node.params:
                 if not isinstance(decl, ParamDecl):
-                    raise TypeError(
+                    raise IRError(
                         f"{path}: params holds {decl!r}, not a ParamDecl; pass literals as consts=((name, value),)"
                     )
                 if decl.shared_key is not None:
@@ -213,7 +267,7 @@ def _relabel(node: IRNode, reads: dict, writes: dict, produced: set) -> IRNode:
     if isinstance(node, CallNode):
         names = [i.name for i in node.inputs or ()] + [o.name for o in node.outputs or ()]
         if node.kind == "frame" and any(n in reads or n in writes for n in names):
-            raise TypeError(f"{node.origin.path}: relabel can't rename a frame step's columns; rename them in the function")
+            raise IRError(f"{node.origin.path}: relabel can't rename a frame step's columns; rename them in the function")
         inputs = None if node.inputs is None else tuple(replace(i, name=read(i.name)) for i in node.inputs)
         outputs = None if node.outputs is None else tuple(replace(o, name=writes.get(o.name, o.name)) for o in node.outputs)
         produced.update(o.name for o in node.outputs or ())

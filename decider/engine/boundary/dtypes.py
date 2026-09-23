@@ -6,25 +6,13 @@ from typing import Sequence
 
 import polars as pl
 
-from decider.engine.boundary._arrow.plan import ArrowKindError, FramePlan
+from decider.engine.boundary._arrow.plan import FramePlan
 from decider.engine.ir.decls import FeatureKind, Input, feature_kind
+from decider.exceptions import ArrowKindError, NeedsKernelSplit
 
 F64, I64, BOOL, CODE, STR = (
     FeatureKind.F64, FeatureKind.I64, FeatureKind.BOOL, FeatureKind.CODE, FeatureKind.STR,
 )
-
-
-class NeedsKernelSplit(ArrowKindError):
-    """A declared column has no flat-array form (List, Struct, Array, Object, Binary, an overflowing Decimal).
-
-    The caller splits the kernel around the column; `column` and `dtype` name it.
-    """
-
-    def __init__(self, name: str, dtype: pl.DataType, reason: str = ""):
-        self.column = name
-        self.dtype = dtype
-        message = f"column '{name}' ({dtype}) has no flat-array extraction; needs the kernel-split escape"
-        super().__init__(f"{message} ({reason})" if reason else message)
 
 
 @dataclass(frozen=True)
