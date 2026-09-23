@@ -45,6 +45,8 @@ export interface Comparison {
   changedInputs: { name: string; after: unknown; scope: string }[];
   /** The two pipeline files, when they differ (a revision against the working tree). */
   files?: { a: string; b: string };
+  /** The params documents each run used, when they differ (a what-if or a scenario). */
+  paramsDocs?: { a: unknown; b: unknown };
 }
 
 const SAMPLES = 3;
