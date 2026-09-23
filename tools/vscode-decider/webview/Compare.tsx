@@ -156,7 +156,7 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
           <thead>
             <tr>
               <th>step</th>
-              <th>in</th>
+              <th>file</th>
               <th>what changed</th>
               <th>records changed</th>
             </tr>
@@ -165,7 +165,7 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
             {causes.map((s) => (
               <tr key={s.path}>
                 <td><a onClick={() => onSelect(s.path)}>{s.path.split("/").pop()}</a></td>
-                <td className="muted small">{s.path.split("/").slice(-3, -1).join("/")}</td>
+                <td className="muted small mono" title={s.path}>{rowEdits(readers.find((r) => r.steps.includes(s.path))?.param ?? "").length ? "PARAMS" : s.where ?? "—"}</td>
                 <td>
                   {[
                     ...s.paramChanges,

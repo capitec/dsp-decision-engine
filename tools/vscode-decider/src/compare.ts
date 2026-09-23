@@ -23,6 +23,8 @@ export interface StepDiff {
   /** Each changed param, as "cap: 48 → 42". */
   paramChanges: string[];
   outputs: ValueDiff[];
+  /** Where the step is defined, as "policy.py:193". */
+  where?: string;
 }
 
 export interface Comparison {
@@ -196,7 +198,12 @@ function merged(a: CallNodeJson[], b: CallNodeJson[]): string[] {
 export function compareTraces(a: TraceResult, b: TraceResult, labelA: string, labelB: string): Comparison {
   const nodesA = new Map(callNodes(a.ir).map((n) => [n.path, n]));
   const nodesB = new Map(callNodes(b.ir).map((n) => [n.path, n]));
-  const steps: StepDiff[] = merged([...nodesA.values()], [...nodesB.values()]).map((path) => {
+  const where = (path: string) => {
+    const n = nodesB.get(path) ?? nodesA.get(path);
+    return n?.file ? `${n.file.slice(n.file.lastIndexOf("/") + 1)}${n.line ? `:${n.line}` : ""}` : undefined;
+  };
+  const steps: StepDiff[] = merged([...nodesA.values()], [...nodesB.values()]).map((path): StepDiff => ({ ...stepDiff(path), where: where(path) }));
+  function stepDiff(path: string): StepDiff {
     const na = nodesA.get(path);
     const nb = nodesB.get(path);
     if (!na) return { path, status: "added", structural: [], paramChanges: [], outputs: [] };
@@ -210,7 +217,7 @@ export function compareTraces(a: TraceResult, b: TraceResult, labelA: string, la
     if (sa && !sb) return { path, status: "removed", structural: changes, paramChanges: params, outputs: [] };
     const outputs = diffColumns(sa ?? {}, sb ?? {});
     return { path, status: outputs.length || changes.length ? "changed" : "same", structural: changes, paramChanges: params, outputs };
-  });
+  }
   const inputs = new Set(Object.keys(b.data[0] ?? a.data[0] ?? {}));
   const results = (o: Record<string, unknown[]> | null) => Object.fromEntries(Object.entries(o ?? {}).filter(([k]) => !inputs.has(k)));
   const changedInputs = Object.keys(b.data[0] ?? {})
