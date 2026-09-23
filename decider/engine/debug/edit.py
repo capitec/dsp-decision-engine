@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import copy
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
-from decider.engine.debug.events import Edited, Paused
+from decider.engine.debug.events import Edited, Error, Paused
+from decider.engine.debug.hot import ModuleWatcher, keys, same
 from decider.engine.ir.nodes import CallNode, iter_nodes
 from decider.engine.wiring import resolve
 from decider.engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, Sequence, Version
@@ -61,14 +62,95 @@ class Edits:
         """
         return self._edit("delete", path, None)
 
-    def _edit(self, action: str, path: str, new: Step | None) -> Checkpoint | None:
-        from decider.engine.run.engine import Executable
+    def reload(self, pipeline: Any) -> Checkpoint | None:
+        """Switch to `pipeline`, an edited version of the session's one, re-running from its first change.
+
+        Steps are compared by content (function code, config data, params,
+        wiring), not by identity, so re-running the cells or re-importing the
+        module that build the pipeline is enough. Values computed before the
+        first change are kept, overrides included; the session pauses there
+        (reason `"edit"`) or where it was paused if that comes first. One
+        `Edited` event per changed path (`"replace"`, `"add"` or `"delete"`);
+        nothing happens if nothing changed. Raises, and changes nothing, if
+        `pipeline` doesn't wire.
+
+        Example::
+
+            s.resume()
+            s.reload(flow(disposable_income, ratio_v2, affordable))
+            s.resume()
+        """
+        from decider.engine import step_map
         from decider.steps.base import as_step
 
-        before, old = self.executable, self.state
-        root = swap(as_step(before.step), path, new)
+        root = as_step(pipeline)
         plan = resolve(root)
-        _check_producers(plan, before.plan, path)
+        old, new = self._keys, keys(plan, step_map(root))
+        first = next((i for i, (a, b) in enumerate(zip(old, new)) if a[:2] != b[:2] or not same(a[2], b[2])),
+                     None if len(old) == len(new) else min(len(old), len(new)))
+        if first is None:
+            return self.current
+        was = {p: k for w, p, k in old if w == "before"}
+        now = {p: k for w, p, k in new if w == "before"}
+        edits = [Edited("delete", p) for p in was if p not in now]
+        edits += [Edited("add" if p not in was else "replace", p) for p in now if p not in was or not same(was[p], now[p])]
+        return self._apply(root, plan, lambda pos: pos(*new[first][:2]) if first < len(new) else None, edits,
+                           "the pipeline", new)
+
+    def watch(self, source: Any) -> Callable[[], Any]:
+        """Reload after every notebook cell: from `source()`, or from `"module:attr"` when its files change.
+
+        `lambda: pipeline` picks up a re-run pipeline cell; a function that
+        builds the pipeline (`lambda: flow(income, ratio)`) also picks up a
+        re-run cell that only redefines `ratio`. A string re-imports the
+        module and everything it imports from its directory once a file
+        changes. A failed reload is logged as an `Error` and raised; the
+        session keeps the pipeline it had. Returns the IPython callback.
+
+        Example::
+
+            s = pipeline.session(df)
+            s.watch(lambda: pipeline)
+            s.watch("credit.pipeline:pipeline")
+        """
+        from IPython import get_ipython
+
+        get = ModuleWatcher(source).poll if isinstance(source, str) else source
+
+        def hook(*_: Any) -> None:
+            try:
+                new = get()
+                if new is not None:
+                    self.reload(new)
+            except Exception as e:
+                self._emit(Error(f"reload failed: {type(e).__name__}: {e}", None))
+                raise
+
+        get_ipython().events.register("post_run_cell", hook)
+        return hook
+
+    def _edit(self, action: str, path: str, new: Step | None) -> Checkpoint | None:
+        from decider.steps.base import as_step
+
+        before = self.executable
+        root = swap(as_step(before.step), path, new)
+
+        def target(pos: Callable) -> int | None:
+            if action == "replace":
+                return pos("before", path)
+            old_order = list(_order(before.plan.root)[0])
+            later = old_order[old_order.index(("after", path)) + 1:]
+            return next(i for i in (pos(*e) for e in later) if i is not None)
+
+        return self._apply(root, resolve(root), target, [Edited(action, path)], repr(path))
+
+    def _apply(self, root: Step, plan: Plan, where: Callable, edits: list, label: str,
+               new_keys: list | None = None) -> Checkpoint | None:
+        from decider.engine import step_map
+        from decider.engine.run.engine import Executable
+
+        before, old = self.executable, self.state
+        _check_producers(plan, before.plan, label)
         exe = Executable(plan, before.runner, before.lazy, root)
         state, params = exe.prepare(self.frame, self.params)
         # A copy, so a failure below leaves the running one as it was.
@@ -85,15 +167,10 @@ class Edits:
                 at = unit.calls[0 if when == "before" else -1].node.origin.path
             return order.get((when, at))
 
-        if action == "replace":
-            target = pos("before", path)
-        else:
-            old_order = list(_order(before.plan.root)[0])
-            later = old_order[old_order.index(("after", path)) + 1:]
-            target = next(i for i in (pos(*e) for e in later) if i is not None)
-            if target == len(order) - 1:
-                # Nothing after it: every node is as it was, so the run ends where it did.
-                target = len(order)
+        target = where(pos)
+        if target is None or target == len(order) - 1:
+            # Nothing after it: every node is as it was, so the run ends where it did.
+            target = len(order)
         stop = None
         if self.current is not None or self.finished:
             here = None if self.current is None else pos(self.current.when, self.current.origin.path)
@@ -116,7 +193,9 @@ class Edits:
         self._logged = (0, 0, 0)
         self._visits.clear()
         self._index()
-        self._emit(Edited(action, path))
+        self._keys = new_keys or keys(plan, step_map(root))
+        for e in edits:
+            self._emit(e)
         if stop is None:
             return None
         if cp is None:
@@ -180,7 +259,7 @@ def _check_producers(plan: Plan, old: Plan, path: str) -> None:
         name = orphans[0]
         reader = next((c.node.origin.path for c in plan.calls for v in c.reads or ()
                        if v.producer is None and v.name == name), "a later step")
-        raise WiringError(f"after editing {path!r} nothing produces {name!r}, which {reader!r} reads; "
+        raise WiringError(f"after editing {path} nothing produces {name!r}, which {reader!r} reads; "
                           "keep a step that writes it, or edit the reader too")
 
 
