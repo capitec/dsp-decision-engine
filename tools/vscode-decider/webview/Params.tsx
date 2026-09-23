@@ -174,7 +174,7 @@ export function Params({ schema, values, inputColumns, record, keyCol, sessionRu
   return (
     <div className="params">
       <section className="params-bar">
-        <input aria-label="Filter params" placeholder={`Filter ${total} params by step or name, e.g. repo_rate or base_rates`} value={query} onChange={(e) => setQuery(e.target.value)} />
+        <input aria-label="Filter params" placeholder={`Filter ${total} params, e.g. repo_rate`} value={query} onChange={(e) => setQuery(e.target.value)} />
         <label><input type="checkbox" checked={changedOnly} onChange={(e) => setChangedOnly(e.target.checked)} /> changed only</label>
       </section>
       <section>

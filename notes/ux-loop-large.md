@@ -14,6 +14,7 @@ goal isn't visibly met caps at 5). The loop stops above 8/10 or after 40 rounds.
 | 4 | 7.1 | 8 | 7 | 8 | 7 | 7 | 7 | 6 |
 | 5 | 7.6 | 8 | 8 | 8 | 7 | 7 | 8 | 7 |
 | 6 | 7.3 | 8 | 8 | 8 | 7 | 6 | 7 | 7 |
+| 7 | 7.4 | 8 | 8 | 8 | 7 | 6 | 8 | 7 |
 
 ## Round 0 (baseline)
 
@@ -182,3 +183,27 @@ Judge's problems, most damaging first:
 10. L3: the cap and floor values and the headroom are never computed.
 11. L5: picker narrow; the chosen param's current value not shown; values not echoed.
 12. What-if tables clip their last column; filter placeholder cut off.
+
+## Round 7
+
+Changes: after "Use edited code" the details show the new formula, marked edited, with the old one struck through;
+the breakdown computes a cap or floor from its formula (a small arithmetic evaluator, since the webview's CSP rules
+out eval) and says "cap 28.75%, not reached (3.55 pp below)"; it opens at its heading; a changed decline reason gets
+its own result card and declined-only changes collapse; edit comparisons say which edits they apply; the sweep scrolls
+sideways and drops never-changing columns; knob pickers show the param's current value and echo the parsed values;
+the adapter's launch options moved to their own file (it was over 500 lines).
+
+Judge's problems, most damaging first:
+
+1. Offer counts contradict: "offers changed for 0 applicants" next to "offer_amount: 1 of 40 records changed".
+2. Declined records show offer fields in bold as if offered.
+3. Sweep cells wrap to three lines; no up/down colour; no approve/decline column.
+4. The knob's full path overlaps the values input.
+5. "41 steps changed" counts readers that changed no record.
+6. No reason given for why no approved offer moved.
+7. The banner still carries the diff that the details repeat.
+8. Step details crush the graph; no resizable split.
+9. The breakdown weighs zero parts like real ones; the summary is one run-on line.
+10. After running the edited code the focused record shows no before/after.
+11. Lookup table columns clip; column order differs from the matched-row view.
+12. Small labels: a git button inside the step list, a wrapping badge, "reads pl_base_rates" for the table itself.
