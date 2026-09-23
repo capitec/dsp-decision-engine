@@ -9,6 +9,7 @@ import numpy as np
 import polars as pl
 
 from decider.engine.debug.commands import Command
+from decider.engine.debug.edit import Edits
 from decider.engine.debug.events import (Error, Event, NodeFinished, NodeStarted, NodeVisited, Overridden,
                                          ParamsValidated, Paused, RunFinished, RunStarted, Warning, summarize)
 from decider.engine.ir.nodes import SequenceNode, iter_nodes
@@ -24,7 +25,7 @@ if TYPE_CHECKING:
 Breakpoint = str | Callable[[Checkpoint], bool]
 
 
-class Session:
+class Session(Edits):
     """Run a pipeline one checkpoint at a time: break, inspect, override, resume.
 
     Nothing runs until a command moves the session. Each command runs
@@ -44,6 +45,9 @@ class Session:
     the kernel's steps in `Paused.kernel`. Values a kernel uses only inside
     itself are never stored, so `value` and `set` on one raise a `KeyError`
     that suggests `mode="stepped"`.
+
+    `replace(path, step)` and `delete(path)` edit the pipeline mid-run and
+    re-run from the edit, keeping every value upstream of it.
 
     Example::
 
@@ -68,26 +72,12 @@ class Session:
         self._runner = copy.copy(executable.runner)
         if hasattr(self._runner, "visit"):
             self._runner.visit = self._visit
-        plan = executable.plan
-        self._sequences = {n.origin.path for n in iter_nodes(plan.root.node) if isinstance(n, SequenceNode)}
-        self._produces: dict[str, list[Version]] = {}
-        for v in plan.versions:
-            self._produces.setdefault(v.producer, []).append(v)
         self._pause = False
         self._visits: Counter[str] = Counter()
         self._visited: set[str] = set()
         self._previous: Checkpoint | None = None
         self._start()
-        # A fused runner compiles on `iterate`, so its units exist once the run has started.
-        self._kernels: dict[str, tuple[str, ...]] = {}
-        self._internal: dict[int, tuple[str, ...]] = {}
-        for unit in getattr(self._runner, "units", {}).values():
-            if len(unit.calls) > 1:
-                kernel = tuple(c.node.origin.path for c in unit.calls)
-                kept = [v for v, _ in unit.writes]
-                self._kernels[kernel[0]] = kernel
-                self._produces[kernel[0]] = kept
-                self._internal.update((v.id, kernel) for c in unit.calls for v in c.writes if v not in kept)
+        self._index()
         self._emit(RunStarted(self.state.n))
         self._log_params()
 
@@ -208,6 +198,23 @@ class Session:
         self.state, self._params = self.executable.prepare(self.frame, self.params)
         self._iterator = self._runner.iterate(self.executable.plan, self.state, self._params)
         self._logged = (0, 0, 0)
+
+    def _index(self) -> None:
+        # A fused runner compiles on `iterate`, so call this once the run has started.
+        plan = self.executable.plan
+        self._sequences = {n.origin.path for n in iter_nodes(plan.root.node) if isinstance(n, SequenceNode)}
+        self._produces: dict[str, list[Version]] = {}
+        for v in plan.versions:
+            self._produces.setdefault(v.producer, []).append(v)
+        self._kernels: dict[str, tuple[str, ...]] = {}
+        self._internal: dict[int, tuple[str, ...]] = {}
+        for unit in getattr(self._runner, "units", {}).values():
+            if len(unit.calls) > 1:
+                kernel = tuple(c.node.origin.path for c in unit.calls)
+                kept = [v for v, _ in unit.writes]
+                self._kernels[kernel[0]] = kernel
+                self._produces[kernel[0]] = kept
+                self._internal.update((v.id, kernel) for c in unit.calls for v in c.writes if v not in kept)
 
     def _go(self, reason: str, until: Callable[[Checkpoint], bool]) -> Checkpoint | None:
         while (cp := self._next()) is not None:
