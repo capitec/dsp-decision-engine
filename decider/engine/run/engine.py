@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING, Any, Literal, Mapping
 
 import numpy as np
@@ -26,6 +27,8 @@ Mode = Literal["interpreted", "stepped", "fused"]
 RUNNERS: dict[str, type] = {"interpreted": InterpretedRunner, "stepped": SteppedRunner, "fused": FusedRunner}
 
 _NO_FRAME = pl.DataFrame()
+# Prototype switch: bools reach kernels bit-packed, as they do from Arrow.
+_PACK_BOOLS = os.environ.get("DECIDER_ZERO_COPY") == "1"
 
 
 class Engine:
@@ -219,5 +222,16 @@ def _load(state: State, record: Mapping[str, Any], versions: list[Version], dtyp
         block = np.array([0 if null else x for x, null in zip(xs, nulls)] if any(nulls) else xs, dtype)
         # Read-only like a column read from a frame, so one kernel specialisation serves both.
         block.flags.writeable = False
+    # Comparing a dtype costs about half a microsecond; once per call, not per input.
+    packed = _PACK_BOOLS and dtype == np.bool_
+    if packed:
+        # Bit-packed, one shared bitmap: a kernel reads a bool input as a bitmap however it arrived.
+        bits = np.packbits(block, bitorder="little")
+        bits.flags.writeable = False
     for k, (v, null) in enumerate(zip(given, nulls)):
+        if packed:
+            state.values[v.id], state.packed[v.id] = (bits, k), None
+            if null:
+                state.valid[v.id] = np.zeros(1, bool)
+            continue
         state.write(v, block[k:k + 1], valid=np.zeros(1, bool) if null else None)
