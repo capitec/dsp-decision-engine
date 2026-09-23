@@ -45,6 +45,7 @@ export function App() {
   const [showDiff, setShowDiff] = useState(true);
   const [details, setDetails] = useState(true);
   const [tab, setTab] = useState<Tab>("graph");
+  const [compareFrom, setCompareFrom] = useState<Tab | null>(null);
 
   useEffect(() => {
     const onMessage = (e: MessageEvent<ToWebview>) => {
@@ -74,6 +75,9 @@ export function App() {
           break;
         case "compare":
           setCompare(m);
+          setCompareFrom(null);
+          // Start where the runs first differ.
+          if (m.comparison) setSelected(m.comparison.firstDivergence ?? m.comparison.steps.find((s) => s.status !== "same" && s.status !== "not run")?.path);
           break;
         case "tab":
           setTab(m.tab);
@@ -100,6 +104,11 @@ export function App() {
   const nodes = useMemo(() => (describe ? callNodes(describe.ir) : []), [describe]);
   const selectedNode = nodes.find((n) => n.path === selected);
 
+  // A lineage card about a column the newly selected step doesn't touch is stale; close it.
+  useEffect(() => {
+    if (column && selectedNode && !(selectedNode.inputs ?? []).includes(column) && !(selectedNode.outputs ?? []).includes(column)) setColumn(undefined);
+  }, [selected]);
+
   // A tree's path for the focused record, once the tree has run.
   useEffect(() => {
     if (selectedNode?.callKind === "row" && run.record !== null && run.finishedPaths.includes(selectedNode.path)) send({ type: "treePath", path: selectedNode.path });
@@ -119,6 +128,9 @@ export function App() {
     () => (showDiff && compare.comparison ? new Map(compare.comparison.steps.map((s) => [s.path, s.status])) : undefined),
     [compare.comparison, showDiff],
   );
+  const changedSteps = compare.comparison ? compare.comparison.steps.filter((s) => s.status === "changed" || s.status === "added").map((s) => s.path) : [];
+  const changedAt = changedSteps.indexOf(selected ?? "");
+  const goChanged = (dir: 1 | -1) => setSelected(changedSteps[(changedAt + dir + changedSteps.length) % changedSteps.length]);
 
   if (!describe) return <div className="empty">Open a pipeline file and choose “Visualise flow”.</div>;
 
@@ -147,7 +159,7 @@ export function App() {
         <button className="icon" title="Maximise the flow panel (again to restore)" onClick={() => send({ type: "maximise" })}>⤢</button>
         {columns && (
           <label title="Show values for one record instead of the whole batch">
-            Focus{" "}
+            Focus record{" "}
             <select aria-label="record" value={run.record ?? ""} onChange={(e) => send({ type: "record", row: e.target.value === "" ? null : Number(e.target.value) })}>
               <option value="">all {rows} records</option>
               {Array.from({ length: rows }, (_, i) => (
@@ -160,13 +172,24 @@ export function App() {
       </header>
       {tab === "graph" && (
         <div className="subbar">
-          {tab === "graph" && (
-            <label><input type="checkbox" checked={showData} onChange={(e) => setShowData(e.target.checked)} /> all data edges</label>
+          <span className="edge-key" title="Solid arrows: the order steps run in. Dotted: which step's output another reads (shown for the selected step).">
+            <span className="line solid" /> runs next <span className="line dotted" /> data
+          </span>
+          <label><input type="checkbox" checked={showData} onChange={(e) => setShowData(e.target.checked)} /> show every data dependency</label>
+          <label><input type="checkbox" checked={details} onChange={(e) => setDetails(e.target.checked)} /> details pane</label>
+          {compare.comparison && (
+            <span className="legend">
+              <label><input type="checkbox" checked={showDiff} onChange={(e) => setShowDiff(e.target.checked)} /> colour by comparison:</label>
+              <span className="swatch changed" /> changed <span className="swatch added" /> added <span className="swatch same" /> same
+              {showDiff && changedSteps.length > 0 && (
+                <>
+                  <button title="Previous changed step" onClick={() => goChanged(-1)}>◀</button>
+                  <span>{changedAt >= 0 ? `${changedAt + 1} of ${changedSteps.length}: ${changedSteps[changedAt]}` : `${changedSteps.length} changed`}</span>
+                  <button title="Next changed step" onClick={() => goChanged(1)}>▶</button>
+                </>
+              )}
+            </span>
           )}
-          {tab === "graph" && compare.comparison && (
-            <label><input type="checkbox" checked={showDiff} onChange={(e) => setShowDiff(e.target.checked)} /> colour by last comparison</label>
-          )}
-          {tab === "graph" && <label><input type="checkbox" checked={details} onChange={(e) => setDetails(e.target.checked)} /> details</label>}
         </div>
       )}
       <main>
@@ -208,6 +231,7 @@ export function App() {
             onRun={(scenarios, fromHere) => send({ type: "sweep", scenarios, fromHere })}
             onOpen={(i) => {
               setCompare({ comparison: sweep.sweep!.comparisons[i] });
+              setCompareFrom("scenarios");
               setTab("compare");
             }}
           />
@@ -219,6 +243,7 @@ export function App() {
             onSelect={select}
             onCompareRevision={() => send({ type: "compareRevision" })}
             onOpenDiff={(path) => send({ type: "openDiff", path })}
+            back={compareFrom ? { label: `${sweep.sweep?.labels.length ?? ""} scenarios`, go: () => setTab(compareFrom) } : undefined}
           />
         )}
         {withDetails && (
@@ -238,6 +263,7 @@ export function App() {
             onReveal={(path) => send({ type: "reveal", path })}
             onRewind={(path) => send({ type: "rewind", path })}
             onRunTo={(path) => send({ type: "runTo", path })}
+            onStep={() => send({ type: "step" })}
           />
         )}
       </main>

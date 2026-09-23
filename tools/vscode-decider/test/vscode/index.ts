@@ -25,7 +25,7 @@ function defineTests() {
       const titles = lenses.map((l) => l.command!.title);
       assert.ok(titles.some((t) => t.includes("Run flow")), titles.join());
       assert.ok(titles.some((t) => t.includes("Visualise flow")), titles.join());
-      assert.strictEqual(lenses[0].range.start.line, 108);
+      assert.strictEqual(lenses[0].range.start.line, 113);
     });
 
     it("visualises the flow without an error", async () => {

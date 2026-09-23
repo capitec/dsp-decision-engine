@@ -72,11 +72,11 @@ def test_a_loop_is_stepped_iteration_by_iteration():
 
 
 def test_a_row_node_reports_tree_visits_and_breaks_on_a_locator():
-    b = started(breakpoints=["risk_tree#low_score"])
+    b = started(breakpoints=["risk_tree#bureau_score < 680"])
     r = b.handle({"cmd": "resume"})
     assert r["current"] == {"path": "risk_tree", "when": "after"}
     visits = {e["origin"]["locator"]: e["rows"] for e in r["events"] if e["kind"] == "node_visited"}
-    assert visits == {"root": 2, "low_score": 1, "good_score": 1}
+    assert visits == {"root": 2, "bureau_score < 680": 1, "ratio >= 3": 1, "bureau_score >= 680": 1}
 
 
 def test_state_can_focus_one_record():
@@ -177,8 +177,8 @@ def test_tree_path_rewalks_one_record():
     b = started()
     b.handle({"cmd": "resume"})
     assert b.handle({"cmd": "tree_path", "path": "risk_tree", "row": 0}) == {
-        "path": "risk_tree", "row": 0, "visited": ["root", "low_score"], "result": [1]}
-    assert b.handle({"cmd": "tree_path", "path": "risk_tree", "row": 1})["visited"] == ["root", "good_score"]
+        "path": "risk_tree", "row": 0, "visited": ["root", "bureau_score < 680", "ratio >= 3"], "result": [1]}
+    assert b.handle({"cmd": "tree_path", "path": "risk_tree", "row": 1})["visited"] == ["root", "bureau_score >= 680"]
 
 
 def test_scenarios_fork_from_the_pause_and_keep_earlier_overrides():
