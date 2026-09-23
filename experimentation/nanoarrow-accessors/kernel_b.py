@@ -9,7 +9,7 @@ from numba import njit
 
 from kernel import (CMP, EQ, ERR_LEAF, GE, GT, IS_TRUE, LE, LEAF, LT, NE, _match_at,  # noqa: F401
                     pattern_table)
-from nashim import GET_STRING_ADDR, GET_STRING_CHECKED_ADDR, NanoView, call_get_string
+from nashim import DEFAULT, GET_STRING_ADDR, GET_STRING_CHECKED_ADDR, NanoView, call_get_string
 
 
 @njit(cache=True)
@@ -70,6 +70,12 @@ def run_tree_b(float_cols, nano_views: list[NanoView], tree, patterns, out=None,
         out = np.empty(n, dtype=np.int64)
     pat_bytes, pat_bounds = pat if pat is not None else pattern_table(patterns)
     fn = np.uint64(GET_STRING_CHECKED_ADDR if checked else GET_STRING_ADDR)
+    if checked:
+        # the checked accessor compares offsets against the data buffer's size,
+        # which nanoarrow only resolves at DEFAULT validation (it reads the last
+        # offset); SetArrayMinimal leaves it unknown (-1) for 'u'/'U' arrays.
+        for v in nano_views:
+            v.validate(DEFAULT)
     n_chunks = len(nano_views[0].chunks) if nano_views else 1
     layouts = [[c.array.length for c in v.chunks] for v in nano_views]
     if any(l != layouts[0] for l in layouts):

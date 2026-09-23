@@ -63,57 +63,71 @@ def build_offsets_array(strings, fmt):
     return schema, arr, arrowc.StringView(format=fmt, chunks=[chunk])
 
 
-def try_(label, fn):
-    try:
-        out = fn()
-        ok = out == EXPECT
-        outcome = "correct" if ok else "wrong_answer"
-        detail = str(out)
-    except Exception as e:  # noqa: BLE001
-        outcome = "refused"
-        detail = f"{type(e).__name__}: {str(e)[:140]}"
-    return outcome, detail
+
+def make(fmt):
+    """(sv_for_A, nanoview_factory_for_B/C, expect) for a format label."""
+    global EXPECT
+    if fmt in ("u", "U"):
+        schema, arr, sv = build_offsets_array(STRINGS, fmt)
+        return sv, (lambda: NanoView(structs=(schema, arr))), EXPECT
+    if fmt == "vz":   # a REAL format (binary_view): the schema lies about utf8 buffers
+        schema, arr, sv = build_offsets_array(STRINGS, "u"); schema.format = b"vz"; sv.format = "vz"
+        return sv, (lambda: NanoView(structs=(schema, arr))), EXPECT
+    if fmt == "q":    # a format nanoarrow 0.9.0 does not know
+        schema, arr, sv = build_offsets_array(STRINGS, "u"); schema.format = b"q"; sv.format = "q"
+        return sv, (lambda: NanoView(structs=(schema, arr))), EXPECT
+    if fmt == "n":    # a real polars column whose dtype is Null (pl.Series([None]) infers Null)
+        s = pl.Series("s", [None] * len(STRINGS))
+        return (lambda: arrowc.export(s)), (lambda: NanoView(s)), [0] * len(STRINGS)
+    raise ValueError(fmt)
 
 
-def run_case(fmt, sv_a, nv_factory):
+LABELS = {"u": "u (utf8, int32 offsets)", "U": "U (large_utf8, int64 offsets)",
+          "vz": "vz (schema says binary_view, buffers are utf8)", "q": "q (unknown format)",
+          "n": "n (polars Null dtype column)"}
+
+
+def child(fmt, ap):
+    sv_a, nv, expect = make(fmt)
     feats = np.empty((len(STRINGS), 0))
-    cases = {
-        "A": lambda: run_tree(feats, [sv_a], TREE, ["dog"]).tolist(),
-        "B": lambda: run_tree_b(feats, [nv_factory()], TREE, ["dog"]).tolist(),
-        "B-checked": lambda: run_tree_b(feats, [nv_factory()], TREE, ["dog"], checked=True).tolist(),
-        "C-full": lambda: run_tree_c(feats, [nv_factory()], TREE, ["dog"], level=FULL).tolist(),
-    }
-    for ap, fn in cases.items():
-        outcome, detail = try_(ap, fn)
-        record(probe="spec_change", format=fmt, approach=ap, outcome=outcome, detail=detail)
-        print(f"format {fmt!r:6} {ap:<10} {outcome:<13} {detail}", flush=True)
+    if ap == "A":
+        v = sv_a() if callable(sv_a) else sv_a
+        out = run_tree(feats, [v], TREE, ["dog"])
+    elif ap == "B":
+        out = run_tree_b(feats, [nv()], TREE, ["dog"])
+    elif ap == "B-checked":
+        out = run_tree_b(feats, [nv()], TREE, ["dog"], checked=True)
+    else:
+        out = run_tree_c(feats, [nv()], TREE, ["dog"], level=FULL)
+    print("RESULT", out.tolist(), "EXPECT", expect, flush=True)
 
 
 def main():
-    for fmt in ("u", "U"):
-        schema, arr, sv_a = build_offsets_array(STRINGS, fmt)
-        run_case(fmt, sv_a, lambda: NanoView(structs=(schema, arr)))
-    # a made-up future format: what does each side say?
-    schema, arr, sv_a = build_offsets_array(STRINGS, "u")
-    schema.format = b"vz"; sv_a.format = "vz"
-    run_case("vz", sv_a, lambda: NanoView(structs=(schema, arr)))
-    # a real polars column whose dtype is Null (pl.Series([None]) infers Null, not String)
-    s = pl.Series("s", [None] * len(STRINGS))
-    global EXPECT
-    EXPECT = [0] * len(STRINGS)
-    def a_null():
-        v = arrowc.export(s)
-        return run_tree(np.empty((len(STRINGS), 0)), [v], TREE, ["dog"]).tolist()
-    outcome, detail = try_("A", a_null)
-    record(probe="spec_change", format="n (polars Null dtype)", approach="A", outcome=outcome, detail=detail)
-    print(f"format 'n'    A          {outcome:<13} {detail}")
-    feats = np.empty((len(STRINGS), 0))
-    for ap, fn in {"B": lambda: run_tree_b(feats, [NanoView(s)], TREE, ["dog"]).tolist(),
-                   "B-checked": lambda: run_tree_b(feats, [NanoView(s)], TREE, ["dog"], checked=True).tolist(),
-                   "C-full": lambda: run_tree_c(feats, [NanoView(s)], TREE, ["dog"], level=FULL).tolist()}.items():
-        outcome, detail = try_(ap, fn)
-        record(probe="spec_change", format="n (polars Null dtype)", approach=ap, outcome=outcome, detail=detail)
-        print(f"format 'n'    {ap:<10} {outcome:<13} {detail}")
+    import os, subprocess, sys
+    if len(sys.argv) == 3:
+        child(sys.argv[1], sys.argv[2]); return
+    here = os.path.dirname(os.path.abspath(__file__))
+    for fmt in ("u", "U", "n", "q", "vz"):
+        for ap in ("A", "B", "B-checked", "C-full"):
+            p = subprocess.run([sys.executable, os.path.join(here, "spec_change.py"), fmt, ap],
+                               capture_output=True, text=True, cwd=here, timeout=120)
+            res = [ln for ln in p.stdout.splitlines() if ln.startswith("RESULT")]
+            if p.returncode < 0 or p.returncode >= 128:
+                outcome, detail = "crash", f"signal {-p.returncode if p.returncode < 0 else p.returncode - 128}"
+            elif p.returncode != 0:
+                last = [ln for ln in p.stderr.strip().splitlines() if ln.strip()][-1:] or ["?"]
+                outcome, detail = "refused", last[0][:150]
+            else:
+                got, expect = res[0].split(" EXPECT ")
+                got = got[len("RESULT "):]
+                if got == expect:
+                    outcome, detail = "correct", got
+                elif "-1" in got:
+                    outcome, detail = "error_leaf", got
+                else:
+                    outcome, detail = "wrong_answer", got
+            record(probe="spec_change", format=LABELS[fmt], approach=ap, returncode=p.returncode, outcome=outcome, detail=detail)
+            print(f"{LABELS[fmt]:<48} {ap:<10} rc={p.returncode:>4}  {outcome:<12} {detail}", flush=True)
 
 
 if __name__ == "__main__":

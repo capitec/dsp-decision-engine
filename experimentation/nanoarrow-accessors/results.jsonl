@@ -232,3 +232,125 @@
 {"probe": "corrupt", "case": "lying_sizes_buffer", "approach": "C-full", "returncode": 0, "outcome": "wrong_answer", "detail": "[1, 0, 0, 0, 1, 1]", "ts": 1790147446.2980485}
 {"probe": "corrupt", "case": "lying_sizes_buffer", "approach": "C-trusting", "returncode": 0, "outcome": "wrong_answer", "detail": "[1, 0, 0, 0, 1, 1]", "ts": 1790147447.2019713}
 {"probe": "layout_lines", "A (hand-decoded numba)": 42, "B (nanoarrow per row, unsafe accessor)": 0, "B-checked (nanoarrow + hand-written bounds check in C)": 37, "C (nanoarrow validate + A's numba decode)": 42}
+{"probe": "bench_lean", "n": 1, "stage": "A.lean_end_to_end", "median_us": 20.4258675, "min_us": 20.319524, "ts": 1790147566.513238}
+{"probe": "bench_lean", "n": 1, "stage": "B.pooled_end_to_end", "median_us": 9.0785345, "min_us": 9.0307915, "ts": 1790147566.9727623}
+{"probe": "bench_lean", "n": 1000, "stage": "A.lean_end_to_end", "median_us": 81.4287405, "min_us": 81.0624965, "ts": 1790147574.927456}
+{"probe": "bench_lean", "n": 1000, "stage": "B.pooled_end_to_end", "median_us": 73.7880655, "min_us": 73.453231, "ts": 1790147578.6543984}
+{"probe": "bench", "n": 1, "stage": "polars.__arrow_c_stream__", "median_us": 0.492462, "min_us": 0.486968, "blocks": 25, "k": 2000, "ts": 1790147579.655446}
+{"probe": "bench", "n": 1, "stage": "A.export (arrowc, ctypes loop)", "median_us": 26.2105985, "min_us": 26.101981, "blocks": 25, "k": 2000, "ts": 1790147581.092667}
+{"probe": "bench", "n": 1, "stage": "A.kernel (walk_chunk, tables prebuilt)", "median_us": 3.2973625, "min_us": 3.2653895000000004, "blocks": 25, "k": 2000, "ts": 1790147581.2682455}
+{"probe": "bench", "n": 1, "stage": "A.dispatch floor (walk_chunk n=0)", "median_us": 3.2721880000000003, "min_us": 3.2497485, "blocks": 25, "k": 2000, "ts": 1790147581.4320188}
+{"probe": "bench", "n": 1, "stage": "A.string_tables (python glue)", "median_us": 4.255687, "min_us": 4.23102, "blocks": 25, "k": 2000, "ts": 1790147581.6447616}
+{"probe": "bench", "n": 1, "stage": "A.pattern_table (python glue)", "median_us": 2.771788, "min_us": 2.761492, "blocks": 25, "k": 2000, "ts": 1790147581.7835836}
+{"probe": "bench", "n": 1, "stage": "A.end_to_end", "median_us": 42.620324000000004, "min_us": 42.384305, "blocks": 25, "k": 2000, "ts": 1790147583.9296916}
+{"probe": "bench", "n": 1, "stage": "B.import (NanoView: stream+init+SetArrayMinimal)", "median_us": 11.540040999999999, "min_us": 11.4249045, "blocks": 25, "k": 2000, "ts": 1790147584.5173614}
+{"probe": "bench", "n": 1, "stage": "B.kernel (walk_chunk_b, prebuilt)", "median_us": 2.178587, "min_us": 2.1488825, "blocks": 25, "k": 2000, "ts": 1790147584.6265657}
+{"probe": "bench", "n": 1, "stage": "B.dispatch floor (walk_chunk_b n=0)", "median_us": 2.1466999999999996, "min_us": 2.1281754999999998, "blocks": 25, "k": 2000, "ts": 1790147584.7340696}
+{"probe": "bench", "n": 1, "stage": "validate.minimal", "median_us": 1.466557, "min_us": 1.4606379999999999, "blocks": 25, "k": 2000, "level": 1, "ts": 1790147584.8075035}
+{"probe": "bench", "n": 1, "stage": "validate.default", "median_us": 1.472646, "min_us": 1.4665540000000001, "blocks": 25, "k": 2000, "level": 2, "ts": 1790147584.8812146}
+{"probe": "bench", "n": 1, "stage": "validate.full", "median_us": 1.4838075, "min_us": 1.4760205000000002, "blocks": 25, "k": 2000, "level": 3, "ts": 1790147584.955481}
+{"probe": "bench", "n": 1, "stage": "B.end_to_end", "median_us": 19.2868475, "min_us": 19.155813, "blocks": 25, "k": 2000, "ts": 1790147585.9195921}
+{"probe": "bench", "n": 1, "stage": "B-checked.end_to_end", "median_us": 19.299186000000002, "min_us": 19.18757, "blocks": 25, "k": 2000, "ts": 1790147586.8939054}
+{"probe": "bench", "n": 1, "stage": "C-none.end_to_end (import only, no validate)", "median_us": 31.794451000000002, "min_us": 31.571143, "blocks": 25, "k": 2000, "ts": 1790147588.4933147}
+{"probe": "bench", "n": 1, "stage": "C-minimal.end_to_end", "median_us": 33.342106, "min_us": 32.988771500000006, "blocks": 25, "k": 2000, "ts": 1790147590.179322}
+{"probe": "bench", "n": 1, "stage": "C-default.end_to_end", "median_us": 33.339464, "min_us": 33.029504, "blocks": 25, "k": 2000, "ts": 1790147591.8952703}
+{"probe": "bench", "n": 1, "stage": "C-full.end_to_end", "median_us": 33.254639499999996, "min_us": 32.903394999999996, "blocks": 25, "k": 2000, "ts": 1790147593.567836}
+{"probe": "bench", "n": 1000000, "stage": "polars.__arrow_c_stream__", "median_us": 1.271, "min_us": 0.854, "blocks": 5, "k": 1, "ts": 1790147598.596094}
+{"probe": "bench", "n": 1000000, "stage": "A.export (arrowc, ctypes loop)", "median_us": 40.179, "min_us": 36.647, "blocks": 5, "k": 1, "ts": 1790147598.5967333}
+{"probe": "bench", "n": 1000000, "stage": "A.kernel (walk_chunk, tables prebuilt)", "median_us": 59859.512, "min_us": 59799.096, "blocks": 5, "k": 1, "ts": 1790147598.9561546}
+{"probe": "bench", "n": 1000000, "stage": "A.dispatch floor (walk_chunk n=0)", "median_us": 4.245, "min_us": 3.817, "blocks": 5, "k": 1, "ts": 1790147598.9564192}
+{"probe": "bench", "n": 1000000, "stage": "A.string_tables (python glue)", "median_us": 6.307, "min_us": 5.958, "blocks": 5, "k": 1, "ts": 1790147598.956543}
+{"probe": "bench", "n": 1000000, "stage": "A.pattern_table (python glue)", "median_us": 3.542, "min_us": 3.106, "blocks": 5, "k": 1, "ts": 1790147598.9566424}
+{"probe": "bench", "n": 1000000, "stage": "A.end_to_end", "median_us": 60072.111, "min_us": 59929.066, "blocks": 5, "k": 1, "ts": 1790147599.257129}
+{"probe": "bench", "n": 1000000, "stage": "B.import (NanoView: stream+init+SetArrayMinimal)", "median_us": 13.676, "min_us": 12.263, "blocks": 5, "k": 1, "ts": 1790147599.257521}
+{"probe": "bench", "n": 1000000, "stage": "B.kernel (walk_chunk_b, prebuilt)", "median_us": 63809.819, "min_us": 63708.675, "blocks": 5, "k": 1, "ts": 1790147599.6404912}
+{"probe": "bench", "n": 1000000, "stage": "B.dispatch floor (walk_chunk_b n=0)", "median_us": 2.669, "min_us": 2.512, "blocks": 5, "k": 1, "ts": 1790147599.6407192}
+{"probe": "bench", "n": 1000000, "stage": "validate.minimal", "median_us": 2.104, "min_us": 1.753, "blocks": 5, "k": 1, "level": 1, "ts": 1790147599.6407998}
+{"probe": "bench", "n": 1000000, "stage": "validate.default", "median_us": 1.859, "min_us": 1.734, "blocks": 5, "k": 1, "level": 2, "ts": 1790147599.6408548}
+{"probe": "bench", "n": 1000000, "stage": "validate.full", "median_us": 1.826, "min_us": 1.711, "blocks": 5, "k": 1, "level": 3, "ts": 1790147599.640903}
+{"probe": "bench", "n": 1000000, "stage": "B.end_to_end", "median_us": 64081.264, "min_us": 63835.566, "blocks": 5, "k": 1, "ts": 1790147599.9611597}
+{"probe": "bench", "n": 1000000, "stage": "B-checked.end_to_end", "median_us": 63651.675, "min_us": 63529.625, "blocks": 5, "k": 1, "ts": 1790147600.2816904}
+{"probe": "bench", "n": 1000000, "stage": "C-none.end_to_end (import only, no validate)", "median_us": 63352.589, "min_us": 60340.672, "blocks": 5, "k": 1, "ts": 1790147600.5942442}
+{"probe": "bench", "n": 1000000, "stage": "C-minimal.end_to_end", "median_us": 60388.741, "min_us": 60288.168, "blocks": 5, "k": 1, "ts": 1790147600.8968}
+{"probe": "bench", "n": 1000000, "stage": "C-default.end_to_end", "median_us": 60339.523, "min_us": 60094.115, "blocks": 5, "k": 1, "ts": 1790147601.198383}
+{"probe": "bench", "n": 1000000, "stage": "C-full.end_to_end", "median_us": 60129.67, "min_us": 60029.35, "blocks": 5, "k": 1, "ts": 1790147601.4995315}
+{"probe": "spec_change", "format": "u", "approach": "A", "outcome": "refused", "detail": "ValueError: expected Arrow Utf8View ('vu') from polars, got 'u'; this kernel reads the binview layout only", "ts": 1790147602.258864}
+{"probe": "spec_change", "format": "u", "approach": "B", "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147602.4721344}
+{"probe": "spec_change", "format": "u", "approach": "B-checked", "outcome": "wrong_answer", "detail": "[-1, -1, -1, 0, -1, -1]", "ts": 1790147602.4726496}
+{"probe": "spec_change", "format": "u", "approach": "C-full", "outcome": "refused", "detail": "ValueError: expected Arrow Utf8View ('vu') from polars, got 'u'; the per-row numba decode reads the binview layout only", "ts": 1790147602.4728916}
+{"probe": "spec_change", "format": "U", "approach": "A", "outcome": "refused", "detail": "ValueError: expected Arrow Utf8View ('vu') from polars, got 'U'; this kernel reads the binview layout only", "ts": 1790147602.4730713}
+{"probe": "spec_change", "format": "U", "approach": "B", "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147602.4732504}
+{"probe": "spec_change", "format": "U", "approach": "B-checked", "outcome": "wrong_answer", "detail": "[-1, -1, -1, 0, -1, -1]", "ts": 1790147602.473409}
+{"probe": "spec_change", "format": "U", "approach": "C-full", "outcome": "refused", "detail": "ValueError: expected Arrow Utf8View ('vu') from polars, got 'U'; the per-row numba decode reads the binview layout only", "ts": 1790147602.4735398}
+{"probe": "spec_change", "format": "vz", "approach": "A", "outcome": "refused", "detail": "ValueError: expected Arrow Utf8View ('vu') from polars, got 'vz'; this kernel reads the binview layout only", "ts": 1790147602.4736888}
+{"probe": "corrupt", "case": "clean", "approach": "A", "returncode": 0, "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147604.7251744}
+{"probe": "corrupt", "case": "clean", "approach": "B", "returncode": 0, "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147605.662272}
+{"probe": "corrupt", "case": "clean", "approach": "B-checked", "returncode": 0, "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147606.5875764}
+{"probe": "corrupt", "case": "clean", "approach": "C-full", "returncode": 0, "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147607.5111852}
+{"probe": "corrupt", "case": "clean", "approach": "C-trusting", "returncode": 0, "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147608.457465}
+{"probe": "corrupt", "case": "sliced_offset", "approach": "A", "returncode": 0, "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147609.367107}
+{"probe": "corrupt", "case": "sliced_offset", "approach": "B", "returncode": 0, "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147610.2949834}
+{"probe": "corrupt", "case": "sliced_offset", "approach": "B-checked", "returncode": 0, "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147611.2309933}
+{"probe": "corrupt", "case": "sliced_offset", "approach": "C-full", "returncode": 0, "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147612.1754115}
+{"probe": "corrupt", "case": "sliced_offset", "approach": "C-trusting", "returncode": 0, "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147613.112989}
+{"probe": "corrupt", "case": "bad_buffer_index", "approach": "A", "returncode": 0, "outcome": "error_leaf", "detail": "[1, -1, 0, 0, 1, 1]", "ts": 1790147614.1010134}
+{"probe": "corrupt", "case": "bad_buffer_index", "approach": "B", "returncode": -11, "outcome": "crash", "detail": "signal 11", "ts": 1790147616.1198545}
+{"probe": "corrupt", "case": "bad_buffer_index", "approach": "B-checked", "returncode": 0, "outcome": "error_leaf", "detail": "[1, -1, 0, 0, 1, 1]", "ts": 1790147617.0757005}
+{"probe": "corrupt", "case": "bad_buffer_index", "approach": "C-full", "returncode": 0, "outcome": "error_leaf", "detail": "[1, -1, 0, 0, 1, 1]", "ts": 1790147618.0048141}
+{"probe": "corrupt", "case": "bad_buffer_index", "approach": "C-trusting", "returncode": -11, "outcome": "crash", "detail": "signal 11", "ts": 1790147620.024115}
+{"probe": "corrupt", "case": "bad_offset", "approach": "A", "returncode": 0, "outcome": "error_leaf", "detail": "[1, -1, 0, 0, 1, 1]", "ts": 1790147620.982835}
+{"probe": "corrupt", "case": "bad_offset", "approach": "B", "returncode": -11, "outcome": "crash", "detail": "signal 11", "ts": 1790147623.0054622}
+{"probe": "corrupt", "case": "bad_offset", "approach": "B-checked", "returncode": 0, "outcome": "error_leaf", "detail": "[1, -1, 0, 0, 1, 1]", "ts": 1790147623.9489026}
+{"probe": "corrupt", "case": "bad_offset", "approach": "C-full", "returncode": 0, "outcome": "error_leaf", "detail": "[1, -1, 0, 0, 1, 1]", "ts": 1790147624.9237595}
+{"probe": "corrupt", "case": "bad_offset", "approach": "C-trusting", "returncode": -11, "outcome": "crash", "detail": "signal 11", "ts": 1790147626.9643126}
+{"probe": "corrupt", "case": "bad_length", "approach": "A", "returncode": 0, "outcome": "error_leaf", "detail": "[1, -1, 0, 0, 1, 1]", "ts": 1790147627.8967497}
+{"probe": "corrupt", "case": "bad_length", "approach": "B", "returncode": 0, "outcome": "answered by luck", "detail": "[1, 1, 0, 0, 1, 1]: match found before the 1 GB overrun was walked", "ts": 1790147628.8182106}
+{"probe": "corrupt", "case": "bad_length", "approach": "B-checked", "returncode": 0, "outcome": "error_leaf", "detail": "[1, -1, 0, 0, 1, 1]", "ts": 1790147629.7449353}
+{"probe": "corrupt", "case": "bad_length", "approach": "C-full", "returncode": 0, "outcome": "error_leaf", "detail": "[1, -1, 0, 0, 1, 1]", "ts": 1790147630.6646914}
+{"probe": "corrupt", "case": "bad_length", "approach": "C-trusting", "returncode": 0, "outcome": "answered by luck", "detail": "[1, 1, 0, 0, 1, 1]: match found before the 1 GB overrun was walked", "ts": 1790147631.5969644}
+{"probe": "corrupt", "case": "bad_length_scan", "approach": "A", "returncode": 0, "outcome": "error_leaf", "detail": "[0, -1, 0, 0, 0, 0]", "ts": 1790147632.543716}
+{"probe": "corrupt", "case": "bad_length_scan", "approach": "B", "returncode": 0, "outcome": "wrong_answer", "detail": "[0, 1, 0, 0, 0, 0]", "ts": 1790147633.5059698}
+{"probe": "corrupt", "case": "bad_length_scan", "approach": "B-checked", "returncode": 0, "outcome": "error_leaf", "detail": "[0, -1, 0, 0, 0, 0]", "ts": 1790147634.4481287}
+{"probe": "corrupt", "case": "bad_length_scan", "approach": "C-full", "returncode": 0, "outcome": "error_leaf", "detail": "[0, -1, 0, 0, 0, 0]", "ts": 1790147635.4238987}
+{"probe": "corrupt", "case": "bad_length_scan", "approach": "C-trusting", "returncode": 0, "outcome": "wrong_answer", "detail": "[0, 1, 0, 0, 0, 0]", "ts": 1790147636.3956866}
+{"probe": "corrupt", "case": "null_validity_nonzero_null_count", "approach": "A", "returncode": 0, "outcome": "answered (null_count ignored)", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147637.3398151}
+{"probe": "corrupt", "case": "null_validity_nonzero_null_count", "approach": "B", "returncode": 1, "outcome": "refused", "detail": "nashim.NanoError: import refused rc=-6: Expected string_view array buffer 0 to have size >= 1 bytes but found buffer with 0 bytes", "ts": 1790147638.0233052}
+{"probe": "corrupt", "case": "null_validity_nonzero_null_count", "approach": "B-checked", "returncode": 1, "outcome": "refused", "detail": "nashim.NanoError: import refused rc=-6: Expected string_view array buffer 0 to have size >= 1 bytes but found buffer with 0 bytes", "ts": 1790147638.7198396}
+{"probe": "corrupt", "case": "null_validity_nonzero_null_count", "approach": "C-full", "returncode": 1, "outcome": "refused", "detail": "nashim.NanoError: import refused rc=-6: Expected string_view array buffer 0 to have size >= 1 bytes but found buffer with 0 bytes", "ts": 1790147639.3988965}
+{"probe": "corrupt", "case": "null_validity_nonzero_null_count", "approach": "C-trusting", "returncode": 1, "outcome": "refused", "detail": "nashim.NanoError: import refused rc=-6: Expected string_view array buffer 0 to have size >= 1 bytes but found buffer with 0 bytes", "ts": 1790147640.0704355}
+{"probe": "corrupt", "case": "n_buffers_truncated", "approach": "A", "returncode": 0, "outcome": "error_leaf", "detail": "[1, -1, 0, 0, -1, 1]", "ts": 1790147640.9947267}
+{"probe": "corrupt", "case": "n_buffers_truncated", "approach": "B", "returncode": 0, "outcome": "wrong_answer", "detail": "returned the clean answer [1, 1, 0, 0, 1, 1] on corrupt data (read out of bounds silently)", "ts": 1790147641.9616458}
+{"probe": "corrupt", "case": "n_buffers_truncated", "approach": "B-checked", "returncode": 0, "outcome": "error_leaf", "detail": "[1, -1, 0, 0, -1, 1]", "ts": 1790147642.9698627}
+{"probe": "corrupt", "case": "n_buffers_truncated", "approach": "C-full", "returncode": 1, "outcome": "refused", "detail": "ValueError: Array length must be >= 0, not -1", "ts": 1790147643.6740892}
+{"probe": "corrupt", "case": "n_buffers_truncated", "approach": "C-trusting", "returncode": 1, "outcome": "refused", "detail": "ValueError: Array length must be >= 0, not -1", "ts": 1790147644.3711188}
+{"probe": "corrupt", "case": "lying_sizes_buffer", "approach": "A", "returncode": 0, "outcome": "wrong_answer", "detail": "[1, 0, 0, 0, 1, 1]", "ts": 1790147645.3147445}
+{"probe": "corrupt", "case": "lying_sizes_buffer", "approach": "B", "returncode": 0, "outcome": "wrong_answer", "detail": "[1, 0, 0, 0, 1, 1]", "ts": 1790147646.2435007}
+{"probe": "corrupt", "case": "lying_sizes_buffer", "approach": "B-checked", "returncode": 0, "outcome": "wrong_answer", "detail": "[1, 0, 0, 0, 1, 1]", "ts": 1790147647.1693401}
+{"probe": "corrupt", "case": "lying_sizes_buffer", "approach": "C-full", "returncode": 0, "outcome": "wrong_answer", "detail": "[1, 0, 0, 0, 1, 1]", "ts": 1790147648.0957427}
+{"probe": "corrupt", "case": "lying_sizes_buffer", "approach": "C-trusting", "returncode": 0, "outcome": "wrong_answer", "detail": "[1, 0, 0, 0, 1, 1]", "ts": 1790147649.0294912}
+{"probe": "bench_lean", "n": 1, "stage": "A.lean_end_to_end", "median_us": 21.054347, "min_us": 20.872383999999997, "ts": 1790147749.787911}
+{"probe": "bench_lean", "n": 1, "stage": "B.pooled_end_to_end", "median_us": 9.337939, "min_us": 9.206678, "ts": 1790147750.263281}
+{"probe": "bench_lean", "n": 1, "stage": "C-full.pooled_end_to_end", "median_us": 17.239943, "min_us": 17.126991, "ts": 1790147751.1262782}
+{"probe": "bench_lean", "n": 1000, "stage": "A.lean_end_to_end", "median_us": 81.62947849999999, "min_us": 80.8242755, "ts": 1790147758.7617812}
+{"probe": "bench_lean", "n": 1000, "stage": "B.pooled_end_to_end", "median_us": 74.430556, "min_us": 73.9809195, "ts": 1790147762.51884}
+{"probe": "bench_lean", "n": 1000, "stage": "C-full.pooled_end_to_end", "median_us": 77.687108, "min_us": 77.2942495, "ts": 1790147766.4267435}
+{"probe": "spec_change", "format": "u (utf8, int32 offsets)", "approach": "A", "returncode": 1, "outcome": "refused", "detail": "ValueError: expected Arrow Utf8View ('vu') from polars, got 'u'; this kernel reads the binview layout only", "ts": 1790147767.8984003}
+{"probe": "spec_change", "format": "u (utf8, int32 offsets)", "approach": "B", "returncode": 0, "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147768.845261}
+{"probe": "spec_change", "format": "u (utf8, int32 offsets)", "approach": "B-checked", "returncode": 0, "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147769.767019}
+{"probe": "spec_change", "format": "u (utf8, int32 offsets)", "approach": "C-full", "returncode": 1, "outcome": "refused", "detail": "ValueError: expected Arrow Utf8View ('vu') from polars, got 'u'; the per-row numba decode reads the binview layout only", "ts": 1790147770.467083}
+{"probe": "spec_change", "format": "U (large_utf8, int64 offsets)", "approach": "A", "returncode": 1, "outcome": "refused", "detail": "ValueError: expected Arrow Utf8View ('vu') from polars, got 'U'; this kernel reads the binview layout only", "ts": 1790147771.1483853}
+{"probe": "spec_change", "format": "U (large_utf8, int64 offsets)", "approach": "B", "returncode": 0, "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147772.0643833}
+{"probe": "spec_change", "format": "U (large_utf8, int64 offsets)", "approach": "B-checked", "returncode": 0, "outcome": "correct", "detail": "[1, 1, 0, 0, 1, 1]", "ts": 1790147773.0149043}
+{"probe": "spec_change", "format": "U (large_utf8, int64 offsets)", "approach": "C-full", "returncode": 1, "outcome": "refused", "detail": "ValueError: expected Arrow Utf8View ('vu') from polars, got 'U'; the per-row numba decode reads the binview layout only", "ts": 1790147773.706909}
+{"probe": "spec_change", "format": "n (polars Null dtype column)", "approach": "A", "returncode": 1, "outcome": "refused", "detail": "IndexError: list index out of range", "ts": 1790147774.380359}
+{"probe": "spec_change", "format": "n (polars Null dtype column)", "approach": "B", "returncode": 1, "outcome": "refused", "detail": "nashim.NanoError: sm_import_single rc=-6: Expected array with 0 buffer(s) but found 1 buffer(s)", "ts": 1790147775.0578969}
+{"probe": "spec_change", "format": "n (polars Null dtype column)", "approach": "B-checked", "returncode": 1, "outcome": "refused", "detail": "nashim.NanoError: sm_import_single rc=-6: Expected array with 0 buffer(s) but found 1 buffer(s)", "ts": 1790147775.7254932}
+{"probe": "spec_change", "format": "n (polars Null dtype column)", "approach": "C-full", "returncode": 1, "outcome": "refused", "detail": "nashim.NanoError: sm_import_single rc=-6: Expected array with 0 buffer(s) but found 1 buffer(s)", "ts": 1790147776.426047}
+{"probe": "spec_change", "format": "q (unknown format)", "approach": "A", "returncode": 1, "outcome": "refused", "detail": "ValueError: expected Arrow Utf8View ('vu') from polars, got 'q'; this kernel reads the binview layout only", "ts": 1790147777.1089005}
+{"probe": "spec_change", "format": "q (unknown format)", "approach": "B", "returncode": 1, "outcome": "refused", "detail": "nashim.NanoError: sm_view_set rc=-5: Error parsing schema->format: Unknown format: 'q'", "ts": 1790147777.790306}
+{"probe": "spec_change", "format": "q (unknown format)", "approach": "B-checked", "returncode": 1, "outcome": "refused", "detail": "nashim.NanoError: sm_view_set rc=-5: Error parsing schema->format: Unknown format: 'q'", "ts": 1790147778.558896}
+{"probe": "spec_change", "format": "q (unknown format)", "approach": "C-full", "returncode": 1, "outcome": "refused", "detail": "nashim.NanoError: sm_view_set rc=-5: Error parsing schema->format: Unknown format: 'q'", "ts": 1790147779.2452006}
+{"probe": "spec_change", "format": "vz (schema says binary_view, buffers are utf8)", "approach": "A", "returncode": 1, "outcome": "refused", "detail": "ValueError: expected Arrow Utf8View ('vu') from polars, got 'vz'; this kernel reads the binview layout only", "ts": 1790147779.9381993}
+{"probe": "spec_change", "format": "vz (schema says binary_view, buffers are utf8)", "approach": "B", "returncode": -11, "outcome": "crash", "detail": "signal 11", "ts": 1790147781.9750605}
+{"probe": "spec_change", "format": "vz (schema says binary_view, buffers are utf8)", "approach": "B-checked", "returncode": 0, "outcome": "error_leaf", "detail": "[-1, -1, -1, 0, -1, -1]", "ts": 1790147782.9100616}
+{"probe": "spec_change", "format": "vz (schema says binary_view, buffers are utf8)", "approach": "C-full", "returncode": 1, "outcome": "refused", "detail": "ValueError: expected Arrow Utf8View ('vu') from polars, got 'vz'; the per-row numba decode reads the binview layout only", "ts": 1790147783.593205}

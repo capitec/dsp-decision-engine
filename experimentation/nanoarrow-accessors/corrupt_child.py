@@ -75,11 +75,17 @@ def main():
         c = v.chunks[0]
         if case not in ("sliced_offset",):
             corrupt(case, c._arr)
-            # arrowc snapshotted its fields at export; refresh what the kernel uses
+            # arrowc snapshotted its fields at export; re-read them from the (now
+            # corrupted) ArrowArray exactly as a fresh export would, so A trusts
+            # the same producer metadata B and C re-import
             c.null_count = c._arr.null_count
             nb = c._arr.n_buffers
-            if case == "n_buffers_truncated":
+            n_data = nb - 3
+            if n_data <= 0:
                 c.data, c.data_sizes = [], []
+            else:
+                c.data = [c._arr.buffers[2 + k] for k in range(n_data)]
+                c.data_sizes = list((ctypes.c_int64 * n_data).from_address(c._arr.buffers[nb - 1]))
         out = run_tree(feats, [v], TREE, [pattern])
     else:
         nv = NanoView(s)
