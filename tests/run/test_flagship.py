@@ -1,4 +1,4 @@
-"""The flagship pipeline, interpreted: answers, additive output, emit/drop, retuning and score."""
+"""The flagship pipeline in every mode: answers, additive output, emit/drop, retuning and score."""
 from __future__ import annotations
 
 import polars as pl
@@ -39,8 +39,8 @@ FRAME = pl.DataFrame({
 })
 
 
-def test_interpreted_mode_gives_the_flagship_answer():
-    out = Engine().bind(pipeline, mode="interpreted").run(FRAME)
+def test_every_mode_gives_the_flagship_answer(bind):
+    out = bind(pipeline).run(FRAME)
     assert out["cap_by_income_band"].to_list() == [60.0, 48.0, 60.0, 48.0]
 
 
@@ -49,59 +49,59 @@ def test_step_run_is_the_interpreted_engine():
 
 
 def test_an_unknown_mode_is_an_error_listing_the_modes():
-    with pytest.raises(ValueError, match="unknown mode 'fused'.*interpreted"):
-        Engine().bind(pipeline, mode="fused")
+    with pytest.raises(ValueError, match="unknown mode 'jit'.*fused.*interpreted.*stepped"):
+        Engine().bind(pipeline, mode="jit")
 
 
-def test_output_is_additive():
-    out = pipeline.run(FRAME)
+def test_output_is_additive(bind):
+    out = bind(pipeline).run(FRAME)
     assert out.columns[:len(FRAME.columns)] == FRAME.columns
     assert out["affordability_ratio"].to_list() == [5.083333333333333, 3.25, 3.6, 4.284285714285715]
 
 
-def test_untapped_intermediates_are_not_materialised():
-    assert "disposable_income" not in pipeline.run(FRAME).columns
+def test_untapped_intermediates_are_not_materialised(bind):
+    assert "disposable_income" not in bind(pipeline).run(FRAME).columns
 
 
-def test_emit_materialises_an_intermediate():
-    out = pipeline.emit("disposable_income").run(FRAME)
+def test_emit_materialises_an_intermediate(bind):
+    out = bind(pipeline.emit("disposable_income")).run(FRAME)
     assert out["disposable_income"].to_list() == [6100.0, 2600.0, 9000.0, 2999.0]
 
 
-def test_drop_removes_an_input_column():
-    assert "min_net_salary" not in pipeline.drop("min_net_salary").run(FRAME).columns
+def test_drop_removes_an_input_column(bind):
+    assert "min_net_salary" not in bind(pipeline.drop("min_net_salary")).run(FRAME).columns
 
 
-def test_drop_removes_an_output():
-    assert "affordability_ratio" not in pipeline.drop("affordability_ratio").run(FRAME).columns
+def test_drop_removes_an_output(bind):
+    assert "affordability_ratio" not in bind(pipeline.drop("affordability_ratio")).run(FRAME).columns
 
 
-def test_an_unread_frame_column_passes_through_unless_dropped():
+def test_an_unread_frame_column_passes_through_unless_dropped(bind):
     frame = FRAME.with_columns(pl.Series("client_id", [1, 2, 3, 4]))
-    assert pipeline.run(frame)["client_id"].to_list() == [1, 2, 3, 4]
-    assert "client_id" not in pipeline.drop("client_id").run(frame).columns
+    assert bind(pipeline).run(frame)["client_id"].to_list() == [1, 2, 3, 4]
+    assert "client_id" not in bind(pipeline.drop("client_id")).run(frame).columns
 
 
-def test_retuning_changes_the_answer_without_editing_code():
-    out = pipeline.run(FRAME, params={"cap_by_income_band": {"cap": 36.0}})
+def test_retuning_changes_the_answer_without_editing_code(bind):
+    out = bind(pipeline).run(FRAME, params={"cap_by_income_band": {"cap": 36.0}})
     assert out["cap_by_income_band"].to_list() == [60.0, 36.0, 60.0, 36.0]
 
 
-def test_a_param_outside_its_bounds_is_rejected_at_run_time_naming_node_param_and_rows():
+def test_a_param_outside_its_bounds_is_rejected_at_run_time_naming_node_param_and_rows(bind):
     with pytest.raises(ParamsError, match=r"(?s)4 rows.*cap_by_income_band: param 'cap'"):
-        pipeline.run(FRAME, params={"cap_by_income_band": {"cap": 999.0}})
+        bind(pipeline).run(FRAME, params={"cap_by_income_band": {"cap": 999.0}})
 
 
-def test_score_takes_a_dict_and_returns_a_dict():
-    out = Engine().bind(pipeline).score({
+def test_score_takes_a_dict_and_returns_a_dict(bind):
+    out = bind(pipeline).score({
         "net_income": 4100.0, "expenses": 1500.0, "instalment": 800.0,
         "term_cap": 60.0, "min_net_salary": 4100.0,
     })
     assert out["cap_by_income_band"] == 48.0
 
 
-def test_score_agrees_with_run_row_for_row():
-    exe = Engine().bind(pipeline)
+def test_score_agrees_with_run_row_for_row(bind):
+    exe = bind(pipeline)
     batch = exe.run(FRAME)["cap_by_income_band"].to_list()
     single = [exe.score(dict(zip(FRAME.columns, row)))["cap_by_income_band"] for row in FRAME.iter_rows()]
     assert batch == single

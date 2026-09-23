@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum, IntEnum
+import types
+import typing
 from typing import Any, Literal
 
 OnInvalid = Literal["error", "warn", "default"]
@@ -45,6 +47,19 @@ def feature_kind(annotation: Any) -> FeatureKind:
     <FeatureKind.I64: 1>
     """
     return _KIND_BY_ANNOTATION.get(annotation, FeatureKind.F64)
+
+
+def base_annotation(annotation: Any) -> Any:
+    """`T` for an optional `T | None`, else the annotation itself.
+
+    >>> base_annotation(int | None)
+    <class 'int'>
+    """
+    if typing.get_origin(annotation) in (typing.Union, types.UnionType):
+        args = [a for a in typing.get_args(annotation) if a is not type(None)]
+        if len(args) == 1:
+            return args[0]
+    return annotation
 
 
 @dataclass(frozen=True, slots=True)
