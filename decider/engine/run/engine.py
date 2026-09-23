@@ -140,6 +140,10 @@ class Executable:
     def run(self, df: pl.DataFrame, params: Mapping[str, Any] | None = None) -> pl.DataFrame:
         """Run over a frame: the input columns plus every output, minus drops.
 
+        `params` is treated as immutable: it is validated once and reused
+        while the same object is passed, so pass a new dict to change a value
+        rather than editing one in place.
+
         Example::
 
             out = exe.run(df, params={"shared": {"min_ratio": 0.4}})
@@ -153,7 +157,9 @@ class Executable:
         """Run one record, given as a dict of input values; returns a dict of the output row.
 
         Uses the same kernels as `run`. A pipeline without frame steps never
-        builds a polars frame on this path.
+        builds a polars frame on this path. As in `run`, `params` is treated
+        as immutable: pass the same document object call after call and it is
+        never hashed or validated again.
 
         Example::
 
