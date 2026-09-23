@@ -57,9 +57,16 @@ def pl_raw_rate(pl_base_rate: float, pl_risk_loading: float, pl_salary_discount:
 
 @step(output="pl_rate")
 def pl_regulated_rate(pl_raw_rate: float, repo_rate: float = param(0.0775, shared_key="repo_rate"),
-                        cap_multiple: float = param(2.2), cap_margin: float = param(0.2)) -> float:
-    """The National Credit Act cap: repo times a multiple plus a margin."""
+                        cap_multiple: float = param(1.0), cap_margin: float = param(0.21)) -> float:
+    """The National Credit Act cap: repo plus 21% for unsecured credit, 12% for mortgages."""
     return min(pl_raw_rate, repo_rate * cap_multiple + cap_margin)
+
+
+@step(output="pl_rate")
+def pl_rate_floor(pl_rate: float, repo_rate: float = param(0.0775, shared_key="repo_rate"),
+                  margin: float = param(0.03)) -> float:
+    """Never price below repo plus a margin."""
+    return max(pl_rate, repo_rate + margin)
 
 
 def pl_monthly_rate(pl_rate: float) -> float:
@@ -78,6 +85,7 @@ pl_pricing = flow(
     pl_collections_loading,
     pl_raw_rate,
     pl_regulated_rate,
+    pl_rate_floor,
     pl_monthly_rate,
     name="pricing",
 )

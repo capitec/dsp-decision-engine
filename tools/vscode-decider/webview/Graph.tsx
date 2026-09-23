@@ -20,17 +20,23 @@ interface Props {
   zoom: number | "auto";
   onSelect: (path: string) => void;
   onOpen: (path: string) => void;
+  /** Open a folded group, or fold an open one. */
+  onToggle: (path: string) => void;
 }
+
+// A step whose output many later steps read would bury the graph in arcs; past this, only its inputs are drawn.
+const MAX_OUT = 4;
 
 // Below this, node text gets smaller than the editor's; scroll instead.
 const MIN_AUTO = 0.9;
 
-export function Graph({ ir, showData, run, selected, highlightColumn, lineage, diff, treePath, zoom, onSelect, onOpen }: Props) {
+export function Graph({ ir, showData, run, selected, highlightColumn, lineage, diff, treePath, zoom, onSelect, onOpen, onToggle }: Props) {
   const laid = useMemo(() => layout(ir), [ir]);
   const flows = useMemo(() => dataEdges(ir), [ir]);
   const at = useMemo(() => new Map(laid.nodes.map((n) => [n.path, n])), [laid]);
   // Data edges would tangle the layout, so they are drawn over it: all of them, or only the selection's.
-  const shownFlows = flows.filter((f) => showData || f.from === selected || f.to === selected || f.column === highlightColumn);
+  const outgoing = flows.filter((f) => f.from === selected).length;
+  const shownFlows = flows.filter((f) => showData || f.to === selected || (f.from === selected && outgoing <= MAX_OUT) || f.column === highlightColumn);
   const box = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   useEffect(() => {
@@ -41,12 +47,13 @@ export function Graph({ ir, showData, run, selected, highlightColumn, lineage, d
     return () => watch.disconnect();
   }, []);
   // A new flow starts at its top.
-  useEffect(() => box.current?.scrollTo(0, 0), [ir]);
+  useEffect(() => box.current?.scrollTo(0, 0), [ir.path]);
   const done = new Set(run.finishedPaths);
   const touches = (n: IRNodeJson) =>
     n.kind === "call" && !!highlightColumn && ((n.inputs ?? []).includes(highlightColumn) || (n.outputs ?? []).includes(highlightColumn));
   const lines = (n: IRNodeJson): [string, string] => {
-    if (n.kind !== "call") return ["", ""];
+    if (n.kind !== "call") return n.folded ? foldedLines(n.folded) : ["", ""];
+    if (treePath?.path === n.path && n.source.includes("DecisionTable")) return [`row ${Number(treePath.visited[treePath.visited.length - 1]) + 1} matched`, "for the focused record"];
     if (treePath?.path === n.path) return [fit(treePath.visited.slice(1).join(" → ")), "path of the focused record"];
     return [fit(`reads ${n.inputs === null ? "?" : n.inputs.join(", ") || "nothing"}`), fit(`→ ${n.outputs === null ? "?" : n.outputs.join(", ")}`)];
   };
@@ -72,10 +79,12 @@ export function Graph({ ir, showData, run, selected, highlightColumn, lineage, d
             <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--vscode-foreground)" />
           </marker>
         </defs>
-        {laid.clusters.filter((c) => c.path !== "").map((c) => (
-          <g key={c.path} className={`cluster ${c.kind} ${run.current?.path === c.path ? "current" : ""}`} onClick={() => onSelect(c.path)}>
+        {laid.clusters.filter((c) => c.path !== ir.path).map((c) => (
+          <g key={c.path} className={`cluster ${c.kind} ${run.current?.path === c.path ? "current" : ""}`}>
             <rect x={c.x} y={c.y} width={c.width} height={c.height} rx={6} />
-            <text x={c.x + 8} y={c.y + 15}>{c.label} <tspan className="kind">{c.kind}</tspan></text>
+            <text x={c.x + 8} y={c.y + 15} className="fold" onClick={() => onToggle(c.path)}>
+              <title>Fold {c.label} into one box</title>⊟ {c.label} <tspan className="kind">{c.kind}</tspan>
+            </text>
           </g>
         ))}
         {laid.edges.map((e) => {
@@ -107,6 +116,9 @@ export function Graph({ ir, showData, run, selected, highlightColumn, lineage, d
             className={[
               "node",
               kindLabel(n.node),
+              n.node.kind !== "call" ? "folded" : "",
+              run.edits?.[n.path] ? `edited-${run.edits[n.path]}` : "",
+              n.node.kind !== "call" && run.current && n.node.folded?.includes(run.current.path) ? "current" : "",
               n.path === run.current?.path ? `current ${run.current.when}` : "",
               done.has(n.path) ? "done" : "",
               n.path === selected ? "selected" : "",
@@ -115,17 +127,24 @@ export function Graph({ ir, showData, run, selected, highlightColumn, lineage, d
               diff ? `diff-${(diff.get(n.path) ?? "same").replace(" ", "-")}` : "",
             ].join(" ")}
             transform={`translate(${n.x},${n.y})`}
-            onClick={() => onSelect(n.path)}
-            onDoubleClick={() => onOpen(n.path)}
+            onClick={() => (n.node.kind === "call" ? onSelect(n.path) : onToggle(n.path))}
+            onDoubleClick={() => n.node.kind === "call" && onOpen(n.path)}
           >
-            <title>{`${n.path} (${kindLabel(n.node)})\n${n.node.kind === "call" ? `${(n.node.inputs ?? ["?"]).join(", ")} → ${(n.node.outputs ?? ["?"]).join(", ")}\n` : ""}Double-click to open the source`}</title>
+            <title>
+              {n.node.kind === "call"
+                ? `${n.path} (${kindLabel(n.node)})${n.node.doc ? `\n${n.node.doc}` : ""}\n${(n.node.inputs ?? ["?"]).join(", ")} → ${(n.node.outputs ?? ["?"]).join(", ")}\nDouble-click to open the source`
+                : `${n.path}: ${n.node.folded?.length} steps. Click to open.`}
+            </title>
             <rect width={n.width} height={n.height} rx={5} />
             <text x={n.width / 2} y={19} textAnchor="middle" className="title">
-              {n.node.kind === "call" && n.node.callKind === "row" ? "◇ " : n.node.kind === "call" && n.node.callKind === "frame" ? "⊞ " : ""}
+              {n.node.kind === "call" && n.node.callKind === "row" ? "◇ " : n.node.kind === "call" && n.node.callKind === "frame" ? "⊞ " : n.node.kind !== "call" ? "⊞ " : ""}
               {n.label}
             </text>
             <text x={n.width / 2} y={35} textAnchor="middle" className="sub">{lines(n.node)[0]}</text>
             <text x={n.width / 2} y={50} textAnchor="middle" className="sub">{lines(n.node)[1]}</text>
+            {run.edits?.[n.path] && (
+              <text x={n.width - 6} y={13} textAnchor="end" className="edit-mark">{run.edits[n.path] === "delete" ? "skipped" : "edited"}</text>
+            )}
             {done.has(n.path) && (
               <text x={6} y={13} className="ran-mark"><title>ran</title>✓</text>
             )}
@@ -134,7 +153,6 @@ export function Graph({ ir, showData, run, selected, highlightColumn, lineage, d
       </svg>
     </div>
   );
-}
 
 /** A data edge: out of the right side of the writer, into the right side of the reader. */
 function curve(a: LaidNode, b: LaidNode): string {
@@ -142,6 +160,14 @@ function curve(a: LaidNode, b: LaidNode): string {
   const [x2, y2] = [b.x + b.width, b.y + b.height / 2];
   const bulge = 30 + Math.min(120, Math.abs(y2 - y1) / 4);
   return `M${x1},${y1} C${x1 + bulge},${y1} ${x2 + bulge},${y2} ${x2},${y2}`;
+}
+
+  function foldedLines(paths: string[]): [string, string] {
+    const changed = diff ? paths.filter((p) => diff.get(p) === "changed" || diff.get(p) === "added").length : 0;
+    const ran = paths.filter((p) => done.has(p)).length;
+    const status = changed ? `${changed} changed` : ran ? `${ran} of ${paths.length} ran` : "";
+    return [`${paths.length} steps · click to open`, status];
+  }
 }
 
 /** Shortened to fit on a node; the node's tooltip has the whole text. */

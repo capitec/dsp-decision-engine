@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { same, type Comparison, type ValueDiff } from "../src/compare";
+import { paramReaders, same, type Comparison, type ValueDiff } from "../src/compare";
 import { formatValue, recordLabel, type RecordKey } from "../src/protocol";
 
 interface Props {
@@ -42,16 +42,24 @@ function Diffs({ diffs, record, keyCol, results }: { diffs: ValueDiff[]; record:
   );
 }
 
-/** Each result column, changed or not, with its values: the answer to "did the decision move?". */
+/** The result columns that changed, for the records they changed on; the unchanged ones on request. */
 function Results({ c, record }: { c: Comparison; record: number | null }) {
-  const all = record === null ? Array.from({ length: c.rows }, (_, i) => i) : [record];
+  const [showSame, setShowSame] = useState(false);
+  const moved = (n: string, r: number) => !same(c.results.a[n]?.[r], c.results.b[n]?.[r]);
+  const cols = Object.keys(c.results.b);
+  const everyRow = Array.from({ length: c.rows }, (_, i) => i);
+  // Records whose results moved come first: they are the answer.
+  const all = record === null ? [...everyRow.filter((r) => cols.some((n) => moved(n, r))), ...everyRow.filter((r) => !cols.some((n) => moved(n, r)))] : [record];
   const rows = all.slice(0, 4);
-  // Changed outcomes first, then the rest with their values: "did the decision move?" needs both.
-  const changed = (n: string) => rows.some((r) => !same(c.results.a[n]?.[r], c.results.b[n]?.[r]));
-  const names = [...Object.keys(c.results.b).filter(changed), ...Object.keys(c.results.b).filter((n) => !changed(n))];
+  const changed = (n: string) => rows.some((r) => moved(n, r));
+  const unchanged = cols.filter((n) => !changed(n));
+  const names = [...cols.filter(changed), ...(showSame ? unchanged : [])];
   return (
     <>
-    {!names.some(changed) && <div>No result changes{record === null ? "" : ` for ${recordLabel(record, c.key)}`}.</div>}
+    {!cols.some(changed) && <div>No result changes{record === null ? "" : ` for ${recordLabel(record, c.key)}`}.</div>}
+    {unchanged.length > 0 && (
+      <label className="small muted"><input type="checkbox" checked={showSame} onChange={(e) => setShowSame(e.target.checked)} /> show the {unchanged.length} unchanged results too</label>
+    )}
     {names.length > 0 && (
     <table className="results">
       <thead>
@@ -85,6 +93,9 @@ function Results({ c, record }: { c: Comparison; record: number | null }) {
   );
 }
 
+// Steps named in the summary line; the step-by-step list below has them all.
+const LIST = 8;
+
 /** Two runs side by side, step by step, in execution order. */
 export function Compare({ comparison: c, busy, error, record, onSelect, onCompareRevision, onOpenDiff, back, header, withRevision = true }: Props) {
   const [onlyChanges, setOnlyChanges] = useState(true);
@@ -106,13 +117,17 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
   const count = (st: string) => c.steps.filter((s) => s.status === st).length;
   // A step is "edited" when its code or params differ; otherwise it only moved because its inputs did.
   const docHas = (path: string) => path.split("/").reduce<unknown>((d, part) => (d as Record<string, unknown> | undefined)?.[part], c.paramsDocs?.b) !== undefined;
-  const edited = (s: (typeof c.steps)[number]) => s.status !== "changed" || s.structural.length > 0 || s.paramChanges.length > 0 || docHas(s.path);
+  const readers = paramReaders(c.paramsDocs?.b, c.sharedUsers);
+  const readsChanged = (path: string) => readers.some((r) => r.steps.includes(path));
+  const edited = (s: (typeof c.steps)[number]) => s.status !== "changed" || s.structural.length > 0 || s.paramChanges.length > 0 || docHas(s.path) || readsChanged(s.path);
   const label = (s: (typeof c.steps)[number]) => (edited(s) ? s.status : "affected");
   const outcomes = Object.keys(c.results.b);
   const movedOut = outcomes
     .map((n) => ({ n, k: Array.from({ length: c.rows }, (_, r) => r).filter((r) => !same(c.results.a[n]?.[r], c.results.b[n]?.[r])).length }))
     .filter((x) => x.k > 0);
   const stayed = outcomes.filter((n) => !movedOut.some((m) => m.n === n));
+  // A changed param whose readers all wrote the same values: say so, or "nothing changed" reads as a bug.
+  const idle = readers.filter((p) => p.steps.length && !p.steps.some((s) => c.steps.find((x) => x.path === s)?.outputs.length));
   return (
     <div className="compare">
       {back && <a className="back" onClick={back.go}>← Back to {back.label}</a>}
@@ -125,20 +140,36 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
         {movedOut.length === 0
           ? "No final output changes."
           : `${movedOut.map((m) => `${m.n} changes for ${m.k} of ${c.rows} records`).join("; ")}.`}
-        {stayed.length > 0 && movedOut.length > 0 && <span className="muted"> Unchanged: {stayed.join(", ")}.</span>}
+        {stayed.length > 0 && movedOut.length > 0 && stayed.length <= 8 && <span className="muted"> Unchanged: {stayed.join(", ")}.</span>}
       </div>
+      {idle.map((p) => (
+        <div key={p.param} className="note">
+          <span className="mono">{p.param}</span> is read by{" "}
+          {p.steps.slice(0, 6).map((s, i) => (
+            <span key={s}>
+              {i > 0 && ", "}
+              <a onClick={() => onSelect(s)}>{s.split("/").pop()}</a>
+            </span>
+          ))}
+          {p.steps.length > 6 && ` and ${p.steps.length - 6} more`}, but none of {p.steps.length === 1 ? "its" : "their"} outputs changed for any of the {c.rows} records.
+        </div>
+      ))}
       {c.steps.some((s) => s.status !== "same" && s.status !== "not run") && (
         <div className="changed-list">
           Changed:{" "}
           {c.steps
             .filter((s) => s.status !== "same" && s.status !== "not run")
+            // Edited steps first: they are the cause, the rest only follow from them.
+            .sort((x, y) => Number(edited(y)) - Number(edited(x)))
+            .slice(0, LIST)
             .map((s, i) => (
               <span key={s.path}>
                 {i > 0 && ", "}
                 <a onClick={() => onSelect(s.path)}>{s.path.split("/").pop()}</a>
-                <span className="muted"> ({[...s.paramChanges.map((p) => p.split(":")[0] + " param"), ...s.structural.filter((x) => x !== "params"), ...(s.outputs.length ? ["values"] : [])].join(", ") || s.status})</span>
+                <span className="muted"> ({[...s.paramChanges.map((p) => p.split(":")[0] + " param"), ...(readsChanged(s.path) ? readers.filter((r) => r.steps.includes(s.path)).map((r) => `${r.param} param`) : []), ...s.structural.filter((x) => x !== "params"), ...(s.outputs.length ? ["values"] : [])].join(", ") || s.status})</span>
               </span>
             ))}
+          {count("changed") + count("added") + count("removed") > LIST && <span className="muted"> and {count("changed") + count("added") + count("removed") - LIST} more that follow from these; see Step by step below</span>}
         </div>
       )}
       {header}

@@ -39,9 +39,9 @@ export class GraphPanel {
     GraphPanel.current.post({ type: "describe", describe });
   }
 
-  private constructor(ctx: vscode.ExtensionContext, onMessage: (m: FromWebview) => void, column: vscode.ViewColumn) {
+  private constructor(ctx: vscode.ExtensionContext, onMessage: (m: FromWebview) => void, column0: vscode.ViewColumn) {
     const dist = vscode.Uri.joinPath(ctx.extensionUri, "dist", "webview");
-    this.panel = vscode.window.createWebviewPanel("decider.graph", "decider: flow", { viewColumn: column, preserveFocus: true }, {
+    this.panel = vscode.window.createWebviewPanel("decider.graph", "decider: flow", { viewColumn: column0, preserveFocus: true }, {
       enableScripts: true,
       retainContextWhenHidden: true,
       localResourceRoots: [dist],
@@ -59,7 +59,25 @@ export class GraphPanel {
         for (const q of this.queue.splice(0)) w.postMessage(q);
       } else onMessage(m);
     });
-    this.panel.onDidDispose(() => (GraphPanel.current = undefined));
+    // While debugging, the debugger opens a paused step's source in the active group. When that is
+    // the panel's group, the flow would vanish behind it: move the source to the first group instead.
+    let column = column0;
+    this.panel.onDidChangeViewState((e) => (column = e.webviewPanel.viewColumn ?? column));
+    const keepInView = vscode.window.tabGroups.onDidChangeTabs(async (e) => {
+      if (column === vscode.ViewColumn.One || vscode.debug.activeDebugSession?.type !== "decider") return;
+      for (const tab of [...e.opened, ...e.changed]) {
+        if (!(tab.input instanceof vscode.TabInputText) || tab.group.viewColumn !== column || !tab.isActive || tab.isDirty) continue;
+        const uri = tab.input.uri;
+        const selection = vscode.window.visibleTextEditors.find((ed) => ed.document.uri.toString() === uri.toString() && ed.viewColumn === column)?.selection;
+        await vscode.window.tabGroups.close(tab, true);
+        await vscode.window.showTextDocument(uri, { viewColumn: vscode.ViewColumn.One, selection, preserveFocus: true });
+        this.panel.reveal(column, true);
+      }
+    });
+    this.panel.onDidDispose(() => {
+      keepInView.dispose();
+      GraphPanel.current = undefined;
+    });
   }
 
   post(m: ToWebview) {

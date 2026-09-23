@@ -27,7 +27,18 @@ interface Props {
 interface Row {
   kind: "param" | "value";
   key: string;
+  /** What is typed in the picker; `key` is set once it names a param or field. */
+  text?: string;
   values: string;
+}
+
+/** "cap · pl_product_cap (personal_loan/limits)": a param's name, its step and where the step sits. */
+export function paramLabel(key: string): string {
+  const [path, name] = key.split("|");
+  if (path === "shared") return `${name} · shared`;
+  const parts = path.split("/");
+  const group = parts.slice(0, -1).slice(-2).join("/");
+  return `${name} · ${parts[parts.length - 1]}${group ? ` (${group})` : ""}`;
 }
 
 function knobOf(r: Row, schema: Props["schema"]): Knob | null {
@@ -48,14 +59,19 @@ export function Scenarios({ schema, columns, pausedAt, record, keyCol, rows, res
   const [shownRow, setShownRow] = useState<number>(record ?? (rows <= 3 ? -2 : -1));
   const [open, setOpen] = useState<number | null>(null);
   useEffect(() => {
-    if (result.sweep) setEditing(false);
+    if (result.sweep) {
+      setEditing(false);
+      if (record === null) setShownRow(result.sweep.rows <= 3 ? -2 : -1);
+    }
     setOpen(null);
   }, [result.sweep]);
   useEffect(() => {
     if (record !== null) setShownRow(record);
   }, [record]);
 
-  const paramKeys = Object.entries(schema).flatMap(([path, ps]) => Object.keys(ps).map((n) => `${path}|${n}`));
+  const paramKeys = Object.entries(schema).flatMap(([path, ps]) => Object.keys(ps).filter((n) => ps[n].type !== "table").map((n) => `${path}|${n}`));
+  const labels = new Map(paramKeys.map((k) => [paramLabel(k), k]));
+  const incomplete = knobs.map((k) => (k.text || k.key || k.values.trim() ? !knobOf(k, schema) : false));
   const built = knobs.map((k) => knobOf(k, schema)).filter((k): k is Knob => k !== null);
   const list = scenarios(built, only);
   const tooMany = list.length > MAX_SCENARIOS;
@@ -112,17 +128,28 @@ export function Scenarios({ schema, columns, pausedAt, record, keyCol, rows, res
         <h4>Try every combination of</h4>
         {knobs.map((k, i) => (
           <div className="knob" key={i}>
-            <select aria-label="knob kind" value={k.kind} onChange={(e) => set(i, { kind: e.target.value as Row["kind"], key: "" })}>
+            <select aria-label="knob kind" value={k.kind} onChange={(e) => set(i, { kind: e.target.value as Row["kind"], key: "", text: "" })}>
               <option value="param">parameter</option>
               <option value="value">input field</option>
             </select>
-            <select aria-label="knob" value={k.key} onChange={(e) => set(i, { key: e.target.value })}>
-              <option value="">{k.kind === "param" ? "choose a parameter…" : "choose a field…"}</option>
-              {(k.kind === "param" ? paramKeys : columns).map((key) => (
-                <option key={key} value={key} title={key.replace("|", " · ")}>{k.kind === "param" ? `${key.split("|")[0].split("/").pop()} · ${key.split("|")[1]}` : key}</option>
+            <input
+              aria-label="knob"
+              list={`knob-options-${i}`}
+              className={`picker ${incomplete[i] && !k.key ? "invalid" : ""}`}
+              placeholder={k.kind === "param" ? `type to find one of ${paramKeys.length} parameters…` : "type to find a field…"}
+              title={k.key.replace("|", " · ")}
+              value={k.text ?? (k.kind === "param" && k.key ? paramLabel(k.key) : k.key)}
+              onChange={(e) => {
+                const text = e.target.value;
+                set(i, { text, key: k.kind === "param" ? labels.get(text) ?? "" : columns.includes(text) ? text : "" });
+              }}
+            />
+            <datalist id={`knob-options-${i}`}>
+              {(k.kind === "param" ? [...labels.keys()] : columns).map((label) => (
+                <option key={label} value={label} />
               ))}
-            </select>
-            <input aria-label="knob values" className="grow" placeholder="values to try, e.g. 24, 36, 48" value={k.values} onChange={(e) => set(i, { values: e.target.value })} />
+            </datalist>
+            <input aria-label="knob values" className={`grow ${incomplete[i] && k.key ? "invalid" : ""}`} placeholder="values to try, e.g. 24, 36, 48" value={k.values} onChange={(e) => set(i, { values: e.target.value })} />
             <button className="link" style={{ visibility: knobs.length > 1 ? "visible" : "hidden" }} onClick={() => setKnobs(knobs.filter((_, j) => j !== i))}>remove</button>
           </div>
         ))}
@@ -150,17 +177,25 @@ export function Scenarios({ schema, columns, pausedAt, record, keyCol, rows, res
         )}
       </section>
       <div className="actions sticky">
-        <button className="primary" disabled={!list.length || tooMany || !!result.busy} onClick={() => onRun(list, fromHere && !!pausedAt)}>
+        <button className="primary" disabled={!list.length || tooMany || incomplete.some(Boolean) || !!result.busy} onClick={() => onRun(list, fromHere && !!pausedAt)}>
           {result.busy ? "Running…" : list.length ? `Run ${list.length} scenario${list.length === 1 ? "" : "s"}` : "Run"}
         </button>
         <span>{list.length ? start : "Pick a parameter or input field and the values to try."}</span>
         {tooMany && <span className="error">{list.length} combinations is too many; keep it to {MAX_SCENARIOS}.</span>}
+        {incomplete.some(Boolean) && <span className="error">Finish or remove the row marked red: it needs {incomplete.findIndex(Boolean) >= 0 && !knobs[incomplete.findIndex(Boolean)].key ? "a parameter or field from the list" : "values to try"}.</span>}
         {result.sweep && <button onClick={() => setEditing(false)}>Back to results</button>}
       </div>
       {result.busy && <div className="empty">{result.busy}</div>}
       {result.error && <div className="empty error">{result.error}</div>}
     </div>
   );
+}
+
+/** "pl_product_cap cap" for a step's param, "repo_rate" for a shared one, the field for an input. */
+function knobShort(name: string): string {
+  const [path, param] = name.split(" · ");
+  if (param === undefined || path === "shared") return param ?? name;
+  return `${path.split("/").pop()} ${param}`;
 }
 
 function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row: number; rows: number; onRow: (r: number) => void; onOpen: (i: number) => void; open: number | null }) {
@@ -170,7 +205,10 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
   const knobCols = sweep.knobs.length ? sweep.knobs : [{ name: "scenario", values: sweep.labels }];
   const summary = row === -1;
   const each = row === -2;
-  const shown = each ? Array.from({ length: rows }, (_, i) => i) : [row];
+  // Side by side, the records some scenario changed come first; a few fit.
+  const hit = (r: number) => sweep.comparisons.some((cmp) => cmp.output.some((o) => o.changedRows.includes(r)));
+  const everyRow = Array.from({ length: rows }, (_, i) => i);
+  const shown = each ? [...everyRow.filter(hit), ...everyRow.filter((r) => !hit(r))].slice(0, 3) : [row];
   const recordsOf = (list: number[]) => list.map((r) => recordLabel(r, sweep.key)).join(", ");
   const baseKnob = (name: string) => {
     const values = sweep.knobBase[name] ?? [];
@@ -211,7 +249,7 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
       <div className="summary">
         <span>Show</span>
         <select aria-label="scenario record" value={row} onChange={(e) => onRow(Number(e.target.value))}>
-          <option value={-2}>each record side by side</option>
+          <option value={-2}>{rows > 3 ? "the 3 records that changed most, side by side" : "each record side by side"}</option>
           <option value={-1}>a summary of all {rows} records (ranges)</option>
           {Array.from({ length: rows }, (_, i) => (
             <option key={i} value={i}>the values for {recordLabel(i, sweep.key)}</option>
@@ -234,7 +272,7 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
             )}
             <tr>
               {knobCols.map((k) => (
-                <th key={k.name} className="knob-col" title={k.name}>{k.name.split(" · ").pop()}</th>
+                <th key={k.name} className="knob-col" title={k.name}>{knobShort(k.name)}</th>
               ))}
               {(summary ? [0] : shown).flatMap((r) => cols.map((c) => <th key={`${c}-${r}`}>{c}</th>))}
             </tr>
@@ -242,7 +280,7 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
           <tbody>
             <tr className="original">
               <td className="knob-col" colSpan={knobCols.length} title={knobCols.map((k) => `${k.name} = ${baseKnob(k.name)}`).join("\n")}>
-                original run ({knobCols.filter((k) => k.name !== "scenario").map((k) => `${k.name.split(" · ").pop()} ${baseKnob(k.name)}`).join(", ")})
+                original run ({knobCols.filter((k) => k.name !== "scenario").map((k) => `${knobShort(k.name)} ${baseKnob(k.name)}`).join(", ")})
               </td>
               {summary ? cols.map((c) => <td key={c} className="mono">{overall(sweep.base?.[c])}</td>) : shown.flatMap((r) => cols.map((c) => recordCell(null, c, r)))}
             </tr>

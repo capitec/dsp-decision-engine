@@ -70,12 +70,21 @@ export function dataEdges(ir: IRNodeJson): { from: string; to: string; column: s
   return edges;
 }
 
+const isLeaf = (n: IRNodeJson) => n.kind === "call" || n.folded !== undefined;
+
+/** `ir` with every group `open` rejects drawn as one box; the root is always open. */
+export function fold(ir: IRNodeJson, open: (path: string) => boolean, root = true): IRNodeJson {
+  if (ir.kind === "call") return ir;
+  if (!root && !open(ir.path)) return { ...ir, children: [], folded: callNodes(ir).map((c) => c.path) };
+  return { ...ir, children: ir.children.map((c) => fold(c, open, false)) };
+}
+
 function firstLeaf(n: IRNodeJson): string {
-  return n.kind === "call" ? n.path : firstLeaf(n.children[0]);
+  return isLeaf(n) ? n.path : firstLeaf((n as { children: IRNodeJson[] }).children[0]);
 }
 
 function lastLeaves(n: IRNodeJson): string[] {
-  if (n.kind === "call") return [n.path];
+  if (isLeaf(n) || n.kind === "call") return [n.path];
   if (n.kind === "branch") return n.children.slice(1).flatMap(lastLeaves);
   if (n.kind === "loop") return [n.children[0].path]; // the loop exits from its condition
   return lastLeaves(n.children[n.children.length - 1]);
@@ -85,6 +94,7 @@ function lastLeaves(n: IRNodeJson): string[] {
 export function orderEdges(ir: IRNodeJson): { from: string; to: string; label?: string; back?: boolean }[] {
   const edges: { from: string; to: string; label?: string; back?: boolean }[] = [];
   walk(ir, (n) => {
+    if (isLeaf(n)) return;
     if (n.kind === "sequence") {
       for (let i = 1; i < n.children.length; i++) {
         for (const from of lastLeaves(n.children[i - 1])) edges.push({ from, to: firstLeaf(n.children[i]) });
@@ -109,7 +119,7 @@ export function layout(ir: IRNodeJson): Layout {
   g.setGraph({ rankdir: "TB", nodesep: 30, ranksep: 40, marginx: 16, marginy: 16 });
   g.setDefaultEdgeLabel(() => ({}));
   walk(ir, (n, parent) => {
-    if (n.kind === "call") g.setNode(n.path, { width: NODE_W, height: NODE_H });
+    if (isLeaf(n)) g.setNode(n.path, { width: NODE_W, height: NODE_H });
     else g.setNode(n.path, { clusterLabelPos: "top" });
     if (parent) g.setParent(n.path, parent.path);
   });
@@ -122,7 +132,7 @@ export function layout(ir: IRNodeJson): Layout {
   walk(ir, (n) => {
     const l = g.node(n.path);
     const laid = { path: n.path, kind: n.kind, label: lastSegment(n.path), x: l.x - l.width / 2, y: l.y - l.height / 2, width: l.width, height: l.height, node: n };
-    (n.kind === "call" ? nodes : clusters).push(laid);
+    (isLeaf(n) ? nodes : clusters).push(laid);
   });
   const laidEdges: LaidEdge[] = edges.map((e) => ({ ...e, points: g.edge(e.from, e.to, e.id).points }));
   const { width = 0, height = 0 } = g.graph();

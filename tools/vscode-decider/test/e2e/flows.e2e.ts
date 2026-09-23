@@ -66,7 +66,7 @@ describe("decider in VSCodium", () => {
     await wv.locator("header nav button", { hasText: "What-if" }).click();
     await wv.locator('input[aria-label="term/cap_by_income cap"]').fill("24");
     await c.shot("05-params");
-    await wv.locator("button", { hasText: "Compare with defaults" }).click();
+    await wv.locator("button", { hasText: "Run and compare" }).click();
     await wv.locator(".compare a", { hasText: "term/cap_by_income" }).first().waitFor({ timeout: 90_000 });
     await c.shot("06-compare");
     await wv.locator("header nav button", { hasText: "Graph" }).click();
