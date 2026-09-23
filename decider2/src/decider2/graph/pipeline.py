@@ -61,7 +61,7 @@ def _dummy_value(inp: Input) -> Any:
         return False
     if inp.annotation is int:
         return 1
-    if inp.annotation is str:
+    if inp.annotation in (str, bytes):   # bytes: a tree's string feature (a span), fed as text
         return ""
     return 1.0
 

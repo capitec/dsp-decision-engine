@@ -120,7 +120,11 @@ class TreeModule:
         e = self.encoded
         tunable = [p for p in e.params if p.annotation in ("float", "int")]
         int_thresholds = [p for p in e.params if p.annotation == "int"]
-        literals = [p for p in e.params if p.annotation == "str"]
+        # every pattern of every string-match node: a `patterns` param holds
+        # a node's literal list, a `str` param one InputRef pattern
+        literals = [
+            pat for p in e.params if p.annotation == "patterns" for pat in p.default
+        ] + [p for p in e.params if p.annotation == "str"]
         output_names = [s.name for s in e.output_steps]
         typed = ", ".join(f"{f}: {e.feature_kinds[f]}" for f in e.features)
         lines = [
@@ -134,7 +138,7 @@ class TreeModule:
             f"  output steps    : {', '.join(output_names) or '(none)'}",
             f"  thresholds      : {len(tunable)} (kernel arguments, retune is free; "
             f"{len(int_thresholds)} int64)",
-            f"  string literals : {len(literals)} (int32 codes, retune is free)",
+            f"  string patterns : {len(literals)} (matched by bytes at the node; retune, add or remove is free)",
         ]
         return "\n".join(lines)
 
@@ -178,7 +182,7 @@ def tree_module(
     del build_dir
     encoded = encode_tree(tree, name=name, feature_types=feature_types)
 
-    steps = list(encoded.matcher_steps) + [encoded.path_step] + list(encoded.output_steps)
+    steps = [encoded.path_step] + list(encoded.output_steps)
 
     instance_name = name or tree.name or "tree"
     built = module(*steps, name=instance_name)

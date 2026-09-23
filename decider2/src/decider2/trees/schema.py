@@ -158,13 +158,13 @@ class RangeEndLogic(str, enum.Enum):
 class TStringMatchType(str, enum.Enum):
     """decider 1's string matching strategies.
 
-    Only `exact` survives into a compiled kernel: doc 05 §1.5 is
-    unconditional that "a string never enters a kernel as a string" — it
-    enters as an int32 dictionary code, and a code comparison cannot express
-    a prefix, a suffix, a substring or a regex. `decider2.trees.codegen`
-    raises a named error for the other four rather than silently matching
-    something else; see this module's `MIGRATION NOTES` in the package
-    docstring.
+    `exact`, `starts_with`, `ends_with` and `contains` are matched in the
+    compiled kernel, at the node, on the string's own UTF-8 bytes
+    (docs/BOUNDARY-REWORK.md §3.1; `decider2.trees.interpreter.
+    match_bytes`). `regex` has no in-kernel form — there is no regex engine
+    in nopython numba — and `decider2.trees.encode` raises a named
+    `UnsupportedInKernel` for it, with the frame-tier route, rather than
+    silently matching something else.
     """
 
     exact = "exact"
@@ -562,13 +562,17 @@ class UnaryIsIn(_BaseUnaryOp):
 
 
 class UnaryStringMatch(_BaseUnaryOp):
-    """decider 1's `UnaryStringMatch`, restricted to `match_type="exact"`.
+    """decider 1's `UnaryStringMatch`: `exact`, `starts_with`, `ends_with`
+    and `contains` are matched in the kernel; `regex`, `case_sensitive=
+    False` and `trim_whitespace=True` are refused by name
+    (`UnsupportedInKernel`) with the frame-tier route.
 
-    `patterns` is an OR. Each pattern becomes its own `str`-typed `param()`,
-    resolved to the feature column's int32 dictionary code at param
-    resolution (`runtime.invoke._resolve_str_param_code`), exactly as
-    EXPERIMENTS.md §O describes — so a pattern is a kernel argument like any
-    threshold, and retuning it does not recompile.
+    `patterns` is an OR. The literal patterns become ONE `list[str]`-typed
+    `param()` named `<node_id>_patterns` (or `<node_id>_patterns_<i>` for
+    the i-th condition of a composite), an `InputRef` pattern a `str`
+    `param()` named by its key — all kernel arguments in the per-call
+    pattern table (`types.Step.typed_args`), so editing a pattern, adding
+    one or removing one is a value change that never recompiles.
     """
 
     op: t.Literal["string_match"] = "string_match"
@@ -596,12 +600,13 @@ class UnaryStringMatch(_BaseUnaryOp):
         self, ctx: "EncodeContext", node_id: str, *, then_pc: int, otherwise_pc: int,
         cond_idx: t.Optional[str] = None,
     ) -> int:
-        # cond_idx is unused: a string test names its literals by the
-        # hoisted matcher step, not by node_id/role, so it never collides
-        # with a sibling the way a threshold param would.
+        # `cond_idx` keeps two same-shaped siblings of a composite on
+        # distinct pattern-param NAMES, exactly as `_ThresholdedUnaryOp`
+        # does for thresholds.
+        role = f"patterns_{cond_idx}" if cond_idx is not None else "patterns"
         return ctx.encode_string_match(
             self.feature, self.patterns, self.match_type, self.case_sensitive,
-            self.trim_whitespace, node_id, then_pc, otherwise_pc,
+            self.trim_whitespace, node_id, then_pc, otherwise_pc, role=role,
         )
 
 
@@ -715,13 +720,16 @@ class StringMatchCondition(BaseModel):
         trim_whitespace: bool,
         then_pc: int,
         otherwise_pc: int,
+        role: str = "patterns",
     ) -> int:
         """`feature`/`match_type`/`case_sensitive`/`trim_whitespace` are the
         enclosing `CasesStringMatch` node's — a branch only ever carries its
-        own `patterns` (the wire format's shape, kept as-is)."""
+        own `patterns` (the wire format's shape, kept as-is). `role` names
+        this branch's literal-patterns param (`<node_id>_<role>`), so
+        sibling branches of one node get distinct params."""
         return ctx.encode_string_match(
             feature, self.patterns, match_type, case_sensitive, trim_whitespace, node_id,
-            then_pc, otherwise_pc,
+            then_pc, otherwise_pc, role=role,
         )
 
 
@@ -1072,14 +1080,13 @@ class CasesStringMatch(_CasesNode):
     ) -> int:
         # feat_idx is unused: a string test re-derives its own feature slot
         # from `feature=` (idempotent — `plain_feature_index` dedupes by
-        # name), because it must also register the hoisted matcher, which a
-        # plain numeric `feat_idx` alone does not carry.
+        # name), the same way `UnaryStringMatch.encode` does.
         del feat_idx
         return self.conditions[idx].encode(
             ctx, node_id,
             feature=self.feature, match_type=self.match_type,
             case_sensitive=self.case_sensitive, trim_whitespace=self.trim_whitespace,
-            then_pc=then_pc, otherwise_pc=otherwise_pc,
+            then_pc=then_pc, otherwise_pc=otherwise_pc, role=f"patterns_{idx}",
         )
 
 

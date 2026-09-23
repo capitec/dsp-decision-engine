@@ -345,12 +345,16 @@ class ParamsPlan:
                 for decl in step.params:
                     if decl.name in values:
                         value = values[decl.name]
-                        if decl.annotation is str:
+                        if decl.annotation is str and not step.typed_args:
                             # Doc 05 §1.5 + §O: the param stays a `str` in the
                             # params document and the pydantic model (a business
                             # user writes "government", never a code) — encoded
                             # to its column's int32 code only here, at the
-                            # kernel-argument boundary.
+                            # kernel-argument boundary. A typed step (a tree)
+                            # matches its `str`/`list[str]` params as BYTES
+                            # against a string span (docs/BOUNDARY-REWORK.md
+                            # §3.1) and has no dictionary to resolve against;
+                            # `compile.gather._typed_params` encodes them.
                             value = _resolve_str_param_code(step, decl.name, value, categories)
                         per_step_scalar[(sp.module, sname, decl.name)] = value
                         # The unqualified key is kept only for callers that drive
