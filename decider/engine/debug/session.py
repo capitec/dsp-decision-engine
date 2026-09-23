@@ -14,7 +14,7 @@ from decider.engine.debug.events import (Error, Event, NodeFinished, NodeStarted
                                          ParamsValidated, Paused, RunFinished, RunStarted, Warning, summarize)
 from decider.engine.debug.hot import keys
 from decider.engine.ir.context import step_map
-from decider.engine.ir.nodes import IRNode, SequenceNode, iter_nodes
+from decider.engine.ir.nodes import CallNode, IRNode, SequenceNode, iter_nodes
 from decider.engine.ir.origin import Origin
 from decider.engine.run.runners.base import Checkpoint
 from decider.engine.ir.decls import base_annotation
@@ -235,6 +235,23 @@ class Session(Edits):
                 self._check_stored(spec, v)
             return self.state.column(spec)
         return self.state.column(spec, self._targets(spec)[-1])
+
+    def structure(self) -> list[dict[str, str]]:
+        """The pipeline's nodes as they are now, parents before children: `path`, `kind` and `source` of each.
+
+        `kind` is `"scalar"`, `"row"` or `"frame"` for a call, else `"sequence"`,
+        `"branch"` or `"loop"`. Ask again after an edit or reload adds or
+        deletes steps.
+
+        Example::
+
+            s.structure()
+            # [{"path": "", "kind": "sequence", "source": "decider.steps:SequentialStep"},
+            #  {"path": "ratio", "kind": "scalar", "source": "credit.rules:ratio"}, ...]
+        """
+        return [{"path": n.origin.path, "kind": n.kind if isinstance(n, CallNode) else
+                 type(n).__name__.removesuffix("Node").lower(), "source": n.origin.source}
+                for n in iter_nodes(self.executable.plan.root.node)]
 
     def output(self) -> pl.DataFrame:
         """The frame `Executable.run` returns, overrides applied; only once the run has finished.

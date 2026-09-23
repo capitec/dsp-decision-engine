@@ -139,6 +139,34 @@ def test_the_fingerprint_sees_closure_values_and_globals(monkeypatch):
     assert fingerprint(interest) != before
 
 
+def make(data):
+    def rule(x: float) -> float:
+        return x * data[0]
+
+    return rule
+
+
+def test_the_fingerprint_sees_captured_arrays_and_frames_by_value():
+    import polars as pl
+
+    a = np.array([1.0, 2.0])
+    before = fingerprint(make(a))
+    assert fingerprint(make(a.copy())) == before != fingerprint(make(a.astype(np.float32)))
+    a[0] = 3.0                              # an in-place edit is a change
+    assert fingerprint(make(a)) != before
+    frame = pl.DataFrame({"id": [1, 2], "score": [700, 650]})
+    assert fingerprint(make(frame)) == fingerprint(make(frame.clone()))
+    assert fingerprint(make(frame)) != fingerprint(make(frame.with_columns(score=pl.Series([700, 600]))))
+    assert fingerprint(make(frame)) != fingerprint(make(frame.cast({"score": pl.Float64})))
+
+
+def test_equal_captured_arrays_share_compiled_code_and_a_changed_one_compiles_its_own():
+    _, compiled = jit(make(np.array([2.0])))
+    assert jit(make(np.array([2.0])))[1] is compiled
+    _, other = jit(make(np.array([5.0])))
+    assert (compiled(1.0), other(1.0)) == (2.0, 5.0)
+
+
 def test_the_cpu_target_is_recorded():
     triple, cpu, features = cpu_target()
     assert triple.startswith(platform.machine()) and cpu and features

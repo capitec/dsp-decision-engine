@@ -133,6 +133,14 @@ class Edited:
 
 
 @dataclass(frozen=True, slots=True)
+class ReloadFailed:
+    """A watched reload couldn't import or build the edited pipeline; the session keeps the one it had and can go on."""
+
+    error: str
+    kind: Literal["reload_failed"] = "reload_failed"
+
+
+@dataclass(frozen=True, slots=True)
 class RunFinished:
     """The run reached the end; `output` summarises every column of `session.output()`."""
 
@@ -141,4 +149,4 @@ class RunFinished:
 
 
 Event = Union[RunStarted, NodeStarted, NodeFinished, NodeVisited, Paused, Overridden,
-              ParamsValidated, Warning, Error, Edited, RunFinished]
+              ParamsValidated, Warning, Error, Edited, ReloadFailed, RunFinished]
