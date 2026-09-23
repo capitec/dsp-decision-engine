@@ -40,3 +40,18 @@
 `decider2/docs/05-boundary-and-compilation.md` (§4.2);
 `decider2/src/decider2/runtime/bundles.py`;
 `experimentation/namedtuple-dispatch-trap/`; `IR.md` (§4.1, §8)
+
+## In-process sharing (T3.2)
+
+- Step dispatchers and fused kernels are shared within a process by content
+  (`engine/compile/fingerprint.py`), so a re-run notebook cell or a renamed
+  parent reuses compiled code.
+- Sharing by content means the key must cover everything numba freezes into
+  the code, not only the bytecode: closure cell values and the globals the
+  function reads (functions by their own content, modules by name, literals by
+  value, anything else by identity). Otherwise `make_rule(2.0)` and
+  `make_rule(3.0)` share one compiled body and the second silently returns the
+  first's answers.
+- The function's own name, file and line numbers stay out, so moving or
+  renaming a function keeps its compiled code in-process (numba's disk cache
+  still misses on a moved file).
