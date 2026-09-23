@@ -16,6 +16,8 @@ Decision records for the consolidated `decider`, each with its measured reason.
 - `table-rows-as-runtime-arrays.md`: table rows, thresholds and enable flags are runtime arrays, so editing them never recompiles.
 - `arrow-shim-build.md`: the boundary's nanoarrow shim is compiled with `cc` on first import into a content-keyed cache; no pure-Python path; a REQUIRED null is an error.
 - `interpreted-runner.md`: state holds nullable columns and each reader applies its null policy; row subsets for arms and loops; checkpoints before/after each node; params validated per node at run time.
+- `compiled-runners.md`: stepped/fused are the interpreted driver with compiled calls; a fused kernel pauses once with its first step's origin; `str` values are codes from one table per runner; nulls behave the same in every mode; `score()` skips polars.
+- `lazy-validation-fused.md`: lazy validation in fused mode validates a kernel's nodes as it launches; no kernel suspend, because a kernel has no control flow.
 - `wiring-scopes.md`: how names bind to versions: input columns, typo and forward-reference errors, branch/loop scopes, frame barriers, outputs.
 
 `progress.md` will hold the task log.

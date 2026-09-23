@@ -1,6 +1,6 @@
-# The spec's worked example pipeline, run end to end in interpreted mode.
-# Trees arrive later, so `TreeConfig` is a stub emitting one row node with a
-# Python reference. No `from __future__ import annotations`: the stub's
+# The spec's worked example pipeline, run end to end in every mode.
+# Trees arrive later, so `TreeConfig` is a stub emitting one row node with an
+# njit-able kernel and a Python reference. No `from __future__ import annotations`: the stub's
 # pydantic fields resolve against its (fake) module.
 import polars as pl
 
@@ -25,7 +25,7 @@ class TreeConfig(ConfigurableStep):
 
 
 def _tree_kernel(row, params, consts):
-    raise AssertionError("interpreted mode calls the reference")
+    return (int(row[0] > params[0]),)
 
 
 def _tree_reference(row, params, consts, visit):
@@ -106,8 +106,8 @@ FRAME = pl.DataFrame({
 })
 
 
-def test_the_worked_example_runs_end_to_end():
-    out = Engine().bind(pipeline).run(FRAME)
+def test_the_worked_example_runs_end_to_end(bind):
+    out = bind(pipeline).run(FRAME)
     assert out.columns == [
         *FRAME.columns, "bureau_score", "affordable", "band", "band_score", "term_cap", "risk_band",
         "term_cap@term/term_cap", "term_cap@term/cap_by_income", "term_cap@term/by_sector/cap_private",
@@ -127,13 +127,13 @@ def test_the_worked_example_runs_end_to_end():
     assert out["term_cap@term/by_sector"].to_list() == [54.0, 48.0, 54.0]
 
 
-def test_the_worked_example_retunes_arms_shared_params_and_the_tree():
+def test_the_worked_example_retunes_arms_shared_params_and_the_tree(bind):
     params = {
         "shared": {"min_ratio": 1.0},
         "term": {"by_sector": {"cap_private": {"cap": 50.0}}},
         "risk_tree": {"hi_thresh": 2.0},
     }
-    out = pipeline.run(FRAME, params=params)
+    out = bind(pipeline).run(FRAME, params=params)
     assert out["affordable"].to_list() == [True, False, True]
     assert out["term_cap"].to_list() == [50.0, 48.0, 50.0]
     assert out["risk_band"].to_list() == [1, 0, 0]
@@ -147,6 +147,19 @@ def test_the_tree_reference_reports_its_internal_nodes():
     assert visited == ["n0", "n0", "n0"]
 
 
-def test_score_runs_the_worked_example_for_one_record():
-    out = Engine().bind(pipeline).score(FRAME.row(1, named=True))
+def test_score_runs_the_worked_example_for_one_record(bind):
+    out = bind(pipeline).score(FRAME.row(1, named=True))
     assert (out["term_cap"], out["bureau_score"], out["risk_band"]) == (48.0, 650, 0)
+
+
+def test_all_three_modes_agree_on_the_worked_example():
+    params = {"shared": {"min_ratio": 1.0}, "risk_tree": {"hi_thresh": 2.0}}
+    runs = [Engine().bind(pipeline, mode=m).run(FRAME, params=params) for m in ("interpreted", "stepped", "fused")]
+    assert runs[0].equals(runs[1]) and runs[1].equals(runs[2])
+    assert runs[0].schema == runs[1].schema == runs[2].schema
+
+
+def test_score_equals_run_row_for_row_on_the_worked_example(bind):
+    exe = bind(pipeline)
+    batch = exe.run(FRAME).rows(named=True)
+    assert [exe.score(row) for row in FRAME.iter_rows(named=True)] == batch
