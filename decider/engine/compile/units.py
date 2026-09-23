@@ -52,7 +52,9 @@ class Kernel:
                 fallback.run(values, valid, bundles, n)
             return
         cols = tuple([values[v.id] for v in self.reads])
-        valids = tuple([valid[v.id] if v.id in valid else np.ones(n, np.bool_) for v in self.optional])
+        # One shared all-valid mask: a tree can read dozens of nullable columns, and one allocation each showed in score().
+        ones = np.ones(n, np.bool_) if self.optional else None
+        valids = tuple([valid.get(v.id, ones) for v in self.optional])
         params: list[Any] = []
         for cid, has_params, consts, row in self._layout:
             bundle = bundles[cid] if has_params else ()

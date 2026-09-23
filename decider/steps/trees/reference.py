@@ -12,6 +12,7 @@ from decider.steps.trees.schema import (
     Feature,
     LeafNode,
     LogicOp,
+    NullHandling,
     RangeEndLogic,
     StringMatchType,
     Tree,
@@ -22,6 +23,7 @@ from decider.steps.trees.schema import (
     UnaryNode,
     UnaryStringMatch,
 )
+from decider.steps.trees.walker import NULL_INT
 from decider.steps.values import ParamRef
 
 _COMPARE = {"<": operator.lt, "<=": operator.le, "==": operator.eq, ">": operator.gt, ">=": operator.ge,
@@ -47,8 +49,20 @@ _MATCH = {
 }
 
 
+def _value(v: t.Any, cast: t.Callable) -> t.Any:
+    # The walker gets a null float as NaN and a null int as NULL_INT, so they are nulls here too.
+    if v is None or v != v:
+        return None
+    v = cast(v)
+    return None if cast is int and v == NULL_INT else v
+
+
 class _Row:
-    """One row's feature values and params, read the way the compiled walker reads them."""
+    """One row's feature values and params, read the way the compiled walker reads them.
+
+    A test on a null is unknown (`None`): NOT keeps it unknown, AND and OR
+    follow three-valued logic, and a node takes its otherwise branch on it.
+    """
 
     __slots__ = ("values", "params", "kinds")
 
@@ -58,20 +72,28 @@ class _Row:
     def feature(self, f: Feature) -> t.Any:
         if isinstance(f.root, str):
             return self.values[f.root]
-        return f.root.expr.evaluate(self.values)
+        if any(self.values[name] is None for name in f.root.expr.dependencies()):
+            return None
+        x = f.root.expr.evaluate(self.values)
+        # The compiled walker computes a null as NaN, so a NaN result is unknown too.
+        return None if x != x else x
 
     def value(self, v: t.Any, f: Feature) -> t.Any:
         if isinstance(v, ParamRef):
             return getattr(self.params, v.param)
         return int(v) if isinstance(f.root, str) and self.kinds[f.root] == "int" else float(v)
 
-    def between(self, f: Feature, bounds: t.Any, ops: tuple[t.Callable, t.Callable]) -> bool:
+    def between(self, f: Feature, bounds: t.Any, ops: tuple[t.Callable, t.Callable]) -> t.Optional[bool]:
         x = self.feature(f)
+        if x is None:
+            return None
         return ((bounds.min is None or ops[0](x, self.value(bounds.min, f)))
                 and (bounds.max is None or ops[1](x, self.value(bounds.max, f))))
 
-    def isin(self, f: Feature, values: t.Any) -> bool:
+    def isin(self, f: Feature, values: t.Any) -> t.Optional[bool]:
         x = self.feature(f)
+        if x is None:
+            return None
         if isinstance(values, ParamRef):
             return x == self.value(values, f)
         return any(x == self.value(v, f) for v in values)
@@ -79,7 +101,7 @@ class _Row:
     def matches(self, f: Feature, patterns: t.Sequence[t.Any], node: t.Any) -> bool:
         s = self.feature(f)
         if s is None:
-            return False
+            return getattr(node, "null_handling", None) is NullHandling.match
         if node.trim_whitespace:
             s = s.strip()
         found = [getattr(self.params, p.param) if isinstance(p, ParamRef) else p for p in patterns]
@@ -88,23 +110,33 @@ class _Row:
         test = _MATCH[node.match_type]
         return any(test(s, p) for p in found)
 
-    def holds(self, c: t.Any) -> bool:
+    def holds(self, c: t.Any) -> t.Optional[bool]:
         if isinstance(c, CompositeNode):
             if c.op is LogicOp.NOT:
-                return not self.holds(c.conditions[0])
-            test = all if c.op is LogicOp.AND else any
-            return test(self.holds(sub) for sub in c.conditions)
-        if isinstance(c, UnaryIsTrue):
-            return bool(self.feature(c.feature))
-        if isinstance(c, UnaryIsFalse):
-            return not self.feature(c.feature)
+                r = self.holds(c.conditions[0])
+                return None if r is None else not r
+            decisive = c.op is LogicOp.OR
+            unknown = False
+            for sub in c.conditions:
+                r = self.holds(sub)
+                if r is decisive:
+                    return decisive
+                unknown = unknown or r is None
+            return None if unknown else not decisive
+        if isinstance(c, UnaryStringMatch):
+            return self.matches(c.feature, c.patterns, c)
         if isinstance(c, UnaryBetween):
             return self.between(c.feature, c, (operator.ge, operator.le))
         if isinstance(c, UnaryIsIn):
             return self.isin(c.feature, c.values)
-        if isinstance(c, UnaryStringMatch):
-            return self.matches(c.feature, c.patterns, c)
-        return _COMPARE[c.op](self.feature(c.feature), self.value(c.threshold, c.feature))
+        x = self.feature(c.feature)
+        if x is None:
+            return None
+        if isinstance(c, UnaryIsTrue):
+            return bool(x)
+        if isinstance(c, UnaryIsFalse):
+            return not x
+        return _COMPARE[c.op](x, self.value(c.threshold, c.feature))
 
     def branch(self, data: t.Any) -> int:
         if isinstance(data, UnaryNode):
@@ -150,7 +182,7 @@ def reference(tree: Tree, inputs: t.Sequence[t.Any], kinds: dict[str, str],
     rows = [*tree.output.data, tree.output.default or {}]
 
     def walk(row: tuple, params: t.Any, consts: tuple, visit: t.Callable[[str], None]) -> tuple:
-        r = _Row({n: None if v is None else cast(v) for (n, cast), v in zip(names, row)}, params, kinds)
+        r = _Row({n: _value(v, cast) for (n, cast), v in zip(names, row)}, params, kinds)
         leaves: dict[int, int] = {}
         out = []
         for slot, column, choices in columns:
