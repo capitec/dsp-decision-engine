@@ -96,17 +96,22 @@ class IRContext:
         node = self.child(owner.name).build(helper)
         return replace(node, origin=self.origin(owner))
 
-    def value(self, value: Any, annotation: Any = None) -> Any:
+    def value(self, value: Any, annotation: Any = None, arg: str | None = None) -> Any:
         """A `Value[T]`: the literal itself, or a `ParamDecl` for a `ParamRef`.
 
         A `ParamRef` without a default is a required param. `annotation`
         defaults to the type of the ref's default. A literal goes in the
-        node's `consts`, a `ParamDecl` in its `params`.
+        node's `consts` as `(arg, literal)`, a `ParamDecl` in its `params`.
+
+        Args:
+            arg: the function argument a scalar call feeds, whatever the
+                ref's param is called in the params document.
 
         Example::
 
             ctx.value(0.7)                                            # 0.7
-            ctx.value(ParamRef(param="hi_thresh", default=0.7), float)  # ParamDecl("hi_thresh", float, 0.7)
+            ctx.value(ParamRef(param="hi_thresh", default=0.7), float, arg="threshold")
+            # ParamDecl("hi_thresh", float, 0.7, arg="threshold")
         """
         from decider.steps.values import ParamRef
 
@@ -114,7 +119,7 @@ class IRContext:
             return value
         return ParamDecl(
             value.param, annotation or type(value.default), value.default, required=value.default is None,
-            shared_key=value.param if value.shared else None,
+            shared_key=value.param if value.shared else None, arg=arg,
         )
 
     def table(self, value: Any, schema: dict[str, str]) -> Any:

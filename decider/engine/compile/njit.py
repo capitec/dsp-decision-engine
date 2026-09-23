@@ -115,7 +115,7 @@ def _probe_signature(node: CallNode) -> tuple | None:
         if node.kind == "row":
             return (types.Tuple(tuple(ins)), typeof(bundle), typeof(consts))
         by_arg = {i.arg: t for i, t in zip(node.inputs, ins)}
-        by_arg |= {d.name: typeof(v) for d, v in zip(node.params, bundle)}
+        by_arg |= {d.arg: typeof(v) for d, v in zip(node.params, bundle)}
         by_arg |= {name: typeof(v) for name, v in node.consts}
         return tuple(by_arg[p] for p in parameters(node.fn))
     except (ValueError, KeyError):
