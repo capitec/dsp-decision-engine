@@ -1,5 +1,4 @@
 """Debug sessions: breakpoints, stepping, overrides, rewind and pause, interpreted mode."""
-# No `from __future__ import annotations`: the tree stub's pydantic fields resolve against its module.
 import polars as pl
 import pytest
 
@@ -7,10 +6,8 @@ from decider import branch, flow, param, step
 from decider.engine import Engine
 from decider.engine.debug import (NodeFinished, NodeVisited, Overridden, ParamsValidated, Paused, RunFinished,
                                   SetValue)
-from decider.engine.ir.decls import Input, Output
-from decider.engine.ir.nodes import CallNode
 from decider.engine.run.runners import InterpretedRunner
-from decider.steps import ConfigurableStep
+from decider.steps.trees import TreeConfig
 
 
 def disposable_income(net_income: float, expenses: float) -> float:
@@ -58,24 +55,14 @@ term = flow(term_cap, branch(is_private, cap_private, cap_public, modifies=["ter
 TERM_FRAME = pl.DataFrame({"requested_term": [72.0, 50.0, 84.0], "sector_code": [1, 2, 1]})
 
 
-class TreeConfig(ConfigurableStep):
-    __module__ = "decider.steps.trees"
-
-    def to_ir(self, ctx):
-        return CallNode(ctx.origin(self), "row", _tree_kernel, (Input("requested_term", float),),
-                        (Output("risk_band", int),), (), reference=_tree_reference)
-
-
-def _tree_kernel(row, params, consts):
-    raise AssertionError("interpreted mode calls the reference")
-
-
-def _tree_reference(row, params, consts, visit):
-    visit("n0")
-    if row[0] > 60:
-        visit("n1")
-        return (1,)
-    return (0,)
+def _risk_tree() -> TreeConfig:
+    return TreeConfig(name="risk_tree", tree={
+        "nodes": [{"id": "n0", "data": {"type": "unary", "condition":
+                                        {"op": ">", "feature": "requested_term", "threshold": 60}}},
+                  {"id": "n1", "data": {"type": "leaf", "result_idx": 0}}],
+        "edges": [{"source": "n0", "target": "n1", "data": {"sourceIndex": 0}}],
+        "output": {"data": [{"risk_band": 1}], "default": {"risk_band": 0}, "dtypes": [["risk_band", "Int64"]]},
+    })
 
 
 def paths(session, kind):
@@ -264,7 +251,7 @@ def test_rewind_to_an_unknown_path_is_an_error_and_changes_nothing():
 
 
 def test_a_row_node_reports_visits_and_a_locator_breakpoint_stops_after_it():
-    tree = TreeConfig(name="risk_tree")
+    tree = _risk_tree()
     s = flow(term_cap, tree).session(TERM_FRAME)
     s.break_at("risk_tree#n1")
     at = s.resume()
