@@ -147,7 +147,7 @@ describe("user stories", () => {
       await wv.locator('input[aria-label="knob"]').first().fill("cap · cap_by_income (term)");
       await wv.locator('input[aria-label="knob values"]').first().fill("24, 36, 48");
       await wv.locator("button", { hasText: "+ add another" }).click();
-      await wv.locator('input[aria-label="knob"]').nth(1).fill("requested_amount");
+      await wv.locator('input[aria-label="knob"]').nth(1).fill("field · requested_amount");
       await wv.locator('input[aria-label="knob values"]').nth(1).fill("50000, 150000");
       await shot("Two rows filled in: the cap parameter and the requested_amount input field.");
       await wv.locator("button", { hasText: /^Run 6 scenarios/ }).click();

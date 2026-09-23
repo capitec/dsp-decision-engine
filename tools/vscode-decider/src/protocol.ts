@@ -133,14 +133,17 @@ export function recordLabel(row: number, key: RecordKey): string {
 /** Values for people: no float noise; amounts of 100 or more to two decimals (58113.07), smaller ones to four. */
 /** Names whose values read as percentages: rates, loadings, discounts, margins. */
 export const isRateName = (name?: string) => !!name && /(rate|loading|discount|margin)s?$/.test(name);
+/** Names whose values are rand amounts. */
+export const isMoneyName = (name?: string) => !!name && /(amount|cost|income|fee|instalment|expenses)s?$/.test(name);
 
 /** A value as the UI shows it; with its column's `name`, a rate below 1 shows as a percentage ("25.2%"). */
 export function formatValue(v: unknown, name?: string): string {
   if (v === undefined) return "—";
   if (v === null) return "empty";
   if (typeof v === "number" && isRateName(name) && Math.abs(v) < 1) return `${Number((v * 100).toFixed(3))}%`;
+  if (typeof v === "number" && isMoneyName(name)) return `R\u00a0${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   if (typeof v === "number") return v.toLocaleString("en-US", { maximumFractionDigits: Math.abs(v) >= 100 ? 2 : 4 });
-  return JSON.stringify(v);
+  return typeof v === "string" ? v : JSON.stringify(v);
 }
 
 export type Tab = "graph" | "state" | "params" | "scenarios" | "compare";
@@ -166,7 +169,7 @@ export type FromWebview =
   | { type: "rewind"; path: string }
   | { type: "skip"; path: string }
   | { type: "reloadStep"; path: string }
-  | { type: "compareEdits"; label: string; edits: Record<string, "delete" | "replace"> }
+  | { type: "compareEdits"; label: string; edits: Record<string, "delete" | "replace">; path?: string }
   | { type: "whatIf"; params: unknown; overrides: Record<string, unknown>; row: number | null; label: string }
   | { type: "restartWith"; params: unknown }
   | { type: "compareRevision" }
@@ -197,7 +200,9 @@ export function kindLabel(n: IRNodeJson): string {
   return n.kind === "call" ? n.callKind : n.kind;
 }
 
-export function previewOf(c: Summary): string {
-  const shown = c.preview.map((x) => formatValue(x)).join(", ");
+export function previewOf(c: Summary, name?: string): string {
+  // Empty values (records on another branch arm) say nothing; the count at the end covers them.
+  const values = c.nulls ? c.preview.filter((x) => x !== null) : c.preview;
+  const shown = values.map((x) => formatValue(x, name)).join(", ");
   return `${shown}${c.rows > c.preview.length ? ", …" : ""}${c.nulls ? `  (${c.nulls} of ${c.rows} empty)` : ""}`;
 }
