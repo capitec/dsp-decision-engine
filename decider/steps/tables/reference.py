@@ -27,7 +27,7 @@ def _band(e: BetweenExpression, rows: list[dict], r: int) -> tuple[t.Any, t.Any]
 
 
 def _holds(e: t.Any, rows: list[dict], r: int, values: dict[str, t.Any]) -> bool:
-    # A comparison with a null is null in decider_old, which never matches.
+    # A comparison with a null is null in decider 0.3, which never matches.
     if isinstance(e, AndExpression):
         return all(_holds(sub, rows, r, values) for sub in e.expressions)
     if isinstance(e, OrExpression):

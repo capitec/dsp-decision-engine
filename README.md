@@ -3,216 +3,67 @@
 [![Python Version](https://img.shields.io/badge/python-%3E%3D3.10-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-**Decider** is a Python framework for building, serving, and inspecting decision pipelines as versioned, deployable micro-services. Define pipelines from plain Python functions, compose them with `|` and `&`, save them as versioned JSON configs, and serve them over HTTP — all with a single consistent API.
+Decision pipelines from plain Python functions, run over polars frames or
+single records. A function's arguments are the columns it reads and its name
+is the column it writes. Steps compose with `flow`, `dag`, `branch` and
+`loop`; decision trees, decision tables and scorecards load from JSON as
+steps. Tunable values are `param()`s, retuned per call through a params
+document without rebuilding or recompiling. The same pipeline runs
+interpreted, or compiled with numba (per step or fused), and can be paused and
+stepped through in a debug session.
 
-## Table of Contents
-
-- [Introduction](#introduction)
-- [Installation](#installation)
-- [Concepts](#concepts)
-- [Usage Examples](#usage-examples)
-- [CLI](#cli)
-- [Contributing](#contributing)
-- [License](#license)
-
-## Introduction
-
-Decider is built around a few core ideas:
-
-- **Functions as nodes** — plain Python functions that accept and return `polars.Expr` are wired into executable DAGs automatically, with no decorators or registries required.
-- **Composable pipelines** — modules chain with `|` (sequential) or merge with `&` (parallel union), making it easy to build complex pipelines from simple parts.
-- **Versioned configs** — every pipeline is serialisable to JSON. Configs are versioned, loadable by the server at startup, and hot-swappable without redeployment.
-- **Pluggable extensions** — new module types are registered into a discriminated union at runtime, so the server always knows how to reconstruct any module from its config.
-
-## Installation
+## Install
 
 ```bash
-# Core library and CLI
-pip install decider
-
-# With serving dependencies
-pip install "decider[serve-starlette]"   # uvicorn + starlette
-pip install "decider[serve-sanic]"       # sanic
-
-# With the interactive graph visualiser
-pip install "decider[visualise]"
-
-# Everything
-pip install "decider[all]"
+pip install decider                        # library and CLI
+pip install "decider[serve-starlette]"     # HTTP serving with uvicorn + starlette
+pip install "decider[serve-sanic]"         # or sanic
 ```
 
-**With uv (recommended):**
+From a checkout: `uv sync`, then `uv run pytest`.
 
-```bash
-git clone https://github.com/capitec/dsp-decision-engine.git
-cd dsp-decision-engine
-uv sync --all-extras
-```
-
-## Concepts
-
-### Modules
-
-A module is the basic unit of computation. The simplest way to create one is `generate_from_functions`, which turns plain functions into an executable module:
-
-- **Function name → output column** — `def dti_ratio(...)` produces a `dti_ratio` column.
-- **Parameter name → input column or sibling output** — parameters are resolved from the input DataFrame or from the output of another function in the same module.
-- **`config` parameter → Pydantic model injection** — declare `config: MyConfig` and the config fields are promoted onto the module itself.
-
-### Pipelines
-
-Modules compose with two operators:
-
-- `|` — **sequential**: `step_a | step_b | step_c` passes each step's output as the next step's input.
-- `&` — **union**: `module_a & module_b` merges both modules into a single compilation pass, computing all columns in one frame scan.
-
-### Versioned Configs
-
-Every module can be saved to a versioned JSON config and reconstructed from it:
-
-```python
-await module.asave("main", config_manager)
-await config_manager.save_version(overwrite=True)
-```
-
-The server reads the latest version on startup and watches for updates.
-
-### Extensions
-
-Custom module types are registered with `register_graph_module` and auto-discovered by `initialize_decider` from an `extension_path` directory. This keeps the core library small while allowing domain-specific modules to be developed and shipped independently.
-
-## Usage Examples
-
-### Your first module
+## Example
 
 ```python
 import polars as pl
-from decider.modules.functional import generate_from_functions
+from decider import Engine, flow, param
 
-def dti_ratio(debt: pl.Expr, income: pl.Expr) -> pl.Expr:
+def ratio(income: float, debt: float) -> float:
     return debt / income
 
-def credit_score(dti_ratio: pl.Expr) -> pl.Expr:
-    return pl.lit(800) - dti_ratio * 200
+def affordable(ratio: float, limit: float = param(0.4)) -> bool:
+    return ratio <= limit
 
-Scorer = generate_from_functions("credit_scorer", dti_ratio, credit_score)
-scorer = Scorer(name="scorer")
-
-df = pl.DataFrame({"debt": [25_000.0], "income": [50_000.0]})
-result = scorer({"input": df})
-# shape: (1, 4) — debt, income, dti_ratio, credit_score
-```
-
-### Config injection
-
-```python
-from pydantic import BaseModel
-
-class ScorerConfig(BaseModel):
-    dti_weight: float = 200.0
-    score_base: float = 800.0
-
-def credit_score(dti_ratio: pl.Expr, config: ScorerConfig) -> pl.Expr:
-    return pl.lit(config.score_base) - dti_ratio * config.dti_weight
-
-Scorer = generate_from_functions("credit_scorer", dti_ratio, credit_score)
-scorer = Scorer(name="scorer", dti_weight=150.0)  # config fields on the module
-```
-
-### Sequential pipeline
-
-```python
-features = FeatureModule(name="features")
-scorer   = ScorerModule(name="scorer")
-flags    = FlagModule(name="flags")
-
-pipeline = features | scorer | flags
-result = pipeline({"input": df})
-```
-
-### Join then score
-
-```python
-from decider.modules.primitives.join import JoinModule
-
-join = JoinModule(name="enrich", left="transactions", right="users", on="user_id", how="left")
-pipeline = join | scorer
-
-result = pipeline({"transactions": txns_df, "users": users_df})
-```
-
-### Save and load
-
-```python
-import asyncio
-from decider.config.file import JsonFileConfigManager
-from decider.modules import GraphModule
-
-mgr = JsonFileConfigManager(basepath="./configs")
-asyncio.run(scorer.asave("main", mgr))
-asyncio.run(mgr.save_version(overwrite=True))
-
-# Reconstruct from disk
-fresh = JsonFileConfigManager(basepath="./configs")
-loaded = asyncio.run(fresh.get_latest())
-module = GraphModule.model_validate(loaded.config["main"]).root
+pipeline = flow(ratio, affordable, name="afford")
+df = pl.DataFrame({"income": [1000.0, 500.0], "debt": [200.0, 400.0]})
+pipeline.run(df)                                                   # income, debt, affordable
+pipeline.run(df, params={"afford": {"affordable": {"limit": 0.9}}})
+Engine().bind(pipeline, mode="fused").score({"income": 1000.0, "debt": 200.0})   # one record
 ```
 
 ## CLI
 
 ```bash
-# Scaffold a new module
-decider template module CreditScorer
-
-# Scaffold a module into a shareable package
-decider template module CreditScorer --package mylib
-
-# Scaffold a new project
-decider template project fraud_detection
-
-# Start a server
-decider serve                            # starlette on :8080
-decider serve --engine sanic --workers 4
-decider serve --port 9000 --reload
-
-# Launch the interactive graph visualiser
-decider visualise --project-dir projects/loan_scoring
+decider template NAME [DIR]   # write a starter project
+decider build [VERSION]       # stage and warm a config version (fills the numba cache)
+decider serve                 # POST /invocations, GET /ping
 ```
 
-### Jupyter magic
+Settings come from `DECIDER_*` environment variables; see `decider --help`.
 
-```python
-%load_ext decider.magics
-```
+## Documentation
 
-```python
-%%module CreditScorer
-
-class CreditScorerConfig(BaseModel):
-    weight: float = 200.0
-
-def dti_ratio(debt: pl.Expr, income: pl.Expr) -> pl.Expr:
-    return debt / income
-
-def credit_score(dti_ratio: pl.Expr, config: CreditScorerConfig) -> pl.Expr:
-    return pl.lit(800) - dti_ratio * config.weight
-```
-
-This writes `decider_extensions/credit_scorer/__init__.py`, reloads it, and injects `CreditScorer` into the notebook namespace. Add `--package mylib` to write into a proper uv src-layout package instead.
+- `IR.md`: the contract, what a pipeline compiles to and how each mode runs it.
+- `Design.md`: the design and package layout.
+- `notes/`: decision records with their measurements; `notes/spec-amendments.md`
+  amends `IR.md`.
+- The package docstrings (`help(decider)`) are the user documentation.
 
 ## Contributing
 
-We welcome contributions to Decider! Please refer to our [Contributing Guide](CONTRIBUTING.md) for full details.
-
-- **Fork** the repository and create a branch from `main`.
-- **Install dependencies** with `uv sync --all-extras`.
-- **Run tests** with `uv run pytest`.
-- **Submit a Pull Request** with a clear description of your changes.
+See [CONTRIBUTING.md](CONTRIBUTING.md). Run `uv run pytest` before opening a
+pull request.
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
----
-
-Thank you for your interest in Decider! We look forward to your contributions and feedback.
+MIT. See [LICENSE](LICENSE).

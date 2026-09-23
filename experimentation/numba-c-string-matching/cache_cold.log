@@ -1,5 +1,0 @@
-[cache] index saved to '/home/sholto/Documents/Workspace/capitec/dsp-decision-engine/experimentation/numba-c-string-matching/.numba_cache_persist/numba-c-string-matching_72c5b25cf6caf2dd82deff8d58a4c8c90e4333c4/kernels.walk_typed-91.py314.nbi'
-[cache] data saved to '/home/sholto/Documents/Workspace/capitec/dsp-decision-engine/experimentation/numba-c-string-matching/.numba_cache_persist/numba-c-string-matching_72c5b25cf6caf2dd82deff8d58a4c8c90e4333c4/kernels.walk_typed-91.py314.1.nbc'
-[cache] index saved to '/home/sholto/Documents/Workspace/capitec/dsp-decision-engine/experimentation/numba-c-string-matching/.numba_cache_persist/numba-c-string-matching_72c5b25cf6caf2dd82deff8d58a4c8c90e4333c4/kernels.walk_f64-64.py314.nbi'
-[cache] data saved to '/home/sholto/Documents/Workspace/capitec/dsp-decision-engine/experimentation/numba-c-string-matching/.numba_cache_persist/numba-c-string-matching_72c5b25cf6caf2dd82deff8d58a4c8c90e4333c4/kernels.walk_f64-64.py314.1.nbc'
-RESULT checksum=1260 typed_first_call_ms=1134.5 f64_first_call_ms=375.8 import_ms=561.4

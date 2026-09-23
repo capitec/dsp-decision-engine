@@ -24,4 +24,11 @@ Decision records for the consolidated `decider`, each with its measured reason.
 - `wiring-scopes.md`: how names bind to versions: input columns, typo and forward-reference errors, branch/loop scopes, frame barriers, outputs.
 - `hot-reload-investigation.md` (spike): `Session.reload` diffs checkpoint sequences by content and re-runs from the first change; notebook `watch`, file `ModuleWatcher`, measurements, and why serving never hot reloads.
 
-`progress.md` will hold the task log.
+- `benchmarks-vs-decider2.md`: the last measured numbers against decider2, per workload, and which benchmark script replaced each comparison script.
+- `old-test-coverage.md`: every test of decider_old and decider2 mapped to the test that covers it now, or the reason it was dropped.
+
+`progress.md` holds the task log.
+
+`decider_old/` (decider 0.3), `decider2/`, `experimentation/`, `tests/_legacy/`,
+`Plan.md` and `Prompt.md` were deleted in T7.1. Paths into them cited in these
+notes are history; they are in git before that commit.
