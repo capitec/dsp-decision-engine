@@ -1,0 +1,104 @@
+# Build + test the wheel matrix for decider2's compiled Arrow shim
+# (decider2/src/decider2/_arrow, docs/BOUNDARY-REWORK.md §4.2).
+#
+# Adopted from experimentation/packaging-first-binary/ci/wheels.yml with the
+# pure-numba `fallback` job removed (the shim is the only implementation, by
+# decision). This workflow has NOT yet been executed: the Linux x86_64 leg
+# was measured locally by the packaging strand (RESULTS.md §3); the macOS,
+# Windows and aarch64 legs are unverified until it runs once.
+#
+# One abi3 wheel per platform (cp310+), built from cp310, tested on the built
+# wheel, plus an sdist. Rough cost ~22 runner-minutes per run (macOS bills
+# 10x on a private repo), so it runs on tags, relevant PRs and weekly.
+#
+# This matters more than it looks: a wheel built on a developer box links
+# GLIBC_2.38 and auditwheel refuses to retag it manylinux_2_28 (RHEL 8/9 are
+# glibc 2.28/2.34). The only deployable Linux wheel is the one built here,
+# inside the manylinux container.
+name: decider2 wheels
+
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - "decider2/src/decider2/_arrow/**"
+      - "decider2/pyproject.toml"
+      - ".github/workflows/decider2-wheels.yml"
+  schedule:
+    - cron: "17 3 * * 1"   # weekly: catches toolchain / image drift before a release does
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  provenance:
+    # The vendored nanoarrow must match its recorded hashes, and the header's
+    # version must match the pin, before anything is compiled from it.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: verify vendored nanoarrow against SHA512SUMS and VERSION
+        working-directory: decider2/src/decider2/_arrow/vendor
+        run: |
+          sha512sum -c SHA512SUMS
+          pin=$(sed -n '1s/^nanoarrow \([0-9.]*\).*/\1/p' VERSION)
+          hdr=$(sed -n 's/^#define NANOARROW_VERSION "\(.*\)"/\1/p' nanoarrow/nanoarrow.h)
+          test "$pin" = "$hdr" && echo "nanoarrow $pin: manifest and header agree"
+
+  sdist:
+    needs: provenance
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv build --sdist --out-dir dist decider2
+      - name: the sdist must build a working wheel on its own (catches a missing header)
+        run: |
+          uv venv --python 3.12 .v && uv pip install -p .v/bin/python dist/*.tar.gz pytest
+          .v/bin/python -c "import decider2._arrow as a, json; d = a.diagnose(); print(json.dumps(d, indent=1)); assert d['shim'] == 'loaded'"
+          cd decider2 && ../.v/bin/python -m pytest tests/test_shim.py -q
+      - uses: actions/upload-artifact@v4
+        with: { name: sdist, path: dist/*.tar.gz }
+
+  wheels:
+    needs: provenance
+    name: wheel ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-13, macos-14, windows-2022]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      # Run from INSIDE the package dir: `test-sources` in [tool.cibuildwheel]
+      # resolves against the cwd, not package-dir. All selection lives in
+      # decider2/pyproject.toml: build = "cp310-*", abi3, manylinux_2_28,
+      # test-sources = ["tests"], test-command runs tests/test_shim.py on the
+      # built wheel.
+      - name: cibuildwheel
+        working-directory: decider2
+        run: |
+          rm -rf build           # setuptools reuses stale objects in build/ across flag changes
+          pipx run cibuildwheel==4.2.1 --output-dir ../wheelhouse .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.os }}
+          path: wheelhouse/*.whl
+
+  collect:
+    needs: [sdist, wheels]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: dist, merge-multiple: true }
+      - name: exactly one wheel per platform, all abi3, plus the sdist
+        run: |
+          ls -la dist
+          test $(ls dist/*.whl | wc -l) -eq 5
+          ls dist/*.whl | grep -v 'cp310-abi3' && exit 1 || true
+      # Publishing (an internal index) goes here, behind an environment with
+      # required reviewers; out of scope for Stage 1.
