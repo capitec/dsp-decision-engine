@@ -476,15 +476,17 @@ def test_a_computed_feature_now_compiles_instead_of_being_refused():
 @pytest.mark.parametrize(
     "kwargs, expected",
     [
-        ({"match_type": "contains"}, "frame tier"),
         ({"match_type": "regex"}, "nopython"),
         ({"case_sensitive": False}, "to_lowercase"),
         ({"trim_whitespace": True}, "strip_chars"),
     ],
 )
 def test_string_matching_a_kernel_cannot_do_is_refused_not_approximated(kwargs, expected):
-    """Doc 05 §1.5: a string enters as an int32 code, so only `exact`
-    survives. Each refusal names the frame-tier route instead."""
+    """docs/BOUNDARY-REWORK.md §5: no regex engine in nopython numba, and no
+    Unicode case-folding or whitespace table in the kernel. Each refusal
+    names the frame-tier route instead. (`contains` used to be in this
+    table — doc 05 §1.5's dictionary-code kernel could not express it — and
+    is now matched in the kernel by bytes; see the positive test below.)"""
     tree = Tree(
         name="t",
         edges=[MultiSourceEdge(source="root", target="leaf", data=MultiEdgeData(sourceIndex=[0]))],
@@ -496,6 +498,32 @@ def test_string_matching_a_kernel_cannot_do_is_refused_not_approximated(kwargs, 
     )
     with pytest.raises(UnsupportedInKernel, match=expected):
         encode_tree(tree)
+
+
+def test_contains_is_matched_in_the_kernel_by_bytes():
+    """Deliberately inverted (BOUNDARY-REWORK.md §9, Stage 2): `contains`
+    was refused with the frame-tier message when a string entered the
+    kernel as a dictionary code. It is now a `STR_MATCH` node reading the
+    string's own bytes, so it encodes — and its patterns are a param."""
+    tree = Tree(
+        name="t",
+        edges=[
+            MultiSourceEdge(source="root", target="leaf", data=MultiEdgeData(sourceIndex=[0])),
+            MultiSourceEdge(source="root", target="miss", data=MultiEdgeData(sourceIndex=[1])),
+        ],
+        nodes=[
+            PositionedNode(id="root", data=UnaryNode(
+                condition=UnaryStringMatch(feature="s", patterns=["a"], match_type="contains"))),
+            PositionedNode(id="leaf", data=LeafNode(result_idx=0)),
+            PositionedNode(id="miss", data=LeafNode(result_idx=1)),
+        ],
+    )
+    encoded = encode_tree(tree)
+    assert encoded.string_features == ("s",)
+    (inp,) = encoded.path_step.inputs
+    assert inp.annotation is bytes
+    (pattern_param,) = encoded.path_step.params
+    assert pattern_param.name == "root_patterns" and pattern_param.default == ["a"]
 
 
 def test_encoding_the_same_tree_twice_is_identical(tmp_path):

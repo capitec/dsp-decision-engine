@@ -361,12 +361,16 @@ def resolve_params(
             for decl in step.params:
                 if decl.name in values:
                     value = values[decl.name]
-                    if decl.annotation is str:
+                    if decl.annotation is str and not step.typed_args:
                         # Doc 05 §1.5 + §O: the param stays a `str` in the
                         # params document and the pydantic model (a business
                         # user writes "government", never a code) — encoded
                         # to its column's int32 code only here, at the
-                        # kernel-argument boundary.
+                        # kernel-argument boundary. A typed step (a tree)
+                        # matches its `str`/`list[str]` params as BYTES
+                        # against a string span (docs/BOUNDARY-REWORK.md
+                        # §3.1) and has no dictionary to resolve against;
+                        # `compile.gather._typed_params` encodes them.
                         value = _resolve_str_param_code(step, decl.name, value, categories)
                     per_step_scalar[(sp.module, sname, decl.name)] = value
                     # The unqualified key is kept only for callers that drive
@@ -551,6 +555,15 @@ def apply(
     registry: dict[str, Any] = {}
     for name, ec in extracted.columns.items():
         annotation = input_by_name[name].annotation if name in input_by_name else float
+        if annotation is bytes:
+            # A string SPAN input (a tree's string feature, docs/BOUNDARY-
+            # REWORK.md §2.1): `extract_frame` already built the (n, 2)
+            # int64 (address, length) table through the Arrow shim
+            # (`boundary.dtypes.SpanPlan`); it is handed over as-is. The
+            # addresses stay valid while `extracted` is alive, which it is
+            # for the whole of this call.
+            registry[name] = ec.values
+            continue
         # Doc 05 §1.5: "a string never enters a kernel as a string" — a
         # `str`-declared column already arrived as a dictionary code
         # (`extract_frame`/`EntryMode.CODES`); this just settles it onto the
@@ -726,6 +739,9 @@ def score(
     routed_reason: str | None = None
     registry: dict[str, Any] = {}
     record_categories: dict[str, tuple[str, ...]] = {}
+    # The UTF-8 bytes of every `bytes` (string-span) input, kept alive until
+    # the kernel has run: the span in `registry` is an ADDRESS into them.
+    keepalive: list[np.ndarray] = []
     for inp in interface.inputs:
         # Doc 03 §1 (review finding 4): absent and null share one path. A
         # key missing from `record` entirely used to `continue` past this
@@ -748,6 +764,23 @@ def score(
                     "raise_for (doc 03 §1)."
                 )
             routed_reason = routed_reason or inp.name
+            continue
+        if inp.annotation is bytes:
+            # A string SPAN input (a tree's string feature, docs/BOUNDARY-
+            # REWORK.md §2.1, Stage 2): the record's text is encoded once
+            # and the span is its address + byte length — no polars, no
+            # Arrow, no dictionary. This is the ladder's independent
+            # producer (§1.6): `apply()` reads the same bytes out of polars'
+            # memory through nanoarrow, and `assert_equivalent`'s fourth
+            # rung checks the two agree.
+            if not isinstance(value, str):
+                raise TypeError(
+                    f"input {inp.name!r} is a string feature, but the record holds "
+                    f"{type(value).__name__} {value!r}; pass a str."
+                )
+            encoded = np.frombuffer(value.encode("utf-8"), dtype=np.uint8)
+            keepalive.append(encoded)
+            registry[inp.name] = np.array([[encoded.ctypes.data, len(encoded)]], dtype=np.int64)
             continue
         if inp.annotation is str and isinstance(value, str):
             # A str input enters the kernel as a dictionary code (doc 05
@@ -784,6 +817,7 @@ def score(
         steps, group_ids, owners, registry, resolved, 1,
         mode=mode, terminal_names=terminal_names, build_dir=build_dir,
     )
+    del keepalive  # the kernel has run; no span in `registry` is read after this
 
     for name in terminal_names:
         if name in registry:

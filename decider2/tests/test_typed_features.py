@@ -7,7 +7,8 @@ scaled-int64 money columns doc 03 §1.2 mandates, the failure mode doc 03
 §2.1 calls the worst the design can have. Now a feature has a kind
 (`float`/`int`/`bool`/`str`), declared via `feature_types=` or inferred
 from use, every node row carries `feat_kind` beside `feat_idx`, and the
-row the walker reads is six typed arrays (`types.Step.typed_args`).
+row the walker reads is five typed arrays (`types.Step.typed_args`), a
+string feature riding as a span into polars' own memory.
 
 The deciding tests: the int64 case answers `[1, 0]` in every mode; a bool
 and an int stay themselves end to end; an ordering comparison on a
@@ -181,9 +182,14 @@ def test_a_mixed_tree_agrees_across_every_mode_and_explains_its_kinds():
     }
     report = built.explain()
     assert "income_cents: int" in report and "is_staff: bool" in report and "sector: str" in report
-    # The matcher's int result rides in the int64 row array, not float64.
-    matcher_input = next(i for i in built.encoded.path_step.inputs if i.name.endswith("__m_sector"))
-    assert matcher_input.annotation is int
+    # The string feature is a `bytes` (string span) input of the path step
+    # itself — no hoisted matcher step, no synthetic `__m_sector` output
+    # (BOUNDARY-REWORK.md §9, Stage 2) — and its patterns are a param.
+    sector_input = next(i for i in built.encoded.path_step.inputs if i.name == "sector")
+    assert sector_input.annotation is bytes
+    assert not any("__m_" in s.name for s in built.module.steps)
+    patterns = next(p for p in built.encoded.path_step.params if p.name == "n3_patterns")
+    assert patterns.annotation == list[str] and patterns.default == ["retail", "public"]
     pipeline = flow(built.module)
     # Row i fails at node i (its false edge -> leaf i); row 6 passes all.
     frame = pl.DataFrame({
@@ -304,44 +310,45 @@ def test_the_typed_layout_rule_is_slot_within_kind_in_input_order():
 # ---------------------------------------------------------------------------
 
 
-def test_the_raw_string_slot_carries_polars_bytes_zero_copy():
-    """A `bytes`-annotated input reads polars' own `offsets`/`values`
-    buffers: the row array holds `(start, end)` and the byte buffer
-    travels alongside, so a kernel can read the actual string. Proven with
-    a step returning `len(s) * 1000 + first byte` — a lazy matcher (the
-    sibling string strands) is this plus a comparison."""
+def test_the_string_slot_carries_polars_bytes_zero_copy_as_spans():
+    """A `bytes`-annotated input is a STRING SPAN (BOUNDARY-REWORK.md
+    §2.1): the row array holds `(address, byte length)` pointing straight
+    into polars' own memory, resolved through the compiled Arrow shim
+    (`boundary.dtypes.SpanPlan`), so a kernel can read the actual string
+    with a byte load. Proven with a step returning `len(s) * 1000 + first
+    byte` — a `STR_MATCH` node is this plus a comparison."""
+    from decider2._arrow.intrinsics import load_u8
+    from decider2.boundary.extract import extract_column
+    from decider2.compile.driver import _packed_input_arrays, ResolvedParams, _typed_params
 
     @njit(inline="always")
     def peek(args, params):
-        f64, i64, b8, i32, s64, sbytes = args
-        start, end = s64[0], s64[1]
-        first = sbytes[0][start] if end > start else 0
-        return (end - start) * 1000 + first + i64[0]
+        f64, i64, b8, i32, span = args
+        addr, ln = span[0], span[1]
+        first = load_u8(addr) if ln > 0 else 0
+        return ln * 1000 + first + i64[0]
 
     step = Step(
         name="peek", fn=peek,
         inputs=(Input("s", bytes), Input("k", int)), params=(),
         packed=True, typed_args=True, output_annotation=int,
     )
-    strings = ["ab", "", "xyz", "q"]
-    series = pl.Series("s", strings)
-    bufs = series._get_buffers()
-    registry = {
-        "s": bufs["offsets"].to_numpy(allow_copy=False),
-        "__bytes__s": bufs["values"].to_numpy(allow_copy=False),
-        "k": np.array([1, 2, 3, 4], dtype=np.int64),
-    }
-    expected = [len(s) * 1000 + (s.encode()[0] if s else 0) + k for s, k in zip(strings, [1, 2, 3, 4])]
+    strings = ["ab", "", "xyz", "q", "thirteen char"]
+    extracted = extract_column(pl.Series("s", strings), Input("s", bytes))
+    assert extracted.values.shape == (5, 2) and extracted.values.dtype == np.int64
+    assert extracted.values[:, 1].tolist() == [len(s) for s in strings]
+    registry = {"s": extracted.values, "k": np.array([1, 2, 3, 4, 5], dtype=np.int64)}
+    expected = [len(s) * 1000 + (s.encode()[0] if s else 0) + k for s, k in zip(strings, [1, 2, 3, 4, 5])]
 
-    from decider2.compile.driver import _packed_input_arrays, ResolvedParams
     arrays = _packed_input_arrays(step, registry)
-    out = np.empty(4, dtype=np.int64)
-    build_packed_kernel(step)(arrays, ((), ()), 4, out)
+    out = np.empty(5, dtype=np.int64)
+    build_packed_kernel(step)(arrays, _typed_params(step, ()), 5, out)
     assert out.tolist() == expected
-    # And the interpreted/stepped row path builds the same six-tuple.
+    # And the interpreted/stepped row path builds the same five-tuple.
     resolved = ResolvedParams(per_step_scalar={}, per_step_bundle={})
-    rows = [peek(*_packed_row_args(step, None, registry, resolved, i)) for i in range(4)]
+    rows = [peek(*_packed_row_args(step, None, registry, resolved, i)) for i in range(5)]
     assert rows == expected
+    del extracted  # the plan owned the Arrow view; the spans above were only read while it lived
 
 
 # ---------------------------------------------------------------------------

@@ -20,10 +20,11 @@ bookkeeping.
 count varies per tree, and a closure's own parameter list is fixed the
 moment it is written. Every `fn` built here therefore has the SAME two-
 argument shape regardless of tree size: `fn(args, params)`, where `args`
-is the per-row six-tuple of typed row arrays and `params` the `(floats,
-ints)` threshold pair (`types.Step.typed_args`). `decider2.compile.driver`'s
-packed-call helpers are what every execution mode (interpreted/stepped/
-fused/fallback) calls this shape through; see that module.
+is the per-row five-tuple of typed row arrays and `params` the `(floats,
+ints, pat_bytes, pat_off, grp_off)` bundle — thresholds plus the pattern
+table (`types.Step.typed_args`). `decider2.compile.driver`'s packed-call
+helpers are what every execution mode (interpreted/stepped/fused/fallback)
+calls this shape through; see that module.
 
 **Features are split by type, and the type is program data.** Every
 feature the tree reads has a KIND — `float`, `int`, `bool` or `str` —
@@ -73,12 +74,21 @@ wall, no CPython indentation limit and no depth cap.** `TreeTooLarge`
 survives only for `TableTooComplex`'s unrelated DNF-explosion guard
 (`tables/schema.py`) — nothing in THIS module raises it any more.
 
-**3. A string never enters the walker as a string.** Doc 05 §1.5. Every
-string comparison is hoisted out of the tree into its own one-input step
-(`EncodeContext.encode_string_match`), which takes that column as `str` (an
-int32 dictionary code at runtime) plus one `str` param per literal, and
-returns an `int`: which pattern matched, or -1. That int rides in the
-walker's int64 row array — no longer cast to float64 on the way in.
+**3. A string is tested at the node, by its bytes, against patterns that
+are params.** docs/BOUNDARY-REWORK.md §3.1 (which retires doc 05 §1.5's
+"a string never enters a kernel as a string" for trees). A `str` feature
+is a `bytes`-annotated path-step input — the wire spelling of a STRING
+SPAN, `(address, byte length)` into polars' own memory through the
+compiled Arrow shim — and every `string_match` becomes a `STR_MATCH` node
+(`EncodeContext.encode_string_match`) that compares those bytes against a
+PATTERN GROUP: a node's literal patterns are ONE `list[str]` param, an
+`InputRef` pattern is a `str` param, and both ride in the per-call
+pattern table `compile.gather._typed_params` builds. The table's numba
+type does not depend on how many patterns there are or how long, so
+editing, adding or removing a pattern is a value change, never a
+recompile — the same guarantee property 1 gives a threshold. What the
+kernel cannot do (`regex`, `case_sensitive=False`, `trim_whitespace`) is
+still refused by name with the frame-tier route (`UnsupportedInKernel`).
 """
 from __future__ import annotations
 
@@ -92,7 +102,9 @@ import numpy as np
 from numba import literal_unroll, njit
 from pydantic import Field
 
-from decider2.trees.interpreter import BOOL, CODE, EQ, F64, GE, GT, I64, LE, LT, walk_tree
+from decider2.trees.interpreter import (
+    BOOL, CONTAINS, EXACT, F64, GE, GT, I64, LE, LT, PREFIX, STR, STR_MATCH, SUFFIX, walk_tree,
+)
 from decider2.trees.schema import InputRef, Tree, TStringMatchType
 from decider2.types import Input, NullPolicy, ParamDecl, Step
 
@@ -125,9 +137,25 @@ _KIND_ALIASES: dict[str, str] = {
     "bool": "bool", "boolean": "bool",
     "str": "str", "string": "str", "utf8": "str", "categorical": "str", "enum": "str",
 }
-_PY_TYPE_BY_KIND: dict[str, Any] = {"float": float, "int": int, "bool": bool, "str": str}
-_SLOT_BY_KIND: dict[str, int] = {"float": F64, "int": I64, "bool": BOOL, "str": CODE}
+# A feature's kind -> the path step's INPUT annotation. `str` is `bytes`:
+# the wire spelling of a string span (`types.FeatureKind.STR`), which the
+# boundary produces from a String column (`boundary.dtypes.SpanPlan`) and
+# `score()` from `str.encode()`; `str` itself stays the dictionary-code
+# convention of hand-written steps (doc 05 §1.5) and never names a tree
+# input.
+_INPUT_ANNOTATION_BY_KIND: dict[str, Any] = {"float": float, "int": int, "bool": bool, "str": bytes}
+_SLOT_BY_KIND: dict[str, int] = {"float": F64, "int": I64, "bool": BOOL, "str": STR}
+# A `_ParamSlot.annotation` -> the `ParamDecl` annotation. `patterns` is a
+# string-match node's literal list — one param, one pattern GROUP (the
+# module docstring's property 3).
+_PARAM_ANNOTATION: dict[str, Any] = {"float": float, "int": int, "str": str, "patterns": list[str]}
 _ORDERING = frozenset((LT, LE, GT, GE))
+_MATCH_OP: dict[TStringMatchType, int] = {
+    TStringMatchType.exact: EXACT,
+    TStringMatchType.starts_with: PREFIX,
+    TStringMatchType.ends_with: SUFFIX,
+    TStringMatchType.contains: CONTAINS,
+}
 
 
 def normalise_feature_type(feature: str, value: Any) -> str:
@@ -192,7 +220,6 @@ class EncodedTree:
     knows (for `.explain()` and `TreeModule.decode()`)."""
 
     path_step: Step
-    matcher_steps: tuple[Step, ...]
     output_steps: tuple[Step, ...]
     path_column: str
     features: tuple[str, ...]
@@ -204,15 +231,12 @@ class EncodedTree:
     feature_kinds: dict[str, str] = field(default_factory=dict)  # name -> float|int|bool|str
 
 
-# A negative feature/threshold slot, during the encode walk, is a DEFERRED
-# reference: `-(k + 1)` names the k-th entry of a list whose own final
-# length isn't known until the whole tree has been walked (a computed
-# feature's local, or a string match's anonymous literal). Resolved to a
-# real, non-negative array index only once, in `_resolve_deferred` below —
-# never by shifting anything already assigned a plain (>= 0) index, which is
-# stable the moment it is handed out.
-def _resolve_deferred(raw: Sequence[int], base: int) -> list[int]:
-    return [v if v >= 0 else base + (-v - 1) for v in raw]
+# A negative feature slot, during the encode walk, is a DEFERRED reference:
+# `-(k + 1)` names the k-th computed feature, whose float64 row position
+# (after every plain float feature) isn't known until the whole tree has
+# been walked. Resolved to a real, non-negative array index only once, in
+# `resolve_arrays` below — never by shifting anything already assigned a
+# plain (>= 0) index, which is stable the moment it is handed out.
 
 
 class EncodeContext:
@@ -265,19 +289,17 @@ class EncodeContext:
         # computed feature -> compiled closure (f64_row, thr_f) -> float
         self._computed: list[Any] = []
 
-        # -- threshold space: every registered param (float, int AND str;
-        # str entries never enter a threshold tuple, but stay in `params`
-        # for `.explain()`'s reporting) --
+        # -- threshold space: every registered param (float, int, str and
+        # patterns) --
         self.params: list[_ParamSlot] = []
         self._param_by_ident: dict[str, _ParamSlot] = {}
-        # position among FLOAT params / among INT params, each in first-
-        # threshold-use order — the two tuples `walk_tree` indexes. A
-        # deferred (anonymous literal) slot resolves against the INT count.
-        self._thr_pos: dict[str, dict[str, int]] = {"float": {}, "int": {}}
-        self._literals: list[int] = []
-
-        # feature name -> hoisted string matcher
-        self.matchers: dict[str, _StringMatcher] = {}
+        # position among FLOAT params / among INT params / among PATTERN
+        # GROUPS (`str` and `patterns` params share one index space: each
+        # is one group of the pattern table), each in first-use order —
+        # what `walk_tree` indexes `thr_f`/`thr_i`/`grp_off` by. The driver
+        # derives the same positions from `Step.params` order alone
+        # (`compile.gather._typed_params`), so the two cannot disagree.
+        self._thr_pos: dict[str, dict[str, int]] = {"float": {}, "int": {}, "pat": {}}
 
         self.max_depth = 0
         self.leaf_count = 0
@@ -296,14 +318,10 @@ class EncodeContext:
     def _slot_kind(self, feat_ref: int) -> int:
         """Which typed ROW ARRAY a feature reference reads from
         (`FeatureKind` value): a computed feature is always float64; a
-        string feature's slot holds its hoisted matcher's int result, so it
-        is int64 in the path step even though the column itself is `str`."""
+        `str` feature is a STRING SPAN slot (`FeatureKind.STR`)."""
         if feat_ref < 0:
             return F64
-        name = self.features[feat_ref]
-        if name in self.matchers:
-            return I64
-        return _SLOT_BY_KIND[self.feature_kind(name)]
+        return _SLOT_BY_KIND[self.feature_kind(self.features[feat_ref])]
 
     def _demand(self, feat_ref: int, tag: str) -> None:
         if self.probe and feat_ref >= 0:
@@ -337,38 +355,34 @@ class EncodeContext:
 
     def add_cmp(
         self, feat_idx: int, op: int, thr_slot: int, then_pc: int, otherwise_pc: int,
-        *, via_matcher: bool = False,
     ) -> int:
-        """One `CMP` row. `via_matcher` marks the `EQ` chain
-        `encode_string_match` builds against a hoisted matcher's int result
-        — the only comparison a `str` feature is allowed to take part in.
-        Everything else on a `str` or `bool` feature is rejected HERE, at
-        build time, naming the node: a dictionary code has no order and no
-        numeric meaning (`sector < 5` used to compare codes, silently), and a
-        boolean is tested with `is_true`/`is_false`, not a threshold."""
+        """One `CMP` row. A numeric comparison on a `str` or `bool` feature
+        is rejected HERE, at build time, naming the node: a string has no
+        numeric order (`sector < 5` used to compare dictionary codes,
+        silently), and a boolean is tested with `is_true`/`is_false`, not
+        a threshold. A string is tested with `string_match`, which builds
+        a `STR_MATCH` node (`encode_string_match`), never a `CMP`."""
         from decider2.trees.interpreter import CMP
 
-        if not via_matcher:
-            self._demand(feat_idx, "order" if op in _ORDERING else "eq")
-            if not self.probe and feat_idx >= 0:
-                kind = self.feature_kind(self.features[feat_idx])
-                if kind == "str":
-                    raise ValueError(
-                        f"tree '{self.tree.name}': a numeric comparison on "
-                        f"{self._feature_desc(feat_idx)}. A string enters the "
-                        "kernel as an int32 dictionary code (doc 05 §1.5), which "
-                        "has no order and no numeric meaning — the comparison "
-                        "would silently compare codes. Use op='string_match' "
-                        "(exact) on it, or declare it a numeric type in "
-                        "feature_types= if it really is one."
-                    )
-                if kind == "bool":
-                    raise ValueError(
-                        f"tree '{self.tree.name}': a threshold comparison on "
-                        f"{self._feature_desc(feat_idx)}. Test a boolean with "
-                        "op='is_true'/'is_false', or declare the feature int/"
-                        "float in feature_types= if it is really a 0/1 number."
-                    )
+        self._demand(feat_idx, "order" if op in _ORDERING else "eq")
+        if not self.probe and feat_idx >= 0:
+            kind = self.feature_kind(self.features[feat_idx])
+            if kind == "str":
+                raise ValueError(
+                    f"tree '{self.tree.name}': a numeric comparison on "
+                    f"{self._feature_desc(feat_idx)}. A string is compared by its "
+                    "bytes (docs/BOUNDARY-REWORK.md §3.1), which have no order and "
+                    "no numeric meaning — the comparison would be silently wrong. "
+                    "Use op='string_match' on it, or declare it a numeric type in "
+                    "feature_types= if it really is one."
+                )
+            if kind == "bool":
+                raise ValueError(
+                    f"tree '{self.tree.name}': a threshold comparison on "
+                    f"{self._feature_desc(feat_idx)}. Test a boolean with "
+                    "op='is_true'/'is_false', or declare the feature int/"
+                    "float in feature_types= if it is really a 0/1 number."
+                )
         return self._add_node(CMP, feat_ref=feat_idx, op=op, thr_slot=thr_slot, then_=then_pc, else_=otherwise_pc)
 
     def _add_truth_test(self, node_kind: int, feat_idx: int, then_pc: int, otherwise_pc: int) -> int:
@@ -376,9 +390,8 @@ class EncodeContext:
         if not self.probe and feat_idx >= 0 and self.feature_kind(self.features[feat_idx]) == "str":
             raise ValueError(
                 f"tree '{self.tree.name}': is_true/is_false on "
-                f"{self._feature_desc(feat_idx)}. A string's dictionary code "
-                "(doc 05 §1.5) has no truth value — code 0 is just the first "
-                "category. Use op='string_match' on it."
+                f"{self._feature_desc(feat_idx)}. A string has no truth value "
+                "(and an empty string is not a null). Use op='string_match' on it."
             )
         return self._add_node(node_kind, feat_ref=feat_idx, then_=then_pc, else_=otherwise_pc)
 
@@ -538,19 +551,20 @@ class EncodeContext:
             positions[ident] = len(positions)
         return positions[ident]
 
-    def literal_slot(self, value: int) -> int:
-        """An anonymous INT threshold-space entry — never a named argument,
-        just a plain literal embedded in the closure's own thresholds-
-        tuple-building step (a string match's "which pattern index" test
-        against a hoisted matcher's int result). DEFERRED for the same
-        reason a computed feature's slot is: the offset it resolves against
-        (how many named int thresholds this tree ended up with) isn't final
-        until the walk is done."""
-        k = len(self._literals)
-        self._literals.append(int(value))
-        return -(k + 1)
+    # -- string matching at the node -------------------------------------
 
-    # -- hoisted string matching ---------------------------------------
+    def _pattern_group(self, name: str, default: Any, annotation: str, origin: str) -> int:
+        """Register one pattern group (a `str` param — one pattern — or a
+        `patterns` param — a node's literal list) and return its index in
+        the pattern table's group space (`grp_off`), stable the moment it
+        is first assigned, first-use order — the same rule as
+        `threshold_slot`, over the shared str/patterns index space that
+        `compile.gather._typed_params` numbers from `Step.params` order."""
+        slot = self._add_param(name, default, annotation, origin)
+        positions = self._thr_pos["pat"]
+        if slot.name not in positions:
+            positions[slot.name] = len(positions)
+        return positions[slot.name]
 
     def encode_string_match(
         self,
@@ -562,49 +576,61 @@ class EncodeContext:
         node_id: str,
         then_pc: int,
         otherwise_pc: int,
+        role: str = "patterns",
     ) -> int:
-        """A string comparison, hoisted into its own step, then encoded as
-        an ordinary `CMP(EQ)` chain against that step's int result.
+        """A string test, encoded as `STR_MATCH` node(s) that compare the
+        feature's bytes at the node (docs/BOUNDARY-REWORK.md §3.1).
 
-        Doesn't return source that tests the hoisted step's int result —
-        appends nodes that do. See the module docstring for why the matcher
-        itself stays a separate step. Shared by `UnaryStringMatch.encode`
-        and `StringMatchCondition.encode`.
+        `patterns` is an OR. Its literal members become ONE `list[str]`
+        param named `<node_id>_<role>` — one pattern group, so editing the
+        list (its texts, its length) is a value change; each `InputRef`
+        member becomes a `str` param named by its key — a group of one,
+        shared by every node naming the same key. One node per group,
+        chained like `_encode_isin` (first group tested first, any match
+        wins). Shared by `UnaryStringMatch.encode` and
+        `StringMatchCondition.encode`; `role` keeps a `CasesStringMatch`'s
+        sibling conditions on distinct param names.
+
+        What a kernel cannot do is refused by name, with the frame-tier
+        route: `regex` (no engine in nopython numba; BOUNDARY-REWORK.md
+        §5), `case_sensitive=False` (Unicode case folding is a table the
+        kernel does not have) and `trim_whitespace` (Unicode whitespace,
+        likewise).
         """
         root = getattr(feature, "root", feature)
         if not isinstance(root, str):
             raise UnsupportedInKernel(
                 f"node '{node_id}' string-matches a computed feature "
                 f"('{feature}'). A computed feature (decider2.expr) emits a "
-                "numeric expression, never a string column, so it has no "
-                "int32 dictionary code to match against (doc 05 §1.5). Give "
-                "the tree a named string column instead."
+                "numeric expression, never a string column, so there are no "
+                "bytes to match against. Give the tree a named string column "
+                "instead."
             )
-        if match_type is not TStringMatchType.exact:
+        if match_type is TStringMatchType.regex:
             raise UnsupportedInKernel(
-                f"node '{node_id}' uses match_type={match_type.value!r} on feature "
-                f"'{feature}'. Doc 05 §1.5: a string enters a kernel as an int32 "
-                "dictionary code, and a code comparison cannot express a prefix, a "
-                "suffix, a substring or a regex — numba has no `re` in nopython at "
-                "all. EXPERIMENTS.md §O measured the working route and it is 7x "
-                "faster than the one you are asking for: shape the string in the "
-                "frame tier (`pl.col(...).str.contains(...)`) into a boolean or a "
-                "category column before the pipeline, and branch on that column "
-                "here with op='is_true' or op='isin'."
+                f"node '{node_id}' uses match_type='regex' on feature '{feature}'. "
+                "There is no regex engine in nopython numba (docs/BOUNDARY-REWORK.md "
+                "§5; EXPERIMENTS.md §O), and a backtracking engine in the kernel "
+                "would be a per-row DoS axis opened by a rule edit. Evaluate the "
+                "regex in the frame tier (`pl.col(...).str.contains(pattern)`) into "
+                "a boolean column before the pipeline and branch on it here with "
+                "op='is_true'; exact, starts_with, ends_with and contains are "
+                "matched in the kernel."
             )
         if not case_sensitive:
             raise UnsupportedInKernel(
                 f"node '{node_id}' sets case_sensitive=False on feature '{feature}'. "
-                "Case folding is a string operation and a kernel only sees the "
-                "dictionary code (doc 05 §1.5). Normalise the column once in the "
-                "frame tier (`pl.col(...).str.to_lowercase()`) and lower-case the "
-                "patterns in this document."
+                "The kernel compares bytes; Unicode case folding needs a table it "
+                "does not have (docs/BOUNDARY-REWORK.md §5). Normalise the column "
+                "once in the frame tier (`pl.col(...).str.to_lowercase()`) and "
+                "lower-case the patterns in this document."
             )
         if trim_whitespace:
             raise UnsupportedInKernel(
                 f"node '{node_id}' sets trim_whitespace=True on feature '{feature}'. "
-                "Same reason as case_sensitive=False: strip the column in the frame "
-                "tier (`pl.col(...).str.strip_chars()`) before the pipeline."
+                "Same reason as case_sensitive=False (Unicode whitespace): strip the "
+                "column in the frame tier (`pl.col(...).str.strip_chars()`) before "
+                "the pipeline."
             )
 
         fname = str(feature)
@@ -614,28 +640,26 @@ class EncodeContext:
             raise ValueError(
                 f"tree '{self.tree.name}' node '{node_id}': string_match on "
                 f"{self._feature_desc(feat_idx)}. A string_match needs a str "
-                "column (its int32 dictionary code, doc 05 §1.5). Declare the "
-                "feature str in feature_types=, or use a numeric comparison."
+                "column (its bytes). Declare the feature str in feature_types=, "
+                "or use a numeric comparison."
             )
-        matcher = self.matchers.get(fname)
-        if matcher is None:
-            # The step's OUTPUT name is its function name (types.Step.name),
-            # and that is the name the tree body reads — so they must be the
-            # same string. Qualified by the tree instance name because two
-            # trees testing the same column with different literals must not
-            # collide on one value (doc 03 §3.2's waterfall would silently
-            # give the second tree the first one's answer).
-            matcher = _StringMatcher(
-                feature=fname,
-                fn_name=f"{self.name}__m_{safe_ident(fname)}",
-                literals=[],
-            )
-            self.matchers[fname] = matcher
-        slots = [matcher.literal_slot(p, self) for p in patterns]
+        mode = _MATCH_OP[match_type]
+        literals = [p for p in patterns if not isinstance(p, InputRef)]
+        groups: list[int] = []
+        if literals:
+            groups.append(self._pattern_group(
+                f"{node_id}_{role}", list(literals), "patterns", f"{node_id}.{role}",
+            ))
+        for p in patterns:
+            if isinstance(p, InputRef):
+                groups.append(self._pattern_group(
+                    p.key, "", "str", f"InputRef #{p.key} ({node_id}.{role})",
+                ))
         entry = otherwise_pc
-        for i in reversed(slots):
-            lit = self.literal_slot(i)
-            entry = self.add_cmp(feat_idx, EQ, lit, then_pc, entry, via_matcher=True)
+        for g in reversed(groups):
+            entry = self._add_node(
+                STR_MATCH, feat_ref=feat_idx, op=mode, thr_slot=g, then_=then_pc, else_=entry,
+            )
         return entry
 
     # -- the tree walk, called from schema.py's node classes ---------------
@@ -724,40 +748,11 @@ class EncodeContext:
             "feat_kind": feat_kind,
             "feat_idx": feat_idx,
             "op": list(self._op),
-            "thr_slot": _resolve_deferred(self._thr_slot, len(self._thr_pos["int"])),
+            "thr_slot": list(self._thr_slot),
             "then": list(self._then),
             "else": list(self._else),
             "leaf_value": list(self._leaf_value),
         }
-
-
-@dataclass
-class _StringMatcher:
-    """A hoisted string test: one step, one `str` input, N `str` params.
-    Behaviourally unchanged by this pass — only its OWN `fn` is now a
-    closure (`_build_matcher_fn`) instead of a tiny `if`/`elif` source
-    fragment."""
-
-    feature: str
-    fn_name: str
-    literals: list[tuple[str, Any]] = field(default_factory=list)
-
-    def literal_slot(self, pattern: Any, ctx: EncodeContext) -> int:
-        """The index this literal answers with, registering it if new."""
-        if isinstance(pattern, InputRef):
-            key, default = pattern.key, ""
-        else:
-            key, default = f"{safe_ident(self.feature)}_pat_{len(self.literals)}", pattern
-        for i, (existing, _) in enumerate(self.literals):
-            if existing == key:
-                return i
-        self.literals.append((key, default))
-        ctx._add_param(key, default, "str", f"string literal for '{self.feature}'")
-        return len(self.literals) - 1
-
-    @property
-    def feature_ident(self) -> str:
-        return safe_ident(self.feature)
 
 
 # ---------------------------------------------------------------------------
@@ -790,16 +785,15 @@ def _nonempty_i(items: tuple) -> tuple:
     return items
 
 
-def _build_path_fn(
-    arrays: dict, start_pc: int, n_f64_plain: int, computed: list, literals: Sequence[int],
-):
+def _build_path_fn(arrays: dict, start_pc: int, n_f64_plain: int, computed: list):
     """One tree's `path_fn(args, params) -> int`. `args` is the driver's
-    typed row gather for this tree's features — the six-tuple `(f64, i64,
-    b8, i32, s64, sbytes)` of `types.Step.typed_args`, each array exactly
-    as wide as that kind's feature count (no per-count closure family here
-    any more: replaces `_path0`..`_path6`, which raised past 6 computed
-    features). `params` is the `(floats, ints)` threshold pair the driver
-    groups from `Step.params` by annotation.
+    typed row gather for this tree's features — the five-tuple `(f64, i64,
+    b8, i32, span)` of `types.Step.typed_args`, each array exactly as wide
+    as that kind's feature count (no per-count closure family here any
+    more: replaces `_path0`..`_path6`, which raised past 6 computed
+    features). `params` is the `(floats, ints, pat_bytes, pat_off,
+    grp_off)` bundle the driver groups from `Step.params` by annotation:
+    the two threshold tuples plus the pattern table.
 
     A computed feature's own arithmetic (`decider2.expr.Expr.compile`) is
     ALREADY a real closure, composed once per expression regardless of
@@ -824,7 +818,6 @@ def _build_path_fn(
     then_ = np.array(arrays["then"], dtype=np.int32)
     else_ = np.array(arrays["else"], dtype=np.int32)
     leaf_value = np.array(arrays["leaf_value"], dtype=np.int64)
-    literals_t = tuple(int(v) for v in literals)
 
     n_computed = len(computed)
     if n_computed == 0:
@@ -842,9 +835,9 @@ def _build_path_fn(
         @njit(cache=True, inline="always")
         def path_fn(args, params):
             thr_f = _nonempty(params[0])
-            thr_i = _nonempty_i(params[1] + literals_t)
+            thr_i = _nonempty_i(params[1])
             return walk_tree(
-                args, thr_f, thr_i,
+                args, thr_f, thr_i, params[2], params[3], params[4],
                 kind, feat_kind, feat_idx, op, thr_slot, then_, else_, leaf_value, start_pc,
             )
         return path_fn
@@ -868,8 +861,8 @@ def _build_path_fn(
     # grow numba's on-disk cache index rather than hit an existing entry.
     def path_fn(args, params):
         thr_f = _nonempty(params[0])
-        thr_i = _nonempty_i(params[1] + literals_t)
-        f64, i64, b8, i32, s64, sbytes = args
+        thr_i = _nonempty_i(params[1])
+        f64, i64, b8, i32, span = args
         feats = np.empty(n_f + n_computed, dtype=np.float64)
         for k in range(n_f):
             feats[k] = f64[k]
@@ -878,30 +871,10 @@ def _build_path_fn(
             feats[j] = cf(f64, thr_f)
             j += 1
         return walk_tree(
-            (feats, i64, b8, i32, s64, sbytes), thr_f, thr_i,
+            (feats, i64, b8, i32, span), thr_f, thr_i, params[2], params[3], params[4],
             kind, feat_kind, feat_idx, op, thr_slot, then_, else_, leaf_value, start_pc,
         )
     return path_fn
-
-
-def _build_matcher_fn(n_literals: int):
-    """`(args, params) -> int`: which of `params`' `n_literals` string-
-    literal codes `args[0]` (the column's own int32 dictionary code)
-    equals, or -1. `args`/`params` are both homogeneous int32-valued
-    tuples, so a plain runtime loop over `params` — the same "array
-    addressed by plain index" shape `walk_tree` itself uses — needs no
-    per-literal-count variant the way the arity-bounded families above do.
-    """
-
-    @njit(cache=True)
-    def matcher_fn(args, params):
-        code = args[0]
-        for i in range(len(params)):
-            if params[i] == code:
-                return i
-        return -1
-
-    return matcher_fn
 
 
 # One body per numeric/boolean output-column dtype: `_out_step_fn(args,
@@ -1016,15 +989,14 @@ def encode_tree(
 
     Holds, as `Step`s:
 
-    * one string-matcher step per string feature the tree tests (hoisted,
-      see the module docstring);
     * `<name>_path` — the path step: a `typed_args` packed step whose
-      inputs carry each feature's own kind (`float`/`int`/`bool`, or the
-      hoisted matcher's `int` result in a string feature's place), and
-      whose `fn` makes ONE call into `walk_tree`, returning the reached
-      leaf's `result_idx` as an `int`. **This is path capture** (doc 03
-      §7's `<Name>_path` convention, int64, "a value the node produces, and
-      you emit it the way you emit any other");
+      inputs carry each feature's own kind (`float`/`int`/`bool`, or
+      `bytes` — a string span — for a `str` feature), whose params are
+      every threshold and every string pattern, and whose `fn` makes ONE
+      call into `walk_tree`, returning the reached leaf's `result_idx` as
+      an `int`. **This is path capture** (doc 03 §7's `<Name>_path`
+      convention, int64, "a value the node produces, and you emit it the
+      way you emit any other");
     * one step per numeric or boolean output column, mapping the reached
       `result_idx` to that column's value via a captured array lookup.
 
@@ -1047,47 +1019,23 @@ def encode_tree(
     start_pc = _walk(ctx)
 
     arrays = ctx.resolve_arrays()
-    matchers = [ctx.matchers[f] for f in ctx.features if f in ctx.matchers]
-    string_features = tuple(m.feature for m in matchers)
-
-    # -- matcher steps ------------------------------------------------------
-    matcher_steps: list[Step] = []
-    for matcher in matchers:
-        fn = _build_matcher_fn(len(matcher.literals))
-        inputs = (Input(name=matcher.feature, annotation=str, null_policy=NullPolicy.REQUIRED),)
-        params = tuple(
-            ParamDecl(name=safe_ident(k), annotation=str, default=default, field_info=Field(default))
-            for k, default in matcher.literals
-        )
-        matcher_steps.append(
-            Step(
-                name=matcher.fn_name, fn=fn, inputs=inputs, params=params,
-                doc=f"Which pattern `{matcher.feature}` matches, or -1.",
-                packed=True, output_annotation=int,
-            )
-        )
+    string_features = tuple(f for f in ctx.features if kinds[f] == "str")
 
     # -- path step ------------------------------------------------------
-    path_fn = _build_path_fn(arrays, start_pc, ctx.n_f64_plain(), ctx._computed, ctx._literals)
-    path_inputs: list[Input] = []
-    for feature in ctx.features:
-        if feature in ctx.matchers:
-            # The matcher step's OWN output is an int — and now it stays
-            # one: it rides in the int64 row array, never cast to float64.
-            path_inputs.append(
-                Input(name=ctx.matchers[feature].fn_name, annotation=int, null_policy=NullPolicy.REQUIRED)
-            )
-        else:
-            path_inputs.append(
-                Input(name=feature, annotation=_PY_TYPE_BY_KIND[kinds[feature]], null_policy=NullPolicy.REQUIRED)
-            )
+    # A `str` feature is a `bytes` input (a string span, `_INPUT_ANNOTATION_
+    # BY_KIND`); every param — thresholds AND patterns — is a kernel
+    # argument of the path step, so a pattern retunes like a threshold.
+    path_fn = _build_path_fn(arrays, start_pc, ctx.n_f64_plain(), ctx._computed)
+    path_inputs = tuple(
+        Input(name=feature, annotation=_INPUT_ANNOTATION_BY_KIND[kinds[feature]], null_policy=NullPolicy.REQUIRED)
+        for feature in ctx.features
+    )
     path_params = tuple(
         ParamDecl(
-            name=slot.name, annotation=_PY_TYPE_BY_KIND[slot.annotation], default=slot.default,
+            name=slot.name, annotation=_PARAM_ANNOTATION[slot.annotation], default=slot.default,
             field_info=Field(slot.default),
         )
         for slot in ctx.params
-        if slot.annotation in ("float", "int")
     )
     path_name = f"{name}_path"
     path_step = Step(
@@ -1123,7 +1071,6 @@ def encode_tree(
 
     return EncodedTree(
         path_step=path_step,
-        matcher_steps=tuple(matcher_steps),
         output_steps=tuple(output_steps),
         path_column=path_name,
         features=tuple(ctx.features),
