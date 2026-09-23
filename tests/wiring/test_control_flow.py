@@ -6,6 +6,7 @@ import pytest
 from decider import branch, flow, frame_step, loop, step
 from decider.engine.wiring import Branch, Call, Loop, Sequence, interface, resolve
 from decider.engine import to_ir
+from decider.exceptions import WiringError
 
 
 def is_private(sector_code: int) -> bool:
@@ -216,3 +217,64 @@ def test_every_call_in_the_tree_is_in_the_flat_list_once():
 
     calls(plan.root)
     assert seen == list(plan.calls)
+
+
+@step(outputs=("term_cap", "flag"))
+def cap_and_flag(term_cap: float) -> tuple[float, bool]:
+    return min(term_cap, 54.0), True
+
+
+def flagged(flag: bool) -> bool:
+    return flag
+
+
+def _by(arm=cap_and_flag):
+    return branch(is_private, arm, cap_public, modifies=["term_cap"], name="by")
+
+
+def test_reading_a_name_only_an_arm_writes_is_an_error_naming_arm_and_modifies():
+    with pytest.raises(WiringError, match=r"flagged reads 'flag', but the only step writing it, by/cap_and_flag, "
+                                          r"is inside branch by, which passes on only modifies=\['term_cap'\]"):
+        resolve(flow(term_cap, _by(), flagged))
+
+
+def test_reading_the_branch_condition_after_the_branch_is_an_error():
+    def uses_condition(is_private: bool) -> bool:
+        return is_private
+
+    with pytest.raises(WiringError, match="only step writing it, by/is_private, is inside branch by"):
+        resolve(flow(term_cap, _by(), uses_condition))
+
+
+def test_emitting_an_arm_only_name_by_bare_name_points_at_its_path():
+    with pytest.raises(WiringError, match="Emit that version as 'flag@by/cap_and_flag'"):
+        resolve(flow(term_cap, _by()).emit("flag"))
+
+
+def test_arm_writes_and_the_condition_are_emittable_by_path():
+    plan = resolve(flow(term_cap, _by()).emit("flag@by/cap_and_flag", "is_private@by/is_private"))
+    assert plan.outputs["flag@by/cap_and_flag"].producer == "by/cap_and_flag"
+    assert plan.outputs["is_private@by/is_private"].producer == "by/is_private"
+
+
+def test_an_arm_intermediate_nothing_reads_after_the_branch_is_fine():
+    assert "flag" not in resolve(flow(term_cap, _by())).outputs
+
+
+def test_listing_the_arm_write_in_modifies_passes_it_on():
+    by = branch(is_private, cap_and_flag, cap_public, modifies=["term_cap", "flag"], name="by")
+    plan = resolve(flow(term_cap, by, flagged))
+    assert plan.calls[-1].reads[0].producer == "by"
+
+
+def test_reading_a_name_only_a_loop_body_writes_is_an_error():
+    @step(outputs=("best", "tries"))
+    def body(best: float) -> tuple[float, int]:
+        return best + 1, 1
+
+    def report(tries: int) -> int:
+        return tries
+
+    searched = loop(keep_going, body, carries=["best"], max_iterations=5, name="search")
+    with pytest.raises(WiringError, match=r"inside loop search, which passes on only carries=\['best'\]"):
+        resolve(flow(searched, report))

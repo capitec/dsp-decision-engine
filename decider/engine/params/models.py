@@ -6,6 +6,7 @@ from pydantic import ConfigDict, Field, TypeAdapter, create_model
 
 from decider.engine.ir.decls import ParamDecl
 from decider.engine.params.bundles import bundle_class
+from decider.exceptions import IRError
 
 
 def type_name(annotation: Any) -> str:
@@ -27,7 +28,7 @@ def record_shared_type(types: dict[str, tuple[Any, str]], decl: ParamDecl, path:
     """
     seen_type, seen_path = types.setdefault(decl.shared_key, (decl.annotation, path))
     if seen_type != decl.annotation:
-        raise TypeError(
+        raise IRError(
             f"shared param '{decl.shared_key}' is declared {type_name(seen_type)} by {seen_path} "
             f"and {type_name(decl.annotation)} by {path}"
         )

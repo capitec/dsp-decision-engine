@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 from decider.engine.ir.nodes import IRNode, SequenceNode
 from decider.engine.wiring.interface import interface
+from decider.exceptions import WiringError
 from decider.steps.base import Step, as_step
 from decider.steps.sequential import SequentialStep
 
@@ -34,7 +35,7 @@ class DagStep(SequentialStep):
         for i, (_, writes) in enumerate(faces):
             for name in sorted(writes):
                 if name in writer:
-                    raise ValueError(
+                    raise WiringError(
                         f"{where}: {self._label(writer[name])} and {self._label(i)} both write {name!r}; "
                         "use flow(...) to apply them in written order, the later one winning"
                     )
@@ -47,7 +48,7 @@ class DagStep(SequentialStep):
                 if not any(faces[i][0] & faces[j][1] for j in left if j != i):
                     break
             else:
-                raise ValueError(f"{where}: {[self._label(i) for i in left]} depend on each other in a cycle")
+                raise WiringError(f"{where}: {[self._label(i) for i in left]} depend on each other in a cycle")
             left.remove(i)
             order.append(i)
         return order
@@ -57,14 +58,17 @@ def dag(*steps: Any, name: str | None = None) -> Step:
     """Run steps in dependency order: a step reading a name runs after the step writing it.
 
     Two members writing one name is an error (use `flow` for a waterfall). A
-    single unnamed step is returned unchanged.
+    single unnamed step is returned unchanged. As with `flow`, intermediates
+    are dropped from the output unless kept with `.emit(...)`; `.drop(...)`
+    removes columns.
 
     Example::
 
         affordability = dag(affordable, ratio, disposable_income, name="affordability")
+        affordability.emit("ratio", "disposable_income").run(df)
     """
     if not steps:
-        raise ValueError("dag() needs at least one step")
+        raise WiringError("dag() needs at least one step")
     if len(steps) == 1 and name is None:
         return as_step(steps[0])
     return DagStep(tuple(map(as_step, steps)), name)

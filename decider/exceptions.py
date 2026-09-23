@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from contextlib import contextmanager
 from warnings import warn
@@ -94,6 +96,77 @@ class OutputFormattingError(DeciderError):
 class DeciderRuntimeError(DeciderError):
     _STATUS_CODE = 500
     _MESSAGE = "A runtime error occurred."
+
+
+class WiringError(DeciderError, ValueError):
+    """A pipeline can't be wired: its message names the step path and suggests a fix.
+
+    Raised for a bad step name, duplicate paths, a likely typo, a read of a
+    name a branch arm keeps to itself, a dag cycle, a bad emit or drop.
+
+    Example::
+
+        try:
+            pipeline.run(df)
+        except WiringError as e:
+            print(e)   # names the step path and suggests a fix
+    """
+
+
+class IRError(DeciderError, TypeError):
+    """A step, or the IR it builds, is malformed.
+
+    Raised for a signature that can't be wired, a branch condition that isn't
+    one call, a node with no origin, a shared param declared with two types.
+    """
+
+
+class ParamsError(DeciderError, ValueError):
+    """A node's params are invalid for the params document in use."""
+
+
+class MissingInputError(DeciderError, ValueError):
+    """A required input (no `missing_as()`, no `| None`) is null or absent in the data.
+
+    `input`, `path` and `null_count` say which input of which step, and on how many rows.
+    """
+
+    _STATUS_CODE = 400
+
+    def __init__(self, input: str, path: str, null_count: int, n_rows: int, absent: bool = False):
+        self.input, self.path, self.null_count = input, path, null_count
+        where = f"step '{path}'" if path else "the pipeline"
+        found = ("is not in the input frame or record" if absent
+                 else f"has {null_count} null row(s) of {n_rows}")
+        super().__init__(
+            f"input '{input}' of {where} is required but column '{input}' {found}. "
+            f"Fix the data, or declare `{input}: T = missing_as(fill)` or `{input}: T | None`."
+        )
+
+
+class ArrowKindError(DeciderError, TypeError):
+    """A column's Arrow type can't be read as its declared kind.
+
+    Carries `column`, `kind` and `arrow_type` when the import (rather than the
+    dtype table) refused it.
+    """
+
+
+class NeedsKernelSplit(ArrowKindError):
+    """A declared column has no flat-array form (List, Struct, Array, Object, Binary, an overflowing Decimal).
+
+    The caller splits the kernel around the column; `column` and `dtype` name it.
+    """
+
+    def __init__(self, name: str, dtype: object, reason: str = ""):
+        self.column = name
+        self.dtype = dtype
+        message = f"column '{name}' ({dtype}) has no flat-array extraction; needs the kernel-split escape"
+        super().__init__(f"{message} ({reason})" if reason else message)
+
+
+class ArrowImportError(DeciderError, RuntimeError):
+    """nanoarrow refused what `__arrow_c_stream__()` handed over."""
 
 
 @contextmanager
