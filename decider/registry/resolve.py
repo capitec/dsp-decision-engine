@@ -1,30 +1,32 @@
-"""Fuzzy name matching, for suggesting likely typos."""
 from __future__ import annotations
 
 import difflib
 from typing import Iterable
 
-
-_GATE_CUTOFF = 0.8
+# Hints only decorate an error already being raised, so a loose match costs nothing.
 _HINT_CUTOFF = 0.6
+# A gate match makes the caller raise, so a loose match would be a false build error.
+_GATE_CUTOFF = 0.8
 
 
 def suggest_names(name: str, candidates: Iterable[str], *, n: int = 1) -> tuple[str, ...]:
-    """Up to `n` closest candidates, closest first, for decorating an error
-    that's already been raised. Generous cutoff: a false suggestion here
-    costs nothing."""
+    """Up to `n` candidates close to `name`, closest first, for did-you-mean hints.
+
+    Example:
+        suggest_names("tre", ["tree", "table"])  # ("tree",)
+    """
     pool = [c for c in candidates if c != name]
-    if not pool:
-        return ()
     return tuple(difflib.get_close_matches(name, pool, n=n, cutoff=_HINT_CUTOFF))
 
 
 def suggest_name(name: str, candidates: Iterable[str]) -> str | None:
-    """The single closest candidate, for gating — i.e. when a non-None
-    result is what makes the caller raise. Strict cutoff, because a false
-    positive here is a false build error on legitimate code."""
+    """The closest candidate to `name` under a strict cutoff, or `None`.
+
+    For deciding whether a near-miss is likely a typo worth raising on.
+
+    Example:
+        suggest_name("incme", ["income", "age"])  # "income"
+    """
     pool = [c for c in candidates if c != name]
-    if not pool:
-        return None
     matches = difflib.get_close_matches(name, pool, n=1, cutoff=_GATE_CUTOFF)
     return matches[0] if matches else None
