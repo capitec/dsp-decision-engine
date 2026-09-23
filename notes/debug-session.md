@@ -36,6 +36,19 @@ and the websocket adapter build on.
   (sequences are entered); anywhere else it moves one checkpoint.
   `step_into()` always moves one checkpoint, which enters the taken arms and
   each loop iteration.
+- **Arms and iterations are steps over the batch.** One step is one node
+  over every row that reaches it, so a branch whose rows go both ways is
+  entered arm by arm, in arm order, each over its own rows; per-row stepping
+  would pause once per row and could not be the same checkpoints in every
+  mode. `Checkpoint.arm` and `.iteration` (innermost branch arm, innermost
+  loop iteration from 1; the condition checked before iteration k is k)
+  say where a checkpoint is, and `NodeStarted`/`Paused` carry them. The
+  path alone names the arm but not the iteration.
+- **A value's "current" version after a loop is the carry.** The loop's
+  carried version sits after its body's versions in the chain, as a branch's
+  merge follows its arms', so `value("best")` after a loop (and during it)
+  reads what the loop hands on, not the last body write, which only holds
+  the rows that iterated.
 - **`set` overwrites every version of the name written so far, then records
   an `override@<path>` version.** Versions are bound at resolve time, so a
   later node reads a specific version id, not "the latest"; a branch may

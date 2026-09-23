@@ -44,7 +44,9 @@ def branch(condition: Any, *arms: Any, modifies: Sequence[str], name: str) -> Br
     """Run one arm per row: a bool condition picks the first arm (true) or the second; an int picks by index.
 
     A bool condition sends `True` to arm 0, while an int picks arm `i`, so
-    switching a flag from bool to 0/1 swaps the arms.
+    switching a flag from bool to 0/1 swaps the arms. An arm may be one step
+    or a flow of several; the arms of one branch must agree on the type of
+    each name they modify.
 
     Args:
         modifies: the names the branch passes on; they keep their earlier

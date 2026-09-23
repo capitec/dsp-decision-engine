@@ -7,7 +7,9 @@ tasks build on.
   subclasses `InterpretedRunner` and replaces only how a scalar or row call runs
   (through its `compile_plan` unit); frame steps, branches, loops, row subsets
   and merges are the interpreted code. `FusedRunner` also replaces the walk of
-  a sequence, so a unit covering several calls runs once.
+  a sequence, so a unit covering several calls runs once, and runs a branch
+  or loop of plain scalar steps as one packed kernel when it can
+  (`packed-control-flow.md`).
 - **A fused kernel's checkpoints carry its first step's origin.** One
   `before`/`after` pair per kernel; the later steps of the kernel yield nothing.
   The enclosing sequence was the alternative, but it already yields its own
@@ -32,6 +34,11 @@ tasks build on.
   kernel is split after a nullable output that a later step of the same run
   reads, so that reader's null policy is applied by the driver, as in
   interpreted mode.
+- **Python code sees Python scalars.** Interpreted mode and the per-call
+  Python fallback pass each column through `.tolist()`, so a step gets
+  `float`/`int`/`bool`, not numpy scalars: `x / 0.0` raises
+  `ZeroDivisionError` as it does in a kernel, instead of warning and giving
+  inf/nan.
 - **Errors from step functions carry the step.** The runner adds a note
   (`exc.add_note`, Python 3.11+; nothing on 3.10) naming the step path, and in
   interpreted mode the frame row, keeping the exception's type. A fused

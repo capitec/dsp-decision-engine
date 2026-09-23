@@ -66,12 +66,10 @@ def plus_one(half: float) -> float:
 
 def test_fused_pauses_once_per_kernel_with_the_origin_of_its_first_step():
     pipeline = flow(term_cap, half, plus_one, branch(is_private, cap_private, cap_public, modifies=["term_cap"], name="by"))
+    # The branch of plain scalar steps is packed into one kernel, so nothing inside it pauses.
     assert _checkpoints(pipeline, _frame(2), "fused") == [
         ("before", ""), ("before", "seed"), ("after", "seed"),
-        ("before", "by"), ("before", "by/is_private"), ("after", "by/is_private"),
-        ("before", "by/cap_private"), ("after", "by/cap_private"),
-        ("before", "by/cap_public"), ("after", "by/cap_public"),
-        ("after", "by"), ("after", ""),
+        ("before", "by"), ("after", "by"), ("after", ""),
     ]
 
 
@@ -256,13 +254,14 @@ def test_a_row_node_without_a_reference_is_called_with_row_params_and_consts(bin
     assert out["scaled"].to_list() == [3.0, 6.0]
 
 
-def test_state_keeps_every_version_of_a_waterfall(bind):
+def test_state_keeps_every_version_of_a_waterfall(bind, mode):
     exe = bind(by_sector)
     state, params = exe.prepare(pl.DataFrame({"requested_term": [72.0, 72.0], "sector_code": [1, 2]}))
     for _ in exe.runner.iterate(exe.plan, state, params):
         pass
     assert [v.producer for v in state.versions("term_cap@*")] == ["seed", "by/cap_private", "by/cap_public", "by"]
-    assert state.column("term_cap@by/cap_private").to_list() == [54.0, None]
+    # A packed branch keeps its arms' values inside the kernel.
+    assert state.column("term_cap@by/cap_private").to_list() == ([None, None] if mode == "fused" else [54.0, None])
     assert state.column("term_cap").to_list() == [54.0, 60.0]
 
 

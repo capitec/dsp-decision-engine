@@ -35,6 +35,8 @@ class Kernel:
     """
 
     __slots__ = ("calls", "fn", "reads", "optional", "writes", "_masked", "_layout", "_python")
+    # Whether a kernel numba can't build runs its calls one by one instead.
+    splits = True
 
     def __init__(self, calls, fn, reads, optional, writes, masked, layout):
         self.calls: tuple[Call, ...] = calls
@@ -70,6 +72,8 @@ class Kernel:
         try:
             self.fn(n, cols, valids, tuple(params), tuple(outs + masks))
         except FALLBACK_ERRORS as e:
+            if not self.splits:
+                raise
             # Each call compiled alone, but not together (a value numba can't
             # type only reaches it here), so run them one by one in Python.
             reason = f"{type(e).__name__}: {e}"
@@ -103,7 +107,7 @@ class Fallback:
         call = self.calls[0]
         node = call.node
         bundle = bundles[call.id] if node.params else ()
-        cols = [(i.arg, values[v.id], valid.get(v.id) if i.null_policy is NullPolicy.OPTIONAL else None)
+        cols = [(i.arg, values[v.id].tolist(), valid.get(v.id) if i.null_policy is NullPolicy.OPTIONAL else None)
                 for i, v in zip(node.inputs, call.reads)]
         outs = [np.empty(n, dtype) for _, dtype in self.writes]
         masks = [np.ones(n, np.bool_) for _ in outs]
@@ -251,58 +255,76 @@ def _kept(plan: Plan) -> tuple[set[int], dict[int, set[int]]] | None:
     return pinned, readers
 
 
-def _kernel(compiled: list, keep) -> Kernel:
-    calls = tuple(c for c, *_ in compiled)
-    ids = {c.id for c in calls}
-    cols: dict[int, int] = {}
-    masks: dict[int, int] = {}
-    reads: list[Version] = []
-    optional: list[Version] = []
-    produced: dict[int, tuple[int, int]] = {}
-    specs, layout, outputs, writes, masked = [], [], [], [], []
-    p = 0
-    for s, (call, key, fn, _) in enumerate(compiled):
+class Layout:
+    """Where each value of one kernel comes from: the columns it reads, the params it takes, the calls' results.
+
+    `spec(call, key, fn)` numbers the calls in the order it sees them;
+    `produced` maps a version made inside the kernel to its source.
+    """
+
+    def __init__(self) -> None:
+        self.reads: list[Version] = []
+        self.optional: list[Version] = []
+        self.layout: list[tuple] = []
+        self.produced: dict[int, tuple] = {}
+        self._cols: dict[int, int] = {}
+        self._masks: dict[int, int] = {}
+        self._p = 0
+        self._specs = 0
+
+    def source(self, v: Version, policy: NullPolicy = NullPolicy.REQUIRED) -> tuple:
+        if v.id in self.produced:
+            return self.produced[v.id]
+        if v.id not in self._cols:
+            self._cols[v.id] = len(self.reads)
+            self.reads.append(v)
+        if policy is not NullPolicy.OPTIONAL:
+            return ("col", self._cols[v.id])
+        if v.id not in self._masks:
+            self._masks[v.id] = len(self.optional)
+            self.optional.append(v)
+        return ("opt", self._cols[v.id], self._masks[v.id])
+
+    def spec(self, call: Call, key: str, fn) -> Spec:
         node = call.node
-        sources = []
-        for inp, v in zip(node.inputs, call.reads):
-            if v.id in produced:
-                sources.append(("res", *produced[v.id]))
-                continue
-            if v.id not in cols:
-                cols[v.id] = len(reads)
-                reads.append(v)
-            if inp.null_policy is NullPolicy.OPTIONAL:
-                if v.id not in masks:
-                    masks[v.id] = len(optional)
-                    optional.append(v)
-                sources.append(("opt", cols[v.id], masks[v.id]))
-            else:
-                sources.append(("col", cols[v.id]))
+        sources = [self.source(v, inp.null_policy) for inp, v in zip(node.inputs, call.reads)]
         consts = tuple(v for _, v in node.consts)
         if node.params or consts or node.kind == "row":
-            layout.append((call.id, bool(node.params), consts, node.kind == "row"))
+            self.layout.append((call.id, bool(node.params), consts, node.kind == "row"))
+        p = self._p
         if node.kind == "row":
             args = (("row", tuple(sources)), ("par", p), ("par", p + 1))
-            p += 2
+            self._p += 2
         else:
             by_arg = {i.arg: src for i, src in zip(node.inputs, sources)}
             by_arg |= {d.arg: ("par", p + k) for k, d in enumerate(node.params)}
             p += len(node.params)
             by_arg |= {name: ("par", p + k) for k, (name, _) in enumerate(node.consts)}
-            p += len(node.consts)
+            self._p = p + len(node.consts)
             missing = [a for a in parameters(fn) if a not in by_arg]
             if missing:
                 raise ValueError(f"{node.origin.path}: argument(s) {missing} are not an input, const or param")
             args = tuple(by_arg[a] for a in parameters(fn))
         dtypes = tuple(output_dtype(o.annotation) for o in node.outputs)
         nulls = tuple(nullable(o.annotation) for o in node.outputs)
-        specs.append(Spec(key, fn, args, dtypes, node.kind == "row" or len(dtypes) > 1, nulls if any(nulls) else ()))
+        s, self._specs = self._specs, self._specs + 1
+        self.produced.update((v.id, ("res", s, k)) for k, v in enumerate(call.writes))
+        return Spec(key, fn, args, dtypes, node.kind == "row" or len(dtypes) > 1, nulls if any(nulls) else ())
+
+
+def _kernel(compiled: list, keep) -> Kernel:
+    calls = tuple(c for c, *_ in compiled)
+    ids = {c.id for c in calls}
+    lay = Layout()
+    specs, outputs, writes, masked = [], [], [], []
+    for call, key, fn, _ in compiled:
+        spec = lay.spec(call, key, fn)
+        specs.append(spec)
         for k, v in enumerate(call.writes):
-            produced[v.id] = (s, k)
             if keep is None or v.id in keep[0] or keep[1].get(v.id, set()) - ids:
-                if nulls[k]:
+                if spec.nullable and spec.nullable[k]:
                     masked.append(len(writes))
-                outputs.append((s, k))
-                writes.append((v, dtypes[k]))
+                outputs.append(lay.produced[v.id])
+                writes.append((v, spec.dtypes[k]))
     fn = fused_kernel(tuple(specs), tuple(outputs))
-    return Kernel(calls, fn, tuple(reads), tuple(optional), tuple(writes), tuple(masked), tuple(layout))
+    return Kernel(calls, fn, tuple(lay.reads), tuple(lay.optional), tuple(writes), tuple(masked), tuple(lay.layout))

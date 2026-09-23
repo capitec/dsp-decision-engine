@@ -86,11 +86,10 @@ def ratio(x: float, y: float) -> float:
     return x / y
 
 
-@pytest.mark.filterwarnings("ignore::RuntimeWarning")
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="dividing by zero gives inf/nan in interpreted mode and raises ZeroDivisionError compiled")
-def test_dividing_by_zero_agrees_across_modes():
-    assert_equivalent(flow(ratio), pl.DataFrame({"x": [1.0, 0.0], "y": [0.0, 0.0]}))
+@pytest.mark.parametrize("mode", ("interpreted", "stepped", "fused"))
+def test_dividing_by_zero_agrees_across_modes(mode):
+    with pytest.raises(ZeroDivisionError):
+        Engine().bind(flow(ratio), mode).run(pl.DataFrame({"x": [1.0, 0.0], "y": [0.0, 0.0]}))
 
 
 def test_a_score_disagreeing_with_run_fails_naming_the_row(monkeypatch):

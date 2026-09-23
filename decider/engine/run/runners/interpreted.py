@@ -17,22 +17,28 @@ from decider.engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, Seque
 class _Scope:
     """The rows a node runs on, the frame a frame step sees on them, and the names in sight."""
 
-    __slots__ = ("rows", "base", "names")
+    __slots__ = ("rows", "base", "names", "arm", "iteration")
 
-    def __init__(self, rows: np.ndarray | None, base: pl.DataFrame, names: dict[str, Version]):
+    def __init__(self, rows: np.ndarray | None, base: pl.DataFrame, names: dict[str, Version],
+                 arm: int | None = None, iteration: int | None = None):
         self.rows = rows
         self.base = base
         self.names = names
+        self.arm = arm
+        self.iteration = iteration
 
     def count(self, n: int) -> int:
         return n if self.rows is None else len(self.rows)
 
     def child(self, keep: np.ndarray | None = None) -> _Scope:
         if keep is None:
-            return _Scope(self.rows, self.base, dict(self.names))
+            return _Scope(self.rows, self.base, dict(self.names), self.arm, self.iteration)
         rows = np.flatnonzero(keep) if self.rows is None else self.rows[keep]
         base = self.base.filter(pl.Series(keep)) if self.base.width else self.base
-        return _Scope(rows, base, dict(self.names))
+        return _Scope(rows, base, dict(self.names), self.arm, self.iteration)
+
+    def checkpoint(self, origin, when: str) -> Checkpoint:
+        return Checkpoint(origin, when, self.arm, self.iteration)
 
 
 class InterpretedRunner:
@@ -65,7 +71,7 @@ class InterpretedRunner:
             scope.names.update((v.name, v) for v in passed)
             return
         origin = r.node.origin
-        yield Checkpoint(origin, "before")
+        yield scope.checkpoint(origin, "before")
         if isinstance(r, Call):
             self._call(r, state, params, scope)
         elif isinstance(r, Sequence):
@@ -74,7 +80,7 @@ class InterpretedRunner:
             yield from self._branch(r, state, params, scope)
         else:
             yield from self._loop(r, state, params, scope)
-        yield Checkpoint(origin, "after")
+        yield scope.checkpoint(origin, "after")
 
     def _sequence(self, seq: Sequence, state: State, params: RunParams, scope: _Scope) -> Iterator[Checkpoint]:
         for child in seq.children:
@@ -86,7 +92,8 @@ class InterpretedRunner:
             return _frame(call, state, scope)
         m = scope.count(state.n)
         bundle = params.bundle(call.id, m)
-        cols = [_argument(state, v, i, scope.rows, node.origin.path) for i, v in zip(node.inputs, call.reads)]
+        # Plain Python scalars, not numpy ones: `x / 0.0` must raise here as it does in a kernel.
+        cols = [_argument(state, v, i, scope.rows, node.origin.path).tolist() for i, v in zip(node.inputs, call.reads)]
         rows = zip(*cols) if cols else repeat((), m)
         results: list = []
         append = results.append
@@ -135,6 +142,7 @@ class InterpretedRunner:
             if not keep.any():
                 continue
             inner = cond.child(keep)
+            inner.arm = k
             yield from self._node(resolved, state, params, inner)
             taken.append((k, inner.rows))
         for merge in branch.merges:
@@ -152,7 +160,8 @@ class InterpretedRunner:
             state.write(carry.version, values.copy(), scope.rows, valid)
             active.names[carry.version.name] = carry.version
         # ponytail: rows still looping at max_iterations stop silently; raise or flag them if that hides bugs.
-        for _ in range(loop.node.max_iterations):
+        for i in range(1, loop.node.max_iterations + 1):
+            active.iteration = i
             cond = active.child()
             yield from self._node(loop.condition, state, params, cond)
             going, _ = state.read(loop.condition.writes[0], active.rows)
