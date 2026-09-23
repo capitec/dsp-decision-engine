@@ -3,25 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from decider.engine.ir.nodes import CallNode, IRNode, SequenceNode
+from decider.engine.ir.nodes import IRNode, SequenceNode
+from decider.engine.wiring.interface import interface
 from decider.steps.base import Step, as_step
 from decider.steps.sequential import SequentialStep
 
 if TYPE_CHECKING:
     from decider.engine.ir.context import IRContext
-
-
-def _interface(node: IRNode) -> tuple[set[str], set[str]]:
-    """(names read from outside, names written)."""
-    if isinstance(node, CallNode):
-        return {i.name for i in node.inputs or ()}, {o.name for o in node.outputs or ()}
-    reads: set[str] = set()
-    writes: set[str] = set()
-    for child in node.children():
-        r, w = _interface(child)
-        reads |= r - writes
-        writes |= w
-    return reads, writes
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -40,7 +28,7 @@ class DagStep(SequentialStep):
         return self.steps[i].name or type(self.steps[i]).__name__
 
     def _order(self, nodes: list[IRNode]) -> list[int]:
-        faces = [_interface(n) for n in nodes]
+        faces = [interface(n) for n in nodes]
         where = f"dag {self.name!r}" if self.name else "dag"
         writer: dict[str, int] = {}
         for i, (_, writes) in enumerate(faces):
