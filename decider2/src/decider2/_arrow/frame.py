@@ -386,6 +386,20 @@ class FrameView:
         )
         return out
 
+    def spans(self) -> np.ndarray:
+        """Every row's STR spans through the C gather (one call per row,
+        BOUNDARY-REWORK.md §1.3b): an `(n, 2 * n_str)` int64 table of
+        `(address, length)` per STR slot, length -1 for a null — the span
+        table a `bytes`-declared input crosses the boundary as (`boundary.
+        dtypes.SpanPlan`, `compile.gather`). Only the span buffer is copied
+        out; the numeric slots are gathered and discarded."""
+        self._require_bound()
+        n = self.n
+        ns = self.plan.counts[STR]
+        out = np.empty((n, max(2 * ns, 2)), np.int64)
+        materialize_spans(np.uint64(self.gather_addr), np.uint64(self.plan_addr), n, self.span, out)
+        return out
+
     def strings(self, slot: int) -> list[bytes | None]:
         """Every row's bytes for STR slot `slot` (copies), None for nulls."""
         rows = self.materialize()
@@ -424,6 +438,17 @@ def materialize_rows(gather_addr, plan_addr, n, f64, i64, b8, i32, span, valid,
         out_i32[i, :] = i32
         out_span[i, :] = span
         out_valid[i, :] = valid
+
+
+@njit(cache=True)
+def materialize_spans(gather_addr, plan_addr, n, span, out):
+    """`materialize_rows` for the span buffer alone: every row through the
+    shim's gather (one pointer call per row), copying out only the STR
+    slots' `(address, length)` pairs. Same cache discipline: both addresses
+    are ARGUMENTS."""
+    for i in range(n):
+        call_gather(gather_addr, plan_addr, i)
+        out[i, :] = span
 
 
 @njit(cache=True)

@@ -181,17 +181,31 @@ def _assert_score_agrees_with_apply(
     value (`_scatter_back`'s NaN/0/False) is `observe/`'s job, not yet
     built (doc 00-BUILD.md Layer 5) — a different check than this rung.
 
-    A pipeline with any `str`-typed input is skipped entirely, not
-    compared: `runtime.invoke.score`'s own module docstring calls its
-    extraction a "minimal reference implementation" with "no dtype ladder"
-    at all, so a `str` input is out of its scope from the start — a
-    pre-existing, separately-scoped gap (doc 05 §1.5's dictionary-code
-    encoding has no single-record equivalent) that review finding 3's fix
-    is not asking to close.
+    **This rung is the boundary's independent producer** (docs/BOUNDARY-
+    REWORK.md §1.6). `interpreted`/`stepped`/`fused` all read a string
+    feature out of polars' memory through the SAME Arrow import; `score()`
+    never builds a frame — it encodes the record's own `str` with Python
+    and hands the kernel that address. So `fused == score` over a
+    string-bearing pipeline is the assertion that nanoarrow's decode of a
+    Utf8View element yields the bytes Python's encoder yields, which is
+    why `bytes` (string-span) inputs are always compared here, driven by
+    `decider2.testing.corpus`'s string corpus.
+
+    The one remaining skip: a pipeline in which a hand-written
+    (non-packed) step reads a `str`-typed input — the dictionary-code
+    convention of doc 05 §1.5, whose `score()` side is the "record is its
+    own dictionary" shim in `runtime.invoke.score`. That is Stage 7's
+    surface, and the skip is keyed on the STEP being non-packed, not on
+    the input type, so a tree's string feature is never excused by it.
     """
-    interface = getattr(pipeline, "interface", None)
-    if interface is not None and any(inp.annotation is str for inp in interface.inputs):
-        return
+    flatten = getattr(pipeline, "flatten_for_runtime", None)
+    if flatten is not None:
+        steps = flatten()[0]
+        if any(
+            not step.packed and any(inp.annotation is str for inp in step.inputs)
+            for step in steps
+        ):
+            return
     score_kwargs = {k: v for k, v in kwargs.items() if k in ("params", "shared")}
     terminal_names = [c for c in reference.columns if c not in frame.columns]
     if not terminal_names:
