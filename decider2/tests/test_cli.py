@@ -5,6 +5,7 @@ binding a socket is `serving/server.py`'s job and is exercised through
 """
 from __future__ import annotations
 
+import os
 import textwrap
 
 import click
@@ -93,7 +94,16 @@ def test_build_precompiles_and_reports(tmp_path):
 
 def test_build_verify_is_the_zero_compilation_release_gate(tmp_path):
     from click.testing import CliRunner
+    import decider2._arrow as arrow
     from decider2.cli import cli
+
+    # `build --verify` gates a release on the compiled shim being loadable, so
+    # it cannot pass without it. Skip where the extension was never built (no C
+    # toolchain or headers) rather than fail; DECIDER2_REQUIRE_SHIM=1, which CI
+    # sets, turns that back into an error. The sibling test below covers the
+    # unavailable case on purpose, by monkeypatching.
+    if arrow.diagnose()["shim"] != "loaded" and not os.environ.get("DECIDER2_REQUIRE_SHIM"):
+        pytest.skip("compiled shim not built here; set DECIDER2_REQUIRE_SHIM=1 to require it")
 
     result = CliRunner().invoke(cli, ["build", "--verify", str(_write_flow(tmp_path))])
     assert result.exit_code == 0, result.output
