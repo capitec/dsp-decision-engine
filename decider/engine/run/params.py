@@ -35,14 +35,17 @@ class RunReport:
 class RunParams:
     """One run's view of a params document: each node's bundle, validated on first use and cached.
 
+    `lazy` says the run validates a node only when it runs.
+
     Example::
 
         params = RunParams(nodes, doc, ParamsCache())
         params.bundle(call.id, rows=len(df)).cap
     """
 
-    def __init__(self, nodes: dict[int, NodeParams], doc: Mapping[str, Any], cache: ParamsCache):
+    def __init__(self, nodes: dict[int, NodeParams], doc: Mapping[str, Any], cache: ParamsCache, lazy: bool = False):
         self.nodes = nodes
+        self.lazy = lazy
         self.doc = doc
         self.key = document_key(doc) if doc else _EMPTY_KEY
         self.cache = cache
