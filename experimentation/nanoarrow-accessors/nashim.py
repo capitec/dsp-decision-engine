@@ -61,8 +61,11 @@ assert lib.sm_sizeof_schema() == ctypes.sizeof(arrowc.ArrowSchema)
 assert lib.sm_sizeof_array() == ctypes.sizeof(arrowc.ArrowArray)
 
 # nanoarrow's enum ArrowType values we care about (nanoarrow.h)
-STORAGE_NAMES = {13: "utf8 (u)", 14: "binary", 25: "large_utf8 (U)", 24: "large_binary",
-                 37: "utf8_view (vu)", 36: "binary_view"}
+# enum ArrowType (nanoarrow.h): NA=1, STRING=15, BINARY=16, LARGE_STRING=36, LARGE_BINARY=37,
+# BINARY_VIEW=40, STRING_VIEW=41
+STORAGE_NAMES = {1: "null (n)", 15: "utf8 (u)", 16: "binary", 36: "large_utf8 (U)", 37: "large_binary",
+                 41: "utf8_view (vu)", 40: "binary_view"}
+STRING_VIEW = 41
 MINIMAL, DEFAULT, FULL = 1, 2, 3
 
 
@@ -102,7 +105,8 @@ class NanoView:
 
     def __init__(self, series=None, *, stream_ptr=None, capsule=None, structs=None):
         self.err = ctypes.create_string_buffer(ERR_SIZE)
-        if structs is not None:  # a hand-built (schema, array) pair, no stream
+        self._owned = structs is None
+        if structs is not None:  # a hand-built (schema, array) pair, borrowed: never released here
             self.schema, arr = structs
             self._capsule = None
             self.format = self.schema.format.decode()
@@ -171,8 +175,10 @@ class NanoView:
     def release(self):
         for c in self.chunks:
             lib.sm_view_reset(c.view)
-            lib.sm_array_release(ctypes.byref(c.array))
-        lib.sm_schema_release(ctypes.byref(self.schema))
+            if self._owned:
+                lib.sm_array_release(ctypes.byref(c.array))
+        if self._owned:
+            lib.sm_schema_release(ctypes.byref(self.schema))
         self.chunks = []
 
     def __del__(self):  # pragma: no cover

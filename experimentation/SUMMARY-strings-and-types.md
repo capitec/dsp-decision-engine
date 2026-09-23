@@ -88,6 +88,7 @@ fourth was not in the original plan — the C work turned it up (section 5):
 | **Numba + C** | same, but C instead of Rust — no second language in the build | **done** |
 | **Typed features** | split the one array into float64 / int64 / bool / codes | **done** |
 | **Pure numba bytes** | prefix/suffix/substring over raw bytes, no C and no Rust | *running* |
+| **nanoarrow accessors** | use a library instead of hand-decoding the Arrow layout | **done — does not pay off** |
 | **Arrow strings** | read polars' string bytes straight into the tree, no encoding | **done — this is the answer** |
 | **polars Rust plugin** | make a tree a polars expression instead of a numba kernel | **done** |
 
@@ -778,5 +779,112 @@ measurements in `results.jsonl`.
 
 ---
 
-*Still out: pure-numba byte matching, and the three-way nanoarrow comparison
-you asked for.*
+## 10. nanoarrow — the library does not save you from hand-writing it
+
+You asked to use an existing library rather than own the layout decoding, on
+the grounds that if the spec changes you just pull the latest. That is the
+right instinct in general. Here it does not pay off, for a specific and
+checkable reason.
+
+Three approaches were built and measured on identical data:
+
+- **(A)** today's hand-decoded numba
+- **(B)** vendored nanoarrow called per row through a C shim
+- **(C)** nanoarrow `ValidateFull` once per batch, then per-row numba
+
+### The finding that decides it
+
+**nanoarrow does not validate string views at all.** I checked the vendored
+source myself: `ArrowArrayViewValidateFull` has cases for `LIST_VIEW` and
+`LARGE_LIST_VIEW` and **no case for `STRING_VIEW` or `BINARY_VIEW`**. It never
+checks a single element's `(buffer_index, offset, length)`. So option (C)'s
+whole premise — validate once, then the per-row path is provably safe — is
+false. The prototype proves it: the variant that trusts `ValidateFull` passes
+validation and then segfaults.
+
+And the fast accessor is named `...Unsafe` because it is. Handed deliberately
+corrupted arrays, each in its own subprocess:
+
+| corruption | hand-decoded numba | nanoarrow (unsafe) |
+|---|---|---|
+| buffer index 1000 | error leaf | **SIGSEGV** (signal 11, confirmed) |
+| offset 2³¹−1 | error leaf | **SIGSEGV** (signal 11, confirmed) |
+| length 2³⁰, pattern absent | error leaf | **wrong answer** — matched bytes past the buffer |
+| truncated buffer count | error leaf | **wrong answer** — nanoarrow computes −1 variadic buffers and accepts it |
+| a `sizes` buffer that lies | wrong answer | wrong answer (nobody can catch this) |
+
+nanoarrow's import check catches one of five. The hand-decoded kernel refuses
+everything it can know about.
+
+### So what does the library actually save you?
+
+| | lines of Arrow-layout knowledge you own |
+|---|---|
+| hand-decoded numba | **42** (Python) |
+| nanoarrow, unsafe accessor | **0** — and it crashes |
+| nanoarrow + your own bounds checks | **37** (C) |
+
+That is the whole answer. nanoarrow *decodes* the layout for you but does not
+*check* it, so to get back to safety you write the bounds checks yourself — 37
+lines of C instead of 42 lines of Python, plus the project's first compiled
+artefact. **The library moves where you hand-write it, and makes it C.**
+
+### Where nanoarrow genuinely wins, in fairness
+
+If polars ever exported plain `u` (utf8) or `U` (large_utf8) instead of `vu`,
+**nanoarrow handles it with zero code changes**; the hand-decoded version
+refuses loudly (`expected 'vu'`) and would need 10–15 lines to support it. On a
+schema that lies about its own type, though, nanoarrow segfaults and the
+hand-decoded version refuses.
+
+And "just pull the latest" is mechanically true — nanoarrow ships about two
+releases a year with a stable C API — but the Arrow format is *additive*.
+Utf8View has not changed since Arrow 15. A "spec change" means a *new* format,
+which the hand-decoded version refuses by name, and which nanoarrow only helps
+with once it supports it **and** the accessor is safe — which for string views
+it is not.
+
+### Speed at one record, which is your 90% case
+
+µs per call, against the 60 µs spec:
+
+| | as written | with the Python glue leaned out |
+|---|---|---|
+| hand-decoded numba | 42.6–45.1 | **21.0** |
+| nanoarrow per row | 19.3–20.6 | 9.3 |
+| validate-full + numba | 33.3–35.9 | 17.2 |
+
+nanoarrow is genuinely faster — but look at *what* is being timed. In every
+approach the dominant cost is the **import handshake and Python glue**, not
+decoding: 26 µs of the hand-decoded path is `export`, of which ~8 µs is a
+single `np.ctypeslib.as_array` call. Building the pattern table and the string
+tables per call is another 7 µs of Python that should be hoisted. polars' own
+`__arrow_c_stream__` is 0.5 µs.
+
+**Leaning that glue takes 45 µs to 21 µs with no C at all** — most of
+nanoarrow's advantage, none of its cost. At 1M rows the hand-decoded kernel is
+actually 6–10% *faster*, because nanoarrow's per-row call cannot inline.
+
+### Recommendation
+
+**Keep the hand-decoded numba kernel, lean its glue, do not adopt nanoarrow,
+and drop the validate-once idea entirely** — it rests on a check that does not
+exist. Revisit only if the project ships a compiled artefact for some other
+reason *and* nanoarrow gains string-view bounds validation. There is no
+upstream issue tracking it.
+
+### Two bugs found on the way
+
+- **In our own prototype:** `pl.Series("s", [None])` infers dtype `Null`, not
+  `String`, and `arrowc.export` dies on it with an `IndexError`. A real latent
+  bug worth fixing.
+- **In nanoarrow 0.9.0:** it accepts a string-view array declaring 2 buffers,
+  computing −1 variadic buffers. Worth reporting upstream.
+
+Full detail: `experimentation/nanoarrow-accessors/RESULTS.md`; `./run_all.sh`
+reproduces in about six minutes.
+
+---
+
+*Still out: the pure-numba byte-matching strand, asked to wrap up with partial
+results.*
