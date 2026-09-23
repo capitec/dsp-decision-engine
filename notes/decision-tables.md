@@ -84,5 +84,15 @@ the same order):
 | bands AND string `in` | decider fused, rows param | 423 | 137.1 µs | 157.4 µs |
 
 The rows-param rows pay for `document_key`, which JSON-encodes the whole
-params document on every call (about 40 µs for 12 rows, profiled): keying
-a document by identity, or hashing it once when it is loaded, would remove it.
+params document on every call (about 40 µs for 12 rows, profiled). Now
+`ParamsCache.key` remembers the last document object and its hash, so a
+document passed again is not re-hashed: rows-param `score()` p50/p99 went
+from 88.6/191.9 µs to 35.8/42.9 µs (dev box, load ~5). The cache holds the
+document, so its id can't be reused while it's cached; documents are
+treated as immutable once passed (`run`/`score` docstrings say so). A
+path that alternates documents on one executable still hashes each call;
+widen the one slot to a small dict if that shows up.
+
+Decision tables have no matched-row output (the tree's `path_output`
+counterpart): it needs a new output kind in the matcher's `pick` and the
+reference, so it waits for someone to ask.
