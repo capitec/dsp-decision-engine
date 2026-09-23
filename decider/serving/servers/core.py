@@ -6,6 +6,10 @@ from decider.exceptions import DeciderError
 _INITIALIZING = b'{"message": "Server is initializing, please try again shortly."}'
 
 
+def ready(handler: t.Any) -> bool:
+    return handler is not None and handler.active is not None
+
+
 def error_response(error: DeciderError) -> t.Tuple[int, bytes, str]:
     body = error.get_response_body()
     payload: t.Dict[str, str] = {"message": body.message}
