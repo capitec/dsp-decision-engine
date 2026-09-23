@@ -136,3 +136,17 @@ where they disagree, this file wins.
 - **Regex, case-insensitive and whitespace-trimming matches** run the tree's
   Python walker as a `Fallback` in compiled modes, on raw strings.
 - **Tree literals are consts; only `ParamRef`s are params.**
+
+## 2026-09-23, T4.3 (tables, tree nulls)
+
+- **`DecisionTableConfig`** (alias `decision_table`): `columns`, `rows`
+  (inline or `{"table": name}`), `expression`, `outputs`, `default`; first
+  matching row wins; a null input never matches; decider_old's
+  `"parameters": {"data", "dtypes"}` document loads as written; outputs are
+  flat columns (`unnest_output` accepted and ignored).
+- A String output of a table whose rows come from params is declared as an
+  Enum column with its categories; such outputs are always nullable.
+- **Tree null handling:** `TreeConfig.null_handling = "otherwise"` (default,
+  decider_old's routing of a null feature to the otherwise branch) or
+  `"error"`. String conditions keep decider_old's `match`/`no_match`/`error`.
+  NaN counts as null in trees and tables.
