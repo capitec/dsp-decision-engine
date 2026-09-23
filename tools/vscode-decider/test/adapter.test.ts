@@ -104,13 +104,14 @@ describe("decider debug adapter", () => {
 
   it("a tree locator breakpoint stops after the row node with a Visited scope", async () => {
     await launch();
-    await breakAt("risk_tree#low_score");
+    await breakAt("risk_tree#bureau_score < 680");
     expect((await top())[0].name).toBe("risk_tree  [row]  after");
     const visited = (await scopes()).find((x) => x.name === "Visited")!;
     expect((await vars(visited.variablesReference)).map((v) => [v.name, v.value])).toEqual([
       ["#root", "2 rows"],
-      ["#low_score", "1 rows"],
-      ["#good_score", "1 rows"],
+      ["#bureau_score < 680", "1 rows"],
+      ["#ratio >= 3", "1 rows"],
+      ["#bureau_score >= 680", "1 rows"],
     ]);
   });
 

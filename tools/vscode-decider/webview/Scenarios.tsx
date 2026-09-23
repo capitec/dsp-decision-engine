@@ -121,41 +121,66 @@ export function Scenarios({ schema, columns, pausedAt, record, keyCol, rows, res
   );
 }
 
+/** Up to this many records show side by side; more switch to one record at a time. */
+const SIDE_BY_SIDE = 4;
+
 function Results({ sweep, row, rows, onRow, onOpen }: { sweep: Sweep; row: number; rows: number; onRow: (r: number) => void; onOpen: (i: number) => void }) {
   const cols = sweep.changedColumns;
   const knobCols = sweep.knobs.length ? sweep.knobs : [{ name: "scenario", values: sweep.labels }];
-  const all = row < 0;
+  const records = rows <= SIDE_BY_SIDE ? Array.from({ length: rows }, (_, i) => i) : row < 0 ? [] : [row];
+  const counting = records.length === 0;
   const recordsOf = (list: number[]) => list.map((r) => recordLabel(r, sweep.key)).join(", ");
   const baseKnob = (name: string) => {
     const values = sweep.knobBase[name] ?? [];
-    if (!all) return formatValue(values[row]);
-    return values.every((v) => same(v, values[0])) ? formatValue(values[0]) : "varies";
+    return values.every((v) => same(v, values[0])) ? formatValue(values[0]) : records.length === 1 ? formatValue(values[records[0]]) : "varies by record";
+  };
+  const cell = (i: number | null, c: string, r: number) => {
+    const before = sweep.base?.[c]?.[r];
+    if (i === null) return <td key={`${c}-${r}`} className="mono">{formatValue(before)}</td>;
+    const after = sweep.outputs[i]?.[c]?.[r];
+    const changed = !same(before, after);
+    const delta = changed && typeof before === "number" && typeof after === "number" ? after - before : null;
+    return (
+      <td key={`${c}-${r}`} className={`mono ${changed ? "changed" : "unchanged"}`} title={changed ? `original run: ${formatValue(before)}` : "same as the original run"}>
+        {formatValue(after)}
+        {delta !== null && <span className={delta > 0 ? "up" : "down"}> ({delta > 0 ? "+" : ""}{formatValue(delta)})</span>}
+      </td>
+    );
   };
   return (
     <section>
-      <div className="summary">
-        <span>Outputs for</span>
-        <select aria-label="scenario record" value={row} onChange={(e) => onRow(Number(e.target.value))}>
-          <option value={-1}>all records (count changes)</option>
-          {Array.from({ length: rows }, (_, i) => (
-            <option key={i} value={i}>{recordLabel(i, sweep.key)}</option>
-          ))}
-        </select>
-      </div>
-      <p className="hint">Each row is one scenario. Highlighted cells differ from the original run; click a row to see its step-by-step comparison.</p>
+      {rows > SIDE_BY_SIDE && (
+        <div className="summary">
+          <span>Results for</span>
+          <select aria-label="scenario record" value={row} onChange={(e) => onRow(Number(e.target.value))}>
+            <option value={-1}>all records (count changes)</option>
+            {Array.from({ length: rows }, (_, i) => (
+              <option key={i} value={i}>{recordLabel(i, sweep.key)}</option>
+            ))}
+          </select>
+        </div>
+      )}
+      <p className="hint">One row per scenario. Highlighted cells differ from the original run. Click a row for its step-by-step comparison.</p>
       {cols.length === 0 ? (
         <div className="muted">No scenario changes any result.</div>
       ) : (
         <table className="sweep">
           <thead>
+            {records.length > 1 && (
+              <tr>
+                <th colSpan={knobCols.length} className="knob-col">tried</th>
+                {records.map((r) => (
+                  <th key={r} colSpan={cols.length} className="group-head">{recordLabel(r, sweep.key)}</th>
+                ))}
+                <th />
+              </tr>
+            )}
             <tr>
               {knobCols.map((k) => (
-                <th key={k.name} className="knob-col" title={k.name}>{k.name.split(".").pop()}</th>
+                <th key={k.name} className="knob-col" title={k.name}>{k.name.split(" · ").pop()}</th>
               ))}
-              {cols.map((c) => (
-                <th key={c}>{c}</th>
-              ))}
-              <th title="Records whose results differ from the original">records changed</th>
+              {(counting ? [0] : records).flatMap((r) => cols.map((c) => <th key={`${c}-${r}`}>{c}</th>))}
+              <th title="How many records have any result that differs from the original run">records changed</th>
             </tr>
           </thead>
           <tbody>
@@ -163,9 +188,7 @@ function Results({ sweep, row, rows, onRow, onOpen }: { sweep: Sweep; row: numbe
               {knobCols.map((k) => (
                 <td key={k.name} className="mono knob-col">{k.name === "scenario" ? "original run" : baseKnob(k.name)}</td>
               ))}
-              {cols.map((c) => (
-                <td key={c} className="mono">{all ? "" : formatValue(sweep.base?.[c]?.[row])}</td>
-              ))}
+              {counting ? cols.map((c) => <td key={c} />) : records.flatMap((r) => cols.map((c) => cell(null, c, r)))}
               <td className="muted">original run</td>
             </tr>
             {sweep.labels.map((label, i) => {
@@ -175,28 +198,18 @@ function Results({ sweep, row, rows, onRow, onOpen }: { sweep: Sweep; row: numbe
                   {knobCols.map((k) => (
                     <td key={k.name} className="mono knob-col">{formatValue(k.values[i])}</td>
                   ))}
-                  {cols.map((c) => {
-                    if (all) {
-                      const diff = sweep.comparisons[i].output.find((o) => o.name === c);
-                      return (
-                        <td key={c} className={diff ? "changed" : "unchanged"} title={diff ? `changed for ${recordsOf(diff.changedRows)}` : "same for every record"}>
-                          {diff ? `${diff.changedRows.length} changed` : "same"}
-                        </td>
-                      );
-                    }
-                    const before = sweep.base?.[c]?.[row];
-                    const after = sweep.outputs[i]?.[c]?.[row];
-                    const changed = !same(before, after);
-                    const delta = changed && typeof before === "number" && typeof after === "number" ? after - before : null;
-                    return (
-                      <td key={c} className={`mono ${changed ? "changed" : "unchanged"}`} title={changed ? `original: ${formatValue(before)}` : "same as the original"}>
-                        {formatValue(after)}
-                        {delta !== null && <span className={delta > 0 ? "up" : "down"}> ({delta > 0 ? "+" : ""}{formatValue(delta)})</span>}
-                      </td>
-                    );
-                  })}
+                  {counting
+                    ? cols.map((c) => {
+                        const diff = sweep.comparisons[i].output.find((o) => o.name === c);
+                        return (
+                          <td key={c} className={diff ? "changed" : "unchanged"} title={diff ? `changed for ${recordsOf(diff.changedRows)}` : "same for every record"}>
+                            {diff ? `${diff.changedRows.length} changed` : "same"}
+                          </td>
+                        );
+                      })
+                    : records.flatMap((r) => cols.map((c) => cell(i, c, r)))}
                   <td title={changedRows.length ? recordsOf(changedRows) : "no record changed"}>
-                    {sweep.errors[i] ? <span className="error small">{sweep.errors[i]}</span> : changedRows.length ? recordsOf(changedRows) : "none"}
+                    {sweep.errors[i] ? <span className="error small">{sweep.errors[i]}</span> : `${changedRows.length} of ${rows}`}
                   </td>
                 </tr>
               );

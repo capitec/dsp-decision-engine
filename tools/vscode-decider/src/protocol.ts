@@ -151,6 +151,7 @@ export type FromWebview =
   | { type: "compareRevision" }
   | { type: "runTo"; path: string }
   | { type: "maximise" }
+  | { type: "step" }
   | { type: "openDiff"; path: string }
   | { type: "sweep"; scenarios: Scenario[]; fromHere: boolean };
 

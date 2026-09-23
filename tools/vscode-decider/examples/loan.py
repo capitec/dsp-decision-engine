@@ -95,12 +95,17 @@ def _risk_kernel(row, params, consts):
 
 
 def _risk_reference(row, params, consts, visit):
+    # Each position reached is named by the test that led there, so a record's path reads as its reasons.
     score, r = row
     visit("root")
     if score < 680:
-        visit("low_score")
-        return (2,) if r < 3 else (1,)
-    visit("good_score")
+        visit("bureau_score < 680")
+        if r < 3:
+            visit("ratio < 3")
+            return (2,)
+        visit("ratio >= 3")
+        return (1,)
+    visit("bureau_score >= 680")
     return (0,)
 
 
