@@ -1645,3 +1645,68 @@ details.edit-menu .edit-menu-body {
 .how {
   scroll-margin-top: 48px;
 }
+
+.compare-top {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.compare-top a {
+  margin-left: auto;
+  cursor: pointer;
+  color: var(--vscode-textLink-foreground);
+}
+.compare .chip {
+  white-space: nowrap;
+}
+
+table.sweep td.changed {
+  white-space: nowrap;
+}
+table.sweep td.changed.down {
+  color: var(--vscode-charts-green, #89d185);
+}
+table.sweep td.changed.up {
+  color: var(--vscode-charts-red, #f14c4c);
+}
+
+.splitter {
+  flex: none;
+  height: 6px;
+  cursor: row-resize;
+  background: var(--vscode-panel-border);
+  opacity: 0.6;
+}
+.splitter:hover {
+  opacity: 1;
+  background: var(--vscode-focusBorder);
+}
+@media (min-width: 761px) {
+  .splitter {
+    display: none;
+  }
+}
+
+.params table.table-grid {
+  width: 100%;
+  table-layout: fixed;
+}
+.params table.table-grid th:first-child,
+.params table.table-grid th:last-child {
+  width: 2em;
+}
+.params table.table-grid td input,
+.params table.table-grid td input.key {
+  width: 100%;
+  box-sizing: border-box;
+}
+.params table.table-grid th {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+table.sweep td {
+  white-space: nowrap;
+}
