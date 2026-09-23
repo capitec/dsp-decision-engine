@@ -466,7 +466,8 @@ export class DeciderDebugSession extends LoggingDebugSession {
         case "decider.skip":
         case "decider.reloadStep": {
           // A wiring error rejects the request and leaves the run as it was.
-          const status = await this.bridge!.request<Status>(command === "decider.skip" ? "skip" : "reload_step", { path: args.path });
+          const status = await this.bridge!.request<Status & { diff: string[] }>(command === "decider.skip" ? "skip" : "reload_step", { path: args.path });
+          response.body = { diff: status.diff };
           this.sendResponse(response);
           return this.apply(status, true, "edit");
         }

@@ -16,6 +16,7 @@ drop into the Python of one step.
 from __future__ import annotations
 
 import ast
+import difflib
 import hashlib
 import importlib.util
 import inspect
@@ -43,6 +44,10 @@ from runs import apply_overrides, debug_condition, trace, tree_path  # noqa: E40
 from forks import checkpoint_key, merge, sweep  # noqa: E402
 
 
+# Each loaded module file's text as it was loaded, so an edit can be diffed against the code that ran.
+_TEXTS: dict[str, str] = {}
+
+
 def load_module(file):
     """Import `file` from its source as it is now: by dotted name when it sits in a package, so its imports resolve."""
     # Cached bytecode is keyed on the file's mtime in whole seconds and its size, so an edit saved within the
@@ -50,9 +55,15 @@ def load_module(file):
     with tempfile.TemporaryDirectory(prefix="decider-pyc-") as fresh:
         before, sys.pycache_prefix = sys.pycache_prefix, fresh
         try:
-            return _import(file)
+            mod = _import(file)
         finally:
             sys.pycache_prefix = before
+    top = mod.__name__.split(".")[0]
+    for m in list(sys.modules.values()):
+        f = getattr(m, "__file__", None)
+        if f and (m.__name__ == top or m.__name__.startswith(top + ".")):
+            _TEXTS[f] = Path(f).read_text()
+    return mod
 
 
 def _import(file):
@@ -112,6 +123,18 @@ def _formula(fn):
         return None
     body = [b for b in getattr(node, "body", ()) if not (isinstance(b, ast.Expr) and isinstance(b.value, ast.Constant))]
     return ast.unparse(body[0].value) if len(body) == 1 and isinstance(body[0], ast.Return) and body[0].value else None
+
+
+def _source_diff(old, old_texts, new, new_texts):
+    """The lines that differ between two steps' Python, each read from its file as it was loaded, as `-`/`+` lines."""
+    def lines(step_, texts):
+        code = getattr(getattr(step_, "fn", None), "__code__", None)
+        text = code and texts.get(code.co_filename)
+        if not text:
+            return []
+        return [line.rstrip("\n") for line in inspect.getblock(text.splitlines(True)[code.co_firstlineno - 1:])]
+    return [line for line in difflib.unified_diff(lines(old, old_texts), lines(new, new_texts), lineterm="", n=0)
+            if line[:1] in "+-" and not line.startswith(("+++", "---"))]
 
 
 def _code_location(fn):
@@ -293,12 +316,14 @@ class Bridge:
 
     def reload_step(self, path):
         """Re-import the pipeline's files and swap the step now at `path` into the paused run."""
+        old, texts = step_map(self.step).get(path), dict(_TEXTS)
         new = step_map(getattr(load_module(self.file), self.name)).get(path)
         if new is None:
             raise KeyError(f"{path!r} is no longer in {self.name}")
         self.session.replace(path, new)
         self.step = self.session.executable.step
         self.edits.append((path, new))
+        return _source_diff(old, texts, new, _TEXTS)
 
     def compare_edits(self, path=None):
         """The flow as started and with the edits made since (or only the one at `path`), each run start to end."""
@@ -360,8 +385,8 @@ class Bridge:
         if cmd == "debug_condition":
             return {"condition": debug_condition(s, **args)}
         if cmd in ("skip", "reload_step"):
-            getattr(self, cmd)(**args)  # a WiringError changes nothing and comes back as the reply's error
-            return self.status()
+            diff = getattr(self, cmd)(**args)  # a WiringError changes nothing and comes back as the reply's error
+            return {**self.status(), "diff": diff or []}
         if cmd in ("step", "step_into", "resume", "rewind", "break_at", "clear_break", "set"):
             try:
                 getattr(s, cmd)(**args)

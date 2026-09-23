@@ -85,7 +85,7 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
                 ))}
                 {path.result && (
                   <span>
-                    {" → "}gives <strong>{(node.outputs ?? []).map((o, i) => `${o} = ${formatValue(path.result![i])}`).join(", ")}</strong>
+                    {" → "}gives <strong>{(node.outputs ?? []).map((o, i) => `${o} = ${formatValue(path.result![i], o)}`).join(", ")}</strong>
                   </span>
                 )}
                 <div className="muted small">with {(node.inputs ?? []).map((i) => `${i} = ${valueOf(i) ?? "?"}`).join(", ")}</div>
@@ -147,8 +147,8 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
                 const [a, b] = comparison ? sides(comparison, node, k, v) : [v, v];
                 return (
                   <div key={k} className="mono">
-                    {k} = {formatValue(a)}
-                    {!same(a, b) && <strong> → {formatValue(b)}</strong>}
+                    {k} = {formatValue(a, k)}
+                    {!same(a, b) && <strong> → {formatValue(b, k)}</strong>}
                   </div>
                 );
               })}
@@ -270,7 +270,7 @@ function TableMatch({ table, visited, result, outputs, inputs }: { table: { name
     <div className="table-match">
       <div>
         {matched ? <>Matched row <strong>{last + 1}</strong> of <span className="mono">{table.name}</span></> : <>No row of <span className="mono">{table.name}</span> matched: the default applies</>}
-        {result && <> → <strong>{outputs.map((o, i) => `${o} = ${formatValue(result[i])}`).join(", ")}</strong></>}
+        {result && <> → <strong>{outputs.map((o, i) => `${o} = ${formatValue(result[i], o)}`).join(", ")}</strong></>}
       </div>
       <div className="muted small">with {inputs.join(", ")}</div>
       <table className="table-grid">

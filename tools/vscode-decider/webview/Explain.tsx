@@ -73,6 +73,7 @@ export function Explain({ entry, who, role, nodes, values, onPick, onSelect }: P
         <span className="mono">{entry.name}{who ? ` = ${formatValue(entry.value, entry.name)}` : ""}</span>
         {role && <span className="muted"> ({role})</span>}
       </div>
+      {entry.producer !== null && summary(entry, nodes, values) && <div className="explain-summary">{summary(entry, nodes, values)}</div>}
       {entry.producer === null ? (
         <div>It is an input: it arrives with the data.</div>
       ) : (
@@ -83,6 +84,29 @@ export function Explain({ entry, who, role, nodes, values, onPick, onSelect }: P
       <div className="muted small">Click a value to open its own inputs; a step name selects it in the graph.</div>
     </div>
   );
+}
+
+/** Down the chain of caps and floors to the step that builds the value: "floor did not apply · cap did not apply · pl_raw_rate = 25.5% − 0.1% − 0.2%". */
+function summary(entry: Lineage, nodes: CallNodeJson[], values: Record<string, unknown>): string | null {
+  const parts: string[] = [];
+  let at: Lineage | undefined = entry;
+  for (let depth = 0; at && depth < 6; depth++) {
+    const node = nodes.find((n) => n.path === at!.producer);
+    if (!node?.formula) break;
+    const note = clampNote(node.formula, at.inputs, at.value);
+    if (note) {
+      parts.push(note.split(":")[0]);
+      const first = /^(?:min|max)\((\w+),/.exec(node.formula)![1];
+      at = at.inputs.find((i) => i.name === first);
+      continue;
+    }
+    const known: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(node.params)) known[k] = shared(values)[k] ?? v;
+    for (const i of at.inputs) known[i.name] = i.value;
+    parts.push(`${at.name} = ${substitute(node.formula, known)}`);
+    break;
+  }
+  return parts.length > 1 ? parts.join(" · ") : null;
 }
 
 function Level({ entry, depth, nodes, values, who, onPick, onSelect }: { entry: Lineage; depth: number; nodes: CallNodeJson[]; values: Record<string, unknown>; who: string | null; onPick: (n?: string) => void; onSelect: (p: string) => void }) {

@@ -46,7 +46,8 @@ const cellText = (v: unknown, percent = false) =>
 
 /** A lookup table's rows as an editable grid: one input per cell, edited cells marked. */
 export function TableGrid({ name, columns, rows, base, onChange, expression }: Props) {
-  const cols = Object.keys(columns);
+  const keys = new Set([expression?.lower_bound_column, expression?.upper_bound_column, expression?.value_column].filter(Boolean));
+  const cols = [...Object.keys(columns).filter((c) => !keys.has(c)), ...Object.keys(columns).filter((c) => keys.has(c))];
   const percent = Object.fromEntries(cols.map((c) => [c, isPercent(c, base)]));
   // Cells hold the typed text until the document is built, so "0." survives typing "0.25".
   const set = (i: number, col: string, text: string) => onChange(rows.map((r, j) => (j === i ? { ...r, [col]: text } : r)));
@@ -70,7 +71,7 @@ export function TableGrid({ name, columns, rows, base, onChange, expression }: P
               const edited = base[i] === undefined || cellText(was) !== cellText(tableRows([r], columns)[0][c]);
               return (
                 <td key={c} className={edited ? "edited" : ""} title={edited && base[i] ? `was ${cellText(was ?? null, percent[c]) || formatValue(null)}` : undefined}>
-                  <input aria-label={`${name} row ${i + 1} ${c}`} className={numeric(columns[c]) ? "num" : ""} value={cellText(r[c], percent[c])} onChange={(e) => set(i, c, e.target.value)} />
+                  <input aria-label={`${name} row ${i + 1} ${c}`} className={`${numeric(columns[c]) ? "num" : ""} ${keys.has(c) ? "key" : ""}`} value={cellText(r[c], percent[c])} onChange={(e) => set(i, c, e.target.value)} />
                 </td>
               );
             })}

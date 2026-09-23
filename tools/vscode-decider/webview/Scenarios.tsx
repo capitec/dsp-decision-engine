@@ -248,7 +248,7 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
     if (!ds.length) return "";
     const d = ds.reduce((t, x) => t + x, 0) / ds.length;
     const size = isRateName(c) && Math.abs(d) < 1 ? `${Number((Math.abs(d) * 100).toFixed(2))} pp` : formatValue(Math.abs(d), c);
-    return `${d > 0 ? "+" : "−"}${size} on average`;
+    return `${d > 0 ? "+" : "−"}${size}`;
   };
   const summaryCell = (i: number, c: string) => {
     const diff = sweep.comparisons[i].output.find((o) => o.name === c);
@@ -257,10 +257,7 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
     return (
       <td key={c} className="changed mono" title={`changed for ${recordsOf(diff.changedRows)}; original: ${overall(sweep.base?.[c])}`}>
         {numeric ? (
-          <>
-            <div>{diff.changedRows.length} of {rows} records changed</div>
-            <div className="small">{delta(c, i, diff.changedRows)}</div>
-          </>
+          `${diff.changedRows.length} · ${delta(c, i, diff.changedRows)}`
         ) : (
           overall(sweep.outputs[i]?.[c], sweep.base?.[c])
         )}
@@ -290,7 +287,9 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
           ))}
         </select>
       </div>
-      <p className="hint">One row per scenario; highlighted cells differ from the original run. Click a row to see what changed, step by step.</p>
+      <p className="hint">
+        One row per scenario; click one to see what changed, step by step.{summary ? " A changed cell reads “records changed · average change of those records”." : ""}
+      </p>
       {cols.length === 0 ? (
         <div className="muted">No scenario changes any result.</div>
       ) : (

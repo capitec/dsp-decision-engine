@@ -1499,3 +1499,68 @@ table.sweep td.changed .small {
 .nowrap {
   white-space: nowrap;
 }
+
+/* One card per changed record. */
+.result-card {
+  border-left: 3px solid var(--changed, orange);
+  padding: 3px 8px;
+  margin: 4px 0;
+  background: var(--vscode-editorWidget-background);
+}
+.result-card.hit {
+  border-left-color: var(--vscode-focusBorder);
+}
+.result-head {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.result-head .decision {
+  padding: 0 6px;
+  border-radius: 8px;
+  font-size: 0.9em;
+  border: 1px solid var(--vscode-panel-border);
+}
+.result-head .decision.approve {
+  color: var(--vscode-charts-green, #89d185);
+}
+.result-head .decision.decline {
+  color: var(--vscode-charts-red, #f14c4c);
+}
+.result-line {
+  padding-left: 8px;
+  overflow-wrap: anywhere;
+}
+.result-line .before {
+  opacity: 0.6;
+}
+details.no-offer {
+  margin: 6px 0;
+}
+details.no-offer summary {
+  cursor: pointer;
+  color: var(--vscode-descriptionForeground);
+}
+
+.params table.table-grid td input.key {
+  width: 5em;
+}
+
+.explain-summary {
+  margin: 2px 0 6px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+pre.banner-diff {
+  margin: 2px 0;
+  font-weight: normal;
+  white-space: pre-wrap;
+  font-size: 0.9em;
+}
+pre.banner-diff .added {
+  color: var(--vscode-gitDecoration-addedResourceForeground, #81b88b);
+}
+pre.banner-diff .removed {
+  color: var(--vscode-gitDecoration-deletedResourceForeground, #c74e39);
+}
