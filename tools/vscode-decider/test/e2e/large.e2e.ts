@@ -147,12 +147,11 @@ describe("large flow stories", () => {
         await wv(c).locator(".params").waitFor({ timeout: 60_000 });
         await shot("After clicking 'What-if': every parameter of the flow.");
         await wv(c).locator('input[aria-label="Filter params"]').fill("repo_rate");
-        await wv(c).locator("details.used-by summary").first().click();
-        await shot("Filtered to repo_rate and opened 'used by' to see which steps read it.");
-        await wv(c).locator('input[aria-label="shared repo_rate"]').first().fill("0.075");
+        await shot("Filtered the params to repo_rate: which steps read it.");
+        await wv(c).locator('input[aria-label="shared repo_rate"]').first().fill("7.5%");
         await wv(c).locator("button", { hasText: "Run and compare" }).click({ timeout: 10_000 });
         await wv(c).locator(".compare .verdict").waitFor({ timeout: 120_000 });
-        await shot("The comparison after changing repo_rate to 0.075.");
+        await shot("The comparison after changing repo_rate from 7.75% to 7.5%.");
       },
     );
   }, 400_000);

@@ -165,7 +165,10 @@ async function onWebview(m: FromWebview, describe: DescribeResult) {
       post({ type: "compare", comparison: null, busy: "Running the flow as started and as edited…" });
       try {
         const r = (await s.customRequest("decider.compareEdits")) as { a: TraceResult; b: TraceResult };
-        post({ type: "compare", comparison: compareTraces(r.a, r.b, "the flow as started", "with your edits") });
+        const comparison = compareTraces(r.a, r.b, "the flow as started", m.label);
+        // Both runs share one description, so a swapped step's new code shows only through the edits made.
+        for (const st of comparison.steps) if (m.edits[st.path] === "replace") st.structural.push("code");
+        post({ type: "compare", comparison });
       } catch (e) {
         post({ type: "compare", comparison: null, error: (e as Error).message });
       }

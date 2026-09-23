@@ -1,4 +1,4 @@
-import { callNodes, type CallNodeJson, type DescribeResult, type RecordKey } from "./protocol";
+import { callNodes, formatValue, type CallNodeJson, type DescribeResult, type RecordKey } from "./protocol";
 
 /** One whole run, as the bridge's `trace` returns it. */
 export interface TraceResult extends DescribeResult {
@@ -53,6 +53,24 @@ export interface Comparison {
   values?: { a: unknown; b: unknown };
 }
 
+/** A run's params document as it ran: its PARAMS over every param's declared default. */
+function withDefaults(t: TraceResult): Record<string, unknown> {
+  const doc: Record<string, unknown> = {};
+  for (const [path, ps] of Object.entries(t.params ?? {})) {
+    let at = doc;
+    for (const part of path.split("/")) at = (at[part] ??= {}) as Record<string, unknown>;
+    for (const [k, info] of Object.entries(ps)) if (info.default !== undefined) at[k] = info.default;
+  }
+  const merge = (into: Record<string, unknown>, from: unknown) => {
+    for (const [k, v] of Object.entries((from ?? {}) as Record<string, unknown>)) {
+      if (v && typeof v === "object" && !Array.isArray(v) && into[k] && typeof into[k] === "object") merge(into[k] as Record<string, unknown>, v);
+      else into[k] = v;
+    }
+  };
+  merge(doc, t.values);
+  return doc;
+}
+
 /** The parts of `b` that differ from `a`, nested the same way. */
 export function diffDoc(a: unknown, b: unknown): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -79,12 +97,12 @@ export function paramChangeLines(doc: unknown, before: unknown): string[] {
         v.forEach((row, i) => {
           const r = row as Record<string, unknown>;
           if (!rows[i]) return lines.push(`${k} row ${i + 1} added`);
-          const cells = Object.keys(r).filter((c) => !same(rows[i][c], r[c])).map((c) => `${c} ${fmt(rows[i][c])} → ${fmt(r[c])}`);
+          const cells = Object.keys(r).filter((c) => !same(rows[i][c], r[c])).map((c) => `${c} ${formatValue(rows[i][c], c)} → ${formatValue(r[c], c)}`);
           if (cells.length) lines.push(`${k} row ${i + 1}: ${cells.join(", ")}`);
         });
         if (rows.length > v.length) lines.push(`${k}: ${rows.length - v.length} row${rows.length - v.length === 1 ? "" : "s"} removed`);
       } else if (v && typeof v === "object") visit(v, old);
-      else lines.push(`${k}: ${old === undefined ? "default" : fmt(old)} → ${fmt(v)}`);
+      else lines.push(`${k}: ${old === undefined ? "default" : formatValue(old, k)} → ${formatValue(v, k)}`);
     }
   };
   visit(doc, before);
@@ -181,6 +199,8 @@ export function compareTraces(a: TraceResult, b: TraceResult, labelA: string, la
     const changes = structural(na, nb);
     const params = paramChanges(na, nb);
     if (!sa && !sb) return { path, status: changes.length ? "changed" : "not run", structural: changes, paramChanges: params, outputs: [] };
+    // Ran in one run only (skipped mid-run, or in an arm no record took in the other): its values aren't "emptied".
+    if (sa && !sb) return { path, status: "removed", structural: changes, paramChanges: params, outputs: [] };
     const outputs = diffColumns(sa ?? {}, sb ?? {});
     return { path, status: outputs.length || changes.length ? "changed" : "same", structural: changes, paramChanges: params, outputs };
   });
@@ -205,7 +225,7 @@ export function compareTraces(a: TraceResult, b: TraceResult, labelA: string, la
     rows: b.data.length,
     key: b.key ?? null,
     outputColumns: Object.keys(b.output ?? a.output ?? {}),
-    values: { a: a.values ?? {}, b: b.values ?? {} },
+    values: { a: withDefaults(a), b: withDefaults(b) },
     // Two revisions each run with their own PARAMS; what differs between them is a param change.
     paramsDocs: Object.keys(diffDoc(a.values, b.values)).length ? { a: a.values, b: diffDoc(a.values, b.values) } : undefined,
     sharedUsers: Object.fromEntries(Object.entries(b.params?.shared ?? {}).map(([k, info]) => [k, (info.used_by as string[] | undefined) ?? []])),

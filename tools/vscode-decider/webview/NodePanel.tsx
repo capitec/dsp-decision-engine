@@ -44,7 +44,7 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
   const valueOf = (name: string) => {
     if (run.record === null) return undefined;
     const c = columns?.find((x) => x.name === name);
-    return c ? formatValue(c.value) : undefined;
+    return c ? formatValue(c.value, name) : undefined;
   };
   const path = treePath && node && treePath.path === node.path && run.record === treePath.row ? treePath : null;
   const paused = run.current && !run.finished;
@@ -183,7 +183,7 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
                 {v.written === false ? (
                   <span className="muted">not on this record</span>
                 ) : (
-                  <span className="mono">{run.record === null ? v.values.slice(0, 3).map(formatValue).join(", ") : formatValue(v.values[0])}</span>
+                  <span className="mono">{run.record === null ? v.values.slice(0, 3).map((x) => formatValue(x)).join(", ") : formatValue(v.values[0])}</span>
                 )}
                 {" ← "}
                 {v.producer === "input" || v.producer.startsWith("override@") ? (

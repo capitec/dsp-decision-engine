@@ -130,7 +130,8 @@ describe("param readers", () => {
 describe("explaining a value", () => {
   it("fills a formula with the record's values", () => {
     expect(substitute("min(pl_raw_rate, repo_rate * cap_multiple + cap_margin)", { pl_raw_rate: 0.252, repo_rate: 0.0775, cap_multiple: 1, cap_margin: 0.21 }))
-      .toBe("min(0.252, 0.0775 * 1 + 0.21)");
+      .toBe("min(25.2%, 7.75% * 1 + 21%)");
+    expect(substitute("pl_base_rate + pl_risk_loading - pl_loyalty_discount", { pl_base_rate: 0.255, pl_risk_loading: 0, pl_loyalty_discount: 0.001 })).toBe("25.5% - 0.1%");
   });
 
   it("finds a band's row, lower edge included", () => {
@@ -145,6 +146,6 @@ describe("explaining a value", () => {
     const b = { shared: { repo_rate: 0.0775, t: [{ lo: 1, r: 0.2 }, { lo: 2, r: 0.25 }] } };
     expect(diffDoc(a, b)).toEqual({ shared: { t: b.shared.t } });
     expect(paramChangeLines(diffDoc(a, b), a)).toEqual(["t row 2: r 0.3 → 0.25"]);
-    expect(paramChangeLines({ shared: { repo_rate: 0.075 } }, a)).toEqual(["repo_rate: 0.0775 → 0.075"]);
+    expect(paramChangeLines({ shared: { repo_rate: 0.075 } }, a)).toEqual(["repo_rate: 7.75% → 7.5%"]);
   });
 });

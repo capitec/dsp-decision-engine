@@ -53,6 +53,9 @@ export function App() {
   const [opened, setOpened] = useState<Set<string>>(new Set());
   // Said while a run is starting or re-running, until the next status arrives.
   const [pending, setPending] = useState<string>();
+  // What the last skip or swap did, said in the pause banner until the run moves on.
+  const [note, setNote] = useState<string>();
+  const noteNext = useRef<string | undefined>(undefined);
   const shown = useRef<string | undefined>(undefined);
 
   useEffect(() => {
@@ -73,6 +76,8 @@ export function App() {
         case "status":
           setRun(m);
           setPending(undefined);
+          setNote(noteNext.current);
+          noteNext.current = undefined;
           if (m.current) setSelected(m.current.path);
           break;
         case "state":
@@ -205,10 +210,17 @@ export function App() {
         <div className="pause-banner" title={run.current.path}>
           ⏸ Paused {run.current.when} <strong>{run.current.path.split("/").pop() || "the start"}</strong>
           {run.record !== null && <span> · focused on {recordLabel(run.record, keyCol)}</span>}
+          {note && <div className="banner-note">{note}</div>}
           {Object.keys(run.edits ?? {}).length > 0 && (
             <>
               <span> · {Object.keys(run.edits!).length} step{Object.keys(run.edits!).length === 1 ? "" : "s"} edited </span>
-              <button title="Run the flow as started and as edited to the end, and compare every result" onClick={() => send({ type: "compareEdits" })}>
+              <button title="Run the flow as started and as edited to the end, and compare every result" onClick={() =>
+                  send({
+                    type: "compareEdits",
+                    label: Object.entries(run.edits!).map(([p, a]) => `${p.split("/").pop()} ${a === "delete" ? "skipped" : "edited"}`).join(", "),
+                    edits: run.edits!,
+                  })
+                }>
                 Compare with the flow as started
               </button>
             </>
@@ -254,6 +266,16 @@ export function App() {
             <button title="Fit the width, keeping text readable" className={zoom === "auto" ? "primary" : ""} onClick={() => setZoom("auto")}>fit</button>
             <button title="Zoom in" onClick={() => setZoom((z) => Math.min(3, (z === "auto" ? 1 : z) * 1.25))}>+</button>
           </span>
+        </div>
+      )}
+      {tab === "graph" && selected && (
+        <div className="crumbs" title={selected}>
+          {selected.split("/").map((part, i, all) => (
+            <span key={i}>
+              {i > 0 && <span className="muted"> › </span>}
+              {i === all.length - 1 ? <strong>{part}</strong> : part}
+            </span>
+          ))}
         </div>
       )}
       <main className={withDetails && selectedNode ? "detailed" : ""}>
@@ -339,10 +361,12 @@ export function App() {
             values={describe.values ?? {}}
             onSkip={(path) => {
               setPending(`Skipping ${path.split("/").pop()} and re-running from there…`);
+              noteNext.current = `Skipped ${path.split("/").pop()}: the run re-ran from where it was and paused at the next step. Values before it were kept.`;
               send({ type: "skip", path });
             }}
             onReload={(path) => {
               setPending(`Reloading ${path.split("/").pop()} and re-running from there…`);
+              noteNext.current = `Loaded your edited ${path.split("/").pop()}: the run went back to just before it, keeping every value upstream. Continue to run the new code.`;
               send({ type: "reloadStep", path });
             }}
           />
