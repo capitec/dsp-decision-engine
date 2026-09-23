@@ -4,7 +4,7 @@ import { DeciderDebugSession } from "./adapter";
 import { analyse, PipelineCodeLens } from "./analysis";
 import { listRefs, materialise, repoRoot } from "./git";
 import { GraphPanel } from "./graphPanel";
-import type { CallNodeJson, ColumnHistory, ColumnSummary, DescribeResult, FromWebview, Lineage, RunStatus, ToWebview } from "./protocol";
+import type { CallNodeJson, ColumnHistory, ColumnSummary, DescribeResult, FromWebview, Lineage, RecordKey, RunStatus, ToWebview } from "./protocol";
 import { debugpyLibs, pythonCommand } from "./python";
 import { runComparison, type Side } from "./compareRuns";
 import { withBridge } from "./bridge";
@@ -108,15 +108,15 @@ export function activate(ctx: vscode.ExtensionContext) {
       const body = e.body as RunStatus;
       structure.setStatus(body.current, body.finishedPaths);
       GraphPanel.current?.post({ type: "status", ...body });
-      const { columns } = (await e.session.customRequest("decider.state")) as { columns: ColumnSummary[] | null };
-      GraphPanel.current?.post({ type: "state", columns, rows: columns?.[0]?.rows ?? 0 });
+      const { columns, key } = (await e.session.customRequest("decider.state")) as { columns: ColumnSummary[] | null; key: RecordKey };
+      GraphPanel.current?.post({ type: "state", columns, rows: columns?.[0]?.rows ?? 0, key });
     }),
 
     vscode.debug.onDidTerminateDebugSession((s) => {
       if (s.type !== "decider") return;
       structure.setStatus(null, []);
       GraphPanel.current?.post({ type: "status", current: null, finished: true, finishedPaths: [], visits: {}, record: null });
-      GraphPanel.current?.post({ type: "state", columns: null, rows: 0 });
+      GraphPanel.current?.post({ type: "state", columns: null, rows: 0, key: null });
     }),
   );
 }
@@ -146,7 +146,7 @@ async function onWebview(m: FromWebview, describe: DescribeResult) {
       break;
     }
     case "treePath":
-      if (s) post({ type: "treePath", ...((await s.customRequest("decider.treePath", { path: m.path })) as { path: string; row: number; visited: string[] }) });
+      if (s) post({ type: "treePath", ...((await s.customRequest("decider.treePath", { path: m.path })) as { path: string; row: number; visited: string[]; result: unknown[] }) });
       break;
     case "rewind":
       await s?.customRequest("decider.rewind", { path: m.path });
@@ -156,13 +156,9 @@ async function onWebview(m: FromWebview, describe: DescribeResult) {
       break;
     case "whatIf": {
       if (!shown) return;
-      const changes = [
-        ...leafNames(m.params as Record<string, unknown>),
-        ...Object.entries(m.overrides).map(([k, v]) => `${k}=${JSON.stringify(v)}${m.row === null ? "" : ` on record ${m.row}`}`),
-      ];
       await compare(
         { label: "defaults", file: shown.file, pipeline: shown.pipeline },
-        { label: `what-if: ${changes.join(", ")}`, file: shown.file, pipeline: shown.pipeline, params: m.params, overrides: m.overrides, row: m.row },
+        { label: m.label, file: shown.file, pipeline: shown.pipeline, params: m.params, overrides: m.overrides, row: m.row },
       );
       break;
     }
@@ -171,6 +167,17 @@ async function onWebview(m: FromWebview, describe: DescribeResult) {
       break;
     case "sweep":
       await runSweep(m.scenarios, m.fromHere && !!s);
+      break;
+    case "runTo":
+      await runTo(m.path);
+      break;
+    case "openDiff":
+      if (lastFiles) {
+        const node = findNode(describe, m.path);
+        await vscode.commands.executeCommand("vscode.diff", vscode.Uri.file(lastFiles.a), vscode.Uri.file(lastFiles.b), `${path.basename(lastFiles.b)}: ${lastFiles.label} ↔ working tree`, {
+          selection: node?.line ? new vscode.Range(node.line - 1, 0, node.line - 1, 0) : undefined,
+        });
+      }
       break;
   }
 }
@@ -186,17 +193,34 @@ async function runSweep(list: Scenario[], fromHere: boolean) {
       : await withBridge({ python: pythonCommand(), cwd: path.dirname(shown!.file) }, (b) =>
           b.request("sweep", { scenarios: list, from_here: false, file: shown!.file, pipeline: shown!.pipeline }),
         )) as SweepResponse;
-    post({ type: "sweep", sweep: summariseSweep(r) });
+    post({ type: "sweep", sweep: summariseSweep(r, list) });
   } catch (e) {
     post({ type: "sweep", sweep: null, error: (e as Error).message });
   }
+}
+
+/** The files of the latest revision comparison, for "view code diff". */
+let lastFiles: { a: string; b: string; label: string } | undefined;
+
+/** Pause before a step: a function breakpoint on its path, then run (or start) the flow to it. */
+async function runTo(nodePath: string) {
+  vscode.debug.addBreakpoints([new vscode.FunctionBreakpoint(nodePath)]);
+  const s = deciderSession();
+  if (s) await s.customRequest("continue", { threadId: 1 });
+  else if (shown)
+    await vscode.debug.startDebugging(undefined, { type: "decider", request: "launch", name: `decider: ${shown.pipeline}`, program: shown.file, pipeline: shown.pipeline, stopOnEntry: false });
 }
 
 async function compare(a: Side, b: Side) {
   post({ type: "tab", tab: "compare" });
   post({ type: "compare", comparison: null, busy: `Running ${a.label} and ${b.label}…` });
   try {
-    post({ type: "compare", comparison: await runComparison(a, b, pythonCommand(), path.dirname(b.file)) });
+    const comparison = await runComparison(a, b, pythonCommand(), path.dirname(b.file));
+    if (a.file !== b.file) {
+      comparison.files = { a: a.file, b: b.file };
+      lastFiles = { ...comparison.files, label: a.label };
+    }
+    post({ type: "compare", comparison });
   } catch (e) {
     post({ type: "compare", comparison: null, error: (e as Error).message });
   }
@@ -307,13 +331,6 @@ function findNode(d: DescribeResult, p: string) {
   };
   visit(d.ir);
   return found;
-}
-
-/** `term/cap_by_income.cap=24` for every value in a nested params document. */
-function leafNames(doc: Record<string, unknown>, prefix = ""): string[] {
-  return Object.entries(doc ?? {}).flatMap(([k, v]) =>
-    v && typeof v === "object" && !Array.isArray(v) ? leafNames(v as Record<string, unknown>, prefix ? `${prefix}/${k}` : k) : [`${prefix}.${k}=${JSON.stringify(v)}`],
-  );
 }
 
 function deciderSession(): vscode.DebugSession | undefined {

@@ -2,21 +2,23 @@ import { useEffect, useMemo, useState } from "react";
 import type { Comparison } from "../src/compare";
 import {
   callNodes,
+  recordLabel,
   type ColumnHistory,
   type ColumnSummary,
   type DescribeResult,
   type FromWebview,
   type Lineage,
+  type RecordKey,
   type RunStatus,
   type Tab,
   type ToWebview,
 } from "../src/protocol";
+import type { Sweep } from "../src/sweep";
 import { Compare } from "./Compare";
 import { Graph } from "./Graph";
 import { NodePanel } from "./NodePanel";
 import { Params } from "./Params";
 import { Scenarios } from "./Scenarios";
-import type { Sweep } from "../src/sweep";
 import { StateTable } from "./StateTable";
 
 declare function acquireVsCodeApi(): { postMessage(m: FromWebview): void };
@@ -24,15 +26,17 @@ const vscode = acquireVsCodeApi();
 const send = (m: FromWebview) => vscode.postMessage(m);
 
 const IDLE: RunStatus = { current: null, finished: false, finishedPaths: [], visits: {}, record: null };
+type TreePath = { path: string; row: number; visited: string[]; result?: unknown[] };
 
 export function App() {
   const [describe, setDescribe] = useState<DescribeResult>();
   const [run, setRun] = useState<RunStatus>(IDLE);
   const [columns, setColumns] = useState<ColumnSummary[] | null>(null);
   const [rows, setRows] = useState(0);
+  const [keyCol, setKeyCol] = useState<RecordKey>(null);
   const [lineage, setLineage] = useState<Lineage | null>(null);
   const [history, setHistory] = useState<ColumnHistory | null>(null);
-  const [treePath, setTreePath] = useState<{ path: string; row: number; visited: string[] } | null>(null);
+  const [treePath, setTreePath] = useState<TreePath | null>(null);
   const [compare, setCompare] = useState<{ comparison: Comparison | null; busy?: string; error?: string }>({ comparison: null });
   const [sweep, setSweep] = useState<{ sweep: Sweep | null; busy?: string; error?: string }>({ sweep: null });
   const [selected, setSelected] = useState<string>();
@@ -59,6 +63,7 @@ export function App() {
         case "state":
           setColumns(m.columns);
           setRows(m.rows);
+          setKeyCol(m.key);
           break;
         case "lineage":
           setLineage(m.lineage);
@@ -119,6 +124,9 @@ export function App() {
     setSelected(path);
     setTab("graph");
   };
+  const pausedAt = run.current && !run.finished ? `${run.current.when} ${run.current.path || "the start"}` : null;
+  const shownTreePath = treePath && run.record === treePath.row ? treePath : null;
+  const withDetails = details && (tab === "graph" || tab === "state");
 
   return (
     <div className="app">
@@ -126,37 +134,35 @@ export function App() {
         <strong>{describe.pipeline}</strong>
         <nav>
           {tabButton("graph", "Graph")}
-          {tabButton("state", columns ? `State (${columns.length})` : "State")}
+          {tabButton("state", "State")}
           {tabButton("params", "Params")}
           {tabButton("scenarios", sweep.busy ? "Scenarios…" : "Scenarios")}
           {tabButton("compare", compare.busy ? "Compare…" : "Compare")}
         </nav>
-        {tab === "graph" && (
-          <label>
-            <input type="checkbox" checked={showData} onChange={(e) => setShowData(e.target.checked)} /> all data edges
-          </label>
-        )}
-        {tab === "graph" && compare.comparison && (
-          <label>
-            <input type="checkbox" checked={showDiff} onChange={(e) => setShowDiff(e.target.checked)} /> diff
-          </label>
-        )}
         {columns && (
-          <label>
-            record{" "}
+          <label title="Show values for one record instead of the whole batch">
+            Focus{" "}
             <select aria-label="record" value={run.record ?? ""} onChange={(e) => send({ type: "record", row: e.target.value === "" ? null : Number(e.target.value) })}>
-              <option value="">all {rows}</option>
+              <option value="">all {rows} records</option>
               {Array.from({ length: rows }, (_, i) => (
-                <option key={i} value={i}>{i}</option>
+                <option key={i} value={i}>{recordLabel(i, keyCol)}</option>
               ))}
             </select>
           </label>
         )}
-        <label>
-          <input type="checkbox" checked={details} onChange={(e) => setDetails(e.target.checked)} /> details
-        </label>
-        {run.current && <span className="badge">{run.current.when} {run.current.path || "<root>"}</span>}
+        {pausedAt && <span className="badge" title="Where the debug run is paused">⏸ {pausedAt}</span>}
       </header>
+      {(tab === "graph" || tab === "state") && (
+        <div className="subbar">
+          {tab === "graph" && (
+            <label><input type="checkbox" checked={showData} onChange={(e) => setShowData(e.target.checked)} /> all data edges</label>
+          )}
+          {tab === "graph" && compare.comparison && (
+            <label><input type="checkbox" checked={showDiff} onChange={(e) => setShowDiff(e.target.checked)} /> colour by last comparison</label>
+          )}
+          <label><input type="checkbox" checked={details} onChange={(e) => setDetails(e.target.checked)} /> details</label>
+        </div>
+      )}
       <main>
         {tab === "graph" && (
           <Graph
@@ -167,28 +173,30 @@ export function App() {
             highlightColumn={column}
             lineage={lineagePaths}
             diff={diff}
+            treePath={shownTreePath}
             onSelect={setSelected}
             onOpen={(path) => send({ type: "reveal", path })}
           />
         )}
-        {tab === "state" && <StateTable columns={columns} record={run.record} selected={selectedNode} onPick={setColumn} picked={column} />}
+        {tab === "state" && <StateTable columns={columns} record={run.record} keyCol={keyCol} selected={selectedNode} onPick={setColumn} picked={column} />}
         {tab === "params" && (
           <Params
             schema={describe.params}
             inputColumns={inputColumns}
             record={run.record}
+            keyCol={keyCol}
             sessionRunning={columns !== null}
-            onWhatIf={(params, overrides, row) => send({ type: "whatIf", params, overrides, row })}
+            onWhatIf={(params, overrides, row, label) => send({ type: "whatIf", params, overrides, row, label })}
             onRestart={(params) => send({ type: "restartWith", params })}
-            onCompareRevision={() => send({ type: "compareRevision" })}
           />
         )}
         {tab === "scenarios" && (
           <Scenarios
             schema={describe.params}
             columns={columns ? columns.map((c) => c.name) : inputColumns}
-            pausedAt={run.current && !run.finished ? `${run.current.when} ${run.current.path || "<root>"}` : null}
+            pausedAt={pausedAt}
             record={run.record}
+            keyCol={keyCol}
             rows={rows}
             result={sweep}
             onRun={(scenarios, fromHere) => send({ type: "sweep", scenarios, fromHere })}
@@ -198,20 +206,32 @@ export function App() {
             }}
           />
         )}
-        {tab === "compare" && <Compare {...compare} record={run.record} onSelect={select} />}
-        <NodePanel
-          hidden={!details}
-          node={selectedNode}
-          run={run}
-          column={column}
-          lineage={lineage}
-          history={history}
-          treePath={treePath}
-          onPick={setColumn}
-          onSelect={setSelected}
-          onReveal={(path) => send({ type: "reveal", path })}
-          onRewind={(path) => send({ type: "rewind", path })}
-        />
+        {tab === "compare" && (
+          <Compare
+            {...compare}
+            record={run.record}
+            onSelect={select}
+            onCompareRevision={() => send({ type: "compareRevision" })}
+            onOpenDiff={(path) => send({ type: "openDiff", path })}
+          />
+        )}
+        {withDetails && (
+          <NodePanel
+            node={selectedNode}
+            run={run}
+            columns={columns}
+            keyCol={keyCol}
+            column={column}
+            lineage={lineage}
+            history={history}
+            treePath={shownTreePath}
+            onPick={setColumn}
+            onSelect={setSelected}
+            onReveal={(path) => send({ type: "reveal", path })}
+            onRewind={(path) => send({ type: "rewind", path })}
+            onRunTo={(path) => send({ type: "runTo", path })}
+          />
+        )}
       </main>
     </div>
   );

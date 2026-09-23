@@ -512,3 +512,119 @@ table.sweep td.changed {
 .small {
   font-size: 0.85em;
 }
+
+/* round 1 review: legibility, sticky actions, comparison tables */
+.subbar {
+  display: flex;
+  gap: 14px;
+  padding: 3px 10px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  font-size: 0.92em;
+}
+.node text.sub,
+.cluster text {
+  fill: var(--vscode-foreground);
+  opacity: 0.8;
+}
+.cluster text {
+  font-size: 11px;
+  font-weight: 600;
+}
+.cluster text .kind {
+  font-weight: normal;
+  opacity: 0.7;
+}
+.node text.title {
+  font-size: 13px;
+  font-weight: 600;
+}
+.node text.sub {
+  font-size: 11px;
+}
+.edge text {
+  font-size: 10px;
+  fill: var(--vscode-foreground);
+  opacity: 0.8;
+}
+.actions.sticky {
+  position: sticky;
+  bottom: 0;
+  background: var(--vscode-editor-background);
+  padding: 8px 0;
+  border-top: 1px solid var(--vscode-panel-border);
+  align-items: center;
+}
+.form-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0 8px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+.form-summary button,
+aside .actions button {
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  border: none;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+aside .actions {
+  margin: 6px 0;
+}
+table.sweep tr.clickable {
+  cursor: pointer;
+}
+table.sweep tr.clickable:hover td {
+  background: var(--vscode-list-hoverBackground);
+}
+table.sweep th.knob-col,
+table.sweep td.knob-col {
+  background: var(--vscode-editorWidget-background);
+}
+table.vdiffs {
+  width: auto;
+  margin: 2px 0 6px 12px;
+}
+table.vdiffs td {
+  border: none;
+  padding: 1px 8px 1px 0;
+}
+table.vdiffs td.before {
+  color: var(--vscode-gitDecoration-deletedResourceForeground, #c74e39);
+}
+table.vdiffs td.after {
+  color: var(--vscode-gitDecoration-addedResourceForeground, #81b88b);
+}
+table.vdiffs tr.hit td {
+  font-weight: bold;
+}
+.step-diff {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+.unchanged-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.chip.same {
+  opacity: 0.7;
+}
+.chip-value {
+  font-family: var(--vscode-editor-font-family);
+  color: var(--vscode-charts-green, #89d185);
+}
+.chip {
+  border: 1px solid var(--vscode-button-border, var(--vscode-panel-border));
+}
+.tree-path {
+  padding: 4px 6px;
+  background: var(--vscode-editorWidget-background);
+  border-left: 3px solid var(--vscode-charts-green, #89d185);
+}
+.params td input {
+  width: 90px;
+}

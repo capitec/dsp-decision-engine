@@ -114,6 +114,14 @@ def node_json(node, steps, located):
     return {**base, "kind": kind, **extra, "children": [node_json(c, steps, located) for c in node.children()]}
 
 
+def key_column(frame):
+    """The column that names a record (`client_id`, `id`), so views can say "client_id 2" not "row 1"."""
+    for c in frame.columns:
+        if c == "id" or c.endswith("_id") or c.startswith("id_"):
+            return {"name": c, "values": frame[c].to_list()}
+    return None
+
+
 def _load_rows(data):
     if isinstance(data, str):
         data = json.loads(Path(data).read_text())
@@ -154,7 +162,7 @@ class Bridge:
         if rows is None:
             raise ValueError("no data: pass `data` (rows or a JSON file) or define SAMPLE in the module")
         frame = apply_overrides(_load_rows(rows), overrides, row)
-        return {**described, **trace(self.step, frame, params), "data": frame.to_dicts()}
+        return {**described, **trace(self.step, frame, params), "data": frame.to_dicts(), "key": key_column(frame)}
 
     def _index(self, n, parent):
         self.parents[n["path"]] = parent
@@ -220,8 +228,8 @@ class Bridge:
                 results.append({"label": sc.get("label"),
                                 **trace(self.step, apply_overrides(frame, sc.get("overrides"), sc.get("row")), doc or None)})
             result = {"baseline": base, "results": results}
-        data_rows = (s.frame if from_here and s is not None else frame).to_dicts()
-        return {**result, "describe": self.described, "data": data_rows,
+        used = s.frame if from_here and s is not None else frame
+        return {**result, "describe": self.described, "data": used.to_dicts(), "key": key_column(used),
                 "at": None if at is None else {"path": at[0], "when": at[1], "n": at[2]}}
 
     def _names(self):
@@ -245,7 +253,7 @@ class Bridge:
             cols.append({"name": name, "dtype": str(series.dtype), "rows": series.len(),
                          "nulls": series.null_count(), "preview": series.head(5).to_list(), "value": at,
                          "producer": versions[-1].producer or "input", "versions": len(versions)})
-        return {"columns": cols, "row": row}
+        return {"columns": cols, "row": row, "key": key_column(self.session.frame)}
 
     def column(self, name, row=None):
         st = self.session.state

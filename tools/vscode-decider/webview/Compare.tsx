@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Comparison, ValueDiff } from "../src/compare";
+import { formatValue, recordLabel, type RecordKey } from "../src/protocol";
 
 interface Props {
   comparison: Comparison | null;
@@ -7,81 +8,98 @@ interface Props {
   error?: string;
   record: number | null;
   onSelect: (path: string) => void;
+  onCompareRevision: () => void;
+  onOpenDiff: (path: string) => void;
 }
 
-const fmt = (v: unknown) => (v === undefined ? "—" : JSON.stringify(v));
-
-function Diffs({ diffs, record }: { diffs: ValueDiff[]; record: number | null }) {
+function Diffs({ diffs, record, keyCol }: { diffs: ValueDiff[]; record: number | null; keyCol: RecordKey }) {
   return (
-    <>
-      {diffs.map((d) => {
-        const hit = record !== null && d.changedRows.includes(record);
-        return (
-          <div key={d.name} className={`vdiff ${hit ? "hit" : ""}`}>
-            <span className="mono">{d.name}</span>
-            <span className="muted"> · {d.changedRows.length} row{d.changedRows.length === 1 ? "" : "s"}</span>
-            {d.samples.map((s) => (
-              <span key={s.row} className="mono sample">
-                {" "}r{s.row}: <del>{fmt(s.a)}</del> → <ins>{fmt(s.b)}</ins>
-              </span>
-            ))}
-          </div>
-        );
-      })}
-    </>
+    <table className="vdiffs">
+      <tbody>
+        {diffs.flatMap((d) =>
+          d.samples.map((s, i) => (
+            <tr key={`${d.name}-${s.row}`} className={record === s.row ? "hit" : ""}>
+              <td className="mono">{i === 0 ? d.name : ""}</td>
+              <td>{recordLabel(s.row, keyCol)}</td>
+              <td className="mono before">{formatValue(s.a)}</td>
+              <td className="arrow">→</td>
+              <td className="mono after">{formatValue(s.b)}</td>
+              <td className="muted">{i === 0 && d.changedRows.length > d.samples.length ? `+${d.changedRows.length - d.samples.length} more` : ""}</td>
+            </tr>
+          )),
+        )}
+      </tbody>
+    </table>
   );
 }
 
 /** Two runs side by side, step by step, in execution order. */
-export function Compare({ comparison: c, busy, error, record, onSelect }: Props) {
+export function Compare({ comparison: c, busy, error, record, onSelect, onCompareRevision, onOpenDiff }: Props) {
   const [onlyChanges, setOnlyChanges] = useState(true);
-  if (busy) return <div className="empty">{busy}</div>;
-  if (error) return <div className="empty error">{error}</div>;
-  if (!c) return <div className="empty">Nothing compared yet. Use the Params tab for a what-if, or compare with a git revision.</div>;
+  const toolbar = (
+    <div className="actions">
+      <button onClick={onCompareRevision}>Compare with a git revision…</button>
+    </div>
+  );
+  if (busy) return <div className="compare"><div className="empty">{busy}</div></div>;
+  if (error) return <div className="compare"><div className="empty error">{error}</div>{toolbar}</div>;
+  if (!c)
+    return (
+      <div className="compare">
+        <div className="empty">Nothing compared yet. Try a what-if on the Params tab, run scenarios, or compare with a git revision.</div>
+        {toolbar}
+      </div>
+    );
   const steps = c.steps.filter((s) => {
     if (!onlyChanges) return true;
     if (s.status === "same" || s.status === "not run") return false;
     return record === null || s.status !== "changed" || s.structural.length > 0 || s.outputs.some((o) => o.changedRows.includes(record));
   });
+  const changedOut = new Set(c.output.map((o) => o.name));
   const count = (st: string) => c.steps.filter((s) => s.status === st).length;
   return (
     <div className="compare">
       <div className="summary">
-        <strong><del>{c.a}</del> → <ins>{c.b}</ins></strong>
-        <span className="muted"> · {c.rows} rows · {count("changed")} changed, {count("added")} added, {count("removed")} removed</span>
+        <span><span className="muted">Baseline</span> <strong>{c.a}</strong> <span className="muted">vs</span> <strong>{c.b}</strong></span>
         <label className="right"><input type="checkbox" checked={onlyChanges} onChange={(e) => setOnlyChanges(e.target.checked)} /> only changes</label>
       </div>
+      <div className="muted">{c.rows} records · {count("changed")} steps changed, {count("added")} added, {count("removed")} removed</div>
       {(c.errors.a || c.errors.b) && (
         <div className="error">
           {c.errors.a && <div>{c.a}: {c.errors.a}</div>}
           {c.errors.b && <div>{c.b}: {c.errors.b}</div>}
         </div>
       )}
-      <div className="muted">
-        {c.firstDivergence ? (
-          <>Values first diverge at <a onClick={() => onSelect(c.firstDivergence!)}>{c.firstDivergence}</a>.</>
-        ) : (
-          "Every step produces the same values."
-        )}
+      <h4>Final outputs</h4>
+      <Diffs diffs={c.output} record={record} keyCol={c.key} />
+      <div className="unchanged-list">
+        {c.outputColumns.filter((o) => !changedOut.has(o)).map((o) => (
+          <span key={o} className="chip small same">{o}: unchanged</span>
+        ))}
       </div>
-      <table>
-        <tbody>
-          {steps.map((s) => (
-            <tr key={s.path} className={`step ${s.status}`}>
-              <td><span className={`badge-status ${s.status}`}>{s.status}</span></td>
-              <td>
-                <a onClick={() => onSelect(s.path)}>{s.path}</a>
-                {s.structural.map((x) => (
-                  <span key={x} className="chip small">{x}</span>
-                ))}
-              </td>
-              <td><Diffs diffs={s.outputs} record={record} /></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <h4>Output</h4>
-      {c.output.length ? <Diffs diffs={c.output} record={record} /> : <div className="muted">The outputs are identical.</div>}
+      <h4>
+        Step by step
+        {c.firstDivergence && (
+          <span className="muted small"> · first difference at <a onClick={() => onSelect(c.firstDivergence!)}>{c.firstDivergence}</a></span>
+        )}
+      </h4>
+      {steps.length === 0 && <div className="muted">Every step produces the same values.</div>}
+      {steps.map((s) => (
+        <div key={s.path} className={`step-diff ${s.status}`}>
+          <div>
+            <span className={`badge-status ${s.status}`}>{s.status}</span> <a onClick={() => onSelect(s.path)}>{s.path}</a>
+            {s.structural.map((x) =>
+              x === "code" && c.files ? (
+                <a key={x} className="chip small" onClick={() => onOpenDiff(s.path)} title="Open a diff of the two versions">view code diff</a>
+              ) : (
+                <span key={x} className="chip small">{x} changed</span>
+              ),
+            )}
+          </div>
+          {s.outputs.length > 0 && <Diffs diffs={s.outputs} record={record} keyCol={c.key} />}
+        </div>
+      ))}
+      {toolbar}
     </div>
   );
 }

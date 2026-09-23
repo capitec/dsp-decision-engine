@@ -62,7 +62,7 @@ async function runToBreakpoint(c: Codium, line: number) {
   await goTo(c, LINE.pipeline);
   await lens(c, "Run flow").click({ timeout: 60_000 });
   await c.page.locator(".quick-input-widget .monaco-list-row", { hasText: "SAMPLE" }).click();
-  await c.webview().locator(".badge", { hasText: "before <root>" }).waitFor({ timeout: 60_000 });
+  await c.webview().locator(".badge", { hasText: "before the start" }).waitFor({ timeout: 60_000 });
   await c.page.keyboard.press("F5");
 }
 
@@ -91,27 +91,30 @@ describe("user stories", () => {
   }, 180_000);
 
   it("find out why one application got its term", async () => {
-    await story("2-debug-record", "A credit analyst runs the flow on sample applications, pauses at the income cap, focuses on application 1 and wants to see what its term_cap was computed from, then see which path the risk tree took for it.", async (c, shot) => {
-      await runToBreakpoint(c, LINE.capByIncome);
+    await story("2-debug-record", "A credit analyst runs the flow on sample applications, pauses at the income cap, focuses on the application with client_id 1 and wants to see what its term_cap was computed from, then see which path the risk tree took for it.", async (c, shot) => {
+      await open(c);
+      await goTo(c, LINE.pipeline);
+      await lens(c, "Visualise flow").click({ timeout: 60_000 });
       const wv = c.webview();
-      await wv.locator(".badge", { hasText: "cap_by_income" }).waitFor({ timeout: 30_000 });
-      await shot("Paused at a breakpoint on cap_by_income (set with F9 on its def line, then 'Run flow', then F5).");
-      await wv.locator("select[aria-label=record]").selectOption("1");
+      await wv.locator("svg .node", { hasText: "cap_by_income" }).click({ timeout: 30_000 });
+      await shot("After 'Visualise flow' and clicking the cap_by_income step.");
+      await wv.locator("aside button", { hasText: "Run to here" }).click();
+      await wv.locator(".badge", { hasText: "cap_by_income" }).waitFor({ timeout: 60_000 });
+      await shot("After clicking 'Run to here': the flow runs on the sample and pauses before cap_by_income.");
+      await wv.locator("select[aria-label=record]").selectOption({ label: "client_id 1" });
       await wv.locator(".chip", { hasText: "term_cap" }).first().click();
-      await wv.locator("aside h4", { hasText: "Lineage of term_cap" }).waitFor();
-      await shot("After choosing record 1 in the header and clicking the term_cap chip in the details.");
+      await wv.locator("aside h4", { hasText: "Where term_cap comes from" }).waitFor();
+      await shot("After focusing client_id 1 in the header and clicking the term_cap chip.");
       await tab(c, "State");
-      await shot("The State tab for record 1.");
+      await shot("The State tab while focused on client_id 1.");
       await tab(c, "Graph");
-      await goTo(c, LINE.treeLowScore);
-      await toggleBreakpoint(c);
-      await c.page.keyboard.press("F5");
-      await wv.locator(".badge", { hasText: "risk_tree" }).waitFor({ timeout: 30_000 });
+      await wv.locator("svg .node", { hasText: "risk_tree" }).click();
+      await wv.locator("aside button", { hasText: "Continue to here" }).click();
+      await wv.locator(".badge", { hasText: "before risk_tree" }).waitFor({ timeout: 30_000 });
       await c.page.keyboard.press("F10");
       await wv.locator(".badge", { hasText: "after risk_tree" }).waitFor({ timeout: 30_000 });
-      await wv.locator("svg .node", { hasText: "risk_tree" }).click();
-      await wv.locator("aside h4", { hasText: "Path of record" }).waitFor({ timeout: 10_000 });
-      await shot("After a breakpoint inside the tree's Python, stepping over the tree and clicking it: the path record 1 took.");
+      await wv.locator("aside h4", { hasText: "Path for client_id 1" }).waitFor({ timeout: 10_000 });
+      await shot("After clicking risk_tree, 'Continue to here', then F10 to step over the tree: the path client_id 1 took.");
     });
   }, 180_000);
 
@@ -125,9 +128,9 @@ describe("user stories", () => {
       await shot("After clicking 'What-if' above the pipeline.");
       await wv.locator('input[aria-label="term/cap_by_income cap"]').fill("24");
       await shot("After typing 24 into term/cap_by_income · cap.");
-      await wv.locator("button", { hasText: "Compare what-if with defaults" }).click();
+      await wv.locator("button", { hasText: "Compare with defaults" }).click();
       await wv.locator(".compare .summary").waitFor({ timeout: 90_000 });
-      await shot("The comparison after clicking 'Compare what-if with defaults'.");
+      await shot("The comparison after clicking 'Compare with defaults'.");
       await tab(c, "Graph");
       await shot("The graph after the comparison.");
     });
@@ -142,14 +145,14 @@ describe("user stories", () => {
       await shot("The Scenarios tab while paused before cap_by_income.");
       await wv.locator('select[aria-label="knob"]').first().selectOption("term/cap_by_income|cap");
       await wv.locator('input[aria-label="knob values"]').first().fill("24, 36, 48");
-      await wv.locator("button", { hasText: "+ add a knob" }).click();
+      await wv.locator("button", { hasText: "+ add another" }).click();
       await wv.locator('select[aria-label="knob"]').nth(1).selectOption("requested_amount");
       await wv.locator('input[aria-label="knob values"]').nth(1).fill("50000, 150000");
-      await shot("Two knobs filled in: the cap param and the requested_amount value.");
+      await shot("Two rows filled in: the cap parameter and the requested_amount input field.");
       await wv.locator("button", { hasText: /^Run 6 scenarios/ }).click();
       await wv.locator("table.sweep").waitFor({ timeout: 120_000 });
       await shot("The results table after running the 6 scenarios.");
-      await wv.locator("table.sweep a").nth(0).click();
+      await wv.locator("table.sweep tr.clickable").nth(0).click();
       await wv.locator(".compare .summary").waitFor();
       await shot("After clicking the first scenario: its step-by-step comparison.");
     });
