@@ -289,9 +289,7 @@ def test_loop_needs_carries_and_a_bound():
 # --- running ---
 
 
-def test_run_and_session_wait_for_the_runner():
-    with pytest.raises(NotImplementedError):
-        step(ratio).run(None)
+def test_session_waits_for_the_debugger():
     with pytest.raises(NotImplementedError):
         step(ratio).session(None)
 
