@@ -463,6 +463,9 @@ export class DeciderDebugSession extends LoggingDebugSession {
           this.sendResponse(response);
           await this.startSession();
           return void (await this.run("step_into", {}, "entry"));
+        case "decider.sweep":
+          response.body = await this.bridge!.request("sweep", { scenarios: args.scenarios, from_here: true });
+          break;
         case "decider.setRecord":
           this.record = typeof args.row === "number" ? args.row : null;
           this.refresh();

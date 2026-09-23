@@ -6,7 +6,9 @@ import { listRefs, materialise, repoRoot } from "./git";
 import { GraphPanel } from "./graphPanel";
 import type { CallNodeJson, ColumnHistory, ColumnSummary, DescribeResult, FromWebview, Lineage, RunStatus, ToWebview } from "./protocol";
 import { debugpyLibs, pythonCommand } from "./python";
-import { runComparison, type Side } from "./scenarios";
+import { runComparison, type Side } from "./compareRuns";
+import { withBridge } from "./bridge";
+import { summariseSweep, type Scenario, type SweepResponse } from "./sweep";
 import { StructureProvider } from "./structure";
 
 let lineageChannel: vscode.OutputChannel | undefined;
@@ -154,16 +156,39 @@ async function onWebview(m: FromWebview, describe: DescribeResult) {
       break;
     case "whatIf": {
       if (!shown) return;
-      const who = m.row === null ? "all records" : `record ${m.row}`;
+      const changes = [
+        ...leafNames(m.params as Record<string, unknown>),
+        ...Object.entries(m.overrides).map(([k, v]) => `${k}=${JSON.stringify(v)}${m.row === null ? "" : ` on record ${m.row}`}`),
+      ];
       await compare(
         { label: "defaults", file: shown.file, pipeline: shown.pipeline },
-        { label: `what-if (${who})`, file: shown.file, pipeline: shown.pipeline, params: m.params, overrides: m.overrides, row: m.row },
+        { label: `what-if: ${changes.join(", ")}`, file: shown.file, pipeline: shown.pipeline, params: m.params, overrides: m.overrides, row: m.row },
       );
       break;
     }
     case "compareRevision":
       await compareRevision();
       break;
+    case "sweep":
+      await runSweep(m.scenarios, m.fromHere && !!s);
+      break;
+  }
+}
+
+/** Run scenarios next to the unchanged run: forked from the paused session, or from the start. */
+async function runSweep(list: Scenario[], fromHere: boolean) {
+  post({ type: "tab", tab: "scenarios" });
+  post({ type: "sweep", sweep: null, busy: `Running ${list.length} scenario${list.length === 1 ? "" : "s"}…` });
+  try {
+    const s = deciderSession();
+    const r = (fromHere && s
+      ? await s.customRequest("decider.sweep", { scenarios: list })
+      : await withBridge({ python: pythonCommand(), cwd: path.dirname(shown!.file) }, (b) =>
+          b.request("sweep", { scenarios: list, from_here: false, file: shown!.file, pipeline: shown!.pipeline }),
+        )) as SweepResponse;
+    post({ type: "sweep", sweep: summariseSweep(r) });
+  } catch (e) {
+    post({ type: "sweep", sweep: null, error: (e as Error).message });
   }
 }
 
@@ -282,6 +307,13 @@ function findNode(d: DescribeResult, p: string) {
   };
   visit(d.ir);
   return found;
+}
+
+/** `term/cap_by_income.cap=24` for every value in a nested params document. */
+function leafNames(doc: Record<string, unknown>, prefix = ""): string[] {
+  return Object.entries(doc ?? {}).flatMap(([k, v]) =>
+    v && typeof v === "object" && !Array.isArray(v) ? leafNames(v as Record<string, unknown>, prefix ? `${prefix}/${k}` : k) : [`${prefix}.${k}=${JSON.stringify(v)}`],
+  );
 }
 
 function deciderSession(): vscode.DebugSession | undefined {

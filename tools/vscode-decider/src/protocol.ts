@@ -1,4 +1,5 @@
 import type { Comparison } from "./compare";
+import type { Scenario, Sweep } from "./sweep";
 
 // Shapes the Python bridge sends. Shared by the adapter, the tree and the webview.
 
@@ -109,7 +110,7 @@ export interface ColumnHistory {
   versions: { producer: string; values: unknown[]; written?: boolean }[];
 }
 
-export type Tab = "graph" | "state" | "params" | "compare";
+export type Tab = "graph" | "state" | "params" | "scenarios" | "compare";
 
 /** Messages between the extension and the graph webview. */
 export type ToWebview =
@@ -119,7 +120,8 @@ export type ToWebview =
   | { type: "lineage"; lineage: Lineage | null; history: ColumnHistory | null }
   | { type: "treePath"; path: string; row: number; visited: string[] }
   | { type: "compare"; comparison: Comparison | null; busy?: string; error?: string }
-  | { type: "tab"; tab: Tab };
+  | { type: "tab"; tab: Tab }
+  | { type: "sweep"; sweep: Sweep | null; busy?: string; error?: string };
 
 export type FromWebview =
   | { type: "ready" }
@@ -130,7 +132,8 @@ export type FromWebview =
   | { type: "rewind"; path: string }
   | { type: "whatIf"; params: unknown; overrides: Record<string, unknown>; row: number | null }
   | { type: "restartWith"; params: unknown }
-  | { type: "compareRevision" };
+  | { type: "compareRevision" }
+  | { type: "sweep"; scenarios: Scenario[]; fromHere: boolean };
 
 export function walk(node: IRNodeJson, fn: (n: IRNodeJson, parent: IRNodeJson | null) => void, parent: IRNodeJson | null = null) {
   fn(node, parent);

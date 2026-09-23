@@ -459,3 +459,56 @@ aside.collapsed {
 .muted.small {
   font-size: 0.8em;
 }
+
+/* scenarios */
+.scenarios {
+  flex: 1;
+  overflow: auto;
+  padding: 8px 12px;
+}
+.knob {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+.knob input {
+  flex: 1;
+  min-width: 160px;
+}
+.scenarios input,
+.scenarios select {
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  padding: 2px 4px;
+}
+.scenarios .summary {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin: 10px 0 6px;
+}
+table.sweep td,
+table.sweep th {
+  white-space: nowrap;
+}
+table.sweep tr.original td {
+  font-weight: bold;
+  border-bottom: 2px solid var(--vscode-panel-border);
+}
+table.sweep td.unchanged {
+  opacity: 0.55;
+}
+table.sweep td.changed {
+  background: var(--vscode-diffEditor-insertedTextBackground, #9bb95522);
+}
+.up {
+  color: var(--vscode-gitDecoration-addedResourceForeground, #81b88b);
+}
+.down {
+  color: var(--vscode-gitDecoration-deletedResourceForeground, #c74e39);
+}
+.small {
+  font-size: 0.85em;
+}
