@@ -76,6 +76,23 @@ Nothing here reads a raw address from a global, which is the thing that
 actually segfaulted on a warm second process (this module's predecessor
 docstring, EXPERIMENTS.md §W and its correction).
 
+**Inlining, stated once.** `walk` and the step `fn` (`fn_int`/`fn_bool`/
+`fn_float`) are `inline="always"`: numba splices their bodies into the
+caller before typing, so the driver's per-row loop absorbs the step `fn`,
+`walk` with it, and `code`/`lit` become constants of that one loop instead
+of two arrays (seven scalars each) pushed across a real call per row —
+the same rule `decider2.trees.interpreter.walk_tree` documents: **do not
+put a non-inlined layer between the per-row kernel and the walker.**
+Measured (EXPERIMENTS.md §X): a Branch + Loop pipeline, 200k rows, 627
+ns/row with `walk` a real call, 490 with both inlined, bit-identical
+output. What stays a real call, and why: `_seed_regs` (its
+`literal_unroll` is over a runtime ARGUMENT, `params`, which numba's inline
+pass cannot handle — it fails at "switch const list for tuples"), and
+`call`/the adapters (inlining `call` measured no further gain, 492 vs
+490). Nothing about caching changes: these closures were never
+`cache=True`, and inlining a never-cached closure into a never-cached
+kernel costs no cache entry.
+
 **Registers.** Every value a program touches — a leaf input, a `param()`
 value, a carry, `loop_idx`, an arm's result — lives in one per-call float64
 `regs` array at an index decided once when the program is built
@@ -368,7 +385,7 @@ def make_walker(adapters: Sequence[Callable]) -> Callable:
             i += 1
         return r
 
-    @njit
+    @njit(inline="always")
     def walk(code, lit, start_pc, regs):
         pc = start_pc
         while True:
@@ -450,17 +467,17 @@ def make_step_fn(walk: Callable, program: Program, output_annotation: Any, n_par
     seed = _seed_regs if n_params else _seed_regs_no_params
 
     if output_annotation is int:
-        @njit
+        @njit(inline="always")
         def fn_int(args, params):
             return int(walk(code, lit, start_pc, seed(args, params, n_regs)))
         return fn_int
     if output_annotation is bool:
-        @njit
+        @njit(inline="always")
         def fn_bool(args, params):
             return walk(code, lit, start_pc, seed(args, params, n_regs)) != 0.0
         return fn_bool
 
-    @njit
+    @njit(inline="always")
     def fn_float(args, params):
         return walk(code, lit, start_pc, seed(args, params, n_regs))
     return fn_float
