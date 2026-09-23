@@ -49,15 +49,15 @@ describe("decider in VSCodium", () => {
     await lens("Run flow").click();
     await c.page.locator(".quick-input-widget .quick-input-list .monaco-list-row", { hasText: "SAMPLE" }).click();
     const wv = c.webview();
-    await wv.locator(".badge", { hasText: "before <root>" }).waitFor({ timeout: 60_000 });
+    await wv.locator(".badge", { hasText: "before the start" }).waitFor({ timeout: 60_000 });
     await c.page.keyboard.press("F5");
     await wv.locator(".badge", { hasText: "term/by_sector/cap_public" }).waitFor({ timeout: 30_000 });
     await wv.locator("select[aria-label=record]").selectOption("1");
     await wv.locator(".chip", { hasText: "term_cap" }).first().click();
-    await wv.locator("aside h4", { hasText: "Lineage of term_cap, record 1" }).waitFor();
+    await wv.locator("aside h4", { hasText: "Where term_cap comes from for client_id 2" }).waitFor();
     await c.shot("03-paused-record");
     await wv.locator("header nav button", { hasText: "State" }).click();
-    await wv.locator("td", { hasText: "requested_amount" }).waitFor();
+    await wv.locator("td", { hasText: "requested_amount" }).first().waitFor();
     await c.shot("04-state");
   }, 120_000);
 
@@ -66,7 +66,7 @@ describe("decider in VSCodium", () => {
     await wv.locator("header nav button", { hasText: "Params" }).click();
     await wv.locator('input[aria-label="term/cap_by_income cap"]').fill("24");
     await c.shot("05-params");
-    await wv.locator("button", { hasText: "Compare what-if with defaults" }).click();
+    await wv.locator("button", { hasText: "Compare with defaults" }).click();
     await wv.locator(".compare a", { hasText: "term/cap_by_income" }).first().waitFor({ timeout: 90_000 });
     await c.shot("06-compare");
     await wv.locator("header nav button", { hasText: "Graph" }).click();
