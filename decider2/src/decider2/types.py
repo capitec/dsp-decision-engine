@@ -31,21 +31,23 @@ class FeatureKind(IntEnum):
     on it at runtime, so they are fixed here (no numba import needed to
     read them) and never renumbered.
 
-    `STR` is the reserved slot for a RAW string (polars' own
-    `offsets: int64` / `values: uint8` buffers, zero-copy from
-    `_get_buffers()`): the row carries `(start, end)` byte offsets in the
-    `int64` span array and the whole-column byte buffer travels alongside,
-    so a lazy matcher can read actual bytes inside the kernel. The
-    boundary does not yet produce such a column (`boundary.dtypes` still
-    dictionary-encodes every string to `CODE`); the driver side of the
-    slot is built and tested so that when it does, nothing here changes.
+    `STR` is the slot for a RAW string as a SPAN (docs/BOUNDARY-REWORK.md
+    §2.1): the row carries `(address, byte length)` in the `int64` span
+    array — the address of the row's UTF-8 bytes in polars' own memory
+    (nanoarrow's `ArrowArrayViewGetStringUnsafe` through the compiled
+    shim, `decider2._arrow`) or in a `bytes` object `score()` built, with
+    length `-1` for a null — so a tree tests the string at the node, by
+    its bytes (`decider2.trees.interpreter`, `STR_MATCH`). A `bytes`
+    annotation is the wire spelling of such an input (`boundary.dtypes.
+    extract` produces it from a String column); `str` stays the
+    dictionary-code convention for hand-written steps until Stage 7.
     """
 
     F64 = 0     # float
     I64 = 1     # int
     BOOL = 2    # bool
     CODE = 3    # str   — an int32 dictionary code (doc 05 §1.5)
-    STR = 4     # bytes — raw string spans (reserved; see above)
+    STR = 4     # bytes — a raw string span (address, length); see above
 
 
 _KIND_BY_ANNOTATION = {float: FeatureKind.F64, int: FeatureKind.I64, bool: FeatureKind.BOOL,
@@ -97,19 +99,27 @@ class Step:
     output_annotation: Any = None
     shared_fields: tuple[str, ...] | None = None
     typed_args: bool = False           # packed fn gets args split by FeatureKind
-    # `typed_args`: this packed Step's `fn` receives `args` as a 6-tuple of
-    # per-kind row arrays — `(f64[:], i64[:], bool[:], int32[:], str_spans
-    # int64[:], str_bytes)` in `FeatureKind` order — and `params` as a pair
-    # `(floats..., ints...)` grouped by `ParamDecl.annotation`, instead of
-    # one float64 array and one flat tuple. Input `k` of kind `K` is slot
-    # `j` of that kind's array where `j` counts the kind-`K` inputs before
-    # it in `inputs` order; the producer (`decider2.trees.encode`) and the
-    # driver (`decider2.compile.driver._typed_layout`) both derive `j` from
-    # `inputs` alone, so they cannot disagree. Exists so a tree's Int64
-    # feature is compared as an int64 and its Boolean as a bool (doc 03
-    # §1.2) — the one-float64-array convention (`packed` alone) forced
-    # every input through float64, which collapses integers above 2**53.
-    # A step that is `typed_args` is also `packed`.
+    # `typed_args`: this packed Step's `fn` receives `args` as a 5-tuple of
+    # per-kind row arrays — `(f64[:], i64[:], bool[:], int32[:], span
+    # int64[:])` in `FeatureKind` order, a `bytes` input's span being
+    # `(address, byte length)` with length -1 for a null (docs/BOUNDARY-
+    # REWORK.md §2.1) — and `params` as `(floats, ints, pat_bytes,
+    # pat_off, grp_off)`: the float/int threshold tuples grouped by
+    # `ParamDecl.annotation`, plus the PATTERN TABLE built from every
+    # `str`-annotated param (one pattern) and `list[str]`-annotated param
+    # (a group of patterns) in first-appearance order — `uint8[:]` bytes,
+    # `int64[:]` pattern offsets, `int64[:]` group offsets. The table's
+    # numba type is the same for one pattern or a hundred, so changing,
+    # adding or removing a pattern is a VALUE change, never a recompile
+    # (§2.2, §6). Input `k` of kind `K` is slot `j` of that kind's array
+    # where `j` counts the kind-`K` inputs before it in `inputs` order;
+    # the producer (`decider2.trees.encode`) and the driver (`decider2.
+    # compile.gather._typed_layout`) both derive `j` from `inputs` alone,
+    # so they cannot disagree. Exists so a tree's Int64 feature is
+    # compared as an int64 and its Boolean as a bool (doc 03 §1.2) — the
+    # one-float64-array convention (`packed` alone) forced every input
+    # through float64, which collapses integers above 2**53. A step that
+    # is `typed_args` is also `packed`.
     # `shared_fields`: the `shared` keys this `reads_shared` step actually
     # reads, when it can say — a table's row/output steps read a fixed,
     # build-time-known set (`decider2.tables.encode`). The runtime then

@@ -14,9 +14,10 @@ Four tests could not port unchanged — see each docstring and PORTED.md:
   * `test_null_and_boolean_operators` — its `is_null`/`is_not_null` half
     rests on `UnaryIsNull`, a KNOWN GAP (decider2 declares null policy in
     the signature instead, doc 03 §1). Its `is_true`/`is_false` half ports.
-  * `test_string_match_types` — only `match_type="exact"` survives a
-    kernel (doc 05 §1.5); the other four are ported as `UnsupportedInKernel`
-    assertions, which is what decider2 actually does with them.
+  * `test_string_match_types` — `exact`, `contains`, `starts_with` and
+    `ends_with` port with decider 1's answers (matched in the kernel by
+    bytes, docs/BOUNDARY-REWORK.md §3.1); only `regex` is ported as an
+    `UnsupportedInKernel` assertion, which is what decider2 does with it.
   * `test_string_match_case_insensitive_and_trim` — same reason, both cases
     become `UnsupportedInKernel` assertions.
   * `test_special_numeric_values_through_range_rules` — its `inf`/`-inf`/
@@ -182,27 +183,40 @@ def test_string_match_types(tmp_path):
     """decider 1: exact, contains, starts_with, ends_with, regex all route
     correctly.
 
-    Only `exact` survives into a compiled kernel (doc 05 §1.5 — a string is
-    an int32 dictionary code there, and a code comparison cannot express a
-    prefix, a suffix, a substring or a regex). `exact` is ported with
-    decider 1's own expected answer; the other four are ported as
-    `UnsupportedInKernel` assertions — decider2's actual, deliberate
-    behaviour for exactly these configs, naming the frame-tier route.
+    Deliberately inverted (docs/BOUNDARY-REWORK.md §9, Stage 2): `exact`,
+    `contains`, `starts_with` and `ends_with` are now matched in the
+    kernel, at the node, on the string's own bytes — each ported with
+    decider 1's own expected answer. Only `regex` stays an
+    `UnsupportedInKernel` assertion (no regex engine in nopython numba),
+    naming the frame-tier route.
     """
     df = pl.DataFrame({"s": ["hello world", "world", "hello", "goodbye"]})
 
     exact = _unary("exact", UnaryStringMatch(feature="s", patterns=["world"], match_type="exact"), ("match",), default="no")
     assert _run(exact, df, name="exact", tmp_path=tmp_path) == ["no", "match", "no", "no"]
 
-    for match_type in ("contains", "starts_with", "ends_with", "regex"):
+    expected = {
+        "contains": (["ello"], ["match", "no", "match", "no"]),
+        "starts_with": (["hello"], ["match", "no", "match", "no"]),
+        "ends_with": (["hello"], ["no", "no", "match", "no"]),
+    }
+    for match_type, (patterns, answer) in expected.items():
         tree = _unary(
             f"mt_{match_type}",
-            UnaryStringMatch(feature="s", patterns=["ello" if match_type == "contains" else "hello"], match_type=match_type),
+            UnaryStringMatch(feature="s", patterns=patterns, match_type=match_type),
             ("match",),
             default="no",
         )
-        with pytest.raises(UnsupportedInKernel, match="frame tier"):
-            tree_module(tree, name=f"mt_{match_type}", build_dir=tmp_path)
+        assert _run(tree, df, name=f"mt_{match_type}", tmp_path=tmp_path) == answer, match_type
+
+    regex = _unary(
+        "mt_regex",
+        UnaryStringMatch(feature="s", patterns=["^hello"], match_type="regex"),
+        ("match",),
+        default="no",
+    )
+    with pytest.raises(UnsupportedInKernel, match="frame tier"):
+        tree_module(regex, name="mt_regex", build_dir=tmp_path)
 
 
 def test_string_match_case_insensitive_and_trim(tmp_path):
@@ -295,10 +309,12 @@ def test_cases_isin(tmp_path):
 
 
 def test_cases_string_match(tmp_path):
-    """decider 1 groups strings by `match_type="starts_with"` prefix. No
-    exact-match config produces the same groupings (the whole point of the
-    test is prefix grouping), so it is ported as `UnsupportedInKernel` —
-    decider2's actual, deliberate refusal of this config, per doc 05 §1.5.
+    """decider 1 groups strings by `match_type="starts_with"` prefix.
+
+    Deliberately inverted (docs/BOUNDARY-REWORK.md §9, Stage 2): prefix
+    grouping is now matched in the kernel by bytes, so this ports as the
+    positive test decider 1 had — each branch an OR of its own patterns,
+    branches tested in source-index order, the default row otherwise.
     """
     tree = _tree(
         "strmatch",
@@ -318,8 +334,10 @@ def test_cases_string_match(tmp_path):
         [("root", 0, "l0"), ("root", 1, "l1"), ("root", 2, "l2")],
         _output("A", "B", default="other"),
     )
-    with pytest.raises(UnsupportedInKernel, match="frame tier"):
-        tree_module(tree, name="strmatch", build_dir=tmp_path)
+    df = pl.DataFrame({"s": ["apple", "banana", "cherry", "date", "", "a", "ab"]})
+    assert _run(tree, df, name="strmatch", tmp_path=tmp_path) == [
+        "A", "B", "B", "other", "other", "A", "A",
+    ]
 
 
 # ---------------------------------------------------------------------------

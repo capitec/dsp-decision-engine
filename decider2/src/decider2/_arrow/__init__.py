@@ -20,7 +20,7 @@ _LAZY = {
     "materialize_rows": "frame", "string_lengths": "frame",
     "GATHER_ADDR": "_shim", "GET_STRING_ADDR": "_shim", "NANOARROW_VERSION": "_shim",
     "call_gather": "_shim", "call_get_string": "_shim",
-    "load_u8": "_shim", "load_i64": "_shim", "load_f64": "_shim", "lib": "_shim",
+    "load_u8": "intrinsics", "load_i64": "intrinsics", "load_f64": "intrinsics", "lib": "_shim",
 }
 
 __all__ = ["available", "diagnose", *sorted(_LAZY)]

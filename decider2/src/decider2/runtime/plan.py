@@ -63,7 +63,13 @@ class InputSlot:
     annotation)` — the same resolution `apply()` uses, so an `int` input
     stays int64 (doc 03 §1) and a `str` one is an int32 code (doc 05
     §1.5). `raise_if_missing` is `MissingInputPolicy.raise_for` membership,
-    resolved here rather than per call."""
+    resolved here rather than per call.
+
+    A `bytes` input is a string SPAN (a tree's string feature, BOUNDARY-
+    REWORK.md §2.1, Stage 2): it does not cross as a scalar at all but as
+    one `(address, byte length)` pair pointing into the record's own
+    encoded text, so `is_span` gives it a `(1, 2)` int64 pooled buffer and
+    an int64 `dtype` rather than `numpy_dtype`'s float64 default."""
 
     name: str
     dtype: np.dtype
@@ -72,15 +78,19 @@ class InputSlot:
     is_str: bool
     raise_if_missing: bool
     valid_key: str
+    is_span: bool = False
 
 
 class _RowPool:
     """One thread's pooled 1-row buffers: per slot `(slot, values, valid,
-    code)` — the value array in the slot's own dtype, a bool validity
-    array (registered only for an OPTIONAL input, `boundary.nulls` tier 3),
-    and, for a `str` input, the constant int32 code-0 array a single record
-    is its own dictionary for (see `ScorePlan.run`). `busy` guards against
-    re-entrant use on the same thread."""
+    code, null_span)` — the value array in the slot's own dtype (`(1, 2)`
+    int64 for a SPAN slot), a bool validity array (registered only for an
+    OPTIONAL input, `boundary.nulls` tier 3), for a `str` input the
+    constant int32 code-0 array a single record is its own dictionary for
+    (see `ScorePlan.run`), and for a SPAN slot the constant `(0, -1)` null
+    span — the same thing `sm_gather_row` writes for a null string
+    (`_arrow/frame.py`). `busy` guards against re-entrant use on the same
+    thread."""
 
     __slots__ = ("entries", "busy")
 
@@ -88,13 +98,35 @@ class _RowPool:
         self.entries = tuple(
             (
                 slot,
-                np.empty(1, dtype=slot.dtype),
+                np.empty((1, 2), dtype=np.int64) if slot.is_span else np.empty(1, dtype=slot.dtype),
                 np.empty(1, dtype=np.bool_),
                 np.zeros(1, dtype=np.int32) if slot.is_str else None,
+                np.array([[0, -1]], dtype=np.int64) if slot.is_span else None,
             )
             for slot in slots
         )
         self.busy = False
+
+
+def _slot(inp: Input, policy: MissingInputPolicy) -> InputSlot:
+    """One declared input's `InputSlot`. A `bytes` input is a string span,
+    so its buffer is `(1, 2)` int64 and a null is the span `(0, -1)` — the
+    same refusal `_arrow.frame.FramePlan` makes for a fill on a STR column
+    is made here, so `score()` and `apply()` cannot disagree about what a
+    missing string is."""
+    is_span = inp.annotation is bytes
+    if is_span and inp.fill is not None:
+        raise ValueError(f"{inp.name}: a STR feature has no fill; a null is length -1")
+    return InputSlot(
+        name=inp.name,
+        dtype=np.dtype(np.int64) if is_span else numpy_dtype(inp.annotation),
+        null_policy=inp.null_policy,
+        fill=inp.fill,
+        is_str=inp.annotation is str,
+        raise_if_missing=inp.name in policy.raise_for,
+        valid_key=f"__valid__{inp.name}",
+        is_span=is_span,
+    )
 
 
 @dataclass(frozen=True)
@@ -140,18 +172,7 @@ class ScorePlan:
         except KeyError:
             raise ValueError(f"unknown mode {mode!r}; expected one of {tuple(modes.MODES)}") from None
         terminal_names = frozenset(interface.terminals) | frozenset(emit)
-        slots = tuple(
-            InputSlot(
-                name=inp.name,
-                dtype=numpy_dtype(inp.annotation),
-                null_policy=inp.null_policy,
-                fill=inp.fill,
-                is_str=inp.annotation is str,
-                raise_if_missing=inp.name in policy.raise_for,
-                valid_key=f"__valid__{inp.name}",
-            )
-            for inp in interface.inputs
-        )
+        slots = tuple(_slot(inp, policy) for inp in interface.inputs)
         return cls(
             steps=steps_t,
             group_ids=tuple(group_ids),
@@ -200,8 +221,12 @@ class ScorePlan:
         registry: dict[str, Any] = {}
         routed_reason: str | None = None
         record_categories: dict[str, tuple[str, ...]] | None = None
+        # The UTF-8 bytes of every `bytes` (string-span) input, kept alive
+        # until the kernel has run: the span in `registry` is an ADDRESS
+        # into them. Empty unless the pipeline declares a `bytes` input.
+        keepalive: list[bytes] = []
         get = record.get
-        for slot, values, valid, code in pool.entries:
+        for slot, values, valid, code, null_span in pool.entries:
             # Doc 03 §1 (review finding 4): absent and null share one path —
             # `record.get` folds "absent" and "present but None" into the same
             # `value`, so `missing_as`/`not_applicable_as` fill an ABSENT key
@@ -224,12 +249,43 @@ class ScorePlan:
                         routed_reason = slot.name
                     continue
                 if null_policy is NullPolicy.OPTIONAL:
-                    values[0] = 0
+                    if slot.is_span:
+                        registry[slot.name] = null_span
+                    else:
+                        values[0] = 0
+                        registry[slot.name] = values
                     valid[0] = False
-                    registry[slot.name] = values
                     registry[slot.valid_key] = valid
                     continue
-                values[0] = slot.fill          # MISSING_AS / NOT_APPLICABLE_AS
+                # MISSING_AS / NOT_APPLICABLE_AS. A span slot has no fill
+                # (refused in `_slot`, as `FramePlan` refuses it), so its
+                # null is the null span the gather would have written.
+                if slot.is_span:
+                    registry[slot.name] = null_span
+                    continue
+                values[0] = slot.fill
+                registry[slot.name] = values
+                continue
+            if slot.is_span:
+                # A string SPAN input (a tree's string feature, docs/
+                # BOUNDARY-REWORK.md §2.1, Stage 2): the record's text is
+                # encoded once and the span is its address + byte length —
+                # no polars, no Arrow, no dictionary. This is the ladder's
+                # INDEPENDENT producer (§1.6): `apply()` reads the same
+                # bytes out of polars' own memory through nanoarrow, and
+                # `assert_equivalent`'s fourth rung checks the two agree.
+                # The encoded bytes are kept alive until the kernel has
+                # run (`keepalive`); the span is an ADDRESS into them.
+                if not isinstance(value, str):
+                    raise TypeError(
+                        f"input {slot.name!r} is a string feature, but the record holds "
+                        f"{type(value).__name__} {value!r}; pass a str."
+                    )
+                encoded = value.encode("utf-8")
+                keepalive.append(encoded)
+                buf = np.frombuffer(encoded, dtype=np.uint8)
+                values[0, 0] = buf.ctypes.data
+                values[0, 1] = buf.size
                 registry[slot.name] = values
                 continue
             if slot.is_str and isinstance(value, str):
@@ -240,8 +296,9 @@ class ScorePlan:
                 # literal 0 when it matches and -1 when it does not. `a == b` over
                 # one row is exactly `code(a) == code(b)` under that mapping, so
                 # score() and apply() agree without score() needing a declared
-                # vocabulary it has no way to know. (Stage 2 replaces this block
-                # with a span over the encoded bytes.)
+                # vocabulary it has no way to know. A tree's `bytes` feature
+                # takes the span branch above instead; this block is the
+                # hand-written-step `str` convention, Stage 7's surface.
                 if record_categories is None:
                     record_categories = {}
                 record_categories[slot.name] = (value,)
@@ -270,6 +327,7 @@ class ScorePlan:
             self.steps, self.group_ids, self.owners, registry, resolved, 1,
             terminal_names=self.terminal_names, build_dir=self.build_dir,
         )
+        del keepalive   # the kernel has run; no span in `registry` is read after this
 
         for name in self.terminal_order:
             arr = registry.get(name)

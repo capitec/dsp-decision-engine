@@ -410,7 +410,6 @@ def _row_kwargs(
 # name is re-exported so `from decider2.compile.driver import <name>` keeps
 # working for the callers that predate the split.
 from decider2.compile.gather import (  # noqa: F401 — re-exported, see above
-    _BYTES_DUMMY,
     _TYPED_DTYPES,
     _TYPED_DUMMIES,
     _as_readonly,
