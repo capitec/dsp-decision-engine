@@ -150,7 +150,9 @@ def _pack(top: Branch | Loop, outputs: set[int], lazy: bool) -> Packed:
         raise _Unpackable
     writes = tuple((v, variables[lay.produced[v.id][1]]) for v in kept)
     fn = fused_kernel(program, tuple(lay.produced[v.id] for v in kept), tuple(variables))
-    packed = Packed(tuple(calls), fn, tuple(lay.reads), tuple(lay.optional), writes, (), tuple(lay.layout))
+    # Only float, int and bool are merged or carried, so no output is a Literal code.
+    packed = Packed(tuple(calls), fn, tuple(lay.reads), tuple(lay.optional), writes, (), tuple(lay.layout),
+                    (None,) * len(writes))
     packed.inner = frozenset(inner)
     packed.passthrough = tuple(passthrough)
     required = {v.id: v for c in conditional for i, v in zip(c.node.inputs, c.reads)

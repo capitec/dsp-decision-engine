@@ -129,6 +129,15 @@ def _row_body(program: tuple, outputs: tuple[tuple, ...], variables: tuple[np.dt
 
             def element(tup, tup_v, j):
                 arr = tup.types[j]
+                if arr.ndim == 2:
+                    # A `bytes` column: row i is its `(address, byte length)` span.
+                    span = types.UniTuple(types.int64, 2)
+                    getitem = context.get_function(operator.getitem, signature(arr.dtype, arr, types.UniTuple(i, 2)))
+                    parts = [getitem(builder, (builder.extract_value(tup_v, j),
+                                               context.make_tuple(builder, types.UniTuple(i, 2),
+                                                                  [i_v, context.get_constant(i, k)])))
+                             for k in (0, 1)]
+                    return context.make_tuple(builder, span, parts), span
                 getitem = context.get_function(operator.getitem, signature(arr.dtype, arr, i))
                 return getitem(builder, (builder.extract_value(tup_v, j), i_v)), arr.dtype
 
