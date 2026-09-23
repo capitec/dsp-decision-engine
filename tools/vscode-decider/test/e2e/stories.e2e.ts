@@ -9,7 +9,7 @@ import { launch, ROOT, SHOTS, type Codium } from "./codium";
 
 const OUT = path.join(SHOTS, "stories");
 const manifest: { story: string; goal: string; shots: { file: string; caption: string }[] }[] = [];
-const LINE = { pipeline: 109, capByIncome: 36, treeLowScore: 101 };
+const LINE = { pipeline: 114, capByIncome: 36, treeLowScore: 101 };
 
 async function story(name: string, goal: string, body: (c: Codium, shot: (caption: string) => Promise<void>) => Promise<void>, folder?: string) {
   const entry = { story: name, goal, shots: [] as { file: string; caption: string }[] };

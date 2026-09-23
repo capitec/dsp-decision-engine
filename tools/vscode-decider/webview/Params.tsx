@@ -48,7 +48,7 @@ function bounds(info: ParamInfo): string {
 
 function leafNames(doc: Record<string, unknown>, prefix = ""): string[] {
   return Object.entries(doc).flatMap(([k, v]) =>
-    v && typeof v === "object" && !Array.isArray(v) ? leafNames(v as Record<string, unknown>, prefix ? `${prefix}/${k}` : k) : [`${prefix.split("/").pop()}.${k} = ${formatValue(v)}`],
+    v && typeof v === "object" && !Array.isArray(v) ? leafNames(v as Record<string, unknown>, prefix ? `${prefix}/${k}` : k) : [`${prefix} · ${k} = ${formatValue(v)}`],
   );
 }
 

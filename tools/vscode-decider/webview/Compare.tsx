@@ -10,9 +10,11 @@ interface Props {
   onSelect: (path: string) => void;
   onCompareRevision: () => void;
   onOpenDiff: (path: string) => void;
+  /** Set when the comparison was opened from somewhere to go back to, e.g. "6 scenarios". */
+  back?: { label: string; go: () => void };
 }
 
-function Diffs({ diffs, record, keyCol }: { diffs: ValueDiff[]; record: number | null; keyCol: RecordKey }) {
+function Diffs({ diffs, record, keyCol, results }: { diffs: ValueDiff[]; record: number | null; keyCol: RecordKey; results?: Comparison["results"] }) {
   return (
     <table className="vdiffs">
       <tbody>
@@ -24,7 +26,12 @@ function Diffs({ diffs, record, keyCol }: { diffs: ValueDiff[]; record: number |
               <td className="mono before">{formatValue(s.a)}</td>
               <td className="arrow">→</td>
               <td className="mono after">{formatValue(s.b)}</td>
-              <td className="muted">{i === 0 && d.changedRows.length > d.samples.length ? `+${d.changedRows.length - d.samples.length} more` : ""}</td>
+              <td className="muted">
+                {i === 0 && d.changedRows.length > d.samples.length ? `+${d.changedRows.length - d.samples.length} more ` : ""}
+                {results && d.name in results.b && !(same(results.a[d.name]?.[s.row], s.a) && same(results.b[d.name]?.[s.row], s.b))
+                  ? `later steps change it again; final result ${formatValue(results.a[d.name]?.[s.row])} → ${formatValue(results.b[d.name]?.[s.row])}`
+                  : ""}
+              </td>
             </tr>
           )),
         )}
@@ -55,7 +62,7 @@ function Results({ c, record }: { c: Comparison; record: number | null }) {
               const a = c.results.a[n]?.[r];
               const b = c.results.b[n]?.[r];
               return same(a, b) ? (
-                <td key={r} className="mono unchanged-cell">{formatValue(b)} <span className="muted small">same</span></td>
+                <td key={r} className="mono unchanged-cell" title="same in both runs">{formatValue(b)}</td>
               ) : (
                 <td key={r} className="mono changed-cell"><span className="before">{formatValue(a)}</span> → <span className="after">{formatValue(b)}</span></td>
               );
@@ -68,7 +75,7 @@ function Results({ c, record }: { c: Comparison; record: number | null }) {
 }
 
 /** Two runs side by side, step by step, in execution order. */
-export function Compare({ comparison: c, busy, error, record, onSelect, onCompareRevision, onOpenDiff }: Props) {
+export function Compare({ comparison: c, busy, error, record, onSelect, onCompareRevision, onOpenDiff, back }: Props) {
   const [onlyChanges, setOnlyChanges] = useState(true);
   const revisionButton = <button onClick={onCompareRevision}>Compare with a git revision…</button>;
   if (busy) return <div className="compare"><div className="empty">{busy}</div></div>;
@@ -88,8 +95,12 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
   const count = (st: string) => c.steps.filter((s) => s.status === st).length;
   return (
     <div className="compare">
+      {back && <a className="back" onClick={back.go}>← Back to {back.label}</a>}
       <div className="summary">
-        <span><span className="muted">Baseline</span> <strong>{c.a}</strong> <span className="muted">vs</span> <strong>{c.b}</strong></span>
+        <div className="sides">
+          <div><span className="side-label">Baseline</span> <strong>{c.a}</strong></div>
+          <div><span className="side-label">Variant</span> <strong>{c.b}</strong></div>
+        </div>
         <span className="right">{revisionButton}</span>
       </div>
       <div className="muted">{c.rows} records · {count("changed")} steps changed{count("added") ? `, ${count("added")} added` : ""}{count("removed") ? `, ${count("removed")} removed` : ""}</div>
@@ -116,7 +127,11 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
         )}
         <label className="right small"><input type="checkbox" checked={onlyChanges} onChange={(e) => setOnlyChanges(e.target.checked)} /> only changed steps</label>
       </h4>
-      {steps.length === 0 && <div className="muted">Every step produces the same values.</div>}
+      {steps.length === 0 ? (
+        <div className="muted">Every step produces the same values.</div>
+      ) : (
+        <div className="muted">Values are what each step wrote. A later step may change them again; the Results table above has the final values.</div>
+      )}
       {steps.map((s) => (
         <div key={s.path} className={`step-diff ${s.status}`}>
           <div>
@@ -134,7 +149,7 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
               <span key={x} className="chip small">{x} changed</span>
             ))}
           </div>
-          {s.outputs.length > 0 && <Diffs diffs={s.outputs} record={record} keyCol={c.key} />}
+          {s.outputs.length > 0 && <Diffs diffs={s.outputs} record={record} keyCol={c.key} results={c.results} />}
         </div>
       ))}
     </div>

@@ -735,3 +735,105 @@ details summary {
   margin: 2px 0 6px;
   opacity: 0.85;
 }
+
+/* round 3 review: contrast, one meaning per border style, themed buttons */
+.muted {
+  opacity: 0.82;
+  font-size: 1em;
+}
+.small {
+  font-size: 0.92em;
+}
+aside h4 .muted {
+  text-transform: none;
+}
+button {
+  font-family: inherit;
+  font-size: inherit;
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  border: none;
+  padding: 3px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+button.primary {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+button.link {
+  background: none;
+  padding: 0;
+  color: var(--vscode-textLink-foreground);
+}
+.node.frame rect {
+  stroke-dasharray: none;
+  stroke-width: 2;
+}
+.node.diff-same rect {
+  stroke-dasharray: none;
+}
+.kind-tag {
+  font-size: 9px;
+  fill: var(--vscode-foreground);
+  opacity: 0.7;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.subbar {
+  flex-wrap: wrap;
+  align-items: center;
+  row-gap: 3px;
+}
+.subbar .legend {
+  position: static;
+  float: none;
+  border: none;
+  background: none;
+  padding: 0;
+}
+.edge-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.edge-key .line {
+  display: inline-block;
+  width: 18px;
+  border-top: 2px solid var(--vscode-foreground);
+  opacity: 0.7;
+}
+.edge-key .line.dotted {
+  border-top: 2px dotted var(--vscode-charts-blue, #3794ff);
+}
+.swatch.same {
+  border: 2px solid var(--vscode-foreground);
+  opacity: 0.6;
+}
+.back {
+  display: inline-block;
+  margin-bottom: 6px;
+}
+.sides .side-label {
+  display: inline-block;
+  min-width: 64px;
+  opacity: 0.82;
+}
+.compare .summary {
+  align-items: flex-start;
+}
+th.group-head {
+  text-align: center;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+.state td:nth-child(3),
+.state td:nth-child(4) {
+  white-space: normal;
+}
+.unchanged-cell {
+  opacity: 0.75;
+}

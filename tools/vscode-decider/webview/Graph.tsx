@@ -32,12 +32,10 @@ export function Graph({ ir, showData, run, selected, highlightColumn, lineage, d
   const done = new Set(run.finishedPaths);
   const touches = (n: IRNodeJson) =>
     n.kind === "call" && !!highlightColumn && ((n.inputs ?? []).includes(highlightColumn) || (n.outputs ?? []).includes(highlightColumn));
-  const subtitle = (n: IRNodeJson) => {
-    if (n.kind !== "call") return "";
-    if (treePath?.path === n.path) return treePath.visited.join(" → ");
-    const visits = run.visits[n.path];
-    if (visits && Object.keys(visits).length) return Object.entries(visits).map(([l, c]) => `${l} ${c}`).join(" · ");
-    return signature(n);
+  const lines = (n: IRNodeJson): [string, string] => {
+    if (n.kind !== "call") return ["", ""];
+    if (treePath?.path === n.path) return [fit(treePath.visited.slice(1).join(" → ")), "path of the focused record"];
+    return [fit(`reads ${n.inputs === null ? "?" : n.inputs.join(", ") || "nothing"}`), fit(`→ ${n.outputs === null ? "?" : n.outputs.join(", ")}`)];
   };
 
   // Keep the step the run is at, or the one just clicked, in the middle of the view.
@@ -48,17 +46,6 @@ export function Graph({ ir, showData, run, selected, highlightColumn, lineage, d
     box.current?.querySelector(".node.selected")?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
   }, [selected]);
 
-  const changed = diff ? laid.nodes.filter((n) => diff.get(n.path) === "changed" || diff.get(n.path) === "added").map((n) => n.path) : [];
-  const nextChange = (dir: 1 | -1) => {
-    const i = changed.indexOf(selected ?? "");
-    onSelect(changed[(i + dir + changed.length) % changed.length] ?? changed[0]);
-  };
-
-  // After a comparison, bring the first changed step into view.
-  useEffect(() => {
-    if (diff) box.current?.querySelector(".node.diff-changed, .node.diff-added")?.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
-  }, [diff]);
-
   const pad = shownFlows.length ? PAD : 0;
 
   const scale = zoom === "fit" ? 1 : zoom;
@@ -66,18 +53,6 @@ export function Graph({ ir, showData, run, selected, highlightColumn, lineage, d
 
   return (
     <div className="graph" ref={box}>
-      {diff && (
-        <div className="legend">
-          <span className="swatch changed" /> changed <span className="swatch added" /> added <span className="swatch same" /> same
-          {changed.length > 0 && (
-            <>
-              <button title="Previous changed step" onClick={() => nextChange(-1)}>◀</button>
-              <span>{changed.length} changed</span>
-              <button title="Next changed step" onClick={() => nextChange(1)}>▶</button>
-            </>
-          )}
-        </div>
-      )}
       <div className="zoom">
         <button title="Zoom out" onClick={() => step(1 / 1.25)}>−</button>
         <button title="Fit the whole flow in the panel" className={zoom === "fit" ? "active" : ""} onClick={() => setZoom(zoom === "fit" ? 1 : "fit")}>{zoom === "fit" ? "100%" : "fit"}</button>
@@ -142,8 +117,12 @@ export function Graph({ ir, showData, run, selected, highlightColumn, lineage, d
           >
             <title>{`${n.path} (${kindLabel(n.node)})\n${n.node.kind === "call" ? `${(n.node.inputs ?? ["?"]).join(", ")} → ${(n.node.outputs ?? ["?"]).join(", ")}\n` : ""}Double-click to open the source`}</title>
             <rect width={n.width} height={n.height} rx={5} />
-            <text x={n.width / 2} y={18} textAnchor="middle" className="title">{n.label}</text>
-            <text x={n.width / 2} y={34} textAnchor="middle" className="sub">{subtitle(n.node)}</text>
+            <text x={n.width / 2} y={19} textAnchor="middle" className="title">{n.label}</text>
+            <text x={n.width / 2} y={35} textAnchor="middle" className="sub">{lines(n.node)[0]}</text>
+            <text x={n.width / 2} y={50} textAnchor="middle" className="sub">{lines(n.node)[1]}</text>
+            {n.node.kind === "call" && n.node.callKind !== "scalar" && (
+              <text x={n.width - 6} y={12} textAnchor="end" className="kind-tag">{n.node.callKind === "row" ? "tree" : "frame"}</text>
+            )}
           </g>
         ))}
       </svg>
@@ -159,9 +138,7 @@ function curve(a: LaidNode, b: LaidNode): string {
   return `M${x1},${y1} C${x1 + bulge},${y1} ${x2 + bulge},${y2} ${x2},${y2}`;
 }
 
-/** "term_cap, min_net_salary → term_cap", shortened to fit a node. */
-function signature(n: IRNodeJson): string {
-  if (n.kind !== "call") return "";
-  const text = `${n.inputs === null ? "?" : n.inputs.join(", ")} → ${n.outputs === null ? "?" : n.outputs.join(", ")}`;
-  return text.length > 34 ? `${text.slice(0, 33)}…` : text;
+/** Shortened to fit on a node; the node's tooltip has the whole text. */
+function fit(text: string): string {
+  return text.length > 36 ? `${text.slice(0, 35)}…` : text;
 }

@@ -39,14 +39,18 @@ export async function listRefs(root: string, commits = 20): Promise<Ref[]> {
       return { ref: sha, label: sha, description: `${subject} (${when})` };
     });
   const head = recent[0] ? [{ ref: "HEAD", label: "HEAD", sha: recent[0].ref, description: `last commit: ${recent[0].description}` }] : [];
-  // Several names often point at one commit; say so, so the list doesn't look like different choices.
-  const names = new Map<string, string[]>();
-  for (const r of [...head, ...named]) names.set(r.sha, [...(names.get(r.sha) ?? []), r.label]);
-  const alias = (r: { sha: string; label: string }) => (names.get(r.sha) ?? []).filter((n) => n !== r.label);
-  return [
-    ...[...head, ...named].map(({ sha, ...r }) => ({ ...r, description: alias({ sha, label: r.label }).length ? `${r.description} · same commit as ${alias({ sha, label: r.label }).join(", ")}` : r.description })),
-    ...recent.map((r) => ({ ...r, description: names.has(r.ref) ? `${r.description} · ${names.get(r.ref)!.join(", ")}` : r.description })),
-  ];
+  // One entry per commit: names that point at the same commit are listed together.
+  const bySha = new Map<string, { ref: string; names: string[]; description: string }>();
+  for (const r of [...head, ...named, ...recent.map((c) => ({ ...c, sha: c.ref }))]) {
+    const seen = bySha.get(r.sha);
+    if (seen) seen.names.push(r.label);
+    else bySha.set(r.sha, { ref: r.ref, names: [r.label], description: r.description });
+  }
+  return [...bySha.values()].map((e) => ({
+    ref: e.ref,
+    label: e.names.length > 1 ? `${e.names[0]} (${e.names.slice(1).join(", ")})` : e.names[0],
+    description: e.description,
+  }));
 }
 
 /**

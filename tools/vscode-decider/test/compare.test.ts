@@ -68,10 +68,10 @@ describe("scenario sweeps", () => {
       1,
     );
     expect(sc.map((s) => s.label)).toEqual([
-      "term/cap_by_income.cap=24, requested_amount=1000",
-      "term/cap_by_income.cap=24, requested_amount=2000",
-      "term/cap_by_income.cap=36, requested_amount=1000",
-      "term/cap_by_income.cap=36, requested_amount=2000",
+      "term/cap_by_income · cap = 24, requested_amount = 1000",
+      "term/cap_by_income · cap = 24, requested_amount = 2000",
+      "term/cap_by_income · cap = 36, requested_amount = 1000",
+      "term/cap_by_income · cap = 36, requested_amount = 2000",
     ]);
     expect(sc[3]).toMatchObject({ params: { term: { cap_by_income: { cap: 36 } } }, overrides: { requested_amount: 2000 }, row: 1 });
     expect(scenarios([], null)).toEqual([]);
@@ -103,9 +103,10 @@ describe("git revisions", () => {
     fs.writeFileSync(path.join(repo, "flow.py"), "v = 2\n");
     g("commit", "-qam", "second");
     const refs = await listRefs(repo);
-    expect(refs[0].label).toBe("HEAD");
-    expect(refs.map((r) => r.label)).toContain("v1");
-    expect(refs.find((r) => r.description.startsWith("second"))).toBeTruthy();
+    expect(refs[0].label).toMatch(/^HEAD \(/); // HEAD, its branch and its sha are one entry
+    expect(refs.some((r) => r.label.startsWith("v1"))).toBe(true);
+    expect(refs[0].description).toMatch(/^last commit: second/);
+    expect(refs.length).toBe(2);
     const cache = path.join(repo, ".cache");
     const dir = await materialise(repo, "v1", cache);
     expect(fs.readFileSync(path.join(dir, "flow.py"), "utf8")).toBe("v = 1\n");

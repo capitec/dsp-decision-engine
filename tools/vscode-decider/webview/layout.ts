@@ -30,7 +30,7 @@ export interface Layout {
 }
 
 const NODE_W = 210;
-const NODE_H = 44;
+const NODE_H = 58;
 
 /** Which branch arms a node sits in, so alternatives never feed each other. */
 function armKeys(ir: IRNodeJson): Map<string, Map<string, number>> {

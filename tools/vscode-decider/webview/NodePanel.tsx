@@ -16,10 +16,11 @@ interface Props {
   onReveal: (path: string) => void;
   onRewind: (path: string) => void;
   onRunTo: (path: string) => void;
+  onStep: () => void;
 }
 
 /** The details pane: the selected step, then the picked column's lineage and history. */
-export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, lineage, history, treePath, onPick, onSelect, onReveal, onRewind, onRunTo }: Props) {
+export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, lineage, history, treePath, onPick, onSelect, onReveal, onRewind, onRunTo, onStep }: Props) {
   const visits = node && run.visits[node.path];
   const who = run.record === null ? null : recordLabel(run.record, keyCol);
   const valueOf = (name: string) => {
@@ -31,19 +32,23 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
   const paused = run.current && !run.finished;
   const ran = !!node && run.finishedPaths.includes(node.path);
   const card = lineage && lineage.name === column ? lineage : null;
+  const atThis = !!node && run.current?.path === node.path && run.current.when === "before" && !run.finished;
   return (
     <aside>
       <button className="close link" title="Hide details" onClick={onClose}>✕</button>
-      {card && <HowComputed entry={card} who={who} nodes={nodes} onPick={onPick} onSelect={onSelect} />}
       {node ? (
         <>
           <h3>{node.path}</h3>
           <div className="muted">{kindLabel(node)} step · {node.source}</div>
           <div className="actions">
             <button onClick={() => onReveal(node.path)}>Open source</button>
-            <button onClick={() => onRunTo(node.path)} title="Add a breakpoint here and run the flow to it">
-              {paused ? "Continue to here" : "Run to here"}
-            </button>
+            {atThis ? (
+              <button className="primary" onClick={onStep} title="Run this step and pause after it">Run this step</button>
+            ) : (
+              <button onClick={() => onRunTo(node.path)} title="Add a breakpoint here and run the flow to it">
+                {paused ? "Continue to here" : "Run to here"}
+              </button>
+            )}
           </div>
           {path && (
             <>
@@ -56,10 +61,11 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
                   </span>
                 ))}
                 {path.result && (
-                  <span className="muted">
-                    {" → "}gives {(node.outputs ?? []).map((o, i) => `${o} = ${formatValue(path.result![i])}`).join(", ")}
+                  <span>
+                    {" → "}gives <strong>{(node.outputs ?? []).map((o, i) => `${o} = ${formatValue(path.result![i])}`).join(", ")}</strong>
                   </span>
                 )}
+                <div className="muted small">with {(node.inputs ?? []).map((i) => `${i} = ${valueOf(i) ?? "?"}`).join(", ")}</div>
               </div>
             </>
           )}
@@ -67,6 +73,7 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
           <Chips names={node.inputs} picked={column} onPick={onPick} valueOf={valueOf} />
           <h4>Writes{who && !ran && <span className="muted"> · not run yet</span>}</h4>
           <Chips names={node.outputs} picked={column} onPick={onPick} valueOf={ran ? valueOf : () => undefined} />
+          {card && <HowComputed entry={card} who={who} nodes={nodes} onPick={onPick} onSelect={onSelect} />}
           {Object.keys(node.params).length > 0 && (
             <>
               <h4>Params</h4>
@@ -88,6 +95,7 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
       ) : (
         <div className="muted">Click a step in the graph to see what it reads and writes.</div>
       )}
+      {!node && card && <HowComputed entry={card} who={who} nodes={nodes} onPick={onPick} onSelect={onSelect} />}
       {card && (
         <details>
           <summary>Full lineage of {card.name}</summary>

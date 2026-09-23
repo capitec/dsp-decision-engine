@@ -173,6 +173,9 @@ async function onWebview(m: FromWebview, describe: DescribeResult) {
     case "runTo":
       await runTo(m.path);
       break;
+    case "step":
+      await s?.customRequest("next", { threadId: 1 });
+      break;
     case "maximise":
       await vscode.commands.executeCommand("workbench.action.toggleMaximizeEditorGroup");
       break;

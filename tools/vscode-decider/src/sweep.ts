@@ -58,7 +58,7 @@ export function scenarios(knobs: Knob[], row: number | null): Scenario[] {
   return combos
     .filter((c) => c.length)
     .map((c) => {
-      const sc: Scenario = { label: c.map(([k, v]) => `${k.key.replace("|", ".")}=${JSON.stringify(v)}`).join(", "), row };
+      const sc: Scenario = { label: c.map(([k, v]) => `${k.key.replace("|", " · ")} = ${JSON.stringify(v)}`).join(", "), row };
       for (const [k, v] of c) {
         if (k.kind === "value") (sc.overrides ??= {})[k.key] = v;
         else {
@@ -72,13 +72,13 @@ export function scenarios(knobs: Knob[], row: number | null): Scenario[] {
     });
 }
 
-/** `{"term/cap_by_income.cap": 24, "requested_amount": 50000}` for one scenario. */
+/** `{"term/cap_by_income · cap": 24, "requested_amount": 50000}` for one scenario. */
 export function knobValues(s: Scenario): Record<string, unknown> {
   const out: Record<string, unknown> = { ...(s.overrides ?? {}) };
   const walk = (doc: Record<string, unknown>, prefix: string) => {
     for (const [k, v] of Object.entries(doc)) {
       if (v && typeof v === "object" && !Array.isArray(v)) walk(v as Record<string, unknown>, prefix ? `${prefix}/${k}` : k);
-      else out[`${prefix}.${k}`] = v;
+      else out[`${prefix} · ${k}`] = v;
     }
   };
   walk(s.params ?? {}, "");
@@ -101,7 +101,7 @@ export function summariseSweep(r: SweepResponse, scenarioList: Scenario[] = []):
   const knobBase = Object.fromEntries(
     knobNames.map((name) => {
       if (inputs.has(name)) return [name, r.data.map((row) => row[name])];
-      const [path, param] = [name.slice(0, name.lastIndexOf(".")), name.slice(name.lastIndexOf(".") + 1)];
+      const [path, param] = name.split(" · ");
       return [name, r.data.map(() => r.describe.params[path]?.[param]?.default)];
     }),
   );
