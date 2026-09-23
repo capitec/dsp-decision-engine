@@ -33,6 +33,10 @@ class TreeConfig(ConfigurableStep):
     `"error"`: a null is a `MissingInputError`. A string match has its own
     `null_handling` (`no_match`, `match` or `error`).
 
+    `path_output` names an extra String column holding the id of the leaf
+    that answered (null when the default row answered); in `mode: "all"`
+    one per rule, `<rule>.<path_output>`.
+
     `nodes` maps each node id to its node: the locators a session breaks on,
     e.g. `session.break_at("risk_tree#high")`.
 
@@ -53,6 +57,7 @@ class TreeConfig(ConfigurableStep):
         })
         risk.run(df)                                          # writes risk_band
         risk.run(df, params={"risk_tree": {"hi_thresh": 2.0}})
+        # With "path_output": "risk_leaf" in the document, run() also writes risk_leaf: "high" or null.
 
     The same tree as flat rules: `"tree": {"type": "flat_rule", "rule": {"rule": {"type": "unary",
     "condition": {...}, "then": {"type": "leaf", "result_idx": 0}}}, "output": {...}}`.
@@ -62,6 +67,7 @@ class TreeConfig(ConfigurableStep):
     tree: TreeDocument
     feature_types: t.Dict[str, str] = {}
     null_handling: t.Literal["otherwise", "error"] = "otherwise"
+    path_output: t.Optional[str] = None
 
     @field_validator("feature_types")
     @classmethod
@@ -75,7 +81,7 @@ class TreeConfig(ConfigurableStep):
 
     def to_ir(self, ctx: t.Any) -> CallNode:
         tree = self.tree.to_tree()
-        p = encode(tree, self.feature_types, ctx.value, self.null_handling)
+        p = encode(tree, self.feature_types, ctx.value, self.null_handling, self.path_output)
         ref = reference(tree, p.inputs, p.kinds, p.columns)
         # The node's consts are addresses into these arrays; the node holds its reference, which holds them.
         ref.arrays = p.arrays

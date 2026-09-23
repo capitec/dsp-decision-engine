@@ -4,11 +4,13 @@ import re
 import numpy as np
 import polars as pl
 import pytest
+from numba import typeof
 
 from decider import flow
 from decider.engine import Engine
 from decider.engine.compile import compile_call
 from decider.engine.ir.context import to_ir
+from decider.testing import no_recompile
 from decider.steps.trees import TreeConfig
 
 MATCH_TYPES = ("exact", "starts_with", "ends_with", "contains", "regex")
@@ -240,3 +242,42 @@ def test_a_long_string_column_is_read_in_place_and_an_override_replaces_it(mode)
     s.set("s", "gold")
     s.resume()
     assert s.output()["hit"].to_list() == [1] * 60
+
+
+def _gated(patterns: list, threshold: float = 10.0) -> TreeConfig:
+    """`x > threshold` and `s` contains a pattern: hit 1, else 0."""
+    return _nodes({"type": "composite", "op": "and", "conditions": [
+        {"op": ">", "feature": "x", "threshold": threshold},
+        {"op": "string_match", "feature": "s", "patterns": patterns, "match_type": "contains"}]}, name="retune")
+
+
+def test_editing_adding_and_removing_patterns_never_recompiles():
+    # Literal patterns are data the walker reads, so a document with other patterns reuses the kernels.
+    frame = pl.DataFrame({"x": [20.0] * 5, "s": ["ab", "xabx", "cd", "twelve charsA", "日本語"]})
+    for mode in ("stepped", "fused"):
+        exe = Engine().bind(_gated(["ab"]), mode=mode)
+        exe.run(frame)
+        exe.score({"x": 20.0, "s": "ab"})
+    edits = [(["cd"], [0, 0, 1, 0, 0]), (["twelve charsA"], [0, 0, 0, 1, 0]),
+             (["ab", "cd", "本語"], [1, 1, 1, 0, 1]), (["q" * 5000], [0, 0, 0, 0, 0]),
+             (["cd", "本語", "sA"], [0, 0, 1, 1, 1])]
+    with no_recompile():
+        for patterns, hits in edits:
+            for mode in ("stepped", "fused"):
+                exe = Engine().bind(_gated(patterns), mode=mode)
+                assert exe.run(frame)["hit"].to_list() == hits
+                assert [exe.score(r)["hit"] for r in frame.iter_rows(named=True)] == hits
+    exe = Engine().bind(_gated(["ab", {"param": "extra", "default": "zz"}]), mode="fused")
+    exe.run(frame)
+    exe.score({"x": 20.0, "s": "cd"})
+    with no_recompile():
+        assert exe.run(frame, {"retune": {"extra": "語"}})["hit"].to_list() == [1, 1, 0, 0, 1]
+        assert exe.score({"x": 20.0, "s": "cd"}, {"retune": {"extra": "d"}})["hit"] == 1
+
+
+def test_a_pattern_count_change_and_a_threshold_change_share_one_kernel_signature():
+    def signature(tree):
+        node = to_ir(tree)
+        return typeof(tuple(v for _, v in node.consts)), node.params
+
+    assert signature(_gated(["a"])) == signature(_gated(["a", "bb", "ccc"])) == signature(_gated(["a"], 99.5))

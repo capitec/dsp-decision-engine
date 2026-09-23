@@ -143,8 +143,8 @@ class Program:
     consts: tuple[tuple[str, t.Any], ...]
     python: bool
     kinds: dict[str, str]
-    # Per output: (rule slot, column, string choices or None); slot -1 is first-match over every rule.
-    columns: tuple[tuple[int, str, t.Optional[tuple[str, ...]]], ...]
+    # Per output: (rule slot, column or None for the path, string choices or None); slot -1 is first-match.
+    columns: tuple[tuple[int, t.Optional[str], t.Optional[tuple[str, ...]]], ...]
     # The arrays `consts` holds the addresses of: whoever holds the row node must keep these alive.
     arrays: list[np.ndarray]
 
@@ -163,6 +163,8 @@ class _Encoder:
     groups: list[int] = field(default_factory=lambda: [0])
     python: bool = False
     default: t.Optional[int] = None
+    # Leaf node id -> its position in every output's values; a leaf with result_idx -1 has none.
+    leaves: dict[str, int] = field(default_factory=dict)
 
     def slot(self, name: str) -> int:
         kind = self.kinds[name]
@@ -282,7 +284,7 @@ class _Encoder:
             if not -1 <= data.result_idx < len(self.tree.output.data):
                 raise ValueError(f"{where}: result_idx {data.result_idx} is not a row of the output "
                                  f"({len(self.tree.output.data)} rows, or -1 for the default)")
-            return self.add(LEAF, data.result_idx)
+            return self.add(LEAF, -1 if data.result_idx < 0 else self.leaves.setdefault(nid, len(self.leaves)))
         children = [entries[c] if c is not None else self.leaf() for c in node.children]
         if isinstance(data, UnaryNode):
             return self.condition(data.condition, children[0], children[1], where)
@@ -327,21 +329,25 @@ def _post_order(tree: Tree) -> list[str]:
     return order
 
 
-def _output_values(tree: Tree) -> t.Iterator[tuple[str, str, list]]:
+def _output_values(tree: Tree, leaves: t.Iterable[str]) -> t.Iterator[tuple[str, str, list]]:
+    # One value per leaf, not per output row, so the leaf index a walk ends at also names the leaf.
     dtypes = tree.output.dtypes
-    rows = [*tree.output.data, tree.output.default or {}]
+    rows = [*(tree.output.data[tree.nodes[nid].data.result_idx] for nid in leaves), tree.output.default or {}]
     for column, dtype in (dtypes.items() if isinstance(dtypes, dict) else dtypes):
         kind = kind_of(getattr(dtype, "type", dtype), f"output column {column!r}")
         yield column, kind, [row.get(column) for row in rows]
 
 
-def _outputs(tree: Tree) -> tuple[list[Output], list[tuple], list[tuple]]:
+def _outputs(tree: Tree, leaves: t.Sequence[str],
+             path: t.Optional[str]) -> tuple[list[Output], list[tuple], list[tuple]]:
     # Per output: its declaration, (rule slot, kind, values, validity or None), and what the reference returns.
+    if path in tree.output.columns:
+        raise ValueError(f"path_output {path!r} is also an output column of the tree; name it something else")
     outputs, values, columns = [], [], []
     slots = [(-1, "")] if tree.mode == "first_match" else [
         (k, f"{r.name or f'rule_{k}'}.") for k, r in enumerate(tree.rules)]
     for slot, prefix in slots:
-        for column, kind, row_values in _output_values(tree):
+        for column, kind, row_values in _output_values(tree, leaves):
             name = prefix + column
             if kind == "str":
                 texts = [None if v is None else str(v) for v in row_values]
@@ -356,6 +362,11 @@ def _outputs(tree: Tree) -> tuple[list[Output], list[tuple], list[tuple]]:
             values.append((slot, kind, [0 if v is None else TYPES[kind](v) for v in row_values],
                            None if all(valid) else valid))
             columns.append((slot, column, None))
+        if path is not None:
+            # A column of `None` marks the path column: the reference answers with the leaf id itself.
+            outputs.append(Output(prefix + path, t.Literal[tuple(leaves) or ("",)]))
+            values.append((slot, "int", [*range(len(leaves)), -1], None))
+            columns.append((slot, None, tuple(leaves)))
     if not outputs:
         raise ValueError("the tree's output declares no columns (output.dtypes is empty)")
     return outputs, values, columns
@@ -409,11 +420,11 @@ def _input(name: str, kind: str, nulls: str, strict: set[str]) -> Input:
 
 
 def encode(tree: Tree, feature_types: t.Mapping[str, str], value: t.Callable[..., t.Any],
-           nulls: str = "otherwise") -> Program:
+           nulls: str = "otherwise", path: t.Optional[str] = None) -> Program:
     """The row node of `tree`, with `value` turning a `ParamRef` into a `ParamDecl` (`IRContext.value`).
 
     `nulls` is `TreeConfig.null_handling`: `"error"` makes numeric and
-    boolean features required inputs.
+    boolean features required inputs. `path` is `TreeConfig.path_output`.
 
     Example::
 
@@ -428,6 +439,6 @@ def encode(tree: Tree, feature_types: t.Mapping[str, str], value: t.Callable[...
     inputs = tuple(_input(name, kind, nulls, strict)
                    for name, kind in sorted(kinds.items(), key=lambda nk: (order[nk[1]], nk[0])))
     params = tuple(sorted(enc.params.values(), key=lambda d: order[d.annotation.__name__]))
-    outputs, values, columns = _outputs(tree)
+    outputs, values, columns = _outputs(tree, list(enc.leaves), path)
     consts, arrays = ((), []) if enc.python else _pack(enc, roots, values)
     return Program(inputs, params, tuple(outputs), consts, enc.python, kinds, tuple(columns), arrays)
