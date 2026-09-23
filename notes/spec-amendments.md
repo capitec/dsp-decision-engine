@@ -84,3 +84,11 @@ where they disagree, this file wins.
 - **`engine.step_map(step)`** returns the `path → Step` map of IR.md §4.1,
   including branch conditions, arms and loop bodies. `Step.walk()` stays the
   authoring tree (named members of flows and dags).
+
+## 2026-09-23, T2.2
+
+- **`ParamDecl.arg`.** Like `Input.arg`: the function argument a param feeds,
+  defaulting to `name`. `name` stays the key in the params document. Needed so
+  a config field (`threshold`) can be fed by a local `ParamRef`
+  (`{"param": "hi_cut"}`). Scalar calls pass params as `**{d.arg: value}`.
+- **`ConfigurableStep.load(path_or_dict)`** loads a document by its `type` tag.
