@@ -67,7 +67,7 @@ class NodeVisited:
 
 @dataclass(frozen=True, slots=True)
 class Paused:
-    """The session stopped at a checkpoint; `reason` is `"breakpoint"`, `"step"`, `"pause"` or `"rewind"`.
+    """The session stopped at a checkpoint; `reason` is `"breakpoint"`, `"step"`, `"pause"`, `"rewind"` or `"edit"`.
 
     `kernel` lists the steps a fused kernel runs when the checkpoint is one
     (the first is `origin`); a breakpoint on any of them pauses here.
@@ -118,6 +118,15 @@ class Error:
 
 
 @dataclass(frozen=True, slots=True)
+class Edited:
+    """The step at `path` was replaced or deleted; the run goes on from there (a `Paused` follows)."""
+
+    action: Literal["replace", "delete"]
+    path: str
+    kind: Literal["edited"] = "edited"
+
+
+@dataclass(frozen=True, slots=True)
 class RunFinished:
     """The run reached the end; `output` summarises every column of `session.output()`."""
 
@@ -126,4 +135,4 @@ class RunFinished:
 
 
 Event = Union[RunStarted, NodeStarted, NodeFinished, NodeVisited, Paused, Overridden,
-              ParamsValidated, Warning, Error, RunFinished]
+              ParamsValidated, Warning, Error, Edited, RunFinished]

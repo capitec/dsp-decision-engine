@@ -60,6 +60,8 @@ class SteppedRunner(InterpretedRunner):
                 inside |= {v.id for v in c.writes}
             reads[unit.calls[0].id] = tuple(ext)
         self.units, self._reads, self._strs = units, reads, {k: v for k, v in strs.items() if v}
+        # Converted bundles are keyed by call id, which means another call in another plan.
+        self._converted = {}
         self._plan = plan
 
     def _call(self, call: Call, state: State, params: RunParams, scope: _Scope) -> None:

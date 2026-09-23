@@ -48,6 +48,10 @@ class InterpretedRunner:
             ...
     """
 
+    # Nodes to pass over as already run, each with the versions it passes on; their values are in the
+    # state already. A debug session sets it while it replays a run up to an edit.
+    skip: dict[Resolved, list[Version]] = {}
+
     def __init__(self, visit: Callable[[str], None] | None = None):
         self.visit = visit or _ignore
 
@@ -57,6 +61,9 @@ class InterpretedRunner:
         state.frame = root.base
 
     def _node(self, r: Resolved, state: State, params: RunParams, scope: _Scope) -> Iterator[Checkpoint]:
+        if self.skip and (passed := self.skip.get(r)) is not None:
+            scope.names.update((v.name, v) for v in passed)
+            return
         origin = r.node.origin
         yield Checkpoint(origin, "before")
         if isinstance(r, Call):
