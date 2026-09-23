@@ -77,6 +77,8 @@ class ParamDecl:
             `None` for a param local to its node.
         on_invalid: what an invalid value does: `"error"` fails, `"warn"` and
             `"default"` fall back to the default (with and without a warning).
+        schema: for a table-valued param, its columns and dtypes
+            (`{"product": "str", "rate": "float"}`); `None` otherwise.
 
     Example::
 
@@ -90,3 +92,4 @@ class ParamDecl:
     required: bool = False
     shared_key: str | None = None
     on_invalid: OnInvalid = "error"
+    schema: dict[str, str] | None = None
