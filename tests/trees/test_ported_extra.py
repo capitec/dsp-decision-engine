@@ -1,4 +1,4 @@
-"""Null numeric inputs are errors, and a param is one value for the whole call."""
+"""Strict null handling makes a null numeric input an error, and a param is one value for the whole call."""
 import polars as pl
 import pytest
 
@@ -9,8 +9,8 @@ from decider.steps.trees import TreeConfig
 MODES = ("interpreted", "stepped", "fused")
 
 
-def _two_leaf(condition: dict, name: str, output: dict) -> TreeConfig:
-    return TreeConfig(name=name, tree={
+def _two_leaf(condition: dict, name: str, output: dict, **config) -> TreeConfig:
+    return TreeConfig(name=name, **config, tree={
         "nodes": [{"id": "root", "data": {"type": "unary", "condition": condition}},
                   {"id": "yes", "data": {"type": "leaf", "result_idx": 0}}],
         "edges": [{"source": "root", "target": "yes", "data": {"sourceIndex": 0}}],
@@ -19,9 +19,10 @@ def _two_leaf(condition: dict, name: str, output: dict) -> TreeConfig:
 
 
 @pytest.mark.parametrize("mode", MODES)
-def test_a_null_numeric_feature_is_a_missing_input_not_a_silent_otherwise(mode):
+def test_a_null_numeric_feature_is_a_missing_input_under_strict_null_handling(mode):
     tree = _two_leaf({"op": "between", "feature": "v", "min": 0.0, "max": 100.0}, "routed",
-                     {"data": [{"r": "match"}], "default": {"r": "no"}, "dtypes": [["r", "String"]]})
+                     {"data": [{"r": "match"}], "default": {"r": "no"}, "dtypes": [["r", "String"]]},
+                     null_handling="error")
     with pytest.raises(MissingInputError, match="'v'"):
         Engine().bind(tree, mode=mode).run(pl.DataFrame({"v": pl.Series([50.0, None], dtype=pl.Float64)}))
 

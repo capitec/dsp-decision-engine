@@ -108,13 +108,16 @@ def _input_type(inp: Input) -> Any:
     if base_annotation(inp.annotation) is bytes:
         # A null span has length -1, so a `bytes` input is never an Optional.
         return SPAN
-    t = from_dtype(numpy_dtype(inp.annotation))
+    # An OPTIONAL `T | None` arrives as T's array plus a mask, so it is typed `Optional(T)`.
+    t = from_dtype(numpy_dtype(base_annotation(inp.annotation)))
     return types.Optional(t) if inp.null_policy is NullPolicy.OPTIONAL else t
 
 
 def _probe_signature(node: CallNode) -> tuple | None:
     # Typed as the values the kernel will pass; None when a value has no numba
     # type (a table param), and the node then compiles on first use instead.
+    if any(d.schema is not None for d in node.params):
+        return None
     try:
         bundle, consts = default_bundle(node), tuple(v for _, v in node.consts)
         ins = [_input_type(i) for i in node.inputs]
