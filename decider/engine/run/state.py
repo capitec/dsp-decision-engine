@@ -108,6 +108,25 @@ class State:
         self.write(v, values, valid=valid)
         return v
 
+    def restore(self, old: State, keep: set[int]) -> None:
+        """Take back from `old` the values of the versions in `keep`, every override it recorded, and its chains.
+
+        For re-running part of a run: a fresh state replays up to a node, then
+        restores what the earlier run had upstream of it.
+
+        Example::
+
+            fresh.restore(state, {v.id for v in plan.versions if v.producer is None})
+        """
+        for vid, values in old.values.items():
+            if vid in keep or vid >= len(self.plan.versions):
+                self.values[vid] = values
+                if vid in old.valid:
+                    self.valid[vid] = old.valid[vid]
+                else:
+                    self.valid.pop(vid, None)
+        self.chains, self._extra = old.chains, old._extra
+
     def versions(self, spec: str) -> list[Version]:
         """The versions `spec` names: `name` (the latest), `name@path` (by producer) or `name@*` (all).
 
