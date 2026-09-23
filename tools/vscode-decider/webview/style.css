@@ -1710,3 +1710,82 @@ table.sweep td.changed.up {
 table.sweep td {
   white-space: nowrap;
 }
+
+.scenarios .knob {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 6px;
+  align-items: center;
+}
+.scenarios .knob input.picker {
+  grid-column: 1;
+  width: 100%;
+  min-width: 0;
+}
+.scenarios .knob > button.link {
+  grid-column: 2;
+}
+.scenarios .knob .knob-now,
+.scenarios .knob input.values,
+.scenarios .knob .knob-echo {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+table.sweep td.stack {
+  white-space: normal;
+}
+table.sweep td.stack > div {
+  white-space: nowrap;
+}
+table.sweep td.stack .changed.down .mono {
+  color: var(--vscode-charts-green, #89d185);
+}
+table.sweep td.stack .changed.up .mono {
+  color: var(--vscode-charts-red, #f14c4c);
+}
+table.sweep td.stack .unchanged {
+  opacity: 0.6;
+}
+.current-tag {
+  display: inline-block;
+  font-size: 0.85em;
+  padding: 0 6px;
+  border-radius: 8px;
+  border: 1px solid var(--vscode-focusBorder);
+}
+
+aside .step-head {
+  position: sticky;
+  top: -8px;
+  z-index: 3;
+  background: var(--vscode-editor-background);
+  padding-top: 2px;
+}
+aside .step-head .actions {
+  position: static;
+}
+aside .wrote {
+  font-weight: 600;
+  margin: 2px 0;
+}
+
+.pause-banner .banner-button {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border: none;
+  border-radius: 2px;
+  padding: 1px 8px;
+  cursor: pointer;
+}
+.pause-banner .edit-list {
+  display: inline;
+}
+
+.params .actions.sticky {
+  background: var(--vscode-editor-background);
+  padding: 6px 0;
+  border-top: 1px solid var(--vscode-panel-border);
+}

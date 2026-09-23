@@ -155,7 +155,8 @@ function summary(entry: Lineage, nodes: CallNodeJson[], values: Record<string, u
       at = at.inputs.find((i) => i.name === first);
       continue;
     }
-    parts.push(`${at.name} = ${substitute(node.formula, known)}`);
+    const zeros = at.inputs.filter((i) => i.value === 0).map((i) => i.name);
+    parts.push(`${at.name} = ${substitute(node.formula, known)}${zeros.length ? ` (at 0: ${zeros.join(", ")})` : ""}`);
     break;
   }
   return parts.length > 1 ? parts.join(" · ") : null;

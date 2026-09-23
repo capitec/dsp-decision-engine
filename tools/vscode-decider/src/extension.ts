@@ -209,6 +209,11 @@ async function onWebview(m: FromWebview, describe: DescribeResult) {
     case "step":
       await s?.customRequest("next", { threadId: 1 });
       break;
+    case "layout":
+      // Only the two-group layout the panel set up; a user's own arrangement is left alone.
+      if (vscode.window.tabGroups.all.length === 2 && GraphPanel.current?.column === vscode.ViewColumn.Two)
+        await vscode.commands.executeCommand("vscode.setEditorLayout", { orientation: 0, groups: [{ size: m.wide ? 0.3 : 0.5 }, { size: m.wide ? 0.7 : 0.5 }] });
+      break;
     case "maximise":
       await vscode.commands.executeCommand("workbench.action.toggleMaximizeEditorGroup");
       break;

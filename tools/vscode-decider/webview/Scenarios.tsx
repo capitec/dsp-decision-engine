@@ -269,6 +269,21 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
     const size = isRateName(c) && Math.abs(d) < 1 ? `${Number((Math.abs(d) * 100).toFixed(2))} pp` : formatValue(Math.abs(d), c);
     return `${d > 0 ? "+" : "−"}${size}`;
   };
+  // A scenario whose knobs equal the original run's: it is the setting in force now.
+  const isCurrent = (i: number) => knobCols.every((k) => k.name === "scenario" || (sweep.knobBase[k.name] ?? []).every((v) => same(v, k.values[i])));
+  const summaryLine = (i: number, c: string) => {
+    const diff = sweep.comparisons[i].output.find((o) => o.name === c);
+    const numeric = !categorical(sweep.base?.[c]);
+    const cls = !diff ? "unchanged" : numeric ? (avgDelta(c, i, diff.changedRows) < 0 ? "changed down" : "changed up") : "changed";
+    return (
+      <div key={c} className={cls} title={diff ? `changed for ${recordsOf(diff.changedRows)}` : "same as the original run for every record"}>
+        <span className="muted">{c}</span>{" "}
+        <span className="mono">
+          {!diff ? (outcomes.includes(c) ? overall(sweep.outputs[i]?.[c]) : "no change") : numeric ? `${delta(c, i, diff.changedRows)} (${diff.changedRows.length} rec.)` : overall(sweep.outputs[i]?.[c], sweep.base?.[c])}
+        </span>
+      </div>
+    );
+  };
   const summaryCell = (i: number, c: string) => {
     const diff = sweep.comparisons[i].output.find((o) => o.name === c);
     if (!diff) return <td key={c} className="unchanged mono" title="same as the original run for every record">{outcomes.includes(c) ? overall(sweep.outputs[i]?.[c]) : "no change"}</td>;
@@ -311,7 +326,7 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
         </select>
       </div>
       <p className="hint">
-        One row per scenario; click one to see what changed, step by step.{summary ? " “−R 5,303.95 (3)” means 3 records changed, by −R 5,303.95 on average." : ""}
+        One row per scenario; click one to see what changed, step by step.{summary ? " “−R 5,303.95 (3 rec.)” means 3 records changed, by −R 5,303.95 on average." : ""}
       </p>
       {cols.length === 0 ? (
         <div className="muted">No scenario changes any result.</div>
@@ -331,13 +346,7 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
               {knobCols.map((k) => (
                 <th key={k.name} className="knob-col" title={k.name}>{knobShort(k.name)}</th>
               ))}
-              {(summary ? [0] : shown).flatMap((r) =>
-                cols.map((c) => (
-                  <th key={`${c}-${r}`}>
-                    {c}
-                  </th>
-                )),
-              )}
+              {summary ? <th>results</th> : shown.flatMap((r) => cols.map((c) => <th key={`${c}-${r}`}>{c}</th>))}
             </tr>
           </thead>
           <tbody>
@@ -346,14 +355,29 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
                 original run
                 <div className="muted small">{knobCols.filter((k) => k.name !== "scenario").map((k) => baseKnob(k.name)).join(" · ")}</div>
               </td>
-              {summary ? cols.map((c) => <td key={c} className="mono">{overall(sweep.base?.[c], undefined, c)}</td>) : shown.flatMap((r) => cols.map((c) => recordCell(null, c, r)))}
+              {summary ? (
+                <td className="stack">
+                  {cols.map((c) => (
+                    <div key={c}><span className="muted">{c}</span> <span className="mono">{overall(sweep.base?.[c], undefined, c)}</span></div>
+                  ))}
+                </td>
+              ) : (
+                shown.flatMap((r) => cols.map((c) => recordCell(null, c, r)))
+              )}
             </tr>
             {sweep.labels.map((label, i) => (
               <tr key={i} className={`clickable ${open === i ? "open" : ""}`} title={`${label}: see what changed, step by step`} onClick={() => onOpen(i)}>
                 {knobCols.map((k) => (
                   <td key={k.name} className="mono knob-col">{formatValue(k.values[i], knobShort(k.name))}</td>
                 ))}
-                {summary ? cols.map((c) => summaryCell(i, c)) : shown.flatMap((r) => cols.map((c) => recordCell(i, c, r)))}
+                {summary ? (
+                  <td className="stack">
+                    {isCurrent(i) && <div className="current-tag">the current setting</div>}
+                    {cols.map((c) => summaryLine(i, c))}
+                  </td>
+                ) : (
+                  shown.flatMap((r) => cols.map((c) => recordCell(i, c, r)))
+                )}
                 {sweep.errors[i] && <td className="error small">{sweep.errors[i]}</td>}
               </tr>
             ))}

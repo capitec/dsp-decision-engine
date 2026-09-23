@@ -16,6 +16,7 @@ goal isn't visibly met caps at 5). The loop stops above 8/10 or after 40 rounds.
 | 6 | 7.3 | 8 | 8 | 8 | 7 | 6 | 7 | 7 |
 | 7 | 7.4 | 8 | 8 | 8 | 7 | 6 | 8 | 7 |
 | 8 | 7.4 | 8 | 8 | 7 | 8 | 6 | 8 | 7 |
+| 9 | 7.4 | 8 | 8 | 7 | 8 | 7 | 8 | 6 |
 
 ## Round 0 (baseline)
 
@@ -234,3 +235,27 @@ Judge's problems, most damaging first:
 10. The banner's compare button looks like text; edit chips hidden.
 11. What-if opens with the shared tables expanded; the sticky footer covers a title; headers truncated.
 12. L1: no sense of position among 1,024 steps; params cut off.
+
+## Round 9
+
+Changes: the knob picker is a two-column grid (an older four-column rule was squeezing it); the sweep summary stacks
+each scenario's results in one cell so nothing scrolls sideways, and tags the current setting; the panel widens to
+70% on What-if, Scenarios and Compare; the view switches moved into a "View" popover; the step's name, actions,
+written value and params are pinned at the top of its details; "only declined moved" is said once; "What changed"
+has a file column; the edits sit inline in the banner; What-if opens with every group folded; the breadcrumb says
+"step 11 of 13 in pricing".
+
+Judge's problems, most damaging first:
+
+1. L7: "42 steps changed" but Step by step lists one: the focused record filter hides steps that didn't change it.
+2. L5: green/red by sign has no clear meaning (a smaller offer is green).
+3. L5: a 3 × 2 sweep is six stacked rows; wants a grid.
+4. L3: the answer lands at the pane's bottom edge.
+5. L3: the summary is machine-like; wants a labelled waterfall; "* 1" is noise.
+6. L7: the banner grows to four lines.
+7. The panel width jumps between tabs (the round 8 judge asked for wider tabs; this one dislikes the jump).
+8. L7: the edit isn't visible in the editor.
+9. L6: a client id is cut off in Step by step.
+10. The file column says "PARAMS", not the file.
+11. Changed records truncated at 3 with "(and 1 more)".
+12. L4: the floor is tagged "changed" though it only passed its input through.

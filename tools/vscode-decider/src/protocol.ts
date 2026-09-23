@@ -172,6 +172,7 @@ export type FromWebview =
   | { type: "rewind"; path: string }
   | { type: "skip"; path: string }
   | { type: "reloadStep"; path: string }
+  | { type: "layout"; wide: boolean }
   | { type: "compareEdits"; label: string; edits: Record<string, "delete" | "replace">; path?: string }
   | { type: "whatIf"; params: unknown; overrides: Record<string, unknown>; row: number | null; label: string }
   | { type: "restartWith"; params: unknown }
