@@ -28,9 +28,9 @@ function Diffs({ diffs, record, keyCol, results }: { diffs: ValueDiff[]; record:
               <td className="mono">{i === 0 ? d.name : ""}</td>
               <td className="nowrap">{recordLabel(s.row, keyCol)}:</td>
               <td>
-                step wrote <strong className="mono">{formatValue(s.b)}</strong> <span className="muted">(was {formatValue(s.a)})</span>
+                step wrote <strong className="mono">{formatValue(s.b, d.name)}</strong> <span className="muted">(was {formatValue(s.a, d.name)})</span>
                 {results && d.name in results.b && !(same(results.a[d.name]?.[s.row], s.a) && same(results.b[d.name]?.[s.row], s.b)) && (
-                  <span> · final <strong className="mono">{formatValue(results.b[d.name]?.[s.row])}</strong> <span className="muted">(was {formatValue(results.a[d.name]?.[s.row])})</span></span>
+                  <span> · final <strong className="mono">{formatValue(results.b[d.name]?.[s.row], d.name)}</strong> <span className="muted">(was {formatValue(results.a[d.name]?.[s.row], d.name)})</span></span>
                 )}
                 {i === 0 && d.changedRows.length > d.samples.length && <span className="muted"> · +{d.changedRows.length - d.samples.length} more records</span>}
               </td>
@@ -50,14 +50,16 @@ function Results({ c, record }: { c: Comparison; record: number | null }) {
   const everyRow = Array.from({ length: c.rows }, (_, i) => i);
   const hit = everyRow.filter((r) => cols.some((n) => moved(n, r)));
   // Only the records whose results moved: they are the answer. The rest on request.
-  const all = record !== null ? [record] : showSame || !hit.length ? [...hit, ...everyRow.filter((r) => !hit.includes(r))] : hit;
+  const rest = showSame || !hit.length ? [...hit, ...everyRow.filter((r) => !hit.includes(r))] : hit;
+  const all = record !== null ? [record, ...rest.filter((r) => r !== record)] : rest;
   const rows = all.slice(0, 4);
   const changed = (n: string) => rows.some((r) => moved(n, r));
   const unchanged = cols.filter((n) => !changed(n));
   const names = [...cols.filter(changed), ...(showSame ? unchanged : [])];
   return (
     <>
-    {!cols.some(changed) && <div>No result changes{record === null ? "" : ` for ${recordLabel(record, c.key)}`}.</div>}
+    {!hit.length && <div>No result changes for any of the {c.rows} records.</div>}
+    {record !== null && hit.length > 0 && !hit.includes(record) && <div className="muted">{recordLabel(record, c.key)} (focused) is unchanged; the records that changed follow it.</div>}
     {(unchanged.length > 0 || hit.length < c.rows) && cols.some(changed) && (
       <label className="small muted">
         <input type="checkbox" checked={showSame} onChange={(e) => setShowSame(e.target.checked)} /> also show unchanged: {c.rows - hit.length} records, {unchanged.length} result fields
@@ -81,9 +83,9 @@ function Results({ c, record }: { c: Comparison; record: number | null }) {
               const a = c.results.a[n]?.[r];
               const b = c.results.b[n]?.[r];
               return same(a, b) ? (
-                <td key={r} className="mono unchanged-cell" title="same in both runs">= {formatValue(b)}</td>
+                <td key={r} className="mono unchanged-cell" title="same in both runs">= {formatValue(b, n)}</td>
               ) : (
-                <td key={r} className="mono changed-cell"><s className="before">{formatValue(a)}</s> <span className="after">{formatValue(b)}</span></td>
+                <td key={r} className="mono changed-cell"><s className="before">{formatValue(a, n)}</s> <span className="after">{formatValue(b, n)}</span></td>
               );
             })}
           </tr>
@@ -91,7 +93,7 @@ function Results({ c, record }: { c: Comparison; record: number | null }) {
       </tbody>
     </table>
     )}
-    {all.length > rows.length && <div className="muted">Showing {rows.length} of {all.length} {showSame ? "" : "changed "}records; focus a record to see another.</div>}
+    {all.length > rows.length && <div className="muted">Showing {rows.length} of {all.length} {showSame || !hit.length ? "" : "changed "}records; focus a record to see another.</div>}
     </>
   );
 }
@@ -129,6 +131,10 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
     .map((n) => ({ n, k: Array.from({ length: c.rows }, (_, r) => r).filter((r) => !same(c.results.a[n]?.[r], c.results.b[n]?.[r])).length }))
     .filter((x) => x.k > 0);
   const stayed = outcomes.filter((n) => !movedOut.some((m) => m.n === n));
+  const paramLines = [
+    ...paramChangeLines(c.paramsDocs?.b, c.values?.a),
+    ...c.steps.flatMap((s) => s.paramChanges.map((p) => `${s.path.split("/").pop()} ${p} (in its code)`)),
+  ];
   // A changed param whose readers all wrote the same values: say so, or "nothing changed" reads as a bug.
   const idle = readers.filter((p) => p.steps.length && !p.steps.some((s) => c.steps.find((x) => x.path === s)?.outputs.length));
   return (
@@ -141,7 +147,7 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
       </div>
       <div className="verdict">
         {movedOut.length === 0
-          ? "No final output changes."
+          ? `No final output changes: every one of the ${c.rows} records ends the same.`
           : `${movedOut.map((m) => `${m.n} changes for ${m.k} of ${c.rows} records`).join("; ")}.`}
         {stayed.length > 0 && movedOut.length > 0 && stayed.length <= 8 && <span className="muted"> Unchanged: {stayed.join(", ")}.</span>}
       </div>
@@ -158,22 +164,41 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
         </div>
       ))}
       {c.steps.some((s) => s.status !== "same" && s.status !== "not run") && (
-        <div className="changed-list">
-          Changed:{" "}
-          {c.steps
-            .filter((s) => s.status !== "same" && s.status !== "not run")
-            // Edited steps first: they are the cause, the rest only follow from them.
-            .sort((x, y) => Number(edited(y)) - Number(edited(x)))
-            .slice(0, LIST)
-            .map((s, i) => (
-              <span key={s.path}>
-                {i > 0 && ", "}
-                <a onClick={() => onSelect(s.path)}>{s.path.split("/").pop()}</a>
-                <span className="muted"> ({[...s.paramChanges.map((p) => p.split(":")[0] + " param"), ...(readsChanged(s.path) ? readers.filter((r) => r.steps.includes(s.path)).map((r) => `${r.param} param`) : []), ...s.structural.filter((x) => x !== "params"), ...(s.outputs.length ? ["values"] : [])].join(", ") || s.status})</span>
-              </span>
-            ))}
-          {count("changed") + count("added") + count("removed") > LIST && <span className="muted"> and {count("changed") + count("added") + count("removed") - LIST} more that follow from these; see Step by step below</span>}
-        </div>
+        <table className="changed-table">
+          <thead>
+            <tr>
+              <th>step</th>
+              <th>in</th>
+              <th>what changed</th>
+              <th>records</th>
+            </tr>
+          </thead>
+          <tbody>
+            {c.steps
+              .filter((s) => s.status !== "same" && s.status !== "not run")
+              // Edited steps first: they are the cause, the rest only follow from them.
+              .sort((x, y) => Number(edited(y)) - Number(edited(x)))
+              .slice(0, LIST)
+              .map((s) => (
+                <tr key={s.path}>
+                  <td><a onClick={() => onSelect(s.path)}>{s.path.split("/").pop()}</a></td>
+                  <td className="muted small">{s.path.split("/").slice(-3, -1).join("/")}</td>
+                  <td>
+                    {[
+                      ...s.paramChanges,
+                      ...readers.filter((r) => r.steps.includes(s.path)).map((r) => `${r.param} param`),
+                      ...s.structural.filter((x) => x !== "params").map((x) => (x === "code" ? "code changed" : `${x} changed`)),
+                      ...(s.status === "removed" ? ["skipped / removed"] : s.status === "added" ? ["added"] : []),
+                    ].join(", ") || <span className="muted">follows from the above</span>}
+                  </td>
+                  <td className="mono">{new Set(s.outputs.flatMap((o) => o.changedRows)).size || "—"}</td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      )}
+      {count("changed") + count("added") + count("removed") > LIST && (
+        <div className="muted small">and {count("changed") + count("added") + count("removed") - LIST} more steps that follow from these; see Step by step below</div>
       )}
       {header}
       {(c.errors.a || c.errors.b) && (
@@ -182,10 +207,10 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
           {c.errors.b && <div>{c.b}: {c.errors.b}</div>}
         </div>
       )}
-      {paramChangeLines(c.paramsDocs?.b, c.values?.a).length > 0 && (
+      {paramLines.length > 0 && (
         <>
           <h4>Changed params</h4>
-          {paramChangeLines(c.paramsDocs?.b, c.values?.a).map((l) => (
+          {paramLines.map((l) => (
             <div key={l} className="mono">{l}</div>
           ))}
         </>

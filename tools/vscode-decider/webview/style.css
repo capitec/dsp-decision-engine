@@ -1382,3 +1382,59 @@ ul.explain .formula {
   display: inline-block;
   margin-right: 8px;
 }
+
+table.changed-table {
+  border-collapse: collapse;
+  margin: 4px 0;
+  width: 100%;
+}
+table.changed-table th {
+  text-align: left;
+  font-weight: normal;
+  color: var(--vscode-descriptionForeground);
+  border-bottom: 1px solid var(--vscode-panel-border);
+  padding: 2px 6px;
+}
+table.changed-table td {
+  padding: 2px 6px;
+  vertical-align: top;
+}
+table.changed-table a {
+  cursor: pointer;
+  color: var(--vscode-textLink-foreground);
+}
+
+ul.explain .formula .clamp {
+  font-family: var(--vscode-font-family);
+  color: var(--vscode-charts-green, #89d185);
+}
+aside .actions {
+  position: sticky;
+  top: -8px;
+  z-index: 3;
+  background: var(--vscode-editor-background);
+  padding: 4px 0;
+}
+
+.params tr.used-by-row td {
+  padding: 2px 0 8px 18px;
+}
+.params tr.used-by-row .chip {
+  margin: 2px 4px 2px 0;
+}
+.params details.used-by summary {
+  font-size: 1rem;
+}
+
+.crumbs {
+  padding: 2px 10px;
+  font-size: 0.9em;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.banner-note {
+  font-weight: normal;
+  margin-top: 2px;
+}

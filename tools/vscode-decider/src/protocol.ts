@@ -131,9 +131,14 @@ export function recordLabel(row: number, key: RecordKey): string {
 }
 
 /** Values for people: no float noise; amounts of 100 or more to two decimals (58113.07), smaller ones to four. */
-export function formatValue(v: unknown): string {
+/** Names whose values read as percentages: rates, loadings, discounts, margins. */
+export const isRateName = (name?: string) => !!name && /(rate|loading|discount|margin)s?$/.test(name);
+
+/** A value as the UI shows it; with its column's `name`, a rate below 1 shows as a percentage ("25.2%"). */
+export function formatValue(v: unknown, name?: string): string {
   if (v === undefined) return "—";
   if (v === null) return "empty";
+  if (typeof v === "number" && isRateName(name) && Math.abs(v) < 1) return `${Number((v * 100).toFixed(3))}%`;
   if (typeof v === "number") return v.toLocaleString("en-US", { maximumFractionDigits: Math.abs(v) >= 100 ? 2 : 4 });
   return JSON.stringify(v);
 }
@@ -161,7 +166,7 @@ export type FromWebview =
   | { type: "rewind"; path: string }
   | { type: "skip"; path: string }
   | { type: "reloadStep"; path: string }
-  | { type: "compareEdits" }
+  | { type: "compareEdits"; label: string; edits: Record<string, "delete" | "replace"> }
   | { type: "whatIf"; params: unknown; overrides: Record<string, unknown>; row: number | null; label: string }
   | { type: "restartWith"; params: unknown }
   | { type: "compareRevision" }
@@ -193,6 +198,6 @@ export function kindLabel(n: IRNodeJson): string {
 }
 
 export function previewOf(c: Summary): string {
-  const shown = c.preview.map(formatValue).join(", ");
+  const shown = c.preview.map((x) => formatValue(x)).join(", ");
   return `${shown}${c.rows > c.preview.length ? ", …" : ""}${c.nulls ? `  (${c.nulls} of ${c.rows} empty)` : ""}`;
 }

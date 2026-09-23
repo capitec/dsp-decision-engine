@@ -20,7 +20,20 @@ const shared = (values: Record<string, unknown>) => (values.shared ?? {}) as Rec
 
 /** `formula` with each name replaced by its value: "min(0.252, 0.0775 * 1 + 0.21)". */
 export function substitute(formula: string, known: Record<string, unknown>): string {
-  return formula.replace(/\b[A-Za-z_]\w*\b/g, (name) => (name in known ? formatValue(known[name] as never) : name));
+  const filled = formula.replace(/\b[A-Za-z_]\w*\b/g, (name) => (name in known ? formatValue(known[name] as never, name) : name));
+  // A sum of many terms reads better without the ones that are zero.
+  return filled.replace(/ [+-] 0%?(?![.\d%])/g, "");
+}
+
+/** For `min(x, …)` / `max(x, …)`: whether the limit changed `x`, e.g. "the cap did not apply: pl_raw_rate passed through". */
+export function clampNote(formula: string, inputs: { name: string; value: unknown }[], result: unknown): string | null {
+  const m = /^(min|max)\((\w+),/.exec(formula);
+  const first = m && inputs.find((i) => i.name === m[2]);
+  if (!m || !first || typeof result !== "number" || typeof first.value !== "number") return null;
+  const limit = m[1] === "min" ? "cap" : "floor";
+  return Math.abs(result - first.value) < 1e-12
+    ? `the ${limit} did not apply: ${first.name} passed through`
+    : `the ${limit} applied: ${formatValue(first.value, first.name)} → ${formatValue(result, first.name)}`;
 }
 
 /** The row of a lookup table a value falls in, and why: `[2, "49 ≤ requested_term 60 < 85"]`. */
@@ -57,7 +70,7 @@ export function Explain({ entry, who, role, nodes, values, onPick, onSelect }: P
     <div className="how" ref={box}>
       <div className="how-title">
         {who ? `For ${who}, ` : ""}
-        <span className="mono">{entry.name}{who ? ` = ${formatValue(entry.value)}` : ""}</span>
+        <span className="mono">{entry.name}{who ? ` = ${formatValue(entry.value, entry.name)}` : ""}</span>
         {role && <span className="muted"> ({role})</span>}
       </div>
       {entry.producer === null ? (
@@ -67,7 +80,7 @@ export function Explain({ entry, who, role, nodes, values, onPick, onSelect }: P
           <Level entry={entry} depth={0} nodes={nodes} values={values} who={who} onPick={onPick} onSelect={onSelect} />
         </ul>
       )}
-      <div className="muted small">▸ opens a value's own inputs; a name picks it in the graph.</div>
+      <div className="muted small">Click a value to open its own inputs; a step name selects it in the graph.</div>
     </div>
   );
 }
@@ -88,8 +101,8 @@ function Level({ entry, depth, nodes, values, who, onPick, onSelect }: { entry: 
       ) : (
         <span className="twisty" />
       )}
-      <a className="mono" title={`Pick ${entry.name}`} onClick={() => onPick(entry.name)}>{entry.name}</a>
-      {who && <strong className="mono"> = {formatValue(entry.value)}</strong>}
+      <a className="mono" title={expandable ? `Show how ${entry.name} was computed` : entry.name} onClick={() => expandable && setOpen(!open)}>{entry.name}</a>
+      {who && <strong className="mono"> = {formatValue(entry.value, entry.name)}</strong>}
       <span className="muted">
         {" "}
         {entry.producer === null ? "input" : <>from <a onClick={() => onSelect(entry.producer!)}>{short(entry.producer)}</a></>}
@@ -99,6 +112,7 @@ function Level({ entry, depth, nodes, values, who, onPick, onSelect }: { entry: 
       {open && node?.formula && who && (
         <div className="formula mono" title={node.formula}>
           = {substitute(node.formula, known)}
+          {clampNote(node.formula, entry.inputs, entry.value) && <div className="clamp">{clampNote(node.formula, entry.inputs, entry.value)}</div>}
         </div>
       )}
       {open && match && (

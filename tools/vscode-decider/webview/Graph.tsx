@@ -63,8 +63,10 @@ export function Graph({ ir, showData, run, selected, highlightColumn, lineage, d
     box.current?.querySelector(".node.current, .cluster.current")?.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
   }, [run.current?.path, zoom]);
   useEffect(() => {
-    box.current?.querySelector(".node.selected")?.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
-  }, [selected]);
+    // After the groups around it open and the layout settles.
+    const t = setTimeout(() => box.current?.querySelector(".node.selected")?.scrollIntoView({ block: "center", inline: "center" }), 80);
+    return () => clearTimeout(t);
+  }, [selected, ir]);
 
   const pad = shownFlows.length ? PAD : 0;
 

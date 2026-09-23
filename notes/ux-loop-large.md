@@ -10,6 +10,7 @@ goal isn't visibly met caps at 5). The loop stops above 8/10 or after 40 rounds.
 | 0 | 3.3 | 5 | 2 | 2 | 3 | 2 | 6 | |
 | 1 | 5.6 | 7 | 7 | 4 | 7 | 4 | 5 | 5 |
 | 2 | 6.4 | 7 | 8 | 6 | 5 | 7 | 8 | 4 |
+| 3 | 6.4 | 7 | 8 | 6 | 6 | 6 | 7 | 5 |
 
 ## Round 0 (baseline)
 
@@ -79,3 +80,28 @@ Judge's problems, most damaging first:
 10. L6: "Changed params" omits the code-declared limit change.
 11. The "Changed:" prose is hard to scan; "default → 0.075" hides the old value.
 12. The editor is squeezed; Variables shows 40 values of noise.
+
+## Round 3
+
+Changes: rates, loadings, discounts and margins show as percentages wherever the column is known, and params accept
+"7.5%"; the breakdown hides zero terms and says whether a cap or floor applied; clicking a value opens it in place;
+step actions stay pinned; a found step is centred with a breadcrumb; skip/swap leave a note in the pause banner and
+the edits comparison is titled with them; a skipped step is "removed", not "values emptied"; the focused record is
+pinned first in results with the changed ones after it; the changed-steps prose is a table; code-declared param
+changes join "Changed params"; sweep cells say "3 of 40 · avg −0.53 pp" over the changed records, and outcomes that
+never change move to a note; filtered params show their readers as chips.
+
+Judge's problems, most damaging first:
+
+1. L7: comparing while paused reads as if the runs had finished (they do run to the end, but it doesn't say so).
+2. L7: the skip and the edit are compared only together, not one at a time.
+3. L6: changed records are capped at 4 columns; one that matters is hidden.
+4. L3: the breakdown is crammed under the graph; the story's click collapsed it (a test bug: it hit the outer item).
+5. The editor beside the panel cuts code at ~45 characters.
+6. Units still mixed: the matched-row table and the debugger's Variables show raw decimals; scenario values are fractions.
+7. L4: reader chips run off the edge; the value box is clipped.
+8. L3: "why this rate" takes four expert steps.
+9. L5: the knob picker is three cramped boxes.
+10. L5: summary cells don't say what the average is over; no currency.
+11. L6/L7: no decision column next to reason_code changes.
+12. Money formatting inconsistent; "default → 7.5%" in the What-if title while the body says 7.75%.

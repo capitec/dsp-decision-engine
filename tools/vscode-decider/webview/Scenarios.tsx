@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { same } from "../src/compare";
-import { formatValue, recordLabel, type ParamInfo, type RecordKey } from "../src/protocol";
+import { formatValue, isRateName, recordLabel, type ParamInfo, type RecordKey } from "../src/protocol";
 import { scenarios, type Knob, type Scenario, type Sweep } from "../src/sweep";
 import { Compare } from "./Compare";
 import { parseValue } from "./Params";
@@ -197,7 +197,8 @@ const categorical = (v: unknown[] | undefined) => !!v?.length && v.every((x) => 
 function knobShort(name: string): string {
   const [path, param] = name.split(" · ");
   if (param === undefined || path === "shared") return param ?? name;
-  return `${path.split("/").pop()} ${param}`;
+  const step = path.split("/").pop()!;
+  return step.includes(param) ? step : `${step} ${param}`;
 }
 
 function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row: number; rows: number; onRow: (r: number) => void; onOpen: (i: number) => void; open: number | null }) {
@@ -212,7 +213,7 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
   const knobCols = sweep.knobs.length ? sweep.knobs : [{ name: "scenario", values: sweep.labels }];
   const summary = row === -1;
   const each = row === -2;
-  const cols = summary ? [...changedCols.filter((c) => categorical(sweep.base?.[c])), ...outcomes, ...changedCols.filter((c) => !categorical(sweep.base?.[c]))] : changedCols;
+  const cols = summary ? [...changedCols.filter((c) => categorical(sweep.base?.[c])), ...changedCols.filter((c) => !categorical(sweep.base?.[c]))] : changedCols;
   // Side by side, the records some scenario changed come first; a few fit.
   const hit = (r: number) => sweep.comparisons.some((cmp) => cmp.output.some((o) => o.changedRows.includes(r)));
   const everyRow = Array.from({ length: rows }, (_, i) => i);
@@ -220,11 +221,11 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
   const recordsOf = (list: number[]) => list.map((r) => recordLabel(r, sweep.key)).join(", ");
   const baseKnob = (name: string) => {
     const values = sweep.knobBase[name] ?? [];
-    if (!summary && !each) return formatValue(values[row]);
-    return values.every((v) => same(v, values[0])) ? formatValue(values[0]) : values.map(formatValue).join(" / ");
+    if (!summary && !each) return formatValue(values[row], knobShort(name));
+    return values.every((v) => same(v, values[0])) ? formatValue(values[0], knobShort(name)) : values.map((x) => formatValue(x, knobShort(name))).join(" / ");
   };
   // Counts for an outcome ("approve 12 · decline 25"), the average for a number, each against the original run.
-  const overall = (values: unknown[] | undefined, base?: unknown[]) => {
+  const overall = (values: unknown[] | undefined, base?: unknown[], name?: string) => {
     const v = values ?? [];
     if (categorical(v)) {
       const count = (xs: unknown[] | undefined, k: string) => (xs ?? []).filter((x) => x === k).length;
@@ -241,16 +242,23 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
     const avg = (xs: number[]) => xs.reduce((t, x) => t + x, 0) / xs.length;
     const baseNums = (base ?? []).filter((x): x is number => typeof x === "number");
     const d = baseNums.length ? avg(nums) - avg(baseNums) : 0;
-    return `avg ${formatValue(avg(nums))}${Math.abs(d) > 1e-12 ? ` (${d > 0 ? "+" : "−"}${formatValue(Math.abs(d))})` : ""}`;
+    return `avg ${formatValue(avg(nums), name)}${Math.abs(d) > 1e-12 ? ` (${d > 0 ? "+" : "−"}${formatValue(Math.abs(d), name)})` : ""}`;
+  };
+  // A number's change is averaged over the records it moved, so a 3-record effect isn't diluted by 37 that didn't move.
+  const delta = (c: string, i: number, changedRows: number[]) => {
+    const ds = changedRows.map((r) => (sweep.outputs[i]?.[c]?.[r] as number) - (sweep.base?.[c]?.[r] as number)).filter((d) => !Number.isNaN(d));
+    if (!ds.length) return "";
+    const d = ds.reduce((t, x) => t + x, 0) / ds.length;
+    const size = isRateName(c) && Math.abs(d) < 1 ? `${Number((Math.abs(d) * 100).toFixed(2))} pp` : formatValue(Math.abs(d));
+    return `avg ${d > 0 ? "+" : "−"}${size}`;
   };
   const summaryCell = (i: number, c: string) => {
     const diff = sweep.comparisons[i].output.find((o) => o.name === c);
-    const value = overall(sweep.outputs[i]?.[c], sweep.base?.[c]);
-    if (!diff) return <td key={c} className="unchanged mono" title="same as the original run for every record">{value}</td>;
+    if (!diff) return <td key={c} className="unchanged mono" title="same as the original run for every record">no change</td>;
+    const numeric = !categorical(sweep.base?.[c]);
     return (
       <td key={c} className="changed mono" title={`changed for ${recordsOf(diff.changedRows)}; original: ${overall(sweep.base?.[c])}`}>
-        {value}
-        <span className="up"> · {diff.changedRows.length} of {rows} records changed</span>
+        {numeric ? `${diff.changedRows.length} of ${rows} · ${delta(c, i, diff.changedRows)}` : overall(sweep.outputs[i]?.[c], sweep.base?.[c])}
       </td>
     );
   };
@@ -303,12 +311,12 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
               <td className="knob-col" colSpan={knobCols.length} title={knobCols.map((k) => `${k.name} = ${baseKnob(k.name)}`).join("\n")}>
                 original run ({knobCols.filter((k) => k.name !== "scenario").map((k) => `${knobShort(k.name)} ${baseKnob(k.name)}`).join(", ")})
               </td>
-              {summary ? cols.map((c) => <td key={c} className="mono">{overall(sweep.base?.[c])}</td>) : shown.flatMap((r) => cols.map((c) => recordCell(null, c, r)))}
+              {summary ? cols.map((c) => <td key={c} className="mono">{overall(sweep.base?.[c], undefined, c)}</td>) : shown.flatMap((r) => cols.map((c) => recordCell(null, c, r)))}
             </tr>
             {sweep.labels.map((label, i) => (
               <tr key={i} className={`clickable ${open === i ? "open" : ""}`} title={`${label}: see what changed, step by step`} onClick={() => onOpen(i)}>
                 {knobCols.map((k) => (
-                  <td key={k.name} className="mono knob-col">{formatValue(k.values[i])}</td>
+                  <td key={k.name} className="mono knob-col">{formatValue(k.values[i], knobShort(k.name))}</td>
                 ))}
                 {summary ? cols.map((c) => summaryCell(i, c)) : shown.flatMap((r) => cols.map((c) => recordCell(i, c, r)))}
                 {sweep.errors[i] && <td className="error small">{sweep.errors[i]}</td>}
@@ -317,6 +325,11 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
           </tbody>
         </table>
       )}
+      {summary && outcomes.map((c) => (
+        <div key={c} className="muted">
+          <span className="mono">{c}</span> is the same in every scenario: {overall(sweep.base?.[c])}.
+        </div>
+      ))}
     </section>
   );
 }

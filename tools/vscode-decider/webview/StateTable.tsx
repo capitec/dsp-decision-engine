@@ -44,7 +44,7 @@ export function StateTable({ columns, record, keyCol, selected, order, picked, o
             <tr key={c.name} className={`${role(c.name) ? "touched" : ""} ${picked === c.name ? "picked" : ""}`} onClick={() => onPick(picked === c.name ? undefined : c.name)}>
               <td>{c.name}</td>
               <td className="preview">
-                {record === null ? `${c.preview.map(formatValue).join(", ")}${c.rows > c.preview.length ? ", …" : ""}` : formatValue(c.value)}
+                {record === null ? `${c.preview.map((x) => formatValue(x)).join(", ")}${c.rows > c.preview.length ? ", …" : ""}` : formatValue(c.value)}
               </td>
               {step && <td className="role">{role(c.name)}</td>}
               <td className="muted" title={c.producer}>{c.producer.split("/").pop()}{c.versions > 1 ? ` (${c.versions} versions)` : ""}</td>
