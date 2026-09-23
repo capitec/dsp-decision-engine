@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import types
 import typing
 from typing import Any, Iterator, Mapping, Union
 
@@ -8,8 +7,7 @@ import numpy as np
 
 from decider.engine.compile.kernel import Spec, fused_kernel
 from decider.engine.compile.njit import FALLBACK_ERRORS, compile_call, numpy_dtype, parameters
-from decider.engine.ir.decls import Input, NullPolicy, base_annotation
-from decider.engine.ir.origin import Origin
+from decider.engine.ir.decls import Input, NullPolicy, base_annotation, nullable
 from decider.engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, Sequence, Version
 
 Values = dict[int, np.ndarray]
@@ -31,7 +29,6 @@ class Kernel:
         units = compile_plan(plan)
         unit = units[plan.calls[0].id]
         unit.run(values, {}, bundles, n)
-        [o.path for o in unit.origins]
     """
 
     __slots__ = ("calls", "fn", "reads", "optional", "writes", "_masked", "_layout", "_choices", "_python")
@@ -48,10 +45,6 @@ class Kernel:
         self._layout = layout
         self._choices: tuple[tuple | None, ...] = choices
         self._python: tuple[Fallback, ...] = ()
-
-    @property
-    def origins(self) -> tuple[Origin, ...]:
-        return tuple(c.node.origin for c in self.calls)
 
     def run(self, values: Values, valid: Values, bundles: Mapping[int, tuple], n: int) -> None:
         if self._python:
@@ -89,7 +82,7 @@ class Kernel:
 class Fallback:
     """One call numba couldn't compile, run row by row in Python; `reason` says why.
 
-    Same `run`, `origins` and `writes` as `Kernel`; it stores every version it writes.
+    Same `run` and `writes` as `Kernel`; it stores every version it writes.
     """
 
     __slots__ = ("calls", "fn", "reason", "writes")
@@ -103,10 +96,6 @@ class Fallback:
             (v, np.dtype(object) if base_annotation(o.annotation) is str else output_dtype(o.annotation))
             for v, o in zip(call.writes, call.node.outputs)
         )
-
-    @property
-    def origins(self) -> tuple[Origin, ...]:
-        return (self.calls[0].node.origin,)
 
     def run(self, values: Values, valid: Values, bundles: Mapping[int, tuple], n: int) -> None:
         call = self.calls[0]
@@ -217,15 +206,6 @@ def _split_at_nulls(run: list[Call]) -> Iterator[list[Call]]:
         made |= {v.id for v, o in zip(call.writes, call.node.outputs) if nullable(o.annotation)}
     if part:
         yield part
-
-
-def nullable(annotation: Any) -> bool:
-    """Whether an output declared `annotation` may be `None` (`T | None`).
-
-    >>> nullable(float | None), nullable(float)
-    (True, False)
-    """
-    return typing.get_origin(annotation) in (typing.Union, types.UnionType) and type(None) in typing.get_args(annotation)
 
 
 def output_dtype(annotation: Any) -> np.dtype:

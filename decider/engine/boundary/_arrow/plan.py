@@ -12,15 +12,6 @@ F64, I64, BOOL, CODE, STR = (
     FeatureKind.F64, FeatureKind.I64, FeatureKind.BOOL, FeatureKind.CODE, FeatureKind.STR,
 )
 
-# The row buffer dtype per kind; a STR slot is two int64s, (address, byte length).
-ROW_DTYPES: dict[FeatureKind, np.dtype] = {
-    F64: np.dtype(np.float64),
-    I64: np.dtype(np.int64),
-    BOOL: np.dtype(np.bool_),
-    CODE: np.dtype(np.int32),
-    STR: np.dtype(np.int64),
-}
-
 
 @dataclass(frozen=True)
 class ColumnSpec:
@@ -45,7 +36,7 @@ class FramePlan:
     """
 
     __slots__ = ("specs", "columns", "ncols", "names", "kinds", "slots", "child_idx",
-                 "fill_f64", "fill_i64", "counts")
+                 "fill_f64", "fill_i64", "counts", "places", "addresses", "row_bytes")
 
     def __init__(self, inputs: Iterable[ColumnSpec | tuple[str, FeatureKind]],
                  columns: Sequence[str]) -> None:
@@ -81,6 +72,12 @@ class FramePlan:
             else:
                 self.fill_i64[c] = int(s.fill)
         self.counts = tuple(counts)
+        # The bytes a row takes in `FrameView.columns()`' buffer: values, then validity.
+        self.row_bytes = 8 * counts[F64] + 8 * counts[I64] + 16 * counts[STR] + 4 * counts[CODE] + counts[BOOL] + n
+        self.places = tuple((int(s.kind), int(self.slots[c])) for c, s in enumerate(specs))
+        # Taken once: `.ctypes.data` costs about a microsecond a call.
+        self.addresses = tuple(a.ctypes.data for a in (self.kinds, self.slots, self.child_idx,
+                                                      self.fill_f64, self.fill_i64))
 
     def __repr__(self) -> str:
         return f"FramePlan({list(zip(self.names, [FeatureKind(k).name for k in self.kinds]))})"

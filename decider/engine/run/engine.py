@@ -194,10 +194,13 @@ class Executable:
 
     def output(self, state: State) -> pl.DataFrame:
         """The output frame of a finished run: unread frame columns, then every produced output."""
-        produced = {k: v for k, v in self.plan.outputs.items() if v.producer is not None}
-        drops = set(self.plan.drops)
-        kept = [state.frame[c] for c in state.frame.columns if c not in drops and c not in produced]
-        return pl.DataFrame(kept + [state.column(k, v) for k, v in produced.items()])
+        frame = state.frame
+        results = [state.column(k, v) for k, v in self._results]
+        names = frame.columns
+        if names and self._hidden.isdisjoint(names):
+            # Every frame column passes through: hstack is several times cheaper than a new frame.
+            return frame.hstack(results)
+        return pl.DataFrame([frame.get_column(c) for c in names if c not in self._hidden] + results)
 
 
 def _load(state: State, record: Mapping[str, Any], versions: list[Version], dtype: np.dtype) -> None:

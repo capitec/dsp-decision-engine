@@ -7,7 +7,7 @@ from decider.engine.ir.decls import Input, base_annotation
 from decider.engine.ir.nodes import BranchNode, CallNode, IRNode, LoopNode, SequenceNode, iter_nodes
 from decider.engine.wiring.plan import Branch, Call, Carry, Loop, Merge, Plan, Resolved, Sequence, Version
 from decider.exceptions import WiringError
-from decider.registry.resolve import suggest_name, suggest_names
+from decider.registry.resolve import TYPO_CUTOFF, hint, suggest
 
 
 def resolve(ir: Any) -> Plan:
@@ -135,7 +135,7 @@ class _Resolver:
             )
         # A node's own outputs are no typo: `term_cap_a` may read `term_cap`.
         produced = {n: v for n, v in scope.names.items() if v.producer is not None and n not in own}
-        near = suggest_name(name, produced)
+        near = suggest(name, produced, TYPO_CUTOFF)
         if near is not None:
             raise WiringError(
                 f"{reader}: input {name!r} is not produced by any earlier step and is not a declared input "
@@ -256,7 +256,7 @@ class _Resolver:
             if v is None:
                 raise WiringError(
                     f"{label}: emit({spec!r}): no step produces {name!r} and it is not a declared input "
-                    f"column.{_hint(name, [*scope.names, *self.chains])}"
+                    f"column.{hint(name, [*scope.names, *self.chains])}"
                 )
             self.emitted[name] = v
             return
@@ -265,7 +265,7 @@ class _Resolver:
         if not mine:
             raise WiringError(
                 f"{label}: emit({spec!r}): no step {'under ' + label + ' ' if where else ''}produces {name!r}."
-                f"{_hint(name, self.chains)}"
+                f"{hint(name, self.chains)}"
             )
         relative = [v.producer[len(prefix):] for v in mine]
         if producer == "*":
@@ -278,7 +278,7 @@ class _Resolver:
                 return
         raise WiringError(
             f"{label}: emit({spec!r}): {name!r} is never produced by {producer!r}. "
-            f"Producers, in order: {relative}.{_hint(producer, [*relative, *(v.producer for v in mine)])}"
+            f"Producers, in order: {relative}.{hint(producer, [*relative, *(v.producer for v in mine)])}"
         )
 
     def finish(self, root: Resolved, scope: _Scope) -> Plan:
@@ -297,7 +297,7 @@ class _Resolver:
                     "column, a final value or an emitted one, so there is nothing in the output to drop."
                 )
             if name not in outputs and scope.barrier is None:
-                near = suggest_name(name, [*outputs, *self.chains])
+                near = suggest(name, [*outputs, *self.chains], TYPO_CUTOFF)
                 if near is not None:
                     raise WiringError(f"{where or '<root>'}: drop({name!r}): no such value. Did you mean {near!r}?")
             outputs.pop(name, None)
@@ -307,7 +307,3 @@ class _Resolver:
             tuple(dict.fromkeys(drops)), {name: tuple(chain) for name, chain in self.chains.items()},
         )
 
-
-def _hint(name: str, candidates) -> str:
-    near = suggest_names(name, candidates)
-    return f" Did you mean {near[0]!r}?" if near else ""

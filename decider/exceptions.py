@@ -1,76 +1,39 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from contextlib import contextmanager
-from warnings import warn
 
-
-@dataclass
-class DeciderErrorResponse:
-    message: str
-    details: str | None = None
-    # Do we include a stack trace here? Maybe only in debug mode?
 
 class DeciderError(Exception):
-    """Base class for all Decider-related exceptions."""
-    _STATUS_CODE = 500  # Default to Internal Server Error, can be overridden by subclasses
+    """Base class of every error decider raises; catch it to handle them all.
+
+    `_STATUS_CODE` is the HTTP status a server answers with (500 unless a subclass says otherwise).
+
+    Example::
+
+        try:
+            exe.run(df)
+        except DeciderError as e:
+            print(e)
+    """
+
+    _STATUS_CODE = 500
     _MESSAGE = "An error occurred in the Decider system."
 
     def __init__(self, message=None, *args):
         self.message = message or self._MESSAGE
         super().__init__(self.message, *args)
-    
-    def get_status_code(self) -> int:
-        """Return the HTTP status code associated with this error."""
-        return self._STATUS_CODE
-    
-    def get_response_body(self) -> DeciderErrorResponse:
-        """Return the response body to be sent to the client."""
-        return DeciderErrorResponse(
-            message=self.message,
-            details=str(self)  # Include the exception message as details
-        )
 
 
 class DeciderMissingDependencyError(DeciderError, ModuleNotFoundError):
-    """Raised when there is an error importing a module or source."""
-    _STATUS_CODE = 500
-    _MESSAGE = "Failed to import a required module or source. Please ensure the optional package is installed and available."
-    # TODO make this more dynamic by reading from the pyproject.toml 
-    _KNOWN_MODULES = {
-        "pandera": "pandera>=0.29.0<1.0.0",
-    }
+    """An optional dependency isn't installed; the message names the extra that provides it."""
 
-    def __init__(self, package_name: str = None, optional_source: str = None, *args):
+    def __init__(self, package_name: str, optional_source: str):
         self.optional_source = optional_source
-
-        package_name = package_name or 'a package'
-        if self.optional_source:
-            self.message = (
-                f"Failed to import {package_name} provided in {self.optional_source}. "
-                f"Please ensure you install decider with pip install decider[{self.optional_source}] "
-                f"or install {package_name} directly with pip install '{self._KNOWN_MODULES.get(package_name, package_name)}'."
-            )
-        else:
-            self.message = (
-                f"Failed to import {package_name}. "
-                f"Please ensure you install {package_name} directly with pip install '{self._KNOWN_MODULES.get(package_name, package_name)}'."
-            )
-        super().__init__(self.message, *args)
-
-
-class BaseConfigurationError(DeciderError):
-    _STATUS_CODE = 500
-    _MESSAGE = "A configuration error occurred."
-
-
-class ModuleLoadError(DeciderError):
-    _STATUS_CODE = 500
-    _MESSAGE = "Failed to load the decider module."
-
-    @classmethod
-    def from_value_error(cls, e: ValueError) -> "ModuleLoadError":
-        return cls(str(e))
+        super().__init__(
+            f"Failed to import {package_name} provided in {optional_source}. "
+            f"Please ensure you install decider with pip install decider[{optional_source}] "
+            f"or install {package_name} directly."
+        )
 
 
 class UnsupportedContentTypeError(DeciderError):
@@ -91,11 +54,6 @@ class UnsupportedAcceptError(DeciderError):
 class OutputFormattingError(DeciderError):
     _STATUS_CODE = 500
     _MESSAGE = "Failed to format the output."
-
-
-class DeciderRuntimeError(DeciderError):
-    _STATUS_CODE = 500
-    _MESSAGE = "A runtime error occurred."
 
 
 class WiringError(DeciderError, ValueError):
@@ -193,17 +151,9 @@ class ExprError(DeciderError, ValueError):
 
 
 @contextmanager
-def wrap_import_errors(optional_source: str = None, raise_error=True):
+def wrap_import_errors(optional_source: str):
+    # Only a missing module: an ImportError from inside an installed package is a real bug.
     try:
-        yield 
-    # We only care about module not found error not import errors
-    # as if we importing pandora it will raise module not found if the dependency is missing
+        yield
     except ModuleNotFoundError as e:
-        error = DeciderMissingDependencyError(
-            optional_source=optional_source, 
-            package_name=e.name,
-        )
-        if raise_error:
-            raise error from e
-        else:
-            warn(error.message + " Some functionality may not work properly.", ImportWarning)
+        raise DeciderMissingDependencyError(e.name, optional_source) from e

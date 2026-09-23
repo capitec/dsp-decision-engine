@@ -44,9 +44,8 @@ class _Scope:
 class InterpretedRunner:
     """Runs every node in plain Python, row by row; row nodes call their Python `reference`.
 
-    Args:
-        visit: called with each locator a row node's `reference` reports
-            (a tree's internal nodes); ignored by default.
+    `visit` is called with each locator a row node's `reference` reports (a
+    tree's internal nodes); set it to watch them.
 
     Example::
 
@@ -58,8 +57,8 @@ class InterpretedRunner:
     # state already. A debug session sets it while it replays a run up to an edit.
     skip: dict[Resolved, list[Version]] = {}
 
-    def __init__(self, visit: Callable[[str], None] | None = None):
-        self.visit = visit or _ignore
+    def __init__(self) -> None:
+        self.visit: Callable[[str], None] = _ignore
 
     def iterate(self, plan: Plan, state: State, params: RunParams) -> Iterator[Checkpoint]:
         root = _Scope(None, state.frame, {})

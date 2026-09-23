@@ -47,13 +47,14 @@ _SIGNATURES = {
     "sm_view_dictionary": (_vp, _vp),
     "sm_view_n_variadic_buffers": (_int, _vp),
     "sm_view_has_validity": (_int, _vp),
-    "sm_view_reset": (None, _vp),
     "sm_array_release": (None, _vp),
-    "sm_schema_release": (None, _vp),
+    "sm_release": (None, _vp, _vp, _vp, _vp),
     "sm_schema_child_to_string": (_i64, _vp, _i64, _vp, _i64),
     "sm_get_string": (_i64, _vp, _i64, ctypes.POINTER(_vp)),
     "sm_resolve_all": (_int, _vp, _vp, _vp, _vp, _vp, _vp, _i32, _vp, _vp),
     "sm_gather_row": (None, _vp, _i64),
+    "sm_columns": (None, _vp, _i64, _vp, _i32),
+    "sm_array_move": (None, _vp, _vp),
 }
 for _name, (_restype, *_argtypes) in _SIGNATURES.items():
     _fn = getattr(lib, _name)

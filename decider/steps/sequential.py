@@ -87,14 +87,4 @@ def flow(*steps: Any, name: str | None = None) -> SequentialStep:
     """
     if not steps:
         raise WiringError("flow() needs at least one step")
-    members: list[Step] = []
-    emits: tuple[str, ...] = ()
-    drops: tuple[str, ...] = ()
-    for s in map(as_step, steps):
-        if type(s) is SequentialStep and s.name is None and not s.reads and not s.writes:
-            members += s.steps
-            emits += s.emits
-            drops += s.drops
-        else:
-            members.append(s)
-    return SequentialStep(tuple(members), name, tuple(dict.fromkeys(emits)), tuple(dict.fromkeys(drops)))
+    return SequentialStep(tuple(map(as_step, steps)), name)

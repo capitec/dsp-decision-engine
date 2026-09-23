@@ -11,15 +11,12 @@ from numba.core.dispatcher import Dispatcher
 from numba.core.errors import NumbaError, UnsupportedBytecodeError
 
 from decider.engine.compile.fingerprint import fingerprint
-from decider.engine.ir.decls import FeatureKind, Input, NullPolicy, base_annotation, feature_kind
+from decider.engine.ir.decls import KIND_DTYPES, FeatureKind, Input, NullPolicy, base_annotation, feature_kind
 from decider.engine.ir.nodes import CallNode
 from decider.engine.params import NodeParams
 
 # UnsupportedBytecodeError (e.g. an `import` inside a step) isn't a NumbaError.
 FALLBACK_ERRORS = (NumbaError, UnsupportedBytecodeError)
-
-_DTYPES = {FeatureKind.F64: np.dtype(np.float64), FeatureKind.I64: np.dtype(np.int64),
-           FeatureKind.BOOL: np.dtype(np.bool_), FeatureKind.CODE: np.dtype(np.int32)}
 
 # ponytail: unbounded, one entry per distinct function content; add eviction if a long session edits steps thousands of times.
 _DISPATCHERS: dict[str, Dispatcher] = {}
@@ -36,7 +33,9 @@ def numpy_dtype(annotation: Any) -> np.dtype:
     >>> numpy_dtype(int), numpy_dtype(int | None)
     (dtype('int64'), dtype('float64'))
     """
-    return _DTYPES.get(feature_kind(annotation), _DTYPES[FeatureKind.F64])
+    kind = feature_kind(annotation)
+    # A `bytes` value is a span into Arrow memory, never stored between nodes.
+    return KIND_DTYPES[FeatureKind.F64 if kind is FeatureKind.STR else kind]
 
 
 def jit(fn: Callable) -> tuple[str, Dispatcher]:

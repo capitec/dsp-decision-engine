@@ -11,11 +11,7 @@ def ready(handler: t.Any) -> bool:
 
 
 def error_response(error: DeciderError) -> t.Tuple[int, bytes, str]:
-    body = error.get_response_body()
-    payload: t.Dict[str, str] = {"message": body.message}
-    if body.details:
-        payload["details"] = body.details
-    return error.get_status_code(), json.dumps(payload).encode(), "application/json"
+    return error._STATUS_CODE, json.dumps({"message": str(error)}).encode(), "application/json"
 
 
 def parse_content_headers(headers: t.Mapping[str, str]) -> t.Tuple[str, str]:
