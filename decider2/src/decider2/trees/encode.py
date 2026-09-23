@@ -710,10 +710,19 @@ class EncodeContext:
             seen_per_kind[k] = seen_per_kind.get(k, 0) + 1
         n_f64 = seen_per_kind.get(F64, 0)
 
+        from decider2.trees.interpreter import LEAF
+
         feat_kind: list[int] = []
         feat_idx: list[int] = []
-        for ref in self._feat_ref:
-            if ref < 0:
+        for node_kind, ref in zip(self._kind, self._feat_ref):
+            if node_kind == LEAF and not kinds:
+                # A leaf reads no feature; its `feat_ref` is `_add_node`'s
+                # placeholder 0. A tree whose every `Cases*` node has zero
+                # arms registers no feature at all, so there is nothing for
+                # the placeholder to resolve against.
+                feat_kind.append(F64)
+                feat_idx.append(0)
+            elif ref < 0:
                 feat_kind.append(F64)
                 feat_idx.append(n_f64 + (-ref - 1))
             else:
