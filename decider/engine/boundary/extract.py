@@ -33,6 +33,7 @@ class ExtractedColumn(NamedTuple):
     plan: ColumnPlan
     categories: tuple[str | None, ...] | None = None
     has_nulls: bool = False
+    bits: tuple | None = None
 
 
 @dataclass(frozen=True)
@@ -131,8 +132,12 @@ def extract_frame(frame: pl.DataFrame, inputs: Sequence[Input], *, path: str = "
         view.bind(kernel_frame)
         values, masks = view.columns()
         everywhere = None
-        for decl, x, nulls, (kind, _) in zip(inputs, values, masks, fp.places):
+        for decl, x, nulls, bits, (kind, _) in zip(inputs, values, masks, view.bits, fp.places):
             mask = nulls
+            if bits is not None:
+                # Read in place: the validity stays a bitmap until something asks for a mask.
+                columns[decl.name] = ExtractedColumn(decl.name, x, None, sp.plans[decl.name], None, True, bits)
+                continue
             if decl.null_policy is not NullPolicy.OPTIONAL:
                 mask = None
             elif nulls is None:
