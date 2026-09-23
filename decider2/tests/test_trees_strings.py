@@ -125,7 +125,9 @@ def test_every_match_type_agrees_with_python_over_the_string_corpus(match_type, 
     frame = pl.DataFrame({"s": VALUES})
     expected = [_reference(match_type, patterns, v) for v in VALUES]
     out = pipeline.apply(frame)["hit"].to_list()
-    assert out == expected, (match_type, patterns)
+    # a null routes (doc 03 §1); its int64 terminal comes back as the 0
+    # placeholder `runtime.invoke._scatter_back` documents, never as a match
+    assert out == [0 if e is None else e for e in expected], (match_type, patterns)
     # score() builds its span from Python bytes, never from polars
     assert [pipeline.score({"s": v})["hit"] for v in VALUES if v is not None] == [e for e in expected if e is not None]
     assert_equivalent(pipeline, frame)
@@ -177,10 +179,11 @@ def test_a_zero_row_frame_and_a_frame_with_every_row_routed_still_run():
     pipeline = _string_pipeline("exact", ["a"])
     frames = corpus(pipeline)
     assert pipeline.apply(frames["empty"])["hit"].to_list() == []
+    # every row routed: the int64 terminal is `_scatter_back`'s 0 placeholder
     all_null = pl.DataFrame({"s": pl.Series([None, None], dtype=pl.String)})
-    assert pipeline.apply(all_null)["hit"].to_list() == [None, None]
+    assert pipeline.apply(all_null)["hit"].to_list() == [0, 0]
     absent = pl.DataFrame({"other": [1.0, 2.0]})
-    assert pipeline.apply(absent)["hit"].to_list() == [None, None]
+    assert pipeline.apply(absent)["hit"].to_list() == [0, 0]
 
 
 # ---------------------------------------------------------------------------
@@ -430,7 +433,7 @@ def test_a_non_str_record_value_for_a_string_feature_is_a_type_error_naming_the_
 def test_a_null_string_routes_like_any_required_null():
     pipeline = _string_pipeline("contains", [""])   # "" is in every string; a null still never matches
     frame = pl.DataFrame({"s": ["a", None, ""]})
-    assert pipeline.apply(frame)["hit"].to_list() == [1, None, 1]
+    assert pipeline.apply(frame)["hit"].to_list() == [1, 0, 1]   # 0: routed-row placeholder, not a match
     routed = pipeline.score({"s": None})
     assert routed["decision"] == "refer" and routed["routed_on"] == "s"
 
