@@ -39,3 +39,11 @@ and the websocket adapter build on.
 - **JSON only at the edge.** Events and commands are frozen dataclasses with
   a `kind` literal; `wire.py` holds the pydantic `TypeAdapter`s. A command's
   `kind` is the `Session` method name, so `Session.apply` dispatches by name.
+- **Websocket adapter (`serving/session_ws.py`).** One session per
+  connection. A reader task handles `pause` inline (the session's flag is
+  thread-safe) and queues everything else; one loop runs queued commands in a
+  worker thread and value requests in order, so state is never read while the
+  worker writes it. Command failures reply `{"kind": "rejected"}`, not
+  `"error"`, which is already the run-error event. Tests drive the ASGI app
+  directly because starlette's `TestClient` needs httpx, which no extra
+  includes; `starlette` is in the dev group.
