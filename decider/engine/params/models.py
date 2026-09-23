@@ -8,7 +8,12 @@ from decider.engine.ir.decls import ParamDecl
 from decider.engine.params.bundles import bundle_class
 
 
-def _type_name(annotation: Any) -> str:
+def type_name(annotation: Any) -> str:
+    """A readable name for a param's annotation.
+
+    >>> type_name(float), type_name(list[int])
+    ('float', 'list[int]')
+    """
     return annotation.__name__ if isinstance(annotation, type) else repr(annotation)
 
 
@@ -23,8 +28,8 @@ def record_shared_type(types: dict[str, tuple[Any, str]], decl: ParamDecl, path:
     seen_type, seen_path = types.setdefault(decl.shared_key, (decl.annotation, path))
     if seen_type != decl.annotation:
         raise TypeError(
-            f"shared param '{decl.shared_key}' is declared {_type_name(seen_type)} by {seen_path} "
-            f"and {_type_name(decl.annotation)} by {path}"
+            f"shared param '{decl.shared_key}' is declared {type_name(seen_type)} by {seen_path} "
+            f"and {type_name(decl.annotation)} by {path}"
         )
 
 
