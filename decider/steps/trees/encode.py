@@ -1,6 +1,7 @@
 """A `Tree` as the arrays the compiled walker reads, plus the inputs, params and outputs of its row node."""
 from __future__ import annotations
 
+import math
 import typing as t
 from dataclasses import dataclass, field
 
@@ -18,6 +19,7 @@ from decider.steps.trees.schema import (
     Feature,
     LeafNode,
     LogicOp,
+    NullHandling,
     RangeEndLogic,
     StringMatchType,
     Tree,
@@ -28,7 +30,10 @@ from decider.steps.trees.schema import (
     UnaryNode,
     UnaryStringMatch,
 )
-from decider.steps.trees.walker import CMP_B, CMP_E, CMP_F, CMP_I, CONTAINS, EXACT, LEAF, MATCH, PREFIX, SUFFIX
+from decider.steps.trees.schema.conditions import find
+from decider.steps.trees.walker import (
+    CMP_B, CMP_E, CMP_F, CMP_I, CONTAINS, EXACT, LEAF, MATCH, NULL_INT, PREFIX, SUFFIX,
+)
 from decider.steps.values import ParamRef
 
 KINDS = ("float", "int", "bool", "str")
@@ -164,8 +169,14 @@ class _Encoder:
         return sorted(f for f, k in self.kinds.items() if k == kind).index(name)
 
     def add(self, *row: int) -> int:
-        self.rows.append([*row, 0, 0, 0, 0, 0][:6])
+        self.rows.append([*row, 0, 0, 0, 0, 0, 0][:7])
         return len(self.rows) - 1
+
+    def test(self, kind: int, slot: int, op: int, thr: int, then: int, other: int, flip: bool) -> int:
+        # A null feature makes the test unknown, which only a NOT tells apart
+        # from false: `flip` is true under an odd number of NOTs, where the
+        # node's otherwise branch is this row's `then`.
+        return self.add(kind, slot, op, thr, then, other, then if flip else other)
 
     def param(self, ref: ParamRef, kind: str, where: str) -> ParamDecl:
         decl = self.value(ref, TYPES[kind])
@@ -196,33 +207,34 @@ class _Encoder:
         self.exprs.append((computed.expression, rows, depth))
         return len(self.exprs) - 1
 
-    def compare(self, feature: Feature, op: int, value: t.Any, then: int, other: int, where: str) -> int:
+    def compare(self, feature: Feature, op: int, value: t.Any, then: int, other: int, where: str,
+                flip: bool = False) -> int:
         if isinstance(feature.root, ComputedFeature):
-            return self.add(CMP_E, self.expression(feature.root), op, self.threshold(value, "float", where),
-                            then, other)
+            return self.test(CMP_E, self.expression(feature.root), op, self.threshold(value, "float", where),
+                             then, other, flip)
         kind = self.kinds[feature.root]
-        return self.add(CMP_I if kind == "int" else CMP_F, self.slot(feature.root), op,
-                        self.threshold(value, kind, where), then, other)
+        return self.test(CMP_I if kind == "int" else CMP_F, self.slot(feature.root), op,
+                         self.threshold(value, kind, where), then, other, flip)
 
-    def truth(self, feature: Feature, op: int, then: int, other: int, where: str) -> int:
+    def truth(self, feature: Feature, op: int, then: int, other: int, where: str, flip: bool) -> int:
         if isinstance(feature.root, str) and self.kinds[feature.root] == "bool":
-            return self.add(CMP_B, self.slot(feature.root), op, self.threshold(0, "int", where), then, other)
+            return self.test(CMP_B, self.slot(feature.root), op, self.threshold(0, "int", where), then, other, flip)
         kind = "float" if isinstance(feature.root, ComputedFeature) else self.kinds[feature.root]
-        return self.compare(feature, op, 0 if kind == "int" else 0.0, then, other, where)
+        return self.compare(feature, op, 0 if kind == "int" else 0.0, then, other, where, flip)
 
-    def isin(self, feature: Feature, values: t.Any, then: int, other: int, where: str) -> int:
+    def isin(self, feature: Feature, values: t.Any, then: int, other: int, where: str, flip: bool = False) -> int:
         if isinstance(values, ParamRef):
-            return self.compare(feature, EQ, values, then, other, where)
+            return self.compare(feature, EQ, values, then, other, where, flip)
         for v in reversed(values):
-            other = self.compare(feature, EQ, v, then, other, where)
+            other = self.compare(feature, EQ, v, then, other, where, flip)
         return other
 
     def between(self, feature: Feature, bounds: t.Any, ops: tuple[int, int], then: int, other: int,
-                where: str) -> int:
+                where: str, flip: bool = False) -> int:
         if bounds.max is not None:
-            then = self.compare(feature, ops[1], bounds.max, then, other, where)
+            then = self.compare(feature, ops[1], bounds.max, then, other, where, flip)
         if bounds.min is not None:
-            then = self.compare(feature, ops[0], bounds.min, then, other, where)
+            then = self.compare(feature, ops[0], bounds.min, then, other, where, flip)
         return then
 
     def match(self, feature: Feature, patterns: t.Sequence[t.Any], node: t.Any, then: int, other: int,
@@ -236,29 +248,32 @@ class _Encoder:
             self.patterns += literals
             self.groups.append(len(self.patterns))
             refs.insert(0, len(self.groups) - 2)
+        # A null string's match is plain true or false, so a NOT flips it like any other.
+        hit = getattr(node, "null_handling", None) is NullHandling.match
         for g in reversed(refs):
-            other = self.add(MATCH, self.slot(feature.root), _MODES[node.match_type], g, then, other)
+            other = self.add(MATCH, self.slot(feature.root), _MODES[node.match_type], g, then, other,
+                             then if hit else other)
         return other
 
-    def condition(self, c: t.Any, then: int, other: int, where: str) -> int:
+    def condition(self, c: t.Any, then: int, other: int, where: str, flip: bool = False) -> int:
         if isinstance(c, CompositeNode):
             if c.op is LogicOp.NOT:
-                return self.condition(c.conditions[0], other, then, where)
+                return self.condition(c.conditions[0], other, then, where, not flip)
             for sub in reversed(c.conditions):
                 if c.op is LogicOp.AND:
-                    then = self.condition(sub, then, other, where)
+                    then = self.condition(sub, then, other, where, flip)
                 else:
-                    other = self.condition(sub, then, other, where)
+                    other = self.condition(sub, then, other, where, flip)
             return then if c.op is LogicOp.AND else other
         if isinstance(c, (UnaryIsTrue, UnaryIsFalse)):
-            return self.truth(c.feature, NE if isinstance(c, UnaryIsTrue) else EQ, then, other, where)
+            return self.truth(c.feature, NE if isinstance(c, UnaryIsTrue) else EQ, then, other, where, flip)
         if isinstance(c, UnaryBetween):
-            return self.between(c.feature, c, (GE, LE), then, other, where)
+            return self.between(c.feature, c, (GE, LE), then, other, where, flip)
         if isinstance(c, UnaryIsIn):
-            return self.isin(c.feature, c.values, then, other, where)
+            return self.isin(c.feature, c.values, then, other, where, flip)
         if isinstance(c, UnaryStringMatch):
             return self.match(c.feature, c.patterns, c, then, other, where)
-        return self.compare(c.feature, OPCODE[c.op], c.threshold, then, other, where)
+        return self.compare(c.feature, OPCODE[c.op], c.threshold, then, other, where, flip)
 
     def node(self, nid: str, entries: dict[str, int]) -> int:
         node = self.tree.nodes[nid]
@@ -382,8 +397,23 @@ def _pack(enc: _Encoder, roots: list[int], values: list[tuple]) -> tuple[tuple, 
     return consts, arrays
 
 
-def encode(tree: Tree, feature_types: t.Mapping[str, str], value: t.Callable[..., t.Any]) -> Program:
+def _input(name: str, kind: str, nulls: str, strict: set[str]) -> Input:
+    if kind == "str":
+        return Input(name, bytes) if name in strict else Input(name, bytes | None, NullPolicy.OPTIONAL)
+    if nulls == "error":
+        return Input(name, TYPES[kind])
+    if kind == "bool":
+        return Input(name, bool | None, NullPolicy.OPTIONAL)
+    # A fill rather than an Optional: each Optional column is one more mask array per kernel launch.
+    return Input(name, TYPES[kind], NullPolicy.MISSING_AS, math.nan if kind == "float" else NULL_INT)
+
+
+def encode(tree: Tree, feature_types: t.Mapping[str, str], value: t.Callable[..., t.Any],
+           nulls: str = "otherwise") -> Program:
     """The row node of `tree`, with `value` turning a `ParamRef` into a `ParamDecl` (`IRContext.value`).
+
+    `nulls` is `TreeConfig.null_handling`: `"error"` makes numeric and
+    boolean features required inputs.
 
     Example::
 
@@ -393,10 +423,10 @@ def encode(tree: Tree, feature_types: t.Mapping[str, str], value: t.Callable[...
     enc = _Encoder(tree, kinds, value)
     roots = enc.roots()
     order = {k: i for i, k in enumerate(KINDS)}
-    inputs = tuple(
-        Input(name, bytes | None, NullPolicy.OPTIONAL) if kind == "str" else Input(name, TYPES[kind])
-        for name, kind in sorted(kinds.items(), key=lambda nk: (order[nk[1]], nk[0]))
-    )
+    strict = {str(c.feature) for node in tree.nodes.values() for c in find(node.data, UnaryStringMatch)
+              if c.null_handling is NullHandling.error}
+    inputs = tuple(_input(name, kind, nulls, strict)
+                   for name, kind in sorted(kinds.items(), key=lambda nk: (order[nk[1]], nk[0])))
     params = tuple(sorted(enc.params.values(), key=lambda d: order[d.annotation.__name__]))
     outputs, values, columns = _outputs(tree)
     consts, arrays = ((), []) if enc.python else _pack(enc, roots, values)

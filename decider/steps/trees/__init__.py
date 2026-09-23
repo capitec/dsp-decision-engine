@@ -26,6 +26,13 @@ class TreeConfig(ConfigurableStep):
     `str`; only `is_true`/`is_false`: `bool`; otherwise `float`); declare it
     in `feature_types` to compare an int64 column exactly.
 
+    `null_handling` says what a null numeric or boolean feature does.
+    `"otherwise"` (the default, as decider_old trees behave): a test on it
+    is unknown, NOT keeps it unknown, AND/OR follow three-valued logic and
+    the node takes its otherwise branch (a cases node tries its next case).
+    `"error"`: a null is a `MissingInputError`. A string match has its own
+    `null_handling` (`no_match`, `match` or `error`).
+
     `nodes` maps each node id to its node: the locators a session breaks on,
     e.g. `session.break_at("risk_tree#high")`.
 
@@ -54,6 +61,7 @@ class TreeConfig(ConfigurableStep):
     type: t.Literal["tree"] = "tree"
     tree: TreeDocument
     feature_types: t.Dict[str, str] = {}
+    null_handling: t.Literal["otherwise", "error"] = "otherwise"
 
     @field_validator("feature_types")
     @classmethod
@@ -67,7 +75,7 @@ class TreeConfig(ConfigurableStep):
 
     def to_ir(self, ctx: t.Any) -> CallNode:
         tree = self.tree.to_tree()
-        p = encode(tree, self.feature_types, ctx.value)
+        p = encode(tree, self.feature_types, ctx.value, self.null_handling)
         ref = reference(tree, p.inputs, p.kinds, p.columns)
         # The node's consts are addresses into these arrays; the node holds its reference, which holds them.
         ref.arrays = p.arrays
