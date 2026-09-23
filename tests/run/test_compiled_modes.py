@@ -1,7 +1,4 @@
 """Stepped and fused modes: one answer with interpreted, one kernel for run and score, no recompiles."""
-from contextlib import contextmanager
-
-import numba
 import polars as pl
 import pytest
 
@@ -11,6 +8,7 @@ from decider.engine.compile import Kernel
 from decider.engine.ir.decls import Input, Output
 from decider.engine.ir.nodes import CallNode
 from decider.engine.ir.origin import Origin
+from decider.testing import assert_equivalent, no_recompile
 
 MODES = ("interpreted", "stepped", "fused")
 
@@ -39,29 +37,8 @@ FRAME = pl.DataFrame({
 ROW = {"net_income": 4100.0, "expenses": 1500.0, "instalment": 800.0, "term_cap": 60.0, "min_net_salary": 4100.0}
 
 
-@contextmanager
-def counting_compiles():
-    counted = {"n": 0}
-    original = numba.core.dispatcher.Dispatcher.compile
-
-    def compile(self, sig):
-        counted["n"] += 1
-        return original(self, sig)
-
-    numba.core.dispatcher.Dispatcher.compile = compile
-    try:
-        yield counted
-    finally:
-        numba.core.dispatcher.Dispatcher.compile = original
-
-
-def _runs(pipeline, frame, **kw):
-    return [Engine().bind(pipeline, mode=m).run(frame, **kw) for m in MODES]
-
-
 def test_the_three_modes_agree_exactly_on_the_flagship():
-    interpreted, stepped, fused = _runs(flagship, FRAME)
-    assert interpreted.equals(stepped) and stepped.equals(fused)
+    assert_equivalent(flagship, FRAME)
 
 
 def test_fused_runs_the_flagship_as_one_kernel_and_stepped_as_one_per_step():
@@ -94,11 +71,10 @@ def test_repeated_calls_do_not_rebuild_the_driver(mode):
     frame = pl.DataFrame({"x": [1.0] * 64, "y": [2.0] * 64})
     exe.run(frame)
     exe.score({"x": 1.0, "y": 2.0})
-    with counting_compiles() as counted:
+    with no_recompile():
         for _ in range(3):
             exe.run(frame)
             exe.score({"x": 1.0, "y": 2.0})
-    assert counted["n"] == 0
 
 
 @pytest.mark.parametrize("mode", ["stepped", "fused"])
@@ -106,13 +82,12 @@ def test_retuning_never_recompiles(mode):
     exe = Engine().bind(flagship, mode=mode)
     exe.run(FRAME)
     exe.score(ROW)
-    with counting_compiles() as counted:
+    with no_recompile():
         retuned = exe.run(FRAME, params={"cap_by_income_band": {"cap": 24.0}})
         scored = exe.score(ROW, params={"cap_by_income_band": {"cap": 12.0}})
         back = exe.score(ROW)
     assert retuned["cap_by_income_band"].to_list() == [60.0, 24.0, 60.0, 24.0]
     assert (scored["cap_by_income_band"], back["cap_by_income_band"]) == (12.0, 48.0)
-    assert counted["n"] == 0
 
 
 def sector_rate(sector: str, private: str = param("private"), rate: float = param(0.9, gt=0)) -> float:
@@ -125,13 +100,12 @@ SECTORS = pl.DataFrame({"sector": ["private", "public", "private", "government"]
 def test_retuning_a_string_literal_never_recompiles():
     exe = Engine().bind(flow(sector_rate), mode="fused")
     exe.run(SECTORS)
-    with counting_compiles() as counted:
+    with no_recompile():
         for literal, expected in [("government", [1.0, 1.0, 1.0, 0.9]), ("martian", [1.0] * 4),
                                   ("public", [1.0, 0.9, 1.0, 1.0])]:
             out = exe.run(SECTORS, params={"sector_rate": {"private": literal}})
             assert out["sector_rate"].to_list() == expected
         assert exe.score({"sector": "public"}, params={"sector_rate": {"private": "public"}})["sector_rate"] == 0.9
-    assert counted["n"] == 0
 
 
 @pytest.mark.parametrize("mode", ["stepped", "fused"])
@@ -157,8 +131,8 @@ def half_or_zero(x: float | None) -> float:
 
 
 def test_an_optional_input_reaches_every_mode_as_a_real_none():
-    runs = _runs(flow(half_or_zero), pl.DataFrame({"x": [10.0, None]}))
-    assert [r["half_or_zero"].to_list() for r in runs] == [[5.0, 0.0]] * 3
+    out = assert_equivalent(flow(half_or_zero), pl.DataFrame({"x": [10.0, None]}))
+    assert out["half_or_zero"].to_list() == [5.0, 0.0]
 
 
 def maybe_band(score: float) -> int | None:
@@ -166,10 +140,9 @@ def maybe_band(score: float) -> int | None:
 
 
 def test_a_nullable_output_keeps_its_type_and_its_nulls_in_every_mode():
-    runs = _runs(flow(maybe_band), pl.DataFrame({"score": [250.0, -1.0, 720.0]}))
-    for out in runs:
-        assert out["maybe_band"].dtype == pl.Int64
-        assert out["maybe_band"].to_list() == [2, None, 7]
+    out = assert_equivalent(flow(maybe_band), pl.DataFrame({"score": [250.0, -1.0, 720.0]}))
+    assert out["maybe_band"].dtype == pl.Int64
+    assert out["maybe_band"].to_list() == [2, None, 7]
 
 
 def test_a_null_passed_between_fused_steps_meets_each_readers_policy():
@@ -180,8 +153,7 @@ def test_a_null_passed_between_fused_steps_meets_each_readers_policy():
         return maybe_band
 
     frame = pl.DataFrame({"score": [250.0, -1.0]})
-    runs = _runs(flow(maybe_band, band_or_nine), frame)
-    assert [r["band_or_nine"].to_list() for r in runs] == [[2, 9]] * 3
+    assert assert_equivalent(flow(maybe_band, band_or_nine), frame)["band_or_nine"].to_list() == [2, 9]
     for m in MODES:
         with pytest.raises(ValueError, match="input 'maybe_band' of step 'strict'"):
             Engine().bind(flow(maybe_band, strict), mode=m).run(frame)
@@ -207,9 +179,7 @@ def test_score_equals_run_row_for_row_through_a_branch_and_nulls():
 
     pipeline = flow(branch(is_big, big, small, modifies=["y"], name="by"), bump)
     frame = pl.DataFrame({"x": [1.0, 200.0, 50.0, 300.0], "extra": [None, 1.0, 2.0, None]})
-    for m in MODES:
-        exe = Engine().bind(pipeline, mode=m)
-        assert [exe.score(r) for r in frame.iter_rows(named=True)] == exe.run(frame).rows(named=True)
+    assert_equivalent(pipeline, frame)
 
 
 def test_fused_lazy_validation_covers_every_step_of_a_kernel_that_runs_and_nothing_else():
@@ -256,5 +226,4 @@ def test_a_scalar_step_of_twenty_inputs_answers_in_every_mode():
                 + 12 * a11 + 13 * a12 + 14 * a13 + 15 * a14 + 16 * a15 + 17 * a16 + 18 * a17 + 19 * a18 + 20 * a19)
 
     frame = pl.DataFrame({n: [1.0, 2.0] for n in names})
-    runs = _runs(flow(weighted), frame)
-    assert [r["weighted"].to_list() for r in runs] == [[210.0, 420.0]] * 3
+    assert assert_equivalent(flow(weighted), frame)["weighted"].to_list() == [210.0, 420.0]

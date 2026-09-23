@@ -9,6 +9,7 @@ from decider.engine import Engine
 from decider.engine.ir.decls import Input, Output, ParamDecl
 from decider.engine.ir.nodes import CallNode
 from decider.steps import ConfigurableStep, Value
+from decider.testing import assert_equivalent
 
 
 class TreeConfig(ConfigurableStep):
@@ -152,14 +153,13 @@ def test_score_runs_the_worked_example_for_one_record(bind):
     assert (out["term_cap"], out["bureau_score"], out["risk_band"]) == (48.0, 650, 0)
 
 
-def test_all_three_modes_agree_on_the_worked_example():
+def _cap_ratio_in_term(s):
+    s.break_at("term")
+    s.resume()
+    s.set("ratio", [0.5, 5.0, 0.5])
+
+
+def test_all_three_modes_agree_on_the_worked_example_in_run_score_and_a_session():
     params = {"shared": {"min_ratio": 1.0}, "risk_tree": {"hi_thresh": 2.0}}
-    runs = [Engine().bind(pipeline, mode=m).run(FRAME, params=params) for m in ("interpreted", "stepped", "fused")]
-    assert runs[0].equals(runs[1]) and runs[1].equals(runs[2])
-    assert runs[0].schema == runs[1].schema == runs[2].schema
-
-
-def test_score_equals_run_row_for_row_on_the_worked_example(bind):
-    exe = bind(pipeline)
-    batch = exe.run(FRAME).rows(named=True)
-    assert [exe.score(row) for row in FRAME.iter_rows(named=True)] == batch
+    out = assert_equivalent(pipeline, FRAME, params=params, script=_cap_ratio_in_term)
+    assert out["risk_band"].to_list() == [1, 0, 0]
