@@ -10,7 +10,7 @@ from decider.engine.compile import Unit, compile_plan, numpy_dtype
 from decider.engine.ir.decls import Input, NullPolicy, base_annotation
 from decider.engine.run.params import RunParams
 from decider.engine.run.runners.base import Checkpoint
-from decider.engine.run.runners.interpreted import InterpretedRunner, _absent, _Scope
+from decider.engine.run.runners.interpreted import InterpretedRunner, _absent, _note, _Scope
 from decider.engine.run.state import State
 from decider.engine.wiring.plan import Call, Plan, Version
 
@@ -88,7 +88,13 @@ class SteppedRunner(InterpretedRunner):
                     x = np.where(mask, x, decl.fill).astype(x.dtype)
                 valid[v.id] = mask
             values.setdefault(v.id, x)
-        unit.run(values, valid, bundles, n)
+        try:
+            unit.run(values, valid, bundles, n)
+        except Exception as e:
+            paths = [c.node.origin.path for c in unit.calls]
+            _note(e, f"in step {paths[0]}" if len(paths) == 1 else
+                  f"in one of the steps {paths}, fused into one kernel; run in mode='stepped' to see which")
+            raise
         for v, _ in unit.writes:
             state.write(v, values[v.id], rows, valid.get(v.id))
             scope.names[v.name] = v
