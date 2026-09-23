@@ -2,7 +2,6 @@ import os
 import typing as t
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from functools import cache
 
 
 def _default_workers() -> int:
@@ -45,8 +44,8 @@ class DeciderConfigSettings(BaseModel):
     type: str = "file:json"
 
     def get(self):
-        from decider.config import ConfigManager
-        return ConfigManager.model_validate(self.model_dump()).root
+        # TODO: build the config store from these settings.
+        raise NotImplementedError("the config store is not implemented yet")
 
 
 class DeciderSettings(BaseSettings):
@@ -66,28 +65,3 @@ class DeciderSettings(BaseSettings):
 
 settings = DeciderSettings()
 
-
-# ========================================
-# Executor Configuration
-# ========================================
-
-if t.TYPE_CHECKING:
-    from decider.executor import Executor
-
-
-
-@cache
-def get_default_executor() -> "Executor":
-    """Get the default executor from settings.
-
-    If no executor has been set, creates and returns a SimpleExecutor.
-
-    Returns:
-        The default executor instance
-
-    Example:
-        >>> executor = get_default_executor()
-        >>> compiled = module.compile(executor)
-    """
-    from decider.executor import SimpleExecutor
-    return SimpleExecutor()
