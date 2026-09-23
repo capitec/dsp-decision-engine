@@ -86,7 +86,7 @@ class Fallback:
                 for i, v in zip(node.inputs, call.reads)]
         outs = [np.empty(n, numpy_dtype(o.annotation)) for o in node.outputs]
         consts = tuple(v for _, v in node.consts)
-        fixed = dict(node.consts) | {d.name: b for d, b in zip(node.params, bundle)}
+        fixed = dict(node.consts) | {d.arg: b for d, b in zip(node.params, bundle)}
         for r in range(n):
             args = [(a, None if m is not None and not m[r] else col[r]) for a, col, m in cols]
             if node.kind == "row":
@@ -225,7 +225,7 @@ def _kernel(compiled: list, keep) -> Kernel:
             p += 2
         else:
             by_arg = {i.arg: src for i, src in zip(node.inputs, sources)}
-            by_arg |= {d.name: ("par", p + k) for k, d in enumerate(node.params)}
+            by_arg |= {d.arg: ("par", p + k) for k, d in enumerate(node.params)}
             p += len(node.params)
             by_arg |= {name: ("par", p + k) for k, (name, _) in enumerate(node.consts)}
             p += len(node.consts)

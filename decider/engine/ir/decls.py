@@ -92,10 +92,13 @@ class ParamDecl:
             `"default"` fall back to the default (with and without a warning).
         schema: for a table-valued param, its `(column, dtype)` pairs
             (`(("product", "str"), ("rate", "float"))`); `None` otherwise.
+        arg: the function argument a scalar call passes it as (default:
+            `name`), for a config param whose document key differs from it.
 
     Example::
 
         ParamDecl("base_rate", float, 5.0, shared_key="base_rate", on_invalid="warn")
+        ParamDecl("hi_thresh", float, 0.7, arg="threshold")   # {"hi_thresh": ...} feeds `threshold`
     """
 
     name: str
@@ -107,3 +110,8 @@ class ParamDecl:
     shared_key: str | None = None
     on_invalid: OnInvalid = "error"
     schema: tuple[tuple[str, str], ...] | None = None
+    arg: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.arg is None:
+            object.__setattr__(self, "arg", self.name)

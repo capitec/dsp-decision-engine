@@ -80,7 +80,7 @@ class InterpretedRunner:
         rows = zip(*cols) if cols else repeat((), m)
         if node.kind == "scalar":
             args = [i.arg for i in node.inputs]
-            fixed = {**dict(node.consts), **bundle._asdict()}
+            fixed = {**dict(node.consts), **{d.arg: b for d, b in zip(node.params, bundle)}}
             results = [node.fn(**dict(zip(args, row)), **fixed) for row in rows]
             if len(node.outputs) == 1:
                 results = [(r,) for r in results]
