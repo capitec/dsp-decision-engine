@@ -177,3 +177,31 @@ def test_a_table_round_trips_through_json(run):
     assert again.model_dump() == table.model_dump()
     frame = pl.DataFrame({"score": [10.0, 50.0, 90.0]})
     assert run(again, frame).equals(run(table, frame))
+
+
+def test_a_400_condition_table_builds_and_answers_correctly(run):
+    n = 400
+    row = {f"lo{i}": float(i) for i in range(n)} | {f"hi{i}": float(i + 10) for i in range(n)} | {"pts": 1}
+    table = DecisionTableConfig(
+        name="wide", columns={c: "Int64" if c == "pts" else "Float64" for c in row}, rows=[row],
+        expression={"type": "and", "expressions": [
+            {"type": "between", "variable": f"v{i}", "lower_bound_column": f"lo{i}", "upper_bound_column": f"hi{i}",
+             "allow_gaps": True} for i in range(n)]},
+        outputs=["pts"], default=[0])
+    frame = pl.DataFrame({f"v{i}": [i + 5.0, 9999.0 if i == 200 else i + 5.0] for i in range(n)})
+    assert run(table, frame)["pts"].to_list() == [1, 0]
+
+
+def test_twenty_eq_and_twenty_in_conditions_in_one_table(run):
+    row = {f"e{i}": float(i) for i in range(20)} | {f"s{i}": [float(i), i + 100.0] for i in range(20)} | {"pts": 1}
+    columns = ({f"e{i}": "Float64" for i in range(20)} | {"pts": "Int64"}
+               | {f"s{i}": {"type": "List", "inner": "Float64"} for i in range(20)})
+    table = DecisionTableConfig(
+        name="eq_in_wide", columns=columns, rows=[row],
+        expression={"type": "and", "expressions": [
+            {"type": "eq", "variable": f"ev{i}", "value_column": f"e{i}"} for i in range(20)] + [
+            {"type": "in", "variable": f"iv{i}", "values_column": f"s{i}"} for i in range(20)]},
+        outputs=["pts"], default=[0])
+    frame = pl.DataFrame({f"ev{i}": [float(i), 999.0 if i == 15 else float(i)] for i in range(20)}
+                         | {f"iv{i}": [i + 100.0, float(i)] for i in range(20)})
+    assert run(table, frame)["pts"].to_list() == [1, 0]
