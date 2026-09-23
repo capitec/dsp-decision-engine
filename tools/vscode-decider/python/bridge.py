@@ -16,6 +16,7 @@ drop into the Python of one step.
 from __future__ import annotations
 
 import ast
+import hashlib
 import importlib.util
 import inspect
 import json
@@ -36,6 +37,7 @@ from decider.steps import FrameStep, FunctionStep, Step
 
 sys.path.insert(0, os.path.dirname(__file__))
 from lineage import latest, lineage  # noqa: E402
+from runs import apply_overrides, debug_condition, trace, tree_path  # noqa: E402
 
 
 def load_module(file):
@@ -78,6 +80,17 @@ def _code_location(fn):
     return (code.co_filename, code.co_firstlineno) if code else (None, None)
 
 
+def _fingerprint(fn, step_):
+    """Changes when the code or config behind a node changes; compared across revisions."""
+    try:
+        text = inspect.getsource(fn)
+    except (OSError, TypeError):
+        text = repr(fn)
+    if hasattr(step_, "model_dump_json"):
+        text += step_.model_dump_json()
+    return hashlib.sha1(text.encode()).hexdigest()[:12]
+
+
 def node_json(node, steps, located):
     o = node.origin
     step_ = steps.get(o.path)
@@ -91,7 +104,7 @@ def node_json(node, steps, located):
         return {**base, "kind": "call", "callKind": node.kind,
                 "inputs": None if node.inputs is None else [i.name for i in node.inputs],
                 "outputs": None if node.outputs is None else [x.name for x in node.outputs],
-                "params": {d.name: d.default for d in node.params},
+                "params": {d.name: d.default for d in node.params}, "code": _fingerprint(python, step_),
                 "python": {"file": rf, "line": rl, "bodyLine": _first_statement(python)} if rf else None}
     kind = "branch" if isinstance(node, BranchNode) else "loop" if isinstance(node, LoopNode) else "sequence"
     extra = {"modifies": list(node.modifies)} if kind == "branch" else {}
@@ -128,7 +141,18 @@ class Bridge:
         self.parents = {}
         tree = node_json(self.ir, steps, located)
         self._index(tree, None)
-        return {"pipelines": pipelines, "pipeline": self.name, "ir": tree}
+        params = {path: {k: {kk: vv for kk, vv in info.items() if kk != "used_by"} for k, info in ps.items()}
+                  for path, ps in self.step.parameters().items()}
+        return {"pipelines": pipelines, "pipeline": self.name, "ir": tree, "params": params}
+
+    def trace(self, file, pipeline=None, data=None, params=None, overrides=None, row=None):
+        """Describe and run `file` to the end on `data` (default: its SAMPLE), with `overrides` applied."""
+        described = self.describe(file, pipeline)
+        rows = data if data is not None else getattr(self.mod, "SAMPLE", None)
+        if rows is None:
+            raise ValueError("no data: pass `data` (rows or a JSON file) or define SAMPLE in the module")
+        frame = apply_overrides(_load_rows(rows), overrides, row)
+        return {**described, **trace(self.step, frame, params), "data": frame.to_dicts()}
 
     def _index(self, n, parent):
         self.parents[n["path"]] = parent
@@ -196,14 +220,16 @@ class Bridge:
         versions = [{"producer": v.producer or "input", "values": st.column(name, v).to_list()}
                     for v in self._written(name)]
         if row is not None:
-            for v in versions:
+            for v, version in zip(versions, self._written(name)):
                 v["values"] = v["values"][row:row + 1]
+                valid = st.valid.get(version.id)
+                v["written"] = bool(valid is None or valid[row])
         return {"name": name, "values": self.session.value(name).to_list(), "versions": versions}
 
     def handle(self, req):
         cmd = req["cmd"]
         args = {k: v for k, v in req.items() if k not in ("id", "cmd")}
-        if cmd in ("describe", "start", "state", "column", "step_out"):
+        if cmd in ("describe", "start", "state", "column", "step_out", "trace"):
             result = getattr(self, cmd)(**args)
             return self.status() if cmd == "step_out" else result
         s = self.session
@@ -211,6 +237,10 @@ class Bridge:
             raise RuntimeError("no session: send start first")
         if cmd == "lineage":
             return lineage(s, **args)
+        if cmd == "tree_path":
+            return tree_path(s, **args)
+        if cmd == "debug_condition":
+            return {"condition": debug_condition(s, **args)}
         if cmd in ("step", "step_into", "resume", "rewind", "break_at", "clear_break", "set"):
             try:
                 getattr(s, cmd)(**args)
