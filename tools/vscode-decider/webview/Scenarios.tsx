@@ -191,6 +191,8 @@ export function Scenarios({ schema, columns, pausedAt, record, keyCol, rows, res
   );
 }
 
+const categorical = (v: unknown[] | undefined) => !!v?.length && v.every((x) => typeof x === "string" || typeof x === "boolean");
+
 /** "pl_product_cap cap" for a step's param, "repo_rate" for a shared one, the field for an input. */
 function knobShort(name: string): string {
   const [path, param] = name.split(" · ");
@@ -201,10 +203,16 @@ function knobShort(name: string): string {
 function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row: number; rows: number; onRow: (r: number) => void; onOpen: (i: number) => void; open: number | null }) {
   // The outcomes that moved most come first, so the columns that matter survive a narrow panel.
   const moved = (c: string) => sweep.comparisons.reduce((t, cmp) => t + (cmp.output.find((o) => o.name === c)?.changedRows.length ?? 0), 0);
-  const cols = [...sweep.changedColumns].sort((a, b) => moved(b) - moved(a));
+  const changedCols = [...sweep.changedColumns].sort((a, b) => moved(b) - moved(a));
+  // Outcomes with a few values (approve / refer / decline) always show in the summary, changed or not.
+  const outcomes = Object.entries(sweep.base ?? {})
+    .filter(([c, v]) => !changedCols.includes(c) && !sweep.comparisons[0]?.inputColumns.includes(c) && v.every((x) => typeof x === "string") && new Set(v).size <= 4)
+    .map(([c]) => c)
+    .slice(0, 2);
   const knobCols = sweep.knobs.length ? sweep.knobs : [{ name: "scenario", values: sweep.labels }];
   const summary = row === -1;
   const each = row === -2;
+  const cols = summary ? [...changedCols.filter((c) => categorical(sweep.base?.[c])), ...outcomes, ...changedCols.filter((c) => !categorical(sweep.base?.[c]))] : changedCols;
   // Side by side, the records some scenario changed come first; a few fit.
   const hit = (r: number) => sweep.comparisons.some((cmp) => cmp.output.some((o) => o.changedRows.includes(r)));
   const everyRow = Array.from({ length: rows }, (_, i) => i);
@@ -215,21 +223,34 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
     if (!summary && !each) return formatValue(values[row]);
     return values.every((v) => same(v, values[0])) ? formatValue(values[0]) : values.map(formatValue).join(" / ");
   };
-  // The mean over all records, or the single value when every record agrees.
-  const overall = (values: unknown[] | undefined) => {
+  // Counts for an outcome ("approve 12 · decline 25"), the average for a number, each against the original run.
+  const overall = (values: unknown[] | undefined, base?: unknown[]) => {
     const v = values ?? [];
-    if (v.every((x) => same(x, v[0]))) return formatValue(v[0]);
+    if (categorical(v)) {
+      const count = (xs: unknown[] | undefined, k: string) => (xs ?? []).filter((x) => x === k).length;
+      return [...new Set([...v, ...(base ?? [])] as string[])]
+        .sort()
+        .map((k) => {
+          const d = base ? count(v, k) - count(base, k) : 0;
+          return `${k} ${count(v, k)}${d ? ` (${d > 0 ? "+" : ""}${d})` : ""}`;
+        })
+        .join(" · ");
+    }
     const nums = v.filter((x): x is number => typeof x === "number");
-    return nums.length === v.length ? `${formatValue(Math.min(...nums))}–${formatValue(Math.max(...nums))}` : "varies";
+    if (!nums.length) return "varies";
+    const avg = (xs: number[]) => xs.reduce((t, x) => t + x, 0) / xs.length;
+    const baseNums = (base ?? []).filter((x): x is number => typeof x === "number");
+    const d = baseNums.length ? avg(nums) - avg(baseNums) : 0;
+    return `avg ${formatValue(avg(nums))}${Math.abs(d) > 1e-12 ? ` (${d > 0 ? "+" : "−"}${formatValue(Math.abs(d))})` : ""}`;
   };
   const summaryCell = (i: number, c: string) => {
     const diff = sweep.comparisons[i].output.find((o) => o.name === c);
-    const value = overall(sweep.outputs[i]?.[c]);
+    const value = overall(sweep.outputs[i]?.[c], sweep.base?.[c]);
     if (!diff) return <td key={c} className="unchanged mono" title="same as the original run for every record">{value}</td>;
     return (
       <td key={c} className="changed mono" title={`changed for ${recordsOf(diff.changedRows)}; original: ${overall(sweep.base?.[c])}`}>
         {value}
-        <span className="up"> ({diff.changedRows.length}/{rows} changed)</span>
+        <span className="up"> · {diff.changedRows.length} of {rows} records changed</span>
       </td>
     );
   };
@@ -250,7 +271,7 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
         <span>Show</span>
         <select aria-label="scenario record" value={row} onChange={(e) => onRow(Number(e.target.value))}>
           <option value={-2}>{rows > 3 ? "the 3 records that changed most, side by side" : "each record side by side"}</option>
-          <option value={-1}>a summary of all {rows} records (ranges)</option>
+          <option value={-1}>a summary of all {rows} records</option>
           {Array.from({ length: rows }, (_, i) => (
             <option key={i} value={i}>the values for {recordLabel(i, sweep.key)}</option>
           ))}

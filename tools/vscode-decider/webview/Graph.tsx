@@ -63,7 +63,7 @@ export function Graph({ ir, showData, run, selected, highlightColumn, lineage, d
     box.current?.querySelector(".node.current, .cluster.current")?.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
   }, [run.current?.path, zoom]);
   useEffect(() => {
-    box.current?.querySelector(".node.selected")?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+    box.current?.querySelector(".node.selected")?.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
   }, [selected]);
 
   const pad = shownFlows.length ? PAD : 0;
@@ -137,7 +137,7 @@ export function Graph({ ir, showData, run, selected, highlightColumn, lineage, d
             </title>
             <rect width={n.width} height={n.height} rx={5} />
             <text x={n.width / 2} y={19} textAnchor="middle" className="title">
-              {n.node.kind === "call" && n.node.callKind === "row" ? "◇ " : n.node.kind === "call" && n.node.callKind === "frame" ? "⊞ " : n.node.kind !== "call" ? "⊞ " : ""}
+              {n.node.kind === "call" && n.node.table ? "▦ " : n.node.kind === "call" && n.node.callKind === "row" ? "◇ " : n.node.kind === "call" && n.node.callKind === "frame" ? "⊞ " : n.node.kind !== "call" ? "⊞ " : ""}
               {n.label}
             </text>
             <text x={n.width / 2} y={35} textAnchor="middle" className="sub">{lines(n.node)[0]}</text>

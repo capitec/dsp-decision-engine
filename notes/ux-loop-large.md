@@ -9,6 +9,7 @@ goal isn't visibly met caps at 5). The loop stops above 8/10 or after 40 rounds.
 |---|---|---|---|---|---|---|---|---|
 | 0 | 3.3 | 5 | 2 | 2 | 3 | 2 | 6 | |
 | 1 | 5.6 | 7 | 7 | 4 | 7 | 4 | 5 | 5 |
+| 2 | 6.4 | 7 | 8 | 6 | 5 | 7 | 8 | 4 |
 
 ## Round 0 (baseline)
 
@@ -53,3 +54,28 @@ Judge's problems, most damaging first:
 10. What-if results land under "Compare with a git revision…".
 11. "used by 8 steps" tiny and far from the value.
 12. Scenario builder: truncated param field, raw money formatting.
+
+## Round 2
+
+Changes: the "how it was computed" card is a tree of each step's formula filled with the record's values
+(`min(0.252, 0.0775 * 1 + 0.21)`), with a lookup table's matched row and why (`49 ≤ requested_term 60 < 85`);
+lookup tables have their own label and icon; a paused run with edits offers "Compare with the flow as started";
+the sweep summary counts outcomes (approve / decline) and averages numbers with their change; a revision's PARAMS
+differences show as "Changed params" row by row; What-if results are titled with the change; results list only
+changed records; table grids show rates as percentages and which band edge is inclusive; the details pane gets more
+height; the example emits decision and offer_amount.
+
+Judge's problems, most damaging first:
+
+1. L7: comparing mid-run says "no final output changes" (outputs not computed yet) and shows empty values as changes.
+2. L7: the focused record filters the changed offers out of Results; no "caused by".
+3. L4: "used by" is tiny and collapsed; the steps never show.
+4. Units change between screens: % in What-if, raw decimals elsewhere.
+5. L3: whether the cap applied is left to arithmetic; zero terms clutter the raw-rate sum.
+6. L3: the breakdown loses its expansion when drilling in; action buttons clipped.
+7. L1: the found node is off screen after Enter; no breadcrumb.
+8. L5: sweep cells wrap; averages over 40 records dilute a 3-record change; unchanged columns waste space.
+9. L7: the rewind to the edited step happens silently.
+10. L6: "Changed params" omits the code-declared limit change.
+11. The "Changed:" prose is hard to scan; "default → 0.075" hides the old value.
+12. The editor is squeezed; Variables shows 40 values of noise.

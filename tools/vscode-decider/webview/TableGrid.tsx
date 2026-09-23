@@ -8,7 +8,22 @@ interface Props {
   /** The rows the flow runs with, to mark edited cells. */
   base: Record<string, unknown>[];
   onChange: (rows: Record<string, unknown>[]) => void;
+  /** How a record matches a row, to label band edges: `{type: "between", lower_bound_column, …}`. */
+  expression?: Record<string, unknown> | null;
 }
+
+/** "min_term (from, incl.)" for a band's edges, else the column's name. */
+function header(col: string, expr?: Record<string, unknown> | null): string {
+  if (expr?.type !== "between") return col;
+  const upperInclusive = expr.mode === "upper_inclusive";
+  if (col === expr.lower_bound_column) return `${col} (from, ${upperInclusive ? "excl." : "incl."})`;
+  if (col === expr.upper_bound_column) return `${col} (to, ${upperInclusive ? "incl." : "excl."})`;
+  return col;
+}
+
+// Rates, loadings and discounts read as percentages; typing "24.5%" stores 0.245.
+const isPercent = (col: string, rows: Record<string, unknown>[]) =>
+  /rate|loading|discount/.test(col) && rows.every((r) => typeof r[col] !== "number" || Math.abs(r[col] as number) < 1);
 
 const numeric = (dtype: string) => /^(Float|Int|UInt)/.test(dtype);
 
@@ -26,11 +41,13 @@ function parseCell(text: string, dtype: string): unknown {
   return text;
 }
 
-const cellText = (v: unknown) => (v === null || v === undefined ? "" : String(v));
+const cellText = (v: unknown, percent = false) =>
+  v === null || v === undefined ? "" : percent && typeof v === "number" ? `${Number((v * 100).toFixed(4))}%` : String(v);
 
 /** A lookup table's rows as an editable grid: one input per cell, edited cells marked. */
-export function TableGrid({ name, columns, rows, base, onChange }: Props) {
+export function TableGrid({ name, columns, rows, base, onChange, expression }: Props) {
   const cols = Object.keys(columns);
+  const percent = Object.fromEntries(cols.map((c) => [c, isPercent(c, base)]));
   // Cells hold the typed text until the document is built, so "0." survives typing "0.25".
   const set = (i: number, col: string, text: string) => onChange(rows.map((r, j) => (j === i ? { ...r, [col]: text } : r)));
   return (
@@ -39,7 +56,7 @@ export function TableGrid({ name, columns, rows, base, onChange }: Props) {
         <tr>
           <th className="muted small">#</th>
           {cols.map((c) => (
-            <th key={c} title={columns[c]}>{c}</th>
+            <th key={c} title={columns[c]}>{header(c, expression)}</th>
           ))}
           <th />
         </tr>
@@ -52,8 +69,8 @@ export function TableGrid({ name, columns, rows, base, onChange }: Props) {
               const was = base[i]?.[c];
               const edited = base[i] === undefined || cellText(was) !== cellText(tableRows([r], columns)[0][c]);
               return (
-                <td key={c} className={edited ? "edited" : ""} title={edited && base[i] ? `was ${formatValue(was ?? null)}` : undefined}>
-                  <input aria-label={`${name} row ${i + 1} ${c}`} className={numeric(columns[c]) ? "num" : ""} value={cellText(r[c])} onChange={(e) => set(i, c, e.target.value)} />
+                <td key={c} className={edited ? "edited" : ""} title={edited && base[i] ? `was ${cellText(was ?? null, percent[c]) || formatValue(null)}` : undefined}>
+                  <input aria-label={`${name} row ${i + 1} ${c}`} className={numeric(columns[c]) ? "num" : ""} value={cellText(r[c], percent[c])} onChange={(e) => set(i, c, e.target.value)} />
                 </td>
               );
             })}

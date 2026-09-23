@@ -179,7 +179,7 @@ describe("user stories", () => {
       await shot("After clicking 'Compare with…' above the pipeline.");
       await c.page.keyboard.press("Enter");
       const wv = c.webview();
-      await wv.locator(".compare .comparing", { hasText: "working tree" }).waitFor({ timeout: 120_000 });
+      await wv.locator(".compare .compare-title", { hasText: "working tree" }).waitFor({ timeout: 120_000 });
       await shot("The comparison of HEAD against the working tree.");
       await tab(c, "Graph");
       await shot("The graph after the comparison.");
