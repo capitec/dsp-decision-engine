@@ -1,0 +1,208 @@
+:root {
+  color-scheme: light dark;
+}
+body {
+  margin: 0;
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  color: var(--vscode-foreground);
+  background: var(--vscode-editor-background);
+}
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+header nav button,
+aside button,
+.chip {
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+header nav button.active {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+.badge {
+  margin-left: auto;
+  font-family: var(--vscode-editor-font-family);
+  color: var(--vscode-debugIcon-pauseForeground, orange);
+}
+main {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.graph,
+.state {
+  flex: 1;
+  overflow: auto;
+}
+aside {
+  width: 240px;
+  border-left: 1px solid var(--vscode-panel-border);
+  padding: 8px;
+  overflow: auto;
+}
+aside h3 {
+  margin: 0 0 4px;
+  font-size: 1em;
+  word-break: break-all;
+}
+aside h4 {
+  margin: 10px 0 4px;
+  font-size: 0.9em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+.muted {
+  opacity: 0.65;
+  font-size: 0.9em;
+}
+.empty {
+  padding: 20px;
+  opacity: 0.7;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.chip.picked {
+  border-color: var(--vscode-focusBorder);
+  background: var(--vscode-list-activeSelectionBackground);
+}
+pre {
+  font-size: 0.85em;
+  margin: 0;
+}
+
+/* graph */
+svg {
+  font-family: var(--vscode-font-family);
+}
+.cluster rect {
+  fill: var(--vscode-editorWidget-background);
+  stroke: var(--vscode-panel-border);
+  stroke-dasharray: 4 3;
+}
+.cluster.branch rect {
+  stroke: var(--vscode-charts-purple, #b180d7);
+}
+.cluster text {
+  font-size: 10px;
+  fill: var(--vscode-descriptionForeground);
+}
+.node {
+  cursor: pointer;
+}
+.node rect {
+  fill: var(--vscode-input-background);
+  stroke: var(--vscode-input-border, var(--vscode-panel-border));
+  stroke-width: 1.2;
+}
+.node text {
+  fill: var(--vscode-foreground);
+  font-size: 12px;
+  pointer-events: none;
+}
+.node text.sub {
+  font-size: 10px;
+  fill: var(--vscode-descriptionForeground);
+}
+.node.done rect {
+  stroke: var(--vscode-testing-iconPassed, #73c991);
+}
+.node.current rect {
+  fill: var(--vscode-editor-stackFrameHighlightBackground, #ffff0033);
+  stroke: var(--vscode-debugIcon-pauseForeground, orange);
+  stroke-width: 2;
+}
+.node.selected rect {
+  stroke: var(--vscode-focusBorder);
+  stroke-width: 2;
+}
+.node.touches rect {
+  fill: var(--vscode-editor-findMatchHighlightBackground, #ea5c0055);
+}
+.edge path {
+  fill: none;
+  stroke: var(--vscode-foreground);
+  stroke-width: 1.2;
+  opacity: 0.55;
+}
+.edge.data path {
+  stroke: var(--vscode-charts-blue, #3794ff);
+  stroke-dasharray: 3 3;
+  opacity: 0.4;
+}
+.edge text {
+  font-size: 9px;
+  fill: var(--vscode-descriptionForeground);
+}
+.edge.related path,
+.edge.column path {
+  opacity: 1;
+  stroke-width: 2;
+}
+.edge.column text,
+.edge.related text {
+  fill: var(--vscode-foreground);
+  font-weight: bold;
+}
+
+/* state table */
+.state input {
+  width: calc(100% - 16px);
+  margin: 8px;
+  padding: 4px 6px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, transparent);
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.92em;
+}
+th,
+td {
+  text-align: left;
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  white-space: nowrap;
+}
+th {
+  position: sticky;
+  top: 0;
+  background: var(--vscode-editor-background);
+}
+tr {
+  cursor: pointer;
+}
+tr.touched {
+  background: var(--vscode-editor-findMatchHighlightBackground, #ea5c0033);
+}
+tr.picked {
+  outline: 1px solid var(--vscode-focusBorder);
+}
+td.role {
+  color: var(--vscode-charts-orange, orange);
+}
+td.preview {
+  font-family: var(--vscode-editor-font-family);
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
