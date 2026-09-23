@@ -7,7 +7,7 @@ import numpy as np
 import polars as pl
 
 from decider.engine.boundary.nulls import MissingInputError
-from decider.engine.ir.decls import Input, NullPolicy
+from decider.engine.ir.decls import Input, NullPolicy, base_annotation
 from decider.engine.run.params import RunParams
 from decider.engine.run.runners.base import Checkpoint
 from decider.engine.run.state import State, dtype_of, from_series
@@ -62,13 +62,16 @@ class InterpretedRunner:
         if isinstance(r, Call):
             self._call(r, state, params, scope)
         elif isinstance(r, Sequence):
-            for child in r.children:
-                yield from self._node(child, state, params, scope)
+            yield from self._sequence(r, state, params, scope)
         elif isinstance(r, Branch):
             yield from self._branch(r, state, params, scope)
         else:
             yield from self._loop(r, state, params, scope)
         yield Checkpoint(origin, "after")
+
+    def _sequence(self, seq: Sequence, state: State, params: RunParams, scope: _Scope) -> Iterator[Checkpoint]:
+        for child in seq.children:
+            yield from self._node(child, state, params, scope)
 
     def _call(self, call: Call, state: State, params: RunParams, scope: _Scope) -> None:
         node = call.node
@@ -95,7 +98,8 @@ class InterpretedRunner:
             raise ValueError(f"{node.origin.path}: returned {len(columns)} values per row, "
                              f"but declares {len(node.outputs)} outputs")
         for v, out, values in zip(call.writes, node.outputs, columns):
-            state.write(v, _array(values, dtype_of(out.annotation)), scope.rows)
+            array, valid = _array(values, dtype_of(base_annotation(out.annotation)))
+            state.write(v, array, scope.rows, valid)
             scope.names[v.name] = v
 
     def _branch(self, branch: Branch, state: State, params: RunParams, scope: _Scope) -> Iterator[Checkpoint]:
@@ -157,8 +161,7 @@ def _argument(state: State, version: Version, decl: Input, rows: np.ndarray | No
         return values
     missing = ~valid
     if decl.null_policy is NullPolicy.REQUIRED:
-        absent = version.producer is None and version.name not in state.frame.columns
-        raise MissingInputError(decl.name, path, int(missing.sum()), len(valid), absent=absent)
+        raise MissingInputError(decl.name, path, int(missing.sum()), len(valid), absent=_absent(state, version))
     if decl.null_policy is NullPolicy.MISSING_AS:
         return np.where(valid, values, decl.fill)
     values = values.astype(object)
@@ -166,14 +169,25 @@ def _argument(state: State, version: Version, decl: Input, rows: np.ndarray | No
     return values
 
 
-def _array(values: tuple, dtype: np.dtype) -> np.ndarray:
+def _absent(state: State, version: Version) -> bool:
+    # A state stores every input column it was given, so one never written was absent.
+    return version.producer is None and version.id not in state.values
+
+
+def _array(values: tuple, dtype: np.dtype) -> tuple[np.ndarray, np.ndarray | None]:
+    # A step returning None writes a null, which later readers see through their null policy.
+    valid = np.array([x is not None for x in values], bool)
+    if valid.all():
+        valid = None
+    elif dtype != object:
+        values = tuple(0 if x is None else x for x in values)
     if dtype != object:
-        return np.array(values, dtype)
+        return np.array(values, dtype), valid
     # Filled one by one so a tuple or list value stays one element.
     out = np.empty(len(values), object)
     for i, v in enumerate(values):
         out[i] = v
-    return out
+    return out, valid
 
 
 def _frame(call: Call, state: State, scope: _Scope) -> None:
