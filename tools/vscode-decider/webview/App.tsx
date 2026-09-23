@@ -57,6 +57,7 @@ export function App() {
   const [note, setNote] = useState<string>();
   const noteNext = useRef<string | undefined>(undefined);
   const [codeDiff, setCodeDiff] = useState<string[]>([]);
+  const [editsOpen, setEditsOpen] = useState(false);
   const shown = useRef<string | undefined>(undefined);
 
   useEffect(() => {
@@ -175,6 +176,10 @@ export function App() {
 
   if (!describe) return <div className="empty">Open a pipeline file and choose “Visualise flow”.</div>;
 
+  const edits = Object.entries(run.edits ?? {});
+  const editLabel = ([p, a]: [string, string]) => `${p.split("/").pop()} ${a === "delete" ? "skipped" : "edited"}`;
+  const compareEdits = (only?: string) =>
+    send({ type: "compareEdits", label: only ? editLabel(edits.find(([p]) => p === only)!) : edits.map(editLabel).join(", "), edits: run.edits!, path: only });
   const tabButton = (t: Tab, label: string) => (
     <button className={tab === t ? "active" : ""} onClick={() => setTab(t)}>{label}</button>
   );
@@ -215,36 +220,37 @@ export function App() {
         <div className="pause-banner" title={run.current.path}>
           ⏸ Paused {run.current.when} <strong>{run.current.path.split("/").pop() || "the start"}</strong>
           {run.record !== null && <span> · focused on {recordLabel(run.record, keyCol)}</span>}
+          {edits.length > 0 && (
+            <>
+              {" · "}
+              <button className="link" aria-expanded={editsOpen} title="The steps skipped or swapped in this run" onClick={() => setEditsOpen(!editsOpen)}>
+                {edits.length} edit{edits.length === 1 ? "" : "s"} {editsOpen ? "▴" : "▾"}
+              </button>{" "}
+              <button title="Run the flow as started and as edited, start to end, and compare every result" onClick={() => compareEdits()}>
+                {edits.length > 1 ? "Compare all edits with the flow as started" : "Compare with the flow as started"}
+              </button>
+            </>
+          )}
           {note && <div className="banner-note">{note}</div>}
-          {codeDiff.length > 0 && (
+          {note && codeDiff.length > 0 && (
             <pre className="banner-diff">
               {codeDiff.slice(0, 6).map((l, i) => (
                 <div key={i} className={l.startsWith("+") ? "added" : "removed"}>{l.replace(/^([+-])\s+/, "$1 ")}</div>
               ))}
             </pre>
           )}
-          {Object.keys(run.edits ?? {}).length > 0 && (
+          {editsOpen && edits.length > 0 && (
             <div className="edit-list">
-              Edits in this run:{" "}
-              {Object.entries(run.edits!).map(([p, a]) => (
+              {edits.map(([p, a]) => (
                 <span key={p} className="edit-chip">
                   {p.split("/").pop()} {a === "delete" ? "skipped" : "edited"}
-                  {Object.keys(run.edits!).length > 1 && (
-                    <button className="link" title="Compare the flow as started with only this edit" onClick={() => send({ type: "compareEdits", label: `${p.split("/").pop()} ${a === "delete" ? "skipped" : "edited"}`, edits: run.edits!, path: p })}>
+                  {edits.length > 1 && (
+                    <button className="link" title="Compare the flow as started with only this edit" onClick={() => compareEdits(p)}>
                       compare
                     </button>
                   )}
                 </span>
               ))}
-              <button title="Run the flow as started and as edited, start to end, and compare every result" onClick={() =>
-                  send({
-                    type: "compareEdits",
-                    label: Object.entries(run.edits!).map(([p, a]) => `${p.split("/").pop()} ${a === "delete" ? "skipped" : "edited"}`).join(", "),
-                    edits: run.edits!,
-                  })
-                }>
-                {Object.keys(run.edits!).length > 1 ? "Compare all edits with the flow as started" : "Compare with the flow as started"}
-              </button>
             </div>
           )}
         </div>
@@ -352,6 +358,7 @@ export function App() {
           <Compare
             {...compare}
             record={run.record}
+            onFocus={columns ? (row) => send({ type: "record", row }) : undefined}
             onSelect={select}
             onCompareRevision={() => send({ type: "compareRevision" })}
             onOpenDiff={(path) => send({ type: "openDiff", path })}

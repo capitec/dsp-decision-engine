@@ -1564,3 +1564,54 @@ pre.banner-diff .added {
 pre.banner-diff .removed {
   color: var(--vscode-gitDecoration-deletedResourceForeground, #c74e39);
 }
+
+details.edit-menu {
+  display: inline-block;
+}
+details.edit-menu summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 2px 8px;
+  color: var(--vscode-textLink-foreground);
+}
+details.edit-menu .edit-menu-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 0;
+}
+
+.find-nav {
+  margin-left: 4px;
+  white-space: nowrap;
+}
+.find-nav button {
+  padding: 0 4px;
+}
+
+.compare h4 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+}
+.compare h4 .right {
+  margin-left: auto;
+}
+.result-head a {
+  cursor: pointer;
+  color: var(--vscode-textLink-foreground);
+}
+
+.step-formula {
+  margin: 2px 0 4px;
+  padding: 2px 6px;
+  background: var(--vscode-textCodeBlock-background, rgba(127, 127, 127, 0.1));
+  overflow-wrap: anywhere;
+}
+.params table.table-grid td input {
+  width: 6em;
+}
+.scenarios .knob input.picker {
+  flex: 1 1 100%;
+}

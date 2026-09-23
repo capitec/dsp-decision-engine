@@ -50,6 +50,7 @@ const tab = (c: Codium, name: string) => wv(c).locator("header nav button", { ha
 /** Type into the graph's find box and take the first hit. */
 async function find(c: Codium, query: string) {
   const box = wv(c).locator('input[aria-label="Find a step"]');
+  await box.fill("");
   await box.fill(query);
   await wv(c).locator(".find-hits li").first().waitFor({ timeout: 10_000 });
   await box.press("Enter");
@@ -164,10 +165,10 @@ describe("large flow stories", () => {
         await visualise(c);
         await tab(c, "Scenarios");
         await shot("The Scenarios tab on the large flow.");
-        await wv(c).locator('input[aria-label="knob"]').first().fill("repo_rate · shared");
+        await wv(c).locator('input[aria-label="knob"]').first().fill("repo_rate (shared)");
         await wv(c).locator('input[aria-label="knob values"]').first().fill("7%, 7.75%, 8.5%");
         await wv(c).locator("button", { hasText: "+ add another" }).click();
-        await wv(c).locator('input[aria-label="knob"]').nth(1).fill("cap · pl_product_cap (personal_loan/limits)");
+        await wv(c).locator('input[aria-label="knob"]').nth(1).fill("pl_product_cap (cap) in personal_loan/limits");
         await wv(c).locator('input[aria-label="knob values"]').nth(1).fill("250000, 350000");
         await shot("After typing repo_rate and the personal loan product cap into the two knob pickers, with values.");
         await wv(c).locator("button", { hasText: /^Run 6 scenarios/ }).click({ timeout: 10_000 });
@@ -191,6 +192,7 @@ describe("large flow stories", () => {
         await find(c, "pl_rate_floor");
         await runTo(c);
         await shot("Paused before pl_rate_floor after 'Run to pl_rate_floor'.");
+        await wv(c).locator("aside details.edit-menu summary").click();
         await wv(c).locator("aside button", { hasText: /^Skip / }).click();
         await wv(c).locator(".pause-banner:not(.pending)").waitFor({ timeout: 60_000 });
         await find(c, "pl_rate_floor");
@@ -201,6 +203,7 @@ describe("large flow stories", () => {
         await tab(c, "Graph");
         fs.writeFileSync(pricing, fs.readFileSync(pricing, "utf8").replace("return min(pl_raw_rate, repo_rate * cap_multiple + cap_margin)", "return min(pl_raw_rate, repo_rate * cap_multiple + cap_margin - 0.01)"));
         await find(c, "pl_regulated_rate");
+        await wv(c).locator("aside details.edit-menu summary").click();
         await wv(c).locator("aside button", { hasText: "Use edited code" }).click();
         await wv(c).locator(".pause-banner:not(.pending)").waitFor({ timeout: 60_000 });
         await shot("Edited pl_regulated_rate's cap in pricing.py (1% tighter), saved, then clicked 'Use edited code'.");
@@ -208,6 +211,7 @@ describe("large flow stories", () => {
         await wv(c).locator(".pause-banner:not(.pending)").waitFor({ timeout: 60_000 }).catch(() => undefined);
         await wv(c).locator("select[aria-label=record]").selectOption({ label: "client_id 20400" }).catch(() => undefined);
         await shot("After 'Run through pl_regulated_rate' with client_id 20400 focused.");
+        await wv(c).locator(".pause-banner button[aria-expanded]").click();
         await wv(c).locator(".edit-chip", { hasText: "pl_regulated_rate" }).locator("button", { hasText: "compare" }).click();
         await wv(c).locator(".compare .compare-title", { hasText: "pl_regulated_rate edited" }).waitFor({ timeout: 120_000 });
         await shot("Clicked 'compare' on the pl_regulated_rate edit alone: the tighter cap on its own.");

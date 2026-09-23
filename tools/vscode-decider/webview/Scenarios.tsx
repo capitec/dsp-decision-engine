@@ -35,10 +35,10 @@ interface Row {
 /** "cap · pl_product_cap (personal_loan/limits)": a param's name, its step and where the step sits. */
 export function paramLabel(key: string): string {
   const [path, name] = key.split("|");
-  if (path === "shared") return `${name} · shared`;
+  if (path === "shared") return `${name} (shared)`;
   const parts = path.split("/");
   const group = parts.slice(0, -1).slice(-2).join("/");
-  return `${name} · ${parts[parts.length - 1]}${group ? ` (${group})` : ""}`;
+  return `${parts[parts.length - 1]} (${name})${group ? ` in ${group}` : ""}`;
 }
 
 function knobOf(r: Row, schema: Props["schema"]): Knob | null {
@@ -163,11 +163,13 @@ export function Scenarios({ schema, columns, pausedAt, record, keyCol, rows, res
             </select>
           </div>
         )}
-        <div className="scope">
-          <span className="muted">Run</span>
-          <label><input type="radio" checked={fromHere && !!pausedAt} disabled={!pausedAt} onChange={() => setFromHere(true)} /> from where the run is paused</label>
-          <label><input type="radio" checked={!fromHere || !pausedAt} onChange={() => setFromHere(false)} /> from the start</label>
-        </div>
+        {pausedAt && (
+          <div className="scope">
+            <span className="muted">Run</span>
+            <label><input type="radio" checked={fromHere} onChange={() => setFromHere(true)} /> from where the run is paused</label>
+            <label><input type="radio" checked={!fromHere} onChange={() => setFromHere(false)} /> from the start</label>
+          </div>
+        )}
         {fromHere && pausedAt && (
           <div className="muted">
             Starts {pausedAt}: changed parameters affect that step and the ones after it; changed input fields overwrite their current values.
@@ -211,7 +213,7 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
   const knobCols = sweep.knobs.length ? sweep.knobs : [{ name: "scenario", values: sweep.labels }];
   const summary = row === -1;
   const each = row === -2;
-  const cols = summary ? [...changedCols.filter((c) => categorical(sweep.base?.[c])), ...changedCols.filter((c) => !categorical(sweep.base?.[c]))] : changedCols;
+  const cols = summary ? [...outcomes, ...changedCols.filter((c) => categorical(sweep.base?.[c])), ...changedCols.filter((c) => !categorical(sweep.base?.[c]))] : changedCols;
   // Side by side, the records some scenario changed come first; a few fit.
   const hit = (r: number) => sweep.comparisons.some((cmp) => cmp.output.some((o) => o.changedRows.includes(r)));
   const everyRow = Array.from({ length: rows }, (_, i) => i);
@@ -252,7 +254,7 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
   };
   const summaryCell = (i: number, c: string) => {
     const diff = sweep.comparisons[i].output.find((o) => o.name === c);
-    if (!diff) return <td key={c} className="unchanged mono" title="same as the original run for every record">no change</td>;
+    if (!diff) return <td key={c} className="unchanged mono" title="same as the original run for every record">{outcomes.includes(c) ? overall(sweep.outputs[i]?.[c]) : "no change"}</td>;
     const numeric = !categorical(sweep.base?.[c]);
     return (
       <td key={c} className="changed mono" title={`changed for ${recordsOf(diff.changedRows)}; original: ${overall(sweep.base?.[c])}`}>
@@ -307,7 +309,14 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
               {knobCols.map((k) => (
                 <th key={k.name} className="knob-col" title={k.name}>{knobShort(k.name)}</th>
               ))}
-              {(summary ? [0] : shown).flatMap((r) => cols.map((c) => <th key={`${c}-${r}`}>{c}</th>))}
+              {(summary ? [0] : shown).flatMap((r) =>
+                cols.map((c) => (
+                  <th key={`${c}-${r}`}>
+                    {c}
+                    {summary && !outcomes.includes(c) && !categorical(sweep.base?.[c]) && <div className="muted small">records changed · avg change</div>}
+                  </th>
+                )),
+              )}
             </tr>
           </thead>
           <tbody>
@@ -329,9 +338,9 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
           </tbody>
         </table>
       )}
-      {summary && outcomes.map((c) => (
-        <div key={c} className="muted">
-          <span className="mono">{c}</span> is the same in every scenario: {overall(sweep.base?.[c])}.
+      {summary && outcomes.filter((c) => !sweep.comparisons.some((cmp) => cmp.output.some((o) => o.name === c))).map((c) => (
+        <div key={c} className="muted small">
+          <span className="mono">{c}</span> is the same in every scenario.
         </div>
       ))}
     </section>
