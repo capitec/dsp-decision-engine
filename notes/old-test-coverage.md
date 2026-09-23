@@ -5,16 +5,16 @@ behaviour have a test under `tests/` (excluding `tests/_legacy`)? Old tests are
 every test function in `decider2/tests/*.py` and `tests/_legacy/**` (decider_old's
 tests; `decider_old/` itself has none). Matched by behaviour, not name.
 
-**Summary: 639 old tests: 495 PORTED, 85 DROPPED, 35 PENDING-T4.3, 24 GAP.**
+**Summary: 639 old tests: 509 PORTED, 95 DROPPED, 35 PENDING-T4.3, 0 GAP** (the 24 GAPs were closed by G1: 14 ported, 10 dropped as triaged in `notes/progress.md`).
 
 | Source | Tests | Ported | Dropped | Pending T4.3 | Gap |
 |---|---|---|---|---|---|
 | decider2 boundary + shim (7 files) | 104 | 87 | 17 | 0 | 0 |
-| decider2 compile/runtime/serving/cli/arity (9 files) | 99 | 64 | 29 | 2 | 4 |
-| decider2 graph/params/registry/testing (8 files) | 110 | 86 | 16 | 1 | 7 |
-| decider2 control flow/flagship/spec/review (5 files) | 73 | 63 | 5 | 0 | 5 |
-| decider2 trees/expr/tables (11 files) | 155 | 116 | 6 | 27 | 6 |
-| tests/_legacy (decider_old, 10 files) | 98 | 79 | 12 | 5 | 2 |
+| decider2 compile/runtime/serving/cli/arity (9 files) | 99 | 68 | 29 | 2 | 0 |
+| decider2 graph/params/registry/testing (8 files) | 110 | 88 | 21 | 1 | 0 |
+| decider2 control flow/flagship/spec/review (5 files) | 73 | 64 | 9 | 0 | 0 |
+| decider2 trees/expr/tables (11 files) | 155 | 122 | 6 | 27 | 0 |
+| tests/_legacy (decider_old, 10 files) | 98 | 80 | 13 | 5 | 0 |
 
 Classes: PORTED = a new test covers the same behaviour (possibly adapted to a
 design change, noted in the line); DROPPED = behaviour removed, reason quoted
@@ -22,7 +22,7 @@ from notes/progress.md, notes/spec-amendments.md, notes/*.md or a task commit;
 PENDING-T4.3 = decision tables, being ported by T4.3; GAP = no new test and no
 recorded drop.
 
-## GAPs
+## GAPs (closed by G1; kept for the record)
 
 | Old test | What it checks | Still applies? | Suggested new test |
 |---|---|---|---|
@@ -51,8 +51,8 @@ a one-line drop in the notes or a port.
 
 ### Drops with no recorded reason
 
-Counted as DROPPED because the behaviour no longer exists, but no note records
-it. T7.1 should add a line to `notes/progress.md` for each:
+Counted as DROPPED because the behaviour no longer exists; the Old-test coverage
+triage in `notes/progress.md` now records each:
 
 - `decider2/tests/test_score_plan.py::test_plan_holds_exactly_the_schema_invariant_pieces` (decider2 `ScorePlan` internals)
 - `decider2/tests/test_score_plan.py::test_a_re_entrant_call_on_one_thread_never_shares_the_busy_pool` (no row pool now)
@@ -278,7 +278,7 @@ One line per old test: `old test | class | new test or reason`.
 
 - test_pipeline_serve_returns_a_serve_handle | DROPPED | T6.2 "Dropped: decider2 params-play routes, sealed/live modes" (ServeHandle replaced by RequestHandler, tested in tests/serving/test_serving.py)
 - test_serve_rejects_an_unknown_mode | DROPPED | T6.2 "sealed/live modes" dropped (engine mode check: tests/run/test_flagship.py::test_an_unknown_mode_is_an_error_listing_the_modes)
-- test_params_only_activation_does_not_recompile | GAP | engine-level retune covered (tests/run/test_compiled_modes.py::test_retuning_never_recompiles) but no test that RequestHandler.stage/activate of a params-only version compiles nothing
+- test_params_only_activation_does_not_recompile | PORTED | tests/serving/test_serving.py::test_staging_and_activating_a_params_only_version_compiles_nothing
 - test_stage_validates_before_returning_a_plan | PORTED | tests/serving/test_serving.py::test_a_failing_stage_raises_and_the_active_version_keeps_serving[invalid value]
 - test_stage_rejects_an_unknown_module | PORTED | tests/serving/test_serving.py::test_a_failing_stage_raises_and_the_active_version_keeps_serving[unknown namespace]
 - test_activate_requires_a_prior_stage | PORTED | tests/serving/test_serving.py::test_activate_requires_a_prior_stage
@@ -301,7 +301,7 @@ One line per old test: `old test | class | new test or reason`.
 - test_a_re_entrant_call_on_one_thread_never_shares_the_busy_pool | DROPPED | unrecorded: decider2 ScorePlan row pool has no counterpart (new score path allocates per call; decider/engine/run has no pool)
 - test_pooled_validity_and_fill_state_never_leaks_between_calls | PORTED | tests/run/test_score.py::test_validity_and_fills_never_leak_between_calls
 - test_retune_takes_effect_and_compiles_nothing | PORTED | tests/run/test_compiled_modes.py::test_retuning_never_recompiles
-- test_serve_handle_generation_swap_takes_effect_and_compiles_nothing | GAP | answer swap covered (tests/serving/test_serving.py::test_activate_switches_answers_and_rollback_restores_them) but "compiles nothing" across stage/activate is not asserted
+- test_serve_handle_generation_swap_takes_effect_and_compiles_nothing | PORTED | tests/serving/test_serving.py::test_staging_and_activating_a_params_only_version_compiles_nothing (answer swap: test_activate_switches_answers_and_rollback_restores_them)
 - test_a_bad_retune_is_still_a_hard_error | PORTED | tests/run/test_score.py::test_a_bad_retune_is_a_hard_error
 - test_score_still_agrees_with_apply_on_the_flagship_and_an_optional_input | PORTED | tests/run/test_compiled_modes.py::test_score_equals_run_row_for_row_through_a_branch_and_nulls (+ assert_equivalent's score()==run() check in test_the_three_modes_agree_exactly_on_the_flagship)
 - test_flagship_score_p50_is_within_the_60us_spec | PORTED | tests/run/test_score.py::test_fused_flagship_score_p50_is_within_60_microseconds
@@ -334,8 +334,8 @@ One line per old test: `old test | class | new test or reason`.
 
 ### `decider2/tests/test_no_arity_ceiling.py` (4)
 
-- test_a_400_feature_tree_builds_and_answers_correctly | GAP | only a 400-input generic row node (tests/run/test_compiled_modes.py::test_a_row_node_of_400_inputs_answers_in_every_mode) and a 400-node single-feature chain (tests/trees/test_trees.py::test_a_very_large_tree_builds_and_runs); no tree with 400 distinct features
-- test_more_than_six_computed_features_in_one_tree | GAP | tests/trees/test_computed_features.py uses one computed feature per tree; no tree with many computed features on distinct columns
+- test_a_400_feature_tree_builds_and_answers_correctly | PORTED | tests/trees/test_trees.py::test_a_400_feature_tree_builds_and_answers_correctly
+- test_more_than_six_computed_features_in_one_tree | PORTED | tests/trees/test_trees.py::test_more_than_six_computed_features_in_one_tree
 - test_a_table_of_comparable_width_builds_and_answers_correctly | PENDING-T4.3 | decision table
 - test_more_than_eight_eq_and_in_conditions_in_one_table | PENDING-T4.3 | decision table
 
@@ -356,8 +356,8 @@ One line per old test: `old test | class | new test or reason`.
 - test_calling_a_module_renames_it_for_reuse | PORTED | tests/steps/test_function_step.py::test_named_renames_a_copy (.named replaces __call__)
 - test_reusing_the_same_module_instance_twice_in_a_pipeline_is_an_error | PORTED | tests/ir/test_to_ir.py::test_a_path_clash_raises_suggesting_a_name (flow(ratio, ratio) raises; same step under two parents is legal per IR.md §10 test 6)
 - test_renamed_reuse_is_allowed | PORTED | tests/ir/test_to_ir.py::test_a_path_clash_raises_suggesting_a_name (.named("ratio_2") passes) + test_the_same_step_placed_twice_gets_two_paths
-- test_contract_true_snapshots_to_the_derived_path | GAP | no contract= in decider; no drop recorded
-- test_contract_catches_a_breaking_change | GAP | no contract= in decider; no drop recorded
+- test_contract_true_snapshots_to_the_derived_path | DROPPED | Old-test coverage triage (progress.md): `contract=` snapshots dropped
+- test_contract_catches_a_breaking_change | DROPPED | Old-test coverage triage (progress.md): `contract=` snapshots dropped
 
 ### `decider2/tests/test_graph_pipeline.py` (12)
 
@@ -381,10 +381,10 @@ One line per old test: `old test | class | new test or reason`.
 - test_score_is_namespaced_the_same_way_as_apply | PORTED | tests/run/test_params_namespacing.py::test_score_is_namespaced_the_same_way_as_run
 - test_an_unknown_params_namespace_is_a_hard_error_with_a_suggestion | PORTED | tests/run/test_params_namespacing.py::test_an_unknown_params_namespace_is_a_hard_error_with_a_suggestion
 - test_a_misspelled_field_inside_a_known_namespace_is_a_hard_error | PORTED | tests/run/test_spec_conformance.py::test_a_misspelled_param_is_rejected + tests/params/test_params_validate.py::test_a_misspelled_param_is_invalid_with_a_suggestion
-- test_a_bound_value_changes_the_answer | GAP | bind only checked at IR level and by direct call (test_function_step::test_bind_sets_a_params_default...); no run()/score() of a bound step
+- test_a_bound_value_changes_the_answer | PORTED | tests/steps/test_function_step.py::test_a_bound_value_changes_the_answer_of_run_and_score (every mode)
 - test_a_bound_value_leaves_the_caller_facing_interface | DROPPED | progress T1.1 "bind() changes the default only" (bound param stays tunable)
 - test_overriding_a_bound_value_is_an_error_not_a_silent_win | DROPPED | progress T1.1 "bind() changes the default only" (overriding is now legal)
-- test_a_bound_value_is_still_validated_by_the_model | GAP | bind(cap=999) with le=60 not tested; models use validate_default=True so likely holds
+- test_a_bound_value_is_still_validated_by_the_model | PORTED | tests/steps/test_function_step.py::test_a_bound_value_outside_the_params_bounds_is_rejected (every mode)
 - test_binding_one_knob_leaves_its_siblings_tunable | DROPPED | progress T1.1 "bind() changes the default only" (every knob stays tunable)
 - test_binding_does_not_change_the_compiled_signature_count | PORTED | tests/run/test_compiled_modes.py::test_retuning_never_recompiles (a bound value is just a param default, passed as an argument)
 
@@ -413,10 +413,10 @@ One line per old test: `old test | class | new test or reason`.
 - test_build_params_model_returns_none_when_no_params | PORTED | tests/params/test_params_declare.py::test_a_node_with_no_params_gets_an_empty_bundle
 - test_a_hand_written_model_and_a_harvested_one_agree_on_values | PORTED | tests/params/test_params_declare.py::test_a_hand_written_model_and_a_harvested_one_agree
 - test_a_misspelled_param_is_a_hard_error | PORTED | tests/params/test_params_declare.py::test_a_misspelled_param_is_a_hard_error_in_the_model
-- test_parse_docstring_with_implements_line | GAP | no docstring/"Implements:" harvesting in decider; no drop recorded
-- test_parse_docstring_without_implements_line | GAP | as above
-- test_parse_docstring_none | GAP | as above
-- test_harvest_step_end_to_end | PORTED | tests/steps/test_function_step.py::test_every_spelling_of_step_produces_identical_fields + test_name_and_nogil_reach_the_ir (name/fn/inputs/params); doc/implements half is the parse_docstring GAP
+- test_parse_docstring_with_implements_line | DROPPED | Old-test coverage triage (progress.md): docstring-as-description/`Implements:` dropped
+- test_parse_docstring_without_implements_line | DROPPED | Old-test coverage triage (progress.md): docstring-as-description/`Implements:` dropped
+- test_parse_docstring_none | DROPPED | Old-test coverage triage (progress.md): docstring-as-description/`Implements:` dropped
+- test_harvest_step_end_to_end | PORTED | tests/steps/test_function_step.py::test_every_spelling_of_step_produces_identical_fields + test_name_and_nogil_reach_the_ir (name/fn/inputs/params); doc/implements half dropped (see parse_docstring)
 - test_harvest_step_name_override | PORTED | tests/steps/test_function_step.py::test_name_and_nogil_reach_the_ir
 
 ### `decider2/tests/test_registry.py` (8)
@@ -507,7 +507,7 @@ One line per old test: `old test | class | new test or reason`.
 - test_step_above_the_floor_is_untouched | PORTED | tests/steps/test_function_step.py::test_a_step_is_callable_with_its_param_defaults
 - test_bare_function_is_a_pipeline_element | PORTED | tests/run/test_flagship.py::test_every_mode_gives_the_flagship_answer (flow of bare functions writes cap_by_income_band)
 - test_params_are_namespaced_by_module_instance | PORTED | tests/steps/test_function_step.py::test_params_are_namespaced_by_the_step_path (+ tests/ir/test_worked_example.py::test_defaults_document_matches)
-- test_the_docstring_is_the_description | GAP | no Step.doc / "Implements:" in decider; unrecorded drop
+- test_the_docstring_is_the_description | DROPPED | Old-test coverage triage (progress.md): docstring-as-description/`Implements:` dropped
 - test_every_mode_produces_the_same_answer | PORTED | tests/run/test_flagship.py::test_every_mode_gives_the_flagship_answer
 - test_the_three_modes_agree_exactly | PORTED | tests/run/test_compiled_modes.py::test_the_three_modes_agree_exactly_on_the_flagship
 - test_output_is_additive | PORTED | tests/run/test_flagship.py::test_output_is_additive
@@ -549,7 +549,7 @@ One line per old test: `old test | class | new test or reason`.
 - test_score_types_a_bool_input_as_bool_not_float | PORTED | tests/run/test_inputs_and_score.py::test_score_types_a_bool_input_as_bool
 - test_score_can_index_a_tuple_by_an_int_annotated_input | PORTED | tests/run/test_inputs_and_score.py::test_score_can_index_a_tuple_by_an_int_input
 - test_assert_equivalent_rejects_a_non_polars_frame | PORTED | tests/testing/test_testing.py::test_assert_equivalent_needs_a_dataframe
-- test_assert_equivalent_fails_when_all_three_modes_crash_identically | GAP | decider/testing/equivalence.py re-raises the first mode's error, but no test pins it
+- test_assert_equivalent_fails_when_all_three_modes_crash_identically | PORTED | tests/testing/test_testing.py::test_assert_equivalent_fails_when_every_mode_raises_the_same_error
 - test_assert_equivalent_checks_score_agrees_with_apply | PORTED | tests/testing/test_testing.py::test_a_score_disagreeing_with_run_fails_naming_the_row
 - test_score_routes_a_required_absent_input_instead_of_keyerror | DROPPED | T3.1: "refer/decline routing, NOT_APPLICABLE_AS and fill-reason reporting are dropped"; replaced by tests/run/test_inputs_and_score.py::test_score_raises_naming_a_required_input_absent_from_the_record
 - test_score_fills_a_missing_as_input_when_the_key_is_absent | PORTED | tests/run/test_inputs_and_score.py::test_score_fills_a_missing_as_input_absent_from_the_record
@@ -557,9 +557,9 @@ One line per old test: `old test | class | new test or reason`.
 - test_apply_fills_a_missing_as_column_entirely_absent_from_the_frame | PORTED | tests/run/test_inputs_and_score.py::test_run_fills_a_missing_as_column_absent_from_the_frame
 - test_a_bare_python_default_is_rejected_at_harvest | PORTED | tests/params/test_params_declare.py::test_harvest_rejects_a_bare_default_naming_both_spellings
 - test_the_bare_default_error_names_the_parameter | PORTED | tests/params/test_params_declare.py::test_harvest_rejects_a_bare_default_naming_both_spellings (message names param(1.0)/missing_as(1.0), not the argument name; weak)
-- test_6a_a_floating_def_in_a_pipeline_file_is_flagged | GAP | no lint module in decider; unrecorded drop
-- test_6b_an_unread_params_model_field_is_a_build_error | GAP | no module(params=Model) in decider, so the lint has nothing to check; unrecorded drop
-- test_6c_a_step_parameter_never_referenced_in_the_body_is_a_build_error | GAP | decider does not check that every argument is read; unrecorded drop
+- test_6a_a_floating_def_in_a_pipeline_file_is_flagged | DROPPED | Old-test coverage triage (progress.md): lints 6a/6b/6c dropped
+- test_6b_an_unread_params_model_field_is_a_build_error | DROPPED | Old-test coverage triage (progress.md): lints 6a/6b/6c dropped
+- test_6c_a_step_parameter_never_referenced_in_the_body_is_a_build_error | DROPPED | Old-test coverage triage (progress.md): lints 6a/6b/6c dropped
 
 ### `decider2/tests/test_trees.py` (18)
 
@@ -567,8 +567,8 @@ One line per old test: `old test | class | new test or reason`.
 - test_retuning_a_threshold_never_recompiles | PORTED | tests/trees/test_trees.py::test_retuning_a_param_threshold_never_recompiles
 - test_a_literal_and_an_inputref_threshold_become_the_same_thing | PORTED | tests/trees/test_trees.py::test_a_literal_threshold_and_a_param_threshold_give_the_same_answers
 - test_one_inputref_named_twice_is_one_knob | PORTED | tests/trees/test_trees.py::test_one_param_named_twice_is_one_knob
-- test_a_tree_reports_which_leaf_it_reached | GAP | no `<name>_path` reached-leaf column in TreeConfig; no drop recorded
-- test_the_path_column_survives_an_explicit_emit | GAP | same as above (path column absent)
+- test_a_tree_reports_which_leaf_it_reached | PORTED | tests/trees/test_tree_config.py::test_a_tree_reports_the_leaf_that_answered_in_every_mode (opt-in `TreeConfig.path_output`, a String column naming the leaf id, not an int result_idx)
+- test_the_path_column_survives_an_explicit_emit | PORTED | tests/trees/test_tree_config.py::test_the_path_column_survives_an_explicit_emit_and_a_drop
 - test_an_unconnected_branch_reaches_the_default_leaf | PORTED | tests/trees/test_trees.py::test_an_unconnected_branch_reaches_the_default_row
 - test_composite_and_between_and_isin_nodes | PORTED | tests/trees/test_trees.py::test_composite_between_and_isin_nodes
 - test_two_same_shaped_sibling_thresholds_do_not_collide | PORTED | tests/trees/test_trees.py::test_two_same_shaped_sibling_thresholds_do_not_collide
@@ -590,9 +590,9 @@ One line per old test: `old test | class | new test or reason`.
 - test_a_zero_row_frame_and_a_frame_with_every_row_routed_still_run | PORTED | tests/trees/test_strings.py::test_an_empty_frame_an_all_null_column_and_an_absent_column_still_run (routed half: T3.1 "refer/decline routing ... dropped")
 - test_assert_equivalent_drives_all_four_rungs_over_the_generated_corpus | PORTED | tests/trees/test_strings.py::test_every_match_type_agrees_with_python_over_the_string_corpus (3 modes via run_modes + fused score per value)
 - test_a_mixed_tree_with_a_threshold_and_a_string_node_agrees_in_every_mode | PORTED | tests/trees/test_strings.py::test_a_mixed_tree_with_a_threshold_and_a_string_node_agrees_in_every_mode
-- test_editing_adding_and_removing_patterns_never_recompiles | GAP | no new test pins zero compiles when string patterns are edited/added/removed
-- test_a_pattern_count_change_and_a_threshold_change_share_one_kernel_signature | GAP | same gap: pattern count change must not change walker signature
-- test_precompile_leaves_nothing_for_the_first_string_request_to_compile | GAP | no test that warm-up (stage/build) leaves nothing to compile for a string tree's first run/score
+- test_editing_adding_and_removing_patterns_never_recompiles | PORTED | tests/trees/test_strings.py::test_editing_adding_and_removing_patterns_never_recompiles (literal patterns are consts the walker reads as data, so edits are new documents; plus ParamRef pattern retunes)
+- test_a_pattern_count_change_and_a_threshold_change_share_one_kernel_signature | PORTED | tests/trees/test_strings.py::test_a_pattern_count_change_and_a_threshold_change_share_one_kernel_signature (numba type of the consts)
+- test_precompile_leaves_nothing_for_the_first_string_request_to_compile | PORTED | tests/serving/test_serving.py::test_after_staging_the_first_string_tree_requests_compile_nothing (found and fixed: warm-up fed a string input 1.0)
 - test_injected_span_drift_fails_between_apply_and_score_and_not_between_modes | PORTED | tests/testing/test_testing.py::test_a_score_disagreeing_with_run_fails_naming_the_row (generic score-vs-run drift detection)
 - test_regex_case_folding_and_trimming_are_still_refused | DROPPED | spec-amendments T4.2 "Regex, case-insensitive and whitespace-trimming matches run the tree's Python walker as a Fallback"; replaced by tests/trees/test_strings.py::test_regex_case_folding_and_trimming_run_the_python_walker_in_compiled_modes
 - test_an_inputref_pattern_is_a_str_param_retuned_by_its_key | PORTED | tests/trees/test_strings.py::test_a_pattern_param_is_retuned_by_its_key
@@ -619,7 +619,7 @@ One line per old test: `old test | class | new test or reason`.
 - test_an_undeclared_tree_encodes_exactly_as_before | PORTED | tests/trees/test_typed_features.py::test_an_undeclared_tree_reads_every_feature_as_a_float
 - test_the_typed_layout_rule_is_slot_within_kind_in_input_order | DROPPED | layout replaced: notes/tree-walker.md "Declaring inputs grouped by kind (then by name)"; exercised by tests/trees/test_typed_features.py::test_a_mixed_tree_agrees_across_every_mode
 - test_the_string_slot_carries_polars_bytes_zero_copy_as_spans | PORTED | tests/trees/test_strings.py::test_a_long_string_column_is_read_in_place_and_an_override_replaces_it
-- test_a_typed_tree_path_fn_is_a_genuine_cache_hit_in_a_fresh_process | GAP | walker.walk (njit cache=True) disk-cache hit in a fresh process untested for trees (only a plain row kernel in tests/testing/test_shared_bundle_cache.py)
+- test_a_typed_tree_path_fn_is_a_genuine_cache_hit_in_a_fresh_process | PORTED | tests/trees/test_tree_config.py::test_the_tree_walker_is_a_disk_cache_hit_in_a_fresh_process
 
 ### `decider2/tests/test_expr.py` (28)
 
@@ -691,11 +691,11 @@ One line per old test: `old test | class | new test or reason`.
 - test_nested_cases_ranges_then_unary | PORTED | tests/trees/test_legacy_end_to_end.py::test_a_cases_branch_can_be_a_string_match_rule
 - test_three_level_nested_tree | PORTED | tests/trees/test_legacy_end_to_end.py::test_a_three_level_tree_routes_every_row
 - test_composite_inside_nested_tree | PORTED | tests/trees/test_legacy_end_to_end.py::test_a_composite_rule_works_inside_a_nested_tree
-- test_path_unary_then_branch | PORTED | tests/trees/test_legacy_end_to_end.py::test_a_nested_tree_visits_one_node_per_decision_and_the_leaf (adapted to reference-walker visits; no path column, see GAP)
+- test_path_unary_then_branch | PORTED | tests/trees/test_legacy_end_to_end.py::test_a_nested_tree_visits_one_node_per_decision_and_the_leaf (adapted to reference-walker visits; the reached leaf is also `path_output`, see test_a_tree_reports_which_leaf_it_reached)
 - test_path_otherwise_branch_index_is_branch_count | PORTED | tests/trees/test_legacy_end_to_end.py::test_a_cases_rule_visits_the_branch_of_the_matched_condition_or_otherwise (visits)
 - test_path_nested_tree_depth_reflects_decisions | PORTED | tests/trees/test_legacy_end_to_end.py::test_a_nested_tree_visits_one_node_per_decision_and_the_leaf (visits)
 - test_path_cases_ranges_records_correct_bucket_index | PORTED | tests/trees/test_legacy_end_to_end.py::test_a_cases_rule_visits_the_branch_of_the_matched_condition_or_otherwise (isin cases, not ranges; visits)
-- test_path_identical_inputs_always_produce_identical_paths | PORTED | tests/trees/test_legacy_end_to_end.py::test_a_nested_tree_visits_one_node_per_decision_and_the_leaf (deterministic visits; no path column, see GAP)
+- test_path_identical_inputs_always_produce_identical_paths | PORTED | tests/trees/test_legacy_end_to_end.py::test_a_nested_tree_visits_one_node_per_decision_and_the_leaf (deterministic visits; path column: see test_a_tree_reports_which_leaf_it_reached)
 - test_multi_column_output_all_fields_correct | PORTED | tests/trees/test_legacy_end_to_end.py::test_every_output_column_comes_from_the_reached_row
 - test_multi_column_output_default_row_on_no_match | PORTED | tests/trees/test_legacy_end_to_end.py::test_every_output_column_comes_from_the_default_row_when_nothing_matches
 - test_cases_ranges_empty_conditions_returns_otherwise | PORTED | tests/trees/test_legacy_end_to_end.py::test_a_cases_rule_without_conditions_always_takes_otherwise[ranges]
@@ -839,7 +839,7 @@ One line per old test: `old test | class | new test or reason`.
 - test_build_parameters_expr_no_runtime_column_uses_defaults | PORTED | behaviour (defaults when no override): tests/trees/test_legacy_parameters.py::test_a_param_ref_uses_the_parameters_block_default
 - test_build_parameters_expr_empty_schema_returns_none | PORTED | behaviour (param-less tree runs): every param-less fixture, e.g. tests/trees/test_legacy_conditions.py::test_numeric_comparisons_route_boundary_values
 - test_build_parameters_expr_parameter_with_no_default_uses_runtime | PORTED | behaviour (default-less param comes from the params document): tests/run/test_params_validation.py::test_a_missing_required_param_is_invalid, tests/steps/test_ctx_call.py::test_a_required_ref_takes_its_type_from_the_function_signature (no tree-specific run)
-- test_prioritize_results_empty_list_returns_default | GAP | internal fn gone; behaviour (prioritized document with zero rules -> default row) untested
+- test_prioritize_results_empty_list_returns_default | PORTED | tests/trees/test_legacy_end_to_end.py::test_prioritized_rules_with_no_rules_return_the_default
 - test_optimized_execution_path | DROPPED | notes/tree-documents.md "`use_optimized_execution` ... ignored"
 - test_optimized_execution_prioritized | DROPPED | notes/tree-documents.md "`use_optimized_execution` ... ignored"
 - test_run_polars_expression_execute | PORTED | behaviour (build once, execute correctly) covered by every TreeConfig run, e.g. tests/trees/test_legacy_conditions.py::test_numeric_comparisons_route_boundary_values; internal class gone (no polars tier, Design.md D7)
@@ -858,7 +858,7 @@ One line per old test: `old test | class | new test or reason`.
 - test_v3_numerical_and_range_nodes_execute_correctly | PORTED | tests/trees/test_legacy_migration.py::test_v3_range_cases_band_lower_inclusive, tests/trees/test_tree_migration.py::test_v3_range_cases_band_exactly_as_decider_old
 - test_v1_tree_parse_rejects_missing_nodes | DROPPED | v1 deprecated (spec-amendments); a v1 doc without nodes is still refused naming v1: tests/trees/test_legacy_migration.py::test_a_v1_or_v2_tree_is_refused_naming_its_version[doc2]
 - test_v1_tree_parse_rejects_unknown_node_type | DROPPED | v1 deprecated (spec-amendments "v1/v2 documents raise a clear deprecation error")
-- test_can_create_default_tree | GAP | `Tree.default_tree()` (one-leaf v3 starter tree) has no counterpart; not recorded as dropped in this repo (only in decider2/tests/test_trees_ported_migration.py)
+- test_can_create_default_tree | DROPPED | Old-test coverage triage (progress.md): `Tree.default_tree()` dropped (UI convenience)
 
 ### `tests/_legacy/credit/decision_table/test_decision_table.py` (5)
 

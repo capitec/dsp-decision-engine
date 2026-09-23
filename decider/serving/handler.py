@@ -195,7 +195,7 @@ class RequestHandler:
         pass
 
 
-_DUMMY = {bool: False, int: 1, str: ""}
+_DUMMY = {bool: False, int: 1, str: "", bytes: ""}
 
 
 def _warm(exe: Executable, params: t.Any) -> None:
