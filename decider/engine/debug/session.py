@@ -14,7 +14,8 @@ from decider.engine.debug.events import (Error, Event, NodeFinished, NodeStarted
 from decider.engine.ir.nodes import SequenceNode, iter_nodes
 from decider.engine.ir.origin import Origin
 from decider.engine.run.runners.base import Checkpoint
-from decider.engine.run.state import _base, dtype_of
+from decider.engine.ir.decls import base_annotation
+from decider.engine.run.state import dtype_of
 from decider.engine.wiring.plan import Version
 
 if TYPE_CHECKING:
@@ -115,7 +116,7 @@ class Session:
         targets = self._targets(name)
         if not targets:
             raise KeyError(f"{name!r} is neither an input column nor a value produced so far")
-        dtype = dtype_of(_base(targets[-1].annotation))
+        dtype = dtype_of(base_annotation(targets[-1].annotation))
         values, valid = _cast(name, value, dtype, self.state.n)
         previous = summarize(self.value(name))
         # Every version written so far, not only the latest: a loop or branch
