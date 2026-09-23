@@ -289,11 +289,6 @@ def test_loop_needs_carries_and_a_bound():
 # --- running ---
 
 
-def test_session_waits_for_the_debugger():
-    with pytest.raises(NotImplementedError):
-        step(ratio).session(None)
-
-
 def test_relabel_keeps_the_argument_each_input_feeds():
     def capped(a: float, cap: float = param(1.0), *, x: float = missing_as(0.0)) -> float:
         return min(a + x, cap)

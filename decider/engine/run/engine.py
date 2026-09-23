@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Literal, Mapping
+from typing import TYPE_CHECKING, Any, Literal, Mapping
 
 import polars as pl
 
@@ -10,6 +10,9 @@ from decider.engine.run.runners.base import Runner
 from decider.engine.run.runners.interpreted import InterpretedRunner
 from decider.engine.run.state import State
 from decider.engine.wiring import Plan, resolve
+
+if TYPE_CHECKING:
+    from decider.engine.debug import Session
 
 # Mode name -> runner class; a new mode is one entry here.
 RUNNERS: dict[str, type] = {"interpreted": InterpretedRunner}
@@ -119,6 +122,19 @@ class Executable:
         for _ in self.runner.iterate(self.plan, state, run):
             pass
         return self.output(state).row(0, named=True)
+
+    def session(self, df: pl.DataFrame, params: Mapping[str, Any] | None = None) -> Session:
+        """A debug `Session` over `df`, paused before anything runs.
+
+        Example::
+
+            s = exe.session(df)
+            s.break_at("term")
+            s.resume()
+        """
+        from decider.engine.debug import Session
+
+        return Session(self, df, params)
 
     def output(self, state: State) -> pl.DataFrame:
         """The output frame of a finished run: unread frame columns, then every produced output."""
