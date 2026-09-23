@@ -10,7 +10,6 @@ from pydantic import AfterValidator, Field, model_validator
 
 from decider.engine.ir.decls import Input, NullPolicy, Output
 from decider.engine.ir.nodes import CallNode
-from decider.serializable.schema import PolarsSchema
 from decider.steps.configurable import ConfigurableStep
 from decider.steps.tables.encode import Shape, check_columns, dtypes, kind, pack, program, typed, variables
 from decider.steps.tables.matcher import match
@@ -86,7 +85,7 @@ class DecisionTableConfig(ConfigurableStep):
         frame = data["parameters"]
         frame = {"data": frame} if isinstance(frame, list) else dict(frame)
         rows = frame.get("data", [])
-        types = frame.get("dtypes") or PolarsSchema.from_polars_schema(pl.DataFrame(rows).schema).model_dump()
+        types = frame.get("dtypes") or {k: _dtype_name(v) for k, v in pl.DataFrame(rows).schema.items()}
         rest = {k: v for k, v in data.items() if k not in ("parameters", "unnest_output")}
         return {"rows": rows, "columns": dict(types), **rest}
 
@@ -169,3 +168,9 @@ def _choices(column: str, dtype: t.Any, data: t.Optional[list[dict]], default: t
         raise ValueError(f"{name}: output column {column!r} is a String and its rows come from params, so its "
                          "values aren't known up front; declare it {\"type\": \"Enum\", \"categories\": [...]}")
     return tuple(dict.fromkeys([*dtype.categories, *extra]))
+
+
+def _dtype_name(dtype: pl.DataType) -> t.Any:
+    if isinstance(dtype, pl.List):
+        return {"type": "List", "inner": _dtype_name(dtype.inner)}
+    return type(dtype).__name__
