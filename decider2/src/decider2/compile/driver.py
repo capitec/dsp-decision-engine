@@ -66,7 +66,7 @@ from numba.core.errors import NumbaError, UnsupportedBytecodeError
 _FALLBACK_TRIGGERS: tuple[type[BaseException], ...] = (NumbaError, UnsupportedBytecodeError)
 
 from decider2.compile.kernel import KernelPlan, build_fused_kernel, kernel_signature
-from decider2.types import Input, NullPolicy, Step
+from decider2.types import FeatureKind, Input, NullPolicy, Step, feature_kind
 
 SegmentKind = Literal["compiled", "fallback"]
 
@@ -237,10 +237,139 @@ def _fill_array(arrays, i, out):
     what keeps the array-based row gather (no arity ceiling) close to the
     previous per-count closure family's per-row cost instead of well
     behind it — see this module's report."""
-    n = len(arrays)
-    for k in range(n):
+    # `len(out)`, not `len(arrays)`: a typed step's per-kind tuple is padded
+    # with one zero-length dummy when that kind has no inputs (an empty
+    # tuple has no element type numba can infer for a runtime-indexed
+    # read, `_gather0`'s own reason to exist), and `out` is the honest
+    # count. Identical for the plain float64 case, where the two agree.
+    for k in range(len(out)):
         out[k] = arrays[k][i]
     return out
+
+
+# ---------------------------------------------------------------------------
+# Typed row gather — `types.Step.typed_args`. A packed step whose inputs
+# keep their own dtypes: `args` is a 6-tuple of per-kind row arrays in
+# `FeatureKind` order, `params` a `(floats, ints)` pair. Same "homogeneous
+# tuple indexed at a runtime position" mechanism as `_fill_array` above,
+# applied once per kind instead of once — so there is still no width past
+# which anything raises, and an Int64 column is compared as an int64
+# (doc 03 §1.2) rather than rounded through float64 on the way in.
+# ---------------------------------------------------------------------------
+
+_TYPED_DTYPES: tuple[np.dtype, ...] = (
+    np.dtype(np.float64),   # F64
+    np.dtype(np.int64),     # I64
+    np.dtype(np.bool_),     # BOOL
+    np.dtype(np.int32),     # CODE
+    np.dtype(np.int64),     # STR — offsets into the byte buffer
+)
+
+
+def _readonly_empty(dtype: np.dtype) -> np.ndarray:
+    arr = np.empty(0, dtype=dtype)
+    arr.flags.writeable = False
+    return arr
+
+
+# One inert, zero-length, read-only array per kind: the padding entry for a
+# kind with no inputs (see `_fill_array`). Read-only so it is the SAME numba
+# type as a real column would be (`_as_readonly` below).
+_TYPED_DUMMIES: tuple[np.ndarray, ...] = tuple(_readonly_empty(d) for d in _TYPED_DTYPES)
+_BYTES_DUMMY: np.ndarray = _readonly_empty(np.dtype(np.uint8))
+
+
+def _typed_layout(step: Step) -> tuple[FeatureKind, ...]:
+    """`inputs[k]`'s kind, in order. Slot `j` of kind `K` is the `j`-th
+    input of kind `K` here — the only rule, shared with the producer."""
+    return tuple(feature_kind(inp.annotation) for inp in step.inputs)
+
+
+def _typed_counts(step: Step) -> tuple[int, ...]:
+    layout = _typed_layout(step)
+    return tuple(sum(1 for k in layout if k == kind) for kind in FeatureKind)
+
+
+def _as_readonly(arr: np.ndarray, dtype: np.dtype) -> np.ndarray:
+    """`_as_readonly_f64`, for any dtype — same reasoning, same view trick."""
+    out = arr if arr.dtype == dtype else arr.astype(dtype)
+    out = out.view() if out is arr else out
+    out.flags.writeable = False
+    return out
+
+
+def _typed_input_arrays(step: Step, registry: dict) -> tuple:
+    """`(f64_cols, i64_cols, bool_cols, code_cols, str_offsets, str_bytes)`
+    — one homogeneous tuple of whole-column arrays per kind, each padded
+    with its kind's dummy when empty, plus the raw-string byte buffers.
+    A `bytes`-annotated input reads `registry[name]` as the column's
+    `offsets` (int64, length n+1) and `registry["__bytes__" + name]` as
+    its `values` (uint8) — the two arrays polars' `_get_buffers()` hands
+    back for a String column, untouched."""
+    groups: list[list[np.ndarray]] = [[] for _ in FeatureKind]
+    byte_bufs: list[np.ndarray] = []
+    for inp, kind in zip(step.inputs, _typed_layout(step)):
+        groups[kind].append(_as_readonly(registry[inp.name], _TYPED_DTYPES[kind]))
+        if kind is FeatureKind.STR:
+            byte_bufs.append(_as_readonly(registry[f"__bytes__{inp.name}"], np.dtype(np.uint8)))
+    cols = tuple(
+        tuple(g) if g else (_TYPED_DUMMIES[kind],) for kind, g in zip(FeatureKind, groups)
+    )
+    return cols + ((tuple(byte_bufs) if byte_bufs else (_BYTES_DUMMY,)),)
+
+
+def _typed_params(step: Step, values: Sequence[Any]) -> tuple:
+    """`(floats, ints)` — `values` (in `step.params` order) grouped by each
+    `ParamDecl.annotation`, so the kernel can index each group at a
+    runtime position (a homogeneous tuple) without slicing a mixed one
+    (which numba cannot do from a closure constant — verified). Position
+    within a group is first-appearance order in `step.params`, the rule
+    the producer's own slot numbering follows. A `bool`-annotated param
+    rides in the int group as 0/1."""
+    floats: list = []
+    ints: list = []
+    for decl, value in zip(step.params, values):
+        ann = decl.annotation if decl.annotation is not Any else type(decl.default)
+        if ann is float:
+            floats.append(float(value))
+        elif ann in (int, bool):
+            ints.append(int(value))
+        else:
+            raise ValueError(
+                f"typed step '{step.name}': param '{decl.name}' is annotated "
+                f"{ann!r}; a typed packed step takes float/int/bool params only."
+            )
+    return tuple(floats), tuple(ints)
+
+
+@njit(cache=True)
+def _fill_spans(offsets, i, out):
+    """The raw-string slot's row gather: `out[2k], out[2k+1]` = the byte
+    range of string feature `k` on row `i`, read straight off its polars
+    `offsets` buffer. Never dereferences the bytes — that is a matcher's
+    job (`FeatureKind.STR`)."""
+    for k in range(len(out) // 2):
+        out[2 * k] = offsets[k][i]
+        out[2 * k + 1] = offsets[k][i + 1]
+    return out
+
+
+def _typed_row_args(arrays: tuple, counts: Sequence[int], i: int) -> tuple:
+    """One row of a typed step as `_packed_row_args` needs it — the plain-
+    Python (interpreted/stepped) counterpart of the kernel's own per-row
+    gather in `build_packed_kernel`; same six-tuple, same slot rule.
+    `counts[kind]` (from `_typed_counts`) says how many REAL columns each
+    kind's tuple holds, so a padding dummy is never read."""
+    f_cols, i_cols, b_cols, c_cols, s_cols, s_bytes = arrays
+    nf, ni, nb, nc, ns = counts
+    return (
+        np.array([f_cols[k][i] for k in range(nf)], dtype=np.float64),
+        np.array([i_cols[k][i] for k in range(ni)], dtype=np.int64),
+        np.array([b_cols[k][i] for k in range(nb)], dtype=np.bool_),
+        np.array([c_cols[k][i] for k in range(nc)], dtype=np.int32),
+        np.array([v for k in range(ns) for v in (s_cols[k][i], s_cols[k][i + 1])], dtype=np.int64),
+        s_bytes,
+    )
 
 
 def _make_row_gatherer(annotations: Sequence[Any]) -> Callable:
@@ -288,10 +417,68 @@ def _packed_input_arrays(step: Step, registry: dict) -> tuple:
     `_as_float`/`_as_is` cast the previous, per-input-count closure family
     did inside it — same total work, done once per column instead of once
     per row per column."""
+    if step.typed_args:
+        return _typed_input_arrays(step, registry)
     inputs = step.inputs
     if len(inputs) == 1 and inputs[0].annotation is not float:
         return (registry[inputs[0].name],)
     return tuple(_as_readonly_f64(registry[inp.name]) for inp in inputs)
+
+
+def _build_typed_kernel(step: Step) -> Callable:
+    """`build_packed_kernel` for a `typed_args` step: six row buffers
+    hoisted above the loop (one per kind, the raw-string span buffer
+    holding two int64s per string feature), each refilled per row from
+    its own homogeneous column tuple, then ONE call into `fn` with the
+    six-tuple. Zero allocations per row, as before; the extra cost over
+    the single float64 gather is the five (mostly empty) extra fill loops
+    and the tuple build — measured in `evaluation/typed-features`."""
+    n_f, n_i, n_b, n_c, n_s = _typed_counts(step)
+    n_s2 = 2 * n_s
+    fn = step.fn
+
+    # The row six-tuple is built ONCE, above the loop (its members are the
+    # hoisted buffers, refilled in place per row): building a tuple of six
+    # arrays per row measured ~+75 ns/row, the NRT bookkeeping on each
+    # member. `fn` is expected to be `inline="always"` (a tree's `path_fn`
+    # is) so the tuple never crosses a real call boundary either — see
+    # `trees.interpreter.walk_tree` for the measured cost when it does.
+    if step.reads_shared:
+        @njit
+        def kernel(arrays, params, shared, n, out):
+            f_cols, i_cols, b_cols, c_cols, s_cols, s_bytes = arrays
+            bf = np.empty(n_f, dtype=np.float64)
+            bi = np.empty(n_i, dtype=np.int64)
+            bb = np.empty(n_b, dtype=np.bool_)
+            bc = np.empty(n_c, dtype=np.int32)
+            bs = np.empty(n_s2, dtype=np.int64)
+            row = (bf, bi, bb, bc, bs, s_bytes)
+            for i in range(n):
+                _fill_array(f_cols, i, bf)
+                _fill_array(i_cols, i, bi)
+                _fill_array(b_cols, i, bb)
+                _fill_array(c_cols, i, bc)
+                _fill_spans(s_cols, i, bs)
+                out[i] = fn(row, params, shared)
+        return kernel
+
+    @njit
+    def kernel(arrays, params, n, out):
+        f_cols, i_cols, b_cols, c_cols, s_cols, s_bytes = arrays
+        bf = np.empty(n_f, dtype=np.float64)
+        bi = np.empty(n_i, dtype=np.int64)
+        bb = np.empty(n_b, dtype=np.bool_)
+        bc = np.empty(n_c, dtype=np.int32)
+        bs = np.empty(n_s2, dtype=np.int64)
+        row = (bf, bi, bb, bc, bs, s_bytes)
+        for i in range(n):
+            _fill_array(f_cols, i, bf)
+            _fill_array(i_cols, i, bi)
+            _fill_array(b_cols, i, bb)
+            _fill_array(c_cols, i, bc)
+            _fill_spans(s_cols, i, bs)
+            out[i] = fn(row, params)
+    return kernel
 
 
 def build_packed_kernel(step: Step) -> Callable:
@@ -305,6 +492,9 @@ def build_packed_kernel(step: Step) -> Callable:
     (built once, doc 08 §2: retuning it is a values change, so it is a
     plain argument here too, never baked into the kernel). No `step.
     inputs` count raises here any more — see this module's report."""
+    if step.typed_args:
+        return _build_typed_kernel(step)
+
     annotations = tuple(inp.annotation for inp in step.inputs)
     n_inputs = len(annotations)
     fn = step.fn
@@ -641,13 +831,20 @@ def _packed_row_args(
     needless specialisation of it rather than reuse the one `fused` mode
     already warmed.
     """
+    values = tuple(_scalar_arg(resolved, owner, step.name, p.name) for p in step.params)
+    if step.typed_args:
+        # Same six-tuple / `(floats, ints)` pair the fused kernel builds
+        # (`_build_typed_kernel`), so `step.fn` compiles ONE specialisation
+        # that every mode shares — the reason the plain path below also
+        # mirrors its fused counterpart's shape exactly.
+        arrays = _typed_input_arrays(step, registry)
+        return _typed_row_args(arrays, _typed_counts(step), i), _typed_params(step, values)
     inputs = step.inputs
     if len(inputs) == 1 and inputs[0].annotation is not float:
         args: Any = (registry[inputs[0].name][i],)
     else:
         args = np.array([float(registry[inp.name][i]) for inp in inputs], dtype=np.float64)
-    params = tuple(_scalar_arg(resolved, owner, step.name, p.name) for p in step.params)
-    return args, params
+    return args, values
 
 
 def _call_step_row(
@@ -816,6 +1013,8 @@ class PackedCompiledSegment(Segment):
         owner = self.owners[0] if self.owners else step.name
         arrays = _packed_input_arrays(step, registry)
         params = tuple(_scalar_arg(resolved, owner, step.name, p.name) for p in step.params)
+        if step.typed_args:
+            params = _typed_params(step, params)
         out = np.empty(n, dtype=_return_dtype(step))
         if step.reads_shared:
             self.kernel_fn(arrays, params, _shared_arg(resolved, owner, step), n, out)
