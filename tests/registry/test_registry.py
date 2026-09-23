@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 import pytest
 from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
 
-from decider.modules.core import BaseModule
+from decider.steps import ConfigurableStep
 from decider.registry import BaseRegistryModule, import_path, ref
 
 
@@ -74,13 +74,14 @@ def test_alias_loads_by_either_spelling_and_dumps_as_alias():
 
 def test_import_path_imports_the_module(tmp_path, monkeypatch):
     (tmp_path / "registry_plugin_mod.py").write_text(
-        "from decider.modules.core import BaseModule\n"
-        "class Plugin(BaseModule):\n"
+        "from decider.steps import ConfigurableStep\n"
+        "class Plugin(ConfigurableStep):\n"
         "    x: int = 1\n"
+        "    def to_ir(self, ctx): ...\n"
     )
     monkeypatch.syspath_prepend(str(tmp_path))
-    cls = BaseModule.resolve("registry_plugin_mod:Plugin")
-    assert cls.__name__ == "Plugin" and issubclass(cls, BaseModule)
+    cls = ConfigurableStep.resolve("registry_plugin_mod:Plugin")
+    assert cls.__name__ == "Plugin" and issubclass(cls, ConfigurableStep)
 
 
 class NotAStep(BaseModel):
@@ -99,8 +100,8 @@ def test_import_path_to_a_non_registered_class_is_rejected(tag):
 
 def test_independent_roots_never_share_entries():
     with pytest.raises(LookupError):
-        BaseModule.resolve(import_path(Plain))
-    assert "aliased" not in BaseModule.registered_extensions()
+        ConfigurableStep.resolve(import_path(Plain))
+    assert "aliased" not in ConfigurableStep.registered_extensions()
 
 
 def test_two_classes_claiming_one_alias_is_an_error_naming_both():
