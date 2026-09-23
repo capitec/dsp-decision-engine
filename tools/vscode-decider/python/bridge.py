@@ -151,7 +151,7 @@ class Bridge:
         self.sent = 0
 
     def describe(self, file, pipeline=None):
-        self.mod = load_module(file)
+        self.file, self.mod = file, load_module(file)
         pipelines = find_pipelines(self.mod, file)
         if not pipelines:
             raise ValueError(f"{file}: no decider pipeline at module level")
@@ -248,6 +248,19 @@ class Bridge:
         return {**result, "describe": self.described, "data": used.to_dicts(), "key": key_column(used),
                 "at": None if at is None else {"path": at[0], "when": at[1], "n": at[2]}}
 
+    def skip(self, path):
+        """Remove the step at `path` from the paused run and re-run from where it was."""
+        self.session.delete(path)
+        self.step = self.session.executable.step  # forks replay the edited pipeline
+
+    def reload_step(self, path):
+        """Re-import the pipeline's files and swap the step now at `path` into the paused run."""
+        new = step_map(getattr(load_module(self.file), self.name)).get(path)
+        if new is None:
+            raise KeyError(f"{path!r} is no longer in {self.name}")
+        self.session.replace(path, new)
+        self.step = self.session.executable.step
+
     def _names(self):
         plan = self.session.executable.plan
         return sorted({v.name for v in plan.versions} | set(self.session.state.chains))
@@ -297,6 +310,9 @@ class Bridge:
             return tree_path(s, **args)
         if cmd == "debug_condition":
             return {"condition": debug_condition(s, **args)}
+        if cmd in ("skip", "reload_step"):
+            getattr(self, cmd)(**args)  # a WiringError changes nothing and comes back as the reply's error
+            return self.status()
         if cmd in ("step", "step_into", "resume", "rewind", "break_at", "clear_break", "set"):
             try:
                 getattr(s, cmd)(**args)
