@@ -46,6 +46,8 @@ export interface Sweep {
   comparisons: Comparison[];
   /** Output columns that differ in at least one scenario, in output order. */
   changedColumns: string[];
+  /** Each knob's value in the original run, per record (a param's default is the same on every row). */
+  knobBase: Record<string, unknown[]>;
   rows: number;
 }
 
@@ -90,7 +92,28 @@ export function summariseSweep(r: SweepResponse, scenarioList: Scenario[] = []):
   for (const res of r.results)
     for (const [name, values] of Object.entries(res.output ?? {}))
       if (!base?.[name] || values.some((v, i) => !same(v, base[name][i]))) changed.add(name);
-  const knobNames = [...new Set(scenarioList.flatMap((s) => Object.keys(knobValues(s))))];
+  // In the order the user listed the knobs, which is the order of the scenario labels.
+  const firstLabel = scenarioList[0]?.label ?? "";
+  const knobNames = [...new Set(scenarioList.flatMap((s) => Object.keys(knobValues(s))))].sort(
+    (a, b) => firstLabel.indexOf(a) - firstLabel.indexOf(b),
+  );
+  const inputs = new Set(Object.keys(r.data[0] ?? {}));
+  const knobBase = Object.fromEntries(
+    knobNames.map((name) => {
+      if (inputs.has(name)) return [name, r.data.map((row) => row[name])];
+      const [path, param] = [name.slice(0, name.lastIndexOf(".")), name.slice(name.lastIndexOf(".") + 1)];
+      return [name, r.data.map(() => r.describe.params[path]?.[param]?.default)];
+    }),
+  );
+  // A fork sets inputs mid-run, so its output still shows the input as it arrived; name the change instead.
+  const withInputs = (c: Comparison, s: Scenario | undefined): Comparison => ({
+    ...c,
+    changedInputs: Object.entries(s?.overrides ?? {}).map(([name, after]) => ({
+      name,
+      after,
+      scope: s?.row == null ? "every record" : r.key ? `${r.key.name} ${String(r.key.values[s.row])}` : `row ${s.row}`,
+    })),
+  });
   return {
     key: r.key,
     knobs: knobNames.map((name) => ({ name, values: scenarioList.map((s) => knobValues(s)[name]) })),
@@ -99,8 +122,9 @@ export function summariseSweep(r: SweepResponse, scenarioList: Scenario[] = []):
     base,
     outputs: r.results.map((x) => x.output),
     errors: r.results.map((x) => x.error),
-    comparisons: r.results.map((x) => compareTraces(asTrace(r.baseline), asTrace(x), "original", x.label)),
-    changedColumns: Object.keys(base ?? r.results[0]?.output ?? {}).filter((c) => changed.has(c)),
+    comparisons: r.results.map((x, i) => withInputs(compareTraces(asTrace(r.baseline), asTrace(x), "original", x.label), scenarioList[i])),
+    knobBase,
+    changedColumns: Object.keys(base ?? r.results[0]?.output ?? {}).filter((c) => changed.has(c) && !inputs.has(c)),
     rows: r.data.length,
   };
 }

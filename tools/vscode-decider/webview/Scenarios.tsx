@@ -124,48 +124,66 @@ export function Scenarios({ schema, columns, pausedAt, record, keyCol, rows, res
 function Results({ sweep, row, rows, onRow, onOpen }: { sweep: Sweep; row: number; rows: number; onRow: (r: number) => void; onOpen: (i: number) => void }) {
   const cols = sweep.changedColumns;
   const knobCols = sweep.knobs.length ? sweep.knobs : [{ name: "scenario", values: sweep.labels }];
+  const all = row < 0;
+  const recordsOf = (list: number[]) => list.map((r) => recordLabel(r, sweep.key)).join(", ");
+  const baseKnob = (name: string) => {
+    const values = sweep.knobBase[name] ?? [];
+    if (!all) return formatValue(values[row]);
+    return values.every((v) => same(v, values[0])) ? formatValue(values[0]) : "varies";
+  };
   return (
     <section>
       <div className="summary">
-        <span className="muted">Outputs for</span>
+        <span>Outputs for</span>
         <select aria-label="scenario record" value={row} onChange={(e) => onRow(Number(e.target.value))}>
+          <option value={-1}>all records (count changes)</option>
           {Array.from({ length: rows }, (_, i) => (
             <option key={i} value={i}>{recordLabel(i, sweep.key)}</option>
           ))}
         </select>
-        <span className="muted small">· green: differs from the original · click a row for its step-by-step comparison</span>
       </div>
+      <p className="hint">Each row is one scenario. Highlighted cells differ from the original run; click a row to see its step-by-step comparison.</p>
       {cols.length === 0 ? (
-        <div className="muted">No scenario changes any output.</div>
+        <div className="muted">No scenario changes any result.</div>
       ) : (
         <table className="sweep">
           <thead>
             <tr>
               {knobCols.map((k) => (
-                <th key={k.name} className="knob-col">{k.name.split(".").pop()}</th>
+                <th key={k.name} className="knob-col" title={k.name}>{k.name.split(".").pop()}</th>
               ))}
               {cols.map((c) => (
                 <th key={c}>{c}</th>
               ))}
-              <th title="Records whose outputs differ from the original">records changed</th>
+              <th title="Records whose results differ from the original">records changed</th>
             </tr>
           </thead>
           <tbody>
             <tr className="original">
-              <td colSpan={knobCols.length}>original run</td>
-              {cols.map((c) => (
-                <td key={c} className="mono">{formatValue(sweep.base?.[c]?.[row])}</td>
+              {knobCols.map((k) => (
+                <td key={k.name} className="mono knob-col">{k.name === "scenario" ? "original run" : baseKnob(k.name)}</td>
               ))}
-              <td />
+              {cols.map((c) => (
+                <td key={c} className="mono">{all ? "" : formatValue(sweep.base?.[c]?.[row])}</td>
+              ))}
+              <td className="muted">original run</td>
             </tr>
             {sweep.labels.map((label, i) => {
-              const changedRows = new Set(sweep.comparisons[i].output.flatMap((o) => o.changedRows));
+              const changedRows = [...new Set(sweep.comparisons[i].output.flatMap((o) => o.changedRows))].sort((a, b) => a - b);
               return (
                 <tr key={i} className="clickable" title={`${label}: open its step-by-step comparison`} onClick={() => onOpen(i)}>
                   {knobCols.map((k) => (
                     <td key={k.name} className="mono knob-col">{formatValue(k.values[i])}</td>
                   ))}
                   {cols.map((c) => {
+                    if (all) {
+                      const diff = sweep.comparisons[i].output.find((o) => o.name === c);
+                      return (
+                        <td key={c} className={diff ? "changed" : "unchanged"} title={diff ? `changed for ${recordsOf(diff.changedRows)}` : "same for every record"}>
+                          {diff ? `${diff.changedRows.length} changed` : "same"}
+                        </td>
+                      );
+                    }
                     const before = sweep.base?.[c]?.[row];
                     const after = sweep.outputs[i]?.[c]?.[row];
                     const changed = !same(before, after);
@@ -177,7 +195,9 @@ function Results({ sweep, row, rows, onRow, onOpen }: { sweep: Sweep; row: numbe
                       </td>
                     );
                   })}
-                  <td>{sweep.errors[i] ? <span className="error small">{sweep.errors[i]}</span> : `${changedRows.size} of ${rows}`}</td>
+                  <td title={changedRows.length ? recordsOf(changedRows) : "no record changed"}>
+                    {sweep.errors[i] ? <span className="error small">{sweep.errors[i]}</span> : changedRows.length ? recordsOf(changedRows) : "none"}
+                  </td>
                 </tr>
               );
             })}

@@ -20,6 +20,8 @@ export interface StepDiff {
   status: "same" | "changed" | "added" | "removed" | "not run";
   /** What changed in the step itself: "code", "params", "reads", "writes". */
   structural: string[];
+  /** Each changed param, as "cap: 48 → 42". */
+  paramChanges: string[];
   outputs: ValueDiff[];
 }
 
@@ -35,6 +37,12 @@ export interface Comparison {
   key: RecordKey;
   /** Every output column, so a view can say which stayed the same. */
   outputColumns: string[];
+  /** Columns that were pipeline inputs rather than results. */
+  inputColumns: string[];
+  /** Both runs' results (not inputs), for showing values that did not change too. */
+  results: { a: Record<string, unknown[]>; b: Record<string, unknown[]> };
+  /** Inputs the second run changed on purpose: a what-if's or a scenario's own values. */
+  changedInputs: { name: string; after: unknown; scope: string }[];
   /** The two pipeline files, when they differ (a revision against the working tree). */
   files?: { a: string; b: string };
 }
@@ -60,6 +68,14 @@ function diffColumns(a: Record<string, unknown[]>, b: Record<string, unknown[]>)
   }
   return out;
 }
+
+function paramChanges(a: CallNodeJson, b: CallNodeJson): string[] {
+  return [...new Set([...Object.keys(a.params), ...Object.keys(b.params)])]
+    .filter((k) => !same(a.params[k], b.params[k]))
+    .map((k) => `${k}: ${fmt(a.params[k])} → ${fmt(b.params[k])}`);
+}
+
+const fmt = (v: unknown) => (v === undefined ? "none" : typeof v === "number" ? String(Number(v.toFixed(4))) : JSON.stringify(v));
 
 function structural(a: CallNodeJson, b: CallNodeJson): string[] {
   const changes: string[] = [];
@@ -101,20 +117,32 @@ export function compareTraces(a: TraceResult, b: TraceResult, labelA: string, la
   const steps: StepDiff[] = merged([...nodesA.values()], [...nodesB.values()]).map((path) => {
     const na = nodesA.get(path);
     const nb = nodesB.get(path);
-    if (!na) return { path, status: "added", structural: [], outputs: [] };
-    if (!nb) return { path, status: "removed", structural: [], outputs: [] };
+    if (!na) return { path, status: "added", structural: [], paramChanges: [], outputs: [] };
+    if (!nb) return { path, status: "removed", structural: [], paramChanges: [], outputs: [] };
     const sa = a.steps[path];
     const sb = b.steps[path];
     const changes = structural(na, nb);
-    if (!sa && !sb) return { path, status: changes.length ? "changed" : "not run", structural: changes, outputs: [] };
+    const params = paramChanges(na, nb);
+    if (!sa && !sb) return { path, status: changes.length ? "changed" : "not run", structural: changes, paramChanges: params, outputs: [] };
     const outputs = diffColumns(sa ?? {}, sb ?? {});
-    return { path, status: outputs.length || changes.length ? "changed" : "same", structural: changes, outputs };
+    return { path, status: outputs.length || changes.length ? "changed" : "same", structural: changes, paramChanges: params, outputs };
   });
+  const inputs = new Set(Object.keys(b.data[0] ?? a.data[0] ?? {}));
+  const results = (o: Record<string, unknown[]> | null) => Object.fromEntries(Object.entries(o ?? {}).filter(([k]) => !inputs.has(k)));
+  const changedInputs = Object.keys(b.data[0] ?? {})
+    .map((name) => {
+      const rows = b.data.map((_, r) => r).filter((r) => !same(a.data[r]?.[name], b.data[r]?.[name]));
+      return rows.length ? { name, after: b.data[rows[0]][name], scope: rows.length === b.data.length ? "every record" : rows.map((r) => (b.key ? `${b.key.name} ${fmt(b.key.values[r])}` : `row ${r}`)).join(", ") } : null;
+    })
+    .filter((x): x is { name: string; after: unknown; scope: string } => x !== null);
   return {
     a: labelA,
     b: labelB,
     steps,
-    output: a.output && b.output ? diffColumns(a.output, b.output) : [],
+    inputColumns: [...inputs],
+    results: { a: results(a.output), b: results(b.output) },
+    changedInputs,
+    output: a.output && b.output ? diffColumns(results(a.output), results(b.output)) : [],
     firstDivergence: steps.find((s) => s.outputs.length)?.path ?? null,
     errors: { a: a.error, b: b.error },
     rows: b.data.length,

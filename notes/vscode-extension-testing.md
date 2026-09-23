@@ -26,6 +26,14 @@ Findings that cost time:
 - **A fresh profile needs quiet settings** (no parent-folder git prompt, no
   secondary side bar), or notifications cover the UI in screenshots.
 
+**Usability loop.** `pnpm test:stories` runs five user stories and captions each
+screenshot with what the user just did. An agent with no other context scores
+each story from the screenshots alone (discoverability, clarity, feedback,
+efficiency, goal answered) and lists fixes. A fresh reviewer each round keeps
+the scores honest. Story scripts drive the editor the way a person would:
+keys pressed while a webview has focus stay in the webview, so a script clicks
+the editor tab before using editor shortcuts.
+
 The screenshots showed layout bugs that no assertion caught. Flex children
 wouldn't shrink, so the graph was pushed out of view. Data edges in the layout
 graph made it sprawl. Both were fixed from the images.

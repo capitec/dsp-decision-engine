@@ -22,14 +22,14 @@ export interface Ref {
 
 /** Tags, local branches and recent commits, newest first, for picking a baseline. */
 export async function listRefs(root: string, commits = 20): Promise<Ref[]> {
-  const refs = await git(root, "for-each-ref", "--sort=-creatordate", "--format=%(refname:short)\t%(objecttype)\t%(refname)", "refs/tags", "refs/heads");
+  const refs = await git(root, "for-each-ref", "--sort=-creatordate", "--format=%(refname:short)\t%(objectname:short)\t%(refname)", "refs/tags", "refs/heads");
   const log = await git(root, "log", `-${commits}`, "--format=%h\t%s\t%cr");
   const named = refs
     .split("\n")
     .filter(Boolean)
     .map((l) => {
-      const [name, , full] = l.split("\t");
-      return { ref: name, label: name, description: full.startsWith("refs/tags/") ? "tag" : "branch" };
+      const [name, sha, full] = l.split("\t");
+      return { ref: name, label: name, sha, description: full.startsWith("refs/tags/") ? "tag" : "branch" };
     });
   const recent = log
     .split("\n")
@@ -38,8 +38,15 @@ export async function listRefs(root: string, commits = 20): Promise<Ref[]> {
       const [sha, subject, when] = l.split("\t");
       return { ref: sha, label: sha, description: `${subject} (${when})` };
     });
-  const head = recent[0] ? [{ ref: "HEAD", label: "HEAD", description: `last commit: ${recent[0].description}` }] : [];
-  return [...head, ...named, ...recent];
+  const head = recent[0] ? [{ ref: "HEAD", label: "HEAD", sha: recent[0].ref, description: `last commit: ${recent[0].description}` }] : [];
+  // Several names often point at one commit; say so, so the list doesn't look like different choices.
+  const names = new Map<string, string[]>();
+  for (const r of [...head, ...named]) names.set(r.sha, [...(names.get(r.sha) ?? []), r.label]);
+  const alias = (r: { sha: string; label: string }) => (names.get(r.sha) ?? []).filter((n) => n !== r.label);
+  return [
+    ...[...head, ...named].map(({ sha, ...r }) => ({ ...r, description: alias({ sha, label: r.label }).length ? `${r.description} · same commit as ${alias({ sha, label: r.label }).join(", ")}` : r.description })),
+    ...recent.map((r) => ({ ...r, description: names.has(r.ref) ? `${r.description} · ${names.get(r.ref)!.join(", ")}` : r.description })),
+  ];
 }
 
 /**

@@ -2,6 +2,8 @@ import { formatValue, kindLabel, recordLabel, type CallNodeJson, type ColumnHist
 
 interface Props {
   node?: CallNodeJson;
+  nodes: CallNodeJson[];
+  onClose: () => void;
   run: RunStatus;
   columns: ColumnSummary[] | null;
   keyCol: RecordKey;
@@ -17,7 +19,7 @@ interface Props {
 }
 
 /** The details pane: the selected step, then the picked column's lineage and history. */
-export function NodePanel({ node, run, columns, keyCol, column, lineage, history, treePath, onPick, onSelect, onReveal, onRewind, onRunTo }: Props) {
+export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, lineage, history, treePath, onPick, onSelect, onReveal, onRewind, onRunTo }: Props) {
   const visits = node && run.visits[node.path];
   const who = run.record === null ? null : recordLabel(run.record, keyCol);
   const valueOf = (name: string) => {
@@ -27,8 +29,12 @@ export function NodePanel({ node, run, columns, keyCol, column, lineage, history
   };
   const path = treePath && node && treePath.path === node.path && run.record === treePath.row ? treePath : null;
   const paused = run.current && !run.finished;
+  const ran = !!node && run.finishedPaths.includes(node.path);
+  const card = lineage && lineage.name === column ? lineage : null;
   return (
     <aside>
+      <button className="close link" title="Hide details" onClick={onClose}>✕</button>
+      {card && <HowComputed entry={card} who={who} nodes={nodes} onPick={onPick} onSelect={onSelect} />}
       {node ? (
         <>
           <h3>{node.path}</h3>
@@ -59,8 +65,8 @@ export function NodePanel({ node, run, columns, keyCol, column, lineage, history
           )}
           <h4>Reads{who && <span className="muted"> · values for {who}</span>}</h4>
           <Chips names={node.inputs} picked={column} onPick={onPick} valueOf={valueOf} />
-          <h4>Writes</h4>
-          <Chips names={node.outputs} picked={column} onPick={onPick} valueOf={valueOf} />
+          <h4>Writes{who && !ran && <span className="muted"> · not run yet</span>}</h4>
+          <Chips names={node.outputs} picked={column} onPick={onPick} valueOf={ran ? valueOf : () => undefined} />
           {Object.keys(node.params).length > 0 && (
             <>
               <h4>Params</h4>
@@ -82,11 +88,11 @@ export function NodePanel({ node, run, columns, keyCol, column, lineage, history
       ) : (
         <div className="muted">Click a step in the graph to see what it reads and writes.</div>
       )}
-      {lineage && lineage.name === column && (
-        <>
-          <h4>Where {lineage.name} comes from{who ? ` for ${who}` : ""}</h4>
-          <LineageTree entry={lineage} record={run.record} onSelect={onSelect} />
-        </>
+      {card && (
+        <details>
+          <summary>Full lineage of {card.name}</summary>
+          <LineageTree entry={card} record={run.record} onSelect={onSelect} />
+        </details>
       )}
       {history && history.name === column && (
         <>
@@ -114,6 +120,46 @@ export function NodePanel({ node, run, columns, keyCol, column, lineage, history
         </>
       )}
     </aside>
+  );
+}
+
+/** "term_cap = 60, written by term/term_cap from requested_term = 72 and ceiling = 60". */
+function HowComputed({ entry, who, nodes, onPick, onSelect }: { entry: Lineage; who: string | null; nodes: CallNodeJson[]; onPick: (n?: string) => void; onSelect: (p: string) => void }) {
+  const producer = nodes.find((n) => n.path === entry.producer);
+  return (
+    <div className="how">
+      <div className="how-title">
+        How is <span className="mono">{entry.name}{who ? ` = ${formatValue(entry.value)}` : ""}</span> computed{who ? ` for ${who}` : ""}?
+      </div>
+      {entry.producer === null ? (
+        <div>It is an input: it arrives with the data.</div>
+      ) : (
+        <>
+          <div>
+            Written by <a onClick={() => onSelect(entry.producer!)}>{entry.producer}</a>
+            {entry.via === "merge" && <span className="muted"> (the branch arm this record took)</span>}
+            {entry.via === "carry" && <span className="muted"> (the loop's last iteration)</span>}
+            {entry.inputs.length > 0 && " from:"}
+          </div>
+          <ul>
+            {entry.inputs.map((i, k) => (
+              <li key={k}>
+                <a className="mono" title={`How is ${i.name} computed?`} onClick={() => onPick(i.name)}>{i.name}</a>
+                {who && <span className="mono"> = {formatValue(i.value)}</span>}
+                <span className="muted"> {i.producer ? `from ${i.producer}` : "input"}</span>
+              </li>
+            ))}
+            {producer &&
+              Object.entries(producer.params).map(([k, v]) => (
+                <li key={k}>
+                  <span className="mono">{k} = {formatValue(v)}</span> <span className="muted">parameter</span>
+                </li>
+              ))}
+          </ul>
+          <div className="muted small">Click an input to go one step further back.</div>
+        </>
+      )}
+    </div>
   );
 }
 
