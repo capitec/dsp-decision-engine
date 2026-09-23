@@ -47,7 +47,7 @@ const cellText = (v: unknown, percent = false) =>
 /** A lookup table's rows as an editable grid: one input per cell, edited cells marked. */
 export function TableGrid({ name, columns, rows, base, onChange, expression }: Props) {
   const keys = new Set([expression?.lower_bound_column, expression?.upper_bound_column, expression?.value_column].filter(Boolean));
-  const cols = [...Object.keys(columns).filter((c) => !keys.has(c)), ...Object.keys(columns).filter((c) => keys.has(c))];
+  const cols = [...Object.keys(columns).filter((c) => keys.has(c)), ...Object.keys(columns).filter((c) => !keys.has(c))];
   const percent = Object.fromEntries(cols.map((c) => [c, isPercent(c, base)]));
   // Cells hold the typed text until the document is built, so "0." survives typing "0.25".
   const set = (i: number, col: string, text: string) => onChange(rows.map((r, j) => (j === i ? { ...r, [col]: text } : r)));

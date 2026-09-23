@@ -119,7 +119,13 @@ export function Explain({ entry, who, role, nodes, values, onPick, onSelect }: P
         <span className="mono">{entry.name}{who ? ` = ${formatValue(entry.value, entry.name)}` : ""}</span>
         {role && <span className="muted"> ({role})</span>}
       </div>
-      {entry.producer !== null && summary(entry, nodes, values) && <div className="explain-summary">{summary(entry, nodes, values)}</div>}
+      {entry.producer !== null && summary(entry, nodes, values) && (
+        <div className="explain-summary">
+          {summary(entry, nodes, values)!.split(" · ").map((part) => (
+            <div key={part}>{part}</div>
+          ))}
+        </div>
+      )}
       {entry.producer === null ? (
         <div>It is an input: it arrives with the data.</div>
       ) : (
@@ -157,6 +163,9 @@ function summary(entry: Lineage, nodes: CallNodeJson[], values: Record<string, u
 
 function Level({ entry, depth, nodes, values, who, onPick, onSelect }: { entry: Lineage; depth: number; nodes: CallNodeJson[]; values: Record<string, unknown>; who: string | null; onPick: (n?: string) => void; onSelect: (p: string) => void }) {
   const [open, setOpen] = useState(depth < OPEN_DEPTH);
+  const [showZeros, setShowZeros] = useState(false);
+  // A term that is 0 for this record adds nothing to the answer; folded unless asked for, or when it's the only one.
+  const zero = (i: Lineage) => i.value === 0 && entry.inputs.filter((x) => x.value === 0).length > 1;
   const node = nodes.find((n) => n.path === entry.producer);
   const known: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(node?.params ?? {})) known[k] = shared(values)[k] ?? v;
@@ -192,9 +201,15 @@ function Level({ entry, depth, nodes, values, who, onPick, onSelect }: { entry: 
       )}
       {open && entry.inputs.length > 0 && (
         <ul>
-          {entry.inputs.map((i, k) => (
+          {entry.inputs.filter((i) => !zero(i) || showZeros).map((i, k) => (
             <Level key={k} entry={i} depth={depth + 1} nodes={nodes} values={values} who={who} onPick={onPick} onSelect={onSelect} />
           ))}
+          {!showZeros && entry.inputs.filter(zero).length > 1 && (
+            <li className="muted small">
+              <span className="twisty" />
+              <a onClick={() => setShowZeros(true)}>+ {entry.inputs.filter(zero).length} parts at 0: {entry.inputs.filter(zero).map((i) => i.name).join(", ")}</a>
+            </li>
+          )}
         </ul>
       )}
     </li>

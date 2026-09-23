@@ -22,6 +22,8 @@ interface Props {
   onOpen: (path: string) => void;
   /** Open a folded group, or fold an open one. */
   onToggle: (path: string) => void;
+  /** Height in pixels set by dragging the split under the graph. */
+  height?: number | null;
 }
 
 // A step whose output many later steps read would bury the graph in arcs; past this, only its inputs are drawn.
@@ -30,7 +32,7 @@ const MAX_OUT = 4;
 // Below this, node text gets smaller than the editor's; scroll instead.
 const MIN_AUTO = 0.9;
 
-export function Graph({ ir, showData, run, selected, highlightColumn, lineage, diff, treePath, zoom, onSelect, onOpen, onToggle }: Props) {
+export function Graph({ ir, showData, run, selected, highlightColumn, lineage, diff, treePath, zoom, onSelect, onOpen, onToggle, height }: Props) {
   const laid = useMemo(() => layout(ir), [ir]);
   const flows = useMemo(() => dataEdges(ir), [ir]);
   const at = useMemo(() => new Map(laid.nodes.map((n) => [n.path, n])), [laid]);
@@ -74,7 +76,7 @@ export function Graph({ ir, showData, run, selected, highlightColumn, lineage, d
   const scale = zoom === "auto" ? Math.min(1, Math.max(MIN_AUTO, width ? (width - 4) / full : 1)) : zoom;
 
   return (
-    <div className="graph" ref={box}>
+    <div className="graph" ref={box} style={height ? { height, flex: "none" } : undefined}>
       <svg viewBox={`0 0 ${full} ${laid.height}`} width={full * scale} height={laid.height * scale}>
         <defs>
           <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">

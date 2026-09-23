@@ -15,6 +15,7 @@ goal isn't visibly met caps at 5). The loop stops above 8/10 or after 40 rounds.
 | 5 | 7.6 | 8 | 8 | 8 | 7 | 7 | 8 | 7 |
 | 6 | 7.3 | 8 | 8 | 8 | 7 | 6 | 7 | 7 |
 | 7 | 7.4 | 8 | 8 | 8 | 7 | 6 | 8 | 7 |
+| 8 | 7.4 | 8 | 8 | 7 | 8 | 6 | 8 | 7 |
 
 ## Round 0 (baseline)
 
@@ -207,3 +208,29 @@ Judge's problems, most damaging first:
 10. After running the edited code the focused record shows no before/after.
 11. Lookup table columns clip; column order differs from the matched-row view.
 12. Small labels: a git button inside the step list, a wrapping badge, "reads pl_base_rates" for the table itself.
+
+## Round 8
+
+Changes: declined records show only their decision and reason, other values as "internal values, not offered";
+readers of a changed param that moved nothing collapse into one line; when no approved offer moved, one line says
+where the change went; a table's own edit reads "row 3 edited"; the git action sits beside the title; sweep cells
+read "−R 5,303.95 (3)", green down and red up, with decision counts as a column; a draggable split between the graph
+and the details, remembered per viewer; the breakdown folds zero parts and splits its summary into lines; lookup
+tables put the band first and fit the panel; the banner no longer repeats the code diff.
+
+The score held at 7.4. The remaining problems are mostly about space: a ~500px panel beside the editor.
+
+Judge's problems, most damaging first:
+
+1. L5: the sweep scrolls sideways; offer columns hidden while half the panel is empty; the current setting unmarked.
+2. L3: the summary drops the zero terms, so "risk loading" is missing from the answer.
+3. The panel is cramped; the editor clips the edited line; What-if, Scenarios and Compare don't need the editor.
+4. L7: the focused record's new value is below the fold.
+5. The graph viewport is small: banner, two toolbar rows and details.
+6. L5: the knob picker is squeezed and its path overlaps the values box.
+7. L4/L7: "only declined records moved" is said four times.
+8. L6: "What changed" lists flow paths, not the changed files.
+9. L3: the step name scrolls away above the breakdown.
+10. The banner's compare button looks like text; edit chips hidden.
+11. What-if opens with the shared tables expanded; the sticky footer covers a title; headers truncated.
+12. L1: no sense of position among 1,024 steps; params cut off.

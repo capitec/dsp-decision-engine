@@ -60,6 +60,31 @@ export function App() {
   const [editsOpen, setEditsOpen] = useState(false);
   // Steps whose code was swapped mid-run: path -> the formula now running.
   const [formulas, setFormulas] = useState<Record<string, string | null>>({});
+  const [graphHeight, setGraphHeight] = useState<number | null>(() => {
+    try {
+      return Number(localStorage.getItem("decider.graphHeight")) || null;
+    } catch {
+      return null;
+    }
+  });
+  const dragSplit = (e: React.MouseEvent) => {
+    const top = (e.currentTarget.previousElementSibling as HTMLElement | null)?.getBoundingClientRect().top ?? 0;
+    const move = (ev: MouseEvent) => setGraphHeight(Math.max(120, ev.clientY - top));
+    const up = () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+      setGraphHeight((h) => {
+        try {
+          if (h) localStorage.setItem("decider.graphHeight", String(h));
+        } catch {
+          // storage may be unavailable; the split still works for this view
+        }
+        return h;
+      });
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+  };
   const shown = useRef<string | undefined>(undefined);
 
   useEffect(() => {
@@ -239,13 +264,7 @@ export function App() {
             </>
           )}
           {note && <div className="banner-note">{note}</div>}
-          {note && codeDiff.length > 0 && (
-            <pre className="banner-diff">
-              {codeDiff.slice(0, 6).map((l, i) => (
-                <div key={i} className={l.startsWith("+") ? "added" : "removed"}>{l.replace(/^([+-])\s+/, "$1 ")}</div>
-              ))}
-            </pre>
-          )}
+
           {editsOpen && edits.length > 0 && (
             <div className="edit-list">
               {edits.map(([p, a]) => (
@@ -328,8 +347,10 @@ export function App() {
             onSelect={setSelected}
             onOpen={(path) => send({ type: "reveal", path })}
             onToggle={toggle}
+            height={graphHeight}
           />
         )}
+        {tab === "graph" && withDetails && selectedNode && <div className="splitter" title="Drag to give the graph or the details more room" onMouseDown={dragSplit} />}
         {tab === "state" && <StateTable columns={columns} record={run.record} keyCol={keyCol} selected={selectedNode} order={columnOrder} onPick={setColumn} picked={column} />}
         {tab === "params" && (
           <Params
@@ -403,7 +424,7 @@ export function App() {
             }}
             onReload={(path) => {
               setPending(`Reloading ${path.split("/").pop()} and re-running from there…`);
-              noteNext.current = `Loaded your edited ${path.split("/").pop()} and went back to just before it; continue to run the new code:`;
+              noteNext.current = `Loaded your edited ${path.split("/").pop()} and went back to just before it; continue to run the new code.`;
               send({ type: "reloadStep", path });
             }}
           />

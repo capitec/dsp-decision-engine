@@ -36,12 +36,21 @@ export function ResultCards({ c, record, onFocus }: { c: Comparison; record: num
         {r === record && <span className="muted small"> (focused)</span>}
       </div>
       {cols
-        .filter((n) => n !== decision && moved(n, r))
+        .filter((n) => n !== decision && moved(n, r) && (!declined(r) || n === "reason_code"))
         .map((n) => (
           <div key={n} className="result-line">
             <span className="mono">{n}</span> <s className="before">{formatValue(c.results.a[n]?.[r], n)}</s> → <strong className="after">{formatValue(c.results.b[n]?.[r], n)}</strong>
           </div>
         ))}
+      {declined(r) && cols.some((n) => n !== decision && n !== "reason_code" && moved(n, r)) && (
+        <div className="result-line muted small">
+          internal values, not offered:{" "}
+          {cols
+            .filter((n) => n !== decision && n !== "reason_code" && moved(n, r))
+            .map((n) => `${n} ${formatValue(c.results.a[n]?.[r], n)} → ${formatValue(c.results.b[n]?.[r], n)}`)
+            .join(", ")}
+        </div>
+      )}
     </div>
   );
   return (
