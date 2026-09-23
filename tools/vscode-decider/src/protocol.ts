@@ -110,15 +110,30 @@ export interface ColumnHistory {
   versions: { producer: string; values: unknown[]; written?: boolean }[];
 }
 
+/** The column that names a record, and its value on every row. */
+export type RecordKey = { name: string; values: unknown[] } | null;
+
+/** "client_id 2", or "row 1" when the data has no id column. */
+export function recordLabel(row: number, key: RecordKey): string {
+  return key ? `${key.name} ${formatValue(key.values[row])}` : `row ${row}`;
+}
+
+/** Values for people: no float noise (58113.073350000006 shows as 58113.0734). */
+export function formatValue(v: unknown): string {
+  if (v === undefined) return "—";
+  if (typeof v === "number") return Number.isInteger(v) ? String(v) : String(Number(v.toFixed(4)));
+  return JSON.stringify(v);
+}
+
 export type Tab = "graph" | "state" | "params" | "scenarios" | "compare";
 
 /** Messages between the extension and the graph webview. */
 export type ToWebview =
   | { type: "describe"; describe: DescribeResult }
   | ({ type: "status" } & RunStatus)
-  | { type: "state"; columns: ColumnSummary[] | null; rows: number }
+  | { type: "state"; columns: ColumnSummary[] | null; rows: number; key: RecordKey }
   | { type: "lineage"; lineage: Lineage | null; history: ColumnHistory | null }
-  | { type: "treePath"; path: string; row: number; visited: string[] }
+  | { type: "treePath"; path: string; row: number; visited: string[]; result?: unknown[] }
   | { type: "compare"; comparison: Comparison | null; busy?: string; error?: string }
   | { type: "tab"; tab: Tab }
   | { type: "sweep"; sweep: Sweep | null; busy?: string; error?: string };
@@ -130,9 +145,11 @@ export type FromWebview =
   | { type: "lineage"; name: string }
   | { type: "treePath"; path: string }
   | { type: "rewind"; path: string }
-  | { type: "whatIf"; params: unknown; overrides: Record<string, unknown>; row: number | null }
+  | { type: "whatIf"; params: unknown; overrides: Record<string, unknown>; row: number | null; label: string }
   | { type: "restartWith"; params: unknown }
   | { type: "compareRevision" }
+  | { type: "runTo"; path: string }
+  | { type: "openDiff"; path: string }
   | { type: "sweep"; scenarios: Scenario[]; fromHere: boolean };
 
 export function walk(node: IRNodeJson, fn: (n: IRNodeJson, parent: IRNodeJson | null) => void, parent: IRNodeJson | null = null) {

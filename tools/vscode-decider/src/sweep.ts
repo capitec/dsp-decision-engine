@@ -1,5 +1,5 @@
 import { compareTraces, same, type Comparison } from "./compare";
-import type { DescribeResult } from "./protocol";
+import type { DescribeResult, RecordKey } from "./protocol";
 
 export interface RunTrace {
   steps: Record<string, Record<string, unknown[]>>;
@@ -13,6 +13,7 @@ export interface SweepResponse {
   results: (RunTrace & { label: string })[];
   describe: DescribeResult;
   data: Record<string, unknown>[];
+  key: RecordKey;
   at: { path: string; when: string; n: number } | null;
 }
 
@@ -32,6 +33,9 @@ export interface Knob {
 }
 
 export interface Sweep {
+  key: RecordKey;
+  /** Per scenario, the knob values it used, for one column per knob. */
+  knobs: { name: string; values: unknown[] }[];
   /** Where the scenarios fork: "before term/cap_by_income", or null for the start. */
   at: string | null;
   labels: string[];
@@ -66,14 +70,30 @@ export function scenarios(knobs: Knob[], row: number | null): Scenario[] {
     });
 }
 
-export function summariseSweep(r: SweepResponse): Sweep {
-  const asTrace = (t: RunTrace) => ({ ...r.describe, ...t, data: r.data });
+/** `{"term/cap_by_income.cap": 24, "requested_amount": 50000}` for one scenario. */
+export function knobValues(s: Scenario): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...(s.overrides ?? {}) };
+  const walk = (doc: Record<string, unknown>, prefix: string) => {
+    for (const [k, v] of Object.entries(doc)) {
+      if (v && typeof v === "object" && !Array.isArray(v)) walk(v as Record<string, unknown>, prefix ? `${prefix}/${k}` : k);
+      else out[`${prefix}.${k}`] = v;
+    }
+  };
+  walk(s.params ?? {}, "");
+  return out;
+}
+
+export function summariseSweep(r: SweepResponse, scenarioList: Scenario[] = []): Sweep {
+  const asTrace = (t: RunTrace) => ({ ...r.describe, ...t, data: r.data, key: r.key });
   const base = r.baseline.output;
   const changed = new Set<string>();
   for (const res of r.results)
     for (const [name, values] of Object.entries(res.output ?? {}))
       if (!base?.[name] || values.some((v, i) => !same(v, base[name][i]))) changed.add(name);
+  const knobNames = [...new Set(scenarioList.flatMap((s) => Object.keys(knobValues(s))))];
   return {
+    key: r.key,
+    knobs: knobNames.map((name) => ({ name, values: scenarioList.map((s) => knobValues(s)[name]) })),
     at: r.at ? `${r.at.when} ${r.at.path}${r.at.n > 1 ? ` (time ${r.at.n})` : ""}` : null,
     labels: r.results.map((x) => x.label),
     base,

@@ -1,4 +1,4 @@
-import { callNodes, type CallNodeJson, type DescribeResult } from "./protocol";
+import { callNodes, type CallNodeJson, type DescribeResult, type RecordKey } from "./protocol";
 
 /** One whole run, as the bridge's `trace` returns it. */
 export interface TraceResult extends DescribeResult {
@@ -6,6 +6,7 @@ export interface TraceResult extends DescribeResult {
   output: Record<string, unknown[]> | null;
   error: string | null;
   data: Record<string, unknown>[];
+  key?: RecordKey;
 }
 
 export interface ValueDiff {
@@ -31,6 +32,11 @@ export interface Comparison {
   firstDivergence: string | null;
   errors: { a: string | null; b: string | null };
   rows: number;
+  key: RecordKey;
+  /** Every output column, so a view can say which stayed the same. */
+  outputColumns: string[];
+  /** The two pipeline files, when they differ (a revision against the working tree). */
+  files?: { a: string; b: string };
 }
 
 const SAMPLES = 3;
@@ -112,5 +118,7 @@ export function compareTraces(a: TraceResult, b: TraceResult, labelA: string, la
     firstDivergence: steps.find((s) => s.outputs.length)?.path ?? null,
     errors: { a: a.error, b: b.error },
     rows: b.data.length,
+    key: b.key ?? null,
+    outputColumns: Object.keys(b.output ?? a.output ?? {}),
   };
 }

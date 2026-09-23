@@ -26,6 +26,7 @@ import {
   type DescribeResult,
   type IRNodeJson,
   type Lineage,
+  type RecordKey,
   type RunStatus,
   type Status,
   type Visits,
@@ -78,7 +79,7 @@ export class DeciderDebugSession extends LoggingDebugSession {
   private record: number | null = null;
   private handles = new Handles<VarRef>();
   private frameIds = new Map<number, string>();
-  private stateCache?: Promise<ColumnSummary[]>;
+  private stateCache?: Promise<{ columns: ColumnSummary[]; key: RecordKey }>;
   private sourceBps = new Map<string, string[]>();
   private fnBps: string[] = [];
   private applied = new Set<string>();
@@ -329,7 +330,11 @@ export class DeciderDebugSession extends LoggingDebugSession {
   }
 
   private state(): Promise<ColumnSummary[]> {
-    this.stateCache ??= this.bridge!.request<{ columns: ColumnSummary[] }>("state", { row: this.record }).then((r) => r.columns);
+    return this.fullState().then((r) => r.columns);
+  }
+
+  private fullState() {
+    this.stateCache ??= this.bridge!.request<{ columns: ColumnSummary[]; key: RecordKey }>("state", { row: this.record });
     return this.stateCache;
   }
 
@@ -438,7 +443,7 @@ export class DeciderDebugSession extends LoggingDebugSession {
           response.body = this.describe;
           break;
         case "decider.state":
-          response.body = { columns: this.current || this.finished ? await this.state() : null, record: this.record };
+          response.body = this.current || this.finished ? { ...(await this.fullState()), record: this.record } : { columns: null, key: null, record: this.record };
           break;
         case "decider.info":
           response.body = { debugpyPort: this.debugpyPort, current: this.current, node: this.current ? this.nodes.get(this.current.path) : null };
