@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { paramChangeLines } from "../src/compare";
 import { formatValue, recordLabel, type ParamInfo, type RecordKey } from "../src/protocol";
 import { TableGrid, tableRows } from "./TableGrid";
 
@@ -13,6 +14,8 @@ interface Props {
   onWhatIf: (params: unknown, overrides: Record<string, unknown>, row: number | null, label: string) => void;
   onRestart: (params: unknown) => void;
   onSelectStep: (path: string) => void;
+  /** Lookup table param -> how a record matches its rows. */
+  tables?: Record<string, Record<string, unknown>>;
 }
 
 type Edits = Record<string, string>;
@@ -65,14 +68,6 @@ function bounds(info: ParamInfo): string {
   return parts.filter(Boolean).join(", ");
 }
 
-function leafNames(doc: Record<string, unknown>, prefix = ""): string[] {
-  return Object.entries(doc).flatMap(([k, v]) =>
-    v && typeof v === "object" && !Array.isArray(v)
-      ? leafNames(v as Record<string, unknown>, prefix ? `${prefix}/${k}` : k)
-      : [Array.isArray(v) ? `${k} table` : `${k} = ${formatValue(v)}`],
-  );
-}
-
 /** Params grouped by the flow that holds their step; shared params first. */
 export function groupParams(schema: Schema): [string, string[]][] {
   const groups = new Map<string, string[]>();
@@ -87,7 +82,7 @@ const words = (q: string) => q.toLowerCase().replace(/_/g, " ").split(/\s+/).fil
 const matches = (text: string, ws: string[]) => ws.every((w) => text.toLowerCase().replace(/_/g, " ").includes(w));
 
 /** Every param with the value the flow runs with; change some, then compare, or restart the debug run with them. */
-export function Params({ schema, values, inputColumns, record, keyCol, sessionRunning, onWhatIf, onRestart, onSelectStep }: Props) {
+export function Params({ schema, values, inputColumns, record, keyCol, sessionRunning, onWhatIf, onRestart, onSelectStep, tables = {} }: Props) {
   const [edits, setEdits] = useState<Edits>({});
   const [overrides, setOverrides] = useState<{ column: string; value: string }[]>([]);
   const [scope, setScope] = useState<"record" | "all">("record");
@@ -99,7 +94,7 @@ export function Params({ schema, values, inputColumns, record, keyCol, sessionRu
   const override = Object.fromEntries(overrides.filter((o) => o.column && o.value !== "").map((o) => [o.column, parseValue(o.value, "number")]));
   const row = scope === "record" && record !== null ? record : null;
   const who = row === null ? "every record" : recordLabel(row, keyCol);
-  const changes = [...leafNames(doc), ...Object.entries(override).map(([k, v]) => `${k} = ${formatValue(v)} for ${who}`)];
+  const changes = [...paramChangeLines(doc, values), ...Object.entries(override).map(([k, v]) => `${k} = ${formatValue(v)} for ${who}`)];
   const ws = words(query);
   const total = Object.values(schema).reduce((n, ps) => n + Object.keys(ps).length, 0);
 
@@ -123,9 +118,16 @@ export function Params({ schema, values, inputColumns, record, keyCol, sessionRu
         <tr key={key} className={edited ? "edited" : ""}>
           <td className="name" colSpan={3}>
             <div>
-              <strong>{label}</strong> <span className="muted small">lookup table{usedBy.length ? ` · used by ${usedBy.map((u) => u.split("/").pop()).join(", ")}` : ""}</span> {edited && reset}
+              <strong>{label}</strong>{" "}
+              <span className="muted small">
+                lookup table
+                {usedBy.map((u) => (
+                  <span key={u}> · <a title={u} onClick={() => onSelectStep(u)}>looked up in {u.split("/").slice(-3, -1).join("/")}</a></span>
+                ))}
+              </span>{" "}
+              {edited && reset}
             </div>
-            <TableGrid name={name} columns={info.schema as Record<string, string>} rows={rows ?? []} base={(base as Record<string, unknown>[] | null) ?? []} onChange={(r) => setEdits({ ...edits, [key]: JSON.stringify(r) })} />
+            <TableGrid name={name} columns={info.schema as Record<string, string>} rows={rows ?? []} base={(base as Record<string, unknown>[] | null) ?? []} expression={tables[name]} onChange={(r) => setEdits({ ...edits, [key]: JSON.stringify(r) })} />
           </td>
         </tr>
       );
@@ -140,7 +142,7 @@ export function Params({ schema, values, inputColumns, record, keyCol, sessionRu
         <td className="muted small">
           {edited ? <>was {shown(base)} · {reset}</> : bounds(info)}
           {usedBy.length > 0 && (
-            <details className="used-by">
+            <details className="used-by" open={ws.length > 0}>
               <summary>used by {usedBy.length} step{usedBy.length === 1 ? "" : "s"}</summary>
               {usedBy.map((u) => (
                 <div key={u}>
@@ -213,13 +215,13 @@ export function Params({ schema, values, inputColumns, record, keyCol, sessionRu
         )}
       </section>
       <section className="actions sticky">
-        <button className="primary" disabled={!changes.length} onClick={() => onWhatIf(doc, override, row, changes.join(", "))}>
+        <button className="primary" disabled={!changes.length} onClick={() => onWhatIf(doc, override, row, `What-if: ${changes.join("; ")}`)}>
           Run and compare
         </button>
         {sessionRunning && (
           <button disabled={!Object.keys(doc).length} onClick={() => onRestart(doc)}>Restart the debug run with these params</button>
         )}
-        <span className="muted small">{changes.length ? `Changing: ${changes.join(", ")}` : "Change a value, then run both and compare."}</span>
+        <span className="muted small">{changes.length ? `Changing ${changes.join("; ")}` : "Change a value, then run both and compare."}</span>
       </section>
     </div>
   );

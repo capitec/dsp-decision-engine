@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { same, type Comparison } from "../src/compare";
+import { Explain } from "./Explain";
 import { formatValue, recordLabel, type CallNodeJson, type ColumnHistory, type ColumnSummary, type Lineage, type RecordKey, type RunStatus } from "../src/protocol";
 
 interface Props {
@@ -62,7 +63,7 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
       {node ? (
         <>
           <h3>{name} {node.path !== name && <span className="muted">in {node.path.slice(0, -(name?.length ?? 0) - 1)}</span>}</h3>
-          <div className="muted" title={node.source}>{KIND[node.callKind]}{node.doc ? ` · ${node.doc}` : ""}</div>
+          <div className="muted" title={node.source}>{node.table ? "lookup table, matched once per record" : KIND[node.callKind]}{node.doc ? ` · ${node.doc}` : ""}</div>
           {run.edits?.[node.path] && (
             <div className="edited-note">{run.edits[node.path] === "delete" ? "Skipped in this run: the steps after it ran without it." : "Running your edited code in this run."}</div>
           )}
@@ -130,12 +131,12 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
           <h4>Reads{who && <span className="muted"> · values for {who} · click one to see where it came from</span>}</h4>
           <Chips names={node.inputs} picked={column} onPick={onPick} valueOf={valueOf} />
           {card && (node.inputs ?? []).includes(card.name) && (
-            <HowComputed entry={card} who={who} role="an input to this step" nodes={nodes} onPick={onPick} onSelect={onSelect} />
+            <Explain entry={card} who={who} role="an input to this step" nodes={nodes} values={values} onPick={onPick} onSelect={onSelect} />
           )}
           <h4>Writes{who && !ran && <span className="muted"> · not run yet</span>}</h4>
           <Chips names={node.outputs} picked={column} onPick={onPick} valueOf={ran ? valueOf : () => undefined} />
           {card && !(node.inputs ?? []).includes(card.name) && (
-            <HowComputed entry={card} who={who} role={ran ? "written by this step" : "the value so far"} nodes={nodes} onPick={onPick} onSelect={onSelect} />
+            <Explain entry={card} who={who} role={ran ? "written by this step" : "the value so far"} nodes={nodes} values={values} onPick={onPick} onSelect={onSelect} />
           )}
           {Object.keys(node.params).length > 0 && (
             <>
@@ -166,7 +167,7 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
       ) : (
         <div className="muted">Click a step in the graph to see what it reads and writes.</div>
       )}
-      {!node && card && <HowComputed entry={card} who={who} role="" nodes={nodes} onPick={onPick} onSelect={onSelect} />}
+      {!node && card && <Explain entry={card} who={who} role="" nodes={nodes} values={values} onPick={onPick} onSelect={onSelect} />}
       {card && (
         <details>
           <summary>Full lineage of {card.name}</summary>
@@ -199,50 +200,6 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
         </>
       )}
     </aside>
-  );
-}
-
-/** "term_cap = 60, written by term/term_cap from requested_term = 72 and ceiling = 60". */
-function HowComputed({ entry, who, role, nodes, onPick, onSelect }: { entry: Lineage; who: string | null; role: string; nodes: CallNodeJson[]; onPick: (n?: string) => void; onSelect: (p: string) => void }) {
-  const producer = nodes.find((n) => n.path === entry.producer);
-  const box = useRef<HTMLDivElement>(null);
-  useEffect(() => box.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }), [entry]);
-  return (
-    <div className="how" ref={box}>
-      <div className="how-title">
-        {who ? `For ${who}, ` : ""}
-        <span className="mono">{entry.name}{who ? ` = ${formatValue(entry.value)}` : ""}</span>
-        {role && <span className="muted"> ({role})</span>}
-      </div>
-      {entry.producer === null ? (
-        <div>It is an input: it arrives with the data.</div>
-      ) : (
-        <>
-          <div>
-            was written by <a onClick={() => onSelect(entry.producer!)}>{entry.producer}</a>
-            {entry.via === "merge" && <span className="muted"> (the branch arm this record took)</span>}
-            {entry.via === "carry" && <span className="muted"> (the loop's last iteration)</span>}
-            {entry.inputs.length > 0 && " from:"}
-          </div>
-          <ul>
-            {entry.inputs.map((i, k) => (
-              <li key={k}>
-                <a className="mono" title={`How is ${i.name} computed?`} onClick={() => onPick(i.name)}>{i.name}</a>
-                {who && <span className="mono"> = {formatValue(i.value)}</span>}
-                <span className="muted"> {i.producer ? `from ${i.producer}` : "input"}</span>
-              </li>
-            ))}
-            {producer &&
-              Object.entries(producer.params).map(([k, v]) => (
-                <li key={k}>
-                  <span className="mono">{k} = {formatValue(v)}</span> <span className="muted">parameter</span>
-                </li>
-              ))}
-          </ul>
-          <div className="muted small">Click an input to go one step further back.</div>
-        </>
-      )}
-    </div>
   );
 }
 

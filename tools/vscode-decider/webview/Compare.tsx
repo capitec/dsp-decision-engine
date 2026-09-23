@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { paramReaders, same, type Comparison, type ValueDiff } from "../src/compare";
+import { paramChangeLines, paramReaders, same, type Comparison, type ValueDiff } from "../src/compare";
 import { formatValue, recordLabel, type RecordKey } from "../src/protocol";
 
 interface Props {
@@ -48,8 +48,9 @@ function Results({ c, record }: { c: Comparison; record: number | null }) {
   const moved = (n: string, r: number) => !same(c.results.a[n]?.[r], c.results.b[n]?.[r]);
   const cols = Object.keys(c.results.b);
   const everyRow = Array.from({ length: c.rows }, (_, i) => i);
-  // Records whose results moved come first: they are the answer.
-  const all = record === null ? [...everyRow.filter((r) => cols.some((n) => moved(n, r))), ...everyRow.filter((r) => !cols.some((n) => moved(n, r)))] : [record];
+  const hit = everyRow.filter((r) => cols.some((n) => moved(n, r)));
+  // Only the records whose results moved: they are the answer. The rest on request.
+  const all = record !== null ? [record] : showSame || !hit.length ? [...hit, ...everyRow.filter((r) => !hit.includes(r))] : hit;
   const rows = all.slice(0, 4);
   const changed = (n: string) => rows.some((r) => moved(n, r));
   const unchanged = cols.filter((n) => !changed(n));
@@ -57,8 +58,10 @@ function Results({ c, record }: { c: Comparison; record: number | null }) {
   return (
     <>
     {!cols.some(changed) && <div>No result changes{record === null ? "" : ` for ${recordLabel(record, c.key)}`}.</div>}
-    {unchanged.length > 0 && (
-      <label className="small muted"><input type="checkbox" checked={showSame} onChange={(e) => setShowSame(e.target.checked)} /> show the {unchanged.length} unchanged results too</label>
+    {(unchanged.length > 0 || hit.length < c.rows) && cols.some(changed) && (
+      <label className="small muted">
+        <input type="checkbox" checked={showSame} onChange={(e) => setShowSame(e.target.checked)} /> also show unchanged: {c.rows - hit.length} records, {unchanged.length} result fields
+      </label>
     )}
     {names.length > 0 && (
     <table className="results">
@@ -88,7 +91,7 @@ function Results({ c, record }: { c: Comparison; record: number | null }) {
       </tbody>
     </table>
     )}
-    {all.length > rows.length && <div className="muted">Showing {rows.length} of {all.length} records; focus a record to see it here.</div>}
+    {all.length > rows.length && <div className="muted">Showing {rows.length} of {all.length} {showSame ? "" : "changed "}records; focus a record to see another.</div>}
     </>
   );
 }
@@ -131,9 +134,9 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
   return (
     <div className="compare">
       {back && <a className="back" onClick={back.go}>← Back to {back.label}</a>}
-      {withRevision && <div className="actions top-actions">{revisionButton}</div>}
+      <h3 className="compare-title">{c.b}</h3>
       <div className="comparing">
-        Comparing <strong>{c.a}</strong> → <strong>{c.b}</strong>
+        Compared with <strong>{c.a}</strong>
         <span className="muted"> · {c.rows} records · {count("changed")} steps changed{count("added") ? `, ${count("added")} added` : ""}{count("removed") ? `, ${count("removed")} removed` : ""}</span>
       </div>
       <div className="verdict">
@@ -179,9 +182,17 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
           {c.errors.b && <div>{c.b}: {c.errors.b}</div>}
         </div>
       )}
+      {paramChangeLines(c.paramsDocs?.b, c.values?.a).length > 0 && (
+        <>
+          <h4>Changed params</h4>
+          {paramChangeLines(c.paramsDocs?.b, c.values?.a).map((l) => (
+            <div key={l} className="mono">{l}</div>
+          ))}
+        </>
+      )}
       {c.changedInputs.length > 0 && (
         <>
-          <h4>Changed params and inputs</h4>
+          <h4>Changed inputs</h4>
           {c.changedInputs.map((i) => (
             <div key={i.name} className="mono">{i.name} → {formatValue(i.after)} <span className="muted">for {i.scope}</span></div>
           ))}
@@ -221,6 +232,7 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
           {s.outputs.length > 0 && <Diffs diffs={s.outputs} record={record} keyCol={c.key} results={c.results} />}
         </div>
       ))}
+      {withRevision && <div className="actions">{revisionButton}</div>}
     </div>
   );
 }

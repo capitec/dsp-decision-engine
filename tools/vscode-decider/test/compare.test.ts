@@ -3,7 +3,8 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { describe, expect, it } from "vitest";
-import { compareTraces, paramReaders, same, type TraceResult } from "../src/compare";
+import { compareTraces, diffDoc, paramChangeLines, paramReaders, same, type TraceResult } from "../src/compare";
+import { matchRow, substitute } from "../webview/Explain";
 import { listRefs, materialise } from "../src/git";
 import { scenarios, summariseSweep } from "../src/sweep";
 
@@ -123,5 +124,27 @@ describe("param readers", () => {
       { param: "pl_base_rates", steps: [] },
       { param: "cap", steps: ["term/cap_by_income"] },
     ]);
+  });
+});
+
+describe("explaining a value", () => {
+  it("fills a formula with the record's values", () => {
+    expect(substitute("min(pl_raw_rate, repo_rate * cap_multiple + cap_margin)", { pl_raw_rate: 0.252, repo_rate: 0.0775, cap_multiple: 1, cap_margin: 0.21 }))
+      .toBe("min(0.252, 0.0775 * 1 + 0.21)");
+  });
+
+  it("finds a band's row, lower edge included", () => {
+    const rows = [{ lo: 6, hi: 25 }, { lo: 25, hi: 49 }, { lo: 49, hi: 85 }];
+    const expr = { type: "between", variable: "term", lower_bound_column: "lo", upper_bound_column: "hi" };
+    expect(matchRow(expr, rows, 49)).toEqual([2, "49 ≤ term 49 < 85"]);
+    expect(matchRow(expr, rows, 85)).toBeNull();
+  });
+
+  it("says what changed in a params document, row by row for a table", () => {
+    const a = { shared: { repo_rate: 0.0775, t: [{ lo: 1, r: 0.2 }, { lo: 2, r: 0.3 }] } };
+    const b = { shared: { repo_rate: 0.0775, t: [{ lo: 1, r: 0.2 }, { lo: 2, r: 0.25 }] } };
+    expect(diffDoc(a, b)).toEqual({ shared: { t: b.shared.t } });
+    expect(paramChangeLines(diffDoc(a, b), a)).toEqual(["t row 2: r 0.3 → 0.25"]);
+    expect(paramChangeLines({ shared: { repo_rate: 0.075 } }, a)).toEqual(["repo_rate: 0.0775 → 0.075"]);
   });
 });

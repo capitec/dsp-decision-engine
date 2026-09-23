@@ -1325,3 +1325,60 @@ input.invalid {
 .table-match table.table-grid tr.tried td {
   opacity: 0.6;
 }
+
+h3.compare-title {
+  margin: 4px 0 2px;
+  font-size: 1.1em;
+}
+
+ul.explain,
+ul.explain ul {
+  list-style: none;
+  margin: 2px 0;
+  padding-left: 14px;
+}
+ul.explain {
+  padding-left: 0;
+}
+ul.explain .twisty {
+  display: inline-block;
+  width: 1.2em;
+  padding: 0;
+}
+ul.explain .formula {
+  margin: 1px 0 3px 1.2em;
+  padding: 2px 6px;
+  border-left: 2px solid var(--vscode-textLink-foreground);
+  background: var(--vscode-textCodeBlock-background, rgba(127, 127, 127, 0.1));
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  main.detailed .graph {
+    height: 40vh;
+  }
+}
+.pause-banner button {
+  margin-left: 6px;
+}
+.node.selected rect {
+  animation: found 0.6s ease-out 2;
+}
+@keyframes found {
+  50% {
+    stroke-width: 5;
+  }
+}
+
+.knob select[aria-label="knob kind"] {
+  width: auto;
+  flex: none;
+}
+.knob input.picker {
+  flex: 2;
+  min-width: 22em;
+}
+.params details.used-by[open] > div {
+  display: inline-block;
+  margin-right: 8px;
+}

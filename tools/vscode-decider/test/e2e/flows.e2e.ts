@@ -89,7 +89,7 @@ describe("decider in VSCodium", () => {
     await c.page.waitForTimeout(300);
     await c.page.keyboard.press("Enter");
     const wv = c.webview();
-    await wv.locator(".compare .comparing", { hasText: "working tree" }).waitFor({ timeout: 90_000 });
+    await wv.locator(".compare .compare-title", { hasText: "working tree" }).waitFor({ timeout: 90_000 });
     await c.shot("09-compare-revision");
     expect(await wv.locator(".compare").innerText()).not.toContain("Error");
   }, 150_000);

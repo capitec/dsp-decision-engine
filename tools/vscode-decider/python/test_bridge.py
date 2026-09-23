@@ -245,3 +245,17 @@ def test_skipping_the_only_producer_is_refused_and_changes_nothing():
         b.handle({"cmd": "skip", "path": "affordability/ratio"})
     assert b.handle({"cmd": "resume"})["finished"]
     assert b.session.output()["term_cap"].to_list() == [48.0, 36.0]
+
+
+def test_edits_compare_against_the_flow_as_started():
+    b = started(breakpoints=["term/cap_by_income"])
+    b.handle({"cmd": "resume"})
+    b.handle({"cmd": "skip", "path": "term/cap_by_income"})
+    r = b.handle({"cmd": "compare_edits"})
+    assert r["a"]["output"]["term_cap"] == [48.0, 36.0]
+    assert r["b"]["output"]["term_cap"] == [54.0, 36.0]
+    assert "term/cap_by_income" in r["a"]["steps"] and "term/cap_by_income" not in r["b"]["steps"]
+
+
+def test_a_one_line_step_reports_its_formula():
+    assert find(Bridge().describe(LOAN)["ir"], "term/term_cap")["formula"] == "min(requested_term, ceiling)"

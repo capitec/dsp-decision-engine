@@ -23,6 +23,10 @@ export interface CallNodeJson extends IRNodeBase {
   code: string;
   /** The first line of the step's docstring. */
   doc?: string;
+  /** What a one-line step returns, e.g. `min(pl_raw_rate, repo_rate + cap_margin)`. */
+  formula?: string | null;
+  /** A lookup table's match, e.g. `{type: "between", variable, lower_bound_column, upper_bound_column}`. */
+  table?: Record<string, unknown> | null;
 }
 
 export interface GroupNodeJson extends IRNodeBase {
@@ -157,6 +161,7 @@ export type FromWebview =
   | { type: "rewind"; path: string }
   | { type: "skip"; path: string }
   | { type: "reloadStep"; path: string }
+  | { type: "compareEdits" }
   | { type: "whatIf"; params: unknown; overrides: Record<string, unknown>; row: number | null; label: string }
   | { type: "restartWith"; params: unknown }
   | { type: "compareRevision" }

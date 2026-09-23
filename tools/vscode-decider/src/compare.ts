@@ -49,6 +49,46 @@ export interface Comparison {
   paramsDocs?: { a: unknown; b: unknown };
   /** Shared param -> the steps that read it. */
   sharedUsers?: Record<string, string[]>;
+  /** Each run's PARAMS document (tables' rows and tuned values), for saying what a param was. */
+  values?: { a: unknown; b: unknown };
+}
+
+/** The parts of `b` that differ from `a`, nested the same way. */
+export function diffDoc(a: unknown, b: unknown): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  const isDoc = (x: unknown): x is Record<string, unknown> => !!x && typeof x === "object" && !Array.isArray(x);
+  for (const [k, v] of Object.entries(isDoc(b) ? b : {})) {
+    const was = isDoc(a) ? a[k] : undefined;
+    if (isDoc(v) && isDoc(was)) {
+      const inner = diffDoc(was, v);
+      if (Object.keys(inner).length) out[k] = inner;
+    } else if (!same(was, v)) out[k] = v;
+  }
+  return out;
+}
+
+/** "repo_rate: 0.0775 → 0.075", or for a table "pl_base_rates row 3: pl_base_rate 0.255 → 0.245". */
+export function paramChangeLines(doc: unknown, before: unknown): string[] {
+  const lines: string[] = [];
+  const at = (d: unknown, k: string) => (d && typeof d === "object" ? (d as Record<string, unknown>)[k] : undefined);
+  const visit = (d: unknown, was: unknown) => {
+    for (const [k, v] of Object.entries((d ?? {}) as Record<string, unknown>)) {
+      const old = at(was, k);
+      if (Array.isArray(v)) {
+        const rows = (Array.isArray(old) ? old : []) as Record<string, unknown>[];
+        v.forEach((row, i) => {
+          const r = row as Record<string, unknown>;
+          if (!rows[i]) return lines.push(`${k} row ${i + 1} added`);
+          const cells = Object.keys(r).filter((c) => !same(rows[i][c], r[c])).map((c) => `${c} ${fmt(rows[i][c])} → ${fmt(r[c])}`);
+          if (cells.length) lines.push(`${k} row ${i + 1}: ${cells.join(", ")}`);
+        });
+        if (rows.length > v.length) lines.push(`${k}: ${rows.length - v.length} row${rows.length - v.length === 1 ? "" : "s"} removed`);
+      } else if (v && typeof v === "object") visit(v, old);
+      else lines.push(`${k}: ${old === undefined ? "default" : fmt(old)} → ${fmt(v)}`);
+    }
+  };
+  visit(doc, before);
+  return lines;
 }
 
 /** Each param a params document sets, with the steps that read it. */
@@ -165,6 +205,9 @@ export function compareTraces(a: TraceResult, b: TraceResult, labelA: string, la
     rows: b.data.length,
     key: b.key ?? null,
     outputColumns: Object.keys(b.output ?? a.output ?? {}),
+    values: { a: a.values ?? {}, b: b.values ?? {} },
+    // Two revisions each run with their own PARAMS; what differs between them is a param change.
+    paramsDocs: Object.keys(diffDoc(a.values, b.values)).length ? { a: a.values, b: diffDoc(a.values, b.values) } : undefined,
     sharedUsers: Object.fromEntries(Object.entries(b.params?.shared ?? {}).map(([k, info]) => [k, (info.used_by as string[] | undefined) ?? []])),
   };
 }

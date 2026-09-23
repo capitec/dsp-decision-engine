@@ -7,6 +7,7 @@ import { GraphPanel } from "./graphPanel";
 import type { CallNodeJson, ColumnHistory, ColumnSummary, DescribeResult, FromWebview, Lineage, RecordKey, RunStatus, ToWebview } from "./protocol";
 import { debugpyLibs, pythonCommand } from "./python";
 import { runComparison, type Side } from "./compareRuns";
+import { compareTraces, type TraceResult } from "./compare";
 import { withBridge } from "./bridge";
 import { summariseSweep, type Scenario, type SweepResponse } from "./sweep";
 import { StructureProvider } from "./structure";
@@ -158,6 +159,18 @@ async function onWebview(m: FromWebview, describe: DescribeResult) {
     case "rewind":
       await s?.customRequest("decider.rewind", { path: m.path });
       break;
+    case "compareEdits": {
+      if (!s) return;
+      post({ type: "tab", tab: "compare" });
+      post({ type: "compare", comparison: null, busy: "Running the flow as started and as edited…" });
+      try {
+        const r = (await s.customRequest("decider.compareEdits")) as { a: TraceResult; b: TraceResult };
+        post({ type: "compare", comparison: compareTraces(r.a, r.b, "the flow as started", "with your edits") });
+      } catch (e) {
+        post({ type: "compare", comparison: null, error: (e as Error).message });
+      }
+      break;
+    }
     case "skip":
     case "reloadStep":
       try {
@@ -237,7 +250,7 @@ async function compare(a: Side, b: Side) {
   post({ type: "compare", comparison: null, busy: `Running ${a.label} and ${b.label}…` });
   try {
     const comparison = await runComparison(a, b, pythonCommand(), path.dirname(b.file));
-    comparison.paramsDocs = { a: a.params ?? {}, b: b.params ?? {} };
+    if (a.params || b.params) comparison.paramsDocs = { a: a.params ?? {}, b: b.params ?? {} };
     if (a.file !== b.file) {
       comparison.files = { a: a.file, b: b.file };
       lastFiles = { ...comparison.files, label: a.label };
