@@ -15,6 +15,13 @@ found.*
 | **Typed feature arrays** — fixes a silent wrong answer on money columns, costs ~20% of the walk | **merge, as a correctness change** |
 | **Rust for string matching** — works, caches, 4.5× on a narrow case worth 35 ms per million rows | **no** |
 | **C (PCRE2) for string matching** — works, caches, 2.5–3.5× on a case worth 20–40 ns/row, and it backtracks | **no** |
+| **polars Rust plugin** — type-honest and 7–85× on big batches, but 4× over spec on single records, 252 crates, and a process-abort failure mode | **no, unless big batches become the main case** |
+
+**If 90% of calls are single-record, almost none of the batch numbers below
+decide anything.** At one row every engine is ~1 µs of actual work wrapped in
+230–600 µs of plumbing. That is section 9's finding and it is the same wall
+decider2 already hit — the fix is doc 05 §3.1b's whole-row marshalling, in
+whatever language.
 
 Two surprises. The typed-features branch reports itself 1.6–1.8× *faster*; it
 is not the typed split — it changed two things at once, and **all** of the
@@ -82,7 +89,7 @@ fourth was not in the original plan — the C work turned it up (section 5):
 | **Typed features** | split the one array into float64 / int64 / bool / codes | **done** |
 | **Pure numba bytes** | prefix/suffix/substring over raw bytes, no C and no Rust | *running* |
 | **Arrow strings** | read polars' string bytes straight into the tree, no encoding | **done — this is the answer** |
-| **polars Rust plugin** | make a tree a polars expression instead of a numba kernel | *running* |
+| **polars Rust plugin** | make a tree a polars expression instead of a numba kernel | **done** |
 
 ---
 
@@ -644,5 +651,132 @@ reproduces it in about ten minutes.
 
 ---
 
-*Still out: pure-numba byte matching (the sibling of section 8's matchers) and
-the polars Rust plugin.*
+## 9. The polars Rust plugin — more honest, not simpler, and it misses on your 90%
+
+A real `pyo3-polars` plugin was built: 227 lines of Rust, 88 of Python, tree
+passed as data, exposed as a polars expression.
+
+### It works, and it is honest about types
+
+The triple you care about, all passing:
+
+| | plugin | decider2 today |
+|---|---|---|
+| `[2⁵³, 2⁵³+1] == 2⁵³` on Int64 | `[true, false]` | `[true, true]` |
+| a Boolean column | stays `[1, 0, null]` | becomes float |
+| a String column | matched as a string, no dictionary anywhere | int32 code |
+
+It also *refuses* what it cannot do honestly — a Categorical column, a float
+tested as an int, unsupported dtypes — each naming the node, the column and
+both dtypes. That is the right behaviour and decider2 does not have it today.
+
+### But the single-record case, which you say is 90% of traffic
+
+µs per call, against your 60 µs spec:
+
+| | 1 thread | 28 threads (default) |
+|---|---|---|
+| **the spec** | **60** | **60** |
+| decider2 `score()`, same pipeline | 580–610 | 560–600 |
+| plugin, best configuration | **236** | 694 (spread 270–1800) |
+
+Two things to take from that.
+
+**It beats decider2 by ~2.5× and still misses the spec by 4×.** Of that 236 µs,
+the tree walk itself is **about 1 µs**. Everything else is engine machinery:
+29 µs planner floor, 37 µs per plugin call, 19 µs to build a one-row frame.
+This is the same wall decider2 already hit from the other side — the engine
+does not matter at one record, the plumbing does.
+
+**Default threading makes it three times worse.** polars dispatches a
+multi-input expression's inputs to its thread pool even for a single row. So
+single-record serving needs `POLARS_MAX_THREADS=1` — the exact opposite of the
+setting that wins on batches. You would be running two configurations.
+
+There is also a trap worth knowing: **the tree is deserialised on every
+evaluation** — about 2 µs per node, so 1.34 ms for a 512-node tree. A packed
+binary format cut that 11×, but it is a per-call cost that does not exist in
+decider2 at all.
+
+### On batches it wins clearly, from 100k rows up
+
+ns/row, 4-step pipeline, answers checked against a pure-polars oracle:
+
+| rows | decider2 fused (1 thread) | plugin, streaming, 28 threads |
+|---|---|---|
+| 10k | 464 | 242 |
+| 100k | 252 | **37.8** |
+| 1M | 253 | **17.2** |
+| 10M | 931 | **11.0** |
+
+At 1M rows decider2 takes 253 ms, outside its own 20–100 ms budget; the
+streaming plugin takes 17 ms. That is real and it is 7–85× from 100k up.
+
+### A correction I owe you
+
+When you first raised this I said decider2's structural advantage is that N
+steps compile into **one** kernel over one row loop, and that a polars plugin
+would trade that away. **That is not true of trees.** decider2's own source
+says so, in `compile/driver.py`:
+
+> *"A real, reported scope cut, not full fusion. Each packed step becomes its
+> OWN compiled segment — this does not fuse a tree's own matcher/path/output
+> steps into ONE kernel call."*
+
+Trees, tables, Branch and Loop are all "packed" steps, and none of them fuse.
+Fusion applies to ordinary steps. So the 2.1× the plugin wins single-threaded
+is mostly decider2 running five segments with intermediates — not Rust beating
+numba. **The fusion argument I gave you does not apply to the case we were
+discussing**, and the trade-off is better for the plugin than I said.
+
+### What it costs to own — measured, and worse than the earlier Rust figures
+
+| | earlier standalone Rust | this plugin |
+|---|---|---|
+| first build | 29 s | **5 min 38 s** |
+| cold rebuild | 15 s | 4 min 39 s |
+| one-line change | 0.9–1.5 s | 5.7–10.2 s |
+| wheel | 888 KB | **5.71 MB** (`.so` 21.8 MB) |
+| crates | 50 | **252** |
+
+A plugin statically links its own copy of polars, which is where all of that
+comes from. Your polars version is then chosen by `pyo3-polars`, not by you:
+it pins `polars ^0.55`. Upgrading Python-side polars is safe; upgrading the
+Rust side is a five-minute rebuild plus API churn.
+
+### The one that would worry me in a credit path
+
+**A column of a dtype the plugin was not compiled with aborts the Python
+process with `SIGABRT` and no exception.** A `Decimal` column does it. The
+panic happens inside polars' own FFI import, before the plugin's error
+handling can see it. The mitigation is to build with `dtype-full`, but nothing
+enforces that, and the failure is a process abort rather than a raised error.
+
+Ordinary panics inside the plugin body *are* caught and become `ComputeError`.
+This one is not.
+
+### Verdict
+
+**More honest, provably. Not simpler.** You would take on a Rust toolchain, a
+five-minute build, 252 crates, a 5.7 MB wheel per platform, a polars version
+you do not control, and a process-abort failure mode — to buy honest types
+(which typed feature arrays already give you inside decider2 for ~20% of the
+walk) and parallel batch speed.
+
+And on the batch side there is a cheaper answer worth knowing: **plain
+`pl.when/then` beats the plugin below about 32 leaves** with no Rust at all
+(19.6 vs 39.5 ns/row at 8 leaves), and loses 11× at 512 leaves because it
+evaluates every condition rather than short-circuiting. So the plugin's real
+niche is *large* trees on *large* batches.
+
+Your "depend on a maintained library" preference is real, but it applies to
+the **bridge**, not the tree: `pyo3-polars` maintains the FFI; the ~300 lines
+of tree logic, the wheel matrix and the rebuilds stay yours.
+
+Full detail: `experimentation/polars-plugin-trees/RESULTS.md`, 248
+measurements in `results.jsonl`.
+
+---
+
+*Still out: pure-numba byte matching, and the three-way nanoarrow comparison
+you asked for.*
