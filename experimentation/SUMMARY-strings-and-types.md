@@ -11,19 +11,23 @@ found.*
 | | verdict |
 |---|---|
 | **Inline the walkers** — ready on a branch, 1.6–1.9× on trees and 22% on Branch/Loop, identical answers | **take it** |
-| **String matching past `exact`** — per-category mask, 1.07 ns/row against 34, no new dependency | **take it** |
+| **Strings straight from polars via Arrow** — no dictionary encoding, `exact`/prefix/suffix/contains at the node, pure numba, and *cheaper* than today | **take it — this is the string answer** |
 | **Typed feature arrays** — fixes a silent wrong answer on money columns, costs ~20% of the walk | **merge, as a correctness change** |
 | **Rust for string matching** — works, caches, 4.5× on a narrow case worth 35 ms per million rows | **no** |
 | **C (PCRE2) for string matching** — works, caches, 2.5–3.5× on a case worth 20–40 ns/row, and it backtracks | **no** |
 
-The one surprise: the typed-features branch reports itself 1.6–1.8× *faster*.
-It is not the typed split — it changed two things at once, and **all** of the
-speedup is the inlining, which you can have on its own today (section 6).
+Two surprises. The typed-features branch reports itself 1.6–1.8× *faster*; it
+is not the typed split — it changed two things at once, and **all** of the
+speedup is the inlining, which you can have on its own today (section 6). And
+the Arrow route you asked about, which you expected to cost a little more for a
+simpler pattern, turns out to be **cheaper** as well as simpler (section 8) —
+because the accessor every earlier strand used was the thing doing the copying.
 
 Three things I had told you earlier are wrong, and are corrected in place with
-the measurements: polars string buffers are not zero-copy, the Rust regex crate
-is ~40 ns not 25.6, and "C regex is too slow" was a verdict on glibc rather
-than on C.
+the measurements: the Rust regex crate is ~40 ns not 25.6; "C regex is too
+slow" was a verdict on glibc rather than on C; and "polars string buffers are
+not zero-copy" was true of the accessor everyone used and **false of the
+memory** — which is what section 8 turns on.
 
 ---
 
@@ -77,6 +81,8 @@ fourth was not in the original plan — the C work turned it up (section 5):
 | **Numba + C** | same, but C instead of Rust — no second language in the build | **done** |
 | **Typed features** | split the one array into float64 / int64 / bool / codes | **done** |
 | **Pure numba bytes** | prefix/suffix/substring over raw bytes, no C and no Rust | *running* |
+| **Arrow strings** | read polars' string bytes straight into the tree, no encoding | **done — this is the answer** |
+| **polars Rust plugin** | make a tree a polars expression instead of a numba kernel | *running* |
 
 ---
 
@@ -121,11 +127,16 @@ per platform, and a new way to crash.
 
 ### Two things I had told you that were wrong
 
-**"polars string buffers are zero-copy, there is nothing to pack."** False on
-polars 1.41. A `String` column is stored as `Utf8View`, so asking for the
-offsets/values buffers *materialises* them every call — verified independently:
-two calls return different memory, at 6.8 ns/row for 200k rows. At 0%
-selectivity that conversion IS the whole cost of the lazy path.
+**"polars string buffers are zero-copy, there is nothing to pack."**
+Half right, and the half that was wrong sent three strands down a slower path.
+`Series._get_buffers()` — what all of them used — *does* copy: it converts
+polars' internal layout into a different one on every call, at 15–19 ns/row and
+~44 MB per call on a 4-million-row column. But the memory itself **is**
+reachable with no copy at all, through the Arrow C Data Interface
+(`__arrow_c_stream__`), which is flat at ~1.2 µs however many rows there are
+and adds no resident memory. Section 8. The accessor was the copy, not the
+memory — so every "lazy" number in sections 4 and 5 was carrying a tax that
+does not have to exist.
 
 **"the Rust regex crate is 25.6 ns/call."** It is ~40 ns on the 13–22 byte
 strings that actually occur here, and pattern complexity barely matters
@@ -522,6 +533,116 @@ the next real win is — not in the kernel.
 
 ---
 
-*Section 8 — the fourth strand, pure-numba byte matching with no C at all — to
-follow when it reports. If it works, it changes item 2: prefix, suffix and
-substring could go straight into the walk with no dependency at all.*
+## 8. Strings straight out of polars, through Arrow — and this is the answer
+
+You asked whether Arrow could let a string reach the tree without being turned
+into a number first, and said you would pay more for the simpler pattern. It
+turns out to be **cheaper**, not more expensive.
+
+### The thing I had wrong, and it matters
+
+Every strand above measured polars' string buffers through
+`Series._get_buffers()` and concluded they are not zero-copy. That accessor
+does copy. The memory does not have to be:
+
+| | cost at 100k rows | at 1M | at 4M | memory added |
+|---|---|---|---|---|
+| `__arrow_c_stream__()` — the Arrow C Data Interface | 1.2 µs | 1.3 µs | 1.2 µs | **0 MB** |
+| `_get_buffers()` — what everyone used | 1.5 ms | 19 ms | 78 ms | ~44 MB per call |
+
+I checked this myself two ways that need no knowledge of the layout: the cost
+is **flat** in rows for one and linear for the other, and five calls on a
+76 MB column added **0.0 MB** of resident memory for one and **222 MB** for the
+other. polars hands over its own buffers, with an owned reference — you can
+drop the DataFrame and the bytes stay valid.
+
+So the accessor was the copy. Every "lazy" number in sections 4 and 5 was
+paying a tax that did not have to exist.
+
+### What that makes possible
+
+A tree node that reads the row's actual bytes and matches them in place — in
+**pure numba**, no C, no Rust, no dictionary encoding, no pass over the column:
+
+```python
+elif k == STR:                       # a string test, at the node
+    view = views_addr + 16 * row     # polars' own 16-byte view for this row
+    n    = load_u32(view)            # length
+    if n <= 12:                      # short string: the bytes are inline
+        hit = cmp_inline(view + 4, n, pat_addr, pat_len, mode)
+    else:                            # long: (buffer index, offset) into a data buffer
+        hit = cmp_buffer(data_tab, view, n, pat_addr, pat_len, mode)
+    pc = then_[pc] if hit else else_[pc]
+```
+
+`exact`, `starts_with`, `ends_with`, `contains` — all four, at the node. 38
+tests pass; I ran them myself. They cover nulls, empty strings, multi-byte
+UTF-8, sliced frames, all-null and zero-row columns, and multi-chunk frames.
+
+### What it costs — cheaper, in most cases by a lot
+
+1M rows, ns/row, boundary plus kernel:
+
+| | today | STR node |
+|---|---|---|
+| low cardinality, `== "dog"` | 178–185 | **56–75** |
+| high cardinality, `== "dog"` | 800–1100 (the encoding dominates) | **38–55** |
+| `contains`, low cardinality | 66–155 (precomputed in polars) | 98–110 |
+| **gated — 1% of rows reach the node** | 62–198 | **17–33** |
+
+The gated row is your original argument, finally paid off: a tree
+short-circuits, a column-wide pass cannot. 3–6× there.
+
+A `STR` node does cost 25–40 ns more than a numeric node when it is reached.
+End to end that is swamped by not encoding a million strings.
+
+### The simplicity verdict, which is what you actually asked for
+
+| | today | with the STR node |
+|---|---|---|
+| a string arrives as | an int32 code, from a `cast(pl.Categorical)` every batch, plus a category list | the bytes polars already holds |
+| preprocessing pass | yes, every batch | none — one ~1 µs handshake per column |
+| non-exact match | refused; author precomputes a bool column | four match types at the node |
+| a pattern in a rule is | resolved to a code against *this batch's* category list | bytes in a table, an argument like any threshold |
+| a maintainer must understand | codes, category lists, code stability across batches, the float64 slot the code rides in, the frame-tier workaround | 16 bytes per row: a length, then bytes or (buffer, offset) |
+| nulls | `NaN` in a float slot | a validity bit; a null never matches |
+| still float-encoded | yes | **no — a string stays a string** |
+
+### What still has to stay, honestly
+
+- **`regex` is not covered.** nopython numba has no regex engine. If a rule
+  needs a real regex, the frame-tier workaround stays for that one case — and
+  that is the only remaining argument for the C or Rust strands.
+- **`Categorical`/`Enum` columns** arrive from upstream already as codes and
+  keep the existing path. That is polars making a distinction, not the boundary
+  inventing one, and no cast happens either way.
+- **`isin` over thousands of values** becomes k byte-compares. Fine for a
+  handful, not for thousands.
+- **Case-insensitive and trim** are a few lines for ASCII; Unicode case folding
+  needs a table and is not in reach without a dependency.
+
+### One correctness trap worth knowing about
+
+A polars Series can hold several **chunks**. Naive buffer access reads only the
+first and silently gives wrong answers for the rest. The prototype walks chunk
+by chunk and proves it (a 5+5 concatenation answers on all ten rows), and where
+two columns of one frame have *different* chunk layouts it refuses loudly and
+tells the caller to `rechunk()`. Whoever lands this must keep that property —
+it is exactly the kind of silent wrong answer doc 03 §2.1 calls the worst
+failure the design can have.
+
+### How it fits the typed-features branch
+
+That branch already reserved a raw-string slot, and it is the right idea with
+the wrong plumbing: it carries `_get_buffers()`'s offsets and values — the
+15–19 ns/row copy. Swapping that for the C Data Interface's view table removes
+the copy, deletes its `_fill_spans` step, and gives `walk_tree` the `STR` kind.
+The two pieces of work fit together directly.
+
+Full detail: `experimentation/arrow-strings-in-tree/RESULTS.md`; `./run_all.sh`
+reproduces it in about ten minutes.
+
+---
+
+*Still out: pure-numba byte matching (the sibling of section 8's matchers) and
+the polars Rust plugin.*
