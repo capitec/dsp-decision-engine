@@ -62,7 +62,7 @@ async function runToBreakpoint(c: Codium, line: number) {
   await goTo(c, LINE.pipeline);
   await lens(c, "Run flow").click({ timeout: 60_000 });
   await c.page.locator(".quick-input-widget .monaco-list-row", { hasText: "SAMPLE" }).click();
-  await c.webview().locator(".badge", { hasText: "before the start" }).waitFor({ timeout: 60_000 });
+  await c.webview().locator(".pause-banner", { hasText: "before the start" }).waitFor({ timeout: 60_000 });
   await c.page.keyboard.press("F5");
 }
 
@@ -100,20 +100,20 @@ describe("user stories", () => {
       await wv.locator("svg .node", { hasText: "cap_by_income" }).click({ timeout: 30_000 });
       await shot("After 'Visualise flow' and clicking the cap_by_income step.");
       await wv.locator("aside button", { hasText: "Run to cap_by_income" }).click();
-      await wv.locator(".badge", { hasText: "cap_by_income" }).waitFor({ timeout: 60_000 });
+      await wv.locator(".pause-banner", { hasText: "cap_by_income" }).waitFor({ timeout: 60_000 });
       await shot("After clicking 'Run to cap_by_income': the flow runs on the sample and pauses before cap_by_income.");
       await wv.locator("select[aria-label=record]").selectOption({ label: "client_id 1" });
       await wv.locator(".chip", { hasText: "term_cap" }).first().click();
-      await wv.locator(".how-title", { hasText: "comes from" }).waitFor();
+      await wv.locator(".how-title", { hasText: "term_cap = " }).waitFor();
       await shot("After focusing client_id 1 in the header and clicking the term_cap chip.");
       await tab(c, "State");
       await shot("The State tab while focused on client_id 1.");
       await tab(c, "Graph");
       await wv.locator("svg .node", { hasText: "risk_tree" }).click();
       await wv.locator("aside button", { hasText: "Run to risk_tree" }).click();
-      await wv.locator(".badge", { hasText: "before risk_tree" }).waitFor({ timeout: 30_000 });
+      await wv.locator(".pause-banner", { hasText: "before risk_tree" }).waitFor({ timeout: 30_000 });
       await wv.locator("aside button", { hasText: "Run through risk_tree" }).click();
-      await wv.locator(".badge", { hasText: "after risk_tree" }).waitFor({ timeout: 30_000 });
+      await wv.locator(".pause-banner", { hasText: "after risk_tree" }).waitFor({ timeout: 30_000 });
       await wv.locator("aside h4", { hasText: "Path for client_id 1" }).waitFor({ timeout: 10_000 });
       await shot("After clicking risk_tree, 'Run to risk_tree', then 'Run through risk_tree': the path client_id 1 took.");
     });
@@ -141,7 +141,7 @@ describe("user stories", () => {
     await story("4-scenarios", "A risk analyst pauses the run just before the income cap and wants to try caps of 24, 36 and 48 together with requested amounts of 50000 and 150000, then compare every combination with the original run.", async (c, shot) => {
       await runToBreakpoint(c, LINE.capByIncome);
       const wv = c.webview();
-      await wv.locator(".badge", { hasText: "cap_by_income" }).waitFor({ timeout: 30_000 });
+      await wv.locator(".pause-banner", { hasText: "cap_by_income" }).waitFor({ timeout: 30_000 });
       await tab(c, "Scenarios");
       await shot("The Scenarios tab while paused before cap_by_income.");
       await wv.locator('select[aria-label="knob"]').first().selectOption("term/cap_by_income|cap");

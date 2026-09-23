@@ -171,8 +171,13 @@ export function App() {
             </select>
           </label>
         )}
-        {pausedAt && <span className="badge" title="Where the debug run is paused">⏸ {pausedAt}</span>}
       </header>
+      {pausedAt && run.current && (
+        <div className="pause-banner" title={run.current.path}>
+          ⏸ Paused {run.current.when} <strong>{run.current.path.split("/").pop() || "the start"}</strong>
+          {run.record !== null && <span> · focused on {recordLabel(run.record, keyCol)}</span>}
+        </div>
+      )}
       {tab === "graph" && (
         <div className="subbar">
           <details className="legend-pop">
