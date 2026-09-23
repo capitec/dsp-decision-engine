@@ -3,7 +3,7 @@ import * as vscode from "vscode";
 import { DeciderDebugSession } from "./adapter";
 import { analyse, PipelineCodeLens } from "./analysis";
 import { GraphPanel } from "./graphPanel";
-import type { CallNodeJson, Checkpoint, ColumnSummary, DescribeResult, Lineage } from "./protocol";
+import type { CallNodeJson, ColumnSummary, DescribeResult, Lineage, RunStatus } from "./protocol";
 import { debugpyLibs, pythonCommand } from "./python";
 import { StructureProvider } from "./structure";
 
@@ -12,15 +12,18 @@ let lineageChannel: vscode.OutputChannel | undefined;
 export function activate(ctx: vscode.ExtensionContext) {
   const structure = new StructureProvider();
   const tree = vscode.window.createTreeView("decider.structure", { treeDataProvider: structure, showCollapseAll: true });
-  let lastDescribe: { uri: vscode.Uri; describe: DescribeResult } | undefined;
-
-  const showGraph = (uri: vscode.Uri, describe: DescribeResult) => {
-    lastDescribe = { uri, describe };
+  const showGraph = (describe: DescribeResult) => {
     structure.setDescribe(describe);
-    GraphPanel.show(ctx, describe, (m) => {
+    GraphPanel.show(ctx, describe, async (m) => {
+      const s = deciderSession();
       if (m.type === "reveal") {
         const node = findNode(describe, m.path);
         if (node?.file) reveal(node.file, node.line);
+      } else if (m.type === "record" && s) {
+        await s.customRequest("decider.setRecord", { row: m.row });
+      } else if (m.type === "lineage") {
+        const lineage = s ? ((await s.customRequest("decider.lineage", { name: m.name })) as Lineage) : null;
+        GraphPanel.current?.post({ type: "lineage", lineage });
       }
     });
   };
@@ -40,7 +43,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       if (!doc) return;
       try {
         const d = await analyse(doc);
-        showGraph(doc.uri, pipeline ? { ...d, pipeline } : d);
+        showGraph(pipeline ? { ...d, pipeline } : d);
       } catch (e) {
         vscode.window.showErrorMessage(`decider: ${(e as Error).message}`);
       }
@@ -65,9 +68,17 @@ export function activate(ctx: vscode.ExtensionContext) {
 
     vscode.commands.registerCommand("decider.debugStep", debugStep),
 
+    vscode.commands.registerCommand("decider.focusRecord", async () => {
+      const s = deciderSession();
+      if (!s) return vscode.window.showInformationMessage("decider: no pipeline session is running");
+      const text = await vscode.window.showInputBox({ prompt: "Record (row number) to follow; empty for the whole batch" });
+      if (text === undefined) return;
+      await s.customRequest("decider.setRecord", { row: text.trim() === "" ? null : Number(text) });
+    }),
+
     vscode.commands.registerCommand("decider.trace", async () => {
-      const s = vscode.debug.activeDebugSession;
-      if (s?.type !== "decider") return vscode.window.showInformationMessage("decider: no pipeline session is running");
+      const s = deciderSession();
+      if (!s) return vscode.window.showInformationMessage("decider: no pipeline session is running");
       const { columns } = (await s.customRequest("decider.state")) as { columns: ColumnSummary[] | null };
       const name = await vscode.window.showQuickPick((columns ?? []).map((c) => ({ label: c.name, description: `${c.dtype}, from ${c.producer}` })), {
         placeHolder: "Column to trace",
@@ -84,22 +95,22 @@ export function activate(ctx: vscode.ExtensionContext) {
     vscode.debug.onDidStartDebugSession(async (s) => {
       if (s.type !== "decider") return;
       const d = (await s.customRequest("decider.describe")) as DescribeResult;
-      showGraph(vscode.Uri.file(s.configuration.program), d);
+      showGraph(d);
     }),
 
     vscode.debug.onDidReceiveDebugSessionCustomEvent(async (e) => {
       if (e.session.type !== "decider" || e.event !== "decider.status") return;
-      const body = e.body as { current: Checkpoint | null; finished: boolean; finishedPaths: string[] };
+      const body = e.body as RunStatus;
       structure.setStatus(body.current, body.finishedPaths);
       GraphPanel.current?.post({ type: "status", ...body });
       const { columns } = (await e.session.customRequest("decider.state")) as { columns: ColumnSummary[] | null };
-      GraphPanel.current?.post({ type: "state", columns });
+      GraphPanel.current?.post({ type: "state", columns, rows: columns?.[0]?.rows ?? 0 });
     }),
 
     vscode.debug.onDidTerminateDebugSession((s) => {
       if (s.type !== "decider") return;
       structure.setStatus(null, []);
-      GraphPanel.current?.post({ type: "status", current: null, finished: true, finishedPaths: [] });
+      GraphPanel.current?.post({ type: "status", current: null, finished: true, finishedPaths: [], visits: {}, record: null });
     }),
   );
 }
@@ -109,19 +120,21 @@ export function activate(ctx: vscode.ExtensionContext) {
  * process, break once on the function's first statement, then step the flow.
  */
 async function debugStep() {
-  const s = vscode.debug.activeDebugSession;
-  if (s?.type !== "decider") return vscode.window.showInformationMessage("decider: no pipeline session is running");
-  const info = (await s.customRequest("decider.info")) as { debugpyPort?: number; node: CallNodeJson | null };
+  const s = deciderSession();
+  if (!s) return vscode.window.showInformationMessage("decider: no pipeline session is running");
+  const info = (await s.customRequest("decider.info")) as { debugpyPort?: number; node: CallNodeJson | null; current: { when: string } | null };
   if (!info.debugpyPort) return vscode.window.showErrorMessage("decider: debugpy is not available (install the ms-python.debugpy extension)");
-  if (!info.node || info.node.kind !== "call" || !info.node.file || !info.node.bodyLine) {
-    return vscode.window.showInformationMessage("decider: the current node is not a Python function; step into a call node first");
+  const py = info.node?.kind === "call" ? info.node.python : null;
+  if (!py?.bodyLine || info.current?.when !== "before") {
+    return vscode.window.showInformationMessage("decider: stop just before a step that runs Python (a function, frame or tree reference) first");
   }
-  const location = new vscode.Location(vscode.Uri.file(info.node.file), new vscode.Position(info.node.bodyLine - 1, 0));
+  // ponytail: stops on the first row the step runs; a per-record stop needs the row index passed into the call.
+  const location = new vscode.Location(vscode.Uri.file(py.file), new vscode.Position(py.bodyLine - 1, 0));
   const bp = new vscode.SourceBreakpoint(location, true, undefined, "1");
   vscode.debug.addBreakpoints([bp]);
   const attached = await vscode.debug.startDebugging(
     s.workspaceFolder,
-    { type: "debugpy", request: "attach", name: `python: ${info.node.path}`, connect: { host: "127.0.0.1", port: info.debugpyPort }, justMyCode: false },
+    { type: "debugpy", request: "attach", name: `python: ${info.node!.path}`, connect: { host: "127.0.0.1", port: info.debugpyPort }, justMyCode: false },
     { parentSession: s, compact: true },
   );
   if (!attached) {
@@ -194,7 +207,13 @@ function findNode(d: DescribeResult, p: string) {
   return found;
 }
 
+function deciderSession(): vscode.DebugSession | undefined {
+  const s = vscode.debug.activeDebugSession;
+  return s?.type === "decider" ? s : undefined;
+}
+
 function renderLineage(l: Lineage, indent = ""): string {
-  const line = `${indent}${l.name}  ←  ${l.producer ?? "<input column>"}`;
+  const value = l.value === null || l.value === undefined ? "" : ` = ${JSON.stringify(l.value)}`;
+  const line = `${indent}${l.name}${value}  ←  ${l.producer ?? "<input column>"}${l.via ? ` (${l.via})` : ""}`;
   return [line, ...l.inputs.map((i) => renderLineage(i, indent + "    "))].join("\n");
 }

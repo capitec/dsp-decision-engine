@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { lastSegment, type Checkpoint, type DescribeResult, type IRNodeJson } from "./protocol";
+import { kindLabel, lastSegment, type Checkpoint, type DescribeResult, type IRNodeJson } from "./protocol";
 
 /** The structural view: the IR tree, decorated with the running session's position. */
 export class StructureProvider implements vscode.TreeDataProvider<IRNodeJson> {
@@ -30,10 +30,10 @@ export class StructureProvider implements vscode.TreeDataProvider<IRNodeJson> {
       node.kind === "call" ? vscode.TreeItemCollapsibleState.None : vscode.TreeItemCollapsibleState.Expanded,
     );
     item.id = node.path || "<root>";
-    item.description = node.kind === "call" ? `${node.inputs.join(", ")} → ${node.outputs.join(", ")}` : node.kind;
+    item.description = node.kind === "call" ? `${names(node.inputs)} → ${names(node.outputs)}` : node.kind;
     item.tooltip = `${node.path || "<root>"}\n${node.source}` + (node.kind === "call" ? `\nparams: ${JSON.stringify(node.params)}` : "");
     item.iconPath = new vscode.ThemeIcon(
-      this.current?.path === node.path ? "debug-stackframe" : this.finished.has(node.path) ? "pass" : ICONS[node.kind],
+      this.current?.path === node.path ? "debug-stackframe" : this.finished.has(node.path) ? "pass" : ICONS[kindLabel(node)],
     );
     if (node.file) {
       item.command = { command: "decider.reveal", title: "Open source", arguments: [node.file, node.line] };
@@ -54,4 +54,10 @@ export class StructureProvider implements vscode.TreeDataProvider<IRNodeJson> {
   }
 }
 
-const ICONS: Record<IRNodeJson["kind"], string> = { call: "symbol-function", sequence: "list-ordered", branch: "git-branch" };
+const ICONS: Record<string, string> = {
+  scalar: "symbol-function", row: "list-tree", frame: "table", sequence: "list-ordered", branch: "git-branch", loop: "sync",
+};
+
+function names(xs: string[] | null): string {
+  return xs === null ? "?" : xs.join(", ");
+}

@@ -25,7 +25,7 @@ function defineTests() {
       const titles = lenses.map((l) => l.command!.title);
       assert.ok(titles.some((t) => t.includes("Run flow")), titles.join());
       assert.ok(titles.some((t) => t.includes("Visualise flow")), titles.join());
-      assert.strictEqual(lenses[0].range.start.line, 55);
+      assert.strictEqual(lenses[0].range.start.line, 108);
     });
 
     it("visualises the flow without an error", async () => {
@@ -45,8 +45,9 @@ function defineTests() {
       const session = await waitFor(async () => vscode.debug.activeDebugSession?.type === "decider" ? vscode.debug.activeDebugSession : undefined);
       const d = (await session.customRequest("decider.describe")) as { pipeline: string };
       assert.strictEqual(d.pipeline, "pipeline");
-      const info = (await session.customRequest("decider.info")) as { current: { path: string } | null; debugpyPort?: number };
-      assert.deepStrictEqual(info.current, { path: "", phase: "start", depth: 0 });
+      // The engine import takes a few seconds, so the entry stop lands after the session starts.
+      const current = await waitFor(async () => ((await session.customRequest("decider.info")) as { current: unknown }).current ?? undefined);
+      assert.deepStrictEqual(current, { path: "", when: "before" });
       await vscode.debug.stopDebugging(session);
     });
   });

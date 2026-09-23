@@ -3,18 +3,20 @@ import type { CallNodeJson, ColumnSummary } from "../src/protocol";
 
 interface Props {
   columns: ColumnSummary[] | null;
+  record: number | null;
   selected?: CallNodeJson;
   picked?: string;
   onPick: (name?: string) => void;
 }
 
 /** The searchable state: every column, marked by how the selected node touches it. */
-export function StateTable({ columns, selected, picked, onPick }: Props) {
+export function StateTable({ columns, record, selected, picked, onPick }: Props) {
   const [q, setQ] = useState("");
   if (!columns) return <div className="empty">No session running. Use “Run flow” to see the state here.</div>;
   const rows = columns.filter((c) => c.name.includes(q) || c.producer.includes(q) || c.dtype.includes(q));
-  const role = (name: string) =>
-    selected?.inputs.includes(name) && selected?.outputs.includes(name) ? "reads, writes" : selected?.inputs.includes(name) ? "reads" : selected?.outputs.includes(name) ? "writes" : "";
+  const reads = new Set(selected?.inputs ?? []);
+  const writes = new Set(selected?.outputs ?? []);
+  const role = (name: string) => [reads.has(name) && "reads", writes.has(name) && "writes"].filter(Boolean).join(", ");
   return (
     <div className="state">
       <input placeholder="filter columns, producers, dtypes" value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
@@ -27,7 +29,7 @@ export function StateTable({ columns, selected, picked, onPick }: Props) {
             <th>nulls</th>
             <th>producer</th>
             <th>v</th>
-            <th>preview</th>
+            <th>{record === null ? "preview" : `record ${record}`}</th>
           </tr>
         </thead>
         <tbody>
@@ -39,7 +41,11 @@ export function StateTable({ columns, selected, picked, onPick }: Props) {
               <td>{c.nulls || ""}</td>
               <td className="muted">{c.producer}</td>
               <td>{c.versions}</td>
-              <td className="preview">{c.preview.map((v) => JSON.stringify(v)).join(", ")}{c.rows > c.preview.length ? ", …" : ""}</td>
+              <td className="preview">
+                {record === null
+                  ? `${c.preview.map((v) => JSON.stringify(v)).join(", ")}${c.rows > c.preview.length ? ", …" : ""}`
+                  : JSON.stringify(c.value)}
+              </td>
             </tr>
           ))}
         </tbody>

@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import * as net from "node:net";
 import * as path from "node:path";
 import * as readline from "node:readline";
 
@@ -92,4 +93,16 @@ export async function withBridge<T>(opts: BridgeOptions, fn: (b: Bridge) => Prom
   } finally {
     await b.dispose();
   }
+}
+
+/** A free local TCP port, for debugpy to listen on. */
+export function freePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const srv = net.createServer();
+    srv.listen(0, "127.0.0.1", () => {
+      const port = (srv.address() as net.AddressInfo).port;
+      srv.close(() => resolve(port));
+    });
+    srv.on("error", reject);
+  });
 }

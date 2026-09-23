@@ -36,6 +36,10 @@
       {
         "command": "decider.trace",
         "title": "decider: Trace a column's lineage"
+      },
+      {
+        "command": "decider.focusRecord",
+        "title": "decider: Focus one record"
       }
     ],
     "menus": {
@@ -52,6 +56,10 @@
         },
         {
           "command": "decider.trace",
+          "when": "debugType == decider"
+        },
+        {
+          "command": "decider.focusRecord",
           "when": "debugType == decider"
         }
       ]
@@ -114,6 +122,14 @@
               },
               "data": {
                 "description": "Input rows: a list of records, or the path of a JSON file. Default: the module's SAMPLE"
+              },
+              "params": {
+                "type": "object",
+                "description": "A params document for the run"
+              },
+              "record": {
+                "type": "integer",
+                "description": "Show this record's values instead of batch previews"
               },
               "stopOnEntry": {
                 "type": "boolean",

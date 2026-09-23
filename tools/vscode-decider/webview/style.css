@@ -206,3 +206,52 @@ td.preview {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* node kinds, tree visits, lineage */
+.node.frame rect {
+  stroke-dasharray: 6 2;
+}
+.node.row rect {
+  stroke: var(--vscode-charts-green, #89d185);
+}
+.node.current.after rect {
+  stroke-dasharray: 2 2;
+}
+.node.lineage rect {
+  stroke: var(--vscode-charts-orange, orange);
+  stroke-width: 2.5;
+}
+.cluster.loop rect {
+  stroke: var(--vscode-charts-yellow, #cca700);
+}
+.cluster.current rect {
+  stroke: var(--vscode-debugIcon-pauseForeground, orange);
+  stroke-dasharray: none;
+  stroke-width: 2;
+}
+.edge.back path {
+  stroke-dasharray: 5 3;
+}
+.mono {
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.9em;
+}
+ul.lineage {
+  list-style: none;
+  margin: 0;
+  padding-left: 12px;
+  border-left: 1px solid var(--vscode-panel-border);
+}
+aside > ul.lineage {
+  padding-left: 0;
+  border-left: none;
+}
+ul.lineage a {
+  cursor: pointer;
+  color: var(--vscode-textLink-foreground);
+}
+header select {
+  background: var(--vscode-dropdown-background);
+  color: var(--vscode-dropdown-foreground);
+  border: 1px solid var(--vscode-dropdown-border, transparent);
+}
