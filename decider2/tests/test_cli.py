@@ -61,3 +61,52 @@ def test_a_missing_file_is_a_clean_cli_error(tmp_path):
 def test_a_dotted_module_path_also_works():
     loaded = load_pipeline("decider2.examples.flagship")
     assert isinstance(loaded, Pipeline)
+
+
+# `decider2 build [--verify]` — a thin wrapper over `Pipeline.precompile()`
+# and `decider2.testing.assert_no_compilation_after_warmup` (doc 05 §8).
+
+def _write_flow(tmp_path):
+    path = tmp_path / "demo.py"
+    path.write_text(textwrap.dedent(
+        """
+        from decider2 import flow, param
+
+        def cap(term_cap: float, cap: float = param(48.0)) -> float:
+            return min(term_cap, cap)
+
+        pipeline = flow(cap)
+        """
+    ))
+    return path
+
+
+def test_build_precompiles_and_reports(tmp_path):
+    from click.testing import CliRunner
+    from decider2.cli import cli
+
+    result = CliRunner().invoke(cli, ["build", str(_write_flow(tmp_path))])
+    assert result.exit_code == 0, result.output
+    assert result.output.startswith("precompile: apply ")
+    assert "compile events" in result.output and "verify" not in result.output
+
+
+def test_build_verify_is_the_zero_compilation_release_gate(tmp_path):
+    from click.testing import CliRunner
+    from decider2.cli import cli
+
+    result = CliRunner().invoke(cli, ["build", "--verify", str(_write_flow(tmp_path))])
+    assert result.exit_code == 0, result.output
+    assert "shim: loaded (" in result.output and "nanoarrow 0.9.0" in result.output
+    assert result.output.rstrip().endswith("verify: 0 compilations after warm-up")
+
+
+def test_build_verify_fails_cleanly_when_the_shim_is_unavailable(tmp_path, monkeypatch):
+    from click.testing import CliRunner
+    import decider2._arrow as arrow
+    from decider2.cli import cli
+
+    monkeypatch.setattr(arrow, "diagnose", lambda: {"shim": "unavailable", "error": "no shim here"})
+    result = CliRunner().invoke(cli, ["build", "--verify", str(_write_flow(tmp_path))])
+    assert result.exit_code != 0
+    assert "no shim here" in result.output

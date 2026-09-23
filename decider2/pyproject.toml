@@ -10,6 +10,14 @@ dependencies = [
     "numba>=0.67.0",
     "pydantic>=2",
 ]
+# The vendored nanoarrow (src/decider2/_arrow/vendor, Apache-2.0) must travel
+# with every redistribution (Apache-2.0 §4(d)). PEP 639 license-files puts
+# LICENSE.txt and NOTICE.txt into <dist>.dist-info/licenses/ of the wheel and
+# at the sdist root.
+license-files = [
+    "src/decider2/_arrow/vendor/LICENSE.txt",
+    "src/decider2/_arrow/vendor/NOTICE.txt",
+]
 
 [project.optional-dependencies]
 serve = ["starlette", "uvicorn"]
@@ -19,7 +27,8 @@ dev   = ["pytest"]
 decider2 = "decider2.cli:main"
 
 [build-system]
-requires = ["setuptools>=68"]
+# setuptools>=77 for PEP 639 license-files; >=74.1 for [[tool.setuptools.ext-modules]]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 # src/ layout, and it is load-bearing rather than convention.
@@ -36,3 +45,66 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["decider2*"]
+
+[tool.setuptools]
+# false: otherwise every extension source under src/decider2/_arrow/ (nanoarrow.c,
+# the header, shim.c) is also copied into the WHEEL as package data (+335 KB
+# measured). The sdist still carries them, as extension sources.
+include-package-data = false
+
+[tool.setuptools.package-data]
+# the provenance record ships inside the package so `decider2._arrow.diagnose()`
+# can show it (VERSION: release + tarball sha512; SHA512SUMS: the vendored files)
+"decider2._arrow" = ["vendor/VERSION", "vendor/SHA512SUMS", "vendor/LICENSE.txt", "vendor/NOTICE.txt"]
+
+# The one compiled artefact (docs/BOUNDARY-REWORK.md §4.1-4.2): the nanoarrow
+# shim as a real CPython extension built against the stable ABI (abi3,
+# CPython >= 3.10), so ONE wheel per platform covers every supported
+# interpreter. Declarative (no setup.py): setuptools >= 74.1. Adopted from
+# experimentation/packaging-first-binary/proto/pyproject.toml, RESULTS.md §2.
+#
+# There is deliberately no `optional = true`: a compile failure must fail the
+# install, never degrade silently (packaging strand, "Decision taken").
+[[tool.setuptools.ext-modules]]
+name = "decider2._arrow._nashim"
+sources = [
+    "src/decider2/_arrow/c/shim_module.c",   # PyInit + address table (this project)
+    "src/decider2/_arrow/c/shim.c",          # the shim (this project): import, resolve, gather, get_string
+    "src/decider2/_arrow/vendor/nanoarrow.c",  # vendored nanoarrow 0.9.0 amalgamation (Apache-2.0)
+]
+include-dirs = ["src/decider2/_arrow/vendor"]
+# `depends` is what puts the header into the SDIST: without it `uv build`
+# (sdist -> wheel) fails with "nanoarrow/nanoarrow.h: No such file" because
+# sdists carry only extension sources.
+depends = ["src/decider2/_arrow/vendor/nanoarrow/nanoarrow.h"]
+# NANOARROW_DLL="" : nanoarrow.h otherwise marks its own API visibility("default"),
+# which overrides -fvisibility=hidden below and leaks 71 Arrow* symbols.
+define-macros = [["Py_LIMITED_API", "0x030A0000"], ["NANOARROW_DLL", ""]]
+py-limited-api = true
+# Hide nanoarrow's Arrow* functions and the sm_* functions from the dynamic
+# symbol table: only PyInit__nashim is exported (89 -> 1, measured). MSVC
+# ignores this flag with a D9002 warning and exports nothing by default.
+# NOTE: setuptools reuses stale objects in build/ across flag changes; delete
+# build/ after editing these flags.
+extra-compile-args = ["-fvisibility=hidden"]
+
+# Tag the wheel cp310-abi3-<platform> instead of cp3XY-cp3XY-<platform>.
+[tool.distutils.bdist_wheel]
+py-limited-api = "cp310"
+
+# The wheel matrix (BOUNDARY-REWORK.md §4.2): one abi3 wheel per platform,
+# built from cp310. Run cibuildwheel from INSIDE decider2/ (test-sources
+# resolves against the cwd). See .github/workflows/decider2-wheels.yml.
+[tool.cibuildwheel]
+build = "cp310-*"
+skip = "*-musllinux_* *-win32 *-manylinux_i686 pp*"
+build-verbosity = 1
+test-requires = "pytest"
+test-sources = ["tests"]
+test-command = "python -m pytest tests/test_shim.py -q"
+manylinux-x86_64-image = "manylinux_2_28"
+manylinux-aarch64-image = "manylinux_2_28"
+
+[tool.cibuildwheel.macos]
+# polars/numba wheels need 11.0+ on arm64 anyway; one floor for both arches
+environment = { MACOSX_DEPLOYMENT_TARGET = "11.0" }
