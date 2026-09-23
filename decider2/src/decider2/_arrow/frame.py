@@ -15,8 +15,9 @@ a `FrameView` is the pooled per-pipeline (per-thread) object that owns the
 opaque nanoarrow structs, the `ColDesc` array, the `RowPlan` and the row
 buffers, and binds one frame at a time. Every address a kernel sees —
 `gather_addr`, `plan_addr`, `addrs`, the row buffers — is a value it
-receives as an argument. Nothing here is a consumer yet: Stages 2–4 wire
-trees, `apply()` and `score()` onto it.
+receives as an argument. `boundary/extract.py` (Stage 3) is the consumer:
+`apply()` binds the whole frame here and reads every declared column back
+through `materialize_columns()`.
 
 Kinds are `decider2.types.FeatureKind` (F64=0, I64=1, BOOL=2, CODE=3,
 STR=4); a STR feature's slot holds `(address, length)` with `length == -1`
