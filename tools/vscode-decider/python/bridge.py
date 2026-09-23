@@ -42,13 +42,28 @@ from forks import checkpoint_key, merge, sweep  # noqa: E402
 
 
 def load_module(file):
+    """Import `file`: by its dotted name when it sits in a package, so its own package imports resolve."""
     path = Path(file).resolve()
-    sys.path.insert(0, str(path.parent))
-    spec = importlib.util.spec_from_file_location(path.stem, path)
+    root, parts = path.parent, [path.stem]
+    while (root / "__init__.py").exists():
+        parts.insert(0, root.name)
+        root = root.parent
+    sys.path.insert(0, str(root))
+    name = ".".join(parts)
+    if len(parts) > 1:
+        for mod_name in [m for m in sys.modules if m == parts[0] or m.startswith(parts[0] + ".")]:
+            del sys.modules[mod_name]  # a fresh import, so edits since the last describe count
+        return importlib.import_module(name)
+    spec = importlib.util.spec_from_file_location(name, path)
     mod = importlib.util.module_from_spec(spec)
-    sys.modules[path.stem] = mod  # classes defined in it (ConfigurableSteps) resolve by import path
+    sys.modules[name] = mod  # classes defined in it (ConfigurableSteps) resolve by import path
     spec.loader.exec_module(mod)
     return mod
+
+
+def base_params(mod, params):
+    """The module's `PARAMS` (its tables and tuned values, as the config store holds them) with `params` on top."""
+    return merge(getattr(mod, "PARAMS", None) or {}, params or {}) or None
 
 
 def _assignment_lines(file):
@@ -162,7 +177,7 @@ class Bridge:
         if rows is None:
             raise ValueError("no data: pass `data` (rows or a JSON file) or define SAMPLE in the module")
         frame = apply_overrides(_load_rows(rows), overrides, row)
-        return {**described, **trace(self.step, frame, params), "data": frame.to_dicts(), "key": key_column(frame)}
+        return {**described, **trace(self.step, frame, base_params(self.mod, params)), "data": frame.to_dicts(), "key": key_column(frame)}
 
     def _index(self, n, parent):
         self.parents[n["path"]] = parent
@@ -175,7 +190,7 @@ class Bridge:
             data = getattr(self.mod, "SAMPLE", None)
         if data is None:
             raise ValueError("no data: pass `data` (rows or a JSON file) or define SAMPLE in the module")
-        self.session = Engine().bind(self.step).session(_load_rows(data), params)
+        self.session = Engine().bind(self.step).session(_load_rows(data), base_params(self.mod, params))
         self.sent = 0
         # Overrides made so far and where, so forks can replay them; a rewind breaks the replay.
         self.history, self.rewound = [], False
@@ -221,6 +236,7 @@ class Bridge:
             rows = data if data is not None else getattr(self.mod, "SAMPLE", None)
             frame = _load_rows(rows)
             at = None
+            params = base_params(self.mod, params)
             base = trace(self.step, frame, params)
             results = []
             for sc in scenarios:
