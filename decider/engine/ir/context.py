@@ -1,26 +1,28 @@
 from __future__ import annotations
 
 import weakref
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
 from decider.engine.ir.decls import ParamDecl
 from decider.engine.ir.nodes import BranchNode, CallNode, IRNode, LoopNode, SequenceNode, iter_nodes
-from decider.engine.ir.origin import Origin
+from decider.engine.ir.origin import Origin, check_name
 from decider.engine.params.models import record_shared_type
 from decider.registry import import_path
 
 if TYPE_CHECKING:
     from decider.steps.base import Step
 
-# Built IR per (step object, parent path). Keyed by id() because pydantic steps
-# compare by value; the finalizer drops the entry before the id can be reused.
-_BUILT: dict[int, dict[str, IRNode]] = {}
+# Built IR and the path -> Step entries of its members, per (step object,
+# parent path). Keyed by id() because pydantic steps compare by value; the
+# finalizer drops the entry before the id can be reused.
+_BUILT: dict[int, dict[str, tuple[IRNode, dict[str, Step]]]] = {}
 
 
 def _join(parent: str, name: str) -> str:
+    check_name(name)
     return f"{parent}/{name}" if parent else name
 
 
@@ -40,15 +42,17 @@ class IRContext:
     """
 
     path: str = ""
+    # Every step built under this context, by the path of its node.
+    steps: dict[str, Step] = field(default_factory=dict, compare=False, repr=False)
 
     def child(self, name: str | None) -> IRContext:
         """The context for members of a step called `name`; `None` (anonymous) is transparent."""
-        return self if name is None else IRContext(_join(self.path, name))
+        return self if name is None else IRContext(_join(self.path, name), self.steps)
 
     def origin(self, step: Step, name: str | None = None, locator: str | None = None) -> Origin:
         """The origin of a node `step` produces here, named `name` (default: the step's name)."""
         source = type(step) if isinstance(step, BaseModel) else getattr(step, "fn", type(step))
-        own = name or step.name
+        own = step.name if name is None else name
         return Origin(self.path if own is None else _join(self.path, own), import_path(source), locator)
 
     def build(self, step: Step) -> IRNode:
@@ -62,20 +66,42 @@ class IRContext:
         if built is None:
             built = _BUILT[key] = {}
             weakref.finalize(step, _BUILT.pop, key, None)
-        node = built.get(self.path)
-        if node is None:
-            node = step.to_ir(self)
+        entry = built.get(self.path)
+        if entry is None:
+            # A fresh map per build, so a cached subtree brings its own entries along.
+            scope = IRContext(self.path)
+            node = step.to_ir(scope)
             reads, writes = dict(getattr(step, "reads", ())), dict(getattr(step, "writes", ()))
             if reads or writes:
                 node = _relabel(node, reads, writes, set())
-            built[self.path] = node
+            entry = built[self.path] = (node, scope.steps)
+        node, members = entry
+        self.steps.update(members)
+        # Kept out of the cache entry, which would otherwise keep the step alive.
+        # Set last, so a step owns its path over an anonymous member or helper sharing it.
+        self.steps[self.child(step.name).path] = step
         return node
+
+    def expand(self, owner: Step, helper: Step) -> IRNode:
+        """Build `helper` as the body of `owner`: its nodes sit under `owner`'s name, its root takes `owner`'s origin.
+
+        For a `ConfigurableStep` whose `to_ir` assembles other steps.
+
+        Example::
+
+            class Affordability(ConfigurableStep):
+                def to_ir(self, ctx):
+                    return ctx.expand(self, flow(disposable_income, ratio))
+        """
+        node = self.child(owner.name).build(helper)
+        return replace(node, origin=self.origin(owner))
 
     def value(self, value: Any, annotation: Any = None) -> Any:
         """A `Value[T]`: the literal itself, or a `ParamDecl` for a `ParamRef`.
 
         A `ParamRef` without a default is a required param. `annotation`
-        defaults to the type of the ref's default.
+        defaults to the type of the ref's default. A literal goes in the
+        node's `consts`, a `ParamDecl` in its `params`.
 
         Example::
 
@@ -108,7 +134,7 @@ class IRContext:
             return value
         return ParamDecl(
             value.table, DataFrame, required=True, shared_key=value.table if value.shared else None,
-            schema=dict(schema),
+            schema=tuple(schema.items()),
         )
 
 
@@ -124,11 +150,26 @@ def to_ir(step: Any) -> IRNode:
         from decider import engine
         ir = engine.to_ir(pipeline)
     """
+    return _build(step)[0]
+
+
+def step_map(step: Any) -> dict[str, Step]:
+    """The step object behind each node path of `to_ir(step)`, conditions, arms and loop bodies included.
+
+    Example::
+
+        engine.step_map(pipeline)["term/by_sector/cap_private"]  # the FunctionStep
+    """
+    return _build(step)[1]
+
+
+def _build(step: Any) -> tuple[IRNode, dict[str, Step]]:
     from decider.steps.base import as_step
 
-    root = IRContext().build(as_step(step))
+    ctx = IRContext()
+    root = ctx.build(as_step(step))
     _check(root)
-    return root
+    return root, ctx.steps
 
 
 def _check(root: IRNode) -> None:
@@ -150,6 +191,10 @@ def _check(root: IRNode) -> None:
         seen[path] = origin
         if isinstance(node, CallNode):
             for decl in node.params:
+                if not isinstance(decl, ParamDecl):
+                    raise TypeError(
+                        f"{path}: params holds {decl!r}, not a ParamDecl; pass literals as consts=((name, value),)"
+                    )
                 if decl.shared_key is not None:
                     record_shared_type(shared, decl, path)
 

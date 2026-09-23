@@ -7,7 +7,7 @@ import json
 import polars as pl
 
 from decider import branch, dag, engine, flow, frame_step, missing_as, param, step
-from decider.engine.ir.decls import Input, Output
+from decider.engine.ir.decls import Input, Output, ParamDecl
 from decider.engine.ir.nodes import CallNode
 from decider.steps import ConfigurableStep, ParamRef, Value
 
@@ -17,19 +17,21 @@ class TreeConfig(ConfigurableStep):
     threshold: Value[float] = 0.5
 
     def to_ir(self, ctx):
+        threshold = ctx.value(self.threshold, float)
+        params, consts = ((threshold,), ()) if isinstance(threshold, ParamDecl) else ((), (("threshold", threshold),))
         return CallNode(
             ctx.origin(self), "row", _tree_kernel, (Input("ratio", float),), (Output("risk_band", int),),
-            (ctx.value(self.threshold, float),), reference=_tree_reference,
+            params, reference=_tree_reference, consts=consts,
         )
 
 
-def _tree_kernel(row, params):
-    return (int(row[0] > params[0]),)
+def _tree_kernel(row, params, consts):
+    return (int(row[0] > (params or consts)[0]),)
 
 
-def _tree_reference(row, params, visit):
+def _tree_reference(row, params, consts, visit):
     visit("n0")
-    return _tree_kernel(row, params)
+    return _tree_kernel(row, params, consts)
 
 
 BUREAU = pl.DataFrame({"client_id": [1], "bureau_score": [700]})

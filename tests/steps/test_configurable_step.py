@@ -17,10 +17,12 @@ class Threshold(ConfigurableStep):
     cut: Value[float] = 0.5
 
     def to_ir(self, ctx):
-        # A literal cut would be baked into the kernel's data; only a ref is a param.
         cut = ctx.value(self.cut, float)
-        params = (cut,) if isinstance(cut, ParamDecl) else ()
-        return CallNode(ctx.origin(self), "row", _above, (Input(self.column, float),), (Output(self.name, bool),), params)
+        params, consts = ((cut,), ()) if isinstance(cut, ParamDecl) else ((), (("cut", cut),))
+        return CallNode(
+            ctx.origin(self), "row", _above, (Input(self.column, float),), (Output(self.name, bool),), params,
+            consts=consts,
+        )
 
 
 class Aliased(ConfigurableStep):
@@ -30,8 +32,8 @@ class Aliased(ConfigurableStep):
         return CallNode(ctx.origin(self), "row", _above, (), (Output(self.name, bool),), ())
 
 
-def _above(row, params):
-    return (row[0] > params[0],)
+def _above(row, params, consts):
+    return (row[0] > (params or consts)[0],)
 
 
 def ratio(x: float) -> float:

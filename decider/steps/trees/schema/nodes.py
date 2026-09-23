@@ -5,17 +5,16 @@ import typing as t
 from pydantic import Discriminator, Tag, model_validator
 
 from decider.steps.trees.schema.conditions import (
+    CompositeCondition,
     Feature,
     IsInCondition,
-    LogicOp,
     RangeCondition,
     RangeEndLogic,
     SchemaModel,
     StringMatchCondition,
     StringMatchType,
-    TCondition,
     TUnaryOp,
-    check_logic,
+    get_field,
     validate_range_conditions,
 )
 
@@ -36,18 +35,7 @@ class UnaryNode(SchemaModel):
     condition: TUnaryOp
 
 
-class CompositeNode(SchemaModel):
-    """AND/OR/NOT over conditions. Branch 0 is taken when it holds, branch 1 otherwise."""
-
-    type: t.Literal["composite"] = "composite"
-    id: t.Optional[str] = None
-    op: LogicOp
-    conditions: t.List[TCondition]
-
-    @model_validator(mode="after")
-    def _logic(self) -> "CompositeNode":
-        check_logic(self.op, self.conditions)
-        return self
+CompositeNode = CompositeCondition
 
 
 class _Ranges(SchemaModel):
@@ -104,9 +92,8 @@ class CasesIsIn(_IsIn):
 
 
 def node_tag(value: t.Any) -> str:
-    get = value.get if isinstance(value, dict) else lambda k, d=None: getattr(value, k, d)
-    kind = get("type", None)
-    return f"cases:{get('op', 'ranges')}" if kind == "cases" else str(kind)
+    kind = get_field(value, "type")
+    return f"cases:{get_field(value, 'op', 'ranges')}" if kind == "cases" else str(kind)
 
 
 NodeData = t.Annotated[

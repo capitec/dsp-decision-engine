@@ -55,9 +55,9 @@ def harvest(
                 ann = type(d.default)
             params.append(ParamDecl(name, ann, d.default, d.field_info, d.required, d.shared_key, d.on_invalid))
         elif isinstance(d, MissingAs):
-            inputs.append(Input(name, type(d.fill) if ann is Any else ann, NullPolicy.MISSING_AS, d.fill))
+            inputs.append(Input(name, type(d.fill) if ann is Any else ann, NullPolicy.MISSING_AS, d.fill, arg=name))
         elif _permits_none(ann):
-            inputs.append(Input(name, ann, NullPolicy.OPTIONAL))
+            inputs.append(Input(name, ann, NullPolicy.OPTIONAL, arg=name))
         elif d is not _EMPTY:
             # A bare default could mean a tunable knob or a fill for nulls; make the author say which.
             raise TypeError(
@@ -65,7 +65,7 @@ def harvest(
                 f"Use param({d!r}) for a tunable param or missing_as({d!r}) to fill nulls."
             )
         else:
-            inputs.append(Input(name, ann, NullPolicy.REQUIRED))
+            inputs.append(Input(name, ann, NullPolicy.REQUIRED, arg=name))
     ret = Any if sig.return_annotation is _EMPTY else sig.return_annotation
     return tuple(inputs), tuple(params), _outputs(fn, outputs or (fn.__name__,), ret)
 
