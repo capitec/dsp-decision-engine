@@ -1,4 +1,3 @@
-import * as net from "node:net";
 import * as path from "node:path";
 import {
   Breakpoint,
@@ -16,18 +15,23 @@ import {
   Variable,
 } from "@vscode/debugadapter";
 import type { DebugProtocol } from "@vscode/debugprotocol";
-import { Bridge } from "./bridge";
+import { Bridge, freePort } from "./bridge";
 import {
-  callNodes,
+  kindLabel,
   lastSegment,
+  previewOf,
   walk,
   type Checkpoint,
   type ColumnSummary,
   type DescribeResult,
   type IRNodeJson,
   type Lineage,
+  type RunStatus,
   type Status,
+  type Summary,
+  type Visits,
 } from "./protocol";
+import { nodeAtLine } from "./sourceMap";
 
 export interface AdapterOptions {
   python: string[];
@@ -38,6 +42,9 @@ export interface LaunchArgs extends DebugProtocol.LaunchRequestArguments {
   program: string;
   pipeline?: string;
   data?: unknown;
+  params?: unknown;
+  /** Show this record's values instead of batch previews. */
+  record?: number;
   stopOnEntry?: boolean;
   cwd?: string;
 }
@@ -47,7 +54,8 @@ type VarRef =
   | { kind: "column"; name: string }
   | { kind: "values"; name: string }
   | { kind: "versions"; name: string }
-  | { kind: "lineage"; entry: Lineage };
+  | { kind: "lineage"; entry: Lineage }
+  | { kind: "visits"; path: string };
 
 const THREAD = 1;
 
@@ -58,6 +66,7 @@ const THREAD = 1;
  * `rewind`.
  */
 export class DeciderDebugSession extends LoggingDebugSession {
+  private opts: AdapterOptions;
   private bridge?: Bridge;
   private describe?: DescribeResult;
   private nodes = new Map<string, IRNodeJson>();
@@ -65,6 +74,8 @@ export class DeciderDebugSession extends LoggingDebugSession {
   private current: Checkpoint | null = null;
   private finished = false;
   private finishedPaths: string[] = [];
+  private visits: Visits = {};
+  private record: number | null = null;
   private handles = new Handles<VarRef>();
   private frameIds = new Map<number, string>();
   private stateCache?: Promise<ColumnSummary[]>;
@@ -75,8 +86,6 @@ export class DeciderDebugSession extends LoggingDebugSession {
   private configuredPromise = new Promise<void>((r) => (this.configured = r));
   private launchArgs?: LaunchArgs;
   private debugpyPort?: number;
-
-  private opts: AdapterOptions;
 
   constructor(opts?: AdapterOptions | boolean) {
     super();
@@ -106,6 +115,7 @@ export class DeciderDebugSession extends LoggingDebugSession {
 
   protected async launchRequest(response: DebugProtocol.LaunchResponse, args: LaunchArgs): Promise<void> {
     this.launchArgs = args;
+    this.record = args.record ?? null;
     try {
       this.debugpyPort = this.opts.debugpyLibs ? await freePort() : undefined;
       this.bridge = new Bridge({
@@ -127,14 +137,7 @@ export class DeciderDebugSession extends LoggingDebugSession {
       // Breakpoints arrive after this event; launch continues once configurationDone lands.
       this.sendEvent(new InitializedEvent());
       await this.configuredPromise;
-      const status = await this.bridge.request<Status>("start", {
-        file: args.program,
-        pipeline: args.pipeline,
-        data: args.data ?? null,
-        breakpoints: this.desiredBreakpoints(),
-      });
-      this.applied = new Set(this.desiredBreakpoints());
-      this.apply(status, false);
+      await this.startSession();
       this.sendEvent(new OutputEvent(`decider: running ${this.describe.pipeline} from ${args.program}\n`, "console"));
       await this.run(args.stopOnEntry === false ? "resume" : "step_into", {}, args.stopOnEntry === false ? undefined : "entry");
     } catch (e) {
@@ -143,7 +146,20 @@ export class DeciderDebugSession extends LoggingDebugSession {
     }
   }
 
-  // ---------------------------------------------------------------- breakpoints
+  private async startSession() {
+    const a = this.launchArgs!;
+    this.finishedPaths = [];
+    this.visits = {};
+    const status = await this.bridge!.request<Status>("start", {
+      file: a.program,
+      pipeline: a.pipeline,
+      data: a.data ?? null,
+      params: a.params ?? null,
+      breakpoints: this.desiredBreakpoints(),
+    });
+    this.applied = new Set(this.desiredBreakpoints());
+    this.apply(status, false);
+  }
 
   private desiredBreakpoints(): string[] {
     return [...new Set([...this.fnBps, ...[...this.sourceBps.values()].flat()])];
@@ -152,8 +168,8 @@ export class DeciderDebugSession extends LoggingDebugSession {
   private async syncBreakpoints() {
     if (!this.bridge) return;
     const desired = new Set(this.desiredBreakpoints());
-    for (const p of desired) if (!this.applied.has(p)) await this.bridge.request("break_at", { path: p });
-    for (const p of this.applied) if (!desired.has(p)) await this.bridge.request("clear_break", { path: p });
+    for (const p of desired) if (!this.applied.has(p)) await this.bridge.request("break_at", { target: p });
+    for (const p of this.applied) if (!desired.has(p)) await this.bridge.request("clear_break", { target: p });
     this.applied = desired;
   }
 
@@ -162,17 +178,15 @@ export class DeciderDebugSession extends LoggingDebugSession {
     args: DebugProtocol.SetBreakpointsArguments,
   ): Promise<void> {
     const file = args.source.path ?? "";
-    const inFile = [...this.nodes.values()].filter((n) => n.file && samePath(n.file, file) && n.line !== null);
     const paths: string[] = [];
     response.body = {
       breakpoints: (args.breakpoints ?? []).map((bp) => {
-        // The node whose definition starts closest above the requested line.
-        const node = inFile.filter((n) => n.line! <= bp.line).sort((a, b) => b.line! - a.line!)[0];
-        if (!node) return new Breakpoint(false);
-        paths.push(node.path);
-        const b = new Breakpoint(true, node.line!, undefined, new Source(path.basename(file), file));
-        (b as DebugProtocol.Breakpoint).message = node.path;
-        return b;
+        const anchor = nodeAtLine(this.nodes.values(), file, bp.line);
+        if (!anchor) return new Breakpoint(false);
+        paths.push(anchor.path);
+        const b: DebugProtocol.Breakpoint = new Breakpoint(true, anchor.line, undefined, new Source(path.basename(file), file));
+        b.message = anchor.path;
+        return b as Breakpoint;
       }),
     };
     this.sourceBps.set(file, paths);
@@ -190,42 +204,67 @@ export class DeciderDebugSession extends LoggingDebugSession {
     this.sendResponse(response);
   }
 
-  // ---------------------------------------------------------------- running
-
   private async run(cmd: string, args: Record<string, unknown> = {}, reason?: string): Promise<void> {
-    const status = await this.bridge!.request<Status>(cmd, args);
+    let status: Status;
+    try {
+      status = await this.bridge!.request<Status>(cmd, args);
+    } catch (e) {
+      this.sendEvent(new OutputEvent(`decider: ${(e as Error).message}\n`, "stderr"));
+      this.sendEvent(new StoppedEvent("exception", THREAD, (e as Error).message));
+      return;
+    }
     this.apply(status, true, reason);
   }
 
   private apply(status: Status, stop: boolean, reason?: string) {
     let paused = reason;
     for (const ev of status.events) {
-      switch (ev.event) {
-        case "NodeFinished":
-          if (ev.outputs?.length) {
-            this.finishedPaths.push(ev.path!);
-            this.sendEvent(new OutputEvent(`${ev.path}  ${ev.outputs.map((o) => `${o.name}=${preview(o)}`).join("  ")}\n`, "stdout"));
-          }
+      const p = ev.origin?.path ?? "";
+      switch (ev.kind) {
+        case "node_started":
+          if (this.nodes.get(p)?.kind === "call") this.visits[p] = {};
           break;
-        case "Overridden":
+        case "node_visited":
+          (this.visits[p] ??= {})[ev.origin!.locator!] = ev.rows as number;
+          break;
+        case "node_finished": {
+          const outs = Object.entries(ev.outputs as Record<string, Summary>);
+          if (this.nodes.get(p)?.kind === "call") this.finishedPaths.push(p);
+          if (outs.length) this.sendEvent(new OutputEvent(`${p}  ${outs.map(([n, s]) => `${n}=${previewOf(s)}`).join("  ")}\n`, "stdout"));
+          break;
+        }
+        case "overridden":
           this.sendEvent(new OutputEvent(`set ${ev.name} (${ev.producer})\n`, "console"));
           break;
-        case "RunFinished":
-          this.sendEvent(new OutputEvent(`run finished; columns: ${(ev.columns as string[]).join(", ")}\n`, "console"));
+        case "warning":
+          this.sendEvent(new OutputEvent(`warning: ${ev.message}\n`, "console"));
           break;
-        case "Paused":
-          paused ??= ev.reason;
+        case "error":
+          this.sendEvent(new OutputEvent(`error in ${ev.path ?? "?"}: ${ev.message}\n`, "stderr"));
+          break;
+        case "run_finished":
+          this.sendEvent(new OutputEvent(`run finished; columns: ${Object.keys(ev.output as object).join(", ")}\n`, "console"));
+          break;
+        case "paused":
+          paused ??= ev.reason as string;
           break;
       }
     }
     this.current = status.current;
     this.finished = status.finished;
+    this.refresh();
+    if (!stop) return;
+    if (status.error) this.sendEvent(new StoppedEvent("exception", THREAD, status.error));
+    else if (this.finished) this.sendEvent(new TerminatedEvent());
+    else this.sendEvent(new StoppedEvent(paused ?? "step", THREAD));
+  }
+
+  /** Drop cached values and tell the views where the run is. */
+  private refresh() {
     this.stateCache = undefined;
     this.handles.reset();
-    this.sendEvent(new Event("decider.status", { current: this.current, finished: this.finished, finishedPaths: this.finishedPaths }));
-    if (!stop) return;
-    if (this.finished) this.sendEvent(new TerminatedEvent());
-    else this.sendEvent(new StoppedEvent(paused ?? "step", THREAD));
+    const body: RunStatus = { current: this.current, finished: this.finished, finishedPaths: this.finishedPaths, visits: this.visits, record: this.record };
+    this.sendEvent(new Event("decider.status", body));
   }
 
   protected async nextRequest(response: DebugProtocol.NextResponse): Promise<void> {
@@ -239,9 +278,8 @@ export class DeciderDebugSession extends LoggingDebugSession {
   }
 
   protected async stepOutRequest(response: DebugProtocol.StepOutResponse): Promise<void> {
-    // ponytail: Session has no step-out; step-over is the nearest. Add step_out to Session if people miss it.
     this.sendResponse(response);
-    await this.run("step");
+    await this.run("step_out");
   }
 
   protected async continueRequest(response: DebugProtocol.ContinueResponse): Promise<void> {
@@ -264,14 +302,7 @@ export class DeciderDebugSession extends LoggingDebugSession {
 
   protected async restartRequest(response: DebugProtocol.RestartResponse): Promise<void> {
     this.sendResponse(response);
-    this.finishedPaths = [];
-    const status = await this.bridge!.request<Status>("start", {
-      file: this.launchArgs!.program,
-      pipeline: this.launchArgs!.pipeline,
-      data: this.launchArgs!.data ?? null,
-      breakpoints: this.desiredBreakpoints(),
-    });
-    this.apply(status, false);
+    await this.startSession();
     await this.run("step_into", {}, "entry");
   }
 
@@ -288,10 +319,8 @@ export class DeciderDebugSession extends LoggingDebugSession {
     this.sendEvent(new TerminatedEvent());
   }
 
-  // ---------------------------------------------------------------- inspection
-
   protected threadsRequest(response: DebugProtocol.ThreadsResponse): void {
-    response.body = { threads: [new Thread(THREAD, "pipeline")] };
+    response.body = { threads: [new Thread(THREAD, this.record === null ? "pipeline" : `pipeline (record ${this.record})`)] };
     this.sendResponse(response);
   }
 
@@ -304,7 +333,8 @@ export class DeciderDebugSession extends LoggingDebugSession {
       const id = frames.length + 1;
       this.frameIds.set(id, p);
       const src = node?.file ? new Source(path.basename(node.file), node.file) : undefined;
-      frames.push(new StackFrame(id, `${lastSegment(p)}  [${node?.kind ?? "?"}]`, src, node?.line ?? 0, 1));
+      const when = id === 1 ? `  ${this.current!.when}` : "";
+      frames.push(new StackFrame(id, `${lastSegment(p)}  [${node ? kindLabel(node) : "?"}]${when}`, src, node?.line ?? 0, 1));
       p = this.parents.get(p);
     }
     response.body = { stackFrames: frames, totalFrames: frames.length };
@@ -312,11 +342,13 @@ export class DeciderDebugSession extends LoggingDebugSession {
   }
 
   protected scopesRequest(response: DebugProtocol.ScopesResponse, args: DebugProtocol.ScopesArguments): void {
-    const node = this.nodes.get(this.frameIds.get(args.frameId) ?? "");
+    const p = this.frameIds.get(args.frameId) ?? "";
+    const node = this.nodes.get(p);
     const scopes: Scope[] = [];
     if (node?.kind === "call") {
-      scopes.push(new Scope("Inputs", this.handles.create({ kind: "scope", names: node.inputs }), false));
-      scopes.push(new Scope("Outputs", this.handles.create({ kind: "scope", names: node.outputs }), false));
+      if (node.inputs) scopes.push(new Scope("Inputs", this.handles.create({ kind: "scope", names: node.inputs }), false));
+      if (node.outputs) scopes.push(new Scope("Outputs", this.handles.create({ kind: "scope", names: node.outputs }), false));
+      if (this.visits[p] && Object.keys(this.visits[p]).length) scopes.push(new Scope("Visited", this.handles.create({ kind: "visits", path: p }), false));
     }
     scopes.push(new Scope("State", this.handles.create({ kind: "scope", names: "all" }), true));
     response.body = { scopes };
@@ -324,7 +356,7 @@ export class DeciderDebugSession extends LoggingDebugSession {
   }
 
   private state(): Promise<ColumnSummary[]> {
-    this.stateCache ??= this.bridge!.request<{ columns: ColumnSummary[] }>("state").then((r) => r.columns);
+    this.stateCache ??= this.bridge!.request<{ columns: ColumnSummary[] }>("state", { row: this.record }).then((r) => r.columns);
     return this.stateCache;
   }
 
@@ -332,15 +364,18 @@ export class DeciderDebugSession extends LoggingDebugSession {
     response: DebugProtocol.VariablesResponse,
     args: DebugProtocol.VariablesArguments,
   ): Promise<void> {
-    const ref = this.handles.get(args.variablesReference);
-    let variables: Variable[] = [];
+    let variables: Variable[];
     try {
-      variables = await this.variablesFor(ref);
+      variables = await this.variablesFor(this.handles.get(args.variablesReference));
     } catch (e) {
       variables = [new Variable("error", (e as Error).message)];
     }
     response.body = { variables };
     this.sendResponse(response);
+  }
+
+  private shown(c: ColumnSummary): string {
+    return this.record === null ? previewOf(c) : JSON.stringify(c.value);
   }
 
   private async variablesFor(ref: VarRef): Promise<Variable[]> {
@@ -352,7 +387,7 @@ export class DeciderDebugSession extends LoggingDebugSession {
         return names.map((n) => {
           const c = byName.get(n);
           if (!c) return new Variable(n, "<not yet computed>");
-          const v: DebugProtocol.Variable = new Variable(n, preview(c), this.handles.create({ kind: "column", name: n }));
+          const v: DebugProtocol.Variable = new Variable(n, this.shown(c), this.handles.create({ kind: "column", name: n }));
           v.type = c.dtype;
           v.evaluateName = n;
           return v as Variable;
@@ -361,11 +396,11 @@ export class DeciderDebugSession extends LoggingDebugSession {
       case "column": {
         const c = (await this.state()).find((x) => x.name === ref.name)!;
         return [
-          new Variable("values", `${c.rows} rows`, this.handles.create({ kind: "values", name: ref.name })),
+          new Variable("values", this.record === null ? `${c.rows} rows` : `record ${this.record}`, this.handles.create({ kind: "values", name: ref.name })),
           new Variable("producer", c.producer),
           new Variable("nulls", String(c.nulls)),
           new Variable("versions", String(c.versions), this.handles.create({ kind: "versions", name: ref.name })),
-          new Variable("lineage", "static, before the current node", this.handles.create({ kind: "lineage", entry: await this.lineage(ref.name) })),
+          new Variable("lineage", "what it was computed from, so far", this.handles.create({ kind: "lineage", entry: await this.lineage(ref.name) })),
         ];
       }
       case "values": {
@@ -373,18 +408,22 @@ export class DeciderDebugSession extends LoggingDebugSession {
         return col.values.map((v, i) => new Variable(`[${i}]`, JSON.stringify(v)));
       }
       case "versions": {
-        const col = await this.bridge!.request<{ versions: { producer: string; values: unknown[] }[] }>("column", { name: ref.name });
-        return col.versions.map((v) => new Variable(v.producer, JSON.stringify(v.values.slice(0, 5))));
+        const col = await this.bridge!.request<{ versions: { producer: string; values: unknown[] }[] }>("column", { name: ref.name, row: this.record });
+        return col.versions.map((v, i) => new Variable(`${i} ${v.producer}`, JSON.stringify(v.values.slice(0, 5))));
       }
       case "lineage":
-        return ref.entry.inputs.map(
-          (e) => new Variable(e.name, e.producer ?? "<input column>", e.inputs.length ? this.handles.create({ kind: "lineage", entry: e }) : 0),
-        );
+        return ref.entry.inputs.map((e) => {
+          const label = `${e.producer ?? "<input column>"}${e.via ? ` (${e.via})` : ""}`;
+          const value = this.record === null ? label : `${JSON.stringify(e.value)}  ← ${label}`;
+          return new Variable(e.name, value, e.inputs.length ? this.handles.create({ kind: "lineage", entry: e }) : 0);
+        });
+      case "visits":
+        return Object.entries(this.visits[ref.path] ?? {}).map(([loc, rows]) => new Variable(`#${loc}`, `${rows} rows`));
     }
   }
 
   private lineage(name: string): Promise<Lineage> {
-    return this.bridge!.request<Lineage>("lineage", { name, path: this.current?.path ?? null });
+    return this.bridge!.request<Lineage>("lineage", { name, row: this.record });
   }
 
   protected async setVariableRequest(
@@ -399,9 +438,10 @@ export class DeciderDebugSession extends LoggingDebugSession {
     }
     try {
       const status = await this.bridge!.request<Status>("set", { name: args.name, value });
+      if (status.error) throw new Error(status.error);
       this.apply(status, false);
       const c = (await this.state()).find((x) => x.name === args.name)!;
-      response.body = { value: preview(c), type: c.dtype, variablesReference: this.handles.create({ kind: "column", name: args.name }) };
+      response.body = { value: this.shown(c), type: c.dtype, variablesReference: this.handles.create({ kind: "column", name: args.name }) };
       this.sendResponse(response);
     } catch (e) {
       this.sendErrorResponse(response, 2, (e as Error).message);
@@ -414,7 +454,7 @@ export class DeciderDebugSession extends LoggingDebugSession {
   ): Promise<void> {
     const c = (await this.state().catch(() => [])).find((x) => x.name === args.expression.trim());
     if (!c) return this.sendErrorResponse(response, 3, `not a column: ${args.expression}`);
-    response.body = { result: preview(c), type: c.dtype, variablesReference: this.handles.create({ kind: "column", name: c.name }) };
+    response.body = { result: this.shown(c), type: c.dtype, variablesReference: this.handles.create({ kind: "column", name: c.name }) };
     this.sendResponse(response);
   }
 
@@ -425,13 +465,20 @@ export class DeciderDebugSession extends LoggingDebugSession {
           response.body = this.describe;
           break;
         case "decider.state":
-          response.body = { columns: this.current || this.finished ? await this.state() : null };
+          response.body = { columns: this.current || this.finished ? await this.state() : null, record: this.record };
           break;
         case "decider.info":
           response.body = { debugpyPort: this.debugpyPort, current: this.current, node: this.current ? this.nodes.get(this.current.path) : null };
           break;
         case "decider.lineage":
           response.body = await this.lineage(args.name as string);
+          break;
+        case "decider.setRecord":
+          this.record = typeof args.row === "number" ? args.row : null;
+          this.refresh();
+          // Re-stopping makes VS Code fetch the Variables view again, now for the record.
+          this.sendEvent(new StoppedEvent("record", THREAD));
+          response.body = { record: this.record };
           break;
         default:
           return this.sendErrorResponse(response, 4, `unknown request ${command}`);
@@ -441,26 +488,6 @@ export class DeciderDebugSession extends LoggingDebugSession {
       this.sendErrorResponse(response, 5, (e as Error).message);
     }
   }
-}
-
-function preview(c: ColumnSummary): string {
-  const shown = c.preview.map((v) => JSON.stringify(v)).join(", ");
-  return `[${shown}${c.rows > c.preview.length ? ", …" : ""}]${c.nulls ? ` ${c.nulls} null` : ""}`;
-}
-
-function samePath(a: string, b: string): boolean {
-  return path.resolve(a) === path.resolve(b);
-}
-
-function freePort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const srv = net.createServer();
-    srv.listen(0, "127.0.0.1", () => {
-      const port = (srv.address() as net.AddressInfo).port;
-      srv.close(() => resolve(port));
-    });
-    srv.on("error", reject);
-  });
 }
 
 function optionsFromEnv(): AdapterOptions {

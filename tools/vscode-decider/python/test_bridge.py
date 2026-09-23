@@ -1,5 +1,7 @@
+import glob
 import json
 import os
+import socket
 import subprocess
 import sys
 
@@ -8,114 +10,143 @@ import pytest
 HERE = os.path.dirname(__file__)
 LOAN = os.path.join(HERE, "..", "examples", "loan.py")
 sys.path.insert(0, HERE)
-import decider_stub as dc  # noqa: E402
 from bridge import Bridge  # noqa: E402
 
 
-def load_loan():
-    return Bridge().describe(LOAN)
-
-
-def test_describe_finds_the_pipeline_and_its_ir():
-    d = load_loan()
-    assert [p["name"] for p in d["pipelines"]] == ["pipeline"]
-    assert d["pipelines"][0]["line"] > 0
-    paths = [c["path"] for c in d["ir"]["children"]]
-    assert paths == ["affordability", "banding", "term"]
-    by_sector = d["ir"]["children"][2]["children"][2]
-    assert by_sector["kind"] == "branch"
-    assert [c["path"] for c in by_sector["children"]] == [
-        "term/by_sector/is_private", "term/by_sector/cap_private", "term/by_sector/cap_public"]
-    assert "term_cap" in d["columns"]
-
-
-def test_dag_orders_by_dependencies():
+def started(**kw):
     b = Bridge()
-    b.describe(LOAN)
-    aff = b.ir.children_[0]
-    assert [n.origin.path for n in aff.children_] == [
-        "affordability/disposable_income", "affordability/ratio", "affordability/affordable"]
+    b.start(LOAN, **kw)
+    return b
 
 
-def test_break_set_resume_changes_the_output():
-    b = Bridge()
-    r = b.start(LOAN, breakpoints=["term/cap_by_income"])
-    r = b.resume()
-    assert r["current"]["path"] == "term/cap_by_income"
-    assert r["events"][-1] == {"event": "Paused", "path": "term/cap_by_income", "reason": "breakpoint"}
-    b.session.set("term_cap", 12.0)
-    r = b.resume()
-    assert r["finished"]
-    assert b.session.state.columns["term_cap"] == [12.0, 12.0]
-    producers = [p for p, _ in b.session.state.versions["term_cap"]]
-    assert producers == ["term/term_cap", "override@term/cap_by_income", "term/cap_by_income",
-                         "term/by_sector/cap_private", "term/by_sector/cap_public"]
+def find(node, path):
+    if node["path"] == path:
+        return node
+    for c in node.get("children", ()):
+        if (hit := find(c, path)) is not None:
+            return hit
 
 
-def test_step_steps_over_a_branch_and_step_into_enters_it():
-    b = Bridge()
-    b.start(LOAN, breakpoints=["term/by_sector"])
-    b.resume()
-    b.session.step()
-    assert b.session.finished
-    b.start(LOAN, breakpoints=["term/by_sector"])
-    b.resume()
-    b.session.step_into()
-    assert b.session.current.path == "term/by_sector/is_private"
-    b.session.step()
-    assert b.session.current.path == "term/by_sector/cap_private"
+def test_describe_reports_every_node_kind_with_its_source():
+    d = Bridge().describe(LOAN)
+    assert d["pipeline"] == "pipeline"
+    ir = d["ir"]
+    assert [c["path"] for c in ir["children"]] == ["join_bureau", "affordability", "banding", "term", "sizing", "risk_tree"]
+    assert find(ir, "join_bureau")["callKind"] == "frame"
+    loop = find(ir, "sizing/shrink_offer")
+    assert loop["kind"] == "loop" and loop["carries"] == ["offer"]
+    assert [c["path"] for c in loop["children"]] == ["sizing/shrink_offer/too_big", "sizing/shrink_offer/shrink"]
+    tree = find(ir, "risk_tree")
+    assert tree["callKind"] == "row" and tree["inputs"] == ["bureau_score", "ratio"]
+    assert tree["line"] and tree["python"]["bodyLine"]  # a row node debugs into its Python reference
+    assert find(ir, "term")["line"] and find(ir, "term/cap_by_income")["file"].endswith("loan.py")
 
 
-def test_rewind_reruns_from_a_node_with_the_current_state():
-    b = Bridge()
-    b.start(LOAN)
-    b.resume()
-    b.session.set("requested_term", 10.0)
-    b.session.rewind("term/term_cap")
-    assert b.session.current.path == "term/term_cap"
-    b.resume()
-    assert b.session.state.columns["term_cap"] == [10.0, 10.0]
+def test_break_set_resume_changes_the_output_and_the_trail():
+    b = started(breakpoints=["term/cap_by_income"])
+    r = b.handle({"cmd": "resume"})
+    assert r["current"] == {"path": "term/cap_by_income", "when": "before"}
+    assert r["events"][-1]["kind"] == "paused"
+    b.handle({"cmd": "set", "name": "term_cap", "value": 12.0})
+    assert b.handle({"cmd": "resume"})["finished"]
+    assert b.session.output()["term_cap"].to_list() == [12.0, 12.0]
+    producers = [v["producer"] for v in b.column("term_cap")["versions"]]
+    assert "override@term/cap_by_income" in producers
 
 
-def test_lineage_walks_back_to_inputs():
-    b = Bridge()
-    b.describe(LOAN)
-    l = b.lineage("term_cap", "term/by_sector/cap_private")
+def test_step_out_stops_after_the_enclosing_node():
+    b = started(breakpoints=["term/by_sector/is_private"])
+    b.handle({"cmd": "resume"})
+    r = b.handle({"cmd": "step_out"})
+    assert r["current"] == {"path": "term/by_sector", "when": "after"}
+
+
+def test_a_loop_is_stepped_iteration_by_iteration():
+    b = started(breakpoints=["sizing/shrink_offer/shrink"])
+    hits = 0
+    while not b.handle({"cmd": "resume"})["finished"]:
+        hits += 1
+    assert hits == 5  # 150000 shrinks five times for client 1; client 2 never loops
+    producers = {v["producer"] for v in b.column("offer")["versions"]}
+    assert producers == {"sizing/offer", "sizing/shrink_offer", "sizing/shrink_offer/shrink"}
+
+
+def test_a_row_node_reports_tree_visits_and_breaks_on_a_locator():
+    b = started(breakpoints=["risk_tree#low_score"])
+    r = b.handle({"cmd": "resume"})
+    assert r["current"] == {"path": "risk_tree", "when": "after"}
+    visits = {e["origin"]["locator"]: e["rows"] for e in r["events"] if e["kind"] == "node_visited"}
+    assert visits == {"root": 2, "low_score": 1, "good_score": 1}
+
+
+def test_state_can_focus_one_record():
+    b = started()
+    b.handle({"cmd": "resume"})
+    cols = {c["name"]: c for c in b.state(row=1)["columns"]}
+    assert cols["term_cap"]["value"] == 36.0
+    assert cols["min_net_salary"]["value"] is None and cols["min_net_salary"]["nulls"] == 1
+    assert cols["bureau_score"]["producer"] == "join_bureau"
+    assert [v["values"] for v in b.column("offer", row=0)["versions"]][-1] == [49152.0]
+
+
+def test_runtime_lineage_follows_the_arm_a_record_took():
+    b = started()
+    b.handle({"cmd": "resume"})
+    private = b.handle({"cmd": "lineage", "name": "term_cap", "row": 0})
+    assert private["producer"] == "term/by_sector" and private["via"] == "merge" and private["value"] == 48.0
+    assert [i["producer"] for i in private["inputs"]] == ["term/by_sector/is_private", "term/by_sector/cap_private"]
+    public = b.handle({"cmd": "lineage", "name": "term_cap", "row": 1})
+    assert public["inputs"][1]["producer"] == "term/by_sector/cap_public"
+    assert {"name": "requested_term", "producer": None, "value": 36.0, "inputs": []} in flatten(public)
+
+
+def flatten(entry):
+    yield entry
+    for i in entry["inputs"]:
+        yield from flatten(i)
+
+
+def test_lineage_only_sees_what_has_run_so_far():
+    b = started(breakpoints=["term/by_sector"])
+    b.handle({"cmd": "resume"})
+    l = b.handle({"cmd": "lineage", "name": "term_cap", "row": 0})
     assert l["producer"] == "term/cap_by_income"
-    inner = l["inputs"][0]
-    assert inner["producer"] == "term/term_cap"
-    assert inner["inputs"][0] == {"name": "requested_term", "producer": None, "inputs": []}
+
+
+def test_a_failing_step_is_reported_not_fatal():
+    rows = [{**r, "sector_code": None} for r in __import__("loan").SAMPLE]
+    b = started(data=rows)
+    r = b.handle({"cmd": "resume"})
+    assert "sector_code" in r["error"]
+    assert r["events"][-1]["kind"] == "error"
+
+
+def run_bridge(*extra, env=None):
+    return subprocess.Popen([sys.executable, os.path.join(HERE, "bridge.py"), *extra], stdin=subprocess.PIPE,
+                            stdout=subprocess.PIPE, text=True, env=env)
 
 
 def test_the_stdio_protocol_round_trips():
-    p = subprocess.Popen([sys.executable, os.path.join(HERE, "bridge.py")], stdin=subprocess.PIPE,
-                         stdout=subprocess.PIPE, text=True)
+    p = run_bridge()
 
     def call(**req):
         p.stdin.write(json.dumps(req) + "\n")
         p.stdin.flush()
         return json.loads(p.stdout.readline())
 
-    assert call(id=1, cmd="describe", file=LOAN)["ok"]
-    r = call(id=2, cmd="start", file=LOAN, breakpoints=["banding"])
-    assert r["ok"] and r["result"]["current"] is None
-    r = call(id=3, cmd="resume")
-    assert r["result"]["current"]["path"] == "banding"
-    assert call(id=4, cmd="state")["result"]["columns"][0]["name"] == "affordable"
-    assert call(id=5, cmd="bogus")["ok"] is False
-    call(id=6, cmd="exit")
-    assert p.wait(5) == 0
+    assert call(id=1, cmd="start", file=LOAN, breakpoints=["banding"])["ok"]
+    assert call(id=2, cmd="resume")["result"]["current"]["path"] == "banding"
+    assert call(id=3, cmd="bogus")["ok"] is False
+    call(id=4, cmd="exit")
+    assert p.wait(10) == 0
 
 
-DEBUGPY_LIBS = sorted(__import__("glob").glob(os.path.expanduser("~/.vscode*/extensions/ms-python.debugpy-*/bundled/libs")))
+DEBUGPY_LIBS = sorted(glob.glob(os.path.expanduser("~/.vscode*/extensions/ms-python.debugpy-*/bundled/libs")))
 
 
 @pytest.mark.skipif(not DEBUGPY_LIBS, reason="ms-python.debugpy extension not installed")
 def test_debugpy_flag_opens_an_attach_port():
-    import socket
-    env = {**os.environ, "PYTHONPATH": DEBUGPY_LIBS[-1]}
-    p = subprocess.Popen([sys.executable, os.path.join(HERE, "bridge.py"), "--debugpy", "5689"],
-                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, env=env, text=True)
+    p = run_bridge("--debugpy", "5689", env={**os.environ, "PYTHONPATH": DEBUGPY_LIBS[-1]})
     try:
         p.stdin.write('{"id": 1, "cmd": "describe", "file": %s}\n' % json.dumps(LOAN))
         p.stdin.flush()
@@ -123,7 +154,3 @@ def test_debugpy_flag_opens_an_attach_port():
         socket.create_connection(("127.0.0.1", 5689), 2).close()
     finally:
         p.kill()
-
-
-if __name__ == "__main__":
-    sys.exit(pytest.main([__file__, "-q"]))
