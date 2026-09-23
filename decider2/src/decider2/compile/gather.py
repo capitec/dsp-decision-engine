@@ -18,6 +18,7 @@ split.
 """
 from __future__ import annotations
 
+import typing
 from typing import Any, Callable, Sequence
 
 import numpy as np
@@ -169,12 +170,23 @@ def _fill_array(arrays, i, out):
 
 # ---------------------------------------------------------------------------
 # Typed row gather — `types.Step.typed_args`. A packed step whose inputs
-# keep their own dtypes: `args` is a 6-tuple of per-kind row arrays in
-# `FeatureKind` order, `params` a `(floats, ints)` pair. Same "homogeneous
-# tuple indexed at a runtime position" mechanism as `_fill_array` above,
-# applied once per kind instead of once — so there is still no width past
-# which anything raises, and an Int64 column is compared as an int64
-# (doc 03 §1.2) rather than rounded through float64 on the way in.
+# keep their own dtypes: `args` is a 5-tuple of per-kind row arrays in
+# `FeatureKind` order, `params` the `(floats, ints, pat_bytes, pat_off,
+# grp_off)` bundle. Same "homogeneous tuple indexed at a runtime position"
+# mechanism as `_fill_array` above, applied once per kind instead of once —
+# so there is still no width past which anything raises, and an Int64
+# column is compared as an int64 (doc 03 §1.2) rather than rounded through
+# float64 on the way in.
+#
+# A `bytes`-annotated (`FeatureKind.STR`) input's COLUMN is a span table:
+# an `(n, 2)` int64 array of `(address, byte length)` per row, length -1
+# for a null, produced by `boundary.extract` (the STR slot of the
+# whole-frame gather, `_arrow.frame.materialize_columns`) through the compiled
+# Arrow shim for `apply()` and by `runtime.invoke.score` from
+# `str.encode("utf-8")` for a record (docs/BOUNDARY-REWORK.md §2.1). The
+# addresses are only valid while whoever built the table keeps the bytes
+# alive — the `ExtractedFrame` for a batch, the record's own `bytes` for a
+# score — which every caller does for the duration of the run.
 # ---------------------------------------------------------------------------
 
 _TYPED_DTYPES: tuple[np.dtype, ...] = (
@@ -182,21 +194,63 @@ _TYPED_DTYPES: tuple[np.dtype, ...] = (
     np.dtype(np.int64),     # I64
     np.dtype(np.bool_),     # BOOL
     np.dtype(np.int32),     # CODE
-    np.dtype(np.int64),     # STR — offsets into the byte buffer
+    np.dtype(np.int64),     # STR — the (n, 2) span table
 )
 
 
-def _readonly_empty(dtype: np.dtype) -> np.ndarray:
-    arr = np.empty(0, dtype=dtype)
+def _readonly_empty(dtype: np.dtype, shape=(0,)) -> np.ndarray:
+    arr = np.empty(shape, dtype=dtype)
     arr.flags.writeable = False
     return arr
 
 
 # One inert, zero-length, read-only array per kind: the padding entry for a
 # kind with no inputs (see `_fill_array`). Read-only so it is the SAME numba
-# type as a real column would be (`_as_readonly` below).
-_TYPED_DUMMIES: tuple[np.ndarray, ...] = tuple(_readonly_empty(d) for d in _TYPED_DTYPES)
-_BYTES_DUMMY: np.ndarray = _readonly_empty(np.dtype(np.uint8))
+# type as a real column would be (`_as_readonly` below); the STR dummy is
+# 2-D like a real span table, or the tuple would not be homogeneous.
+_TYPED_DUMMIES: tuple[np.ndarray, ...] = tuple(
+    _readonly_empty(d, (0, 2) if kind is FeatureKind.STR else (0,))
+    for kind, d in zip(FeatureKind, _TYPED_DTYPES)
+)
+
+def _readonly(arr: np.ndarray) -> np.ndarray:
+    arr.flags.writeable = False
+    return arr
+
+
+def _pattern_table(groups: Sequence[Sequence[str]]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """`(pat_bytes, pat_off, grp_off)` for `groups`, each group the
+    patterns of one `str`/`list[str]` param, in param order: pattern `p`
+    is `pat_bytes[pat_off[p]:pat_off[p+1]]`, group `g` is patterns
+    `grp_off[g]..grp_off[g+1]`. UTF-8 bytes, so a multi-byte pattern
+    matches exactly its own byte sequence at the node.
+
+    All three are 1-D, C-contiguous and READ-ONLY whether they hold zero
+    patterns or a thousand (`np.frombuffer` over a `bytes` is read-only by
+    construction; the offsets are made so), so the numba type of the bundle
+    never depends on how many patterns there are or how long — the reason
+    a pattern edit is a value change (`types.Step.typed_args`)."""
+    encoded: list[bytes] = []
+    grp_off = [0]
+    for group in groups:
+        for pattern in group:
+            if not isinstance(pattern, str):
+                raise TypeError(
+                    f"a string pattern must be a str, got {type(pattern).__name__} {pattern!r}"
+                )
+            encoded.append(pattern.encode("utf-8"))
+        grp_off.append(len(encoded))
+    pat_off = np.zeros(len(encoded) + 1, dtype=np.int64)
+    np.cumsum([len(b) for b in encoded], out=pat_off[1:])
+    pat_bytes = np.frombuffer(b"".join(encoded), dtype=np.uint8)
+    return pat_bytes, _readonly(pat_off), _readonly(np.array(grp_off, dtype=np.int64))
+
+
+def _is_pattern_list(annotation: Any) -> bool:
+    """A `list[str]`-annotated param: one GROUP of patterns (`decider2.
+    trees.encode` declares a string-match node's literals this way, so the
+    group's size is a value)."""
+    return typing.get_origin(annotation) is list and typing.get_args(annotation) == (str,)
 
 
 def _typed_layout(step: Step) -> tuple[FeatureKind, ...]:
@@ -219,76 +273,96 @@ def _as_readonly(arr: np.ndarray, dtype: np.dtype) -> np.ndarray:
 
 
 def _typed_input_arrays(step: Step, registry: dict) -> tuple:
-    """`(f64_cols, i64_cols, bool_cols, code_cols, str_offsets, str_bytes)`
-    — one homogeneous tuple of whole-column arrays per kind, each padded
-    with its kind's dummy when empty, plus the raw-string byte buffers.
-    A `bytes`-annotated input reads `registry[name]` as the column's
-    `offsets` (int64, length n+1) and `registry["__bytes__" + name]` as
-    its `values` (uint8) — the two arrays polars' `_get_buffers()` hands
-    back for a String column, untouched."""
+    """`(f64_cols, i64_cols, bool_cols, code_cols, span_tables)` — one
+    homogeneous tuple of whole-column arrays per kind, each padded with
+    its kind's dummy when empty. A `bytes`-annotated input reads
+    `registry[name]` as its `(n, 2)` span table (see the section comment
+    above); anything else there is a producer bug and is refused by name
+    rather than handed to a kernel that would read it as addresses."""
     groups: list[list[np.ndarray]] = [[] for _ in FeatureKind]
-    byte_bufs: list[np.ndarray] = []
     for inp, kind in zip(step.inputs, _typed_layout(step)):
-        groups[kind].append(_as_readonly(registry[inp.name], _TYPED_DTYPES[kind]))
-        if kind is FeatureKind.STR:
-            byte_bufs.append(_as_readonly(registry[f"__bytes__{inp.name}"], np.dtype(np.uint8)))
-    cols = tuple(
+        arr = registry[inp.name]
+        if kind is FeatureKind.STR and not (arr.ndim == 2 and arr.shape[1] == 2):
+            raise TypeError(
+                f"typed step '{step.name}': input '{inp.name}' is declared bytes (a "
+                f"string span), so its column must be an (n, 2) int64 span table; got "
+                f"an array of shape {arr.shape} and dtype {arr.dtype}."
+            )
+        groups[kind].append(_as_readonly(arr, _TYPED_DTYPES[kind]))
+    return tuple(
         tuple(g) if g else (_TYPED_DUMMIES[kind],) for kind, g in zip(FeatureKind, groups)
     )
-    return cols + ((tuple(byte_bufs) if byte_bufs else (_BYTES_DUMMY,)),)
 
 
 def _typed_params(step: Step, values: Sequence[Any]) -> tuple:
-    """`(floats, ints)` — `values` (in `step.params` order) grouped by each
-    `ParamDecl.annotation`, so the kernel can index each group at a
-    runtime position (a homogeneous tuple) without slicing a mixed one
-    (which numba cannot do from a closure constant — verified). Position
-    within a group is first-appearance order in `step.params`, the rule
-    the producer's own slot numbering follows. A `bool`-annotated param
-    rides in the int group as 0/1."""
+    """`(floats, ints, pat_bytes, pat_off, grp_off)` — `values` (in
+    `step.params` order) grouped by each `ParamDecl.annotation`, so the
+    kernel can index each group at a runtime position (a homogeneous
+    tuple) without slicing a mixed one (which numba cannot do from a
+    closure constant — verified). Position within a group is first-
+    appearance order in `step.params`, the rule the producer's own slot
+    numbering follows. A `bool`-annotated param rides in the int group as
+    0/1; a `str` param is one pattern GROUP of one pattern, a `list[str]`
+    param one group of as many patterns as the list holds — both in the
+    pattern table (`_pattern_table`), whose numba type does not depend on
+    the count."""
     floats: list = []
     ints: list = []
+    groups: list[Sequence[str]] = []
     for decl, value in zip(step.params, values):
         ann = decl.annotation if decl.annotation is not Any else type(decl.default)
         if ann is float:
             floats.append(float(value))
         elif ann in (int, bool):
             ints.append(int(value))
+        elif ann is str:
+            groups.append((value,))
+        elif _is_pattern_list(ann):
+            groups.append(tuple(value))
         else:
             raise ValueError(
                 f"typed step '{step.name}': param '{decl.name}' is annotated "
-                f"{ann!r}; a typed packed step takes float/int/bool params only."
+                f"{ann!r}; a typed packed step takes float/int/bool/str/list[str] params only."
             )
-    return tuple(floats), tuple(ints)
+    table = _pattern_table(groups) if groups else _EMPTY_PATTERNS
+    return (tuple(floats), tuple(ints)) + table
+
+
+# The pattern table of a step with no string patterns: no bytes, one
+# pattern offset, one group offset — the same three types `_pattern_table`
+# produces for a populated one (1-D, C, read-only), so the kernel sees one
+# signature either way.
+_EMPTY_PATTERNS: tuple[np.ndarray, np.ndarray, np.ndarray] = _pattern_table(())
 
 
 @njit(cache=True)
-def _fill_spans(offsets, i, out):
-    """The raw-string slot's row gather: `out[2k], out[2k+1]` = the byte
-    range of string feature `k` on row `i`, read straight off its polars
-    `offsets` buffer. Never dereferences the bytes — that is a matcher's
-    job (`FeatureKind.STR`)."""
+def _fill_spans(tables, i, out):
+    """The string slot's row gather: `out[2k], out[2k+1]` = the
+    `(address, length)` span of string feature `k` on row `i`, read off
+    its `(n, 2)` span table. Never dereferences the bytes — that is the
+    walker's `STR_MATCH` node's job (`FeatureKind.STR`)."""
     for k in range(len(out) // 2):
-        out[2 * k] = offsets[k][i]
-        out[2 * k + 1] = offsets[k][i + 1]
+        out[2 * k] = tables[k][i, 0]
+        out[2 * k + 1] = tables[k][i, 1]
     return out
 
 
 def _typed_row_args(arrays: tuple, counts: Sequence[int], i: int) -> tuple:
     """One row of a typed step as `_packed_row_args` needs it — the plain-
     Python (interpreted/stepped) counterpart of the kernel's own per-row
-    gather in `build_packed_kernel`; same six-tuple, same slot rule.
+    gather in `build_packed_kernel`; same five-tuple, same slot rule.
     `counts[kind]` (from `_typed_counts`) says how many REAL columns each
-    kind's tuple holds, so a padding dummy is never read."""
-    f_cols, i_cols, b_cols, c_cols, s_cols, s_bytes = arrays
+    kind's tuple holds, so a padding dummy is never read. The spans come
+    from the SAME table the fused kernel reads (BOUNDARY-REWORK.md §1.6:
+    one import path, not two — the independent producer is `score()`)."""
+    f_cols, i_cols, b_cols, c_cols, s_cols = arrays
     nf, ni, nb, nc, ns = counts
     return (
         np.array([f_cols[k][i] for k in range(nf)], dtype=np.float64),
         np.array([i_cols[k][i] for k in range(ni)], dtype=np.int64),
         np.array([b_cols[k][i] for k in range(nb)], dtype=np.bool_),
         np.array([c_cols[k][i] for k in range(nc)], dtype=np.int32),
-        np.array([v for k in range(ns) for v in (s_cols[k][i], s_cols[k][i + 1])], dtype=np.int64),
-        s_bytes,
+        np.array([v for k in range(ns) for v in (s_cols[k][i, 0], s_cols[k][i, 1])], dtype=np.int64),
     )
 
 
@@ -346,19 +420,19 @@ def _packed_input_arrays(step: Step, registry: dict) -> tuple:
 
 
 def _build_typed_kernel(step: Step) -> Callable:
-    """`build_packed_kernel` for a `typed_args` step: six row buffers
-    hoisted above the loop (one per kind, the raw-string span buffer
-    holding two int64s per string feature), each refilled per row from
-    its own homogeneous column tuple, then ONE call into `fn` with the
-    six-tuple. Zero allocations per row, as before; the extra cost over
-    the single float64 gather is the five (mostly empty) extra fill loops
-    and the tuple build — measured in `evaluation/typed-features`."""
+    """`build_packed_kernel` for a `typed_args` step: five row buffers
+    hoisted above the loop (one per kind, the string span buffer holding
+    two int64s per string feature), each refilled per row from its own
+    homogeneous column tuple, then ONE call into `fn` with the five-tuple.
+    Zero allocations per row, as before; the extra cost over the single
+    float64 gather is the four (mostly empty) extra fill loops and the
+    tuple build — measured in `evaluation/typed-features`."""
     n_f, n_i, n_b, n_c, n_s = _typed_counts(step)
     n_s2 = 2 * n_s
     fn = step.fn
 
-    # The row six-tuple is built ONCE, above the loop (its members are the
-    # hoisted buffers, refilled in place per row): building a tuple of six
+    # The row five-tuple is built ONCE, above the loop (its members are the
+    # hoisted buffers, refilled in place per row): building a tuple of
     # arrays per row measured ~+75 ns/row, the NRT bookkeeping on each
     # member. `fn` is expected to be `inline="always"` (a tree's `path_fn`
     # is) so the tuple never crosses a real call boundary either — see
@@ -366,13 +440,13 @@ def _build_typed_kernel(step: Step) -> Callable:
     if step.reads_shared:
         @njit
         def kernel(arrays, params, shared, n, out):
-            f_cols, i_cols, b_cols, c_cols, s_cols, s_bytes = arrays
+            f_cols, i_cols, b_cols, c_cols, s_cols = arrays
             bf = np.empty(n_f, dtype=np.float64)
             bi = np.empty(n_i, dtype=np.int64)
             bb = np.empty(n_b, dtype=np.bool_)
             bc = np.empty(n_c, dtype=np.int32)
             bs = np.empty(n_s2, dtype=np.int64)
-            row = (bf, bi, bb, bc, bs, s_bytes)
+            row = (bf, bi, bb, bc, bs)
             for i in range(n):
                 _fill_array(f_cols, i, bf)
                 _fill_array(i_cols, i, bi)
@@ -384,13 +458,13 @@ def _build_typed_kernel(step: Step) -> Callable:
 
     @njit
     def kernel(arrays, params, n, out):
-        f_cols, i_cols, b_cols, c_cols, s_cols, s_bytes = arrays
+        f_cols, i_cols, b_cols, c_cols, s_cols = arrays
         bf = np.empty(n_f, dtype=np.float64)
         bi = np.empty(n_i, dtype=np.int64)
         bb = np.empty(n_b, dtype=np.bool_)
         bc = np.empty(n_c, dtype=np.int32)
         bs = np.empty(n_s2, dtype=np.int64)
-        row = (bf, bi, bb, bc, bs, s_bytes)
+        row = (bf, bi, bb, bc, bs)
         for i in range(n):
             _fill_array(f_cols, i, bf)
             _fill_array(i_cols, i, bi)
@@ -484,7 +558,7 @@ def _packed_row_args(
     """
     values = tuple(_scalar_arg(resolved, owner, step.name, p.name) for p in step.params)
     if step.typed_args:
-        # Same six-tuple / `(floats, ints)` pair the fused kernel builds
+        # Same five-tuple / params bundle the fused kernel builds
         # (`_build_typed_kernel`), so `step.fn` compiles ONE specialisation
         # that every mode shares — the reason the plain path below also
         # mirrors its fused counterpart's shape exactly.

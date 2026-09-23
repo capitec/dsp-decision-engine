@@ -209,23 +209,10 @@ def call_get_string(typingctx, fn_t, view_t, i_t):
     return sig, codegen
 
 
-def _load_intrinsic(llvm_type, numba_type):
-    @intrinsic
-    def load(typingctx, addr_t):
-        if not isinstance(addr_t, types.Integer):
-            return None
-
-        def codegen(context, builder, sig, args):
-            return builder.load(builder.inttoptr(args[0], llvm_type.as_pointer()))
-
-        return numba_type(addr_t), codegen
-
-    return load
-
-
-load_u8 = _load_intrinsic(ir.IntType(8), types.uint8)
-load_i64 = _load_intrinsic(ir.IntType(64), types.int64)
-load_f64 = _load_intrinsic(ir.DoubleType(), types.float64)
+# The raw loads live in `decider2._arrow.intrinsics` (importable with no
+# extension — `trees.interpreter` reads span bytes through `load_u8`) and
+# are re-exported here so every consumer of Stage 1's names still works.
+from decider2._arrow.intrinsics import load_f64, load_i64, load_u8  # noqa: E402,F401
 
 
 def info() -> dict:

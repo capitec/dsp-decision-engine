@@ -813,6 +813,43 @@ Acceptance:
 Single-record: `score()` supports prefix/suffix/contains in trees; latency
 unchanged (the string path adds one `encode()`).
 
+*Landed (Stage 2, reconciled with Stages 3 and 4).* A `str` feature is a
+`bytes`-annotated path-step input; every `string_match` is a `STR_MATCH`
+node comparing the span's bytes against a PATTERN GROUP, and **a node's
+literal patterns are ONE `list[str]` param, not one `str` param per
+pattern** (the design text above says otherwise): only a list param makes
+"change the pattern COUNT, zero compiles, same `Driver`" true, which §6
+item 3 and acceptance item 5 demand. An `InputRef` pattern stays a `str`
+param named by its key — a group of one. The table the kernel indexes is
+`(pat_bytes uint8[:], pat_off int64[:], grp_off int64[:])`, all read-only,
+so its numba type is the same for one pattern and for a thousand.
+
+Three things this stage assumed that Stage 3 then changed, and how they
+were reconciled:
+
+1. **There is no `SpanPlan` and no per-Series import.** Stage 3 deleted the
+   ladder; a `bytes` input is `FeatureKind.STR` in `dtypes.plan_column`'s
+   table and its column is the STR slot of the whole-frame gather —
+   `registry[name]` is the same `(n, 2)` int64 `(address, length)` table
+   either way, valid while `ExtractedFrame.kernel_frame` lives.
+2. **Interpreted and stepped are NOT independent producers.** They read the
+   same Arrow columns `fused` does (Stage 3's §1.6 note). The independent
+   producer is `score()` alone, which encodes the record's own `str` — so
+   injected span drift surfaces on the `fused ↔ score` rung and on no
+   other, which is what `test_injected_span_drift_fails_between_apply_and_
+   score_and_not_between_modes` pins.
+3. **A Categorical column feeding a `bytes` feature is no longer refused.**
+   Stage 2 refused it (its per-Series import could not read a dictionary);
+   Stage 3's table has a row for the pair — one frame-tier cast Categorical
+   → String — so it answers exactly as the String column does, at the cost
+   of a copy. Stage 6 replaces the cast with the per-batch dictionary mask.
+
+`score()`'s span marshalling lives in Stage 4's `ScorePlan._run`
+(`runtime/plan.py`), not in `invoke.score`: the `(1, 2)` int64 buffer is
+pooled per thread like every other slot, and a STR slot has no fill —
+a null is the span `(0, -1)`, the same refusal `_arrow.frame.FramePlan`
+makes, so `score()` and `apply()` cannot disagree about a missing string.
+
 ### Stage 3 — the whole-frame boundary
 
 §1 in full for `apply()`. `extract_frame` (`extract.py:178-229`) becomes:
