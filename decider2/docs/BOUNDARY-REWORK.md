@@ -557,9 +557,12 @@ same `len(driver.signatures)` after a values-only retune,
 `testing/recompile.py:103-149`), `assert_no_compilation_after_warmup`
 (`:152-193`, counting numba's own `numba:compile` events), and the seven
 on-disk cache conditions of doc 05 §4.2. Note: `decider2 build --verify` is
-described in doc 05 §8 and referenced from `graph/pipeline.py:298-302`, but
-`cli.py` has only `serve` (`cli.py:80-107`); the guarantee is enforced by the
-`decider2.testing` functions today, and that is what the acceptance tests
+described in doc 05 §8 and referenced from `graph/pipeline.py:298-302`; until
+Stage 1 `cli.py` had only `serve`, and the guarantee was enforced by the
+`decider2.testing` functions alone. Stage 1 added `decider2 build [--verify]
+<pipeline>` as a thin wrapper over `Pipeline.precompile()` and
+`assert_no_compilation_after_warmup` (plus a check that the compiled shim
+loads); the `decider2.testing` functions remain what the acceptance tests
 below call.
 
 How it is preserved:
@@ -655,6 +658,22 @@ Acceptance tests (new `tests/test_arrow_shim.py`):
 - CI builds the wheel for at least `manylinux2014_x86_64` and installs it in
   a clean image without a compiler.
 Single-record: none.
+
+*Landed (Stage 1 commit).* `decider2/src/decider2/_arrow/`: `c/shim.c` +
+`c/shim_module.c` (abi3 `PyInit__nashim`, one exported symbol), `vendor/`
+(nanoarrow 0.9.0 + `SHA512SUMS`), `_shim.py` (loader, addresses,
+intrinsics), `frame.py` (`FramePlan`/`FrameView`/`Rows`, the cached
+`materialize_rows`/`string_lengths` kernels), `doctor.py` (`diagnose()`).
+The tests are `tests/test_shim.py` (not `test_arrow_shim.py`). No
+pure-numba fallback is shipped, by decision (§4.4 and the packaging strand's
+"Decision taken"); `optional = true` is not set, so a missing compiler fails
+the sdist install. The wheel matrix workflow is
+`.github/workflows/decider2-wheels.yml`, adopted from the packaging strand
+and not yet executed. Measured on the merge box: `FrameView.bind()`+release
+for a 17-column frame 39 µs at n=1 and 42 µs at n=1M (flat in rows; today's
+numpy path 124 µs at n=1); a cold process saves the two cached kernels and
+a warm one loads both and saves nothing, with the shim at a different
+address in each.
 
 ### Stage 1b — `compile/gather.py`
 
