@@ -1,4 +1,4 @@
-"""The interpreted runner: checkpoints per node, branches, loops and frame steps."""
+"""Runners in every mode: checkpoints per node, branches, loops and frame steps."""
 from __future__ import annotations
 
 import numpy as np
@@ -34,8 +34,8 @@ def cap_public(term_cap: float) -> float:
 by_sector = flow(term_cap, branch(is_private, cap_private, cap_public, modifies=["term_cap"], name="by"))
 
 
-def _checkpoints(pipeline, df):
-    exe = Engine().bind(pipeline)
+def _checkpoints(pipeline, df, mode="interpreted"):
+    exe = Engine().bind(pipeline, mode=mode)
     state, params = exe.prepare(df)
     return [(c.when, c.origin.path) for c in exe.runner.iterate(exe.plan, state, params)]
 
@@ -44,26 +44,44 @@ def _frame(n):
     return pl.DataFrame({"requested_term": [72.0] * n, "sector_code": [1, 2] * (n // 2)})
 
 
-def test_every_node_yields_before_and_after_once_whatever_the_row_count():
-    assert _checkpoints(by_sector, _frame(2)) == [
+@pytest.mark.parametrize("mode", ["interpreted", "stepped"])
+def test_every_node_yields_before_and_after_once_whatever_the_row_count(mode):
+    assert _checkpoints(by_sector, _frame(2), mode) == [
         ("before", ""), ("before", "seed"), ("after", "seed"),
         ("before", "by"), ("before", "by/is_private"), ("after", "by/is_private"),
         ("before", "by/cap_private"), ("after", "by/cap_private"),
         ("before", "by/cap_public"), ("after", "by/cap_public"),
         ("after", "by"), ("after", ""),
     ]
-    assert _checkpoints(by_sector, _frame(200)) == _checkpoints(by_sector, _frame(2))
+    assert _checkpoints(by_sector, _frame(200), mode) == _checkpoints(by_sector, _frame(2), mode)
 
 
-def test_a_checkpoint_carries_the_node_origin():
-    exe = Engine().bind(by_sector)
+def half(requested_term: float) -> float:
+    return requested_term / 2
+
+
+def plus_one(half: float) -> float:
+    return half + 1
+
+
+def test_fused_pauses_once_per_kernel_with_the_origin_of_its_first_step():
+    pipeline = flow(term_cap, half, plus_one, branch(is_private, cap_private, cap_public, modifies=["term_cap"], name="by"))
+    # The branch of plain scalar steps is packed into one kernel, so nothing inside it pauses.
+    assert _checkpoints(pipeline, _frame(2), "fused") == [
+        ("before", ""), ("before", "seed"), ("after", "seed"),
+        ("before", "by"), ("after", "by"), ("after", ""),
+    ]
+
+
+def test_a_checkpoint_carries_the_node_origin(bind):
+    exe = bind(by_sector)
     state, params = exe.prepare(_frame(2))
     first = next(exe.runner.iterate(exe.plan, state, params))
     assert isinstance(first, Checkpoint) and first.origin is exe.plan.root.node.origin
 
 
-def test_a_session_can_stop_before_a_node_and_inspect_after_it():
-    exe = Engine().bind(by_sector)
+def test_a_session_can_stop_before_a_node_and_inspect_after_it(bind):
+    exe = bind(by_sector)
     state, params = exe.prepare(_frame(2))
     steps = exe.runner.iterate(exe.plan, state, params)
     seed_call = exe.plan.calls[0]
@@ -75,22 +93,23 @@ def test_a_session_can_stop_before_a_node_and_inspect_after_it():
             break
 
 
-def test_an_arm_no_row_takes_yields_nothing():
-    paths = {p for _, p in _checkpoints(by_sector, pl.DataFrame({"requested_term": [72.0], "sector_code": [1]}))}
+@pytest.mark.parametrize("mode", ["interpreted", "stepped"])
+def test_an_arm_no_row_takes_yields_nothing(mode):
+    paths = {p for _, p in _checkpoints(by_sector, pl.DataFrame({"requested_term": [72.0], "sector_code": [1]}), mode)}
     assert "by/cap_private" in paths and "by/cap_public" not in paths
 
 
-def test_a_branch_merges_each_rows_arm():
-    out = by_sector.run(pl.DataFrame({"requested_term": [72.0, 72.0, 50.0], "sector_code": [1, 2, 1]}))
+def test_a_branch_merges_each_rows_arm(bind):
+    out = bind(by_sector).run(pl.DataFrame({"requested_term": [72.0, 72.0, 50.0], "sector_code": [1, 2, 1]}))
     assert out["term_cap"].to_list() == [54.0, 60.0, 50.0]
 
 
-def test_an_arm_leaving_a_modified_name_alone_keeps_the_prior_value():
+def test_an_arm_leaving_a_modified_name_alone_keeps_the_prior_value(bind):
     def keep(term_cap: float) -> float:
         return term_cap
 
     pipeline = flow(term_cap, branch(is_private, cap_private, keep, modifies=["term_cap"], name="by"))
-    out = pipeline.run(pl.DataFrame({"requested_term": [72.0, 72.0], "sector_code": [1, 2]}))
+    out = bind(pipeline).run(pl.DataFrame({"requested_term": [72.0, 72.0], "sector_code": [1, 2]}))
     assert out["term_cap"].to_list() == [54.0, 72.0]
 
 
@@ -113,16 +132,16 @@ def high(score: float) -> float:
     return 0.05
 
 
-def test_an_int_condition_picks_the_arm_by_index():
+def test_an_int_condition_picks_the_arm_by_index(bind):
     pipeline = branch(band, low, mid, high, modifies=["rate"], name="price")
-    out = pipeline.run(pl.DataFrame({"score": [400.0, 800.0, 600.0]}))
+    out = bind(pipeline).run(pl.DataFrame({"score": [400.0, 800.0, 600.0]}))
     assert out["rate"].to_list() == [0.2, 0.05, 0.1]
 
 
-def test_an_int_condition_out_of_range_is_an_error():
+def test_an_int_condition_out_of_range_is_an_error(bind):
     pipeline = branch(band, low, mid, modifies=["rate"], name="price")
     with pytest.raises(ValueError, match="branch price: the condition picked arm 2 on 1 row"):
-        pipeline.run(pl.DataFrame({"score": [400.0, 800.0]}))
+        bind(pipeline).run(pl.DataFrame({"score": [400.0, 800.0]}))
 
 
 def keep_going(best: float) -> bool:
@@ -137,29 +156,30 @@ def improve(best: float, step_size: float) -> float:
 FRAME = pl.DataFrame({"best": [0.0, 9.0, 20.0], "step_size": [3.0, 3.0, 1.0]})
 
 
-def test_a_loop_runs_each_row_until_its_condition_fails():
+def test_a_loop_runs_each_row_until_its_condition_fails(bind):
     search = loop(keep_going, improve, carries=["best"], max_iterations=10, name="search")
-    assert search.run(FRAME)["best"].to_list() == [12.0, 12.0, 20.0]
+    assert bind(search).run(FRAME)["best"].to_list() == [12.0, 12.0, 20.0]
 
 
-def test_a_loop_stops_at_max_iterations():
+def test_a_loop_stops_at_max_iterations(bind):
     search = loop(keep_going, improve, carries=["best"], max_iterations=2, name="search")
-    assert search.run(FRAME)["best"].to_list() == [6.0, 12.0, 20.0]
+    assert bind(search).run(FRAME)["best"].to_list() == [6.0, 12.0, 20.0]
 
 
-def test_a_loop_body_yields_once_per_iteration_not_per_row():
+@pytest.mark.parametrize("mode", ["interpreted", "stepped"])
+def test_a_loop_body_yields_once_per_iteration_not_per_row(mode):
     search = loop(keep_going, improve, carries=["best"], max_iterations=10, name="search")
-    paths = [p for w, p in _checkpoints(search, FRAME) if w == "before"]
+    paths = [p for w, p in _checkpoints(search, FRAME, mode) if w == "before"]
     assert paths.count("search/improve") == 4
     assert paths.count("search/keep_going") == 5
 
 
-def test_a_loop_leaves_the_input_column_alone_until_it_ends():
+def test_a_loop_leaves_the_input_column_alone_until_it_ends(bind):
     def doubled(best: float) -> float:
         return best * 2
 
     search = loop(keep_going, improve, carries=["best"], max_iterations=10, name="search")
-    assert flow(search, doubled).run(FRAME)["doubled"].to_list() == [24.0, 24.0, 40.0]
+    assert bind(flow(search, doubled)).run(FRAME)["doubled"].to_list() == [24.0, 24.0, 40.0]
 
 
 def enrich(df: pl.DataFrame) -> pl.DataFrame:
@@ -173,14 +193,14 @@ def ratio(disposable_income: float, instalment: float) -> float:
 INCOME = pl.DataFrame({"net_income": [1100.0, 2100.0], "instalment": [100.0, 200.0], "client_id": [7, 8]})
 
 
-def test_names_read_after_an_unknown_lineage_frame_come_from_what_it_returns():
-    out = flow(frame_step(enrich), ratio).run(INCOME)
+def test_names_read_after_an_unknown_lineage_frame_come_from_what_it_returns(bind):
+    out = bind(flow(frame_step(enrich), ratio)).run(INCOME)
     assert out["ratio"].to_list() == [10.0, 10.0]
     assert out["client_id"].to_list() == [7, 8]
     assert out["disposable_income"].to_list() == [1000.0, 2000.0]
 
 
-def test_a_frame_step_sees_values_computed_before_it():
+def test_a_frame_step_sees_values_computed_before_it(bind):
     def doubled(net_income: float) -> float:
         return net_income * 2
 
@@ -190,37 +210,37 @@ def test_a_frame_step_sees_values_computed_before_it():
         seen.update(df.to_dict(as_series=False))
         return df
 
-    flow(doubled, frame_step(look)).run(INCOME)
+    bind(flow(doubled, frame_step(look))).run(INCOME)
     assert seen["doubled"] == [2200.0, 4200.0]
 
 
-def test_a_barrier_missing_a_column_later_steps_read_is_an_error():
+def test_a_barrier_missing_a_column_later_steps_read_is_an_error(bind):
     with pytest.raises(ValueError, match="frame step drop_it returned no column 'instalment', which later steps read"):
-        flow(frame_step(lambda df: enrich(df).drop("instalment"), name="drop_it"), ratio).run(INCOME)
+        bind(flow(frame_step(lambda df: enrich(df).drop("instalment"), name="drop_it"), ratio)).run(INCOME)
 
 
-def test_a_frame_step_missing_a_declared_column_is_an_error():
+def test_a_frame_step_missing_a_declared_column_is_an_error(bind):
     lazy = frame_step(lambda df: df, name="lazy", reads=["client_id"], writes=["bureau_score"])
     with pytest.raises(ValueError, match="frame step lazy returned no column 'bureau_score', which it declares"):
-        lazy.run(INCOME)
+        bind(lazy).run(INCOME)
 
 
-def test_a_frame_step_changing_the_row_count_is_an_error():
+def test_a_frame_step_changing_the_row_count_is_an_error(bind):
     with pytest.raises(ValueError, match="frame step head returned 1 rows for 2"):
-        frame_step(lambda df: df.head(1), name="head").run(INCOME)
+        bind(frame_step(lambda df: df.head(1), name="head")).run(INCOME)
 
 
-def test_a_frame_step_inside_an_arm_sees_only_that_arms_rows():
+def test_a_frame_step_inside_an_arm_sees_only_that_arms_rows(bind):
     def mark(df: pl.DataFrame) -> pl.DataFrame:
         return df.with_columns(term_cap=pl.col("term_cap") - pl.len().cast(pl.Float64))
 
     arm = frame_step(mark, name="mark", reads=["term_cap"], writes=["term_cap"])
     pipeline = flow(term_cap, branch(is_private, arm, cap_public, modifies=["term_cap"], name="by"))
-    out = pipeline.run(pl.DataFrame({"requested_term": [72.0, 72.0, 72.0], "sector_code": [1, 2, 1]}))
+    out = bind(pipeline).run(pl.DataFrame({"requested_term": [72.0, 72.0, 72.0], "sector_code": [1, 2, 1]}))
     assert out["term_cap"].to_list() == [70.0, 60.0, 70.0]
 
 
-def test_a_row_node_without_a_reference_is_called_with_row_params_and_consts():
+def test_a_row_node_without_a_reference_is_called_with_row_params_and_consts(bind):
     from decider.engine.ir.decls import Input, Output
     from decider.engine.ir.nodes import CallNode
     from decider.engine.ir.origin import Origin
@@ -230,22 +250,23 @@ def test_a_row_node_without_a_reference_is_called_with_row_params_and_consts():
 
     node = CallNode(Origin("scale", "tests:kernel"), "row", kernel, (Input("x", float),), (Output("scaled", float),),
                     (), consts=(("factor", 3.0),))
-    out = Engine().bind(node).run(pl.DataFrame({"x": [1.0, 2.0]}))
+    out = bind(node).run(pl.DataFrame({"x": [1.0, 2.0]}))
     assert out["scaled"].to_list() == [3.0, 6.0]
 
 
-def test_state_keeps_every_version_of_a_waterfall():
-    exe = Engine().bind(by_sector)
+def test_state_keeps_every_version_of_a_waterfall(bind, mode):
+    exe = bind(by_sector)
     state, params = exe.prepare(pl.DataFrame({"requested_term": [72.0, 72.0], "sector_code": [1, 2]}))
     for _ in exe.runner.iterate(exe.plan, state, params):
         pass
     assert [v.producer for v in state.versions("term_cap@*")] == ["seed", "by/cap_private", "by/cap_public", "by"]
-    assert state.column("term_cap@by/cap_private").to_list() == [54.0, None]
+    # A packed branch keeps its arms' values inside the kernel.
+    assert state.column("term_cap@by/cap_private").to_list() == ([None, None] if mode == "fused" else [54.0, None])
     assert state.column("term_cap").to_list() == [54.0, 60.0]
 
 
-def test_state_records_an_override_as_a_new_version():
-    exe = Engine().bind(by_sector)
+def test_state_records_an_override_as_a_new_version(bind):
+    exe = bind(by_sector)
     state, _ = exe.prepare(pl.DataFrame({"requested_term": [72.0], "sector_code": [1]}))
     v = state.record("term_cap", "override@by", np.array([40.0]))
     assert state.versions("term_cap@override@by") == [v]

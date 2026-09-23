@@ -6,25 +6,9 @@ from typing import Sequence
 
 import polars as pl
 
-from decider.engine.boundary._arrow.plan import ArrowKindError, FramePlan
-from decider.engine.ir.decls import FeatureKind, Input, feature_kind
-
-F64, I64, BOOL, CODE, STR = (
-    FeatureKind.F64, FeatureKind.I64, FeatureKind.BOOL, FeatureKind.CODE, FeatureKind.STR,
-)
-
-
-class NeedsKernelSplit(ArrowKindError):
-    """A declared column has no flat-array form (List, Struct, Array, Object, Binary, an overflowing Decimal).
-
-    The caller splits the kernel around the column; `column` and `dtype` name it.
-    """
-
-    def __init__(self, name: str, dtype: pl.DataType, reason: str = ""):
-        self.column = name
-        self.dtype = dtype
-        message = f"column '{name}' ({dtype}) has no flat-array extraction; needs the kernel-split escape"
-        super().__init__(f"{message} ({reason})" if reason else message)
+from decider.engine.boundary._arrow.plan import BOOL, CODE, F64, I64, STR
+from decider.engine.ir.decls import FeatureKind, Input, NullPolicy, feature_kind
+from decider.exceptions import ArrowKindError, NeedsKernelSplit
 
 
 @dataclass(frozen=True)
@@ -131,12 +115,15 @@ def cast_frame(frame: pl.DataFrame, casts: Sequence[tuple[int, ColumnPlan]]) -> 
     return out
 
 
-def _natural_kind(dtype: pl.DataType) -> FeatureKind:
+_NATURAL = {STR: bytes, CODE: str, BOOL: bool, I64: int}
+
+
+def _natural(dtype: pl.DataType) -> type:
     base = dtype.base_type()
     for kind in (STR, CODE, BOOL, I64):
         if base in _NATIVE[kind]:
-            return kind
-    return I64 if base is pl.Decimal else F64
+            return _NATURAL[kind]
+    return int if base is pl.Decimal else float
 
 
 def explain_boundary(frame: pl.DataFrame, inputs: Sequence[Input] | None = None) -> list[ColumnPlan]:
@@ -149,41 +136,30 @@ def explain_boundary(frame: pl.DataFrame, inputs: Sequence[Input] | None = None)
     ['double']
     """
     from decider.engine.boundary._arrow.view import FrameView
+    from decider.engine.boundary.extract import _schema_plan
 
-    if inputs is not None:
-        wanted = [(d.name, feature_kind(d.annotation)) for d in inputs if d.name in frame.columns]
-    else:
-        wanted = [(name, _natural_kind(dtype)) for name, dtype in frame.schema.items()]
-    position = {name: k for k, name in enumerate(frame.columns)}
-    plans: list[ColumnPlan] = []
-    casts: list[tuple[int, ColumnPlan]] = []
-    for name, kind in wanted:
-        dtype = frame.dtypes[position[name]]
-        try:
-            plan = plan_column(name, dtype, kind)
-        except NeedsKernelSplit as exc:
-            plans.append(ColumnPlan(name, dtype, kind, None, error=str(exc)))
-            continue
-        if plan.cast is not None:
-            casts.append((position[name], plan))
-        plans.append(plan)
-    try:
-        exported = cast_frame(frame, casts)
-    except NeedsKernelSplit as exc:
-        return [replace(p, error=str(exc)) if p.name == exc.column else p for p in plans]
+    schema = frame.schema
+    if inputs is None:
+        inputs = [Input(name, _natural(dtype)) for name, dtype in schema.items()]
+    columns, dtypes = tuple(schema), tuple(schema.values())
     out: list[ColumnPlan] = []
-    for p in plans:
-        if p.error is not None:
-            out.append(p)
+    # One column at a time, so a refused column doesn't hide the others' Arrow types.
+    for decl in inputs:
+        if decl.name not in schema:
             continue
-        # One column per view, so a refused column doesn't hide the others' Arrow types.
-        view = FrameView(FramePlan([(p.name, p.kind)], exported.columns))
+        try:
+            sp = _schema_plan((Input(decl.name, decl.annotation, NullPolicy.OPTIONAL),), columns, dtypes)
+            plan = sp.plans[decl.name]
+            exported = cast_frame(frame, sp.casts)
+        except NeedsKernelSplit as exc:
+            out.append(ColumnPlan(decl.name, schema[decl.name], feature_kind(decl.annotation), None, error=str(exc)))
+            continue
+        view = FrameView(sp.frame_plan)
         try:
             view.bind(exported)
-            out.append(replace(p, arrow_type=view.arrow_type(p.name)))
+            out.append(replace(plan, arrow_type=view.arrow_type(decl.name)))
         except ArrowKindError as exc:
-            out.append(replace(p, arrow_type=getattr(exc, "arrow_type", None), error=str(exc)))
+            out.append(replace(plan, arrow_type=getattr(exc, "arrow_type", None), error=str(exc)))
         finally:
             view.release()
     return out
-

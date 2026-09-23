@@ -1,13 +1,13 @@
 from __future__ import annotations
 
+import typing
 from typing import Any, Iterator, Mapping, Union
 
 import numpy as np
 
 from decider.engine.compile.kernel import Spec, fused_kernel
-from decider.engine.compile.njit import compile_call, numpy_dtype, parameters
-from decider.engine.ir.decls import NullPolicy
-from decider.engine.ir.origin import Origin
+from decider.engine.compile.njit import FALLBACK_ERRORS, compile_call, numpy_dtype, parameters
+from decider.engine.ir.decls import Input, NullPolicy, base_annotation, nullable
 from decider.engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, Sequence, Version
 
 Values = dict[int, np.ndarray]
@@ -20,31 +20,37 @@ class Kernel:
     (and OPTIONAL inputs' masks from `valid`; absent means all valid), takes
     each call's validated params bundle from `bundles[call.id]` (nodes
     without params need none), and stores the versions it keeps in `values`.
-    Values only used inside the kernel are never stored.
+    Values only used inside the kernel are never stored. A version declared
+    `T | None` also stores its validity mask in `valid`. If numba can't
+    compile the calls together, they run one by one in Python from then on.
 
     Example::
 
         units = compile_plan(plan)
         unit = units[plan.calls[0].id]
         unit.run(values, {}, bundles, n)
-        [o.path for o in unit.origins]
     """
 
-    __slots__ = ("calls", "fn", "reads", "optional", "writes", "_layout")
+    __slots__ = ("calls", "fn", "reads", "optional", "writes", "_masked", "_layout", "_choices", "_python")
+    # Whether a kernel numba can't build runs its calls one by one instead.
+    splits = True
 
-    def __init__(self, calls, fn, reads, optional, writes, layout):
+    def __init__(self, calls, fn, reads, optional, writes, masked, layout, choices):
         self.calls: tuple[Call, ...] = calls
         self.fn = fn
         self.reads: tuple[Version, ...] = reads
         self.optional: tuple[Version, ...] = optional
         self.writes: tuple[tuple[Version, np.dtype], ...] = writes
+        self._masked: tuple[int, ...] = masked
         self._layout = layout
-
-    @property
-    def origins(self) -> tuple[Origin, ...]:
-        return tuple(c.node.origin for c in self.calls)
+        self._choices: tuple[tuple | None, ...] = choices
+        self._python: tuple[Fallback, ...] = ()
 
     def run(self, values: Values, valid: Values, bundles: Mapping[int, tuple], n: int) -> None:
+        if self._python:
+            for fallback in self._python:
+                fallback.run(values, valid, bundles, n)
+            return
         cols = tuple([values[v.id] for v in self.reads])
         valids = tuple([valid[v.id] if v.id in valid else np.ones(n, np.bool_) for v in self.optional])
         params: list[Any] = []
@@ -55,36 +61,50 @@ class Kernel:
             else:
                 params += bundle
                 params += consts
-        outs = tuple([np.empty(n, dtype) for _, dtype in self.writes])
-        self.fn(n, cols, valids, tuple(params), outs)
-        for (v, _), out in zip(self.writes, outs):
-            values[v.id] = out
+        outs = [np.empty(n, dtype) for _, dtype in self.writes]
+        masks = [np.empty(n, np.bool_) for _ in self._masked]
+        try:
+            self.fn(n, cols, valids, tuple(params), tuple(outs + masks))
+        except FALLBACK_ERRORS as e:
+            if not self.splits:
+                raise
+            # Each call compiled alone, but not together (a value numba can't
+            # type only reaches it here), so run them one by one in Python.
+            reason = f"{type(e).__name__}: {e}"
+            self._python = tuple(Fallback(c, getattr(c.node.fn, "py_func", c.node.fn), reason) for c in self.calls)
+            return self.run(values, valid, bundles, n)
+        for (v, _), out, choices in zip(self.writes, outs, self._choices):
+            values[v.id] = out if choices is None else _decode(out, choices, valid, v.id)
+        for k, mask in zip(self._masked, masks):
+            valid[self.writes[k][0].id] = mask
 
 
 class Fallback:
     """One call numba couldn't compile, run row by row in Python; `reason` says why.
 
-    Same `run` and `origins` as `Kernel`; it stores every version it writes.
+    Same `run` and `writes` as `Kernel`; it stores every version it writes.
     """
 
-    __slots__ = ("calls", "fn", "reason")
+    __slots__ = ("calls", "fn", "reason", "writes")
 
     def __init__(self, call: Call, fn, reason: str):
         self.calls = (call,)
         self.fn = fn
         self.reason = reason
-
-    @property
-    def origins(self) -> tuple[Origin, ...]:
-        return (self.calls[0].node.origin,)
+        # Python values come back as they are: a `str` output is stored as an object, not a code.
+        self.writes = tuple(
+            (v, np.dtype(object) if base_annotation(o.annotation) is str else output_dtype(o.annotation))
+            for v, o in zip(call.writes, call.node.outputs)
+        )
 
     def run(self, values: Values, valid: Values, bundles: Mapping[int, tuple], n: int) -> None:
         call = self.calls[0]
         node = call.node
         bundle = bundles[call.id] if node.params else ()
-        cols = [(i.arg, values[v.id], valid.get(v.id) if i.null_policy is NullPolicy.OPTIONAL else None)
+        cols = [(i.arg, values[v.id].tolist(), valid.get(v.id) if i.null_policy is NullPolicy.OPTIONAL else None)
                 for i, v in zip(node.inputs, call.reads)]
-        outs = [np.empty(n, numpy_dtype(o.annotation)) for o in node.outputs]
+        outs = [np.empty(n, dtype) for _, dtype in self.writes]
+        masks = [np.ones(n, np.bool_) for _ in outs]
         consts = tuple(v for _, v in node.consts)
         fixed = dict(node.consts) | {d.arg: b for d, b in zip(node.params, bundle)}
         for r in range(n):
@@ -95,10 +115,17 @@ class Fallback:
                 result = self.fn(**dict(args), **fixed)
             if len(outs) == 1 and node.kind == "scalar":
                 result = (result,)
-            for out, x in zip(outs, result):
+            for out, mask, x in zip(outs, masks, result):
+                if x is None:
+                    mask[r], x = False, 0
                 out[r] = x
-        for v, out in zip(call.writes, outs):
+        for v, out, mask, o in zip(call.writes, outs, masks, node.outputs):
             values[v.id] = out
+            if not mask.all():
+                valid[v.id] = mask
+            choices = literal_choices(o.annotation)
+            if choices is not None:
+                values[v.id] = _decode(out, choices, valid, v.id)
 
 
 Unit = Union[Kernel, Fallback]
@@ -126,7 +153,7 @@ def compile_plan(plan: Plan, *, fuse: bool = True) -> dict[int, Unit]:
     """
     keep = _kept(plan) if fuse else None
     units: dict[int, Unit] = {}
-    for run in _runs(plan.root, fuse):
+    for run in (part for whole in _runs(plan.root, fuse) for part in _split_at_nulls(whole)):
         compiled = [(call, *compile_call(call.node)) for call in run]
         start = 0
         for k, (call, _, fn, reason) in enumerate(compiled + [(None, None, None, "end")]):
@@ -166,6 +193,56 @@ def _runs(r: Resolved, fuse: bool) -> Iterator[list[Call]]:
         yield from _runs(r.body, fuse)
 
 
+def _split_at_nulls(run: list[Call]) -> Iterator[list[Call]]:
+    # A value that may be null reaches its readers through the driver, which
+    # applies each reader's null policy, so no kernel both writes and reads one.
+    part: list[Call] = []
+    made: set[int] = set()
+    for call in run:
+        if any(v.id in made for v in call.reads):
+            yield part
+            part, made = [], set()
+        part.append(call)
+        made |= {v.id for v, o in zip(call.writes, call.node.outputs) if nullable(o.annotation)}
+    if part:
+        yield part
+
+
+def output_dtype(annotation: Any) -> np.dtype:
+    """The dtype a kernel stores an output declared `annotation` in: `numpy_dtype` of `T` for `T | None`.
+
+    A `Literal` of strings is stored as the int64 index of its value.
+
+    >>> output_dtype(int | None)
+    dtype('int64')
+    """
+    if literal_choices(annotation) is not None:
+        return np.dtype(np.int64)
+    return numpy_dtype(base_annotation(annotation))
+
+
+def literal_choices(annotation: Any) -> tuple[str, ...] | None:
+    """The values of a `Literal` of strings, else `None`.
+
+    A row node's output declared `Literal["low", "high"]` is returned by its
+    compiled `fn` as the index of the value (-1 for null) and stored as the
+    string; its `reference` returns the string itself.
+
+    >>> literal_choices(typing.Literal["low", "high"]), literal_choices(str)
+    (('low', 'high'), None)
+    """
+    if typing.get_origin(annotation) is typing.Literal and all(isinstance(a, str) for a in typing.get_args(annotation)):
+        return typing.get_args(annotation)
+    return None
+
+
+def _decode(codes: np.ndarray, choices: tuple[str, ...], valid: Values, vid: int) -> np.ndarray:
+    strings = np.array((*choices, None), object)[codes]
+    if (codes < 0).any():
+        valid[vid] = codes >= 0
+    return strings
+
+
 def _kept(plan: Plan) -> tuple[set[int], dict[int, set[int]]] | None:
     # A frame call of unknown inputs reads whatever is in the frame.
     # ponytail: keeps every version for such a plan; narrow to the latest version per name if it matters.
@@ -179,9 +256,11 @@ def _kept(plan: Plan) -> tuple[set[int], dict[int, set[int]]] | None:
             stack += r.children
         elif isinstance(r, Branch):
             pinned |= {v.id for m in r.merges for v in (m.version, m.prior, *m.arms) if v is not None}
+            pinned.add(r.condition.writes[0].id)
             stack += r.arms
         elif isinstance(r, Loop):
             pinned |= {v.id for c in r.carries for v in (c.version, c.initial, c.last)}
+            pinned.add(r.condition.writes[0].id)
             stack.append(r.body)
     readers: dict[int, set[int]] = {}
     for c in plan.calls:
@@ -190,55 +269,80 @@ def _kept(plan: Plan) -> tuple[set[int], dict[int, set[int]]] | None:
     return pinned, readers
 
 
-def _kernel(compiled: list, keep) -> Kernel:
-    calls = tuple(c for c, *_ in compiled)
-    ids = {c.id for c in calls}
-    cols: dict[int, int] = {}
-    masks: dict[int, int] = {}
-    reads: list[Version] = []
-    optional: list[Version] = []
-    produced: dict[int, tuple[int, int]] = {}
-    specs, layout, outputs, writes = [], [], [], []
-    p = 0
-    for s, (call, key, fn, _) in enumerate(compiled):
+class Layout:
+    """Where each value of one kernel comes from: the columns it reads, the params it takes, the calls' results.
+
+    `spec(call, key, fn)` numbers the calls in the order it sees them;
+    `produced` maps a version made inside the kernel to its source.
+    """
+
+    def __init__(self) -> None:
+        self.reads: list[Version] = []
+        self.optional: list[Version] = []
+        self.layout: list[tuple] = []
+        self.produced: dict[int, tuple] = {}
+        self._cols: dict[int, int] = {}
+        self._masks: dict[int, int] = {}
+        self._p = 0
+        self._specs = 0
+
+    def source(self, v: Version, inp: Input | None = None) -> tuple:
+        if v.id in self.produced:
+            return self.produced[v.id]
+        if v.id not in self._cols:
+            self._cols[v.id] = len(self.reads)
+            self.reads.append(v)
+        # A null `bytes` value is a span of length -1, so it needs no mask.
+        if inp is None or inp.null_policy is not NullPolicy.OPTIONAL or base_annotation(inp.annotation) is bytes:
+            return ("col", self._cols[v.id])
+        if v.id not in self._masks:
+            self._masks[v.id] = len(self.optional)
+            self.optional.append(v)
+        return ("opt", self._cols[v.id], self._masks[v.id])
+
+    def spec(self, call: Call, key: str, fn) -> Spec:
         node = call.node
-        sources = []
-        for inp, v in zip(node.inputs, call.reads):
-            if v.id in produced:
-                sources.append(("res", *produced[v.id]))
-                continue
-            if v.id not in cols:
-                cols[v.id] = len(reads)
-                reads.append(v)
-            if inp.null_policy is NullPolicy.OPTIONAL:
-                if v.id not in masks:
-                    masks[v.id] = len(optional)
-                    optional.append(v)
-                sources.append(("opt", cols[v.id], masks[v.id]))
-            else:
-                sources.append(("col", cols[v.id]))
+        sources = [self.source(v, inp) for inp, v in zip(node.inputs, call.reads)]
         consts = tuple(v for _, v in node.consts)
         if node.params or consts or node.kind == "row":
-            layout.append((call.id, bool(node.params), consts, node.kind == "row"))
+            self.layout.append((call.id, bool(node.params), consts, node.kind == "row"))
+        p = self._p
         if node.kind == "row":
             args = (("row", tuple(sources)), ("par", p), ("par", p + 1))
-            p += 2
+            self._p += 2
         else:
             by_arg = {i.arg: src for i, src in zip(node.inputs, sources)}
             by_arg |= {d.arg: ("par", p + k) for k, d in enumerate(node.params)}
             p += len(node.params)
             by_arg |= {name: ("par", p + k) for k, (name, _) in enumerate(node.consts)}
-            p += len(node.consts)
+            self._p = p + len(node.consts)
             missing = [a for a in parameters(fn) if a not in by_arg]
             if missing:
                 raise ValueError(f"{node.origin.path}: argument(s) {missing} are not an input, const or param")
             args = tuple(by_arg[a] for a in parameters(fn))
-        dtypes = tuple(numpy_dtype(o.annotation) for o in node.outputs)
-        specs.append(Spec(key, fn, args, dtypes, node.kind == "row" or len(dtypes) > 1))
+        dtypes = tuple(output_dtype(o.annotation) for o in node.outputs)
+        nulls = tuple(nullable(o.annotation) for o in node.outputs)
+        s, self._specs = self._specs, self._specs + 1
+        self.produced.update((v.id, ("res", s, k)) for k, v in enumerate(call.writes))
+        return Spec(key, fn, args, dtypes, node.kind == "row" or len(dtypes) > 1, nulls if any(nulls) else ())
+
+
+def _kernel(compiled: list, keep) -> Kernel:
+    calls = tuple(c for c, *_ in compiled)
+    ids = {c.id for c in calls}
+    lay = Layout()
+    specs, outputs, writes, masked, choices = [], [], [], [], []
+    for call, key, fn, _ in compiled:
+        spec = lay.spec(call, key, fn)
+        specs.append(spec)
         for k, v in enumerate(call.writes):
-            produced[v.id] = (s, k)
             if keep is None or v.id in keep[0] or keep[1].get(v.id, set()) - ids:
-                outputs.append((s, k))
-                writes.append((v, dtypes[k]))
+                if spec.nullable and spec.nullable[k]:
+                    masked.append(len(writes))
+                outputs.append(lay.produced[v.id])
+                writes.append((v, spec.dtypes[k]))
+                choices.append(literal_choices(call.node.outputs[k].annotation))
     fn = fused_kernel(tuple(specs), tuple(outputs))
-    return Kernel(calls, fn, tuple(reads), tuple(optional), tuple(writes), tuple(layout))
+    return Kernel(calls, fn, tuple(lay.reads), tuple(lay.optional), tuple(writes), tuple(masked), tuple(lay.layout),
+                  tuple(choices))
+

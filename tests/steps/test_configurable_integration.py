@@ -9,16 +9,14 @@ import pytest
 from polars.testing import assert_frame_equal
 from pydantic import TypeAdapter
 
-from decider import engine, flow, step
+from decider import ConfigurableStep, Engine, ParamRef, Value, engine, flow, step
 from decider.config import JsonFileStore
-from decider.engine import Engine
-from decider.engine.ir.decls import Input, Output, ParamDecl
-from decider.engine.ir.nodes import CallNode
+from decider.engine.ir import ParamDecl
 from decider.registry import import_path
-from decider.steps import ConfigurableStep, ParamRef, StepRef, Value
+from decider.steps import StepRef
 
 
-def _threshold(x, threshold, above, below):
+def _threshold(x: float, threshold: float, above: float, below: float) -> float:
     return above if x > threshold else below
 
 
@@ -31,11 +29,9 @@ class ThresholdRule(ConfigurableStep):
     below: Value[float] = 0.0
 
     def to_ir(self, ctx):
-        values = {f: ctx.value(getattr(self, f), float, arg=f) for f in ("threshold", "above", "below")}
-        return CallNode(
-            ctx.origin(self), "scalar", _threshold, (Input(self.input, float, arg="x"),),
-            (Output(self.output, float),), tuple(v for v in values.values() if isinstance(v, ParamDecl)),
-            consts=tuple((f, v) for f, v in values.items() if not isinstance(v, ParamDecl)),
+        return ctx.call(
+            self, _threshold, inputs={"x": self.input}, outputs=[self.output],
+            values={"threshold": self.threshold, "above": self.above, "below": self.below},
         )
 
 
@@ -97,6 +93,7 @@ def test_load_reads_a_json_file_and_checks_the_tag_against_the_class(tmp_path):
     path = tmp_path / "bands.json"
     path.write_text(bands.model_dump_json())
     assert RuleSet.load(path) == ConfigurableStep.load(str(path)) == bands
+    assert ConfigurableStep.load(bands.model_dump_json()) == bands
     untagged = {k: v for k, v in bands.model_dump(mode="json").items() if k != "type"}
     assert RuleSet.load(untagged) == bands
     with pytest.raises(LookupError, match="not a registered RuleSet"):
@@ -152,6 +149,6 @@ def test_configs_and_params_from_the_config_store_run_the_same(tmp_path):
         "steps.risk": risk.model_dump(mode="json"), "steps.bands": bands.model_dump(mode="json"), "params": params,
     })
     fresh = JsonFileStore(basepath=str(tmp_path))
-    config = fresh.get_latest().config
+    config = fresh.read(fresh.latest_version()).config
     loaded = pipeline(ConfigurableStep.load(config["steps.risk"]), ConfigurableStep.load(config["steps.bands"]))
     assert_frame_equal(loaded.run(DF, params=config["params"]), expected)

@@ -7,6 +7,10 @@
   `UnsupportedBytecodeError` (see below).
 - A runtime error always propagates, compiled or not.
 - The fallback decision is cached per node and named in the build report.
+- A kernel whose calls each compiled but which fails as a whole (a param
+  numba can't type is only seen when the kernel launches) catches the same
+  errors on its first launch and runs its calls one by one in Python from
+  then on. Runtime errors raised by the compiled kernel still propagate.
 
 **Why:**
 - **One bad node takes down the whole driver.** In all six compile-failure modes

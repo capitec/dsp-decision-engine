@@ -1,6 +1,6 @@
 import os
 import typing as t
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,26 +16,16 @@ class ServeSettings(BaseModel):
     # None means use _default_workers() at serve time so nproc is evaluated
     # on the target machine, not at settings-parse time.
     workers: t.Optional[int] = None
+    server: t.Literal["starlette", "sanic"] = "starlette"
 
 
 class APISettings(BaseModel):
-    """Settings for the Decider API."""
-    root_path: str = "./model/code"
-    flow_subpath: str = ""
-    init_module: t.Optional[str] = "inference"
+    """What the server serves: `pipeline` and `handler` are import paths, resolved from `code_path`."""
+    code_path: str = "."
+    pipeline: str = "pipeline:build"
+    handler: str = "inference:Handler"
+    mode: str = "fused"
 
-class DeciderAppExtensionSettings(BaseModel):
-    """Settings for the Decider application extensions."""
-    extension_path: str = "decider_extensions"
-    extension_imports: t.List[str] = []
-
-    @field_validator("extension_imports", mode="before")
-    @classmethod
-    def split_comma_separated(cls, v: t.Any) -> t.Any:
-        """Allow comma-separated values from environment variables."""
-        if isinstance(v, str):
-            return [item.strip() for item in v.split(",") if item.strip()]
-        return v
 
 class DeciderConfigSettings(BaseModel):
     """The config store to build: its `type` tag plus that store's own fields (e.g. `basepath`)."""
@@ -57,7 +47,6 @@ class DeciderSettings(BaseSettings):
     )
 
     serve: ServeSettings = Field(default_factory=ServeSettings)
-    ext: DeciderAppExtensionSettings = Field(default_factory=DeciderAppExtensionSettings)
     api: APISettings = Field(default_factory=APISettings)
     config: DeciderConfigSettings = Field(default_factory=DeciderConfigSettings)
 

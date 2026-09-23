@@ -1,47 +1,38 @@
 import typing as t
 from io import BytesIO
+
 import polars as pl
-from .media_types import MediaType
+
 
 class Response(t.NamedTuple):
+    """What `RequestHandler.output_fn` returns: the body and its media type.
+
+    Example::
+
+        Response(b'{"capped": 48.0}', "application/json")
+    """
+
     content: bytes
-    media_type: t.Optional[str] = None
+    media_type: str
 
 
+def _json(result: pl.DataFrame) -> bytes:
+    text = result.write_json()
+    # One row goes back as an object, not a one-element list.
+    return (text.removeprefix("[").removesuffix("]") if len(result) == 1 else text).encode()
 
-def format_application_json(result: pl.DataFrame) -> "Response":
-    if len(result) == 1:
-        return Response(
-            content=result.write_json().removeprefix('[').removesuffix(']').encode("utf-8"),
-            media_type=MediaType.APPLICATION_JSON.value
-        )
-    else:
-        return Response(content=result.write_json().encode("utf-8"), media_type=MediaType.APPLICATION_JSON.value)
 
-def format_application_jsonl(result: pl.DataFrame) -> "Response":
-    return Response(
-        content=result.write_ndjson().encode("utf-8"),
-        media_type=MediaType.APPLICATION_JSONL.value
-    )
-
-def format_application_x_parquet(result: pl.DataFrame) -> "Response":
+def _parquet(result: pl.DataFrame) -> bytes:
     f = BytesIO()
     result.write_parquet(f)
-    return Response(
-        content=f.getvalue(),
-        media_type=MediaType.APPLICATION_X_PARQUET.value
-    )
+    return f.getvalue()
 
-def format_text_csv(result: pl.DataFrame) -> "Response":
-    return Response(
-        content=result.write_csv().encode("utf-8"),
-        media_type=MediaType.TEXT_CSV.value
-    )
 
-DEFAULT_OUTPUT_FORMATTERS = {
-    MediaType.ANY.value: format_application_json,  # Default to JSON for any Accept header
-    MediaType.APPLICATION_JSON.value: format_application_json,
-    MediaType.APPLICATION_JSONL.value: format_application_jsonl,
-    MediaType.APPLICATION_X_PARQUET.value: format_application_x_parquet,
-    MediaType.TEXT_CSV.value: format_text_csv,
+# Accept header -> (response media type, writer).
+DEFAULT_OUTPUT_FORMATTERS: dict[str, tuple[str, t.Callable[[pl.DataFrame], bytes]]] = {
+    "*/*": ("application/json", _json),
+    "application/json": ("application/json", _json),
+    "application/jsonl": ("application/jsonl", lambda r: r.write_ndjson().encode()),
+    "application/x-parquet": ("application/x-parquet", _parquet),
+    "text/csv": ("text/csv", lambda r: r.write_csv().encode()),
 }

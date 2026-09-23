@@ -11,15 +11,12 @@ from numba.core.dispatcher import Dispatcher
 from numba.core.errors import NumbaError, UnsupportedBytecodeError
 
 from decider.engine.compile.fingerprint import fingerprint
-from decider.engine.ir.decls import FeatureKind, Input, NullPolicy, feature_kind
+from decider.engine.ir.decls import KIND_DTYPES, FeatureKind, Input, NullPolicy, base_annotation, feature_kind
 from decider.engine.ir.nodes import CallNode
 from decider.engine.params import NodeParams
 
 # UnsupportedBytecodeError (e.g. an `import` inside a step) isn't a NumbaError.
 FALLBACK_ERRORS = (NumbaError, UnsupportedBytecodeError)
-
-_DTYPES = {FeatureKind.F64: np.dtype(np.float64), FeatureKind.I64: np.dtype(np.int64),
-           FeatureKind.BOOL: np.dtype(np.bool_), FeatureKind.CODE: np.dtype(np.int32)}
 
 # ponytail: unbounded, one entry per distinct function content; add eviction if a long session edits steps thousands of times.
 _DISPATCHERS: dict[str, Dispatcher] = {}
@@ -36,7 +33,9 @@ def numpy_dtype(annotation: Any) -> np.dtype:
     >>> numpy_dtype(int), numpy_dtype(int | None)
     (dtype('int64'), dtype('float64'))
     """
-    return _DTYPES.get(feature_kind(annotation), _DTYPES[FeatureKind.F64])
+    kind = feature_kind(annotation)
+    # A `bytes` value is a span into Arrow memory, never stored between nodes.
+    return KIND_DTYPES[FeatureKind.F64 if kind is FeatureKind.STR else kind]
 
 
 def jit(fn: Callable) -> tuple[str, Dispatcher]:
@@ -101,7 +100,13 @@ def default_bundle(node: CallNode) -> tuple:
     return NodeParams(node.origin.path, node.params).defaults if node.params else ()
 
 
+SPAN = types.UniTuple(types.int64, 2)
+
+
 def _input_type(inp: Input) -> Any:
+    if base_annotation(inp.annotation) is bytes:
+        # A null span has length -1, so a `bytes` input is never an Optional.
+        return SPAN
     t = from_dtype(numpy_dtype(inp.annotation))
     return types.Optional(t) if inp.null_policy is NullPolicy.OPTIONAL else t
 
@@ -113,9 +118,13 @@ def _probe_signature(node: CallNode) -> tuple | None:
         bundle, consts = default_bundle(node), tuple(v for _, v in node.consts)
         ins = [_input_type(i) for i in node.inputs]
         if node.kind == "row":
+            if SPAN in ins and node.params:
+                # A `str` param of a node reading `bytes` reaches the kernel as a span of its UTF-8 bytes.
+                bundle = bundle._replace(**{d.name: (0, 0) for d in node.params if d.annotation is str})
             return (types.Tuple(tuple(ins)), typeof(bundle), typeof(consts))
         by_arg = {i.arg: t for i, t in zip(node.inputs, ins)}
-        by_arg |= {d.arg: typeof(v) for d, v in zip(node.params, bundle)}
+        # A `str` param reaches a scalar kernel as the int32 code of its literal.
+        by_arg |= {d.arg: types.int32 if d.annotation is str else typeof(v) for d, v in zip(node.params, bundle)}
         by_arg |= {name: typeof(v) for name, v in node.consts}
         return tuple(by_arg[p] for p in parameters(node.fn))
     except (ValueError, KeyError):
