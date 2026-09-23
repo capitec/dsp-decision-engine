@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import types
-import typing
 from typing import Any
 
 import numpy as np
 import polars as pl
 
-from decider.engine.ir.decls import Input, NullPolicy
+from decider.engine.ir.decls import Input, NullPolicy, base_annotation
 from decider.engine.wiring.plan import Plan, Version
 
 # Kinds the boundary reads into typed arrays; anything else stays a Python object.
@@ -45,8 +43,8 @@ class State:
         from decider.engine.boundary.extract import extract_frame
 
         state = cls(plan, frame, n)
-        typed = [Input(i.name, _base(i.annotation), NullPolicy.OPTIONAL) for i in plan.inputs
-                 if _base(i.annotation) in _TYPED]
+        typed = [Input(i.name, base_annotation(i.annotation), NullPolicy.OPTIONAL) for i in plan.inputs
+                 if base_annotation(i.annotation) in _TYPED and i.name in frame.columns]
         extracted = extract_frame(frame, typed).columns if typed else {}
         for v in plan.versions:
             if v.producer is not None:
@@ -155,14 +153,6 @@ def from_series(s: pl.Series) -> tuple[np.ndarray, np.ndarray | None]:
     elif s.dtype == pl.Boolean:
         s = s.fill_null(False)
     return s.to_numpy(), valid
-
-
-def _base(annotation: Any) -> Any:
-    if typing.get_origin(annotation) in (typing.Union, types.UnionType):
-        args = [a for a in typing.get_args(annotation) if a is not type(None)]
-        if len(args) == 1:
-            return args[0]
-    return annotation
 
 
 def dtype_of(annotation: Any) -> np.dtype:

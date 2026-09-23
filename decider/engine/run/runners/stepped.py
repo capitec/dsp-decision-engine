@@ -1,0 +1,141 @@
+from __future__ import annotations
+
+import threading
+from typing import Iterator
+
+import numpy as np
+
+from decider.engine.boundary.nulls import MissingInputError
+from decider.engine.compile import Unit, compile_plan, numpy_dtype
+from decider.engine.ir.decls import Input, NullPolicy, base_annotation
+from decider.engine.run.params import RunParams
+from decider.engine.run.runners.base import Checkpoint
+from decider.engine.run.runners.interpreted import InterpretedRunner, _absent, _Scope
+from decider.engine.run.state import State
+from decider.engine.wiring.plan import Call, Plan, Version
+
+
+class SteppedRunner(InterpretedRunner):
+    """Runs every scalar and row node as its own numba kernel, with a Python driver in between.
+
+    Pauses at every node, like the interpreted runner. Frame steps, branches
+    and loops run in Python. A `str` value enters a kernel as an int32 code
+    and a `str` param as the code of its literal, so a step compares a `str`
+    input against a `str` param exactly as it does in plain Python.
+
+    Example::
+
+        exe = Engine().bind(pipeline, mode="stepped")
+        for checkpoint in exe.runner.iterate(exe.plan, *exe.prepare(df)):
+            ...
+    """
+
+    fuse = False
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._plan: Plan | None = None
+        self.units: dict[int, Unit] = {}
+        self._reads: dict[int, tuple[tuple[Input, Version, str], ...]] = {}
+        self._strs: dict[int, tuple[str, ...]] = {}
+        self._converted: dict[tuple[str, int], tuple] = {}
+        self._codes: dict[str, int] = {}
+        self._lock = threading.Lock()
+
+    def iterate(self, plan: Plan, state: State, params: RunParams) -> Iterator[Checkpoint]:
+        # Not a generator itself: one generator frame less per checkpoint on the single-record path.
+        if plan is not self._plan:
+            self._compile(plan)
+        return super().iterate(plan, state, params)
+
+    def _compile(self, plan: Plan) -> None:
+        strs = {c.id: _str_params(c) for c in plan.calls if c.node.kind == "scalar"}
+        units = compile_plan(plan, fuse=self.fuse)
+        reads = {}
+        for unit in units.values():
+            inside: set[int] = set()
+            ext = []
+            for c in unit.calls:
+                ext += [(i, v, c.node.origin.path) for i, v in zip(c.node.inputs, c.reads) if v.id not in inside]
+                inside |= {v.id for v in c.writes}
+            reads[unit.calls[0].id] = tuple(ext)
+        self.units, self._reads, self._strs = units, reads, {k: v for k, v in strs.items() if v}
+        self._plan = plan
+
+    def _call(self, call: Call, state: State, params: RunParams, scope: _Scope) -> None:
+        unit = self.units.get(call.id)
+        if unit is None:
+            return super()._call(call, state, params, scope)
+        self._run(unit, state, params, scope)
+
+    def _run(self, unit: Unit, state: State, params: RunParams, scope: _Scope) -> None:
+        rows = scope.rows
+        n = scope.count(state.n)
+        # Every call of a unit runs on every row the unit runs on, so validating
+        # them all here is validating exactly the nodes that run.
+        bundles = {c.id: self._bundle(c.id, params, n) for c in unit.calls if c.node.params}
+        values: dict[int, np.ndarray] = {}
+        valid: dict[int, np.ndarray] = {}
+        for decl, v, path in self._reads[unit.calls[0].id]:
+            x, mask = state.read(v, rows)
+            if x.dtype == object:
+                x = self._typed(x, mask, decl)
+            if mask is not None and not mask.all():
+                if decl.null_policy is NullPolicy.REQUIRED:
+                    raise MissingInputError(decl.name, path, int((~mask).sum()), len(mask), absent=_absent(state, v))
+                if decl.null_policy is NullPolicy.MISSING_AS:
+                    # ponytail: one fill per version per kernel; two readers with different fills share the first.
+                    x = np.where(mask, x, decl.fill).astype(x.dtype)
+                valid[v.id] = mask
+            values.setdefault(v.id, x)
+        unit.run(values, valid, bundles, n)
+        for v, _ in unit.writes:
+            state.write(v, values[v.id], rows, valid.get(v.id))
+            scope.names[v.name] = v
+
+    def _typed(self, x: np.ndarray, mask: np.ndarray | None, decl: Input) -> np.ndarray:
+        if base_annotation(decl.annotation) is str:
+            get = self._codes.get
+            return np.fromiter((get(s, -1) for s in x), np.int32, len(x))
+        if mask is not None:
+            x = np.where(mask, x, 0)
+        return x.astype(numpy_dtype(base_annotation(decl.annotation)))
+
+    def _bundle(self, call_id: int, params: RunParams, n: int) -> tuple:
+        bundle = params.bundle(call_id, n)
+        names = self._strs.get(call_id)
+        if names is None:
+            return bundle
+        key = (params.key, call_id)
+        converted = self._converted.get(key)
+        if converted is None:
+            with self._lock:
+                codes = {k: np.int32(self._codes.setdefault(getattr(bundle, k), len(self._codes))) for k in names}
+            converted = self._converted[key] = bundle._replace(**codes)
+        return converted
+
+
+def _str_params(call: Call) -> tuple[str, ...]:
+    node = call.node
+    strs = [i.name for i in node.inputs if base_annotation(i.annotation) is str]
+    params = tuple(d.name for d in node.params if d.annotation is str)
+    path = node.origin.path
+    if not strs:
+        if params:
+            raise ValueError(
+                f"{path}: `str` param '{params[0]}' reaches a compiled kernel as the code of its literal, "
+                "which only means something compared with a `str` input, and this step reads none"
+            )
+        return params
+    if len(strs) > 1:
+        raise ValueError(
+            f"{path}: reads several `str` inputs {strs}; compiled modes compare a `str` input only "
+            "with a `str` param, so split the step or run it in interpreted mode"
+        )
+    if not params or any(isinstance(v, str) for _, v in node.consts):
+        raise ValueError(
+            f"{path}: `str` input '{strs[0]}' enters a compiled kernel as a code, so a literal in the "
+            "function body would never match it; declare the literal as a `str` param, "
+            "e.g. `private: str = param(\"private\")`"
+        )
+    return params

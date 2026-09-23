@@ -7,6 +7,7 @@ from decider.engine.params import NodeParams, ParamsCache, ParamsError, Status, 
 from decider.registry.resolve import suggest_names
 
 _NO_PARAMS = bundle_class(())()
+_EMPTY_KEY = document_key({})
 
 
 @dataclass
@@ -43,7 +44,7 @@ class RunParams:
     def __init__(self, nodes: dict[int, NodeParams], doc: Mapping[str, Any], cache: ParamsCache):
         self.nodes = nodes
         self.doc = doc
-        self.key = document_key(doc)
+        self.key = document_key(doc) if doc else _EMPTY_KEY
         self.cache = cache
         self.report = RunReport()
 
