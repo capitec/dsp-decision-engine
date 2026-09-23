@@ -32,6 +32,9 @@ class FusedRunner(SteppedRunner):
             if unit is None or len(unit.calls) == 1:
                 yield from self._node(child, state, params, scope)
             elif unit.calls[0] is child:
+                if self.skip and (passed := self.skip.get(child)) is not None:
+                    scope.names.update((v.name, v) for v in passed)
+                    continue
                 origin = child.node.origin
                 yield Checkpoint(origin, "before")
                 self._run(unit, state, params, scope)
