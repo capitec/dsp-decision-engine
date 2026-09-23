@@ -36,21 +36,14 @@ Use `uv` for everything: `uv run pytest`, `uv run python`. Python 3.10+.
 
 ## Layout
 
-- `decider/` is the package being built. Target layout: `Design.md` §8, with
-  the file split for `steps/` and `engine/ir/` in `IR.md` §9.
+- `decider/` is the package. Its layout follows `Design.md` §8, with the file
+  split for `steps/` and `engine/ir/` in `IR.md` §9; the code is the truth
+  where they differ.
 - `engine/` imports nothing from `steps/trees|tables|scorecard`, `config/` or
   `serving/`.
-- `decider_old/` and `decider2/` are read-only references until deleted. Never
-  edit them.
-- `decider_old/` imports `decider.*`, so it does not run. Read it only.
-- `decider2/` runs only with `PYTHONPATH=decider2/src`, for example
-  `PYTHONPATH=decider2/src uv run pytest decider2/tests -q`. Without it,
-  `import decider2` finds an empty namespace package. Its numba suite is slow,
-  so run subsets. Its `_arrow` tests skip without a C toolchain; check the
-  skips before trusting a green run.
-- decider2's docs describe features that were never built. Its code and tests
-  are the truth.
-- Never import from `experimentation/`.
+- `benchmarks/` holds plain scripts (`uv run python benchmarks/<name>.py`),
+  not tests. The last numbers against decider2 are in
+  `notes/benchmarks-vs-decider2.md`.
 
 ## Contract
 
