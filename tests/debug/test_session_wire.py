@@ -4,8 +4,8 @@ import json
 import polars as pl
 
 from decider import flow
-from decider.engine.debug import (COMMAND, EVENT, EVENT_LOG, BreakAt, ClearBreak, Pause, Resume, Rewind, SetValue,
-                                  StepInto, StepOver)
+from decider.engine.debug import (COMMAND, EVENT, EVENT_LOG, BreakAt, ClearBreak, Pause, ReloadFailed, Resume, Rewind,
+                                  SetValue, StepInto, StepOver)
 
 
 def disposable_income(net_income: float, expenses: float) -> float:
@@ -52,6 +52,12 @@ def test_the_log_carries_summaries_never_full_columns():
                 for s in [*e.get("outputs", {}).values(), *e.get("output", {}).values()]]
     assert previews and all(len(p) <= 5 for p in previews)
     assert "149.0" not in text               # the last row's net_income
+
+
+def test_a_failed_reload_round_trips_as_its_own_event():
+    event = ReloadFailed("SyntaxError: invalid syntax")
+    assert json.loads(EVENT.dump_json(event)) == {"kind": "reload_failed", "error": "SyntaxError: invalid syntax"}
+    assert EVENT.validate_json(EVENT.dump_json(event)) == event
 
 
 def test_commands_round_trip_as_json():
