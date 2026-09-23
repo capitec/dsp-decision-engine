@@ -99,12 +99,21 @@ class Step(ABC):
         return _walk(self, "")
 
     def run(self, data: Any, **kwargs: Any) -> Any:
-        """Run the step over a frame."""
-        raise NotImplementedError("running steps needs the engine runner, which is not built yet")
+        """Run the step over a polars frame, interpreted; `kwargs` go to `Executable.run` (e.g. `params=`).
+
+        For repeated runs, bind once with `Engine().bind(step)` instead.
+
+        Example::
+
+            out = pipeline.run(df, params={"term": {"cap_by_income": {"cap": 36.0}}})
+        """
+        from decider.engine import Engine
+
+        return Engine().bind(self).run(data, **kwargs)
 
     def session(self, data: Any, **kwargs: Any) -> Any:
         """Open a debug session over a frame."""
-        raise NotImplementedError("debug sessions need the engine runner, which is not built yet")
+        raise NotImplementedError("debug sessions are not built yet")
 
 
 def _walk(step: Step, parent: str) -> Iterator[tuple[str, Step]]:
