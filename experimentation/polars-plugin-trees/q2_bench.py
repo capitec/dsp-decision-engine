@@ -40,7 +40,8 @@ for _ in range(reps):
     gc.collect()
     t0 = time.perf_counter(); run(); times.append(time.perf_counter() - t0)
 times.sort()
-rec = log("q2_pipeline", engine=engine, rows=rows, polars_threads=threads,
+load1 = float(open("/proc/loadavg").read().split()[0])
+rec = log("q2_pipeline", engine=engine, rows=rows, polars_threads=threads, loadavg_1m=load1,
           wall_min_s=times[0], wall_median_s=times[len(times)//2], wall_max_s=times[-1],
           ns_per_row_min=times[0] / rows * 1e9, ns_per_row_median=times[len(times)//2] / rows * 1e9, reps=reps)
 print(json.dumps(rec))

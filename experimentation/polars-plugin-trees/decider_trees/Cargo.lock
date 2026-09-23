@@ -446,6 +446,7 @@ dependencies = [
  "rayon",
  "regex",
  "serde",
+ "serde-pickle",
 ]
 
 [[package]]

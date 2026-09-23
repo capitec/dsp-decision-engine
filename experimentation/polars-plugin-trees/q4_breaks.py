@@ -101,27 +101,4 @@ for depth in (8, 64, 512, 4096):
           f"eval 1 row {ev1['p50_us']:7.1f} us  eval 1k rows {ev1k['p50_us']:7.1f} us")
     log("q4_tree_transfer", depth=depth, pickled_bytes=nbytes, pickle_p50_us=pk["p50_us"], expr_build_p50_us=build["p50_us"],
         eval_1row_p50_us=ev1["p50_us"], eval_1k_p50_us=ev1k["p50_us"])
-# retune: does changing a threshold recompile anything? (there is nothing to compile; it is a new kwargs blob)
-from decider2.testing.recompile import count_new_compiles
-with count_new_compiles() as ev:
-    for thr in (5000.0, 6000.0, 7000.0):
-        t = list(trees.T1); t[0] = dt.test(0, "<", thr, 1, 2)
-        frame_1k.with_columns(dt.walk_value(*[pl.col(f) for f in trees.T1_FEATURES], tree=t))
-print("numba compile events during 3 plugin retunes:", len(ev))
-with count_new_compiles() as ev2:
-    for thr in (5000.0, 6000.0, 7000.0):
-        p.apply(frame_1k, params={"band": {"n0_thr": thr}}, mode="fused")
-print("numba compile events during 3 decider2 retunes:", len(ev2))
-log("q4_retune", plugin_compile_events=len(ev), decider2_compile_events=len(ev2))
-
-# ---------------------------------------------------------------- (d) errors and panics, each in its own process
-res = {}
-for mode in ("after_error", "categorical", "panic"):
-    pr = subprocess.run([PY, str(HERE / "panic_worker.py"), mode], capture_output=True, text=True, timeout=120, cwd=str(HERE))
-    sig = signal.Signals(-pr.returncode).name if pr.returncode < 0 else None
-    tail = [l for l in pr.stderr.splitlines() if l.strip()][-2:]
-    print(f"\n=== {mode}: rc={pr.returncode}" + (f" KILLED by {sig}" if sig else ""))
-    for l in pr.stdout.splitlines(): print("  " + l)
-    for l in tail: print("  stderr| " + l[:200])
-    res[mode] = {"rc": pr.returncode, "signal": sig, "stdout": pr.stdout.splitlines(), "stderr_tail": tail}
-log("q4_panics", **res)
+# (retune + panic demos live in q4b_retune_panic.py)

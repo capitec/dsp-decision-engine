@@ -23,7 +23,7 @@ def cell(engine, rows, threads=None, reps=7):
     rec = json.loads(p.stdout.strip().splitlines()[-1])
     rec["threads_env"] = threads
     print(f"{engine:16s} rows={rows:>9,} thr={rec['polars_threads']:>2} "
-          f"{rec['ns_per_row_median']:8.1f} ns/row  wall {rec['wall_median_s']*1e3:9.2f} ms")
+          f"{rec['ns_per_row_median']:8.1f} ns/row  wall {rec['wall_median_s']*1e3:9.2f} ms  load {rec['loadavg_1m']:5.1f}")
     return rec
 
 ENGINES = ["d2-fused", "pl-eager", "pl-lazy", "pl-streaming", "pl-eager-par", "pl-oracle-eager"]
