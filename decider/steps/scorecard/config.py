@@ -18,21 +18,36 @@ class _Model(BaseModel):
 
 
 class DefaultBin(_Model):
-    """The points a variable scores when no bin matches, or its input is null."""
+    """The points a variable scores when no bin matches, or its input is null.
+
+    Example::
+
+        {"value": 0, "name": "unknown"}
+    """
 
     value: Value[float]
     name: t.Optional[str] = None
 
 
 class BoundBin(DefaultBin):
-    """Points for `lower_bound < x <= upper_bound`; a missing bound is taken from the neighbouring bin, or is open."""
+    """Points for `lower_bound < x <= upper_bound`; a missing bound is taken from the neighbouring bin, or is open.
+
+    Example::
+
+        {"value": 10, "lower_bound": 25, "upper_bound": {"param": "old", "default": 60}}
+    """
 
     lower_bound: t.Optional[Value[float]] = None
     upper_bound: t.Optional[Value[float]] = None
 
 
 class ValuesBin(DefaultBin):
-    """Points for an input equal to one of `items`; checked before any `BoundBin`."""
+    """Points for an input equal to one of `items`; checked before any `BoundBin`.
+
+    Example::
+
+        {"value": 15, "items": ["gold", "platinum"]}
+    """
 
     items: list[t.Union[int, float, str]] = Field(default_factory=list)
 
@@ -60,6 +75,11 @@ class ScoredVariable(_Model):
     """One input binned into points, written to `value_output_name` (`{variable_name}` is filled in).
 
     With `strict` (the default) consecutive bound bins must meet exactly; otherwise gaps score the default.
+
+    Example::
+
+        {"type": "scored", "variable_name": "age", "default": {"value": 0},
+         "bins": [{"value": 5, "upper_bound": 25}, {"value": 10, "lower_bound": 25}]}
     """
 
     type: t.Literal["scored"] = "scored"
@@ -146,6 +166,10 @@ class AdjustedVariable(_Model):
     """A scored variable rescaled as `score * scale + offset`, written to `variable_output_name`.
 
     `{variable_name}` and `{score_value_output_name}` are filled in; the unadjusted score is written too.
+
+    Example::
+
+        {"type": "adjusted", "scale": 2.0, "offset": -5.0, "variable": {"type": "scored", ...}}
     """
 
     type: t.Literal["adjusted"] = "adjusted"
@@ -171,7 +195,12 @@ class AdjustedVariable(_Model):
 
 
 class ConstantScore(_Model):
-    """The same points for every row, written to `output_name`."""
+    """The same points for every row, written to `output_name`.
+
+    Example::
+
+        {"type": "constant", "score": 600, "output_name": "base_score"}
+    """
 
     type: t.Literal["constant"] = "constant"
     score: Value[float]

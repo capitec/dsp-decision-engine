@@ -1,19 +1,14 @@
 from __future__ import annotations
 
 import inspect
-import types
 import typing
 from typing import Any, Callable
 
-from decider.engine.ir.decls import Input, NullPolicy, Output, ParamDecl
+from decider.engine.ir.decls import Input, NullPolicy, Output, ParamDecl, nullable
 from decider.engine.params.declare import MissingAs, ParamSpec, is_plain_marker
 from decider.exceptions import IRError
 
 _EMPTY = inspect.Parameter.empty
-
-
-def _permits_none(annotation: Any) -> bool:
-    return typing.get_origin(annotation) in (typing.Union, types.UnionType) and type(None) in typing.get_args(annotation)
 
 
 def _outputs(fn: Callable, names: tuple[str, ...], ret: Any) -> tuple[Output, ...]:
@@ -57,7 +52,7 @@ def harvest(
             params.append(ParamDecl(name, ann, d.default, d.field_info, d.required, d.shared_key, d.on_invalid))
         elif isinstance(d, MissingAs):
             inputs.append(Input(name, type(d.fill) if ann is Any else ann, NullPolicy.MISSING_AS, d.fill, arg=name))
-        elif _permits_none(ann):
+        elif nullable(ann):
             inputs.append(Input(name, ann, NullPolicy.OPTIONAL, arg=name))
         elif d is not _EMPTY:
             # A bare default could mean a tunable knob or a fill for nulls; make the author say which.
