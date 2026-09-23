@@ -995,3 +995,79 @@ table.sweep tr.original td.knob-col {
 table.sweep th {
   white-space: normal;
 }
+
+/* round 5 review */
+.node text.sub {
+  font-size: 12px;
+}
+.node text.title {
+  font-size: 13.5px;
+}
+.edge text,
+.cluster text {
+  font-size: 11.5px;
+  opacity: 0.9;
+}
+.sides > div {
+  white-space: normal;
+  overflow: visible;
+}
+table.sweep tr.clickable:hover td {
+  background: inherit;
+  box-shadow: inset 0 0 0 999px color-mix(in srgb, var(--vscode-list-hoverBackground) 60%, transparent);
+}
+table.sweep tr.clickable:hover td.changed {
+  background: var(--changed-bg);
+}
+table.sweep tr.open td {
+  font-weight: 600;
+}
+table.sweep tr.open td:first-child {
+  box-shadow: inset 4px 0 0 var(--vscode-focusBorder);
+}
+.knob {
+  display: grid;
+  grid-template-columns: 110px minmax(120px, 1fr) minmax(120px, 1fr) 60px;
+  gap: 6px;
+  align-items: center;
+}
+.knob input,
+.knob select {
+  min-width: 0;
+}
+.legend-pop {
+  display: inline-block;
+  position: relative;
+}
+.legend-pop summary {
+  margin: 0;
+  cursor: pointer;
+}
+.legend-pop .legend-body {
+  position: absolute;
+  z-index: 5;
+  top: 1.6em;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  background: var(--vscode-editorWidget-background);
+  border: 1px solid var(--vscode-panel-border);
+  white-space: nowrap;
+}
+.legend-body .line {
+  display: inline-block;
+  width: 18px;
+  border-top: 2px solid var(--vscode-foreground);
+  vertical-align: middle;
+}
+.legend-body .line.dotted {
+  border-top: 2px dotted var(--lineage);
+}
+.changed-box {
+  margin: 6px 0 10px;
+  padding: 6px 8px;
+  background: var(--changed-bg);
+  border-left: 3px solid var(--changed);
+}

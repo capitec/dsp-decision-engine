@@ -82,7 +82,7 @@ export function Scenarios({ schema, columns, pausedAt, record, keyCol, rows, res
           }}
         />
         {open !== null && (
-          <div className="inline-compare">
+          <div className="inline-compare" ref={(el) => el?.scrollIntoView({ block: "start", behavior: "smooth" })}>
             <Compare
               comparison={result.sweep.comparisons[open]}
               record={shownRow < 0 ? null : shownRow}
@@ -163,15 +163,21 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
     if (!summary) return formatValue(values[row]);
     return values.every((v) => same(v, values[0])) ? formatValue(values[0]) : values.map(formatValue).join(" / ");
   };
+  // The mean over all records, or the single value when every record agrees.
+  const overall = (values: unknown[] | undefined) => {
+    const v = values ?? [];
+    if (v.every((x) => same(x, v[0]))) return formatValue(v[0]);
+    const nums = v.filter((x): x is number => typeof x === "number");
+    return nums.length === v.length ? `avg ${formatValue(nums.reduce((t, x) => t + x, 0) / nums.length)}` : "varies";
+  };
   const summaryCell = (i: number, c: string) => {
     const diff = sweep.comparisons[i].output.find((o) => o.name === c);
-    if (!diff) return <td key={c} className="unchanged" title="same for every record">no change</td>;
-    const deltas = diff.changedRows.map((r) => [sweep.base?.[c]?.[r], sweep.outputs[i]?.[c]?.[r]]).filter(([a, b]) => typeof a === "number" && typeof b === "number");
-    const mean = deltas.length ? deltas.reduce((t, [a, b]) => t + (b as number) - (a as number), 0) / deltas.length : null;
+    const value = overall(sweep.outputs[i]?.[c]);
+    if (!diff) return <td key={c} className="unchanged mono" title="same as the original run for every record">{value}</td>;
     return (
-      <td key={c} className="changed" title={`changed for ${recordsOf(diff.changedRows)}`}>
-        {diff.changedRows.length} of {rows}
-        {mean !== null && <span className="up"> · avg {mean > 0 ? "+" : ""}{formatValue(mean)}</span>}
+      <td key={c} className="changed mono" title={`changed for ${recordsOf(diff.changedRows)}; original: ${overall(sweep.base?.[c])}`}>
+        {value}
+        <span className="up"> · {diff.changedRows.length} of {rows} changed</span>
       </td>
     );
   };
@@ -210,7 +216,7 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
                 <th key={k.name} className="knob-col" title={k.name}>{k.name.split(" · ").pop()}</th>
               ))}
               {cols.map((c) => (
-                <th key={c}>{c}{summary ? " changed" : ""}</th>
+                <th key={c}>{c}</th>
               ))}
             </tr>
           </thead>
@@ -219,7 +225,7 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
               <td className="knob-col" colSpan={knobCols.length} title={knobCols.map((k) => `${k.name} = ${baseKnob(k.name)}`).join("\n")}>
                 original run ({knobCols.filter((k) => k.name !== "scenario").map((k) => `${k.name.split(" · ").pop()} ${baseKnob(k.name)}`).join(", ")})
               </td>
-              {summary ? cols.map((c) => <td key={c} />) : cols.map((c) => recordCell(null, c))}
+              {summary ? cols.map((c) => <td key={c} className="mono">{overall(sweep.base?.[c])}</td>) : cols.map((c) => recordCell(null, c))}
             </tr>
             {sweep.labels.map((label, i) => (
               <tr key={i} className={`clickable ${open === i ? "open" : ""}`} title={`${label}: see what changed, step by step`} onClick={() => onOpen(i)}>
