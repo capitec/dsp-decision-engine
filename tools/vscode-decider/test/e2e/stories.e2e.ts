@@ -99,9 +99,9 @@ describe("user stories", () => {
       const wv = c.webview();
       await wv.locator("svg .node", { hasText: "cap_by_income" }).click({ timeout: 30_000 });
       await shot("After 'Visualise flow' and clicking the cap_by_income step.");
-      await wv.locator("aside button", { hasText: "Run to here" }).click();
+      await wv.locator("aside button", { hasText: "Run to cap_by_income" }).click();
       await wv.locator(".badge", { hasText: "cap_by_income" }).waitFor({ timeout: 60_000 });
-      await shot("After clicking 'Run to here': the flow runs on the sample and pauses before cap_by_income.");
+      await shot("After clicking 'Run to cap_by_income': the flow runs on the sample and pauses before cap_by_income.");
       await wv.locator("select[aria-label=record]").selectOption({ label: "client_id 1" });
       await wv.locator(".chip", { hasText: "term_cap" }).first().click();
       await wv.locator(".how-title", { hasText: "comes from" }).waitFor();
@@ -110,12 +110,12 @@ describe("user stories", () => {
       await shot("The State tab while focused on client_id 1.");
       await tab(c, "Graph");
       await wv.locator("svg .node", { hasText: "risk_tree" }).click();
-      await wv.locator("aside button", { hasText: "Continue to here" }).click();
+      await wv.locator("aside button", { hasText: "Run to risk_tree" }).click();
       await wv.locator(".badge", { hasText: "before risk_tree" }).waitFor({ timeout: 30_000 });
-      await wv.locator("aside button", { hasText: "Run this step" }).click();
+      await wv.locator("aside button", { hasText: "Run through risk_tree" }).click();
       await wv.locator(".badge", { hasText: "after risk_tree" }).waitFor({ timeout: 30_000 });
       await wv.locator("aside h4", { hasText: "Path for client_id 1" }).waitFor({ timeout: 10_000 });
-      await shot("After clicking risk_tree, 'Continue to here', then 'Run this step': the path client_id 1 took.");
+      await shot("After clicking risk_tree, 'Run to risk_tree', then 'Run through risk_tree': the path client_id 1 took.");
     });
   }, 180_000);
 

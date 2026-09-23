@@ -22,7 +22,8 @@ interface Props {
   onOpen: (path: string) => void;
 }
 
-const MIN_AUTO = 0.7;
+// Below this, node text gets smaller than the editor's; scroll instead.
+const MIN_AUTO = 0.9;
 
 export function Graph({ ir, showData, run, selected, highlightColumn, lineage, diff, treePath, zoom, onSelect, onOpen }: Props) {
   const laid = useMemo(() => layout(ir), [ir]);
@@ -52,7 +53,7 @@ export function Graph({ ir, showData, run, selected, highlightColumn, lineage, d
 
   // Keep the step the run is at, or the one just clicked, in the middle of the view.
   useEffect(() => {
-    box.current?.querySelector(".node.current, .cluster.current")?.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
+    box.current?.querySelector(".node.current, .cluster.current")?.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
   }, [run.current?.path, zoom]);
   useEffect(() => {
     box.current?.querySelector(".node.selected")?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
@@ -119,12 +120,12 @@ export function Graph({ ir, showData, run, selected, highlightColumn, lineage, d
           >
             <title>{`${n.path} (${kindLabel(n.node)})\n${n.node.kind === "call" ? `${(n.node.inputs ?? ["?"]).join(", ")} → ${(n.node.outputs ?? ["?"]).join(", ")}\n` : ""}Double-click to open the source`}</title>
             <rect width={n.width} height={n.height} rx={5} />
-            <text x={n.width / 2} y={19} textAnchor="middle" className="title">{n.label}</text>
+            <text x={n.width / 2} y={19} textAnchor="middle" className="title">
+              {n.node.kind === "call" && n.node.callKind === "row" ? "◇ " : n.node.kind === "call" && n.node.callKind === "frame" ? "⊞ " : ""}
+              {n.label}
+            </text>
             <text x={n.width / 2} y={35} textAnchor="middle" className="sub">{lines(n.node)[0]}</text>
             <text x={n.width / 2} y={50} textAnchor="middle" className="sub">{lines(n.node)[1]}</text>
-            {n.node.kind === "call" && n.node.callKind !== "scalar" && (
-              <text x={n.width - 6} y={12} textAnchor="end" className="kind-tag">{n.node.callKind === "row" ? "decision tree" : "data frame"}</text>
-            )}
             {done.has(n.path) && (
               <text x={6} y={13} className="ran-mark"><title>ran</title>✓</text>
             )}

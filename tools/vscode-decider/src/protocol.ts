@@ -137,6 +137,7 @@ export type ToWebview =
   | { type: "treePath"; path: string; row: number; visited: string[]; result?: unknown[] }
   | { type: "compare"; comparison: Comparison | null; busy?: string; error?: string }
   | { type: "tab"; tab: Tab }
+  | { type: "select"; path: string }
   | { type: "sweep"; sweep: Sweep | null; busy?: string; error?: string };
 
 export type FromWebview =

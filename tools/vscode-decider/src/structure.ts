@@ -38,9 +38,7 @@ export class StructureProvider implements vscode.TreeDataProvider<IRNodeJson> {
     item.iconPath = new vscode.ThemeIcon(
       this.current?.path === node.path ? "debug-stackframe" : this.finished.has(node.path) ? "pass" : ICONS[kindLabel(node)],
     );
-    if (node.file) {
-      item.command = { command: "decider.reveal", title: "Open source", arguments: [node.file, node.line] };
-    }
+    item.command = { command: "decider.selectStep", title: "Select in the flow", arguments: [node.path, node.file, node.line] };
     return item;
   }
 

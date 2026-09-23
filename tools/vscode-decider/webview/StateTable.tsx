@@ -47,7 +47,7 @@ export function StateTable({ columns, record, keyCol, selected, order, picked, o
                 {record === null ? `${c.preview.map(formatValue).join(", ")}${c.rows > c.preview.length ? ", …" : ""}` : formatValue(c.value)}
               </td>
               {step && <td className="role">{role(c.name)}</td>}
-              <td className="muted">{c.producer}{c.versions > 1 ? ` (${c.versions} versions)` : ""}</td>
+              <td className="muted" title={c.producer}>{c.producer.split("/").pop()}{c.versions > 1 ? ` (${c.versions} versions)` : ""}</td>
               <td className="muted">{c.dtype}</td>
               <td>{c.nulls || ""}</td>
             </tr>
