@@ -214,3 +214,34 @@ def test_debug_condition_matches_only_the_focused_record():
     assert cond == "term_cap == 36.0 and min_net_salary == 0.0"  # the null arrives filled
     assert eval(cond, {}, {"term_cap": 36.0, "min_net_salary": 0.0})
     assert not eval(cond, {}, {"term_cap": 60.0, "min_net_salary": 4000.0})
+
+
+def test_skipping_a_step_mid_run_reruns_without_it():
+    b = started(breakpoints=["term/cap_by_income"])
+    b.handle({"cmd": "resume"})
+    r = b.handle({"cmd": "skip", "path": "term/cap_by_income"})
+    assert any(e["kind"] == "edited" and e["action"] == "delete" for e in r["events"])
+    assert b.handle({"cmd": "resume"})["finished"]
+    assert b.session.output()["term_cap"].to_list() == [54.0, 36.0]
+
+
+def test_an_edited_step_is_swapped_in_mid_run(tmp_path):
+    loan = tmp_path / "loan.py"
+    loan.write_text(open(LOAN).read())
+    b = Bridge()
+    b.start(str(loan), breakpoints=["term/cap_by_income"])
+    b.handle({"cmd": "resume"})
+    loan.write_text(loan.read_text().replace("return min(term_cap, cap) if", "return min(term_cap, cap) - 1 if"))
+    r = b.handle({"cmd": "reload_step", "path": "term/cap_by_income"})
+    assert r["current"] == {"path": "term/cap_by_income", "when": "before"}
+    assert b.handle({"cmd": "resume"})["finished"]
+    assert b.session.output()["term_cap"].to_list() == [47.0, 35.0]  # record 1's missing salary fills as 0, so the edit hits it too
+
+
+def test_skipping_the_only_producer_is_refused_and_changes_nothing():
+    b = started(breakpoints=["term/cap_by_income"])
+    b.handle({"cmd": "resume"})
+    with pytest.raises(Exception, match="nothing produces"):
+        b.handle({"cmd": "skip", "path": "affordability/ratio"})
+    assert b.handle({"cmd": "resume"})["finished"]
+    assert b.session.output()["term_cap"].to_list() == [48.0, 36.0]
