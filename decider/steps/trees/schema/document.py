@@ -6,6 +6,7 @@ import typing as t
 
 from pydantic import BeforeValidator, Discriminator, Tag, TypeAdapter
 
+from decider.steps.trees.schema.conditions import get_field
 from decider.steps.trees.schema.flat import FlatRuleDocument, PrioritizedFlatRuleDocument
 from decider.steps.trees.schema.v3 import V3TreeDocument
 
@@ -19,17 +20,16 @@ def detect_format(doc: t.Any) -> str:
     `format_version`), then by a `"v<n>-tree"` type. Dict-shaped `nodes` is
     the original v0 format; anything else is read as v3.
     """
-    get = doc.get if isinstance(doc, dict) else lambda k: getattr(doc, k, None)
-    kind = get("type")
+    kind = get_field(doc, "type")
     if kind in ("flat_rule", "prioritized_flat_rule"):
         return kind
-    version = get("formatVersion")
+    version = get_field(doc, "formatVersion")
     if version is None:
-        version = get("format_version")
+        version = get_field(doc, "format_version")
     if version is None and isinstance(kind, str) and (m := re.fullmatch(r"v(\d+)-tree", kind)):
         version = m.group(1)
     if version is None:
-        version = 0 if isinstance(get("nodes"), dict) else 3
+        version = 0 if isinstance(get_field(doc, "nodes"), dict) else 3
     return f"v{version}"
 
 

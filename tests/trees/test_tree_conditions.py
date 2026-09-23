@@ -98,14 +98,14 @@ def test_between_needs_a_bound():
 
 
 def test_isin_needs_a_value():
-    with pytest.raises(ValueError, match="at least one element"):
+    with pytest.raises(ValueError, match="at least 1 item"):
         UnaryIsIn(feature="x", values=[])
 
 
 def test_string_match_needs_a_pattern():
-    with pytest.raises(ValueError, match="at least one pattern"):
+    with pytest.raises(ValueError, match="at least 1 item"):
         UnaryStringMatch(feature="s", patterns=[])
-    with pytest.raises(ValueError, match="at least one pattern"):
+    with pytest.raises(ValueError, match="at least 1 item"):
         StringMatchCondition(patterns=[])
 
 

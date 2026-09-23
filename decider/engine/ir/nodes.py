@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Callable, Iterator, Literal
+from typing import Any, Callable, Iterator, Literal
 
 from decider.engine.ir.decls import Input, Output, ParamDecl
 from decider.engine.ir.origin import Origin
@@ -25,17 +25,23 @@ class IRNode(ABC):
 class CallNode(IRNode):
     """Calls one function.
 
-    - `scalar`: `fn(*inputs, **params)`, per row. `inputs[i]` feeds the i-th
-      argument of `fn` that is not a param, so a relabelled input still
-      reaches the right argument.
-    - `row`: `fn(row, params)`, both tuples in declared order; returns a tuple
-      of outputs. `reference(row, params, visit)` is its plain-Python twin.
+    - `scalar`: `fn(**{i.arg: value for i in inputs}, **dict(consts), **params)`,
+      per row. Inputs go by argument name (`Input.arg`), so a relabelled input
+      still reaches its argument, keyword-only arguments included.
+    - `row`: `fn(row, params, consts)`, all three tuples in declared order
+      (`consts` holds the values only); returns a tuple of outputs.
+      `reference(row, params, consts, visit)` is its plain-Python twin.
     - `frame`: `fn(df) -> df`. `inputs`/`outputs` of `None` mean unknown
       lineage: names read after it are checked at run time.
+
+    `consts` are named literal arguments, such as a config's inline
+    `Value[T]`. Like params they arrive as arguments at run time, never baked
+    into compiled code, so changing one never recompiles.
 
     Example::
 
         CallNode(origin, "scalar", ratio, (Input("income", float),), (Output("ratio", float),), ())
+        CallNode(origin, "row", kernel, inputs, outputs, (), consts=(("threshold", 0.5),))
     """
 
     origin: Origin
@@ -46,6 +52,7 @@ class CallNode(IRNode):
     params: tuple[ParamDecl, ...]
     reference: Callable | None = None
     nogil: bool = False
+    consts: tuple[tuple[str, Any], ...] = ()
 
     def children(self) -> tuple[IRNode, ...]:
         return ()

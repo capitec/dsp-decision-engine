@@ -3,10 +3,10 @@ from __future__ import annotations
 
 import typing as t
 
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from decider.steps.trees.schema.nodes import NodeData, arity
-from decider.steps.trees.schema.tree import Node, ParameterInfo, Rule, Tree, TreeOutput, add_node
+from decider.steps.trees.schema.tree import BaseTreeDocument, Node, Rule, Tree, add_node
 
 
 class Position(BaseModel):
@@ -50,7 +50,7 @@ class SubTree(BaseModel):
     name: t.Optional[str] = None
 
 
-class V3TreeDocument(BaseModel):
+class V3TreeDocument(BaseTreeDocument):
     """A v3 tree: `nodes` say what each node tests, `edges` wire branch `sourceIndex` of `source` to `target`.
 
     A branch with no edge selects the default output row. The root is the
@@ -69,16 +69,11 @@ class V3TreeDocument(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     type: t.Literal["v3-tree"] = "v3-tree"
-    name: str = "output"
     metadata: t.Optional[TreeMetadata] = None
     nodes: t.List[PositionedNode]
     edges: t.List[MultiSourceEdge] = Field(default_factory=list)
     subtrees: t.List[SubTree] = Field(default_factory=list)
-    output: TreeOutput = Field(default_factory=TreeOutput)
-    parameters: t.Dict[str, ParameterInfo] = Field(default_factory=dict)
     format_version: t.Literal[3] = Field(alias="formatVersion", default=3)
-
-    _tree: Tree = PrivateAttr()
 
     @model_validator(mode="after")
     def _normalise(self) -> V3TreeDocument:
@@ -94,10 +89,6 @@ class V3TreeDocument(BaseModel):
         self._tree = self._build()
         return self
 
-    def to_tree(self) -> Tree:
-        """This document as the format-independent `Tree`."""
-        return self._tree
-
     def _root_id(self) -> str:
         targets = {e.target for e in self.edges}
         roots = [n.id for n in self.nodes if n.id not in targets]
@@ -112,9 +103,10 @@ class V3TreeDocument(BaseModel):
         for edge in self.edges:
             for i in edge.data.sourceIndex:
                 branches.setdefault(edge.source, {})[i] = edge.target
-        defaults = {k: p.default_value for k, p in self.parameters.items() if p.default_value is not None}
+        defaults = self._param_defaults()
         nodes: dict[str, Node] = {}
-        todo = [self._root_id()]
+        root = self._root_id()
+        todo = [root]
         while todo:
             nid = todo.pop()
             if nid in nodes:
@@ -122,4 +114,4 @@ class V3TreeDocument(BaseModel):
             children = [branches.get(nid, {}).get(i) for i in range(arity(data[nid]))]
             add_node(nodes, nid, data[nid], children, defaults)
             todo += filter(None, children)
-        return Tree(name=self.name, rules=(Rule(root=self._root_id()),), nodes=nodes, output=self.output)
+        return Tree(name=self.name, rules=(Rule(root=root),), nodes=nodes, output=self.output)

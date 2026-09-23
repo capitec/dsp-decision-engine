@@ -22,3 +22,19 @@ class Origin:
     path: str
     source: str
     locator: str | None = None
+
+
+def check_name(name: str) -> str:
+    """Return `name` if it can be a step name in a path, else raise `ValueError`.
+
+    Example::
+
+        check_name("cap_by_income")  # "cap_by_income"
+        check_name("a/b")            # ValueError
+    """
+    if not isinstance(name, str) or not name or "/" in name or "#" in name:
+        raise ValueError(
+            f"step name {name!r} must be a non-empty string without '/' or '#': "
+            "paths join names with '/' and mark positions inside a node with '#'"
+        )
+    return name

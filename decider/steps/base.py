@@ -4,6 +4,8 @@ import dataclasses
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Iterator
 
+from decider.engine.ir.origin import check_name
+
 if TYPE_CHECKING:
     from typing import Self
 
@@ -27,6 +29,10 @@ class Step(ABC):
     """
 
     __slots__ = ("__weakref__",)
+
+    def __post_init__(self) -> None:
+        if self.name is not None:
+            check_name(self.name)
 
     @abstractmethod
     def to_ir(self, ctx: IRContext) -> IRNode:
@@ -52,7 +58,7 @@ class Step(ABC):
 
             flow(cap, cap.named("cap_again"))
         """
-        return self._replace(name=name)
+        return self._replace(name=check_name(name))
 
     def relabel(self, *, reads: dict[str, str] | None = None, writes: dict[str, str] | None = None) -> Self:
         """A copy that reads and writes other names at its boundary.
