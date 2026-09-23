@@ -28,7 +28,8 @@ export default defineConfig({
   },
   ssr: { noExternal: true, target: "node" },
   test: {
-    include: ["test/*.test.ts"],
+    include: process.env.E2E ? ["test/e2e/*.e2e.ts"] : ["test/*.test.ts"],
+    fileParallelism: false,
     testTimeout: 30000,
   },
 });

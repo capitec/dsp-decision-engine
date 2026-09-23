@@ -2,3 +2,4 @@ node_modules/
 dist/
 *.vsix
 .vscode-test/
+test/e2e/shots/
