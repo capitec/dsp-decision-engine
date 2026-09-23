@@ -4,6 +4,8 @@ import type { DescribeResult, FromWebview, ToWebview } from "./protocol";
 /** The graph view: one React webview panel, fed the IR and the session position. */
 export class GraphPanel {
   static current: GraphPanel | undefined;
+  /** The editor column the panel is in. */
+  declare readonly column: vscode.ViewColumn;
   /** Messages sent while the panel is being opened. */
   private static early: ToWebview[] = [];
   private static opening: Promise<void> | undefined;
@@ -63,6 +65,7 @@ export class GraphPanel {
     // the panel's group, the flow would vanish behind it: move the source to the first group instead.
     let column = column0;
     this.panel.onDidChangeViewState((e) => (column = e.webviewPanel.viewColumn ?? column));
+    Object.defineProperty(this, "column", { get: () => column });
     const keepInView = vscode.window.tabGroups.onDidChangeTabs(async (e) => {
       if (column === vscode.ViewColumn.One || vscode.debug.activeDebugSession?.type !== "decider") return;
       for (const tab of [...e.opened, ...e.changed]) {

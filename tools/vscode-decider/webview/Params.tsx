@@ -90,7 +90,7 @@ export function Params({ schema, values, inputColumns, record, keyCol, sessionRu
   const [query, setQuery] = useState("");
   const [changedOnly, setChangedOnly] = useState(false);
   // A short list opens whole; a long one opens only the shared tables and rates.
-  const [open, setOpen] = useState<Set<string>>(() => new Set(Object.keys(schema).length <= OPEN_ALL ? groupParams(schema).map(([g]) => g) : ["shared"]));
+  const [open, setOpen] = useState<Set<string>>(() => new Set(Object.keys(schema).length <= OPEN_ALL ? groupParams(schema).map(([g]) => g) : []));
   const doc = paramsDocument(schema, edits, values);
   const override = Object.fromEntries(overrides.filter((o) => o.column && o.value !== "").map((o) => [o.column, parseValue(o.value, "number")]));
   const row = scope === "record" && record !== null ? record : null;
@@ -174,7 +174,7 @@ export function Params({ schema, values, inputColumns, record, keyCol, sessionRu
   return (
     <div className="params">
       <section className="params-bar">
-        <input aria-label="Filter params" placeholder={`Filter ${total} params, e.g. repo_rate`} value={query} onChange={(e) => setQuery(e.target.value)} />
+        <input autoFocus aria-label="Filter params" placeholder={`Filter ${total} params, e.g. repo_rate`} value={query} onChange={(e) => setQuery(e.target.value)} />
         <label><input type="checkbox" checked={changedOnly} onChange={(e) => setChangedOnly(e.target.checked)} /> changed only</label>
       </section>
       <section>

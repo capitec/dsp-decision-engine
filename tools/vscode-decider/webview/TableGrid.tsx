@@ -57,7 +57,7 @@ export function TableGrid({ name, columns, rows, base, onChange, expression }: P
         <tr>
           <th className="muted small">#</th>
           {cols.map((c) => (
-            <th key={c} title={columns[c]}>{header(c, expression)}</th>
+            <th key={c} title={`${header(c, expression)} · ${columns[c]}`}>{header(c, expression)}</th>
           ))}
           <th />
         </tr>

@@ -53,6 +53,8 @@ export function App() {
   const [opened, setOpened] = useState<Set<string>>(new Set());
   // Said while a run is starting or re-running, until the next status arrives.
   const [pending, setPending] = useState<string>();
+  // The graph sits beside the code; the other tabs are wide tables and get more of the window.
+  useEffect(() => send({ type: "layout", wide: tab !== "graph" }), [tab]);
   // What the last skip or swap did, said in the pause banner until the run moves on.
   const [note, setNote] = useState<string>();
   const noteNext = useRef<string | undefined>(undefined);
@@ -209,6 +211,7 @@ export function App() {
   if (!describe) return <div className="empty">Open a pipeline file and choose “Visualise flow”.</div>;
 
   const edits = Object.entries(run.edits ?? {});
+  const position = (path: string) => positionIn(nodes, path);
   const editLabel = ([p, a]: [string, string]) => `${p.split("/").pop()} ${a === "delete" ? "skipped" : "edited"}`;
   const compareEdits = (only?: string) =>
     send({ type: "compareEdits", label: only ? editLabel(edits.find(([p]) => p === only)!) : edits.map(editLabel).join(", "), edits: run.edits!, path: only });
@@ -253,23 +256,11 @@ export function App() {
           ⏸ Paused {run.current.when} <strong>{run.current.path.split("/").pop() || "the start"}</strong>
           {run.record !== null && <span> · focused on {recordLabel(run.record, keyCol)}</span>}
           {edits.length > 0 && (
-            <>
+            <span className="edit-list">
               {" · "}
-              <button className="link" aria-expanded={editsOpen} title="The steps skipped or swapped in this run" onClick={() => setEditsOpen(!editsOpen)}>
-                {edits.length} edit{edits.length === 1 ? "" : "s"} {editsOpen ? "▴" : "▾"}
-              </button>{" "}
-              <button title="Run the flow as started and as edited, start to end, and compare every result" onClick={() => compareEdits()}>
-                {edits.length > 1 ? "Compare all edits with the flow as started" : "Compare with the flow as started"}
-              </button>
-            </>
-          )}
-          {note && <div className="banner-note">{note}</div>}
-
-          {editsOpen && edits.length > 0 && (
-            <div className="edit-list">
               {edits.map(([p, a]) => (
                 <span key={p} className="edit-chip">
-                  {p.split("/").pop()} {a === "delete" ? "skipped" : "edited"}
+                  {editLabel([p, a])}
                   {edits.length > 1 && (
                     <button className="link" title="Compare the flow as started with only this edit" onClick={() => compareEdits(p)}>
                       compare
@@ -277,8 +268,13 @@ export function App() {
                   )}
                 </span>
               ))}
-            </div>
+              <button className="banner-button" title="Run the flow as started and as edited, start to end, and compare every result" onClick={() => compareEdits()}>
+                {edits.length > 1 ? "Compare all edits with the flow as started" : "Compare with the flow as started"}
+              </button>
+            </span>
           )}
+          {note && <div className="banner-note">{note}</div>}
+
         </div>
       )}
       {tab === "graph" && (
@@ -288,8 +284,10 @@ export function App() {
             <button className="link" title="Fold every group back into one box" onClick={() => setOpened(new Set())}>fold all</button>
           )}
           <details className="legend-pop">
-            <summary>Legend</summary>
+            <summary>View</summary>
             <div className="legend-body">
+              <label><input type="checkbox" checked={showData} onChange={(e) => setShowData(e.target.checked)} /> show all data links</label>
+              <label><input type="checkbox" checked={details} onChange={(e) => setDetails(e.target.checked)} /> step details</label>
               <span><span className="line solid" /> runs next</span>
               <span><span className="line dotted" /> passes data (for the selected step)</span>
               <span><span className="swatch paused" /> paused here</span>
@@ -300,8 +298,6 @@ export function App() {
               <span>⊞ data frame step</span>
             </div>
           </details>
-          <label><input type="checkbox" checked={showData} onChange={(e) => setShowData(e.target.checked)} /> show all data links</label>
-          <label><input type="checkbox" checked={details} onChange={(e) => setDetails(e.target.checked)} /> step details</label>
           {compare.comparison && (
             <span className="legend">
               <label><input type="checkbox" checked={showDiff} onChange={(e) => setShowDiff(e.target.checked)} /> compared:</label>
@@ -324,6 +320,7 @@ export function App() {
       )}
       {tab === "graph" && selected && (
         <div className="crumbs" title={selected}>
+          {position(selected) && <span className="muted">{position(selected)} · </span>}
           {selected.split("/").map((part, i, all) => (
             <span key={i}>
               {i > 0 && <span className="muted"> › </span>}
@@ -432,6 +429,14 @@ export function App() {
       </main>
     </div>
   );
+}
+
+/** "step 7 of 89 in policy" for a path in a flow of `nodes`. */
+function positionIn(nodes: { path: string }[], path: string): string | null {
+  const group = path.slice(0, path.lastIndexOf("/"));
+  const siblings = nodes.filter((n) => n.path.slice(0, n.path.lastIndexOf("/")) === group);
+  const i = siblings.findIndex((n) => n.path === path);
+  return i < 0 || siblings.length < 2 ? null : `step ${i + 1} of ${siblings.length} in ${group.split("/").pop()}`;
 }
 
 function producers(l: Lineage): string[] {

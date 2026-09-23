@@ -56,11 +56,7 @@ export function ResultCards({ c, record, onFocus }: { c: Comparison; record: num
   return (
     <>
       {record !== null && !hit.includes(record) && <div className="muted">{recordLabel(record, c.key)} (focused) is unchanged; the records below changed.</div>}
-      {!offered.length && noOffer.length > 0 && (
-        <div className="note">
-          Every record this moved is declined ({noOffer.map((r) => recordLabel(r, c.key)).join(", ")}): their internal values changed, but they get no offer either way, so no offer changed.
-        </div>
-      )}
+
       {(more ? ordered : ordered.slice(0, FIRST)).map(card)}
       {ordered.length > FIRST && (
         <button className="link" onClick={() => setMore(!more)}>{more ? "show fewer" : `show all ${ordered.length} changed records`}</button>
