@@ -37,15 +37,14 @@ class DeciderAppExtensionSettings(BaseModel):
             return [item.strip() for item in v.split(",") if item.strip()]
         return v
 
-SETTINGS_DEFAULT_CONFIG_POLL_DURATION_S: int = 10
-
 class DeciderConfigSettings(BaseModel):
+    """The config store to build: its `type` tag plus that store's own fields (e.g. `basepath`)."""
     model_config = ConfigDict(extra='allow')
     type: str = "file:json"
 
     def get(self):
-        # TODO: build the config store from these settings.
-        raise NotImplementedError("the config store is not implemented yet")
+        from decider.config import ConfigStore
+        return ConfigStore.resolve(self.type).model_validate(self.model_dump())
 
 
 class DeciderSettings(BaseSettings):
