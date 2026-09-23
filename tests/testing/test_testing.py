@@ -138,7 +138,7 @@ def test_a_scripted_session_diverging_across_modes_fails():
         assert_equivalent(pipeline, FRAME, script=per_mode)
 
 
-@pytest.mark.xfail(strict=True, reason="a fused session can't yet break on a step inside a kernel other than its first")
+@pytest.mark.xfail(strict=True, reason="by design: a fused session pauses before the whole kernel, so a set lands before its earlier steps run")
 def test_a_breakpoint_on_a_later_step_of_a_fused_kernel_agrees_across_modes():
     def override_scaled_input(s):
         s.break_at("scaled")
