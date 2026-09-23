@@ -16,19 +16,31 @@ interface Props {
   diff?: Map<string, string>;
   /** The focused record's path through a tree step, shown on that step. */
   treePath?: { path: string; visited: string[] } | null;
+  /** "auto" fits the panel's width without shrinking text below MIN_AUTO; a number is a fixed scale. */
+  zoom: number | "auto";
   onSelect: (path: string) => void;
   onOpen: (path: string) => void;
 }
 
-export function Graph({ ir, showData, run, selected, highlightColumn, lineage, diff, treePath, onSelect, onOpen }: Props) {
+const MIN_AUTO = 0.7;
+
+export function Graph({ ir, showData, run, selected, highlightColumn, lineage, diff, treePath, zoom, onSelect, onOpen }: Props) {
   const laid = useMemo(() => layout(ir), [ir]);
   const flows = useMemo(() => dataEdges(ir), [ir]);
   const at = useMemo(() => new Map(laid.nodes.map((n) => [n.path, n])), [laid]);
   // Data edges would tangle the layout, so they are drawn over it: all of them, or only the selection's.
   const shownFlows = flows.filter((f) => showData || f.from === selected || f.to === selected || f.column === highlightColumn);
-  // Actual size by default: labels stay readable, and the view scrolls to the current step.
-  const [zoom, setZoom] = useState<number | "fit">(1);
   const box = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const watch = new ResizeObserver(() => setWidth(el.clientWidth));
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, []);
+  // A new flow starts at its top.
+  useEffect(() => box.current?.scrollTo(0, 0), [ir]);
   const done = new Set(run.finishedPaths);
   const touches = (n: IRNodeJson) =>
     n.kind === "call" && !!highlightColumn && ((n.inputs ?? []).includes(highlightColumn) || (n.outputs ?? []).includes(highlightColumn));
@@ -48,22 +60,12 @@ export function Graph({ ir, showData, run, selected, highlightColumn, lineage, d
 
   const pad = shownFlows.length ? PAD : 0;
 
-  const scale = zoom === "fit" ? 1 : zoom;
-  const step = (f: number) => setZoom((z) => Math.min(3, Math.max(0.3, (z === "fit" ? 1 : z) * f)));
+  const full = laid.width + pad;
+  const scale = zoom === "auto" ? Math.min(1, Math.max(MIN_AUTO, width ? (width - 4) / full : 1)) : zoom;
 
   return (
     <div className="graph" ref={box}>
-      <div className="zoom">
-        <button title="Zoom out" onClick={() => step(1 / 1.25)}>−</button>
-        <button title="Fit the whole flow in the panel" className={zoom === "fit" ? "active" : ""} onClick={() => setZoom(zoom === "fit" ? 1 : "fit")}>{zoom === "fit" ? "100%" : "fit"}</button>
-        <button title="Zoom in" onClick={() => step(1.25)}>+</button>
-      </div>
-      <svg
-        viewBox={`0 0 ${laid.width + pad} ${laid.height}`}
-        width={zoom === "fit" ? "100%" : (laid.width + pad) * scale}
-        height={zoom === "fit" ? undefined : laid.height * scale}
-        style={zoom === "fit" ? { maxWidth: (laid.width + pad) * 1.5 } : undefined}
-      >
+      <svg viewBox={`0 0 ${full} ${laid.height}`} width={full * scale} height={laid.height * scale}>
         <defs>
           <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--vscode-foreground)" />
@@ -121,7 +123,10 @@ export function Graph({ ir, showData, run, selected, highlightColumn, lineage, d
             <text x={n.width / 2} y={35} textAnchor="middle" className="sub">{lines(n.node)[0]}</text>
             <text x={n.width / 2} y={50} textAnchor="middle" className="sub">{lines(n.node)[1]}</text>
             {n.node.kind === "call" && n.node.callKind !== "scalar" && (
-              <text x={n.width - 6} y={12} textAnchor="end" className="kind-tag">{n.node.callKind === "row" ? "tree" : "frame"}</text>
+              <text x={n.width - 6} y={12} textAnchor="end" className="kind-tag">{n.node.callKind === "row" ? "decision tree" : "data frame"}</text>
+            )}
+            {done.has(n.path) && (
+              <text x={6} y={13} className="ran-mark"><title>ran</title>✓</text>
             )}
           </g>
         ))}

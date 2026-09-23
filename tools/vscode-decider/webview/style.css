@@ -837,3 +837,161 @@ th.group-head {
 .unchanged-cell {
   opacity: 0.75;
 }
+
+/* round 4 review: one colour per meaning everywhere.
+   changed = orange, added = green, paused here = yellow, lineage = blue, selected = focus outline. */
+:root {
+  --changed: var(--vscode-charts-orange, #d18616);
+  --changed-bg: color-mix(in srgb, var(--vscode-charts-orange, #d18616) 22%, transparent);
+  --added: var(--vscode-charts-green, #89d185);
+  --paused: var(--vscode-debugIcon-pauseForeground, #cca700);
+  --lineage: var(--vscode-charts-blue, #3794ff);
+}
+.node rect {
+  stroke: var(--vscode-panel-border);
+}
+.node.done rect {
+  stroke: var(--vscode-panel-border);
+}
+.node .ran-mark {
+  font-size: 11px;
+  fill: var(--vscode-foreground);
+  opacity: 0.8;
+}
+.node.row rect {
+  stroke: var(--vscode-panel-border);
+}
+.node.current rect {
+  fill: color-mix(in srgb, var(--paused) 18%, transparent);
+  stroke: var(--paused);
+  stroke-width: 3;
+}
+.node.lineage rect {
+  stroke: var(--lineage);
+  stroke-width: 2.5;
+}
+.node.selected rect {
+  stroke: var(--vscode-focusBorder);
+  stroke-width: 3;
+}
+.node.diff-changed rect {
+  fill: var(--changed-bg);
+  stroke: var(--changed);
+  stroke-width: 2.5;
+}
+.node.diff-added rect {
+  stroke: var(--added);
+  stroke-dasharray: 5 3;
+  stroke-width: 2.5;
+}
+.swatch.changed {
+  border: 2px solid var(--changed);
+  background: var(--changed-bg);
+}
+.swatch.added {
+  border: 2px dashed var(--added);
+  background: none;
+}
+.swatch.paused {
+  border: 2px solid var(--paused);
+}
+.swatch.lineage {
+  border: 2px solid var(--lineage);
+}
+.badge-status.changed {
+  background: var(--changed);
+}
+.badge-status.added {
+  background: var(--added);
+}
+table.sweep td.changed,
+.changed-cell {
+  background: var(--changed-bg);
+}
+table.vdiffs td.before,
+.changed-cell .before {
+  color: var(--vscode-foreground);
+  opacity: 0.75;
+}
+table.vdiffs td.after,
+.changed-cell .after {
+  color: var(--vscode-foreground);
+  font-weight: bold;
+}
+.chip.picked {
+  border-color: var(--lineage);
+}
+.chip-value {
+  color: var(--vscode-foreground);
+  font-weight: 600;
+}
+.tree-path {
+  border-left-color: var(--lineage);
+}
+.how {
+  border-left-color: var(--lineage);
+}
+.up,
+.down {
+  color: var(--vscode-foreground);
+  opacity: 0.85;
+}
+.subbar label,
+.subbar .legend > * {
+  white-space: nowrap;
+}
+.subbar .zoom-bar {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: auto;
+}
+.params td.muted,
+.params .small {
+  opacity: 0.9;
+}
+.sides > div {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.sides {
+  min-width: 0;
+  flex: 1;
+}
+/* A draggable split: drag the graph's bottom-right corner to give it more or less room. */
+@media (max-width: 760px) {
+  main .graph {
+    flex: none;
+    height: 58vh;
+    min-height: 120px;
+    resize: vertical;
+  }
+  main aside {
+    flex: 1;
+    max-height: none;
+    min-height: 80px;
+  }
+}
+.graph svg {
+  display: block;
+  margin: 0 auto;
+}
+.inline-compare {
+  margin-top: 10px;
+  border-top: 2px solid var(--vscode-focusBorder);
+}
+.knob .grow {
+  flex: 1;
+}
+
+:root {
+  --paused: var(--vscode-charts-yellow, #cca700);
+}
+table.sweep tr.original td.knob-col {
+  white-space: normal;
+  max-width: 220px;
+}
+table.sweep th {
+  white-space: normal;
+}
