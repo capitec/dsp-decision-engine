@@ -13,5 +13,6 @@ Decision records for the consolidated `decider`, each with its measured reason.
 - `single-record-path.md`: `score()` takes a dict, not kwargs, and converted params bundles are cached.
 - `python-fallback-numbaerror-only.md`: only compile failures trigger the Python fallback, at kernel boundaries, and runtime errors always propagate.
 - `table-rows-as-runtime-arrays.md`: table rows, thresholds and enable flags are runtime arrays, so editing them never recompiles.
+- `arrow-shim-build.md`: the boundary's nanoarrow shim is compiled with `cc` on first import into a content-keyed cache; no pure-Python path; a REQUIRED null is an error.
 
 `progress.md` will hold the task log.
