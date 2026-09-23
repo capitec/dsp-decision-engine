@@ -22,5 +22,6 @@ Decision records for the consolidated `decider`, each with its measured reason.
 - `tree-walker.md`: a tree is one row node walked by one njit function over packed arrays passed by address, with an independent Python reference; string outputs are `Literal` indices; strings are matched as byte spans in the kernel, regex/case/trim in Python.
 - `decision-tables.md`: a table is one row node, a jump program plus packed rows read by one njit matcher; rows inline or from a table param checked and packed when the document arrives; String outputs of param rows are Enum columns; decider_old's null semantics.
 - `wiring-scopes.md`: how names bind to versions: input columns, typo and forward-reference errors, branch/loop scopes, frame barriers, outputs.
+- `hot-reload-investigation.md` (spike): `Session.reload` diffs checkpoint sequences by content and re-runs from the first change; notebook `watch`, file `ModuleWatcher`, measurements, and why serving never hot reloads.
 
 `progress.md` will hold the task log.

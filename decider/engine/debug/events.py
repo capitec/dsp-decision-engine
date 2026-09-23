@@ -125,9 +125,9 @@ class Error:
 
 @dataclass(frozen=True, slots=True)
 class Edited:
-    """The step at `path` was replaced or deleted; the run goes on from there (a `Paused` follows)."""
+    """The step at `path` was replaced, added or deleted; the run goes on from there (a `Paused` follows)."""
 
-    action: Literal["replace", "delete"]
+    action: Literal["replace", "add", "delete"]
     path: str
     kind: Literal["edited"] = "edited"
 

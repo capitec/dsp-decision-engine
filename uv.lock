@@ -602,6 +602,8 @@ visualise = [
 [package.dev-dependencies]
 dev = [
     { name = "anyio" },
+    { name = "ipython", version = "8.39.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "ipython", version = "9.14.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -651,6 +653,7 @@ provides-extras = ["all", "dev", "docs", "eval", "notebook", "serve-sanic", "ser
 [package.metadata.requires-dev]
 dev = [
     { name = "anyio" },
+    { name = "ipython", specifier = ">=8.39.0" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov", specifier = ">=7.1.0" },
