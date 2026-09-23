@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { paramChangeLines, same } from "../src/compare";
+import { docWithDefaults, paramChangeLines, same } from "../src/compare";
 import { formatValue, recordLabel, type ParamInfo, type RecordKey } from "../src/protocol";
 import { TableGrid, tableRows } from "./TableGrid";
 
@@ -95,7 +95,7 @@ export function Params({ schema, values, inputColumns, record, keyCol, sessionRu
   const override = Object.fromEntries(overrides.filter((o) => o.column && o.value !== "").map((o) => [o.column, parseValue(o.value, "number")]));
   const row = scope === "record" && record !== null ? record : null;
   const who = row === null ? "every record" : recordLabel(row, keyCol);
-  const changes = [...paramChangeLines(doc, values), ...Object.entries(override).map(([k, v]) => `${k} = ${formatValue(v)} for ${who}`)];
+  const changes = [...paramChangeLines(doc, docWithDefaults(schema, values)), ...Object.entries(override).map(([k, v]) => `${k} = ${formatValue(v)} for ${who}`)];
   const ws = words(query);
   const total = Object.values(schema).reduce((n, ps) => n + Object.keys(ps).length, 0);
 
@@ -159,7 +159,7 @@ export function Params({ schema, values, inputColumns, record, keyCol, sessionRu
       chips && (
         <tr key={`${key}-used`} className="used-by-row">
           <td colSpan={3}>
-            <span className="muted">read by {usedBy.length} step{usedBy.length === 1 ? "" : "s"}: </span>
+            <div className="muted">read by {usedBy.length} step{usedBy.length === 1 ? "" : "s"}:</div>
             {usedBy.map((u) => (
               <button key={u} className="chip" title={`${u}: show it in the graph`} onClick={() => onSelectStep(u)}>
                 {u.split("/").pop()} <span className="muted small">{u.split("/").slice(-3, -2)}</span>

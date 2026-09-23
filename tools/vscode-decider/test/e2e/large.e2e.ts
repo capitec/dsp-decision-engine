@@ -128,7 +128,7 @@ describe("large flow stories", () => {
         await wv(c).locator(".chip", { hasText: "pl_rate" }).first().click({ timeout: 10_000 });
         await wv(c).locator(".how .formula").first().waitFor({ timeout: 20_000 });
         await shot("Ran to pl_monthly_rate, focused client_id 20400 and clicked its pl_rate input: how the rate was computed.");
-        await wv(c).locator("ul.explain li", { hasText: "pl_base_rate" }).locator("button.twisty").first().click({ timeout: 10_000 }).catch(() => undefined);
+        await wv(c).locator("ul.explain a.mono", { hasText: /^pl_base_rate$/ }).first().click({ timeout: 10_000 });
         await shot("Opened pl_base_rate in the breakdown: which table row it came from.");
         await find(c, "pl_base_rates");
         await wv(c).locator(".table-match").waitFor({ timeout: 20_000 }).catch(() => undefined);
@@ -165,9 +165,8 @@ describe("large flow stories", () => {
         await tab(c, "Scenarios");
         await shot("The Scenarios tab on the large flow.");
         await wv(c).locator('input[aria-label="knob"]').first().fill("repo_rate · shared");
-        await wv(c).locator('input[aria-label="knob values"]').first().fill("0.07, 0.0775, 0.085");
+        await wv(c).locator('input[aria-label="knob values"]').first().fill("7%, 7.75%, 8.5%");
         await wv(c).locator("button", { hasText: "+ add another" }).click();
-        await wv(c).locator('select[aria-label="knob kind"]').nth(1).selectOption("param");
         await wv(c).locator('input[aria-label="knob"]').nth(1).fill("cap · pl_product_cap (personal_loan/limits)");
         await wv(c).locator('input[aria-label="knob values"]').nth(1).fill("250000, 350000");
         await shot("After typing repo_rate and the personal loan product cap into the two knob pickers, with values.");
@@ -209,9 +208,12 @@ describe("large flow stories", () => {
         await wv(c).locator(".pause-banner:not(.pending)").waitFor({ timeout: 60_000 }).catch(() => undefined);
         await wv(c).locator("select[aria-label=record]").selectOption({ label: "client_id 20400" }).catch(() => undefined);
         await shot("After 'Run through pl_regulated_rate' with client_id 20400 focused.");
-        await wv(c).locator(".pause-banner button", { hasText: "Compare with the flow as started" }).click();
-        await wv(c).locator(".compare .verdict").waitFor({ timeout: 120_000 });
-        await shot("Compared again: the flow as started against the skipped floor and the tighter cap.");
+        await wv(c).locator(".edit-chip", { hasText: "pl_regulated_rate" }).locator("button", { hasText: "compare" }).click();
+        await wv(c).locator(".compare .compare-title", { hasText: "pl_regulated_rate edited" }).waitFor({ timeout: 120_000 });
+        await shot("Clicked 'compare' on the pl_regulated_rate edit alone: the tighter cap on its own.");
+        await wv(c).locator(".pause-banner button", { hasText: "Compare all edits" }).click();
+        await wv(c).locator(".compare .compare-title", { hasText: "skipped" }).waitFor({ timeout: 120_000 });
+        await shot("Clicked 'Compare all edits with the flow as started': the skipped floor and the tighter cap together.");
       },
       dir,
     );

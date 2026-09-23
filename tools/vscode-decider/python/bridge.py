@@ -23,6 +23,7 @@ import json
 import os
 import queue
 import sys
+import tempfile
 import textwrap
 import threading
 from pathlib import Path
@@ -31,6 +32,7 @@ import polars as pl
 
 from decider.engine import Engine
 from decider.engine.debug import EVENT
+from decider.engine.debug.edit import swap
 from decider.engine.ir.context import step_map, to_ir
 from decider.engine.ir.nodes import BranchNode, CallNode, LoopNode
 from decider.steps import FrameStep, FunctionStep, Step
@@ -42,7 +44,18 @@ from forks import checkpoint_key, merge, sweep  # noqa: E402
 
 
 def load_module(file):
-    """Import `file`: by its dotted name when it sits in a package, so its own package imports resolve."""
+    """Import `file` from its source as it is now: by dotted name when it sits in a package, so its imports resolve."""
+    # Cached bytecode is keyed on the file's mtime in whole seconds and its size, so an edit saved within the
+    # same second as the last load, at the same length, would run the old code. Compile into a fresh cache.
+    with tempfile.TemporaryDirectory(prefix="decider-pyc-") as fresh:
+        before, sys.pycache_prefix = sys.pycache_prefix, fresh
+        try:
+            return _import(file)
+        finally:
+            sys.pycache_prefix = before
+
+
+def _import(file):
     path = Path(file).resolve()
     root, parts = path.parent, [path.stem]
     while (root / "__init__.py").exists():
@@ -213,6 +226,7 @@ class Bridge:
             raise ValueError("no data: pass `data` (rows or a JSON file) or define SAMPLE in the module")
         self.doc = base_params(self.mod, params)
         self.original = self.step
+        self.edits = []  # (path, step or None), so each edit can be compared on its own
         self.session = Engine().bind(self.step).session(_load_rows(data), self.doc)
         self.sent = 0
         # Overrides made so far and where, so forks can replay them; a rewind breaks the replay.
@@ -275,6 +289,7 @@ class Bridge:
         """Remove the step at `path` from the paused run and re-run from where it was."""
         self.session.delete(path)
         self.step = self.session.executable.step  # forks replay the edited pipeline
+        self.edits.append((path, None))
 
     def reload_step(self, path):
         """Re-import the pipeline's files and swap the step now at `path` into the paused run."""
@@ -283,12 +298,17 @@ class Bridge:
             raise KeyError(f"{path!r} is no longer in {self.name}")
         self.session.replace(path, new)
         self.step = self.session.executable.step
+        self.edits.append((path, new))
 
-    def compare_edits(self):
-        """The flow as it was started and as edited since (steps skipped or swapped), each run to the end."""
+    def compare_edits(self, path=None):
+        """The flow as started and with the edits made since (or only the one at `path`), each run start to end."""
+        edited = self.original
+        for at, new in self.edits:
+            if path is None or at == path:
+                edited = swap(edited, at, new)
         frame = self.session.frame
-        return {"a": {**self.described, **trace(self.original, frame, self.doc), "data": frame.to_dicts(), "key": key_column(frame)},
-                "b": {**self.described, **trace(self.step, frame, self.doc), "data": frame.to_dicts(), "key": key_column(frame)}}
+        side = lambda step: {**self.described, **trace(step, frame, self.doc), "data": frame.to_dicts(), "key": key_column(frame)}  # noqa: E731
+        return {"a": side(self.original), "b": side(edited)}
 
     def _names(self):
         plan = self.session.executable.plan

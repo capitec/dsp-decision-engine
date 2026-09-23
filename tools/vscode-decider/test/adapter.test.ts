@@ -2,6 +2,7 @@ import * as path from "node:path";
 import { DebugClient } from "@vscode/debugadapter-testsupport";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { SAMPLE_WITHOUT_SECTOR } from "./fixtures";
+import { compareTraces, type TraceResult } from "../src/compare";
 
 const ROOT = path.resolve(__dirname, "..");
 const LOAN = path.join(ROOT, "examples", "loan.py");
@@ -39,6 +40,16 @@ describe("decider debug adapter", () => {
 
   const vars = async (ref: number) => (await dc.variablesRequest({ variablesReference: ref })).body.variables;
 
+  it("skipping a step mid-run can be compared with the flow as started", async () => {
+    await launch();
+    await breakAt("term/cap_by_income");
+    await dc.customRequest("decider.skip", { path: "term/cap_by_income" });
+    const r = (await dc.customRequest("decider.compareEdits", {})).body as { a: TraceResult; b: TraceResult };
+    const c = compareTraces(r.a, r.b, "the flow as started", "cap_by_income skipped");
+    expect(c.steps.find((st) => st.path === "term/cap_by_income")?.status).toBe("removed");
+    expect(c.output.map((o) => o.name)).toContain("term_cap");
+  });
+
   it("stops on entry at the root and shows the pipeline as a stack", async () => {
     const [, , stopped] = await launch();
     expect(stopped.body.reason).toBe("entry");
@@ -54,7 +65,7 @@ describe("decider debug adapter", () => {
     const s = await scopes();
     expect(s.map((x) => x.name)).toEqual(["Inputs", "Outputs", "State"]);
     const inputs = await vars(s[0].variablesReference);
-    expect(inputs.map((v) => [v.name, v.value])).toEqual([["term_cap", "60, 36"], ["min_net_salary", "4,000, empty  (1 of 2 empty)"]]);
+    expect(inputs.map((v) => [v.name, v.value])).toEqual([["term_cap", "60, 36"], ["min_net_salary", "4,000  (1 of 2 empty)"]]);
   });
 
   it("setVariable overrides a column and the run continues with it", async () => {

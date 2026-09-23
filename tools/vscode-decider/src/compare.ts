@@ -49,14 +49,21 @@ export interface Comparison {
   paramsDocs?: { a: unknown; b: unknown };
   /** Shared param -> the steps that read it. */
   sharedUsers?: Record<string, string[]>;
+  /** Said under the title, e.g. how the two runs were made. */
+  note?: string;
   /** Each run's PARAMS document (tables' rows and tuned values), for saying what a param was. */
   values?: { a: unknown; b: unknown };
 }
 
 /** A run's params document as it ran: its PARAMS over every param's declared default. */
 function withDefaults(t: TraceResult): Record<string, unknown> {
+  return docWithDefaults(t.params ?? {}, t.values);
+}
+
+/** `values` (a PARAMS document) over the default of every param in `schema`, nested by path. */
+export function docWithDefaults(schema: DescribeResult["params"], values: unknown): Record<string, unknown> {
   const doc: Record<string, unknown> = {};
-  for (const [path, ps] of Object.entries(t.params ?? {})) {
+  for (const [path, ps] of Object.entries(schema)) {
     let at = doc;
     for (const part of path.split("/")) at = (at[part] ??= {}) as Record<string, unknown>;
     for (const [k, info] of Object.entries(ps)) if (info.default !== undefined) at[k] = info.default;
@@ -67,7 +74,7 @@ function withDefaults(t: TraceResult): Record<string, unknown> {
       else into[k] = v;
     }
   };
-  merge(doc, t.values);
+  merge(doc, values);
   return doc;
 }
 

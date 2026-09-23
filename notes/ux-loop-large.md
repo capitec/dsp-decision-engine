@@ -11,6 +11,7 @@ goal isn't visibly met caps at 5). The loop stops above 8/10 or after 40 rounds.
 | 1 | 5.6 | 7 | 7 | 4 | 7 | 4 | 5 | 5 |
 | 2 | 6.4 | 7 | 8 | 6 | 5 | 7 | 8 | 4 |
 | 3 | 6.4 | 7 | 8 | 6 | 6 | 6 | 7 | 5 |
+| 4 | 7.1 | 8 | 7 | 8 | 7 | 7 | 7 | 6 |
 
 ## Round 0 (baseline)
 
@@ -105,3 +106,27 @@ Judge's problems, most damaging first:
 10. L5: summary cells don't say what the average is over; no currency.
 11. L6/L7: no decision column next to reason_code changes.
 12. Money formatting inconsistent; "default → 7.5%" in the What-if title while the body says 7.75%.
+
+## Round 4
+
+Changes: each mid-run edit can be compared on its own or all together, and the comparison says both runs went start
+to end; the bridge compiles every load from source in a fresh bytecode cache (an edit saved within the same second at
+the same length used to run the old code); results list every changed record as a row with decision first; money
+shows in rand; empty values drop out of previews; one picker for a scenario knob (parameters and input fields),
+values accept percentages; the breakdown gets more room; the editor split is 50/50; the adapter no longer fails on a
+custom request without arguments.
+
+Judge's problems, most damaging first:
+
+1. L7: the focused, unchanged record is the only visible result row; the changed ones are below the fold.
+2. Compare: rows of "follows from the above" push the results off screen.
+3. Declined applicants appear as changed offers.
+4. Result tables clip on the right in the narrow panel.
+5. Lookup tables: the value column is clipped while band inputs take the space.
+6. L7: "No result changes" doesn't say why (the floor never applied).
+7. The graph viewport is tiny under a 4-line pause banner.
+8. Scenario cells verbose; "on average" of what?
+9. A few raw decimals left (a table result, node params).
+10. No one-line summary on the rate breakdown.
+11. After "Use edited code" nothing shows what changed in the code.
+12. Whether the relaxed rule changed any decision is unclear.

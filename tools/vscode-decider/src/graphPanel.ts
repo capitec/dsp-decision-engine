@@ -24,7 +24,7 @@ export class GraphPanel {
         if (vscode.window.tabGroups.all.length === 1) {
           // Beside the code the flow gets 60% of the width: at half or less, its text and tables don't fit.
           // Lay out the groups first and then open the panel in the second, so the order is certain.
-          await vscode.commands.executeCommand("vscode.setEditorLayout", { orientation: 0, groups: [{ size: 0.4 }, { size: 0.6 }] });
+          await vscode.commands.executeCommand("vscode.setEditorLayout", { orientation: 0, groups: [{ size: 0.5 }, { size: 0.5 }] });
           column = vscode.ViewColumn.Two;
         }
         GraphPanel.current = new GraphPanel(ctx, onMessage, column);

@@ -356,7 +356,7 @@ export class DeciderDebugSession extends LoggingDebugSession {
   }
 
   private shown(c: ColumnSummary): string {
-    return this.record === null ? previewOf(c) : formatValue(c.value);
+    return this.record === null ? previewOf(c, c.name) : formatValue(c.value, c.name);
   }
 
   private async variablesFor(ref: VarRef): Promise<Variable[]> {
@@ -439,7 +439,7 @@ export class DeciderDebugSession extends LoggingDebugSession {
     this.sendResponse(response);
   }
 
-  protected async customRequest(command: string, response: DebugProtocol.Response, args: Record<string, unknown>): Promise<void> {
+  protected async customRequest(command: string, response: DebugProtocol.Response, args: Record<string, unknown> = {}): Promise<void> {
     try {
       switch (command) {
         case "decider.describe":
@@ -479,7 +479,7 @@ export class DeciderDebugSession extends LoggingDebugSession {
           await this.startSession();
           return void (await this.run("step_into", {}, "entry"));
         case "decider.compareEdits":
-          response.body = await this.bridge!.request("compare_edits");
+          response.body = await this.bridge!.request("compare_edits", { path: args.path ?? null });
           break;
         case "decider.sweep":
           response.body = await this.bridge!.request("sweep", { scenarios: args.scenarios, from_here: true });

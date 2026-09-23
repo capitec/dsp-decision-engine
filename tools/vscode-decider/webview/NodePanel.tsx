@@ -141,7 +141,7 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
           {Object.keys(node.params).length > 0 && (
             <>
               <h4>Params</h4>
-              {comparison && <div className="muted">baseline → variant</div>}
+              {comparison && <div className="muted">before → after</div>}
               {Object.entries(node.params).map(([k, v]) => {
                 if (table?.name === k) return <div key={k} className="mono">{k} = lookup table, {table.rows.length} rows <span className="muted small">(edit its rows in What-if)</span></div>;
                 const [a, b] = comparison ? sides(comparison, node, k, v) : [v, v];
@@ -284,7 +284,7 @@ function TableMatch({ table, visited, result, outputs, inputs }: { table: { name
           {table.rows.map((r, i) => (
             <tr key={i} className={matched && i === last ? "matched" : tried.includes(i) ? "tried" : ""}>
               <td className="muted small">{i + 1}</td>
-              {cols.map((c) => <td key={c} className="mono">{formatValue((r[c] ?? null) as never)}</td>)}
+              {cols.map((c) => <td key={c} className="mono">{formatValue((r[c] ?? null) as never, c)}</td>)}
             </tr>
           ))}
         </tbody>
