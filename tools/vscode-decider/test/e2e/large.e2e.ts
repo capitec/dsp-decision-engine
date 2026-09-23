@@ -106,8 +106,8 @@ describe("large flow stories", () => {
         await shot("After clicking 'What-if' above the pipeline: the params of the whole flow.");
         await wv(c).locator('input[aria-label="Filter params"]').fill("pl_base_rates");
         await shot("Typed pl_base_rates into the params filter.");
-        await wv(c).locator('input[aria-label="pl_base_rates row 3 pl_base_rate"]').fill("0.245");
-        await shot("Changed the 49 to 84 month rate (row 3) from 0.255 to 0.245.");
+        await wv(c).locator('input[aria-label="pl_base_rates row 3 pl_base_rate"]').fill("24.5%");
+        await shot("Typed 24.5% over the 49 to 84 month rate (row 3), which was 25.5%.");
         await wv(c).locator("button", { hasText: "Run and compare" }).click({ timeout: 10_000 });
         await wv(c).locator(".compare .verdict").waitFor({ timeout: 120_000 });
         await shot("The comparison after 'Run and compare'.");
@@ -121,14 +121,15 @@ describe("large flow stories", () => {
       "A credit analyst is asked why client 20400, a personal loan applicant, was quoted the rate she was: which row of the base rate table applied, what risk loading and discounts were added, and whether the regulatory cap kicked in.",
       async (c, shot) => {
         await visualise(c);
-        await find(c, "pl_regulated_rate");
-        await shot("Found pl_regulated_rate with the find box.");
+        await find(c, "pl_monthly_rate");
+        await shot("Found pl_monthly_rate, the step after the cap and the floor, with the find box.");
         await runTo(c);
-        await shot("After 'Run to pl_regulated_rate': the run paused there.");
         await wv(c).locator("select[aria-label=record]").selectOption({ label: "client_id 20400" });
-        await wv(c).locator(".chip", { hasText: "pl_raw_rate" }).first().click({ timeout: 10_000 });
-        await wv(c).locator(".how").first().waitFor({ timeout: 20_000 }).catch(() => undefined);
-        await shot("Focused client_id 20400 and clicked the pl_raw_rate input: how it was computed.");
+        await wv(c).locator(".chip", { hasText: "pl_rate" }).first().click({ timeout: 10_000 });
+        await wv(c).locator(".how .formula").first().waitFor({ timeout: 20_000 });
+        await shot("Ran to pl_monthly_rate, focused client_id 20400 and clicked its pl_rate input: how the rate was computed.");
+        await wv(c).locator("ul.explain li", { hasText: "pl_base_rate" }).locator("button.twisty").first().click({ timeout: 10_000 }).catch(() => undefined);
+        await shot("Opened pl_base_rate in the breakdown: which table row it came from.");
         await find(c, "pl_base_rates");
         await wv(c).locator(".table-match").waitFor({ timeout: 20_000 }).catch(() => undefined);
         await shot("Selected the pl_base_rates lookup table step: which row matched for client_id 20400.");
@@ -196,6 +197,10 @@ describe("large flow stories", () => {
         await wv(c).locator(".pause-banner:not(.pending)").waitFor({ timeout: 60_000 });
         await find(c, "pl_rate_floor");
         await shot("After 'Skip pl_rate_floor': the run re-ran from there without it.");
+        await wv(c).locator(".pause-banner button", { hasText: "Compare with the flow as started" }).click();
+        await wv(c).locator(".compare .verdict").waitFor({ timeout: 120_000 });
+        await shot("Clicked 'Compare with the flow as started' in the pause banner.");
+        await tab(c, "Graph");
         fs.writeFileSync(pricing, fs.readFileSync(pricing, "utf8").replace("return min(pl_raw_rate, repo_rate * cap_multiple + cap_margin)", "return min(pl_raw_rate, repo_rate * cap_multiple + cap_margin - 0.01)"));
         await find(c, "pl_regulated_rate");
         await wv(c).locator("aside button", { hasText: "Use edited code" }).click();
@@ -205,6 +210,9 @@ describe("large flow stories", () => {
         await wv(c).locator(".pause-banner:not(.pending)").waitFor({ timeout: 60_000 }).catch(() => undefined);
         await wv(c).locator("select[aria-label=record]").selectOption({ label: "client_id 20400" }).catch(() => undefined);
         await shot("After 'Run through pl_regulated_rate' with client_id 20400 focused.");
+        await wv(c).locator(".pause-banner button", { hasText: "Compare with the flow as started" }).click();
+        await wv(c).locator(".compare .verdict").waitFor({ timeout: 120_000 });
+        await shot("Compared again: the flow as started against the skipped floor and the tighter cap.");
       },
       dir,
     );
@@ -219,13 +227,15 @@ describe("large flow stories", () => {
     g("init", "-q", "-b", "main");
     g("add", ".");
     g("commit", "-qm", "Origination flow");
-    const pricing = path.join(repo, "bank", "products", "personal_loan", "pricing.py");
-    fs.writeFileSync(pricing, fs.readFileSync(pricing, "utf8").replace('"rate": 0.255', '"rate": 0.245'));
+    const params = path.join(repo, "bank", "params.json");
+    const doc = JSON.parse(fs.readFileSync(params, "utf8"));
+    doc.shared.pl_base_rates[2].pl_base_rate = 0.245;
+    fs.writeFileSync(params, JSON.stringify(doc, null, 1));
     const policy = path.join(repo, "bank", "products", "personal_loan", "policy.py");
     fs.writeFileSync(policy, fs.readFileSync(policy, "utf8").replace(/def pl_max_enquiries\(enquiries_6m: float, limit: float = param\([\d.]+\)\)/, "def pl_max_enquiries(enquiries_6m: float, limit: float = param(10.0))"));
     await story(
       "L6-two-file-commit",
-      "A developer changed a row in the personal loan rate table (pricing.py) and relaxed the enquiries rule (policy.py), in two different files. Before opening a pull request she wants to see, step by step, what behaves differently from the last commit across the 40 applications.",
+      "A developer changed a row in the personal loan rate table (params.json) and relaxed the enquiries rule (policy.py), in two different files. Before opening a pull request she wants to see, step by step, what behaves differently from the last commit across the 40 applications.",
       async (c, shot) => {
         await keys(c, "Control+P", FILE);
         await lens(c, "Compare with").click({ timeout: 90_000 });

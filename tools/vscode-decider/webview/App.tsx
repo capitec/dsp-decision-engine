@@ -205,6 +205,14 @@ export function App() {
         <div className="pause-banner" title={run.current.path}>
           ⏸ Paused {run.current.when} <strong>{run.current.path.split("/").pop() || "the start"}</strong>
           {run.record !== null && <span> · focused on {recordLabel(run.record, keyCol)}</span>}
+          {Object.keys(run.edits ?? {}).length > 0 && (
+            <>
+              <span> · {Object.keys(run.edits!).length} step{Object.keys(run.edits!).length === 1 ? "" : "s"} edited </span>
+              <button title="Run the flow as started and as edited to the end, and compare every result" onClick={() => send({ type: "compareEdits" })}>
+                Compare with the flow as started
+              </button>
+            </>
+          )}
         </div>
       )}
       {tab === "graph" && (
@@ -222,6 +230,7 @@ export function App() {
               <span><span className="swatch lineage" /> inputs of the picked value</span>
               <span>✓ has run</span>
               <span>◇ decision tree</span>
+              <span>▦ lookup table</span>
               <span>⊞ data frame step</span>
             </div>
           </details>
@@ -247,7 +256,7 @@ export function App() {
           </span>
         </div>
       )}
-      <main>
+      <main className={withDetails && selectedNode ? "detailed" : ""}>
         {tab === "graph" && (
           <Graph
             ir={graphIr!}
@@ -269,6 +278,7 @@ export function App() {
           <Params
             schema={describe.params}
             values={describe.values ?? {}}
+            tables={Object.fromEntries(nodes.filter((n) => n.table).flatMap((n) => Object.keys(n.params).map((k) => [k, n.table!])))}
             inputColumns={inputColumns}
             record={run.record}
             keyCol={keyCol}

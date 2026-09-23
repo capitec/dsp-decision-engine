@@ -23,7 +23,7 @@ product = branch(
     modifies=["offer_amount", "offer_term", "offer_rate", "monthly_instalment", "declined", "decline_reason"],
     name="product",
 )
-origination = flow(features, risk, pricing_inputs, product, decision, name="origination")
+origination = flow(features, risk, pricing_inputs, product, decision, name="origination").emit("decision", "offer_amount")
 
 SAMPLE = json.loads((Path(__file__).parent / "applications.json").read_text())
 # The rate, fee and discount tables, as the config store holds them.

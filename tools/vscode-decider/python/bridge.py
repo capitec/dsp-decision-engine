@@ -91,6 +91,16 @@ def _first_statement(fn):
         return None
 
 
+def _formula(fn):
+    """The expression a one-line step returns, e.g. `min(pl_raw_rate, repo_rate + cap_margin)`."""
+    try:
+        node = ast.parse(textwrap.dedent(inspect.getsource(fn))).body[0]
+    except (OSError, TypeError, SyntaxError, IndexError):
+        return None
+    body = [b for b in getattr(node, "body", ()) if not (isinstance(b, ast.Expr) and isinstance(b.value, ast.Constant))]
+    return ast.unparse(body[0].value) if len(body) == 1 and isinstance(body[0], ast.Return) and body[0].value else None
+
+
 def _code_location(fn):
     code = getattr(fn, "__code__", None)
     return (code.co_filename, code.co_firstlineno) if code else (None, None)
@@ -122,6 +132,8 @@ def node_json(node, steps, located):
                 "outputs": None if node.outputs is None else [x.name for x in node.outputs],
                 "params": {d.name: d.default for d in node.params}, "code": _fingerprint(python, step_),
                 "doc": (inspect.getdoc(python) or "").split("\n")[0],
+                "formula": _formula(python) if isinstance(step_, FunctionStep) else None,
+                "table": step_.expression.model_dump(mode="json") if hasattr(step_, "expression") and hasattr(step_, "rows") else None,
                 "python": {"file": rf, "line": rl, "bodyLine": _first_statement(python)} if rf else None}
     kind = "branch" if isinstance(node, BranchNode) else "loop" if isinstance(node, LoopNode) else "sequence"
     extra = {"modifies": list(node.modifies)} if kind == "branch" else {}
@@ -199,7 +211,9 @@ class Bridge:
             data = getattr(self.mod, "SAMPLE", None)
         if data is None:
             raise ValueError("no data: pass `data` (rows or a JSON file) or define SAMPLE in the module")
-        self.session = Engine().bind(self.step).session(_load_rows(data), base_params(self.mod, params))
+        self.doc = base_params(self.mod, params)
+        self.original = self.step
+        self.session = Engine().bind(self.step).session(_load_rows(data), self.doc)
         self.sent = 0
         # Overrides made so far and where, so forks can replay them; a rewind breaks the replay.
         self.history, self.rewound = [], False
@@ -270,6 +284,12 @@ class Bridge:
         self.session.replace(path, new)
         self.step = self.session.executable.step
 
+    def compare_edits(self):
+        """The flow as it was started and as edited since (steps skipped or swapped), each run to the end."""
+        frame = self.session.frame
+        return {"a": {**self.described, **trace(self.original, frame, self.doc), "data": frame.to_dicts(), "key": key_column(frame)},
+                "b": {**self.described, **trace(self.step, frame, self.doc), "data": frame.to_dicts(), "key": key_column(frame)}}
+
     def _names(self):
         plan = self.session.executable.plan
         return sorted({v.name for v in plan.versions} | set(self.session.state.chains))
@@ -307,7 +327,7 @@ class Bridge:
     def handle(self, req):
         cmd = req["cmd"]
         args = {k: v for k, v in req.items() if k not in ("id", "cmd")}
-        if cmd in ("describe", "start", "state", "column", "step_out", "trace", "sweep"):
+        if cmd in ("describe", "start", "state", "column", "step_out", "trace", "sweep", "compare_edits"):
             result = getattr(self, cmd)(**args)
             return self.status() if cmd == "step_out" else result
         s = self.session
