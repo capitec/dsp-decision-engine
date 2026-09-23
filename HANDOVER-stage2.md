@@ -22,7 +22,7 @@ terminal has no NaN equivalent, so it gets 0/False"), never `None`. Every
 failing parametrisation differed only at index 0 (the `None` row):
 `0 != None`. I fixed the three expectations (`[0 if e is None else e ...]`,
 `[0, 0]`, `[1, 0, 1]`) and launched a re-run of that one file in the
-background; I have NOT seen its result. Nothing else in the 17-file run
+background. RESULT, seen after writing the rest of this file: **55 passed** in 104 s. Nothing else in the 17-file run
 failed — the inverted refusal tests, the rewritten typed-features tests,
 `test_shim.py`, serving, CLI, boundary all passed.
 
