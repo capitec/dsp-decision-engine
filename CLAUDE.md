@@ -63,7 +63,9 @@ example in `GUIDE.md` runs in `tests/test_guide.py`; keep it that way.
 - Serving kernels are `nogil=True`. `fastmath` is off by default.
 - Kernels use CPython-equal `round(x, n)` and `x ** n`; int64 still wraps silently. Money
   is int64 cents; running totals accumulate in float64.
-- Only `NumbaError` triggers the Python fallback. Runtime errors propagate.
+- Compile-time failures and steps compiled modes refuse fall back to Python per
+  step (with a warning; `Engine(strict_compile=True)` raises). Runtime errors
+  always propagate.
 - Nested polymorphic pydantic fields need `SerializeAsAny`, or subclass fields
   are silently dropped on dump.
 - Single-record calls take a dict, not keyword arguments. Cache converted params
