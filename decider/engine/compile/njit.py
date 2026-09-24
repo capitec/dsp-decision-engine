@@ -1,16 +1,19 @@
 from __future__ import annotations
 
+import hashlib
 import inspect
 import os
+from pathlib import Path
 from typing import Any, Callable
 
 import numpy as np
 from numba import from_dtype, njit, typeof
 from numba.core import types
+from numba.core.caching import FunctionCache
 from numba.core.dispatcher import Dispatcher
 from numba.core.errors import NumbaError, UnsupportedBytecodeError
 
-from decider.engine.compile import cpython  # noqa: F401  (registers CPython-compatible round and **)
+from decider.engine.compile import cpython  # registers CPython-compatible round and **
 from decider.engine.compile.fingerprint import fingerprint
 from decider.engine.ir.decls import KIND_DTYPES, FeatureKind, Input, NullPolicy, base_annotation, feature_kind
 from decider.engine.ir.nodes import CallNode
@@ -22,6 +25,16 @@ FALLBACK_ERRORS = (NumbaError, UnsupportedBytecodeError)
 # ponytail: unbounded, one entry per distinct function content; add eviction if a long session edits steps thousands of times.
 _DISPATCHERS: dict[str, Dispatcher] = {}
 _REASONS: dict[tuple, str | None] = {}
+
+# numba keys a disk-cached step by its own bytecode only, so a kernel compiled
+# before decider changed what `round` or `**` compile to would still be served.
+# ponytail: salts on cpython.py only; widen the hash if other decider overloads start reaching user steps.
+SALT = hashlib.sha256(Path(cpython.__file__).read_bytes()).hexdigest()
+
+
+class _SaltedCache(FunctionCache):
+    def _index_key(self, sig, codegen):
+        return (*super()._index_key(sig, codegen), SALT)
 
 
 def numpy_dtype(annotation: Any) -> np.dtype:
@@ -52,8 +65,9 @@ def jit(fn: Callable) -> tuple[str, Dispatcher]:
     dispatcher = _DISPATCHERS.get(key)
     if dispatcher is None:
         # numba's disk cache needs a real source file, and never hits for a closure.
-        cache = fn.__closure__ is None and os.path.isfile(fn.__code__.co_filename)
-        dispatcher = _DISPATCHERS[key] = njit(cache=cache)(fn)
+        dispatcher = _DISPATCHERS[key] = njit(fn)
+        if fn.__closure__ is None and os.path.isfile(fn.__code__.co_filename):
+            dispatcher._cache = _SaltedCache(fn)
     return key, dispatcher
 
 
