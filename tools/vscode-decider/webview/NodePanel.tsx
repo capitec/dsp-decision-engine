@@ -175,7 +175,6 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
             <>
               <h4>Row for {who}</h4>
               <TableMatch table={table} expression={node.table} visited={path.visited} result={path.result} outputs={node.outputs ?? []} inputs={(node.inputs ?? []).map((i) => `${i} = ${valueOf(i) ?? "?"}`)} />
-              {card && <Explain entry={card} who={who} role="" nodes={nodes} values={values} onPick={onPick} onSelect={onSelect} />}
             </>
           )}
           {path && !table && (

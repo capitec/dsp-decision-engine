@@ -214,10 +214,10 @@ describe("large flow stories", () => {
         await shot("After 'Run through pl_regulated_rate' with client_id 20400 focused.");
         await wv(c).locator('select[aria-label="compare one edit"]').selectOption({ label: "pl_regulated_rate edited" });
         await wv(c).locator(".compare .compare-title", { hasText: "pl_regulated_rate edited" }).waitFor({ timeout: 120_000 });
-        await shot("Picked 'or only… pl_regulated_rate edited' beside Compare with start: the tighter cap on its own.");
+        await shot("Picked '…or just one edit: pl_regulated_rate edited' beside the compare button: the tighter cap on its own.");
         await wv(c).locator(".pause-banner button.banner-button").click();
         await wv(c).locator(".compare .compare-title", { hasText: "skipped" }).waitFor({ timeout: 120_000 });
-        await shot("Clicked 'Compare with start': the skipped floor and the tighter cap together.");
+        await shot("Clicked 'Compare all 2 edits with start': the skipped floor and the tighter cap together.");
       },
       dir,
     );

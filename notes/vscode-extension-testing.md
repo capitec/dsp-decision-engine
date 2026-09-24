@@ -56,3 +56,8 @@ What the small example never showed:
 - **A test's `locator(..., { hasText })` matches ancestors too**: a nested
   list item's text is in every item above it, so clicking "the first match"
   hit the outermost one.
+
+**Judge variance.** A fresh judge per round keeps scores honest but noisy: two
+judges on the same screenshots differed by up to 0.4. A score that crosses a
+threshold is worth confirming with a second judge on the same screenshots
+before acting on it.

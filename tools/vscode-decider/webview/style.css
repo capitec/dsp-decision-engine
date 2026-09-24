@@ -2140,3 +2140,22 @@ table.explain-summary td.muted {
   stroke-dasharray: 5 3;
   stroke-width: 1.5;
 }
+
+@media (min-width: 761px) {
+  main.explaining aside {
+    width: 52%;
+    max-width: none;
+  }
+}
+/* The What-if footer covers nothing: the list ends above it and it is opaque. */
+.params {
+  padding-bottom: 64px;
+}
+.params .actions.sticky {
+  z-index: 4;
+  background: var(--vscode-editor-background);
+  box-shadow: 0 -6px 8px var(--vscode-editor-background);
+}
+.banner-note {
+  color: var(--vscode-editorWarning-foreground, #cca700);
+}

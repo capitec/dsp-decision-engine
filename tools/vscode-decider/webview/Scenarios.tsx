@@ -367,6 +367,12 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
     return rows.length ? `\nchanged: ${recordsOf(rows)}` : "";
   };
   const example = grid ? sweep.labels.map((_, i) => cellText(i, shownMetric)).find((t) => t !== "no change" && !t.startsWith("no offer")) : undefined;
+  // A knob that changes nothing needs one column, not one per value.
+  const idle0 = grid && idleKnobs.includes(knobCols[0]);
+  const idle1 = grid && idleKnobs.includes(knobCols[1]);
+  const rowValues = grid ? (idle0 ? uniq(knobCols[0].values).slice(0, 1) : uniq(knobCols[0].values)) : [];
+  const colValues = grid ? (idle1 ? uniq(knobCols[1].values).slice(0, 1) : uniq(knobCols[1].values)) : [];
+  const anyOf = (k: (typeof knobCols)[number]) => `any of ${uniq(k.values).map((v) => formatValue(v, knobShort(k.name))).join(" / ")}`;
   const matrix = grid && (
     <div className="sweep-scroll">
       {outcomes.map((c) => (
@@ -376,7 +382,7 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
       ))}
       {idleKnobs.map((k) => (
         <div key={k.name} className="note">
-          <strong>{knobShort(k.name)} ({k.values.filter((v, j) => k.values.findIndex((w) => same(v, w)) === j).map((v) => formatValue(v, knobShort(k.name))).join(" / ")}) made no difference</strong> to offers or approvals in any scenario.
+          <strong>{knobShort(k.name)} ({k.values.filter((v, j) => k.values.findIndex((w) => same(v, w)) === j).map((v) => formatValue(v, knobShort(k.name))).join(" / ")}) made no difference</strong> to offers or approvals in any scenario: no applicant's decision or offer turns on it at these values, so the grid shows it as one column.
         </div>
       ))}
       <div className="muted small">
@@ -387,26 +393,26 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
         <thead>
           <tr>
             <th className="axes" title={knobCols[0].name}>{knobShort(knobCols[0].name).split(" ")[0]} ↓</th>
-            <th className="axes" title={knobCols[1].name} colSpan={uniq(knobCols[1].values).length}>{knobShort(knobCols[1].name).split(" ")[0]} →</th>
+            <th className="axes" title={knobCols[1].name} colSpan={colValues.length}>{knobShort(knobCols[1].name).split(" ")[0]} →</th>
           </tr>
           <tr>
             <th />
-            {uniq(knobCols[1].values).map((v, j) => (
+            {colValues.map((v, j) => (
               <th key={j} className="mono">
-                {formatValue(v, knobShort(knobCols[1].name))}
+                {idle1 ? anyOf(knobCols[1]) : formatValue(v, knobShort(knobCols[1].name))}
                 {(sweep.knobBase[knobCols[1].name] ?? []).some((b) => same(b, v)) && <div className="muted small">current</div>}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {uniq(knobCols[0].values).map((a, r) => (
+          {rowValues.map((a, r) => (
             <tr key={r}>
               <th className="mono">
-                {formatValue(a, knobShort(knobCols[0].name))}
+                {idle0 ? anyOf(knobCols[0]) : formatValue(a, knobShort(knobCols[0].name))}
                 {(sweep.knobBase[knobCols[0].name] ?? []).some((b) => same(b, a)) && <div className="muted small">current</div>}
               </th>
-              {uniq(knobCols[1].values).map((b, j) => {
+              {colValues.map((b, j) => {
                 const i = sweep.labels.findIndex((_, k) => same(knobCols[0].values[k], a) && same(knobCols[1].values[k], b));
                 return i < 0 ? (
                   <td key={j} />

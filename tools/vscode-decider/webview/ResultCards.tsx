@@ -63,14 +63,18 @@ export function ResultCards({ c, record, onFocus, onSelect }: { c: Comparison; r
   return (
     <>
       {!offered.length && noOffer.length > 0 && <div>No offer changed.</div>}
-      {record !== null && !hit.includes(record) && <div className="muted">{recordLabel(record, c.key)} (focused) is unchanged{hit.length ? "; the records below changed" : ""}.</div>}
+      {record !== null && !hit.includes(record) && (
+        <div className="muted">
+          {recordLabel(record, c.key)} (focused) is unchanged{hit.length ? (offered.length ? "; the records below changed" : "; the changes are all in declined applicants, below") : ""}.
+        </div>
+      )}
 
       {(more ? ordered : ordered.slice(0, FIRST)).map(card)}
       {ordered.length > FIRST && (
         <button className="link" onClick={() => setMore(!more)}>{more ? "show fewer" : `show all ${ordered.length} changed records`}</button>
       )}
       {noOffer.length > 0 && (
-        <details className="no-offer">
+        <details className="no-offer" open={!offered.length}>
           <summary>
             Declined either way ({noOffer.length}): offer numbers moved but no offer is made
           </summary>

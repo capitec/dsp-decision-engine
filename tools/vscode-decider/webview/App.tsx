@@ -292,11 +292,11 @@ export function App() {
               {" · "}
               <span className="edit-chip" title={edits.map(editLabel).join("\n")}>✎ {edits.length === 1 ? editLabel(edits[0]) : `${edits.length} edits`}</span>{" "}
               <button className="banner-button" title="Run the flow as started and as edited, start to end, and compare every result" onClick={() => compareEdits()}>
-                Compare with start
+                {edits.length > 1 ? `Compare all ${edits.length} edits with start` : "Compare with start"}
               </button>
               {edits.length > 1 && (
                 <select aria-label="compare one edit" value="" title="Compare the flow as started with only one of the edits" onChange={(e) => e.target.value && compareEdits(e.target.value)}>
-                  <option value="">or only…</option>
+                  <option value="">…or just one edit</option>
                   {edits.map(([p, a]) => (
                     <option key={p} value={p}>{editLabel([p, a])}</option>
                   ))}
@@ -477,7 +477,7 @@ export function App() {
             values={describe.values ?? {}}
             onSkip={(path) => {
               setPending(`Skipping ${path.split("/").pop()} and re-running from there…`);
-              noteNext.current = `Skipped ${path.split("/").pop()}; re-ran from there, keeping everything before it.`;
+              noteNext.current = `Skipped ${path.split("/").pop()}; re-ran from there, keeping everything before it, and paused at the next step.`;
               send({ type: "skip", path });
             }}
             onRestore={(path) => {
@@ -487,7 +487,7 @@ export function App() {
             }}
             onReload={(path) => {
               setPending(`Reloading ${path.split("/").pop()} and re-running from there…`);
-              noteNext.current = `Loaded your edited ${path.split("/").pop()} and went back to just before it; continue to run the new code.`;
+              noteNext.current = `↺ Rewound to just before ${path.split("/").pop()} to run your edited code; everything before it is kept, and other edits stay.`;
               send({ type: "reloadStep", path });
             }}
           />
