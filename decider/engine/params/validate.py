@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from decider.engine.params.models import NodeParams
 from decider.exceptions import ParamsError
-from decider.registry.resolve import suggest
+from decider.registry.resolve import hint, suggest
 
 
 class Status(Enum):
@@ -170,3 +170,47 @@ class ParamsCache:
         if result is None:
             result = self._results[(key, node.path)] = validate_node(node, doc)
         return result
+
+
+def check_namespaces(doc: Mapping[str, Any], nodes: Mapping[Any, NodeParams]) -> None:
+    """Raise `ParamsError` for any entry of `doc` that names no step with params, or no shared key.
+
+    The error lists every step with params and its param names. An empty
+    entry (`{}`) is accepted anywhere: it sets nothing.
+
+    Example::
+
+        check_namespaces({"kap": {"cap": 12.0}}, nodes)   # ParamsError: ... Did you mean 'cap'?
+    """
+    if not isinstance(doc, Mapping):
+        raise ParamsError(f"a params document is a mapping of step paths, got {type(doc).__name__}")
+    paths = {n.path for n in nodes.values()}
+    shared = {d.shared_key for n in nodes.values() for d in n.decls if d.shared_key is not None}
+    given = doc.get("shared", {})
+    for key in given if isinstance(given, Mapping) else ():
+        if key not in shared:
+            raise ParamsError(f"params document: no step uses shared param '{key}'.{hint(key, shared)}"
+                              f" Shared params: {sorted(shared)}.")
+    _walk({k: v for k, v in doc.items() if k != "shared"}, "", paths, nodes)
+
+
+def _walk(level: Mapping[str, Any], prefix: str, paths: set[str], nodes: Mapping[Any, NodeParams]) -> None:
+    for key, sub in level.items():
+        path = prefix + key
+        # An empty entry sets nothing; templates write one for steps without params.
+        if path in paths or (isinstance(sub, Mapping) and not sub):
+            continue
+        if isinstance(sub, Mapping) and any(p.startswith(path + "/") for p in paths):
+            _walk(sub, path + "/", paths, nodes)
+            continue
+        siblings = {p[len(prefix):].split("/")[0] for p in paths if p.startswith(prefix)}
+        raise ParamsError(f"params document: no step with params at '{path}'.{hint(key, siblings, prefix)}"
+                          + _expected(nodes))
+
+
+def _expected(nodes: Mapping[Any, NodeParams]) -> str:
+    if not nodes:
+        return " This pipeline has no params; pass no params document, or {}."
+    steps = sorted(f"{n.path} ({', '.join(d.name for d in n.decls)})" for n in nodes.values())
+    return (" The document nests params by step path; steps with params: " + "; ".join(steps)
+            + ". pipeline.parameters().defaults() builds a complete document.")
