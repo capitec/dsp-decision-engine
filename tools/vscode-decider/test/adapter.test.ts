@@ -46,8 +46,25 @@ describe("decider debug adapter", () => {
     await dc.customRequest("decider.skip", { path: "term/cap_by_income" });
     const r = (await dc.customRequest("decider.compareEdits", {})).body as { a: TraceResult; b: TraceResult };
     const c = compareTraces(r.a, r.b, "the flow as started", "cap_by_income skipped");
-    expect(c.steps.find((st) => st.path === "term/cap_by_income")?.status).toBe("removed");
+    // The trace alone sees a step that didn't run; the extension names it skipped from its list of edits.
+    expect(c.steps.find((st) => st.path === "term/cap_by_income")?.status).toBe("not taken");
     expect(c.output.map((o) => o.name)).toContain("term_cap");
+  });
+
+  it("a value breakpoint pauses where a record first meets it, and says why", async () => {
+    await launch({ controls: { forces: [], watches: [{ name: "offer", op: "<", value: 70000 }] } });
+    const [, stopped] = await Promise.all([dc.continueRequest({ threadId: 1 }), dc.waitForEvent("stopped")]);
+    expect(stopped.body.reason).toBe("data breakpoint");
+    expect(stopped.body.text).toBe("offer < 70000");
+    expect((await top())[0].name).toContain("shrink");
+  });
+
+  it("forces set mid-run send the branch down the other arm", async () => {
+    await launch({ params: { term: { cap_by_income: { cap: 100.0 } } } });
+    await dc.customRequest("decider.setControls", { forces: [{ path: "term/by_sector", arm: 1 }], watches: [] });
+    await breakAt("sizing");
+    const { columns } = (await dc.customRequest("decider.state")).body as { columns: { name: string; preview: unknown[] }[] };
+    expect(columns.find((c) => c.name === "term_cap")?.preview).toEqual([60, 36]); // record 1 is private, capped as public
   });
 
   it("stops on entry at the root and shows the pipeline as a stack", async () => {

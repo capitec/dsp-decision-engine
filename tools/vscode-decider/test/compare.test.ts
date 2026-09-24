@@ -52,6 +52,13 @@ describe("comparing two runs", () => {
     expect(c.steps[at("risk_tree")].status).toBe("added");
   });
 
+  it("a step only the first run took is not taken, not removed", () => {
+    const a = structuredClone(base);
+    const b = structuredClone(base);
+    delete b.steps["banding"];
+    expect(compareTraces(a, b, "a", "b").steps.find((s) => s.path === "banding")?.status).toBe("not taken");
+  });
+
   it("numbers compare with a relative tolerance", () => {
     expect(same(0.1 + 0.2, 0.3)).toBe(true);
     expect(same(1, 1.001)).toBe(false);

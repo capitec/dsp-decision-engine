@@ -98,7 +98,7 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
   const touched = c.steps.filter((s) => s.status !== "same" && s.status !== "not run");
   // Readers of a changed param that wrote the same values: one line, not rows of zeros.
   const idleReaders = [...new Set(readers.flatMap((r) => r.steps))].filter((p) => !touched.some((s) => s.path === p));
-  const causes = touched.filter(edited);
+  const causes = touched.filter((s) => s.status !== "not taken" && edited(s));
   // When no approved applicant's offer moved, say where the change went instead.
   const decision = c.results.b.decision;
   const approved = decision ? decision.map((d, r) => (d !== "decline" ? r : -1)).filter((r) => r >= 0) : [];
@@ -260,7 +260,7 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
       )}
       {downstream > 0 && <div className="muted small">and {downstream} downstream step{downstream === 1 ? "" : "s"} changed as a result: see Step by step below.</div>}
       <h4>
-        Step by step <span className="muted small">· {count("changed")} steps changed{count("added") ? `, ${count("added")} added` : ""}{count("removed") ? `, ${count("removed")} removed` : ""}</span>
+        Step by step <span className="muted small">· {count("changed")} steps changed{count("added") ? `, ${count("added")} added` : ""}{count("removed") ? `, ${count("removed")} removed` : ""}{count("not taken") ? `, ${count("not taken")} not taken` : ""}</span>
         {c.firstDivergence && (
           <span className="muted small"> · first difference at <a onClick={() => onSelect(c.firstDivergence!)}>{c.firstDivergence}</a></span>
         )}

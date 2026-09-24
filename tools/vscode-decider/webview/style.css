@@ -2159,3 +2159,36 @@ table.explain-summary td.muted {
 .banner-note {
   color: var(--vscode-editorWarning-foreground, #cca700);
 }
+.controls-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+.controls-bar .chip.force {
+  border-color: var(--vscode-charts-purple, #b180d7);
+}
+.controls-bar .chip.watch {
+  border-color: var(--vscode-debugIcon-breakpointForeground, #e51400);
+}
+.group-controls,
+.watch-form {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--vscode-panel-border);
+}
+.control-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0;
+}
+input.narrow {
+  width: 6em;
+}
+.banner-note.hit {
+  color: inherit;
+  font-weight: 600;
+}

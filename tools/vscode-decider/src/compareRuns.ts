@@ -1,5 +1,6 @@
 import { Bridge } from "./bridge";
 import { compareTraces, type Comparison, type TraceResult } from "./compare";
+import type { Force } from "./protocol";
 
 /** One side of a comparison: a pipeline file (maybe from another revision) and what to run it with. */
 export interface Side {
@@ -10,6 +11,7 @@ export interface Side {
   overrides?: Record<string, unknown>;
   row?: number | null;
   data?: unknown;
+  forces?: Force[];
 }
 
 /**
@@ -30,5 +32,5 @@ export async function runComparison(a: Side, b: Side, python: string[], cwd: str
 }
 
 function args(s: Side, data: unknown) {
-  return { file: s.file, pipeline: s.pipeline, data: data ?? null, params: s.params ?? null, overrides: s.overrides ?? null, row: s.row ?? null };
+  return { file: s.file, pipeline: s.pipeline, data: data ?? null, params: s.params ?? null, overrides: s.overrides ?? null, row: s.row ?? null, forces: s.forces ?? [] };
 }

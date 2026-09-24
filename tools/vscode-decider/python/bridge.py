@@ -43,47 +43,8 @@ sys.path.insert(0, os.path.dirname(__file__))
 from lineage import latest, lineage  # noqa: E402
 from runs import apply_overrides, debug_condition, trace, tree_path  # noqa: E402
 from forks import checkpoint_key, merge, sweep  # noqa: E402
-
-
-# Each loaded module file's text as it was loaded, so an edit can be diffed against the code that ran.
-_TEXTS: dict[str, str] = {}
-
-
-def load_module(file):
-    """Import `file` from its source as it is now: by dotted name when it sits in a package, so its imports resolve."""
-    # Cached bytecode is keyed on the file's mtime in whole seconds and its size, so an edit saved within the
-    # same second as the last load, at the same length, would run the old code. Compile into a fresh cache.
-    with tempfile.TemporaryDirectory(prefix="decider-pyc-") as fresh:
-        before, sys.pycache_prefix = sys.pycache_prefix, fresh
-        try:
-            mod = _import(file)
-        finally:
-            sys.pycache_prefix = before
-    top = mod.__name__.split(".")[0]
-    for m in list(sys.modules.values()):
-        f = getattr(m, "__file__", None)
-        if f and (m.__name__ == top or m.__name__.startswith(top + ".")):
-            _TEXTS[f] = Path(f).read_text()
-    return mod
-
-
-def _import(file):
-    path = Path(file).resolve()
-    root, parts = path.parent, [path.stem]
-    while (root / "__init__.py").exists():
-        parts.insert(0, root.name)
-        root = root.parent
-    sys.path.insert(0, str(root))
-    name = ".".join(parts)
-    if len(parts) > 1:
-        for mod_name in [m for m in sys.modules if m == parts[0] or m.startswith(parts[0] + ".")]:
-            del sys.modules[mod_name]  # a fresh import, so edits since the last describe count
-        return importlib.import_module(name)
-    spec = importlib.util.spec_from_file_location(name, path)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod  # classes defined in it (ConfigurableSteps) resolve by import path
-    spec.loader.exec_module(mod)
-    return mod
+from loading import TEXTS, load_module, source_diff  # noqa: E402
+from controls import Controls  # noqa: E402
 
 
 def base_params(mod, params):
@@ -141,18 +102,6 @@ def _formula(fn):
         return None
     body = [b for b in getattr(node, "body", ()) if not (isinstance(b, ast.Expr) and isinstance(b.value, ast.Constant))]
     return ast.unparse(body[0].value) if len(body) == 1 and isinstance(body[0], ast.Return) and body[0].value else None
-
-
-def _source_diff(old, old_texts, new, new_texts):
-    """The lines that differ between two steps' Python, each read from its file as it was loaded, as `-`/`+` lines."""
-    def lines(step_, texts):
-        code = getattr(getattr(step_, "fn", None), "__code__", None)
-        text = code and texts.get(code.co_filename)
-        if not text:
-            return []
-        return [line.rstrip("\n") for line in inspect.getblock(text.splitlines(True)[code.co_firstlineno - 1:])]
-    return [line for line in difflib.unified_diff(lines(old, old_texts), lines(new, new_texts), lineterm="", n=0)
-            if line[:1] in "+-" and not line.startswith(("+++", "---"))]
 
 
 def _code_location(fn):
@@ -246,21 +195,21 @@ class Bridge:
                           "values": getattr(self.mod, "PARAMS", None) or {}, "valuesFile": _values_file(file)}
         return self.described
 
-    def trace(self, file, pipeline=None, data=None, params=None, overrides=None, row=None):
-        """Describe and run `file` to the end on `data` (default: its SAMPLE), with `overrides` applied."""
+    def trace(self, file, pipeline=None, data=None, params=None, overrides=None, row=None, forces=()):
+        """Describe and run `file` to the end on `data` (default: its SAMPLE), with `overrides` and `forces` applied."""
         described = self.describe(file, pipeline)
         rows = data if data is not None else getattr(self.mod, "SAMPLE", None)
         if rows is None:
             raise ValueError("no data: pass `data` (rows or a JSON file) or define SAMPLE in the module")
         frame = apply_overrides(_load_rows(rows), overrides, row)
-        return {**described, **trace(self.step, frame, base_params(self.mod, params)), "data": frame.to_dicts(), "key": key_column(frame)}
+        return {**described, **trace(self.step, frame, base_params(self.mod, params), self.described["ir"], forces), "data": frame.to_dicts(), "key": key_column(frame)}
 
     def _index(self, n, parent):
         self.parents[n["path"]] = parent
         for c in n.get("children", ()):
             self._index(c, n["path"])
 
-    def start(self, file, pipeline=None, data=None, params=None, breakpoints=()):
+    def start(self, file, pipeline=None, data=None, params=None, breakpoints=(), forces=(), watches=()):
         self.describe(file, pipeline)
         if data is None:
             data = getattr(self.mod, "SAMPLE", None)
@@ -270,6 +219,10 @@ class Bridge:
         self.original = self.step
         self.edits = []  # (path, step or None), so each edit can be compared on its own
         self.session = Engine().bind(self.step).session(_load_rows(data), self.doc)
+        # First among the breakpoints: a force must land before any other breakpoint pauses on the same checkpoint.
+        self.controls = Controls(self.described["ir"])
+        self.controls.set(forces, watches)
+        self.controls.attach(self.session)
         self.sent = 0
         # Overrides made so far and where, so forks can replay them; a rewind breaks the replay.
         self.history, self.rewound = [], False
@@ -283,7 +236,14 @@ class Bridge:
         self.sent = len(s.events)
         cur = s.current
         return {"finished": s.finished, "events": events,
-                "current": cur and {"path": cur.origin.path, "when": cur.when}}
+                "current": cur and {"path": cur.origin.path, "when": cur.when}, "hit": self.controls.take_hit()}
+
+    def set_controls(self, forces=(), watches=()):
+        """Replace the run's forces and value breakpoints; they apply from the next checkpoint on."""
+        # ponytail: a rewind replays without checking breakpoints, so forces apply only to checkpoints reached
+        # by stepping; rewind to the branch or loop itself to re-run it forced.
+        self.controls.set(forces, watches)
+        return self.status()
 
     def step_out(self):
         s = self.session
@@ -298,10 +258,10 @@ class Bridge:
         finally:
             s.clear_break(target)
 
-    def sweep(self, scenarios, from_here=True, file=None, pipeline=None, data=None, params=None):
+    def sweep(self, scenarios, from_here=True, file=None, pipeline=None, data=None, params=None, forces=()):
         """Run every scenario from the paused point (or from the start) next to the unchanged run.
 
-        Each scenario is `{"label", "params", "overrides", "row"}`. From the start,
+        Each scenario is `{"label", "params", "overrides", "row", "forces"}`. From the start,
         overrides apply to the input rows; from here, to the values at the pause.
         """
         s = self.session
@@ -309,19 +269,21 @@ class Bridge:
             if self.rewound:
                 raise RuntimeError("scenarios can't replay a session that was rewound; restart it first")
             at = checkpoint_key(s)
-            result = sweep(self.step, s.frame, s.params, self.history, at, scenarios)
+            result = sweep(self.step, s.frame, s.params, self.history, at, scenarios, self.described["ir"], self.controls.forces)
         else:
             self.describe(file, pipeline)
             rows = data if data is not None else getattr(self.mod, "SAMPLE", None)
             frame = _load_rows(rows)
             at = None
             params = base_params(self.mod, params)
-            base = trace(self.step, frame, params)
+            ir = self.described["ir"]
+            base = trace(self.step, frame, params, ir, forces)
             results = []
             for sc in scenarios:
                 doc = merge(params, sc.get("params"))
                 results.append({"label": sc.get("label"),
-                                **trace(self.step, apply_overrides(frame, sc.get("overrides"), sc.get("row")), doc or None)})
+                                **trace(self.step, apply_overrides(frame, sc.get("overrides"), sc.get("row")), doc or None,
+                                      ir, sc.get("forces") or forces)})
             result = {"baseline": base, "results": results}
         used = s.frame if from_here and s is not None else frame
         return {**result, "describe": self.described, "data": used.to_dicts(), "key": key_column(used),
@@ -335,14 +297,14 @@ class Bridge:
 
     def reload_step(self, path):
         """Re-import the pipeline's files and swap the step now at `path` into the paused run."""
-        old, texts = step_map(self.step).get(path), dict(_TEXTS)
+        old, texts = step_map(self.step).get(path), dict(TEXTS)
         new = step_map(getattr(load_module(self.file), self.name)).get(path)
         if new is None:
             raise KeyError(f"{path!r} is no longer in {self.name}")
         self.session.replace(path, new)
         self.step = self.session.executable.step
         self.edits.append((path, new))
-        return {"diff": _source_diff(old, texts, new, _TEXTS), "formula": _formula(new.fn) if isinstance(new, FunctionStep) else None}
+        return {"diff": source_diff(old, texts, new, TEXTS), "formula": _formula(new.fn) if isinstance(new, FunctionStep) else None}
 
     def restore(self, path):
         """Put the step at `path` back as the run started it, undoing a skip or a code swap, and re-run from there."""
@@ -371,7 +333,7 @@ class Bridge:
             if path is None or at == path:
                 edited = swap(edited, at, new)
         frame = self.session.frame
-        side = lambda step: {**self.described, **trace(step, frame, self.doc), "data": frame.to_dicts(), "key": key_column(frame)}  # noqa: E731
+        side = lambda step: {**self.described, **trace(step, frame, self.doc, self.described["ir"], self.controls.forces), "data": frame.to_dicts(), "key": key_column(frame)}  # noqa: E731
         return {"a": side(self.original), "b": side(edited)}
 
     def _names(self):
@@ -411,7 +373,7 @@ class Bridge:
     def handle(self, req):
         cmd = req["cmd"]
         args = {k: v for k, v in req.items() if k not in ("id", "cmd")}
-        if cmd in ("describe", "start", "state", "column", "step_out", "trace", "sweep", "compare_edits"):
+        if cmd in ("describe", "start", "state", "column", "step_out", "trace", "sweep", "compare_edits", "set_controls"):
             result = getattr(self, cmd)(**args)
             return self.status() if cmd == "step_out" else result
         s = self.session
@@ -427,6 +389,8 @@ class Bridge:
             edit = getattr(self, cmd)(**args) or {}  # a WiringError changes nothing and comes back as the reply's error
             return {**self.status(), "diff": edit.get("diff", []), "formula": edit.get("formula")}
         if cmd in ("step", "step_into", "resume", "rewind", "break_at", "clear_break", "set"):
+            if cmd in ("step", "step_into", "resume") and s.current is not None:
+                self.controls.force(s.current)  # paused on a condition, its breakpoint check already passed
             try:
                 getattr(s, cmd)(**args)
             except Exception as e:  # a step raised: the events hold the Error, the reply the message

@@ -17,7 +17,8 @@ export interface ValueDiff {
 
 export interface StepDiff {
   path: string;
-  status: "same" | "changed" | "added" | "removed" | "not run";
+  /** "not taken": it ran in the first run only; the second sent every record another way (a branch arm, a loop that stopped). */
+  status: "same" | "changed" | "added" | "removed" | "not run" | "not taken";
   /** What changed in the step itself: "code", "params", "reads", "writes". */
   structural: string[];
   /** Each changed param, as "cap: 48 → 42". */
@@ -216,8 +217,8 @@ export function compareTraces(a: TraceResult, b: TraceResult, labelA: string, la
     const changes = structural(na, nb);
     const params = paramChanges(na, nb);
     if (!sa && !sb) return { path, status: changes.length ? "changed" : "not run", structural: changes, paramChanges: params, outputs: [] };
-    // Ran in one run only (skipped mid-run, or in an arm no record took in the other): its values aren't "emptied".
-    if (sa && !sb) return { path, status: "removed", structural: changes, paramChanges: params, outputs: [] };
+    // A skipped step is gone from the IR (above); in both but run in one only, the other took another arm.
+    if (sa && !sb) return { path, status: "not taken", structural: changes, paramChanges: params, outputs: [] };
     const outputs = diffColumns(sa ?? {}, sb ?? {});
     return { path, status: outputs.length || changes.length ? "changed" : "same", structural: changes, paramChanges: params, outputs };
   }
