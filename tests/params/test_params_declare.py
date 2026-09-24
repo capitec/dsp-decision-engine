@@ -277,3 +277,12 @@ def test_feature_kind_values_are_fixed():
     assert feature_kind(bytes) is FeatureKind.STR
     assert feature_kind(bool) is FeatureKind.BOOL
     assert feature_kind(object) is FeatureKind.F64
+
+
+def test_bool_and_none_markers_test_like_their_value_on_a_direct_call():
+    def excluded(deceased: bool = missing_as(False), review: bool = param(False),
+                 on: bool = param(True), note: str | None = param(None)) -> tuple:
+        return bool(deceased), bool(review), bool(on), bool(note)
+
+    assert excluded() == (False, False, True, False)
+    assert missing_as(True) and not param(0.0)

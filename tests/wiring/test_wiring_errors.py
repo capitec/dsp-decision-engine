@@ -97,3 +97,48 @@ def _term_cap_step(name: str, delta: float):
 def test_a_chain_of_self_read_waterfalls_is_no_forward_reference():
     plan = resolve(flow(_term_cap_step("seed", 0), _term_cap_step("income", 1), _term_cap_step("sector", 2)))
     assert [v.producer for v in plan.chains["term_cap"]] == ["seed", "income", "sector"]
+
+
+def test_an_input_read_with_two_types_is_an_error_naming_both_readers():
+    def as_float(dependants: float) -> float:
+        return dependants * 1.5
+
+    def as_int(dependants: int | None) -> str:
+        return str(dependants)
+
+    with pytest.raises(ValueError, match=r"as_float reads input column 'dependants' as float, but as_int reads it as int"):
+        resolve(flow(as_float, as_int))
+
+
+def test_an_input_read_with_one_type_and_its_optional_form_is_fine():
+    def a(n: int) -> int:
+        return n
+
+    def b(n: int | None) -> int:
+        return n or 0
+
+    assert [i.name for i in resolve(flow(a, b)).inputs] == ["n"]
+
+
+def test_a_similar_but_not_mistyped_name_is_an_input_column_with_a_warning():
+    def entity_base_score() -> float:
+        return 600.0
+
+    def total(entity_base_score: float, entity_bureau_score: float) -> float:
+        return entity_base_score + entity_bureau_score
+
+    with pytest.warns(UserWarning, match="reading 'entity_bureau_score' as an input column"):
+        plan = resolve(flow(entity_base_score, total))
+    assert [i.name for i in plan.inputs] == ["entity_bureau_score"]
+
+
+def test_names_differing_only_in_digits_are_no_typo():
+    def applicant1_income(x: float) -> float:
+        return x
+
+    def total(applicant1_income: float, applicant2_income: float) -> float:
+        return applicant1_income + applicant2_income
+
+    with pytest.warns(UserWarning):
+        plan = resolve(flow(applicant1_income, total))
+    assert "applicant2_income" in [i.name for i in plan.inputs]
