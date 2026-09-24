@@ -28,10 +28,12 @@ class OrExpression(BaseModel):
 class BetweenExpression(BaseModel):
     """`variable` lies in the row's band.
 
-    A row's missing lower bound is the previous row's upper, and a missing
-    upper the next row's lower; only the first row may leave its lower edge
-    open and only the last its upper. Unless `allow_gaps`, each row's upper
-    must equal the next row's lower.
+    Rows that share their `eq` values (say every row of one grade)
+    form one ladder of bands, checked on its own. In a ladder, a row's
+    missing lower bound is the previous row's upper and a missing upper the
+    next row's lower; the first row may leave its lower edge open (`None`)
+    and the last its upper. Unless `allow_gaps`, each row's upper must equal
+    the next row's lower in its ladder.
     """
 
     type: t.Literal["between"] = "between"
@@ -93,33 +95,59 @@ def leaves(e: t.Any) -> t.Iterator[Leaf]:
         yield e
 
 
-def bounds(leaf: BetweenExpression, rows: t.Sequence[t.Mapping[str, t.Any]]) -> list[tuple[t.Any, t.Any]]:
-    """Each row's `(lower, upper)`, a missing one taken from the neighbouring row; `None` is an open edge."""
-    n = len(rows)
-    lower = [r.get(leaf.lower_bound_column) if leaf.lower_bound_column else None for r in rows]
-    upper = [r.get(leaf.upper_bound_column) if leaf.upper_bound_column else None for r in rows]
-    return [(lower[i] if lower[i] is not None else upper[i - 1] if i > 0 else None,
-             upper[i] if upper[i] is not None else lower[i + 1] if i < n - 1 else None) for i in range(n)]
+def groups(expression: t.Any, rows: t.Sequence[t.Mapping[str, t.Any]]) -> list[list[int]]:
+    """Row numbers grouped by their `eq` column values, in row order: each group is one band ladder."""
+    keys = [leaf.value_column for leaf in leaves(expression) if isinstance(leaf, EqExpression)]
+    found: dict[tuple, list[int]] = {}
+    for i, row in enumerate(rows):
+        found.setdefault(tuple(row.get(k) for k in keys), []).append(i)
+    return list(found.values())
+
+
+def bounds(leaf: BetweenExpression, rows: t.Sequence[t.Mapping[str, t.Any]],
+           ladders: t.Sequence[t.Sequence[int]]) -> list[tuple[t.Any, t.Any]]:
+    """Each row's `(lower, upper)`, a missing one taken from the neighbouring row of its group; `None` is open."""
+    resolved: list[tuple[t.Any, t.Any]] = [(None, None)] * len(rows)
+    for ladder in ladders:
+        n = len(ladder)
+        lower = [rows[i].get(leaf.lower_bound_column) if leaf.lower_bound_column else None for i in ladder]
+        upper = [rows[i].get(leaf.upper_bound_column) if leaf.upper_bound_column else None for i in ladder]
+        for k, i in enumerate(ladder):
+            resolved[i] = (lower[k] if lower[k] is not None else upper[k - 1] if k > 0 else None,
+                           upper[k] if upper[k] is not None else lower[k + 1] if k < n - 1 else None)
+    return resolved
 
 
 def check_rows(expression: t.Any, rows: t.Sequence[t.Mapping[str, t.Any]]) -> None:
-    """Raise `ValueError` if a `between` band of `rows` can't be resolved or, without `allow_gaps`, leaves a gap."""
-    n = len(rows)
+    """Raise `ValueError` if a `between` band of `rows` can't be resolved or, without `allow_gaps`, leaves a gap.
+
+    Rows with the same `eq` values form one ladder: its first row may
+    leave its lower edge open (`None`), its last row its upper.
+    """
+    ladders = groups(expression, rows)
     for leaf in leaves(expression):
         if not isinstance(leaf, BetweenExpression):
             continue
-        resolved = bounds(leaf, rows)
-        for i, (lo, hi) in enumerate(resolved):
-            if lo is None and hi is None:
-                raise ValueError(f"Row {i}: both bounds are unresolvable. "
-                                 "Only row 0's lower and the last row's upper may be None (open edges).")
-            if lo is None and i > 0:
-                raise ValueError(f"Row {i}: lower bound unresolvable — only row 0 may have an open lower edge.")
-            if hi is None and i < n - 1:
-                raise ValueError(f"Row {i}: upper bound unresolvable — only row {n - 1} may have an open upper edge.")
-            if not leaf.allow_gaps and i < n - 1:
-                following = rows[i + 1].get(leaf.lower_bound_column) if leaf.lower_bound_column else None
-                following = hi if following is None else following
-                if hi is not None and hi != following:
-                    raise ValueError(f"Row {i} upper ({hi}) != row {i + 1} lower ({following}): "
-                                     "ranges are not contiguous. Set allow_gaps=True to permit this.")
+        resolved = bounds(leaf, rows, ladders)
+        for ladder in ladders:
+            first, last = ladder[0], ladder[-1]
+            of = "" if len(ladders) == 1 else " of its group (rows sharing its eq values)"
+            for k, i in enumerate(ladder):
+                lo, hi = resolved[i]
+                if lo is None and hi is None:
+                    raise ValueError(f"Row {i}: both bounds are unresolvable; give it a lower or an upper bound. "
+                                     f"Only the first row{of} (row {first}) may leave its lower bound None and "
+                                     f"only the last (row {last}) its upper.")
+                if lo is None and i != first:
+                    raise ValueError(f"Row {i}: lower bound unresolvable; only the first row{of} (row {first}) "
+                                     "may have an open lower edge.")
+                if hi is None and i != last:
+                    raise ValueError(f"Row {i}: upper bound unresolvable; only the last row{of} (row {last}) "
+                                     "may have an open upper edge.")
+                if not leaf.allow_gaps and i != last:
+                    after = ladder[k + 1]
+                    following = rows[after].get(leaf.lower_bound_column) if leaf.lower_bound_column else None
+                    following = hi if following is None else following
+                    if hi is not None and hi != following:
+                        raise ValueError(f"Row {i} upper ({hi}) != row {after} lower ({following}): ranges are "
+                                         "not contiguous. Set allow_gaps=True to permit this.")

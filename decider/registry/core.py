@@ -53,6 +53,8 @@ class BaseRegistryModule(BaseModel, ABC):
 
     _is_registry_root: t.ClassVar[bool] = False
     _registry: t.ClassVar[dict[str, type[BaseRegistryModule]]]
+    # Alias -> the module that registers it, imported on first use.
+    _lazy: t.ClassVar[dict[str, str]]
     _tag: t.ClassVar[str | None] = None
 
     def __init_subclass__(cls, root: bool = False, **kwargs: t.Any) -> None:
@@ -60,6 +62,7 @@ class BaseRegistryModule(BaseModel, ABC):
         if root:
             cls._is_registry_root = True
             cls._registry = {}
+            cls._lazy = {}
 
     # Fields are only final here, not in `__init_subclass__`.
     @classmethod
@@ -103,6 +106,18 @@ class BaseRegistryModule(BaseModel, ABC):
         )
 
     @classmethod
+    def lazy(cls, aliases: t.Mapping[str, str]) -> None:
+        """Make each alias resolve by importing its module the first time it's asked for.
+
+        For built-in types, so a document loads without the user importing
+        the module that defines its class.
+
+        Example:
+            ConfigurableStep.lazy({"tree": "decider.steps.trees"})
+        """
+        cls._root()._lazy.update(aliases)
+
+    @classmethod
     def resolve(cls: type[R], tag: str) -> type[R]:
         """The registered subclass of `cls` for an alias or import path.
 
@@ -113,8 +128,11 @@ class BaseRegistryModule(BaseModel, ABC):
         Raises:
             RegistryError: (a `LookupError`) unknown tag, with a did-you-mean when one is close.
         """
-        registry = cls._root()._registry
-        if tag not in registry and ":" in tag:
+        root = cls._root()
+        registry = root._registry
+        if tag not in registry and tag in root._lazy:
+            importlib.import_module(root._lazy[tag])
+        elif tag not in registry and ":" in tag:
             try:
                 importlib.import_module(tag.partition(":")[0])
             except ImportError:
@@ -122,12 +140,15 @@ class BaseRegistryModule(BaseModel, ABC):
         found = registry.get(tag)
         if found is not None and issubclass(found, cls):
             return found
-        known = sorted(k for k, c in registry.items() if issubclass(c, cls))
-        raise RegistryError(f"{tag!r} is not a registered {cls.__name__} type.{hint(tag, known)}")
+        known = sorted({k for k, c in registry.items() if issubclass(c, cls)} | set(root._lazy))
+        raise RegistryError(f"{tag!r} is not a registered {cls.__name__} type.{hint(tag, known)} Import the "
+                            "module that defines it first, or name it by import path, '<module>:<Class>'.")
 
     @classmethod
     def json_schema(cls) -> dict[str, dict[str, t.Any]]:
         """`{tag: JSON schema}` for every registered subclass of `cls`, for UI forms."""
+        for module in cls._root()._lazy.values():
+            importlib.import_module(module)
         classes = {c._tag: c for c in cls._root()._registry.values() if issubclass(c, cls)}
         schemas = {}
         for tag, klass in sorted(classes.items()):
