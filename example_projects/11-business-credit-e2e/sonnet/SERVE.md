@@ -109,4 +109,6 @@ PYTHONPATH="<REPO>/example_projects/00-shared-credit-core/sonnet:<REPO>/example_
 PYTHONPATH is wider than the serving one above: `tests/test_reuse.py` and
 `tests/test_daily_pass.py` load 05, 06 and 07 (06 transitively needs 03 --
 see "Setup" above), and `tests/test_review.py` calls into 07's per-account
-pipeline for the revolving-facility limit decision. All 29 tests pass.
+pipeline for the revolving-facility limit decision. All 37 tests pass
+(29 covering origination/review/covenant/reuse, plus 8 in `test_phases.py`
+proving the full-width skeleton's entry-point x phase routing).
