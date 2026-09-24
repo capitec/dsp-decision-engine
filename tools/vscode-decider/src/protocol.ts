@@ -138,7 +138,7 @@ export function recordLabel(row: number, key: RecordKey): string {
 
 /** Values for people: no float noise; amounts of 100 or more to two decimals (58113.07), smaller ones to four. */
 /** Names whose values read as percentages: rates, loadings, discounts, margins. */
-export const isRateName = (name?: string) => !!name && /(rate|loading|discount|margin)s?$/.test(name);
+export const isRateName = (name?: string) => !!name && /(rate|loading|discount|margin|share)s?$/.test(name);
 /** Names whose values are rand amounts. */
 export const isMoneyName = (name?: string) => !!name && /(amount|cost|income|fee|instalment|expenses)s?$/.test(name);
 
