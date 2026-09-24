@@ -604,7 +604,7 @@ assert banding(ratio=3.0) == (1, 10.0)
 - **Live sessions:** `session.replace(path, new_step)` and
   `session.delete(path)` edit a running session. Both regenerate the IR for that
   subtree and re-run downstream from the change. Steps are pure, so this is
-  correct. This is task T6.5 in `Plan.md`.
+  correct.
 
 ---
 

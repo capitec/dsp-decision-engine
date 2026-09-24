@@ -1,16 +1,20 @@
 """TreeConfig as a step: loading, params, breakpoints, recompiles, and the walkers against each other."""
 import json
+import os
 import random
+import subprocess
+import sys
 
 import polars as pl
 import pytest
 
-from decider import engine
+from decider import engine, flow
 from decider.engine import Engine
 from decider.engine.compile import kernel
 from decider.engine.debug import NodeVisited
 from decider.steps import ConfigurableStep
 from decider.steps.trees import LeafNode, TreeConfig, walker
+from decider.testing import assert_equivalent
 
 RISK = {
     "nodes": [
@@ -188,9 +192,9 @@ def _frame(rng, n=120):
     })
 
 
-def _config(name, doc, reads):
+def _config(name, doc, reads, path=None):
     types = {f: "int" for f in ("i0", "i1") if f in reads}
-    return TreeConfig(name=name, tree=doc, feature_types=types)
+    return TreeConfig(name=name, tree=doc, feature_types=types, path_output=path)
 
 
 def _reads(doc):
@@ -218,10 +222,96 @@ def test_random_trees_agree_across_walkers_modes_and_formats(seed, run):
              for k in range(3)]
     for mode in ("first_match", "all"):
         doc = {"type": "prioritized_flat_rule", "mode": mode, "rules": rules, "output": output}
-        out = run(_config("p", doc, _reads(doc)), df)
+        out = run(_config("p", doc, _reads(doc), path="leaf"), df)
         if mode == "all":
             assert [c for c in out.columns if "." in c] == [
-                f"{r}.{c}" for r in ("rule_0", "r1", "r2") for c in ("label", "pts", "band", "flag")]
+                f"{r}.{c}" for r in ("rule_0", "r1", "r2") for c in ("label", "pts", "band", "flag", "leaf")]
+
+
+def _two_leaves_one_row(**config) -> TreeConfig:
+    # Two leaves share output row 0, so only the path tells them apart; `x > 9` leads nowhere (the default).
+    return TreeConfig(name="risk_tree", path_output="risk_leaf", **config, tree={
+        "nodes": [
+            {"id": "root", "data": {"type": "unary", "condition": {"op": ">", "feature": "x", "threshold": 5.0}}},
+            {"id": "mid", "data": {"type": "unary", "condition": {"op": ">", "feature": "x", "threshold": 9.0}}},
+            {"id": "low", "data": {"type": "leaf", "result_idx": 0}},
+            {"id": "also_low", "data": {"type": "leaf", "result_idx": 0}},
+        ],
+        "edges": [{"source": "root", "target": "mid", "data": {"sourceIndex": 0}},
+                  {"source": "root", "target": "low", "data": {"sourceIndex": 1}},
+                  {"source": "mid", "target": "also_low", "data": {"sourceIndex": 1}}],
+        "output": {"data": [{"pts": 1}], "default": {"pts": 0}, "dtypes": [["pts", "Int64"]]},
+    })
+
+
+def test_a_tree_reports_the_leaf_that_answered_in_every_mode():
+    out = assert_equivalent(_two_leaves_one_row(), pl.DataFrame({"x": [1.0, 7.0, 10.0, None]}))
+    assert out["risk_leaf"].to_list() == ["low", "also_low", None, "low"]   # a null x takes the otherwise branch
+    assert out["pts"].to_list() == [1, 1, 0, 1]
+    assert out.schema["risk_leaf"] == pl.String
+    assert Engine().bind(_two_leaves_one_row(), mode="fused").score({"x": 7.0})["risk_leaf"] == "also_low"
+
+
+def test_the_path_column_survives_an_explicit_emit_and_a_drop():
+    pipeline = flow(_two_leaves_one_row(), name="scoring").emit("risk_leaf").drop("pts")
+    out = assert_equivalent(pipeline, pl.DataFrame({"x": [1.0, 7.0]}))
+    assert out.columns == ["x", "risk_leaf"] and out["risk_leaf"].to_list() == ["low", "also_low"]
+
+
+def test_the_path_column_names_each_rules_leaf_in_all_mode_and_in_python_trees():
+    def rule(name, pattern):
+        return {"meta": {"name": name}, "rule": {"type": "unary", "condition": {
+            "op": "string_match", "feature": "s", "patterns": [pattern], "match_type": "regex"},
+            "then": {"id": f"{name}_yes", "type": "leaf", "result_idx": 0}}}
+
+    tree = TreeConfig(name="t", path_output="leaf", tree={
+        "type": "prioritized_flat_rule", "mode": "all", "rules": [rule("a", "^x"), rule("b", "y$")],
+        "output": {"data": [{"hit": 1}], "default": {"hit": 0}, "dtypes": [["hit", "Int64"]]}})
+    out = assert_equivalent(tree, pl.DataFrame({"s": ["xy", "x", "zz"]}))
+    assert out["a.leaf"].to_list() == ["a_yes", "a_yes", None]
+    assert out["b.leaf"].to_list() == ["b_yes", None, None]
+
+
+def test_a_path_output_named_like_an_output_column_is_refused():
+    with pytest.raises(ValueError, match="path_output 'pts'"):
+        engine.to_ir(_two_leaves_one_row().model_copy(update={"path_output": "pts"}))
+
+
+_CHILD = """
+import contextlib, io, json
+import polars as pl
+from decider.engine import Engine
+from decider.steps.trees import TreeConfig
+
+tree = TreeConfig(name="t", tree=json.loads(%r))
+log = io.StringIO()
+with contextlib.redirect_stdout(log):  # NUMBA_DEBUG_CACHE prints to stdout
+    out = Engine().bind(tree, mode="stepped").run(pl.DataFrame({"ratio": [0.5, 0.9], "s": ["ab", "cd"]}))
+lines = [l for l in log.getvalue().splitlines() if "walk" in l]
+print(json.dumps({"pts": out["pts"].to_list(), "saved": sum("data saved" in l for l in lines),
+                  "loaded": sum("data loaded" in l for l in lines)}))
+"""
+
+
+def test_the_tree_walker_is_a_disk_cache_hit_in_a_fresh_process(tmp_path):
+    tree = {**RISK, "nodes": [
+        {"id": "root", "data": {"type": "composite", "op": "and", "conditions": [
+            {"op": ">", "feature": "ratio", "threshold": {"param": "hi_thresh", "default": 0.7}},
+            {"op": "string_match", "feature": "s", "patterns": ["c"], "match_type": "starts_with"}]}},
+        {"id": "high", "data": {"type": "leaf", "result_idx": 0}}]}
+    (tmp_path / "child.py").write_text(_CHILD % json.dumps(tree))  # once: numba's index is keyed by mtime
+    env = dict(os.environ, NUMBA_CACHE_DIR=str(tmp_path / "numba_cache"), NUMBA_DEBUG_CACHE="1")
+
+    def fresh():
+        proc = subprocess.run([sys.executable, "child.py"], cwd=tmp_path, env=env, capture_output=True, text=True,
+                              timeout=600, check=False)
+        assert proc.returncode == 0, proc.stderr
+        return json.loads(proc.stdout.splitlines()[-1])
+
+    cold, warm = fresh(), fresh()
+    assert cold["pts"] == warm["pts"] == [0, 10]
+    assert (cold["saved"], cold["loaded"]) == (1, 0), cold
+    assert (warm["saved"], warm["loaded"]) == (0, 1), warm
 
 
 def test_a_string_feature_given_a_number_is_a_type_error_naming_it():

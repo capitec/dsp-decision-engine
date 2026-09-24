@@ -156,22 +156,24 @@ class _Row:
         return len(data.conditions)
 
 
-def _leaf(tree: Tree, root: str, row: _Row, visit: t.Callable[[str], None]) -> int:
+def _leaf(tree: Tree, root: str, row: _Row, visit: t.Callable[[str], None]) -> t.Optional[str]:
+    # The id of the leaf that answers, or None when the default row does.
     nid: t.Optional[str] = root
     while nid is not None:
         visit(nid)
         node = tree.nodes[nid]
         if isinstance(node.data, LeafNode):
-            return node.data.result_idx
+            return nid if node.data.result_idx >= 0 else None
         nid = node.children[row.branch(node.data)]
-    return -1
+    return None
 
 
 def reference(tree: Tree, inputs: t.Sequence[t.Any], kinds: dict[str, str],
               columns: t.Sequence[tuple[int, str, t.Any]]) -> t.Callable:
     """`reference(row, params, consts, visit)`: the tree walked in Python, calling `visit(node_id)` per node.
 
-    Returns one value per output column, in the order `columns` lists them.
+    Returns one value per output column, in the order `columns` lists them;
+    a column named `None` is the id of the leaf that answered.
 
     Example::
 
@@ -183,7 +185,7 @@ def reference(tree: Tree, inputs: t.Sequence[t.Any], kinds: dict[str, str],
 
     def walk(row: tuple, params: t.Any, consts: tuple, visit: t.Callable[[str], None]) -> tuple:
         r = _Row({n: _value(v, cast) for (n, cast), v in zip(names, row)}, params, kinds)
-        leaves: dict[int, int] = {}
+        leaves: dict[int, t.Optional[str]] = {}
         out = []
         for slot, column, choices in columns:
             if slot not in leaves:
@@ -191,8 +193,12 @@ def reference(tree: Tree, inputs: t.Sequence[t.Any], kinds: dict[str, str],
                     leaves[slot] = _leaf(tree, tree.rules[slot].root, r, visit)
                 else:
                     leaves[slot] = next((leaf for rule in tree.rules
-                                         if (leaf := _leaf(tree, rule.root, r, visit)) != -1), -1)
-            v = rows[leaves[slot]].get(column)
+                                         if (leaf := _leaf(tree, rule.root, r, visit)) is not None), None)
+            leaf = leaves[slot]
+            if column is None:
+                out.append(leaf)
+                continue
+            v = rows[-1 if leaf is None else tree.nodes[leaf].data.result_idx].get(column)
             out.append(str(v) if choices is not None and v is not None else v)
         return tuple(out)
 

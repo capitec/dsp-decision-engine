@@ -140,6 +140,26 @@ class ParamsCache:
     # ponytail: unbounded; add eviction when a long-lived server sees many distinct documents.
     def __init__(self) -> None:
         self._results: dict[tuple[str, str], Validation] = {}
+        self._last: tuple[Any, str] = (None, "")
+
+    def key(self, doc: Mapping) -> str:
+        """`document_key(doc)`, hashed once while the same document object is passed call after call.
+
+        The document is treated as immutable: one edited in place and passed
+        again keeps its old key, so pass an edited copy instead.
+
+        Example::
+
+            cache.key(doc) == document_key(doc)   # True; the second call with `doc` costs nothing
+        """
+        # One slot holding the document itself, so its id can't be reused by another object while cached.
+        # ponytail: one document per cache; a small dict if callers alternate documents on one executable.
+        last = self._last
+        if last[0] is doc:
+            return last[1]
+        key = document_key(doc)
+        self._last = (doc, key)
+        return key
 
     def status(self, key: str, path: str) -> Status:
         result = self._results.get((key, path))

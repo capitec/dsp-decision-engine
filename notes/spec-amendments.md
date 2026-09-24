@@ -150,3 +150,14 @@ where they disagree, this file wins.
   decider_old's routing of a null feature to the otherwise branch) or
   `"error"`. String conditions keep decider_old's `match`/`no_match`/`error`.
   NaN counts as null in trees and tables.
+
+## 2026-09-23, G1 and hot reload
+
+- **`TreeConfig.path_output: str | None`** adds a String output naming the
+  leaf that answered (per rule in `all` mode; null when the default answered).
+- **Params documents are treated as immutable** once passed to `run`/`score`;
+  a reused document object is hashed once.
+- **Hot reload:** `Session.reload(new_pipeline)` diffs by content and re-runs
+  from the first change; `Session.watch(fn)` (IPython after-cell hook) and
+  `ModuleWatcher("module:attr")` (source files) call it. Serving never
+  hot-reloads; it keeps explicit stage/activate.

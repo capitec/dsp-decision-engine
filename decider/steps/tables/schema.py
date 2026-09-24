@@ -1,4 +1,4 @@
-"""A decision table's conditions, in decider_old's vocabulary, and the checks its rows must pass."""
+"""A decision table's conditions, in decider 0.3's vocabulary, and the checks its rows must pass."""
 from __future__ import annotations
 
 import typing as t

@@ -62,6 +62,18 @@ def test_assert_equivalent_needs_a_dataframe():
         assert_equivalent(pipeline, FRAME.to_dict())
 
 
+def always_broken(x: float) -> float:
+    if x > -1e300:
+        raise RuntimeError("deliberately broken in every mode")
+    return x
+
+
+def test_assert_equivalent_fails_when_every_mode_raises_the_same_error():
+    # Identical crashes in every mode are not agreement: nothing was compared.
+    with pytest.raises(RuntimeError, match="deliberately broken"):
+        assert_equivalent(flow(always_broken), pl.DataFrame({"x": [1.0, 2.0]}))
+
+
 def bump(x):
     return x + 1.0
 

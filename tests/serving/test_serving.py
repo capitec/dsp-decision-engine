@@ -5,6 +5,7 @@ import sys
 import threading
 import typing as t
 
+import polars as pl
 import pytest
 
 from decider import ConfigurableStep, Value, flow, param
@@ -12,6 +13,7 @@ from decider.config import JsonFileStore, Version
 from decider.exceptions import MissingInputError
 from decider.serving.handler import RequestHandler
 from decider.serving.servers.starlette import create_app
+from decider.testing import no_recompile
 
 
 def _scale(x: float, factor: float) -> float:
@@ -84,6 +86,43 @@ def test_activate_switches_answers_and_rollback_restores_them(handler):
     assert handler.staged is None
     assert handler.rollback() == Version(0, 0, 0)
     assert _answer(_score(handler)) == ANSWERS["0.0.0"]
+
+
+def test_staging_and_activating_a_params_only_version_compiles_nothing(handler, store):
+    store.create_version({**V0, "params": {"afford": {"capped": {"cap": 1000.0}}}})
+    with no_recompile():
+        handler.stage()
+        handler.activate()
+        assert _answer(_score(handler)) == (6000.0, 1000.0)
+
+
+def _string_tree(tree):
+    return tree
+
+
+STRING_TREE = {"type": "decider.steps.trees:TreeConfig", "name": "warm", "tree": {
+    "nodes": [{"id": "root", "data": {"type": "unary", "condition": {
+                  "op": "string_match", "feature": "s", "match_type": "ends_with",
+                  "patterns": ["ing", {"param": "extra", "default": "zzz"}]}}},
+              {"id": "yes", "data": {"type": "leaf", "result_idx": 1}},
+              {"id": "no", "data": {"type": "leaf", "result_idx": 0}}],
+    "edges": [{"source": "root", "target": "yes", "data": {"sourceIndex": 0}},
+              {"source": "root", "target": "no", "data": {"sourceIndex": 1}}],
+    "output": {"data": [{"hit": 0}, {"hit": 1}], "default": {"hit": -1}, "dtypes": [["hit", "Int64"]]}}}
+
+
+def test_after_staging_the_first_string_tree_requests_compile_nothing(tmp_path):
+    store = JsonFileStore(basepath=str(tmp_path))
+    store.create_version({"tree": STRING_TREE, "params": {}})
+    handler = RequestHandler(store, _string_tree)
+    handler.stage()
+    handler.activate()
+    live = handler.module_fn()
+    frame = pl.DataFrame({"s": ["running", "ran", "héllo wörld", None]})
+    with no_recompile():
+        assert live.executable.run(frame, live.params)["hit"].to_list() == [1, 0, 0, 0]
+        assert live.executable.score({"s": "singing"}, live.params)["hit"] == 1
+        assert live.executable.score({"s": "日本語"}, {"warm": {"extra": "語"}})["hit"] == 1
 
 
 def test_record_fields_survive_in_the_answer(handler):
