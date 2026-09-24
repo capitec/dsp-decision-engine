@@ -109,6 +109,26 @@
   output with values `0..n-1`, and the walker didn't change at all. The
   cost is a few more values when several leaves share a row. A leaf that
   selects the default row reports a null path, as the default answered.
+- **`trace_output` is a path number, not a list.** A kernel can't write a
+  variable-length list or a string, and the leaf doesn't name the path once
+  a node has two parents. So the encoder numbers paths Ball-Larus style:
+  each node's path count is the sum of its branches' (a missing branch is
+  one path), and the jump into branch `i` weighs the counts of branches
+  `0..i-1`. Every program row carries three weights, one per target
+  (`W_THEN`, `W_ELSE`, `W_UNKNOWN`: nonzero only on jumps that leave a
+  node), and `_walk` sums the weights of the jumps it takes, so the sum is
+  the path's index among its root's paths. The output is a `Literal` of
+  every path's `>`-joined node ids, enumerated in that order, which the
+  unit decodes like any string output; no new output kind reached the
+  engine. First-match adds each rule's base (the paths of earlier rules,
+  stored after the roots) and reports the last rule walked. Costs: the
+  walker does one more add per row whether traced or not (`tree_walk.py`
+  back to back at load ~7, 2026-09-24: fused score p50 63.4 -> 62.5 µs,
+  string-gated 112.4 -> 111.0 µs, batch 226 -> 233 ns/row, all within
+  noise), and a tree gets one string per path, so a DAG
+  whose shared nodes multiply paths past 100k is refused. A node that
+  compiles to no rows (a condition that tests nothing) can't be told apart
+  from its child, so tracing one is an error.
 - A numeric output column holding `None` is declared `T | None`.
 - **`mode: "all"`** writes `<rule name>.<column>` per rule (`rule_<i>` when
   unnamed), since a row node writes flat columns, not decider_old's structs.

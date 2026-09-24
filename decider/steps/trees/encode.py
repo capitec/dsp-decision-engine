@@ -31,8 +31,10 @@ from decider.steps.trees.schema import (
     UnaryStringMatch,
 )
 from decider.steps.trees.schema.conditions import find
+from decider.steps.trees.reference import TRACE
+from decider.steps.trees.trace import counts, paths
 from decider.steps.trees.walker import (
-    CMP_B, CMP_E, CMP_F, CMP_I, CONTAINS, EXACT, LEAF, MATCH, NULL_INT, PREFIX, SUFFIX,
+    CMP_B, CMP_E, CMP_F, CMP_I, CONTAINS, EXACT, LEAF, MATCH, NULL_INT, PREFIX, SUFFIX, WIDTH,
 )
 from decider.steps.values import ParamRef
 
@@ -143,7 +145,8 @@ class Program:
     consts: tuple[tuple[str, t.Any], ...]
     python: bool
     kinds: dict[str, str]
-    # Per output: (rule slot, column or None for the path, string choices or None); slot -1 is first-match.
+    # Per output: (rule slot, column, or None for the leaf and TRACE for the path, string choices or None);
+    # slot -1 is first-match.
     columns: tuple[tuple[int, t.Optional[str], t.Optional[tuple[str, ...]]], ...]
     # The arrays `consts` holds the addresses of: whoever holds the row node must keep these alive.
     arrays: list[np.ndarray]
@@ -165,13 +168,17 @@ class _Encoder:
     default: t.Optional[int] = None
     # Leaf node id -> its position in every output's values; a leaf with result_idx -1 has none.
     leaves: dict[str, int] = field(default_factory=dict)
+    # With a trace output, each node's number of paths to an end; empty without one.
+    counts: dict[str, int] = field(default_factory=dict)
+    # Nodes that compile to no rows, whose branches a trace can't tell apart.
+    blind: list[str] = field(default_factory=list)
 
     def slot(self, name: str) -> int:
         kind = self.kinds[name]
         return sorted(f for f, k in self.kinds.items() if k == kind).index(name)
 
     def add(self, *row: int) -> int:
-        self.rows.append([*row, 0, 0, 0, 0, 0, 0][:7])
+        self.rows.append([*row, 0, 0, 0, 0, 0, 0, 0, 0, 0][:WIDTH])
         return len(self.rows) - 1
 
     def test(self, kind: int, slot: int, op: int, thr: int, then: int, other: int, flip: bool) -> int:
@@ -286,6 +293,27 @@ class _Encoder:
                                  f"({len(self.tree.output.data)} rows, or -1 for the default)")
             return self.add(LEAF, -1 if data.result_idx < 0 else self.leaves.setdefault(nid, len(self.leaves)))
         children = [entries[c] if c is not None else self.leaf() for c in node.children]
+        start = len(self.rows)
+        entry = self.branches(data, children, where)
+        if self.counts:
+            self.weigh(nid, node.children, children, start)
+        return entry
+
+    def weigh(self, nid: str, kids: t.Sequence[t.Optional[str]], entries: list[int], start: int) -> None:
+        # Ball-Larus path numbering: the jump into branch i weighs the path counts of branches 0..i-1,
+        # so the weights along any root-to-end path sum to its index among the root's paths.
+        if len(self.rows) == start:
+            self.blind.append(nid)
+        weight: dict[int, int] = {}
+        total = 0
+        for kid, entry in zip(kids, entries):
+            # Two branches into one row are the same node sequence, so either weight names it.
+            weight.setdefault(entry, total)
+            total += 1 if kid is None else self.counts[kid]
+        for row in self.rows[start:]:
+            row[7:10] = [weight[x] if x < start else 0 for x in row[4:7]]
+
+    def branches(self, data: t.Any, children: list[int], where: str) -> int:
         if isinstance(data, UnaryNode):
             return self.condition(data.condition, children[0], children[1], where)
         if isinstance(data, CompositeNode):
@@ -307,9 +335,9 @@ class _Encoder:
             self.default = self.add(LEAF, -1)
         return self.default
 
-    def roots(self) -> list[int]:
+    def roots(self, order: t.Sequence[str]) -> list[int]:
         entries: dict[str, int] = {}
-        for nid in _post_order(self.tree):
+        for nid in order:
             entries[nid] = self.node(nid, entries)
         return [entries[r.root] for r in self.tree.rules]
 
@@ -338,11 +366,15 @@ def _output_values(tree: Tree, leaves: t.Iterable[str]) -> t.Iterator[tuple[str,
         yield column, kind, [row.get(column) for row in rows]
 
 
-def _outputs(tree: Tree, leaves: t.Sequence[str],
-             path: t.Optional[str]) -> tuple[list[Output], list[tuple], list[tuple]]:
+def _outputs(tree: Tree, leaves: t.Sequence[str], path: t.Optional[str], trace: t.Optional[str],
+             order: t.Sequence[str]) -> tuple[list[Output], list[tuple], list[tuple]]:
     # Per output: its declaration, (rule slot, kind, values, validity or None), and what the reference returns.
-    if path in tree.output.columns:
-        raise ValueError(f"path_output {path!r} is also an output column of the tree; name it something else")
+    for name, label in ((path, "path_output"), (trace, "trace_output")):
+        if name in tree.output.columns:
+            raise ValueError(f"{label} {name!r} is also an output column of the tree; name it something else")
+    if path is not None and path == trace:
+        raise ValueError(f"path_output and trace_output are both {path!r}; give them different names")
+    ends = paths(tree, order) if trace is not None else {}
     outputs, values, columns = [], [], []
     slots = [(-1, "")] if tree.mode == "first_match" else [
         (k, f"{r.name or f'rule_{k}'}.") for k, r in enumerate(tree.rules)]
@@ -367,6 +399,14 @@ def _outputs(tree: Tree, leaves: t.Sequence[str],
             outputs.append(Output(prefix + path, t.Literal[tuple(leaves) or ("",)]))
             values.append((slot, "int", [*range(len(leaves)), -1], None))
             columns.append((slot, None, tuple(leaves)))
+        if trace is not None:
+            # First-match numbers every rule's paths as one list, rule by rule; the walker adds each rule's base.
+            every = [p for r in (tree.rules if slot < 0 else tree.rules[slot:slot + 1]) for p in ends[r.root]]
+            index = {p: k for k, p in enumerate(dict.fromkeys(every))}
+            # With no rules nothing is walked: path number 0 reads -1, a null.
+            outputs.append(Output(prefix + trace, t.Literal[tuple(index) or ("",)]))
+            values.append((slot, "trace", [index[p] for p in every] or [-1], None))
+            columns.append((slot, TRACE, tuple(index)))
     if not outputs:
         raise ValueError("the tree's output declares no columns (output.dtypes is empty)")
     return outputs, values, columns
@@ -376,6 +416,9 @@ def _pack(enc: _Encoder, roots: list[int], values: list[tuple]) -> tuple[tuple, 
     # Everything the walker reads, packed into one int64, one float64 and one
     # byte array: it gets their addresses, so no array crosses its per-row call.
     ints: list[int] = []
+    # Where each rule's path numbers start in a first-match trace: after every earlier rule's paths.
+    sizes = [enc.counts.get(r.root, 0) for r in enc.tree.rules]
+    bases = [sum(sizes[:k]) for k in range(len(sizes))]
     floats: list[float] = []
 
     def put(seq: list, into: list) -> int:
@@ -385,7 +428,7 @@ def _pack(enc: _Encoder, roots: list[int], values: list[tuple]) -> tuple[tuple, 
     layout = (
         put([x for row in enc.rows for x in row], ints),
         put(list(enc.thr["int"]), ints),
-        put(list(roots), ints),
+        put(list(roots) + bases, ints),
         len(roots),
         put([x for _, rows, _ in enc.exprs for row in rows for x in row], ints),
         put(np.cumsum([0] + [len(rows) for _, rows, _ in enc.exprs]).tolist(), ints),
@@ -397,6 +440,9 @@ def _pack(enc: _Encoder, roots: list[int], values: list[tuple]) -> tuple[tuple, 
     )
     specs = []
     for slot, kind, vals, valid in values:
+        if kind == "trace":
+            specs.append((slot, put(vals, ints)))
+            continue
         where = floats if kind == "float" else ints
         spec = (slot, put([float(v) if kind == "float" else int(v) for v in vals], where), len(vals),
                 {"float": 0.0, "bool": False}.get(kind, 0))
@@ -420,25 +466,30 @@ def _input(name: str, kind: str, nulls: str, strict: set[str]) -> Input:
 
 
 def encode(tree: Tree, feature_types: t.Mapping[str, str], value: t.Callable[..., t.Any],
-           nulls: str = "otherwise", path: t.Optional[str] = None) -> Program:
+           nulls: str = "otherwise", path: t.Optional[str] = None, trace: t.Optional[str] = None) -> Program:
     """The row node of `tree`, with `value` turning a `ParamRef` into a `ParamDecl` (`IRContext.value`).
 
     `nulls` is `TreeConfig.null_handling`: `"error"` makes numeric and
-    boolean features required inputs. `path` is `TreeConfig.path_output`.
+    boolean features required inputs. `path` is `TreeConfig.path_output`,
+    `trace` `TreeConfig.trace_output`.
 
     Example::
 
         program = encode(config.tree.to_tree(), {"income_cents": "int"}, ctx.value)
     """
     kinds = feature_kinds(tree, {k: kind_of(v, f"feature_types[{k!r}]") for k, v in feature_types.items()})
-    enc = _Encoder(tree, kinds, value)
-    roots = enc.roots()
-    order = {k: i for i, k in enumerate(KINDS)}
+    order = _post_order(tree)
+    enc = _Encoder(tree, kinds, value, counts=counts(tree, order) if trace is not None else {})
+    roots = enc.roots(order)
+    if enc.blind and not enc.python:
+        raise ValueError(f"trace_output: tree node {enc.blind[0]!r} tests nothing, so the walker can't tell its "
+                         "branches apart; give it a condition or remove it")
+    rank = {k: i for i, k in enumerate(KINDS)}
     strict = {str(c.feature) for node in tree.nodes.values() for c in find(node.data, UnaryStringMatch)
               if c.null_handling is NullHandling.error}
     inputs = tuple(_input(name, kind, nulls, strict)
-                   for name, kind in sorted(kinds.items(), key=lambda nk: (order[nk[1]], nk[0])))
-    params = tuple(sorted(enc.params.values(), key=lambda d: order[d.annotation.__name__]))
-    outputs, values, columns = _outputs(tree, list(enc.leaves), path)
+                   for name, kind in sorted(kinds.items(), key=lambda nk: (rank[nk[1]], nk[0])))
+    params = tuple(sorted(enc.params.values(), key=lambda d: rank[d.annotation.__name__]))
+    outputs, values, columns = _outputs(tree, list(enc.leaves), path, trace, order)
     consts, arrays = ((), []) if enc.python else _pack(enc, roots, values)
     return Program(inputs, params, tuple(outputs), consts, enc.python, kinds, tuple(columns), arrays)

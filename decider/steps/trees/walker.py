@@ -10,8 +10,8 @@ from decider.steps.trees.ops import EQ, GE, GT, LE, LT
 
 # Program row kinds, and the columns of a program row.
 LEAF, CMP_F, CMP_I, CMP_B, CMP_E, MATCH = range(6)
-KIND, FEAT, OP, THR, THEN, ELSE, UNKNOWN = range(7)
-WIDTH = 7
+KIND, FEAT, OP, THR, THEN, ELSE, UNKNOWN, W_THEN, W_ELSE, W_UNKNOWN = range(10)
+WIDTH = 10
 # A null int feature arrives as this; a null float as NaN; a null bool as None.
 NULL_INT = -(2**63)
 # How a MATCH row compares a string with its patterns.
@@ -112,30 +112,33 @@ def _match(op, span, g, ps, ints, chars, lay):
 
 @njit(inline="always")
 def _walk(pc, ctx):
+    # Returns the leaf and the path's number: the sum of the weights of the jumps taken,
+    # numbered so that each root-to-end path of the tree sums to a different number.
     f, i, b, s, pf, pi, ps, ints, floats, chars, lay = ctx
+    code = 0
     while True:
         row = lay[PROG] + WIDTH * pc
         k = _i(ints, row + KIND)
         if k == LEAF:
-            return _i(ints, row + FEAT)
+            return _i(ints, row + FEAT), code
         j, op, t = _i(ints, row + FEAT), _i(ints, row + OP), _i(ints, row + THR)
         # A null feature takes the row's UNKNOWN target, which the encoder points at
         # the branch that null takes; a negative threshold slot is a param: -1 the first of its kind.
         if k == CMP_I:
             xi = i[j]
             if xi == NULL_INT:
-                pc = _i(ints, row + UNKNOWN)
+                pc, code = _i(ints, row + UNKNOWN), code + _i(ints, row + W_UNKNOWN)
                 continue
             r = _compare(op, xi, _i(ints, lay[THR_I] + t) if t >= 0 else pi[-t - 1])
         elif k == CMP_B:
             y = b[j]
             if y is None:
-                pc = _i(ints, row + UNKNOWN)
+                pc, code = _i(ints, row + UNKNOWN), code + _i(ints, row + W_UNKNOWN)
                 continue
             r = _compare(op, y, _i(ints, lay[THR_I] + t) != 0)
         elif k == MATCH:
             if s[j][1] < 0:
-                pc = _i(ints, row + UNKNOWN)
+                pc, code = _i(ints, row + UNKNOWN), code + _i(ints, row + W_UNKNOWN)
                 continue
             r = _match(op, s[j], t, ps, ints, chars, lay)
         else:
@@ -147,54 +150,71 @@ def _walk(pc, ctx):
                              floats + 8 * lay[EXPR_CONSTS], f, lay[EXPR_DEPTH])
             # A null float, and so a computed feature over one, is NaN.
             if x != x:
-                pc = _i(ints, row + UNKNOWN)
+                pc, code = _i(ints, row + UNKNOWN), code + _i(ints, row + W_UNKNOWN)
                 continue
             r = _compare(op, x, _f(floats, lay[THR_F] + t) if t >= 0 else pf[-t - 1])
-        pc = _i(ints, row + THEN) if r else _i(ints, row + ELSE)
+        if r:
+            pc, code = _i(ints, row + THEN), code + _i(ints, row + W_THEN)
+        else:
+            pc, code = _i(ints, row + ELSE), code + _i(ints, row + W_ELSE)
 
 
 # Real calls, not numba inlining: inlining the walk at each output or call
 # site multiplies compile time, and LLVM inlines what pays anyway.
 @njit
 def _leaf(rule, ctx):
+    # `(leaf, path number)`; first-match numbers the paths of all rules as one list, rule by rule.
     ints, lay = ctx[7], ctx[10]
     if rule >= 0:
         return _walk(_i(ints, lay[ROOTS] + rule), ctx)
-    for k in range(lay[N_ROOTS]):
-        leaf = _walk(_i(ints, lay[ROOTS] + k), ctx)
+    n = lay[N_ROOTS]
+    hit = (-1, 0)
+    for k in range(n):
+        leaf, code = _walk(_i(ints, lay[ROOTS] + k), ctx)
+        hit = (leaf, code + _i(ints, lay[ROOTS] + n + k))
         if leaf != -1:
-            return leaf
-    return -1
+            break
+    return hit
 
 
-def pick(outs, ctx, rule, leaf):
-    """Each output's value at the leaf its rule reached; consecutive outputs of one rule walk it once."""
+def pick(outs, ctx, rule, hit):
+    """Each output's value at the leaf (or path) its rule reached; consecutive outputs of one rule walk it once."""
 
 
 # Inlined by LLVM, not numba: numba inlining this recursion re-types every
 # level at every level, which grows compile time exponentially with outputs.
 @overload(pick, jit_options={"forceinline": True})
-def _pick(outs, ctx, rule, leaf):
+def _pick(outs, ctx, rule, hit):
     if len(outs.types) == 0:
-        return lambda outs, ctx, rule, leaf: ()
+        return lambda outs, ctx, rule, hit: ()
     spec = outs.types[0].types
+
+    # A trace output is `(rule, offset)`: the path's choice index at `offset + path number`.
+    def trace(outs, ctx, rule, hit):
+        o = outs[0]
+        if o[0] != rule:
+            rule, hit = o[0], _leaf(o[0], ctx)
+        return (_i(ctx[7], o[1] + hit[1]),) + pick(outs[1:], ctx, rule, hit)
+
+    if len(spec) == 2:
+        return trace
     read = _read_f if isinstance(spec[3], types.Float) else _read_b if isinstance(spec[3], types.Boolean) else _read_i
 
-    # An output is `(rule, offset, rows, zero[, valid offset])`: `rows` values
+    # Any other output is `(rule, offset, rows, zero[, valid offset])`: `rows` values
     # from `offset`, the last one the default row's, in the int or float array.
-    def impl(outs, ctx, rule, leaf):
+    def impl(outs, ctx, rule, hit):
         o = outs[0]
         if o[0] != rule:
-            rule, leaf = o[0], _leaf(o[0], ctx)
-        k = leaf if leaf >= 0 else o[2] - 1
-        return (read(ctx, o[1] + k),) + pick(outs[1:], ctx, rule, leaf)
+            rule, hit = o[0], _leaf(o[0], ctx)
+        k = hit[0] if hit[0] >= 0 else o[2] - 1
+        return (read(ctx, o[1] + k),) + pick(outs[1:], ctx, rule, hit)
 
-    def nullable(outs, ctx, rule, leaf):
+    def nullable(outs, ctx, rule, hit):
         o = outs[0]
         if o[0] != rule:
-            rule, leaf = o[0], _leaf(o[0], ctx)
-        k = leaf if leaf >= 0 else o[2] - 1
-        return (read(ctx, o[1] + k) if _i(ctx[7], o[4] + k) else None,) + pick(outs[1:], ctx, rule, leaf)
+            rule, hit = o[0], _leaf(o[0], ctx)
+        k = hit[0] if hit[0] >= 0 else o[2] - 1
+        return (read(ctx, o[1] + k) if _i(ctx[7], o[4] + k) else None,) + pick(outs[1:], ctx, rule, hit)
 
     return nullable if len(spec) == 5 else impl
 
