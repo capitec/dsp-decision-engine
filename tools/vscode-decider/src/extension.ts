@@ -113,7 +113,9 @@ export function activate(ctx: vscode.ExtensionContext) {
     }),
 
     vscode.debug.onDidStartDebugSession(async (s) => {
+      if (s.parentSession?.type === "decider") pythonOf.set(s.parentSession, s);
       if (s.type !== "decider") return;
+      running.add(s);
       const d = (await s.customRequest("decider.describe")) as DescribeResult;
       showGraph(s.configuration.program, d);
     }),
@@ -129,7 +131,10 @@ export function activate(ctx: vscode.ExtensionContext) {
     }),
 
     vscode.debug.onDidTerminateDebugSession((s) => {
+      if (s.parentSession && pythonOf.get(s.parentSession) === s) pythonOf.delete(s.parentSession);
       if (s.type !== "decider") return;
+      running.delete(s);
+      pythonOf.delete(s);
       clearRunTo();
       structure.setStatus(null, []);
       GraphPanel.post({ type: "status", current: null, finished: true, finishedPaths: [], visits: {}, record: null });
@@ -356,6 +361,9 @@ async function debugStep() {
   const location = new vscode.Location(vscode.Uri.file(py.file), new vscode.Position(py.bodyLine - 1, 0));
   const bp = new vscode.SourceBreakpoint(location, true, condition ?? undefined, condition ? undefined : "1");
   vscode.debug.addBreakpoints([bp]);
+  // One attach per step: a fresh attach is what brings the editor and the debug toolbar to the Python stop.
+  const old = pythonOf.get(s);
+  if (old) await vscode.debug.stopDebugging(old);
   const attached = await vscode.debug.startDebugging(
     s.workspaceFolder,
     { type: "debugpy", request: "attach", name: `python: ${info.node!.path}`, connect: { host: "127.0.0.1", port: info.debugpyPort }, justMyCode: false },
@@ -365,10 +373,17 @@ async function debugStep() {
     vscode.debug.removeBreakpoints([bp]);
     return;
   }
+  // The debugger gets breakpoints asynchronously: wait until it has verified this one, or the step runs past it.
+  const child = pythonOf.get(s);
+  for (let i = 0; child && i < 100 && !((await child.getDebugProtocolBreakpoint(bp)) as { verified?: boolean } | undefined)?.verified; i++) {
+    await new Promise((r) => setTimeout(r, 100));
+  }
   await s.customRequest("next", { threadId: 1 });
+  // The step is done when the flow pauses after it: drop the breakpoint and detach, leaving the run as it was.
   const sub = vscode.debug.onDidReceiveDebugSessionCustomEvent((e) => {
     if (e.session === s && e.event === "decider.status") {
       vscode.debug.removeBreakpoints([bp]);
+      if (child) void vscode.debug.stopDebugging(child);
       sub.dispose();
     }
   });
@@ -434,9 +449,16 @@ function findNode(d: DescribeResult, p: string) {
   return found;
 }
 
+/** Running decider sessions, and the Python debugger attached under each. */
+const running = new Set<vscode.DebugSession>();
+const pythonOf = new Map<vscode.DebugSession, vscode.DebugSession>();
+
+/** The decider run to act on: the active one, the one a focused Python session belongs to, or the latest started. */
 function deciderSession(): vscode.DebugSession | undefined {
   const s = vscode.debug.activeDebugSession;
-  return s?.type === "decider" ? s : undefined;
+  if (s?.type === "decider") return s;
+  if (s?.parentSession?.type === "decider") return s.parentSession;
+  return [...running].pop();
 }
 
 function renderLineage(l: Lineage, indent = ""): string {

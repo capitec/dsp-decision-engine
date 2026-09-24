@@ -80,6 +80,27 @@ describe("decider in VSCodium", () => {
     await wv.locator(".pause-banner", { hasText: "after cap_public" }).waitFor({ timeout: 60_000 });
   }, 150_000);
 
+  it("steps line by line through a longer step's Python, later in the same run", async () => {
+    const wv = c.webview();
+    await wv.locator("header nav button", { hasText: "Graph" }).click();
+    await wv.locator("select[aria-label=record]").first().selectOption("0");
+    await wv.locator("svg .node", { hasText: "risk_tree" }).first().click();
+    await wv.locator("aside button", { hasText: "Run to risk_tree" }).click();
+    await wv.locator(".pause-banner", { hasText: "before risk_tree" }).waitFor({ timeout: 60_000 });
+    await wv.locator("aside button", { hasText: "Step into the Python" }).click();
+    const line = (n: number) => c.page.locator(".statusbar", { hasText: `Ln ${n},` });
+    await line(99).waitFor({ timeout: 90_000 }); // score, r = row
+    const over = c.page.locator('.debug-toolbar .action-label[aria-label^="Step Over"]').first();
+    // client_id 1's path: under 680, then a ratio of 3 or more.
+    for (const next of [100, 101, 102, 103, 106, 107]) {
+      await over.click();
+      await line(next).waitFor({ timeout: 30_000 });
+    }
+    await c.shot("04c-python-lines");
+    await c.command("Debug: Continue");
+    await wv.locator(".pause-banner", { hasText: "after risk_tree" }).waitFor({ timeout: 60_000 });
+  }, 240_000);
+
   it("runs a what-if on a param and shows where the runs diverge", async () => {
     const wv = c.webview();
     await wv.locator("header nav button", { hasText: "What-if" }).click();
