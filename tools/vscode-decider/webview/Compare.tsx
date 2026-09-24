@@ -164,6 +164,9 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
           ].join(" · ")}
         </div>
       )}
+      {c.forcedRows?.length === 1 && c.results.b.decision && (
+        <div className="lead">{forcedLead(c, c.forcedRows[0])}</div>
+      )}
       {c.forcedRows && c.forcedRows.length > 0 && (
         <div className="muted small">
           Only {c.forcedRows.map((r) => recordLabel(r, c.key)).join(", ")} {c.forcedRows.length === 1 ? "was" : "were"} forced; the other {c.rows - c.forcedRows.length} records ran as they are.
@@ -286,7 +289,7 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
           ))}
         </div>
       )}
-      {downstream > 0 && (
+      {downstream > 0 && !c.forced && (
         <div className="muted small">
           {causes.length ? "and " : ""}
           {downstream} {causes.length ? "downstream " : ""}step{downstream === 1 ? "" : "s"} changed as a result: see Step by step below.
@@ -345,4 +348,19 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
       )}
     </div>
   );
+}
+
+/** "client_id 20400 as credit_card (at product): decline, Loan too large…. As personal_loan: approve, offer_amount R 143,500.00." */
+function forcedLead(c: Comparison, r: number): string {
+  const side = (k: "a" | "b", label: string) => {
+    const res = c.results[k];
+    const decision = String(res.decision?.[r] ?? "");
+    const detail =
+      decision === "decline"
+        ? res.reason_code?.[r]
+        : ["offer_amount", "offer_rate"].filter((n) => res[n]).map((n) => `${n} ${formatValue(res[n][r], n)}`).join(", ");
+    return `${label}: ${decision}${detail ? ` (${detail})` : ""}`;
+  };
+  const strip = (label: string) => label.replace(/^[^:]*: /, "");
+  return `${recordLabel(r, c.key)}, ${side("b", strip(c.b))}. Baseline, ${side("a", strip(c.a))}.`;
 }
