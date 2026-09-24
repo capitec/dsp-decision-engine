@@ -20,10 +20,12 @@ plain-Python entry point, callable with no pipeline for a single account list.
 from __future__ import annotations
 
 from datetime import date
+from typing import Any
 
 from decider import frame_step, missing_as, param
 
 import polars as pl
+from typing_extensions import TypedDict
 
 from credit_core.evidence import cell_id as _cell_id
 from consolidation import vocab
@@ -172,8 +174,15 @@ def _process(row: dict, recently_opened_months: int) -> dict:
     }
 
 
+class Account(TypedDict, total=False):
+    opened_date: date
+    quotation_expiry_date: date
+
+
+# Typed so a served JSON request's account date strings arrive as dates.
 @frame_step(
-    reads=["accounts", "decision_date", "client_nominated_settle", "client_excluded_settle"],
+    reads={"accounts": list[Account], "decision_date": date, "client_nominated_settle": Any,
+           "client_excluded_settle": Any},
     writes=["settleability_account_refs", "settleability_codes", "settleability_rule_ids",
             "settleability_cell_ids", "quotation_turnaround_days_list", "security_release_days_list",
             "early_settlement_rule_codes", "settleable_account_refs", "mandatory_account_refs",

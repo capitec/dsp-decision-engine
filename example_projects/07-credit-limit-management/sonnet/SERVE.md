@@ -15,7 +15,7 @@ cd example_projects/07-credit-limit-management/sonnet   # this directory
 export DECIDER_API__CODE_PATH="$PWD"
 export DECIDER_API__PIPELINE="pipeline:build"
 export DECIDER_CONFIG__BASEPATH="$PWD/configs"
-export DECIDER_API__MODE=interpreted   # see "Why interpreted mode" below
+export DECIDER_API__MODE=fused
 export PYTHONPATH="<REPO>/example_projects/00-shared-credit-core/sonnet:<REPO>/example_projects/02-affordability/sonnet"
 ```
 
@@ -28,7 +28,7 @@ read-only via `PYTHONPATH`; nothing here imports from anywhere else.
 uv run --project <REPO> decider build
 ```
 
-Expect: `built config version 0.1.0 (pipeline pipeline:build, mode interpreted)`.
+Expect: `built config version 0.1.0 (pipeline pipeline:build, mode fused)`.
 
 If `configs/0.1.0/matrix.json` (the 1 152-cell limit assignment matrix)
 is ever regenerated -- a real Credit Risk Policy spreadsheet refresh, in
@@ -78,12 +78,12 @@ scored = exe.run(population_df, params={})               # one account per row
 funded_df, cycle_summary = run_allocation(scored, BudgetInstruction())
 ```
 
-## Why interpreted mode
+## Mode
 
-Inherited from 00/02: `credit_core.expense_norms.norm_table_version`
-(consumed unmodified through project 02) compares two `str` table-version
-columns, which compiled (`fused`/`stepped`) mode rejects at bind time. See
-00's SERVE.md/NOTES.md for the full writeup.
+Served in `fused` mode: on `sample_request.json` its output equals
+`interpreted` mode's exactly. Steps no kernel can run faithfully (for example
+`credit_core.expense_norms.norm_table_version`, which compares two `str`
+inputs) run in Python, row by row, with a warning naming each at build time.
 
 ## Requests need every ragged/optional field populated explicitly
 

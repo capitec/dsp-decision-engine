@@ -117,7 +117,7 @@ def test_decider_build_stages_the_config_version(monkeypatch):
     from decider.cli import cli
 
     monkeypatch.setattr(os, "environ", {k: v for k, v in os.environ.items() if not k.upper().startswith("DECIDER_")})
-    monkeypatch.setenv("DECIDER_API__MODE", "interpreted")
+    monkeypatch.setenv("DECIDER_API__MODE", "fused")
     monkeypatch.setattr(sys, "path", list(sys.path))
     for name in ("pipeline", "inference"):
         monkeypatch.delitem(sys.modules, name, raising=False)

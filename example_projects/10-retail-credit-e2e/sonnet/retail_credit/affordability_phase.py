@@ -48,7 +48,7 @@ MINIMUM_EVIDENCE_TIER = 6  # tiers 6-7 are below minimum (10 §5.7(b)): verdict 
 _RESIDUAL_FLOOR = [1450.0, 1950.0, 2400.0, 2850.0, 3250.0, 3600.0, 3900.0]  # 0..6+ dependants
 
 
-def residual_floor(dependants_count: int) -> float:
+def residual_floor(dependants_count: float) -> float:
     idx = min(max(int(dependants_count), 0), len(_RESIDUAL_FLOOR) - 1)
     return _RESIDUAL_FLOOR[idx]
 
@@ -98,6 +98,14 @@ def pre_buffer(capacity: float, ratio_ceiling: float) -> tuple[float, str]:
 
 
 pre_buffer_step = step(pre_buffer, outputs=("pre_buffer", "affordability_binding_constraint"))
+
+
+def buffer_channel_code(channel_code: int) -> float:
+    # The buffer table reads its match columns as float, and an input column has one type.
+    return float(channel_code)
+
+
+buffer_channel_code_step = step(buffer_channel_code)
 
 
 def build_buffer_table() -> DecisionTableConfig:
