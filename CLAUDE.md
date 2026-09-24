@@ -2,6 +2,10 @@
 
 Use `uv` for everything: `uv run pytest`, `uv run python`. Python 3.10+.
 
+To learn the API as a user: `uv run decider guide` (`decider/GUIDE.md`) and the
+docstrings. Don't read `docs/`: it describes an older version. Every Python
+example in `GUIDE.md` runs in `tests/test_guide.py`; keep it that way.
+
 ## Comments and docstrings
 
 - Docstrings only on public API, written as user docs: a one-line summary, the
