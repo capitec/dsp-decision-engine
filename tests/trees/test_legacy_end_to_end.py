@@ -137,6 +137,14 @@ def test_an_unnamed_rule_in_all_mode_is_named_by_its_position(run):
     assert out["rule_0.r"].to_list() == out["rule_1.r"].to_list() == ["neg", "default"]
 
 
+def test_all_mode_with_a_hundred_rules_compiles_and_agrees_across_modes(run):
+    rules = [(f"r{i}", unary(lt("x", float(i)), leaf(0), leaf(-1))) for i in range(100)]
+    out = run(prioritized(rules, output("hit", default="none"), "all"), pl.DataFrame({"x": [0.5, 50.5]}))
+    assert out["r0.r"].to_list() == ["none", "none"]
+    assert out["r1.r"].to_list() == ["hit", "none"]
+    assert out["r99.r"].to_list() == ["hit", "hit"]
+
+
 # --- which nodes a row passes (the reference walker's visits) -----------------------------------
 
 

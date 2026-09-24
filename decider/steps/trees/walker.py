@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from numba import njit, types
-from numba.extending import overload
+from numba.extending import intrinsic, overload
 
 from decider.engine.boundary._arrow.intrinsics import load_f64, load_i64, load_u8
 from decider.steps.expr.postfix import evaluate
@@ -177,64 +177,71 @@ def _leaf(rule, ctx):
     return hit
 
 
-def pick(outs, ctx, rule, hit):
-    """Each output's value at the leaf (or path) its rule reached; consecutive outputs of one rule walk it once."""
-
-
-# Inlined by LLVM, not numba: numba inlining this recursion re-types every
-# level at every level, which grows compile time exponentially with outputs.
-@overload(pick, jit_options={"forceinline": True})
-def _pick(outs, ctx, rule, hit):
-    if len(outs.types) == 0:
-        return lambda outs, ctx, rule, hit: ()
-    spec = outs.types[0].types
-
+# `pick` makes one call per output, compiled once per output type, and LLVM
+# inlines what pays. Recursing over the output tuple at the type level instead
+# hit Python's recursion limit at a few dozen outputs (`mode: "all"`).
+@njit
+def _trace(o, ctx, rule, hit):
     # A trace output is `(rule, offset)`: the path's choice index at `offset + path number`.
-    def trace(outs, ctx, rule, hit):
-        o = outs[0]
-        if o[0] != rule:
-            rule, hit = o[0], _leaf(o[0], ctx)
-        return (_i(ctx[7], o[1] + hit[1]),) + pick(outs[1:], ctx, rule, hit)
-
-    if len(spec) == 2:
-        return trace
-    read = _read_f if isinstance(spec[3], types.Float) else _read_b if isinstance(spec[3], types.Boolean) else _read_i
-
-    # Any other output is `(rule, offset, rows, zero[, valid offset])`: `rows` values
-    # from `offset`, the last one the default row's, in the int or float array.
-    def impl(outs, ctx, rule, hit):
-        o = outs[0]
-        if o[0] != rule:
-            rule, hit = o[0], _leaf(o[0], ctx)
-        k = hit[0] if hit[0] >= 0 else o[2] - 1
-        return (read(ctx, o[1] + k),) + pick(outs[1:], ctx, rule, hit)
-
-    def nullable(outs, ctx, rule, hit):
-        o = outs[0]
-        if o[0] != rule:
-            rule, hit = o[0], _leaf(o[0], ctx)
-        k = hit[0] if hit[0] >= 0 else o[2] - 1
-        return (read(ctx, o[1] + k) if _i(ctx[7], o[4] + k) else None,) + pick(outs[1:], ctx, rule, hit)
-
-    return nullable if len(spec) == 5 else impl
+    if o[0] != rule:
+        rule, hit = o[0], _leaf(o[0], ctx)
+    return _i(ctx[7], o[1] + hit[1]), rule, hit
 
 
-@njit(inline="always")
-def _read_f(ctx, k):
-    return _f(ctx[8], k)
+# Any other output is `(rule, offset, rows, zero[, valid offset])`: `rows` values
+# from `offset`, the last one the default row's, in the int or float array.
+@njit
+def _value(o, ctx, rule, hit):
+    if o[0] != rule:
+        rule, hit = o[0], _leaf(o[0], ctx)
+    k = hit[0] if hit[0] >= 0 else o[2] - 1
+    return _read(ctx, o[1] + k, o[3]), rule, hit
 
 
-@njit(inline="always")
-def _read_i(ctx, k):
-    return _i(ctx[7], k)
+@njit
+def _nullable(o, ctx, rule, hit):
+    if o[0] != rule:
+        rule, hit = o[0], _leaf(o[0], ctx)
+    k = hit[0] if hit[0] >= 0 else o[2] - 1
+    return (_read(ctx, o[1] + k, o[3]) if _i(ctx[7], o[4] + k) else None), rule, hit
 
 
-@njit(inline="always")
-def _read_b(ctx, k):
-    return _i(ctx[7], k) != 0
+def _read(ctx, k, zero):
+    """Value `k` of the float or int array, typed as `zero`."""
 
 
-@njit(cache=True)
+@overload(_read, inline="always")
+def _read_typed(ctx, k, zero):
+    if isinstance(zero, types.Float):
+        return lambda ctx, k, zero: _f(ctx[8], k)
+    if isinstance(zero, types.Boolean):
+        return lambda ctx, k, zero: _i(ctx[7], k) != 0
+    return lambda ctx, k, zero: _i(ctx[7], k)
+
+
+@intrinsic
+def pick(typingctx, outs, ctx, rule, hit):
+    """Each output's value at the leaf (or path) its rule reached; consecutive outputs of one rule walk it once."""
+    calls = []
+    for spec in outs.types:
+        fnty = typingctx.resolve_value_type({2: _trace, 4: _value}.get(len(spec), _nullable))
+        calls.append((fnty, typingctx.resolve_function_type(fnty, (spec, ctx, rule, hit), {})))
+    ret = types.Tuple([sig.return_type.types[0] for _, sig in calls])
+
+    def codegen(context, builder, sig, args):
+        outs, ctx, rule, hit = args
+        values = []
+        for j, (fnty, call) in enumerate(calls):
+            res = context.get_function(fnty, call)(builder, (builder.extract_value(outs, j), ctx, rule, hit))
+            values.append(builder.extract_value(res, 0))
+            rule, hit = builder.extract_value(res, 1), builder.extract_value(res, 2)
+        return context.make_tuple(builder, ret, values)
+
+    return ret(outs, ctx, rule, hit), codegen
+
+
+# Only kernels call it; a Python entry point for hundreds of outputs takes a minute to compile.
+@njit(cache=True, no_cpython_wrapper=True)
 def walk(row, params, consts):
     """Walk a tree for one row: `row` and `params` laid out floats, ints, bools, spans; `consts` a `Program`'s.
 
