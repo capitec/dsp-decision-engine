@@ -20,6 +20,7 @@ export function ResultCards({ c, record, onFocus, onSelect }: { c: Comparison; r
   const offered = hit.filter((r) => !declined(r) || reasonMoved(r));
   const noOffer = hit.filter((r) => declined(r) && !reasonMoved(r));
   const ordered = record !== null && offered.includes(record) ? [record, ...offered.filter((r) => r !== record)] : offered;
+  const heads = distinct(c.a, c.b);
   if (!hit.length) return <div>No result changes for any of the {c.rows} records.</div>;
   const card = (r: number) => (
     <div key={r} className={`result-card ${r === record ? "hit" : ""}`}>
@@ -29,34 +30,51 @@ export function ResultCards({ c, record, onFocus, onSelect }: { c: Comparison; r
         ) : (
           <strong>{recordLabel(r, c.key)}</strong>
         )}
-        {decision && (
-          <span className={`decision ${c.results.b[decision][r]}`}>
-            {moved(decision, r) ? `${formatValue(c.results.a[decision][r])} → ${formatValue(c.results.b[decision][r])}` : formatValue(c.results.b[decision][r])}
-          </span>
-        )}
+        {decision && !moved(decision, r) && <span className={`decision ${c.results.b[decision][r]}`}>{formatValue(c.results.b[decision][r])} either way</span>}
         {r === record && <span className="muted small"> (focused)</span>}
       </div>
-      {cols
-        .filter((n) => n !== decision && moved(n, r) && (!declined(r) || n === "reason_code"))
-        .map((n) => (
-          <div key={n} className="result-line">
-            <span className="mono">{n}</span> <s className="before">{formatValue(c.results.a[n]?.[r], n)}</s> → <strong className="after">{formatValue(c.results.b[n]?.[r], n)}</strong>
-            {onSelect && writer(n) && (
-              <a className="small why" title={`Show ${writer(n)!.split("/").pop()}, the step that last wrote ${n}`} onClick={() => onSelect(writer(n)!)}> why?</a>
-            )}
-          </div>
-        ))}
-      {declined(r) && cols.some((n) => n !== decision && n !== "reason_code" && moved(n, r)) && (
-        <>
-          <div className="result-line muted">internal values (not offered):</div>
+      <table className="result-table">
+        <thead>
+          <tr>
+            <th />
+            <th title={c.a}>{heads[0]}</th>
+            <th title={c.b}>{heads[1]}</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {decision && moved(decision, r) && (
+            <tr>
+              <td className="mono">{decision}</td>
+              <td><span className={`decision ${c.results.a[decision][r]}`}>{formatValue(c.results.a[decision][r])}</span></td>
+              <td><span className={`decision ${c.results.b[decision][r]}`}>{formatValue(c.results.b[decision][r])}</span></td>
+              <td />
+            </tr>
+          )}
           {cols
-            .filter((n) => n !== decision && n !== "reason_code" && moved(n, r))
-            .map((n) => (
-              <div key={n} className="result-line internal">
-                <span className="mono">{n}</span> {formatValue(c.results.a[n]?.[r], n)} → {formatValue(c.results.b[n]?.[r], n)}
-              </div>
-            ))}
-        </>
+            .filter((n) => n !== decision && moved(n, r))
+            .map((n) => {
+              // On a side that declines, an amount or rate is a working value, not an offer.
+              const off = (side: "a" | "b") => decision !== null && c.results[side][decision][r] === "decline" && n !== "reason_code";
+              return (
+                <tr key={n}>
+                  <td className="mono">{n}</td>
+                  <td className={`num ${off("a") ? "not-offered" : ""}`} title={off("a") ? "Not offered: this side declines" : undefined}>{formatValue(c.results.a[n]?.[r], n)}</td>
+                  <td className={`num ${off("b") ? "not-offered" : ""}`} title={off("b") ? "Not offered: this side declines" : undefined}>
+                    <strong>{formatValue(c.results.b[n]?.[r], n)}</strong>
+                  </td>
+                  <td>
+                    {onSelect && writer(n) && (
+                      <a className="small why" title={`Show ${writer(n)!.split("/").pop()}, the step that last wrote ${n}`} onClick={() => onSelect(writer(n)!)}>why?</a>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+        </tbody>
+      </table>
+      {decision && (c.results.a[decision][r] === "decline" || c.results.b[decision][r] === "decline") && (
+        <div className="muted small">Greyed figures aren't an offer: that side declines{c.results.b.reason_code ? ` (${formatValue(c.results.b.reason_code[r] ?? c.results.a.reason_code?.[r])})` : ""}.</div>
       )}
     </div>
   );
@@ -109,4 +127,17 @@ export function headline(c: Comparison): string | null {
   ]
     .filter(Boolean)
     .join(" · ");
+}
+
+/** The words that tell two labels apart: "down personal_loan" and "down credit_card" from two long run labels. */
+function distinct(a: string, b: string): [string, string] {
+  const x = a.split(" ");
+  const y = b.split(" ");
+  let i = 0;
+  while (i < x.length - 1 && i < y.length - 1 && x[i] === y[i]) i++;
+  let j = 0;
+  while (j < x.length - i - 1 && j < y.length - i - 1 && x[x.length - 1 - j] === y[y.length - 1 - j]) j++;
+  // Keep the word before the difference ("down"), so a lone arm name still reads as a direction.
+  const from = Math.max(0, i - 1);
+  return [x.slice(from, x.length - j).join(" "), y.slice(from, y.length - j).join(" ")];
 }

@@ -16,17 +16,11 @@ drop into the Python of one step.
 from __future__ import annotations
 
 import ast
-import difflib
-import hashlib
-import importlib.util
-import inspect
 import json
 import os
 import queue
 import re
 import sys
-import tempfile
-import textwrap
 import threading
 from pathlib import Path
 
@@ -36,8 +30,7 @@ from decider.engine import Engine
 from decider.engine.debug import EVENT
 from decider.engine.debug.edit import swap
 from decider.engine.ir.context import step_map, to_ir
-from decider.engine.ir.nodes import BranchNode, CallNode, LoopNode
-from decider.steps import FrameStep, FunctionStep, Step
+from decider.steps import FunctionStep, Step
 
 sys.path.insert(0, os.path.dirname(__file__))
 from lineage import latest, lineage  # noqa: E402
@@ -46,113 +39,12 @@ from forks import checkpoint_key, merge, sweep  # noqa: E402
 from loading import TEXTS, load_module, source_diff  # noqa: E402
 from controls import Controls  # noqa: E402
 from timeline import Timeline  # noqa: E402
+from describing import assignment_lines, find_pipelines, formula, key_column, node_json, values_file  # noqa: E402
 
 
 def base_params(mod, params):
     """The module's `PARAMS` (its tables and tuned values, as the config store holds them) with `params` on top."""
     return merge(getattr(mod, "PARAMS", None) or {}, params or {}) or None
-
-
-def _assignment_lines(file):
-    tree = ast.parse(Path(file).read_text(), file)
-    return {t.id: n.lineno for n in tree.body if isinstance(n, ast.Assign)
-            for t in n.targets if isinstance(t, ast.Name)}
-
-
-def find_pipelines(mod, file):
-    """Combinator and config steps assigned at the top of `file` that no other one there contains."""
-    lines = _assignment_lines(file)  # imported sub-flows aren't this file's pipelines
-    steps = {k: v for k, v in vars(mod).items() if isinstance(v, Step) and not k.startswith("_") and k in lines}
-    contained = {id(s) for top in steps.values() for _, s in top.walk() if s is not top}
-    return [{"name": k, "line": lines.get(k), "kind": type(v).__name__} for k, v in steps.items()
-            if id(v) not in contained and not isinstance(v, (FunctionStep, FrameStep))]
-
-
-def _first_statement(fn):
-    """First line of `fn`'s body, where a debugpy breakpoint stops on the call rather than the def."""
-    try:
-        src, first = inspect.getsourcelines(fn)
-        node = ast.parse(textwrap.dedent("".join(src))).body[0]
-        return first + node.body[0].lineno - 1
-    except (OSError, TypeError, SyntaxError, IndexError, AttributeError):
-        return None
-
-
-def _short_source(fn, limit=15):
-    """A step function's source when it is short enough to read in the details pane."""
-    try:
-        lines = textwrap.dedent(inspect.getsource(fn)).rstrip().splitlines()
-    except (OSError, TypeError):
-        return None
-    return "\n".join(lines) if len(lines) <= limit else None
-
-
-def _values_file(file):
-    """The file a module's `PARAMS = ...` reads, when that line names one: `json.loads(... / "params.json" ...)`."""
-    for line in Path(file).read_text().splitlines():
-        if line.startswith("PARAMS") and (m := re.search(r"[\"']([\w./-]+\.(?:json|ya?ml|toml))[\"']", line)):
-            return m.group(1)
-    return None
-
-
-def _formula(fn):
-    """The expression a one-line step returns, e.g. `min(pl_raw_rate, repo_rate + cap_margin)`."""
-    try:
-        node = ast.parse(textwrap.dedent(inspect.getsource(fn))).body[0]
-    except (OSError, TypeError, SyntaxError, IndexError):
-        return None
-    body = [b for b in getattr(node, "body", ()) if not (isinstance(b, ast.Expr) and isinstance(b.value, ast.Constant))]
-    return ast.unparse(body[0].value) if len(body) == 1 and isinstance(body[0], ast.Return) and body[0].value else None
-
-
-def _code_location(fn):
-    code = getattr(fn, "__code__", None)
-    return (code.co_filename, code.co_firstlineno) if code else (None, None)
-
-
-def _fingerprint(fn, step_):
-    """Changes when the code or config behind a node changes; compared across revisions."""
-    try:
-        text = inspect.getsource(fn)
-    except (OSError, TypeError):
-        text = repr(fn)
-    if hasattr(step_, "model_dump_json"):
-        text += step_.model_dump_json()
-    return hashlib.sha1(text.encode()).hexdigest()[:12]
-
-
-def node_json(node, steps, located):
-    o = node.origin
-    step_ = steps.get(o.path)
-    file, line = located.get(id(step_), (None, None))
-    if isinstance(step_, (FunctionStep, FrameStep)):
-        file, line = _code_location(step_.fn)
-    base = {"path": o.path, "source": o.source, "file": file, "line": line}
-    if isinstance(node, CallNode):
-        python = node.reference if node.kind == "row" else node.fn
-        rf, rl = _code_location(python)
-        return {**base, "kind": "call", "callKind": node.kind,
-                "inputs": None if node.inputs is None else [i.name for i in node.inputs],
-                "outputs": None if node.outputs is None else [x.name for x in node.outputs],
-                "params": {d.name: d.default for d in node.params}, "code": _fingerprint(python, step_),
-                "doc": (inspect.getdoc(python) or "").split("\n")[0],
-                "formula": _formula(python) if isinstance(step_, FunctionStep) else None,
-                "body": _short_source(python) if isinstance(step_, FunctionStep) else None,
-                "table": step_.expression.model_dump(mode="json") if hasattr(step_, "expression") and hasattr(step_, "rows") else None,
-                "python": {"file": rf, "line": rl, "bodyLine": _first_statement(python)} if rf else None}
-    kind = "branch" if isinstance(node, BranchNode) else "loop" if isinstance(node, LoopNode) else "sequence"
-    extra = {"modifies": list(node.modifies)} if kind == "branch" else {}
-    if kind == "loop":
-        extra = {"carries": list(node.carries), "maxIterations": node.max_iterations}
-    return {**base, "kind": kind, **extra, "children": [node_json(c, steps, located) for c in node.children()]}
-
-
-def key_column(frame):
-    """The column that names a record (`client_id`, `id`), so views can say "client_id 2" not "row 1"."""
-    for c in frame.columns:
-        if c == "id" or c.endswith("_id") or c.startswith("id_"):
-            return {"name": c, "values": frame[c].to_list()}
-    return None
 
 
 def _load_rows(data):
@@ -183,7 +75,7 @@ class Bridge:
         mods = [self.mod] + [m for n, m in list(sys.modules.items())
                              if (n == top or n.startswith(top + ".")) and m is not self.mod and getattr(m, "__file__", None)]
         for m in mods:
-            lines = _assignment_lines(m.__file__)
+            lines = assignment_lines(m.__file__)
             for k, v in vars(m).items():
                 if isinstance(v, Step) and k in lines:
                     located.setdefault(id(v), (str(Path(m.__file__).resolve()), lines[k]))
@@ -192,8 +84,12 @@ class Bridge:
         self._index(tree, None)
         params = {path: {k: {kk: vv for kk, vv in info.items() if kk != "used_by" or path == "shared"} for k, info in ps.items()}
                   for path, ps in self.step.parameters().items()}
+        # What the flow decides: what it emits, and what its top-level branches set.
+        outcome = [n for n in getattr(self.step, "emits", ()) if "@" not in n]
+        outcome += [m for c in tree.get("children", ()) if c["kind"] == "branch" for m in c.get("modifies", ())]
         self.described = {"pipelines": pipelines, "pipeline": self.name, "ir": tree, "params": params,
-                          "values": getattr(self.mod, "PARAMS", None) or {}, "valuesFile": _values_file(file)}
+                          "outcome": list(dict.fromkeys(outcome)),
+                          "values": getattr(self.mod, "PARAMS", None) or {}, "valuesFile": values_file(file)}
         return self.described
 
     def trace(self, file, pipeline=None, data=None, params=None, overrides=None, row=None, forces=()):
@@ -239,12 +135,26 @@ class Bridge:
         self.sent = len(s.events)
         cur = s.current
         return {"finished": s.finished, "events": events,
-                "current": cur and {"path": cur.origin.path, "when": cur.when}, "hit": self.controls.take_hit()}
+                "current": cur and {"path": cur.origin.path, "when": cur.when}, "hit": self.controls.take_hit(),
+                # What has run since the start or the last rewind, for the graph's ticks.
+                "ran": sorted({p for p, w in self.timeline.log if w == "after"})}
 
     def _checkpoint(self, cp):
-        self.controls.force(cp)
         self.timeline.record(cp)
+        self._force(cp)
         return self.controls.watch(cp)
+
+    def _set_by_hand(self, entry, row):
+        # A forced or overridden value came from you, not from the step that wrote it before.
+        c = self.timeline.last(entry["name"], row)
+        if c and c["path"].split("@")[0] in ("force", "override"):
+            entry.update(setBy=c["path"], was=c["before"][c["rows"].index(row)], inputs=[])
+        for i in entry.get("inputs", ()):
+            self._set_by_hand(i, row)
+
+    def _force(self, cp):
+        for group, name in self.controls.force(cp):
+            self.timeline.forced(group, name)
 
     def changes(self, name, row=None):
         """Every change to `name` so far (for one record, or all), with the step and iteration that made it."""
@@ -253,7 +163,7 @@ class Bridge:
     def go_to(self, change):
         """Go back to just after the step made the timeline's `change`, re-running up to there."""
         c = self.timeline.changes[change]
-        if c["path"].startswith("override@"):
+        if c["path"].split("@")[0] in ("override", "force"):
             raise ValueError("a value you set has no step to go back to")
         n = self.timeline.occurrence(change)
         s = self.session
@@ -334,7 +244,7 @@ class Bridge:
         self.session.replace(path, new)
         self.step = self.session.executable.step
         self.edits.append((path, new))
-        return {"diff": source_diff(old, texts, new, TEXTS), "formula": _formula(new.fn) if isinstance(new, FunctionStep) else None}
+        return {"diff": source_diff(old, texts, new, TEXTS), "formula": formula(new.fn) if isinstance(new, FunctionStep) else None}
 
     def restore(self, path):
         """Put the step at `path` back as the run started it, undoing a skip or a code swap, and re-run from there."""
@@ -416,7 +326,10 @@ class Bridge:
         if s is None:
             raise RuntimeError("no session: send start first")
         if cmd == "lineage":
-            return lineage(s, **args)
+            entry = lineage(s, **args)
+            if args.get("row") is not None:
+                self._set_by_hand(entry, args["row"])
+            return entry
         if cmd == "tree_path":
             return tree_path(s, **args)
         if cmd == "debug_condition":
@@ -427,7 +340,7 @@ class Bridge:
             return {**self.status(), "diff": edit.get("diff", []), "formula": edit.get("formula")}
         if cmd in ("step", "step_into", "resume", "rewind", "break_at", "clear_break", "set"):
             if cmd in ("step", "step_into", "resume") and s.current is not None:
-                self.controls.force(s.current)  # paused on a condition, its breakpoint check already passed
+                self._force(s.current)  # paused on a condition, its breakpoint check already passed
             try:
                 getattr(s, cmd)(**args)
             except Exception as e:  # a step raised: the events hold the Error, the reply the message

@@ -212,7 +212,7 @@ export function summaryRows(entry: Lineage, nodes: CallNodeJson[], values: Recor
 }
 
 function Level({ entry, depth, nodes, values, who, onPick, onSelect }: { entry: Lineage; depth: number; nodes: CallNodeJson[]; values: Record<string, unknown>; who: string | null; onPick: (n?: string) => void; onSelect: (p: string) => void }) {
-  const [open, setOpen] = useState(depth < OPEN_DEPTH);
+  const [open, setOpen] = useState(depth < OPEN_DEPTH && !entry.setBy);
   const [showZeros, setShowZeros] = useState(false);
   // A term that is 0 for this record adds nothing to the answer; folded unless asked for, or when it's the only one.
   const zero = (i: Lineage) => i.value === 0 && entry.inputs.filter((x) => x.value === 0).length > 1;
@@ -222,7 +222,7 @@ function Level({ entry, depth, nodes, values, who, onPick, onSelect }: { entry: 
   for (const i of entry.inputs) known[i.name] = i.value;
   const rows = node?.table ? (Object.keys(node.params).map((k) => shared(values)[k]).find(Array.isArray) as Record<string, unknown>[] | undefined) : undefined;
   const match = node?.table && rows && entry.inputs[0] ? matchRow(node.table, rows, entry.inputs[0].value) : null;
-  const expandable = entry.producer !== null && (entry.inputs.length > 0 || !!node?.formula);
+  const expandable = entry.producer !== null && !entry.setBy && (entry.inputs.length > 0 || !!node?.formula);
   // A sum shows as a waterfall, which already names each part; its inputs' own breakdowns open on request.
   const terms = node?.formula ? sumTerms(node.formula) : null;
   const [partsOpen, setPartsOpen] = useState(false);
@@ -235,12 +235,20 @@ function Level({ entry, depth, nodes, values, who, onPick, onSelect }: { entry: 
       )}
       <a className="mono" title={expandable ? `Show how ${entry.name} was computed` : entry.name} onClick={() => expandable && setOpen(!open)}>{entry.name}</a>
       {who && <strong className="mono"> = {formatValue(entry.value, entry.name)}</strong>}
+      {entry.setBy ? (
+        <span className="set-by">
+          {" "}
+          {entry.setBy.startsWith("force@") ? `forced by you (sending the record down another arm of ${short(entry.setBy.slice(6))})` : "set by you"}
+          {entry.was !== undefined && entry.was !== null && <span className="muted">; {short(entry.producer ?? "")} gave {formatValue(entry.was, entry.name)}</span>}
+        </span>
+      ) : (
       <span className="muted">
         {" "}
         {entry.producer === null ? "input" : <>from <a onClick={() => onSelect(entry.producer!)}>{short(entry.producer)}</a></>}
         {entry.via === "merge" && " (the branch arm this record took)"}
         {entry.via === "carry" && " (the loop's last iteration)"}
       </span>
+      )}
       {open && who && terms && (
         <table className="waterfall">
           <tbody>

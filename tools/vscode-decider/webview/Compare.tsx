@@ -55,6 +55,7 @@ function Diffs({ diffs, record, keyCol, results }: { diffs: ValueDiff[]; record:
 export function Compare({ comparison: c, busy, error, record, onSelect, onCompareRevision, onOpenDiff, back, header, withRevision = true, onFocus }: Props) {
   const [onlyChanges, setOnlyChanges] = useState(true);
   const [showDeclinedOnly, setShowDeclinedOnly] = useState(false);
+  const [showSwitched, setShowSwitched] = useState(false);
   const revisionButton = <button onClick={onCompareRevision}>Compare with a git revision…</button>;
   if (busy) return <div className="compare"><div className="empty">{busy}</div></div>;
   if (error) return <div className="compare"><div className="empty error">{error}</div><div className="actions">{revisionButton}</div></div>;
@@ -76,8 +77,27 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
     if (s.status === "same" || s.status === "not run") return false;
     return !focusChanged || s.status !== "changed" || s.structural.length > 0 || s.outputs.some((o) => o.changedRows.includes(record!));
   });
-  const folded = onlyChanges && !showDeclinedOnly ? shownSteps.filter(declinedOnly) : [];
-  const steps = shownSteps.filter((s) => !folded.includes(s));
+  // A record that went down another arm empties one side's values and fills the other's: say so once per group.
+  const empty = (v: unknown) => v === null || v === undefined;
+  const switchedTo = (s: (typeof c.steps)[number]): "left" | "entered" | null => {
+    if (s.status === "not taken") return "left";
+    if (s.status !== "changed" || s.structural.length || s.paramChanges.length || !s.outputs.length) return null;
+    const samples = s.outputs.flatMap((o) => o.samples);
+    if (samples.length && samples.every((x) => empty(x.b) && !empty(x.a))) return "left";
+    if (samples.length && samples.every((x) => empty(x.a) && !empty(x.b))) return "entered";
+    return null;
+  };
+  const switched = onlyChanges && !showSwitched ? shownSteps.filter((s) => switchedTo(s) !== null) : [];
+  const folded = onlyChanges && !showDeclinedOnly ? shownSteps.filter((s) => declinedOnly(s) && !switched.includes(s)) : [];
+  const steps = shownSteps.filter((s) => !folded.includes(s) && !switched.includes(s));
+  const within = (paths: string[]) => {
+    const parts = paths.map((p) => p.split("/"));
+    let k = 0;
+    while (parts.every((p) => p[k] !== undefined && p[k] === parts[0][k])) k++;
+    return parts[0].slice(0, k).pop();
+  };
+  const left = switched.filter((s) => switchedTo(s) === "left").map((s) => s.path);
+  const entered = switched.filter((s) => switchedTo(s) === "entered").map((s) => s.path);
   const count = (st: string) => c.steps.filter((s) => s.status === st).length;
   // A step is "edited" when its code or params differ; otherwise it only moved because its inputs did.
   const docHas = (path: string) => path.split("/").reduce<unknown>((d, part) => (d as Record<string, unknown> | undefined)?.[part], c.paramsDocs?.b) !== undefined;
@@ -258,14 +278,26 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
           ))}
         </div>
       )}
-      {downstream > 0 && <div className="muted small">and {downstream} downstream step{downstream === 1 ? "" : "s"} changed as a result: see Step by step below.</div>}
+      {downstream > 0 && (
+        <div className="muted small">
+          {causes.length ? "and " : ""}
+          {downstream} {causes.length ? "downstream " : ""}step{downstream === 1 ? "" : "s"} changed as a result{c.forced ? " of the force" : ""}: see Step by step below.
+        </div>
+      )}
       <h4>
-        Step by step <span className="muted small">· {count("changed")} steps changed{count("added") ? `, ${count("added")} added` : ""}{count("removed") ? `, ${count("removed")} removed` : ""}{count("not taken") ? `, ${count("not taken")} not taken` : ""}</span>
+        Step by step <span className="muted small">· {count("changed")} step{count("changed") === 1 ? "" : "s"} changed{count("added") ? `, ${count("added")} added` : ""}{count("removed") ? `, ${count("removed")} removed` : ""}{count("not taken") ? `, ${count("not taken")} not taken` : ""}</span>
         {c.firstDivergence && (
           <span className="muted small"> · first difference at <a onClick={() => onSelect(c.firstDivergence!)}>{c.firstDivergence}</a></span>
         )}
         <label className="right small"><input type="checkbox" checked={onlyChanges} onChange={(e) => setOnlyChanges(e.target.checked)} /> only changed steps</label>
       </h4>
+      {(left.length > 0 || entered.length > 0) && (
+        <div className="muted small switched">
+          {left.length > 0 && <div>{left.length} step{left.length === 1 ? "" : "s"}{within(left) ? ` in ${within(left)}` : ""} no longer ran for {c.rows === 1 ? "this record" : "the records that switched arm"}.</div>}
+          {entered.length > 0 && <div>{entered.length} step{entered.length === 1 ? "" : "s"}{within(entered) ? ` in ${within(entered)}` : ""} ran for them instead.</div>}
+          <a onClick={() => setShowSwitched(true)}>show these steps</a>
+        </div>
+      )}
       {folded.length > 0 && (
         <div className="muted small">
           {folded.length} step{folded.length === 1 ? "" : "s"} changed only declined applicants' internal values ·{" "}

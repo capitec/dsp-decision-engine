@@ -32,7 +32,7 @@ class Timeline:
             if not versions:
                 continue
             valid = st.valid.get(versions[-1].id)
-            self._note(cp, cp.origin.path, name, st.column(spec).to_list(), valid)
+            self._note(cp, cp.origin.path, name, st.column(spec).to_list(), valid, kept=True)
 
     def override(self, name):
         """Note a value set by hand at the current checkpoint."""
@@ -40,14 +40,22 @@ class Timeline:
         path = "" if cp is None else cp.origin.path
         self._note(cp, f"override@{path}", name, self.session.value(name).to_list(), None)
 
-    def _note(self, cp, path, name, values, valid):
+    def forced(self, group, name):
+        """Note a branch's or loop's condition value that a force replaced."""
+        self._note(self.session.current, f"force@{group}", name, self.session.value(name).to_list(), None)
+
+    def _note(self, cp, path, name, values, valid, kept=False):
         now = self.now.setdefault(name, [None] * len(values))
         # A row the step didn't write (another arm, a loop that already stopped) keeps its value.
-        rows = [r for r, v in enumerate(values) if (valid is None or valid[r]) and v != now[r]]
-        if not rows:
+        written = [r for r in range(len(values)) if valid is None or valid[r]]
+        rows = [r for r in written if values[r] != now[r]]
+        # A step that wrote the value a record already had: "the floor kept 25.2%", for one record's history.
+        same = [r for r in written if values[r] == now[r]] if kept else []
+        if not rows and not same:
             return
         self.changes.append({"at": len(self.log), "path": path, "iteration": cp and cp.iteration, "arm": cp and cp.arm,
-                             "name": name, "rows": rows, "values": [values[r] for r in rows], "before": [now[r] for r in rows]})
+                             "name": name, "rows": rows, "values": [values[r] for r in rows], "before": [now[r] for r in rows],
+                             "kept": same, "kept_values": [values[r] for r in same]})
         for r in rows:
             now[r] = values[r]
 
@@ -69,20 +77,31 @@ class Timeline:
         """The changes to `name`, oldest first; for one record, only the changes to it."""
         out = []
         for i, c in enumerate(self.changes):
-            if c["name"] != name or (row is not None and row not in c["rows"]):
+            if c["name"] != name:
                 continue
             e = {k: c[k] for k in ("path", "iteration", "arm")}
             e["change"] = i
             if row is None:
+                if not c["rows"]:
+                    continue
                 e.update(rows=len(c["rows"]), values=c["values"][:3], before=c["before"][:3])
-            else:
+            elif row in c["rows"]:
                 j = c["rows"].index(row)
                 e.update(value=c["values"][j], before=c["before"][j])
+            elif row in c["kept"]:
+                v = c["kept_values"][c["kept"].index(row)]
+                e.update(value=v, before=v, kept=True)
+            else:
+                continue
             out.append(e)
         initial = self.inputs.get(name)
         return {"name": name, "input": initial is not None,
                 "initial": None if initial is None else (initial if row is None else initial[row]),
                 "changes": out}
+
+    def last(self, name, row):
+        """The latest change to `name` for record `row`, or None."""
+        return next((c for c in reversed(self.changes) if c["name"] == name and row in c["rows"]), None)
 
     def occurrence(self, change):
         """Which time its step finished, counting from the start: 3 for the third iteration."""

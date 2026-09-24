@@ -2198,3 +2198,47 @@ input.narrow {
   border-left: 3px solid var(--vscode-focusBorder);
   background: var(--vscode-textBlockQuote-background);
 }
+.timeline li.kept {
+  opacity: 0.75;
+}
+.added {
+  color: var(--vscode-testing-iconPassed, #73c991);
+  margin: 4px 0;
+}
+.banner-note.outcome {
+  font-weight: 600;
+}
+.set-by {
+  color: var(--vscode-charts-purple, #b180d7);
+}
+.result-table {
+  border-collapse: collapse;
+  margin: 4px 0;
+  width: 100%;
+  table-layout: fixed;
+}
+.result-table th {
+  text-align: right;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 8px;
+}
+.result-table th:first-child,
+.result-table td:first-child {
+  width: 34%;
+  text-align: left;
+}
+.result-table th:last-child,
+.result-table td:last-child {
+  width: 3.5em;
+}
+.result-table td {
+  padding: 2px 8px;
+  text-align: right;
+}
+.result-table td.not-offered {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
