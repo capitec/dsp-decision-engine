@@ -8,6 +8,7 @@ from dataclasses import dataclass
 import numpy as np
 import polars as pl
 
+from decider.engine.params.tables import rows_like
 from decider.serializable.schema import PolarsSchema
 from decider.steps.tables.schema import (
     AndExpression,
@@ -161,7 +162,7 @@ class Shape:
 
 def expected(types: t.Mapping[str, t.Any]) -> str:
     """What a table's rows look like, for error messages: `[{"lo": Float64, "band": String}, ...]`."""
-    return "expected a list of rows like [{" + ", ".join(f'"{c}": {d}' for c, d in types.items()) + "}, ...]"
+    return rows_like(types)
 
 
 def typed(data: list[dict], types: dict[str, t.Any]) -> list[dict]:

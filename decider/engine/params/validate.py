@@ -9,6 +9,7 @@ from typing import Any, Mapping
 from pydantic import ValidationError
 
 from decider.engine.params.models import NodeParams
+from decider.engine.params.tables import rows_like
 from decider.exceptions import ParamsError
 from decider.registry.resolve import hint, suggest
 
@@ -56,11 +57,17 @@ def _local_view(doc: Mapping, path: str) -> Any:
 
 
 def _message(node: NodeParams, by_name: dict, err: dict) -> str:
-    decl = by_name[err["loc"][0]]
+    loc = err["loc"]
+    decl = by_name[loc[0]]
     where = f"shared param '{decl.shared_key}'" if decl.shared_key else f"param '{decl.name}'"
-    if err["type"] == "missing":
-        return f"{node.path}: {where} is required but missing"
-    return f"{node.path}: {where}: {err['msg']} (got {err['input']!r})"
+    like = "" if decl.schema is None else rows_like(dict(decl.schema))
+    if err["type"] == "missing" and len(loc) == 1:
+        return f"{node.path}: {where} is required but missing" + (f"; {like}" if like else "")
+    # A table's own row errors are located as (param, row, column).
+    at = f"row {loc[1]}, column {loc[2]!r}: " if len(loc) == 3 and isinstance(loc[1], int) else ""
+    got = "" if at and err["type"] == "missing" else f" (got {err['input']!r})"
+    text = f"{node.path}: {where}: {at}{err['msg']}{got}"
+    return text + (f"; {like}" if like and like not in text else "")
 
 
 def validate_node(node: NodeParams, doc: Mapping) -> Validation:
