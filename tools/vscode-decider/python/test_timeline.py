@@ -79,6 +79,12 @@ def test_going_back_to_a_step_by_path_pauses_after_its_last_write_for_the_record
     assert r["current"] == {"path": "affordability/disposable_income", "when": "after"}
 
 
+def test_a_value_not_set_yet_has_no_breakdown_rather_than_an_error():
+    b = finished()
+    b.handle({"cmd": "go_to", "path": "affordability/disposable_income", "row": 0})
+    assert b.handle({"cmd": "lineage", "name": "offer", "row": 0})["unset"]
+
+
 def test_the_state_mid_iteration_shows_what_the_loop_body_just_wrote():
     b = Bridge()
     b.start(LOAN, breakpoints=["sizing/shrink_offer/shrink"])

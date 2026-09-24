@@ -354,6 +354,11 @@ class Bridge:
         if s is None:
             raise RuntimeError("no session: send start first")
         if cmd == "lineage":
+            row = args.get("row")
+            now = self.timeline.now.get(args["name"])
+            # Not set yet for this record (after going back past it): nothing to break down, and not an error.
+            if row is not None and args["name"] not in s.frame.columns and (now is None or now[row] is None):
+                return {"name": args["name"], "producer": None, "value": None, "inputs": [], "unset": True}
             entry = lineage(s, **args)
             if args.get("row") is not None:
                 self._set_by_hand(entry, args["row"])

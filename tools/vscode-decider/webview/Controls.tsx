@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { formatValue, lastSegment, recordLabel, walk, type Checkpoint, type Controls, type Force, type Hit, type IRNodeJson, type RecordKey, type Watch } from "../src/protocol";
 import { parseValue } from "./Params";
 
@@ -92,13 +92,17 @@ interface GroupProps {
 /** Force a branch's arm or a loop's iteration count, compare two of them, or pause at an iteration. */
 export function GroupControls({ group, controls, record, keyCol, paused, ran, current, onChange, onCompare, onRerun }: GroupProps) {
   const isLoop = group.kind === "loop";
-  const [one, setOne] = useState(false);
-  const [oneCompare, setOneCompare] = useState(false);
+  // With a record focused, forcing and comparing start with just that record.
+  const [one, setOne] = useState(record !== null);
+  const [oneCompare, setOneCompare] = useState(record !== null);
+  useEffect(() => {
+    setOne(record !== null);
+    setOneCompare(record !== null);
+  }, [record]);
   const [a, setA] = useState(isLoop ? "5" : "0");
   const [b, setB] = useState(isLoop ? "10" : "1");
   const [times, setTimes] = useState("");
   const [at, setAt] = useState("");
-  const [added, setAdded] = useState<string>();
   const row = one && record !== null ? record : null;
   // Who a force or comparison applies to: every record, or the focused one.
   const whom = (what: "force" | "compare") =>
@@ -118,7 +122,10 @@ export function GroupControls({ group, controls, record, keyCol, paused, ran, cu
   const mine = controls.forces.filter((f) => f.path === group.path);
   const forced = mine.find((f) => (f.row ?? null) === row);
   const whoForced = mine[0]?.row == null ? "every record" : recordLabel(mine[0].row, keyCol);
+  // A re-run with the current forces happened: they are applied until they change.
+  const [rerunDone, setRerunDone] = useState(false);
   const setForce = (f?: { arm: number } | { iterations: number }) => {
+    setRerunDone(false);
     const rest = controls.forces.filter((x) => !(x.path === group.path && (x.row ?? null) === row));
     onChange({ ...controls, forces: f ? [...rest, { path: group.path, row, ...f }] : rest });
   };
@@ -167,12 +174,15 @@ export function GroupControls({ group, controls, record, keyCol, paused, ran, cu
           </>
         )}
         {forced && <button onClick={() => setForce()}>Stop forcing</button>}
-        {paused && mine.length > 0 && !(current?.path === group.cond && current.when === "before") && (
+        {paused && mine.length > 0 && !rerunDone && !(current?.path === group.cond && current.when === "before") && (
           <button
             title="Go back to just before it, keeping everything earlier, run it with the force, and come back to where you are"
-            onClick={() => onRerun(group.cond, current)}
+            onClick={() => {
+              setRerunDone(true);
+              onRerun(group.cond, current);
+            }}
           >
-            ↺ Re-run {name} with the force{current?.path ? `, back to ${lastSegment(current.path)}` : ""}
+            ↺ Re-run from {name} with this force
           </button>
         )}
       </div>
@@ -180,7 +190,9 @@ export function GroupControls({ group, controls, record, keyCol, paused, ran, cu
         <div className="small added">
           {current?.path === group.cond && current.when === "before"
             ? `Paused just before ${lastSegment(group.cond)}: when it runs, ${whoForced} ${isLoop ? `goes round exactly ${mine[0].iterations} times` : `goes down ${group.arms[mine[0].arm ?? 0]}`}. Step or continue to see it.`
-            : ran && paused
+            : rerunDone && ran
+              ? `Applied: ${whoForced} ${isLoop ? `went round exactly ${mine[0].iterations} times` : `went down ${group.arms[mine[0].arm ?? 0]}`} in the re-run.`
+              : ran && paused
               ? `Force is set, but ${name} already ran in this pause. Re-run it now, or it applies on the next run.`
               : `Force is set: it applies the next time ${lastSegment(group.cond)} runs.`}
         </div>
@@ -203,7 +215,6 @@ export function GroupControls({ group, controls, record, keyCol, paused, ran, cu
             disabled={!at}
             onClick={() => {
               onChange({ ...controls, watches: [...controls.watches, { path: group.path, iteration: Number(at) }] });
-              setAdded(`Added: the run pauses before iteration ${at}. It's listed at the top; × removes it.`);
               setAt("");
             }}
           >
@@ -211,7 +222,15 @@ export function GroupControls({ group, controls, record, keyCol, paused, ran, cu
           </button>
         </div>
       )}
-      {isLoop && added && <div className="added small">{added}</div>}
+      {isLoop &&
+        controls.watches.map((w, i) =>
+          w.path === group.path && w.iteration !== undefined ? (
+            <div key={i} className="small added">
+              ⏸ Pausing before iteration {w.iteration}{" "}
+              <button className="link" onClick={() => onChange({ ...controls, watches: controls.watches.filter((_, j) => j !== i) })}>remove</button>
+            </div>
+          ) : null,
+        )}
     </section>
   );
 }

@@ -18,7 +18,7 @@ export interface CallNodeJson extends IRNodeBase {
   outputs: string[] | null;
   params: Record<string, unknown>;
   /** The Python that runs in interpreted mode: `fn`, or a row node's `reference`. */
-  python: { file: string; line: number; bodyLine: number | null } | null;
+  python: { file: string; line: number; bodyLine: number | null; endLine?: number | null } | null;
   /** Changes when the code or config behind the node changes. */
   code: string;
   /** The first line of the step's docstring. */
@@ -153,6 +153,8 @@ export interface Lineage {
   /** Set when the value came from you: "force@<branch or loop>" or "override@<path>", and what it was before. */
   setBy?: string;
   was?: unknown;
+  /** Not set yet for the focused record: there is nothing to break down. */
+  unset?: boolean;
   /** For a forced branch condition: its arms by name, so a value reads as the arm it picks. */
   arms?: string[];
 }
