@@ -265,7 +265,8 @@ export function App() {
   const decided = run.record !== null && columns ? (describe?.outcome ?? []).map((n) => columns.find((c) => c.name === n)).filter((c) => c && c.value !== null && c.value !== undefined) : [];
   // A declined record has no offer: its amounts and rates are working values, so they stay out of the outcome.
   const declinedNow = decided.some((c) => c!.name === "decision" && c!.value === "decline");
-  const said = declinedNow ? decided.filter((c) => typeof c!.value === "string") : decided;
+  const visible = decided.filter((c) => typeof c!.value !== "boolean" && c!.value !== "");
+  const said = declinedNow ? visible.filter((c) => typeof c!.value === "string") : visible;
   const outcome = said.length
     ? `${run.finished ? "Outcome" : "Outcome so far"} for ${recordLabel(run.record!, keyCol)}: ${said.map((c) => `${c!.name} = ${formatValue(c!.value, c!.name)}`).join(" · ")}${declinedNow ? " · no offer is made" : ""}`
     : null;
@@ -557,9 +558,12 @@ export function App() {
                     current={run.current}
                     onChange={changeControls}
                     onCompare={(a, b) => send({ type: "compareForces", a, b })}
-                    onRerun={(path) => {
-                      noteNext.current = `↺ Went back to just before ${path.split("/").pop()}, keeping everything before it. Step or continue to run it with the force.`;
-                      send({ type: "rewind", path });
+                    onRerun={(path, back) => {
+                      noteNext.current = back
+                        ? `↺ Re-ran from ${path.split("/").pop()} with the force and came back to ${back.path.split("/").pop()}.`
+                        : `↺ Went back to just before ${path.split("/").pop()}, keeping everything before it. Step or continue to run it with the force.`;
+                      setPending(`Re-running from ${path.split("/").pop()} with the force…`);
+                      send({ type: "rerun", path, back: back?.path, when: back?.when });
                     }}
                   />
             )}

@@ -59,7 +59,7 @@ describe("branch and loop controls", () => {
     await wv.locator('select[aria-label="break when op"]').selectOption("<");
     await wv.locator('input[aria-label="break when value"]').fill("70000");
     await wv.locator(".watch-form button", { hasText: "Add breakpoint" }).click();
-    await wv.locator(".controls-bar .chip", { hasText: "offer < R 70,000" }).waitFor();
+    await wv.locator(".controls-bar .chip", { hasText: "offer < R 70,000.00" }).waitFor();
     await c.shot("c04-breakpoints-set");
 
     await c.page.locator(".tab", { hasText: "loan.py" }).first().click();
@@ -72,7 +72,7 @@ describe("branch and loop controls", () => {
     await c.shot("c05-iteration-hit");
     await c.page.locator(".tab", { hasText: "loan.py" }).first().click();
     await c.page.keyboard.press("F5");
-    await wv.locator(".banner-note.hit", { hasText: "offer < R 70,000" }).waitFor({ timeout: 30_000 });
+    await wv.locator(".banner-note.hit", { hasText: "offer < R 70,000.00" }).waitFor({ timeout: 30_000 });
     expect(await wv.locator(".banner-note.hit").innerText()).toContain("client_id 1");
     await c.shot("c06-value-hit");
   }, 180_000);
@@ -96,8 +96,8 @@ describe("branch and loop controls", () => {
     await wv.locator("svg .node", { hasText: "is_private" }).first().click();
     await wv.locator('select[aria-label="force by_sector"]').selectOption("1");
     await wv.locator(".controls-bar .chip", { hasText: "by_sector → cap_public" }).waitFor();
-    await wv.locator(".group-controls button", { hasText: "Re-run by_sector forced" }).click();
-    await wv.locator(".pause-banner", { hasText: "is_private" }).waitFor({ timeout: 30_000 });
+    await wv.locator(".group-controls button", { hasText: "Re-run by_sector with the force" }).click();
+    await wv.locator(".banner-note", { hasText: "Re-ran from is_private" }).waitFor({ timeout: 60_000 });
     await c.shot("c09-forced-rerun");
   }, 120_000);
 });

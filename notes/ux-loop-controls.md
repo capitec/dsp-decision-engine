@@ -27,6 +27,7 @@ visibly met caps at 5. The loop stops at the first of these:
 | 3 | 7.1 | 7.5 | 7 | 8 | 6 | 7 |
 | 4 | 7.4 | 8 | 7 | 8 | 6 | 8 |
 | 5 | 7.2 | 7.5 | 6.5 | 7.5 | 7.5 | 7 |
+| 6 | 6.9 | 7 | 7 | 7.5 | 6 | 7 |
 
 ## Round 0 (baseline)
 
@@ -252,3 +253,37 @@ The judge's problems, most damaging first:
     - "How X changed" should come first.
 12. The action row varies. Breakpoint chips have a red, error-like border. Arcs and teal nodes aren't explained
     on screen.
+
+## Round 6: 6.9 (2 rounds without a new best)
+
+Changes:
+
+- "Re-run with the force" goes back, re-runs and returns to where the run was paused, in one bridge command
+  (`rerun`). Two requests (a rewind, then a continue) left VS Code's Variables view showing the values from before
+  the re-run.
+- "Stop forcing" is a button. The status text reads "Force is set: it applies the next time product_arm runs".
+- The outcome line leaves out true/false flags and empty values.
+- Money always shows two decimals.
+- Paused after a step, the editor points into its body.
+- The force and compare record pickers are separate.
+- A one-record forced comparison leads with one sentence.
+- In the value history:
+  - it comes first in the details;
+  - each line names its step first ("pl_regulated_rate copied pl_raw_rate into pl_rate unchanged");
+  - each step has one go-back link.
+- Breakpoint chips have a neutral border.
+
+The judge's problems, most damaging first:
+
+1. F4: after going back, the breakdown says pl_rate "= empty… It is an input", which is wrong.
+2. The breakdown's "last written by pl_rate_floor" contradicts the history's "comes from pl_raw_rate".
+3. The same answer three times: the summary, the list and the "Why" tree.
+4. The sticky step header covers the loop controls.
+5. The loop's Break section doesn't show the iteration breakpoint that's set.
+6. Paused after pl_regulated_rate, the editor highlights its docstring.
+7. The compare scope ignores the focused record.
+8. Variables truncates "(no offer) R 118,…".
+9. The comparison's title, lead sentence and baseline line repeat each other. The decision row isn't emphasised.
+10. The step counts ("430 steps changed (213…)") are noise.
+11. A loop comparison doesn't show the iteration count per side.
+12. The re-run button's label is long, and the selection jumps away from the force controls after it.

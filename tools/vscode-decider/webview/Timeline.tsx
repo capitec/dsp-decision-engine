@@ -84,34 +84,34 @@ export function ValueTimeline({ history, who, current, onSelect, onGoTo }: Props
       )}
       <ol className="history">
         {history.input && <li className="muted">starts as {who ? <span className="mono">{fmt(history.initial)}</span> : "the input column"}</li>}
-        {changes.map((c) => (
+        {changes.flatMap((c) => [
+          who && c.via && c.viaPath && !c.kept && (
+            <Row key={`o-${c.change}-${c.path}`} pending={false} kept={false}>
+              {link(c.viaPath)} <span className="muted">computed</span> <span className="mono">{c.via} = <strong>{fmt(c.value)}</strong></span>{" "}
+              {back(c.viaPath, c.viaPath, null, "go back here")}
+            </Row>
+          ),
           <Row key={`${c.change}-${c.path}-${c.iteration}-${c.pending ? "p" : ""}`} pending={!!c.pending} kept={!!c.kept}>
-            {who && c.via && c.viaPath && !c.kept && (
-              <div>
-                <span className="mono">computed <strong>{fmt(c.value)}</strong></span> <span className="muted">as {c.via} by</span> {link(c.viaPath)}{" "}
-                {back(c.viaPath, c.viaPath, null, "go back here")}
-              </div>
-            )}
-            <div>
-              {c.kept ? (
-                <span className="mono muted">kept {fmt(c.value)}</span>
-              ) : who ? (
-                c.via ? (
-                  <span className="mono">copied {fmt(c.value)} into {name} unchanged</span>
-                ) : c.before === null || c.before === undefined ? (
-                  <span className="mono">set to <strong>{fmt(c.value)}</strong></span>
-                ) : (
-                  <span className="mono">{fmt(c.before)} → <strong>{fmt(c.value)}</strong></span>
-                )
+            {step(c)}
+            <span className="muted">{when(c)}</span>{" "}
+            {c.kept ? (
+              <span className="muted">kept it at <span className="mono">{fmt(c.value)}</span></span>
+            ) : who ? (
+              c.via ? (
+                <span className="muted">
+                  copied <span className="mono">{c.via}</span> into <span className="mono">{name}</span> unchanged
+                </span>
+              ) : c.before === null || c.before === undefined ? (
+                <span className="mono">set it to <strong>{fmt(c.value)}</strong></span>
               ) : (
-                <span className="mono">{c.rows} record{c.rows === 1 ? "" : "s"}: {c.values!.map(fmt).join(", ")}{c.rows! > c.values!.length ? ", …" : ""}</span>
-              )}{" "}
-              <span className="muted">by</span> {step(c)}
-              <span className="muted">{when(c)}</span>{" "}
-              {c.pending ? <span className="muted small">· will run again when you continue</span> : !byYou(c) && back(c.change, c.path, c.iteration, "go back here")}
-            </div>
-          </Row>
-        ))}
+                <span className="mono">{fmt(c.before)} → <strong>{fmt(c.value)}</strong></span>
+              )
+            ) : (
+              <span className="mono">{c.rows} record{c.rows === 1 ? "" : "s"}: {c.values!.map(fmt).join(", ")}{c.rows! > c.values!.length ? ", …" : ""}</span>
+            )}{" "}
+            {c.pending ? <span className="muted small">· will run again when you continue</span> : !byYou(c) && !c.kept && !c.via && back(c.change, c.path, c.iteration, "go back here")}
+          </Row>,
+        ])}
       </ol>
     </section>
   );

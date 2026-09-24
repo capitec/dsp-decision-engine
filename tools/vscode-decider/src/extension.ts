@@ -164,6 +164,9 @@ async function onWebview(m: FromWebview, describe: DescribeResult) {
     case "treePath":
       if (s) post({ type: "treePath", ...((await s.customRequest("decider.treePath", { path: m.path })) as { path: string; row: number; visited: string[]; result: unknown[] }) });
       break;
+    case "rerun":
+      await s?.customRequest("decider.rerun", { path: m.path, back: m.back, when: m.when });
+      break;
     case "goTo":
       await s?.customRequest("decider.goTo", { change: m.change });
       break;

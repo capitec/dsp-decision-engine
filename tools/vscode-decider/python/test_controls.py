@@ -68,6 +68,15 @@ def test_a_forced_arm_set_mid_run_applies_from_there():
     assert b.session.output()["term_cap"].to_list() == [60.0, 36.0]
 
 
+def test_a_rerun_goes_back_forces_and_returns_to_the_pause():
+    b = started(breakpoints=["sizing"], params=UNCAPPED)
+    b.handle({"cmd": "resume"})
+    b.handle({"cmd": "set_controls", "forces": [{"path": "term/by_sector", "arm": 1}]})
+    r = b.handle({"cmd": "rerun", "path": "term/by_sector/is_private", "back": "sizing"})
+    assert r["current"] == {"path": "sizing", "when": "before"}
+    assert b.session.value("term_cap").to_list() == [60.0, 36.0]
+
+
 def test_a_force_set_while_paused_just_after_the_condition_still_routes():
     b = started(breakpoints=["term/by_sector/is_private"], params=UNCAPPED)
     b.handle({"cmd": "resume"})

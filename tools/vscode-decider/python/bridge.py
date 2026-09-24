@@ -191,6 +191,21 @@ class Bridge:
         self.controls.hit = None
         return self.status()
 
+    def rerun(self, path, back=None, when="before"):
+        """Go back to just before `path` and run on to `back` (where the run was paused), in one move."""
+        s = self.session
+        s.rewind(path)
+        self.rewound = True
+        self.timeline.rewound()
+        if back and back != path:
+            target = lambda cp: cp.origin.path == back and cp.when == when  # noqa: E731
+            s.break_at(target)
+            try:
+                s.resume()
+            finally:
+                s.clear_break(target)
+        return self.status()
+
     def set_controls(self, forces=(), watches=()):
         """Replace the run's forces and value breakpoints; they apply from the next checkpoint on."""
         # ponytail: a rewind replays without checking breakpoints, so forces apply only to checkpoints reached
@@ -332,7 +347,7 @@ class Bridge:
     def handle(self, req):
         cmd = req["cmd"]
         args = {k: v for k, v in req.items() if k not in ("id", "cmd")}
-        if cmd in ("describe", "start", "state", "column", "step_out", "trace", "sweep", "compare_edits", "set_controls", "changes", "go_to"):
+        if cmd in ("describe", "start", "state", "column", "step_out", "trace", "sweep", "compare_edits", "set_controls", "changes", "go_to", "rerun"):
             result = getattr(self, cmd)(**args)
             return self.status() if cmd == "step_out" else result
         s = self.session

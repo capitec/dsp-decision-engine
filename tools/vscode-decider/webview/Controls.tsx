@@ -85,13 +85,15 @@ interface GroupProps {
   current?: Checkpoint | null;
   onChange: (c: Controls) => void;
   onCompare: (a: Side, b: Side) => void;
-  onRerun: (path: string) => void;
+  /** Go back to before the condition, and run on to `back` (where the run is paused) when given. */
+  onRerun: (path: string, back?: Checkpoint | null) => void;
 }
 
 /** Force a branch's arm or a loop's iteration count, compare two of them, or pause at an iteration. */
 export function GroupControls({ group, controls, record, keyCol, paused, ran, current, onChange, onCompare, onRerun }: GroupProps) {
   const isLoop = group.kind === "loop";
   const [one, setOne] = useState(false);
+  const [oneCompare, setOneCompare] = useState(false);
   const [a, setA] = useState(isLoop ? "5" : "0");
   const [b, setB] = useState(isLoop ? "10" : "1");
   const [times, setTimes] = useState("");
@@ -99,11 +101,15 @@ export function GroupControls({ group, controls, record, keyCol, paused, ran, cu
   const [added, setAdded] = useState<string>();
   const row = one && record !== null ? record : null;
   // Who a force or comparison applies to: every record, or the focused one.
-  const whom = (what: string) =>
+  const whom = (what: "force" | "compare") =>
     record === null ? (
       <span>every record</span>
     ) : (
-      <select aria-label={`${name} ${what} for`} value={one ? "one" : "all"} onChange={(e) => setOne(e.target.value === "one")}>
+      <select
+        aria-label={`${name} ${what} for`}
+        value={(what === "force" ? one : oneCompare) ? "one" : "all"}
+        onChange={(e) => (what === "force" ? setOne : setOneCompare)(e.target.value === "one")}
+      >
         <option value="all">every record</option>
         <option value="one">{recordLabel(record, keyCol)}</option>
       </select>
@@ -120,7 +126,8 @@ export function GroupControls({ group, controls, record, keyCol, paused, ran, cu
   const side = (v: string): Side => {
     const f = how(v);
     const label = f === null ? `${name} as it runs` : isLoop ? `${name} run ${v}×` : `${group.arms[Number(v)]} (at ${name})`;
-    return { label: (row === null ? "" : `${recordLabel(row, keyCol)}: `) + label, forces: f ? [{ path: group.path, row, ...f }] : [] };
+    const who = oneCompare && record !== null ? record : null;
+    return { label: (who === null ? "" : `${recordLabel(who, keyCol)}: `) + label, forces: f ? [{ path: group.path, row: who, ...f }] : [] };
   };
   const pick = (v: string, set: (v: string) => void, label: string) =>
     isLoop ? (
@@ -144,7 +151,7 @@ export function GroupControls({ group, controls, record, keyCol, paused, ran, cu
       <div className="control-row">
         {isLoop ? (
           <>
-            Run it for {whom("force")} exactly{" "}
+            Make {whom("force")} go round exactly{" "}
             <input aria-label={`iterations for ${name}`} className="narrow" type="number" min={0} max={group.max} placeholder="e.g. 5" value={times || (forced?.iterations ?? "")} onChange={(e) => setTimes(e.target.value)} /> times{" "}
             <button disabled={times === ""} onClick={() => (setForce({ iterations: Number(times) }), setTimes(""))}>Force</button>
           </>
@@ -159,9 +166,14 @@ export function GroupControls({ group, controls, record, keyCol, paused, ran, cu
             </select>
           </>
         )}
-        {forced && <button className="link" onClick={() => setForce()}>stop forcing</button>}
+        {forced && <button onClick={() => setForce()}>Stop forcing</button>}
         {paused && mine.length > 0 && !(current?.path === group.cond && current.when === "before") && (
-          <button title="Go back to just before it, keeping everything earlier, so the force applies" onClick={() => onRerun(group.cond)}>↺ Re-run {name} forced</button>
+          <button
+            title="Go back to just before it, keeping everything earlier, run it with the force, and come back to where you are"
+            onClick={() => onRerun(group.cond, current)}
+          >
+            ↺ Re-run {name} with the force{current?.path ? `, back to ${lastSegment(current.path)}` : ""}
+          </button>
         )}
       </div>
       {mine.length > 0 && (
@@ -169,8 +181,8 @@ export function GroupControls({ group, controls, record, keyCol, paused, ran, cu
           {current?.path === group.cond && current.when === "before"
             ? `Paused just before ${lastSegment(group.cond)}: when it runs, ${whoForced} ${isLoop ? `goes round exactly ${mine[0].iterations} times` : `goes down ${group.arms[mine[0].arm ?? 0]}`}. Step or continue to see it.`
             : ran && paused
-              ? `On. ${name} has already run in this pause, so the force applies when it runs again: re-run it now, or on the next run.`
-              : `On. It applies the next time ${lastSegment(group.cond)} runs.`}
+              ? `Force is set, but ${name} already ran in this pause. Re-run it now, or it applies on the next run.`
+              : `Force is set: it applies the next time ${lastSegment(group.cond)} runs.`}
         </div>
       )}
       <h5>Compare two ways</h5>
@@ -180,9 +192,10 @@ export function GroupControls({ group, controls, record, keyCol, paused, ran, cu
         <button disabled={a === b} title="Run the flow both ways, start to end, and compare every result" onClick={() => onCompare(side(a), side(b))}>Compare</button>
       </div>
       <div className="muted small">
-        Runs the whole flow twice from the start for every record, {row === null ? "forcing them all" : `forcing only ${recordLabel(row, keyCol)}; the others run as they are`}. Your debug run is left as it is.
+        Runs the whole flow twice from the start for every record, {oneCompare && record !== null ? `forcing only ${recordLabel(record, keyCol)}; the others run as they are` : "forcing them all"}. Your debug run is left as it is.
         {isLoop && ` A forced count overrides ${lastSegment(group.cond)}: the loop goes round exactly that many times, up to ${group.max}.`}
       </div>
+      {isLoop && <h5>Break</h5>}
       {isLoop && (
         <div className="control-row">
           Pause before iteration <input aria-label={`pause ${name} at iteration`} className="narrow" type="number" min={1} max={group.max} placeholder="e.g. 3" value={at} onChange={(e) => setAt(e.target.value)} />{" "}

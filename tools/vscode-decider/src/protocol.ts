@@ -220,7 +220,7 @@ export function formatValue(v: unknown, name?: string): string {
   if (v === undefined) return "—";
   if (v === null) return "empty";
   if (typeof v === "number" && isRateName(name) && Math.abs(v) < 1) return `${Number((v * 100).toFixed(2))}%`;
-  if (typeof v === "number" && (isMoneyName(name) || (!!name && /cap$/.test(name) && Math.abs(v) >= 1000))) return `R\u00a0${v.toLocaleString("en-US", { minimumFractionDigits: Number.isInteger(v) ? 0 : 2, maximumFractionDigits: 2 })}`;
+  if (typeof v === "number" && (isMoneyName(name) || (!!name && /cap$/.test(name) && Math.abs(v) >= 1000))) return `R\u00a0${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   if (typeof v === "number") return v.toLocaleString("en-US", { maximumFractionDigits: Math.abs(v) >= 100 ? 2 : 4 });
   return typeof v === "string" ? v : JSON.stringify(v);
 }
@@ -249,6 +249,8 @@ export type FromWebview =
   | { type: "rewind"; path: string }
   /** A change's index in the timeline, or a step's path: just after it last wrote. */
   | { type: "goTo"; change: number | string }
+  /** Go back to just before a forced branch or loop's condition, then run on to `back` (where the run was paused). */
+  | { type: "rerun"; path: string; back?: string; when?: "before" | "after" }
   | { type: "skip"; path: string }
   | { type: "reloadStep"; path: string }
   | { type: "restore"; path: string }
