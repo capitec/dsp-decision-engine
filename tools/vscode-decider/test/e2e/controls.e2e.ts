@@ -33,7 +33,7 @@ describe("branch and loop controls", () => {
     await wv.locator(".group-controls h4", { hasText: "Branch by_sector" }).waitFor({ timeout: 30_000 });
     await c.shot("c01-branch-controls");
     await wv.locator(".group-controls button", { hasText: "Compare" }).click();
-    await wv.locator(".compare .compare-title", { hasText: "down cap_public" }).waitFor({ timeout: 90_000 });
+    await wv.locator(".compare .compare-title", { hasText: "cap_public (at by_sector)" }).waitFor({ timeout: 90_000 });
     await c.shot("c02-compare-arms");
   }, 180_000);
 
@@ -95,7 +95,7 @@ describe("branch and loop controls", () => {
     const wv = c.webview();
     await wv.locator("svg .node", { hasText: "is_private" }).first().click();
     await wv.locator('select[aria-label="force by_sector"]').selectOption("1");
-    await wv.locator(".controls-bar .chip", { hasText: "by_sector down cap_public" }).waitFor();
+    await wv.locator(".controls-bar .chip", { hasText: "by_sector → cap_public" }).waitFor();
     await wv.locator(".group-controls button", { hasText: "Re-run by_sector forced" }).click();
     await wv.locator(".pause-banner", { hasText: "is_private" }).waitFor({ timeout: 30_000 });
     await c.shot("c09-forced-rerun");

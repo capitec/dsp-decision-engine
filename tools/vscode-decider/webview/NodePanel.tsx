@@ -20,7 +20,7 @@ interface Props {
   onSelect: (path: string) => void;
   onReveal: (path: string) => void;
   onRewind: (path: string) => void;
-  onGoTo: (change: number) => void;
+  onGoTo: (change: number | string) => void;
   onRunTo: (path: string) => void;
   onStep: () => void;
   /** The comparison the graph is coloured by, if any: params show both sides. */
@@ -115,6 +115,7 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
             </div>
           </div>
           {groupControls}
+          {controls}
           {card && !(path && table) && <Explain entry={card} who={who} role="" nodes={nodes} values={values} onPick={onPick} onSelect={onSelect} />}
           {who && ran && (node.outputs ?? []).length > 0 && (
             <div className="wrote">
@@ -236,7 +237,6 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
               {run.record === null && <div className="muted small">Focus a record to see its own path.</div>}
             </>
           )}
-          {controls}
         </>
       ) : (
         <div className="muted">Click a step in the graph to see what it reads and writes.</div>

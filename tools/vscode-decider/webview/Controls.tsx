@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { formatValue, lastSegment, recordLabel, walk, type Controls, type Force, type Hit, type IRNodeJson, type RecordKey, type Watch } from "../src/protocol";
+import { formatValue, lastSegment, recordLabel, walk, type Checkpoint, type Controls, type Force, type Hit, type IRNodeJson, type RecordKey, type Watch } from "../src/protocol";
 import { parseValue } from "./Params";
 
 export interface Group {
@@ -32,7 +32,7 @@ const forWho = (row: number | null | undefined, keyCol: RecordKey) => (row == nu
 
 export function forceText(f: Force, groups: Group[], keyCol: RecordKey): string {
   const g = groups.find((x) => x.path === f.path);
-  const how = f.arm !== undefined ? `down ${g?.arms[f.arm] ?? `arm ${f.arm}`}` : `exactly ${f.iterations}×`;
+  const how = f.arm !== undefined ? `→ ${g?.arms[f.arm] ?? `arm ${f.arm}`}` : `runs exactly ${f.iterations}×`;
   return `${lastSegment(f.path)} ${how}${forWho(f.row, keyCol)}`;
 }
 
@@ -81,13 +81,15 @@ interface GroupProps {
   paused: boolean;
   /** The condition has run in this debug run. */
   ran: boolean;
+  /** Where the debug run is paused. */
+  current?: Checkpoint | null;
   onChange: (c: Controls) => void;
   onCompare: (a: Side, b: Side) => void;
   onRerun: (path: string) => void;
 }
 
 /** Force a branch's arm or a loop's iteration count, compare two of them, or pause at an iteration. */
-export function GroupControls({ group, controls, record, keyCol, paused, ran, onChange, onCompare, onRerun }: GroupProps) {
+export function GroupControls({ group, controls, record, keyCol, paused, ran, current, onChange, onCompare, onRerun }: GroupProps) {
   const isLoop = group.kind === "loop";
   const [one, setOne] = useState(false);
   const [a, setA] = useState(isLoop ? "5" : "0");
@@ -98,7 +100,8 @@ export function GroupControls({ group, controls, record, keyCol, paused, ran, on
   const row = one && record !== null ? record : null;
   const name = lastSegment(group.path);
   const mine = controls.forces.filter((f) => f.path === group.path);
-  const current = mine.find((f) => (f.row ?? null) === row);
+  const forced = mine.find((f) => (f.row ?? null) === row);
+  const whoForced = mine[0]?.row == null ? "every record" : recordLabel(mine[0].row, keyCol);
   const setForce = (f?: { arm: number } | { iterations: number }) => {
     const rest = controls.forces.filter((x) => !(x.path === group.path && (x.row ?? null) === row));
     onChange({ ...controls, forces: f ? [...rest, { path: group.path, row, ...f }] : rest });
@@ -106,8 +109,8 @@ export function GroupControls({ group, controls, record, keyCol, paused, ran, on
   const how = (v: string) => (v === "" ? null : isLoop ? { iterations: Number(v) } : { arm: Number(v) });
   const side = (v: string): Side => {
     const f = how(v);
-    const label = f === null ? `${name} as it runs` : isLoop ? `${name} ${v}×` : `${name} down ${group.arms[Number(v)]}`;
-    return { label: label + forWho(row, keyCol), forces: f ? [{ path: group.path, row, ...f }] : [] };
+    const label = f === null ? `${name} as it runs` : isLoop ? `${name} run ${v}×` : `${group.arms[Number(v)]} (at ${name})`;
+    return { label: (row === null ? "" : `${recordLabel(row, keyCol)}: `) + label, forces: f ? [{ path: group.path, row, ...f }] : [] };
   };
   const pick = (v: string, set: (v: string) => void, label: string) =>
     isLoop ? (
@@ -137,13 +140,13 @@ export function GroupControls({ group, controls, record, keyCol, paused, ran, on
         {isLoop ? (
           <>
             Run it exactly{" "}
-            <input aria-label={`iterations for ${name}`} className="narrow" type="number" min={0} max={group.max} placeholder="e.g. 5" value={times || (current?.iterations ?? "")} onChange={(e) => setTimes(e.target.value)} /> times{" "}
+            <input aria-label={`iterations for ${name}`} className="narrow" type="number" min={0} max={group.max} placeholder="e.g. 5" value={times || (forced?.iterations ?? "")} onChange={(e) => setTimes(e.target.value)} /> times{" "}
             <button disabled={times === ""} onClick={() => (setForce({ iterations: Number(times) }), setTimes(""))}>Force</button>
           </>
         ) : (
           <>
             Send {row === null ? "every record" : recordLabel(row, keyCol)}{" "}
-            <select aria-label={`force ${name}`} value={current?.arm ?? ""} onChange={(e) => setForce(e.target.value === "" ? undefined : { arm: Number(e.target.value) })}>
+            <select aria-label={`force ${name}`} value={forced?.arm ?? ""} onChange={(e) => setForce(e.target.value === "" ? undefined : { arm: Number(e.target.value) })}>
               <option value="">the way the condition says</option>
               {group.arms.map((x, i) => (
                 <option key={i} value={i}>down {x}</option>
@@ -151,16 +154,18 @@ export function GroupControls({ group, controls, record, keyCol, paused, ran, on
             </select>
           </>
         )}
-        {current && <button className="link" onClick={() => setForce()}>stop forcing</button>}
+        {forced && <button className="link" onClick={() => setForce()}>stop forcing</button>}
         {paused && mine.length > 0 && (
           <button title="Go back to just before it, keeping everything earlier, so the force applies" onClick={() => onRerun(group.cond)}>↺ Re-run {name} forced</button>
         )}
       </div>
       {mine.length > 0 && (
         <div className="small added">
-          {ran && paused
-            ? `On. ${name} has already run in this pause, so the force applies when it runs again: re-run it now, or on the next run.`
-            : `On. It applies the next time ${lastSegment(group.cond)} runs.`}
+          {current?.path === group.cond && current.when === "before"
+            ? `Paused just before ${lastSegment(group.cond)}: when it runs, ${whoForced} ${isLoop ? `goes round exactly ${mine[0].iterations} times` : `goes down ${group.arms[mine[0].arm ?? 0]}`}. Step or continue to see it.`
+            : ran && paused
+              ? `On. ${name} has already run in this pause, so the force applies when it runs again: re-run it now, or on the next run.`
+              : `On. It applies the next time ${lastSegment(group.cond)} runs.`}
         </div>
       )}
       <h5>Compare two ways</h5>
@@ -169,7 +174,10 @@ export function GroupControls({ group, controls, record, keyCol, paused, ran, on
         {isLoop && " iterations"}{" "}
         <button disabled={a === b} title="Run the flow both ways, start to end, and compare every result" onClick={() => onCompare(side(a), side(b))}>Compare</button>
       </div>
-      <div className="muted small">Runs the whole flow twice from the start, for {row === null ? "every record" : recordLabel(row, keyCol)}; your debug run is left as it is.</div>
+      <div className="muted small">
+        Runs the whole flow twice from the start for every record, {row === null ? "forcing them all" : `forcing only ${recordLabel(row, keyCol)}; the others run as they are`}. Your debug run is left as it is.
+        {isLoop && ` A forced count overrides ${lastSegment(group.cond)}: the loop goes round exactly that many times, up to ${group.max}.`}
+      </div>
       {isLoop && (
         <div className="control-row">
           Pause before iteration <input aria-label={`pause ${name} at iteration`} className="narrow" type="number" min={1} max={group.max} placeholder="e.g. 3" value={at} onChange={(e) => setAt(e.target.value)} />{" "}
@@ -214,6 +222,7 @@ export function WatchForm({ names, step, writes, scopes, name: initial, record, 
   const [scope, setScope] = useState("");
   const [one, setOne] = useState(false);
   const [added, setAdded] = useState<string>();
+  const [open, setOpen] = useState(false);
   // The breakpoints this step can trigger: on a value it writes, with a scope that covers it.
   const here = controls.watches
     .map((w, i) => ({ w, i }))
@@ -223,10 +232,12 @@ export function WatchForm({ names, step, writes, scopes, name: initial, record, 
     onChange({ ...controls, watches: [...controls.watches, w] });
     setAdded(`Added: the run pauses when ${watchText(w, keyCol)}. It's listed at the top; × removes it.`);
     setValue("");
+    setOpen(false);
   };
   return (
-    <details className="watch-form" open={here.length > 0 || undefined}>
-      <summary>Break when a value…{here.length ? ` (${here.length} here)` : ""}</summary>
+    <>
+    <details className="watch-form" open={open} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
+      <summary>⏸ Break when a value…{here.length ? ` (${here.length} on this step)` : ""}</summary>
       {here.map(({ w, i }) => (
         <div key={i} className="small">
           ⏸ {watchText(w, keyCol)}{" "}
@@ -261,8 +272,10 @@ export function WatchForm({ names, step, writes, scopes, name: initial, record, 
         )}
         <button disabled={!name || value.trim() === ""} onClick={add}>Add breakpoint</button>
       </div>
-      {added ? <div className="added small">{added}</div> : <div className="muted small">Pauses just after a step writes {name || "it"}, the first time a record meets the condition there.</div>}
+      <div className="muted small">Pauses just after a step writes {name || "it"}, the first time a record meets the condition there.</div>
     </details>
+    {added && <div className="added small">{added}</div>}
+    </>
   );
 }
 

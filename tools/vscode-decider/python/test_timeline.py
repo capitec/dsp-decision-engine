@@ -65,6 +65,12 @@ def test_an_input_starts_from_its_value_and_an_override_is_a_change():
     assert h["changes"][0]["path"] == "override@term/cap_by_income" and h["changes"][0]["value"] == 1000.0
 
 
+def test_going_back_to_a_step_by_path_pauses_after_its_last_write_for_the_record():
+    b = finished()
+    r = b.handle({"cmd": "go_to", "path": "affordability/disposable_income", "row": 0})
+    assert r["current"] == {"path": "affordability/disposable_income", "when": "after"}
+
+
 def test_the_state_mid_iteration_shows_what_the_loop_body_just_wrote():
     b = Bridge()
     b.start(LOAN, breakpoints=["sizing/shrink_offer/shrink"])
