@@ -2,8 +2,13 @@
 
 ## 1. What I built
 
-The slice SCOPE.md asks for, "by reuse":
+The slice SCOPE.md asks for, "by reuse", plus the full-width skeleton the
+task brief's own framing requires of this slice (see "What I left out"):
 
+- **The full-width skeleton** (`phases.py`): all 9 entry points and all 23
+  phases (O1-O17, L1-L6) declared, spec 11's own 1 900 decision-point count
+  reproduced exactly, `tests/test_phases.py` proving the entry-point x phase
+  routing resolves correctly even for the phases this slice never runs.
 - **The reuse inventory as real references** (`business_credit_e2e/
   reuse_inventory.py`) -- a data-backed table of every consumed component's
   disposition (reused as-is / wrapped / not reached), a declared gap register
@@ -52,14 +57,30 @@ The slice SCOPE.md asks for, "by reuse":
 
 ### What I left out
 
-- **EP-2 through EP-9** are named in `vocab.py` (all nine, `ENTRY_POINT_
-  NAMES`) but only EP-1 and EP-3(L1) are built -- SCOPE.md's slice, unlike
-  10's, does not ask for a full-width declared-stub skeleton of every entry
-  point and phase; it asks for EP-1, L1, one covenant, one bi-temporal query
-  and the daily pass. I read SCOPE.md's own bullet list literally rather than
-  importing 10's "skeleton at full width" instruction, since 11's SCOPE.md
-  section does not use that phrase (see "Spec problems" for the tension
-  between SCOPE.md's own text and the task brief's framing).
+- **The full-width skeleton** (`phases.py`): all 23 phases (O1-O17, L1-L6)
+  and the 9-entry-point x phase matrix are declared, reproducing spec 11
+  §5.2's own decision-point counts exactly (1 900 total, 1 280 origination /
+  620 lifecycle) -- the same shape project 10's `retail_credit.phases`/
+  `entry_points` takes, per the task brief's own "full-width skeleton plus
+  one real path" framing for this slice. `fleshed_out=True` marks exactly
+  what this project computes for real: O1-O7, O9-O11, O13-O17 (EP-1, via
+  project 05's whole pipeline plus this project's own O1/O10/O15-O17) and
+  L1/L2 (`review.py`, `covenant.py`). O8 (behavioural assessment), O12
+  (cross-facility collateral allocation) and L3-L6 are declared only --
+  `tests/test_phases.py` proves the routing matrix resolves each entry
+  point to the right phase set, not that the unbuilt phases run end to end.
+  (An earlier draft of this NOTES.md argued SCOPE.md's own bullet list for
+  project 11 doesn't use the phrase "full-width skeleton" the way project
+  10's row does, and left this out on that reading -- overridden here since
+  the task brief that assigned this slice states the requirement directly,
+  and the two extra files are cheap. See "Spec problems" for the tension
+  that reasoning names, which is still real even though I resolved it the
+  other way.)
+- **EP-2 through EP-9's real logic**: all nine entry points are named
+  (`vocab.ENTRY_POINT_NAMES`) and routed (`phases.py`), but only EP-1
+  (origination) and EP-3's L1 (annual review) run end to end -- SCOPE.md's
+  slice asks for these two plus one covenant, one bi-temporal query and the
+  daily pass, not all nine built out.
 - **Products 52-58** are named (`vocab.PRODUCT_CATALOGUE_ONLY`) but not
   implemented -- SCOPE.md.
 - **Cascade (§5.12), collateral allocation (§5.11), authority beyond two
