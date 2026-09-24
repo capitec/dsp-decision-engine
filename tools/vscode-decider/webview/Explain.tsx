@@ -123,16 +123,23 @@ export function Explain({ entry, who, role, nodes, values, onPick, onSelect }: P
   return (
     <div className="how" ref={box}>
       <div className="how-title">
-        {who ? `For ${who}, ` : ""}
-        <span className="mono">{entry.name}{who ? ` = ${formatValue(entry.value, entry.name)}` : ""}</span>
-        {role && <span className="muted"> ({role})</span>}
+        Why <span className="mono">{entry.name}{who ? ` = ${formatValue(entry.value, entry.name)}` : ""}</span>
+        {who ? ` for ${who}` : ""}
+        {entry.producer && <span className="muted"> · last written by {short(entry.producer)}</span>}
+        {role && <span className="muted small"> ({role})</span>}
       </div>
-      {entry.producer !== null && summary(entry, nodes, values) && (
-        <div className="explain-summary">
-          {summary(entry, nodes, values)!.split(" · ").map((part) => (
-            <div key={part}>{part}</div>
-          ))}
-        </div>
+      {who && entry.producer !== null && summaryRows(entry, nodes, values) && (
+        <table className="explain-summary">
+          <tbody>
+            {summaryRows(entry, nodes, values)!.map((r, k) => (
+              <tr key={k} className={r.kind}>
+                <td>{r.label}</td>
+                <td className="mono num">{r.value}</td>
+                <td className="muted small">{r.note ?? ""}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
       {entry.producer === null ? (
         <div>It is an input: it arrives with the data.</div>
@@ -146,9 +153,17 @@ export function Explain({ entry, who, role, nodes, values, onPick, onSelect }: P
   );
 }
 
-/** Down the chain of caps and floors to the step that builds the value: "floor did not apply · cap did not apply · pl_raw_rate = 25.5% − 0.1% − 0.2%". */
-function summary(entry: Lineage, nodes: CallNodeJson[], values: Record<string, unknown>): string | null {
-  const parts: string[] = [];
+/** One row of the summary table: a part of the value, a limit it met, or the total. */
+interface SummaryRow {
+  label: string;
+  value: string;
+  note?: string;
+  kind: "part" | "zero" | "total" | "limit";
+}
+
+/** Down the chain of caps and floors to the step that builds the value, as rows: the parts, the sum, then each limit. */
+export function summaryRows(entry: Lineage, nodes: CallNodeJson[], values: Record<string, unknown>): SummaryRow[] | null {
+  const limits: SummaryRow[] = [];
   let at: Lineage | undefined = entry;
   for (let depth = 0; at && depth < 6; depth++) {
     const node = nodes.find((n) => n.path === at!.producer);
@@ -158,23 +173,30 @@ function summary(entry: Lineage, nodes: CallNodeJson[], values: Record<string, u
     for (const i of at.inputs) known[i.name] = i.value;
     const note = clampNote(node.formula, at.inputs, at.value, known);
     if (note) {
-      parts.push(note.replace(/: .*$/, ""));
+      const [head, tail] = note.includes(", ") ? note.split(/, (.*)/s) : [note, ""];
+      limits.unshift({ label: `${head.split(" ")[0]} (${short(node.path)})`, value: head.split(" ").slice(1).join(" "), note: tail || note, kind: "limit" });
       const first = /^(?:min|max)\((\w+),/.exec(node.formula)![1];
       at = at.inputs.find((i) => i.name === first);
       continue;
     }
     const terms = sumTerms(node.formula);
-    if (terms) {
-      const value = (name: string) => at!.inputs.find((i) => i.name === name)?.value;
-      const moving = terms.filter(([, n]) => value(n) !== 0);
-      const zeros = terms.length - moving.length;
-      parts.push(
-        `${at.name} ${formatValue(at.value, at.name)} = ${moving.map(([sign, n], i) => `${i ? (sign === "-" ? "− " : "+ ") : ""}${n} ${formatValue(value(n), n)}`).join(" ")}${zeros ? `; 0 from ${terms.filter(([, n]) => value(n) === 0).map(([, n]) => n).join(", ")}` : ""}`,
-      );
-    } else parts.push(`${at.name} = ${substitute(node.formula, known)}`);
-    break;
+    if (!terms || limits.length === 0) return null;
+    const part = (name: string) => at!.inputs.find((i) => i.name === name);
+    const rows: SummaryRow[] = [];
+    const zeros: string[] = [];
+    terms.forEach(([sign, name], k) => {
+      const p = part(name);
+      if (p?.value === 0) return void zeros.push(name);
+      const from = nodes.find((x) => x.path === p?.producer);
+      const tableRows = from?.table ? (Object.keys(from.params).map((q) => shared(values)[q]).find(Array.isArray) as Record<string, unknown>[] | undefined) : undefined;
+      const match = from?.table && tableRows && p?.inputs[0] ? matchRow(from.table, tableRows, p.inputs[0].value) : null;
+      rows.push({ label: name, value: `${k === 0 ? "" : sign === "-" ? "− " : "+ "}${formatValue(p?.value as never, name)}`, note: match ? `row ${match[0] + 1}: ${match[1]}` : undefined, kind: "part" });
+    });
+    if (zeros.length) rows.push({ label: `${zeros.length} other part${zeros.length === 1 ? "" : "s"}`, value: "0", note: zeros.join(", "), kind: "zero" });
+    rows.push({ label: `= ${at.name}`, value: formatValue(at.value, at.name), kind: "total" });
+    return [...rows, ...limits, { label: `= ${entry.name}`, value: formatValue(entry.value, entry.name), kind: "total" }];
   }
-  return parts.length > 1 ? parts.join(" · ") : null;
+  return null;
 }
 
 function Level({ entry, depth, nodes, values, who, onPick, onSelect }: { entry: Lineage; depth: number; nodes: CallNodeJson[]; values: Record<string, unknown>; who: string | null; onPick: (n?: string) => void; onSelect: (p: string) => void }) {

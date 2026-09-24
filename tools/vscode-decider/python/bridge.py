@@ -344,6 +344,18 @@ class Bridge:
         self.edits.append((path, new))
         return {"diff": _source_diff(old, texts, new, _TEXTS), "formula": _formula(new.fn) if isinstance(new, FunctionStep) else None}
 
+    def restore(self, path):
+        """Put the step at `path` back as the run started it, undoing a code swap, and re-run from there."""
+        if any(at == path and new is None for at, new in self.edits):
+            raise ValueError(f"{path!r} was skipped; a skipped step can't be put back mid-run, restart the run to include it")
+        old = step_map(self.original).get(path)
+        if old is None:
+            raise KeyError(f"{path!r} is not in the flow as started")
+        self.session.replace(path, old)
+        self.step = self.session.executable.step
+        self.edits = [(at, new) for at, new in self.edits if at != path]
+        return {"diff": [], "formula": None}
+
     def compare_edits(self, path=None):
         """The flow as started and with the edits made since (or only the one at `path`), each run start to end."""
         edited = self.original
@@ -403,7 +415,7 @@ class Bridge:
             return tree_path(s, **args)
         if cmd == "debug_condition":
             return {"condition": debug_condition(s, **args)}
-        if cmd in ("skip", "reload_step"):
+        if cmd in ("skip", "reload_step", "restore"):
             edit = getattr(self, cmd)(**args) or {}  # a WiringError changes nothing and comes back as the reply's error
             return {**self.status(), "diff": edit.get("diff", []), "formula": edit.get("formula")}
         if cmd in ("step", "step_into", "resume", "rewind", "break_at", "clear_break", "set"):

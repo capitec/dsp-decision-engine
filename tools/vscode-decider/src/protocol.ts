@@ -164,7 +164,7 @@ export type ToWebview =
   | { type: "compare"; comparison: Comparison | null; busy?: string; error?: string }
   | { type: "tab"; tab: Tab }
   | { type: "select"; path: string }
-  | { type: "edited"; path: string; diff: string[]; formula: string | null }
+  | { type: "edited"; path: string; diff: string[]; formula: string | null; restored?: boolean }
   | { type: "sweep"; sweep: Sweep | null; busy?: string; error?: string };
 
 export type FromWebview =
@@ -176,6 +176,7 @@ export type FromWebview =
   | { type: "rewind"; path: string }
   | { type: "skip"; path: string }
   | { type: "reloadStep"; path: string }
+  | { type: "restore"; path: string }
   | { type: "layout"; wide: boolean }
   | { type: "compareEdits"; label: string; edits: Record<string, "delete" | "replace">; path?: string }
   | { type: "whatIf"; params: unknown; overrides: Record<string, unknown>; row: number | null; label: string }

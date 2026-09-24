@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { describe, expect, it } from "vitest";
 import { compareTraces, diffDoc, paramChangeLines, paramReaders, same, type TraceResult } from "../src/compare";
-import { clampNote, evaluate, matchRow, substitute, sumTerms } from "../webview/Explain";
+import { clampNote, evaluate, matchRow, substitute, sumTerms, summaryRows } from "../webview/Explain";
 import { listRefs, materialise } from "../src/git";
 import { scenarios, summariseSweep } from "../src/sweep";
 
@@ -168,5 +168,33 @@ describe("sums as waterfalls", () => {
     expect(sumTerms("min(a, b)")).toBeNull();
     expect(sumTerms("a * b")).toBeNull();
     expect(sumTerms("a")).toBeNull();
+  });
+});
+
+describe("a rate's summary", () => {
+  it("lists the parts, folds the zeros, then each limit and the final value", () => {
+    const node = (path: string, formula: string, params: Record<string, unknown> = {}) => ({ kind: "call", path, source: "", file: null, line: null, callKind: "scalar", inputs: [], outputs: [], params, python: null, code: "", formula });
+    const nodes = [
+      node("p/raw", "base + loading - discount"),
+      node("p/cap", "min(raw_rate, repo_rate + margin)", { repo_rate: 0.0775, margin: 0.21 }),
+      node("p/floor", "max(rate, repo_rate + margin)", { repo_rate: 0.0775, margin: 0.03 }),
+    ];
+    const raw = { name: "raw_rate", producer: "p/raw", value: 0.254, inputs: [
+      { name: "base", producer: "p/base", value: 0.255, inputs: [] },
+      { name: "loading", producer: "p/loading", value: 0, inputs: [] },
+      { name: "discount", producer: "p/discount", value: 0.001, inputs: [] },
+    ] };
+    const capped = { name: "rate", producer: "p/cap", value: 0.254, inputs: [raw] };
+    const floored = { name: "rate", producer: "p/floor", value: 0.254, inputs: [capped] };
+    const rows = summaryRows(floored, nodes as never, {})!;
+    expect(rows.map((r) => [r.kind, r.label, r.value])).toEqual([
+      ["part", "base", "0.255"],
+      ["part", "discount", "− 0.1%"],
+      ["zero", "1 other part", "0"],
+      ["total", "= raw_rate", "25.4%"],
+      ["limit", "cap (cap)", "28.75%"],
+      ["limit", "floor (floor)", "10.75%"],
+      ["total", "= rate", "25.4%"],
+    ]);
   });
 });
