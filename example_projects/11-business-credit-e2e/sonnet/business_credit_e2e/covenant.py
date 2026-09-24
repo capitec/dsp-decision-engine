@@ -26,6 +26,7 @@ from datetime import date
 
 import polars as pl
 from decider import frame_step
+from typing_extensions import TypedDict
 
 from credit_core.dates import EffectiveDatedSet, EffectiveVersion
 from credit_core.obligations import _process as _obligations_process
@@ -218,7 +219,12 @@ def covenant_instance_id(facility_id: int) -> int:
     return next(_instance_ids)
 
 
-@frame_step(reads=["existing_accounts"], writes=["dscr_debt_service"])
+class Account(TypedDict, total=False):
+    opened_date: date
+
+
+# Typed so a served JSON request's `opened_date` strings arrive as dates.
+@frame_step(reads={"existing_accounts": list[Account]}, writes=["dscr_debt_service"])
 def dscr_debt_service_step(df: pl.DataFrame) -> pl.DataFrame:
     """`new_facility_instalment` is added separately (`dscr_total_debt_service`
     below) once the offer's own instalment/notional payment is known -- this

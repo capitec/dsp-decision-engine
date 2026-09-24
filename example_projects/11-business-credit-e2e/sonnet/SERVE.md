@@ -13,7 +13,7 @@ cd example_projects/11-business-credit-e2e/sonnet   # this directory
 export DECIDER_API__CODE_PATH="$PWD"
 export DECIDER_API__PIPELINE="pipeline:build"
 export DECIDER_CONFIG__BASEPATH="$PWD/configs"
-export DECIDER_API__MODE=interpreted   # see "Why interpreted mode" below
+export DECIDER_API__MODE=fused
 export PYTHONPATH="<REPO>/example_projects/00-shared-credit-core/sonnet:<REPO>/example_projects/02-affordability/sonnet:<REPO>/example_projects/05-business-nested/sonnet:<REPO>/example_projects/07-credit-limit-management/sonnet"
 ```
 
@@ -43,7 +43,7 @@ pricing11.py`.
 uv run --project <REPO> decider build
 ```
 
-Expect: `built config version 0.1.0 (pipeline pipeline:build, mode interpreted)`.
+Expect: `built config version 0.1.0 (pipeline pipeline:build, mode fused)`.
 
 ## Score the sample request
 
@@ -75,14 +75,12 @@ project's covenant binding and DSCR test) runs end to end regardless of the
 final outcome. `tests/test_review.py` builds a clean (approved) applicant for
 the L1 scenarios, since a review needs a predecessor decision to exist.
 
-## Why interpreted mode
+## Mode
 
-Inherited from 00/02/05: `credit_core.expense_norms.norm_table_version`
-(consumed through project 02's sole-proprietor call) compares two `str`
-table-version columns, which compiled (`fused`/`stepped`) mode rejects at
-bind time; 05's `events.py`/`structure.py` also run a nested `Engine` call
-per entity inside a `frame_step`, which only the interpreted runner reaches.
-See 00's own SERVE.md/NOTES.md for the full write-up.
+Served in `fused` mode: on `sample_request.json` its output equals
+`interpreted` mode's exactly. Steps no kernel can run faithfully (for example
+`credit_core.expense_norms.norm_table_version`, which compares two `str`
+inputs) run in Python, row by row, with a warning naming each at build time.
 
 ## Requests need every ragged/optional field populated explicitly
 

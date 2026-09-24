@@ -41,6 +41,9 @@ import importlib.util
 import sys
 from datetime import date
 from pathlib import Path
+from typing import Any
+
+from typing_extensions import TypedDict
 
 import assessment  # project 02's package -- unique on PYTHONPATH, safe to import directly.
 
@@ -134,6 +137,10 @@ def assess(app: dict) -> dict:
     }
 
 
+class Account(TypedDict, total=False):
+    opened_date: date
+
+
 _READS = [
     "decision_id", "decision_date", "product_code", "channel_code", "segment_code", "is_joint_application",
     "risk_grade", "dependants_count", "employment_type_code", "payslip_income", "variable_pay_history",
@@ -161,4 +168,7 @@ def build_affordability_step():
     record (ragged account lists, nested expense structs) to build 02's request shape,
     exactly the row-shaped work `frame_step` exists for (BRIEF)."""
     from decider import frame_step
-    return frame_step(_assess_frame, reads=_READS, writes=_WRITES)
+    # Typed so a served JSON request's account date strings arrive as dates.
+    accounts = ("bureau_accounts", "internal_accounts", "applicant2_bureau_accounts", "applicant2_internal_accounts")
+    reads = {**dict.fromkeys(_READS, Any), **dict.fromkeys(accounts, list[Account])}
+    return frame_step(_assess_frame, reads=reads, writes=_WRITES)

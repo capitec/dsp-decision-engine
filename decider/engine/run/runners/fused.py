@@ -30,8 +30,8 @@ class FusedRunner(SteppedRunner):
 
     fuse = True
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, strict: bool = False) -> None:
+        super().__init__(strict)
         self.packed: dict[str, Packed] = {}
 
     def _compile(self, plan: Plan, lazy: bool) -> None:

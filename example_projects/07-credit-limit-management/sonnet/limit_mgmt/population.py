@@ -34,7 +34,7 @@ def utilisation_band(revolving_utilisation_6m: float) -> int:
     return 8
 
 
-def mob_band(months_on_book: int) -> int:
+def mob_band(months_on_book: float) -> int:
     if months_on_book < 6:
         return 1  # X14 excludes these; banding still resolves for completeness of the record
     for i, edge in enumerate(_MOB_BANDS):

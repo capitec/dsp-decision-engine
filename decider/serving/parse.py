@@ -5,7 +5,7 @@ import typing as t
 
 import polars as pl
 import typing_extensions as te
-from pydantic import TypeAdapter, ValidationError
+from pydantic import ConfigDict, TypeAdapter, ValidationError
 
 from decider.engine.ir.decls import base_annotation
 from decider.exceptions import InputParsingError
@@ -38,7 +38,11 @@ def has_date(annotation: t.Any) -> bool:
     return any(has_date(a) for a in t.get_args(annotation))
 
 
-_adapter = functools.cache(TypeAdapter)
+@functools.cache
+def _adapter(annotation: t.Any) -> TypeAdapter:
+    # Keeps the keys a TypedDict doesn't declare: one declaring only the date fields must not drop the rest.
+    # pydantic takes a config only for a container, hence the one-element list.
+    return TypeAdapter(list[annotation], config=ConfigDict(extra="allow"))
 
 
 def coerce_record(record: t.Dict[str, t.Any], dates: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
@@ -49,7 +53,7 @@ def coerce_record(record: t.Dict[str, t.Any], dates: t.Dict[str, t.Any]) -> t.Di
     for name, annotation in dates.items():
         if out.get(name) is not None:
             try:
-                out[name] = _adapter(annotation).validate_python(out[name])
+                out[name] = _adapter(annotation).validate_python([out[name]])[0]
             except ValidationError as e:
                 raise InputParsingError(
                     f"input {name!r} is declared {annotation} but got {out[name]!r}; "

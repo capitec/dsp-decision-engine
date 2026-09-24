@@ -133,7 +133,7 @@ ACTIVE_CYCLE_CAP: CycleCap | None = None
 
 
 def apply_cycle_cap(
-    matrix_max_increase_unadjusted: float, decision_date: date, product_code: int,
+    matrix_max_increase_unadjusted: float, decision_date: date, product_code: float,
     cycle_cap_enabled: bool = param(False),
     cycle_cap_amount: float = param(5_000.0, ge=0.0),
 ) -> tuple[float, bool]:

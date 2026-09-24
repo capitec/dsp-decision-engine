@@ -49,7 +49,7 @@ def test_decider_build_cli_succeeds():
     env["DECIDER_API__CODE_PATH"] = str(ROOT)
     env["DECIDER_API__PIPELINE"] = "pipeline:build"
     env["DECIDER_CONFIG__BASEPATH"] = str(ROOT / "configs")
-    env["DECIDER_API__MODE"] = "interpreted"
+    env["DECIDER_API__MODE"] = "fused"
     env["PYTHONPATH"] = os.pathsep.join(str(_find_sibling(name)) for name in _SIBLINGS)
 
     # `decider build`'s warm-up scores the sample request (`inference.py`), which needs
