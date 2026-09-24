@@ -2124,3 +2124,19 @@ table.explain-summary td.muted {
   border-radius: 4px;
   background: var(--vscode-editorWidget-background);
 }
+
+.verdict-line {
+  font-weight: 600;
+  margin: 2px 0 4px;
+  padding: 3px 6px;
+  background: var(--vscode-editor-inactiveSelectionBackground, rgba(127, 127, 127, 0.15));
+}
+
+.edits-line {
+  margin: 2px 0;
+}
+
+.node.lineage:not(.selected) rect {
+  stroke-dasharray: 5 3;
+  stroke-width: 1.5;
+}

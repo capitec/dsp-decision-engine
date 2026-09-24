@@ -351,7 +351,9 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
         const key = JSON.stringify(knobCols.filter((o) => o !== k).map((o) => o.values[i]));
         groups.set(key, [...(groups.get(key) ?? []), i]);
       });
-      return [...groups.values()].every((is) => is.every((i) => JSON.stringify(sweep.outputs[i]) === JSON.stringify(sweep.outputs[is[0]])));
+      // Same offers and approvals whichever value it takes (declined applicants' internals aside).
+      const offerView = (i: number) => JSON.stringify(cols.map((c) => cellText(i, c).replace(/ · .*$/, "")));
+      return [...groups.values()].every((is) => is.every((i) => offerView(i) === offerView(is[0])));
     });
   // Cells are tinted by which way offers moved, so the grid can be read at a glance.
   const tintBy = numericCols.find((c) => /offer_amount/.test(c)) ?? numericCols.find((c) => /offer/.test(c));
@@ -370,6 +372,11 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
       {outcomes.map((c) => (
         <div key={c} className="note">
           <strong>{c === "decision" ? "Approvals" : c} unchanged in all {sweep.labels.length} scenarios:</strong> {overall(sweep.base?.[c])}.
+        </div>
+      ))}
+      {idleKnobs.map((k) => (
+        <div key={k.name} className="note">
+          <strong>{knobShort(k.name)} ({k.values.filter((v, j) => k.values.findIndex((w) => same(v, w)) === j).map((v) => formatValue(v, knobShort(k.name))).join(" / ")}) made no difference</strong> to offers or approvals in any scenario.
         </div>
       ))}
       <div className="muted small">
@@ -429,11 +436,6 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
           ))}
         </tbody>
       </table>
-      {idleKnobs.map((k) => (
-        <div key={k.name} className="note">
-          <span className="mono">{knobShort(k.name)}</span> made no difference in any scenario: every result is the same whichever of its values is used.
-        </div>
-      ))}
     </div>
   );
   return (

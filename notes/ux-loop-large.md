@@ -27,6 +27,7 @@ goal isn't visibly met caps at 5). The loop stops above 8/10 or after 40 rounds.
 | 17 | 7.8 | 8 | 8 | 7.5 | 8.5 | 6.5 | 8.5 | 7.5 |
 | 18 | 7.7 | 8 | 8 | 7 | 8 | 7 | 8 | 8 |
 | 19 | 7.4 | 8 | 8 | 7 | 8 | 7 | 7 | 7 |
+| 20 | 8.3 | 9 | 9 | 8 | 9 | 7 | 8 | 8 |
 
 ## Round 0 (baseline)
 
@@ -510,3 +511,28 @@ Judge's problems, most damaging first:
 10. "Still declined, internal values changed" is jargon beside a contradicting note.
 11. Unlabelled dotted edges.
 12. The edited cap's old value isn't shown next to the new.
+
+## Round 20 (8.3: above the 8/10 target)
+
+Changes: the flow gets 70% of the height below the code; a selected lookup-table step shows its matched table
+before the breakdown being explained; the breakdown opens with a one-line verdict ("25.2% = pl_base_rate 25.5% −
+0.1% − 0.2% · cap not reached · floor not reached"); a knob that changes no offer or approval is called out above
+the grid ("pl_min_bureau limit (504 / 580 / 640) made no difference"); a comparison names its changes under the
+title; the graph's change stepper pages through the edits before the knock-on steps ("edit 1 of 2"); one "Compare
+with start" button plus "or only…" replaces three compare entry points; "Declined either way (3)" replaces the
+internal-values wording; lineage nodes are dashed so only one node looks selected.
+
+Judge's remaining problems, most damaging first:
+
+1. The panel still gets ~55% of the window while the editor shows imports; the detail pane is ~420px wide.
+2. L5: the grid still repeats the idle knob's columns and overflows.
+3. L5: "made no difference" isn't explained (who scores below 640 and which rule already declines them).
+4. L7: "or only…" is cryptic; the banner is full.
+5. L7: the only changed records sit in a collapsed "Declined either way".
+6. Explain needs a debug pause.
+7. Unlabelled bands and dotted edges on the graph.
+8. L6: Step by step below the fold.
+9. A decline flag reads "true → false" rather than "declined by this rule → passes".
+10. "before → after" header over unchanged params.
+11. A step's params shown three times.
+12. The change stated three times in a comparison.

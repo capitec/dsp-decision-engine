@@ -132,6 +132,15 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
         <h3 className="compare-title">{c.b}</h3>
         {withRevision && <a className="small" onClick={onCompareRevision}>compare with a git revision…</a>}
       </div>
+      {(paramRows.length > 0 || codeCauses.length > 0) && (
+        <div className="edits-line">
+          {paramRows.length + codeCauses.length} change{paramRows.length + codeCauses.length === 1 ? "" : "s"}:{" "}
+          {[
+            ...paramRows.map((p) => `${p.where}: ${p.param} ${p.lines.join("; ")}`),
+            ...codeCauses.map((s) => `${fileOf(s)}: ${s.path.split("/").pop()} ${[...s.paramChanges, ...(s.structural.includes("code") && !s.paramChanges.length ? ["code"] : []), ...(s.status === "removed" ? ["skipped"] : [])].join(", ")}`),
+          ].join(" · ")}
+        </div>
+      )}
       <div className="comparing" title={c.note}>
         Baseline: <strong>{c.a}</strong>{c.note && <span className="muted"> ⓘ</span>}
         <span className="muted"> · {c.rows} records</span>

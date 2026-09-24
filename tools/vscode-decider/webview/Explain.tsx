@@ -129,6 +129,9 @@ export function Explain({ entry, who, role, nodes, values, onPick, onSelect }: P
         {role && <span className="muted small"> ({role})</span>}
       </div>
       {who && entry.producer !== null && summaryRows(entry, nodes, values) && (
+        <div className="verdict-line">{verdict(summaryRows(entry, nodes, values)!)}</div>
+      )}
+      {who && entry.producer !== null && summaryRows(entry, nodes, values) && (
         <table className="explain-summary">
           <tbody>
             {summaryRows(entry, nodes, values)!.map((r, k) => (
@@ -159,6 +162,16 @@ interface SummaryRow {
   value: string;
   note?: string;
   kind: "part" | "zero" | "total" | "limit";
+}
+
+/** "25.2% = pl_base_rate 25.5% − 0.3% from 2 parts · cap not reached · floor not reached". */
+function verdict(rows: SummaryRow[]): string {
+  const parts = rows.filter((r) => r.kind === "part");
+  const [base, ...rest] = parts;
+  const adjust = rest.length ? ` ${rest.map((r) => r.value).join(" ")}` : "";
+  const limits = rows.filter((r) => r.kind === "limit").map((r) => `${r.label.split(" ")[0]} ${r.note?.startsWith("not") ? "not reached" : "applied"}`);
+  const total = rows[rows.length - 1];
+  return `${total.value} = ${base ? `${base.label} ${base.value}` : ""}${adjust}${limits.length ? ` · ${limits.join(" · ")}` : ""}`;
 }
 
 /** Down the chain of caps and floors to the step that builds the value, as rows: the parts, the sum, then each limit. */

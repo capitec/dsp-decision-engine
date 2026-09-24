@@ -15,6 +15,7 @@ import {
   type ToWebview,
 } from "../src/protocol";
 import type { Sweep } from "../src/sweep";
+import { paramReaders } from "../src/compare";
 import { Compare } from "./Compare";
 import { FindStep } from "./FindStep";
 import { Graph } from "./Graph";
@@ -210,7 +211,12 @@ export function App() {
     } else next.add(path);
     setOpened(next);
   };
-  const changedSteps = compare.comparison ? compare.comparison.steps.filter((s) => s.status === "changed" || s.status === "added").map((s) => s.path) : [];
+  // Edited steps (code, params, a param they read) first; the knock-on ones after them.
+  const causeOf = (s: { structural: string[]; paramChanges: string[]; path: string }) =>
+    s.structural.length > 0 || s.paramChanges.length > 0 || paramReaders(compare.comparison?.paramsDocs?.b, compare.comparison?.sharedUsers).some((r) => r.steps.includes(s.path));
+  const touchedSteps = compare.comparison ? compare.comparison.steps.filter((s) => s.status === "changed" || s.status === "added") : [];
+  const changedSteps = [...touchedSteps.filter(causeOf), ...touchedSteps.filter((s) => !causeOf(s))].map((s) => s.path);
+  const editCount = touchedSteps.filter(causeOf).length;
   const changedAt = changedSteps.indexOf(selected ?? "");
   const goChanged = (dir: 1 | -1) => setSelected(changedSteps[(changedAt + dir + changedSteps.length) % changedSteps.length]);
 
@@ -284,23 +290,18 @@ export function App() {
           {edits.length > 0 && (
             <>
               {" · "}
-              {edits.length <= 3 ? (
-                edits.map(([p, a]) => (
-                  <span key={p} className="edit-chip">
-                    ✎ {editLabel([p, a])}
-                    {edits.length > 1 && (
-                      <button className="link" title="Compare the flow as started with only this edit" onClick={() => compareEdits(p)}>compare</button>
-                    )}
-                  </span>
-                ))
-              ) : (
-                <button className="link" aria-expanded={editsOpen} title="The steps skipped or swapped in this run; compare each on its own" onClick={() => setEditsOpen(!editsOpen)}>
-                  ✎ {edits.length} edits {editsOpen ? "▴" : "▾"}
-                </button>
-              )}{" "}
+              <span className="edit-chip" title={edits.map(editLabel).join("\n")}>✎ {edits.length === 1 ? editLabel(edits[0]) : `${edits.length} edits`}</span>{" "}
               <button className="banner-button" title="Run the flow as started and as edited, start to end, and compare every result" onClick={() => compareEdits()}>
-                {edits.length > 1 ? "Compare all with start" : "Compare with start"}
+                Compare with start
               </button>
+              {edits.length > 1 && (
+                <select aria-label="compare one edit" value="" title="Compare the flow as started with only one of the edits" onChange={(e) => e.target.value && compareEdits(e.target.value)}>
+                  <option value="">or only…</option>
+                  {edits.map(([p, a]) => (
+                    <option key={p} value={p}>{editLabel([p, a])}</option>
+                  ))}
+                </select>
+              )}
             </>
           )}
           {editsOpen && edits.length > 0 && (
@@ -355,7 +356,13 @@ export function App() {
               {showDiff && changedSteps.length > 0 && (
                 <>
                   <button title="Previous changed step" onClick={() => goChanged(-1)}>◀</button>
-                  <span title={changedSteps[changedAt]}>{changedAt >= 0 ? `${changedAt + 1} of ${changedSteps.length}: ${changedSteps[changedAt].split("/").pop()}` : `${changedSteps.length} changed`}</span>
+                  <span title={changedSteps[changedAt]}>
+                    {changedAt >= 0
+                      ? changedAt < editCount
+                        ? `edit ${changedAt + 1} of ${editCount}: ${changedSteps[changedAt].split("/").pop()}`
+                        : `knock-on ${changedAt - editCount + 1} of ${changedSteps.length - editCount}: ${changedSteps[changedAt].split("/").pop()}`
+                      : `${editCount} edited · ${changedSteps.length - editCount} knock-on`}
+                  </span>
                   <button title="Next changed step" onClick={() => goChanged(1)}>▶</button>
                 </>
               )}

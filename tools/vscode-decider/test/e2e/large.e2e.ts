@@ -212,12 +212,12 @@ describe("large flow stories", () => {
         await wv(c).locator(".pause-banner:not(.pending)").waitFor({ timeout: 60_000 }).catch(() => undefined);
         await wv(c).locator("select[aria-label=record]").selectOption({ label: "client_id 20400" }).catch(() => undefined);
         await shot("After 'Run through pl_regulated_rate' with client_id 20400 focused.");
-        await wv(c).locator(".pause-banner .edit-chip", { hasText: "pl_regulated_rate" }).locator("button", { hasText: "compare" }).click();
+        await wv(c).locator('select[aria-label="compare one edit"]').selectOption({ label: "pl_regulated_rate edited" });
         await wv(c).locator(".compare .compare-title", { hasText: "pl_regulated_rate edited" }).waitFor({ timeout: 120_000 });
-        await shot("Clicked 'compare' on the pl_regulated_rate edit chip: the tighter cap on its own.");
+        await shot("Picked 'or only… pl_regulated_rate edited' beside Compare with start: the tighter cap on its own.");
         await wv(c).locator(".pause-banner button.banner-button").click();
         await wv(c).locator(".compare .compare-title", { hasText: "skipped" }).waitFor({ timeout: 120_000 });
-        await shot("Clicked 'Compare all with start': the skipped floor and the tighter cap together.");
+        await shot("Clicked 'Compare with start': the skipped floor and the tighter cap together.");
       },
       dir,
     );
