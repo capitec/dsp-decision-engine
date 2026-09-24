@@ -22,7 +22,7 @@ export async function story(name: string, goal: string, body: (c: Codium, shot: 
   const shot = async (caption: string) => {
     const file = path.join(out.dir, `${name}-${String(++n).padStart(2, "0")}.jpg`);
     await c.page.waitForTimeout(500);
-    await c.page.screenshot({ path: file, type: "jpeg", quality: 60, scale: "css" });
+    await c.page.screenshot({ path: file, type: "jpeg", quality: 60, scale: "css", timeout: 120_000 });
     entry.shots.push({ file, caption });
   };
   try {

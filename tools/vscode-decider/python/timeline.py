@@ -17,7 +17,8 @@ class Timeline:
         self.outputs = _outputs(ir, {})
         self.session = session
         self.log = []  # (path, when) of every checkpoint recorded, in order
-        self.changes = []  # {"at", "path", "iteration", "arm", "name", "rows", "values", "before"}
+        self.changes = []  # {"at", "path", "iteration", "arm", "name", "rows", "values", "before", "kept", "kept_values"}
+        self.undone = []  # what the last rewind took back
         self.inputs = {c: session.frame[c].to_list() for c in session.frame.columns}
         self.now = {k: list(v) for k, v in self.inputs.items()}
 
@@ -64,8 +65,10 @@ class Timeline:
         cp = self.session.current
         if cp is None:
             return
-        at = self.log.index((cp.origin.path, cp.when)) if (cp.origin.path, cp.when) in self.log else len(self.log)
+        # The checkpoint rewound to stays: the session is paused on it and won't pass it again.
+        at = self.log.index((cp.origin.path, cp.when)) + 1 if (cp.origin.path, cp.when) in self.log else len(self.log)
         del self.log[at:]
+        self.undone = [c for c in self.changes if c["at"] > at]
         self.changes = [c for c in self.changes if c["at"] <= at]
         self.now = {k: list(v) for k, v in self.inputs.items()}
         for c in self.changes:
@@ -74,30 +77,36 @@ class Timeline:
                 now[r] = v
 
     def history(self, name, row=None):
-        """The changes to `name`, oldest first; for one record, only the changes to it."""
-        out = []
-        for i, c in enumerate(self.changes):
-            if c["name"] != name:
-                continue
-            e = {k: c[k] for k in ("path", "iteration", "arm")}
-            e["change"] = i
-            if row is None:
-                if not c["rows"]:
-                    continue
-                e.update(rows=len(c["rows"]), values=c["values"][:3], before=c["before"][:3])
-            elif row in c["rows"]:
-                j = c["rows"].index(row)
-                e.update(value=c["values"][j], before=c["before"][j])
-            elif row in c["kept"]:
-                v = c["kept_values"][c["kept"].index(row)]
-                e.update(value=v, before=v, kept=True)
-            else:
-                continue
-            out.append(e)
+        """The changes to `name`, oldest first; for one record, only the changes to it.
+
+        After a rewind, the changes it undid follow as `pending`: they will happen again as the run goes on.
+        """
+        out = [e for i, c in enumerate(self.changes) if (e := self._entry(c, i, name, row))]
+        # A change undone by a rewind drops out once the run has come back past it.
+        out += [dict(e, pending=True, change=-1) for c in self.undone if c["at"] > len(self.log) and (e := self._entry(c, -1, name, row))]
         initial = self.inputs.get(name)
         return {"name": name, "input": initial is not None,
                 "initial": None if initial is None else (initial if row is None else initial[row]),
                 "changes": out}
+
+    def _entry(self, c, i, name, row):
+        if c["name"] != name:
+            return None
+        e = {k: c[k] for k in ("path", "iteration", "arm")}
+        e["change"] = i
+        if row is None:
+            if not c["rows"]:
+                return None
+            e.update(rows=len(c["rows"]), values=c["values"][:3], before=c["before"][:3])
+        elif row in c["rows"]:
+            j = c["rows"].index(row)
+            e.update(value=c["values"][j], before=c["before"][j])
+        elif row in c["kept"]:
+            v = c["kept_values"][c["kept"].index(row)]
+            e.update(value=v, before=v, kept=True)
+        else:
+            return None
+        return e
 
     def last(self, name, row):
         """The latest change to `name` for record `row`, or None."""
