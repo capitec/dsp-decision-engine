@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import importlib
+import importlib.util
 import inspect
+import json
 import os
 import pkgutil
 import sys
@@ -14,11 +17,10 @@ from pydantic_core import to_json
 import decider.exceptions as exc
 from decider.config import ConfigStore, Version
 from decider.engine import Engine
-from decider.engine.ir.decls import base_annotation
 from decider.engine.run import Executable
 from decider.steps import ConfigurableStep, Step
 from .format import DEFAULT_OUTPUT_FORMATTERS, Response
-from .parse import DEFAULT_INPUT_HANDLERS
+from .parse import DEFAULT_INPUT_HANDLERS, coerce_frame, coerce_record, dummy, has_date
 
 
 class Live(t.NamedTuple):
@@ -27,6 +29,7 @@ class Live(t.NamedTuple):
     version: Version
     executable: Executable
     params: dict[str, t.Any] | None
+    dates: dict[str, t.Any] = {}
 
 
 @dataclass
@@ -46,7 +49,14 @@ class RequestHandler:
     scores one record; a JSON array, JSONL, CSV or Parquet body runs as a frame.
 
     Override any `*_fn` method in a `Handler` subclass in `inference.py` to
-    change how requests are parsed, scored or formatted.
+    change how requests are parsed, scored or formatted. JSON dates arrive as
+    ISO strings and are converted to the pipeline's declared `date` and
+    `datetime` inputs, including inside `list[date]`, `date | None` and
+    TypedDict fields (`accounts: list[Account]`); a bare `dict` is left as sent.
+
+    `stage` warms a version by scoring `sample_request` (a JSON file, by
+    default `sample_request.json` in `code_path`) if it exists, else a
+    synthetic record; override `warm_fn` to warm another way.
 
     Example::
 
@@ -69,6 +79,7 @@ class RequestHandler:
     store: ConfigStore
     pipeline: t.Any = "pipeline:build"
     mode: str = "fused"
+    sample_request: str | None = None
     _active: Live | None = field(default=None, init=False, repr=False)
     _staged: Live | None = field(default=None, init=False, repr=False)
     _history: list[Live] = field(default_factory=list, init=False, repr=False)
@@ -102,8 +113,8 @@ class RequestHandler:
             versioned = self.store.read(version)
             exe = Engine().bind(self.pipeline_fn(versioned.config), mode=self.mode)
             params = versioned.config.get("params")
-            _warm(exe, params)
-            self._staged = Live(versioned.version, exe, params)
+            self.warm_fn(exe, params)
+            self._staged = Live(versioned.version, exe, params, _dates(exe))
             return versioned.version
 
     def activate(self) -> Version:
@@ -186,24 +197,43 @@ class RequestHandler:
         live = self.module_fn()
         request = await self.input_fn(data, content_type)
         if isinstance(request, dict):
-            result = live.executable.score(request, live.params)
+            result = live.executable.score(coerce_record(request, live.dates), live.params)
         else:
-            result = live.executable.run(request, live.params)
+            result = live.executable.run(coerce_frame(request, live.dates), live.params)
         return self.output_fn(result, accept)
+
+    def warm_fn(self, executable: Executable, params: t.Any) -> None:
+        # One record through both paths compiles every kernel before a request needs it.
+        sample = self.sample_request if self.sample_request and os.path.exists(self.sample_request) else None
+        if sample:
+            hint = (f"Fix {sample} so it is a request this pipeline answers. Dates inside a bare `dict` input "
+                    f"stay strings; annotate it as a TypedDict with `date` fields to have them converted.")
+        else:
+            record = {v.name: dummy(v.annotation) for v in _inputs(executable)}
+            where = self.sample_request or "a JSON file passed as RequestHandler(sample_request=...)"
+            hint = (f"The synthetic inputs {record!r} don't suit this pipeline; put a representative request "
+                    f"in {where} and staging warms with it instead.")
+        try:
+            if sample:
+                with open(sample) as f:
+                    record = coerce_record(json.load(f), _dates(executable))
+            executable.score(record, params)
+            executable.run(pl.DataFrame([record]), params)
+        except exc.ParamsError:
+            raise
+        except Exception as e:
+            raise exc.DeciderError(f"warm-up failed with {type(e).__name__}: {e}. {hint}") from e
 
     async def shutdown_fn(self):
         pass
 
 
-_DUMMY = {bool: False, int: 1, str: "", bytes: ""}
+def _inputs(exe: Executable) -> list:
+    return list(exe.plan.inputs)
 
 
-def _warm(exe: Executable, params: t.Any) -> None:
-    # One arbitrary row through both paths compiles every kernel before a request needs it;
-    # 1 rather than 0 so an ordinary ratio doesn't divide by zero.
-    record = {v.name: _DUMMY.get(base_annotation(v.annotation), 1.0) for v in exe.plan.versions if v.producer is None}
-    exe.score(record, params)
-    exe.run(pl.DataFrame([record]), params)
+def _dates(exe: Executable) -> dict[str, t.Any]:
+    return {v.name: v.annotation for v in _inputs(exe) if has_date(v.annotation)}
 
 
 def construct_handler_from_settings() -> RequestHandler:
@@ -211,10 +241,26 @@ def construct_handler_from_settings() -> RequestHandler:
     from decider.settings import settings
 
     code_path = os.path.abspath(settings.api.code_path)
-    if code_path not in sys.path:
-        sys.path.insert(0, code_path)
+    # First, even when PYTHONPATH already lists it behind another project with its own pipeline.py.
+    if code_path in sys.path:
+        sys.path.remove(code_path)
+    sys.path.insert(0, code_path)
+    pipeline_module = importlib.import_module(settings.api.pipeline.partition(":")[0])
+    # Shows a pipeline imported from the wrong project before it serves the wrong answers.
+    print(f"decider: pipeline {settings.api.pipeline} from {pipeline_module.__file__}", file=sys.stderr)
     module_name, _, class_name = settings.api.handler.partition(":")
     constructor = RequestHandler
-    if os.path.exists(os.path.join(code_path, f"{module_name}.py")):
-        constructor = getattr(pkgutil.resolve_name(module_name), class_name, RequestHandler)
-    return constructor(settings.config.get(), settings.api.pipeline, settings.api.mode)
+    try:
+        found = importlib.util.find_spec(module_name) is not None
+    except ModuleNotFoundError:  # a missing parent package of a dotted name
+        found = False
+    if found:
+        handler_module = importlib.import_module(module_name)
+        constructor = getattr(handler_module, class_name, None)
+        if constructor is None:
+            raise AttributeError(
+                f"{handler_module.__file__} has no {class_name!r}; define `class {class_name}(RequestHandler)` "
+                f"there, or point DECIDER_API__HANDLER at the module:class that holds your handler.")
+        print(f"decider: handler {settings.api.handler} from {handler_module.__file__}", file=sys.stderr)
+    return constructor(settings.config.get(), settings.api.pipeline, settings.api.mode,
+                       sample_request=os.path.join(code_path, "sample_request.json"))

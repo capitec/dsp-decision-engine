@@ -1,0 +1,109 @@
+{
+  "account_id": 900123456,
+  "client_id": 500777,
+  "decision_date": "2026-09-24",
+
+  "days_past_due": 47,
+  "arrears_amount": 2650.0,
+  "outstanding_balance": 18500.0,
+  "product_family_code": 1,
+  "under_performing_arrangement": false,
+  "bucket_at_arrangement_entry": 0,
+  "times_cured_24m": 0,
+  "times_cured_12m": 0,
+
+  "current_bucket": 3,
+  "payment_ratio_last": 0.4,
+  "days_since_last_payment": 18,
+  "right_party_contact_rate_90d": 0.35,
+  "promise_kept_rate": 0.5,
+  "broken_promises_90d": 1,
+  "account_age_months": 30,
+  "other_accounts_in_arrears": 0,
+
+  "debt_review_stage_code": 0,
+  "debt_review_case_number": "",
+  "debt_review_default_date": "2020-01-01",
+  "administration_order_active": false,
+  "insolvency_active": false,
+  "deceased": false,
+  "complaint_open": false,
+  "complaint_logged_date": "2020-01-01",
+  "ombud_referral_open": false,
+  "dispute_raised": false,
+  "hardship_arrangement_performing": false,
+  "notice_delivered_date": "2020-01-01",
+  "litigation_in_progress": false,
+  "prescription_date": "2029-06-01",
+  "outside_permitted_hours": false,
+  "consent_withdrawn_channels": [4],
+  "frequency_cap_reached": false,
+  "frequency_cap_window_reset_date": "2020-01-01",
+  "written_communication_only": false,
+  "promise_date": "2020-01-01",
+  "no_valid_contact_point": false,
+
+  "previous_episode_open": true,
+  "previous_path_position": 2,
+  "previous_bucket": 2,
+  "previous_intensity_ceiling": 1,
+  "previous_channel_attempt_count": 1,
+  "qualifying_payment": false,
+  "promise_captured": false,
+  "cured": false,
+  "arrangement_activated": false,
+
+  "qualifying_payment_as_at_now": false,
+  "promise_captured_as_at_now": false,
+  "cured_as_at_now": false,
+  "dispute_raised_as_at_now": false,
+  "arrangement_activated_as_at_now": true,
+
+  "contacts_today": 0,
+  "spoken_contacts_today": 0,
+  "contacts_rolling_7d": 2,
+  "contacts_rolling_30d": 6,
+  "days_since_last_treatment": 5,
+
+  "is_new_bucket3_entrant": true,
+
+  "proposed_instalment": 900.0,
+  "proposed_arrangement_instalment": 900.0,
+
+  "applicant1_dependants_count": 2,
+  "applicant1_employment_type_code": 1,
+  "applicant1_payslip_income": 12500.0,
+  "applicant1_variable_pay_history": [0.0],
+  "applicant1_declared_expenses": {"accommodation": 3200.0, "food": 1600.0, "transport": 700.0},
+  "applicant1_statement_expenses": {},
+  "applicant1_bureau_accounts": [
+    {"account_type_code": 10, "balance": 8500.0, "limit": 15000.0, "instalment": 450.0,
+     "months_in_arrears": 2, "opened_date": "2022-03-01", "closed": false, "is_internal": false}
+  ],
+  "applicant1_internal_accounts": [
+    {"account_type_code": 1, "balance": 18500.0, "instalment": 1150.0,
+     "months_in_arrears": 2, "opened_date": "2021-06-15", "closed": false, "is_internal": true}
+  ],
+
+  "applicant2_dependants_count": 0,
+  "applicant2_employment_type_code": 0,
+  "applicant2_variable_pay_history": [0.0],
+  "applicant2_declared_expenses": {},
+  "applicant2_statement_expenses": {},
+  "applicant2_bureau_accounts": [
+    {"account_type_code": 31, "balance": 0.0, "limit": 0.0, "instalment": 0.0,
+     "months_in_arrears": 0, "opened_date": "2020-01-01", "closed": true, "is_internal": false}
+  ],
+  "applicant2_internal_accounts": [
+    {"account_type_code": 31, "balance": 0.0, "limit": 0.0, "instalment": 0.0,
+     "months_in_arrears": 0, "opened_date": "2020-01-01", "closed": true, "is_internal": true}
+  ],
+
+  "bureau_as_of_date": "2026-09-20",
+  "court_ordered_deductions": 0.0,
+  "is_joint_application": false,
+  "risk_grade": 6,
+  "product_code": 10,
+  "channel_code": 4,
+  "segment_code": 3
+}

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 import numpy as np
 import polars as pl
 
+from decider.engine.params.tables import rows_like
 from decider.serializable.schema import PolarsSchema
 from decider.steps.tables.schema import (
     AndExpression,
@@ -19,6 +20,7 @@ from decider.steps.tables.schema import (
     OrExpression,
     bounds,
     check_rows,
+    groups,
     leaves,
 )
 from decider.steps.trees.ops import GE, GT, LE, LT
@@ -147,25 +149,52 @@ class Shape:
         """Rows from a params document, checked against the declared columns and packed."""
         return pack(typed(frame.data, self.dtypes), self)
 
+    def given(self, value: t.Any) -> t.Any:
+        """Refuse a params value that isn't a list of rows before it is read as one."""
+        data = value.get("data") if isinstance(value, dict) else value
+        if not isinstance(data, list):
+            raise ValueError(f"a table param takes its rows as a list, one dict per row; {expected(self.dtypes)}")
+        for r, row in enumerate(data):
+            if not isinstance(row, dict):
+                raise ValueError(f"row {r} is {row!r}, not a dict of column to value; {expected(self.dtypes)}")
+        return value
+
+
+def expected(types: t.Mapping[str, t.Any]) -> str:
+    """What a table's rows look like, for error messages: `[{"lo": Float64, "band": String}, ...]`."""
+    return rows_like(types)
+
 
 def typed(data: list[dict], types: dict[str, t.Any]) -> list[dict]:
-    """`data` cast to the declared column dtypes; `ValueError` for an unknown column or a value that doesn't fit."""
+    """`data` cast to the declared column dtypes; `ValueError` naming the row and column that doesn't fit."""
+    for r, row in enumerate(data):
+        if unknown := sorted(set(row) - set(types)):
+            raise ValueError(f"row {r} has column(s) {unknown} the table does not declare; {expected(types)}")
     given = set().union(*map(set, data)) if data else set(types)
-    if unknown := sorted(given - set(types)):
-        raise ValueError(f"rows have column(s) {unknown} the table does not declare; it declares {sorted(types)}")
     if missing := sorted(set(types) - given):
-        raise ValueError(f"rows lack the declared column(s) {missing}")
+        raise ValueError(f"rows lack the declared column(s) {missing}; {expected(types)}")
     try:
         cast = pl.DataFrame(data, schema=types, strict=True).to_dicts()
     except Exception as e:  # polars raises several unrelated types for a value that doesn't fit
-        raise ValueError(f"rows don't fit the declared columns: {e}") from None
+        raise ValueError(f"rows don't fit the declared columns: {_misfit(data, types) or e}; "
+                         f"{expected(types)}") from None
     # An Enum column turns a value outside its categories into a null rather than failing.
     for r, (raw, row) in enumerate(zip(data, cast)):
         for column, value in row.items():
             if value is None and raw.get(column) is not None:
-                raise ValueError(f"rows don't fit the declared columns: row {r}'s {column} "
-                                 f"{raw[column]!r} is not a {types[column]}")
+                raise ValueError(f"rows don't fit the declared columns: row {r}, column {column!r}: "
+                                 f"{raw[column]!r} is not a {types[column]}; {expected(types)}")
     return cast
+
+
+def _misfit(data: list[dict], types: dict[str, t.Any]) -> t.Optional[str]:
+    for r, row in enumerate(data):
+        for column, value in row.items():
+            try:
+                pl.DataFrame([{column: value}], schema={column: types[column]}, strict=True)
+            except Exception:
+                return f"row {r}, column {column!r}: {value!r} is not a {types[column]}"
+    return None
 
 
 def pack(data: list[dict], shape: Shape) -> Rows:
@@ -173,6 +202,7 @@ def pack(data: list[dict], shape: Shape) -> Rows:
     check_rows(shape.expression, data)
     n = len(data)
     conds = list(leaves(shape.expression))
+    ladders = groups(shape.expression, data)
     ints: list[int] = [0] * (2 * (len(conds) + len(shape.outputs)))
     floats: list[float] = []
     chars = bytearray()
@@ -197,7 +227,7 @@ def pack(data: list[dict], shape: Shape) -> Rows:
     # bigger ints.
     for k, leaf in enumerate(conds):
         if isinstance(leaf, BetweenExpression):
-            bands = bounds(leaf, data)
+            bands = bounds(leaf, data, ladders)
             head(k, put([lo is not None for lo, _ in bands] + [hi is not None for _, hi in bands], ints),
                  put([0.0 if lo is None else float(lo) for lo, _ in bands]
                      + [0.0 if hi is None else float(hi) for _, hi in bands], floats))

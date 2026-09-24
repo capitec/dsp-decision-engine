@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import subprocess
+import sys
 import typing as t
 from abc import ABC, abstractmethod
 
@@ -252,3 +254,16 @@ def test_root_composes_with_a_slotted_abc():
             pass
 
         Incomplete(type="t")
+
+
+def test_built_in_tags_resolve_before_their_modules_are_imported():
+    code = ("import sys; from decider import ConfigurableStep; "
+            "assert 'decider.steps.tables' not in sys.modules and 'decider.steps.trees' not in sys.modules; "
+            "print(*(ConfigurableStep.resolve(t).__name__ for t in ('tree', 'decision_table', 'scorecard')))")
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True).stdout
+    assert out.split() == ["TreeConfig", "DecisionTableConfig", "ScorecardConfig"]
+
+
+def test_an_unknown_tag_says_to_import_its_module():
+    with pytest.raises(LookupError, match="Import the module that defines it"):
+        ConfigurableStep.resolve("no_such_step")

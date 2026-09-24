@@ -30,13 +30,13 @@ class FusedRunner(SteppedRunner):
 
     fuse = True
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, strict: bool = False) -> None:
+        super().__init__(strict)
         self.packed: dict[str, Packed] = {}
 
     def _compile(self, plan: Plan, lazy: bool) -> None:
         super()._compile(plan, lazy)
-        self.packed = compile_packed(plan, lazy)
+        self.packed = compile_packed(plan, lazy, self._python)
         self._reads.update((id(k), _external(k)) for k in self.packed.values())
 
     def _sequence(self, seq: Sequence, state: State, params: RunParams, scope: _Scope) -> Iterator[Checkpoint]:

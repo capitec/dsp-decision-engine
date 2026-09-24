@@ -50,6 +50,24 @@
   `in` also takes numeric lists (decider_old cast every list to strings);
   int columns are compared as float64. `unnest_output` is accepted and
   ignored: outputs are always flat columns.
+- **Band ladders are per `eq` group (a departure from decider_old).**
+  decider_old filled a missing bound from the next row of the whole table
+  and allowed an open edge only on the table's first and last rows, so a
+  table keyed by grade with bands per grade needed `±inf` sentinels *and*
+  `allow_gaps`, which switched off the contiguity check it wanted. Rows
+  with equal `eq` column values now form one ladder (in row order, rows of
+  different groups may interleave): open edges, neighbour fill and
+  contiguity apply within it. `in` lists don't split ladders: a band
+  table whose rows carry different channel lists but share one ladder
+  (and may lean on neighbour fill) is common, and splitting would silently
+  open its edges. A table without `eq` conditions behaves as before.
+- **Param rows fail with the row, the column and the expected shape.** A
+  `BeforeValidator` refuses a value that isn't a list of dicts (pydantic's
+  own "missing" error for a dict without `data` read as "param is required
+  but missing"); `typed` names the row with an undeclared column and, when
+  polars refuses the frame, re-casts cell by cell to name the first value
+  that doesn't fit. Every message ends with `expected a list of rows like
+  [{column: dtype, ...}, ...]`.
 - **Strings are matched raw.** `eq` on a String column and `in` on a
   List[String] compare the input's UTF-8 span with the row's bytes in the
   kernel, through the tree walker's `_matches`; nothing becomes a code.

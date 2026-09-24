@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import warnings
 from typing import TYPE_CHECKING, Any, Literal, Mapping
 
 import numpy as np
@@ -11,8 +13,8 @@ from decider.engine.run.runners.base import Runner
 from decider.engine.run.runners.fused import FusedRunner
 from decider.engine.run.runners.interpreted import InterpretedRunner
 from decider.engine.run.runners.stepped import SteppedRunner
-from decider.engine.ir.decls import base_annotation
-from decider.engine.run.state import State, dtype_of
+from decider.engine.ir.decls import ParamDecl, base_annotation
+from decider.engine.run.state import State, declared_dtype, dtype_of
 from decider.engine.wiring import Plan, resolve
 from decider.engine.wiring.plan import Version
 from decider.exceptions import EngineError
@@ -36,6 +38,9 @@ class Engine:
             params document is first seen and raises on any invalid one;
             `"lazy"` validates a node the first time it runs, so an invalid
             param in a node no row reaches never fails a run.
+        strict_compile: in `"stepped"` and `"fused"` modes, a step no kernel
+            can run faithfully raises at the first run instead of running in
+            Python with a warning.
 
     Example::
 
@@ -43,10 +48,11 @@ class Engine:
         out = exe.run(df, params={"term": {"cap_by_income": {"cap": 36.0}}})
     """
 
-    def __init__(self, params_validation: Literal["eager", "lazy"] = "eager"):
+    def __init__(self, params_validation: Literal["eager", "lazy"] = "eager", strict_compile: bool = False):
         if params_validation not in ("eager", "lazy"):
             raise EngineError(f"params_validation must be 'eager' or 'lazy', not {params_validation!r}")
         self.params_validation = params_validation
+        self.strict_compile = strict_compile
 
     def bind(self, step_or_ir: Any, mode: Mode = "interpreted") -> Executable:
         """An `Executable` running `step_or_ir` in `mode`.
@@ -65,7 +71,8 @@ class Engine:
         runner = RUNNERS.get(mode)
         if runner is None:
             raise EngineError(f"unknown mode {mode!r}; expected one of {sorted(RUNNERS)}")
-        return Executable(resolve(step_or_ir), runner(), self.params_validation == "lazy", step_or_ir)
+        runner = runner() if runner is InterpretedRunner else runner(strict=self.strict_compile)
+        return Executable(resolve(step_or_ir), runner, self.params_validation == "lazy", step_or_ir)
 
 
 class Executable:
@@ -93,6 +100,13 @@ class Executable:
         self.report = RunReport()
         written = {o.name for c in plan.calls for o in c.node.outputs or ()}
         self._produced = written - {i.name for i in plan.inputs}
+        self._params_at = {d.shared_key or d.name: _where(n.path, d) for n in self.nodes.values() for d in n.decls}
+        for i in plan.inputs:
+            self._params_at.pop(i.name, None)
+        # One set test on the hot path covers both checks; nothing else happens unless it hits.
+        self._watched = self._produced | self._params_at.keys()
+        self._warned: set[str] = set()
+        self._declared = {i.name: declared_dtype(i.annotation) for i in plan.inputs}
         inputs: dict[np.dtype, list[Version]] = {}
         for v in plan.versions:
             if v.producer is None:
@@ -113,11 +127,22 @@ class Executable:
                 ...
         """
         self._check_shadowing(df.columns)
+        # A column that is all null, or all empty lists, infers a `Null` dtype, which the Arrow import rejects.
+        fix = {c: self._declared.get(c) or k for c, t in df.schema.items() if (k := _concrete(t)) != t}
+        if fix:
+            df = df.with_columns(pl.col(c).cast(t) for c, t in fix.items())
         state = State.from_frame(self.plan, df, n)
         return state, self._params(params, state.n)
 
     def _check_shadowing(self, columns) -> None:
-        shadowed = sorted(self._produced.intersection(columns))
+        hit = self._watched.intersection(columns)
+        if not hit:
+            return
+        for name in sorted(hit - self._produced - self._warned):
+            self._warned.add(name)
+            warnings.warn(f"'{name}' is a param, not an input, so its value in the record or frame is ignored; "
+                          f"pass it in the params document instead: {self._params_at[name]}", stacklevel=2)
+        shadowed = sorted(hit & self._produced)
         if shadowed:
             name = shadowed[0]
             raise EngineError(
@@ -207,6 +232,27 @@ class Executable:
             # Every frame column passes through: hstack is several times cheaper than a new frame.
             return frame.hstack(results)
         return pl.DataFrame([frame.get_column(c) for c in names if c not in self._hidden] + results)
+
+
+def _where(path: str, decl: ParamDecl) -> str:
+    # The params-document entry that sets `decl`, as JSON.
+    if decl.shared_key is not None:
+        return json.dumps({"shared": {decl.shared_key: "..."}})
+    doc: Any = {decl.name: "..."}
+    for part in reversed(path.split("/")):
+        doc = {part: doc}
+    return json.dumps(doc)
+
+
+def _concrete(dtype: pl.DataType) -> pl.DataType:
+    # `dtype` with every `Null` inside it made `String`: any concrete type holds all-null values.
+    if dtype == pl.Null:
+        return pl.String
+    if isinstance(dtype, pl.List):
+        return pl.List(_concrete(dtype.inner))
+    if isinstance(dtype, pl.Struct):
+        return pl.Struct({f.name: _concrete(f.dtype) for f in dtype.fields})
+    return dtype
 
 
 def _load(state: State, record: Mapping[str, Any], versions: list[Version], dtype: np.dtype) -> None:

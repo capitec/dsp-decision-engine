@@ -1,0 +1,39 @@
+{
+  "loan_granting": {
+    "fraud_handling_path": {
+      "fraud_timeout_ms": 800.0,
+      "bypass_amount_ceiling": 15000.0,
+      "bypass_tenure_floor_months": 24.0
+    },
+    "scoring": {
+      "retail_unsecured": {
+        "bureau_score": {
+          "bureau_low": 500.0,
+          "bureau_mid": 650.0,
+          "bureau_high": 750.0
+        }
+      },
+      "apply_score_adjustments": {
+        "adjustment_stack_enabled": true
+      },
+      "apply_calibration_scale_adjustments": {
+        "adjustment_stack_enabled": true
+      },
+      "apply_probability_of_default_adjustments": {
+        "adjustment_stack_enabled": true
+      },
+      "apply_probability_of_default_for_grading_adjustments": {
+        "adjustment_stack_enabled": true
+      }
+    },
+    "statutory_ceiling": {
+      "repo_rate": 0.07
+    },
+    "recommendation_objective": {
+      "recommendation_objective": "largest_amount"
+    },
+    "evaluation_ceiling_per_term": {
+      "evaluation_ceiling_per_term": 24
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "business_credit_e2e_origination": {
+    "business_nested": {
+      "business_grade": {
+        "combined_pd_before_overlay": {
+          "financial_weight": 0.4,
+          "people_weight": 0.6
+        },
+        "apply_probability_of_default_adjustments": {
+          "adjustment_stack_enabled": true
+        }
+      },
+      "pricing": {
+        "initiation_fee": {
+          "base_fee": 1050.0,
+          "marginal_rate": 0.1,
+          "threshold": 10000.0,
+          "cap": 6500.0
+        },
+        "monthly_service_fee": {
+          "flat_fee": 69.0,
+          "cap": 69.0
+        }
+      }
+    }
+  }
+}

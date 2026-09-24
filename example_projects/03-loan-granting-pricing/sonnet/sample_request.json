@@ -1,0 +1,85 @@
+{
+  "decision_id": "gr-2026-0000987654",
+  "decision_date": "2026-09-24",
+  "product_code": 10,
+  "channel_code": 2,
+  "purpose_code": 1,
+  "requested_amount": 120000.0,
+  "requested_term_months": 60,
+  "is_joint_application": false,
+  "campaign_id": 4471,
+  "campaign_is_preapproved": true,
+
+  "applicant_age_years": 38.0,
+  "employment_type_code": 1,
+  "months_employed": 41.0,
+  "employer_id": 5001,
+  "residency_code": 1,
+  "credit_life_substitution_declared": false,
+  "has_contractual_capacity": true,
+  "dependants_count": 2,
+
+  "internal_tenure_months": 41.0,
+  "internal_exposure_total": 22000.0,
+  "group_exposure_limit": 180000.0,
+  "in_flight_application_count": 0,
+  "debt_review_status_code": 0,
+  "administration_order_flag": false,
+  "insolvency_status_code": 0,
+  "insolvency_rehabilitated_months": 0,
+  "deceased_flag": false,
+  "estate_flag": false,
+  "exclusion_list_hits": [0],
+  "is_duplicate_application": false,
+  "has_adverse_internal_history": false,
+
+  "marketing_opt_out": false,
+  "is_regulated_notice": false,
+  "data_sharing_consent": true,
+
+  "fraud_verdict_code": 1,
+  "fraud_response_ms": 210.0,
+
+  "bureau_response_status": "ok",
+  "bureau_account_count": 7,
+  "bureau_history_months": 48.0,
+  "bureau_identity_subject_count": 1,
+  "bureau_has_unparseable_account": false,
+  "bureau_account_list_truncated": false,
+  "bureau_has_out_of_domain_status": false,
+  "bureau_identity_mismatch": false,
+  "bureau_as_of_date": "2026-09-20",
+  "bureau_enquiry_count_60d": 3,
+
+  "bureau_score": 720.0,
+  "worst_arrears_months": 2.0,
+  "accounts_in_arrears_count": 0,
+  "revolving_utilisation": 0.2,
+
+  "payslip_income": 18500.0,
+  "variable_pay_history": [1450.0, 1600.0, 1300.0],
+  "declared_expenses": {"accommodation": 3500.0, "food": 1800.0, "transport": 900.0},
+  "statement_expenses": {},
+  "bureau_accounts": [
+    {"account_type_code": 10, "balance": 8500.0, "limit": 15000.0, "instalment": 450.0,
+     "months_in_arrears": 0, "opened_date": "2022-03-01", "closed": false, "is_internal": false}
+  ],
+  "internal_accounts": [
+    {"account_type_code": 1, "balance": 22000.0, "instalment": 1150.0,
+     "months_in_arrears": 0, "opened_date": "2021-06-15", "closed": false, "is_internal": true}
+  ],
+  "applicant2_dependants_count": 0,
+  "applicant2_employment_type_code": 0,
+  "applicant2_variable_pay_history": [0.0],
+  "applicant2_declared_expenses": {},
+  "applicant2_statement_expenses": {},
+  "applicant2_bureau_accounts": [
+    {"account_type_code": 31, "balance": 0.0, "limit": 0.0, "instalment": 0.0,
+     "months_in_arrears": 0, "opened_date": "2020-01-01", "closed": true, "is_internal": false}
+  ],
+  "applicant2_internal_accounts": [
+    {"account_type_code": 31, "balance": 0.0, "limit": 0.0, "instalment": 0.0,
+     "months_in_arrears": 0, "opened_date": "2020-01-01", "closed": true, "is_internal": true}
+  ],
+  "court_ordered_deductions": 0.0
+}

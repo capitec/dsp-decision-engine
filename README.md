@@ -44,6 +44,7 @@ Engine().bind(pipeline, mode="fused").score({"income": 1000.0, "debt": 200.0})  
 ## CLI
 
 ```bash
+decider guide                 # print the getting-started guide
 decider template NAME [DIR]   # write a starter project
 decider build [VERSION]       # stage and warm a config version (fills the numba cache)
 decider serve                 # POST /invocations, GET /ping
@@ -53,6 +54,8 @@ Settings come from `DECIDER_*` environment variables; see `decider --help`.
 
 ## Documentation
 
+- Start with `decider guide` (the same text as `decider/GUIDE.md`): concepts,
+  runnable examples, project layout and common mistakes. `docs/` is outdated.
 - `IR.md`: the contract, what a pipeline compiles to and how each mode runs it.
 - `Design.md`: the design and package layout.
 - `notes/`: decision records with their measurements; `notes/spec-amendments.md`

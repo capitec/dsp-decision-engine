@@ -6,7 +6,7 @@ import pytest
 from decider import param
 from decider.engine.ir.decls import ParamDecl
 from decider.engine.params import (
-    NodeParams, ParamsCache, ParamsError, Status, bundle_class, document_key, harvest,
+    NodeParams, ParamsCache, ParamsError, Status, bundle_class, check_namespaces, document_key, harvest,
     record_shared_type, validate_node,
 )
 
@@ -245,3 +245,16 @@ def test_the_params_error_header_says_how_many_rows_it_affects():
         invalid.check(rows=1)
     with pytest.raises(ParamsError, match=r"^invalid params \(affects 3 rows\):"):
         invalid.check(rows=3)
+
+
+def test_params_document_errors_list_every_step_with_params_and_the_defaults_hint():
+    nodes = {0: node_for("p/b", cap_by_income)}
+    with pytest.raises(ParamsError) as e:
+        check_namespaces({"operation": "replay"}, nodes)
+    msg = str(e.value)
+    assert "no step with params at 'operation'" in msg
+    assert "p/b (cap, base_rate)" in msg and "parameters().defaults()" in msg
+
+
+def test_an_empty_entry_for_a_step_without_params_is_accepted():
+    check_namespaces({"p": {"a": {}, "b": {"cap": 12.0}}}, {0: node_for("p/b", cap_by_income)})

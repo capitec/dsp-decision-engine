@@ -1,0 +1,43 @@
+{
+  "decision_id": "aff-2026-0000123456",
+  "decision_date": "2026-09-24",
+  "product_code": 10,
+  "channel_code": 4,
+  "segment_code": 3,
+  "assessment_mode_code": 1,
+  "is_joint_application": false,
+  "risk_grade": 5,
+
+  "applicant1_dependants_count": 2,
+  "applicant1_employment_type_code": 1,
+  "applicant1_payslip_income": 18500.0,
+  "applicant1_variable_pay_history": [1450.0, 1600.0, 1300.0],
+  "applicant1_declared_expenses": {"accommodation": 3500.0, "food": 1800.0, "transport": 900.0},
+  "applicant1_statement_expenses": {},
+  "applicant1_bureau_accounts": [
+    {"account_type_code": 10, "balance": 8500.0, "limit": 15000.0, "instalment": 450.0,
+     "months_in_arrears": 0, "opened_date": "2022-03-01", "closed": false, "is_internal": false}
+  ],
+  "applicant1_internal_accounts": [
+    {"account_type_code": 1, "balance": 22000.0, "instalment": 1150.0,
+     "months_in_arrears": 0, "opened_date": "2021-06-15", "closed": false, "is_internal": true}
+  ],
+
+  "applicant2_dependants_count": 0,
+  "applicant2_employment_type_code": 0,
+  "applicant2_variable_pay_history": [0.0],
+  "applicant2_declared_expenses": {},
+  "applicant2_statement_expenses": {},
+  "applicant2_bureau_accounts": [
+    {"account_type_code": 31, "balance": 0.0, "limit": 0.0, "instalment": 0.0,
+     "months_in_arrears": 0, "opened_date": "2020-01-01", "closed": true, "is_internal": false}
+  ],
+  "applicant2_internal_accounts": [
+    {"account_type_code": 31, "balance": 0.0, "limit": 0.0, "instalment": 0.0,
+     "months_in_arrears": 0, "opened_date": "2020-01-01", "closed": true, "is_internal": true}
+  ],
+
+  "bureau_as_of_date": "2026-09-20",
+  "court_ordered_deductions": 0.0,
+  "proposed_instalment": 2500.0
+}

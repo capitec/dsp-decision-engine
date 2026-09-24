@@ -5,7 +5,16 @@ The only things disk-cached with `cache=True` are user step functions, which
 already live in real `.py` files. Fused kernels are assembled with a numba
 `intrinsic` over fixed tuple signatures and compile once per process; they are
 never written to disk. Record the CPU target with the cache and check it at
-startup. The facts below explain why `exec`/generated files were abandoned.
+startup.
+
+**Salt:** numba's index key is the step's own bytecode, so a user step cached
+before decider changed what `round` or `**` compile to kept the old code until
+its file changed. `njit.jit` gives user steps a `FunctionCache` whose index
+key also carries `njit.SALT`, the sha256 of `compile/cpython.py`: an edit
+there misses every user-step entry once; unchanged, entries still hit. Old
+entries stay in the index (a few KB each). decider's own `cache=True`
+kernels (`walker.walk`) aren't salted: their callees aren't in numba's key
+either, so a callee-only edit there also needs the walker file touched. The facts below explain why `exec`/generated files were abandoned.
 
 **Why:**
 - `exec`'d code can't be cached at all. It fails when decorated:

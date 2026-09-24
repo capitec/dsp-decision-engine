@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from numba import njit, types
-from numba.extending import overload
+from numba.extending import intrinsic, overload
 
 from decider.engine.boundary._arrow.intrinsics import load_f64, load_i64, load_u8
 from decider.steps.expr.postfix import evaluate
@@ -10,8 +10,8 @@ from decider.steps.trees.ops import EQ, GE, GT, LE, LT
 
 # Program row kinds, and the columns of a program row.
 LEAF, CMP_F, CMP_I, CMP_B, CMP_E, MATCH = range(6)
-KIND, FEAT, OP, THR, THEN, ELSE, UNKNOWN = range(7)
-WIDTH = 7
+KIND, FEAT, OP, THR, THEN, ELSE, UNKNOWN, W_THEN, W_ELSE, W_UNKNOWN = range(10)
+WIDTH = 10
 # A null int feature arrives as this; a null float as NaN; a null bool as None.
 NULL_INT = -(2**63)
 # How a MATCH row compares a string with its patterns.
@@ -112,30 +112,33 @@ def _match(op, span, g, ps, ints, chars, lay):
 
 @njit(inline="always")
 def _walk(pc, ctx):
+    # Returns the leaf and the path's number: the sum of the weights of the jumps taken,
+    # numbered so that each root-to-end path of the tree sums to a different number.
     f, i, b, s, pf, pi, ps, ints, floats, chars, lay = ctx
+    code = 0
     while True:
         row = lay[PROG] + WIDTH * pc
         k = _i(ints, row + KIND)
         if k == LEAF:
-            return _i(ints, row + FEAT)
+            return _i(ints, row + FEAT), code
         j, op, t = _i(ints, row + FEAT), _i(ints, row + OP), _i(ints, row + THR)
         # A null feature takes the row's UNKNOWN target, which the encoder points at
         # the branch that null takes; a negative threshold slot is a param: -1 the first of its kind.
         if k == CMP_I:
             xi = i[j]
             if xi == NULL_INT:
-                pc = _i(ints, row + UNKNOWN)
+                pc, code = _i(ints, row + UNKNOWN), code + _i(ints, row + W_UNKNOWN)
                 continue
             r = _compare(op, xi, _i(ints, lay[THR_I] + t) if t >= 0 else pi[-t - 1])
         elif k == CMP_B:
             y = b[j]
             if y is None:
-                pc = _i(ints, row + UNKNOWN)
+                pc, code = _i(ints, row + UNKNOWN), code + _i(ints, row + W_UNKNOWN)
                 continue
             r = _compare(op, y, _i(ints, lay[THR_I] + t) != 0)
         elif k == MATCH:
             if s[j][1] < 0:
-                pc = _i(ints, row + UNKNOWN)
+                pc, code = _i(ints, row + UNKNOWN), code + _i(ints, row + W_UNKNOWN)
                 continue
             r = _match(op, s[j], t, ps, ints, chars, lay)
         else:
@@ -147,74 +150,98 @@ def _walk(pc, ctx):
                              floats + 8 * lay[EXPR_CONSTS], f, lay[EXPR_DEPTH])
             # A null float, and so a computed feature over one, is NaN.
             if x != x:
-                pc = _i(ints, row + UNKNOWN)
+                pc, code = _i(ints, row + UNKNOWN), code + _i(ints, row + W_UNKNOWN)
                 continue
             r = _compare(op, x, _f(floats, lay[THR_F] + t) if t >= 0 else pf[-t - 1])
-        pc = _i(ints, row + THEN) if r else _i(ints, row + ELSE)
+        if r:
+            pc, code = _i(ints, row + THEN), code + _i(ints, row + W_THEN)
+        else:
+            pc, code = _i(ints, row + ELSE), code + _i(ints, row + W_ELSE)
 
 
 # Real calls, not numba inlining: inlining the walk at each output or call
 # site multiplies compile time, and LLVM inlines what pays anyway.
 @njit
 def _leaf(rule, ctx):
+    # `(leaf, path number)`; first-match numbers the paths of all rules as one list, rule by rule.
     ints, lay = ctx[7], ctx[10]
     if rule >= 0:
         return _walk(_i(ints, lay[ROOTS] + rule), ctx)
-    for k in range(lay[N_ROOTS]):
-        leaf = _walk(_i(ints, lay[ROOTS] + k), ctx)
+    n = lay[N_ROOTS]
+    hit = (-1, 0)
+    for k in range(n):
+        leaf, code = _walk(_i(ints, lay[ROOTS] + k), ctx)
+        hit = (leaf, code + _i(ints, lay[ROOTS] + n + k))
         if leaf != -1:
-            return leaf
-    return -1
+            break
+    return hit
 
 
-def pick(outs, ctx, rule, leaf):
-    """Each output's value at the leaf its rule reached; consecutive outputs of one rule walk it once."""
+# `pick` makes one call per output, compiled once per output type, and LLVM
+# inlines what pays. Recursing over the output tuple at the type level instead
+# hit Python's recursion limit at a few dozen outputs (`mode: "all"`).
+@njit
+def _trace(o, ctx, rule, hit):
+    # A trace output is `(rule, offset)`: the path's choice index at `offset + path number`.
+    if o[0] != rule:
+        rule, hit = o[0], _leaf(o[0], ctx)
+    return _i(ctx[7], o[1] + hit[1]), rule, hit
 
 
-# Inlined by LLVM, not numba: numba inlining this recursion re-types every
-# level at every level, which grows compile time exponentially with outputs.
-@overload(pick, jit_options={"forceinline": True})
-def _pick(outs, ctx, rule, leaf):
-    if len(outs.types) == 0:
-        return lambda outs, ctx, rule, leaf: ()
-    spec = outs.types[0].types
-    read = _read_f if isinstance(spec[3], types.Float) else _read_b if isinstance(spec[3], types.Boolean) else _read_i
-
-    # An output is `(rule, offset, rows, zero[, valid offset])`: `rows` values
-    # from `offset`, the last one the default row's, in the int or float array.
-    def impl(outs, ctx, rule, leaf):
-        o = outs[0]
-        if o[0] != rule:
-            rule, leaf = o[0], _leaf(o[0], ctx)
-        k = leaf if leaf >= 0 else o[2] - 1
-        return (read(ctx, o[1] + k),) + pick(outs[1:], ctx, rule, leaf)
-
-    def nullable(outs, ctx, rule, leaf):
-        o = outs[0]
-        if o[0] != rule:
-            rule, leaf = o[0], _leaf(o[0], ctx)
-        k = leaf if leaf >= 0 else o[2] - 1
-        return (read(ctx, o[1] + k) if _i(ctx[7], o[4] + k) else None,) + pick(outs[1:], ctx, rule, leaf)
-
-    return nullable if len(spec) == 5 else impl
+# Any other output is `(rule, offset, rows, zero[, valid offset])`: `rows` values
+# from `offset`, the last one the default row's, in the int or float array.
+@njit
+def _value(o, ctx, rule, hit):
+    if o[0] != rule:
+        rule, hit = o[0], _leaf(o[0], ctx)
+    k = hit[0] if hit[0] >= 0 else o[2] - 1
+    return _read(ctx, o[1] + k, o[3]), rule, hit
 
 
-@njit(inline="always")
-def _read_f(ctx, k):
-    return _f(ctx[8], k)
+@njit
+def _nullable(o, ctx, rule, hit):
+    if o[0] != rule:
+        rule, hit = o[0], _leaf(o[0], ctx)
+    k = hit[0] if hit[0] >= 0 else o[2] - 1
+    return (_read(ctx, o[1] + k, o[3]) if _i(ctx[7], o[4] + k) else None), rule, hit
 
 
-@njit(inline="always")
-def _read_i(ctx, k):
-    return _i(ctx[7], k)
+def _read(ctx, k, zero):
+    """Value `k` of the float or int array, typed as `zero`."""
 
 
-@njit(inline="always")
-def _read_b(ctx, k):
-    return _i(ctx[7], k) != 0
+@overload(_read, inline="always")
+def _read_typed(ctx, k, zero):
+    if isinstance(zero, types.Float):
+        return lambda ctx, k, zero: _f(ctx[8], k)
+    if isinstance(zero, types.Boolean):
+        return lambda ctx, k, zero: _i(ctx[7], k) != 0
+    return lambda ctx, k, zero: _i(ctx[7], k)
 
 
-@njit(cache=True)
+@intrinsic
+def pick(typingctx, outs, ctx, rule, hit):
+    """Each output's value at the leaf (or path) its rule reached; consecutive outputs of one rule walk it once."""
+    calls = []
+    for spec in outs.types:
+        fnty = typingctx.resolve_value_type({2: _trace, 4: _value}.get(len(spec), _nullable))
+        calls.append((fnty, typingctx.resolve_function_type(fnty, (spec, ctx, rule, hit), {})))
+    ret = types.Tuple([sig.return_type.types[0] for _, sig in calls])
+
+    def codegen(context, builder, sig, args):
+        outs, ctx, rule, hit = args
+        values = []
+        for j, (fnty, call) in enumerate(calls):
+            res = context.get_function(fnty, call)(builder, (builder.extract_value(outs, j), ctx, rule, hit))
+            values.append(builder.extract_value(res, 0))
+            rule, hit = builder.extract_value(res, 1), builder.extract_value(res, 2)
+        return context.make_tuple(builder, ret, values)
+
+    return ret(outs, ctx, rule, hit), codegen
+
+
+# Only kernels call it; a Python entry point for hundreds of outputs takes a minute to compile.
+@njit(cache=True, no_cpython_wrapper=True)
 def walk(row, params, consts):
     """Walk a tree for one row: `row` and `params` laid out floats, ints, bools, spans; `consts` a `Program`'s.
 
