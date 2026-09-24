@@ -1,0 +1,130 @@
+{
+ "type": "tree",
+ "name": "bureau_grade",
+ "tree": {
+  "nodes": [
+   {
+    "id": "excellent",
+    "data": {
+     "type": "unary",
+     "condition": {
+      "op": ">=",
+      "feature": "bureau_score",
+      "threshold": {
+       "param": "excellent_threshold",
+       "default": 720.0
+      }
+     }
+    }
+   },
+   {
+    "id": "excellent_leaf",
+    "data": {
+     "type": "leaf",
+     "result_idx": 0
+    }
+   },
+   {
+    "id": "good",
+    "data": {
+     "type": "unary",
+     "condition": {
+      "op": ">=",
+      "feature": "bureau_score",
+      "threshold": {
+       "param": "good_threshold",
+       "default": 660.0
+      }
+     }
+    }
+   },
+   {
+    "id": "good_leaf",
+    "data": {
+     "type": "leaf",
+     "result_idx": 1
+    }
+   },
+   {
+    "id": "fair",
+    "data": {
+     "type": "unary",
+     "condition": {
+      "op": ">=",
+      "feature": "bureau_score",
+      "threshold": {
+       "param": "fair_threshold",
+       "default": 600.0
+      }
+     }
+    }
+   },
+   {
+    "id": "fair_leaf",
+    "data": {
+     "type": "leaf",
+     "result_idx": 2
+    }
+   }
+  ],
+  "edges": [
+   {
+    "source": "excellent",
+    "target": "excellent_leaf",
+    "data": {
+     "sourceIndex": 0
+    }
+   },
+   {
+    "source": "excellent",
+    "target": "good",
+    "data": {
+     "sourceIndex": 1
+    }
+   },
+   {
+    "source": "good",
+    "target": "good_leaf",
+    "data": {
+     "sourceIndex": 0
+    }
+   },
+   {
+    "source": "good",
+    "target": "fair",
+    "data": {
+     "sourceIndex": 1
+    }
+   },
+   {
+    "source": "fair",
+    "target": "fair_leaf",
+    "data": {
+     "sourceIndex": 0
+    }
+   }
+  ],
+  "output": {
+   "data": [
+    {
+     "grade": 1
+    },
+    {
+     "grade": 2
+    },
+    {
+     "grade": 3
+    }
+   ],
+   "default": {
+    "grade": 4
+   },
+   "dtypes": [
+    [
+     "grade",
+     "Int64"
+    ]
+   ]
+  }
+ }
+}
