@@ -1,4 +1,4 @@
-import { formatValue } from "../src/protocol";
+import { formatValue } from "./model/protocol";
 
 interface Props {
   name: string;

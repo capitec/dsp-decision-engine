@@ -1,24 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { paramReaders, type Comparison } from "../src/compare";
-import {
-  callNodes,
-  recordLabel,
-  type ColumnSummary,
-  type Controls,
-  type DescribeResult,
-  type Lineage,
-  type RecordKey,
-  type RunStatus,
-  type Tab,
-  type ToWebview,
-  type ValueHistory,
-} from "../src/protocol";
-import type { Sweep } from "../src/sweep";
+import { paramReaders, type Comparison } from "./model/compare";
+import { callNodes, recordLabel, type ColumnSummary, type Controls, type DescribeResult, type FromUI, type Lineage, type RecordKey, type RunStatus, type Tab, type ToUI, type ValueHistory } from "./model/protocol";
+import type { Sweep } from "./model/sweep";
 import { Compare } from "./Compare";
 import { FindStep } from "./FindStep";
 import { Graph } from "./Graph";
 import { ChangedNav, Key, ViewMenu } from "./GraphBar";
-import { send } from "./host";
 import { fold } from "./layout";
 import { ControlsBar, GroupControls, groupsOf, steered, WatchForm } from "./Controls";
 import { NodePanel } from "./NodePanel";
@@ -32,7 +19,28 @@ type TreePath = { path: string; row: number; visited: string[]; result?: unknown
 // Flows up to this many steps draw fully open; bigger ones start with their groups folded.
 const OPEN_ALL = 80;
 
-export function App() {
+/** Messages only an editor can act on: opening source or diffs, driving its debugger, its window. */
+export type EditorMessage = Extract<FromUI["type"], "reveal" | "maximise" | "openDiff" | "debugStep" | "runTo" | "step" | "compareRevision">;
+
+export interface AppProps {
+  /** Sends a message to the host. */
+  send: (m: FromUI) => void;
+  /** Calls `on` with each message from the host; returns a function that stops listening. */
+  listen: (on: (m: ToUI) => void) => () => void;
+  /** The editor messages this host handles. Controls that send any other are hidden. */
+  can: ReadonlySet<EditorMessage>;
+}
+
+/**
+ * The whole flow view. The host renders it into a sized element and wires messages both ways:
+ *
+ *     createRoot(el).render(<App send={post} listen={subscribe} can={new Set(["reveal"])} />);
+ */
+export function App(props: AppProps) {
+  return <div className="decider"><View {...props} /></div>;
+}
+
+function View({ send, listen, can }: AppProps) {
   const [describe, setDescribe] = useState<DescribeResult>();
   const [run, setRun] = useState<RunStatus>(IDLE);
   const [columns, setColumns] = useState<ColumnSummary[] | null>(null);
@@ -91,8 +99,7 @@ export function App() {
   const shown = useRef<string | undefined>(undefined);
 
   useEffect(() => {
-    const onMessage = (e: MessageEvent<ToWebview>) => {
-      const m = e.data;
+    const stop = listen((m) => {
       switch (m.type) {
         case "describe":
           setDescribe(m.describe);
@@ -157,10 +164,9 @@ export function App() {
           setTab("graph");
           break;
       }
-    };
-    window.addEventListener("message", onMessage);
+    });
     send({ type: "ready" });
-    return () => window.removeEventListener("message", onMessage);
+    return stop;
   }, []);
 
   // Lineage and history depend on the run's position and the focused record, so ask again when either moves.
@@ -250,6 +256,9 @@ export function App() {
     setSelected(path);
     setTab("graph");
   };
+  const reveal = can.has("reveal") ? (path: string) => send({ type: "reveal", path }) : undefined;
+  const openDiff = can.has("openDiff") ? (path: string) => send({ type: "openDiff", path }) : undefined;
+  const compareRevision = can.has("compareRevision") ? () => send({ type: "compareRevision" }) : undefined;
   const pausedAt = run.current && !run.finished ? `${run.current.when} ${run.current.path || "the start"}` : null;
   const shownTreePath = treePath && run.record === treePath.row ? treePath : null;
   const withDetails = details && tab === "graph" && !!selectedNode;
@@ -265,7 +274,7 @@ export function App() {
           {tabButton("scenarios", sweep.busy ? "Scenarios…" : "Scenarios")}
           {tabButton("compare", compare.busy ? "Compare…" : "Compare")}
         </nav>
-        <button className="icon" title="Maximise the flow panel (again to restore)" onClick={() => send({ type: "maximise" })}>⤢</button>
+        {can.has("maximise") && <button className="icon" title="Maximise the flow panel (again to restore)" onClick={() => send({ type: "maximise" })}>⤢</button>}
         {columns && !pausedAt && <label title="Show values for one record instead of the whole batch">Focus record {recordPicker}</label>}
       </header>
       <ControlsBar controls={controls} groups={groups} keyCol={keyCol} onChange={changeControls} />
@@ -329,7 +338,7 @@ export function App() {
             treePath={shownTreePath}
             zoom={zoom}
             onSelect={setSelected}
-            onOpen={(path) => send({ type: "reveal", path })}
+            onOpen={reveal}
             onToggle={toggle}
             height={graphHeight}
           />
@@ -364,8 +373,8 @@ export function App() {
             onRun={(scenarios, fromHere) => send({ type: "sweep", scenarios, fromHere })}
             onOpen={(i) => setCompare({ comparison: sweep.sweep!.comparisons[i] })}
             onSelectStep={select}
-            onCompareRevision={() => send({ type: "compareRevision" })}
-            onOpenDiff={(path) => send({ type: "openDiff", path })}
+            onCompareRevision={compareRevision}
+            onOpenDiff={openDiff}
           />
         )}
         {tab === "compare" && (
@@ -374,8 +383,8 @@ export function App() {
             record={run.record}
             onFocus={columns ? (row) => send({ type: "record", row }) : undefined}
             onSelect={select}
-            onCompareRevision={() => send({ type: "compareRevision" })}
-            onOpenDiff={(path) => send({ type: "openDiff", path })}
+            onCompareRevision={compareRevision}
+            onOpenDiff={openDiff}
           />
         )}
         {withDetails && selectedNode && (
@@ -395,23 +404,23 @@ export function App() {
               setColumn(name);
             }}
             onSelect={setSelected}
-            onReveal={(path) => send({ type: "reveal", path })}
+            onReveal={reveal}
             onRewind={(path) => send({ type: "rewind", path })}
             onGoTo={(change) => {
               noteNext.current = `⤺ Went back to just after that step, with every value as it was then; everything after it runs again when you continue.`;
               send({ type: "goTo", change });
             }}
-            onRunTo={(path) => {
+            onRunTo={can.has("runTo") ? (path) => {
               setPending(`Running the flow to ${path.split("/").pop()}…`);
               send({ type: "runTo", path });
-            }}
-            onStep={() => send({ type: "step" })}
-            onDebugStep={() => {
+            } : undefined}
+            onStep={can.has("step") ? () => send({ type: "step" }) : undefined}
+            onDebugStep={can.has("debugStep") ? () => {
               setPending(`In ${selectedNode.path.split("/").pop()}'s Python: step with F10 and F11, and continue (F5) to come back to the flow.`);
               send({ type: "debugStep" });
-            }}
+            } : undefined}
             comparison={showDiff ? compare.comparison : null}
-            onOpenDiff={(path) => send({ type: "openDiff", path })}
+            onOpenDiff={openDiff}
             values={describe.values ?? {}}
             onSkip={(path) => {
               setPending(`Skipping ${path.split("/").pop()} and re-running from there…`);

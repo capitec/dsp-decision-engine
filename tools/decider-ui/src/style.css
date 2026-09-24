@@ -1,38 +1,38 @@
-:root {
-  color-scheme: light dark;
-}
-body {
-  margin: 0;
-  font-family: var(--vscode-font-family);
-  font-size: var(--vscode-font-size);
-  color: var(--vscode-foreground);
-  background: var(--vscode-editor-background);
-}
+/* Every rule is nested under the root, so the UI can share a page without styling it. The root is the size
+   container its narrow and wide layouts, and its heights, respond to: the panel, not the window. */
+.decider {
+font-family: var(--decider-font);
+font-size: var(--decider-font-size);
+color: var(--decider-fg);
+background: var(--decider-bg);
+height: 100%;
+container-type: size;
+
 .app {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
 }
 header {
   display: flex;
   gap: 12px;
   align-items: center;
   padding: 6px 10px;
-  border-bottom: 1px solid var(--vscode-panel-border);
+  border-bottom: 1px solid var(--decider-border);
 }
 header nav button,
 aside button,
 .chip {
-  background: var(--vscode-button-secondaryBackground);
-  color: var(--vscode-button-secondaryForeground);
+  background: var(--decider-button2-bg);
+  color: var(--decider-button2-fg);
   border: 1px solid transparent;
   border-radius: 3px;
   padding: 2px 8px;
   cursor: pointer;
 }
 header nav button.active {
-  background: var(--vscode-button-background);
-  color: var(--vscode-button-foreground);
+  background: var(--decider-button-bg);
+  color: var(--decider-button-fg);
 }
 
 main {
@@ -47,7 +47,7 @@ main {
 }
 aside {
   width: 240px;
-  border-left: 1px solid var(--vscode-panel-border);
+  border-left: 1px solid var(--decider-border);
   padding: 8px;
   overflow: auto;
 }
@@ -76,8 +76,8 @@ aside h4 {
   gap: 4px;
 }
 .chip.picked {
-  border-color: var(--vscode-focusBorder);
-  background: var(--vscode-list-activeSelectionBackground);
+  border-color: var(--decider-focus);
+  background: var(--decider-selection-bg);
 }
 pre {
   font-size: 0.85em;
@@ -86,66 +86,66 @@ pre {
 
 /* graph */
 svg {
-  font-family: var(--vscode-font-family);
+  font-family: var(--decider-font);
 }
 .cluster rect {
-  fill: var(--vscode-editorWidget-background);
-  stroke: var(--vscode-panel-border);
+  fill: var(--decider-widget-bg);
+  stroke: var(--decider-border);
   stroke-dasharray: 4 3;
 }
 .cluster.branch rect {
-  stroke: var(--vscode-charts-purple, #b180d7);
+  stroke: var(--decider-purple, #b180d7);
 }
 .cluster text {
   font-size: 10px;
-  fill: var(--vscode-descriptionForeground);
+  fill: var(--decider-muted);
 }
 .node {
   cursor: pointer;
 }
 .node rect {
-  fill: var(--vscode-input-background);
-  stroke: var(--vscode-input-border, var(--vscode-panel-border));
+  fill: var(--decider-input-bg);
+  stroke: var(--decider-input-border, var(--decider-border));
   stroke-width: 1.2;
 }
 .node text {
-  fill: var(--vscode-foreground);
+  fill: var(--decider-fg);
   font-size: 12px;
   pointer-events: none;
 }
 .node text.sub {
   font-size: 10px;
-  fill: var(--vscode-descriptionForeground);
+  fill: var(--decider-muted);
 }
 .node.done rect {
-  stroke: var(--vscode-testing-iconPassed, #73c991);
+  stroke: var(--decider-passed, #73c991);
 }
 .node.current rect {
-  fill: var(--vscode-editor-stackFrameHighlightBackground, #ffff0033);
-  stroke: var(--vscode-debugIcon-pauseForeground, orange);
+  fill: var(--decider-paused-bg, #ffff0033);
+  stroke: var(--decider-pause-icon, orange);
   stroke-width: 2;
 }
 .node.selected rect {
-  stroke: var(--vscode-focusBorder);
+  stroke: var(--decider-focus);
   stroke-width: 2;
 }
 .node.touches rect {
-  fill: var(--vscode-editor-findMatchHighlightBackground, #ea5c0055);
+  fill: var(--decider-match-bg, #ea5c0055);
 }
 .edge path {
   fill: none;
-  stroke: var(--vscode-foreground);
+  stroke: var(--decider-fg);
   stroke-width: 1.2;
   opacity: 0.55;
 }
 .edge.data path {
-  stroke: var(--vscode-charts-blue, #3794ff);
+  stroke: var(--decider-blue, #3794ff);
   stroke-dasharray: 3 3;
   opacity: 0.4;
 }
 .edge text {
   font-size: 9px;
-  fill: var(--vscode-descriptionForeground);
+  fill: var(--decider-muted);
 }
 .edge.related path,
 .edge.column path {
@@ -154,7 +154,7 @@ svg {
 }
 .edge.column text,
 .edge.related text {
-  fill: var(--vscode-foreground);
+  fill: var(--decider-fg);
   font-weight: bold;
 }
 
@@ -163,9 +163,9 @@ svg {
   width: calc(100% - 16px);
   margin: 8px;
   padding: 4px 6px;
-  background: var(--vscode-input-background);
-  color: var(--vscode-input-foreground);
-  border: 1px solid var(--vscode-input-border, transparent);
+  background: var(--decider-input-bg);
+  color: var(--decider-input-fg);
+  border: 1px solid var(--decider-input-border, transparent);
 }
 table {
   border-collapse: collapse;
@@ -176,28 +176,28 @@ th,
 td {
   text-align: left;
   padding: 3px 8px;
-  border-bottom: 1px solid var(--vscode-panel-border);
+  border-bottom: 1px solid var(--decider-border);
   white-space: nowrap;
 }
 th {
   position: sticky;
   top: 0;
-  background: var(--vscode-editor-background);
+  background: var(--decider-bg);
 }
 tr {
   cursor: pointer;
 }
 tr.touched {
-  background: var(--vscode-editor-findMatchHighlightBackground, #ea5c0033);
+  background: var(--decider-match-bg, #ea5c0033);
 }
 tr.picked {
-  outline: 1px solid var(--vscode-focusBorder);
+  outline: 1px solid var(--decider-focus);
 }
 td.role {
-  color: var(--vscode-charts-orange, orange);
+  color: var(--decider-orange, orange);
 }
 td.preview {
-  font-family: var(--vscode-editor-font-family);
+  font-family: var(--decider-mono);
   max-width: 300px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -208,20 +208,20 @@ td.preview {
   stroke-dasharray: 6 2;
 }
 .node.row rect {
-  stroke: var(--vscode-charts-green, #89d185);
+  stroke: var(--decider-green, #89d185);
 }
 .node.current.after rect {
   stroke-dasharray: 2 2;
 }
 .node.lineage rect {
-  stroke: var(--vscode-charts-orange, orange);
+  stroke: var(--decider-orange, orange);
   stroke-width: 2.5;
 }
 .cluster.loop rect {
-  stroke: var(--vscode-charts-yellow, #cca700);
+  stroke: var(--decider-yellow, #cca700);
 }
 .cluster.current rect {
-  stroke: var(--vscode-debugIcon-pauseForeground, orange);
+  stroke: var(--decider-pause-icon, orange);
   stroke-dasharray: none;
   stroke-width: 2;
 }
@@ -229,14 +229,14 @@ td.preview {
   stroke-dasharray: 5 3;
 }
 .mono {
-  font-family: var(--vscode-editor-font-family);
+  font-family: var(--decider-mono);
   font-size: 0.9em;
 }
 ul.lineage {
   list-style: none;
   margin: 0;
   padding-left: 12px;
-  border-left: 1px solid var(--vscode-panel-border);
+  border-left: 1px solid var(--decider-border);
 }
 aside > ul.lineage {
   padding-left: 0;
@@ -244,22 +244,22 @@ aside > ul.lineage {
 }
 ul.lineage a {
   cursor: pointer;
-  color: var(--vscode-textLink-foreground);
+  color: var(--decider-link);
 }
 header select {
-  background: var(--vscode-dropdown-background);
-  color: var(--vscode-dropdown-foreground);
-  border: 1px solid var(--vscode-dropdown-border, transparent);
+  background: var(--decider-dropdown-bg);
+  color: var(--decider-dropdown-fg);
+  border: 1px solid var(--decider-dropdown-border, transparent);
 }
 
 /* comparisons */
 .node.diff-changed rect {
-  fill: var(--vscode-diffEditor-insertedTextBackground, #9bb95533);
-  stroke: var(--vscode-charts-orange, orange);
+  fill: var(--decider-inserted-bg, #9bb95533);
+  stroke: var(--decider-orange, orange);
   stroke-width: 2;
 }
 .node.diff-added rect {
-  stroke: var(--vscode-charts-green, #89d185);
+  stroke: var(--decider-green, #89d185);
   stroke-width: 2;
   stroke-dasharray: 4 2;
 }
@@ -282,30 +282,30 @@ header select {
   margin-left: auto;
 }
 del {
-  color: var(--vscode-gitDecoration-deletedResourceForeground, #c74e39);
+  color: var(--decider-deleted-fg, #c74e39);
   text-decoration: line-through;
 }
 ins {
-  color: var(--vscode-gitDecoration-addedResourceForeground, #81b88b);
+  color: var(--decider-added-fg, #81b88b);
   text-decoration: none;
 }
 .badge-status {
   font-size: 0.8em;
   padding: 1px 6px;
   border-radius: 8px;
-  background: var(--vscode-badge-background);
-  color: var(--vscode-badge-foreground);
+  background: var(--decider-badge-bg);
+  color: var(--decider-badge-fg);
 }
 .badge-status.changed {
-  background: var(--vscode-charts-orange, orange);
+  background: var(--decider-orange, orange);
   color: #000;
 }
 .badge-status.added {
-  background: var(--vscode-charts-green, #89d185);
+  background: var(--decider-green, #89d185);
   color: #000;
 }
 .badge-status.removed {
-  background: var(--vscode-charts-red, #f14c4c);
+  background: var(--decider-red, #f14c4c);
   color: #000;
 }
 .compare td {
@@ -319,17 +319,17 @@ ins {
   padding: 0 5px;
 }
 .error {
-  color: var(--vscode-errorForeground);
+  color: var(--decider-error);
 }
 a {
   cursor: pointer;
-  color: var(--vscode-textLink-foreground);
+  color: var(--decider-link);
 }
 button.link {
   background: none;
   border: none;
   padding: 0;
-  color: var(--vscode-textLink-foreground);
+  color: var(--decider-link);
   cursor: pointer;
 }
 .params section {
@@ -343,13 +343,13 @@ button.link {
   padding-left: 18px;
 }
 .params tr.edited td.name {
-  color: var(--vscode-charts-orange, orange);
+  color: var(--decider-orange, orange);
 }
 .params input,
 .params select {
-  background: var(--vscode-input-background);
-  color: var(--vscode-input-foreground);
-  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  background: var(--decider-input-bg);
+  color: var(--decider-input-fg);
+  border: 1px solid var(--decider-input-border, var(--decider-border));
   padding: 2px 4px;
 }
 .override {
@@ -368,15 +368,15 @@ button.link {
   flex-wrap: wrap;
 }
 .actions button {
-  background: var(--vscode-button-secondaryBackground);
-  color: var(--vscode-button-secondaryForeground);
+  background: var(--decider-button2-bg);
+  color: var(--decider-button2-fg);
   border: none;
   padding: 4px 10px;
   cursor: pointer;
 }
 .actions button.primary {
-  background: var(--vscode-button-background);
-  color: var(--vscode-button-foreground);
+  background: var(--decider-button-bg);
+  color: var(--decider-button-fg);
 }
 .actions button:disabled {
   opacity: 0.5;
@@ -409,15 +409,15 @@ aside {
   width: 260px;
 }
 
-@media (max-width: 760px) {
+@container (max-width: 760px) {
   main {
     flex-direction: column;
   }
   aside {
     width: auto;
-    max-height: 34vh;
+    max-height: 34cqh;
     border-left: none;
-    border-top: 1px solid var(--vscode-panel-border);
+    border-top: 1px solid var(--decider-border);
   }
 
 }
@@ -447,9 +447,9 @@ aside {
 }
 .scenarios input,
 .scenarios select {
-  background: var(--vscode-input-background);
-  color: var(--vscode-input-foreground);
-  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  background: var(--decider-input-bg);
+  color: var(--decider-input-fg);
+  border: 1px solid var(--decider-input-border, var(--decider-border));
   padding: 2px 4px;
 }
 .scenarios .summary {
@@ -464,35 +464,35 @@ table.sweep th {
 }
 table.sweep tr.original td {
   font-weight: bold;
-  border-bottom: 2px solid var(--vscode-panel-border);
+  border-bottom: 2px solid var(--decider-border);
 }
 table.sweep td.unchanged {
   opacity: 0.55;
 }
 table.sweep td.changed {
-  background: var(--vscode-diffEditor-insertedTextBackground, #9bb95522);
+  background: var(--decider-inserted-bg, #9bb95522);
 }
 .up {
-  color: var(--vscode-gitDecoration-addedResourceForeground, #81b88b);
+  color: var(--decider-added-fg, #81b88b);
 }
 .down {
-  color: var(--vscode-gitDecoration-deletedResourceForeground, #c74e39);
+  color: var(--decider-deleted-fg, #c74e39);
 }
 .small {
   font-size: 0.85em;
 }
 
-/* round 1 review: legibility, sticky actions, comparison tables */
+/* legibility, sticky actions, comparison tables */
 .subbar {
   display: flex;
   gap: 14px;
   padding: 3px 10px;
-  border-bottom: 1px solid var(--vscode-panel-border);
+  border-bottom: 1px solid var(--decider-border);
   font-size: 0.92em;
 }
 .node text.sub,
 .cluster text {
-  fill: var(--vscode-foreground);
+  fill: var(--decider-fg);
   opacity: 0.8;
 }
 .cluster text {
@@ -512,15 +512,15 @@ table.sweep td.changed {
 }
 .edge text {
   font-size: 10px;
-  fill: var(--vscode-foreground);
+  fill: var(--decider-fg);
   opacity: 0.8;
 }
 .actions.sticky {
   position: sticky;
   bottom: 0;
-  background: var(--vscode-editor-background);
+  background: var(--decider-bg);
   padding: 8px 0;
-  border-top: 1px solid var(--vscode-panel-border);
+  border-top: 1px solid var(--decider-border);
   align-items: center;
 }
 .form-summary {
@@ -529,12 +529,12 @@ table.sweep td.changed {
   align-items: center;
   gap: 8px;
   padding: 6px 0 8px;
-  border-bottom: 1px solid var(--vscode-panel-border);
+  border-bottom: 1px solid var(--decider-border);
 }
 .form-summary button,
 aside .actions button {
-  background: var(--vscode-button-secondaryBackground);
-  color: var(--vscode-button-secondaryForeground);
+  background: var(--decider-button2-bg);
+  color: var(--decider-button2-fg);
   border: none;
   padding: 3px 10px;
   cursor: pointer;
@@ -546,11 +546,11 @@ table.sweep tr.clickable {
   cursor: pointer;
 }
 table.sweep tr.clickable:hover td {
-  background: var(--vscode-list-hoverBackground);
+  background: var(--decider-hover-bg);
 }
 table.sweep th.knob-col,
 table.sweep td.knob-col {
-  background: var(--vscode-editorWidget-background);
+  background: var(--decider-widget-bg);
 }
 table.vdiffs {
   width: auto;
@@ -561,39 +561,39 @@ table.vdiffs td {
   padding: 1px 8px 1px 0;
 }
 table.vdiffs td.before {
-  color: var(--vscode-gitDecoration-deletedResourceForeground, #c74e39);
+  color: var(--decider-deleted-fg, #c74e39);
 }
 table.vdiffs td.after {
-  color: var(--vscode-gitDecoration-addedResourceForeground, #81b88b);
+  color: var(--decider-added-fg, #81b88b);
 }
 table.vdiffs tr.hit td {
   font-weight: bold;
 }
 .step-diff {
   padding: 4px 0;
-  border-bottom: 1px solid var(--vscode-panel-border);
+  border-bottom: 1px solid var(--decider-border);
 }
 
 .chip.same {
   opacity: 0.7;
 }
 .chip-value {
-  font-family: var(--vscode-editor-font-family);
-  color: var(--vscode-charts-green, #89d185);
+  font-family: var(--decider-mono);
+  color: var(--decider-green, #89d185);
 }
 .chip {
-  border: 1px solid var(--vscode-button-border, var(--vscode-panel-border));
+  border: 1px solid var(--decider-button-border, var(--decider-border));
 }
 .tree-path {
   padding: 4px 6px;
-  background: var(--vscode-editorWidget-background);
-  border-left: 3px solid var(--vscode-charts-green, #89d185);
+  background: var(--decider-widget-bg);
+  border-left: 3px solid var(--decider-green, #89d185);
 }
 .params td input {
   width: 90px;
 }
 
-/* round 2 review */
+/* diff colours, the legend and the details pane */
 .node.diff-same {
   opacity: 1;
 }
@@ -601,7 +601,7 @@ table.vdiffs tr.hit td {
   stroke-dasharray: 2 3;
 }
 .node.selected rect {
-  stroke: var(--vscode-focusBorder);
+  stroke: var(--decider-focus);
   stroke-width: 3;
 }
 .legend {
@@ -614,14 +614,14 @@ table.vdiffs tr.hit td {
   gap: 6px;
   align-items: center;
   padding: 2px 6px;
-  background: var(--vscode-editorWidget-background);
-  border: 1px solid var(--vscode-panel-border);
+  background: var(--decider-widget-bg);
+  border: 1px solid var(--decider-border);
   font-size: 0.9em;
 }
 .legend button,
 button.icon {
-  background: var(--vscode-button-secondaryBackground);
-  color: var(--vscode-button-secondaryForeground);
+  background: var(--decider-button2-bg);
+  color: var(--decider-button2-fg);
   border: none;
   cursor: pointer;
   padding: 1px 6px;
@@ -633,15 +633,15 @@ button.icon {
   border: 2px solid;
 }
 .swatch.changed {
-  border-color: var(--vscode-charts-orange, orange);
-  background: var(--vscode-diffEditor-insertedTextBackground, #9bb95533);
+  border-color: var(--decider-orange, orange);
+  background: var(--decider-inserted-bg, #9bb95533);
 }
 .swatch.added {
-  border-color: var(--vscode-charts-green, #89d185);
+  border-color: var(--decider-green, #89d185);
   border-style: dashed;
 }
 .swatch.same {
-  border-color: var(--vscode-panel-border);
+  border-color: var(--decider-border);
   border-style: dotted;
 }
 aside {
@@ -655,8 +655,8 @@ aside .close {
 .how {
   margin: 0 0 10px;
   padding: 6px 8px;
-  background: var(--vscode-editorWidget-background);
-  border-left: 3px solid var(--vscode-charts-orange, orange);
+  background: var(--decider-widget-bg);
+  border-left: 3px solid var(--decider-orange, orange);
 }
 .how-title {
   font-weight: 600;
@@ -684,7 +684,7 @@ details summary {
   opacity: 0.85;
 }
 
-/* round 3 review: contrast, one meaning per border style, themed buttons */
+/* contrast, one meaning per border style, themed buttons */
 .muted {
   opacity: 0.82;
   font-size: 1em;
@@ -698,16 +698,16 @@ aside h4 .muted {
 button {
   font-family: inherit;
   font-size: inherit;
-  background: var(--vscode-button-secondaryBackground);
-  color: var(--vscode-button-secondaryForeground);
+  background: var(--decider-button2-bg);
+  color: var(--decider-button2-fg);
   border: none;
   padding: 3px 10px;
   cursor: pointer;
   white-space: nowrap;
 }
 button.primary {
-  background: var(--vscode-button-background);
-  color: var(--vscode-button-foreground);
+  background: var(--decider-button-bg);
+  color: var(--decider-button-fg);
 }
 button:disabled {
   opacity: 0.5;
@@ -716,7 +716,7 @@ button:disabled {
 button.link {
   background: none;
   padding: 0;
-  color: var(--vscode-textLink-foreground);
+  color: var(--decider-link);
 }
 .node.frame rect {
   stroke-dasharray: none;
@@ -740,7 +740,7 @@ button.link {
 }
 
 .swatch.same {
-  border: 2px solid var(--vscode-foreground);
+  border: 2px solid var(--decider-fg);
   opacity: 0.6;
 }
 
@@ -749,35 +749,35 @@ button.link {
 }
 th.group-head {
   text-align: center;
-  border-bottom: 1px solid var(--vscode-panel-border);
+  border-bottom: 1px solid var(--decider-border);
 }
 .state td:nth-child(3),
 .state td:nth-child(4) {
   white-space: normal;
 }
 
-/* round 4 review: one colour per meaning everywhere.
+/* One colour per meaning everywhere.
    changed = orange, added = green, paused here = yellow, lineage = blue, selected = focus outline. */
-:root {
-  --changed: var(--vscode-charts-orange, #d18616);
-  --changed-bg: color-mix(in srgb, var(--vscode-charts-orange, #d18616) 22%, transparent);
-  --added: var(--vscode-charts-green, #89d185);
-  --paused: var(--vscode-debugIcon-pauseForeground, #cca700);
-  --lineage: var(--vscode-charts-blue, #3794ff);
+& {
+  --changed: var(--decider-orange, #d18616);
+  --changed-bg: color-mix(in srgb, var(--decider-orange, #d18616) 22%, transparent);
+  --added: var(--decider-green, #89d185);
+  --paused: var(--decider-pause-icon, #cca700);
+  --lineage: var(--decider-blue, #3794ff);
 }
 .node rect {
-  stroke: var(--vscode-panel-border);
+  stroke: var(--decider-border);
 }
 .node.done rect {
-  stroke: var(--vscode-panel-border);
+  stroke: var(--decider-border);
 }
 .node .ran-mark {
   font-size: 11px;
-  fill: var(--vscode-foreground);
+  fill: var(--decider-fg);
   opacity: 0.8;
 }
 .node.row rect {
-  stroke: var(--vscode-panel-border);
+  stroke: var(--decider-border);
 }
 .node.current rect {
   fill: color-mix(in srgb, var(--paused) 18%, transparent);
@@ -789,7 +789,7 @@ th.group-head {
   stroke-width: 2.5;
 }
 .node.selected rect {
-  stroke: var(--vscode-focusBorder);
+  stroke: var(--decider-focus);
   stroke-width: 3;
 }
 .node.diff-changed rect {
@@ -826,18 +826,18 @@ table.sweep td.changed {
   background: var(--changed-bg);
 }
 table.vdiffs td.before {
-  color: var(--vscode-foreground);
+  color: var(--decider-fg);
   opacity: 0.75;
 }
 table.vdiffs td.after {
-  color: var(--vscode-foreground);
+  color: var(--decider-fg);
   font-weight: bold;
 }
 .chip.picked {
   border-color: var(--lineage);
 }
 .chip-value {
-  color: var(--vscode-foreground);
+  color: var(--decider-fg);
   font-weight: 600;
 }
 .tree-path {
@@ -848,7 +848,7 @@ table.vdiffs td.after {
 }
 .up,
 .down {
-  color: var(--vscode-foreground);
+  color: var(--decider-fg);
   opacity: 0.85;
 }
 .subbar label,
@@ -866,10 +866,10 @@ table.vdiffs td.after {
 }
 
 /* A draggable split: drag the graph's bottom-right corner to give it more or less room. */
-@media (max-width: 760px) {
+@container (max-width: 760px) {
   main .graph {
     flex: none;
-    height: 58vh;
+    height: 58cqh;
     min-height: 120px;
     resize: vertical;
   }
@@ -885,11 +885,11 @@ table.vdiffs td.after {
 }
 .inline-compare {
   margin-top: 10px;
-  border-top: 2px solid var(--vscode-focusBorder);
+  border-top: 2px solid var(--decider-focus);
 }
 
-:root {
-  --paused: var(--vscode-charts-yellow, #cca700);
+& {
+  --paused: var(--decider-yellow, #cca700);
 }
 table.sweep tr.original td.knob-col {
   white-space: normal;
@@ -899,7 +899,7 @@ table.sweep th {
   white-space: normal;
 }
 
-/* round 5 review */
+/* graph text, scenario rows and the legend */
 .node text.sub {
   font-size: 12px;
 }
@@ -914,7 +914,7 @@ table.sweep th {
 
 table.sweep tr.clickable:hover td {
   background: inherit;
-  box-shadow: inset 0 0 0 999px color-mix(in srgb, var(--vscode-list-hoverBackground) 60%, transparent);
+  box-shadow: inset 0 0 0 999px color-mix(in srgb, var(--decider-hover-bg) 60%, transparent);
 }
 table.sweep tr.clickable:hover td.changed {
   background: var(--changed-bg);
@@ -923,7 +923,7 @@ table.sweep tr.open td {
   font-weight: 600;
 }
 table.sweep tr.open td:first-child {
-  box-shadow: inset 4px 0 0 var(--vscode-focusBorder);
+  box-shadow: inset 4px 0 0 var(--decider-focus);
 }
 .knob {
   display: grid;
@@ -952,14 +952,14 @@ table.sweep tr.open td:first-child {
   flex-direction: column;
   gap: 4px;
   padding: 8px 10px;
-  background: var(--vscode-editorWidget-background);
-  border: 1px solid var(--vscode-panel-border);
+  background: var(--decider-widget-bg);
+  border: 1px solid var(--decider-border);
   white-space: nowrap;
 }
 .legend-body .line {
   display: inline-block;
   width: 18px;
-  border-top: 2px solid var(--vscode-foreground);
+  border-top: 2px solid var(--decider-fg);
   vertical-align: middle;
 }
 .legend-body .line.dotted {
@@ -972,7 +972,7 @@ table.sweep tr.open td:first-child {
   border-left: 3px solid var(--changed);
 }
 
-/* round 6 review: nothing scrolls sideways in a narrow panel */
+/* nothing scrolls sideways in a narrow panel */
 .knob {
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 }
@@ -995,7 +995,7 @@ table.sweep {
 table.sweep td {
   white-space: normal;
 }
-@media (max-width: 520px) {
+@container (max-width: 520px) {
   .params td:nth-child(3) {
     display: none;
   }
@@ -1005,7 +1005,7 @@ aside h3 .muted {
   font-size: 0.85em;
 }
 
-/* round 7 review */
+/* graph kinds, the pager and verdicts */
 .node text.sub,
 .edge text,
 .cluster text,
@@ -1030,12 +1030,12 @@ s.before {
 aside h3 {
   position: sticky;
   top: 0;
-  background: var(--vscode-editor-background);
+  background: var(--decider-bg);
   padding: 2px 0;
   z-index: 1;
 }
 
-/* round 8 review */
+/* affected steps and the pause banner */
 .verdict {
   margin: 4px 0 6px;
   font-weight: 600;
@@ -1045,7 +1045,7 @@ aside h3 {
 }
 .badge-status.affected {
   background: color-mix(in srgb, var(--changed) 45%, transparent);
-  color: var(--vscode-foreground);
+  color: var(--decider-fg);
 }
 .pause-banner {
   padding: 3px 10px;
@@ -1070,14 +1070,14 @@ aside h3 {
   top: 100%;
   left: 0;
   width: 30em;
-  max-height: 60vh;
+  max-height: 60cqh;
   overflow: auto;
   margin: 2px 0 0;
   padding: 0;
   list-style: none;
-  background: var(--vscode-editorWidget-background);
-  border: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border));
-  box-shadow: 0 2px 8px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.4));
+  background: var(--decider-widget-bg);
+  border: 1px solid var(--decider-widget-border, var(--decider-border));
+  box-shadow: 0 2px 8px var(--decider-shadow, rgba(0, 0, 0, 0.4));
 }
 .find-hits li {
   padding: 4px 8px;
@@ -1085,13 +1085,13 @@ aside h3 {
 }
 .find-hits li.at,
 .find-hits li:hover {
-  background: var(--vscode-list-activeSelectionBackground);
-  color: var(--vscode-list-activeSelectionForeground);
+  background: var(--decider-selection-bg);
+  color: var(--decider-selection-fg);
 }
 .node.folded rect {
   stroke-width: 1.5;
   stroke-dasharray: 6 2;
-  fill: var(--vscode-editorWidget-background);
+  fill: var(--decider-widget-bg);
 }
 .cluster text.fold {
   cursor: pointer;
@@ -1109,7 +1109,7 @@ aside h3 {
   top: -8px;
   z-index: 2;
   padding: 6px 0;
-  background: var(--vscode-editor-background);
+  background: var(--decider-bg);
 }
 .params-bar input[aria-label="Filter params"] {
   flex: 1;
@@ -1122,7 +1122,7 @@ aside h3 {
   user-select: none;
 }
 .params h5.group:hover {
-  color: var(--vscode-textLink-foreground);
+  color: var(--decider-link);
 }
 .params .param-group table {
   margin-left: 14px;
@@ -1136,11 +1136,11 @@ aside h3 {
 }
 .params details.used-by summary {
   cursor: pointer;
-  color: var(--vscode-textLink-foreground);
+  color: var(--decider-link);
 }
 .params details.used-by a {
   cursor: pointer;
-  color: var(--vscode-textLink-foreground);
+  color: var(--decider-link);
 }
 table.table-grid {
   border-collapse: collapse;
@@ -1149,9 +1149,9 @@ table.table-grid {
 table.table-grid th {
   font-weight: normal;
   text-align: left;
-  color: var(--vscode-descriptionForeground);
+  color: var(--decider-muted);
   padding: 2px 6px;
-  border-bottom: 1px solid var(--vscode-panel-border);
+  border-bottom: 1px solid var(--decider-border);
 }
 table.table-grid td {
   padding: 1px 2px;
@@ -1171,15 +1171,15 @@ table.table-grid td.edited input {
 .note {
   margin: 4px 0 8px;
   padding: 4px 8px;
-  border-left: 3px solid var(--vscode-charts-blue, #3794ff);
-  background: var(--vscode-editorWidget-background);
+  border-left: 3px solid var(--decider-blue, #3794ff);
+  background: var(--decider-widget-bg);
 }
 
 .scenarios input.picker {
   min-width: 18em;
 }
 input.invalid {
-  border-color: var(--vscode-inputValidation-errorBorder, #be1100) !important;
+  border-color: var(--decider-invalid-border, #be1100) !important;
 }
 
 .pause-banner.pending {
@@ -1205,7 +1205,7 @@ input.invalid {
   fill: var(--changed, orange);
 }
 .table-match table.table-grid tr.matched td {
-  background: var(--vscode-editor-findMatchHighlightBackground, rgba(234, 92, 0, 0.33));
+  background: var(--decider-match-bg, rgba(234, 92, 0, 0.33));
   font-weight: 600;
 }
 .table-match table.table-grid tr.tried td {
@@ -1234,26 +1234,21 @@ ul.explain .twisty {
 ul.explain .formula {
   margin: 1px 0 3px 1.2em;
   padding: 2px 6px;
-  border-left: 2px solid var(--vscode-textLink-foreground);
-  background: var(--vscode-textCodeBlock-background, rgba(127, 127, 127, 0.1));
+  border-left: 2px solid var(--decider-link);
+  background: var(--decider-code-bg, rgba(127, 127, 127, 0.1));
   overflow-wrap: anywhere;
 }
 
-@media (max-width: 760px) {
+@container (max-width: 760px) {
   main.detailed .graph {
-    height: 40vh;
+    height: 40cqh;
   }
 }
 .pause-banner button {
   margin-left: 6px;
 }
 .node.selected rect {
-  animation: found 0.6s ease-out 2;
-}
-@keyframes found {
-  50% {
-    stroke-width: 5;
-  }
+  animation: decider-found 0.6s ease-out 2;
 }
 
 .knob input.picker {
@@ -1273,8 +1268,8 @@ table.changed-table {
 table.changed-table th {
   text-align: left;
   font-weight: normal;
-  color: var(--vscode-descriptionForeground);
-  border-bottom: 1px solid var(--vscode-panel-border);
+  color: var(--decider-muted);
+  border-bottom: 1px solid var(--decider-border);
   padding: 2px 6px;
 }
 table.changed-table td {
@@ -1283,18 +1278,18 @@ table.changed-table td {
 }
 table.changed-table a {
   cursor: pointer;
-  color: var(--vscode-textLink-foreground);
+  color: var(--decider-link);
 }
 
 ul.explain .formula .clamp {
-  font-family: var(--vscode-font-family);
-  color: var(--vscode-charts-green, #89d185);
+  font-family: var(--decider-font);
+  color: var(--decider-green, #89d185);
 }
 aside .actions {
   position: sticky;
   top: -8px;
   z-index: 3;
-  background: var(--vscode-editor-background);
+  background: var(--decider-bg);
   padding: 4px 0;
 }
 
@@ -1311,7 +1306,7 @@ aside .actions {
 .crumbs {
   padding: 2px 10px;
   font-size: 0.9em;
-  border-bottom: 1px solid var(--vscode-panel-border);
+  border-bottom: 1px solid var(--decider-border);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1342,7 +1337,7 @@ table.sweep td.changed .small {
 .scenarios .knob {
   flex-wrap: wrap;
   padding-bottom: 6px;
-  border-bottom: 1px dashed var(--vscode-panel-border);
+  border-bottom: 1px dashed var(--decider-border);
   margin-bottom: 6px;
 }
 .scenarios .knob input.picker {
@@ -1353,9 +1348,9 @@ table.sweep td.changed .small {
   flex: 1 1 100%;
 }
 
-@media (max-width: 760px) {
+@container (max-width: 760px) {
   main.detailed.explaining .graph {
-    height: 24vh;
+    height: 24cqh;
   }
 }
 
@@ -1368,10 +1363,10 @@ table.sweep td.changed .small {
   border-left: 3px solid var(--changed, orange);
   padding: 3px 8px;
   margin: 4px 0;
-  background: var(--vscode-editorWidget-background);
+  background: var(--decider-widget-bg);
 }
 .result-card.hit {
-  border-left-color: var(--vscode-focusBorder);
+  border-left-color: var(--decider-focus);
 }
 .result-head {
   display: flex;
@@ -1382,13 +1377,13 @@ table.sweep td.changed .small {
   padding: 0 6px;
   border-radius: 8px;
   font-size: 0.9em;
-  border: 1px solid var(--vscode-panel-border);
+  border: 1px solid var(--decider-border);
 }
 .result-head .decision.approve {
-  color: var(--vscode-charts-green, #89d185);
+  color: var(--decider-green, #89d185);
 }
 .result-head .decision.decline {
-  color: var(--vscode-charts-red, #f14c4c);
+  color: var(--decider-red, #f14c4c);
 }
 
 details.no-offer {
@@ -1396,7 +1391,7 @@ details.no-offer {
 }
 details.no-offer summary {
   cursor: pointer;
-  color: var(--vscode-descriptionForeground);
+  color: var(--decider-muted);
 }
 
 .params table.table-grid td input.key {
@@ -1416,7 +1411,7 @@ details.edit-menu summary {
   cursor: pointer;
   list-style: none;
   padding: 2px 8px;
-  color: var(--vscode-textLink-foreground);
+  color: var(--decider-link);
 }
 details.edit-menu .edit-menu-body {
   display: flex;
@@ -1444,13 +1439,13 @@ details.edit-menu .edit-menu-body {
 }
 .result-head a {
   cursor: pointer;
-  color: var(--vscode-textLink-foreground);
+  color: var(--decider-link);
 }
 
 .step-formula {
   margin: 2px 0 4px;
   padding: 2px 6px;
-  background: var(--vscode-textCodeBlock-background, rgba(127, 127, 127, 0.1));
+  background: var(--decider-code-bg, rgba(127, 127, 127, 0.1));
   overflow-wrap: anywhere;
 }
 .params table.table-grid td input {
@@ -1462,7 +1457,7 @@ details.edit-menu .edit-menu-body {
 
 .step-formula .edit-mark {
   color: var(--changed, orange);
-  font-family: var(--vscode-font-family);
+  font-family: var(--decider-font);
 }
 .step-formula .before {
   opacity: 0.6;
@@ -1477,12 +1472,12 @@ details.edit-menu .edit-menu-body {
   flex: 1 1 100%;
 }
 
-@media (max-width: 760px) {
+@container (max-width: 760px) {
   main.detailed .graph {
-    height: 48vh;
+    height: 48cqh;
   }
   main.detailed.explaining .graph {
-    height: 30vh;
+    height: 30cqh;
   }
 }
 
@@ -1499,7 +1494,7 @@ details.edit-menu .edit-menu-body {
 .compare-top a {
   margin-left: auto;
   cursor: pointer;
-  color: var(--vscode-textLink-foreground);
+  color: var(--decider-link);
 }
 .compare .chip {
   white-space: nowrap;
@@ -1509,24 +1504,24 @@ table.sweep td.changed {
   white-space: nowrap;
 }
 table.sweep td.changed.down {
-  color: var(--vscode-charts-green, #89d185);
+  color: var(--decider-green, #89d185);
 }
 table.sweep td.changed.up {
-  color: var(--vscode-charts-red, #f14c4c);
+  color: var(--decider-red, #f14c4c);
 }
 
 .splitter {
   flex: none;
   height: 6px;
   cursor: row-resize;
-  background: var(--vscode-panel-border);
+  background: var(--decider-border);
   opacity: 0.6;
 }
 .splitter:hover {
   opacity: 1;
-  background: var(--vscode-focusBorder);
+  background: var(--decider-focus);
 }
-@media (min-width: 761px) {
+@container (min-width: 761px) {
   .splitter {
     display: none;
   }
@@ -1585,10 +1580,10 @@ table.sweep td.stack > div {
   white-space: nowrap;
 }
 table.sweep td.stack .changed.down .mono {
-  color: var(--vscode-charts-green, #89d185);
+  color: var(--decider-green, #89d185);
 }
 table.sweep td.stack .changed.up .mono {
-  color: var(--vscode-charts-red, #f14c4c);
+  color: var(--decider-red, #f14c4c);
 }
 table.sweep td.stack .unchanged {
   opacity: 0.6;
@@ -1598,14 +1593,14 @@ table.sweep td.stack .unchanged {
   font-size: 0.85em;
   padding: 0 6px;
   border-radius: 8px;
-  border: 1px solid var(--vscode-focusBorder);
+  border: 1px solid var(--decider-focus);
 }
 
 aside .step-head {
   position: sticky;
   top: -8px;
   z-index: 3;
-  background: var(--vscode-editor-background);
+  background: var(--decider-bg);
   padding-top: 2px;
 }
 aside .step-head .actions {
@@ -1617,8 +1612,8 @@ aside .wrote {
 }
 
 .pause-banner .banner-button {
-  background: var(--vscode-button-background);
-  color: var(--vscode-button-foreground);
+  background: var(--decider-button-bg);
+  color: var(--decider-button-fg);
   border: none;
   border-radius: 2px;
   padding: 1px 8px;
@@ -1626,9 +1621,9 @@ aside .wrote {
 }
 
 .params .actions.sticky {
-  background: var(--vscode-editor-background);
+  background: var(--decider-bg);
   padding: 6px 0;
-  border-top: 1px solid var(--vscode-panel-border);
+  border-top: 1px solid var(--decider-border);
 }
 
 table.waterfall {
@@ -1650,12 +1645,12 @@ table.waterfall tr.zero {
   opacity: 0.55;
 }
 table.waterfall tr.total td {
-  border-top: 1px solid var(--vscode-panel-border);
+  border-top: 1px solid var(--decider-border);
   font-weight: 600;
 }
 table.waterfall a {
   cursor: pointer;
-  color: var(--vscode-textLink-foreground);
+  color: var(--decider-link);
 }
 
 table.sweep td.changed.down,
@@ -1682,18 +1677,18 @@ table.sweep.grid td.unchanged {
   overflow-wrap: anywhere;
 }
 
-@media (max-width: 760px) {
+@container (max-width: 760px) {
   main.detailed .graph {
-    height: 55vh;
+    height: 55cqh;
   }
   main.detailed.explaining .graph {
-    height: 34vh;
+    height: 34cqh;
   }
 }
 
 aside .wrote .clamp {
   font-weight: normal;
-  color: var(--vscode-charts-green, #89d185);
+  color: var(--decider-green, #89d185);
 }
 
 .scenarios .knob {
@@ -1724,9 +1719,9 @@ table.sweep.grid td > div {
 .how {
   scroll-margin-top: 110px;
 }
-@media (max-width: 760px) {
+@container (max-width: 760px) {
   main.detailed.explaining .graph {
-    height: 20vh;
+    height: 20cqh;
   }
 }
 
@@ -1734,13 +1729,13 @@ table.sweep.grid td > div {
   margin: 4px 0;
   padding: 4px 8px;
   font-weight: 600;
-  border-left: 3px solid var(--vscode-focusBorder);
-  background: var(--vscode-editor-findMatchHighlightBackground, rgba(234, 92, 0, 0.2));
+  border-left: 3px solid var(--decider-focus);
+  background: var(--decider-match-bg, rgba(234, 92, 0, 0.2));
 }
 
 details.step-code summary {
   cursor: pointer;
-  color: var(--vscode-descriptionForeground);
+  color: var(--decider-muted);
 }
 details.step-code pre {
   margin: 2px 0 6px;
@@ -1748,23 +1743,23 @@ details.step-code pre {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font-size: 0.9em;
-  background: var(--vscode-textCodeBlock-background, rgba(127, 127, 127, 0.1));
+  background: var(--decider-code-bg, rgba(127, 127, 127, 0.1));
 }
 
 .node.edited-replace rect {
-  stroke: var(--vscode-charts-purple, #b180d7);
+  stroke: var(--decider-purple, #b180d7);
   stroke-width: 2.5;
   stroke-dasharray: none;
 }
 .node.edited-delete rect {
-  stroke: var(--vscode-charts-purple, #b180d7);
+  stroke: var(--decider-purple, #b180d7);
 }
 .node text.edit-mark {
-  fill: var(--vscode-charts-purple, #b180d7);
+  fill: var(--decider-purple, #b180d7);
 }
 
 .pause-banner .edit-chip {
-  border-color: var(--vscode-charts-purple, #b180d7);
+  border-color: var(--decider-purple, #b180d7);
 }
 
 table.changed-table tr.param-row td {
@@ -1807,9 +1802,9 @@ table.sweep.grid th .axes {
 aside {
   scroll-padding-top: 110px;
 }
-@media (max-width: 760px) {
+@container (max-width: 760px) {
   main.detailed.explaining .graph {
-    height: 28vh;
+    height: 28cqh;
   }
 }
 
@@ -1822,7 +1817,7 @@ aside {
   white-space: nowrap;
 }
 
-@media (max-width: 760px) {
+@container (max-width: 760px) {
   main:not(.detailed) .graph {
     flex: 1;
     height: auto;
@@ -1832,7 +1827,7 @@ aside {
 .node.edited-replace rect,
 .node.edited-replace.done rect,
 .node.edited-replace.current rect {
-  stroke: var(--vscode-charts-purple, #b180d7) !important;
+  stroke: var(--decider-purple, #b180d7) !important;
   stroke-dasharray: none !important;
   stroke-width: 2.5;
 }
@@ -1868,7 +1863,7 @@ table.explain-summary td.num {
   white-space: nowrap;
 }
 table.explain-summary tr.total td {
-  border-top: 1px solid var(--vscode-panel-border);
+  border-top: 1px solid var(--decider-border);
   font-weight: 600;
 }
 table.explain-summary tr.zero td {
@@ -1897,8 +1892,8 @@ table.sweep.grid td.changed.tint-down {
   border-radius: 3px;
   font-size: 0.85em;
   font-weight: 600;
-  background: var(--vscode-badge-background);
-  color: var(--vscode-badge-foreground);
+  background: var(--decider-badge-bg);
+  color: var(--decider-badge-fg);
 }
 
 table.explain-summary {
@@ -1910,7 +1905,7 @@ table.explain-summary td.muted {
 }
 
 /* A wide panel: the graph on the left, the details as a wide column beside it. */
-@media (min-width: 761px) {
+@container (min-width: 761px) {
   aside {
     width: 42%;
     min-width: 320px;
@@ -1929,16 +1924,16 @@ table.explain-summary td.muted {
 }
 .tile {
   padding: 2px 8px;
-  border: 1px solid var(--vscode-panel-border);
+  border: 1px solid var(--decider-border);
   border-radius: 4px;
-  background: var(--vscode-editorWidget-background);
+  background: var(--decider-widget-bg);
 }
 
 .verdict-line {
   font-weight: 600;
   margin: 2px 0 4px;
   padding: 3px 6px;
-  background: var(--vscode-editor-inactiveSelectionBackground, rgba(127, 127, 127, 0.15));
+  background: var(--decider-inactive-selection-bg, rgba(127, 127, 127, 0.15));
 }
 
 .edits-line {
@@ -1950,7 +1945,7 @@ table.explain-summary td.muted {
   stroke-width: 1.5;
 }
 
-@media (min-width: 761px) {
+@container (min-width: 761px) {
   main.explaining aside {
     width: 52%;
     max-width: none;
@@ -1962,30 +1957,30 @@ table.explain-summary td.muted {
 }
 .params .actions.sticky {
   z-index: 4;
-  background: var(--vscode-editor-background);
-  box-shadow: 0 -6px 8px var(--vscode-editor-background);
+  background: var(--decider-bg);
+  box-shadow: 0 -6px 8px var(--decider-bg);
 }
 .banner-note {
-  color: var(--vscode-editorWarning-foreground, #cca700);
+  color: var(--decider-warning, #cca700);
 }
 .controls-bar {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   padding: 4px 8px;
-  border-bottom: 1px solid var(--vscode-panel-border);
+  border-bottom: 1px solid var(--decider-border);
 }
 .controls-bar .chip.force {
-  border-color: var(--vscode-charts-purple, #b180d7);
+  border-color: var(--decider-purple, #b180d7);
 }
 .controls-bar .chip.watch {
-  border-color: var(--vscode-debugIcon-breakpointForeground, #e51400);
+  border-color: var(--decider-breakpoint, #e51400);
 }
 .group-controls,
 .watch-form {
   margin-top: 12px;
   padding-top: 8px;
-  border-top: 1px solid var(--vscode-panel-border);
+  border-top: 1px solid var(--decider-border);
 }
 .control-row {
   display: flex;
@@ -2004,21 +1999,21 @@ input.narrow {
 .timeline .why {
   margin: 4px 0 8px;
   padding: 6px 8px;
-  border-left: 3px solid var(--vscode-focusBorder);
-  background: var(--vscode-textBlockQuote-background);
+  border-left: 3px solid var(--decider-focus);
+  background: var(--decider-quote-bg);
 }
 .timeline li.kept {
   opacity: 0.75;
 }
 .added {
-  color: var(--vscode-testing-iconPassed, #73c991);
+  color: var(--decider-passed, #73c991);
   margin: 4px 0;
 }
 .banner-note.outcome {
   font-weight: 600;
 }
 .set-by {
-  color: var(--vscode-charts-purple, #b180d7);
+  color: var(--decider-purple, #b180d7);
 }
 .result-table {
   border-collapse: collapse;
@@ -2062,11 +2057,11 @@ input.narrow {
   opacity: 0.8;
 }
 .timeline .here {
-  color: var(--vscode-charts-yellow, #cca700);
+  color: var(--decider-yellow, #cca700);
   font-weight: 600;
 }
 aside .step-head {
-  box-shadow: 0 4px 6px -4px var(--vscode-widget-shadow, #0008);
+  box-shadow: 0 4px 6px -4px var(--decider-shadow, #0008);
 }
 aside .how,
 aside .timeline,
@@ -2086,8 +2081,8 @@ aside .watch-form {
   z-index: 5;
   width: 360px;
   padding: 6px 8px;
-  background: var(--vscode-editorWidget-background);
-  border: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border));
+  background: var(--decider-widget-bg);
+  border: 1px solid var(--decider-widget-border, var(--decider-border));
 }
 .swatch {
   display: inline-block;
@@ -2100,19 +2095,19 @@ aside .watch-form {
   border-color: var(--paused);
 }
 .swatch.selected {
-  border-color: var(--vscode-focusBorder);
+  border-color: var(--decider-focus);
 }
 .swatch.lineage {
   border-color: var(--lineage);
 }
 .swatch.changed {
-  border-color: var(--vscode-charts-orange, orange);
+  border-color: var(--decider-orange, orange);
 }
 .group-controls button,
 .watch-form button {
-  border: 1px solid var(--vscode-button-border, var(--vscode-focusBorder));
-  background: var(--vscode-button-secondaryBackground, transparent);
-  color: var(--vscode-button-secondaryForeground, inherit);
+  border: 1px solid var(--decider-button-border, var(--decider-focus));
+  background: var(--decider-button2-bg, transparent);
+  color: var(--decider-button2-fg, inherit);
   border-radius: 2px;
   padding: 1px 8px;
 }
@@ -2129,10 +2124,10 @@ aside .watch-form {
   padding: 0;
 }
 .controls-bar .chip.watch {
-  border-color: var(--vscode-panel-border);
+  border-color: var(--decider-border);
 }
 .controls-bar .chip.watch::first-letter {
-  color: var(--vscode-debugIcon-breakpointForeground, #e51400);
+  color: var(--decider-breakpoint, #e51400);
 }
 
 aside .step-head {
@@ -2141,9 +2136,16 @@ aside .step-head {
 }
 .result-table tr.decision-row td {
   font-weight: 700;
-  border-bottom: 1px solid var(--vscode-panel-border);
+  border-bottom: 1px solid var(--decider-border);
 }
 details.breakdown > summary {
   margin: 6px 0;
   cursor: pointer;
+}
+}
+
+@keyframes decider-found {
+  50% {
+    stroke-width: 5;
+  }
 }

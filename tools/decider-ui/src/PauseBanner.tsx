@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { editLabel, formatValue, recordLabel, type ColumnSummary, type FromWebview, type RecordKey, type RunStatus, type Watch } from "../src/protocol";
+import { editLabel, formatValue, recordLabel, type ColumnSummary, type FromUI, type RecordKey, type RunStatus, type Watch } from "./model/protocol";
 import { hitText } from "./Controls";
 
 interface Props {
@@ -14,7 +14,7 @@ interface Props {
   note?: string;
   explained?: string;
   onExplain: (name?: string) => void;
-  send: (m: FromWebview) => void;
+  send: (m: FromUI) => void;
 }
 
 /** Where the run is paused, and what can be done from there: focus a record, explain a value, compare edits. */

@@ -1,0 +1,62 @@
+/* decider's theme from VS Code's: every --decider-* variable the UI reads, from its --vscode-* colour.
+   Where VS Code leaves a colour unset, so is decider's, and the UI falls back to its own default. */
+:root {
+  color-scheme: light dark;
+  --decider-font: var(--vscode-font-family);
+  --decider-font-size: var(--vscode-font-size);
+  --decider-mono: var(--vscode-editor-font-family);
+  --decider-fg: var(--vscode-foreground);
+  --decider-bg: var(--vscode-editor-background);
+  --decider-muted: var(--vscode-descriptionForeground);
+  --decider-error: var(--vscode-errorForeground);
+  --decider-link: var(--vscode-textLink-foreground);
+  --decider-border: var(--vscode-panel-border);
+  --decider-focus: var(--vscode-focusBorder);
+  --decider-widget-bg: var(--vscode-editorWidget-background);
+  --decider-widget-border: var(--vscode-editorWidget-border);
+  --decider-shadow: var(--vscode-widget-shadow);
+  --decider-code-bg: var(--vscode-textCodeBlock-background);
+  --decider-quote-bg: var(--vscode-textBlockQuote-background);
+  --decider-button-bg: var(--vscode-button-background);
+  --decider-button-fg: var(--vscode-button-foreground);
+  --decider-button-border: var(--vscode-button-border);
+  --decider-button2-bg: var(--vscode-button-secondaryBackground);
+  --decider-button2-fg: var(--vscode-button-secondaryForeground);
+  --decider-input-bg: var(--vscode-input-background);
+  --decider-input-fg: var(--vscode-input-foreground);
+  --decider-input-border: var(--vscode-input-border);
+  --decider-invalid-border: var(--vscode-inputValidation-errorBorder);
+  --decider-dropdown-bg: var(--vscode-dropdown-background);
+  --decider-dropdown-fg: var(--vscode-dropdown-foreground);
+  --decider-dropdown-border: var(--vscode-dropdown-border);
+  --decider-badge-bg: var(--vscode-badge-background);
+  --decider-badge-fg: var(--vscode-badge-foreground);
+  --decider-hover-bg: var(--vscode-list-hoverBackground);
+  --decider-selection-bg: var(--vscode-list-activeSelectionBackground);
+  --decider-selection-fg: var(--vscode-list-activeSelectionForeground);
+  --decider-inactive-selection-bg: var(--vscode-editor-inactiveSelectionBackground);
+  --decider-match-bg: var(--vscode-editor-findMatchHighlightBackground);
+  --decider-paused-bg: var(--vscode-editor-stackFrameHighlightBackground);
+  --decider-inserted-bg: var(--vscode-diffEditor-insertedTextBackground);
+  --decider-added-fg: var(--vscode-gitDecoration-addedResourceForeground);
+  --decider-deleted-fg: var(--vscode-gitDecoration-deletedResourceForeground);
+  --decider-passed: var(--vscode-testing-iconPassed);
+  --decider-pause-icon: var(--vscode-debugIcon-pauseForeground);
+  --decider-breakpoint: var(--vscode-debugIcon-breakpointForeground);
+  --decider-warning: var(--vscode-editorWarning-foreground);
+  --decider-red: var(--vscode-charts-red);
+  --decider-orange: var(--vscode-charts-orange);
+  --decider-yellow: var(--vscode-charts-yellow);
+  --decider-green: var(--vscode-charts-green);
+  --decider-blue: var(--vscode-charts-blue);
+  --decider-purple: var(--vscode-charts-purple);
+}
+html,
+body,
+#root {
+  height: 100%;
+}
+body {
+  margin: 0;
+  background: var(--vscode-editor-background);
+}

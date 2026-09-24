@@ -1,23 +1,23 @@
 import * as vscode from "vscode";
-import type { DescribeResult, FromWebview, ToWebview } from "./protocol";
+import type { DescribeResult, FromUI, ToUI } from "@decider/ui";
 
 /** The graph view: one React webview panel, fed the IR and the session position. */
 export class GraphPanel {
   static current: GraphPanel | undefined;
   /** Messages sent while the panel is being opened. */
-  private static early: ToWebview[] = [];
+  private static early: ToUI[] = [];
   private static opening: Promise<void> | undefined;
   private panel: vscode.WebviewPanel;
   private ready = false;
-  private queue: ToWebview[] = [];
+  private queue: ToUI[] = [];
 
   /** Send to the panel, or hold the message until it has opened. */
-  static post(m: ToWebview) {
+  static post(m: ToUI) {
     if (GraphPanel.current) GraphPanel.current.post(m);
     else GraphPanel.early.push(m);
   }
 
-  static async show(ctx: vscode.ExtensionContext, describe: DescribeResult, onMessage: (m: FromWebview) => void): Promise<void> {
+  static async show(ctx: vscode.ExtensionContext, describe: DescribeResult, onMessage: (m: FromUI) => void): Promise<void> {
     if (!GraphPanel.current) {
       GraphPanel.opening ??= (async () => {
         let column = vscode.ViewColumn.Beside;
@@ -39,7 +39,7 @@ export class GraphPanel {
     GraphPanel.current.post({ type: "describe", describe });
   }
 
-  private constructor(ctx: vscode.ExtensionContext, onMessage: (m: FromWebview) => void, column: vscode.ViewColumn) {
+  private constructor(ctx: vscode.ExtensionContext, onMessage: (m: FromUI) => void, column: vscode.ViewColumn) {
     const dist = vscode.Uri.joinPath(ctx.extensionUri, "dist", "webview");
     this.panel = vscode.window.createWebviewPanel("decider.graph", "decider: flow", { viewColumn: column, preserveFocus: true }, {
       enableScripts: true,
@@ -53,7 +53,7 @@ export class GraphPanel {
 <link rel="stylesheet" href="${w.asWebviewUri(vscode.Uri.joinPath(dist, "index.css"))}">
 </head><body><div id="root"></div>
 <script nonce="${nonce}" src="${w.asWebviewUri(vscode.Uri.joinPath(dist, "index.js"))}"></script></body></html>`;
-    w.onDidReceiveMessage((m: FromWebview) => {
+    w.onDidReceiveMessage((m: FromUI) => {
       if (m.type === "ready") {
         this.ready = true;
         for (const q of this.queue.splice(0)) w.postMessage(q);
@@ -79,7 +79,7 @@ export class GraphPanel {
     });
   }
 
-  post(m: ToWebview) {
+  post(m: ToUI) {
     if (this.ready) this.panel.webview.postMessage(m);
     else this.queue.push(m);
   }

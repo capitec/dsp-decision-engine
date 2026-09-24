@@ -1,12 +1,13 @@
 import { execFileSync } from "node:child_process";
 import * as path from "node:path";
 import { describe, expect, it } from "vitest";
-import type { DescribeResult } from "../src/protocol";
-import { callNodes } from "../src/protocol";
-import { findSteps } from "../webview/FindStep";
-import { dataEdges, fold, layout, orderEdges } from "../webview/layout";
+import type { DescribeResult } from "../src/model/protocol";
+import { callNodes } from "../src/model/protocol";
+import { findSteps } from "../src/FindStep";
+import { dataEdges, fold, layout, orderEdges } from "../src/layout";
 
-const ROOT = path.resolve(__dirname, "..");
+// The Python bridge and the example flows live with the VS Code extension.
+const ROOT = path.resolve(__dirname, "../../vscode-decider");
 const ir: DescribeResult["ir"] = JSON.parse(
   execFileSync("uv", ["run", "python", "-c", `import sys; sys.path.insert(0, ${JSON.stringify(path.join(ROOT, "python"))})
 from bridge import Bridge; import json; print(json.dumps(Bridge().describe(${JSON.stringify(path.join(ROOT, "examples", "loan.py"))})["ir"]))`]).toString(),

@@ -1,4 +1,4 @@
-import { formatValue, type Checkpoint, type ValueChange, type ValueHistory } from "../src/protocol";
+import { formatValue, type Checkpoint, type ValueChange, type ValueHistory } from "./model/protocol";
 
 interface Props {
   history: ValueHistory;

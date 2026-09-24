@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { CallNodeJson } from "../src/protocol";
+import type { CallNodeJson } from "./model/protocol";
 
 const MAX_HITS = 12;
 

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { formatValue, recordLabel, type CallNodeJson, type ColumnSummary, type RecordKey } from "../src/protocol";
+import { formatValue, recordLabel, type CallNodeJson, type ColumnSummary, type RecordKey } from "./model/protocol";
 
 interface Props {
   columns: ColumnSummary[] | null;

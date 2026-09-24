@@ -1,4 +1,4 @@
-import { previewOf, type IRNodeJson, type SessionEvent, type Summary, type Visits } from "./protocol";
+import { previewOf, type IRNodeJson, type SessionEvent, type Summary, type Visits } from "@decider/ui";
 
 export interface Read {
   /** Lines for the Debug Console, with their output category. */

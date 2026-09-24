@@ -1,5 +1,5 @@
 import * as path from "node:path";
-import type { IRNodeJson } from "./protocol";
+import type { IRNodeJson } from "@decider/ui";
 
 /**
  * The node a source breakpoint on `line` of `file` means: the nearest node

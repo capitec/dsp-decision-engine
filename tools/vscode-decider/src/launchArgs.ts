@@ -1,5 +1,5 @@
 import type { DebugProtocol } from "@vscode/debugprotocol";
-import type { Controls } from "./protocol";
+import type { Controls } from "@decider/ui";
 
 export interface AdapterOptions {
   python: string[];

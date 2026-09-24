@@ -1,5 +1,5 @@
 import dagre from "@dagrejs/dagre";
-import { callNodes, lastSegment, walk, type CallNodeJson, type IRNodeJson } from "../src/protocol";
+import { callNodes, lastSegment, walk, type CallNodeJson, type IRNodeJson } from "./model/protocol";
 
 export interface LaidNode {
   path: string;
