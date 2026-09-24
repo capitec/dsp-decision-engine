@@ -54,6 +54,7 @@ function Diffs({ diffs, record, keyCol, results }: { diffs: ValueDiff[]; record:
 /** Two runs side by side, step by step, in execution order. */
 export function Compare({ comparison: c, busy, error, record, onSelect, onCompareRevision, onOpenDiff, back, header, withRevision = true, onFocus }: Props) {
   const [onlyChanges, setOnlyChanges] = useState(true);
+  const [showDeclinedOnly, setShowDeclinedOnly] = useState(false);
   const revisionButton = <button onClick={onCompareRevision}>Compare with a git revision…</button>;
   if (busy) return <div className="compare"><div className="empty">{busy}</div></div>;
   if (error) return <div className="compare"><div className="empty error">{error}</div><div className="actions">{revisionButton}</div></div>;
@@ -65,11 +66,18 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
       </div>
     );
   const focusChanged = record !== null && c.steps.some((s) => s.outputs.some((o) => o.changedRows.includes(record)));
-  const steps = c.steps.filter((s) => {
+  const decisionB = c.results.b.decision;
+  const declinedBoth = (r: number) => !!decisionB && decisionB[r] === "decline" && c.results.a.decision?.[r] === "decline";
+  // A step whose every changed record stays declined only moved internal values; it folds away unless asked for.
+  const declinedOnly = (s: (typeof c.steps)[number]) =>
+    s.status === "changed" && !s.structural.length && !s.paramChanges.length && s.outputs.length > 0 && s.outputs.every((o) => o.changedRows.every(declinedBoth));
+  const shownSteps = c.steps.filter((s) => {
     if (!onlyChanges) return true;
     if (s.status === "same" || s.status === "not run") return false;
     return !focusChanged || s.status !== "changed" || s.structural.length > 0 || s.outputs.some((o) => o.changedRows.includes(record!));
   });
+  const folded = onlyChanges && !showDeclinedOnly ? shownSteps.filter(declinedOnly) : [];
+  const steps = shownSteps.filter((s) => !folded.includes(s));
   const count = (st: string) => c.steps.filter((s) => s.status === st).length;
   // A step is "edited" when its code or params differ; otherwise it only moved because its inputs did.
   const docHas = (path: string) => path.split("/").reduce<unknown>((d, part) => (d as Record<string, unknown> | undefined)?.[part], c.paramsDocs?.b) !== undefined;
@@ -243,8 +251,14 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
         )}
         <label className="right small"><input type="checkbox" checked={onlyChanges} onChange={(e) => setOnlyChanges(e.target.checked)} /> only changed steps</label>
       </h4>
+      {folded.length > 0 && (
+        <div className="muted small">
+          {folded.length} step{folded.length === 1 ? "" : "s"} changed only declined applicants' internal values ·{" "}
+          <a onClick={() => setShowDeclinedOnly(true)}>show them</a>
+        </div>
+      )}
       {steps.length === 0 ? (
-        <div className="muted">Every step produces the same values.</div>
+        <div className="muted">{folded.length ? "No step changed an offered applicant's values." : "Every step produces the same values."}</div>
       ) : (
         <div className="muted">What each changed step wrote, and the final value where a later step changed it again.</div>
       )}

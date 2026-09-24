@@ -2091,3 +2091,11 @@ table.sweep.grid td.changed.tint-down {
   background: var(--vscode-badge-background);
   color: var(--vscode-badge-foreground);
 }
+
+table.explain-summary {
+  width: 100%;
+}
+table.explain-summary td.muted {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
