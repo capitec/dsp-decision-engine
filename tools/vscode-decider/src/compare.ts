@@ -109,7 +109,8 @@ export function paramChangeLines(doc: unknown, before: unknown): string[] {
           const r = row as Record<string, unknown>;
           if (!rows[i]) return lines.push(`${k} row ${i + 1} added`);
           const cells = Object.keys(r).filter((c) => !same(rows[i][c], r[c])).map((c) => `${c} ${formatValue(rows[i][c], c)} → ${formatValue(r[c], c)}`);
-          if (cells.length) lines.push(`${k} row ${i + 1}: ${cells.join(", ")}`);
+          const key = Object.keys(r).filter((c) => same(rows[i][c], r[c])).slice(0, 2).map((c) => `${c} ${formatValue(r[c], c)}`);
+          if (cells.length) lines.push(`${k} row ${i + 1}${key.length ? ` (${key.join(", ")})` : ""}: ${cells.join(", ")}`);
         });
         if (rows.length > v.length) lines.push(`${k}: ${rows.length - v.length} row${rows.length - v.length === 1 ? "" : "s"} removed`);
       } else if (v && typeof v === "object") visit(v, old);

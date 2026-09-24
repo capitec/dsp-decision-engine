@@ -255,6 +255,18 @@ def test_a_swapped_step_can_be_put_back(tmp_path):
     assert b.edits == []
 
 
+def test_a_skipped_step_can_be_put_back():
+    b = started(breakpoints=["term/cap_by_income"])
+    b.handle({"cmd": "resume"})
+    b.handle({"cmd": "skip", "path": "term/cap_by_income"})
+    b.handle({"cmd": "restore", "path": "term/cap_by_income"})
+    # The flow re-runs with the step back in, so its breakpoint is met again on the way.
+    assert b.handle({"cmd": "resume"})["current"] == {"path": "term/cap_by_income", "when": "before"}
+    assert b.handle({"cmd": "resume"})["finished"]
+    assert b.session.output()["term_cap"].to_list() == [48.0, 36.0]
+    assert b.edits == []
+
+
 def test_skipping_the_only_producer_is_refused_and_changes_nothing():
     b = started(breakpoints=["term/cap_by_income"])
     b.handle({"cmd": "resume"})

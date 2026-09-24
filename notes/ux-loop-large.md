@@ -25,6 +25,7 @@ goal isn't visibly met caps at 5). The loop stops above 8/10 or after 40 rounds.
 | 15 | 7.7 | 8 | 8 | 7 | 8 | 7 | 8 | 8 |
 | 16 | 7.8 | 8 | 8.5 | 7 | 8 | 7 | 8.5 | 7.5 |
 | 17 | 7.8 | 8 | 8 | 7.5 | 8.5 | 6.5 | 8.5 | 7.5 |
+| 18 | 7.7 | 8 | 8 | 7 | 8 | 7 | 8 | 8 |
 
 ## Round 0 (baseline)
 
@@ -456,3 +457,29 @@ Judge's problems, most damaging first:
 10. Dotted data edges unexplained.
 11. No book-level totals per scenario.
 12. The banner wraps with edit chips.
+
+## Round 18
+
+Changes: sweep cells count only applicants with an offer on either side ("no offer changed (3 declined only)"), and
+shade by those; a skipped step can be restored (the bridge swaps its enclosing flow back in, rebuilt from the flow
+as started with the other edits kept, since the engine has replace but no insert); the value being explained is
+the first card in the details; a table row change names its band ("row 3 (min_term 49, max_term 85)"); steps that
+only moved declined applicants' internal values fold behind "show them".
+
+Scores have held at 7.6-7.8 for eleven rounds. The one complaint every judge repeats is space: a ~350px editor
+beside a ~650px panel, so code lines are cut and tables clip.
+
+Judge's problems, most damaging first:
+
+1. L5: "no offer changed (3 declined only)" repeated in every metric line; the grid clips.
+2. L3: explaining pl_rate moves the selection to its writer.
+3. L3: risk loading is folded into "5 other parts".
+4. L3: no way back to the breakdown after following a link.
+5. The debug layout squeezes the panel and the code.
+6. L1: "Open source" lands in a narrow editor, on the decorator.
+7. Unlabelled data curves and group bands.
+8. No overview of position among 1,000 steps.
+9. L7: step counts disagree between compares; "the other 1 is left out" reads like a bug.
+10. L7: restore not visible after skipping.
+11. L2: which rows the applications hit isn't shown before running.
+12. The summary line is a dense run-on.

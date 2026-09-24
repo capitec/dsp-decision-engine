@@ -457,10 +457,14 @@ export class DeciderDebugSession extends LoggingDebugSession {
           const cmd = command === "decider.skip" ? "skip" : command === "decider.restore" ? "restore" : "reload_step";
           const status = await this.bridge!.request<Status & { diff: string[]; formula: string | null }>(cmd, { path: args.path });
           response.body = { diff: status.diff, formula: status.formula };
+          const before = { ...this.edits };
           this.sendResponse(response);
           this.apply(status, false);
-          // Putting the original back is an edit to the session, but not one to show.
-          if (cmd === "restore") delete this.edits[args.path as string];
+          // Putting the original back is an edit to the session (of the step, or of its flow), but not one to show.
+          if (cmd === "restore") {
+            delete before[args.path as string];
+            this.edits = before;
+          }
           this.refresh();
           if (this.finished) this.sendEvent(new TerminatedEvent());
           else this.sendEvent(new StoppedEvent("edit", THREAD));
