@@ -1,0 +1,129 @@
+{
+  "decision_id": "biz-2026-0900123",
+  "application_id": 900123,
+  "client_id": 12345,
+  "decision_date": "2026-09-24",
+  "product_code": 50,
+  "requested_amount": 3500000.0,
+  "requested_term_months": 48,
+  "legal_form_code": 3,
+  "sector_code": 412,
+  "declared_annual_turnover": 9200000.0,
+  "security_type_code": 2,
+  "ebitda": 1100000.0,
+  "finance_charges": 210000.0,
+  "current_assets": 2400000.0,
+  "current_liabilities": 1500000.0,
+  "interest_bearing_debt": 1800000.0,
+  "tangible_net_worth": 2600000.0,
+  "adjustment_stack_enabled": true,
+  "entities": [
+    {
+      "entity_id": 1,
+      "entity_key": "PERSON-MDLAMINI",
+      "is_natural_person": true,
+      "relationship_type_code": 5,
+      "direct_ownership_pct": 32.0,
+      "effective_ownership_pct": 32.0,
+      "is_controlling": false,
+      "is_required_surety": true,
+      "is_sole_principal": false,
+      "bureau_score": 612.0,
+      "months_on_record": 96.0,
+      "worst_delinquency_months": 4.0,
+      "adverse_events": [
+        {
+          "event_id": 41,
+          "event_type_code": 1,
+          "amount": 184000.0,
+          "event_date": "2025-03-14",
+          "status_is_active": true,
+          "is_disputed": false,
+          "is_satisfied": false
+        },
+        {
+          "event_id": 42,
+          "event_type_code": 1,
+          "amount": 7000.0,
+          "event_date": "2026-08-01",
+          "status_is_active": true,
+          "is_disputed": false,
+          "is_satisfied": false
+        }
+      ]
+    },
+    {
+      "entity_id": 2,
+      "entity_key": "PERSON-NKOSI",
+      "is_natural_person": true,
+      "relationship_type_code": 1,
+      "direct_ownership_pct": 0.0,
+      "effective_ownership_pct": 0.0,
+      "is_controlling": true,
+      "is_required_surety": true,
+      "is_sole_principal": false,
+      "bureau_score": 705.0,
+      "months_on_record": 140.0,
+      "worst_delinquency_months": 0.0,
+      "adverse_events": []
+    },
+    {
+      "entity_id": 2,
+      "entity_key": "PERSON-NKOSI",
+      "is_natural_person": true,
+      "relationship_type_code": 5,
+      "direct_ownership_pct": 55.0,
+      "effective_ownership_pct": 55.0,
+      "is_controlling": true,
+      "is_required_surety": true,
+      "is_sole_principal": false,
+      "bureau_score": 705.0,
+      "months_on_record": 140.0,
+      "worst_delinquency_months": 0.0,
+      "adverse_events": []
+    },
+    {
+      "entity_id": 3,
+      "entity_key": "PERSON-VANWYK",
+      "is_natural_person": true,
+      "relationship_type_code": 5,
+      "direct_ownership_pct": 13.0,
+      "effective_ownership_pct": 13.0,
+      "is_controlling": false,
+      "is_required_surety": false,
+      "is_sole_principal": false,
+      "bureau_score": 540.0,
+      "months_on_record": 30.0,
+      "worst_delinquency_months": 8.0,
+      "adverse_events": [
+        {
+          "event_id": 51,
+          "event_type_code": 2,
+          "amount": 12000.0,
+          "event_date": "2026-01-05",
+          "status_is_active": true,
+          "is_disputed": false,
+          "is_satisfied": false
+        },
+        {
+          "event_id": 52,
+          "event_type_code": 2,
+          "amount": 9000.0,
+          "event_date": "2026-02-01",
+          "status_is_active": true,
+          "is_disputed": false,
+          "is_satisfied": false
+        },
+        {
+          "event_id": 53,
+          "event_type_code": 2,
+          "amount": 8000.0,
+          "event_date": "2026-03-02",
+          "status_is_active": true,
+          "is_disputed": false,
+          "is_satisfied": false
+        }
+      ]
+    }
+  ]
+}

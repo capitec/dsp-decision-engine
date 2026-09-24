@@ -1,0 +1,58 @@
+{
+  "credit_core_demo": {
+    "decline_reason_codes": {
+      "minimum_age": 18.0
+    },
+    "gross_monthly_income": {
+      "statement_confidence_threshold": 0.7,
+      "haircut_payslip": 0.05,
+      "haircut_statement_high_confidence": 0.1,
+      "haircut_statement_low_confidence": 0.25,
+      "haircut_declared": 0.2,
+      "haircut_bureau_estimated": 0.3
+    },
+    "income_source_code": {
+      "statement_confidence_threshold": 0.7
+    },
+    "income_haircut_applied": {
+      "statement_confidence_threshold": 0.7,
+      "haircut_payslip": 0.05,
+      "haircut_statement_high_confidence": 0.1,
+      "haircut_statement_low_confidence": 0.25,
+      "haircut_declared": 0.2,
+      "haircut_bureau_estimated": 0.3
+    },
+    "affordability_buffer_applied": {
+      "affordability_buffer": 0.12
+    },
+    "retail_unsecured": {
+      "bureau_score": {
+        "bureau_low": 500.0,
+        "bureau_mid": 650.0,
+        "bureau_high": 750.0
+      }
+    },
+    "apply_score_adjustments": {
+      "adjustment_stack_enabled": true
+    },
+    "out_of_range": {
+      "min_amount": 2000.0,
+      "max_amount": 500000.0,
+      "min_term": 6.0,
+      "max_term": 84.0
+    },
+    "initiation_fee": {
+      "base_fee": 1050.0,
+      "marginal_rate": 0.1,
+      "threshold": 10000.0,
+      "cap": 6500.0
+    },
+    "initiation_fee_capped": {
+      "cap": 6500.0
+    },
+    "monthly_service_fee": {
+      "flat_fee": 69.0,
+      "cap": 69.0
+    }
+  }
+}
