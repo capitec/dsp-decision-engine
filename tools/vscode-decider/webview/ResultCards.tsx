@@ -72,7 +72,7 @@ export function ResultCards({ c, record, onFocus, onSelect }: { c: Comparison; r
       {noOffer.length > 0 && (
         <details className="no-offer" open={!offered.length}>
           <summary>
-            {noOffer.length} other declined applicant{noOffer.length === 1 ? "" : "s"} had internal values change (no offer affected)
+            Declined, internal values only: {noOffer.length} (no offer affected)
           </summary>
           {noOffer.map(card)}
         </details>
@@ -98,10 +98,10 @@ export function headline(c: Comparison): string | null {
   const reason = c.results.b.reason_code;
   const reasons = reason ? rows.filter((r) => a[r] === "decline" && b[r] === "decline" && !same(c.results.a.reason_code?.[r], reason[r])).length : 0;
   return [
-    decided.length ? `Decisions changed for ${decided.length} of ${c.rows} (${counts})` : `No decision changed`,
-    reasons ? `${reasons} decline${reasons === 1 ? "" : "s"} now for a different reason` : "",
-    offers.length ? `offers changed for ${offers.length} applicant${offers.length === 1 ? "" : "s"}` : "no offer changed",
-    valuesOnly ? `${valuesOnly} other declined applicant${valuesOnly === 1 ? "" : "s"} had internal values change (no offer affected)` : "",
+    `Decisions changed: ${decided.length}${decided.length ? ` (${counts})` : ""}`,
+    `Offers changed: ${offers.length}`,
+    reasons ? `Declines with a new reason: ${reasons}` : "",
+    valuesOnly ? `Declined, internal values only: ${valuesOnly}` : "",
   ]
     .filter(Boolean)
     .join(" · ");

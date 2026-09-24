@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { same, type Comparison } from "../src/compare";
 import { clampNote, Explain } from "./Explain";
+import { header } from "./TableGrid";
 import { formatValue, recordLabel, type CallNodeJson, type ColumnHistory, type ColumnSummary, type Lineage, type RecordKey, type RunStatus } from "../src/protocol";
 
 interface Props {
@@ -67,9 +68,10 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
   useEffect(() => {
     pane.current?.scrollTo(0, 0);
     // A lookup table's answer is its matched row: bring it into view once the pane has laid out.
-    const t = setTimeout(() => pane.current?.querySelector(".table-match")?.scrollIntoView({ block: "start" }), 60);
+    // So is an open breakdown of a value.
+    const t = setTimeout(() => pane.current?.querySelector(".table-match, .how")?.scrollIntoView({ block: "start" }), 60);
     return () => clearTimeout(t);
-  }, [node?.path, path?.row]);
+  }, [node?.path, path?.row, card?.name]);
   const atThis = !!node && run.current?.path === node.path && run.current.when === "before" && !run.finished;
   const name = node?.path.split("/").pop();
   const change = comparison && node ? comparison.steps.find((s) => s.path === node.path && s.status !== "same" && s.status !== "not run") : undefined;
@@ -147,7 +149,7 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
             <div className="muted small mono">{Object.entries(node.params).map(([k, v]) => `${k} = ${formatValue(v, k)}`).join(" · ")}</div>
           )}
           {node.body && node.formulaBefore === undefined && (
-            <details className="step-code" open={node.body.split("\n").length <= 8}>
+            <details className="step-code" open={!card && node.body.split("\n").length <= 8}>
               <summary>code</summary>
               <pre>{node.body}</pre>
             </details>
@@ -158,7 +160,7 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
           {path && table && (
             <>
               <h4>Row for {who}</h4>
-              <TableMatch table={table} visited={path.visited} result={path.result} outputs={node.outputs ?? []} inputs={(node.inputs ?? []).map((i) => `${i} = ${valueOf(i) ?? "?"}`)} />
+              <TableMatch table={table} expression={node.table} visited={path.visited} result={path.result} outputs={node.outputs ?? []} inputs={(node.inputs ?? []).map((i) => `${i} = ${valueOf(i) ?? "?"}`)} />
             </>
           )}
           {path && !table && (
@@ -311,7 +313,7 @@ function sides(c: Comparison, node: CallNodeJson, name: string, value: unknown):
 }
 
 /** Which row of a lookup table a record matched, with the rows around it. */
-function TableMatch({ table, visited, result, outputs, inputs }: { table: { name: string; rows: Record<string, unknown>[] }; visited: string[]; result?: unknown[]; outputs: string[]; inputs: string[] }) {
+function TableMatch({ table, expression, visited, result, outputs, inputs }: { table: { name: string; rows: Record<string, unknown>[] }; expression?: Record<string, unknown> | null; visited: string[]; result?: unknown[]; outputs: string[]; inputs: string[] }) {
   const tried = visited.map(Number).filter((n) => !Number.isNaN(n));
   const last = tried.length ? tried[tried.length - 1] : -1;
   const row = table.rows[last];
@@ -327,14 +329,14 @@ function TableMatch({ table, visited, result, outputs, inputs }: { table: { name
       <div className="muted small">with {inputs.join(", ")}</div>
       {matched && (
         <div className="matched-card">
-          Row {last + 1}: {cols.map((c) => `${c} ${formatValue((row[c] ?? null) as never, c)}`).join(" · ")}
+          Row {last + 1}: {cols.map((c) => `${header(c, expression)} ${formatValue((row[c] ?? null) as never, c)}`).join(" · ")}
         </div>
       )}
       <table className="table-grid">
         <thead>
           <tr>
             <th>#</th>
-            {cols.map((c) => <th key={c}>{c}</th>)}
+            {cols.map((c) => <th key={c}>{header(c, expression)}</th>)}
           </tr>
         </thead>
         <tbody>

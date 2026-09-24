@@ -183,7 +183,7 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
               <th>what</th>
               <th>where</th>
               <th>change</th>
-              <th>records changed</th>
+              <th>records with any value changed</th>
             </tr>
           </thead>
           <tbody>
