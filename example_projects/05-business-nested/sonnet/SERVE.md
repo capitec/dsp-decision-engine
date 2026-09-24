@@ -7,7 +7,7 @@ cd example_projects/05-business-nested/sonnet   # this directory
 export DECIDER_API__CODE_PATH="$PWD"
 export DECIDER_API__PIPELINE="pipeline:build"
 export DECIDER_CONFIG__BASEPATH="$PWD/configs"
-export DECIDER_API__MODE=interpreted   # see "Why interpreted mode" below
+export DECIDER_API__MODE=fused
 export PYTHONPATH="<REPO>/example_projects/00-shared-credit-core/sonnet:<REPO>/example_projects/02-affordability/sonnet"
 ```
 
@@ -23,7 +23,7 @@ locating `assessment/household.py` on `sys.path`.
 uv run --project <REPO> decider build
 ```
 
-Expect: `built config version 0.1.0 (pipeline pipeline:build, mode interpreted)`.
+Expect: `built config version 0.1.0 (pipeline pipeline:build, mode fused)`.
 
 ## Score the sample request
 
@@ -49,19 +49,12 @@ for entity in record["entities"]:
 live.executable.score(record, live.params)
 ```
 
-## Why interpreted mode
+## Mode
 
-`events.py`'s `classify_events_step` and `structure.py`'s `resolve_structure`
-run arbitrary Python per application (ragged entity/event loops, a nested
-`Engine` call for the threshold table) inside a `frame_step` -- `frame_step`s
-run under the interpreted runner regardless of the pipeline's declared mode
-(they are already outside numba's compiled path), and `sole_proprietor.py`'s
-dynamically-loaded nested pipeline call is Python-level I/O (importlib), not
-something a compiled kernel can call into. Inherited from 00/02: the shared
-`core.expense_norms` machinery 02 uses for the sole-proprietor regulated call
-also compares two `str` table-version columns, which compiled (`fused`/
-`stepped`) mode rejects at bind time. `interpreted` is therefore the only mode
-this project (and everything downstream of it) can serve in unchanged.
+Served in `fused` mode: on `sample_request.json` its output equals
+`interpreted` mode's exactly. Steps no kernel can run faithfully (for example
+`credit_core.expense_norms.norm_table_version`, which compares two `str`
+inputs) run in Python, row by row, with a warning naming each at build time.
 
 ## A request must populate every entity's ragged fields explicitly
 

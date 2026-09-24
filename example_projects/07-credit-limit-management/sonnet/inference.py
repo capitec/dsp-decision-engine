@@ -1,12 +1,6 @@
 """Request handling for credit limit management.
 
-Same gap 00 and 02's NOTES.md already document: `decider build`/`decider
-serve`'s built-in warm-up (`decider.serving.handler._warm`) only knows
-`bool`/`int`/`str`/`bytes` and falls back to `1.0` for `date` and `list`
-inputs -- and this pipeline's `decision_date: date`, `cycle_balances:
-list[float]`, `applicant1_bureau_accounts: list[dict]` (via project 02)
-inputs are exactly that shape. Replaced at import time with a warm-up from
-this project's own `sample_request.json`, exactly as 00/02 do.
+Staging warms up with `sample_request.json`.
 """
 from __future__ import annotations
 
@@ -14,7 +8,6 @@ import datetime
 import json
 from pathlib import Path
 
-import decider.serving.handler as _handler
 from decider.serving.handler import RequestHandler
 
 _SAMPLE_REQUEST_PATH = Path(__file__).parent / "sample_request.json"
@@ -36,16 +29,6 @@ def _typed_sample_record() -> dict:
             if account.get("opened_date"):
                 account["opened_date"] = datetime.date.fromisoformat(account["opened_date"])
     return record
-
-
-def _warm_with_sample_record(exe, params) -> None:
-    record = _typed_sample_record()
-    exe.score(record, params)
-    import polars as pl
-    exe.run(pl.DataFrame([record]), params)
-
-
-_handler._warm = _warm_with_sample_record
 
 
 class Handler(RequestHandler):

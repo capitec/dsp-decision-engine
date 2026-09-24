@@ -7,7 +7,7 @@ cd example_projects/03-loan-granting-pricing/sonnet   # this directory
 export DECIDER_API__CODE_PATH="$PWD"
 export DECIDER_API__PIPELINE="pipeline:build"
 export DECIDER_CONFIG__BASEPATH="$PWD/configs"
-export DECIDER_API__MODE=interpreted   # see "Why interpreted mode" below
+export DECIDER_API__MODE=fused
 export PYTHONPATH="<REPO>/example_projects/00-shared-credit-core/sonnet:<REPO>/example_projects/02-affordability/sonnet"
 ```
 
@@ -21,7 +21,7 @@ those two and `decider` itself.
 uv run --project <REPO> decider build
 ```
 
-Expect: `built config version 0.1.0 (pipeline pipeline:build, mode interpreted)`.
+Expect: `built config version 0.1.0 (pipeline pipeline:build, mode fused)`.
 The first build takes a few seconds while the Flex Loan rate card's 63 360
 rows are staged, indexed for the solve (`loan_granting/pricing.py`'s
 `RateCardIndex`) and warmed (see `inference.py`).
@@ -80,15 +80,12 @@ sends `[0]` (a "no hit" sentinel this project's own code filters out --
 by hand needs to follow the same pattern for every ragged field it might
 otherwise send empty.
 
-## Why interpreted mode
+## Mode
 
-Inherited from 00/02: `credit_core.expense_norms.norm_table_version`
-(reused unmodified inside the affordability call) compares two `str`
-table-version columns, which compiled (`fused`/`stepped`) mode rejects at
-bind time. This project also has its own reason to prefer interpreted mode
-even setting that aside: the solve and the cap waterfall (`solve.py`,
-`waterfall.py`) are plain Python functions inside `frame_step`s, not
-compiled kernels, so `fused`/`stepped` buys nothing for them regardless.
+Served in `fused` mode: on `sample_request.json` its output equals
+`interpreted` mode's exactly. Steps no kernel can run faithfully (for example
+`credit_core.expense_norms.norm_table_version`, which compares two `str`
+inputs) run in Python, row by row, with a warning naming each at build time.
 
 ## Run the tests
 

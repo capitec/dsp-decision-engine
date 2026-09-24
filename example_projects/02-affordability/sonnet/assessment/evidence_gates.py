@@ -19,7 +19,7 @@ MORTGAGE_PRODUCTS = frozenset({40})
 
 
 def bureau_is_stale(
-    decision_date: date, product_code: int = missing_as(-1), bureau_as_of_date: date | None = None,
+    decision_date: date, product_code: float = missing_as(-1.0), bureau_as_of_date: date | None = None,
     staleness_window_days: int = param(7, ge=1, le=60),
     staleness_window_days_mortgage: int = param(14, ge=1, le=60),
 ) -> bool:

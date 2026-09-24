@@ -21,6 +21,8 @@ rather than a nested `list[list[int]]` column, for the same reason.
 from __future__ import annotations
 
 import time
+from datetime import date
+from typing import Any
 
 from decider import frame_step
 
@@ -251,4 +253,6 @@ def build_orchestration_step(rate_card_flex_loan, product11_rows: list[dict] | N
         results = [_run(row, rate_card_flex_loan, product11_rows) for row in df.select(_READS).to_dicts()]
         return df.with_columns(pl.DataFrame(results))
 
-    return frame_step(run, reads=_READS, writes=_WRITES)
+    # Typed so a served JSON request's date strings arrive as dates.
+    reads = {**dict.fromkeys(_READS, Any), "decision_date": date, "bureau_as_of_date": date | None}
+    return frame_step(run, reads=reads, writes=_WRITES)

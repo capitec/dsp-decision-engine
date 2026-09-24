@@ -7,7 +7,7 @@ cd example_projects/02-affordability/sonnet   # this directory
 export DECIDER_API__CODE_PATH="$PWD"
 export DECIDER_API__PIPELINE="pipeline:build"
 export DECIDER_CONFIG__BASEPATH="$PWD/configs"
-export DECIDER_API__MODE=interpreted   # see "Why interpreted mode" below
+export DECIDER_API__MODE=fused
 export PYTHONPATH="<REPO>/example_projects/00-shared-credit-core/sonnet"
 ```
 
@@ -20,7 +20,7 @@ here imports from anywhere but `credit_core` and `decider` itself.
 uv run --project <REPO> decider build
 ```
 
-Expect: `built config version 0.1.0 (pipeline pipeline:build, mode interpreted)`.
+Expect: `built config version 0.1.0 (pipeline pipeline:build, mode fused)`.
 
 ## Score the sample request
 
@@ -49,12 +49,12 @@ for key in ("applicant1_bureau_accounts", "applicant1_internal_accounts",
 live.executable.score(record, live.params)
 ```
 
-## Why interpreted mode
+## Mode
 
-Inherited from 00: `credit_core.expense_norms.norm_table_version` (used
-unmodified here) compares two `str` table-version columns, which compiled
-(`fused`/`stepped`) mode rejects at bind time. See 00's SERVE.md /
-NOTES.md for the full writeup.
+Served in `fused` mode: on `sample_request.json` its output equals
+`interpreted` mode's exactly. Steps no kernel can run faithfully (for example
+`credit_core.expense_norms.norm_table_version`, which compares two `str`
+inputs) run in Python, row by row, with a warning naming each at build time.
 
 ## A request must populate every applicant's ragged fields explicitly
 

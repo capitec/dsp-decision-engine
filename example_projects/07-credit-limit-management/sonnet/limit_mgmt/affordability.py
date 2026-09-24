@@ -65,7 +65,7 @@ _MIN_PAYMENT_FLOOR = {20: 100.0, 21: 50.0}
 
 
 def notional_instalment(
-    policy_proposed_limit: float, product_code: int,
+    policy_proposed_limit: float, product_code: float,
 ) -> float:
     """§5.6: "the commitment the client would carry if the facility were drawn to the
     new limit and serviced at the contractual minimum payment"."""
@@ -227,7 +227,7 @@ def increase_path_code(
 increase_path_code_step = step(increase_path_code)
 
 
-def affordability_cap(policy_proposed_limit: float, max_affordable_instalment: float, product_code: int) -> float:
+def affordability_cap(policy_proposed_limit: float, max_affordable_instalment: float, product_code: float) -> float:
     """C7 (§5.5): the limit the affordable notional instalment implies -- the inverse of
     `notional_instalment`, floored so C7 never exceeds what §5.5's other caps already
     allowed (C7 only ever tightens further, never loosens the policy caps)."""

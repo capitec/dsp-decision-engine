@@ -88,7 +88,7 @@ def resolve_path_position(
     previous_bucket: int = missing_as(0),
     previous_intensity_ceiling: int = missing_as(0),
     previous_channel_attempt_count: int = missing_as(0),
-    times_cured_12m: int = missing_as(0),
+    times_cured_12m: float = missing_as(0.0),
     qualifying_payment: bool = missing_as(False),
     promise_captured: bool = missing_as(False),
     cured: bool = missing_as(False),

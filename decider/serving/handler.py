@@ -229,7 +229,7 @@ class RequestHandler:
 
 
 def _inputs(exe: Executable) -> list:
-    return [v for v in exe.plan.versions if v.producer is None]
+    return list(exe.plan.inputs)
 
 
 def _dates(exe: Executable) -> dict[str, t.Any]:
