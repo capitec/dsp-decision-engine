@@ -1998,3 +1998,24 @@ aside {
     height: 28vh;
   }
 }
+
+.pause-banner {
+  line-height: 1.6;
+}
+.pause-banner .edit-chip {
+  margin: 0 3px;
+  font-size: 0.9em;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  main:not(.detailed) .graph {
+    flex: 1;
+    height: auto;
+  }
+}
+
+.result-line.internal {
+  padding-left: 16px;
+  opacity: 0.75;
+}
