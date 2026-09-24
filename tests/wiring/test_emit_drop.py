@@ -129,3 +129,9 @@ def test_emit_of_an_unknown_path_suggests_the_nearest_relative_or_absolute_one()
         resolve(term.emit("term_cap@term/cap_by_incme"))
     with pytest.raises(ValueError, match="Did you mean 'cap_by_income'"):
         resolve(term.emit("term_cap@cap_by_incme"))
+
+
+def test_emit_of_an_input_column_nothing_reads_is_accepted_and_required():
+    plan = resolve(flow(a, b).emit("client_id"))
+    assert plan.outputs["client_id"].producer is None
+    assert "client_id" in [i.name for i in plan.inputs]

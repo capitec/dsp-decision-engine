@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
-from decider.engine.params import NodeParams, ParamsCache, ParamsError, Status, bundle_class, document_key
-from decider.registry.resolve import hint
+# check_namespaces is re-exported: it lives with the rest of params validation.
+from decider.engine.params import NodeParams, ParamsCache, Status, bundle_class, check_namespaces, document_key  # noqa: F401
 
 _NO_PARAMS = bundle_class(())()
 _EMPTY_KEY = document_key({})
@@ -64,37 +64,4 @@ class RunParams:
         if result.status is Status.INVALID:
             self.report.invalid.append(node.path)
         return result.check(rows=rows).bundle
-
-
-def check_namespaces(doc: Mapping[str, Any], nodes: dict[int, NodeParams]) -> None:
-    """Raise `ParamsError` for any entry of `doc` that names no step with params, or no shared key.
-
-    Example::
-
-        check_namespaces({"kap": {"cap": 12.0}}, nodes)   # ParamsError: ... Did you mean 'cap'?
-    """
-    if not isinstance(doc, Mapping):
-        raise ParamsError(f"a params document is a mapping of step paths, got {type(doc).__name__}")
-    paths = {n.path for n in nodes.values()}
-    shared = {d.shared_key for n in nodes.values() for d in n.decls if d.shared_key is not None}
-    given = doc.get("shared", {})
-    for key in given if isinstance(given, Mapping) else ():
-        if key not in shared:
-            raise ParamsError(f"params document: no step uses shared param '{key}'.{hint(key, shared)}")
-    _walk({k: v for k, v in doc.items() if k != "shared"}, "", paths)
-
-
-def _walk(level: Mapping[str, Any], prefix: str, paths: set[str]) -> None:
-    for key, sub in level.items():
-        path = prefix + key
-        if path in paths:
-            continue
-        if isinstance(sub, Mapping) and any(p.startswith(path + "/") for p in paths):
-            _walk(sub, path + "/", paths)
-            continue
-        siblings = {p[len(prefix):].split("/")[0] for p in paths if p.startswith(prefix)}
-        raise ParamsError(
-            f"params document: no step with params at '{path}'."
-            + hint(key, siblings, prefix)
-        )
 
