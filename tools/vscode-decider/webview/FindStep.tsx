@@ -3,6 +3,13 @@ import type { CallNodeJson } from "../src/protocol";
 
 const MAX_HITS = 12;
 
+/** The branch arm a step sits in (e.g. "personal_loan"), which tells same-named rules apart. */
+const tagOf = (path: string) => {
+  const parts = path.split("/");
+  const i = parts.indexOf("product");
+  return i >= 0 && parts[i + 1] && i + 1 < parts.length - 1 ? parts[i + 1] : "";
+};
+
 /** Steps whose name, description or group matches every word of `query`, best first. */
 export function findSteps(nodes: CallNodeJson[], query: string): CallNodeJson[] {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
@@ -78,6 +85,7 @@ export function FindStep({ nodes, onPick, selected }: { nodes: CallNodeJson[]; o
         <ul className="find-hits" role="listbox">
           {hits.slice(0, MAX_HITS).map((n, i) => (
             <li key={n.path} role="option" aria-selected={i === at} className={i === at ? "at" : ""} onMouseDown={() => pick(i)}>
+              {tagOf(n.path) && <span className="tag">{tagOf(n.path)}</span>}
               <strong>{n.path.slice(n.path.lastIndexOf("/") + 1)}</strong>
               {n.doc && <span> · {n.doc}</span>}
               <div className="muted small">in {n.path.slice(0, n.path.lastIndexOf("/"))}</div>

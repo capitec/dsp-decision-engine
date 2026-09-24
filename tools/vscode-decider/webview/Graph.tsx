@@ -176,5 +176,5 @@ function curve(a: LaidNode, b: LaidNode): string {
 
 /** Shortened to fit on a node; the node's tooltip has the whole text. */
 function fit(text: string): string {
-  return text.length > 44 ? `${text.slice(0, 43)}…` : text;
+  return text.length > 38 ? `${text.slice(0, 37)}…` : text;
 }

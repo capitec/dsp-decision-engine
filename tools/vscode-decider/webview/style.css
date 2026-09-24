@@ -2045,3 +2045,49 @@ table.sweep.grid td.changed.tint-up {
 table.sweep.grid td.changed.tint-down {
   box-shadow: inset 4px 0 0 rgba(234, 92, 0, 0.9);
 }
+
+table.explain-summary {
+  border-collapse: collapse;
+  margin: 4px 0 8px;
+}
+table.explain-summary td {
+  padding: 1px 10px 1px 0;
+  vertical-align: baseline;
+}
+table.explain-summary td.num {
+  text-align: right;
+  white-space: nowrap;
+}
+table.explain-summary tr.total td {
+  border-top: 1px solid var(--vscode-panel-border);
+  font-weight: 600;
+}
+table.explain-summary tr.zero td {
+  opacity: 0.6;
+}
+table.explain-summary tr.limit td:first-child {
+  padding-left: 12px;
+}
+.pause-banner select {
+  width: auto;
+  max-width: 16em;
+}
+input[list]::-webkit-calendar-picker-indicator {
+  display: none !important;
+}
+table.sweep.grid td.changed.tint-up {
+  background: rgba(55, 148, 255, 0.1);
+}
+table.sweep.grid td.changed.tint-down {
+  background: rgba(234, 92, 0, 0.1);
+}
+.find-hits .tag {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 0.85em;
+  font-weight: 600;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}

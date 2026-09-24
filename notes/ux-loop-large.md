@@ -24,6 +24,7 @@ goal isn't visibly met caps at 5). The loop stops above 8/10 or after 40 rounds.
 | 14 | 7.6 | 8 | 8 | 7 | 8 | 7 | 8 | 7 |
 | 15 | 7.7 | 8 | 8 | 7 | 8 | 7 | 8 | 8 |
 | 16 | 7.8 | 8 | 8.5 | 7 | 8 | 7 | 8.5 | 7.5 |
+| 17 | 7.8 | 8 | 8 | 7.5 | 8.5 | 6.5 | 8.5 | 7.5 |
 
 ## Round 0 (baseline)
 
@@ -432,3 +433,26 @@ Judge's problems, most damaging first:
 10. L1: the four find hits look identical but for grey path text.
 11. Node labels spill out of their boxes.
 12. Group boundaries nearly invisible on the graph.
+
+## Round 17
+
+Changes: the rate breakdown opens with a summary table (each part with its matched table row, the zeros folded into
+one row, the raw total, each cap and floor with its headroom, the final value) under "Why pl_rate = 25.2% for
+client_id 20400 · last written by pl_rate_floor"; the explain picker keeps its choice and fits the banner; a swapped
+step can be put back ("Use original code", a new bridge `restore`); plainer names ("Still declined, internal values
+changed"), that group folded; find hits carry their product as a tag; both knob pickers look the same.
+
+Judge's problems, most damaging first:
+
+1. L5: the sweep grid's offer figures include declined applicants (a correctness problem, not just layout).
+2. The editor beside the panel is ~300px; opened code is unreadable.
+3. L3: the explanation starts below the fold and is cut off on the right.
+4. The graph is ~190px tall while explaining.
+5. L7: a skipped step can't be restored.
+6. L7: "nothing changed" with no reason.
+7. Explain needs a debug pause.
+8. Table changes say "row 3", not the term band.
+9. Step by step is mostly declined records' internal values.
+10. Dotted data edges unexplained.
+11. No book-level totals per scenario.
+12. The banner wraps with edit chips.

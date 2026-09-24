@@ -144,7 +144,12 @@ export function App() {
           break;
         case "edited":
           setCodeDiff(m.diff);
-          setFormulas((f) => ({ ...f, [m.path]: m.formula }));
+          setFormulas((f) => {
+            const next = { ...f };
+            if (m.restored) delete next[m.path];
+            else next[m.path] = m.formula;
+            return next;
+          });
           break;
         case "select":
           setSelected(m.path);
@@ -265,7 +270,7 @@ export function App() {
               <select
                 aria-label="explain"
                 title="How was a value computed for this record? Pick one to see its breakdown on the step that wrote it"
-                value=""
+                value={column && columns.some((c) => c.name === column) ? column : ""}
                 onChange={(e) => {
                   if (!e.target.value) return;
                   explainNext.current = e.target.value;
@@ -469,6 +474,11 @@ export function App() {
               setPending(`Skipping ${path.split("/").pop()} and re-running from there…`);
               noteNext.current = `Skipped ${path.split("/").pop()}; re-ran from there, keeping everything before it.`;
               send({ type: "skip", path });
+            }}
+            onRestore={(path) => {
+              setPending(`Putting the original ${path.split("/").pop()} back and re-running from there…`);
+              noteNext.current = `Put the original ${path.split("/").pop()} back; continue to run it.`;
+              send({ type: "restore", path });
             }}
             onReload={(path) => {
               setPending(`Reloading ${path.split("/").pop()} and re-running from there…`);

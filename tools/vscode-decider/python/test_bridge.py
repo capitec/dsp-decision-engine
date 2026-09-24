@@ -241,6 +241,20 @@ def test_an_edited_step_is_swapped_in_mid_run(tmp_path):
     assert b.session.output()["term_cap"].to_list() == [47.0, 35.0]  # record 1's missing salary fills as 0, so the edit hits it too
 
 
+def test_a_swapped_step_can_be_put_back(tmp_path):
+    loan = tmp_path / "loan.py"
+    loan.write_text(open(LOAN).read())
+    b = Bridge()
+    b.start(str(loan), breakpoints=["term/cap_by_income"])
+    b.handle({"cmd": "resume"})
+    loan.write_text(loan.read_text().replace("return min(term_cap, cap) if", "return min(term_cap, cap) - 1 if"))
+    b.handle({"cmd": "reload_step", "path": "term/cap_by_income"})
+    b.handle({"cmd": "restore", "path": "term/cap_by_income"})
+    assert b.handle({"cmd": "resume"})["finished"]
+    assert b.session.output()["term_cap"].to_list() == [48.0, 36.0]
+    assert b.edits == []
+
+
 def test_skipping_the_only_producer_is_refused_and_changes_nothing():
     b = started(breakpoints=["term/cap_by_income"])
     b.handle({"cmd": "resume"})

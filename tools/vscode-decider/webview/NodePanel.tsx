@@ -28,6 +28,7 @@ interface Props {
   values: Record<string, unknown>;
   onSkip: (path: string) => void;
   onReload: (path: string) => void;
+  onRestore: (path: string) => void;
 }
 
 /** A decision table's rows, when `node` is one whose rows are a shared param. */
@@ -39,7 +40,7 @@ function tableOf(node: CallNodeJson, values: Record<string, unknown>): { name: s
 }
 
 /** The details pane: the selected step, then the picked column's lineage and history. */
-export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, lineage, history, treePath, onPick, onSelect, onReveal, onRewind, onRunTo, onStep, comparison, onOpenDiff, values, onSkip, onReload }: Props) {
+export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, lineage, history, treePath, onPick, onSelect, onReveal, onRewind, onRunTo, onStep, comparison, onOpenDiff, values, onSkip, onReload, onRestore }: Props) {
   const visits = node && run.visits[node.path];
   const who = run.record === null ? null : recordLabel(run.record, keyCol);
   const valueOf = (name: string) => {
@@ -155,7 +156,16 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
             </details>
           )}
           {run.edits?.[node.path] && (
-            <div className="edited-note">{run.edits[node.path] === "delete" ? "Skipped in this run: the steps after it ran without it." : "Running your edited code in this run."}</div>
+            <div className="edited-note">
+              {run.edits[node.path] === "delete" ? (
+                "Skipped in this run: the steps after it ran without it. Restart the run to include it again."
+              ) : (
+                <>
+                  Running your edited code in this run.{" "}
+                  {paused && <button onClick={() => onRestore(node.path)} title="Swap the code the run started with back in, and re-run from here">Use original code</button>}
+                </>
+              )}
+            </div>
           )}
           {path && table && (
             <>
