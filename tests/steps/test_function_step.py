@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import dataclasses
 
+import polars as pl
 import pytest
 
 from decider import dag, engine, flow, param, step
 from decider.engine.ir.decls import NullPolicy
+from decider.exceptions import ParamsError
 from decider.steps import FunctionStep, as_step
 
 
@@ -122,6 +124,21 @@ def test_bind_sets_a_params_default_without_touching_the_original():
     decl = engine.to_ir(bound).params[0]
     assert decl.field_info.default == 36.0
     assert decl.field_info.metadata == engine.to_ir(s).params[0].field_info.metadata
+
+
+@pytest.mark.parametrize("mode", ("interpreted", "stepped", "fused"))
+def test_a_bound_value_changes_the_answer_of_run_and_score(mode):
+    exe = engine.Engine().bind(flow(step(cap_by_income_band).bind(cap=12.0)), mode)
+    frame = pl.DataFrame({"term_cap": [60.0, 60.0], "min_net_salary": [4000.0, 4000.0]})
+    assert exe.run(frame)["cap_by_income_band"].to_list() == [12.0, 12.0]
+    assert exe.score({"term_cap": 60.0, "min_net_salary": 4000.0})["cap_by_income_band"] == 12.0
+
+
+@pytest.mark.parametrize("mode", ("interpreted", "stepped", "fused"))
+def test_a_bound_value_outside_the_params_bounds_is_rejected(mode):
+    exe = engine.Engine().bind(flow(step(cap_by_income_band).bind(cap=999.0)), mode)
+    with pytest.raises(ParamsError, match="cap"):
+        exe.run(pl.DataFrame({"term_cap": [60.0], "min_net_salary": [4000.0]}))
 
 
 def test_bind_rejects_an_unknown_param():
