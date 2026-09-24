@@ -57,7 +57,8 @@ export function App() {
   // What the last skip or swap did, said in the pause banner until the run moves on.
   const [note, setNote] = useState<string>();
   const noteNext = useRef<string | undefined>(undefined);
-  const explainNext = useRef<string | undefined>(undefined);
+  // The value picked with "explain a value": its breakdown stays open whichever step is selected.
+  const [explained, setExplained] = useState<string>();
   const [codeDiff, setCodeDiff] = useState<string[]>([]);
   const [editsOpen, setEditsOpen] = useState(false);
   // Steps whose code was swapped mid-run: path -> the formula now running.
@@ -121,12 +122,6 @@ export function App() {
         case "lineage":
           setLineage(m.lineage);
           setHistory(m.history);
-          // "Explain a value" opens the breakdown on the step that wrote it.
-          if (m.lineage && m.lineage.name === explainNext.current && m.lineage.producer) {
-            setSelected(m.lineage.producer);
-            setTab("graph");
-            explainNext.current = undefined;
-          }
           break;
         case "treePath":
           setTreePath(m);
@@ -179,7 +174,7 @@ export function App() {
 
   // A lineage card about a column the newly selected step doesn't touch is stale; close it.
   useEffect(() => {
-    if (column && selectedNode && !(selectedNode.inputs ?? []).includes(column) && !(selectedNode.outputs ?? []).includes(column)) setColumn(undefined);
+    if (column && column !== explained && selectedNode && !(selectedNode.inputs ?? []).includes(column) && !(selectedNode.outputs ?? []).includes(column)) setColumn(undefined);
   }, [selected]);
 
   // A tree's path for the focused record, once the tree has run.
@@ -270,11 +265,11 @@ export function App() {
               <select
                 aria-label="explain"
                 title="How was a value computed for this record? Pick one to see its breakdown on the step that wrote it"
-                value={column && columns.some((c) => c.name === column) ? column : ""}
+                value={explained ?? ""}
                 onChange={(e) => {
-                  if (!e.target.value) return;
-                  explainNext.current = e.target.value;
-                  setColumn(e.target.value);
+                  setExplained(e.target.value || undefined);
+                  setColumn(e.target.value || undefined);
+                  setTab("graph");
                 }}
               >
                 <option value="">explain a value…</option>
@@ -458,7 +453,10 @@ export function App() {
             lineage={lineage}
             history={history}
             treePath={shownTreePath}
-            onPick={setColumn}
+            onPick={(name) => {
+              setExplained(undefined);
+              setColumn(name);
+            }}
             onSelect={setSelected}
             onReveal={(path) => send({ type: "reveal", path })}
             onRewind={(path) => send({ type: "rewind", path })}

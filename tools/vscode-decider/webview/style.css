@@ -2099,3 +2099,28 @@ table.explain-summary td.muted {
   white-space: normal;
   overflow-wrap: anywhere;
 }
+
+/* A wide panel: the graph on the left, the details as a wide column beside it. */
+@media (min-width: 761px) {
+  aside {
+    width: 42%;
+    min-width: 320px;
+    max-width: 640px;
+  }
+  main .graph {
+    flex: 1;
+    height: auto;
+  }
+}
+
+.tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tile {
+  padding: 2px 8px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  background: var(--vscode-editorWidget-background);
+}

@@ -232,7 +232,10 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
   const knobCols = sweep.knobs.length ? sweep.knobs : [{ name: "scenario", values: sweep.labels }];
   const summary = row === -1;
   const each = row === -2;
-  const cols = summary ? [...outcomes, ...changedCols.filter((c) => categorical(sweep.base?.[c])), ...changedCols.filter((c) => !categorical(sweep.base?.[c]))] : changedCols;
+  const fewValues = (c: string) => new Set(sweep.base?.[c] ?? []).size <= 4;
+  const cols = summary
+    ? [...outcomes, ...changedCols.filter((c) => categorical(sweep.base?.[c]) && fewValues(c)), ...changedCols.filter((c) => !categorical(sweep.base?.[c]))]
+    : changedCols;
   // Side by side, the records some scenario changed come first; a few fit.
   const hit = (r: number) => sweep.comparisons.some((cmp) => cmp.output.some((o) => o.changedRows.includes(r)));
   const everyRow = Array.from({ length: rows }, (_, i) => i);
@@ -270,6 +273,10 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
   };
   const [metric, setMetric] = useState<string>();
   const hasDecision = !!sweep.base?.decision;
+  // A scenario that moved no offered applicant anywhere: one line for the cell, not one per metric.
+  const changedIn = (i: number) => [...new Set(sweep.comparisons[i].output.flatMap((o) => o.changedRows))];
+  const noOfferIn = (i: number) => hasDecision && changedIn(i).length > 0 && offeredRows(i, changedIn(i)).length === 0;
+  const declinedIn = (i: number) => changedIn(i).length;
   const offeredRows = (i: number, rows: number[]) =>
     hasDecision ? rows.filter((r) => sweep.outputs[i]?.decision?.[r] !== "decline" || sweep.base?.decision?.[r] !== "decline") : rows;
   const delta = (c: string, i: number, changedRows: number[]) => {
@@ -333,7 +340,7 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
     const offered = offeredRows(i, diff.changedRows);
     const declinedOnly = diff.changedRows.length - offered.length;
     if (!offered.length) return `no offer changed (${declinedOnly} declined only)`;
-    return `${delta(c, i, offered)} on ${offered.length} applicant${offered.length === 1 ? "" : "s"}${declinedOnly ? ` · ${declinedOnly} declined only` : ""}`;
+    return `${delta(c, i, offered)} on ${offered.length} applicant${offered.length === 1 ? "" : "s"}`;
   };
   // A knob whose values never change a result, whatever the other knobs are set to.
   const idleKnobs = knobCols
@@ -357,7 +364,7 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
     const rows = [...new Set(sweep.comparisons[i].output.flatMap((o) => o.changedRows))];
     return rows.length ? `\nchanged: ${recordsOf(rows)}` : "";
   };
-  const example = grid ? sweep.labels.map((_, i) => cellText(i, shownMetric)).find((t) => t !== "no change") : undefined;
+  const example = grid ? sweep.labels.map((_, i) => cellText(i, shownMetric)).find((t) => t !== "no change" && !t.startsWith("no offer")) : undefined;
   const matrix = grid && (
     <div className="sweep-scroll">
       {outcomes.map((c) => (
@@ -366,14 +373,14 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
         </div>
       ))}
       <div className="muted small">
-        Original run: {cols.filter((c) => !outcomes.includes(c)).map((c) => `${c} ${overall(sweep.base?.[c], undefined, c)}`).join(" · ")}
+        Original run: {cols.filter((c) => !outcomes.includes(c) && !categorical(sweep.base?.[c])).map((c) => `${c} ${overall(sweep.base?.[c], undefined, c)}`).join(" · ")}
         {tintBy && <> · shaded by {tintBy}: <span className="tint-up-key">up</span> <span className="tint-down-key">down</span>; hover a cell for the applicants</>}
       </div>
       <table className="sweep grid">
         <thead>
           <tr>
-            <th className="axes">{knobShort(knobCols[0].name)} ↓</th>
-            <th className="axes" colSpan={uniq(knobCols[1].values).length}>{knobShort(knobCols[1].name)} →</th>
+            <th className="axes" title={knobCols[0].name}>{knobShort(knobCols[0].name).split(" ")[0]} ↓</th>
+            <th className="axes" title={knobCols[1].name} colSpan={uniq(knobCols[1].values).length}>{knobShort(knobCols[1].name).split(" ")[0]} →</th>
           </tr>
           <tr>
             <th />
@@ -401,12 +408,19 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
                     {isCurrent(i) && <div className="current-tag">the current setting</div>}
                     {cols.every((c) => cellText(i, c) === "no change") ? (
                       <div className="muted">no change</div>
+                    ) : noOfferIn(i) ? (
+                      <div className="muted">no offer changed · internal values moved for {declinedIn(i)} declined applicant{declinedIn(i) === 1 ? "" : "s"}</div>
                     ) : (
-                      cols.filter((c) => !outcomes.includes(c)).map((c) => (
-                        <div key={c} className={cellText(i, c) === "no change" ? "muted" : ""}>
-                          <span className="muted small">{c}</span> <span className="mono">{cellText(i, c)}</span>
-                        </div>
-                      ))
+                      <>
+                        {cols.filter((c) => !outcomes.includes(c)).map((c) => (
+                          <div key={c} className={cellText(i, c) === "no change" ? "muted" : ""}>
+                            <span className="muted small">{c}</span> <span className="mono">{cellText(i, c)}</span>
+                          </div>
+                        ))}
+                        {changedIn(i).length > offeredRows(i, changedIn(i)).length && (
+                          <div className="muted small">and internal values of {changedIn(i).length - offeredRows(i, changedIn(i)).length} declined applicants</div>
+                        )}
+                      </>
                     )}
                   </td>
                 );

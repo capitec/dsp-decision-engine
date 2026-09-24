@@ -186,13 +186,12 @@ export function summaryRows(entry: Lineage, nodes: CallNodeJson[], values: Recor
     const zeros: string[] = [];
     terms.forEach(([sign, name], k) => {
       const p = part(name);
-      if (p?.value === 0) return void zeros.push(name);
+      if (p?.value === 0) zeros.push(name);
       const from = nodes.find((x) => x.path === p?.producer);
       const tableRows = from?.table ? (Object.keys(from.params).map((q) => shared(values)[q]).find(Array.isArray) as Record<string, unknown>[] | undefined) : undefined;
       const match = from?.table && tableRows && p?.inputs[0] ? matchRow(from.table, tableRows, p.inputs[0].value) : null;
-      rows.push({ label: name, value: `${k === 0 ? "" : sign === "-" ? "− " : "+ "}${formatValue(p?.value as never, name)}`, note: match ? `row ${match[0] + 1}: ${match[1]}` : undefined, kind: "part" });
+      rows.push({ label: name, value: `${k === 0 ? "" : sign === "-" ? "− " : "+ "}${formatValue(p?.value as never, name)}`, note: match ? `row ${match[0] + 1}: ${match[1]}` : undefined, kind: p?.value === 0 ? "zero" : "part" });
     });
-    if (zeros.length) rows.push({ label: `${zeros.length} other part${zeros.length === 1 ? "" : "s"}`, value: "0", note: zeros.join(", "), kind: "zero" });
     rows.push({ label: `= ${at.name}`, value: formatValue(at.value, at.name), kind: "total" });
     return [...rows, ...limits, { label: `= ${entry.name}`, value: formatValue(entry.value, entry.name), kind: "total" }];
   }

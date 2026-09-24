@@ -50,6 +50,8 @@ describe("decider in VSCodium", () => {
     await c.page.locator(".quick-input-widget .quick-input-list .monaco-list-row", { hasText: "SAMPLE" }).click();
     const wv = c.webview();
     await wv.locator(".pause-banner", { hasText: "before the start" }).waitFor({ timeout: 60_000 });
+    // Keys typed while the webview has focus stay in it; give the editor focus for F5.
+    await c.page.locator(".tab", { hasText: "loan.py" }).first().click();
     await c.page.keyboard.press("F5");
     await wv.locator(".pause-banner", { hasText: "cap_public" }).waitFor({ timeout: 30_000 });
     await wv.locator("select[aria-label=record]").selectOption("1");

@@ -172,7 +172,7 @@ describe("sums as waterfalls", () => {
 });
 
 describe("a rate's summary", () => {
-  it("lists the parts, folds the zeros, then each limit and the final value", () => {
+  it("lists every part, zeros marked, then each limit and the final value", () => {
     const node = (path: string, formula: string, params: Record<string, unknown> = {}) => ({ kind: "call", path, source: "", file: null, line: null, callKind: "scalar", inputs: [], outputs: [], params, python: null, code: "", formula });
     const nodes = [
       node("p/raw", "base + loading - discount"),
@@ -189,8 +189,8 @@ describe("a rate's summary", () => {
     const rows = summaryRows(floored, nodes as never, {})!;
     expect(rows.map((r) => [r.kind, r.label, r.value])).toEqual([
       ["part", "base", "0.255"],
+      ["zero", "loading", "+ 0%"],
       ["part", "discount", "− 0.1%"],
-      ["zero", "1 other part", "0"],
       ["total", "= raw_rate", "25.4%"],
       ["limit", "cap (cap)", "28.75%"],
       ["limit", "floor (floor)", "10.75%"],
