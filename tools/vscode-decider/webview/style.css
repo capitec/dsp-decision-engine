@@ -1892,3 +1892,63 @@ aside .wrote .clamp {
 .scenarios .knob .knob-echo {
   grid-column: 1 / -1;
 }
+
+table.sweep.grid td {
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+table.sweep.grid td > div {
+  line-height: 1.35;
+}
+
+.how {
+  scroll-margin-top: 110px;
+}
+@media (max-width: 760px) {
+  main.detailed.explaining .graph {
+    height: 20vh;
+  }
+}
+
+.matched-card {
+  margin: 4px 0;
+  padding: 4px 8px;
+  font-weight: 600;
+  border-left: 3px solid var(--vscode-focusBorder);
+  background: var(--vscode-editor-findMatchHighlightBackground, rgba(234, 92, 0, 0.2));
+}
+
+details.step-code summary {
+  cursor: pointer;
+  color: var(--vscode-descriptionForeground);
+}
+details.step-code pre {
+  margin: 2px 0 6px;
+  padding: 4px 6px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.9em;
+  background: var(--vscode-textCodeBlock-background, rgba(127, 127, 127, 0.1));
+}
+
+.node.edited-replace rect {
+  stroke: var(--vscode-charts-purple, #b180d7);
+  stroke-width: 2.5;
+  stroke-dasharray: none;
+}
+.node.edited-delete rect {
+  stroke: var(--vscode-charts-purple, #b180d7);
+}
+.node text.edit-mark {
+  fill: var(--vscode-charts-purple, #b180d7);
+}
+
+.pause-banner .edit-chip {
+  border-color: var(--vscode-charts-purple, #b180d7);
+}
+
+.result-line a.why {
+  cursor: pointer;
+  color: var(--vscode-textLink-foreground);
+}

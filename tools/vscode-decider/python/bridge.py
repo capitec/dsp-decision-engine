@@ -116,6 +116,15 @@ def _first_statement(fn):
         return None
 
 
+def _short_source(fn, limit=15):
+    """A step function's source when it is short enough to read in the details pane."""
+    try:
+        lines = textwrap.dedent(inspect.getsource(fn)).rstrip().splitlines()
+    except (OSError, TypeError):
+        return None
+    return "\n".join(lines) if len(lines) <= limit else None
+
+
 def _values_file(file):
     """The file a module's `PARAMS = ...` reads, when that line names one: `json.loads(... / "params.json" ...)`."""
     for line in Path(file).read_text().splitlines():
@@ -178,6 +187,7 @@ def node_json(node, steps, located):
                 "params": {d.name: d.default for d in node.params}, "code": _fingerprint(python, step_),
                 "doc": (inspect.getdoc(python) or "").split("\n")[0],
                 "formula": _formula(python) if isinstance(step_, FunctionStep) else None,
+                "body": _short_source(python) if isinstance(step_, FunctionStep) else None,
                 "table": step_.expression.model_dump(mode="json") if hasattr(step_, "expression") and hasattr(step_, "rows") else None,
                 "python": {"file": rf, "line": rl, "bodyLine": _first_statement(python)} if rf else None}
     kind = "branch" if isinstance(node, BranchNode) else "loop" if isinstance(node, LoopNode) else "sequence"
