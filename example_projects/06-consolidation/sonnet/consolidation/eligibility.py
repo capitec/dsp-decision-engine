@@ -8,6 +8,9 @@ CON-ELIG-04 depends on §5.2's settleable count, so this step runs *after*
 """
 from __future__ import annotations
 
+from datetime import date
+from typing import Any
+
 from decider import frame_step
 
 import polars as pl
@@ -91,9 +94,11 @@ def _evaluate(row: dict) -> dict:
     }
 
 
+# Typed so a served JSON request's date strings arrive as dates.
 @frame_step(
-    reads=["decision_date", "client_under_debt_review", "client_under_administration", "last_consolidation_date",
-           "settleable_count", "income_verified", "bureau_unobtainable", "active_reckless_lending_allegation"],
+    reads={"decision_date": date, "client_under_debt_review": Any, "client_under_administration": Any,
+           "last_consolidation_date": date | None, "settleable_count": Any, "income_verified": Any,
+           "bureau_unobtainable": Any, "active_reckless_lending_allegation": Any},
     writes=["eligibility_gate_ids", "eligibility_gate_verdicts", "eligibility_route", "is_eligible_for_search"],
 )
 def eligibility_gates(df: pl.DataFrame) -> pl.DataFrame:

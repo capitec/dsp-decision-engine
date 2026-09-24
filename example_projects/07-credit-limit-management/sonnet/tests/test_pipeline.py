@@ -29,7 +29,7 @@ def _env():
     env["DECIDER_API__CODE_PATH"] = str(PROJECT_DIR)
     env["DECIDER_API__PIPELINE"] = "pipeline:build"
     env["DECIDER_CONFIG__BASEPATH"] = str(PROJECT_DIR / "configs")
-    env["DECIDER_API__MODE"] = "interpreted"
+    env["DECIDER_API__MODE"] = "fused"
     env["PYTHONPATH"] = os.environ.get("PYTHONPATH") or _DEFAULT_DEPS
     return env
 

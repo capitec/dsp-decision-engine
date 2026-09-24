@@ -15,7 +15,7 @@ from business_credit_e2e import covenant, vocab
 from business_credit_e2e.reuse import load_project05_pipeline
 
 
-def new_facility_instalment(product_code: int, instalment: float, offered_amount: float) -> float:
+def new_facility_instalment(product_code: float, instalment: float, offered_amount: float) -> float:
     """Product 50's instalment comes straight from 05's pricing unit (a term
     loan, unmodified). Product 51 (revolving) has no instalment in 05's
     single-product-50-shaped pricing (05 NOTES.md: "take structuring and

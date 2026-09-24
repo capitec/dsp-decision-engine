@@ -12,7 +12,7 @@ export PYTHONPATH="$PWD/../../00-shared-credit-core/sonnet:$PWD/../../01-transac
 export DECIDER_API__CODE_PATH="$PWD"
 export DECIDER_API__PIPELINE="pipeline:build"
 export DECIDER_CONFIG__BASEPATH="$PWD/configs"
-export DECIDER_API__MODE=interpreted
+export DECIDER_API__MODE=fused
 ```
 
 **Never `import pipeline` for another flow.** This project, and every flow it
@@ -48,7 +48,7 @@ for that decision.
 uv run --project <REPO> decider build
 ```
 
-Expect: `built config version 0.1.0 (pipeline pipeline:build, mode interpreted)`.
+Expect: `built config version 0.1.0 (pipeline pipeline:build, mode fused)`.
 
 ## Score the sample request
 
@@ -76,14 +76,12 @@ For the sample request (flow 03's own captured decision), expect
 version and params this build uses, so it must replay bit-identically or
 this project's own claim to "exact replay" is false.
 
-## Why interpreted mode
+## Mode
 
-`run_replay` calls into 01/03/05's own pipelines internally (via
-`governance.replay`), which SERVE.md for 01 and 03 documents as needing
-`interpreted` mode themselves (`str`-column comparisons compiled mode
-rejects). This project's own single step has no such restriction, but it
-would be misleading to build it in `fused` mode while the flows it drives
-internally cannot be, so this project matches them.
+Served in `fused` mode: on `sample_request.json` its output equals
+`interpreted` mode's exactly. Steps no kernel can run faithfully (for example
+`credit_core.expense_norms.norm_table_version`, which compares two `str`
+inputs) run in Python, row by row, with a warning naming each at build time.
 
 ## Run the tests
 

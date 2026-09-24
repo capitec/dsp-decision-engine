@@ -7,7 +7,7 @@ cd example_projects/06-consolidation/sonnet   # this directory
 export DECIDER_API__CODE_PATH="$PWD"
 export DECIDER_API__PIPELINE="pipeline:build"
 export DECIDER_CONFIG__BASEPATH="$PWD/configs"
-export DECIDER_API__MODE=interpreted   # see "Why interpreted mode" below
+export DECIDER_API__MODE=fused
 export PYTHONPATH="<REPO>/example_projects/00-shared-credit-core/sonnet:<REPO>/example_projects/02-affordability/sonnet:<REPO>/example_projects/03-loan-granting-pricing/sonnet"
 ```
 
@@ -21,7 +21,7 @@ anywhere but those three and `decider` itself.
 uv run --project <REPO> decider build
 ```
 
-Expect: `built config version 0.1.0 (pipeline pipeline:build, mode interpreted)`.
+Expect: `built config version 0.1.0 (pipeline pipeline:build, mode fused)`.
 `pipeline.py`'s `build(rate_card_flex_loan, rate_card_product11)` takes two
 `ConfigurableStep` arguments, auto-loaded by `decider` from
 `configs/0.1.0/rate_card_flex_loan.json` (project 00's original product-10 card,
@@ -106,14 +106,12 @@ until they crash (see NOTES.md "Framework friction" #1 for the full story):
   `tests/test_pipeline.py`'s synthetic 18-account client both build every
   account through the exact same field set for this reason.
 
-## Why interpreted mode
+## Mode
 
-Inherited from 00/02/03: `credit_core.expense_norms.norm_table_version` (reused
-unmodified, inside project 02's affordability call) compares two `str`
-table-version columns, which compiled (`fused`/`stepped`) mode rejects at bind
-time. This project also has its own reason: the whole search (`orchestration.py`)
-is one `frame_step` of plain Python, not a compiled kernel, so `fused`/`stepped`
-buys nothing for it regardless.
+Served in `fused` mode: on `sample_request.json` its output equals
+`interpreted` mode's exactly. Steps no kernel can run faithfully (for example
+`credit_core.expense_norms.norm_table_version`, which compares two `str`
+inputs) run in Python, row by row, with a warning naming each at build time.
 
 ## Run the tests
 

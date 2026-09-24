@@ -13,7 +13,7 @@ cd example_projects/00-shared-credit-core/sonnet   # this directory
 export DECIDER_API__CODE_PATH="$PWD"
 export DECIDER_API__PIPELINE="pipeline:build"
 export DECIDER_CONFIG__BASEPATH="$PWD/configs"
-export DECIDER_API__MODE=interpreted   # see "Why interpreted mode" below
+export DECIDER_API__MODE=fused
 ```
 
 No other project's `PYTHONPATH` entry is needed: this project consumes
@@ -25,7 +25,7 @@ nothing (spec 00 is wave 0, the root of the dependency graph).
 uv run --project <REPO> decider build
 ```
 
-Expect: `built config version 0.1.0 (pipeline pipeline:build, mode interpreted)`.
+Expect: `built config version 0.1.0 (pipeline pipeline:build, mode fused)`.
 The first build takes a few seconds to load and validate the Flex Loan
 rate card's 63 360 rows; `decider build` stages and warms it once so a
 live request never pays that cost.
@@ -61,20 +61,12 @@ for acc in record["bureau_accounts"] + record["internal_accounts"]:
 live.executable.score(record, live.params)
 ```
 
-## Why interpreted mode
+## Mode
 
-`norm_table_version` (`credit_core/expense_norms.py`) selects between two
-`str` inputs (the statutory vs. internal table version) at runtime.
-Compiled (`fused`/`stepped`) mode rejects this at bind time:
-
-    ValueError: credit_core_demo/norm_table_version: reads several `str`
-    inputs [...]; compiled modes compare a `str` input only with a `str`
-    param, so split the step or run it in interpreted mode
-
-Interpreted mode has no such restriction and is what this SERVE.md uses
-throughout. See NOTES.md "Framework friction" for the fuller writeup,
-including why the rate card table alone still takes ~30s to warm under
-`fused` mode if a consumer chooses it anyway.
+Served in `fused` mode: on `sample_request.json` its output equals
+`interpreted` mode's exactly. Steps no kernel can run faithfully (for example
+`credit_core.expense_norms.norm_table_version`, which compares two `str`
+inputs) run in Python, row by row, with a warning naming each at build time.
 
 ## Run the tests
 

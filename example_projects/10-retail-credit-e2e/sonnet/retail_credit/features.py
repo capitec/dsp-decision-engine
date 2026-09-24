@@ -54,7 +54,7 @@ def assign_segment(
     internal_tenure_months: float = missing_as(0.0),
     internal_credit_holding: bool = missing_as(False),
     worst_arrears_months: float = missing_as(0.0),
-    employment_type_code: int = missing_as(1),
+    employment_type_code: float = missing_as(1.0),
     is_non_resident: bool = missing_as(False),
     is_staff: bool = missing_as(False),
     is_joint_application: bool = missing_as(False),

@@ -22,7 +22,7 @@ def monthly_rate(nominal_annual_rate: float) -> float:
     return nominal_annual_rate / 12.0
 
 
-def instalment_before_fees(offered_amount: float, term_months: int, nominal_annual_rate: float) -> float:
+def instalment_before_fees(offered_amount: float, term_months: float, nominal_annual_rate: float) -> float:
     """The capital + interest instalment, before fees and premium are added."""
     r = nominal_annual_rate / 12.0
     n = term_months
@@ -40,7 +40,7 @@ def instalment(
     return instalment_before_fees + monthly_service_fee + credit_life_premium
 
 
-def total_cost_of_credit(instalment: float, term_months: int, initiation_fee: float = missing_as(0.0)) -> float:
+def total_cost_of_credit(instalment: float, term_months: float, initiation_fee: float = missing_as(0.0)) -> float:
     return instalment * term_months + initiation_fee
 
 

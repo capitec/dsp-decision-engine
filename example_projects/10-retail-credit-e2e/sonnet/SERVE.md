@@ -13,7 +13,7 @@ cd example_projects/10-retail-credit-e2e/sonnet   # this directory
 export DECIDER_API__CODE_PATH="$PWD"
 export DECIDER_API__PIPELINE="pipeline:build"
 export DECIDER_CONFIG__BASEPATH="$PWD/configs"
-export DECIDER_API__MODE=interpreted   # see "Why interpreted mode" below
+export DECIDER_API__MODE=fused
 
 # PYTHONPATH: this project's own directory FIRST, then 00's, in that order.
 export PYTHONPATH="$PWD:$PWD/../../00-shared-credit-core/sonnet"
@@ -38,7 +38,7 @@ uv run --project <REPO> decider build
 ```
 
 Expect: `built config version 0.1.0 (pipeline pipeline:build, mode
-interpreted)`. The first build takes a few seconds to generate and validate
+fused)`. The first build takes a few seconds to generate and validate
 this project's own 34 560-cell Flex Loan rate card (`retail_credit/pricing.py`,
 generated at import time, not loaded from a config document -- see NOTES.md
 "How I organised a large project" for why this project keeps its tables in
@@ -78,15 +78,12 @@ affordability-bound solve both narrow it. Every field of `pipeline.py`'s
 refer, degraded-mode and consolidation-loop paths against the same fixture
 with targeted overrides.
 
-## Why interpreted mode
+## Mode
 
-Same reason as project 00 (see its NOTES.md): `expense_norms.norm_table_version`
-(`credit_core.expense_norms`, reused unchanged) selects between two `str`
-inputs at runtime, which compiled (`fused`/`stepped`) mode rejects at bind
-time. This project's own tables add a second instance of the same shape
-(`grading.probability_of_default_adjustment_step`'s overlay resolution
-compares `str` scope keys), so interpreted mode is required throughout, not
-only for the one inherited table.
+Served in `fused` mode: on `sample_request.json` its output equals
+`interpreted` mode's exactly. Steps no kernel can run faithfully (for example
+`credit_core.expense_norms.norm_table_version`, which compares two `str`
+inputs) run in Python, row by row, with a warning naming each at build time.
 
 ## Run the tests
 
