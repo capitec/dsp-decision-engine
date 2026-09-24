@@ -80,16 +80,17 @@ class DecisionTableConfig(ConfigurableStep):
         pipeline = flow(pricing, name="loans")
         pipeline.parameters()
         # {'loans/pricing': {'prices': {'type': 'table', 'schema':
-        #     {'product': 'String', 'lo': 'Float64', 'hi': 'Float64', 'rate': 'Float64'}}}}
+        #     {'product': 'String', 'lo': 'Float64', 'hi': 'Float64', 'rate': 'Float64'}, 'required': True}}}
         params = {"loans": {"pricing": {"prices": [
             {"product": "loan", "lo": None, "hi": 10000.0, "rate": 0.20},
             {"product": "loan", "lo": 10000.0, "hi": None, "rate": 0.15},
         ]}}}
         pipeline.run(df, params=params)       # df has product and amount; writes rate
 
-    `pipeline.parameters().defaults()` leaves the table out: it has no
-    default, so a run without it is a `ParamsError` ("param 'prices' is
-    required but missing"). The rows are checked against `columns` when the
+    The table has no default: `pipeline.parameters().defaults()` shows it
+    as `[]` (no rows, so every record takes `default`), and a document
+    without it is a `ParamsError` ("param 'prices' is required but
+    missing"). The rows are checked against `columns` when the
     document arrives: an undeclared or missing column, or a value of the
     wrong type, is a `ParamsError` naming the step, the param, the row and
     the column. A table on its own (not inside `flow`) is keyed by its name

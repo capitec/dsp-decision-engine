@@ -1,12 +1,25 @@
 from __future__ import annotations
 
+import keyword
 import typing as t
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import AfterValidator, BaseModel, ConfigDict
 
 from decider.serializable.dataframe import DataFrame
 
 T = t.TypeVar("T")
+
+
+def _identifier(name: str) -> str:
+    # The name becomes a field of the step's params namedtuple.
+    if not name.isidentifier() or keyword.iskeyword(name) or name.startswith("_"):
+        fixed = name.replace("-", "_").replace(" ", "_").lstrip("_") + ("_" if keyword.iskeyword(name) else "")
+        raise ValueError(f"param name {name!r} must be a Python identifier not starting with '_'; "
+                         f"rename it, e.g. {fixed!r}")
+    return name
+
+
+_Name = t.Annotated[str, AfterValidator(_identifier)]
 
 
 class ParamRef(BaseModel):
@@ -23,7 +36,7 @@ class ParamRef(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    param: str
+    param: _Name
     default: t.Any = None
     shared: bool = False
 
@@ -37,8 +50,8 @@ class TableRef(BaseModel):
     node path, as a list with one dict per row and a value for every column.
     `{"table": "prices", "shared": true}` reads `shared.prices` instead, so
     several steps can use one table. `parameters()` reports the param as
-    `{"type": "table", "schema": {column: dtype}}`; `defaults()` leaves it
-    out, since it has no default.
+    `{"type": "table", "schema": {column: dtype}, "required": True}`;
+    `defaults()` shows it as `[]` (no rows) to say where the rows go.
 
     Example::
 
@@ -49,7 +62,7 @@ class TableRef(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    table: str
+    table: _Name
     shared: bool = False
 
 
