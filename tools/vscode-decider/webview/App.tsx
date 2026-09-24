@@ -543,6 +543,10 @@ export function App() {
               send({ type: "runTo", path });
             }}
             onStep={() => send({ type: "step" })}
+            onDebugStep={() => {
+              setPending(`In ${selectedNode?.path.split("/").pop()}'s Python: step with F10 and F11, and continue (F5) to come back to the flow.`);
+              send({ type: "debugStep" });
+            }}
             comparison={showDiff ? compare.comparison : null}
             onOpenDiff={(path) => send({ type: "openDiff", path })}
             values={describe.values ?? {}}
