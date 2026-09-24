@@ -40,7 +40,8 @@ export function paramLabel(key: string): string {
   if (path === "shared") return `${name} (shared)`;
   const parts = path.split("/");
   const group = parts.slice(0, -1).slice(-2).join("/");
-  return `${parts[parts.length - 1]} (${name})${group ? ` in ${group}` : ""}`;
+  const step = parts[parts.length - 1];
+  return `${step.endsWith(name) ? step : `${step} (${name})`}${group ? ` in ${group}` : ""}`;
 }
 
 function knobOf(r: Row, schema: Props["schema"]): Knob | null {
@@ -148,16 +149,20 @@ export function Scenarios({ schema, values, columns, pausedAt, record, keyCol, r
                 else set(i, { text, kind: "value", key: columns.includes(field) ? field : "" });
               }}
             />
+            <input
+              aria-label="knob values"
+              className={`values ${incomplete[i] && k.key ? "invalid" : ""}`}
+              placeholder={k.key && isRateName(k.key.split("|").pop()) ? "values, e.g. 7%, 7.75%, 8.5%" : "values, e.g. 24, 36, 48"}
+              value={k.values}
+              onChange={(e) => set(i, { values: e.target.value })}
+            />
             <button className="link" style={{ visibility: knobs.length > 1 ? "visible" : "hidden" }} onClick={() => setKnobs(knobs.filter((_, j) => j !== i))}>remove</button>
-            {knobOf(k, schema) && (
-              <div className="muted small knob-echo">tries {knobOf(k, schema)!.values.map((v) => formatValue(v, k.key.split("|").pop())).join(", ")}</div>
-            )}
-            {k.kind === "param" && k.key && (
-              <div className="muted small knob-now" title={k.key.replace("|", " · ")}>
-                {k.key.split("|")[0].split("/").slice(-3).join("/")} · now {formatValue(currentOf(k.key), k.key.split("|")[1])}
+            {(k.key || knobOf(k, schema)) && (
+              <div className="muted small knob-echo" title={k.key.replace("|", " · ")}>
+                {k.kind === "param" && k.key ? `now ${formatValue(currentOf(k.key), k.key.split("|")[1])}` : ""}
+                {knobOf(k, schema) ? `${k.kind === "param" && k.key ? " · " : ""}will try ${knobOf(k, schema)!.values.map((v) => formatValue(v, k.key.split("|").pop())).join(", ")}` : ""}
               </div>
             )}
-            <input aria-label="knob values" className={`values ${incomplete[i] && k.key ? "invalid" : ""}`} placeholder={k.key && isRateName(k.key.split("|").pop()) ? "values to try, e.g. 7%, 7.75%, 8.5%" : "values to try, e.g. 24, 36, 48"} value={k.values} onChange={(e) => set(i, { values: e.target.value })} />
           </div>
         ))}
         <datalist id="knob-options">
@@ -325,6 +330,18 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
     if (!diff) return "no change";
     return categorical(sweep.base?.[c]) ? overall(sweep.outputs[i]?.[c], sweep.base?.[c]) : `${delta(c, i, diff.changedRows)} (${diff.changedRows.length} rec.)`;
   };
+  // A knob whose values never change a result, whatever the other knobs are set to.
+  const idleKnobs = knobCols
+    .filter((k) => k.name !== "scenario")
+    .filter((k) => {
+      const groups = new Map<string, number[]>();
+      sweep.labels.forEach((_, i) => {
+        const key = JSON.stringify(knobCols.filter((o) => o !== k).map((o) => o.values[i]));
+        groups.set(key, [...(groups.get(key) ?? []), i]);
+      });
+      return [...groups.values()].every((is) => is.every((i) => JSON.stringify(sweep.outputs[i]) === JSON.stringify(sweep.outputs[is[0]])));
+    });
+  const example = grid ? sweep.labels.map((_, i) => cellText(i, shownMetric)).find((t) => t !== "no change") : undefined;
   const matrix = grid && (
     <div className="sweep-scroll">
       <div className="summary">
@@ -369,6 +386,11 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
           <span className="mono">{c}</span> is the same in every scenario: {overall(sweep.base?.[c])}.
         </div>
       ))}
+      {idleKnobs.map((k) => (
+        <div key={k.name} className="note">
+          <span className="mono">{knobShort(k.name)}</span> made no difference in any scenario: every result is the same whichever of its values is used.
+        </div>
+      ))}
     </div>
   );
   return (
@@ -384,7 +406,8 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
         </select>
       </div>
       <p className="hint">
-        {grid ? "One cell per combination; click one to see what changed, step by step." : "One row per scenario; click one to see what changed, step by step."}{summary ? " “−R 5,303.95 (3 rec.)” means 3 records changed, by −R 5,303.95 on average." : ""}
+        {grid ? "One cell per combination; click one to see what changed, step by step." : "One row per scenario; click one to see what changed, step by step."}
+        {grid && example && ` “${example}” means that many records changed, by that much on average.`}{summary && !grid ? " “−R 5,303.95 (3 rec.)” means 3 records changed, by −R 5,303.95 on average." : ""}
       </p>
       {cols.length === 0 ? (
         <div className="muted">No scenario changes any result.</div>

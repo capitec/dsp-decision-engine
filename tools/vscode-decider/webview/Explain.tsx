@@ -217,18 +217,16 @@ function Level({ entry, depth, nodes, values, who, onPick, onSelect }: { entry: 
               const row = from?.table && partRows && part?.inputs[0] ? matchRow(from.table, partRows, part.inputs[0].value) : null;
               return (
                 <tr key={n} className={part?.value === 0 ? "zero" : ""}>
-                  <td className="sign">{k === 0 ? "" : sign === "-" ? "−" : "+"}</td>
                   <td>
                     <a title={part?.producer ? `Show ${short(part.producer)} in the graph` : n} onClick={() => part?.producer && onSelect(part.producer)}>{n}</a>
                   </td>
-                  <td className="mono num">{formatValue(part?.value as never, n)}</td>
+                  <td className="mono num">{k === 0 ? "" : sign === "-" ? "− " : "+ "}{formatValue(part?.value as never, n)}</td>
                   <td className="muted small">{row ? `row ${row[0] + 1} of ${short(from!.path)}: ${row[1]}` : ""}</td>
                 </tr>
               );
             })}
             <tr className="total">
-              <td className="sign">=</td>
-              <td>{entry.name}</td>
+              <td>= {entry.name}</td>
               <td className="mono num">{formatValue(entry.value, entry.name)}</td>
               <td />
             </tr>

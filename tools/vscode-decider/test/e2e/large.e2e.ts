@@ -169,7 +169,7 @@ describe("large flow stories", () => {
         await wv(c).locator('input[aria-label="knob"]').first().fill("repo_rate (shared)");
         await wv(c).locator('input[aria-label="knob values"]').first().fill("7%, 7.75%, 8.5%");
         await wv(c).locator("button", { hasText: "+ add another" }).click();
-        await wv(c).locator('input[aria-label="knob"]').nth(1).fill("pl_product_cap (cap) in personal_loan/limits");
+        await wv(c).locator('input[aria-label="knob"]').nth(1).fill("pl_product_cap in personal_loan/limits");
         await wv(c).locator('input[aria-label="knob values"]').nth(1).fill("250000, 350000");
         await shot("After typing repo_rate and the personal loan product cap into the two knob pickers, with values.");
         await wv(c).locator("button", { hasText: /^Run 6 scenarios/ }).click({ timeout: 10_000 });
@@ -193,8 +193,7 @@ describe("large flow stories", () => {
         await find(c, "pl_rate_floor");
         await runTo(c);
         await shot("Paused before pl_rate_floor after 'Run to pl_rate_floor'.");
-        await wv(c).locator("aside details.edit-menu summary").click();
-        await wv(c).locator("aside button", { hasText: /^Skip / }).click();
+        await wv(c).locator("aside button", { hasText: "Skip this step" }).click();
         await wv(c).locator(".pause-banner:not(.pending)").waitFor({ timeout: 60_000 });
         await find(c, "pl_rate_floor");
         await shot("After 'Skip pl_rate_floor': the run re-ran from there without it.");

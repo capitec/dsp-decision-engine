@@ -76,14 +76,15 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
   const readers = paramReaders(c.paramsDocs?.b, c.sharedUsers);
   const readsChanged = (path: string) => readers.some((r) => r.steps.includes(path));
   const edited = (s: (typeof c.steps)[number]) => s.status !== "changed" || s.structural.length > 0 || s.paramChanges.length > 0 || docHas(s.path) || readsChanged(s.path);
-  const label = (s: (typeof c.steps)[number]) => (edited(s) ? s.status : "affected");
+  const ownChange = (s: (typeof c.steps)[number]) => s.status !== "changed" || s.structural.length > 0 || s.paramChanges.length > 0 || docHas(s.path);
+  const label = (s: (typeof c.steps)[number]) =>
+    ownChange(s) ? s.status : readsChanged(s.path) ? `reads ${readers.filter((r) => r.steps.includes(s.path)).map((r) => r.param).join(", ")}` : "affected";
   const outcomes = Object.keys(c.results.b);
   const movedOut = outcomes
     .map((n) => ({ n, k: Array.from({ length: c.rows }, (_, r) => r).filter((r) => !same(c.results.a[n]?.[r], c.results.b[n]?.[r])).length }))
     .filter((x) => x.k > 0);
   const paramLines = [
     ...paramChangeLines(c.paramsDocs?.b, c.values?.a),
-    ...c.steps.flatMap((s) => s.paramChanges.map((p) => `${s.path.split("/").pop()} ${p} (in its code)`)),
   ];
   // The edited steps are the causes; the rest only follow from them.
   const touched = c.steps.filter((s) => s.status !== "same" && s.status !== "not run");
@@ -112,9 +113,8 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
         <h3 className="compare-title">{c.b}</h3>
         {withRevision && <a className="small" onClick={onCompareRevision}>compare with a git revision…</a>}
       </div>
-      {c.note && <div className="muted">{c.note}</div>}
-      <div className="comparing">
-        Compared with <strong>{c.a}</strong>
+      <div className="comparing" title={c.note}>
+        Baseline: <strong>{c.a}</strong>{c.note && <span className="muted"> ⓘ</span>}
         <span className="muted"> · {c.rows} records · {count("changed")} steps changed{count("added") ? `, ${count("added")} added` : ""}{count("removed") ? `, ${count("removed")} removed` : ""}</span>
       </div>
       <div className="verdict">
@@ -171,12 +171,12 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
             {causes.map((s) => (
               <tr key={s.path}>
                 <td><a onClick={() => onSelect(s.path)}>{s.path.split("/").pop()}</a></td>
-                <td className="muted small mono" title={s.path}>{rowEdits(readers.find((r) => r.steps.includes(s.path))?.param ?? "").length ? "PARAMS" : s.where ?? "—"}</td>
+                <td className="muted small mono" title={s.path}>{rowEdits(readers.find((r) => r.steps.includes(s.path))?.param ?? "").length ? c.valuesFile ?? "PARAMS" : s.where ?? "—"}</td>
                 <td>
                   {[
                     ...s.paramChanges,
                     ...readers.filter((r) => r.steps.includes(s.path)).flatMap((r) => (rowEdits(r.param).length ? rowEdits(r.param) : [`reads ${r.param}`])),
-                    ...s.structural.filter((x) => x !== "params").map((x) => (x === "code" ? "code changed" : `${x} changed`)),
+                    ...s.structural.filter((x) => x !== "params" && !(x === "code" && s.paramChanges.length)).map((x) => (x === "code" ? "code changed" : `${x} changed`)),
                     ...(s.status === "removed" ? ["skipped / removed"] : s.status === "added" ? ["added"] : []),
                   ].join(", ")}
                   {s.structural.includes("code") && c.files && <> · <a onClick={() => onOpenDiff(s.path)}>view diff</a></>}
