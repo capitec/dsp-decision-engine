@@ -328,7 +328,7 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
   const cellText = (i: number, c: string) => {
     const diff = sweep.comparisons[i].output.find((o) => o.name === c);
     if (!diff) return "no change";
-    return categorical(sweep.base?.[c]) ? overall(sweep.outputs[i]?.[c], sweep.base?.[c]) : `${delta(c, i, diff.changedRows)} (${diff.changedRows.length} rec.)`;
+    return categorical(sweep.base?.[c]) ? overall(sweep.outputs[i]?.[c], sweep.base?.[c]) : `${delta(c, i, diff.changedRows)} on ${diff.changedRows.length} applicant${diff.changedRows.length === 1 ? "" : "s"}`;
   };
   // A knob whose values never change a result, whatever the other knobs are set to.
   const idleKnobs = knobCols
@@ -344,19 +344,16 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
   const example = grid ? sweep.labels.map((_, i) => cellText(i, shownMetric)).find((t) => t !== "no change") : undefined;
   const matrix = grid && (
     <div className="sweep-scroll">
-      <div className="summary">
-        <span>Showing</span>
-        <select aria-label="grid metric" value={shownMetric} onChange={(e) => setMetric(e.target.value)}>
-          {cols.map((c) => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
-        <span className="muted small">original run: {overall(sweep.base?.[shownMetric], undefined, shownMetric)}</span>
+      <div className="muted small">
+        Original run: {[...new Set([...outcomes, ...cols])].map((c) => `${c} ${overall(sweep.base?.[c], undefined, c)}`).join(" · ")}
       </div>
       <table className="sweep grid">
         <thead>
           <tr>
-            <th>{knobShort(knobCols[0].name)} ↓ · {knobShort(knobCols[1].name)} →</th>
+            <th>
+              <div className="muted small">rows: {knobShort(knobCols[0].name)}</div>
+              <div className="muted small">columns: {knobShort(knobCols[1].name)}</div>
+            </th>
             {uniq(knobCols[1].values).map((v, j) => (
               <th key={j} className="mono">{formatValue(v, knobShort(knobCols[1].name))}</th>
             ))}
@@ -371,9 +368,17 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
                 return i < 0 ? (
                   <td key={j} />
                 ) : (
-                  <td key={j} className={`mono clickable ${open === i ? "open" : ""} ${cellText(i, shownMetric) === "no change" ? "unchanged" : "changed"}`} title="See what changed, step by step" onClick={() => onOpen(i)}>
-                    {cellText(i, shownMetric)}
-                    {isCurrent(i) && <div className="current-tag">current</div>}
+                  <td key={j} className={`clickable ${open === i ? "open" : ""} ${cols.every((c) => cellText(i, c) === "no change") ? "unchanged" : "changed"}`} title="See what changed, step by step" onClick={() => onOpen(i)}>
+                    {isCurrent(i) && <div className="current-tag">the current setting</div>}
+                    {cols.every((c) => cellText(i, c) === "no change") ? (
+                      <div className="muted">no change</div>
+                    ) : (
+                      cols.filter((c) => !outcomes.includes(c)).map((c) => (
+                        <div key={c} className={cellText(i, c) === "no change" ? "muted" : ""}>
+                          <span className="muted small">{c}</span> <span className="mono">{cellText(i, c)}</span>
+                        </div>
+                      ))
+                    )}
                   </td>
                 );
               })}
@@ -407,7 +412,7 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
       </div>
       <p className="hint">
         {grid ? "One cell per combination; click one to see what changed, step by step." : "One row per scenario; click one to see what changed, step by step."}
-        {grid && example && ` “${example}” means that many records changed, by that much on average.`}{summary && !grid ? " “−R 5,303.95 (3 rec.)” means 3 records changed, by −R 5,303.95 on average." : ""}
+        {grid && example && ` “${example}” is the average change for those applicants.`}{summary && !grid ? " “−R 5,303.95 (3 rec.)” means 3 records changed, by −R 5,303.95 on average." : ""}
       </p>
       {cols.length === 0 ? (
         <div className="muted">No scenario changes any result.</div>

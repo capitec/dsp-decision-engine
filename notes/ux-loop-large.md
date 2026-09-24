@@ -19,6 +19,7 @@ goal isn't visibly met caps at 5). The loop stops above 8/10 or after 40 rounds.
 | 9 | 7.4 | 8 | 8 | 7 | 8 | 7 | 8 | 6 |
 | 10 | 7.6 | 8 | 8 | 7 | 8 | 7 | 8 | 7 |
 | 11 | 7.8 | 8 | 9 | 7 | 8.5 | 6.5 | 8 | 7.5 |
+| 12 | 7.6 | 8 | 8 | 8 | 7 | 7 | 8 | 7 |
 
 ## Round 0 (baseline)
 
@@ -308,3 +309,26 @@ Judge's problems, most damaging first:
 10. Node labels truncate while the graph has empty bands.
 11. L5: axis notation and "(3 rec.)" read as notation, not language.
 12. L2: an offer amount rises after a rate cut with no "why".
+
+## Round 12
+
+Changes: each sweep grid cell shows every result in words ("▼ −0.53 pp on 3 applicants") with named axes; the
+explanation opens at its top with the graph shrunk; a lookup table's matched row is a card above the table; short
+steps show their code in the details; mid-run edits are purple with ✎, apart from a comparison's orange; one or two
+edits show as chips in the banner; "What changed" is one table with a files summary; the headline says "no offer
+changed" and "declined applicants had internal values change"; wider graph nodes; "why?" beside a changed result.
+
+Judge's problems, most damaging first:
+
+1. L4: "What changed" credits pricing.py for a shared param edit and never lists the edit itself.
+2. L5: approvals only in a footnote.
+3. L5: every changed cell the same fill; which applicants isn't said.
+4. The Graph tab stacks too much; the graph shrinks to a strip.
+5. L3: the table's match sentence hides under the sticky button row.
+6. L1: the opened rule is cut off in the narrow editor.
+7. L7: what was edited isn't visible under the edited step's name.
+8. L7: the banner grows to three lines.
+9. L7: "Compare with the flow as started" vs "Compare all edits": two names for one action.
+10. L3: the breakdown repeats cap/floor; zero parts take rows.
+11. Node text cut off; unexplained lane lines.
+12. Units: no "months" on term columns; cents on whole rand amounts.

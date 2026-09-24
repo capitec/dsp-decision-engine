@@ -25,6 +25,8 @@ export interface CallNodeJson extends IRNodeBase {
   doc?: string;
   /** What a one-line step returns, e.g. `min(pl_raw_rate, repo_rate + cap_margin)`. */
   formula?: string | null;
+  /** The step's source, when short. */
+  body?: string | null;
   /** Set once the step's code was edited mid-run: the formula it had before. */
   formulaBefore?: string | null;
   /** A lookup table's match, e.g. `{type: "between", variable, lower_bound_column, upper_bound_column}`. */

@@ -110,7 +110,13 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
           {Object.keys(node.params).length > 0 && !table && (
             <div className="muted small mono">{Object.entries(node.params).map(([k, v]) => `${k} = ${formatValue(v, k)}`).join(" · ")}</div>
           )}
-          {node.formula && (
+          {node.body && node.formulaBefore === undefined && (
+            <details className="step-code" open={node.body.split("\n").length <= 8}>
+              <summary>code</summary>
+              <pre>{node.body}</pre>
+            </details>
+          )}
+          {node.formula && (node.formulaBefore !== undefined || !node.body) && (
             <div className="step-formula mono" title="What the step returns">
               returns {node.formula}
               {node.formulaBefore !== undefined && (
@@ -314,6 +320,11 @@ function TableMatch({ table, visited, result, outputs, inputs }: { table: { name
         {result && <> → <strong>{outputs.map((o, i) => `${o} = ${formatValue(result[i], o)}`).join(", ")}</strong></>}
       </div>
       <div className="muted small">with {inputs.join(", ")}</div>
+      {matched && (
+        <div className="matched-card">
+          Row {last + 1}: {cols.map((c) => `${c} ${formatValue((row[c] ?? null) as never, c)}`).join(" · ")}
+        </div>
+      )}
       <table className="table-grid">
         <thead>
           <tr>
