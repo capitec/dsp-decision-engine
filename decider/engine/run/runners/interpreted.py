@@ -10,7 +10,7 @@ from decider.engine.boundary.nulls import MissingInputError
 from decider.engine.ir.decls import Input, NullPolicy, base_annotation
 from decider.engine.run.params import RunParams
 from decider.engine.run.runners.base import Checkpoint
-from decider.engine.run.state import State, dtype_of, from_series
+from decider.engine.run.state import State, dtype_of, fill_missing, from_series
 from decider.engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, Sequence, Version
 
 
@@ -194,7 +194,7 @@ def _argument(state: State, version: Version, decl: Input, rows: np.ndarray | No
     if decl.null_policy is NullPolicy.REQUIRED:
         raise MissingInputError(decl.name, path, int(missing.sum()), len(valid), absent=_absent(state, version))
     if decl.null_policy is NullPolicy.MISSING_AS:
-        return np.where(valid, values, decl.fill)
+        return fill_missing(values, valid, decl.fill)
     values = values.astype(object)
     values[missing] = None
     return values
