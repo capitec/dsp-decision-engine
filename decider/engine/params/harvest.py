@@ -6,6 +6,7 @@ from typing import Any, Callable
 
 from decider.engine.ir.decls import Input, NullPolicy, Output, ParamDecl, nullable
 from decider.engine.params.declare import MissingAs, ParamSpec, is_plain_marker
+from decider.engine.params.tables import table_type
 from decider.exceptions import IRError
 
 _EMPTY = inspect.Parameter.empty
@@ -47,9 +48,12 @@ def harvest(
         ann = Any if p.annotation is _EMPTY else p.annotation
         d = p.default
         if isinstance(d, ParamSpec):
-            if ann is Any and not d.required:
+            if d.schema is not None:
+                ann = table_type(d.schema)
+            elif ann is Any and not d.required:
                 ann = type(d.default)
-            params.append(ParamDecl(name, ann, d.default, d.field_info, d.required, d.shared_key, d.on_invalid))
+            params.append(ParamDecl(name, ann, d.default, d.field_info, d.required, d.shared_key, d.on_invalid,
+                                    schema=d.schema))
         elif isinstance(d, MissingAs):
             inputs.append(Input(name, type(d.fill) if ann is Any else ann, NullPolicy.MISSING_AS, d.fill, arg=name))
         elif nullable(ann):
