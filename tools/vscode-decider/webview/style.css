@@ -2329,3 +2329,15 @@ aside .watch-form {
   font-weight: 600;
   margin: 4px 0 8px;
 }
+aside .step-head {
+  position: static;
+  box-shadow: none;
+}
+.result-table tr.decision-row td {
+  font-weight: 700;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+details.breakdown > summary {
+  margin: 6px 0;
+  cursor: pointer;
+}

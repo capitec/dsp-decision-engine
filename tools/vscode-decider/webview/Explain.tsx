@@ -125,7 +125,7 @@ export function Explain({ entry, who, role, nodes, values, onPick, onSelect }: P
       <div className="how-title">
         Why <span className="mono">{entry.name}{who ? ` = ${formatValue(entry.value, entry.name)}` : ""}</span>
         {who ? ` for ${who}` : ""}
-        {entry.producer && <span className="muted"> · last written by {short(entry.producer)}</span>}
+
         {role && <span className="muted small"> ({role})</span>}
       </div>
       {who && entry.producer !== null && summaryRows(entry, nodes, values) && (

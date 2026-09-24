@@ -61,6 +61,8 @@ export function App() {
   const [note, setNote] = useState<string>();
   const noteNext = useRef<string | undefined>(undefined);
   const runningRef = useRef(false);
+  // After a re-run from the force controls, they stay selected rather than jumping to where the run paused.
+  const keepSelected = useRef(false);
   // The value picked with "explain a value": its breakdown stays open whichever step is selected.
   const [explained, setExplained] = useState<string>();
   const [codeDiff, setCodeDiff] = useState<string[]>([]);
@@ -116,7 +118,8 @@ export function App() {
           setNote(noteNext.current);
           if (noteNext.current === undefined) setCodeDiff([]);
           noteNext.current = undefined;
-          if (m.current) setSelected(m.current.path);
+          if (m.current && !keepSelected.current) setSelected(m.current.path);
+          keepSelected.current = false;
           // A new debug run: an earlier comparison's colours would read as this run's state.
           if (m.current && !runningRef.current) setShowDiff(false);
           runningRef.current = !!m.current && !m.finished;
@@ -563,6 +566,7 @@ export function App() {
                         ? `↺ Re-ran from ${path.split("/").pop()} with the force and came back to ${back.path.split("/").pop()}.`
                         : `↺ Went back to just before ${path.split("/").pop()}, keeping everything before it. Step or continue to run it with the force.`;
                       setPending(`Re-running from ${path.split("/").pop()} with the force…`);
+                      keepSelected.current = true;
                       send({ type: "rerun", path, back: back?.path, when: back?.when });
                     }}
                   />

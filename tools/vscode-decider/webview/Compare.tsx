@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { paramChangeLines, paramReaders, same, type Comparison, type ValueDiff } from "../src/compare";
 import { formatValue, recordLabel, type RecordKey } from "../src/protocol";
+import { distinct } from "./ResultCards";
 import { headline, ResultCards } from "./ResultCards";
 
 interface Props {
@@ -152,7 +153,7 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
     <div className="compare">
       {back && <a className="back" onClick={back.go}>← Back to {back.label}</a>}
       <div className="compare-top">
-        <h3 className="compare-title">{c.b}</h3>
+        <h3 className="compare-title">{c.forced ? forcedTitle(c) : c.b}</h3>
         {withRevision && <a className="small" onClick={onCompareRevision}>compare with a git revision…</a>}
       </div>
       {(paramRows.length > 0 || codeCauses.length > 0) && (
@@ -163,9 +164,6 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
             ...codeCauses.map((s) => `${fileOf(s)}: ${s.path.split("/").pop()} ${[...s.paramChanges, ...(s.structural.includes("code") && !s.paramChanges.length ? ["code"] : []), ...(s.status === "removed" ? ["skipped"] : [])].join(", ")}`),
           ].join(" · ")}
         </div>
-      )}
-      {c.forcedRows?.length === 1 && c.results.b.decision && (
-        <div className="lead">{forcedLead(c, c.forcedRows[0])}</div>
       )}
       {c.forcedRows && c.forcedRows.length > 0 && (
         <div className="muted small">
@@ -296,7 +294,7 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
         </div>
       )}
       <h4>
-        Step by step <span className="muted small">· {count("changed")} step{count("changed") === 1 ? "" : "s"} changed{left.length || entered.length ? ` (${left.length} stopped running, ${entered.length} ran instead, ${count("changed") - entered.length - left.filter((p) => c.steps.find((s) => s.path === p)?.status === "changed").length} changed values)` : ""}{count("added") ? `, ${count("added")} added` : ""}{count("removed") ? `, ${count("removed")} removed` : ""}{count("not taken") ? `, ${count("not taken")} not taken` : ""}</span>
+        Step by step <span className="muted small">· {count("changed")} step{count("changed") === 1 ? "" : "s"} changed{count("added") ? `, ${count("added")} added` : ""}{count("removed") ? `, ${count("removed")} removed` : ""}{count("not taken") ? `, ${count("not taken")} not taken` : ""}</span>
         {c.firstDivergence && (
           <span className="muted small"> · first difference at <a onClick={() => onSelect(c.firstDivergence!)}>{c.firstDivergence}</a></span>
         )}
@@ -350,17 +348,11 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
   );
 }
 
-/** "client_id 20400 as credit_card (at product): decline, Loan too large…. As personal_loan: approve, offer_amount R 143,500.00." */
-function forcedLead(c: Comparison, r: number): string {
-  const side = (k: "a" | "b", label: string) => {
-    const res = c.results[k];
-    const decision = String(res.decision?.[r] ?? "");
-    const detail =
-      decision === "decline"
-        ? res.reason_code?.[r]
-        : ["offer_amount", "offer_rate"].filter((n) => res[n]).map((n) => `${n} ${formatValue(res[n][r], n)}`).join(", ");
-    return `${label}: ${decision}${detail ? ` (${detail})` : ""}`;
-  };
+/** "client_id 20400: personal_loan vs credit_card (at product)". */
+function forcedTitle(c: Comparison): string {
+  const who = c.forcedRows?.length === 1 ? `${recordLabel(c.forcedRows[0], c.key)}: ` : "";
   const strip = (label: string) => label.replace(/^[^:]*: /, "");
-  return `${recordLabel(r, c.key)}, ${side("b", strip(c.b))}. Baseline, ${side("a", strip(c.a))}.`;
+  const [a, b] = distinct(strip(c.a), strip(c.b));
+  const at = strip(c.b).match(/\(at [^)]*\)$/)?.[0] ?? "";
+  return `${who}${a.replace(at, "").trim()} vs ${b.replace(at, "").trim()} ${at}`.trim();
 }

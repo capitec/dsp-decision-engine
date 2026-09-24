@@ -9,6 +9,8 @@ Five stories in `tools/vscode-decider/test/e2e/features.e2e.ts` (`pnpm test:feat
 - F4: find which step set a value, see its history, and go back there.
 - F5: compare 5 and 10 loop iterations, then pause at iteration 3.
 
+**Result: stopped after round 7. Rounds 5, 6 and 7 (7.2, 6.9, 7.2) didn't beat round 4's 7.4.**
+
 The stop rule changed twice. Round 1 stopped on a change under 0.5. Round 3 stopped with three rounds within 0.5.
 The scores were still climbing, so the rule became three rounds without a new best.
 
@@ -28,6 +30,7 @@ visibly met caps at 5. The loop stops at the first of these:
 | 4 | 7.4 | 8 | 7 | 8 | 6 | 8 |
 | 5 | 7.2 | 7.5 | 6.5 | 7.5 | 7.5 | 7 |
 | 6 | 6.9 | 7 | 7 | 7.5 | 6 | 7 |
+| 7 | 7.2 | 8 | 6 | 8 | 7 | 7 |
 
 ## Round 0 (baseline)
 
@@ -287,3 +290,37 @@ The judge's problems, most damaging first:
 10. The step counts ("430 steps changed (213…)") are noise.
 11. A loop comparison doesn't show the iteration count per side.
 12. The re-run button's label is long, and the selection jumps away from the force controls after it.
+
+## Round 7: 7.2 (3 rounds without a new best: stopped)
+
+Changes:
+
+- The details pane:
+  - the step header no longer sticks, so it covers nothing;
+  - the value's history leads, and the step-by-step breakdown folds under it;
+  - the breakdown no longer says "last written by", which could contradict the history.
+- Paused after a step, the editor points at its last statement.
+- The loop's Break section lists the iteration breakpoints that are set.
+- The force and compare scopes default to the focused record.
+- A forced comparison's title reads "client_id 20400: personal_loan vs credit_card (at product)". The decision row
+  in its table is bold.
+- The re-run keeps the force controls selected. Its button reads "Re-run from product with this force".
+- Variables puts the value first: "R 118,000.00 · no offer".
+
+After the judge, two fixes (not judged again):
+
+- The bridge refused the breakdown of a value not set yet with an error, which VS Code showed as a red message
+  after going back. It now returns an empty `unset` entry.
+- After a re-run, the force controls say "Applied: client_id 20400 went down credit_card in the re-run", and the
+  re-run button steps back until the force changes.
+
+Backlog, the judge's problems not yet addressed:
+
+1. Picking a value under "explain a value…" while another step is selected shows nothing in view. Wants the
+   answer shown at once. After going back, the picker resets while the panel keeps the answer.
+2. An edge label overlaps a node (the "offer" label on too_big). The arm the focused record takes can be off
+   canvas, and it isn't highlighted.
+3. A loop comparison names the loop only in the baseline, and doesn't show the natural iteration count.
+4. The "430 steps changed · first difference at product_arm" line means little to an analyst.
+5. Out of a debug run, "For every record" is plain text; in one, it's a picker. Wants the picker always.
+6. The Variables pane still truncates long values with the "· no offer" note.

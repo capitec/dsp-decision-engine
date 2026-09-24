@@ -44,7 +44,7 @@ export function ResultCards({ c, record, onFocus, onSelect }: { c: Comparison; r
         </thead>
         <tbody>
           {decision && moved(decision, r) && (
-            <tr>
+            <tr className="decision-row">
               <td className="mono">{decision}</td>
               <td><span className={`decision ${c.results.a[decision][r]}`}>{formatValue(c.results.a[decision][r])}</span></td>
               <td><span className={`decision ${c.results.b[decision][r]}`}>{formatValue(c.results.b[decision][r])}</span></td>
@@ -130,7 +130,7 @@ export function headline(c: Comparison): string | null {
 }
 
 /** The words that tell two labels apart: "down personal_loan" and "down credit_card" from two long run labels. */
-function distinct(a: string, b: string): [string, string] {
+export function distinct(a: string, b: string): [string, string] {
   const x = a.split(" ");
   const y = b.split(" ");
   let i = 0;
