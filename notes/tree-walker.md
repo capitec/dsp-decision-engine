@@ -26,15 +26,24 @@
   split the tuple with static slices into homogeneous tuples. Params are
   ordered the same way. No source is generated: the overload's
   implementation is an ordinary closure over the slice bounds.
-- **Outputs are picked by type-level recursion** (`walker.pick`), because
-  the output tuple's length and dtypes differ per tree. numba-level inlining
-  (`inline="always"`) of that recursion re-types every level at every level:
-  compile time went 3 s at 4 outputs, 48 s at 8. It is inlined by LLVM
-  instead (`forceinline`), which costs linear compile time (9 s at 12
-  outputs) and runs 50 ns a row at 3 outputs against 78 as real calls. For
-  the same reason the walk loop, byte matching and expression evaluation are
-  real calls, not numba-inlined; before that a one-output tree took 18-34 s
-  to compile.
+- **Outputs are picked by an intrinsic** (`walker.pick`), because the
+  output tuple's length and dtypes differ per tree. Its codegen loops over
+  the outputs in Python and emits one call per output to `_value`,
+  `_nullable` or `_trace`, each compiled once per output type; LLVM inlines
+  them. History: numba-level inlining of a type-level recursion re-typed
+  every level at every level (3 s at 4 outputs, 48 s at 8); `forceinline`
+  recursion was linear but a Python frame chain per output, so a
+  `mode: "all"` set of 100 rules hit `RecursionError` (01's 521-rule set
+  did). Halving the recursion fixed the error but not the time: LLVM's
+  InstCombine/SROA on slices of a 500-field tuple was ~100 s, and runtime
+  indexing into such a tuple is quadratic to compile too. The intrinsic
+  plus `no_cpython_wrapper` on `walk` (its Python entry unboxed the
+  500-spec tuple: 50 s of the rest) compiles a 521-output walk in 25 s,
+  128 outputs in 2 s. `tree_walk.py` at load ~9, 2026-09-24: fused score
+  p50 58.0 µs (before 57.8-58.1), string-gated 99.8 (100.9-101.5), batch
+  188 ns/row (265-275). The walk loop, byte matching and expression
+  evaluation are real calls, not numba-inlined; before that a one-output
+  tree took 18-34 s to compile.
 - **String outputs are `Literal[...]` outputs.** Kernels can't write strings.
   A tree's `String` column is declared `Literal["a", "b", ...]`; `fn` returns
   the value's index (-1 for null) and `engine.compile.units` decodes it into
