@@ -70,9 +70,9 @@ export function ResultCards({ c, record, onFocus, onSelect }: { c: Comparison; r
         <button className="link" onClick={() => setMore(!more)}>{more ? "show fewer" : `show all ${ordered.length} changed records`}</button>
       )}
       {noOffer.length > 0 && (
-        <details className="no-offer" open={!offered.length}>
+        <details className="no-offer">
           <summary>
-            Declined, internal values only: {noOffer.length} (no offer affected)
+            Still declined, internal values changed: {noOffer.length} (no offer either way)
           </summary>
           {noOffer.map(card)}
         </details>
@@ -101,7 +101,7 @@ export function headline(c: Comparison): string | null {
     `Decisions changed: ${decided.length}${decided.length ? ` (${counts})` : ""}`,
     `Offers changed: ${offers.length}`,
     reasons ? `Declines with a new reason: ${reasons}` : "",
-    valuesOnly ? `Declined, internal values only: ${valuesOnly}` : "",
+    valuesOnly ? `Still declined, internal values changed: ${valuesOnly}` : "",
   ]
     .filter(Boolean)
     .join(" · ");
