@@ -9,7 +9,8 @@ Five stories in `tools/vscode-decider/test/e2e/features.e2e.ts` (`pnpm test:feat
 - F4: find which step set a value, see its history, and go back there.
 - F5: compare 5 and 10 loop iterations, then pause at iteration 3.
 
-Round 1 first stopped the loop on a change under 0.5. The rule is now three rounds in a row within 0.5.
+**Result: stopped after round 3. Rounds 1 to 3 (6.6, 7.0, 7.1) all fall within 0.5 of each other.**
+Round 1 first stopped the loop on a change under 0.5; the rule was then widened to three rounds in a row.
 
 Each round, a fresh judge agent scores the screenshots alone, 1 to 10 per story. A story whose goal isn't
 visibly met caps at 5. The loop stops at the first of these:
@@ -23,6 +24,7 @@ visibly met caps at 5. The loop stops at the first of these:
 | 0 | 6.4 | 6 | 5 | 7 | 7 | 7 |
 | 1 | 6.6 | 7 | 7 | 7 | 6 | 6 |
 | 2 | 7.0 | 7 | 7 | 8 | 7 | 6 |
+| 3 | 7.1 | 7.5 | 7 | 8 | 6 | 7 |
 
 ## Round 0 (baseline)
 
@@ -128,3 +130,43 @@ The judge's problems, most damaging first:
     - the scope reads "only in product / personal_loan" in the form but "in personal_loan" on the chip;
     - "applies when the run reaches product" is shown while the run is inside product;
     - the hit list is long.
+
+## Round 3: 7.1
+
+Changes:
+
+- History headline: one line that names the step that computed the value, then the steps that passed it on or kept
+  it. The passed-through line isn't used inside loops, where the breakdown shows the last iteration.
+- History position: "◀ you are here" marks the moment the run is paused at, with no go-back link on it.
+- A forced condition names its arms: "forced by you (down credit_card); product_arm gave 0 (down personal_loan)".
+- Compare:
+  - The baseline column is marked.
+  - The decline note matches the strike-through.
+  - A one-record force says that all records ran.
+- "Re-run forced" pauses before the condition step, so the branch's controls stay in view.
+- Wording:
+  - Forcing says it applies "the next time product_arm runs".
+  - A breakpoint's scope reads the same on the chip and in the form.
+  - The loop boxes have example placeholders.
+- A long list of hit records collapses to three and "and N more".
+
+Backlog, the judge's problems most damaging first:
+
+1. F4: the numbered history still starts at pl_regulated_rate. The headline credits pl_raw_rate. "Go back" goes
+   to pl_regulated_rate, not to the step that computed the value. The timeline tracks one name, so it can't list
+   a value that arrived under another name (pl_raw_rate → pl_rate) as its first row.
+2. F2: after "Re-run forced", nothing says which arm the record now takes, and "applies the next time" still
+   shows.
+3. F1: "for client_id 20400" in the control against "all 40 records" in the result. Wants "the other 39 are
+   unchanged".
+4. F1: 430 changed steps against 213 + 213 folded; the other 4 aren't accounted for.
+5. Comparison titles like "product down credit_card for client_id 20400" read as internal names.
+6. The arm the record takes can be off canvas; wants the branch fitted and the taken arm highlighted.
+7. The sticky action row in the details covers the top of the content.
+8. Compare highlights and the changed-step navigator stay on during a later debug run. The graph has no legend.
+9. An edge label overlaps a node, and an edge runs into a clipped box.
+10. "Break when a value…" sits below the fold. After adding, the empty form reads as a failed add.
+11. The step's action row varies ("Run through…" vs "Change the run ▾"). The step description sits below the
+    branch controls.
+12. A loop comparison doesn't say how many iterations each record runs by itself, or that a force overrides
+    the while condition.

@@ -38,7 +38,7 @@ export function forceText(f: Force, groups: Group[], keyCol: RecordKey): string 
 
 export function watchText(w: Watch, keyCol: RecordKey): string {
   if (w.iteration !== undefined) return `before iteration ${w.iteration} of ${lastSegment(w.path!)}`;
-  const where = w.scope?.length ? ` in ${w.scope.map(lastSegment).join(", ")}` : "";
+  const where = w.scope?.length ? ` only in ${w.scope.map((s) => s.split("/").slice(-2).join(" / ")).join(", ")}` : "";
   return `${w.name} ${w.op} ${formatValue(w.value, w.name)}${where}${forWho(w.row, keyCol)}`;
 }
 
@@ -137,7 +137,7 @@ export function GroupControls({ group, controls, record, keyCol, paused, ran, on
         {isLoop ? (
           <>
             Run it exactly{" "}
-            <input aria-label={`iterations for ${name}`} className="narrow" type="number" min={0} max={group.max} value={times || (current?.iterations ?? "")} onChange={(e) => setTimes(e.target.value)} /> times{" "}
+            <input aria-label={`iterations for ${name}`} className="narrow" type="number" min={0} max={group.max} placeholder="e.g. 5" value={times || (current?.iterations ?? "")} onChange={(e) => setTimes(e.target.value)} /> times{" "}
             <button disabled={times === ""} onClick={() => (setForce({ iterations: Number(times) }), setTimes(""))}>Force</button>
           </>
         ) : (
@@ -153,14 +153,14 @@ export function GroupControls({ group, controls, record, keyCol, paused, ran, on
         )}
         {current && <button className="link" onClick={() => setForce()}>stop forcing</button>}
         {paused && mine.length > 0 && (
-          <button title="Go back to just before it, keeping everything earlier, so the force applies" onClick={() => onRerun(group.path)}>↺ Re-run {name} forced</button>
+          <button title="Go back to just before it, keeping everything earlier, so the force applies" onClick={() => onRerun(group.cond)}>↺ Re-run {name} forced</button>
         )}
       </div>
       {mine.length > 0 && (
         <div className="small added">
           {ran && paused
             ? `On. ${name} has already run in this pause, so the force applies when it runs again: re-run it now, or on the next run.`
-            : `On. It applies when the run reaches ${name}.`}
+            : `On. It applies the next time ${lastSegment(group.cond)} runs.`}
         </div>
       )}
       <h5>Compare two ways</h5>
@@ -172,7 +172,7 @@ export function GroupControls({ group, controls, record, keyCol, paused, ran, on
       <div className="muted small">Runs the whole flow twice from the start, for {row === null ? "every record" : recordLabel(row, keyCol)}; your debug run is left as it is.</div>
       {isLoop && (
         <div className="control-row">
-          Pause before iteration <input aria-label={`pause ${name} at iteration`} className="narrow" type="number" min={1} max={group.max} placeholder="k" value={at} onChange={(e) => setAt(e.target.value)} />{" "}
+          Pause before iteration <input aria-label={`pause ${name} at iteration`} className="narrow" type="number" min={1} max={group.max} placeholder="e.g. 3" value={at} onChange={(e) => setAt(e.target.value)} />{" "}
           <button
             disabled={!at}
             onClick={() => {
