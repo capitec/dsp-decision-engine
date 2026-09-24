@@ -161,3 +161,18 @@ where they disagree, this file wins.
   from the first change; `Session.watch(fn)` (IPython after-cell hook) and
   `ModuleWatcher("module:attr")` (source files) call it. Serving never
   hot-reloads; it keeps explicit stage/activate.
+
+## 2026-09-24, framework fix round
+
+- **Frame steps take params:** `fn(df, **params)`; `param()` declarations in a
+  frame function's signature work like scalar steps'.
+- **One type per input column:** two steps reading one input column with
+  different annotations is a `WiringError` (annotate both the same; convert
+  inside the step that needs the other type).
+- **Compiled modes run what they can't compile in Python:** a step compiled
+  modes refuse (e.g. comparing two `str` inputs) runs as a per-step Python
+  fallback with a one-time warning; `SteppedRunner(strict=True)` raises instead.
+- **Serving:** `code_path` always first on `sys.path`; warm-up uses
+  `sample_request.json` when present; JSON inputs are coerced to declared
+  `date`/`datetime`/`list`/TypedDict annotations; `RequestHandler.warm_fn` is
+  overridable; `from decider.serving import RequestHandler`.
