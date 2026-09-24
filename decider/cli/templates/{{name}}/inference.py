@@ -1,5 +1,5 @@
 """Request handling for {{name}}: override any `*_fn` method of `RequestHandler` here."""
-from decider.serving.handler import RequestHandler
+from decider.serving import RequestHandler
 
 
 class Handler(RequestHandler):
