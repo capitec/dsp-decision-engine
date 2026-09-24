@@ -46,6 +46,11 @@
   - That is exactly what a step with an `import` inside its body raises. decider2
     therefore catches the tuple `(NumbaError, UnsupportedBytecodeError)`, still
     never bare `Exception`.
+  - On Python 3.14, numba's bytecode reader raises a plain `NotImplementedError`
+    for `LOAD_COMMON_CONSTANT`, which `any(x > t for t in ...)` emits. Example
+    project 08 hit it. `compile_call` also catches `NotImplementedError`, but
+    only around `dispatcher.compile(sig)`, which runs no step code, so it can't
+    swallow one a step raises. Kernel launches still catch only the tuple.
 
 **Source:** `decider2/docs/EXPERIMENTS.md` (§B);
 `decider2/docs/02-architecture.md` (§3.2);

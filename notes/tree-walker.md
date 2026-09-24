@@ -26,15 +26,24 @@
   split the tuple with static slices into homogeneous tuples. Params are
   ordered the same way. No source is generated: the overload's
   implementation is an ordinary closure over the slice bounds.
-- **Outputs are picked by type-level recursion** (`walker.pick`), because
-  the output tuple's length and dtypes differ per tree. numba-level inlining
-  (`inline="always"`) of that recursion re-types every level at every level:
-  compile time went 3 s at 4 outputs, 48 s at 8. It is inlined by LLVM
-  instead (`forceinline`), which costs linear compile time (9 s at 12
-  outputs) and runs 50 ns a row at 3 outputs against 78 as real calls. For
-  the same reason the walk loop, byte matching and expression evaluation are
-  real calls, not numba-inlined; before that a one-output tree took 18-34 s
-  to compile.
+- **Outputs are picked by an intrinsic** (`walker.pick`), because the
+  output tuple's length and dtypes differ per tree. Its codegen loops over
+  the outputs in Python and emits one call per output to `_value`,
+  `_nullable` or `_trace`, each compiled once per output type; LLVM inlines
+  them. History: numba-level inlining of a type-level recursion re-typed
+  every level at every level (3 s at 4 outputs, 48 s at 8); `forceinline`
+  recursion was linear but a Python frame chain per output, so a
+  `mode: "all"` set of 100 rules hit `RecursionError` (01's 521-rule set
+  did). Halving the recursion fixed the error but not the time: LLVM's
+  InstCombine/SROA on slices of a 500-field tuple was ~100 s, and runtime
+  indexing into such a tuple is quadratic to compile too. The intrinsic
+  plus `no_cpython_wrapper` on `walk` (its Python entry unboxed the
+  500-spec tuple: 50 s of the rest) compiles a 521-output walk in 25 s,
+  128 outputs in 2 s. `tree_walk.py` at load ~9, 2026-09-24: fused score
+  p50 58.0 µs (before 57.8-58.1), string-gated 99.8 (100.9-101.5), batch
+  188 ns/row (265-275). The walk loop, byte matching and expression
+  evaluation are real calls, not numba-inlined; before that a one-output
+  tree took 18-34 s to compile.
 - **String outputs are `Literal[...]` outputs.** Kernels can't write strings.
   A tree's `String` column is declared `Literal["a", "b", ...]`; `fn` returns
   the value's index (-1 for null) and `engine.compile.units` decodes it into
@@ -109,6 +118,26 @@
   output with values `0..n-1`, and the walker didn't change at all. The
   cost is a few more values when several leaves share a row. A leaf that
   selects the default row reports a null path, as the default answered.
+- **`trace_output` is a path number, not a list.** A kernel can't write a
+  variable-length list or a string, and the leaf doesn't name the path once
+  a node has two parents. So the encoder numbers paths Ball-Larus style:
+  each node's path count is the sum of its branches' (a missing branch is
+  one path), and the jump into branch `i` weighs the counts of branches
+  `0..i-1`. Every program row carries three weights, one per target
+  (`W_THEN`, `W_ELSE`, `W_UNKNOWN`: nonzero only on jumps that leave a
+  node), and `_walk` sums the weights of the jumps it takes, so the sum is
+  the path's index among its root's paths. The output is a `Literal` of
+  every path's `>`-joined node ids, enumerated in that order, which the
+  unit decodes like any string output; no new output kind reached the
+  engine. First-match adds each rule's base (the paths of earlier rules,
+  stored after the roots) and reports the last rule walked. Costs: the
+  walker does one more add per row whether traced or not (`tree_walk.py`
+  back to back at load ~7, 2026-09-24: fused score p50 63.4 -> 62.5 µs,
+  string-gated 112.4 -> 111.0 µs, batch 226 -> 233 ns/row, all within
+  noise), and a tree gets one string per path, so a DAG
+  whose shared nodes multiply paths past 100k is refused. A node that
+  compiles to no rows (a condition that tests nothing) can't be told apart
+  from its child, so tracing one is an error.
 - A numeric output column holding `None` is declared `T | None`.
 - **`mode: "all"`** writes `<rule name>.<column>` per rule (`rule_<i>` when
   unnamed), since a row node writes flat columns, not decider_old's structs.

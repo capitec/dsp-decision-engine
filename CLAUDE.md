@@ -2,6 +2,10 @@
 
 Use `uv` for everything: `uv run pytest`, `uv run python`. Python 3.10+.
 
+To learn the API as a user: `uv run decider guide` (`decider/GUIDE.md`) and the
+docstrings. Don't read `docs/`: it describes an older version. Every Python
+example in `GUIDE.md` runs in `tests/test_guide.py`; keep it that way.
+
 ## Comments and docstrings
 
 - Docstrings only on public API, written as user docs: a one-line summary, the
@@ -57,9 +61,11 @@ Use `uv` for everything: `uv run pytest`, `uv run python`. Python 3.10+.
   byte-identical between runs. Key compiled code by content, never by path or
   name.
 - Serving kernels are `nogil=True`. `fastmath` is off by default.
-- `round()` differs between CPython and numba, and int64 wraps silently. Money
+- Kernels use CPython-equal `round(x, n)` and `x ** n`; int64 still wraps silently. Money
   is int64 cents; running totals accumulate in float64.
-- Only `NumbaError` triggers the Python fallback. Runtime errors propagate.
+- Compile-time failures and steps compiled modes refuse fall back to Python per
+  step (with a warning; `Engine(strict_compile=True)` raises). Runtime errors
+  always propagate.
 - Nested polymorphic pydantic fields need `SerializeAsAny`, or subclass fields
   are silently dropped on dump.
 - Single-record calls take a dict, not keyword arguments. Cache converted params

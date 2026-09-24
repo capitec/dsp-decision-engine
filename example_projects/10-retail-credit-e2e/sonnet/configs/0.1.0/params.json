@@ -1,0 +1,116 @@
+{
+  "retail_credit_ep1_product10": {
+    "resolve_identity": {
+      "confidence_floor": 0.88
+    },
+    "p03": {
+      "decline_reason_codes": {
+        "minimum_age": 18.0
+      },
+      "product_10_extra_reasons": {
+        "max_age_at_maturity": 75.0
+      }
+    },
+    "evaluate_fraud": {
+      "refer_threshold": 0.71,
+      "decline_threshold": 0.88
+    },
+    "p06": {
+      "gross_monthly_income": {
+        "statement_confidence_threshold": 0.7,
+        "haircut_payslip": 0.05,
+        "haircut_statement_high_confidence": 0.1,
+        "haircut_statement_low_confidence": 0.25,
+        "haircut_declared": 0.2,
+        "haircut_bureau_estimated": 0.3
+      },
+      "income_source_code": {
+        "statement_confidence_threshold": 0.7
+      },
+      "income_haircut_applied": {
+        "statement_confidence_threshold": 0.7,
+        "haircut_payslip": 0.05,
+        "haircut_statement_high_confidence": 0.1,
+        "haircut_statement_low_confidence": 0.25,
+        "haircut_declared": 0.2,
+        "haircut_bureau_estimated": 0.3
+      }
+    },
+    "bureau_down_reduced_envelope_ok": {
+      "max_reduced_amount": 25000.0,
+      "max_reduced_term": 36
+    },
+    "p08": {
+      "apply_probability_of_default_adjustments": {
+        "adjustment_stack_enabled": true
+      }
+    },
+    "p09a": {
+      "evaluate_amount_and_grade_caps": {
+        "product_max_amount": 500000.0
+      },
+      "apply_amount_cap_adjustments": {
+        "adjustment_stack_enabled": true
+      }
+    },
+    "p10": {
+      "apply_affordability_buffer_adjustments": {
+        "adjustment_stack_enabled": true
+      },
+      "affordability_verdict_code": {
+        "minimum_viable_instalment": 185.0,
+        "marginal_band": 0.08
+      }
+    },
+    "product_10_eligible": {
+      "min_amount": 2000.0,
+      "max_amount": 500000.0,
+      "min_term": 6,
+      "max_term": 84,
+      "grade_floor": 12
+    },
+    "apply_nominal_annual_rate_adjustments": {
+      "adjustment_stack_enabled": true
+    },
+    "l1_seeded": {
+      "l1": {
+        "l1_pass": {
+          "max_passes": 4,
+          "min_improvement": 25.0
+        }
+      }
+    },
+    "p12": {
+      "apply_nominal_annual_rate_adjustments": {
+        "adjustment_stack_enabled": true
+      },
+      "statutory_ceiling_ok": {
+        "ceiling": 0.2825
+      },
+      "initiation_fee": {
+        "base_fee": 210.0,
+        "marginal_rate": 0.095,
+        "threshold": 1200.0,
+        "cap": 1480.0
+      },
+      "initiation_fee_capped": {
+        "cap": 1480.0
+      },
+      "initiation_fee_incl_tax": {
+        "tax_rate": 0.15
+      },
+      "credit_life_premium": {
+        "cap": 1000.0
+      },
+      "credit_life_cap_applied": {
+        "cap": 1000.0
+      },
+      "monthly_service_fee": {
+        "fee": 87.98
+      }
+    },
+    "revalidate_offer": {
+      "tolerance_cents": 1.0
+    }
+  }
+}

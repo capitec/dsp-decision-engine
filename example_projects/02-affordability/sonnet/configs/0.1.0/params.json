@@ -1,0 +1,71 @@
+{
+  "affordability_assessment": {
+    "evidence": {
+      "applicant1_income": {
+        "gross_monthly_income": {
+          "statement_confidence_threshold": 0.7,
+          "haircut_payslip": 0.05,
+          "haircut_statement_high_confidence": 0.1,
+          "haircut_statement_low_confidence": 0.25,
+          "haircut_declared": 0.2,
+          "haircut_bureau_estimated": 0.3
+        },
+        "income_source_code": {
+          "statement_confidence_threshold": 0.7
+        },
+        "income_haircut_applied": {
+          "statement_confidence_threshold": 0.7,
+          "haircut_payslip": 0.05,
+          "haircut_statement_high_confidence": 0.1,
+          "haircut_statement_low_confidence": 0.25,
+          "haircut_declared": 0.2,
+          "haircut_bureau_estimated": 0.3
+        }
+      },
+      "applicant2_income": {
+        "gross_monthly_income": {
+          "statement_confidence_threshold": 0.7,
+          "haircut_payslip": 0.05,
+          "haircut_statement_high_confidence": 0.1,
+          "haircut_statement_low_confidence": 0.25,
+          "haircut_declared": 0.2,
+          "haircut_bureau_estimated": 0.3
+        },
+        "income_source_code": {
+          "statement_confidence_threshold": 0.7
+        },
+        "income_haircut_applied": {
+          "statement_confidence_threshold": 0.7,
+          "haircut_payslip": 0.05,
+          "haircut_statement_high_confidence": 0.1,
+          "haircut_statement_low_confidence": 0.25,
+          "haircut_declared": 0.2,
+          "haircut_bureau_estimated": 0.3
+        }
+      },
+      "household_income_verification_tier": {
+        "minor_contribution_threshold": 0.1
+      },
+      "bureau_is_stale": {
+        "staleness_window_days": 7,
+        "staleness_window_days_mortgage": 14
+      },
+      "minimum_income_tier": {
+        "minimum_tier_new_application": 4,
+        "minimum_tier_limit_increase": 3,
+        "minimum_tier_arrangement": 6,
+        "minimum_tier_scenario": 4
+      }
+    },
+    "capacity": {
+      "overlay": {
+        "apply_max_affordable_instalment_adjustments": {
+          "adjustment_stack_enabled": true
+        }
+      },
+      "affordability_verdict_code": {
+        "marginal_band": 0.05
+      }
+    }
+  }
+}

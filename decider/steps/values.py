@@ -1,12 +1,25 @@
 from __future__ import annotations
 
+import keyword
 import typing as t
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import AfterValidator, BaseModel, ConfigDict
 
 from decider.serializable.dataframe import DataFrame
 
 T = t.TypeVar("T")
+
+
+def _identifier(name: str) -> str:
+    # The name becomes a field of the step's params namedtuple.
+    if not name.isidentifier() or keyword.iskeyword(name) or name.startswith("_"):
+        fixed = name.replace("-", "_").replace(" ", "_").lstrip("_") + ("_" if keyword.iskeyword(name) else "")
+        raise ValueError(f"param name {name!r} must be a Python identifier not starting with '_'; "
+                         f"rename it, e.g. {fixed!r}")
+    return name
+
+
+_Name = t.Annotated[str, AfterValidator(_identifier)]
 
 
 class ParamRef(BaseModel):
@@ -23,7 +36,7 @@ class ParamRef(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    param: str
+    param: _Name
     default: t.Any = None
     shared: bool = False
 
@@ -31,18 +44,25 @@ class ParamRef(BaseModel):
 class TableRef(BaseModel):
     """A table-valued config field whose rows come from the params document.
 
-    `{"table": "prices"}` reads the rows of param `prices`; the owning step
-    declares the columns and dtypes, so editing rows never recompiles.
+    `{"table": "prices"}` makes a required param `prices` of the owning step,
+    which declares the columns and dtypes, so editing rows or their count
+    never recompiles. In the params document the rows sit under the step's
+    node path, as a list with one dict per row and a value for every column.
+    `{"table": "prices", "shared": true}` reads `shared.prices` instead, so
+    several steps can use one table. `parameters()` reports the param as
+    `{"type": "table", "schema": {column: dtype}, "required": True}`;
+    `defaults()` shows it as `[]` (no rows) to say where the rows go.
 
     Example::
 
-        TableRef(table="prices")
-        # params document: {"pricing": {"prices": [{"product": "loan", "rate": 0.1}]}}
+        DecisionTableConfig(name="pricing", rows=TableRef(table="prices"), ...)
+        # inside flow(..., name="loans"), the params document is
+        # {"loans": {"pricing": {"prices": [{"product": "loan", "rate": 0.1}, {"product": "card", "rate": 0.2}]}}}
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    table: str
+    table: _Name
     shared: bool = False
 
 
@@ -50,4 +70,5 @@ Value = t.Union[T, ParamRef]
 """`Value[float]` accepts a literal (`0.7`) or a `ParamRef` dict."""
 
 TableValue = t.Union[DataFrame, TableRef]
-"""Inline rows (`{"data": [...]}`) or a `TableRef`."""
+"""A table field: rows inline (a list of row dicts, or `{"data": [...]}`), or `{"table": "<param>"}` for rows
+from the params document (see `TableRef`)."""

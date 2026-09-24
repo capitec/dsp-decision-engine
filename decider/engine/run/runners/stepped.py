@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+import warnings
 from typing import Iterator
 
 import numpy as np
@@ -12,7 +13,7 @@ from decider.engine.ir.decls import Input, NullPolicy, base_annotation
 from decider.engine.run.params import RunParams
 from decider.engine.run.runners.base import Checkpoint
 from decider.engine.run.runners.interpreted import InterpretedRunner, _absent, _note, _Scope
-from decider.engine.run.state import State
+from decider.engine.run.state import State, fill_missing
 from decider.engine.wiring.plan import Call, Plan, Version
 
 
@@ -27,6 +28,10 @@ class SteppedRunner(InterpretedRunner):
     then so does each `str` param of that node. A Python fallback gets plain
     Python values.
 
+    A step no kernel can run faithfully (it compares two `str` inputs, or a
+    `str` input with a literal) runs in Python instead, with a warning
+    naming it. With `strict=True` it raises instead.
+
     Example::
 
         exe = Engine().bind(pipeline, mode="stepped")
@@ -36,11 +41,12 @@ class SteppedRunner(InterpretedRunner):
 
     fuse = False
 
-    def __init__(self) -> None:
+    def __init__(self, strict: bool = False) -> None:
         super().__init__()
+        self.strict = strict
         self._plan: Plan | None = None
         self.units: dict[int, Unit] = {}
-        self._reads: dict[int, tuple[tuple[Input, Version, str], ...]] = {}
+        self._reads: dict[int, tuple[tuple[Input, Version, str, np.dtype | None], ...]] = {}
         self._strs: dict[int, tuple[str, ...]] = {}
         self._converted: dict[tuple[str, int], tuple] = {}
         self._codes: dict[str, int] = {}
@@ -55,12 +61,25 @@ class SteppedRunner(InterpretedRunner):
         return super().iterate(plan, state, params)
 
     def _compile(self, plan: Plan, lazy: bool) -> None:
-        strs = {c.id: _str_params(c) for c in plan.calls if c.node.kind == "scalar"}
+        strs: dict[int, tuple[str, ...]] = {}
+        python: dict[int, str] = {}
+        for c in plan.calls:
+            if c.node.kind != "scalar":
+                continue
+            strs[c.id], problem = _str_params(c)
+            if problem is None:
+                continue
+            why, fix = problem
+            if self.strict:
+                raise ValueError(f"{why}; to compile it, {fix}, or run it in mode='interpreted'")
+            warnings.warn(f"{why}. It runs in Python, row by row, instead; to compile it, {fix}", stacklevel=4)
+            python[c.id] = why
         # A row node reading `bytes` compares bytes, so its `str` params go in as UTF-8 spans.
         self._spans = {c.id for c in plan.calls if c.node.kind == "row" and _reads_bytes(c)}
         strs |= {k: tuple(d.name for d in c.node.params if d.annotation is str)
                  for c in plan.calls if (k := c.id) in self._spans}
-        self.units = compile_plan(plan, fuse=self.fuse)
+        self.units = compile_plan(plan, fuse=self.fuse, python=python)
+        self._python = python
         self._reads = {id(unit): _external(unit) for unit in self.units.values()}
         self._strs = {k: v for k, v in strs.items() if v}
         # Converted bundles are keyed by call id, which means another call in another plan.
@@ -85,16 +104,19 @@ class SteppedRunner(InterpretedRunner):
         values: dict[int, np.ndarray] = {}
         valid: dict[int, np.ndarray] = {}
         alive: list = []
-        for decl, v, path in self._reads[id(unit)]:
+        for decl, v, path, want in self._reads[id(unit)]:
             x, mask = state.read(v, rows)
-            if x.dtype == object and not python:
+            if not python and x.dtype == object:
                 x = self._typed(x, mask, decl, alive, None if rows is not None else state.source(v))
+            elif not python and want is not None and x.dtype != want and np.can_cast(x.dtype, want):
+                # An int column read as `float` (another step reads it as `int`): a kernel types what it gets.
+                x = x.astype(want)
             if mask is not None and not mask.all():
                 if decl.null_policy is NullPolicy.REQUIRED:
                     raise MissingInputError(decl.name, path, int((~mask).sum()), len(mask), absent=_absent(state, v))
                 if decl.null_policy is NullPolicy.MISSING_AS:
                     # ponytail: one fill per version per kernel; two readers with different fills share the first.
-                    x = np.where(mask, x, decl.fill).astype(x.dtype)
+                    x = fill_missing(x, mask, decl.fill).astype(x.dtype, copy=False)
                 valid[v.id] = mask
             values.setdefault(v.id, x)
         try:
@@ -142,13 +164,14 @@ class SteppedRunner(InterpretedRunner):
         return converted
 
 
-def _external(unit: Unit) -> tuple[tuple[Input, Version, str], ...]:
-    # What a unit reads from outside itself, with the null policy that applies.
+def _external(unit: Unit) -> tuple[tuple[Input, Version, str, np.dtype | None], ...]:
+    # What a unit reads from outside itself, with the null policy that applies and the dtype a number is read as.
     inside = {v.id for c in unit.calls for v in c.writes} | getattr(unit, "inner", set())
     reads = [(i, v, c.node.origin.path) for c in unit.calls for i, v in zip(c.node.inputs, c.reads) if v.id not in inside]
     # A value a packed branch or loop only copies needs no policy: a null in it sends the run down the unpacked path.
     reads += [(Input(v.name, base_annotation(v.annotation)), v, "") for v in getattr(unit, "passthrough", ())]
-    return tuple(reads)
+    return tuple((i, v, path, numpy_dtype(b) if (b := base_annotation(i.annotation)) in (float, int, bool) else None)
+                 for i, v, path in reads)
 
 
 def _reads_bytes(call: Call) -> bool:
@@ -177,27 +200,23 @@ def _spans(x: np.ndarray, mask: np.ndarray | None, alive: list, source: pl.Serie
     return extracted.columns["s"].values
 
 
-def _str_params(call: Call) -> tuple[str, ...]:
+def _str_params(call: Call) -> tuple[tuple[str, ...], tuple[str, str] | None]:
+    # The `str` params a kernel takes as codes, and (why, fix) when no kernel can run the step faithfully.
     node = call.node
     strs = [i.name for i in node.inputs if base_annotation(i.annotation) is str]
     params = tuple(d.name for d in node.params if d.annotation is str)
     path = node.origin.path
     if not strs:
         if params:
-            raise ValueError(
-                f"{path}: `str` param '{params[0]}' reaches a compiled kernel as the code of its literal, "
-                "which only means something compared with a `str` input, and this step reads none"
-            )
-        return params
+            return (), (f"{path}: `str` param '{params[0]}' reaches a compiled kernel as the code of its "
+                        "literal, which only means something compared with a `str` input, and this step reads none",
+                        "compare it in a step that reads the `str` input, or make it a `bool` or `int` param")
+        return (), None
     if len(strs) > 1:
-        raise ValueError(
-            f"{path}: reads several `str` inputs {strs}; compiled modes compare a `str` input only "
-            "with a `str` param, so split the step or run it in interpreted mode"
-        )
+        return (), (f"{path}: reads several `str` inputs {strs}; compiled modes compare a `str` input only "
+                    "with a `str` param", "split the step so each part reads one `str` input")
     if not params or any(isinstance(v, str) for _, v in node.consts):
-        raise ValueError(
-            f"{path}: `str` input '{strs[0]}' enters a compiled kernel as a code, so a literal in the "
-            "function body would never match it; declare the literal as a `str` param, "
-            "e.g. `private: str = param(\"private\")`"
-        )
-    return params
+        return (), (f"{path}: `str` input '{strs[0]}' enters a compiled kernel as a code, so a literal in the "
+                    "function body would never match it",
+                    "declare the literal as a `str` param, e.g. `private: str = param(\"private\")`")
+    return params, None

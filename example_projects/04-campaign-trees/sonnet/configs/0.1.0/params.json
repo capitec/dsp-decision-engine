@@ -1,0 +1,13 @@
+{
+  "campaign_trees": {
+    "tree_adjusted": {
+      "campaign23_node6_discretionary_income_thresh": 2600.0
+    },
+    "overlay_stack_id_param": {
+      "overlay_stack_id": "OS-ADJ-C23-VOL-001"
+    },
+    "estimate_max_affordable_instalment": {
+      "serviceability_ratio": 0.3
+    }
+  }
+}

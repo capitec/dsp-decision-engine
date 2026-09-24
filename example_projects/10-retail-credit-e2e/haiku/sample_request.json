@@ -1,0 +1,22 @@
+{
+  "entry_point_code": 1,
+  "identity_number": "9005141234087",
+  "product_code": 10,
+  "amount": 75000,
+  "term_months": 48,
+  "channel_code": 1,
+  "gross_monthly_income": 45000,
+  "dependants": 2,
+  "employment_type_code": 1,
+  "bureau_accounts": 2,
+  "internal_tenure_months": 36,
+  "has_bureau_consent": true,
+  "has_data_sharing_consent": true,
+  "consolidation_eligible": false,
+  "request_metadata": {
+    "application_id": "APP-2024-001",
+    "client_segment": "existing_clean",
+    "channel_name": "branch",
+    "region_code": "ZA-WC"
+  }
+}

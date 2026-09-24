@@ -1,0 +1,84 @@
+{
+  "decision_id": "d10e0000-1111-4a2b-9c4b-2f6e7a1b0001",
+  "decision_date": "2026-09-24",
+  "entry_point_code": 1,
+  "product_code": 10,
+  "channel_code": 3,
+  "applicant_age_years": 34.0,
+  "dependants_count": 2,
+  "employment_type_code": 1,
+  "months_employed": 42.0,
+  "internal_tenure_months": 40.0,
+
+  "is_resident": true,
+  "has_contractual_capacity": true,
+  "product_available": true,
+  "on_exclusion_list": false,
+  "is_sanctioned": false,
+  "is_deceased": false,
+  "in_debt_review": false,
+  "in_administration": false,
+  "has_in_flight_application": false,
+  "is_existing_client": true,
+  "is_non_resident": false,
+  "is_staff": false,
+  "is_joint_application": false,
+  "internal_credit_holding": true,
+  "bureau_accounts_ever_count": 5,
+  "bureau_history_months": 48.0,
+  "self_employed_haircut": false,
+  "cover_type_code": 1,
+
+  "has_authenticated_session": true,
+  "identity_number_match": false,
+  "identity_verification_confirmed": false,
+  "probabilistic_match_confidence": 0.0,
+
+  "bureau_enquiry_consent": true,
+  "data_sharing_consent": true,
+  "marketing_opt_out": false,
+
+  "bureau_available": true,
+
+  "device_is_new": true,
+  "contact_changed_days_ago": 11,
+  "income_employer_mismatch": false,
+  "address_change_count_90d": 0,
+  "shared_device_count": 0,
+  "consortium_watchlist_hit": false,
+  "internal_fraud_register_hit": false,
+  "synthetic_identity_score": 0.05,
+  "application_burst_count": 0,
+  "identity_number_reused": false,
+  "sector_employer_mismatch": false,
+  "referral_chain_flag": false,
+  "has_adverse_internal_history": false,
+
+  "payslip_income": 18500.0,
+  "variable_pay_history": [1450.0, 1600.0, 1300.0],
+  "declared_living_expenses": 6200.0,
+  "court_ordered_deductions": 0.0,
+
+  "bureau_accounts": [
+    {"account_type_code": 10, "balance": 8500.0, "limit": 15000.0, "instalment": 450.0,
+     "months_in_arrears": 0, "opened_date": "2022-03-01", "closed": false, "is_internal": false}
+  ],
+  "internal_accounts": [
+    {"account_type_code": 1, "balance": 22000.0, "instalment": 1150.0,
+     "months_in_arrears": 0, "opened_date": "2021-06-15", "closed": false, "is_internal": true}
+  ],
+
+  "bureau_score": 640.0,
+
+  "enquiry_velocity_90d": 4,
+  "channel_open": true,
+  "on_concentration_watchlist": false,
+  "group_limit": 260000.0,
+  "group_exposure": 148000.0,
+  "campaign_id": "",
+
+  "is_consolidation_eligible": true,
+
+  "requested_amount": 95000.0,
+  "term_months": 60
+}
