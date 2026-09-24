@@ -175,6 +175,7 @@
     "test:stories": "pnpm build && E2E=stories vitest run",
     "test:large": "pnpm build && E2E=large vitest run",
     "test:controls": "pnpm build && E2E=controls vitest run",
+    "test:features": "pnpm build && E2E=features vitest run",
     "package": "pnpm build && vsce package --no-dependencies"
   },
   "devDependencies": {

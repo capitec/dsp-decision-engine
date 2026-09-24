@@ -119,6 +119,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     vscode.debug.onDidReceiveDebugSessionCustomEvent(async (e) => {
       if (e.session.type !== "decider" || e.event !== "decider.status") return;
       const body = e.body as RunStatus;
+      if (body.current) clearRunTo(body.current.path);
       structure.setStatus(body.current, body.finishedPaths);
       GraphPanel.post({ type: "status", ...body });
       const { columns, key } = (await e.session.customRequest("decider.state")) as { columns: ColumnSummary[] | null; key: RecordKey };
@@ -127,6 +128,7 @@ export function activate(ctx: vscode.ExtensionContext) {
 
     vscode.debug.onDidTerminateDebugSession((s) => {
       if (s.type !== "decider") return;
+      clearRunTo();
       structure.setStatus(null, []);
       GraphPanel.post({ type: "status", current: null, finished: true, finishedPaths: [], visits: {}, record: null });
       GraphPanel.post({ type: "state", columns: null, rows: 0, key: null });
@@ -271,8 +273,23 @@ async function runSweep(list: Scenario[], fromHere: boolean) {
 let lastFiles: { a: string; b: string; label: string } | undefined;
 
 /** Pause before a step: a function breakpoint on its path, then run (or start) the flow to it. */
+/** "Run to" breakpoints: gone once the run pauses there or the session ends, like run to cursor. */
+let runToBreakpoints: vscode.FunctionBreakpoint[] = [];
+
+function clearRunTo(pausedAt?: string) {
+  const done = runToBreakpoints.filter((b) => pausedAt === undefined || b.functionName === pausedAt);
+  if (!done.length) return;
+  vscode.debug.removeBreakpoints(done);
+  runToBreakpoints = runToBreakpoints.filter((b) => !done.includes(b));
+}
+
 async function runTo(nodePath: string) {
-  vscode.debug.addBreakpoints([new vscode.FunctionBreakpoint(nodePath)]);
+  const own = vscode.debug.breakpoints.some((b) => b instanceof vscode.FunctionBreakpoint && b.functionName === nodePath);
+  if (!own) {
+    const bp = new vscode.FunctionBreakpoint(nodePath);
+    runToBreakpoints.push(bp);
+    vscode.debug.addBreakpoints([bp]);
+  }
   const s = deciderSession();
   if (s) await s.customRequest("continue", { threadId: 1 });
   else if (shown)
