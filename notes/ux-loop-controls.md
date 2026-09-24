@@ -9,15 +9,15 @@ Five stories in `tools/vscode-decider/test/e2e/features.e2e.ts` (`pnpm test:feat
 - F4: find which step set a value, see its history, and go back there.
 - F5: compare 5 and 10 loop iterations, then pause at iteration 3.
 
-**Result: stopped after round 3. Rounds 1 to 3 (6.6, 7.0, 7.1) all fall within 0.5 of each other.**
-Round 1 first stopped the loop on a change under 0.5; the rule was then widened to three rounds in a row.
+The stop rule changed twice. Round 1 stopped on a change under 0.5. Round 3 stopped with three rounds within 0.5.
+The scores were still climbing, so the rule became three rounds without a new best.
 
 Each round, a fresh judge agent scores the screenshots alone, 1 to 10 per story. A story whose goal isn't
 visibly met caps at 5. The loop stops at the first of these:
 
 - an overall score of 8 or more;
 - 10 rounds;
-- three consecutive rounds within 0.5 of each other.
+- three rounds in a row without a new best overall score.
 
 | Round | Overall | F1 arms | F2 force | F3 value bp | F4 history | F5 loop |
 |---|---|---|---|---|---|---|
@@ -25,6 +25,7 @@ visibly met caps at 5. The loop stops at the first of these:
 | 1 | 6.6 | 7 | 7 | 7 | 6 | 6 |
 | 2 | 7.0 | 7 | 7 | 8 | 7 | 6 |
 | 3 | 7.1 | 7.5 | 7 | 8 | 6 | 7 |
+| 4 | 7.4 | 8 | 7 | 8 | 6 | 8 |
 
 ## Round 0 (baseline)
 
@@ -170,3 +171,47 @@ Backlog, the judge's problems most damaging first:
     branch controls.
 12. A loop comparison doesn't say how many iterations each record runs by itself, or that a force overrides
     the while condition.
+
+## Round 4: 7.4 (best so far)
+
+Changes:
+
+- Value history:
+  - "Go back" can target a step by path. Where a step passed a value on, the history starts with the step that
+    computed it, and going back lands there.
+  - The history stays in view after going back past the step that first set the value.
+- Branch and loop controls:
+  - The force chip reads "product → credit_card".
+  - Comparison sides read "client_id 20400: credit_card (at product)".
+  - Paused just before the condition, forcing says what will happen when it runs.
+  - Compare says every record runs and only the named one is forced.
+  - A loop says a forced count overrides its condition.
+- Compare:
+  - It says "Only client_id 20400 was forced; the other 39 ran as they are".
+  - The step count splits into stopped, ran-instead and changed values.
+- Graph and details:
+  - The graph has a "Key" for its node styles.
+  - A new debug run hides an earlier comparison's colours.
+  - The breakpoint form sits with the step's controls and closes after adding, leaving its confirmation.
+  - The details header casts a shadow, and scrolled-to sections clear it.
+
+The judge's problems, most damaging first:
+
+1. F4: after going back to pl_raw_rate, the history says "Nothing has set pl_rate yet" and lists pl_regulated_rate
+   as "set to", contradicting the screen before. Wants the same steps and wording at every pause.
+2. F4: "pl_raw_rate computed it (as pl_raw_rate)" mixes names. Wants "the value came from pl_raw_rate;
+   pl_regulated_rate copied it into pl_rate unchanged".
+3. F2: "Re-run product forced" when already paused before the condition looks like a no-op, and its note reads as
+   still in progress.
+4. F3: "(1 on this step)" implies the breakpoint belongs to one step. Its scope is the whole personal_loan
+   branch.
+5. F1/F2: the "only client_id" checkbox is easy to miss, and it scopes both actions. Wants the scope inside each
+   action.
+6. F1: the comparison header repeats the client and reads like code. The step-by-step block is noise for an
+   analyst.
+7. An edge label overlaps a node.
+8. Disabled buttons look like plain text.
+9. The step's action row varies between steps.
+10. The Variables pane truncates "(no offer)" so the figures look like an offer.
+11. The record's arm can be off canvas.
+12. "Will re-run" colours are explained only behind the collapsed Key.

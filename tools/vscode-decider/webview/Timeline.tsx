@@ -10,7 +10,8 @@ interface Props {
   /** Where the debug run is paused, to mark the change it's paused just after. */
   current?: Checkpoint | null;
   onSelect: (path: string) => void;
-  onGoTo: (change: number) => void;
+  /** A change's index, or the path of a step to go back to just after. */
+  onGoTo: (change: number | string) => void;
 }
 
 const byYou = (c: ValueChange) => c.path.startsWith("override@") || c.path.startsWith("force@");
@@ -55,7 +56,8 @@ export function ValueTimeline({ history, who, lineage, current, onSelect, onGoTo
           {passed ? (
             <>
               {name} is <strong>{fmt(last.value)}</strong>: <a title={passed.producer!} onClick={() => onSelect(passed.producer!)}>{short(passed.producer!)}</a> computed it (as{" "}
-              <span className="mono">{passed.name}</span>), then {step(last)} passed it on unchanged{keptBy.length ? ` and ${keptBy.join(", ")} kept it` : ""}. {goBack(last, "⤺ Go back to that moment")}
+              <span className="mono">{passed.name}</span>), then {step(last)} passed it on unchanged{keptBy.length ? ` and ${keptBy.join(", ")} kept it` : ""}.{" "}
+              <button className="link" title={`Re-run to just after ${short(passed.producer!)} and pause there`} onClick={() => onGoTo(passed.producer!)}>⤺ Go back to where it was computed</button>
             </>
           ) : (
             <>
@@ -69,12 +71,21 @@ export function ValueTimeline({ history, who, lineage, current, onSelect, onGoTo
       {who && !last && <div className="muted">{history.input ? `${name} is still its input value, ${fmt(history.initial)}.` : `Nothing has set ${name} yet.`}</div>}
       <ol className="history">
         {history.input && <li className="muted">starts as {who ? <span className="mono">{fmt(history.initial)}</span> : "the input column"}</li>}
+        {passed && (
+          <li>
+            <span className="mono">computed <strong>{fmt(passed.value)}</strong></span> <span className="muted">as {passed.name} by</span>{" "}
+            <a title={passed.producer!} onClick={() => onSelect(passed.producer!)}>{short(passed.producer!)}</a>{" "}
+            <button className="link" onClick={() => onGoTo(passed.producer!)}>go back here</button>
+          </li>
+        )}
         {changes.map((c) => (
           <li key={`${c.change}-${c.path}-${c.iteration}`} className={c.pending ? "pending" : c.kept ? "kept" : ""} title={c.pending ? "Undone by going back: it runs again when you continue" : undefined}>
             {c.kept ? (
               <span className="mono muted">kept {fmt(c.value)}</span>
             ) : who ? (
-              c.before === null || c.before === undefined ? (
+              passed && c === last ? (
+                <span className="mono">passed on {fmt(c.value)} unchanged</span>
+              ) : c.before === null || c.before === undefined ? (
                 <span className="mono">set to <strong>{fmt(c.value)}</strong></span>
               ) : (
                 <span className="mono">{fmt(c.before)} → <strong>{fmt(c.value)}</strong></span>

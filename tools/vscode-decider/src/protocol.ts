@@ -148,6 +148,8 @@ export interface Lineage {
   value: unknown;
   via?: "merge" | "carry";
   inputs: Lineage[];
+  /** Records a comparison forced; the others ran as they are. */
+  forcedRows?: number[];
   /** Set when the value came from you: "force@<branch or loop>" or "override@<path>", and what it was before. */
   setBy?: string;
   was?: unknown;
@@ -242,7 +244,8 @@ export type FromWebview =
   | { type: "lineage"; name: string }
   | { type: "treePath"; path: string }
   | { type: "rewind"; path: string }
-  | { type: "goTo"; change: number }
+  /** A change's index in the timeline, or a step's path: just after it last wrote. */
+  | { type: "goTo"; change: number | string }
   | { type: "skip"; path: string }
   | { type: "reloadStep"; path: string }
   | { type: "restore"; path: string }

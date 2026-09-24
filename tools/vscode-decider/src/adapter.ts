@@ -489,7 +489,7 @@ export class DeciderDebugSession extends LoggingDebugSession {
           break;
         case "decider.goTo":
           this.sendResponse(response);
-          return void (await this.run("go_to", { change: args.change }, "goto"));
+          return void (await this.run("go_to", typeof args.change === "string" ? { path: args.change, row: this.record } : { change: args.change }, "goto"));
         case "decider.rewind":
           this.sendResponse(response);
           return void (await this.run("rewind", { path: args.path }));

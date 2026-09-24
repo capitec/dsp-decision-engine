@@ -153,8 +153,9 @@ async function onWebview(m: FromWebview, describe: DescribeResult) {
       break;
     case "lineage": {
       if (!s) return post({ type: "lineage", lineage: null, history: null });
+      // A value not written yet has no lineage, but its history still lists what will set it.
       const [lineage, history] = await Promise.all([
-        s.customRequest("decider.lineage", { name: m.name }) as Thenable<Lineage>,
+        Promise.resolve(s.customRequest("decider.lineage", { name: m.name }) as Thenable<Lineage>).catch(() => null),
         s.customRequest("decider.changes", { name: m.name }) as Thenable<ValueHistory>,
       ]);
       post({ type: "lineage", lineage, history });
@@ -303,8 +304,8 @@ async function compare(a: Side, b: Side, forced = false) {
     const comparison = await runComparison(a, b, pythonCommand(), path.dirname(b.file));
     if (a.params || b.params) comparison.paramsDocs = { a: a.params ?? {}, b: b.params ?? {} };
     comparison.forced = forced || !!(a.forces?.length || b.forces?.length);
-    if ([...(a.forces ?? []), ...(b.forces ?? [])].some((f) => f.row !== null && f.row !== undefined))
-      comparison.note = `Both runs cover all ${comparison.rows} records; the force changes only the record it names, so only that record can differ.`;
+    const rows = [...(a.forces ?? []), ...(b.forces ?? [])].map((f) => f.row).filter((r): r is number => r !== null && r !== undefined);
+    if (rows.length) comparison.forcedRows = [...new Set(rows)];
     if (a.file !== b.file) {
       comparison.files = { a: a.file, b: b.file };
       lastFiles = { ...comparison.files, label: a.label };

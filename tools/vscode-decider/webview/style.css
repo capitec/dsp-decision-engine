@@ -2256,3 +2256,46 @@ input.narrow {
   color: var(--vscode-charts-yellow, #cca700);
   font-weight: 600;
 }
+aside .step-head {
+  box-shadow: 0 4px 6px -4px var(--vscode-widget-shadow, #0008);
+}
+aside .how,
+aside .timeline,
+aside .group-controls,
+aside .watch-form {
+  scroll-margin-top: 120px;
+}
+.legend {
+  position: relative;
+  font-size: 11px;
+  margin-right: 8px;
+}
+.legend > div {
+  position: absolute;
+  right: 0;
+  top: 18px;
+  z-index: 5;
+  width: 360px;
+  padding: 6px 8px;
+  background: var(--vscode-editorWidget-background);
+  border: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border));
+}
+.swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 2px solid;
+  vertical-align: middle;
+}
+.swatch.paused {
+  border-color: var(--paused);
+}
+.swatch.selected {
+  border-color: var(--vscode-focusBorder);
+}
+.swatch.lineage {
+  border-color: var(--lineage);
+}
+.swatch.changed {
+  border-color: var(--vscode-charts-orange, orange);
+}

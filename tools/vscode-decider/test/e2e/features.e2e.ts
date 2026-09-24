@@ -126,7 +126,7 @@ describe("steering and tracing stories", () => {
         await wv(c).locator(".timeline .why button").click();
         await wv(c).locator(".pause-banner", { hasText: "Went back" }).waitFor({ timeout: 120_000 });
         await wv(c).locator(".timeline").scrollIntoViewIfNeeded();
-        await shot("Clicked '⤺ Go back to that moment'.");
+        await shot("Clicked the '⤺ Go back…' link in the answer.");
       },
     );
   }, 1_200_000);

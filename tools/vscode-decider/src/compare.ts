@@ -54,6 +54,8 @@ export interface Comparison {
   sharedUsers?: Record<string, string[]>;
   /** The runs differ by a forced branch arm or loop count, not by an edit. */
   forced?: boolean;
+  /** The records the force named; the others ran as they are. */
+  forcedRows?: number[];
   /** Said under the title, e.g. how the two runs were made. */
   note?: string;
   /** The file the flow's PARAMS come from, e.g. "params.json". */
