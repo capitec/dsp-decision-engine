@@ -1,0 +1,20 @@
+{
+  "entry_point": "ep1_origination",
+  "parameters": {
+    "application_id": 100001,
+    "product_code": 50,
+    "amount": 500000,
+    "term_months": 36,
+    "entities_list": [
+      {
+        "entity_key": "director_001",
+        "legal_form_code": 1,
+        "name": "John Doe",
+        "ownership_pct": 100,
+        "criticality_class": "critical",
+        "adverse_events": []
+      }
+    ],
+    "adverse_events_list": []
+  }
+}

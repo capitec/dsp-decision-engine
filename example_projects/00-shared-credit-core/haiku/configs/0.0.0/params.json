@@ -1,0 +1,20 @@
+{
+  "core-library": {
+    "income_step": {
+      "payslip_income": 15000.0
+    },
+    "deductions_step": {
+      "employment_type_code": 1
+    },
+    "expenses_step": {
+      "declared_living_expenses": 1000.0
+    },
+    "affordability_step": {
+      "affordability_buffer": 0.12
+    },
+    "pricing_step": {
+      "amount": 50000.0,
+      "term_months": 36
+    }
+  }
+}

@@ -1,0 +1,1 @@
+"""Collections treatment assignment logic."""

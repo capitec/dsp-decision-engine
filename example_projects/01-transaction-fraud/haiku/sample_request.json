@@ -1,0 +1,30 @@
+{
+  "raw_event": {
+    "event_id": 1001,
+    "event_type_code": 210,
+    "event_timestamp": "2026-09-24T14:22:03Z",
+    "client_id": 1000001,
+    "channel_code": 2,
+    "product_code": 0,
+    "amount": 8500.00,
+    "currency_code": "ZAR",
+    "device_id": "dev_abc123",
+    "session_id": "sess_xyz789",
+    "beneficiary_id": 5000001,
+    "beneficiary_age_hours": 3.5,
+    "beneficiary_on_mule_list": false,
+    "device_reputation_band": 2,
+    "device_change_hours": 36.0,
+    "sim_change_hours": 120.0,
+    "velocity_1min_count": 2,
+    "velocity_1min_sum": 9500.00,
+    "velocity_10min_count": 5,
+    "velocity_10min_sum": 28000.00,
+    "velocity_1h_count": 12,
+    "velocity_24h_count": 45,
+    "model_score": 620.0
+  },
+  "client_id": 1000001,
+  "decision_date": "2026-09-24",
+  "client_segments": ["retail", "standard"]
+}

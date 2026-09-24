@@ -1,0 +1,60 @@
+{
+  "action": "replay_and_explain_decision",
+  "parameters": {
+    "decision_id": "DEC-2024-09-24-001",
+    "flow_type": "01",
+    "audience": "analyst",
+    "decision_date": "2024-09-24",
+    "evidence": {
+      "decision_id": "DEC-2024-09-24-001",
+      "flow_name": "01-transaction-fraud",
+      "decision_date": "2024-09-24",
+      "inputs_as_received": {
+        "event_id": "EVT-2024-09-24-00001",
+        "client_id": 123456,
+        "amount": 50000.00,
+        "transaction_type": "instant_payment",
+        "beneficiary_age_hours": 2,
+        "device_change_hours": 48
+      },
+      "parameters": {
+        "rule_set_version": 1,
+        "overlay_set_id": "OVL-2024-Q3"
+      },
+      "outputs": {
+        "action_code": "step_up",
+        "decline_reason_codes": ["FR-104"],
+        "primary_reason_code": "FR-104",
+        "rules_fired": ["CF-001", "AT-012"]
+      },
+      "rules_fired": [
+        {
+          "rule_id": "CF-001",
+          "description": "Card velocity exceeds threshold",
+          "severity": "major",
+          "action": "step_up"
+        },
+        {
+          "rule_id": "AT-012",
+          "description": "Unusual amount for beneficiary",
+          "severity": "minor",
+          "action": "monitor"
+        }
+      ],
+      "gates_evaluated": [
+        {
+          "gate_id": "G-001",
+          "name": "Sanctions Check",
+          "outcome": "passed",
+          "value": "no_match"
+        }
+      ],
+      "adjusted_values": {
+        "action_code": "step_up"
+      },
+      "unadjusted_values": {
+        "action_code": "monitor"
+      }
+    }
+  }
+}

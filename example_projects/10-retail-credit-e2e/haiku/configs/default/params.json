@@ -1,0 +1,210 @@
+{
+  "ep1_entry_point_1_new_credit": {
+    "product_code": {
+      "value": 10,
+      "type": "int",
+      "minimum": 10,
+      "maximum": 40,
+      "description": "Product code (10=Flex Loan, 20=Everyday Card, 21=Access Facility)"
+    },
+    "amount": {
+      "value": 50000,
+      "type": "float",
+      "minimum": 2000,
+      "maximum": 500000,
+      "description": "Requested loan amount in ZAR"
+    },
+    "term_months": {
+      "value": 36,
+      "type": "int",
+      "minimum": 6,
+      "maximum": 84,
+      "description": "Requested term in months"
+    },
+    "channel_code": {
+      "value": 1,
+      "type": "int",
+      "minimum": 1,
+      "maximum": 10,
+      "description": "Channel identifier (1=branch, 2=app, 3=phone, etc.)"
+    },
+    "gross_monthly_income": {
+      "value": 30000,
+      "type": "float",
+      "minimum": 1000,
+      "maximum": 200000,
+      "description": "Gross monthly income before deductions"
+    },
+    "dependants": {
+      "value": 0,
+      "type": "int",
+      "minimum": 0,
+      "maximum": 10,
+      "description": "Number of financial dependants"
+    },
+    "employment_type_code": {
+      "value": 1,
+      "type": "int",
+      "minimum": 1,
+      "maximum": 6,
+      "description": "Employment type (1=employed, 2=self-employed, 3=pensioner, 4=grant, 5=informal, 6=student)"
+    },
+    "bureau_accounts": {
+      "value": 3,
+      "type": "int",
+      "minimum": 0,
+      "maximum": 20,
+      "description": "Number of bureau accounts on client's file"
+    },
+    "internal_tenure_months": {
+      "value": 24,
+      "type": "int",
+      "minimum": 0,
+      "maximum": 360,
+      "description": "Months as internal customer"
+    },
+    "has_bureau_consent": {
+      "value": true,
+      "type": "boolean",
+      "description": "Whether client has given consent for bureau enquiry"
+    },
+    "has_data_sharing_consent": {
+      "value": true,
+      "type": "boolean",
+      "description": "Whether client has given consent for data sharing"
+    },
+    "consolidation_eligible": {
+      "value": false,
+      "type": "boolean",
+      "description": "Whether client meets consolidation eligibility criteria (triggers loop L1)"
+    }
+  },
+  "p06_feature_derivation": {
+    "gross_monthly_income": {
+      "value": 30000,
+      "type": "float",
+      "minimum": 1000,
+      "maximum": 200000
+    },
+    "dependants": {
+      "value": 0,
+      "type": "int",
+      "minimum": 0,
+      "maximum": 10
+    },
+    "employment_type_code": {
+      "value": 1,
+      "type": "int",
+      "minimum": 1,
+      "maximum": 6
+    },
+    "bureau_accounts": {
+      "value": 3,
+      "type": "int",
+      "minimum": 0,
+      "maximum": 20
+    },
+    "internal_tenure_months": {
+      "value": 24,
+      "type": "int",
+      "minimum": 0,
+      "maximum": 360
+    }
+  },
+  "p07_scoring": {
+    "base_score": {
+      "value": 650,
+      "type": "int",
+      "minimum": 300,
+      "maximum": 850,
+      "description": "Base score before adjustments"
+    }
+  },
+  "p09_policy_gates_and_caps": {
+    "cap_rules_count": {
+      "value": 52,
+      "type": "int",
+      "minimum": 1,
+      "maximum": 100,
+      "description": "Number of cap register entries (real: 52)"
+    }
+  },
+  "p10_affordability_assessment": {
+    "buffer_override": {
+      "value": null,
+      "type": "float",
+      "description": "Affordability buffer override (if null, use 12%). Range 0.0-0.3"
+    },
+    "force_fail": {
+      "value": false,
+      "type": "boolean",
+      "description": "Force affordability to fail (for testing)"
+    },
+    "max_loop_passes": {
+      "value": 4,
+      "type": "int",
+      "minimum": 1,
+      "maximum": 10,
+      "description": "Maximum iterations for loop L1 (affordability re-run)"
+    }
+  },
+  "p12_pricing": {
+    "amount": {
+      "value": 50000,
+      "type": "float",
+      "minimum": 2000,
+      "maximum": 500000
+    },
+    "term_months": {
+      "value": 36,
+      "type": "int",
+      "minimum": 6,
+      "maximum": 84
+    },
+    "rate_override": {
+      "value": null,
+      "type": "float",
+      "description": "Override computed rate (for testing); null means compute from grade"
+    }
+  },
+  "p13_the_solve": {
+    "requested_amount": {
+      "value": 50000,
+      "type": "float",
+      "minimum": 2000,
+      "maximum": 500000
+    },
+    "requested_term": {
+      "value": 36,
+      "type": "int",
+      "minimum": 6,
+      "maximum": 84
+    }
+  },
+  "p14_consolidation_search": {
+    "max_scenarios": {
+      "value": 5,
+      "type": "int",
+      "minimum": 1,
+      "maximum": 250,
+      "description": "Maximum consolidation scenarios to evaluate (real: up to 250)"
+    }
+  },
+  "p15_limit_assignment": {
+    "proposed_limit": {
+      "value": 100000,
+      "type": "float",
+      "minimum": 1000,
+      "maximum": 300000
+    }
+  },
+  "build": {
+    "entry_point_code": {
+      "value": 1,
+      "type": "int",
+      "minimum": 1,
+      "maximum": 8,
+      "description": "Entry point routing (1=new credit, 2=limit change, 3=limit program, etc.)"
+    }
+  }
+}

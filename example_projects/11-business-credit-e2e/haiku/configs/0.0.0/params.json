@@ -1,0 +1,7 @@
+{
+  "covenant_test_dscr": {
+    "ebitda": 100000,
+    "debt_service_annual": 60000,
+    "dscr_threshold": 1.25
+  }
+}
