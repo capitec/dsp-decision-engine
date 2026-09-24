@@ -256,11 +256,22 @@ export function App() {
           {edits.length > 0 && (
             <>
               {" · "}
-              <span className="edit-dropdown">
-                <button className="link" aria-expanded={editsOpen} title="The steps skipped or swapped in this run" onClick={() => setEditsOpen(!editsOpen)}>
-                  {edits.length} edit{edits.length === 1 ? "" : "s"} {editsOpen ? "▴" : "▾"}
-                </button>
-              </span>{" "}
+              {edits.length <= 2 ? (
+                edits.map(([p, a]) => (
+                  <span key={p} className="edit-chip">
+                    ✎ {editLabel([p, a])}
+                    {edits.length > 1 && (
+                      <button className="link" title="Compare the flow as started with only this edit" onClick={() => compareEdits(p)}>compare</button>
+                    )}
+                  </span>
+                ))
+              ) : (
+                <span className="edit-dropdown">
+                  <button className="link" aria-expanded={editsOpen} title="The steps skipped or swapped in this run" onClick={() => setEditsOpen(!editsOpen)}>
+                    {edits.length} edits {editsOpen ? "▴" : "▾"}
+                  </button>
+                </span>
+              )}{" "}
               <button className="banner-button" title="Run the flow as started and as edited, start to end, and compare every result" onClick={() => compareEdits()}>
                 {edits.length > 1 ? "Compare all edits" : "Compare with the flow as started"}
               </button>

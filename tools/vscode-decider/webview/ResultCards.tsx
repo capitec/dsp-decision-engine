@@ -6,7 +6,8 @@ import { formatValue, recordLabel } from "../src/protocol";
 const FIRST = 12;
 
 /** The records whose results changed, one card each: approved first, declined ones grouped after. */
-export function ResultCards({ c, record, onFocus }: { c: Comparison; record: number | null; onFocus?: (row: number) => void }) {
+export function ResultCards({ c, record, onFocus, onSelect }: { c: Comparison; record: number | null; onFocus?: (row: number) => void; onSelect?: (path: string) => void }) {
+  const writer = (n: string) => [...c.steps].reverse().find((s) => s.outputs.some((o) => o.name === n))?.path;
   const [more, setMore] = useState(false);
   const moved = (n: string, r: number) => !same(c.results.a[n]?.[r], c.results.b[n]?.[r]);
   const cols = Object.keys(c.results.b);
@@ -40,6 +41,9 @@ export function ResultCards({ c, record, onFocus }: { c: Comparison; record: num
         .map((n) => (
           <div key={n} className="result-line">
             <span className="mono">{n}</span> <s className="before">{formatValue(c.results.a[n]?.[r], n)}</s> → <strong className="after">{formatValue(c.results.b[n]?.[r], n)}</strong>
+            {onSelect && writer(n) && (
+              <a className="small why" title={`Show ${writer(n)!.split("/").pop()}, the step that last wrote ${n}`} onClick={() => onSelect(writer(n)!)}> why?</a>
+            )}
           </div>
         ))}
       {declined(r) && cols.some((n) => n !== decision && n !== "reason_code" && moved(n, r)) && (
@@ -90,8 +94,10 @@ export function headline(c: Comparison): string | null {
   return [
     decided.length ? `Decisions changed for ${decided.length} of ${c.rows} (${counts})` : `No decision changed`,
     reasons ? `${reasons} decline${reasons === 1 ? "" : "s"} now for a different reason` : "",
-    `offers changed for ${offers.length} applicant${offers.length === 1 ? "" : "s"}`,
-    changed.length > offers.length ? `${changed.length - offers.length} declined record${changed.length - offers.length === 1 ? "" : "s"} changed values only` : "",
+    offers.length ? `offers changed for ${offers.length} applicant${offers.length === 1 ? "" : "s"}` : "no offer changed",
+    changed.length > offers.length
+      ? `${changed.length - offers.length} declined applicant${changed.length - offers.length === 1 ? "" : "s"} had internal values change (no offer affected)`
+      : "",
   ]
     .filter(Boolean)
     .join(" · ");

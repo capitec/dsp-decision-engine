@@ -147,7 +147,7 @@ export function Graph({ ir, showData, run, selected, highlightColumn, lineage, d
             <text x={n.width / 2} y={35} textAnchor="middle" className="sub">{lines(n.node)[0]}</text>
             <text x={n.width / 2} y={50} textAnchor="middle" className="sub">{lines(n.node)[1]}</text>
             {run.edits?.[n.path] && (
-              <text x={n.width - 6} y={13} textAnchor="end" className="edit-mark">{run.edits[n.path] === "delete" ? "skipped" : "edited"}</text>
+              <text x={n.width - 6} y={13} textAnchor="end" className="edit-mark">{run.edits[n.path] === "delete" ? "✎ skipped" : "✎ edited"}</text>
             )}
             {done.has(n.path) && (
               <text x={6} y={13} className="ran-mark"><title>ran</title>✓</text>
@@ -176,5 +176,5 @@ function curve(a: LaidNode, b: LaidNode): string {
 
 /** Shortened to fit on a node; the node's tooltip has the whole text. */
 function fit(text: string): string {
-  return text.length > 36 ? `${text.slice(0, 35)}…` : text;
+  return text.length > 44 ? `${text.slice(0, 43)}…` : text;
 }

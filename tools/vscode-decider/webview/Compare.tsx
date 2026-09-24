@@ -102,7 +102,9 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
   const rowEdits = (param: string) =>
     paramChangeLines(c.paramsDocs?.b, c.values?.a)
       .filter((l) => l.startsWith(`${param} row`))
-      .map((l) => `${l.split(":")[0].slice(param.length + 1)} edited`);
+      .map((l) => l.slice(param.length + 1));
+  const fileOf = (s: (typeof c.steps)[number]) =>
+    rowEdits(readers.find((r) => r.steps.includes(s.path))?.param ?? "").length ? c.valuesFile ?? "PARAMS" : (s.where ?? "").split(":")[0] || s.path;
   const downstream = touched.length - causes.length;
   // A changed param whose readers all wrote the same values: say so, or "nothing changed" reads as a bug.
   const idle = readers.filter((p) => p.steps.length && !p.steps.some((s) => c.steps.find((x) => x.path === s)?.outputs.length));
@@ -149,11 +151,16 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
         </div>
       )}
       <h4>Results</h4>
-      <ResultCards c={c} record={record} onFocus={onFocus} />
+      <ResultCards c={c} record={record} onFocus={onFocus} onSelect={onSelect} />
       {(paramLines.length > 0 || c.changedInputs.length > 0 || causes.length > 0) && <h4>What changed</h4>}
-      {paramLines.map((l) => (
+      {!causes.length && paramLines.map((l) => (
         <div key={l} className="mono">{l}</div>
       ))}
+      {causes.length > 0 && (
+        <div className="muted small">
+          {causes.length} change{causes.length === 1 ? "" : "s"} in {new Set(causes.map(fileOf)).size} file{new Set(causes.map(fileOf)).size === 1 ? "" : "s"}: {[...new Set(causes.map(fileOf))].join(", ")}
+        </div>
+      )}
       {c.changedInputs.map((i) => (
         <div key={i.name} className="mono">{i.name} → {formatValue(i.after, i.name)} <span className="muted">for {i.scope}</span></div>
       ))}
