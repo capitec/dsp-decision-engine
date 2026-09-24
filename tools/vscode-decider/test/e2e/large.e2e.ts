@@ -126,9 +126,10 @@ describe("large flow stories", () => {
         await shot("Found pl_monthly_rate, the step after the cap and the floor, with the find box.");
         await runTo(c);
         await wv(c).locator("select[aria-label=record]").selectOption({ label: "client_id 20400" });
-        await wv(c).locator(".chip", { hasText: "pl_rate" }).first().click({ timeout: 10_000 });
+        await wv(c).locator("select[aria-label=explain]").waitFor({ timeout: 20_000 });
+        await wv(c).locator("select[aria-label=explain]").selectOption({ value: "pl_rate" });
         await wv(c).locator(".how .formula").first().waitFor({ timeout: 20_000 });
-        await shot("Ran to pl_monthly_rate, focused client_id 20400 and clicked its pl_rate input: how the rate was computed.");
+        await shot("Ran to pl_monthly_rate, focused client_id 20400 in the pause banner and picked 'explain a value… pl_rate'.");
         await wv(c).locator("table.waterfall a", { hasText: /^pl_base_rate$/ }).first().click({ timeout: 10_000 });
         await wv(c).locator(".table-match").waitFor({ timeout: 20_000 }).catch(() => undefined);
         await shot("Clicked pl_base_rate in the breakdown: its lookup table step, with the row client_id 20400 matched.");

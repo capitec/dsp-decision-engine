@@ -13,7 +13,7 @@ interface Props {
 }
 
 /** "min_term (from, incl.)" for a band's edges, else the column's name. */
-function header(col: string, expr?: Record<string, unknown> | null): string {
+export function header(col: string, expr?: Record<string, unknown> | null): string {
   if (expr?.type !== "between") return col;
   const upperInclusive = expr.mode === "upper_inclusive";
   if (col === expr.lower_bound_column) return `${col} (from, ${upperInclusive ? "excl." : "incl."})`;
