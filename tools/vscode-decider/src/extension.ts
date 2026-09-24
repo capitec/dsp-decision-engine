@@ -219,7 +219,7 @@ async function onWebview(m: FromWebview, describe: DescribeResult) {
       await s?.customRequest("decider.setControls", controls);
       break;
     case "compareForces":
-      if (shown) await compare({ ...shown, ...m.a }, { ...shown, ...m.b });
+      if (shown) await compare({ ...shown, ...m.a }, { ...shown, ...m.b }, true);
       break;
     case "compareRevision":
       await compareRevision();
@@ -296,12 +296,13 @@ async function runTo(nodePath: string) {
     await vscode.debug.startDebugging(undefined, { type: "decider", request: "launch", name: `decider: ${shown.pipeline}`, program: shown.file, pipeline: shown.pipeline, stopOnEntry: false, internalConsoleOptions: "neverOpen" });
 }
 
-async function compare(a: Side, b: Side) {
+async function compare(a: Side, b: Side, forced = false) {
   post({ type: "tab", tab: "compare" });
   post({ type: "compare", comparison: null, busy: `Running ${a.label} and ${b.label}…` });
   try {
     const comparison = await runComparison(a, b, pythonCommand(), path.dirname(b.file));
     if (a.params || b.params) comparison.paramsDocs = { a: a.params ?? {}, b: b.params ?? {} };
+    comparison.forced = forced || !!(a.forces?.length || b.forces?.length);
     if (a.file !== b.file) {
       comparison.files = { a: a.file, b: b.file };
       lastFiles = { ...comparison.files, label: a.label };
