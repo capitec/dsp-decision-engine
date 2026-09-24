@@ -1,0 +1,19 @@
+{
+  "flex_loan_granting": {
+    "intake_and_parse": {
+      "decision_date_str": "2026-09-24"
+    },
+    "eligibility_gates": {},
+    "scorecard_and_grading": {},
+    "cap_waterfall": {},
+    "affordability_assessment": {},
+    "solve_and_pricing": {},
+    "construct_offers": {
+      "recommendation_objective": "largest_amount",
+      "total_cost_ratio_threshold": 1.85,
+      "effective_rate_ceiling": 0.60,
+      "min_instalment": 150.0
+    },
+    "final_validation": {}
+  }
+}

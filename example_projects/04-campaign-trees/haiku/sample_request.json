@@ -1,0 +1,17 @@
+{
+  "cycle_id": 202609,
+  "cycle_date_str": "2026-09-24",
+  "client_id": 8412907,
+  "client_features": {
+    "age": 35,
+    "tenure_months": 24,
+    "income_band": 6,
+    "behavior_score": 650,
+    "flex_balance": 45000,
+    "payment_missed": 0,
+    "discretionary_income": 3500,
+    "flex_term_remaining": 12,
+    "settlement_ratio": 0.55,
+    "employment_type": 1
+  }
+}
