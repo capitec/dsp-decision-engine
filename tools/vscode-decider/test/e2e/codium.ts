@@ -32,6 +32,7 @@ export async function launch(folder = path.join(ROOT, "examples"), size = { widt
       "chat.disableAIFeatures": true,
     }),
   );
+  linkDebugpy(path.join(home, "extensions"));
   const env = Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== undefined)) as Record<string, string>;
   delete env.ELECTRON_RUN_AS_NODE;
   delete env.VSCODE_IPC_HOOK_CLI;
@@ -78,4 +79,12 @@ export async function launch(folder = path.join(ROOT, "examples"), size = { widt
       fs.rmSync(home, { recursive: true, force: true });
     },
   };
+}
+
+/** The Python debugger and the extensions it needs, from the installed VSCodium, so "Step into the Python" can attach. */
+export function linkDebugpy(extensions: string) {
+  const installed = path.join(os.homedir(), ".vscode-oss", "extensions");
+  const python = fs.existsSync(installed) ? fs.readdirSync(installed).filter((d) => d.startsWith("ms-python.")) : [];
+  fs.mkdirSync(extensions, { recursive: true });
+  for (const d of python) fs.symlinkSync(path.join(installed, d), path.join(extensions, d));
 }

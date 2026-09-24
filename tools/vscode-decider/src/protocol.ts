@@ -266,6 +266,8 @@ export type FromWebview =
   | { type: "runTo"; path: string }
   | { type: "maximise" }
   | { type: "step" }
+  /** Attach the Python debugger and stop on the first line of the step the run is paused before. */
+  | { type: "debugStep" }
   | { type: "openDiff"; path: string }
   | { type: "sweep"; scenarios: Scenario[]; fromHere: boolean };
 

@@ -66,6 +66,20 @@ describe("decider in VSCodium", () => {
     await c.shot("04-state");
   }, 120_000);
 
+  it("steps into a step's Python and comes back to the flow", async () => {
+    const wv = c.webview();
+    await wv.locator("header nav button", { hasText: "Graph" }).click();
+    await wv.locator("svg .node", { hasText: "cap_public" }).first().click();
+    await wv.locator("aside button", { hasText: "Step into the Python" }).click();
+    // The Python debugger stops on the step's first line, inside the function.
+    // The Python debugger attaches and stops inside the function, with this record's locals.
+    await c.page.locator(".debug-view-content .monaco-list-row", { hasText: "Locals" }).first().waitFor({ timeout: 90_000 });
+    await c.page.waitForTimeout(1500);
+    await c.shot("04b-python-step");
+    await c.command("Debug: Continue");
+    await wv.locator(".pause-banner", { hasText: "after cap_public" }).waitFor({ timeout: 60_000 });
+  }, 150_000);
+
   it("runs a what-if on a param and shows where the runs diverge", async () => {
     const wv = c.webview();
     await wv.locator("header nav button", { hasText: "What-if" }).click();

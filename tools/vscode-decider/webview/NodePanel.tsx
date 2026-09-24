@@ -23,6 +23,8 @@ interface Props {
   onGoTo: (change: number | string) => void;
   onRunTo: (path: string) => void;
   onStep: () => void;
+  /** Step into the Python of the step the run is paused before. */
+  onDebugStep: () => void;
   /** The comparison the graph is coloured by, if any: params show both sides. */
   comparison: Comparison | null;
   onOpenDiff: (path: string) => void;
@@ -46,7 +48,7 @@ function tableOf(node: CallNodeJson, values: Record<string, unknown>): { name: s
 }
 
 /** The details pane: the selected step, then the picked column's lineage and history. */
-export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, lineage, history, treePath, onPick, onSelect, onReveal, onRewind, onGoTo, onRunTo, onStep, comparison, onOpenDiff, values, onSkip, onReload, onRestore, controls, groupControls }: Props) {
+export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, lineage, history, treePath, onPick, onSelect, onReveal, onRewind, onGoTo, onRunTo, onStep, onDebugStep, comparison, onOpenDiff, values, onSkip, onReload, onRestore, controls, groupControls }: Props) {
   const visits = node && run.visits[node.path];
   const who = run.record === null ? null : recordLabel(run.record, keyCol);
   const valueOf = (name: string) => {
@@ -94,7 +96,14 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
           <div className="actions">
               <button onClick={() => onReveal(node.path)}>Open source</button>
               {run.edits?.[node.path] === "delete" ? null : atThis ? (
-                <button className="primary" onClick={onStep} title="Run this step and pause just after it">Run through {name}</button>
+                <>
+                  <button className="primary" onClick={onStep} title="Run this step and pause just after it">Run through {name}</button>
+                  {node.python?.bodyLine && (
+                    <button title="Attach the Python debugger and stop on the first line of this step's code, for the focused record; step through it with F10 and F11" onClick={onDebugStep}>
+                      Step into the Python
+                    </button>
+                  )}
+                </>
               ) : ran && paused ? null : (
                 <button className="primary" onClick={() => onRunTo(node.path)} title="Run the flow and pause just before this step">Run to {name}</button>
               )}

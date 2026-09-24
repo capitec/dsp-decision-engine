@@ -239,6 +239,9 @@ async function onWebview(m: FromWebview, describe: DescribeResult) {
     case "step":
       await s?.customRequest("next", { threadId: 1 });
       break;
+    case "debugStep":
+      await debugStep();
+      break;
     case "layout":
       // Only the two-group layout the panel set up; a user's own arrangement is left alone.
       if (vscode.window.tabGroups.all.length === 2 && GraphPanel.current?.column === vscode.ViewColumn.Two)
