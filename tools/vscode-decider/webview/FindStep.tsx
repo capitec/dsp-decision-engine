@@ -15,13 +15,19 @@ export function findSteps(nodes: CallNodeJson[], query: string): CallNodeJson[] 
 }
 
 /** A find box over every step; picking a hit selects it (and opens the groups around it). Ctrl+F focuses it. */
-export function FindStep({ nodes, onPick }: { nodes: CallNodeJson[]; onPick: (path: string) => void }) {
+export function FindStep({ nodes, onPick, selected }: { nodes: CallNodeJson[]; onPick: (path: string) => void; selected?: string }) {
   const [query, setQuery] = useState("");
   const [at, setAt] = useState(0);
   // After a pick the list closes but the hits stay, to step through with ◀ ▶.
   const [picked, setPicked] = useState<number | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const hits = findSteps(nodes, query);
+  useEffect(() => {
+    if (picked !== null && hits[picked]?.path !== selected) {
+      setQuery("");
+      setPicked(null);
+    }
+  }, [selected]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "f") {

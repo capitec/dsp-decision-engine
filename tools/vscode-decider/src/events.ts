@@ -39,10 +39,18 @@ export function readEvents(events: SessionEvent[], nodes: Map<string, IRNodeJson
       case "paused":
         read.paused ??= ev.reason as string;
         break;
-      case "edited":
+      case "edited": {
         edits[ev.path as string] = ev.action as "delete" | "replace";
+        // Everything from the edited step on runs again, in the order the nodes were described.
+        const order = [...nodes.keys()];
+        const from = order.indexOf(ev.path as string);
+        if (from >= 0) {
+          const rerun = new Set(order.slice(from));
+          for (let i = finishedPaths.length - 1; i >= 0; i--) if (rerun.has(finishedPaths[i])) finishedPaths.splice(i, 1);
+        }
         read.lines.push([`${ev.action === "delete" ? "skipped" : "swapped in edited code for"} ${ev.path}; re-running from there\n`, "console"]);
         break;
+      }
     }
   }
   return read;

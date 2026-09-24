@@ -260,23 +260,32 @@ export function App() {
                 <button className="link" aria-expanded={editsOpen} title="The steps skipped or swapped in this run" onClick={() => setEditsOpen(!editsOpen)}>
                   {edits.length} edit{edits.length === 1 ? "" : "s"} {editsOpen ? "▴" : "▾"}
                 </button>
-                {editsOpen && (
-                  <span className="edit-menu-pop">
-                    {edits.map(([p, a]) => (
-                      <div key={p}>
-                        {editLabel([p, a])}{" "}
-                        {edits.length > 1 && (
-                          <button className="link" title="Compare the flow as started with only this edit" onClick={() => compareEdits(p)}>compare this one</button>
-                        )}
-                      </div>
-                    ))}
-                  </span>
-                )}
               </span>{" "}
               <button className="banner-button" title="Run the flow as started and as edited, start to end, and compare every result" onClick={() => compareEdits()}>
                 {edits.length > 1 ? "Compare all edits" : "Compare with the flow as started"}
               </button>
             </>
+          )}
+          {editsOpen && edits.length > 0 && (
+            <div className="edit-menu-pop">
+              {edits.map(([p, a]) => (
+                <div key={p}>
+                  {editLabel([p, a])}{" "}
+                  {edits.length > 1 && (
+                    <button
+                      className="link"
+                      title="Compare the flow as started with only this edit"
+                      onClick={() => {
+                        setEditsOpen(false);
+                        compareEdits(p);
+                      }}
+                    >
+                      compare this one
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
           )}
           {note && <div className="banner-note">{note}</div>}
 
@@ -284,7 +293,7 @@ export function App() {
       )}
       {tab === "graph" && (
         <div className="subbar">
-          <FindStep nodes={nodes} onPick={setSelected} />
+          <FindStep nodes={nodes} onPick={setSelected} selected={selected} />
           {nodes.length > OPEN_ALL && opened.size > 0 && (
             <button className="link" title="Fold every group back into one box" onClick={() => setOpened(new Set())}>fold all</button>
           )}
