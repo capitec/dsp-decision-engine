@@ -138,7 +138,13 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
         {c.note && <div className="muted small">{c.note}</div>}
       </div>
       <div className="verdict">
-        {headline(c) ?? (movedOut.length === 0
+        {headline(c) ? (
+          <span className="tiles">
+            {headline(c)!.split(" · ").map((t) => (
+              <span key={t} className="tile">{t}</span>
+            ))}
+          </span>
+        ) : (movedOut.length === 0
           ? `No final output changes: every one of the ${c.rows} records ends the same.`
           : `${movedOut.map((m) => `${m.n} changes for ${m.k} of ${c.rows} records`).join("; ")}.`)}
       </div>

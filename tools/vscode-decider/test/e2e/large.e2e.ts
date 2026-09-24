@@ -129,7 +129,7 @@ describe("large flow stories", () => {
         await wv(c).locator("select[aria-label=explain]").waitFor({ timeout: 20_000 });
         await wv(c).locator("select[aria-label=explain]").selectOption({ value: "pl_rate" });
         await wv(c).locator(".how .formula").first().waitFor({ timeout: 20_000 });
-        await shot("Ran to pl_monthly_rate, focused client_id 20400 in the pause banner and picked 'explain a value… pl_rate'.");
+        await shot("Ran to pl_monthly_rate, focused client_id 20400 in the pause banner and picked pl_rate under 'explain a value…'.");
         await wv(c).locator("table.waterfall a", { hasText: /^pl_base_rate$/ }).first().click({ timeout: 10_000 });
         await wv(c).locator(".table-match").waitFor({ timeout: 20_000 }).catch(() => undefined);
         await shot("Clicked pl_base_rate in the breakdown: its lookup table step, with the row client_id 20400 matched.");
@@ -159,23 +159,23 @@ describe("large flow stories", () => {
     );
   }, 400_000);
 
-  it("sweep the repo rate and personal loan cap over 40 applications", async () => {
+  it("sweep affordability and the bureau minimum over 40 applications", async () => {
     await story(
       "L5-sweep-many-records",
-      "A risk analyst wants to see how the repo rate (7%, 7.75%, 8.5%) and the personal loan product cap (R250,000 and R350,000) together change approvals and offers across all 40 applications.",
+      "A risk analyst wants to see how the personal loan affordability share (the part of disposable income an instalment may take: 40%, 50%, 60%) and the minimum bureau score (504, 580, 640) together change approvals and offers across all 40 applications.",
       async (c, shot) => {
         await visualise(c);
         await tab(c, "Scenarios");
         await shot("The Scenarios tab on the large flow.");
-        await wv(c).locator('input[aria-label="knob"]').first().fill("repo_rate (shared)");
-        await wv(c).locator('input[aria-label="knob values"]').first().fill("7%, 7.75%, 8.5%");
+        await wv(c).locator('input[aria-label="knob"]').first().fill("pl_affordable_instalment (share) in personal_loan/affordability");
+        await wv(c).locator('input[aria-label="knob values"]').first().fill("40%, 50%, 60%");
         await wv(c).locator("button", { hasText: "+ add another" }).click();
-        await wv(c).locator('input[aria-label="knob"]').nth(1).fill("pl_product_cap in personal_loan/limits");
-        await wv(c).locator('input[aria-label="knob values"]').nth(1).fill("250000, 350000");
-        await shot("After typing repo_rate and the personal loan product cap into the two knob pickers, with values.");
-        await wv(c).locator("button", { hasText: /^Run 6 scenarios/ }).click({ timeout: 10_000 });
+        await wv(c).locator('input[aria-label="knob"]').nth(1).fill("pl_min_bureau (limit) in personal_loan/policy");
+        await wv(c).locator('input[aria-label="knob values"]').nth(1).fill("504, 580, 640");
+        await shot("After typing the affordability share and the bureau minimum into the two knob pickers, with values.");
+        await wv(c).locator("button", { hasText: /^Run 9 scenarios/ }).click({ timeout: 10_000 });
         await wv(c).locator("table.sweep").waitFor({ timeout: 180_000 });
-        await shot("The results of the six scenarios across 40 applications.");
+        await shot("The results of the nine scenarios across 40 applications.");
       },
     );
   }, 500_000);

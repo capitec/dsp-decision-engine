@@ -166,8 +166,9 @@ async function onWebview(m: FromWebview, describe: DescribeResult) {
       try {
         const r = (await s.customRequest("decider.compareEdits", { path: m.path })) as { a: TraceResult; b: TraceResult };
         const comparison = compareTraces(r.a, r.b, "the flow as started", m.label);
-        const all = Object.keys(m.edits).length;
-        const scope = m.path ? (all > 1 ? `Only this edit is applied; the other ${all - 1} ${all === 2 ? "is" : "are"} left out.` : "") : all > 1 ? `All ${all} edits are applied.` : "";
+        const name = ([p, a]: [string, string]) => `${p.split("/").pop()} ${a === "delete" ? "skipped" : "edited"}`;
+        const others = Object.entries(m.edits).filter(([p]) => p !== m.path).map(name);
+        const scope = m.path ? (others.length ? `Only ${m.label} is applied; ${others.join(", ")} ${others.length === 1 ? "is" : "are"} not.` : "") : others.length > 1 ? `All ${others.length} edits are applied.` : "";
         comparison.note = `${scope} Both versions ran from the start to the end; your debug run is still paused where it was.`.trim();
         // Both runs share one description, so a swapped step's new code shows only through the edits made.
         for (const st of comparison.steps) if (m.edits[st.path] === "replace" && (!m.path || m.path === st.path)) st.structural.push("code");

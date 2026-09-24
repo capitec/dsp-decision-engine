@@ -26,6 +26,7 @@ goal isn't visibly met caps at 5). The loop stops above 8/10 or after 40 rounds.
 | 16 | 7.8 | 8 | 8.5 | 7 | 8 | 7 | 8.5 | 7.5 |
 | 17 | 7.8 | 8 | 8 | 7.5 | 8.5 | 6.5 | 8.5 | 7.5 |
 | 18 | 7.7 | 8 | 8 | 7 | 8 | 7 | 8 | 8 |
+| 19 | 7.4 | 8 | 8 | 7 | 8 | 7 | 7 | 7 |
 
 ## Round 0 (baseline)
 
@@ -483,3 +484,29 @@ Judge's problems, most damaging first:
 10. L7: restore not visible after skipping.
 11. L2: which rows the applications hit isn't shown before running.
 12. The summary line is a dense run-on.
+
+## Round 19
+
+A structural change for the space complaint: the code on top and the flow below, both at full width (the editor
+group layout is vertical). Code lines now read in full; the graph has less height. Also: explaining a value keeps
+the step you're on; every part of a sum is a row (zeros greyed); a scenario cell with no offer changed says so once;
+the edit comparison names what it leaves out; the headline is count tiles. The L5 story now sweeps the personal
+loan affordability share against the bureau minimum: the old repo × product cap sweep could not move an approved
+offer in this data (approved rates sit at 20-26%, far below the 28.75% cap), so it demonstrated nothing.
+
+The score dropped to 7.4 (judge noise is about ±0.3). The judge wants the panel bigger still and the graph taller.
+
+Judge's problems, most damaging first:
+
+1. The panel gets ~55% of the height; the graph ~450px with dead striped columns.
+2. L3: selecting the table step leaves the breakdown on top; the table itself doesn't show.
+3. L3: no one-line verdict above the breakdown.
+4. L5: identical columns repeated; the grid clips; "no effect" left to the reader.
+5. L6: "1 of 49" pages knock-on steps along with the 2 edits.
+6. L6: the two edits aren't named up front.
+7. L7: the rewind after "Use edited code" isn't explained.
+8. L7: three compare entry points; the banner wraps.
+9. L2: stretched table columns; no units; "to, excl. 85" vs "49 to 84".
+10. "Still declined, internal values changed" is jargon beside a contradicting note.
+11. Unlabelled dotted edges.
+12. The edited cap's old value isn't shown next to the new.
