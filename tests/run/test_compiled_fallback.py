@@ -5,6 +5,8 @@ import warnings
 import polars as pl
 import pytest
 
+from decider.exceptions import WiringError
+
 from decider import flow, missing_as
 from decider.engine import Engine
 from decider.engine.compile import Fallback, Kernel
@@ -109,9 +111,9 @@ def as_int(code: int) -> int:
     return code // 2
 
 
-def test_an_int_column_read_as_float_by_one_step_reaches_its_kernel_as_float():
-    out = assert_equivalent(flow(as_int, as_float, name="p"), pl.DataFrame({"code": [3, 4]}))
-    assert out["as_float"].to_list() == [1.5, 2.0]
+def test_an_input_read_as_int_and_as_float_is_refused_with_a_fix():
+    with pytest.raises(WiringError, match="reads input column 'code' as int, but p/as_float reads it as float"):
+        Engine().bind(flow(as_int, as_float, name="p"), mode="fused")
 
 
 def total(hist: list[float] = missing_as([])) -> float:
