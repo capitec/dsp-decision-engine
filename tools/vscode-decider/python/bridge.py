@@ -345,15 +345,23 @@ class Bridge:
         return {"diff": _source_diff(old, texts, new, _TEXTS), "formula": _formula(new.fn) if isinstance(new, FunctionStep) else None}
 
     def restore(self, path):
-        """Put the step at `path` back as the run started it, undoing a code swap, and re-run from there."""
-        if any(at == path and new is None for at, new in self.edits):
-            raise ValueError(f"{path!r} was skipped; a skipped step can't be put back mid-run, restart the run to include it")
+        """Put the step at `path` back as the run started it, undoing a skip or a code swap, and re-run from there."""
         old = step_map(self.original).get(path)
         if old is None:
             raise KeyError(f"{path!r} is not in the flow as started")
-        self.session.replace(path, old)
+        skipped = any(at == path and new is None for at, new in self.edits)
+        rest = [(at, new) for at, new in self.edits if at != path]
+        if skipped:
+            # The step is gone from the running flow, so its enclosing flow goes back in, with the other edits kept.
+            parent = path.rsplit("/", 1)[0] if "/" in path else self.original.name
+            rebuilt = self.original
+            for at, new in rest:
+                rebuilt = swap(rebuilt, at, new)
+            self.session.replace(parent, step_map(rebuilt)[parent])
+        else:
+            self.session.replace(path, old)
         self.step = self.session.executable.step
-        self.edits = [(at, new) for at, new in self.edits if at != path]
+        self.edits = rest
         return {"diff": [], "formula": None}
 
     def compare_edits(self, path=None):

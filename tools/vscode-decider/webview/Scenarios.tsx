@@ -269,6 +269,9 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
     return ds.length ? ds.reduce((t, x) => t + x, 0) / ds.length : 0;
   };
   const [metric, setMetric] = useState<string>();
+  const hasDecision = !!sweep.base?.decision;
+  const offeredRows = (i: number, rows: number[]) =>
+    hasDecision ? rows.filter((r) => sweep.outputs[i]?.decision?.[r] !== "decline" || sweep.base?.decision?.[r] !== "decline") : rows;
   const delta = (c: string, i: number, changedRows: number[]) => {
     const d = avgDelta(c, i, changedRows);
     if (!d) return "";
@@ -284,9 +287,7 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
     return (
       <div key={c} className={cls} title={diff ? `changed for ${recordsOf(diff.changedRows)}` : "same as the original run for every record"}>
         <span className="muted">{c}</span>{" "}
-        <span className="mono">
-          {!diff ? (outcomes.includes(c) ? overall(sweep.outputs[i]?.[c]) : "no change") : numeric ? `${delta(c, i, diff.changedRows)} (${diff.changedRows.length} rec.)` : overall(sweep.outputs[i]?.[c], sweep.base?.[c])}
-        </span>
+        <span className="mono">{!diff ? (outcomes.includes(c) ? overall(sweep.outputs[i]?.[c]) : "no change") : cellText(i, c)}</span>
       </div>
     );
   };
@@ -328,7 +329,11 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
   const cellText = (i: number, c: string) => {
     const diff = sweep.comparisons[i].output.find((o) => o.name === c);
     if (!diff) return "no change";
-    return categorical(sweep.base?.[c]) ? overall(sweep.outputs[i]?.[c], sweep.base?.[c]) : `${delta(c, i, diff.changedRows)} on ${diff.changedRows.length} applicant${diff.changedRows.length === 1 ? "" : "s"}`;
+    if (categorical(sweep.base?.[c])) return overall(sweep.outputs[i]?.[c], sweep.base?.[c]);
+    const offered = offeredRows(i, diff.changedRows);
+    const declinedOnly = diff.changedRows.length - offered.length;
+    if (!offered.length) return `no offer changed (${declinedOnly} declined only)`;
+    return `${delta(c, i, offered)} on ${offered.length} applicant${offered.length === 1 ? "" : "s"}${declinedOnly ? ` · ${declinedOnly} declined only` : ""}`;
   };
   // A knob whose values never change a result, whatever the other knobs are set to.
   const idleKnobs = knobCols
@@ -345,7 +350,8 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
   const tintBy = numericCols.find((c) => /offer_amount/.test(c)) ?? numericCols.find((c) => /offer/.test(c));
   const tint = (i: number) => {
     const d = tintBy ? sweep.comparisons[i].output.find((o) => o.name === tintBy) : undefined;
-    return d ? (avgDelta(tintBy!, i, d.changedRows) > 0 ? "tint-up" : "tint-down") : "";
+    const rows = d ? offeredRows(i, d.changedRows) : [];
+    return rows.length ? (avgDelta(tintBy!, i, rows) > 0 ? "tint-up" : "tint-down") : "";
   };
   const changedRecords = (i: number) => {
     const rows = [...new Set(sweep.comparisons[i].output.flatMap((o) => o.changedRows))];

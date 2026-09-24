@@ -145,7 +145,7 @@ describe("explaining a value", () => {
     const a = { shared: { repo_rate: 0.0775, t: [{ lo: 1, r: 0.2 }, { lo: 2, r: 0.3 }] } };
     const b = { shared: { repo_rate: 0.0775, t: [{ lo: 1, r: 0.2 }, { lo: 2, r: 0.25 }] } };
     expect(diffDoc(a, b)).toEqual({ shared: { t: b.shared.t } });
-    expect(paramChangeLines(diffDoc(a, b), a)).toEqual(["t row 2: r 0.3 → 0.25"]);
+    expect(paramChangeLines(diffDoc(a, b), a)).toEqual(["t row 2 (lo 2): r 0.3 → 0.25"]);
     expect(paramChangeLines({ shared: { repo_rate: 0.075 } }, a)).toEqual(["repo_rate: 7.75% → 7.5%"]);
   });
 });

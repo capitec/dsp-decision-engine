@@ -108,6 +108,7 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
               )}
             </div>
           </div>
+          {card && <Explain entry={card} who={who} role="" nodes={nodes} values={values} onPick={onPick} onSelect={onSelect} />}
           {who && ran && (node.outputs ?? []).length > 0 && (
             <div className="wrote">
               For {who}: {(node.outputs ?? []).map((o) => `${o} = ${valueOf(o) ?? "?"}`).join(", ")}
@@ -158,7 +159,10 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
           {run.edits?.[node.path] && (
             <div className="edited-note">
               {run.edits[node.path] === "delete" ? (
-                "Skipped in this run: the steps after it ran without it. Restart the run to include it again."
+                <>
+                  Skipped in this run: the steps after it ran without it.{" "}
+                  {paused && <button onClick={() => onRestore(node.path)} title="Put the step back and re-run its flow from the start of that flow">Restore step</button>}
+                </>
               ) : (
                 <>
                   Running your edited code in this run.{" "}
@@ -194,14 +198,8 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
           )}
           <h4>Reads{who && <span className="muted"> · values for {who} · click one to see where it came from</span>}</h4>
           <Chips names={node.inputs} picked={column} onPick={onPick} valueOf={valueOf} />
-          {card && (node.inputs ?? []).includes(card.name) && (
-            <Explain entry={card} who={who} role="an input to this step" nodes={nodes} values={values} onPick={onPick} onSelect={onSelect} />
-          )}
           <h4>Writes{who && !ran && <span className="muted"> · not run yet</span>}</h4>
           <Chips names={node.outputs} picked={column} onPick={onPick} valueOf={ran ? valueOf : () => undefined} />
-          {card && !(node.inputs ?? []).includes(card.name) && (
-            <Explain entry={card} who={who} role={ran ? "written by this step" : "the value so far"} nodes={nodes} values={values} onPick={onPick} onSelect={onSelect} />
-          )}
           {Object.keys(node.params).length > 0 && (
             <>
               <h4>Params</h4>
