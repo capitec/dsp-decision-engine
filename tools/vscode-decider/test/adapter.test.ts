@@ -143,6 +143,17 @@ describe("decider debug adapter", () => {
     ]);
   });
 
+  it("a record's value history goes back to the iteration that made a value", async () => {
+    await launch();
+    await breakAt("risk_tree");
+    await dc.customRequest("decider.setRecord", { row: 0 });
+    const { changes } = (await dc.customRequest("decider.changes", { name: "offer" })).body as { changes: { change: number; iteration: number | null; value: unknown }[] };
+    expect(changes.map((c) => c.iteration)).toEqual([null, 1, 2, 3, 4, 5]);
+    const [, stopped] = await Promise.all([dc.customRequest("decider.goTo", { change: changes[2].change }), dc.waitForEvent("stopped")]);
+    expect(stopped.body.reason).toBe("rewind");
+    expect((await top())[0].name).toBe("shrink  [scalar]  after");
+  });
+
   it("focusing a record shows its values and its runtime lineage", async () => {
     await launch();
     await breakAt("term/by_sector/cap_public");

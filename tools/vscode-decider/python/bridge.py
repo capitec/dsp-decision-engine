@@ -45,6 +45,7 @@ from runs import apply_overrides, debug_condition, trace, tree_path  # noqa: E40
 from forks import checkpoint_key, merge, sweep  # noqa: E402
 from loading import TEXTS, load_module, source_diff  # noqa: E402
 from controls import Controls  # noqa: E402
+from timeline import Timeline  # noqa: E402
 
 
 def base_params(mod, params):
@@ -219,10 +220,12 @@ class Bridge:
         self.original = self.step
         self.edits = []  # (path, step or None), so each edit can be compared on its own
         self.session = Engine().bind(self.step).session(_load_rows(data), self.doc)
-        # First among the breakpoints: a force must land before any other breakpoint pauses on the same checkpoint.
         self.controls = Controls(self.described["ir"])
         self.controls.set(forces, watches)
-        self.controls.attach(self.session)
+        self.controls.session = self.session
+        self.timeline = Timeline(self.described["ir"], self.session)
+        # First among the breakpoints: `any` stops at the first that pauses, and this one must see every checkpoint.
+        self.session.break_at(self._checkpoint)
         self.sent = 0
         # Overrides made so far and where, so forks can replay them; a rewind breaks the replay.
         self.history, self.rewound = [], False
@@ -237,6 +240,33 @@ class Bridge:
         cur = s.current
         return {"finished": s.finished, "events": events,
                 "current": cur and {"path": cur.origin.path, "when": cur.when}, "hit": self.controls.take_hit()}
+
+    def _checkpoint(self, cp):
+        self.controls.force(cp)
+        self.timeline.record(cp)
+        return self.controls.watch(cp)
+
+    def changes(self, name, row=None):
+        """Every change to `name` so far (for one record, or all), with the step and iteration that made it."""
+        return self.timeline.history(name, row)
+
+    def go_to(self, change):
+        """Go back to just after the step made the timeline's `change`, re-running up to there."""
+        c = self.timeline.changes[change]
+        if c["path"].startswith("override@"):
+            raise ValueError("a value you set has no step to go back to")
+        n = self.timeline.occurrence(change)
+        s = self.session
+        # A rewind keeps upstream values as they are now, a loop's carry included: re-run the whole outermost loop.
+        loops = [g for g, v in self.controls.groups.items() if v["kind"] == "loop" and c["path"].startswith(g + "/")]
+        s.rewind(min(loops, key=len) if loops else c["path"])
+        self.rewound = True
+        self.timeline.rewound()
+        while self.timeline.log.count((c["path"], "after")) < n:
+            if s.step_into() is None:
+                raise RuntimeError(f"the re-run never reached {c['path']} a {n}th time")
+        self.controls.hit = None
+        return self.status()
 
     def set_controls(self, forces=(), watches=()):
         """Replace the run's forces and value breakpoints; they apply from the next checkpoint on."""
@@ -353,9 +383,15 @@ class Bridge:
             except KeyError:
                 continue  # not produced yet
             versions = self._written(name)
-            at = None if row is None else self.session.state.column(name, latest(self.session.state, versions, row))[row]
+            # Mid-iteration, a loop's carry still holds the last iteration's value; the timeline has what was written last.
+            now = self.timeline.now.get(name)
+            if now is None:
+                now = series.to_list()
+                if row is not None:
+                    now[row] = self.session.state.column(name, latest(self.session.state, versions, row))[row]
+            at = None if row is None else now[row]
             cols.append({"name": name, "dtype": str(series.dtype), "rows": series.len(),
-                         "nulls": series.null_count(), "preview": series.head(5).to_list(), "value": at,
+                         "nulls": now.count(None), "preview": now[:5], "value": at,
                          "producer": versions[-1].producer or "input", "versions": len(versions)})
         return {"columns": cols, "row": row, "key": key_column(self.session.frame)}
 
@@ -373,7 +409,7 @@ class Bridge:
     def handle(self, req):
         cmd = req["cmd"]
         args = {k: v for k, v in req.items() if k not in ("id", "cmd")}
-        if cmd in ("describe", "start", "state", "column", "step_out", "trace", "sweep", "compare_edits", "set_controls"):
+        if cmd in ("describe", "start", "state", "column", "step_out", "trace", "sweep", "compare_edits", "set_controls", "changes", "go_to"):
             result = getattr(self, cmd)(**args)
             return self.status() if cmd == "step_out" else result
         s = self.session
@@ -387,6 +423,7 @@ class Bridge:
             return {"condition": debug_condition(s, **args)}
         if cmd in ("skip", "reload_step", "restore"):
             edit = getattr(self, cmd)(**args) or {}  # a WiringError changes nothing and comes back as the reply's error
+            self.timeline.rewound()
             return {**self.status(), "diff": edit.get("diff", []), "formula": edit.get("formula")}
         if cmd in ("step", "step_into", "resume", "rewind", "break_at", "clear_break", "set"):
             if cmd in ("step", "step_into", "resume") and s.current is not None:
@@ -397,6 +434,9 @@ class Bridge:
                 return {**self.status(), "error": f"{type(e).__name__}: {e}"}
             if cmd == "set":
                 self.history.append((checkpoint_key(s), args["name"], args["value"]))
+                self.timeline.override(args["name"])
+            if cmd == "rewind":
+                self.timeline.rewound()
             self.rewound |= cmd == "rewind"
             return self.status()
         if cmd == "exit":
