@@ -6,78 +6,16 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterAll, describe, it } from "vitest";
-import { launch, ROOT, SHOTS, type Codium } from "./codium";
+import { ROOT, SHOTS, type Codium } from "./codium";
+import { FILE, find, keys, lens, out, runTo, story, tab, visualise, writeManifest, wv } from "./harness";
 
-const OUT = path.join(SHOTS, "large");
-const FILE = "bank/pipeline.py";
-const manifest: { story: string; goal: string; shots: { file: string; caption: string }[] }[] = [];
-
-async function story(name: string, goal: string, body: (c: Codium, shot: (caption: string) => Promise<void>) => Promise<void>, folder?: string) {
-  const entry = { story: name, goal, shots: [] as { file: string; caption: string }[] };
-  manifest.push(entry);
-  const c = await launch(folder);
-  let n = 0;
-  const shot = async (caption: string) => {
-    const file = path.join(OUT, `${name}-${String(++n).padStart(2, "0")}.jpg`);
-    await c.page.waitForTimeout(500);
-    await c.page.screenshot({ path: file, type: "jpeg", quality: 60, scale: "css" });
-    entry.shots.push({ file, caption });
-  };
-  try {
-    await body(c, shot);
-  } catch (e) {
-    await shot(`FAILED here: ${(e as Error).message.split("\n")[0]}`);
-    throw e;
-  } finally {
-    await c.close();
-  }
-}
-
-const keys = async (c: Codium, combo: string, text?: string) => {
-  await c.page.keyboard.press(combo);
-  if (text !== undefined) {
-    await c.page.keyboard.type(text, { delay: 20 });
-    await c.page.locator(".quick-input-list .monaco-list-row").first().waitFor({ timeout: 15_000 }).catch(() => undefined);
-    await c.page.waitForTimeout(300);
-    await c.page.keyboard.press("Enter");
-  }
-  await c.page.waitForTimeout(400);
-};
-const lens = (c: Codium, title: string) => c.page.locator(".codelens-decoration a", { hasText: title }).first();
-const wv = (c: Codium) => c.webview();
-const tab = (c: Codium, name: string) => wv(c).locator("header nav button", { hasText: name }).click();
-
-/** Type into the graph's find box and take the first hit. */
-async function find(c: Codium, query: string) {
-  const box = wv(c).locator('input[aria-label="Find a step"]');
-  await box.fill("");
-  await box.fill(query);
-  await wv(c).locator(".find-hits li").first().waitFor({ timeout: 10_000 });
-  await box.press("Enter");
-}
-
-/** Run to the selected step and wait for the pause. */
-async function runTo(c: Codium) {
-  await wv(c).locator("aside button", { hasText: /^Run to/ }).first().click({ timeout: 10_000 });
-  await wv(c).locator(".pause-banner:not(.pending)").waitFor({ timeout: 180_000 });
-}
-
-/** Open the flow file and draw the flow. */
-async function visualise(c: Codium) {
-  await keys(c, "Control+P", FILE);
-  await lens(c, "Visualise flow").waitFor({ timeout: 90_000 });
-  await lens(c, "Visualise flow").click();
-  await wv(c).locator("svg .node").first().waitFor({ timeout: 90_000 });
-}
-
+out.dir = path.join(SHOTS, "large");
 describe("large flow stories", () => {
-  afterAll(() => {
-    fs.writeFileSync(path.join(OUT, "manifest.json"), JSON.stringify(manifest, null, 1));
-  });
+  afterAll(writeManifest);
 
   it("find one rule among a thousand steps", async () => {
-    fs.rmSync(OUT, { recursive: true, force: true });
-    fs.mkdirSync(OUT, { recursive: true });
+    fs.rmSync(out.dir, { recursive: true, force: true });
+    fs.mkdirSync(out.dir, { recursive: true });
     await story(
       "L1-find-a-rule",
       "A policy analyst was told that the personal loan rule 'loan too large for income in sector 4' declined an applicant. The flow has about 1,000 steps in 40 files. She wants to find that rule, see where it sits in the flow, and open its code.",
