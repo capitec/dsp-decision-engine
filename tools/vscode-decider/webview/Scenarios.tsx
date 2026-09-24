@@ -361,23 +361,31 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
       ))}
       <div className="muted small">
         Original run: {cols.filter((c) => !outcomes.includes(c)).map((c) => `${c} ${overall(sweep.base?.[c], undefined, c)}`).join(" · ")}
-        {tintBy && <> · cells: <span className="tint-up-key">{tintBy} up</span> <span className="tint-down-key">{tintBy} down</span></>}
+        {tintBy && <> · shaded by {tintBy}: <span className="tint-up-key">up</span> <span className="tint-down-key">down</span>; hover a cell for the applicants</>}
       </div>
       <table className="sweep grid">
         <thead>
           <tr>
-            <th>
-              <div className="axes">{knobShort(knobCols[0].name)} ↓ × {knobShort(knobCols[1].name)} →</div>
-            </th>
+            <th className="axes">{knobShort(knobCols[0].name)} ↓</th>
+            <th className="axes" colSpan={uniq(knobCols[1].values).length}>{knobShort(knobCols[1].name)} →</th>
+          </tr>
+          <tr>
+            <th />
             {uniq(knobCols[1].values).map((v, j) => (
-              <th key={j} className="mono">{formatValue(v, knobShort(knobCols[1].name))}</th>
+              <th key={j} className="mono">
+                {formatValue(v, knobShort(knobCols[1].name))}
+                {(sweep.knobBase[knobCols[1].name] ?? []).some((b) => same(b, v)) && <div className="muted small">current</div>}
+              </th>
             ))}
           </tr>
         </thead>
         <tbody>
           {uniq(knobCols[0].values).map((a, r) => (
             <tr key={r}>
-              <th className="mono">{formatValue(a, knobShort(knobCols[0].name))}</th>
+              <th className="mono">
+                {formatValue(a, knobShort(knobCols[0].name))}
+                {(sweep.knobBase[knobCols[0].name] ?? []).some((b) => same(b, a)) && <div className="muted small">current</div>}
+              </th>
               {uniq(knobCols[1].values).map((b, j) => {
                 const i = sweep.labels.findIndex((_, k) => same(knobCols[0].values[k], a) && same(knobCols[1].values[k], b));
                 return i < 0 ? (

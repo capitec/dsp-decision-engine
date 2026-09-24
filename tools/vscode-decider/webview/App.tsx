@@ -256,15 +256,22 @@ export function App() {
           {edits.length > 0 && (
             <>
               {" · "}
-              {edits.length === 1 ? (
-                <span className="edit-chip">✎ {editLabel(edits[0])}</span>
+              {edits.length <= 3 ? (
+                edits.map(([p, a]) => (
+                  <span key={p} className="edit-chip">
+                    ✎ {editLabel([p, a])}
+                    {edits.length > 1 && (
+                      <button className="link" title="Compare the flow as started with only this edit" onClick={() => compareEdits(p)}>compare</button>
+                    )}
+                  </span>
+                ))
               ) : (
                 <button className="link" aria-expanded={editsOpen} title="The steps skipped or swapped in this run; compare each on its own" onClick={() => setEditsOpen(!editsOpen)}>
                   ✎ {edits.length} edits {editsOpen ? "▴" : "▾"}
                 </button>
               )}{" "}
               <button className="banner-button" title="Run the flow as started and as edited, start to end, and compare every result" onClick={() => compareEdits()}>
-                {edits.length > 1 ? "Compare with start: all edits" : "Compare with start"}
+                {edits.length > 1 ? "Compare all with start" : "Compare with start"}
               </button>
             </>
           )}
@@ -309,13 +316,14 @@ export function App() {
               <span>✓ has run</span>
               <span>◇ decision tree</span>
               <span>▦ lookup table</span>
+              <span><span className="swatch changed" /> changed in the last comparison</span>
+              <span><span className="swatch added" /> added in the last comparison</span>
               <span>⊞ data frame step</span>
             </div>
           </details>
           {compare.comparison && (
             <span className="legend">
-              <label><input type="checkbox" checked={showDiff} onChange={(e) => setShowDiff(e.target.checked)} /> compared:</label>
-              <span className="swatch changed" /> changed <span className="swatch added" /> added <span className="swatch same" /> same
+              <label title="Colour the graph by the last comparison: orange changed, green added"><input type="checkbox" checked={showDiff} onChange={(e) => setShowDiff(e.target.checked)} /> changes</label>
               {showDiff && changedSteps.length > 0 && (
                 <>
                   <button title="Previous changed step" onClick={() => goChanged(-1)}>◀</button>
@@ -343,7 +351,8 @@ export function App() {
           ))}
         </div>
       )}
-      <main className={withDetails && selectedNode ? (lineage && column ? "detailed explaining" : "detailed") : ""}>
+      {/* An answer that reads as text (a value's breakdown, a table's matched row) gets more of the panel than the graph. */}
+      <main className={withDetails && selectedNode ? ((lineage && column) || (selectedNode.table && run.record !== null) ? "detailed explaining" : "detailed") : ""}>
         {tab === "graph" && (
           <Graph
             ir={graphIr!}

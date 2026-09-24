@@ -47,26 +47,30 @@ export function ResultCards({ c, record, onFocus, onSelect }: { c: Comparison; r
           </div>
         ))}
       {declined(r) && cols.some((n) => n !== decision && n !== "reason_code" && moved(n, r)) && (
-        <div className="result-line muted small">
-          internal values, not offered:{" "}
+        <>
+          <div className="result-line muted">internal values (not offered):</div>
           {cols
             .filter((n) => n !== decision && n !== "reason_code" && moved(n, r))
-            .map((n) => `${n} ${formatValue(c.results.a[n]?.[r], n)} → ${formatValue(c.results.b[n]?.[r], n)}`)
-            .join(", ")}
-        </div>
+            .map((n) => (
+              <div key={n} className="result-line internal">
+                <span className="mono">{n}</span> {formatValue(c.results.a[n]?.[r], n)} → {formatValue(c.results.b[n]?.[r], n)}
+              </div>
+            ))}
+        </>
       )}
     </div>
   );
   return (
     <>
-      {record !== null && !hit.includes(record) && <div className="muted">{recordLabel(record, c.key)} (focused) is unchanged; the records below changed.</div>}
+      {!offered.length && noOffer.length > 0 && <div>No offer changed.</div>}
+      {record !== null && !hit.includes(record) && <div className="muted">{recordLabel(record, c.key)} (focused) is unchanged{hit.length ? "; the records below changed" : ""}.</div>}
 
       {(more ? ordered : ordered.slice(0, FIRST)).map(card)}
       {ordered.length > FIRST && (
         <button className="link" onClick={() => setMore(!more)}>{more ? "show fewer" : `show all ${ordered.length} changed records`}</button>
       )}
       {noOffer.length > 0 && (
-        <details className="no-offer">
+        <details className="no-offer" open={!offered.length}>
           <summary>
             {noOffer.length} other declined applicant{noOffer.length === 1 ? "" : "s"} had internal values change (no offer affected)
           </summary>

@@ -127,6 +127,7 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
       <div className="comparing" title={c.note}>
         Baseline: <strong>{c.a}</strong>{c.note && <span className="muted"> ⓘ</span>}
         <span className="muted"> · {c.rows} records</span>
+        {c.note && <div className="muted small">{c.note}</div>}
       </div>
       <div className="verdict">
         {headline(c) ?? (movedOut.length === 0
