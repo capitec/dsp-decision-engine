@@ -301,5 +301,18 @@ def test_each_edit_compares_on_its_own(tmp_path):
     assert (only_skip, only_edit, both) == ([54.0, 36.0], [48.0, 36.0], [50.0, 36.0])
 
 
+def test_a_param_table_on_a_plain_step_is_described_run_and_edited():
+    ladder = os.path.join(HERE, "..", "examples", "ladder.py")
+    d = Bridge().describe(ladder)
+    info = d["params"]["pricing/rate"]["ladder"]
+    assert info["type"] == "table" and info["schema"] == {"floor": "int", "rate": "float"} and len(info["default"]) == 2
+    assert Bridge().trace(ladder)["output"]["rate"] == [0.2, 0.12]
+    rows = [{"floor": 0, "rate": 0.25}, {"floor": 700, "rate": 0.1}]
+    assert Bridge().trace(ladder, params={"pricing": {"rate": {"ladder": rows}}})["output"]["rate"] == [0.25, 0.1]
+    b = Bridge()
+    b.start(ladder)
+    assert b.handle({"cmd": "resume"})["finished"]
+
+
 def test_a_one_line_step_reports_its_formula():
     assert find(Bridge().describe(LOAN)["ir"], "term/term_cap")["formula"] == "min(requested_term, ceiling)"
