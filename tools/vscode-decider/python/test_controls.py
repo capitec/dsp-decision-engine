@@ -90,6 +90,7 @@ def test_a_value_breakpoint_pauses_where_a_record_first_meets_it():
     r = b.handle({"cmd": "resume"})
     assert r["current"]["path"] == "sizing/shrink_offer/shrink" and r["hit"]["rows"] == [0]
     assert r["hit"]["values"] == [61440.0]
+    assert b.session.current.iteration == 4  # the shrink that wrote 61440, not the one after
     assert b.handle({"cmd": "resume"})["finished"]  # still under 70000 after the next shrink: no second pause
 
 

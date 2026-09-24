@@ -2,7 +2,8 @@ import { useEffect, useRef } from "react";
 import { same, type Comparison } from "../src/compare";
 import { clampNote, Explain } from "./Explain";
 import { header } from "./TableGrid";
-import { formatValue, recordLabel, type CallNodeJson, type ColumnHistory, type ColumnSummary, type Lineage, type RecordKey, type RunStatus } from "../src/protocol";
+import { ValueTimeline } from "./Timeline";
+import { formatValue, recordLabel, type CallNodeJson, type ColumnSummary, type Lineage, type RecordKey, type RunStatus, type ValueHistory } from "../src/protocol";
 
 interface Props {
   node?: CallNodeJson;
@@ -13,12 +14,13 @@ interface Props {
   keyCol: RecordKey;
   column?: string;
   lineage: Lineage | null;
-  history: ColumnHistory | null;
+  history: ValueHistory | null;
   treePath: { path: string; row: number; visited: string[]; result?: unknown[] } | null;
   onPick: (name?: string) => void;
   onSelect: (path: string) => void;
   onReveal: (path: string) => void;
   onRewind: (path: string) => void;
+  onGoTo: (change: number) => void;
   onRunTo: (path: string) => void;
   onStep: () => void;
   /** The comparison the graph is coloured by, if any: params show both sides. */
@@ -42,7 +44,7 @@ function tableOf(node: CallNodeJson, values: Record<string, unknown>): { name: s
 }
 
 /** The details pane: the selected step, then the picked column's lineage and history. */
-export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, lineage, history, treePath, onPick, onSelect, onReveal, onRewind, onRunTo, onStep, comparison, onOpenDiff, values, onSkip, onReload, onRestore, controls }: Props) {
+export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, lineage, history, treePath, onPick, onSelect, onReveal, onRewind, onGoTo, onRunTo, onStep, comparison, onOpenDiff, values, onSkip, onReload, onRestore, controls }: Props) {
   const visits = node && run.visits[node.path];
   const who = run.record === null ? null : recordLabel(run.record, keyCol);
   const valueOf = (name: string) => {
@@ -239,31 +241,7 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
           <LineageTree entry={card} record={run.record} onSelect={onSelect} />
         </details>
       )}
-      {history && history.name === column && (
-        <>
-          <h4>{column} history</h4>
-          <ol className="history">
-            {history.versions.map((v, i) => (
-              <li key={i}>
-                {v.written === false ? (
-                  <span className="muted">not on this record</span>
-                ) : (
-                  <span className="mono">{run.record === null ? v.values.slice(0, 3).map((x) => formatValue(x)).join(", ") : formatValue(v.values[0])}</span>
-                )}
-                {" ← "}
-                {v.producer === "input" || v.producer.startsWith("override@") ? (
-                  <span className="muted">{v.producer === "input" ? "input" : "set by you"}</span>
-                ) : (
-                  <>
-                    <span className="muted">set by </span><a onClick={() => onSelect(v.producer)}>{v.producer.split("/").pop()}</a>{" · "}
-                    <button className="link" title="Run the flow again from this step, keeping the values before it" onClick={() => onRewind(v.producer)}>re-run from {v.producer.split("/").pop()}</button>
-                  </>
-                )}
-              </li>
-            ))}
-          </ol>
-        </>
-      )}
+      {history && history.name === column && <ValueTimeline history={history} who={who} onSelect={onSelect} onGoTo={onGoTo} />}
     </aside>
   );
 }

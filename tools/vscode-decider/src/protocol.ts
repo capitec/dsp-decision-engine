@@ -158,10 +158,27 @@ export interface RunStatus {
   hit?: Hit | null;
 }
 
-export interface ColumnHistory {
+/** One change to a value: the step (or "override@<path>" for a value you set) and iteration that made it. */
+export interface ValueChange {
+  /** Its index in the run's timeline, for going back to it. */
+  change: number;
+  path: string;
+  iteration: number | null;
+  arm: number | null;
+  /** For the focused record. */
+  value?: unknown;
+  before?: unknown;
+  /** For the whole batch: how many records changed, and the first few new values. */
+  rows?: number;
+  values?: unknown[];
+}
+
+export interface ValueHistory {
   name: string;
-  /** `written` is false when a version never reached the focused record (a branch arm it did not take). */
-  versions: { producer: string; values: unknown[]; written?: boolean }[];
+  /** Whether it is an input column, and its value there. */
+  input: boolean;
+  initial: unknown;
+  changes: ValueChange[];
 }
 
 /** The column that names a record, and its value on every row. */
@@ -195,7 +212,7 @@ export type ToWebview =
   | { type: "describe"; describe: DescribeResult }
   | ({ type: "status" } & RunStatus)
   | { type: "state"; columns: ColumnSummary[] | null; rows: number; key: RecordKey }
-  | { type: "lineage"; lineage: Lineage | null; history: ColumnHistory | null }
+  | { type: "lineage"; lineage: Lineage | null; history: ValueHistory | null }
   | { type: "treePath"; path: string; row: number; visited: string[]; result?: unknown[] }
   | { type: "compare"; comparison: Comparison | null; busy?: string; error?: string }
   | { type: "tab"; tab: Tab }
@@ -210,6 +227,7 @@ export type FromWebview =
   | { type: "lineage"; name: string }
   | { type: "treePath"; path: string }
   | { type: "rewind"; path: string }
+  | { type: "goTo"; change: number }
   | { type: "skip"; path: string }
   | { type: "reloadStep"; path: string }
   | { type: "restore"; path: string }
