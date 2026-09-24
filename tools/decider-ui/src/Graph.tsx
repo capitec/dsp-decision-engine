@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { kindLabel, type IRNodeJson, type RunStatus } from "../src/protocol";
+import { kindLabel, type IRNodeJson, type RunStatus } from "./model/protocol";
 import { dataEdges, layout, type LaidNode } from "./layout";
 
 // Room on the right for data edges, which curve out past the nodes.
@@ -19,7 +19,7 @@ interface Props {
   /** "auto" fits the panel's width without shrinking text below MIN_AUTO; a number is a fixed scale. */
   zoom: number | "auto";
   onSelect: (path: string) => void;
-  onOpen: (path: string) => void;
+  onOpen?: (path: string) => void;
   /** Open a folded group, or fold an open one. */
   onToggle: (path: string) => void;
   /** Height in pixels set by dragging the split under the graph. */
@@ -80,7 +80,7 @@ export function Graph({ ir, showData, run, selected, highlightColumn, lineage, d
       <svg viewBox={`0 0 ${full} ${laid.height}`} width={full * scale} height={laid.height * scale}>
         <defs>
           <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--vscode-foreground)" />
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--decider-fg)" />
           </marker>
         </defs>
         {laid.clusters.filter((c) => c.path !== ir.path).map((c) => (
@@ -132,7 +132,7 @@ export function Graph({ ir, showData, run, selected, highlightColumn, lineage, d
             ].join(" ")}
             transform={`translate(${n.x},${n.y})`}
             onClick={() => (n.node.kind === "call" ? onSelect(n.path) : onToggle(n.path))}
-            onDoubleClick={() => n.node.kind === "call" && onOpen(n.path)}
+            onDoubleClick={() => n.node.kind === "call" && onOpen?.(n.path)}
           >
             <title>
               {n.node.kind === "call"

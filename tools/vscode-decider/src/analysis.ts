@@ -1,7 +1,7 @@
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { withBridge } from "./bridge";
-import { type DescribeResult } from "./protocol";
+import { type DescribeResult } from "@decider/ui";
 import { pythonCommand } from "./python";
 
 const DECIDER_IMPORT = /^\s*(from|import)\s+decider\b/m;

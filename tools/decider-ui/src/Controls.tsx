@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { formatValue, lastSegment, recordLabel, walk, type Checkpoint, type Controls, type Force, type Hit, type IRNodeJson, type RecordKey, type Watch } from "../src/protocol";
+import { formatValue, lastSegment, recordLabel, walk, type Checkpoint, type Controls, type Force, type Hit, type IRNodeJson, type RecordKey, type Watch } from "./model/protocol";
 import { parseValue } from "./Params";
 
 export interface Group {

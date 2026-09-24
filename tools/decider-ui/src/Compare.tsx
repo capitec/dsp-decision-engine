@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { paramChangeLines, paramReaders, same, type Comparison, type ValueDiff } from "../src/compare";
-import { formatValue, recordLabel, type RecordKey } from "../src/protocol";
+import { paramChangeLines, paramReaders, same, type Comparison, type ValueDiff } from "./model/compare";
+import { formatValue, recordLabel, type RecordKey } from "./model/protocol";
 import { distinct, headline, ResultCards } from "./ResultCards";
 
 interface Props {
@@ -9,8 +9,8 @@ interface Props {
   error?: string;
   record: number | null;
   onSelect: (path: string) => void;
-  onCompareRevision: () => void;
-  onOpenDiff: (path: string) => void;
+  onCompareRevision?: () => void;
+  onOpenDiff?: (path: string) => void;
   /** Shown above the comparison, e.g. a scenario pager. */
   header?: ReactNode;
   /** Focus a record in the paused debugger; absent when no session is running. */
@@ -56,7 +56,7 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
   // A forced comparison is about its results; the steps behind them open on request.
   const [stepsOpen, setStepsOpen] = useState(!c?.forced);
   useEffect(() => setStepsOpen(!c?.forced), [c]);
-  const revisionButton = <button onClick={onCompareRevision}>Compare with a git revision…</button>;
+  const revisionButton = onCompareRevision && <button onClick={onCompareRevision}>Compare with a git revision…</button>;
   if (busy) return <div className="compare"><div className="empty">{busy}</div></div>;
   if (error) return <div className="compare"><div className="empty error">{error}</div><div className="actions">{revisionButton}</div></div>;
   if (!c)
@@ -144,7 +144,7 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
     <div className="compare">
       <div className="compare-top">
         <h3 className="compare-title">{c.forced ? forcedTitle(c) : c.b}</h3>
-        {withRevision && <a className="small" onClick={onCompareRevision}>compare with a git revision…</a>}
+        {withRevision && onCompareRevision && <a className="small" onClick={onCompareRevision}>compare with a git revision…</a>}
       </div>
       {(paramRows.length > 0 || codeCauses.length > 0) && (
         <div className="edits-line">
@@ -258,7 +258,7 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
                     ...s.structural.filter((x) => x !== "params" && !(x === "code" && s.paramChanges.length)).map((x) => (x === "code" ? "code changed" : `${x} changed`)),
                     ...(s.status === "removed" ? ["skipped / removed"] : s.status === "added" ? ["added"] : []),
                   ].join(", ")}
-                  {s.structural.includes("code") && c.files && <> · <a onClick={() => onOpenDiff(s.path)}>view diff</a></>}
+                  {s.structural.includes("code") && c.files && onOpenDiff && <> · <a onClick={() => onOpenDiff(s.path)}>view diff</a></>}
                 </td>
                 <td className="mono">{new Set(s.outputs.flatMap((o) => o.changedRows)).size}</td>
               </tr>
@@ -320,7 +320,7 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
               <span key={p} className="chip small">{p}</span>
             ))}
             {s.structural.includes("code") &&
-              (c.files ? (
+              (c.files && onOpenDiff ? (
                 <a className="chip small" onClick={() => onOpenDiff(s.path)} title="Open a diff of the two versions">code changed · view diff</a>
               ) : (
                 <span className="chip small">code changed</span>

@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { kindLabel, lastSegment, type Checkpoint, type DescribeResult, type IRNodeJson } from "./protocol";
+import { kindLabel, lastSegment, type Checkpoint, type DescribeResult, type IRNodeJson } from "@decider/ui";
 
 /** The structural view: the IR tree, decorated with the running session's position. */
 export class StructureProvider implements vscode.TreeDataProvider<IRNodeJson> {

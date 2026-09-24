@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { formatValue, isRateName, type CallNodeJson, type Lineage } from "../src/protocol";
+import { formatValue, isRateName, type CallNodeJson, type Lineage } from "./model/protocol";
 
 interface Props {
   entry: Lineage;

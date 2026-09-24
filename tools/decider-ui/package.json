@@ -1,0 +1,39 @@
+{
+  "name": "@decider/ui",
+  "version": "0.0.1",
+  "description": "The decider flow debugger's UI and model, for any host",
+  "private": true,
+  "license": "MIT",
+  "sideEffects": [
+    "*.css"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./style.css": "./src/style.css"
+  },
+  "files": [
+    "dist",
+    "src/style.css"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prepare": "tsc -p tsconfig.build.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@dagrejs/dagre": "^3.1.1"
+  },
+  "peerDependencies": {
+    "react": "^18.2.0 || ^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^18.3.0",
+    "react": "^18.3.1",
+    "typescript": "^5.9.0",
+    "vitest": "^5.0.1"
+  }
+}

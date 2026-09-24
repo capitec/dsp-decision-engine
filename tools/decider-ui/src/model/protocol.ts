@@ -1,7 +1,7 @@
 import type { Comparison } from "./compare";
 import type { Scenario, Sweep } from "./sweep";
 
-// Shapes the Python bridge sends. Shared by the adapter, the tree and the webview.
+// Shapes the Python bridge sends, and the messages between a host and the UI.
 
 export interface IRNodeBase {
   path: string;
@@ -234,8 +234,8 @@ export function formatValue(v: unknown, name?: string): string {
 
 export type Tab = "graph" | "state" | "params" | "scenarios" | "compare";
 
-/** Messages between the extension and the graph webview. */
-export type ToWebview =
+/** Messages from the host to the UI. */
+export type ToUI =
   | { type: "describe"; describe: DescribeResult }
   | ({ type: "status" } & RunStatus)
   | { type: "state"; columns: ColumnSummary[] | null; rows: number; key: RecordKey }
@@ -247,7 +247,8 @@ export type ToWebview =
   | { type: "edited"; path: string; formula: string | null; restored?: boolean }
   | { type: "sweep"; sweep: Sweep | null; busy?: string; error?: string };
 
-export type FromWebview =
+/** Messages from the UI to the host. */
+export type FromUI =
   | { type: "ready" }
   | { type: "reveal"; path: string }
   | { type: "record"; row: number | null }

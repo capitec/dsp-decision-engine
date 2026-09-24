@@ -1,6 +1,5 @@
 import { Bridge } from "./bridge";
-import { compareTraces, type Comparison, type TraceResult } from "./compare";
-import type { Force } from "./protocol";
+import { compareTraces, type Comparison, type Force, type TraceResult } from "@decider/ui";
 
 /** One side of a comparison: a pipeline file (maybe from another revision) and what to run it with. */
 export interface Side {
