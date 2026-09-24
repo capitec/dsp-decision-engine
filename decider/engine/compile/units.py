@@ -93,9 +93,10 @@ class Fallback:
         self.calls = (call,)
         self.fn = fn
         self.reason = reason
-        # Python values come back as they are: a `str` output is stored as an object, not a code.
+        # Python values come back as they are: a `str`, `dict`, `list` or `date` output is stored as an object.
         self.writes = tuple(
-            (v, np.dtype(object) if base_annotation(o.annotation) is str else output_dtype(o.annotation))
+            (v, output_dtype(o.annotation) if literal_choices(o.annotation) is not None
+             or base_annotation(o.annotation) in (float, int, bool) else np.dtype(object))
             for v, o in zip(call.writes, call.node.outputs)
         )
 
@@ -133,14 +134,15 @@ class Fallback:
 Unit = Union[Kernel, Fallback]
 
 
-def compile_plan(plan: Plan, *, fuse: bool = True) -> dict[int, Unit]:
+def compile_plan(plan: Plan, *, fuse: bool = True, python: Mapping[int, str] = {}) -> dict[int, Unit]:
     """Compile a plan's scalar and row calls; returns call id -> the unit that runs it.
 
     With `fuse=True`, the consecutive scalar calls directly inside one
     sequence share one kernel and a unit keeps only the versions read outside
     it or output by the plan. With `fuse=False` every call is its own unit
     and keeps everything it writes. A row call is always its own unit. A call
-    numba can't compile becomes a `Fallback`, splitting its kernel around it.
+    numba can't compile, or one `python` names (call id -> reason), becomes a
+    `Fallback`, splitting its kernel around it.
     Frame calls get no unit; branches and loops aren't compiled as a whole,
     only the calls inside them. A unit runs when a walk over `plan.root`
     reaches its first call, `unit.calls[0]`.
@@ -156,7 +158,8 @@ def compile_plan(plan: Plan, *, fuse: bool = True) -> dict[int, Unit]:
     keep = _kept(plan) if fuse else None
     units: dict[int, Unit] = {}
     for run in (part for whole in _runs(plan.root, fuse) for part in _split_at_nulls(whole)):
-        compiled = [(call, *compile_call(call.node)) for call in run]
+        compiled = [(call, None, getattr(call.node.fn, "py_func", call.node.fn), python[call.id])
+                    if call.id in python else (call, *compile_call(call.node)) for call in run]
         start = 0
         for k, (call, _, fn, reason) in enumerate(compiled + [(None, None, None, "end")]):
             if reason is None:

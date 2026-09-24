@@ -101,10 +101,15 @@ def test_a_string_input_reaches_an_interpreted_step_as_a_string():
 
 
 @pytest.mark.parametrize("mode", ["stepped", "fused"])
-def test_a_string_compared_with_a_literal_in_the_body_is_a_loud_error_when_compiled(mode):
-    # A compiled step sees a code, which a body literal never equals: fail, never answer wrongly.
+def test_a_string_compared_with_a_literal_in_the_body_runs_in_python_when_compiled(mode):
+    # A compiled step sees a code, which a body literal never equals: run it in Python, never answer wrongly.
+    exe = Engine().bind(flow(is_private), mode=mode)
+    with pytest.warns(UserWarning, match="is_private: `str` input 'sector'.*declare the literal as a `str` param"):
+        assert exe.run(pl.DataFrame({"sector": ["private", "public"]}))["is_private"].to_list() == [1.0, 0.0]
+    exe = Engine().bind(flow(is_private), mode=mode)
+    exe.runner.strict = True
     with pytest.raises(ValueError, match="is_private: `str` input 'sector'.*declare the literal as a `str` param"):
-        Engine().bind(flow(is_private), mode=mode).run(pl.DataFrame({"sector": ["private"]}))
+        exe.run(pl.DataFrame({"sector": ["private"]}))
 
 
 def test_a_misspelled_param_is_rejected(bind):
