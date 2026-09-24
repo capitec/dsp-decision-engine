@@ -5,10 +5,11 @@ import json
 import subprocess
 import sys
 
+import polars as pl
 import pytest
 from typing_extensions import TypedDict
 
-from decider import flow
+from decider import flow, frame_step
 from decider.config import JsonFileStore
 from decider.exceptions import DeciderError, ParamsError
 from decider.serving import RequestHandler
@@ -90,6 +91,46 @@ def test_dates_inside_typed_dict_items_are_coerced_and_bare_dicts_are_left_alone
     out = coerce_record(record, dates)
     assert out["accounts"] == [{"opened_date": dt.date(2026, 1, 1), "balance": 1.0}]
     assert out["extra"] == {"d": "2026-01-01"}
+
+
+class Dated(TypedDict, total=False):
+    opened_date: dt.date
+
+
+def test_a_typed_dict_declaring_only_its_dates_keeps_its_other_keys():
+    record = {"accounts": [{"opened_date": "2026-01-01", "balance": 1.0}], "one": {"opened_date": "2026-01-02", "x": 2}}
+    out = coerce_record(record, {"accounts": list[Dated], "one": Dated})
+    assert out["accounts"] == [{"opened_date": dt.date(2026, 1, 1), "balance": 1.0}]
+    assert out["one"] == {"opened_date": dt.date(2026, 1, 2), "x": 2}
+
+
+@frame_step(reads={"accounts": list[Dated]}, writes=["oldest_year"])
+def oldest_year(df: pl.DataFrame) -> pl.DataFrame:
+    years = [min(a["opened_date"] for a in accounts).year for accounts in df["accounts"].to_list()]
+    return df.with_columns(oldest_year=pl.Series(years))
+
+
+def test_a_frame_step_reading_typed_dicts_gets_their_dates_from_json(tmp_path):
+    handler = _handler(tmp_path, lambda: flow(oldest_year, name="f"))
+    handler.stage()
+    handler.activate()
+    body = b'{"accounts": [{"opened_date": "2019-05-01", "balance": 1.0}, {"opened_date": "2021-01-01"}]}'
+    assert json.loads(asyncio.run(handler.process_fn(body, "application/json", "application/json")).content)[
+        "oldest_year"] == 2019
+
+
+@frame_step(reads=["decision_date"], writes=["seen"])
+def seen(df: pl.DataFrame) -> pl.DataFrame:
+    return df.with_columns(seen=pl.lit(True))
+
+
+def test_a_date_is_coerced_when_an_untyped_frame_step_reads_it_before_a_typed_step(tmp_path):
+    handler = _handler(tmp_path, lambda: flow(seen, due_day, name="s"))
+    handler.stage()
+    handler.activate()
+    body = b'{"decision_date": "2026-01-31", "tenure": 1}'
+    assert json.loads(asyncio.run(handler.process_fn(body, "application/json", "application/json")).content)[
+        "due_day"] == 1
 
 
 def second(history: list[float]) -> float:

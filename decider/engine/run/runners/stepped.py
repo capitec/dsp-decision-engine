@@ -13,7 +13,7 @@ from decider.engine.ir.decls import Input, NullPolicy, base_annotation
 from decider.engine.run.params import RunParams
 from decider.engine.run.runners.base import Checkpoint
 from decider.engine.run.runners.interpreted import InterpretedRunner, _absent, _note, _Scope
-from decider.engine.run.state import State
+from decider.engine.run.state import State, fill_missing
 from decider.engine.wiring.plan import Call, Plan, Version
 
 
@@ -116,7 +116,7 @@ class SteppedRunner(InterpretedRunner):
                     raise MissingInputError(decl.name, path, int((~mask).sum()), len(mask), absent=_absent(state, v))
                 if decl.null_policy is NullPolicy.MISSING_AS:
                     # ponytail: one fill per version per kernel; two readers with different fills share the first.
-                    x = _fill(x, mask, decl.fill)
+                    x = fill_missing(x, mask, decl.fill).astype(x.dtype, copy=False)
                 valid[v.id] = mask
             values.setdefault(v.id, x)
         try:
@@ -198,16 +198,6 @@ def _spans(x: np.ndarray, mask: np.ndarray | None, alive: list, source: pl.Serie
     extracted = extract_frame(source.to_frame("s"), [Input("s", bytes, NullPolicy.OPTIONAL)])
     alive.append(extracted.kernel_frame)
     return extracted.columns["s"].values
-
-
-def _fill(x: np.ndarray, mask: np.ndarray, fill) -> np.ndarray:
-    if x.dtype != object:
-        return np.where(mask, x, fill).astype(x.dtype)
-    # Row by row: np.where would broadcast a list or dict fill into a second axis.
-    x = x.copy()
-    for i in np.flatnonzero(~mask):
-        x[i] = fill
-    return x
 
 
 def _str_params(call: Call) -> tuple[tuple[str, ...], tuple[str, str] | None]:

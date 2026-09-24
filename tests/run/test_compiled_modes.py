@@ -113,8 +113,7 @@ def test_a_step_reading_two_string_inputs_is_a_clear_error_when_strict(mode):
     def same(a: str, b: str, which: str = param("a")) -> float:
         return 1.0
 
-    exe = Engine().bind(flow(same), mode=mode)
-    exe.runner.strict = True
+    exe = Engine(strict_compile=True).bind(flow(same), mode=mode)
     with pytest.raises(ValueError, match="same: reads several `str` inputs.*split the step"):
         exe.run(pl.DataFrame({"a": ["x"], "b": ["y"]}))
 
@@ -124,8 +123,7 @@ def test_a_string_param_without_a_string_input_is_a_clear_error_when_strict(mode
     def speed(x: float, mode: str = param("fast")) -> float:
         return x * 2 if mode == "fast" else x
 
-    exe = Engine().bind(flow(speed), mode=mode)
-    exe.runner.strict = True
+    exe = Engine(strict_compile=True).bind(flow(speed), mode=mode)
     with pytest.raises(ValueError, match="speed: `str` param 'mode'.*reads none"):
         exe.run(pl.DataFrame({"x": [1.0]}))
 

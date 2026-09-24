@@ -127,6 +127,9 @@ class _Resolver:
             v = scope.names[name] = self.unbound(name, scope, reader, own, decl)
         if v.producer is None and decl is not None:
             self.same_type(name, decl, reader)
+            if base_annotation(self.inputs[name].annotation) in (None, Any):
+                # An untyped reader (a frame step) came first: the column is described by the first typed one.
+                self.inputs[name] = decl
         self.read.add(v.id)
         return v
 
@@ -172,7 +175,7 @@ class _Resolver:
             )
         if name not in self.leaves:
             self.leaves[name] = self.new(name, None, annotation)
-            # ponytail: the first reader's declaration describes the column; each Call still pairs its own Input.
+            # ponytail: the first typed reader's declaration describes the column; each Call still pairs its own Input.
             self.inputs[name] = decl or Input(name, annotation)
             self.passthrough.add(self.leaves[name].id)
         return self.leaves[name]

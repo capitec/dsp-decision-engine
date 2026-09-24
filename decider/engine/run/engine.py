@@ -38,6 +38,9 @@ class Engine:
             params document is first seen and raises on any invalid one;
             `"lazy"` validates a node the first time it runs, so an invalid
             param in a node no row reaches never fails a run.
+        strict_compile: in `"stepped"` and `"fused"` modes, a step no kernel
+            can run faithfully raises at the first run instead of running in
+            Python with a warning.
 
     Example::
 
@@ -45,10 +48,11 @@ class Engine:
         out = exe.run(df, params={"term": {"cap_by_income": {"cap": 36.0}}})
     """
 
-    def __init__(self, params_validation: Literal["eager", "lazy"] = "eager"):
+    def __init__(self, params_validation: Literal["eager", "lazy"] = "eager", strict_compile: bool = False):
         if params_validation not in ("eager", "lazy"):
             raise EngineError(f"params_validation must be 'eager' or 'lazy', not {params_validation!r}")
         self.params_validation = params_validation
+        self.strict_compile = strict_compile
 
     def bind(self, step_or_ir: Any, mode: Mode = "interpreted") -> Executable:
         """An `Executable` running `step_or_ir` in `mode`.
@@ -67,7 +71,8 @@ class Engine:
         runner = RUNNERS.get(mode)
         if runner is None:
             raise EngineError(f"unknown mode {mode!r}; expected one of {sorted(RUNNERS)}")
-        return Executable(resolve(step_or_ir), runner(), self.params_validation == "lazy", step_or_ir)
+        runner = runner() if runner is InterpretedRunner else runner(strict=self.strict_compile)
+        return Executable(resolve(step_or_ir), runner, self.params_validation == "lazy", step_or_ir)
 
 
 class Executable:
