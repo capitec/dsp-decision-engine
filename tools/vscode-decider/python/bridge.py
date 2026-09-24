@@ -23,6 +23,7 @@ import inspect
 import json
 import os
 import queue
+import re
 import sys
 import tempfile
 import textwrap
@@ -113,6 +114,14 @@ def _first_statement(fn):
         return first + node.body[0].lineno - 1
     except (OSError, TypeError, SyntaxError, IndexError, AttributeError):
         return None
+
+
+def _values_file(file):
+    """The file a module's `PARAMS = ...` reads, when that line names one: `json.loads(... / "params.json" ...)`."""
+    for line in Path(file).read_text().splitlines():
+        if line.startswith("PARAMS") and (m := re.search(r"[\"']([\w./-]+\.(?:json|ya?ml|toml))[\"']", line)):
+            return m.group(1)
+    return None
 
 
 def _formula(fn):
@@ -224,7 +233,7 @@ class Bridge:
         params = {path: {k: {kk: vv for kk, vv in info.items() if kk != "used_by" or path == "shared"} for k, info in ps.items()}
                   for path, ps in self.step.parameters().items()}
         self.described = {"pipelines": pipelines, "pipeline": self.name, "ir": tree, "params": params,
-                          "values": getattr(self.mod, "PARAMS", None) or {}}
+                          "values": getattr(self.mod, "PARAMS", None) or {}, "valuesFile": _values_file(file)}
         return self.described
 
     def trace(self, file, pipeline=None, data=None, params=None, overrides=None, row=None):

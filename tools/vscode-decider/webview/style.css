@@ -1852,3 +1852,43 @@ table.sweep.grid tbody th {
 table.sweep.grid td.unchanged {
   opacity: 0.55;
 }
+
+.pause-banner .edit-menu-pop {
+  position: static;
+  box-shadow: none;
+  margin: 3px 0 0;
+  min-width: 0;
+}
+.pause-banner {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  main.detailed .graph {
+    height: 55vh;
+  }
+  main.detailed.explaining .graph {
+    height: 34vh;
+  }
+}
+
+aside .wrote .clamp {
+  font-weight: normal;
+  color: var(--vscode-charts-green, #89d185);
+}
+
+.scenarios .knob {
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr) auto;
+}
+.scenarios .knob input.picker {
+  grid-column: 1;
+}
+.scenarios .knob input.values {
+  grid-column: 2;
+}
+.scenarios .knob > button.link {
+  grid-column: 3;
+}
+.scenarios .knob .knob-echo {
+  grid-column: 1 / -1;
+}

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { same, type Comparison } from "../src/compare";
-import { Explain } from "./Explain";
+import { clampNote, Explain } from "./Explain";
 import { formatValue, recordLabel, type CallNodeJson, type ColumnHistory, type ColumnSummary, type Lineage, type RecordKey, type RunStatus } from "../src/protocol";
 
 interface Props {
@@ -51,6 +51,17 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
   const ran = !!node && run.finishedPaths.includes(node.path);
   const card = lineage && lineage.name === column ? lineage : null;
   const table = node ? tableOf(node, values) : null;
+  // A cap or floor step, once run for the focused record: whether its limit bound.
+  const raw = (name: string) => columns?.find((x) => x.name === name)?.value;
+  const limit =
+    node?.formula && run.record !== null && ran
+      ? clampNote(
+          node.formula,
+          (node.inputs ?? []).map((i) => ({ name: i, value: raw(i) })),
+          raw((node.outputs ?? [])[0]),
+          Object.fromEntries([...Object.entries(node.params).map(([k, v]) => [k, (values.shared as Record<string, unknown> | undefined)?.[k] ?? v]), ...(node.inputs ?? []).map((i) => [i, raw(i)])]),
+        )
+      : null;
   const pane = useRef<HTMLElement>(null);
   // A newly selected step starts at the top of the pane, not where the last one was scrolled to.
   useEffect(() => pane.current?.scrollTo(0, 0), [node?.path]);
@@ -71,7 +82,13 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
               ) : ran && paused ? null : (
                 <button className="primary" onClick={() => onRunTo(node.path)} title="Run the flow and pause just before this step">Run to {name}</button>
               )}
-              {paused && !run.edits?.[node.path] && (
+              {atThis && !run.edits?.[node.path] && (
+                <>
+                  <button title="Take this step out of the paused run and re-run from where it was; the source is not changed" onClick={() => onSkip(node.path)}>Skip this step</button>
+                  <button title="Save your change to this step's code first: reloads the file and runs the edited step in its place, from here" onClick={() => onReload(node.path)}>Use edited code</button>
+                </>
+              )}
+              {paused && !atThis && !run.edits?.[node.path] && (
                 <details className="edit-menu">
                   <summary>Change the run ▾</summary>
                   <div className="edit-menu-body">
@@ -87,6 +104,7 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
           {who && ran && (node.outputs ?? []).length > 0 && (
             <div className="wrote">
               For {who}: {(node.outputs ?? []).map((o) => `${o} = ${valueOf(o) ?? "?"}`).join(", ")}
+              {limit && <div className="clamp">{limit}</div>}
             </div>
           )}
           {Object.keys(node.params).length > 0 && !table && (
@@ -305,7 +323,7 @@ function TableMatch({ table, visited, result, outputs, inputs }: { table: { name
         </thead>
         <tbody>
           {table.rows.map((r, i) => (
-            <tr key={i} className={matched && i === last ? "matched" : tried.includes(i) ? "tried" : ""}>
+            <tr key={i} className={matched && i === last ? "matched" : tried.includes(i) ? "tried" : ""} ref={matched && i === last ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}>
               <td className="muted small">{i + 1}</td>
               {cols.map((c) => <td key={c} className="mono">{formatValue((r[c] ?? null) as never, c)}</td>)}
             </tr>

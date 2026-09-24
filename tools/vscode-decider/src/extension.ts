@@ -284,7 +284,7 @@ async function compareRevision() {
   );
   if (!pick) return;
   const tree = await materialise(root, pick.ref);
-  await compare({ label: pick.label, file: path.join(tree, path.relative(root, file)), pipeline }, { label: "working tree", file, pipeline });
+  await compare({ label: pick.label, file: path.join(tree, path.relative(root, file)), pipeline }, { label: "your uncommitted changes", file, pipeline });
 }
 
 /**

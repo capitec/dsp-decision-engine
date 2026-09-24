@@ -53,6 +53,8 @@ export interface Comparison {
   sharedUsers?: Record<string, string[]>;
   /** Said under the title, e.g. how the two runs were made. */
   note?: string;
+  /** The file the flow's PARAMS come from, e.g. "params.json". */
+  valuesFile?: string;
   /** Each run's PARAMS document (tables' rows and tuned values), for saying what a param was. */
   values?: { a: unknown; b: unknown };
 }
@@ -240,6 +242,7 @@ export function compareTraces(a: TraceResult, b: TraceResult, labelA: string, la
     key: b.key ?? null,
     outputColumns: Object.keys(b.output ?? a.output ?? {}),
     values: { a: withDefaults(a), b: withDefaults(b) },
+    valuesFile: b.valuesFile ?? undefined,
     // Two revisions each run with their own PARAMS; what differs between them is a param change.
     paramsDocs: Object.keys(diffDoc(a.values, b.values)).length ? { a: a.values, b: diffDoc(a.values, b.values) } : undefined,
     sharedUsers: Object.fromEntries(Object.entries(b.params?.shared ?? {}).map(([k, info]) => [k, (info.used_by as string[] | undefined) ?? []])),

@@ -18,6 +18,7 @@ goal isn't visibly met caps at 5). The loop stops above 8/10 or after 40 rounds.
 | 8 | 7.4 | 8 | 8 | 7 | 8 | 6 | 8 | 7 |
 | 9 | 7.4 | 8 | 8 | 7 | 8 | 7 | 8 | 6 |
 | 10 | 7.6 | 8 | 8 | 7 | 8 | 7 | 8 | 7 |
+| 11 | 7.8 | 8 | 9 | 7 | 8.5 | 6.5 | 8 | 7.5 |
 
 ## Round 0 (baseline)
 
@@ -283,3 +284,27 @@ Judge's problems, most damaging first:
 10. L1: the opened rule is cut off in the narrow editor.
 11. L5: knob hints out of order; "(cap)" jargon; money unformatted.
 12. L6: "PARAMS" instead of params.json; duplicate "in its code"; "working tree" means little to an analyst.
+
+## Round 11
+
+Changes: the edits list opens inline under the banner and closes when a comparison is picked; the panel opens at 65%
+of the width and the graph gets more height; the waterfall's signs are part of its numbers; the find box clears when
+the selection moves elsewhere and a table's matched row scrolls into view; paused at a step, Skip and "Use edited
+code" are plain buttons; steps that will re-run after an edit lose their ✓; a step that only reads a changed param
+is badged "reads repo_rate"; an edited cap says whether it bound; the Compare header names the baseline; knob rows
+read name, values, remove with one hint line; the file column names params.json; a knob that changes nothing says so.
+
+Judge's problems, most damaging first:
+
+1. L5: one metric at a time; approvals a footnote; offer_amount absent.
+2. L3: the explanation opens scrolled with its heading cut off; the graph takes space the answer needs.
+3. L3: the matched row sits at the bottom edge.
+4. L1: the opened rule is cut at ~35 characters in the editor.
+5. L7: "edited" uses the same orange as "changed"; the compare legend lingers.
+6. L7: per-edit compare hidden in the dropdown.
+7. The debug toolbar covers the panel title; the detail pane is cut mid-line.
+8. L6: a lone param line above the table reads as the only change.
+9. Wording: "offers changed for 0 applicants" reads like a bug.
+10. Node labels truncate while the graph has empty bands.
+11. L5: axis notation and "(3 rec.)" read as notation, not language.
+12. L2: an offer amount rises after a rate cut with no "why".
