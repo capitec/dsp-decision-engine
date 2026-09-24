@@ -72,11 +72,16 @@ because the festive-period threshold-multiplier overlay is in force on
 
 ## Why interpreted mode
 
-`fused` mode can't build this pipeline yet: compiling its largest decision
-tree for the fused kernel fails with `RecursionError: maximum recursion depth
-exceeded` inside decider's tree walker. Interpreted mode has no such limit.
-Given this slice explicitly skips the latency target (SCOPE.md), interpreted
-mode is the pragmatic choice.
+`fused` mode builds this pipeline and answers exactly as interpreted mode
+does, but it isn't worth it yet. The three rule sets are `mode: "all"` trees
+with 521, 114 and 18 outputs, and compiling the fused kernel around 653 outputs
+takes about 3.5 minutes at every process start (the walker itself is
+disk-cached; the kernel around it isn't). That is longer than
+`test_decider_build_cli_succeeds` allows. The gain is small: three steps
+(`enrichment_degradation_code`, `degraded_mode_code`, `hard_block_code`) fall
+back to Python in compiled modes, and a sample `score` takes about 24 ms fused
+against 33 ms interpreted. Given this slice explicitly skips the latency
+target (SCOPE.md), interpreted mode is the pragmatic choice.
 
 ## Run the tests
 
