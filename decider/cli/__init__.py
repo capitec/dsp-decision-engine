@@ -4,15 +4,19 @@ import re
 from pathlib import Path
 
 import click
+from dotenv import load_dotenv
 
 import decider.settings as settings_module
 
 TEMPLATES = Path(__file__).parent / "templates"
+GUIDE = Path(__file__).parent.parent / "GUIDE.md"
 CPU_TARGET_FILE = "decider-cpu-target.json"
 
 
 def _settings(**overrides) -> settings_module.DeciderSettings:
-    # Through the environment so uvicorn/sanic worker processes read the same settings.
+    # Through the environment so uvicorn/sanic worker processes read the same settings;
+    # a ./.env fills in whatever the real environment doesn't set.
+    load_dotenv(".env")
     for key, value in overrides.items():
         if value is not None:
             os.environ[f"DECIDER_{key.upper()}"] = str(value)
@@ -31,9 +35,19 @@ def _cpu_target_path(s: settings_module.DeciderSettings) -> Path:
 def cli() -> None:
     """decider: build and serve decision pipelines.
 
-    Settings come from DECIDER_* environment variables, e.g.
-    DECIDER_API__PIPELINE=pipeline:build, DECIDER_CONFIG__BASEPATH=configs.
+    New here? Run `decider guide` for the getting-started guide, then
+    `decider template NAME` for a starter project.
+
+    Settings come from DECIDER_* environment variables, or a .env file in the
+    current directory, e.g. DECIDER_API__PIPELINE=mypkg.pipeline:build,
+    DECIDER_CONFIG__BASEPATH=configs.
     """
+
+
+@cli.command()
+def guide() -> None:
+    """Print the getting-started guide: concepts, examples, project layout, common mistakes."""
+    click.echo(GUIDE.read_text())
 
 
 @cli.command()
@@ -117,19 +131,25 @@ def template(name: str, directory: Path | None) -> None:
     """Write a starter project called NAME into DIRECTORY (default: ./NAME).
 
     \b
-    pipeline.py         steps and a build() function returning the pipeline
-    inference.py        the Handler that serves it
+    NAME/pipeline.py    steps and a build() function returning the pipeline
+    NAME/inference.py   the Handler that serves it
     configs/0.0.0/      a config version with its params document
-    README.md
-    Then: cd DIRECTORY && decider build && decider serve
+    sample_request.json one request, used by the tests and to warm up
+    tests/              scores requests through the handler
+    .env                DECIDER_API__PIPELINE=NAME.pipeline:build and friends
+    Then: cd DIRECTORY && pytest && decider build && decider serve
     """
     target = directory or Path(name)
     if target.exists() and any(target.iterdir()):
         raise click.ClickException(f"{target} exists and is not empty")
-    step_name = re.sub(r"\W+", "_", name).strip("_") or "pipeline"
+    package = re.sub(r"\W+", "_", name).strip("_")
+    if not package.isidentifier():
+        raise click.ClickException(f"{name!r} can't name a Python package; start it with a letter, e.g. 'fraud_rules'")
     for src in sorted(TEMPLATES.rglob("*")):
         if src.is_file() and "__pycache__" not in src.parts:
-            dest = target / src.relative_to(TEMPLATES)
+            rel = src.relative_to(TEMPLATES).as_posix().replace("{{name}}", package)
+            # Stored as `env`: .gitignore, and so the wheel build, skips `.env`.
+            dest = target / (".env" if rel == "env" else rel)
             dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_text(src.read_text().replace("{{name}}", step_name))
+            dest.write_text(src.read_text().replace("{{name}}", package))
             click.echo(f"created {dest}")
