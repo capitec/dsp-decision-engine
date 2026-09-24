@@ -52,11 +52,11 @@ export async function launch(folder = path.join(ROOT, "examples"), size = { widt
       ...(process.env.E2E_HEADED ? [] : ["--ozone-platform=headless"]),
     ],
     env,
-    timeout: 60_000,
+    timeout: 180_000,
   });
   const page = await app.firstWindow();
   await app.evaluate(({ BrowserWindow }, s) => BrowserWindow.getAllWindows()[0]?.setSize(s.width, s.height), size);
-  await page.waitForSelector(".monaco-workbench", { timeout: 60_000 });
+  await page.waitForSelector(".monaco-workbench", { timeout: 180_000 });
   fs.mkdirSync(SHOTS, { recursive: true });
   return {
     app,

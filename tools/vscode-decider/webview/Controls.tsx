@@ -79,13 +79,15 @@ interface GroupProps {
   keyCol: RecordKey;
   /** A debug run is paused: a force can be re-run from the branch or loop. */
   paused: boolean;
+  /** The condition has run in this debug run. */
+  ran: boolean;
   onChange: (c: Controls) => void;
   onCompare: (a: Side, b: Side) => void;
   onRerun: (path: string) => void;
 }
 
 /** Force a branch's arm or a loop's iteration count, compare two of them, or pause at an iteration. */
-export function GroupControls({ group, controls, record, keyCol, paused, onChange, onCompare, onRerun }: GroupProps) {
+export function GroupControls({ group, controls, record, keyCol, paused, ran, onChange, onCompare, onRerun }: GroupProps) {
   const isLoop = group.kind === "loop";
   const [one, setOne] = useState(false);
   const [a, setA] = useState(isLoop ? "5" : "0");
@@ -127,9 +129,10 @@ export function GroupControls({ group, controls, record, keyCol, paused, onChang
       </h4>
       {record !== null && (
         <label className="small">
-          <input type="checkbox" checked={one} onChange={(e) => setOne(e.target.checked)} /> only {recordLabel(record, keyCol)}
+          <input type="checkbox" checked={one} onChange={(e) => setOne(e.target.checked)} /> only {recordLabel(record, keyCol)} (forcing and comparing below)
         </label>
       )}
+      <h5>Force it in the debug run</h5>
       <div className="control-row">
         {isLoop ? (
           <>
@@ -153,11 +156,20 @@ export function GroupControls({ group, controls, record, keyCol, paused, onChang
           <button title="Go back to just before it, keeping everything earlier, so the force applies" onClick={() => onRerun(group.path)}>↺ Re-run {name} forced</button>
         )}
       </div>
+      {mine.length > 0 && (
+        <div className="small added">
+          {ran && paused
+            ? `On. ${name} has already run in this pause, so the force applies when it runs again: re-run it now, or on the next run.`
+            : `On. It applies when the run reaches ${name}.`}
+        </div>
+      )}
+      <h5>Compare two ways</h5>
       <div className="control-row">
-        What if: {pick(a, setA, `${name} what-if a`)} vs {pick(b, setB, `${name} what-if b`)}
+        {pick(a, setA, `${name} what-if a`)} vs {pick(b, setB, `${name} what-if b`)}
         {isLoop && " iterations"}{" "}
         <button disabled={a === b} title="Run the flow both ways, start to end, and compare every result" onClick={() => onCompare(side(a), side(b))}>Compare</button>
       </div>
+      <div className="muted small">Runs the whole flow twice from the start, for {row === null ? "every record" : recordLabel(row, keyCol)}; your debug run is left as it is.</div>
       {isLoop && (
         <div className="control-row">
           Pause before iteration <input aria-label={`pause ${name} at iteration`} className="narrow" type="number" min={1} max={group.max} placeholder="k" value={at} onChange={(e) => setAt(e.target.value)} />{" "}
@@ -182,6 +194,9 @@ const OPS: NonNullable<Watch["op"]>[] = ["==", "!=", "<", "<=", ">", ">="];
 
 interface WatchProps {
   names: string[];
+  /** The selected step, and what it writes. */
+  step: string;
+  writes: string[];
   /** Where the breakpoint may be limited to: the flows holding the selected step, and the step itself. */
   scopes: string[];
   name?: string;
@@ -192,13 +207,17 @@ interface WatchProps {
 }
 
 /** Pause the first time a record's value meets a condition, anywhere or only inside some steps. */
-export function WatchForm({ names, scopes, name: initial, record, keyCol, controls, onChange }: WatchProps) {
+export function WatchForm({ names, step, writes, scopes, name: initial, record, keyCol, controls, onChange }: WatchProps) {
   const [name, setName] = useState(initial ?? names[0] ?? "");
   const [op, setOp] = useState<NonNullable<Watch["op"]>>(">=");
   const [value, setValue] = useState("");
   const [scope, setScope] = useState("");
   const [one, setOne] = useState(false);
   const [added, setAdded] = useState<string>();
+  // The breakpoints this step can trigger: on a value it writes, with a scope that covers it.
+  const here = controls.watches
+    .map((w, i) => ({ w, i }))
+    .filter(({ w }) => w.name && writes.includes(w.name) && (!w.scope?.length || w.scope.some((s) => step === s || step.startsWith(`${s}/`))));
   const add = () => {
     const w: Watch = { name, op, value: parseValue(value, "number"), scope: scope ? [scope] : undefined, row: one && record !== null ? record : null };
     onChange({ ...controls, watches: [...controls.watches, w] });
@@ -206,8 +225,14 @@ export function WatchForm({ names, scopes, name: initial, record, keyCol, contro
     setValue("");
   };
   return (
-    <details className="watch-form">
-      <summary>Break when a value…</summary>
+    <details className="watch-form" open={here.length > 0 || undefined}>
+      <summary>Break when a value…{here.length ? ` (${here.length} here)` : ""}</summary>
+      {here.map(({ w, i }) => (
+        <div key={i} className="small">
+          ⏸ {watchText(w, keyCol)}{" "}
+          <button className="link" onClick={() => onChange({ ...controls, watches: controls.watches.filter((_, j) => j !== i) })}>remove</button>
+        </div>
+      ))}
       <div className="control-row">
         <select aria-label="break when name" value={name} onChange={(e) => setName(e.target.value)}>
           {names.map((n) => (
@@ -219,7 +244,8 @@ export function WatchForm({ names, scopes, name: initial, record, keyCol, contro
             <option key={o}>{o}</option>
           ))}
         </select>
-        <input aria-label="break when value" className="narrow" placeholder="value" value={value} onChange={(e) => setValue(e.target.value)} />
+        <input aria-label="break when value" className="narrow" placeholder="e.g. 25% or 0.25" value={value} onChange={(e) => setValue(e.target.value)} />
+        {value.trim() !== "" && <span className="muted small">= {formatValue(parseValue(value, "number"), name)}</span>}
       </div>
       <div className="control-row">
         <select aria-label="break when scope" value={scope} onChange={(e) => setScope(e.target.value)}>

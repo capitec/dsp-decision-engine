@@ -205,7 +205,11 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
           )}
           <h4>Reads{who && <span className="muted"> · values for {who} · click one to see where it came from</span>}</h4>
           <Chips names={node.inputs} picked={column} onPick={onPick} valueOf={valueOf} />
-          <h4>Writes{who && !ran && <span className="muted"> · not run yet</span>}</h4>
+          <h4>
+            Writes
+            {who && !ran && <span className="muted"> · not run yet</span>}
+            {who && ran && atThis && run.current?.iteration ? <span className="muted"> · not run yet in iteration {run.current.iteration}; iteration {run.current.iteration - 1} wrote</span> : null}
+          </h4>
           <Chips names={node.outputs} picked={column} onPick={onPick} valueOf={ran ? valueOf : () => undefined} />
           {Object.keys(node.params).length > 0 && (
             <>
@@ -244,7 +248,7 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
           <LineageTree entry={card} record={run.record} onSelect={onSelect} />
         </details>
       )}
-      {history && history.name === column && <ValueTimeline history={history} who={who} onSelect={onSelect} onGoTo={onGoTo} />}
+      {history && history.name === column && <ValueTimeline history={history} who={who} lineage={card} onSelect={onSelect} onGoTo={onGoTo} />}
     </aside>
   );
 }

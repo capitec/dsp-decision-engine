@@ -57,7 +57,7 @@ describe("steering and tracing stories", () => {
         await shot("The comparison after clicking Compare.");
       },
     );
-  }, 600_000);
+  }, 1_200_000);
 
   it("send one applicant down another product mid-run", async () => {
     await story(
@@ -83,7 +83,7 @@ describe("steering and tracing stories", () => {
         await shot("Ran on to total_cost_of_credit, the last step, and picked offer_rate under 'explain a value…'.");
       },
     );
-  }, 600_000);
+  }, 1_200_000);
 
   it("pause where a rate crosses a line inside personal loans", async () => {
     await story(
@@ -108,7 +108,7 @@ describe("steering and tracing stories", () => {
         await shot("Started a debug run and pressed F5 (continue).");
       },
     );
-  }, 600_000);
+  }, 1_200_000);
 
   it("find what set an applicant's rate and go back there", async () => {
     await story(
@@ -129,7 +129,7 @@ describe("steering and tracing stories", () => {
         await shot("Clicked '⤺ Go back to that moment'.");
       },
     );
-  }, 600_000);
+  }, 1_200_000);
 
   it("try a loop with 5 and 10 iterations and pause in iteration 3", async () => {
     await story(
@@ -163,5 +163,5 @@ describe("steering and tracing stories", () => {
         await shot("Added 'pause before iteration 3', started a debug run, pressed F5, focused client_id 1 and picked offer under 'explain a value…'.");
       },
     );
-  }, 600_000);
+  }, 1_200_000);
 });

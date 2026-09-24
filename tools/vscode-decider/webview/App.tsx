@@ -285,6 +285,7 @@ export function App() {
       {!pending && pausedAt && run.current && (
         <div className="pause-banner" title={run.current.path}>
           ⏸ Paused {run.current.when} <strong>{run.current.path.split("/").pop() || "the start"}</strong>
+          {run.current.iteration ? <> in iteration <strong>{run.current.iteration}</strong></> : null}
           {columns && <> · focus {recordPicker}</>}
           {run.record !== null && columns && (
             <>
@@ -303,7 +304,10 @@ export function App() {
                 {columns
                   .filter((c) => c.producer !== "input")
                   .map((c) => (
-                    <option key={c.name} value={c.name}>{c.name} = {formatValue(c.value, c.name)}</option>
+                    <option key={c.name} value={c.name}>
+                      {c.name} = {formatValue(c.value, c.name)}
+                      {declinedNow && typeof c.value === "number" && describe.outcome?.includes(c.name) ? " (not offered: declined)" : ""}
+                    </option>
                   ))}
               </select>
             </>
@@ -345,7 +349,18 @@ export function App() {
             </div>
           )}
           {note && <div className="banner-note">{note}</div>}
-          {run.hit && <div className="banner-note hit">⏸ Breakpoint: {hitText(run.hit, keyCol, controls.watches[run.hit.watch])}</div>}
+          {run.hit && (
+            <div className="banner-note hit">
+              ⏸ Breakpoint: {hitText({ ...run.hit, rows: [] }, keyCol, controls.watches[run.hit.watch])}
+              {(run.hit.rows ?? []).length > 0 && ": "}
+              {(run.hit.rows ?? []).map((r, i) => (
+                <span key={r}>
+                  {i > 0 && ", "}
+                  <a title="Focus this record" onClick={() => send({ type: "record", row: r })}>{recordLabel(r, keyCol)}</a> = {formatValue(run.hit!.values?.[i], controls.watches[run.hit!.watch]?.name)}
+                </span>
+              ))}
+            </div>
+          )}
           {outcome && <div className="banner-note outcome">{outcome}</div>}
 
         </div>
@@ -516,6 +531,7 @@ export function App() {
                     record={run.record}
                     keyCol={keyCol}
                     paused={!!pausedAt}
+                    ran={run.finishedPaths.includes(selectedGroup.cond)}
                     onChange={changeControls}
                     onCompare={(a, b) => send({ type: "compareForces", a, b })}
                     onRerun={(path) => {
@@ -528,6 +544,8 @@ export function App() {
                 <WatchForm
                   key={selectedNode.path}
                   names={outputNames}
+                  step={selectedNode.path}
+                  writes={selectedNode.outputs ?? []}
                   scopes={selectedNode.path.split("/").map((_, i, parts) => parts.slice(0, i + 1).join("/"))}
                   name={selectedNode.outputs?.[0]}
                   record={run.record}

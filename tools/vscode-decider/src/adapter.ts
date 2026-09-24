@@ -352,8 +352,11 @@ export class DeciderDebugSession extends LoggingDebugSession {
     this.sendResponse(response);
   }
 
-  private shown(c: ColumnSummary): string {
-    return this.record === null ? previewOf(c, c.name) : formatValue(c.value, c.name);
+  /** A value for the Variables view; `declined` marks a declined record's offer figures, which aren't an offer. */
+  private shown(c: ColumnSummary, declined = false): string {
+    if (this.record === null) return previewOf(c, c.name);
+    const offer = declined && typeof c.value === "number" && (this.describe?.outcome ?? []).includes(c.name);
+    return `${formatValue(c.value, c.name)}${offer ? "  (not offered: declined)" : ""}`;
   }
 
   private async variablesFor(ref: VarRef): Promise<Variable[]> {
@@ -361,11 +364,12 @@ export class DeciderDebugSession extends LoggingDebugSession {
       case "scope": {
         const cols = await this.state();
         const byName = new Map(cols.map((c) => [c.name, c]));
+        const declined = byName.get("decision")?.value === "decline";
         const names = ref.names === "all" ? cols.map((c) => c.name) : ref.names;
         return names.map((n) => {
           const c = byName.get(n);
           if (!c) return new Variable(n, "<not yet computed>");
-          const v: DebugProtocol.Variable = new Variable(n, this.shown(c), this.handles.create({ kind: "column", name: n }));
+          const v: DebugProtocol.Variable = new Variable(n, this.shown(c, declined), this.handles.create({ kind: "column", name: n }));
           v.type = c.dtype;
           v.evaluateName = n;
           return v as Variable;
@@ -485,7 +489,7 @@ export class DeciderDebugSession extends LoggingDebugSession {
           break;
         case "decider.goTo":
           this.sendResponse(response);
-          return void (await this.run("go_to", { change: args.change }));
+          return void (await this.run("go_to", { change: args.change }, "goto"));
         case "decider.rewind":
           this.sendResponse(response);
           return void (await this.run("rewind", { path: args.path }));
