@@ -10,6 +10,7 @@ from numba.core import types
 from numba.core.dispatcher import Dispatcher
 from numba.core.errors import NumbaError, UnsupportedBytecodeError
 
+from decider.engine.compile import cpython  # noqa: F401  (registers CPython-compatible round and **)
 from decider.engine.compile.fingerprint import fingerprint
 from decider.engine.ir.decls import KIND_DTYPES, FeatureKind, Input, NullPolicy, base_annotation, feature_kind
 from decider.engine.ir.nodes import CallNode

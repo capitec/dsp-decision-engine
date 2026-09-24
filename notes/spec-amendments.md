@@ -176,3 +176,20 @@ where they disagree, this file wins.
   `sample_request.json` when present; JSON inputs are coerced to declared
   `date`/`datetime`/`list`/TypedDict annotations; `RequestHandler.warm_fn` is
   overridable; `from decider.serving import RequestHandler`.
+
+## 2026-09-24, fix-round follow-ups (FIX-H)
+
+- **`Engine(strict_compile=True)`** passes `strict` to the stepped and fused
+  runners.
+- **`round(x, n)` in kernels equals CPython's** for float `x` and
+  `|n| <= 22` (exact half-to-even on the double's value); beyond 22 digits it
+  scales and rounds. **`x ** n`** (float `x`, int `n`) calls libm `pow` like
+  CPython instead of multiplying by squaring (a literal `x ** 2` still
+  compiles to `x * x`).
+- **Typed frame reads:** `frame_step(reads={"accounts": list[Account]})`
+  gives read columns types, like a plain step's annotations (JSON date
+  coercion, one type per input column). A list keeps them untyped.
+- **An input column is described by its first typed reader**, so an untyped
+  frame step reading it first no longer hides a later step's `date`.
+- **JSON coercion keeps undeclared TypedDict keys**: a TypedDict naming only
+  the date fields leaves the rest of each dict as sent.
