@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Iterator
+from typing import Collection, Iterator
 
 from decider.engine.compile.kernel import Fork, Repeat, fused_kernel
 from decider.engine.compile.njit import compile_call
@@ -34,11 +34,12 @@ class _Unpackable(Exception):
     pass
 
 
-def compile_packed(plan: Plan, lazy: bool = False) -> dict[str, Packed]:
+def compile_packed(plan: Plan, lazy: bool = False, python: Collection[int] = ()) -> dict[str, Packed]:
     """Every branch and loop that runs as one kernel, by path.
 
     One packs when every call in it (condition, arms, body, nested branches
-    and loops) is a scalar call numba compiles, with no nullable output;
+    and loops) is a scalar call numba compiles, with no nullable output, and
+    none of them is in `python` (call ids that must run in Python);
     every merged or carried name is a `float`, `int` or `bool` of one dtype
     throughout; and nothing made inside it but what it merges or carries is
     a pipeline output. With `lazy` params validation, a call that may not
@@ -54,7 +55,7 @@ def compile_packed(plan: Plan, lazy: bool = False) -> dict[str, Packed]:
     found = {}
     for r in _constructs(plan.root):
         try:
-            found[r.node.origin.path] = _pack(r, outputs, lazy)
+            found[r.node.origin.path] = _pack(r, outputs, lazy, python)
         except _Unpackable:
             pass
     return found
@@ -88,10 +89,10 @@ def _calls(r: Resolved) -> Iterator[Call]:
         yield from _calls(r.body)
 
 
-def _pack(top: Branch | Loop, outputs: set[int], lazy: bool) -> Packed:
+def _pack(top: Branch | Loop, outputs: set[int], lazy: bool, python: Collection[int]) -> Packed:
     calls = list(_calls(top))
     conditional = calls[1:]
-    if lazy and any(c.node.params for c in conditional):
+    if lazy and any(c.node.params for c in conditional) or any(c.id in python for c in calls):
         raise _Unpackable
     compiled = {}
     for c in calls:

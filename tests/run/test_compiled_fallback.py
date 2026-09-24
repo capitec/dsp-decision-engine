@@ -1,0 +1,126 @@
+"""Compiled modes run what no kernel can in Python: `str` comparisons, object outputs, list fills."""
+import datetime as dt
+import warnings
+
+import polars as pl
+import pytest
+
+from decider import flow, missing_as
+from decider.engine import Engine
+from decider.engine.compile import Fallback, Kernel
+from decider.testing import assert_equivalent
+
+COMPILED = ("stepped", "fused")
+
+
+def half(x: float) -> float:
+    return x / 2
+
+
+def pick(a_version: str, b_version: str, half: float) -> str:
+    return a_version if half > 1 else b_version
+
+
+def same(a_version: str, b_version: str) -> bool:
+    return a_version == b_version
+
+
+def is_complete(band: str) -> bool:
+    return band == "complete"
+
+
+def doubled(half: float) -> float:
+    return half * 2
+
+
+VERSIONS = pl.DataFrame({"x": [1.0, 4.0, 6.0], "a_version": ["v1", "v2", "v2"], "b_version": ["v2", "v2", "v1"],
+                         "band": ["complete", "partial", "complete"]})
+
+
+def test_string_steps_run_in_python_and_give_the_interpreted_answer():
+    with pytest.warns(UserWarning, match="pick: reads several `str` inputs.*runs in Python"):
+        out = assert_equivalent(flow(half, pick, same, is_complete, doubled, name="p"), VERSIONS)
+    assert out["pick"].to_list() == ["v2", "v2", "v2"]
+    assert out["same"].to_list() == [False, True, False]
+    assert out["is_complete"].to_list() == [True, False, True]
+
+
+def test_a_python_string_step_splits_the_fused_kernel_around_it():
+    exe = Engine().bind(flow(half, same, doubled, name="p"), mode="fused")
+    with pytest.warns(UserWarning, match="p/same"):
+        exe.run(VERSIONS)
+    units = [exe.runner.units[c.id] for c in exe.plan.calls]
+    assert [type(u) for u in units] == [Kernel, Fallback, Kernel]
+    assert "several `str` inputs" in units[1].reason
+
+
+def test_the_warning_is_given_once_per_executable():
+    exe = Engine().bind(flow(same, name="p"), mode="fused")
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        exe.run(VERSIONS)
+        exe.run(VERSIONS)
+        exe.score({"a_version": "v1", "b_version": "v1"})
+    assert len(caught) == 1
+
+
+def as_dict(x: float) -> dict:
+    return {"a": x}
+
+
+def as_list(x: float) -> list[float]:
+    return [x, x]
+
+
+def as_date(x: float) -> dt.date:
+    return dt.date(2026, 1, int(x))
+
+
+@pytest.mark.parametrize("mode", COMPILED)
+@pytest.mark.parametrize("fn", [as_dict, as_list, as_date])
+def test_a_python_fallback_keeps_object_outputs_as_python_values(mode, fn):
+    expected = Engine().bind(flow(fn, name="p")).score({"x": 3.0})
+    assert Engine().bind(flow(fn, name="p"), mode=mode).score({"x": 3.0}) == expected
+
+
+def days_to(decision_date: dt.date, x: float) -> float:
+    return x
+
+
+def checked(x: float) -> float:
+    # A generator in any(): numba on Python 3.14 can't read its bytecode.
+    return x + 1 if any(x > t for t in (0.0, 1.0)) else x
+
+
+def test_a_step_reading_a_date_or_numba_cannot_read_runs_in_python():
+    df = pl.DataFrame({"decision_date": [dt.date(2026, 1, 1)], "x": [2.0]})
+    out = assert_equivalent(flow(days_to, checked, name="p"), df)
+    assert out["days_to"].to_list() == [2.0] and out["checked"].to_list() == [3.0]
+    exe = Engine().bind(flow(days_to, name="p"), mode="stepped")
+    exe.run(df)
+    assert "reads 'decision_date'" in exe.runner.units[exe.plan.calls[0].id].reason
+
+
+def as_float(code: float) -> float:
+    return code / 2
+
+
+def as_int(code: int) -> int:
+    return code // 2
+
+
+def test_an_int_column_read_as_float_by_one_step_reaches_its_kernel_as_float():
+    out = assert_equivalent(flow(as_int, as_float, name="p"), pl.DataFrame({"code": [3, 4]}))
+    assert out["as_float"].to_list() == [1.5, 2.0]
+
+
+def total(hist: list[float] = missing_as([])) -> float:
+    return float(sum(hist))
+
+
+@pytest.mark.parametrize("mode", COMPILED)
+def test_an_empty_list_fill_fills_each_missing_row(mode):
+    exe = Engine().bind(flow(total, name="p"), mode=mode)
+    assert exe.score({"x": 1.0})["total"] == 0.0
+    out = exe.run(pl.DataFrame({"hist": [[1.0, 2.0], None]}, schema={"hist": pl.List(pl.Float64)}))
+    assert out["total"].to_list() == [3.0, 0.0]

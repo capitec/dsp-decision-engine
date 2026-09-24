@@ -36,7 +36,7 @@ class FusedRunner(SteppedRunner):
 
     def _compile(self, plan: Plan, lazy: bool) -> None:
         super()._compile(plan, lazy)
-        self.packed = compile_packed(plan, lazy)
+        self.packed = compile_packed(plan, lazy, self._python)
         self._reads.update((id(k), _external(k)) for k in self.packed.values())
 
     def _sequence(self, seq: Sequence, state: State, params: RunParams, scope: _Scope) -> Iterator[Checkpoint]:

@@ -68,6 +68,10 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None]:
         key, fn, reason = compile_call(plan.calls[0].node)
     """
     key, dispatcher = jit(node.fn)
+    # numba would type a `date` or `list` input as the float64 it can't be converted to.
+    odd = next((i for i in node.inputs if base_annotation(i.annotation) not in (float, int, bool, str, bytes, Any)), None)
+    if odd is not None:
+        return key, dispatcher.py_func, f"reads '{odd.name}' as {odd.annotation}, which no kernel takes"
     sig = _probe_signature(node)
     if sig is None:
         return key, dispatcher, None
@@ -75,7 +79,9 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None]:
         try:
             dispatcher.compile(sig)
             _REASONS[key, sig] = None
-        except FALLBACK_ERRORS as e:
+        # Compiling runs no step code, so a NotImplementedError here is numba's bytecode reader
+        # meeting an opcode it lacks (Python 3.14's LOAD_COMMON_CONSTANT, from `any(... for ...)`).
+        except (*FALLBACK_ERRORS, NotImplementedError) as e:
             _REASONS[key, sig] = f"{type(e).__name__}: {e}"
     reason = _REASONS[key, sig]
     return key, (dispatcher if reason is None else dispatcher.py_func), reason
