@@ -22,11 +22,18 @@ class ParamSpec:
     shared_key: str | None
     on_invalid: OnInvalid
 
+    # A bool/None default can't be subclassed, so a direct call sees this marker: make it test like its value.
+    def __bool__(self) -> bool:
+        return bool(self.default)
+
 
 class MissingAs:
     """What `missing_as()` returns: the fill value itself (when its type allows) plus the marker."""
 
     fill: Any
+
+    def __bool__(self) -> bool:
+        return bool(self.fill)
 
 
 @cache
@@ -55,6 +62,14 @@ def param(
 ) -> Any:
     """Declare a tunable param as a function argument's default.
 
+    Params are configuration from the params document, the same for every
+    record of a run; they are not request data. A request field is a plain
+    argument, read from the record by its name::
+
+        def affordable(ratio: float,                           # request field / earlier step's output
+                       min_ratio: float = param(0.3)) -> bool:  # config from the params document
+            return ratio >= min_ratio
+
     Every extra keyword (`ge`, `le`, `description`, ...) is passed to pydantic's
     `Field`, so the params document is validated against it.
 
@@ -76,6 +91,10 @@ def param(
             return min(term_cap, cap)
 
         cap_by_income(60.0)  # 48.0: the function is still plain Python
+
+    A `bool` or `None` default comes back as a marker that tests like its
+    value (`if flag:` works on a direct call), but `flag is False` doesn't
+    hold; write `if not flag:`. Param names must be Python identifiers.
     """
     if required == (default is not _NO_DEFAULT):
         raise TypeError("param() takes either a default or required=True, not both or neither")
@@ -90,9 +109,15 @@ def param(
 def missing_as(value: Any) -> Any:
     """Declare that a null in this input is replaced by `value`.
 
+    To let the null through instead, annotate the input `T | None`
+    (`missing_as(None)` is refused). A `bool` fill comes back as a marker
+    that tests like its value on a direct call; use `if not x:`, not `x is False`.
+
     Example::
 
-        def score(bureau_score: float = missing_as(0.0)) -> float:
+        def score(bureau_score: float = missing_as(0.0),
+                  deceased: bool = missing_as(False),
+                  bonus: float | None = None) -> float:
             return bureau_score * 0.01
     """
     if value is None:

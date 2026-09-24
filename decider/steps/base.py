@@ -66,15 +66,27 @@ class Step(ABC):
 
         `reads` maps a name the step reads to the column it should read
         instead; `writes` maps a name it writes to the name to write. Names
-        produced and consumed inside the step follow its writes.
+        produced and consumed inside the step follow its writes. Relabels
+        chain: a key may be the original name or the current one. A key the
+        step doesn't read or write is an error.
 
         Example::
 
             ratio.relabel(reads={"instalment": "monthly_instalment"}, writes={"ratio": "dti"})
+            ratio.relabel(writes={"ratio": "dti"}).relabel(writes={"dti": "dti_pct"})  # writes dti_pct
         """
+        from decider.engine.ir.context import IRContext
+        from decider.engine.ir.nodes import CallNode, iter_nodes
+        from decider.engine.wiring.interface import interface
+
+        node = IRContext().build(self)
+        calls = [n for n in iter_nodes(node) if isinstance(n, CallNode)]
+        # Unknown lineage: any name may be real, so nothing can be checked.
+        known_reads = None if any(c.inputs is None for c in calls) else interface(node)[0]
+        known_writes = None if any(c.outputs is None for c in calls) else {o.name for c in calls for o in c.outputs}
         return self._replace(
-            reads=tuple({**dict(self.reads), **(reads or {})}.items()),
-            writes=tuple({**dict(self.writes), **(writes or {})}.items()),
+            reads=_compose(self, "reads", self.reads, reads, known_reads),
+            writes=_compose(self, "writes", self.writes, writes, known_writes),
         )
 
     def parameters(self) -> ParamsSchema:
@@ -139,6 +151,25 @@ def _walk(step: Step, parent: str) -> Iterator[tuple[str, Step]]:
     for member in getattr(step, "steps", ()):
         if isinstance(member, Step):
             yield from _walk(member, path)
+
+
+def _compose(step: Step, kind: str, old: tuple, new: dict | None, known: set[str] | None) -> tuple:
+    from decider.exceptions import WiringError
+    from decider.registry.resolve import hint
+
+    mapping = dict(old)
+    current = {v: k for k, v in mapping.items()}
+    for key, target in (new or {}).items():
+        if key in current:
+            mapping[current[key]] = target
+        elif key in mapping or known is None or key in known:
+            mapping[key] = target
+        else:
+            raise WiringError(
+                f"{step.name or type(step).__name__}.relabel({kind}={{{key!r}: {target!r}}}): it {kind} no "
+                f"{key!r}; it {kind} {sorted(known)}.{hint(key, known)}"
+            )
+    return tuple(mapping.items())
 
 
 def as_step(value: Any) -> Step:

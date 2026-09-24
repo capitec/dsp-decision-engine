@@ -80,6 +80,13 @@ def step(
     is expected. Two plain functions can't be joined with `|` (Python has no
     `|` for functions): write `step(f) | g` or `flow(f, g)`.
 
+    Plain arguments are request fields (or earlier steps' outputs), read per
+    record by name. `param()` arguments are configuration from the params
+    document, fixed for the run; never declare request data as a `param()`::
+
+        def affordable(ratio: float, min_ratio: float = param(0.3)) -> bool:
+            return ratio >= min_ratio   # ratio: per record; min_ratio: params document
+
     Args:
         name: the step's name in paths (default: the function's name).
         output: the one name it writes (default: the function's name, or

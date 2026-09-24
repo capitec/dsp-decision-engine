@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import difflib
+import re
+import warnings
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -15,15 +18,17 @@ def resolve(ir: Any) -> Plan:
 
     Written order is execution order: a node reads the latest version of each
     name, and every write is kept as a new version. A name nothing has
-    produced yet is a pipeline input column, unless it is close to a name
-    that has been produced, which is taken as a typo and raised with a
-    suggestion. Accepts an IR node or anything `engine.to_ir` accepts.
+    produced yet is a pipeline input column. One within two edits of a name
+    produced earlier is taken as a typo and raised with a suggestion; one
+    merely similar is read as an input column with a warning. Accepts an IR
+    node or anything `engine.to_ir` accepts.
 
     Raises `WiringError` (a `ValueError`), naming the node path, for: a likely
-    typo, a node reading an input column that a later node overwrites, a
-    read or bare emit of a name written only inside a branch arm, branch
-    condition or loop body that doesn't pass it on, an emit or drop of a
-    name that doesn't exist, a drop of a value only used internally, a
+    typo, readers declaring one input column with different types, a node
+    reading an input column that a later node overwrites, a read or bare
+    emit of a name written only inside a branch arm, branch condition or loop
+    body that doesn't pass it on, an emit or drop of a name close to an
+    existing one but not it, a drop of a value only used internally, a
     `name@path` whose path produces no such name, a `modifies` name no arm
     writes, and a `carries` name the loop body never writes.
 
@@ -71,6 +76,8 @@ class _Resolver:
         self.drops: list[tuple[str, str]] = []
         # Finished branch/loop path -> the names it passes on, for errors about the ones it hides.
         self.closed: dict[str, str] = {}
+        # Input column -> (first typed reader, its type), so every reader agrees on the column's type.
+        self.input_types: dict[str, tuple[str, Any]] = {}
 
     def new(self, name: str, producer: str | None, annotation: Any) -> Version:
         v = Version(len(self.versions), name, producer, annotation)
@@ -118,8 +125,23 @@ class _Resolver:
         v = scope.names.get(name)
         if v is None:
             v = scope.names[name] = self.unbound(name, scope, reader, own, decl)
+        if v.producer is None and decl is not None:
+            self.same_type(name, decl, reader)
         self.read.add(v.id)
         return v
+
+    def same_type(self, name: str, decl: Input, reader: str) -> None:
+        # One column arrives as one type, so a reader declaring another would silently get the first's.
+        t = base_annotation(decl.annotation)
+        if t in (None, Any):
+            return
+        first, ft = self.input_types.setdefault(name, (reader, t))
+        if ft != t:
+            raise WiringError(
+                f"{first} reads input column {name!r} as {_type_name(ft)}, but {reader} reads it as "
+                f"{_type_name(t)}; an input column has one type. Annotate both the same, and convert "
+                f"in the step that needs the other type."
+            )
 
     def unbound(self, name: str, scope: _Scope, reader: str, own: set[str], decl: Input | None) -> Version:
         annotation = decl.annotation if decl is not None else self.annotations.get(name)
@@ -137,10 +159,16 @@ class _Resolver:
         produced = {n: v for n, v in scope.names.items() if v.producer is not None and n not in own}
         near = suggest(name, produced, TYPO_CUTOFF)
         if near is not None:
-            raise WiringError(
-                f"{reader}: input {name!r} is not produced by any earlier step and is not a declared input "
-                f"column. Did you mean {near!r} (produced by {produced[near].producer!r})? Rename it, or "
-                f"relabel(reads={{{name!r}: {near!r}}})."
+            if _is_typo(name, near):
+                raise WiringError(
+                    f"{reader}: input {name!r} is not produced by any earlier step. Did you mean {near!r} "
+                    f"(produced by {produced[near].producer!r})? Rename it, or "
+                    f"relabel(reads={{{name!r}: {near!r}}})."
+                )
+            warnings.warn(
+                f"{reader}: reading {name!r} as an input column. It looks like {near!r} (produced by "
+                f"{produced[near].producer!r}); if it's a typo, rename it or relabel(reads={{{name!r}: {near!r}}}).",
+                stacklevel=2,
             )
         if name not in self.leaves:
             self.leaves[name] = self.new(name, None, annotation)
@@ -253,11 +281,15 @@ class _Resolver:
                     f"{label}: emit({spec!r}): {name!r} is only written inside {hidden[1]}. "
                     f"Emit that version as '{name}@{hidden[0].producer}', or list {name!r} there to pass it on."
                 )
-            if v is None:
+            near = hint(name, [*scope.names, *self.chains]) if v is None else ""
+            if near:
                 raise WiringError(
-                    f"{label}: emit({spec!r}): no step produces {name!r} and it is not a declared input "
-                    f"column.{hint(name, [*scope.names, *self.chains])}"
+                    f"{label}: emit({spec!r}): no step produces {name!r}.{near} (Input columns pass through "
+                    "to the output without an emit.)"
                 )
+            if v is None:
+                # An input column nothing reads: it passes through, and emitting it makes it required.
+                v = self.unbound(name, scope, label, frozenset(), None)
             self.emitted[name] = v
             return
         prefix = f"{where}/" if where else ""
@@ -307,3 +339,14 @@ class _Resolver:
             tuple(dict.fromkeys(drops)), {name: tuple(chain) for name, chain in self.chains.items()},
         )
 
+
+
+def _is_typo(name: str, near: str) -> bool:
+    # Within two edits, unless only digits differ (`applicant2_income` next to `applicant1_income`).
+    ops = difflib.SequenceMatcher(None, name, near).get_opcodes()
+    edits = sum(max(i2 - i1, j2 - j1) for tag, i1, i2, j1, j2 in ops if tag != "equal")
+    return edits <= 2 and re.sub(r"\d", "", name) != re.sub(r"\d", "", near)
+
+
+def _type_name(t: Any) -> str:
+    return getattr(t, "__name__", repr(t))
