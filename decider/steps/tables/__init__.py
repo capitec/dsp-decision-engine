@@ -6,7 +6,7 @@ import typing as t
 from dataclasses import replace
 
 import polars as pl
-from pydantic import AfterValidator, Field, model_validator
+from pydantic import AfterValidator, BeforeValidator, Field, model_validator
 
 from decider.engine.ir.decls import Input, NullPolicy, Output
 from decider.engine.ir.nodes import CallNode
@@ -63,10 +63,45 @@ class DecisionTableConfig(ConfigurableStep):
         })
         bands.run(df)                                       # writes band
 
-    With `"rows": {"table": "bands"}` the rows come from params:
-    `bands.run(df, params={"bands": {"bands": [{"lo": None, "hi": 50.0, "band": "low"}, ...]}})`.
-    A String output of such a table must be an `{"type": "Enum", "categories": [...]}` column, so its
-    values are known before the rows arrive.
+    Rows from params (a parameter table): write `"rows": {"table": "<param>"}`
+    and the rows become a required param of the step, named `<param>`. The
+    params document holds them under the step's node path, as a list with
+    one dict per row, a value for every declared column (`None` for null)::
+
+        pricing = DecisionTableConfig.load({
+            "type": "decision_table", "name": "pricing",
+            "columns": {"product": "String", "lo": "Float64", "hi": "Float64", "rate": "Float64"},
+            "rows": {"table": "prices"},
+            "expression": {"type": "and", "expressions": [
+                {"type": "eq", "variable": "product", "value_column": "product"},
+                {"type": "between", "variable": "amount", "lower_bound_column": "lo", "upper_bound_column": "hi"}]},
+            "outputs": ["rate"],
+        })
+        pipeline = flow(pricing, name="loans")
+        pipeline.parameters()
+        # {'loans/pricing': {'prices': {'type': 'table', 'schema':
+        #     {'product': 'String', 'lo': 'Float64', 'hi': 'Float64', 'rate': 'Float64'}}}}
+        params = {"loans": {"pricing": {"prices": [
+            {"product": "loan", "lo": None, "hi": 10000.0, "rate": 0.20},
+            {"product": "loan", "lo": 10000.0, "hi": None, "rate": 0.15},
+        ]}}}
+        pipeline.run(df, params=params)       # df has product and amount; writes rate
+
+    `pipeline.parameters().defaults()` leaves the table out: it has no
+    default, so a run without it is a `ParamsError` ("param 'prices' is
+    required but missing"). The rows are checked against `columns` when the
+    document arrives: an undeclared or missing column, or a value of the
+    wrong type, is a `ParamsError` naming the step, the param, the row and
+    the column. A table on its own (not inside `flow`) is keyed by its name
+    alone: `{"pricing": {"prices": [...]}}`. Changing the rows, or how many
+    there are, never recompiles. A String output of such a table must be
+    an `{"type": "Enum", "categories": [...]}` column, so its values are
+    known before the rows arrive.
+
+    In a `between` condition, rows with the same `eq` values (here, one
+    product's bands) form one ladder: its first row may leave its lower
+    bound `None` and its last its upper, and a missing bound between is the
+    neighbouring band's.
     """
 
     type: t.Literal["decision_table"] = "decision_table"
@@ -143,7 +178,7 @@ class DecisionTableConfig(ConfigurableStep):
         else:
             decl = ctx.table(ref, {c: str(d) for c, d in dt.items()})
             checked = Field()
-            checked.metadata.append(AfterValidator(shape.arrive))
+            checked.metadata += [BeforeValidator(shape.given), AfterValidator(shape.arrive)]
             params = (replace(decl, field_info=checked),)
         py_defaults = [None if d is None else str(d) if types[c] == "str" else _TYPES[types[c]](d)
                        for c, d in zip(self.outputs, defaults)]

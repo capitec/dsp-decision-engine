@@ -35,7 +35,21 @@ class TreeConfig(ConfigurableStep):
 
     `path_output` names an extra String column holding the id of the leaf
     that answered (null when the default row answered); in `mode: "all"`
-    one per rule, `<rule>.<path_output>`.
+    one per rule, `<rule>.<path_output>`. `trace_output` names a String
+    column holding the ordered path, the ids of every node walked joined
+    with `>` (`"root>mid>hi"`, or `"root>mid"` when `mid`'s branch leads
+    nowhere), so the decision record says how the tree got there, also
+    through a node shared by two parents. In `mode: "first_match"` over
+    several rules it is the path in the rule that answered (else the last
+    rule's); in `mode: "all"` one per rule.
+
+    Params are per call, not per row: `params={"risk_tree": {"hi_thresh": 2.0}}`
+    moves the threshold for every row of that run. For a threshold that
+    differs per row, compare against a computed feature over a column
+    instead, e.g. `{"op": ">", "feature": {"type": "computed", "expression":
+    "ratio - customer_limit"}, "threshold": 0.0}` reads `customer_limit` from
+    each row. A param name is a Python identifier (it becomes a field name):
+    write rule `CF-0412`'s threshold as `{"param": "cf_0412_amount"}`.
 
     `nodes` maps each node id to its node: the locators a session breaks on,
     e.g. `session.break_at("risk_tree#high")`.
@@ -57,7 +71,8 @@ class TreeConfig(ConfigurableStep):
         })
         risk.run(df)                                          # writes risk_band
         risk.run(df, params={"risk_tree": {"hi_thresh": 2.0}})
-        # With "path_output": "risk_leaf" in the document, run() also writes risk_leaf: "high" or null.
+        # With "path_output": "risk_leaf" in the document, run() also writes risk_leaf: "high" or null;
+        # with "trace_output": "risk_path", risk_path: "root>high", or "root" when ratio <= 0.7.
 
     The same tree as flat rules: `"tree": {"type": "flat_rule", "rule": {"rule": {"type": "unary",
     "condition": {...}, "then": {"type": "leaf", "result_idx": 0}}}, "output": {...}}`.
@@ -68,6 +83,7 @@ class TreeConfig(ConfigurableStep):
     feature_types: t.Dict[str, str] = {}
     null_handling: t.Literal["otherwise", "error"] = "otherwise"
     path_output: t.Optional[str] = None
+    trace_output: t.Optional[str] = None
 
     @field_validator("feature_types")
     @classmethod
@@ -81,7 +97,7 @@ class TreeConfig(ConfigurableStep):
 
     def to_ir(self, ctx: t.Any) -> CallNode:
         tree = self.tree.to_tree()
-        p = encode(tree, self.feature_types, ctx.value, self.null_handling, self.path_output)
+        p = encode(tree, self.feature_types, ctx.value, self.null_handling, self.path_output, self.trace_output)
         ref = reference(tree, p.inputs, p.kinds, p.columns)
         # The node's consts are addresses into these arrays; the node holds its reference, which holds them.
         ref.arrays = p.arrays
