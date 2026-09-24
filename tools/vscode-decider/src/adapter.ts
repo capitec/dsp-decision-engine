@@ -478,6 +478,12 @@ export class DeciderDebugSession extends LoggingDebugSession {
           else this.sendEvent(new StoppedEvent("edit", THREAD));
           return;
         }
+        case "decider.changes":
+          response.body = await this.bridge!.request("changes", { name: args.name, row: this.record });
+          break;
+        case "decider.goTo":
+          this.sendResponse(response);
+          return void (await this.run("go_to", { change: args.change }));
         case "decider.rewind":
           this.sendResponse(response);
           return void (await this.run("rewind", { path: args.path }));

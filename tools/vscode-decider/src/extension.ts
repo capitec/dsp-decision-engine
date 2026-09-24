@@ -4,7 +4,7 @@ import { DeciderDebugSession } from "./adapter";
 import { analyse, PipelineCodeLens } from "./analysis";
 import { listRefs, materialise, repoRoot } from "./git";
 import { GraphPanel } from "./graphPanel";
-import type { CallNodeJson, ColumnHistory, ColumnSummary, Controls, DescribeResult, FromWebview, Lineage, RecordKey, RunStatus, ToWebview } from "./protocol";
+import type { CallNodeJson, ColumnSummary, Controls, DescribeResult, FromWebview, Lineage, RecordKey, RunStatus, ToWebview, ValueHistory } from "./protocol";
 import { debugpyLibs, pythonCommand } from "./python";
 import { runComparison, type Side } from "./compareRuns";
 import { compareTraces, type TraceResult } from "./compare";
@@ -153,13 +153,16 @@ async function onWebview(m: FromWebview, describe: DescribeResult) {
       if (!s) return post({ type: "lineage", lineage: null, history: null });
       const [lineage, history] = await Promise.all([
         s.customRequest("decider.lineage", { name: m.name }) as Thenable<Lineage>,
-        s.customRequest("decider.column", { name: m.name }) as Thenable<ColumnHistory>,
+        s.customRequest("decider.changes", { name: m.name }) as Thenable<ValueHistory>,
       ]);
       post({ type: "lineage", lineage, history });
       break;
     }
     case "treePath":
       if (s) post({ type: "treePath", ...((await s.customRequest("decider.treePath", { path: m.path })) as { path: string; row: number; visited: string[]; result: unknown[] }) });
+      break;
+    case "goTo":
+      await s?.customRequest("decider.goTo", { change: m.change });
       break;
     case "rewind":
       await s?.customRequest("decider.rewind", { path: m.path });

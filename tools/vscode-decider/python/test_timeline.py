@@ -1,0 +1,69 @@
+import os
+import sys
+
+HERE = os.path.dirname(__file__)
+LOAN = os.path.join(HERE, "..", "examples", "loan.py")
+sys.path.insert(0, HERE)
+from bridge import Bridge  # noqa: E402
+
+
+def finished(**kw):
+    b = Bridge()
+    b.start(LOAN, **kw)
+    b.handle({"cmd": "resume"})
+    return b
+
+
+def test_a_records_history_lists_each_change_with_the_step_and_iteration():
+    h = finished().handle({"cmd": "changes", "name": "offer", "row": 0})
+    assert [(c["path"].split("/")[-1], c["iteration"], c["before"], c["value"]) for c in h["changes"]] == [
+        ("offer", None, None, 150000.0),
+        ("shrink", 1, 150000.0, 120000.0),
+        ("shrink", 2, 120000.0, 96000.0),
+        ("shrink", 3, 96000.0, 76800.0),
+        ("shrink", 4, 76800.0, 61440.0),
+        ("shrink", 5, 61440.0, 49152.0),
+    ]
+    assert not h["input"]
+
+
+def test_a_step_that_writes_the_same_value_is_not_a_change():
+    h = finished().handle({"cmd": "changes", "name": "term_cap", "row": 1})
+    assert [c["path"] for c in h["changes"]] == ["term/term_cap"]  # the caps leave 36 as it is
+
+
+def test_the_batch_history_counts_the_records_each_change_touched():
+    h = finished().handle({"cmd": "changes", "name": "offer"})
+    assert h["changes"][0]["rows"] == 2 and h["changes"][1]["rows"] == 1
+
+
+def test_an_input_starts_from_its_value_and_an_override_is_a_change():
+    b = Bridge()
+    b.start(LOAN, breakpoints=["term/cap_by_income"])
+    b.handle({"cmd": "resume"})
+    b.handle({"cmd": "set", "name": "requested_amount", "value": 1000.0})
+    h = b.handle({"cmd": "changes", "name": "requested_amount", "row": 0})
+    assert h["input"] and h["initial"] == 150000.0
+    assert h["changes"][0]["path"] == "override@term/cap_by_income" and h["changes"][0]["value"] == 1000.0
+
+
+def test_the_state_mid_iteration_shows_what_the_loop_body_just_wrote():
+    b = Bridge()
+    b.start(LOAN, breakpoints=["sizing/shrink_offer/shrink"])
+    b.handle({"cmd": "resume"})
+    b.handle({"cmd": "step"})  # just after the first shrink; the carry still holds 150000
+    offer = next(c for c in b.state(row=0)["columns"] if c["name"] == "offer")
+    assert offer["value"] == 120000.0 and offer["preview"] == [120000.0, 90000.0]
+
+
+def test_going_back_to_a_change_pauses_just_after_the_step_that_made_it():
+    b = finished()
+    third = b.handle({"cmd": "changes", "name": "offer", "row": 0})["changes"][3]
+    r = b.handle({"cmd": "go_to", "change": third["change"]})
+    assert r["current"] == {"path": "sizing/shrink_offer/shrink", "when": "after"}
+    assert b.session.current.iteration == 3
+    assert b.session.value("offer@sizing/shrink_offer/shrink").to_list()[0] == 76800.0
+    after = b.handle({"cmd": "changes", "name": "offer", "row": 0})["changes"]
+    assert [c["value"] for c in after] == [150000.0, 120000.0, 96000.0, 76800.0]  # the later ones haven't happened yet
+    assert b.handle({"cmd": "resume"})["finished"]
+    assert len(b.handle({"cmd": "changes", "name": "offer", "row": 0})["changes"]) == 6

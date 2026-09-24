@@ -79,6 +79,10 @@ class Controls:
     def check(self, cp):
         """Apply any force due at `cp`, then say whether a watch pauses the run here."""
         self.force(cp)
+        return self.watch(cp)
+
+    def watch(self, cp):
+        """Whether a watch pauses the run at `cp`."""
         return any(self._watch(i, w, cp) for i, w in enumerate(self.watches))
 
     def force(self, cp):
@@ -116,8 +120,12 @@ class Controls:
             return False
         if not any(_under(cp.origin.path, p) for p in (w.get("scope") or [""])):
             return False
-        values = self.session.value(name).to_list()
-        rows = range(len(values)) if w.get("row") is None else [w["row"]]
+        # What this step wrote, not `session.value`: a loop's carry catches up only after the iteration ends.
+        st = self.session.state
+        spec = f"{name}@{cp.origin.path}"
+        values = st.column(spec).to_list()
+        valid = st.valid.get(st.versions(spec)[-1].id)
+        rows = [r for r in (range(len(values)) if w.get("row") is None else [w["row"]]) if valid is None or valid[r]]
         test = OPS[w["op"]]
 
         def meets(v):
@@ -128,8 +136,9 @@ class Controls:
 
         now = {r for r in rows if meets(values[r])}
         # Only records that newly meet the condition: a value that stays over a limit pauses once, not at every step.
-        new = sorted(now - self._matched.get(i, set()))
-        self._matched[i] = now
+        old = self._matched.get(i, set())
+        new = sorted(now - old)
+        self._matched[i] = (old - set(rows)) | now  # a record this step didn't write keeps its state
         if new:
             self.hit = {"watch": i, "path": cp.origin.path, "rows": new, "values": [values[r] for r in new],
                         "text": f"{name} {w['op']} {w['value']}"}

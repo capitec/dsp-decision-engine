@@ -4,7 +4,6 @@ import {
   callNodes,
   formatValue,
   recordLabel,
-  type ColumnHistory,
   type ColumnSummary,
   type Controls,
   type DescribeResult,
@@ -14,6 +13,7 @@ import {
   type RunStatus,
   type Tab,
   type ToWebview,
+  type ValueHistory,
 } from "../src/protocol";
 import type { Sweep } from "../src/sweep";
 import { paramReaders } from "../src/compare";
@@ -43,7 +43,7 @@ export function App() {
   const [rows, setRows] = useState(0);
   const [keyCol, setKeyCol] = useState<RecordKey>(null);
   const [lineage, setLineage] = useState<Lineage | null>(null);
-  const [history, setHistory] = useState<ColumnHistory | null>(null);
+  const [history, setHistory] = useState<ValueHistory | null>(null);
   const [treePath, setTreePath] = useState<TreePath | null>(null);
   const [compare, setCompare] = useState<{ comparison: Comparison | null; busy?: string; error?: string }>({ comparison: null });
   const [sweep, setSweep] = useState<{ sweep: Sweep | null; busy?: string; error?: string }>({ sweep: null });
@@ -480,6 +480,10 @@ export function App() {
             onSelect={setSelected}
             onReveal={(path) => send({ type: "reveal", path })}
             onRewind={(path) => send({ type: "rewind", path })}
+            onGoTo={(change) => {
+              noteNext.current = `⤺ Went back to the moment ${column ?? "the value"} changed; everything after it will run again.`;
+              send({ type: "goTo", change });
+            }}
             onRunTo={(path) => {
               setPending(`Running the flow to ${path.split("/").pop()}…`);
               send({ type: "runTo", path });

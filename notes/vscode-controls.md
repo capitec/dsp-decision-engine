@@ -39,3 +39,24 @@ pauses on a value (`tools/vscode-decider/python/controls.py`).
 - **Comparisons label a step one run skipped as "not taken".** A trace can't tell a
   skipped step from an arm the other run never took, because both runs share one IR.
   The extension relabels steps it knows it skipped as "removed".
+
+## Value history and going back
+
+`timeline.py` records every change to every value, per record, as the run passes each
+checkpoint. It shares the first breakpoint hook with forces, since `any` stops at the
+first breakpoint that pauses.
+
+- **Changes, not writes.** A step that writes the value a record already had isn't a
+  change, so "why is x 5" names the step that made it 5. A value set by hand is a change
+  by `override@<path>`.
+- **It reads what the step wrote (`name@path`, with its validity mask), not
+  `session.value`.** `session.value` returns the latest declared version. Inside a loop
+  that is the carry, which takes the body's value only once the iteration ends, so it lags
+  one iteration behind. Value breakpoints read the same way, and the bridge's `state`
+  takes each record's current value from the timeline for the same reason.
+- **Going back re-runs to the change.** `go_to` rewinds and steps forward until the
+  step has finished as many times as it had when it made the change. A rewind keeps
+  upstream values as they are now, and that includes a loop's carry. So a change inside
+  a loop rewinds to before the outermost enclosing loop, and the carry starts again from
+  its initial value.
+- A rewind or an edit drops the changes recorded from the checkpoint it went back to.

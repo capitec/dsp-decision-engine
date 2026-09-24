@@ -77,6 +77,20 @@ describe("branch and loop controls", () => {
     await c.shot("c06-value-hit");
   }, 180_000);
 
+  it("shows how a value changed and goes back to the iteration that made it", async () => {
+    const wv = c.webview();
+    await wv.locator("select[aria-label=record]").first().selectOption("0");
+    await wv.locator("select[aria-label=explain]").selectOption("offer");
+    const timeline = wv.locator(".timeline");
+    await timeline.locator(".why", { hasText: "because shrink set it in iteration 4" }).waitFor({ timeout: 30_000 });
+    expect(await timeline.locator("ol.history li").count()).toBe(6); // the start, the offer step, four shrinks so far
+    await c.shot("c07-value-history");
+    await timeline.locator("li", { hasText: "iteration 2" }).locator("button", { hasText: "go back here" }).click();
+    await wv.locator(".pause-banner", { hasText: "after shrink" }).waitFor({ timeout: 30_000 });
+    await timeline.locator(".why", { hasText: "in iteration 2" }).waitFor({ timeout: 30_000 });
+    await c.shot("c08-went-back");
+  }, 120_000);
+
   it("forces the branch mid-run and re-runs it", async () => {
     const wv = c.webview();
     await wv.locator("svg .node", { hasText: "cap_private" }).first().click();
@@ -84,6 +98,6 @@ describe("branch and loop controls", () => {
     await wv.locator(".controls-bar .chip", { hasText: "by_sector down cap_public" }).waitFor();
     await wv.locator(".group-controls button", { hasText: "Re-run by_sector forced" }).click();
     await wv.locator(".pause-banner", { hasText: "by_sector" }).waitFor({ timeout: 30_000 });
-    await c.shot("c07-forced-rerun");
+    await c.shot("c09-forced-rerun");
   }, 120_000);
 });

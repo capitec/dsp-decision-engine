@@ -2192,3 +2192,9 @@ input.narrow {
   color: inherit;
   font-weight: 600;
 }
+.timeline .why {
+  margin: 4px 0 8px;
+  padding: 6px 8px;
+  border-left: 3px solid var(--vscode-focusBorder);
+  background: var(--vscode-textBlockQuote-background);
+}
