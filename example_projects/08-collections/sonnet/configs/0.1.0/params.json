@@ -1,0 +1,119 @@
+{
+  "collections_treatment": {
+    "collections_core": {
+      "account_state": {
+        "arrears_bucket_code": {
+          "under_performing_arrangement": false,
+          "times_cured_24m": 0
+        }
+      },
+      "scoring": {
+        "_score_shift": {
+          "adjustment_stack_enabled": true
+        },
+        "calibration": {
+          "scaling_change": {
+            "adjustment_stack_enabled": true
+          }
+        },
+        "_odds_multiplier": {
+          "adjustment_stack_enabled": true
+        },
+        "band_boundary_shift": {
+          "adjustment_stack_enabled": true
+        },
+        "recovery_and_cost": {
+          "cost_per_treatment": 15.0,
+          "expected_treatments": 3.0
+        }
+      },
+      "matrix": {
+        "_intensity_dial": {
+          "adjustment_stack_enabled": true
+        },
+        "_treatment_suppression": {
+          "adjustment_stack_enabled": true
+        }
+      },
+      "arrangement": {
+        "_assessment_mode_code": {
+          "assessment_mode_arrangement": 3
+        },
+        "arrangement_affordability": {
+          "evidence": {
+            "applicant1_income": {
+              "gross_monthly_income": {
+                "statement_confidence_threshold": 0.7,
+                "haircut_payslip": 0.05,
+                "haircut_statement_high_confidence": 0.1,
+                "haircut_statement_low_confidence": 0.25,
+                "haircut_declared": 0.2,
+                "haircut_bureau_estimated": 0.3
+              },
+              "income_source_code": {
+                "statement_confidence_threshold": 0.7
+              },
+              "income_haircut_applied": {
+                "statement_confidence_threshold": 0.7,
+                "haircut_payslip": 0.05,
+                "haircut_statement_high_confidence": 0.1,
+                "haircut_statement_low_confidence": 0.25,
+                "haircut_declared": 0.2,
+                "haircut_bureau_estimated": 0.3
+              }
+            },
+            "applicant2_income": {
+              "gross_monthly_income": {
+                "statement_confidence_threshold": 0.7,
+                "haircut_payslip": 0.05,
+                "haircut_statement_high_confidence": 0.1,
+                "haircut_statement_low_confidence": 0.25,
+                "haircut_declared": 0.2,
+                "haircut_bureau_estimated": 0.3
+              },
+              "income_source_code": {
+                "statement_confidence_threshold": 0.7
+              },
+              "income_haircut_applied": {
+                "statement_confidence_threshold": 0.7,
+                "haircut_payslip": 0.05,
+                "haircut_statement_high_confidence": 0.1,
+                "haircut_statement_low_confidence": 0.25,
+                "haircut_declared": 0.2,
+                "haircut_bureau_estimated": 0.3
+              }
+            },
+            "household_income_verification_tier": {
+              "minor_contribution_threshold": 0.1
+            },
+            "bureau_is_stale": {
+              "staleness_window_days": 7,
+              "staleness_window_days_mortgage": 14
+            },
+            "minimum_income_tier": {
+              "minimum_tier_new_application": 4,
+              "minimum_tier_limit_increase": 3,
+              "minimum_tier_arrangement": 6,
+              "minimum_tier_scenario": 4
+            }
+          },
+          "capacity": {
+            "overlay": {
+              "apply_max_affordable_instalment_adjustments": {
+                "adjustment_stack_enabled": true
+              }
+            },
+            "affordability_verdict_code": {
+              "marginal_band": 0.05
+            }
+          }
+        },
+        "arrangement_sustainability": {
+          "minimum_residual": 350.0,
+          "minimum_residual_income_pct": 0.05,
+          "max_instalment_to_discretionary_pct": 0.85
+        }
+      }
+    }
+  }
+}
