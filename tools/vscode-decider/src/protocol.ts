@@ -91,6 +91,41 @@ export interface Status {
   current: Checkpoint | null;
   events: SessionEvent[];
   error?: string;
+  /** Set when a value or iteration breakpoint paused the run. */
+  hit?: Hit | null;
+}
+
+/** Send a branch's records down `arm`, or run a loop exactly `iterations` times; for one record, or all. */
+export interface Force {
+  path: string;
+  arm?: number;
+  iterations?: number;
+  row?: number | null;
+}
+
+/** Pause when `name op value` first holds for a record, just after a step inside `scope` writes it; or before a loop's `iteration`. */
+export interface Watch {
+  name?: string;
+  op?: "==" | "!=" | "<" | "<=" | ">" | ">=";
+  value?: unknown;
+  scope?: string[];
+  row?: number | null;
+  path?: string;
+  iteration?: number;
+}
+
+export interface Controls {
+  forces: Force[];
+  watches: Watch[];
+}
+
+/** Why a watch paused the run: which records newly meet it there, and their values. */
+export interface Hit {
+  watch: number;
+  text: string;
+  path?: string;
+  rows?: number[];
+  values?: unknown[];
 }
 
 export interface ColumnSummary extends Summary {
@@ -120,6 +155,7 @@ export interface RunStatus {
   record: number | null;
   /** Steps edited in this run: path -> "delete" (skipped) or "replace" (swapped for edited code). */
   edits?: Record<string, "delete" | "replace">;
+  hit?: Hit | null;
 }
 
 export interface ColumnHistory {
@@ -179,7 +215,9 @@ export type FromWebview =
   | { type: "restore"; path: string }
   | { type: "layout"; wide: boolean }
   | { type: "compareEdits"; label: string; edits: Record<string, "delete" | "replace">; path?: string }
-  | { type: "whatIf"; params: unknown; overrides: Record<string, unknown>; row: number | null; label: string }
+  | { type: "whatIf"; params: unknown; overrides: Record<string, unknown>; row: number | null; label: string; forces?: Force[] }
+  | { type: "setControls"; controls: Controls }
+  | { type: "compareForces"; a: { label: string; forces: Force[] }; b: { label: string; forces: Force[] } }
   | { type: "restartWith"; params: unknown }
   | { type: "compareRevision" }
   | { type: "runTo"; path: string }

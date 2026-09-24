@@ -7,6 +7,8 @@ import polars as pl
 
 from decider.engine import Engine
 
+from controls import Controls
+
 
 def apply_overrides(frame: pl.DataFrame, overrides: dict | None, row: int | None) -> pl.DataFrame:
     """`frame` with each column in `overrides` set to its value, on `row` or on every row."""
@@ -20,9 +22,14 @@ def apply_overrides(frame: pl.DataFrame, overrides: dict | None, row: int | None
     return frame
 
 
-def trace(step, frame: pl.DataFrame, params: dict | None) -> dict:
-    """Run to the end and keep what every call wrote, for a step-by-step diff against another run."""
+def trace(step, frame: pl.DataFrame, params: dict | None, ir: dict | None = None, forces=()) -> dict:
+    """Run to the end and keep what every call wrote, for a step-by-step diff against another run.
+
+    `forces` (branch arms or loop iteration counts, see `Controls.set`) need the described `ir`.
+    """
     session = Engine().bind(step).session(frame, params)
+    if forces:
+        steer(session, ir, forces)
     error = None
     try:
         session.resume()
@@ -31,6 +38,12 @@ def trace(step, frame: pl.DataFrame, params: dict | None) -> dict:
     except Exception as e:  # the trace up to the failing step is still worth comparing
         error = f"{type(e).__name__}: {e}"
     return collect(session, error)
+
+
+def steer(session, ir, forces):
+    c = Controls(ir)
+    c.set(forces)
+    return c.attach(session)
 
 
 def collect(session, error):

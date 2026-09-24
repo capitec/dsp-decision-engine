@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { docWithDefaults, paramChangeLines, same } from "../src/compare";
-import { formatValue, recordLabel, type ParamInfo, type RecordKey } from "../src/protocol";
+import { formatValue, recordLabel, type Force, type ParamInfo, type RecordKey } from "../src/protocol";
 import { TableGrid, tableRows } from "./TableGrid";
+import { ForcePicker, forceText, pickedForces, type Group } from "./Controls";
 
 interface Props {
   schema: Record<string, Record<string, ParamInfo>>;
@@ -11,7 +12,9 @@ interface Props {
   record: number | null;
   keyCol: RecordKey;
   sessionRunning: boolean;
-  onWhatIf: (params: unknown, overrides: Record<string, unknown>, row: number | null, label: string) => void;
+  onWhatIf: (params: unknown, overrides: Record<string, unknown>, row: number | null, label: string, forces: Force[]) => void;
+  /** The flow's branches and loops, to force one way in the what-if run. */
+  groups: Group[];
   onRestart: (params: unknown) => void;
   onSelectStep: (path: string) => void;
   /** Lookup table param -> how a record matches its rows. */
@@ -83,19 +86,25 @@ const words = (q: string) => q.toLowerCase().replace(/_/g, " ").split(/\s+/).fil
 const matches = (text: string, ws: string[]) => ws.every((w) => text.toLowerCase().replace(/_/g, " ").includes(w));
 
 /** Every param with the value the flow runs with; change some, then compare, or restart the debug run with them. */
-export function Params({ schema, values, inputColumns, record, keyCol, sessionRunning, onWhatIf, onRestart, onSelectStep, tables = {} }: Props) {
+export function Params({ schema, values, inputColumns, record, keyCol, sessionRunning, onWhatIf, onRestart, onSelectStep, tables = {}, groups }: Props) {
   const [edits, setEdits] = useState<Edits>({});
   const [overrides, setOverrides] = useState<{ column: string; value: string }[]>([]);
   const [scope, setScope] = useState<"record" | "all">("record");
   const [query, setQuery] = useState("");
   const [changedOnly, setChangedOnly] = useState(false);
+  const [forcing, setForcing] = useState<Record<string, string>>({});
   // A short list opens whole; a long one opens only the shared tables and rates.
   const [open, setOpen] = useState<Set<string>>(() => new Set(Object.keys(schema).length <= OPEN_ALL ? groupParams(schema).map(([g]) => g) : []));
   const doc = paramsDocument(schema, edits, values);
   const override = Object.fromEntries(overrides.filter((o) => o.column && o.value !== "").map((o) => [o.column, parseValue(o.value, "number")]));
   const row = scope === "record" && record !== null ? record : null;
   const who = row === null ? "every record" : recordLabel(row, keyCol);
-  const changes = [...paramChangeLines(doc, docWithDefaults(schema, values)), ...Object.entries(override).map(([k, v]) => `${k} = ${formatValue(v)} for ${who}`)];
+  const forces = pickedForces(groups, forcing, row);
+  const changes = [
+    ...paramChangeLines(doc, docWithDefaults(schema, values)),
+    ...Object.entries(override).map(([k, v]) => `${k} = ${formatValue(v)} for ${who}`),
+    ...forces.map((f) => `forcing ${forceText(f, groups, keyCol)}`),
+  ];
   const ws = words(query);
   const total = Object.values(schema).reduce((n, ps) => n + Object.keys(ps).length, 0);
 
@@ -221,7 +230,10 @@ export function Params({ schema, values, inputColumns, record, keyCol, sessionRu
           </div>
         ))}
         <button className="link" onClick={() => setOverrides([...overrides, { column: "", value: "" }])}>+ change an input field</button>
-        {overrides.length > 0 && (
+      </section>
+      <ForcePicker groups={groups} value={forcing} onChange={setForcing} />
+      <section>
+        {(overrides.length > 0 || forces.length > 0) && (
           <div className="scope">
             <span className="muted">for</span>
             <label><input type="radio" checked={scope === "all" || record === null} onChange={() => setScope("all")} /> every record</label>
@@ -230,7 +242,7 @@ export function Params({ schema, values, inputColumns, record, keyCol, sessionRu
         )}
       </section>
       <section className="actions sticky">
-        <button className="primary" disabled={!changes.length} onClick={() => onWhatIf(doc, override, row, `What-if: ${changes.join("; ")}`)}>
+        <button className="primary" disabled={!changes.length} onClick={() => onWhatIf(doc, override, row, `What-if: ${changes.join("; ")}`, forces)}>
           Run and compare
         </button>
         {sessionRunning && (
