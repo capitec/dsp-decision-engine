@@ -265,13 +265,19 @@ def _relabel(node: IRNode, reads: dict, writes: dict, produced: set) -> IRNode:
         return writes.get(name, name) if name in produced else reads.get(name, name)
 
     if isinstance(node, CallNode):
-        names = [i.name for i in node.inputs or ()] + [o.name for o in node.outputs or ()]
-        if node.kind == "frame" and any(n in reads or n in writes for n in names):
-            raise IRError(f"{node.origin.path}: relabel can't rename a frame step's columns; rename them in the function")
         inputs = None if node.inputs is None else tuple(replace(i, name=read(i.name)) for i in node.inputs)
         outputs = None if node.outputs is None else tuple(replace(o, name=writes.get(o.name, o.name)) for o in node.outputs)
         produced.update(o.name for o in node.outputs or ())
-        return replace(node, inputs=inputs, outputs=outputs)
+        fn = node.fn
+        if node.kind == "frame":
+            into = {i.name: j.name for i, j in zip(node.inputs or (), inputs or ()) if i.name != j.name}
+            out = {o.name: p.name for o, p in zip(node.outputs or (), outputs or ()) if o.name != p.name}
+            if (into or out) and (node.inputs is None or node.outputs is None):
+                raise IRError(f"{node.origin.path}: relabel needs a frame step's reads= and writes= declared, "
+                              "so it knows which columns to rename; declare them or rename in the function")
+            if into or out:
+                fn = _renamed_frame(fn, into, out)
+        return replace(node, fn=fn, inputs=inputs, outputs=outputs)
     if isinstance(node, SequenceNode):
         children = tuple(_relabel(c, reads, writes, produced) for c in node.children_)
         emits = tuple(writes.get(n, n) + at + where for n, at, where in (e.partition("@") for e in node.emits))
@@ -291,3 +297,15 @@ def _relabel(node: IRNode, reads: dict, writes: dict, produced: set) -> IRNode:
         body = _relabel(node.body, reads, writes, produced)
         return replace(node, condition=condition, body=body, carries=tuple(writes.get(c, c) for c in node.carries))
     raise TypeError(f"can't relabel {type(node).__name__}")
+
+
+def _renamed_frame(fn: Callable, into: dict[str, str], out: dict[str, str]) -> Callable:
+    # Copies, not renames: the frame may already hold a column of the target name.
+    import polars as pl
+
+    def frame(df: Any, **params: Any) -> Any:
+        df = df.with_columns(pl.col(outer).alias(inner) for inner, outer in into.items())
+        result = fn(df, **params)
+        return result.with_columns(pl.col(inner).alias(outer) for inner, outer in out.items())
+
+    return frame

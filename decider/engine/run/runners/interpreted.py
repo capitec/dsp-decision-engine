@@ -88,7 +88,7 @@ class InterpretedRunner:
     def _call(self, call: Call, state: State, params: RunParams, scope: _Scope) -> None:
         node = call.node
         if node.kind == "frame":
-            return _frame(call, state, scope)
+            return _frame(call, state, scope, params.bundle(call.id, scope.count(state.n)))
         m = scope.count(state.n)
         bundle = params.bundle(call.id, m)
         # Plain Python scalars, not numpy ones: `x / 0.0` must raise here as it does in a kernel.
@@ -221,12 +221,12 @@ def _array(values: tuple, dtype: np.dtype) -> tuple[np.ndarray, np.ndarray | Non
     return out, valid
 
 
-def _frame(call: Call, state: State, scope: _Scope) -> None:
+def _frame(call: Call, state: State, scope: _Scope, bundle: tuple) -> None:
     node = call.node
     path = node.origin.path
     df = state.frame_of(scope.base, scope.names, scope.rows)
     try:
-        out = node.fn(df)
+        out = node.fn(df, **{d.arg: b for d, b in zip(node.params, bundle)})
     except Exception as e:
         _note(e, f"in frame step {path}")
         raise

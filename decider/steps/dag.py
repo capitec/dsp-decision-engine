@@ -32,14 +32,20 @@ class DagStep(SequentialStep):
         faces = [interface(n) for n in nodes]
         where = f"dag {self.name!r}" if self.name else "dag"
         writer: dict[str, int] = {}
-        for i, (_, writes) in enumerate(faces):
+        clashes = []
+        for i, (reads, writes) in enumerate(faces):
             for name in sorted(writes):
-                if name in writer:
-                    raise WiringError(
-                        f"{where}: {self._label(writer[name])} and {self._label(i)} both write {name!r}; "
-                        "use flow(...) to apply them in written order, the later one winning"
-                    )
-                writer[name] = i
+                if name not in writer:
+                    writer[name] = i
+                    continue
+                first, second = self._label(writer[name]), self._label(i)
+                # Order matters only when one refines the other's value (reads what it writes).
+                fix = (f"use flow({first}, {second}) to apply them in that order, the later winning"
+                       if name in reads or name in faces[writer[name]][0]
+                       else f"rename one, e.g. {second}.relabel(writes={{{name!r}: {name + '_2'!r}}})")
+                clashes.append(f"{first} and {second} both write {name!r}: {fix}")
+        if clashes:
+            raise WiringError(f"{where}: each name has one writer in a dag.\n  " + "\n  ".join(clashes))
         # Kahn's algorithm, always taking the earliest-written ready member,
         # so members already in dependency order keep their written order.
         left, order = list(range(len(nodes))), []
@@ -57,7 +63,8 @@ class DagStep(SequentialStep):
 def dag(*steps: Any, name: str | None = None) -> Step:
     """Run steps in dependency order: a step reading a name runs after the step writing it.
 
-    Two members writing one name is an error (use `flow` for a waterfall). A
+    Two members writing one name is an error: use `flow` for a waterfall, or
+    `.relabel(writes=...)` one of them when they are different values. A
     single unnamed step is returned unchanged. As with `flow`, intermediates
     are dropped from the output unless kept with `.emit(...)`; `.drop(...)`
     removes columns.

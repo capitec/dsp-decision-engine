@@ -62,6 +62,22 @@ def test_dag_with_two_writers_of_one_name_raises_suggesting_flow():
         engine.to_ir(d)
 
 
+def test_dag_reports_every_duplicate_writer_and_suggests_relabel_for_independent_ones():
+    def a(x: float) -> float:
+        return x
+
+    def b(x: float) -> float:
+        return x
+
+    d = dag(step(a).relabel(writes={"a": "s"}), step(b).relabel(writes={"b": "s"}),
+            _term_cap_rule("cap_private", 1), _term_cap_rule("cap_public", 2), name="d")
+    with pytest.raises(ValueError) as e:
+        engine.to_ir(d)
+    msg = str(e.value)
+    assert "a and b both write 's': rename one, e.g. b.relabel(writes={'s': 's_2'})" in msg
+    assert "cap_private and cap_public both write 'term_cap': use flow(cap_private, cap_public)" in msg
+
+
 def test_dag_cycle_raises():
     def a(b: float) -> float:
         return b
@@ -194,13 +210,53 @@ def test_relabel_of_a_waterfall_reads_outside_then_its_own_writes():
     assert a.outputs[0].name == b.outputs[0].name == "capped"
 
 
-def test_relabel_can_not_rename_frame_columns():
-    @frame_step(reads=["client_id"], writes=["score"])
+def test_relabel_chains_through_the_current_name():
+    s = step(ratio).relabel(writes={"ratio": "a"})
+    assert dict(s.relabel(writes={"a": "b"}).writes) == {"ratio": "b"}
+    assert dict(s.relabel(writes={"ratio": "c"}).writes) == {"ratio": "c"}
+    r = step(ratio).relabel(reads={"instalment": "x"}).relabel(reads={"x": "y"})
+    assert [i.name for i in engine.to_ir(r).inputs] == ["disposable_income", "y"]
+
+
+def test_relabel_of_a_name_the_step_does_not_use_is_an_error_listing_its_names():
+    with pytest.raises(ValueError, match=r"writes no 'ratoi'; it writes \['ratio'\]. Did you mean 'ratio'"):
+        step(ratio).relabel(writes={"ratoi": "dti"})
+    with pytest.raises(ValueError, match="reads no 'ratio'"):
+        step(ratio).relabel(reads={"ratio": "dti"})
+
+
+def test_relabel_renames_a_frame_steps_declared_columns():
+    import polars as pl
+
+    @frame_step(reads=["x"], writes=["y"])
+    def double(df):
+        return df.with_columns(y=pl.col("x") * 2)
+
+    out = flow(double.relabel(reads={"x": "a"}, writes={"y": "b"}), name="p").run(pl.DataFrame({"a": [1.0], "x": [5.0]}))
+    assert out["b"].to_list() == [2.0] and out["x"].to_list() == [5.0]
+
+
+def test_relabel_of_a_frame_step_of_unknown_lineage_is_an_error():
+    @frame_step(reads=["client_id"])
     def join(df):
         return df
 
-    with pytest.raises(TypeError, match="frame"):
-        engine.to_ir(join.relabel(writes={"score": "bureau"}))
+    with pytest.raises(TypeError, match="writes= declared"):
+        engine.to_ir(join.relabel(reads={"client_id": "id"}))
+
+
+def test_frame_step_params_come_from_the_params_document():
+    import polars as pl
+
+    @frame_step(reads=["x"], writes=["y"])
+    def scale(df, k: float = param(3.0), on: bool = param(True)):
+        return df.with_columns(y=pl.col("x") * (k if on else 0.0))
+
+    p = flow(scale, name="p")
+    assert p.run(pl.DataFrame({"x": [1.0]}))["y"].to_list() == [3.0]
+    assert p.run(pl.DataFrame({"x": [1.0]}), params={"p": {"scale": {"k": 10.0}}})["y"].to_list() == [10.0]
+    assert p.parameters()["p/scale"]["k"]["default"] == 3.0
+    assert scale(pl.DataFrame({"x": [1.0]}), k=2.0)["y"].to_list() == [2.0]
 
 
 # --- branch and loop ---
