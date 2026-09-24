@@ -23,6 +23,7 @@ goal isn't visibly met caps at 5). The loop stops above 8/10 or after 40 rounds.
 | 13 | 7.7 | 8 | 8 | 8 | 8 | 7 | 8 | 7 |
 | 14 | 7.6 | 8 | 8 | 7 | 8 | 7 | 8 | 7 |
 | 15 | 7.7 | 8 | 8 | 7 | 8 | 7 | 8 | 8 |
+| 16 | 7.8 | 8 | 8.5 | 7 | 8 | 7 | 8.5 | 7.5 |
 
 ## Round 0 (baseline)
 
@@ -408,3 +409,26 @@ Judge's problems, most damaging first:
 10. L3: the matched-row card drops the incl./excl. band labels.
 11. L6: 49 changed steps paged one by one, not grouped by cause.
 12. L7: the combined compare doesn't say the skip contributed nothing.
+
+## Round 16
+
+Changes: while paused, the record picker sits in the pause banner (a row fewer) with an "explain a value…" picker
+beside it that opens a value's breakdown on the step that wrote it; one fixed shape for the counts ("Decisions
+changed: 0 · Offers changed: 1 · …"); an edited step keeps its solid purple border after running; the matched-row card
+uses the band labels; sweep cells show direction by a coloured edge; the details pane scrolls to an open breakdown
+and folds the step's code while it is open.
+
+Judge's problems, most damaging first:
+
+1. L3: the rate explanation is a bold paragraph, not a breakdown table.
+2. L3: the explain picker forgets the choice; no heading says what is being explained.
+3. While paused the graph is a strip; no overview of where you are in 1,024 steps.
+4. Code opens in a ~300px editor.
+5. L7: the banner wraps over three rows.
+6. L7: skips and code swaps can't be undone.
+7. L5: averages over unnamed applicants; the colour cue barely visible.
+8. L5: the two knob controls look different.
+9. "Declined, internal values only" is jargon; the declined group opens inconsistently.
+10. L1: the four find hits look identical but for grey path text.
+11. Node labels spill out of their boxes.
+12. Group boundaries nearly invisible on the graph.

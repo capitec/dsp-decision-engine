@@ -2019,3 +2019,29 @@ aside {
   padding-left: 16px;
   opacity: 0.75;
 }
+
+.node.edited-replace rect,
+.node.edited-replace.done rect,
+.node.edited-replace.current rect {
+  stroke: var(--vscode-charts-purple, #b180d7) !important;
+  stroke-dasharray: none !important;
+  stroke-width: 2.5;
+}
+
+table.sweep.grid thead th {
+  text-align: center;
+}
+table.sweep.grid td .muted.small {
+  font-size: 0.95em;
+}
+table.sweep.grid td.changed,
+table.sweep.grid td.changed.tint-up,
+table.sweep.grid td.changed.tint-down {
+  background: none;
+}
+table.sweep.grid td.changed.tint-up {
+  box-shadow: inset 4px 0 0 rgba(55, 148, 255, 0.9);
+}
+table.sweep.grid td.changed.tint-down {
+  box-shadow: inset 4px 0 0 rgba(234, 92, 0, 0.9);
+}

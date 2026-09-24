@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Comparison } from "../src/compare";
 import {
   callNodes,
+  formatValue,
   recordLabel,
   type ColumnHistory,
   type ColumnSummary,
@@ -56,6 +57,7 @@ export function App() {
   // What the last skip or swap did, said in the pause banner until the run moves on.
   const [note, setNote] = useState<string>();
   const noteNext = useRef<string | undefined>(undefined);
+  const explainNext = useRef<string | undefined>(undefined);
   const [codeDiff, setCodeDiff] = useState<string[]>([]);
   const [editsOpen, setEditsOpen] = useState(false);
   // Steps whose code was swapped mid-run: path -> the formula now running.
@@ -119,6 +121,12 @@ export function App() {
         case "lineage":
           setLineage(m.lineage);
           setHistory(m.history);
+          // "Explain a value" opens the breakdown on the step that wrote it.
+          if (m.lineage && m.lineage.name === explainNext.current && m.lineage.producer) {
+            setSelected(m.lineage.producer);
+            setTab("graph");
+            explainNext.current = undefined;
+          }
           break;
         case "treePath":
           setTreePath(m);
@@ -209,6 +217,14 @@ export function App() {
   if (!describe) return <div className="empty">Open a pipeline file and choose “Visualise flow”.</div>;
 
   const edits = Object.entries(run.edits ?? {});
+  const recordPicker = (
+    <select aria-label="record" value={run.record ?? ""} onChange={(e) => send({ type: "record", row: e.target.value === "" ? null : Number(e.target.value) })}>
+      <option value="">all {rows} records</option>
+      {Array.from({ length: rows }, (_, i) => (
+        <option key={i} value={i}>{recordLabel(i, keyCol)}</option>
+      ))}
+    </select>
+  );
   const position = (path: string) => positionIn(nodes, path);
   const editLabel = ([p, a]: [string, string]) => `${p.split("/").pop()} ${a === "delete" ? "skipped" : "edited"}`;
   const compareEdits = (only?: string) =>
@@ -236,23 +252,35 @@ export function App() {
           {tabButton("compare", compare.busy ? "Compare…" : "Compare")}
         </nav>
         <button className="icon" title="Maximise the flow panel (again to restore)" onClick={() => send({ type: "maximise" })}>⤢</button>
-        {columns && (
-          <label title="Show values for one record instead of the whole batch">
-            Focus record{" "}
-            <select aria-label="record" value={run.record ?? ""} onChange={(e) => send({ type: "record", row: e.target.value === "" ? null : Number(e.target.value) })}>
-              <option value="">all {rows} records</option>
-              {Array.from({ length: rows }, (_, i) => (
-                <option key={i} value={i}>{recordLabel(i, keyCol)}</option>
-              ))}
-            </select>
-          </label>
-        )}
+        {columns && !pausedAt && <label title="Show values for one record instead of the whole batch">Focus record {recordPicker}</label>}
       </header>
       {pending && <div className="pause-banner pending">⏳ {pending}</div>}
       {!pending && pausedAt && run.current && (
         <div className="pause-banner" title={run.current.path}>
           ⏸ Paused {run.current.when} <strong>{run.current.path.split("/").pop() || "the start"}</strong>
-          {run.record !== null && <span> · focused on {recordLabel(run.record, keyCol)}</span>}
+          {columns && <> · focus {recordPicker}</>}
+          {run.record !== null && columns && (
+            <>
+              {" "}
+              <select
+                aria-label="explain"
+                title="How was a value computed for this record? Pick one to see its breakdown on the step that wrote it"
+                value=""
+                onChange={(e) => {
+                  if (!e.target.value) return;
+                  explainNext.current = e.target.value;
+                  setColumn(e.target.value);
+                }}
+              >
+                <option value="">explain a value…</option>
+                {columns
+                  .filter((c) => c.producer !== "input")
+                  .map((c) => (
+                    <option key={c.name} value={c.name}>{c.name} = {formatValue(c.value, c.name)}</option>
+                  ))}
+              </select>
+            </>
+          )}
           {edits.length > 0 && (
             <>
               {" · "}
