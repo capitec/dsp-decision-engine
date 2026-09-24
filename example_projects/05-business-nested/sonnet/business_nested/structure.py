@@ -40,8 +40,10 @@ from credit_core.adverse_events import event_age_months
 from business_nested import vocab
 
 MAX_RESOLVED_ENTITIES = 40
-MAX_DEPTH = 3
-EXPANSION_MATERIALITY_FLOOR_PCT = 5.0
+# spec 05 §5.1's depth bound (3) and expansion materiality floor (5.0%) are enforced by
+# the caller, before this stage runs -- see the module docstring and NOTES.md "What I
+# left out": the graph-to-bounded-structure traversal itself isn't built in this slice,
+# so there is nothing here that would consume those two constants.
 CRITICAL_OWNERSHIP_PCT = 25.0
 SIGNIFICANT_OWNERSHIP_PCT = 10.0
 
