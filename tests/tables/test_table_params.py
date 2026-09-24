@@ -79,6 +79,23 @@ def test_rows_that_break_the_declared_columns_are_invalid_params(data, message):
         Engine().bind(table()).run(FRAME, params=rows(data))
 
 
+SHAPE = ('expected a list of rows like [{"lo": Float64, "hi": Float64, '
+         '"band": Enum(categories=[\'low\', \'mid\', \'high\']), "pts": Int64, "keys": List(String)}, ...]')
+
+
+@pytest.mark.parametrize("data, message", [
+    ([THREE[0], {**THREE[1], "lo": "abc"}], "bands: param 'rows': .*row 1, column 'lo': 'abc' is not a Float64"),
+    ([THREE[0], {**THREE[1], "band": "other"}], "row 1, column 'band': 'other' is not a Enum"),
+    ([THREE[0], {**THREE[1], "surplus": 1}], r"row 1 has column\(s\) \['surplus'\] the table does not declare"),
+    ([THREE[0], [1.0, 2.0]], r"row 1 is \[1.0, 2.0\], not a dict"),
+    ({"lo": None, "hi": 30.0}, "takes its rows as a list, one dict per row"),
+])
+def test_bad_param_rows_name_the_table_row_and_column_and_show_the_expected_shape(data, message):
+    with pytest.raises(ParamsError, match=message) as err:
+        Engine().bind(table()).run(FRAME, params=rows(data))
+    assert SHAPE in str(err.value)
+
+
 def test_missing_rows_are_invalid_params():
     with pytest.raises(ParamsError, match="required"):
         Engine().bind(table()).run(FRAME)
