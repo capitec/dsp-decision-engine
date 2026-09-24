@@ -2252,3 +2252,7 @@ input.narrow {
   text-transform: uppercase;
   opacity: 0.8;
 }
+.timeline .here {
+  color: var(--vscode-charts-yellow, #cca700);
+  font-weight: 600;
+}

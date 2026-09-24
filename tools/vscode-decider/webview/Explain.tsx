@@ -238,8 +238,12 @@ function Level({ entry, depth, nodes, values, who, onPick, onSelect }: { entry: 
       {entry.setBy ? (
         <span className="set-by">
           {" "}
-          {entry.setBy.startsWith("force@") ? `forced by you (sending the record down another arm of ${short(entry.setBy.slice(6))})` : "set by you"}
-          {entry.was !== undefined && entry.was !== null && <span className="muted">; {short(entry.producer ?? "")} gave {formatValue(entry.was, entry.name)}</span>}
+          {entry.setBy.startsWith("force@") ? `forced by you${armOf(entry, entry.value)}` : "set by you"}
+          {entry.was !== undefined && entry.was !== null && (
+            <span className="muted">
+              ; {short(entry.producer ?? "")} gave {formatValue(entry.was, entry.name)}{armOf(entry, entry.was)}
+            </span>
+          )}
         </span>
       ) : (
       <span className="muted">
@@ -307,4 +311,11 @@ function Level({ entry, depth, nodes, values, who, onPick, onSelect }: { entry: 
       )}
     </li>
   );
+}
+
+/** " (down credit_card)" for a branch condition's value: a bool picks arm 0 when true, an int picks by index. */
+function armOf(entry: Lineage, v: unknown): string {
+  if (!entry.arms) return "";
+  const i = typeof v === "boolean" ? (v ? 0 : 1) : typeof v === "number" ? v : -1;
+  return entry.arms[i] ? ` (down ${entry.arms[i]})` : "";
 }

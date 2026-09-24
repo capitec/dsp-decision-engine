@@ -303,6 +303,8 @@ async function compare(a: Side, b: Side, forced = false) {
     const comparison = await runComparison(a, b, pythonCommand(), path.dirname(b.file));
     if (a.params || b.params) comparison.paramsDocs = { a: a.params ?? {}, b: b.params ?? {} };
     comparison.forced = forced || !!(a.forces?.length || b.forces?.length);
+    if ([...(a.forces ?? []), ...(b.forces ?? [])].some((f) => f.row !== null && f.row !== undefined))
+      comparison.note = `Both runs cover all ${comparison.rows} records; the force changes only the record it names, so only that record can differ.`;
     if (a.file !== b.file) {
       comparison.files = { a: a.file, b: b.file };
       lastFiles = { ...comparison.files, label: a.label };

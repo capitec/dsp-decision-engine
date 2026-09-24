@@ -151,6 +151,8 @@ export interface Lineage {
   /** Set when the value came from you: "force@<branch or loop>" or "override@<path>", and what it was before. */
   setBy?: string;
   was?: unknown;
+  /** For a forced branch condition: its arms by name, so a value reads as the arm it picks. */
+  arms?: string[];
 }
 
 /** Tree positions a row node reached in its latest run: locator -> rows. */
