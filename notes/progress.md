@@ -90,3 +90,13 @@ User request: one Haiku and one Sonnet agent per example spec implement it with 
 - Sonnet 11 process issue: after the agent reported, two of its own background forks overwrote the deliverable with different implementations; the agent restored the dropped phase skeleton (37 tests) and all its forks have now stopped. Final state committed; judge 11 told to re-verify. Lesson: implementers shouldn't spawn writing forks in a shared scratch dir.
 - **Correction (from judgement 11):** the "11 sonnet done" entry above describes a fork's build that was not shipped (07's `run_allocation`, 00 exposure, 28 tests). The shipped 11s is the one judged in `example_projects/evaluation/judgements/11.md` (37 tests; 05 pipeline as a sub-dag; 13 of 22 00 capabilities reachable).
 - **Report:** `example_projects/evaluation/REPORT.md` (Opus synthesis of 12 judgements, 24 summaries and the 32-item framework triage). Headline: Sonnet 12/12 build and score in-process, Haiku 0/12; no project serves raw JSON over HTTP (dates never coerced — new issue, F33); all Sonnet projects monkeypatch the warm-up (F1) and run interpreted (F5); similarity 2/5 everywhere; Haiku self-reports false in all 12; unused built-ins: branch, sessions, assert_equivalent, step_map, ConfigStore.
+
+## Framework fix round (2026-09-24)
+
+User: split up subagents to fix the issues; make the codebase self-explanatory so an agent can orient from the installed package alone (docs/ is outdated — don't read or edit it yet); a small getting-started guide to turn into a skill later. Six parallel opus worktrees, each owning separate files:
+- **FIX-A serving** (`decider/serving/`, `__main__`): F1 warm-up, F2 code_path, F33 HTTP JSON coercion + JSON-safe outputs, F22, F32.
+- **FIX-B run layer** (`run/state.py`, `run/engine.py`, `runners/interpreted.py`, `run/params.py`): F3a–g, F6, F7 (interpreted), F8, F20.
+- **FIX-C compiled** (`engine/compile/`, `runners/stepped.py`, `runners/fused.py`): F5 fallback for refused str steps, F4 object buffers, F7 (stepped); throughput re-measured on 07s/08s.
+- **FIX-D authoring** (`engine/params|ir|wiring`, `steps/{base,frame,function,dag,sequential}.py`): F9–F15, F19, F26, F28, request-field-vs-param docstrings.
+- **FIX-E trees/tables/registry**: F16 trace output, F17 built-in tags without import, F18 per-group table edges, F21, F30.
+- **FIX-F orientation**: `decider/GUIDE.md` (shipped; `decider guide`; package docstring points to it; examples tested), a best-practice `decider template`, pointers in CLAUDE.md/README.
