@@ -14,7 +14,6 @@ from decider.cli import CPU_TARGET_FILE, cli
 from decider.engine.compile import cpu_target
 from decider.serving.handler import construct_handler_from_settings
 
-PENDING_WARM_UP = pytest.mark.xfail(reason="the warm-up can't synthesise a date input yet", strict=False)
 
 
 @pytest.fixture
@@ -57,7 +56,6 @@ def test_the_template_params_document_matches_the_pipeline(project):
         "credit_risk": {"approved": {"limit": 0.4, "month_end_limit": 0.3}}}
 
 
-@pytest.mark.xfail(reason="needs date warm-up, JSON date coercion and decider.serving.RequestHandler", strict=False)
 def test_the_generated_tests_pass(project):
     result = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"],
                             cwd=project, capture_output=True, text=True)
@@ -70,7 +68,6 @@ def test_template_refuses_a_non_empty_directory(project):
     assert "not empty" in result.output
 
 
-@PENDING_WARM_UP
 def test_build_stages_warms_and_records_the_cpu_target(project):
     result = CliRunner().invoke(cli, ["build"])
     assert result.exit_code == 0, result.output
@@ -79,8 +76,6 @@ def test_build_stages_warms_and_records_the_cpu_target(project):
     assert any(p.suffix == ".nbi" for p in (project / "credit_risk/__pycache__").iterdir())
 
 
-@pytest.mark.xfail(reason="needs date warm-up, a dotted DECIDER_API__HANDLER and decider.serving.RequestHandler",
-                   strict=False)
 def test_the_built_project_serves_the_generated_handler(project):
     assert CliRunner().invoke(cli, ["build"]).exit_code == 0
     handler = construct_handler_from_settings()
@@ -154,7 +149,6 @@ def test_serve_warns_when_the_build_ran_on_another_cpu(project, uvicorn_calls):
     assert len(uvicorn_calls) == 1
 
 
-@PENDING_WARM_UP
 def test_serve_is_quiet_on_the_cpu_it_was_built_for(project, uvicorn_calls):
     assert CliRunner().invoke(cli, ["build"]).exit_code == 0
     result = CliRunner().invoke(cli, ["serve", "--workers", "1"])
