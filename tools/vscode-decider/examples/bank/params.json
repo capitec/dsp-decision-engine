@@ -1,0 +1,239 @@
+{
+ "shared": {
+  "pl_base_rates": [
+   {
+    "min_term": 6.0,
+    "max_term": 25.0,
+    "pl_base_rate": 0.215
+   },
+   {
+    "min_term": 25.0,
+    "max_term": 49.0,
+    "pl_base_rate": 0.235
+   },
+   {
+    "min_term": 49.0,
+    "max_term": 85.0,
+    "pl_base_rate": 0.255
+   }
+  ],
+  "pl_risk_loadings": [
+   {
+    "grade_key": 1,
+    "pl_risk_loading": 0.0
+   },
+   {
+    "grade_key": 2,
+    "pl_risk_loading": 0.02
+   },
+   {
+    "grade_key": 3,
+    "pl_risk_loading": 0.04
+   },
+   {
+    "grade_key": 4,
+    "pl_risk_loading": 0.06
+   }
+  ],
+  "pl_fees": [
+   {
+    "min_amount": 0.0,
+    "max_amount": 10001.0,
+    "pl_initiation_fee": 165.0,
+    "pl_monthly_fee": 69.0
+   },
+   {
+    "min_amount": 10001.0,
+    "max_amount": 50001.0,
+    "pl_initiation_fee": 690.0,
+    "pl_monthly_fee": 69.0
+   },
+   {
+    "min_amount": 50001.0,
+    "max_amount": 1000000000.0,
+    "pl_initiation_fee": 1207.5,
+    "pl_monthly_fee": 69.0
+   }
+  ],
+  "cc_base_rates": [
+   {
+    "min_term": 1.0,
+    "max_term": 13.0,
+    "cc_base_rate": 0.205
+   },
+   {
+    "min_term": 13.0,
+    "max_term": 61.0,
+    "cc_base_rate": 0.225
+   }
+  ],
+  "cc_risk_loadings": [
+   {
+    "grade_key": 1,
+    "cc_risk_loading": 0.0
+   },
+   {
+    "grade_key": 2,
+    "cc_risk_loading": 0.02
+   },
+   {
+    "grade_key": 3,
+    "cc_risk_loading": 0.04
+   },
+   {
+    "grade_key": 4,
+    "cc_risk_loading": 0.06
+   }
+  ],
+  "cc_fees": [
+   {
+    "min_amount": 0.0,
+    "max_amount": 10001.0,
+    "cc_initiation_fee": 165.0,
+    "cc_monthly_fee": 69.0
+   },
+   {
+    "min_amount": 10001.0,
+    "max_amount": 50001.0,
+    "cc_initiation_fee": 690.0,
+    "cc_monthly_fee": 69.0
+   },
+   {
+    "min_amount": 50001.0,
+    "max_amount": 1000000000.0,
+    "cc_initiation_fee": 1207.5,
+    "cc_monthly_fee": 69.0
+   }
+  ],
+  "od_base_rates": [
+   {
+    "min_term": 1.0,
+    "max_term": 13.0,
+    "od_base_rate": 0.195
+   }
+  ],
+  "od_risk_loadings": [
+   {
+    "grade_key": 1,
+    "od_risk_loading": 0.0
+   },
+   {
+    "grade_key": 2,
+    "od_risk_loading": 0.02
+   },
+   {
+    "grade_key": 3,
+    "od_risk_loading": 0.04
+   },
+   {
+    "grade_key": 4,
+    "od_risk_loading": 0.06
+   }
+  ],
+  "od_fees": [
+   {
+    "min_amount": 0.0,
+    "max_amount": 10001.0,
+    "od_initiation_fee": 165.0,
+    "od_monthly_fee": 69.0
+   },
+   {
+    "min_amount": 10001.0,
+    "max_amount": 50001.0,
+    "od_initiation_fee": 690.0,
+    "od_monthly_fee": 69.0
+   },
+   {
+    "min_amount": 50001.0,
+    "max_amount": 1000000000.0,
+    "od_initiation_fee": 1207.5,
+    "od_monthly_fee": 69.0
+   }
+  ],
+  "hl_base_rates": [
+   {
+    "min_term": 60.0,
+    "max_term": 181.0,
+    "hl_base_rate": 0.1175
+   },
+   {
+    "min_term": 181.0,
+    "max_term": 241.0,
+    "hl_base_rate": 0.1225
+   },
+   {
+    "min_term": 241.0,
+    "max_term": 361.0,
+    "hl_base_rate": 0.1275
+   }
+  ],
+  "hl_risk_loadings": [
+   {
+    "grade_key": 1,
+    "hl_risk_loading": 0.0
+   },
+   {
+    "grade_key": 2,
+    "hl_risk_loading": 0.005
+   },
+   {
+    "grade_key": 3,
+    "hl_risk_loading": 0.01
+   },
+   {
+    "grade_key": 4,
+    "hl_risk_loading": 0.015
+   }
+  ],
+  "hl_fees": [
+   {
+    "min_amount": 0.0,
+    "max_amount": 1000001.0,
+    "hl_initiation_fee": 6037.5,
+    "hl_monthly_fee": 69.0
+   },
+   {
+    "min_amount": 1000001.0,
+    "max_amount": 1000000000.0,
+    "hl_initiation_fee": 6037.5,
+    "hl_monthly_fee": 69.0
+   }
+  ],
+  "channel_discounts": [
+   {
+    "channel_key": "branch",
+    "channel_discount": 0.0
+   },
+   {
+    "channel_key": "app",
+    "channel_discount": 0.0025
+   },
+   {
+    "channel_key": "web",
+    "channel_discount": 0.001
+   }
+  ],
+  "credit_life_rates": [
+   {
+    "min_age": 18.0,
+    "max_age": 30.0,
+    "credit_life_rate": 0.0021
+   },
+   {
+    "min_age": 30.0,
+    "max_age": 45.0,
+    "credit_life_rate": 0.0032
+   },
+   {
+    "min_age": 45.0,
+    "max_age": 60.0,
+    "credit_life_rate": 0.0055
+   },
+   {
+    "min_age": 60.0,
+    "max_age": 120.0,
+    "credit_life_rate": 0.0098
+   }
+  ]
+ }
+}
