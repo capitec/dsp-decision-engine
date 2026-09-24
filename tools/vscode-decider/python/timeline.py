@@ -54,7 +54,9 @@ class Timeline:
         written = [r for r in range(len(values)) if valid is None or valid[r]]
         rows = [r for r in written if values[r] != now[r]]
         # A step that wrote the value a record already had: "the floor kept 25.2%", for one record's history.
-        same = [r for r in written if values[r] == now[r]] if kept else []
+        # Not inside a loop: a body step's version stays marked written for records that already left the loop, so
+        # "kept" there can't tell a record the step ran for from one it didn't.
+        same = [r for r in written if values[r] == now[r]] if kept and not (cp and cp.iteration) else []
         if not rows and not same:
             return
         # A record whose new value is exactly one of the step's inputs: the step passed that value on (a cap that
