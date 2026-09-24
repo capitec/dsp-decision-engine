@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from functools import lru_cache
 from typing import Any
 
@@ -162,11 +163,11 @@ class State:
     def column(self, spec: str, version: Version | None = None) -> pl.Series:
         """One version as a polars Series named `spec`, null where invalid."""
         (v,) = [version] if version is not None else self.versions(spec)
-        return _series(spec, *self.read(v))
+        return _series(spec, *self.read(v), v.annotation)
 
     def frame_of(self, base: pl.DataFrame, names: dict[str, Version], rows: np.ndarray | None) -> pl.DataFrame:
         """`base` with the current value of every name in `names` on `rows`, for a frame step."""
-        cols = [_series(name, *self.read(v, rows)) for name, v in names.items()]
+        cols = [_series(name, *self.read(v, rows), v.annotation) for name, v in names.items()]
         return base.with_columns(cols) if cols else base
 
 
@@ -177,15 +178,24 @@ def _typed(plan: Plan) -> tuple[Input, ...]:
     return tuple(Input(i.name, t, NullPolicy.OPTIONAL) for i in plan.inputs if (t := base_annotation(i.annotation)) in TYPED)
 
 
-def _series(name: str, values: np.ndarray, valid: np.ndarray | None) -> pl.Series:
+def _series(name: str, values: np.ndarray, valid: np.ndarray | None, annotation: Any = None) -> pl.Series:
     if values.dtype == object:
-        return pl.Series(name, (values if valid is None else np.where(valid, values, None)).tolist())
+        values = (values if valid is None else np.where(valid, values, None)).tolist()
+        # Polars infers a list's element type from its first row: `[[1, 2], [1.5]]` would become ints.
+        dtype = declared_dtype(annotation)
+        return pl.Series(name, values, dtype=dtype if isinstance(dtype, pl.List) else None)
     s = pl.Series(name, values)
     return s if valid is None else s.scatter(np.flatnonzero(~valid), None)
 
 
 def from_series(s: pl.Series) -> tuple[np.ndarray, np.ndarray | None]:
     """A polars Series as `(values, valid)`; nulls hold a zero (or `None` for objects) and are masked."""
+    if s.dtype.is_nested() or s.dtype.is_temporal():
+        # numpy turns structs into float rows, dates into epoch ints and lists into arrays; keep Python objects.
+        values = np.empty(len(s), object)
+        for i, x in enumerate(s.to_list()):
+            values[i] = x
+        return values, (s.is_not_null().to_numpy() if s.null_count() else None)
     if not s.null_count():
         return s.to_numpy(), None
     valid = s.is_not_null().to_numpy()
@@ -194,6 +204,37 @@ def from_series(s: pl.Series) -> tuple[np.ndarray, np.ndarray | None]:
     elif s.dtype == pl.Boolean:
         s = s.fill_null(False)
     return s.to_numpy(), valid
+
+
+def fill_missing(values: np.ndarray, valid: np.ndarray, fill: Any) -> np.ndarray:
+    """`values` with `fill` on every row `valid` marks missing.
+
+    A list, dict or tuple fill is one value per row (a fresh copy each, so a
+    step mutating it changes neither the declaration nor other rows);
+    `np.where` would broadcast it into zero or several columns.
+    """
+    if not isinstance(fill, (list, dict, tuple)):
+        return np.where(valid, values, fill)
+    out = values.astype(object)
+    for i in np.flatnonzero(~valid):
+        out[i] = copy.deepcopy(fill)
+    return out
+
+
+@lru_cache(maxsize=256)
+def declared_dtype(annotation: Any) -> pl.DataType | None:
+    """The polars dtype of `annotation` (`list[float]` -> `List(Float64)`), or `None` when polars can't say."""
+    if annotation is None:
+        return None
+    try:
+        dtype = pl.DataType.from_python(base_annotation(annotation))
+    except (TypeError, ValueError):
+        return None
+    inner = dtype
+    while isinstance(inner, (pl.List, pl.Array)):
+        inner = inner.inner
+    # A bare `list` has no element type (polars gives the class, or `Null`), and `object` no polars one.
+    return None if isinstance(inner, type) or inner in (pl.Null, pl.Object) else dtype
 
 
 def dtype_of(annotation: Any) -> np.dtype:
