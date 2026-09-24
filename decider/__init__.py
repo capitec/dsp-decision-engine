@@ -24,7 +24,8 @@ A function's arguments are the columns it reads and its name is the column it
 writes. `flow` runs steps in written order (a later write wins), `dag` in
 dependency order; `branch`, `loop` and `ConfigurableStep` subclasses (trees,
 tables, scorecards loaded from JSON) compose the same way. Tunable values are
-`param()`s, retuned per run through a params document without rebuilding.
+`param()`s, retuned per run through a params document without rebuilding;
+rows a step loops over (rate ladders, caps) are a `param_table()`.
 Request data is never a `param()`.
 
 More::
@@ -42,10 +43,10 @@ More::
 Build, wiring, params and missing-input errors are `decider.exceptions.DeciderError`s.
 """
 from decider.engine import Engine
-from decider.engine.params import missing_as, param
+from decider.engine.params import Table, missing_as, param, param_table
 from decider.steps import ConfigurableStep, ParamRef, Value, branch, dag, flow, frame_step, loop, step
 
 __all__ = [
     "ConfigurableStep", "Engine", "ParamRef", "Value", "branch", "dag", "flow", "frame_step", "loop",
-    "missing_as", "param", "step",
+    "Table", "missing_as", "param", "param_table", "step",
 ]
