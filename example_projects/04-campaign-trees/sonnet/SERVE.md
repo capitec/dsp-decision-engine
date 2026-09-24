@@ -12,7 +12,7 @@ cd example_projects/04-campaign-trees/sonnet   # this directory
 export DECIDER_API__CODE_PATH="$PWD"
 export DECIDER_API__PIPELINE="pipeline:build"
 export DECIDER_CONFIG__BASEPATH="$PWD/configs"
-export DECIDER_API__MODE=interpreted   # see "Why interpreted mode" below
+export DECIDER_API__MODE=fused
 export PYTHONPATH="<REPO>/example_projects/00-shared-credit-core/sonnet:<REPO>/example_projects/03-loan-granting-pricing/sonnet"
 ```
 
@@ -25,7 +25,7 @@ Both `credit_core` (project 00) and `loan_granting` (project 03) are consumed re
 uv run --project <REPO> decider build
 ```
 
-Expect: `built config version 0.1.0 (pipeline pipeline:build, mode interpreted)`.
+Expect: `built config version 0.1.0 (pipeline pipeline:build, mode fused)`.
 
 If `configs/0.1.0/` is ever regenerated -- the rate card (reused unmodified from
 `credit_core`, exactly as 00/03 generate it) and `params.json` (which bakes in the overlay
@@ -71,14 +71,12 @@ the framework's synthetic warm-up record with `sample_request.json` -- see NOTES
 the pipeline directly, which is what the CLI does internally too, minus the warm-up
 substitution.
 
-## Why interpreted mode
+## Mode
 
-Inherited from 00/03: `credit_core`'s own norm-table-version comparisons (reused inside
-`loan_granting.pricing`) compare two `str` columns, which compiled (`fused`/`stepped`) mode
-rejects at bind time. This project also has its own reason to prefer interpreted mode:
-`preassessment.py`'s pre-assessment and `overlays.py`'s cap adjustment are plain Python
-inside `frame_step`s / closures over 03's `solve_term`, not compiled kernels, so
-`fused`/`stepped` buys nothing for them regardless.
+Served in `fused` mode: on `sample_request.json` its output equals
+`interpreted` mode's exactly. Steps no kernel can run faithfully (for example
+`credit_core.expense_norms.norm_table_version`, which compares two `str`
+inputs) run in Python, row by row, with a warning naming each at build time.
 
 ## Run the tests
 

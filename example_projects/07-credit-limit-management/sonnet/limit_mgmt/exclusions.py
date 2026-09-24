@@ -37,7 +37,7 @@ def exclusion_codes(
     last_change_date: date | None = None,
     consent_automatic_increase: bool = missing_as(False),
     consent_withdrawn: bool = missing_as(False),
-    months_on_book: int = missing_as(0),
+    months_on_book: float = missing_as(0.0),
     treatment_suspension_active: bool = missing_as(False),
     cooling_off_days_card: int = param(180, ge=0, description="X09: days since last change, card"),
     cooling_off_days_facility: int = param(180, ge=0),

@@ -14,7 +14,7 @@ def _handler():
     os.environ.setdefault(
         "DECIDER_CONFIG__BASEPATH", os.path.join(os.path.dirname(os.path.dirname(__file__)), "configs"),
     )
-    os.environ.setdefault("DECIDER_API__MODE", "interpreted")
+    os.environ.setdefault("DECIDER_API__MODE", "fused")
     handler = construct_handler_from_settings()
     handler.stage()
     handler.activate()

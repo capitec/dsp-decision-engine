@@ -24,7 +24,7 @@ from decider import step
 
 
 def validate_request(
-    requested_amount: float, term_months: int, product_code: int, channel_code: int,
+    requested_amount: float, term_months: int, product_code: float, channel_code: int,
 ) -> tuple[bool, list[int]]:
     """A structured rejection (10 §5.2), never recorded as a credit decline -- this project's
     outcome vocabulary keeps it out of `decline_reason_codes` entirely (see `pipeline.py`).

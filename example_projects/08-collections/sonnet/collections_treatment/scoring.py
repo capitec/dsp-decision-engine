@@ -171,7 +171,7 @@ roll_probability_unadjusted_step = step(roll_probability_unadjusted, output="rol
 
 def scaling_change(
     scale: float, decision_date: date,
-    product_family_code: int = missing_as(-1),
+    product_family_code: float = missing_as(-1.0),
     adjustment_stack_enabled: bool = param(True),
 ) -> tuple[float, list[str]]:
     """"Scaling change" (§5.3): "points-to-double-the-odds from 20 to 23 for the revolving
@@ -350,7 +350,7 @@ score_shift_step = step(_score_shift, outputs=(
 
 def _odds_multiplier(
     roll_probability_before_overlay: float, decision_date: date,
-    product_family_code: int = missing_as(-1),
+    product_family_code: float = missing_as(-1.0),
     adjustment_stack_enabled: bool = param(True),
 ) -> tuple[float, list[str]]:
     provenance = {"product_family_code": product_family_code}

@@ -24,7 +24,7 @@ def test_decider_build_stages_the_config_version(monkeypatch):
     from decider.cli import cli
 
     monkeypatch.setattr(os, "environ", {k: v for k, v in os.environ.items() if not k.upper().startswith("DECIDER_")})
-    monkeypatch.setenv("DECIDER_API__MODE", "interpreted")
+    monkeypatch.setenv("DECIDER_API__MODE", "fused")
     monkeypatch.setattr(sys, "path", list(sys.path))
     for p in (str(CREDIT_CORE_ROOT), str(PROJECT_ROOT)):
         if p in sys.path:
@@ -46,7 +46,7 @@ def test_sample_request_scores_through_the_handler(monkeypatch, sample_record, p
     monkeypatch.setenv("DECIDER_API__CODE_PATH", str(PROJECT_ROOT))
     monkeypatch.setenv("DECIDER_API__PIPELINE", "pipeline:build")
     monkeypatch.setenv("DECIDER_CONFIG__BASEPATH", str(PROJECT_ROOT / "configs"))
-    monkeypatch.setenv("DECIDER_API__MODE", "interpreted")
+    monkeypatch.setenv("DECIDER_API__MODE", "fused")
     monkeypatch.chdir(PROJECT_ROOT)
 
     handler = construct_handler_from_settings()
