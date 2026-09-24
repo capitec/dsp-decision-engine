@@ -49,9 +49,9 @@ describe("steering and tracing stories", () => {
         await wv(c).locator(".group-controls h4", { hasText: "product" }).waitFor({ timeout: 30_000 });
         await wv(c).locator(".group-controls h4").scrollIntoViewIfNeeded();
         await shot("Ran to product_arm (the product branch's condition) and focused client_id 20400: the branch's controls in the details.");
-        await wv(c).locator(".group-controls label", { hasText: "only" }).locator("input").check();
+        await wv(c).locator('select[aria-label="product compare for"]').selectOption("one");
         await wv(c).locator('.group-controls select[aria-label$="what-if b"]').selectOption("1");
-        await shot("Ticked 'only client_id 20400' and picked 'down personal_loan' vs 'down credit_card'.");
+        await shot("Under 'Compare two ways', picked 'For client_id 20400: down personal_loan vs down credit_card'.");
         await wv(c).locator(".group-controls button", { hasText: "Compare" }).click();
         await wv(c).locator(".compare .compare-title").waitFor({ timeout: 240_000 });
         await shot("The comparison after clicking Compare.");
@@ -62,25 +62,26 @@ describe("steering and tracing stories", () => {
   it("send one applicant down another product mid-run", async () => {
     await story(
       "F2-force-a-product",
-      "In a paused debug run, send client_id 20400 down the credit card arm instead, re-run from the branch, and see their final offer.",
+      "In a debug run paused at the end of the flow, send client_id 20400 down the credit card arm instead, re-run from the branch, and see their final offer.",
       async (c, shot) => {
         await visualise(c);
-        await find(c, "product_arm");
+        await find(c, "total_cost_of_credit");
         await runTo(c);
         await focus(c, "0");
-        await wv(c).locator(".group-controls label", { hasText: "only" }).locator("input").check();
+        await find(c, "product_arm");
+        await wv(c).locator('select[aria-label="product force for"]').selectOption("one");
         await pick(c, 'select[aria-label="force product"]', (t) => t.includes("credit_card"));
         await wv(c).locator(".controls-bar .chip").first().waitFor();
-        await shot("Ticked 'only client_id 20400' and chose 'down credit_card' under Send.");
+        await shot("Paused at total_cost_of_credit (the last step) with client_id 20400 focused, selected product_arm and chose 'Send client_id 20400 down credit_card'.");
         await wv(c).locator(".group-controls button", { hasText: "Re-run" }).click();
-        await wv(c).locator(".pause-banner", { hasText: "product" }).waitFor({ timeout: 120_000 });
+        await wv(c).locator(".pause-banner", { hasText: "product_arm" }).waitFor({ timeout: 120_000 });
         await shot("Clicked 'Re-run product forced'.");
         await find(c, "total_cost_of_credit");
         await wv(c).locator("aside button", { hasText: /^Run to/ }).first().click();
         await wv(c).locator(".pause-banner", { hasText: "total_cost_of_credit" }).waitFor({ timeout: 180_000 });
         await wv(c).locator("select[aria-label=explain]").selectOption("offer_rate");
         await wv(c).locator(".timeline").waitFor({ timeout: 30_000 });
-        await shot("Ran on to total_cost_of_credit, the last step, and picked offer_rate under 'explain a value…'.");
+        await shot("Clicked 'Run to total_cost_of_credit' and picked offer_rate under 'explain a value…'.");
       },
     );
   }, 1_200_000);
