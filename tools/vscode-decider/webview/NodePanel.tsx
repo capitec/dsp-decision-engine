@@ -64,7 +64,12 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
       : null;
   const pane = useRef<HTMLElement>(null);
   // A newly selected step starts at the top of the pane, not where the last one was scrolled to.
-  useEffect(() => pane.current?.scrollTo(0, 0), [node?.path]);
+  useEffect(() => {
+    pane.current?.scrollTo(0, 0);
+    // A lookup table's answer is its matched row: bring it into view once the pane has laid out.
+    const t = setTimeout(() => pane.current?.querySelector(".table-match")?.scrollIntoView({ block: "start" }), 60);
+    return () => clearTimeout(t);
+  }, [node?.path, path?.row]);
   const atThis = !!node && run.current?.path === node.path && run.current.when === "before" && !run.finished;
   const name = node?.path.split("/").pop();
   const change = comparison && node ? comparison.steps.find((s) => s.path === node.path && s.status !== "same" && s.status !== "not run") : undefined;
@@ -314,7 +319,7 @@ function TableMatch({ table, visited, result, outputs, inputs }: { table: { name
   const matched = row !== undefined && outputs.every((o, i) => result === undefined || same(row[o], result[i]));
   const cols = Object.keys(table.rows[0] ?? {});
   return (
-    <div className="table-match" ref={(el) => el?.scrollIntoView({ block: "start" })}>
+    <div className="table-match">
       <div>
         {matched ? <>Matched row <strong>{last + 1}</strong> of <span className="mono">{table.name}</span></> : <>No row of <span className="mono">{table.name}</span> matched: the default applies</>}
         {result && <> → <strong>{outputs.map((o, i) => `${o} = ${formatValue(result[i], o)}`).join(", ")}</strong></>}

@@ -169,7 +169,7 @@ function summary(entry: Lineage, nodes: CallNodeJson[], values: Record<string, u
       const moving = terms.filter(([, n]) => value(n) !== 0);
       const zeros = terms.length - moving.length;
       parts.push(
-        `${at.name} ${formatValue(at.value, at.name)} = ${moving.map(([sign, n], i) => `${i ? (sign === "-" ? "− " : "+ ") : ""}${n} ${formatValue(value(n), n)}`).join(" ")}${zeros ? ` (${zeros} other part${zeros === 1 ? " is" : "s are"} 0)` : ""}`,
+        `${at.name} ${formatValue(at.value, at.name)} = ${moving.map(([sign, n], i) => `${i ? (sign === "-" ? "− " : "+ ") : ""}${n} ${formatValue(value(n), n)}`).join(" ")}${zeros ? `; 0 from ${terms.filter(([, n]) => value(n) === 0).map(([, n]) => n).join(", ")}` : ""}`,
       );
     } else parts.push(`${at.name} = ${substitute(node.formula, known)}`);
     break;

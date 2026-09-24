@@ -22,6 +22,7 @@ goal isn't visibly met caps at 5). The loop stops above 8/10 or after 40 rounds.
 | 12 | 7.6 | 8 | 8 | 8 | 7 | 7 | 8 | 7 |
 | 13 | 7.7 | 8 | 8 | 8 | 8 | 7 | 8 | 7 |
 | 14 | 7.6 | 8 | 8 | 7 | 8 | 7 | 8 | 7 |
+| 15 | 7.7 | 8 | 8 | 7 | 8 | 7 | 8 | 8 |
 
 ## Round 0 (baseline)
 
@@ -383,3 +384,27 @@ Judge's problems, most damaging first:
 10. L6: the declined card's internal values are tiny grey text.
 11. Step actions differ by step type; the find box empties after a link.
 12. L1: the opened source is cramped.
+
+## Round 15
+
+Changes: a lookup table step scrolls to its matched row once the pane has laid out (the pane's reset-to-top was
+undoing it), and it gets the taller details layout; the breakdown's summary names the parts that are 0; up to three
+edits show as chips with their own compare; the comparison says both versions ran to the end; the comparison legend
+shrank to a "changes" toggle (the swatches moved into View); the graph fills the panel when no step is picked; sweep
+axes are named over their values with the current values marked; Results says "No offer changed" and opens the
+declined list; a declined card's internal values are normal lines.
+
+Judge's problems, most damaging first:
+
+1. L3: explaining a rate still takes a debug run, a known step, a focus pick and a click.
+2. While paused the graph gets 190-400px: focus picker, banner, find bar, breadcrumb, details.
+3. "Open source" lands in a ~35-character editor.
+4. A skipped step can't be restored. (The engine's edit API has replace and delete, no insert.)
+5. L5: cells average over unnamed applicants.
+6. L5: grid typography: small labels, misaligned headers, a fill that reads as an error.
+7. Counts clash: "offers changed for 1" beside "records changed 4"; "2 other declined" with no first group.
+8. L4: no headroom per step for approved applicants.
+9. L7: the edited node's border turns dotted after it runs, like a skipped one.
+10. L3: the matched-row card drops the incl./excl. band labels.
+11. L6: 49 changed steps paged one by one, not grouped by cause.
+12. L7: the combined compare doesn't say the skip contributed nothing.
