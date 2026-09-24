@@ -147,7 +147,7 @@ export function formatValue(v: unknown, name?: string): string {
   if (v === undefined) return "—";
   if (v === null) return "empty";
   if (typeof v === "number" && isRateName(name) && Math.abs(v) < 1) return `${Number((v * 100).toFixed(3))}%`;
-  if (typeof v === "number" && (isMoneyName(name) || (!!name && /cap$/.test(name) && Math.abs(v) >= 1000))) return `R\u00a0${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (typeof v === "number" && (isMoneyName(name) || (!!name && /cap$/.test(name) && Math.abs(v) >= 1000))) return `R\u00a0${v.toLocaleString("en-US", { minimumFractionDigits: Number.isInteger(v) ? 0 : 2, maximumFractionDigits: 2 })}`;
   if (typeof v === "number") return v.toLocaleString("en-US", { maximumFractionDigits: Math.abs(v) >= 100 ? 2 : 4 });
   return typeof v === "string" ? v : JSON.stringify(v);
 }

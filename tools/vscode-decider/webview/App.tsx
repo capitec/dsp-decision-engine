@@ -261,7 +261,7 @@ export function App() {
                   <span key={p} className="edit-chip">
                     ✎ {editLabel([p, a])}
                     {edits.length > 1 && (
-                      <button className="link" title="Compare the flow as started with only this edit" onClick={() => compareEdits(p)}>compare</button>
+                      <button className="link" title="Compare the flow as started with only this edit" onClick={() => compareEdits(p)}>compare with start</button>
                     )}
                   </span>
                 ))
@@ -273,7 +273,7 @@ export function App() {
                 </span>
               )}{" "}
               <button className="banner-button" title="Run the flow as started and as edited, start to end, and compare every result" onClick={() => compareEdits()}>
-                {edits.length > 1 ? "Compare all edits" : "Compare with the flow as started"}
+                {edits.length > 1 ? "Compare with start: all edits" : "Compare with start"}
               </button>
             </>
           )}
