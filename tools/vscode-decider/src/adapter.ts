@@ -308,7 +308,8 @@ export class DeciderDebugSession extends LoggingDebugSession {
       for (let up = p; at && !at.file && this.parents.has(up); up = this.parents.get(up)!) at = this.nodes.get(this.parents.get(up)!);
       const src = at?.file ? new Source(path.basename(at.file), at.file) : undefined;
       const when = id === 1 ? `  ${this.current!.when}` : "";
-      frames.push(new StackFrame(id, `${lastSegment(p)}  [${node ? kindLabel(node) : "?"}]${when}`, src, at?.line ?? 0, 1));
+      const after = id === 1 && this.current!.when === "after" && node?.kind === "call" && node.python?.file === at?.file ? node.python?.bodyLine : null;
+      frames.push(new StackFrame(id, `${lastSegment(p)}  [${node ? kindLabel(node) : "?"}]${when}`, src, after ?? at?.line ?? 0, 1));
       p = this.parents.get(p);
     }
     response.body = { stackFrames: frames, totalFrames: frames.length };
@@ -487,6 +488,9 @@ export class DeciderDebugSession extends LoggingDebugSession {
         case "decider.changes":
           response.body = await this.bridge!.request("changes", { name: args.name, row: this.record });
           break;
+        case "decider.rerun":
+          this.sendResponse(response);
+          return void (await this.run("rerun", { path: args.path, back: args.back ?? null, when: args.when ?? "before" }, "goto"));
         case "decider.goTo":
           this.sendResponse(response);
           return void (await this.run("go_to", typeof args.change === "string" ? { path: args.change, row: this.record } : { change: args.change }, "goto"));

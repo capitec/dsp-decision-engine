@@ -2319,3 +2319,13 @@ aside .watch-form {
   background: none;
   padding: 0;
 }
+.controls-bar .chip.watch {
+  border-color: var(--vscode-panel-border);
+}
+.controls-bar .chip.watch::first-letter {
+  color: var(--vscode-debugIcon-breakpointForeground, #e51400);
+}
+.compare .lead {
+  font-weight: 600;
+  margin: 4px 0 8px;
+}
