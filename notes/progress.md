@@ -55,3 +55,10 @@ One entry per merged task: date, task, model, commit, outcome, tests, follow-ups
 - **T7.1** (opus) `1c682c5`, merge `6008ac4`: deleted `decider2/`, `decider_old/`, `tests/_legacy/`, `experimentation/`, `Plan.md`, `Prompt.md`, `HANDOVER-stage2.md`, `Tasks.md`, `TYPED_FEATURES.md` and the decider2 wheels workflow (~1100 files, ~292k lines). Coverage map final: 639 old tests → 543 ported, 96 dropped, 0 gaps. Benchmarks renamed to decider-only (`modes`, `control_flow`, `tree_walk`, `table_match`); last decider2 numbers in `notes/benchmarks-vs-decider2.md`. README rewritten; CLAUDE.md repointed; `uv build` wheel contains only `decider/`. Design.md/IR.md references to the deleted migration docs repointed to `notes/`. Suite after merge with HR2: 1510 passed, 1 xfailed. Left: `docs/` Sphinx site and `projects/loan_scoring` describe decider 0.3; unused `visualise`/`eval` extras; stale `benchmarks/results*.csv`; untracked leftovers (`decider2/`, `experimentation/` logs and builds, `.decider2_cache/`, ~1.65 GB) left on disk for the user.
 
 **Plan complete (T0.1–T7.1).**
+
+## Example-project experiment (2026-09-24)
+
+User request: one Haiku and one Sonnet agent per example spec implement it with `decider` in the scratchpad, then copy to `example_projects/<NN-name>/<model>/`. Evaluate: (1) similarity (Opus judge), (2) servable unchanged, (3) maintainability via Haiku summaries judged by Opus, (4) reuse of earlier projects and built-ins vs from scratch; final report on what worked, what didn't, improvements, struggles (agents leave NOTES.md).
+- Specs restored to `example_projects/specs/` (kept permanently). Planning (opus): `DEPS.md`, `00-ADDENDUM.md`, `SCOPE.md`; shared `BRIEF.md` for implementers. Rule: consumers never edit earlier projects; gaps recorded in NOTES.md.
+- Waves (per model): W0 00 (+09 evidence contract) → W1 01, 02, 10 → W2 03, 05, 07, 08 → W3 04, 06 → W4 09 harness, 11.
+- W0 dispatched: 00 haiku, 00 sonnet.
