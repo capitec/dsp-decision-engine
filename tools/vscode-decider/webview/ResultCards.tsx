@@ -68,7 +68,7 @@ export function ResultCards({ c, record, onFocus, onSelect }: { c: Comparison; r
       {noOffer.length > 0 && (
         <details className="no-offer">
           <summary>
-            {noOffer.length} declined record{noOffer.length === 1 ? "" : "s"} with changed values but no offer
+            {noOffer.length} other declined applicant{noOffer.length === 1 ? "" : "s"} had internal values change (no offer affected)
           </summary>
           {noOffer.map(card)}
         </details>
@@ -87,6 +87,8 @@ export function headline(c: Comparison): string | null {
   const decided = rows.filter((r) => !same(a[r], b[r]));
   const changed = rows.filter((r) => cols.some((n) => !same(c.results.a[n]?.[r], c.results.b[n]?.[r])));
   const offers = changed.filter((r) => b[r] !== "decline" || a[r] !== "decline");
+  const reasonMoved = (r: number) => !!c.results.b.reason_code && !same(c.results.a.reason_code?.[r], c.results.b.reason_code[r]);
+  const valuesOnly = changed.filter((r) => b[r] === "decline" && a[r] === "decline" && !reasonMoved(r)).length;
   const flips = decided.map((r) => `${formatValue(a[r])} → ${formatValue(b[r])}`);
   const counts = [...new Set(flips)].map((f) => `${flips.filter((x) => x === f).length} ${f}`).join(", ");
   const reason = c.results.b.reason_code;
@@ -95,9 +97,7 @@ export function headline(c: Comparison): string | null {
     decided.length ? `Decisions changed for ${decided.length} of ${c.rows} (${counts})` : `No decision changed`,
     reasons ? `${reasons} decline${reasons === 1 ? "" : "s"} now for a different reason` : "",
     offers.length ? `offers changed for ${offers.length} applicant${offers.length === 1 ? "" : "s"}` : "no offer changed",
-    changed.length > offers.length
-      ? `${changed.length - offers.length} declined applicant${changed.length - offers.length === 1 ? "" : "s"} had internal values change (no offer affected)`
-      : "",
+    valuesOnly ? `${valuesOnly} other declined applicant${valuesOnly === 1 ? "" : "s"} had internal values change (no offer affected)` : "",
   ]
     .filter(Boolean)
     .join(" · ");

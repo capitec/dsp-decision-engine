@@ -211,7 +211,8 @@ describe("large flow stories", () => {
         await wv(c).locator(".pause-banner:not(.pending)").waitFor({ timeout: 60_000 }).catch(() => undefined);
         await wv(c).locator("select[aria-label=record]").selectOption({ label: "client_id 20400" }).catch(() => undefined);
         await shot("After 'Run through pl_regulated_rate' with client_id 20400 focused.");
-        await wv(c).locator(".pause-banner .edit-chip", { hasText: "pl_regulated_rate" }).locator("button", { hasText: "compare with start" }).click();
+        await wv(c).locator(".pause-banner button[aria-expanded]").click();
+        await wv(c).locator(".edit-menu-pop div", { hasText: "pl_regulated_rate" }).locator("button", { hasText: "compare with start" }).click();
         await wv(c).locator(".compare .compare-title", { hasText: "pl_regulated_rate edited" }).waitFor({ timeout: 120_000 });
         await shot("Clicked 'compare with start' on the pl_regulated_rate edit alone: the tighter cap on its own.");
         await wv(c).locator(".pause-banner button.banner-button").click();

@@ -100,6 +100,32 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
               )}
             </div>
           </div>
+          {who && ran && (node.outputs ?? []).length > 0 && (
+            <div className="wrote">
+              For {who}: {(node.outputs ?? []).map((o) => `${o} = ${valueOf(o) ?? "?"}`).join(", ")}
+              {limit && <div className="clamp">{limit}</div>}
+            </div>
+          )}
+          {change && (
+            <div className="changed-box">
+              <div className="how-title">Changed in this comparison</div>
+              {change.paramChanges.map((p) => (
+                <div key={p} className="mono">{p}</div>
+              ))}
+              {change.structural.includes("code") && (
+                <div>
+                  code changed{comparison!.files && <> · <a onClick={() => onOpenDiff(node.path)}>view diff</a></>}
+                </div>
+              )}
+              {change.outputs.flatMap((o) =>
+                o.samples.map((sm) => (
+                  <div key={`${o.name}-${sm.row}`} className="mono">
+                    {o.name} for {recordLabel(sm.row, keyCol ?? comparison!.key)}: {formatValue(sm.a)} → <strong>{formatValue(sm.b)}</strong>
+                  </div>
+                )),
+              )}
+            </div>
+          )}
           {node.formula && (node.formulaBefore !== undefined || !node.body) && (
             <div className="step-formula mono" title="What the step returns">
               returns {node.formula}
@@ -112,12 +138,6 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
             </div>
           )}
           <div className="muted" title={node.source}>{node.table ? "lookup table, matched once per record" : KIND[node.callKind]}{node.doc ? ` · ${node.doc}` : ""}</div>
-          {who && ran && (node.outputs ?? []).length > 0 && (
-            <div className="wrote">
-              For {who}: {(node.outputs ?? []).map((o) => `${o} = ${valueOf(o) ?? "?"}`).join(", ")}
-              {limit && <div className="clamp">{limit}</div>}
-            </div>
-          )}
           {Object.keys(node.params).length > 0 && !table && (
             <div className="muted small mono">{Object.entries(node.params).map(([k, v]) => `${k} = ${formatValue(v, k)}`).join(" · ")}</div>
           )}
@@ -154,26 +174,6 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
                 <div className="muted small">with {(node.inputs ?? []).map((i) => `${i} = ${valueOf(i) ?? "?"}`).join(", ")}</div>
               </div>
             </>
-          )}
-          {change && (
-            <div className="changed-box">
-              <div className="how-title">Changed in this comparison</div>
-              {change.paramChanges.map((p) => (
-                <div key={p} className="mono">{p}</div>
-              ))}
-              {change.structural.includes("code") && (
-                <div>
-                  code changed{comparison!.files && <> · <a onClick={() => onOpenDiff(node.path)}>view diff</a></>}
-                </div>
-              )}
-              {change.outputs.flatMap((o) =>
-                o.samples.map((sm) => (
-                  <div key={`${o.name}-${sm.row}`} className="mono">
-                    {o.name} for {recordLabel(sm.row, keyCol ?? comparison!.key)}: {formatValue(sm.a)} → <strong>{formatValue(sm.b)}</strong>
-                  </div>
-                )),
-              )}
-            </div>
           )}
           <h4>Reads{who && <span className="muted"> · values for {who} · click one to see where it came from</span>}</h4>
           <Chips names={node.inputs} picked={column} onPick={onPick} valueOf={valueOf} />
