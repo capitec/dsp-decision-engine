@@ -135,7 +135,8 @@ class Bridge:
         self.sent = len(s.events)
         cur = s.current
         return {"finished": s.finished, "events": events,
-                "current": cur and {"path": cur.origin.path, "when": cur.when}, "hit": self.controls.take_hit(),
+                "current": cur and {"path": cur.origin.path, "when": cur.when, **({"iteration": cur.iteration} if cur.iteration else {})},
+                "hit": self.controls.take_hit(),
                 # What has run since the start or the last rewind, for the graph's ticks.
                 "ran": sorted({p for p, w in self.timeline.log if w == "after"})}
 

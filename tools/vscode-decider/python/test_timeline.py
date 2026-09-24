@@ -78,10 +78,11 @@ def test_going_back_to_a_change_pauses_just_after_the_step_that_made_it():
     b = finished()
     third = b.handle({"cmd": "changes", "name": "offer", "row": 0})["changes"][3]
     r = b.handle({"cmd": "go_to", "change": third["change"]})
-    assert r["current"] == {"path": "sizing/shrink_offer/shrink", "when": "after"}
+    assert r["current"] == {"path": "sizing/shrink_offer/shrink", "when": "after", "iteration": 3}
     assert b.session.current.iteration == 3
     assert b.session.value("offer@sizing/shrink_offer/shrink").to_list()[0] == 76800.0
     after = b.handle({"cmd": "changes", "name": "offer", "row": 0})["changes"]
-    assert [c["value"] for c in after] == [150000.0, 120000.0, 96000.0, 76800.0]  # the later ones haven't happened yet
+    assert [c["value"] for c in after if not c.get("pending")] == [150000.0, 120000.0, 96000.0, 76800.0]
+    assert [c["value"] for c in after if c.get("pending")] == [61440.0, 49152.0]  # undone, to happen again
     assert b.handle({"cmd": "resume"})["finished"]
     assert len(b.handle({"cmd": "changes", "name": "offer", "row": 0})["changes"]) == 6

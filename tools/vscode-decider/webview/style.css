@@ -2242,3 +2242,13 @@ input.narrow {
   opacity: 0.45;
   text-decoration: line-through;
 }
+.timeline li.pending {
+  opacity: 0.5;
+  font-style: italic;
+}
+.group-controls h5 {
+  margin: 10px 0 2px;
+  font-size: 11px;
+  text-transform: uppercase;
+  opacity: 0.8;
+}

@@ -281,7 +281,7 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
       {downstream > 0 && (
         <div className="muted small">
           {causes.length ? "and " : ""}
-          {downstream} {causes.length ? "downstream " : ""}step{downstream === 1 ? "" : "s"} changed as a result{c.forced ? " of the force" : ""}: see Step by step below.
+          {downstream} {causes.length ? "downstream " : ""}step{downstream === 1 ? "" : "s"} changed as a result: see Step by step below.
         </div>
       )}
       <h4>

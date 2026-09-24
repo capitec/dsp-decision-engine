@@ -73,6 +73,8 @@ export interface ParamInfo {
 export interface Checkpoint {
   path: string;
   when: "before" | "after";
+  /** Inside a loop: which iteration. */
+  iteration?: number;
 }
 
 export interface Summary {
@@ -177,6 +179,8 @@ export interface ValueChange {
   before?: unknown;
   /** The step wrote the value the record already had. */
   kept?: boolean;
+  /** Undone by going back: it happens again as the run goes on. */
+  pending?: boolean;
   /** For the whole batch: how many records changed, and the first few new values. */
   rows?: number;
   values?: unknown[];

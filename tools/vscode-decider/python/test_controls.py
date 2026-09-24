@@ -80,7 +80,7 @@ def test_a_force_set_while_paused_just_after_the_condition_still_routes():
 def test_a_breakpoint_on_an_iteration_pauses_before_it():
     b = started(watches=[{"path": "sizing/shrink_offer", "iteration": 3}])
     r = b.handle({"cmd": "resume"})
-    assert r["current"] == {"path": "sizing/shrink_offer/too_big", "when": "before"}
+    assert r["current"] == {"path": "sizing/shrink_offer/too_big", "when": "before", "iteration": 3}
     assert b.session.current.iteration == 3 and r["hit"]["text"] == "iteration 3 of shrink_offer"
     assert b.session.value("offer").to_list()[0] == 96000.0
 
