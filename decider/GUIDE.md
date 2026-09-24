@@ -165,7 +165,8 @@ assert card.run(pl.DataFrame({"age": [20.0, 40.0]}))["score"].to_list() == [5.0,
 ```
 
 `path_output` names the leaf that answered (per rule in `mode: "all"`);
-`trace_output` names every node id on the row's path, in order. `TreeConfig`
+`trace_output` gives the row's whole path as node ids joined by `>`, root first
+(e.g. `"1>2>4>912"`), so the decision record shows how it got there. `TreeConfig`
 also takes a v3 node/edge tree:
 
 ```python
@@ -177,7 +178,7 @@ tree = TreeConfig.load({"type": "tree", "name": "risk", "trace_output": "risk_pa
               {"id": "high", "data": {"type": "leaf", "result_idx": 0}}],
     "edges": [{"source": "root", "target": "high", "data": {"sourceIndex": 0}}],
     "output": {"data": [{"risk": 1}], "default": {"risk": 0}, "dtypes": [["risk", "Int64"]]}}})
-assert tree.run(pl.DataFrame({"ratio": [0.9]}))["risk_path"].to_list()[0][-1] == "high"
+assert tree.run(pl.DataFrame({"ratio": [0.9]}))["risk_path"].to_list()[0].split(">")[-1] == "high"
 ```
 
 ## Parameter tables
