@@ -100,6 +100,17 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
               )}
             </div>
           </div>
+          {node.formula && (node.formulaBefore !== undefined || !node.body) && (
+            <div className="step-formula mono" title="What the step returns">
+              returns {node.formula}
+              {node.formulaBefore !== undefined && (
+                <>
+                  <span className="edit-mark"> edited</span>
+                  <div className="before">was: <s>{node.formulaBefore}</s></div>
+                </>
+              )}
+            </div>
+          )}
           <div className="muted" title={node.source}>{node.table ? "lookup table, matched once per record" : KIND[node.callKind]}{node.doc ? ` · ${node.doc}` : ""}</div>
           {who && ran && (node.outputs ?? []).length > 0 && (
             <div className="wrote">
@@ -115,17 +126,6 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
               <summary>code</summary>
               <pre>{node.body}</pre>
             </details>
-          )}
-          {node.formula && (node.formulaBefore !== undefined || !node.body) && (
-            <div className="step-formula mono" title="What the step returns">
-              returns {node.formula}
-              {node.formulaBefore !== undefined && (
-                <>
-                  <span className="edit-mark"> edited</span>
-                  <div className="before">was: <s>{node.formulaBefore}</s></div>
-                </>
-              )}
-            </div>
           )}
           {run.edits?.[node.path] && (
             <div className="edited-note">{run.edits[node.path] === "delete" ? "Skipped in this run: the steps after it ran without it." : "Running your edited code in this run."}</div>
@@ -314,7 +314,7 @@ function TableMatch({ table, visited, result, outputs, inputs }: { table: { name
   const matched = row !== undefined && outputs.every((o, i) => result === undefined || same(row[o], result[i]));
   const cols = Object.keys(table.rows[0] ?? {});
   return (
-    <div className="table-match">
+    <div className="table-match" ref={(el) => el?.scrollIntoView({ block: "start" })}>
       <div>
         {matched ? <>Matched row <strong>{last + 1}</strong> of <span className="mono">{table.name}</span></> : <>No row of <span className="mono">{table.name}</span> matched: the default applies</>}
         {result && <> → <strong>{outputs.map((o, i) => `${o} = ${formatValue(result[i], o)}`).join(", ")}</strong></>}
@@ -334,7 +334,7 @@ function TableMatch({ table, visited, result, outputs, inputs }: { table: { name
         </thead>
         <tbody>
           {table.rows.map((r, i) => (
-            <tr key={i} className={matched && i === last ? "matched" : tried.includes(i) ? "tried" : ""} ref={matched && i === last ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}>
+            <tr key={i} className={matched && i === last ? "matched" : tried.includes(i) ? "tried" : ""}>
               <td className="muted small">{i + 1}</td>
               {cols.map((c) => <td key={c} className="mono">{formatValue((r[c] ?? null) as never, c)}</td>)}
             </tr>
