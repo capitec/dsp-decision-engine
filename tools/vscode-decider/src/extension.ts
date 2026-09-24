@@ -4,7 +4,7 @@ import { DeciderDebugSession } from "./adapter";
 import { analyse, PipelineCodeLens } from "./analysis";
 import { listRefs, materialise, repoRoot } from "./git";
 import { GraphPanel } from "./graphPanel";
-import type { CallNodeJson, ColumnSummary, Controls, DescribeResult, FromWebview, Lineage, RecordKey, RunStatus, ToWebview, ValueHistory } from "./protocol";
+import { editLabel, walk, type CallNodeJson, type ColumnSummary, type Controls, type DescribeResult, type FromWebview, type IRNodeJson, type Lineage, type RecordKey, type RunStatus, type ToWebview, type ValueHistory } from "./protocol";
 import { debugpyLibs, pythonCommand } from "./python";
 import { runComparison, type Side } from "./compareRuns";
 import { compareTraces, type TraceResult } from "./compare";
@@ -86,7 +86,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       // From the palette: the flow in the active editor, not whichever one the panel last showed.
       const target = uri ?? vscode.window.activeTextEditor?.document.uri;
       if (!GraphPanel.current || (target && target.fsPath !== shown?.file)) await vscode.commands.executeCommand("decider.visualise", target);
-      GraphPanel.post({ type: "tab", tab: "params" });
+      post({ type: "tab", tab: "params" });
     }),
 
     vscode.commands.registerCommand("decider.focusRecord", async () => {
@@ -125,9 +125,9 @@ export function activate(ctx: vscode.ExtensionContext) {
       const body = e.body as RunStatus;
       if (body.current) clearRunTo(body.current.path);
       structure.setStatus(body.current, body.finishedPaths);
-      GraphPanel.post({ type: "status", ...body });
+      post({ type: "status", ...body });
       const { columns, key } = (await e.session.customRequest("decider.state")) as { columns: ColumnSummary[] | null; key: RecordKey };
-      GraphPanel.post({ type: "state", columns, rows: columns?.[0]?.rows ?? 0, key });
+      post({ type: "state", columns, rows: columns?.[0]?.rows ?? 0, key });
     }),
 
     vscode.debug.onDidTerminateDebugSession((s) => {
@@ -137,15 +137,13 @@ export function activate(ctx: vscode.ExtensionContext) {
       pythonOf.delete(s);
       clearRunTo();
       structure.setStatus(null, []);
-      GraphPanel.post({ type: "status", current: null, finished: true, finishedPaths: [], visits: {}, record: null });
-      GraphPanel.post({ type: "state", columns: null, rows: 0, key: null });
+      post({ type: "status", current: null, finished: true, finishedPaths: [], visits: {}, record: null });
+      post({ type: "state", columns: null, rows: 0, key: null });
     }),
   );
 }
 
-function post(m: ToWebview) {
-  GraphPanel.post(m);
-}
+const post = (m: ToWebview) => GraphPanel.post(m);
 
 async function onWebview(m: FromWebview, describe: DescribeResult) {
   const s = deciderSession();
@@ -187,8 +185,7 @@ async function onWebview(m: FromWebview, describe: DescribeResult) {
       try {
         const r = (await s.customRequest("decider.compareEdits", { path: m.path })) as { a: TraceResult; b: TraceResult };
         const comparison = compareTraces(r.a, r.b, "the flow as started", m.label);
-        const name = ([p, a]: [string, string]) => `${p.split("/").pop()} ${a === "delete" ? "skipped" : "edited"}`;
-        const others = Object.entries(m.edits).filter(([p]) => p !== m.path).map(name);
+        const others = Object.entries(m.edits).filter(([p]) => p !== m.path).map(editLabel);
         const scope = m.path ? (others.length ? `Only ${m.label} is applied; ${others.join(", ")} ${others.length === 1 ? "is" : "are"} not.` : "") : others.length > 1 ? `All ${others.length} edits are applied.` : "";
         comparison.note = `${scope} Both versions ran from the start to the end; your debug run is still paused where it was.`.trim();
         // Both runs share one description, so a swapped step's new code shows only through the edits made.
@@ -208,8 +205,8 @@ async function onWebview(m: FromWebview, describe: DescribeResult) {
     case "restore":
       try {
         const command = m.type === "skip" ? "decider.skip" : m.type === "restore" ? "decider.restore" : "decider.reloadStep";
-        const r = (await s?.customRequest(command, { path: m.path })) as { diff?: string[]; formula?: string | null } | undefined;
-        if (m.type !== "skip" && r) post({ type: "edited", path: m.path, diff: r.diff ?? [], formula: r.formula ?? null, restored: m.type === "restore" });
+        const r = (await s?.customRequest(command, { path: m.path })) as { formula?: string | null } | undefined;
+        if (m.type !== "skip" && r) post({ type: "edited", path: m.path, formula: r.formula ?? null, restored: m.type === "restore" });
       } catch (e) {
         void vscode.window.showErrorMessage(`Couldn't ${m.type === "skip" ? "skip" : m.type === "restore" ? "restore" : "swap in"} ${m.path.split("/").pop()}: ${(e as Error).message}`);
       }
@@ -247,11 +244,6 @@ async function onWebview(m: FromWebview, describe: DescribeResult) {
     case "debugStep":
       await debugStep();
       break;
-    case "layout":
-      // Only the two-group layout the panel set up; a user's own arrangement is left alone.
-      if (vscode.window.tabGroups.all.length === 2 && GraphPanel.current?.column === vscode.ViewColumn.Two)
-        await vscode.commands.executeCommand("vscode.setEditorLayout", { orientation: 0, groups: [{ size: m.wide ? 0.3 : 0.5 }, { size: m.wide ? 0.7 : 0.5 }] });
-      break;
     case "maximise":
       await vscode.commands.executeCommand("workbench.action.toggleMaximizeEditorGroup");
       break;
@@ -286,7 +278,6 @@ async function runSweep(list: Scenario[], fromHere: boolean) {
 /** The files of the latest revision comparison, for "view code diff". */
 let lastFiles: { a: string; b: string; label: string } | undefined;
 
-/** Pause before a step: a function breakpoint on its path, then run (or start) the flow to it. */
 /** "Run to" breakpoints: gone once the run pauses there or the session ends, like run to cursor. */
 let runToBreakpoints: vscode.FunctionBreakpoint[] = [];
 
@@ -297,6 +288,7 @@ function clearRunTo(pausedAt?: string) {
   runToBreakpoints = runToBreakpoints.filter((b) => !done.includes(b));
 }
 
+/** Pause before a step: a function breakpoint on its path, then run (or start) the flow to it. */
 async function runTo(nodePath: string) {
   const own = vscode.debug.breakpoints.some((b) => b instanceof vscode.FunctionBreakpoint && b.functionName === nodePath);
   if (!own) {
@@ -439,13 +431,11 @@ async function reveal(file: string, line: number | null) {
   }
 }
 
-function findNode(d: DescribeResult, p: string) {
-  let found: { file: string | null; line: number | null } | undefined;
-  const visit = (n: DescribeResult["ir"]) => {
-    if (n.path === p) found = n;
-    else if (n.kind !== "call") n.children.forEach(visit);
-  };
-  visit(d.ir);
+function findNode(d: DescribeResult, p: string): IRNodeJson | undefined {
+  let found: IRNodeJson | undefined;
+  walk(d.ir, (n) => {
+    if (n.path === p) found ??= n;
+  });
   return found;
 }
 

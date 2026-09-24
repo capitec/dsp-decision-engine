@@ -21,9 +21,9 @@ export interface Ref {
 }
 
 /** Tags, local branches and recent commits, newest first, for picking a baseline. */
-export async function listRefs(root: string, commits = 20): Promise<Ref[]> {
+export async function listRefs(root: string): Promise<Ref[]> {
   const refs = await git(root, "for-each-ref", "--sort=-creatordate", "--format=%(refname:short)\t%(objectname:short)\t%(refname)", "refs/tags", "refs/heads");
-  const log = await git(root, "log", `-${commits}`, "--format=%h\t%s\t%cr");
+  const log = await git(root, "log", "-20", "--format=%h\t%s\t%cr");
   const named = refs
     .split("\n")
     .filter(Boolean)

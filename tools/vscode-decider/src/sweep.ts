@@ -1,11 +1,5 @@
-import { compareTraces, same, type Comparison } from "./compare";
-import type { DescribeResult, Force, RecordKey } from "./protocol";
-
-export interface RunTrace {
-  steps: Record<string, Record<string, unknown[]>>;
-  output: Record<string, unknown[]> | null;
-  error: string | null;
-}
+import { compareTraces, same, type Comparison, type RunTrace } from "./compare";
+import { recordLabel, type DescribeResult, type Force, type RecordKey } from "./protocol";
 
 /** What the bridge's `sweep` returns: the unchanged continuation and one run per scenario. */
 export interface SweepResponse {
@@ -116,7 +110,7 @@ export function summariseSweep(r: SweepResponse, scenarioList: Scenario[] = []):
       ...Object.entries(s?.overrides ?? {}).map(([name, after]) => ({
         name,
         after,
-        scope: s?.row == null ? "every record" : r.key ? `${r.key.name} ${String(r.key.values[s.row])}` : `row ${s.row}`,
+        scope: s?.row == null ? "every record" : recordLabel(s.row, r.key),
       })),
     ],
   });

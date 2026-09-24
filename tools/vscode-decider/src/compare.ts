@@ -1,10 +1,14 @@
 import { callNodes, formatValue, type CallNodeJson, type DescribeResult, type RecordKey } from "./protocol";
 
-/** One whole run, as the bridge's `trace` returns it. */
-export interface TraceResult extends DescribeResult {
+/** What every call of a run wrote, and its output if it finished. */
+export interface RunTrace {
   steps: Record<string, Record<string, unknown[]>>;
   output: Record<string, unknown[]> | null;
   error: string | null;
+}
+
+/** One whole run, as the bridge's `trace` returns it. */
+export interface TraceResult extends DescribeResult, RunTrace {
   data: Record<string, unknown>[];
   key?: RecordKey;
 }
@@ -62,11 +66,6 @@ export interface Comparison {
   valuesFile?: string;
   /** Each run's PARAMS document (tables' rows and tuned values), for saying what a param was. */
   values?: { a: unknown; b: unknown };
-}
-
-/** A run's params document as it ran: its PARAMS over every param's declared default. */
-function withDefaults(t: TraceResult): Record<string, unknown> {
-  return docWithDefaults(t.params ?? {}, t.values);
 }
 
 /** `values` (a PARAMS document) over the default of every param in `schema`, nested by path. */
@@ -247,7 +246,7 @@ export function compareTraces(a: TraceResult, b: TraceResult, labelA: string, la
     rows: b.data.length,
     key: b.key ?? null,
     outputColumns: Object.keys(b.output ?? a.output ?? {}),
-    values: { a: withDefaults(a), b: withDefaults(b) },
+    values: { a: docWithDefaults(a.params ?? {}, a.values), b: docWithDefaults(b.params ?? {}, b.values) },
     valuesFile: b.valuesFile ?? undefined,
     // Two revisions each run with their own PARAMS; what differs between them is a param change.
     paramsDocs: Object.keys(diffDoc(a.values, b.values)).length ? { a: a.values, b: diffDoc(a.values, b.values) } : undefined,

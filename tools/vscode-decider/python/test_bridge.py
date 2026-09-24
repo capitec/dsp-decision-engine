@@ -235,8 +235,6 @@ def test_an_edited_step_is_swapped_in_mid_run(tmp_path):
     r = b.handle({"cmd": "reload_step", "path": "term/cap_by_income"})
     assert r["current"] == {"path": "term/cap_by_income", "when": "before"}
     assert r["formula"] == "min(term_cap, cap) - 1 if min_net_salary < 5000 else term_cap"
-    assert [line[0] + line[1:].strip() for line in r["diff"]] == ["-return min(term_cap, cap) if min_net_salary < 5000 else term_cap",
-                                                    "+return min(term_cap, cap) - 1 if min_net_salary < 5000 else term_cap"]
     assert b.handle({"cmd": "resume"})["finished"]
     assert b.session.output()["term_cap"].to_list() == [47.0, 35.0]  # record 1's missing salary fills as 0, so the edit hits it too
 

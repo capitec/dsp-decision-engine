@@ -113,8 +113,6 @@ export function headline(c: Comparison): string | null {
   const decided = rows.filter((r) => !same(a[r], b[r]));
   const changed = rows.filter((r) => cols.some((n) => !same(c.results.a[n]?.[r], c.results.b[n]?.[r])));
   const offers = changed.filter((r) => b[r] !== "decline" || a[r] !== "decline");
-  const reasonMoved = (r: number) => !!c.results.b.reason_code && !same(c.results.a.reason_code?.[r], c.results.b.reason_code[r]);
-  const valuesOnly = changed.filter((r) => b[r] === "decline" && a[r] === "decline" && !reasonMoved(r)).length;
   const flips = decided.map((r) => `${formatValue(a[r])} → ${formatValue(b[r])}`);
   const counts = [...new Set(flips)].map((f) => `${flips.filter((x) => x === f).length} ${f}`).join(", ");
   const reason = c.results.b.reason_code;
@@ -123,7 +121,6 @@ export function headline(c: Comparison): string | null {
     `Decisions changed: ${decided.length}${decided.length ? ` (${counts})` : ""}`,
     `Offers changed: ${offers.length}`,
     reasons ? `Declines with a new reason: ${reasons}` : "",
-
   ]
     .filter(Boolean)
     .join(" · ");

@@ -27,21 +27,12 @@ def find_pipelines(mod, file):
             if id(v) not in contained and not isinstance(v, (FunctionStep, FrameStep))]
 
 
-def _last_statement(fn):
+def _statement_line(fn, index):
+    # The first statement is where a debugpy breakpoint stops on the call rather than the def.
     try:
         src, first = inspect.getsourcelines(fn)
         node = ast.parse(textwrap.dedent("".join(src))).body[0]
-        return first + node.body[-1].lineno - 1
-    except (OSError, TypeError, SyntaxError, IndexError, AttributeError):
-        return None
-
-
-def _first_statement(fn):
-    """First line of `fn`'s body, where a debugpy breakpoint stops on the call rather than the def."""
-    try:
-        src, first = inspect.getsourcelines(fn)
-        node = ast.parse(textwrap.dedent("".join(src))).body[0]
-        return first + node.body[0].lineno - 1
+        return first + node.body[index].lineno - 1
     except (OSError, TypeError, SyntaxError, IndexError, AttributeError):
         return None
 
@@ -107,7 +98,7 @@ def node_json(node, steps, located):
                 "formula": formula(python) if isinstance(step_, FunctionStep) else None,
                 "body": _short_source(python) if isinstance(step_, FunctionStep) else None,
                 "table": step_.expression.model_dump(mode="json") if hasattr(step_, "expression") and hasattr(step_, "rows") else None,
-                "python": {"file": rf, "line": rl, "bodyLine": _first_statement(python), "endLine": _last_statement(python)} if rf else None}
+                "python": {"file": rf, "line": rl, "bodyLine": _statement_line(python, 0), "endLine": _statement_line(python, -1)} if rf else None}
     kind = "branch" if isinstance(node, BranchNode) else "loop" if isinstance(node, LoopNode) else "sequence"
     extra = {"modifies": list(node.modifies)} if kind == "branch" else {}
     if kind == "loop":

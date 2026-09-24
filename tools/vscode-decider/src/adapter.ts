@@ -1,44 +1,12 @@
 import * as path from "node:path";
-import {
-  Breakpoint,
-  Event,
-  Handles,
-  InitializedEvent,
-  LoggingDebugSession,
-  OutputEvent,
-  Scope,
-  Source,
-  StackFrame,
-  StoppedEvent,
-  TerminatedEvent,
-  Thread,
-  Variable,
-} from "@vscode/debugadapter";
+import { Breakpoint, Event, Handles, InitializedEvent, LoggingDebugSession, OutputEvent, Scope, Source, StackFrame, StoppedEvent, TerminatedEvent, Thread, Variable } from "@vscode/debugadapter";
 import type { DebugProtocol } from "@vscode/debugprotocol";
 import { Bridge, freePort } from "./bridge";
-import {
-  kindLabel,
-  lastSegment,
-  formatValue,
-  previewOf,
-  walk,
-  type Checkpoint,
-  type ColumnSummary,
-  type Controls,
-  type DescribeResult,
-  type Hit,
-  type IRNodeJson,
-  type Lineage,
-  type RecordKey,
-  type RunStatus,
-  type Status,
-  type Visits,
-} from "./protocol";
+import { kindLabel, lastSegment, formatValue, previewOf, walk } from "./protocol";
+import type { Checkpoint, ColumnSummary, Controls, DescribeResult, Hit, IRNodeJson, Lineage, RecordKey, RunStatus, Status, Visits } from "./protocol";
 import { readEvents } from "./events";
 import { nodeAtLine } from "./sourceMap";
 import { optionsFromEnv, type AdapterOptions, type LaunchArgs } from "./launchArgs";
-
-export type { AdapterOptions, LaunchArgs };
 
 type VarRef =
   | { kind: "scope"; names: string[] | "all" }
@@ -284,9 +252,7 @@ export class DeciderDebugSession extends LoggingDebugSession {
   }
 
   protected async terminateRequest(response: DebugProtocol.TerminateResponse): Promise<void> {
-    this.finished = true;
-    await this.bridge?.dispose();
-    this.sendResponse(response);
+    await this.disconnectRequest(response);
     this.sendEvent(new TerminatedEvent());
   }
 
@@ -462,16 +428,13 @@ export class DeciderDebugSession extends LoggingDebugSession {
         case "decider.debugCondition":
           response.body = this.record === null ? { condition: null } : await this.bridge!.request("debug_condition", { path: args.path, row: this.record });
           break;
-        case "decider.column":
-          response.body = await this.bridge!.request("column", { name: args.name, row: this.record });
-          break;
         case "decider.skip":
         case "decider.reloadStep":
         case "decider.restore": {
           // A wiring error rejects the request and leaves the run as it was.
           const cmd = command === "decider.skip" ? "skip" : command === "decider.restore" ? "restore" : "reload_step";
-          const status = await this.bridge!.request<Status & { diff: string[]; formula: string | null }>(cmd, { path: args.path });
-          response.body = { diff: status.diff, formula: status.formula };
+          const status = await this.bridge!.request<Status & { formula: string | null }>(cmd, { path: args.path });
+          response.body = { formula: status.formula };
           const before = { ...this.edits };
           this.sendResponse(response);
           this.apply(status, false);
