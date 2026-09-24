@@ -1,12 +1,14 @@
 import * as path from "node:path";
 import { DebugClient } from "@vscode/debugadapter-testsupport";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { SAMPLE_WITHOUT_SECTOR } from "./fixtures";
 import { compareTraces, type TraceResult } from "../src/compare";
 
 const ROOT = path.resolve(__dirname, "..");
 const LOAN = path.join(ROOT, "examples", "loan.py");
 const ADAPTER = path.join(ROOT, "dist", "adapterMain.js");
+const SAMPLE_WITHOUT_SECTOR = [
+  { client_id: 1, net_income: 9000.0, expenses: 4000.0, instalment: 1500.0, requested_term: 72.0, min_net_salary: 4000.0, sector_code: null, requested_amount: 150000.0 },
+];
 
 // Drives the built adapter over stdio, exactly as an editor would, against the real decider session.
 describe("decider debug adapter", () => {

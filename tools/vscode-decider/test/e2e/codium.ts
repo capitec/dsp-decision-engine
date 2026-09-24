@@ -18,7 +18,7 @@ export interface Codium {
   close(): Promise<void>;
 }
 
-export async function launch(folder = path.join(ROOT, "examples"), size = { width: 1400, height: 860 }): Promise<Codium> {
+export async function launch(folder = path.join(ROOT, "examples")): Promise<Codium> {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "decider-e2e-"));
   // A quiet profile: no git prompt, no empty secondary side bar, no welcome page.
   fs.mkdirSync(path.join(home, "user", "User"), { recursive: true });
@@ -56,7 +56,7 @@ export async function launch(folder = path.join(ROOT, "examples"), size = { widt
     timeout: 180_000,
   });
   const page = await app.firstWindow();
-  await app.evaluate(({ BrowserWindow }, s) => BrowserWindow.getAllWindows()[0]?.setSize(s.width, s.height), size);
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1400, 860));
   await page.waitForSelector(".monaco-workbench", { timeout: 180_000 });
   fs.mkdirSync(SHOTS, { recursive: true });
   return {

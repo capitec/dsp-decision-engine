@@ -34,11 +34,7 @@ header nav button.active {
   background: var(--vscode-button-background);
   color: var(--vscode-button-foreground);
 }
-.badge {
-  margin-left: auto;
-  font-family: var(--vscode-editor-font-family);
-  color: var(--vscode-debugIcon-pauseForeground, orange);
-}
+
 main {
   display: flex;
   flex: 1;
@@ -316,9 +312,7 @@ ins {
   white-space: normal;
   vertical-align: top;
 }
-.vdiff.hit {
-  outline: 1px solid var(--vscode-focusBorder);
-}
+
 .chip.small {
   font-size: 0.8em;
   margin-left: 6px;
@@ -409,19 +403,12 @@ header nav {
 header label {
   white-space: nowrap;
 }
-.badge {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+
 aside {
   flex: none;
   width: 260px;
 }
-aside.collapsed {
-  display: none;
-}
+
 @media (max-width: 760px) {
   main {
     flex-direction: column;
@@ -432,30 +419,12 @@ aside.collapsed {
     border-left: none;
     border-top: 1px solid var(--vscode-panel-border);
   }
-  .badge {
-    flex-basis: 100%;
-    margin-left: 0;
-  }
+
 }
 .graph {
   position: relative;
 }
-.zoom {
-  position: sticky;
-  float: right;
-  top: 6px;
-  right: 6px;
-  display: flex;
-  gap: 2px;
-  z-index: 1;
-}
-.zoom button {
-  background: var(--vscode-button-secondaryBackground);
-  color: var(--vscode-button-secondaryForeground);
-  border: none;
-  min-width: 24px;
-  cursor: pointer;
-}
+
 .muted.small {
   font-size: 0.8em;
 }
@@ -604,12 +573,7 @@ table.vdiffs tr.hit td {
   padding: 4px 0;
   border-bottom: 1px solid var(--vscode-panel-border);
 }
-.unchanged-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-bottom: 6px;
-}
+
 .chip.same {
   opacity: 0.7;
 }
@@ -702,23 +666,7 @@ aside .close {
   margin: 4px 0;
   padding-left: 16px;
 }
-table.results {
-  width: auto;
-}
-table.results td,
-table.results th {
-  white-space: nowrap;
-}
-.changed-cell {
-  background: var(--vscode-diffEditor-insertedTextBackground, #9bb95522);
-}
-.changed-cell .before {
-  color: var(--vscode-gitDecoration-deletedResourceForeground, #c74e39);
-}
-.changed-cell .after {
-  color: var(--vscode-gitDecoration-addedResourceForeground, #81b88b);
-  font-weight: bold;
-}
+
 .compare h4 {
   display: flex;
   align-items: baseline;
@@ -777,13 +725,7 @@ button.link {
 .node.diff-same rect {
   stroke-dasharray: none;
 }
-.kind-tag {
-  font-size: 9px;
-  fill: var(--vscode-foreground);
-  opacity: 0.7;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
+
 .subbar {
   flex-wrap: wrap;
   align-items: center;
@@ -796,33 +738,12 @@ button.link {
   background: none;
   padding: 0;
 }
-.edge-key {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.edge-key .line {
-  display: inline-block;
-  width: 18px;
-  border-top: 2px solid var(--vscode-foreground);
-  opacity: 0.7;
-}
-.edge-key .line.dotted {
-  border-top: 2px dotted var(--vscode-charts-blue, #3794ff);
-}
+
 .swatch.same {
   border: 2px solid var(--vscode-foreground);
   opacity: 0.6;
 }
-.back {
-  display: inline-block;
-  margin-bottom: 6px;
-}
-.sides .side-label {
-  display: inline-block;
-  min-width: 64px;
-  opacity: 0.82;
-}
+
 .compare .summary {
   align-items: flex-start;
 }
@@ -833,9 +754,6 @@ th.group-head {
 .state td:nth-child(3),
 .state td:nth-child(4) {
   white-space: normal;
-}
-.unchanged-cell {
-  opacity: 0.75;
 }
 
 /* round 4 review: one colour per meaning everywhere.
@@ -904,17 +822,14 @@ th.group-head {
 .badge-status.added {
   background: var(--added);
 }
-table.sweep td.changed,
-.changed-cell {
+table.sweep td.changed {
   background: var(--changed-bg);
 }
-table.vdiffs td.before,
-.changed-cell .before {
+table.vdiffs td.before {
   color: var(--vscode-foreground);
   opacity: 0.75;
 }
-table.vdiffs td.after,
-.changed-cell .after {
+table.vdiffs td.after {
   color: var(--vscode-foreground);
   font-weight: bold;
 }
@@ -949,16 +864,7 @@ table.vdiffs td.after,
 .params .small {
   opacity: 0.9;
 }
-.sides > div {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 100%;
-}
-.sides {
-  min-width: 0;
-  flex: 1;
-}
+
 /* A draggable split: drag the graph's bottom-right corner to give it more or less room. */
 @media (max-width: 760px) {
   main .graph {
@@ -980,9 +886,6 @@ table.vdiffs td.after,
 .inline-compare {
   margin-top: 10px;
   border-top: 2px solid var(--vscode-focusBorder);
-}
-.knob .grow {
-  flex: 1;
 }
 
 :root {
@@ -1008,10 +911,7 @@ table.sweep th {
   font-size: 11.5px;
   opacity: 0.9;
 }
-.sides > div {
-  white-space: normal;
-  overflow: visible;
-}
+
 table.sweep tr.clickable:hover td {
   background: inherit;
   box-shadow: inset 0 0 0 999px color-mix(in srgb, var(--vscode-list-hoverBackground) 60%, transparent);
@@ -1083,21 +983,16 @@ table.sweep tr.open td:first-child {
   margin-bottom: 4px;
   overflow-wrap: anywhere;
 }
-.changed-list {
-  margin: 4px 0 6px;
-  overflow-wrap: anywhere;
-}
+
 .scenarios,
 .compare,
 .params {
   overflow-x: hidden;
 }
-table.sweep,
-table.results {
+table.sweep {
   max-width: 100%;
 }
-table.sweep td,
-table.results td {
+table.sweep td {
   white-space: normal;
 }
 @media (max-width: 520px) {
@@ -1117,30 +1012,21 @@ aside h3 .muted {
 .cluster text .kind {
   opacity: 1;
 }
-aside.strip {
-  flex: none !important;
-  min-height: 0 !important;
-  max-height: 2.4em;
-  overflow: hidden;
-}
+
 .pager {
   display: flex;
   gap: 8px;
   align-items: center;
   margin: 4px 0 8px;
 }
-.top-actions {
-  margin-bottom: 6px;
-}
+
 s.before {
   opacity: 0.75;
 }
 .nowrap {
   white-space: nowrap;
 }
-.unchanged-cell {
-  opacity: 0.9;
-}
+
 aside h3 {
   position: sticky;
   top: 0;
@@ -1370,10 +1256,6 @@ ul.explain .formula {
   }
 }
 
-.knob select[aria-label="knob kind"] {
-  width: auto;
-  flex: none;
-}
 .knob input.picker {
   flex: 2;
   min-width: 22em;
@@ -1439,31 +1321,12 @@ aside .actions {
   margin-top: 2px;
 }
 
-.edit-list {
-  font-weight: normal;
-  margin-top: 2px;
-}
 .edit-chip {
   display: inline-block;
   margin-right: 6px;
   padding: 0 6px;
   border: 1px solid var(--changed, orange);
   border-radius: 8px;
-}
-
-.results-scroll {
-  max-height: 45vh;
-  overflow: auto;
-  margin: 4px 0;
-}
-.results-scroll table.results th {
-  position: sticky;
-  top: 0;
-  background: var(--vscode-editor-background);
-}
-table.results td.unchanged-cell {
-  opacity: 0.6;
-  background: none;
 }
 
 .params tr.used-by-row td {
@@ -1527,13 +1390,7 @@ table.sweep td.changed .small {
 .result-head .decision.decline {
   color: var(--vscode-charts-red, #f14c4c);
 }
-.result-line {
-  padding-left: 8px;
-  overflow-wrap: anywhere;
-}
-.result-line .before {
-  opacity: 0.6;
-}
+
 details.no-offer {
   margin: 6px 0;
 }
@@ -1550,19 +1407,6 @@ details.no-offer summary {
   margin: 2px 0 6px;
   font-weight: 600;
   overflow-wrap: anywhere;
-}
-
-pre.banner-diff {
-  margin: 2px 0;
-  font-weight: normal;
-  white-space: pre-wrap;
-  font-size: 0.9em;
-}
-pre.banner-diff .added {
-  color: var(--vscode-gitDecoration-addedResourceForeground, #81b88b);
-}
-pre.banner-diff .removed {
-  color: var(--vscode-gitDecoration-deletedResourceForeground, #c74e39);
 }
 
 details.edit-menu {
@@ -1628,7 +1472,7 @@ details.edit-menu .edit-menu-body {
   overflow-x: auto;
   max-width: 100%;
 }
-.knob-now,
+
 .knob-echo {
   flex: 1 1 100%;
 }
@@ -1725,7 +1569,7 @@ table.sweep td {
 .scenarios .knob > button.link {
   grid-column: 2;
 }
-.scenarios .knob .knob-now,
+
 .scenarios .knob input.values,
 .scenarios .knob .knob-echo {
   grid-column: 1 / -1;
@@ -1780,30 +1624,11 @@ aside .wrote {
   padding: 1px 8px;
   cursor: pointer;
 }
-.pause-banner .edit-list {
-  display: inline;
-}
 
 .params .actions.sticky {
   background: var(--vscode-editor-background);
   padding: 6px 0;
   border-top: 1px solid var(--vscode-panel-border);
-}
-
-.edit-dropdown {
-  position: relative;
-}
-.edit-menu-pop {
-  position: absolute;
-  z-index: 10;
-  top: 100%;
-  left: 0;
-  min-width: 18em;
-  padding: 4px 8px;
-  font-weight: normal;
-  background: var(--vscode-editorWidget-background);
-  border: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border));
-  box-shadow: 0 2px 8px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.4));
 }
 
 table.waterfall {
@@ -1853,12 +1678,6 @@ table.sweep.grid td.unchanged {
   opacity: 0.55;
 }
 
-.pause-banner .edit-menu-pop {
-  position: static;
-  box-shadow: none;
-  margin: 3px 0 0;
-  min-width: 0;
-}
 .pause-banner {
   overflow-wrap: anywhere;
 }
@@ -1948,11 +1767,6 @@ details.step-code pre {
   border-color: var(--vscode-charts-purple, #b180d7);
 }
 
-.result-line a.why {
-  cursor: pointer;
-  color: var(--vscode-textLink-foreground);
-}
-
 table.changed-table tr.param-row td {
   font-weight: 600;
 }
@@ -2013,11 +1827,6 @@ aside {
     flex: 1;
     height: auto;
   }
-}
-
-.result-line.internal {
-  padding-left: 16px;
-  opacity: 0.75;
 }
 
 .node.edited-replace rect,
@@ -2325,10 +2134,7 @@ aside .watch-form {
 .controls-bar .chip.watch::first-letter {
   color: var(--vscode-debugIcon-breakpointForeground, #e51400);
 }
-.compare .lead {
-  font-weight: 600;
-  margin: 4px 0 8px;
-}
+
 aside .step-head {
   position: static;
   box-shadow: none;

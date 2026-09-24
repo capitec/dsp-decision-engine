@@ -141,7 +141,7 @@ export function Graph({ ir, showData, run, selected, highlightColumn, lineage, d
             </title>
             <rect width={n.width} height={n.height} rx={5} />
             <text x={n.width / 2} y={19} textAnchor="middle" className="title">
-              {n.node.kind === "call" && n.node.table ? "▦ " : n.node.kind === "call" && n.node.callKind === "row" ? "◇ " : n.node.kind === "call" && n.node.callKind === "frame" ? "⊞ " : n.node.kind !== "call" ? "⊞ " : ""}
+              {icon(n.node)}
               {n.label}
             </text>
             <text x={n.width / 2} y={35} textAnchor="middle" className="sub">{lines(n.node)[0]}</text>
@@ -158,6 +158,14 @@ export function Graph({ ir, showData, run, selected, highlightColumn, lineage, d
     </div>
   );
 
+  function foldedLines(paths: string[]): [string, string] {
+    const changed = diff ? paths.filter((p) => diff.get(p) === "changed" || diff.get(p) === "added").length : 0;
+    const ran = paths.filter((p) => done.has(p)).length;
+    const status = changed ? `${changed} changed` : ran ? `${ran} of ${paths.length} ran` : "";
+    return [`${paths.length} steps · click to open`, status];
+  }
+}
+
 /** A data edge: out of the right side of the writer, into the right side of the reader. */
 function curve(a: LaidNode, b: LaidNode): string {
   const [x1, y1] = [a.x + a.width, a.y + a.height / 2];
@@ -166,13 +174,7 @@ function curve(a: LaidNode, b: LaidNode): string {
   return `M${x1},${y1} C${x1 + bulge},${y1} ${x2 + bulge},${y2} ${x2},${y2}`;
 }
 
-  function foldedLines(paths: string[]): [string, string] {
-    const changed = diff ? paths.filter((p) => diff.get(p) === "changed" || diff.get(p) === "added").length : 0;
-    const ran = paths.filter((p) => done.has(p)).length;
-    const status = changed ? `${changed} changed` : ran ? `${ran} of ${paths.length} ran` : "";
-    return [`${paths.length} steps · click to open`, status];
-  }
-}
+const icon = (n: IRNodeJson) => (n.kind !== "call" ? "⊞ " : n.table ? "▦ " : n.callKind === "row" ? "◇ " : n.callKind === "frame" ? "⊞ " : "");
 
 /** Shortened to fit on a node; the node's tooltip has the whole text. */
 function fit(text: string): string {

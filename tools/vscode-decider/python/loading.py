@@ -1,16 +1,10 @@
-"""Importing a pipeline's files from their source as it is now, and diffing a step against the code that ran."""
+"""Importing a pipeline's files from their source as it is now."""
 from __future__ import annotations
 
-import difflib
 import importlib.util
-import inspect
 import sys
 import tempfile
 from pathlib import Path
-
-
-# Each loaded module file's text as it was loaded, so an edit can be diffed against the code that ran.
-TEXTS: dict[str, str] = {}
 
 
 def load_module(file):
@@ -20,15 +14,9 @@ def load_module(file):
     with tempfile.TemporaryDirectory(prefix="decider-pyc-") as fresh:
         before, sys.pycache_prefix = sys.pycache_prefix, fresh
         try:
-            mod = _import(file)
+            return _import(file)
         finally:
             sys.pycache_prefix = before
-    top = mod.__name__.split(".")[0]
-    for m in list(sys.modules.values()):
-        f = getattr(m, "__file__", None)
-        if f and (m.__name__ == top or m.__name__.startswith(top + ".")):
-            TEXTS[f] = Path(f).read_text()
-    return mod
 
 
 def _import(file):
@@ -48,15 +36,3 @@ def _import(file):
     sys.modules[name] = mod  # classes defined in it (ConfigurableSteps) resolve by import path
     spec.loader.exec_module(mod)
     return mod
-
-
-def source_diff(old, old_texts, new, new_texts):
-    """The lines that differ between two steps' Python, each read from its file as it was loaded, as `-`/`+` lines."""
-    def lines(step_, texts):
-        code = getattr(getattr(step_, "fn", None), "__code__", None)
-        text = code and texts.get(code.co_filename)
-        if not text:
-            return []
-        return [line.rstrip("\n") for line in inspect.getblock(text.splitlines(True)[code.co_firstlineno - 1:])]
-    return [line for line in difflib.unified_diff(lines(old, old_texts), lines(new, new_texts), lineterm="", n=0)
-            if line[:1] in "+-" and not line.startswith(("+++", "---"))]

@@ -4,11 +4,9 @@ import { formatValue, isRateName, type CallNodeJson, type Lineage } from "../src
 interface Props {
   entry: Lineage;
   who: string | null;
-  role: string;
   nodes: CallNodeJson[];
   /** The flow's PARAMS document: shared values and lookup tables' rows. */
   values: Record<string, unknown>;
-  onPick: (name?: string) => void;
   onSelect: (path: string) => void;
 }
 
@@ -18,9 +16,16 @@ const OPEN_DEPTH = 3;
 const short = (path: string) => path.slice(path.lastIndexOf("/") + 1);
 const shared = (values: Record<string, unknown>) => (values.shared ?? {}) as Record<string, unknown>;
 
+/** The row of a lookup table `entry` was matched on, when its producer is one. */
+function tableMatch(entry: Lineage | undefined, nodes: CallNodeJson[], values: Record<string, unknown>): [number, string] | null {
+  const node = nodes.find((n) => n.path === entry?.producer);
+  const rows = node?.table ? (Object.keys(node.params).map((k) => shared(values)[k]).find(Array.isArray) as Record<string, unknown>[] | undefined) : undefined;
+  return node?.table && rows && entry?.inputs[0] ? matchRow(node.table, rows, entry.inputs[0].value) : null;
+}
+
 /** `formula` with each name replaced by its value: "min(0.252, 0.0775 * 1 + 0.21)". */
 export function substitute(formula: string, known: Record<string, unknown>): string {
-  const filled = formula.replace(/\b[A-Za-z_]\w*\b/g, (name) => (name in known ? formatValue(known[name] as never, name) : name));
+  const filled = formula.replace(/\b[A-Za-z_]\w*\b/g, (name) => (name in known ? formatValue(known[name], name) : name));
   // A sum of many terms reads better without the ones that are zero.
   return filled.replace(/ [+-] 0%?(?![.\d%])/g, "").replace(/ \* 1(?![.\d%])/g, "").replace(/(^|[(\s])1 \* /g, "$1");
 }
@@ -104,37 +109,34 @@ export function matchRow(expr: Record<string, unknown>, rows: Record<string, unk
     });
     if (i < 0) return null;
     const r = rows[i];
-    const left = lo && r[lo] !== null ? `${formatValue(r[lo] as never)} ${upperInclusive ? "<" : "≤"} ` : "";
-    const right = hi && r[hi] !== null ? ` ${upperInclusive ? "≤" : "<"} ${formatValue(r[hi] as never)}` : "";
-    return [i, `${left}${expr.variable} ${formatValue(x as never)}${right}`];
+    const left = lo && r[lo] !== null ? `${formatValue(r[lo])} ${upperInclusive ? "<" : "≤"} ` : "";
+    const right = hi && r[hi] !== null ? ` ${upperInclusive ? "≤" : "<"} ${formatValue(r[hi])}` : "";
+    return [i, `${left}${expr.variable} ${formatValue(x)}${right}`];
   }
   if (expr.type === "eq") {
     const col = expr.value_column as string;
     const i = rows.findIndex((r) => r[col] === x);
-    return i < 0 ? null : [i, `${expr.variable} = ${formatValue(x as never)}`];
+    return i < 0 ? null : [i, `${expr.variable} = ${formatValue(x)}`];
   }
   return null;
 }
 
 /** How a value was computed for the focused record: each step's formula with the values it had, level by level. */
-export function Explain({ entry, who, role, nodes, values, onPick, onSelect }: Props) {
+export function Explain({ entry, who, nodes, values, onSelect }: Props) {
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => box.current?.scrollIntoView({ block: "start", behavior: "smooth" }), [entry.name, entry.producer]);
+  const summary = who && entry.producer !== null ? summaryRows(entry, nodes, values) : null;
   return (
     <div className="how" ref={box}>
       <div className="how-title">
         Why <span className="mono">{entry.name}{who ? ` = ${formatValue(entry.value, entry.name)}` : ""}</span>
         {who ? ` for ${who}` : ""}
-
-        {role && <span className="muted small"> ({role})</span>}
       </div>
-      {who && entry.producer !== null && summaryRows(entry, nodes, values) && (
-        <div className="verdict-line">{verdict(summaryRows(entry, nodes, values)!)}</div>
-      )}
-      {who && entry.producer !== null && summaryRows(entry, nodes, values) && (
+      {summary && <div className="verdict-line">{verdict(summary)}</div>}
+      {summary && (
         <table className="explain-summary">
           <tbody>
-            {summaryRows(entry, nodes, values)!.map((r, k) => (
+            {summary.map((r, k) => (
               <tr key={k} className={r.kind}>
                 <td>{r.label}</td>
                 <td className="mono num">{r.value}</td>
@@ -148,7 +150,7 @@ export function Explain({ entry, who, role, nodes, values, onPick, onSelect }: P
         <div>It is an input: it arrives with the data.</div>
       ) : (
         <ul className="explain">
-          <Level entry={entry} depth={0} nodes={nodes} values={values} who={who} onPick={onPick} onSelect={onSelect} />
+          <Level entry={entry} depth={0} nodes={nodes} values={values} who={who} onSelect={onSelect} />
         </ul>
       )}
       <div className="muted small">Click a value to open its own inputs; a step name selects it in the graph.</div>
@@ -195,15 +197,10 @@ export function summaryRows(entry: Lineage, nodes: CallNodeJson[], values: Recor
     const terms = sumTerms(node.formula);
     if (!terms || limits.length === 0) return null;
     const part = (name: string) => at!.inputs.find((i) => i.name === name);
-    const rows: SummaryRow[] = [];
-    const zeros: string[] = [];
-    terms.forEach(([sign, name], k) => {
+    const rows: SummaryRow[] = terms.map(([sign, name], k) => {
       const p = part(name);
-      if (p?.value === 0) zeros.push(name);
-      const from = nodes.find((x) => x.path === p?.producer);
-      const tableRows = from?.table ? (Object.keys(from.params).map((q) => shared(values)[q]).find(Array.isArray) as Record<string, unknown>[] | undefined) : undefined;
-      const match = from?.table && tableRows && p?.inputs[0] ? matchRow(from.table, tableRows, p.inputs[0].value) : null;
-      rows.push({ label: name, value: `${k === 0 ? "" : sign === "-" ? "− " : "+ "}${formatValue(p?.value as never, name)}`, note: match ? `row ${match[0] + 1}: ${match[1]}` : undefined, kind: p?.value === 0 ? "zero" : "part" });
+      const match = tableMatch(p, nodes, values);
+      return { label: name, value: `${k === 0 ? "" : sign === "-" ? "− " : "+ "}${formatValue(p?.value, name)}`, note: match ? `row ${match[0] + 1}: ${match[1]}` : undefined, kind: p?.value === 0 ? "zero" : "part" };
     });
     rows.push({ label: `= ${at.name}`, value: formatValue(at.value, at.name), kind: "total" });
     return [...rows, ...limits, { label: `= ${entry.name}`, value: formatValue(entry.value, entry.name), kind: "total" }];
@@ -211,7 +208,7 @@ export function summaryRows(entry: Lineage, nodes: CallNodeJson[], values: Recor
   return null;
 }
 
-function Level({ entry, depth, nodes, values, who, onPick, onSelect }: { entry: Lineage; depth: number; nodes: CallNodeJson[]; values: Record<string, unknown>; who: string | null; onPick: (n?: string) => void; onSelect: (p: string) => void }) {
+function Level({ entry, depth, nodes, values, who, onSelect }: { entry: Lineage; depth: number; nodes: CallNodeJson[]; values: Record<string, unknown>; who: string | null; onSelect: (p: string) => void }) {
   const [open, setOpen] = useState(depth < OPEN_DEPTH && !entry.setBy);
   const [showZeros, setShowZeros] = useState(false);
   // A term that is 0 for this record adds nothing to the answer; folded unless asked for, or when it's the only one.
@@ -220,8 +217,7 @@ function Level({ entry, depth, nodes, values, who, onPick, onSelect }: { entry: 
   const known: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(node?.params ?? {})) known[k] = shared(values)[k] ?? v;
   for (const i of entry.inputs) known[i.name] = i.value;
-  const rows = node?.table ? (Object.keys(node.params).map((k) => shared(values)[k]).find(Array.isArray) as Record<string, unknown>[] | undefined) : undefined;
-  const match = node?.table && rows && entry.inputs[0] ? matchRow(node.table, rows, entry.inputs[0].value) : null;
+  const match = tableMatch(entry, nodes, values);
   const expandable = entry.producer !== null && !entry.setBy && (entry.inputs.length > 0 || !!node?.formula);
   // A sum shows as a waterfall, which already names each part; its inputs' own breakdowns open on request.
   const terms = node?.formula ? sumTerms(node.formula) : null;
@@ -258,16 +254,14 @@ function Level({ entry, depth, nodes, values, who, onPick, onSelect }: { entry: 
           <tbody>
             {terms.map(([sign, n], k) => {
               const part = entry.inputs.find((i) => i.name === n);
-              const from = nodes.find((x) => x.path === part?.producer);
-              const partRows = from?.table ? (Object.keys(from.params).map((p) => shared(values)[p]).find(Array.isArray) as Record<string, unknown>[] | undefined) : undefined;
-              const row = from?.table && partRows && part?.inputs[0] ? matchRow(from.table, partRows, part.inputs[0].value) : null;
+              const row = tableMatch(part, nodes, values);
               return (
                 <tr key={n} className={part?.value === 0 ? "zero" : ""}>
                   <td>
                     <a title={part?.producer ? `Show ${short(part.producer)} in the graph` : n} onClick={() => part?.producer && onSelect(part.producer)}>{n}</a>
                   </td>
-                  <td className="mono num">{k === 0 ? "" : sign === "-" ? "− " : "+ "}{formatValue(part?.value as never, n)}</td>
-                  <td className="muted small">{row ? `row ${row[0] + 1} of ${short(from!.path)}: ${row[1]}` : ""}</td>
+                  <td className="mono num">{k === 0 ? "" : sign === "-" ? "− " : "+ "}{formatValue(part?.value, n)}</td>
+                  <td className="muted small">{row ? `row ${row[0] + 1} of ${short(part!.producer!)}: ${row[1]}` : ""}</td>
                 </tr>
               );
             })}
@@ -299,7 +293,7 @@ function Level({ entry, depth, nodes, values, who, onPick, onSelect }: { entry: 
       {open && entry.inputs.length > 0 && (!terms || partsOpen) && (
         <ul>
           {entry.inputs.filter((i) => !zero(i) || showZeros).map((i, k) => (
-            <Level key={k} entry={i} depth={depth + 1} nodes={nodes} values={values} who={who} onPick={onPick} onSelect={onSelect} />
+            <Level key={k} entry={i} depth={depth + 1} nodes={nodes} values={values} who={who} onSelect={onSelect} />
           ))}
           {!showZeros && entry.inputs.filter(zero).length > 1 && (
             <li className="muted small">

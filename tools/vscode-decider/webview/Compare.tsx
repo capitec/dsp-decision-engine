@@ -1,8 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { paramChangeLines, paramReaders, same, type Comparison, type ValueDiff } from "../src/compare";
 import { formatValue, recordLabel, type RecordKey } from "../src/protocol";
-import { distinct } from "./ResultCards";
-import { headline, ResultCards } from "./ResultCards";
+import { distinct, headline, ResultCards } from "./ResultCards";
 
 interface Props {
   comparison: Comparison | null;
@@ -12,8 +11,6 @@ interface Props {
   onSelect: (path: string) => void;
   onCompareRevision: () => void;
   onOpenDiff: (path: string) => void;
-  /** Set when the comparison was opened from somewhere to go back to, e.g. "6 scenarios". */
-  back?: { label: string; go: () => void };
   /** Shown above the comparison, e.g. a scenario pager. */
   header?: ReactNode;
   /** Focus a record in the paused debugger; absent when no session is running. */
@@ -51,9 +48,8 @@ function Diffs({ diffs, record, keyCol, results }: { diffs: ValueDiff[]; record:
   );
 }
 
-/** The result columns that changed, for the records they changed on; the unchanged ones on request. */
 /** Two runs side by side, step by step, in execution order. */
-export function Compare({ comparison: c, busy, error, record, onSelect, onCompareRevision, onOpenDiff, back, header, withRevision = true, onFocus }: Props) {
+export function Compare({ comparison: c, busy, error, record, onSelect, onCompareRevision, onOpenDiff, header, withRevision = true, onFocus }: Props) {
   const [onlyChanges, setOnlyChanges] = useState(true);
   const [showDeclinedOnly, setShowDeclinedOnly] = useState(false);
   const [showSwitched, setShowSwitched] = useState(false);
@@ -107,17 +103,15 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
   const docHas = (path: string) => path.split("/").reduce<unknown>((d, part) => (d as Record<string, unknown> | undefined)?.[part], c.paramsDocs?.b) !== undefined;
   const readers = paramReaders(c.paramsDocs?.b, c.sharedUsers);
   const readsChanged = (path: string) => readers.some((r) => r.steps.includes(path));
-  const edited = (s: (typeof c.steps)[number]) => s.status !== "changed" || s.structural.length > 0 || s.paramChanges.length > 0 || docHas(s.path) || readsChanged(s.path);
   const ownChange = (s: (typeof c.steps)[number]) => s.status !== "changed" || s.structural.length > 0 || s.paramChanges.length > 0 || docHas(s.path);
+  const edited = (s: (typeof c.steps)[number]) => ownChange(s) || readsChanged(s.path);
   const label = (s: (typeof c.steps)[number]) =>
     ownChange(s) ? s.status : readsChanged(s.path) ? `reads ${readers.filter((r) => r.steps.includes(s.path)).map((r) => r.param).join(", ")}` : "affected";
   const outcomes = Object.keys(c.results.b);
   const movedOut = outcomes
     .map((n) => ({ n, k: Array.from({ length: c.rows }, (_, r) => r).filter((r) => !same(c.results.a[n]?.[r], c.results.b[n]?.[r])).length }))
     .filter((x) => x.k > 0);
-  const paramLines = [
-    ...paramChangeLines(c.paramsDocs?.b, c.values?.a),
-  ];
+  const paramLines = paramChangeLines(c.paramsDocs?.b, c.values?.a);
   // The edited steps are the causes; the rest only follow from them.
   const touched = c.steps.filter((s) => s.status !== "same" && s.status !== "not run");
   // Readers of a changed param that wrote the same values: one line, not rows of zeros.
@@ -131,14 +125,11 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
     decision && readers.length && touched.length && !touchedApproved.size
       ? `For the ${approved.length} approved applicants, none of the ${[...new Set(readers.flatMap((r) => r.steps))].length} steps that read ${readers.map((r) => r.param).join(", ")} changed a value; only declined records moved.`
       : null;
-  const rowEdits = (param: string) =>
-    paramChangeLines(c.paramsDocs?.b, c.values?.a)
-      .filter((l) => l.startsWith(`${param} row`))
-      .map((l) => l.slice(param.length + 1));
+  const rowEdits = (param: string) => paramLines.filter((l) => l.startsWith(`${param} row`));
   // Param edits lead: the edit itself, then the steps that moved because they read it.
   const paramRows = readers.map((r) => {
     const moved = c.steps.filter((st) => r.steps.includes(st.path) && st.outputs.length);
-    const lines = paramChangeLines(c.paramsDocs?.b, c.values?.a).filter((l) => l.startsWith(`${r.param}:`) || l.startsWith(`${r.param} `));
+    const lines = paramLines.filter((l) => l.startsWith(`${r.param}:`) || l.startsWith(`${r.param} `));
     const where = r.steps.length > 1 || (c.values?.b as Record<string, Record<string, unknown>> | undefined)?.shared?.[r.param] !== undefined ? (c.valuesFile ?? "shared params") : (r.steps[0] ?? "").split("/").slice(-2, -1)[0] ?? "";
     return { param: r.param, steps: r.steps, moved, where, lines: lines.map((l) => l.replace(new RegExp(`^${r.param}:? ?`), "")), records: new Set(moved.flatMap((st) => st.outputs.flatMap((o) => o.changedRows))).size };
   });
@@ -151,7 +142,6 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
   const idle = readers.filter((p) => p.steps.length && !p.steps.some((s) => c.steps.find((x) => x.path === s)?.outputs.length));
   return (
     <div className="compare">
-      {back && <a className="back" onClick={back.go}>← Back to {back.label}</a>}
       <div className="compare-top">
         <h3 className="compare-title">{c.forced ? forcedTitle(c) : c.b}</h3>
         {withRevision && <a className="small" onClick={onCompareRevision}>compare with a git revision…</a>}
