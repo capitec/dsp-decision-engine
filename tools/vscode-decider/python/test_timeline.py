@@ -58,6 +58,11 @@ def test_a_step_that_passes_an_input_on_names_it_and_where_it_came_from():
     assert "via" not in shrunk
 
 
+def test_a_record_that_left_a_loop_is_not_said_to_be_kept_by_later_iterations():
+    h = finished().handle({"cmd": "changes", "name": "offer", "row": 1})
+    assert [c["path"] for c in h["changes"]] == ["sizing/offer"]  # record 2 never loops
+
+
 def test_the_batch_history_counts_the_records_each_change_touched():
     h = finished().handle({"cmd": "changes", "name": "offer"})
     assert h["changes"][0]["rows"] == 2 and h["changes"][1]["rows"] == 1

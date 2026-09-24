@@ -83,7 +83,9 @@ export function activate(ctx: vscode.ExtensionContext) {
     }),
 
     vscode.commands.registerCommand("decider.whatIf", async (uri?: vscode.Uri) => {
-      if (uri || !GraphPanel.current) await vscode.commands.executeCommand("decider.visualise", uri);
+      // From the palette: the flow in the active editor, not whichever one the panel last showed.
+      const target = uri ?? vscode.window.activeTextEditor?.document.uri;
+      if (!GraphPanel.current || (target && target.fsPath !== shown?.file)) await vscode.commands.executeCommand("decider.visualise", target);
       GraphPanel.post({ type: "tab", tab: "params" });
     }),
 

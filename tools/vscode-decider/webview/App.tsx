@@ -140,6 +140,8 @@ export function App() {
           break;
         case "compare":
           setCompare(m);
+          // A new comparison colours the graph, even if a debug run hid an earlier one's colours.
+          if (m.comparison) setShowDiff(true);
           // Start where the runs first differ.
           if (m.comparison) setSelected(m.comparison.firstDivergence ?? m.comparison.steps.find((s) => s.status !== "same" && s.status !== "not run")?.path);
           break;

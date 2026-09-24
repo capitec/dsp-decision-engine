@@ -44,8 +44,11 @@ describe("decider in VSCodium", () => {
   it("runs the flow to a breakpoint and shows the state for one record", async () => {
     await c.page.locator(".explorer-folders-view .monaco-list-row", { hasText: "loan.py" }).click();
     await goToLine(CAP_PUBLIC_LINE);
-    await c.page.keyboard.press("F9");
+    // F9 can land outside the editor when the explorer has focus; the command always acts on the editor.
+    await c.command("Debug: Toggle Breakpoint");
     await goToLine(PIPELINE_LINE);
+    // Jumping scrolls the editor, which re-provides the lenses: a click before they settle hits a stale command.
+    await c.page.waitForTimeout(2000);
     await lens("Run flow").click();
     await c.page.locator(".quick-input-widget .quick-input-list .monaco-list-row", { hasText: "SAMPLE" }).click();
     const wv = c.webview();
@@ -56,7 +59,7 @@ describe("decider in VSCodium", () => {
     await wv.locator(".pause-banner", { hasText: "cap_public" }).waitFor({ timeout: 30_000 });
     await wv.locator("select[aria-label=record]").selectOption("1");
     await wv.locator(".chip", { hasText: "term_cap" }).first().click();
-    await wv.locator(".how-title", { hasText: "term_cap = " }).waitFor();
+    await wv.locator(".timeline h4", { hasText: "How term_cap changed" }).waitFor();
     await c.shot("03-paused-record");
     await wv.locator("header nav button", { hasText: "State" }).click();
     await wv.locator("td", { hasText: "requested_amount" }).first().waitFor();
@@ -94,5 +97,28 @@ describe("decider in VSCodium", () => {
     await wv.locator(".compare .compare-title", { hasText: "uncommitted" }).waitFor({ timeout: 90_000 });
     await c.shot("09-compare-revision");
     expect(await wv.locator(".compare").innerText()).not.toContain("Error");
+  }, 150_000);
+
+  it("edits a plain step's parameter table in What-if", async () => {
+    await c.page.keyboard.press("Control+P");
+    await c.page.keyboard.type("ladder.py", { delay: 20 });
+    await c.page.locator(".quick-input-list .monaco-list-row", { hasText: "ladder.py" }).first().waitFor({ timeout: 15_000 });
+    await c.page.keyboard.press("Enter");
+    // Keys go to whatever has focus (the debug views here): give the editor focus before jumping.
+    await c.page.locator(".monaco-editor .view-lines:visible").first().click();
+    await goToLine(14);
+    await c.page.waitForTimeout(2000);
+    await c.page.locator(".codelens-decoration a:visible", { hasText: "What-if" }).first().click();
+    const wv = c.webview();
+    const cell = wv.locator('input[aria-label="ladder row 2 rate"]');
+    await cell.waitFor({ timeout: 60_000 });
+    await cell.fill("10%");
+    await c.shot("10-param-table");
+    await wv.locator("button", { hasText: "Run and compare" }).click();
+    await wv.locator(".compare .compare-title").waitFor({ timeout: 90_000 });
+    const text = await wv.locator(".compare").innerText();
+    expect(text).not.toContain("Error");
+    expect(text).toContain("10%");
+    await c.shot("11-param-table-compare");
   }, 150_000);
 });

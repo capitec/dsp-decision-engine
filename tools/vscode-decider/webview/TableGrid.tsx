@@ -2,7 +2,7 @@ import { formatValue } from "../src/protocol";
 
 interface Props {
   name: string;
-  /** Column name -> polars dtype, e.g. `{"min_term": "Float64"}`. */
+  /** Column name -> dtype: polars for decision tables (`{"min_term": "Float64"}`), Python for a param_table (`"float"`). */
   columns: Record<string, string>;
   rows: Record<string, unknown>[];
   /** The rows the flow runs with, to mark edited cells. */
@@ -25,7 +25,8 @@ export function header(col: string, expr?: Record<string, unknown> | null): stri
 const isPercent = (col: string, rows: Record<string, unknown>[]) =>
   /rate|loading|discount/.test(col) && rows.every((r) => typeof r[col] !== "number" || Math.abs(r[col] as number) < 1);
 
-const numeric = (dtype: string) => /^(Float|Int|UInt)/.test(dtype);
+// Polars dtypes for decision tables ("Float64"), Python types for a step's param_table ("float").
+const numeric = (dtype: string) => /^(float|int|uint)/i.test(dtype);
 
 /** Cells as typed (text while editing) converted to the column's type. */
 export function tableRows(rows: Record<string, unknown>[], columns: Record<string, string>): Record<string, unknown>[] {
@@ -34,6 +35,7 @@ export function tableRows(rows: Record<string, unknown>[], columns: Record<strin
 
 function parseCell(text: string, dtype: string): unknown {
   if (text.trim() === "") return null;
+  if (/^bool/i.test(dtype) && /^(true|false)$/i.test(text.trim())) return text.trim().toLowerCase() === "true";
   if (numeric(dtype)) {
     const n = Number(text.replace(/[\s,%]/g, "")) / (text.trim().endsWith("%") ? 100 : 1);
     return Number.isNaN(n) ? text : n;

@@ -58,6 +58,8 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
   const paused = run.current && !run.finished;
   const ran = !!node && run.finishedPaths.includes(node.path);
   const card = lineage && lineage.name === column && !lineage.unset ? lineage : null;
+  const latest = history && history.name === column ? history.changes.filter((c) => !c.pending && !c.kept).at(-1) : undefined;
+  const behind = !!card && run.record !== null && latest?.value !== undefined && !same(latest.value, card.value);
   const table = node ? tableOf(node, values) : null;
   // A cap or floor step, once run for the focused record: whether its limit bound.
   const raw = (name: string) => columns?.find((x) => x.name === name)?.value;
@@ -76,7 +78,7 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
     pane.current?.scrollTo(0, 0);
     // A lookup table's answer is its matched row: bring it into view once the pane has laid out.
     // So is an open breakdown of a value.
-    const t = setTimeout(() => (pane.current?.querySelector(".table-match") ?? pane.current?.querySelector(".how"))?.scrollIntoView({ block: "start" }), 60);
+    const t = setTimeout(() => (pane.current?.querySelector(".table-match") ?? pane.current?.querySelector(".timeline") ?? pane.current?.querySelector(".how"))?.scrollIntoView({ block: "start" }), 60);
     return () => clearTimeout(t);
   }, [node?.path, path?.row, card?.name]);
   const atThis = !!node && run.current?.path === node.path && run.current.when === "before" && !run.finished;
@@ -118,8 +120,9 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
           {controls}
           {history && history.name === column && <ValueTimeline history={history} who={who} current={run.current} onSelect={onSelect} onGoTo={onGoTo} />}
           {card && !(path && table) && (history?.name === card.name ? (
-            <details className="breakdown">
-              <summary>How {card.name} is calculated, step by step</summary>
+            // Mid-loop, the breakdown follows the loop's carried value, one round behind what the history says now.
+            <details className="breakdown" open={!behind || undefined}>
+              <summary>How {card.name} is calculated, step by step{behind ? " (as of the loop's last finished round)" : ""}</summary>
               <Explain entry={card} who={who} role="" nodes={nodes} values={values} onPick={onPick} onSelect={onSelect} />
             </details>
           ) : (
@@ -226,6 +229,7 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
               {comparison && <div className="muted">before → after</div>}
               {Object.entries(node.params).map(([k, v]) => {
                 if (table?.name === k) return <div key={k} className="mono">{k} = lookup table, {table.rows.length} rows <span className="muted small">(edit its rows in What-if)</span></div>;
+                if (Array.isArray(v)) return <div key={k} className="mono">{k} = table, {v.length} row{v.length === 1 ? "" : "s"} by default <span className="muted small">(edit its rows in What-if)</span></div>;
                 const [a, b] = comparison ? sides(comparison, node, k, v) : [v, v];
                 return (
                   <div key={k} className="mono">
