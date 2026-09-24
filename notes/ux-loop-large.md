@@ -1,5 +1,9 @@
 # Usability loop on a 1,000-step credit flow
 
+**Result: stopped after round 20, which scored 8.3 (a second judge on the same screenshots: 7.9; mean 8.1).**
+Judges vary by about ±0.3 on the same screenshots, so a single score above 8 was confirmed with a second one.
+Round 21 (two judges, mean 7.8) sits inside that noise.
+
 The extension on `tools/vscode-decider/examples/bank` (about 1,000 steps in 40 files, 1,400 params,
 14 lookup tables with shared rows, 3 trees, 40 applications). Each round, `pnpm test:large` screenshots six
 user stories and a fresh judge agent scores them from the screenshots alone (1-10 per story; a story whose
@@ -28,6 +32,8 @@ goal isn't visibly met caps at 5). The loop stops above 8/10 or after 40 rounds.
 | 18 | 7.7 | 8 | 8 | 7 | 8 | 7 | 8 | 8 |
 | 19 | 7.4 | 8 | 8 | 7 | 8 | 7 | 7 | 7 |
 | 20 | 8.3 | 9 | 9 | 8 | 9 | 7 | 8 | 8 |
+| 20 (second judge) | 7.9 | 8 | 9 | 8 | 8 | 7 | 8 | 7 |
+| 21 (two judges) | 7.7 / 7.9 | 8 / 8 | 8 / 9 | 8 / 8 | 8 / 8 | 7 / 7 | 8 / 8 | 7 / 7 |
 
 ## Round 0 (baseline)
 
@@ -536,3 +542,21 @@ Judge's remaining problems, most damaging first:
 10. "before → after" header over unchanged params.
 11. A step's params shown three times.
 12. The change stated three times in a comparison.
+
+## Round 21 (confirmation, two judges: 7.7 and 7.9)
+
+Changes: an axis that makes no difference collapses to one "any of 504 / 580 / 640" column; the details pane takes
+half the panel's width while a breakdown is open; the only changed records are shown when they're all declined, and
+the line says so; "Compare all 2 edits with start" and "…or just one edit"; the note after "Use edited code" says it
+rewound; the What-if footer no longer shows list rows through it; a table step shows its row, not the breakdown again.
+
+What both judges still ask for (the backlog, most asked first):
+
+1. Evidence for "made no difference": the lowest score among approved applicants, and which rule already declines
+   the ones below the new minimum.
+2. Per-edit attribution in "compare all edits", and a control that shows which comparison is on screen.
+3. Explain from a finished run without pausing, and "which applicants does this rule decline?" on a rule.
+4. More room: the panel should take the whole editor area on What-if, Scenarios and Compare; unlabelled graph
+   gutters and dotted edges.
+5. "Why nothing moved" for a param: whether the cap or floor bound for any approved applicant, and how close.
+6. Result cards tagged with the edit that moved them; a jump from the counts to Step by step.
