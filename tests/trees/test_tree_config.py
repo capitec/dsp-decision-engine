@@ -155,11 +155,15 @@ def _rule(rng, depth, names, leaves):
             "otherwise": 2, "branches": branches}
 
 
-def _to_v3(rule) -> tuple[list, list]:
-    nodes, edges = [], []
+def _to_v3(rule, share=False) -> tuple[list, list]:
+    # With `share`, equal subtrees become one node with several parents, so the tree is a DAG.
+    nodes, edges, seen = [], [], {}
 
     def add(r):
-        nid = f"n{len(nodes)}"
+        key = json.dumps(r, sort_keys=True)
+        if share and key in seen:
+            return seen[key]
+        nid = seen[key] = f"n{len(nodes)}"
         data = {k: v for k, v in r.items() if k not in ("then", "otherwise", "branches")}
         nodes.append({"id": nid, "data": data})
         if r["type"] == "cases":
@@ -192,9 +196,9 @@ def _frame(rng, n=120):
     })
 
 
-def _config(name, doc, reads, path=None):
+def _config(name, doc, reads, path=None, trace=None):
     types = {f: "int" for f in ("i0", "i1") if f in reads}
-    return TreeConfig(name=name, tree=doc, feature_types=types, path_output=path)
+    return TreeConfig(name=name, tree=doc, feature_types=types, path_output=path, trace_output=trace)
 
 
 def _reads(doc):
@@ -214,6 +218,14 @@ def test_random_trees_agree_across_walkers_modes_and_formats(seed, run):
     v3 = {"nodes": nodes, "edges": edges, "output": output}
     a = run(_config("t", flat, _reads(flat)), df)
     assert a.equals(run(_config("t", v3, _reads(flat)), df))
+    # The ordered path from both walkers, on the tree and on the same tree with shared nodes.
+    for doc in (v3, dict(zip(("nodes", "edges"), _to_v3(root, share=True)), output=output)):
+        traced = run(_config("t", doc, _reads(flat), path="leaf", trace="trace"), df)
+        assert traced.drop("leaf", "trace").equals(a)
+        ids = {n["id"] for n in doc["nodes"]}
+        for leaf, trace in traced.select("leaf", "trace").rows():
+            assert trace.startswith("n0") and set(trace.split(">")) <= ids
+            assert leaf is None or trace.endswith(">" + leaf) or trace == leaf
     refs = json.dumps(flat).split('"param": "')[1:]
     if refs:
         run(_config("t", flat, _reads(flat)), df, {"t": {r.split('"')[0]: 1 for r in refs}})
@@ -222,10 +234,10 @@ def test_random_trees_agree_across_walkers_modes_and_formats(seed, run):
              for k in range(3)]
     for mode in ("first_match", "all"):
         doc = {"type": "prioritized_flat_rule", "mode": mode, "rules": rules, "output": output}
-        out = run(_config("p", doc, _reads(doc), path="leaf"), df)
+        out = run(_config("p", doc, _reads(doc), path="leaf", trace="trace"), df)
         if mode == "all":
             assert [c for c in out.columns if "." in c] == [
-                f"{r}.{c}" for r in ("rule_0", "r1", "r2") for c in ("label", "pts", "band", "flag", "leaf")]
+                f"{r}.{c}" for r in ("rule_0", "r1", "r2") for c in ("label", "pts", "band", "flag", "leaf", "trace")]
 
 
 def _two_leaves_one_row(**config) -> TreeConfig:

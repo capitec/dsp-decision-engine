@@ -1,0 +1,3 @@
+DECIDER_API__PIPELINE={{name}}.pipeline:build
+DECIDER_API__HANDLER={{name}}.inference:Handler
+DECIDER_CONFIG__BASEPATH=configs

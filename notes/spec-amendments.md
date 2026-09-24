@@ -161,3 +161,78 @@ where they disagree, this file wins.
   from the first change; `Session.watch(fn)` (IPython after-cell hook) and
   `ModuleWatcher("module:attr")` (source files) call it. Serving never
   hot-reloads; it keeps explicit stage/activate.
+
+## 2026-09-24, framework fix round
+
+- **Frame steps take params:** `fn(df, **params)`; `param()` declarations in a
+  frame function's signature work like scalar steps'.
+- **One type per input column:** two steps reading one input column with
+  different annotations is a `WiringError` (annotate both the same; convert
+  inside the step that needs the other type).
+- **Compiled modes run what they can't compile in Python:** a step compiled
+  modes refuse (e.g. comparing two `str` inputs) runs as a per-step Python
+  fallback with a one-time warning; `SteppedRunner(strict=True)` raises instead.
+- **Serving:** `code_path` always first on `sys.path`; warm-up uses
+  `sample_request.json` when present; JSON inputs are coerced to declared
+  `date`/`datetime`/`list`/TypedDict annotations; `RequestHandler.warm_fn` is
+  overridable; `from decider.serving import RequestHandler`.
+## 2026-09-24, trees, tables and registry fixes
+
+- **`TreeConfig.trace_output: str | None`** adds a String output holding the
+  ordered path, the ids of every node walked joined with `>`, from both
+  walkers in every mode (per rule in `all` mode; in `first_match`, the path
+  in the rule that answered, else the last rule's).
+- **Decision-table band ladders are per `eq` group.** Rows with equal `eq`
+  column values form one ladder: open edges (`None`), neighbour fill and
+  contiguity apply within it.
+- **Built-in tags resolve lazily.** `tree`, `decision_table` and `scorecard`
+  resolve without their modules imported first (`BaseRegistryModule.lazy`).
+
+## 2026-09-24, fix-round follow-ups (FIX-H)
+
+- **`Engine(strict_compile=True)`** passes `strict` to the stepped and fused
+  runners.
+- **`round(x, n)` in kernels equals CPython's** for float `x` and
+  `|n| <= 22` (exact half-to-even on the double's value); beyond 22 digits it
+  scales and rounds. **`x ** n`** (float `x`, int `n`) calls libm `pow` like
+  CPython instead of multiplying by squaring (a literal `x ** 2` still
+  compiles to `x * x`).
+- **Typed frame reads:** `frame_step(reads={"accounts": list[Account]})`
+  gives read columns types, like a plain step's annotations (JSON date
+  coercion, one type per input column). A list keeps them untyped.
+- **An input column is described by its first typed reader**, so an untyped
+  frame step reading it first no longer hides a later step's `date`.
+- **JSON coercion keeps undeclared TypedDict keys**: a TypedDict naming only
+  the date fields leaves the rest of each dict as sent.
+
+## 2026-09-24, parameter tables for plain steps (FIX-G)
+
+- **`param_table(columns, default=[...] | required=True, shared_key=None)`**
+  (`from decider import Table, param_table`) declares a table-valued param in
+  a plain step's signature, like `param()`: `rates: Table = param_table({"floor":
+  int, "rate": float}, default=[...])`. Columns are `int`, `float` or `bool`
+  and must be identifiers (they become namedtuple fields); string columns are
+  refused (use a `DecisionTableConfig`, or code the key as an int).
+- **Representation:** the step receives a namedtuple (`bundle_class` of the
+  column names, so numba's disk cache can pickle it) of read-only 1-D numpy
+  arrays (int64, float64, bool), in every mode. It is a runtime argument in
+  the params bundle, never a constant, so row edits and row counts keep one
+  numba type; only a column change recompiles. `Table` is `Any`, for readers.
+  A direct call of the plain function gets the default table itself.
+- **Validation:** the `ParamDecl`'s annotation is `table_type(schema)`, a
+  cached `Annotated[list[TypedDict], AfterValidator(to columns)]` (strict,
+  extra keys forbidden), one object per schema so shared tables compare
+  equal. Errors read `<path>: param 'rates': row 1, column 'floor': ...;
+  expected a list of rows like [{"floor": int, "rate": float}, ...]`.
+- **`parameters()`** reports every table as `{"type": "table", "schema": ...}`
+  plus `"default": rows` or `"required": True` (tables of a
+  `DecisionTableConfig` too); **`defaults()`** shows a required table as `[]`
+  instead of leaving it out; **`json_schema()`** gives each table's column
+  types, `additionalProperties: false` and its default rows.
+- **Params errors:** a nested pydantic `missing` (a row lacking a column) is no
+  longer reported as "param is required but missing"; a missing required
+  table's error names its expected rows. `ParamRef.param` and `TableRef.table`
+  must be identifiers (not keywords, no leading `_`); a bad one fails at load
+  with a suggestion (`hi-cut` -> `hi_cut`).
+- Interpreted mode indexes numpy arrays, so a table value is a numpy scalar
+  there (`x / 0.0` on one gives `inf` with a warning where a kernel raises).

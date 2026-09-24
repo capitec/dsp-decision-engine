@@ -1,0 +1,20 @@
+{
+  "account_id": 12345,
+  "product_code": 20,
+  "client_id": 98765,
+  "current_limit": 15000.0,
+  "current_balance": 7500.0,
+  "months_on_book": 24,
+  "revolving_utilisation_6m": 0.50,
+  "arrears_worst_3m": 0,
+  "arrears_worst_24m": 0,
+  "cycles_ever_past_due": 0,
+  "over_limit_count_12m": 0,
+  "cash_withdrawal_ratio_12m": 0.20,
+  "spend_percentile_90_6m": 800.0,
+  "has_auto_increase_consent": true,
+  "treatment_state_code": 0,
+  "gross_monthly_income": 10000.0,
+  "existing_obligations": 2000.0,
+  "decision_date": "2026-09-24"
+}

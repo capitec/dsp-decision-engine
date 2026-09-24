@@ -1,0 +1,118 @@
+{
+  "limit_mgmt": {
+    "exclusions": {
+      "exclusion_codes": {
+        "cooling_off_days_card": 180,
+        "cooling_off_days_facility": 180,
+        "minimum_months_on_book": 6
+      }
+    },
+    "scoring": {
+      "apply_behaviour_score_adjustments": {
+        "adjustment_stack_enabled": true
+      },
+      "apply_probability_of_default_adjustments": {
+        "adjustment_stack_enabled": true
+      }
+    },
+    "matrix": {
+      "apply_matrix_multiplier_excess_adjustments": {
+        "adjustment_stack_enabled": true
+      },
+      "apply_cycle_cap": {
+        "cycle_cap_enabled": false,
+        "cycle_cap_amount": 5000.0
+      }
+    },
+    "caps": {
+      "cap_income_multiple": {
+        "income_multiple": 4.0
+      },
+      "cap_total_exposure": {
+        "exposure_multiple": 8.0,
+        "exposure_absolute_cap": 450000.0
+      },
+      "cap_observed_spend": {
+        "spend_multiple": 3.5,
+        "spend_floor": 2000.0
+      }
+    },
+    "affordability_bridge": {
+      "evidence": {
+        "applicant1_income": {
+          "gross_monthly_income": {
+            "statement_confidence_threshold": 0.7,
+            "haircut_payslip": 0.05,
+            "haircut_statement_high_confidence": 0.1,
+            "haircut_statement_low_confidence": 0.25,
+            "haircut_declared": 0.2,
+            "haircut_bureau_estimated": 0.3
+          },
+          "income_source_code": {
+            "statement_confidence_threshold": 0.7
+          },
+          "income_haircut_applied": {
+            "statement_confidence_threshold": 0.7,
+            "haircut_payslip": 0.05,
+            "haircut_statement_high_confidence": 0.1,
+            "haircut_statement_low_confidence": 0.25,
+            "haircut_declared": 0.2,
+            "haircut_bureau_estimated": 0.3
+          }
+        },
+        "applicant2_income": {
+          "gross_monthly_income": {
+            "statement_confidence_threshold": 0.7,
+            "haircut_payslip": 0.05,
+            "haircut_statement_high_confidence": 0.1,
+            "haircut_statement_low_confidence": 0.25,
+            "haircut_declared": 0.2,
+            "haircut_bureau_estimated": 0.3
+          },
+          "income_source_code": {
+            "statement_confidence_threshold": 0.7
+          },
+          "income_haircut_applied": {
+            "statement_confidence_threshold": 0.7,
+            "haircut_payslip": 0.05,
+            "haircut_statement_high_confidence": 0.1,
+            "haircut_statement_low_confidence": 0.25,
+            "haircut_declared": 0.2,
+            "haircut_bureau_estimated": 0.3
+          }
+        },
+        "household_income_verification_tier": {
+          "minor_contribution_threshold": 0.1
+        },
+        "bureau_is_stale": {
+          "staleness_window_days": 7,
+          "staleness_window_days_mortgage": 14
+        },
+        "minimum_income_tier": {
+          "minimum_tier_new_application": 4,
+          "minimum_tier_limit_increase": 3,
+          "minimum_tier_arrangement": 6,
+          "minimum_tier_scenario": 4
+        }
+      },
+      "apply_affordability_buffer_applied_adjustments": {
+        "adjustment_stack_enabled": true
+      },
+      "capacity": {
+        "overlay": {
+          "apply_max_affordable_instalment_adjustments": {
+            "adjustment_stack_enabled": true
+          }
+        },
+        "affordability_verdict_code": {
+          "marginal_band": 0.05
+        }
+      },
+      "increase_path_code": {
+        "income_staleness_max_days": 45,
+        "bureau_staleness_max_days": 35,
+        "obligations_growth_threshold": 0.25
+      }
+    }
+  }
+}
