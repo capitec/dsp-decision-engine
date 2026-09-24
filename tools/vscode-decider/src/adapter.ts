@@ -24,7 +24,9 @@ import {
   walk,
   type Checkpoint,
   type ColumnSummary,
+  type Controls,
   type DescribeResult,
+  type Hit,
   type IRNodeJson,
   type Lineage,
   type RecordKey,
@@ -66,6 +68,7 @@ export class DeciderDebugSession extends LoggingDebugSession {
   private visits: Visits = {};
   private edits: Record<string, "delete" | "replace"> = {};
   private record: number | null = null;
+  private hit: Hit | null = null;
   private handles = new Handles<VarRef>();
   private frameIds = new Map<number, string>();
   private stateCache?: Promise<{ columns: ColumnSummary[]; key: RecordKey }>;
@@ -147,6 +150,8 @@ export class DeciderDebugSession extends LoggingDebugSession {
       data: a.data ?? null,
       params: a.params ?? null,
       breakpoints: this.desiredBreakpoints(),
+      forces: a.controls?.forces ?? [],
+      watches: a.controls?.watches ?? [],
     });
     this.applied = new Set(this.desiredBreakpoints());
     this.apply(status, false);
@@ -213,9 +218,12 @@ export class DeciderDebugSession extends LoggingDebugSession {
     const paused = reason ?? read.paused;
     this.current = status.current;
     this.finished = status.finished;
+    this.hit = status.hit ?? null;
+    if (this.hit) this.sendEvent(new OutputEvent(`decider: paused on ${this.hit.text}\n`, "console"));
     this.refresh();
     if (!stop) return;
     if (status.error) this.sendEvent(new StoppedEvent("exception", THREAD, status.error));
+    else if (this.hit) this.sendEvent(new StoppedEvent("data breakpoint", THREAD, this.hit.text));
     else if (this.finished) this.sendEvent(new TerminatedEvent());
     else this.sendEvent(new StoppedEvent(paused ?? "step", THREAD));
   }
@@ -224,7 +232,7 @@ export class DeciderDebugSession extends LoggingDebugSession {
   private refresh() {
     this.stateCache = undefined;
     this.handles.reset();
-    const body: RunStatus = { current: this.current, finished: this.finished, finishedPaths: this.finishedPaths, visits: this.visits, record: this.record, edits: this.edits };
+    const body: RunStatus = { current: this.current, finished: this.finished, finishedPaths: this.finishedPaths, visits: this.visits, record: this.record, edits: this.edits, hit: this.hit };
     this.sendEvent(new Event("decider.status", body));
   }
 
@@ -483,6 +491,12 @@ export class DeciderDebugSession extends LoggingDebugSession {
           break;
         case "decider.sweep":
           response.body = await this.bridge!.request("sweep", { scenarios: args.scenarios, from_here: true });
+          break;
+        case "decider.setControls":
+          // Kept for a restart; a session not started yet picks them up when it starts.
+          this.launchArgs!.controls = args as unknown as Controls;
+          // Nothing runs, so no status: the views keep their selection.
+          if (this.current || this.finished) await this.bridge!.request("set_controls", args);
           break;
         case "decider.setRecord":
           this.record = typeof args.row === "number" ? args.row : null;

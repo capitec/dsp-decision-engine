@@ -1,4 +1,5 @@
 import type { DebugProtocol } from "@vscode/debugprotocol";
+import type { Controls } from "./protocol";
 
 export interface AdapterOptions {
   python: string[];
@@ -14,6 +15,8 @@ export interface LaunchArgs extends DebugProtocol.LaunchRequestArguments {
   record?: number;
   stopOnEntry?: boolean;
   cwd?: string;
+  /** Branch and loop forces and value breakpoints, as the flow panel set them. */
+  controls?: Controls;
 }
 
 /** The Python to run the bridge with, for the standalone adapter: `DECIDER_PYTHON`, e.g. "uv run python". */

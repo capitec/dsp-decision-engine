@@ -6,6 +6,7 @@ import {
   recordLabel,
   type ColumnHistory,
   type ColumnSummary,
+  type Controls,
   type DescribeResult,
   type FromWebview,
   type Lineage,
@@ -20,6 +21,7 @@ import { Compare } from "./Compare";
 import { FindStep } from "./FindStep";
 import { Graph } from "./Graph";
 import { fold } from "./layout";
+import { ControlsBar, enclosing, GroupControls, groupsOf, hitText, WatchForm } from "./Controls";
 import { NodePanel } from "./NodePanel";
 import { Params } from "./Params";
 import { Scenarios } from "./Scenarios";
@@ -172,6 +174,14 @@ export function App() {
     [describe, formulas],
   );
   const selectedNode = nodes.find((n) => n.path === selected);
+  const groups = useMemo(() => (describe ? groupsOf(describe.ir) : []), [describe]);
+  const selectedGroup = selectedNode && enclosing(groups, selectedNode.path);
+  const outputNames = useMemo(() => [...new Set(nodes.flatMap((n) => n.outputs ?? []))].sort(), [nodes]);
+  const [controls, setControls] = useState<Controls>({ forces: [], watches: [] });
+  const changeControls = (c: Controls) => {
+    setControls(c);
+    send({ type: "setControls", controls: c });
+  };
 
   // A lineage card about a column the newly selected step doesn't touch is stale; close it.
   useEffect(() => {
@@ -260,6 +270,7 @@ export function App() {
         <button className="icon" title="Maximise the flow panel (again to restore)" onClick={() => send({ type: "maximise" })}>⤢</button>
         {columns && !pausedAt && <label title="Show values for one record instead of the whole batch">Focus record {recordPicker}</label>}
       </header>
+      <ControlsBar controls={controls} groups={groups} keyCol={keyCol} onChange={changeControls} />
       {pending && <div className="pause-banner pending">⏳ {pending}</div>}
       {!pending && pausedAt && run.current && (
         <div className="pause-banner" title={run.current.path}>
@@ -324,6 +335,7 @@ export function App() {
             </div>
           )}
           {note && <div className="banner-note">{note}</div>}
+          {run.hit && <div className="banner-note hit">⏸ Breakpoint: {hitText(run.hit, keyCol)}</div>}
 
         </div>
       )}
@@ -416,7 +428,8 @@ export function App() {
             record={run.record}
             keyCol={keyCol}
             sessionRunning={columns !== null}
-            onWhatIf={(params, overrides, row, label) => send({ type: "whatIf", params, overrides, row, label })}
+            onWhatIf={(params, overrides, row, label, forces) => send({ type: "whatIf", params, overrides, row, label, forces })}
+            groups={groups}
             onRestart={(params) => send({ type: "restartWith", params })}
             onSelectStep={select}
           />
@@ -480,6 +493,36 @@ export function App() {
               noteNext.current = `Skipped ${path.split("/").pop()}; re-ran from there, keeping everything before it, and paused at the next step.`;
               send({ type: "skip", path });
             }}
+            controls={selectedNode && (
+              <>
+                {selectedGroup && (
+                  <GroupControls
+                    key={selectedGroup.path}
+                    group={selectedGroup}
+                    controls={controls}
+                    record={run.record}
+                    keyCol={keyCol}
+                    paused={!!pausedAt}
+                    onChange={changeControls}
+                    onCompare={(a, b) => send({ type: "compareForces", a, b })}
+                    onRerun={(path) => {
+                      noteNext.current = `↺ Re-running ${path.split("/").pop()} with the force; everything before it is kept.`;
+                      send({ type: "rewind", path });
+                    }}
+                  />
+                )}
+                <WatchForm
+                  key={selectedNode.path}
+                  names={outputNames}
+                  scopes={selectedNode.path.split("/").map((_, i, parts) => parts.slice(0, i + 1).join("/"))}
+                  name={selectedNode.outputs?.[0]}
+                  record={run.record}
+                  keyCol={keyCol}
+                  controls={controls}
+                  onChange={changeControls}
+                />
+              </>
+            )}
             onRestore={(path) => {
               setPending(`Putting the original ${path.split("/").pop()} back and re-running from there…`);
               noteNext.current = `Put the original ${path.split("/").pop()} back; continue to run it.`;

@@ -1,5 +1,5 @@
 import { compareTraces, same, type Comparison } from "./compare";
-import type { DescribeResult, RecordKey } from "./protocol";
+import type { DescribeResult, Force, RecordKey } from "./protocol";
 
 export interface RunTrace {
   steps: Record<string, Record<string, unknown[]>>;
@@ -23,6 +23,7 @@ export interface Scenario {
   params?: Record<string, unknown>;
   overrides?: Record<string, unknown>;
   row?: number | null;
+  forces?: Force[];
 }
 
 /** One knob of a sweep: a param (`path|name`) or a value by column name, and the values to try. */

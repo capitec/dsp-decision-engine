@@ -29,6 +29,8 @@ interface Props {
   onSkip: (path: string) => void;
   onReload: (path: string) => void;
   onRestore: (path: string) => void;
+  /** Branch, loop and breakpoint controls for the selected step. */
+  controls?: React.ReactNode;
 }
 
 /** A decision table's rows, when `node` is one whose rows are a shared param. */
@@ -40,7 +42,7 @@ function tableOf(node: CallNodeJson, values: Record<string, unknown>): { name: s
 }
 
 /** The details pane: the selected step, then the picked column's lineage and history. */
-export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, lineage, history, treePath, onPick, onSelect, onReveal, onRewind, onRunTo, onStep, comparison, onOpenDiff, values, onSkip, onReload, onRestore }: Props) {
+export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, lineage, history, treePath, onPick, onSelect, onReveal, onRewind, onRunTo, onStep, comparison, onOpenDiff, values, onSkip, onReload, onRestore, controls }: Props) {
   const visits = node && run.visits[node.path];
   const who = run.record === null ? null : recordLabel(run.record, keyCol);
   const valueOf = (name: string) => {
@@ -225,6 +227,7 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
               {run.record === null && <div className="muted small">Focus a record to see its own path.</div>}
             </>
           )}
+          {controls}
         </>
       ) : (
         <div className="muted">Click a step in the graph to see what it reads and writes.</div>

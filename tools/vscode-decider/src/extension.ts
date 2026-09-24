@@ -4,7 +4,7 @@ import { DeciderDebugSession } from "./adapter";
 import { analyse, PipelineCodeLens } from "./analysis";
 import { listRefs, materialise, repoRoot } from "./git";
 import { GraphPanel } from "./graphPanel";
-import type { CallNodeJson, ColumnHistory, ColumnSummary, DescribeResult, FromWebview, Lineage, RecordKey, RunStatus, ToWebview } from "./protocol";
+import type { CallNodeJson, ColumnHistory, ColumnSummary, Controls, DescribeResult, FromWebview, Lineage, RecordKey, RunStatus, ToWebview } from "./protocol";
 import { debugpyLibs, pythonCommand } from "./python";
 import { runComparison, type Side } from "./compareRuns";
 import { compareTraces, type TraceResult } from "./compare";
@@ -15,6 +15,8 @@ import { StructureProvider } from "./structure";
 let lineageChannel: vscode.OutputChannel | undefined;
 /** The pipeline the views show: its file and name. */
 let shown: { file: string; pipeline: string } | undefined;
+/** Forces and value breakpoints set in the flow panel; every decider launch starts with them. */
+let controls: Controls = { forces: [], watches: [] };
 
 export function activate(ctx: vscode.ExtensionContext) {
   const structure = new StructureProvider();
@@ -27,6 +29,9 @@ export function activate(ctx: vscode.ExtensionContext) {
   };
 
   ctx.subscriptions.push(
+    vscode.debug.registerDebugConfigurationProvider("decider", {
+      resolveDebugConfiguration: (_folder, config) => ({ ...config, controls: config.controls ?? controls }),
+    }),
     tree,
     vscode.languages.registerCodeLensProvider({ language: "python" }, new PipelineCodeLens()),
     vscode.debug.registerDebugAdapterDescriptorFactory("decider", {
@@ -171,7 +176,11 @@ async function onWebview(m: FromWebview, describe: DescribeResult) {
         const scope = m.path ? (others.length ? `Only ${m.label} is applied; ${others.join(", ")} ${others.length === 1 ? "is" : "are"} not.` : "") : others.length > 1 ? `All ${others.length} edits are applied.` : "";
         comparison.note = `${scope} Both versions ran from the start to the end; your debug run is still paused where it was.`.trim();
         // Both runs share one description, so a swapped step's new code shows only through the edits made.
-        for (const st of comparison.steps) if (m.edits[st.path] === "replace" && (!m.path || m.path === st.path)) st.structural.push("code");
+        for (const st of comparison.steps) {
+          if (m.path && m.path !== st.path) continue;
+          if (m.edits[st.path] === "replace") st.structural.push("code");
+          if (m.edits[st.path] === "delete" && st.status === "not taken") st.status = "removed";
+        }
         post({ type: "compare", comparison });
       } catch (e) {
         post({ type: "compare", comparison: null, error: (e as Error).message });
@@ -196,10 +205,17 @@ async function onWebview(m: FromWebview, describe: DescribeResult) {
       if (!shown) return;
       await compare(
         { label: "current params", file: shown.file, pipeline: shown.pipeline },
-        { label: m.label, file: shown.file, pipeline: shown.pipeline, params: m.params, overrides: m.overrides, row: m.row },
+        { label: m.label, file: shown.file, pipeline: shown.pipeline, params: m.params, overrides: m.overrides, row: m.row, forces: m.forces },
       );
       break;
     }
+    case "setControls":
+      controls = m.controls;
+      await s?.customRequest("decider.setControls", controls);
+      break;
+    case "compareForces":
+      if (shown) await compare({ ...shown, ...m.a }, { ...shown, ...m.b });
+      break;
     case "compareRevision":
       await compareRevision();
       break;

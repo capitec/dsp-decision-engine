@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from decider.engine import Engine
 from decider.engine.params import document_key
-from runs import collect
+from runs import collect, steer
 
 
 def checkpoint_key(session):
@@ -28,7 +28,7 @@ def merge(base, extra):
     return out
 
 
-def fork(step, frame, params, history, target, scenario):
+def fork(step, frame, params, history, target, scenario, ir=None, forces=()):
     """One scenario from `target`: replay to it, apply the scenario's values and params, run to the end.
 
     Args:
@@ -36,8 +36,12 @@ def fork(step, frame, params, history, target, scenario):
         target: the checkpoint key to fork at; `None` forks before anything runs.
         scenario: `{"params": {...}, "overrides": {...}, "row": int | None}`; params
             merge over the run's document and apply only to nodes that run after `target`.
+            Its `forces` replace the run's `forces` on the same branch or loop and record.
     """
     s = Engine().bind(step).session(frame, params)
+    both = {(f["path"], f.get("row")): f for f in [*forces, *(scenario.get("forces") or ())]}
+    if both:
+        steer(s, ir, list(both.values()))
     pending = list(history)
 
     def apply(key):
@@ -71,8 +75,8 @@ def fork(step, frame, params, history, target, scenario):
     return collect(s, error)
 
 
-def sweep(step, frame, params, history, target, scenarios):
+def sweep(step, frame, params, history, target, scenarios, ir=None, forces=()):
     """The original continuation plus one fork per scenario, as traces ready to compare."""
-    baseline = fork(step, frame, params, history, target, {})
-    return {"baseline": baseline, "results": [{"label": sc.get("label"), **fork(step, frame, params, history, target, sc)}
+    baseline = fork(step, frame, params, history, target, {}, ir, forces)
+    return {"baseline": baseline, "results": [{"label": sc.get("label"), **fork(step, frame, params, history, target, sc, ir, forces)}
                                                for sc in scenarios]}

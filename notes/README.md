@@ -22,6 +22,7 @@ Decision records for the consolidated `decider`, each with its measured reason.
 - `tree-walker.md`: a tree is one row node walked by one njit function over packed arrays passed by address, with an independent Python reference; string outputs are `Literal` indices; strings are matched as byte spans in the kernel, regex/case/trim in Python.
 - `decision-tables.md`: a table is one row node, a jump program plus packed rows read by one njit matcher; rows inline or from a table param checked and packed when the document arrives; String outputs of param rows are Enum columns; decider_old's null semantics.
 - `wiring-scopes.md`: how names bind to versions: input columns, typo and forward-reference errors, branch/loop scopes, frame barriers, outputs.
+- `vscode-controls.md`: forcing a branch's arm or a loop's iteration count by overriding its condition's output from a predicate breakpoint; value and iteration breakpoints.
 - `vscode-extension-testing.md`: how the VS Code prototype is tested at four levels (pytest, DebugClient, in-editor mocha, Playwright on the Electron binary), and the traps found on the way.
 
 `progress.md` will hold the task log.
