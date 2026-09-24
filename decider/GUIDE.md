@@ -42,6 +42,7 @@ HTTP with `decider serve`.
 | a decision tree, or a flat rule set | `TreeConfig` (`prioritized_flat_rule`, `mode: "all"`) |
 | a grid (bands, rate cards) fixed in its config document | `DecisionTableConfig`, inline `"rows": [...]` |
 | a grid retuned like a param (params document, per call) | `DecisionTableConfig`, `"rows": {"table": "name"}` |
+| rows a plain step loops over, retuned like a param | `param_table({"col": float}, default=[...])` |
 | a points scorecard | `ScorecardConfig` |
 | the same step twice, or on other column names | `.named("x")`, `.relabel(reads=, writes=)` |
 | another project's pipeline | import its `build()`; put the step inside yours |
@@ -183,6 +184,50 @@ assert tree.run(pl.DataFrame({"ratio": [0.9]}))["risk_path"].to_list()[0].split(
 
 ## Parameter tables
 
+A table-valued param holds rows in the params document (rate ladders, fee
+caps, band floors), retuned per call like any `param()`: editing the rows, or
+how many there are, never rebuilds or recompiles; only changing the columns
+does. A plain step declares one with `param_table({column: type}, default=[...])`
+(or `required=True`, or `shared_key="name"` to read `shared.name`); columns
+are `int`, `float` or `bool`. The step receives a namedtuple with one
+read-only numpy array per column, the same in every mode, so loop over it:
+
+```python
+import polars as pl
+from decider import Engine, Table, flow, param_table
+from decider.testing import no_recompile
+
+def rate(score: int, ladder: Table = param_table({"floor": int, "rate": float},
+                                                  default=[{"floor": 0, "rate": 0.2}])) -> float:
+    r = 0.0
+    for i in range(len(ladder.floor)):
+        if score >= ladder.floor[i]:
+            r = ladder.rate[i]
+    return r
+
+pricing = flow(rate, name="pricing")
+assert pricing.parameters() == {"pricing/rate": {"ladder": {
+    "type": "table", "schema": {"floor": "int", "rate": "float"}, "default": [{"floor": 0, "rate": 0.2}]}}}
+params = pricing.parameters().defaults()          # {"pricing": {"rate": {"ladder": [{"floor": 0, "rate": 0.2}]}}}
+params["pricing"]["rate"]["ladder"] = [{"floor": 0, "rate": 0.2}, {"floor": 600, "rate": 0.1}]
+df = pl.DataFrame({"score": [550, 720]})
+assert pricing.run(df, params=params)["rate"].to_list() == [0.2, 0.1]     # interpreted
+
+exe = Engine().bind(pricing, mode="fused")
+assert exe.run(df, params=params)["rate"].to_list() == [0.2, 0.1]
+with no_recompile():                              # more rows, new values: same kernel
+    params = {"pricing": {"rate": {"ladder": [{"floor": 0, "rate": 0.25}, {"floor": 500, "rate": 0.15},
+                                              {"floor": 700, "rate": 0.08}]}}}
+    assert exe.run(df, params=params)["rate"].to_list() == [0.15, 0.08]
+    assert exe.score({"score": 720}, params)["rate"] == 0.08
+```
+
+Rows are checked when the document arrives: a missing or undeclared column or
+a value of the wrong type is a `ParamsError` naming the step, the param, the
+row and the column. `defaults()` shows a required table as `[]`.
+
+For a grid whose rows *match* records (bands, keys, string columns), use a
+`DecisionTableConfig` instead: no loop to write, and it reads string columns.
 Inline `"rows"` fix a table in its config document: changing them is a new
 document and a rebuild (never a recompile). With `"rows": {"table": "prices"}`
 the rows live in the params document under the step's path, are checked
@@ -200,8 +245,9 @@ price = DecisionTableConfig.load({"type": "decision_table", "name": "price",
     "columns": {"product": "String", "rate": "Float64"}, "rows": {"table": "prices"},
     "expression": {"type": "eq", "variable": "product", "value_column": "product"},
     "outputs": ["rate"], "default": [0.0]})
-assert price.parameters().defaults() == {}       # the rows are required: there is no default
-assert price.parameters() == {"price": {"prices": {"type": "table", "schema": {"product": "String", "rate": "Float64"}}}}
+assert price.parameters().defaults() == {"price": {"prices": []}}     # required: no default rows
+assert price.parameters() == {"price": {"prices": {"type": "table", "schema": {"product": "String", "rate": "Float64"},
+                                                   "required": True}}}
 
 params = {"price": {"prices": [{"product": "loan", "rate": 0.12}, {"product": "card", "rate": 0.2}]}}
 exe = Engine().bind(price, mode="fused")
@@ -213,8 +259,7 @@ with no_recompile():
 ```
 
 `{"table": "prices", "shared": true}` reads `shared.prices`, one table for
-several steps. Table params for plain function steps are coming; until then,
-use a `DecisionTableConfig`.
+several steps.
 
 ## A project: template, build, serve
 

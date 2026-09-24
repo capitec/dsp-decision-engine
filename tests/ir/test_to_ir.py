@@ -134,8 +134,9 @@ def test_table_turns_inline_rows_or_a_ref_into_rows_or_decl():
 def test_a_table_param_reports_its_schema():
     cfg = PriceTable.model_validate({"name": "price_by_product", "rows": {"table": "prices"}})
     schema = cfg.parameters()
-    assert schema == {"price_by_product": {"prices": {"type": "table", "schema": {"product": "str", "rate": "float"}}}}
-    assert schema.defaults() == {}
+    assert schema == {"price_by_product": {"prices": {"type": "table", "schema": {"product": "str", "rate": "float"},
+                                                      "required": True}}}
+    assert schema.defaults() == {"price_by_product": {"prices": []}}
     node_schema = schema.json_schema()["properties"]["price_by_product"]
     assert node_schema["required"] == ["prices"] and node_schema["properties"]["prices"]["type"] == "array"
 

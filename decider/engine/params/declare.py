@@ -21,6 +21,8 @@ class ParamSpec:
     required: bool
     shared_key: str | None
     on_invalid: OnInvalid
+    # A table's `(column, type name)` pairs; `None` for a plain param.
+    schema: tuple[tuple[str, str], ...] | None = None
 
     # A bool/None default can't be subclassed, so a direct call sees this marker: make it test like its value.
     def __bool__(self) -> bool:

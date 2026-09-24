@@ -204,3 +204,35 @@ where they disagree, this file wins.
   frame step reading it first no longer hides a later step's `date`.
 - **JSON coercion keeps undeclared TypedDict keys**: a TypedDict naming only
   the date fields leaves the rest of each dict as sent.
+
+## 2026-09-24, parameter tables for plain steps (FIX-G)
+
+- **`param_table(columns, default=[...] | required=True, shared_key=None)`**
+  (`from decider import Table, param_table`) declares a table-valued param in
+  a plain step's signature, like `param()`: `rates: Table = param_table({"floor":
+  int, "rate": float}, default=[...])`. Columns are `int`, `float` or `bool`
+  and must be identifiers (they become namedtuple fields); string columns are
+  refused (use a `DecisionTableConfig`, or code the key as an int).
+- **Representation:** the step receives a namedtuple (`bundle_class` of the
+  column names, so numba's disk cache can pickle it) of read-only 1-D numpy
+  arrays (int64, float64, bool), in every mode. It is a runtime argument in
+  the params bundle, never a constant, so row edits and row counts keep one
+  numba type; only a column change recompiles. `Table` is `Any`, for readers.
+  A direct call of the plain function gets the default table itself.
+- **Validation:** the `ParamDecl`'s annotation is `table_type(schema)`, a
+  cached `Annotated[list[TypedDict], AfterValidator(to columns)]` (strict,
+  extra keys forbidden), one object per schema so shared tables compare
+  equal. Errors read `<path>: param 'rates': row 1, column 'floor': ...;
+  expected a list of rows like [{"floor": int, "rate": float}, ...]`.
+- **`parameters()`** reports every table as `{"type": "table", "schema": ...}`
+  plus `"default": rows` or `"required": True` (tables of a
+  `DecisionTableConfig` too); **`defaults()`** shows a required table as `[]`
+  instead of leaving it out; **`json_schema()`** gives each table's column
+  types, `additionalProperties: false` and its default rows.
+- **Params errors:** a nested pydantic `missing` (a row lacking a column) is no
+  longer reported as "param is required but missing"; a missing required
+  table's error names its expected rows. `ParamRef.param` and `TableRef.table`
+  must be identifiers (not keywords, no leading `_`); a bad one fails at load
+  with a suggestion (`hi-cut` -> `hi_cut`).
+- Interpreted mode indexes numpy arrays, so a table value is a numpy scalar
+  there (`x / 0.0` on one gives `inf` with a warning where a kernel raises).

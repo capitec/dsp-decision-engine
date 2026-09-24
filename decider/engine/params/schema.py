@@ -10,15 +10,17 @@ from decider.engine.ir.nodes import CallNode, IRNode, iter_nodes
 from decider.engine.params.models import type_name
 
 
+_JSON_TYPES = {"int": "integer", "float": "number", "bool": "boolean"}
+
+
 def _info(decl: ParamDecl) -> dict[str, Any]:
-    if decl.schema is not None:
-        return {"type": "table", "schema": dict(decl.schema)}
-    info: dict[str, Any] = {"type": type_name(decl.annotation)}
+    table = decl.schema is not None
+    info: dict[str, Any] = {"type": "table", "schema": dict(decl.schema)} if table else {"type": type_name(decl.annotation)}
     if decl.required:
         info["required"] = True
     else:
         info["default"] = decl.default
-    for constraint in getattr(decl.field_info, "metadata", ()):
+    for constraint in () if table else getattr(decl.field_info, "metadata", ()):
         if dataclasses.is_dataclass(constraint):
             info.update(dataclasses.asdict(constraint))
     return info
@@ -26,7 +28,9 @@ def _info(decl: ParamDecl) -> dict[str, Any]:
 
 def _json_schema(decl: ParamDecl) -> dict[str, Any]:
     if decl.schema is not None:
-        return {"type": "array", "items": {"type": "object", "required": [column for column, _ in decl.schema]}}
+        columns = {c: {"type": _JSON_TYPES[d]} if d in _JSON_TYPES else {} for c, d in decl.schema}
+        items = {"type": "object", "properties": columns, "required": list(columns), "additionalProperties": False}
+        return {"type": "array", "items": items, **({} if decl.required else {"default": decl.default})}
     # ponytail: types that need $defs (enums, models) keep dangling refs; hoist $defs when such a param appears.
     if decl.field_info is not None:
         return TypeAdapter(Annotated[decl.annotation, decl.field_info]).json_schema()
@@ -55,10 +59,15 @@ class ParamsSchema(dict):
             self["shared"][key]["used_by"] = paths
 
     def defaults(self) -> dict[str, Any]:
-        """A params document holding every default, nested by path. Required params are left out."""
+        """A params document holding every default, nested by path.
+
+        Required params are left out, except a required table, which shows
+        as `[]` (no rows) so the document says where its rows go.
+        """
         doc: dict[str, Any] = {}
         for path, params in self.decls.items():
-            values = {name: d.default for name, d in params.items() if not d.required}
+            values = {name: [] if d.required else d.default
+                      for name, d in params.items() if not d.required or d.schema is not None}
             if values:
                 target = doc
                 for part in path.split("/"):
