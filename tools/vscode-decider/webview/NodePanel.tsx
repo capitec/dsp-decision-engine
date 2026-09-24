@@ -31,8 +31,10 @@ interface Props {
   onSkip: (path: string) => void;
   onReload: (path: string) => void;
   onRestore: (path: string) => void;
-  /** Branch, loop and breakpoint controls for the selected step. */
+  /** Breakpoint controls for the selected step. */
   controls?: React.ReactNode;
+  /** The branch or loop the selected step steers, shown first. */
+  groupControls?: React.ReactNode;
 }
 
 /** A decision table's rows, when `node` is one whose rows are a shared param. */
@@ -44,7 +46,7 @@ function tableOf(node: CallNodeJson, values: Record<string, unknown>): { name: s
 }
 
 /** The details pane: the selected step, then the picked column's lineage and history. */
-export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, lineage, history, treePath, onPick, onSelect, onReveal, onRewind, onGoTo, onRunTo, onStep, comparison, onOpenDiff, values, onSkip, onReload, onRestore, controls }: Props) {
+export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, lineage, history, treePath, onPick, onSelect, onReveal, onRewind, onGoTo, onRunTo, onStep, comparison, onOpenDiff, values, onSkip, onReload, onRestore, controls, groupControls }: Props) {
   const visits = node && run.visits[node.path];
   const who = run.record === null ? null : recordLabel(run.record, keyCol);
   const valueOf = (name: string) => {
@@ -112,6 +114,7 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
               )}
             </div>
           </div>
+          {groupControls}
           {card && !(path && table) && <Explain entry={card} who={who} role="" nodes={nodes} values={values} onPick={onPick} onSelect={onSelect} />}
           {who && ran && (node.outputs ?? []).length > 0 && (
             <div className="wrote">

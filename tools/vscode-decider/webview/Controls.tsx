@@ -5,6 +5,8 @@ import { parseValue } from "./Params";
 export interface Group {
   path: string;
   kind: "branch" | "loop";
+  /** The condition step that picks the arm or decides whether to go round again. */
+  cond: string;
   /** A branch's arms, by the name of the step or flow each runs. */
   arms: string[];
   max?: number;
@@ -15,14 +17,16 @@ export type Side = { label: string; forces: Force[] };
 export function groupsOf(ir: IRNodeJson): Group[] {
   const out: Group[] = [];
   walk(ir, (n) => {
-    if (n.kind === "branch" || n.kind === "loop") out.push({ path: n.path, kind: n.kind, arms: n.children.slice(1).map((c) => lastSegment(c.path)), max: n.maxIterations });
+    if (n.kind === "branch" || n.kind === "loop") out.push({ path: n.path, kind: n.kind, cond: n.children[0]?.path ?? "", arms: n.children.slice(1).map((c) => lastSegment(c.path)), max: n.maxIterations });
   });
   return out;
 }
 
-/** The innermost branch or loop that holds `path`, or is it. */
-export const enclosing = (groups: Group[], path: string) =>
-  groups.filter((g) => path === g.path || path.startsWith(`${g.path}/`)).sort((a, b) => b.path.length - a.path.length)[0];
+/** The branch whose condition `path` is, or the innermost loop around it: what its details can steer. */
+export const steered = (groups: Group[], path: string) =>
+  groups
+    .filter((g) => g.cond === path || (g.kind === "loop" && path.startsWith(`${g.path}/`)))
+    .sort((a, b) => b.path.length - a.path.length)[0];
 
 const forWho = (row: number | null | undefined, keyCol: RecordKey) => (row == null ? "" : ` for ${recordLabel(row, keyCol)}`);
 
@@ -38,10 +42,12 @@ export function watchText(w: Watch, keyCol: RecordKey): string {
   return `${w.name} ${w.op} ${formatValue(w.value, w.name)}${where}${forWho(w.row, keyCol)}`;
 }
 
-export function hitText(hit: Hit, keyCol: RecordKey): string {
-  const name = hit.text.split(" ")[0];
+/** Why a breakpoint paused the run; `watch` (the breakpoint as set) words it the way its chip does. */
+export function hitText(hit: Hit, keyCol: RecordKey, watch?: Watch): string {
+  const name = watch?.name ?? hit.text.split(" ")[0];
   const who = (hit.rows ?? []).map((r, i) => `${recordLabel(r, keyCol)} = ${formatValue(hit.values?.[i], name)}`);
-  return `${hit.text}${hit.path ? ` after ${lastSegment(hit.path)}` : ""}${who.length ? `: ${who.slice(0, 3).join(", ")}${who.length > 3 ? ` and ${who.length - 3} more` : ""}` : ""}`;
+  const text = watch && watch.name ? `${watch.name} ${watch.op} ${formatValue(watch.value, watch.name)}` : hit.text;
+  return `${text}${hit.path ? ` after ${lastSegment(hit.path)}` : ""}${who.length ? `: ${who.slice(0, 3).join(", ")}${who.length > 3 ? ` and ${who.length - 3} more` : ""}` : ""}`;
 }
 
 /** The forces and breakpoints in effect, each removable. */
@@ -85,7 +91,8 @@ export function GroupControls({ group, controls, record, keyCol, paused, onChang
   const [a, setA] = useState(isLoop ? "5" : "0");
   const [b, setB] = useState(isLoop ? "10" : "1");
   const [times, setTimes] = useState("");
-  const [at, setAt] = useState("2");
+  const [at, setAt] = useState("");
+  const [added, setAdded] = useState<string>();
   const row = one && record !== null ? record : null;
   const name = lastSegment(group.path);
   const mine = controls.forces.filter((f) => f.path === group.path);
@@ -153,10 +160,20 @@ export function GroupControls({ group, controls, record, keyCol, paused, onChang
       </div>
       {isLoop && (
         <div className="control-row">
-          Pause before iteration <input aria-label={`pause ${name} at iteration`} className="narrow" type="number" min={1} max={group.max} value={at} onChange={(e) => setAt(e.target.value)} />{" "}
-          <button disabled={!at} onClick={() => onChange({ ...controls, watches: [...controls.watches, { path: group.path, iteration: Number(at) }] })}>Add breakpoint</button>
+          Pause before iteration <input aria-label={`pause ${name} at iteration`} className="narrow" type="number" min={1} max={group.max} placeholder="k" value={at} onChange={(e) => setAt(e.target.value)} />{" "}
+          <button
+            disabled={!at}
+            onClick={() => {
+              onChange({ ...controls, watches: [...controls.watches, { path: group.path, iteration: Number(at) }] });
+              setAdded(`Added: the run pauses before iteration ${at}. It's listed at the top; × removes it.`);
+              setAt("");
+            }}
+          >
+            Add breakpoint
+          </button>
         </div>
       )}
+      {isLoop && added && <div className="added small">{added}</div>}
     </section>
   );
 }
@@ -181,9 +198,11 @@ export function WatchForm({ names, scopes, name: initial, record, keyCol, contro
   const [value, setValue] = useState("");
   const [scope, setScope] = useState("");
   const [one, setOne] = useState(false);
+  const [added, setAdded] = useState<string>();
   const add = () => {
     const w: Watch = { name, op, value: parseValue(value, "number"), scope: scope ? [scope] : undefined, row: one && record !== null ? record : null };
     onChange({ ...controls, watches: [...controls.watches, w] });
+    setAdded(`Added: the run pauses when ${watchText(w, keyCol)}. It's listed at the top; × removes it.`);
     setValue("");
   };
   return (
@@ -216,7 +235,7 @@ export function WatchForm({ names, scopes, name: initial, record, keyCol, contro
         )}
         <button disabled={!name || value.trim() === ""} onClick={add}>Add breakpoint</button>
       </div>
-      <div className="muted small">Pauses just after a step writes {name || "it"}, the first time a record meets the condition there.</div>
+      {added ? <div className="added small">{added}</div> : <div className="muted small">Pauses just after a step writes {name || "it"}, the first time a record meets the condition there.</div>}
     </details>
   );
 }

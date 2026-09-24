@@ -29,7 +29,7 @@ describe("branch and loop controls", () => {
     await lens("Visualise flow").waitFor({ timeout: 60_000 });
     await lens("Visualise flow").click();
     const wv = c.webview();
-    await wv.locator("svg .node", { hasText: "cap_public" }).first().click();
+    await wv.locator("svg .node", { hasText: "is_private" }).first().click();
     await wv.locator(".group-controls h4", { hasText: "Branch by_sector" }).waitFor({ timeout: 30_000 });
     await c.shot("c01-branch-controls");
     await wv.locator(".group-controls button", { hasText: "Compare" }).click();
@@ -59,7 +59,7 @@ describe("branch and loop controls", () => {
     await wv.locator('select[aria-label="break when op"]').selectOption("<");
     await wv.locator('input[aria-label="break when value"]').fill("70000");
     await wv.locator(".watch-form button", { hasText: "Add breakpoint" }).click();
-    await wv.locator(".controls-bar .chip", { hasText: "offer < 70,000" }).waitFor();
+    await wv.locator(".controls-bar .chip", { hasText: "offer < R 70,000" }).waitFor();
     await c.shot("c04-breakpoints-set");
 
     await c.page.locator(".tab", { hasText: "loan.py" }).first().click();
@@ -72,7 +72,7 @@ describe("branch and loop controls", () => {
     await c.shot("c05-iteration-hit");
     await c.page.locator(".tab", { hasText: "loan.py" }).first().click();
     await c.page.keyboard.press("F5");
-    await wv.locator(".banner-note.hit", { hasText: "offer < 70000" }).waitFor({ timeout: 30_000 });
+    await wv.locator(".banner-note.hit", { hasText: "offer < R 70,000" }).waitFor({ timeout: 30_000 });
     expect(await wv.locator(".banner-note.hit").innerText()).toContain("client_id 1");
     await c.shot("c06-value-hit");
   }, 180_000);
@@ -83,7 +83,7 @@ describe("branch and loop controls", () => {
     await wv.locator("select[aria-label=explain]").selectOption("offer");
     const timeline = wv.locator(".timeline");
     await timeline.locator(".why", { hasText: "because shrink set it in iteration 4" }).waitFor({ timeout: 30_000 });
-    expect(await timeline.locator("ol.history li").count()).toBe(6); // the start, the offer step, four shrinks so far
+    expect(await timeline.locator("ol.history li").count()).toBe(5); // the offer step, then four shrinks so far
     await c.shot("c07-value-history");
     await timeline.locator("li", { hasText: "iteration 2" }).locator("button", { hasText: "go back here" }).click();
     await wv.locator(".pause-banner", { hasText: "after shrink" }).waitFor({ timeout: 30_000 });
@@ -93,7 +93,7 @@ describe("branch and loop controls", () => {
 
   it("forces the branch mid-run and re-runs it", async () => {
     const wv = c.webview();
-    await wv.locator("svg .node", { hasText: "cap_private" }).first().click();
+    await wv.locator("svg .node", { hasText: "is_private" }).first().click();
     await wv.locator('select[aria-label="force by_sector"]').selectOption("1");
     await wv.locator(".controls-bar .chip", { hasText: "by_sector down cap_public" }).waitFor();
     await wv.locator(".group-controls button", { hasText: "Re-run by_sector forced" }).click();

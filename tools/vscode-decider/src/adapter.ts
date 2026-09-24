@@ -216,6 +216,8 @@ export class DeciderDebugSession extends LoggingDebugSession {
     const read = readEvents(status.events, this.nodes, this.visits, this.finishedPaths, this.edits);
     for (const [text, category] of read.lines) this.sendEvent(new OutputEvent(text, category));
     const paused = reason ?? read.paused;
+    // A rewind un-runs steps; the bridge knows which have run since.
+    if (status.ran) this.finishedPaths = status.ran;
     this.current = status.current;
     this.finished = status.finished;
     this.hit = status.hit ?? null;

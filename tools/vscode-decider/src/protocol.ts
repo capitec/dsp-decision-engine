@@ -53,6 +53,8 @@ export interface DescribeResult {
   params: Record<string, Record<string, ParamInfo>>;
   /** The module's `PARAMS` document: the values the flow runs with (tables' rows included). */
   values?: Record<string, unknown>;
+  /** What the flow decides: its emitted values and what its top-level branches set. */
+  outcome?: string[];
   /** The file `PARAMS` is read from, when the module names one. */
   valuesFile?: string | null;
 }
@@ -93,6 +95,8 @@ export interface Status {
   error?: string;
   /** Set when a value or iteration breakpoint paused the run. */
   hit?: Hit | null;
+  /** Every step and group that has run since the start or the last rewind. */
+  ran?: string[];
 }
 
 /** Send a branch's records down `arm`, or run a loop exactly `iterations` times; for one record, or all. */
@@ -142,6 +146,9 @@ export interface Lineage {
   value: unknown;
   via?: "merge" | "carry";
   inputs: Lineage[];
+  /** Set when the value came from you: "force@<branch or loop>" or "override@<path>", and what it was before. */
+  setBy?: string;
+  was?: unknown;
 }
 
 /** Tree positions a row node reached in its latest run: locator -> rows. */
@@ -168,6 +175,8 @@ export interface ValueChange {
   /** For the focused record. */
   value?: unknown;
   before?: unknown;
+  /** The step wrote the value the record already had. */
+  kept?: boolean;
   /** For the whole batch: how many records changed, and the first few new values. */
   rows?: number;
   values?: unknown[];
@@ -193,7 +202,7 @@ export function recordLabel(row: number, key: RecordKey): string {
 /** Names whose values read as percentages: rates, loadings, discounts, margins. */
 export const isRateName = (name?: string) => !!name && /(rate|loading|discount|margin|share)s?$/.test(name);
 /** Names whose values are rand amounts. */
-export const isMoneyName = (name?: string) => !!name && /(amount|cost|income|fee|instalment|expenses)s?$/.test(name);
+export const isMoneyName = (name?: string) => !!name && /(amount|cost|income|fee|instalment|expenses|offer)s?$/.test(name);
 
 /** A value as the UI shows it; with its column's `name`, a rate below 1 shows as a percentage ("25.2%"). */
 export function formatValue(v: unknown, name?: string): string {

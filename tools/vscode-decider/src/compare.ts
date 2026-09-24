@@ -52,6 +52,8 @@ export interface Comparison {
   paramsDocs?: { a: unknown; b: unknown };
   /** Shared param -> the steps that read it. */
   sharedUsers?: Record<string, string[]>;
+  /** The runs differ by a forced branch arm or loop count, not by an edit. */
+  forced?: boolean;
   /** Said under the title, e.g. how the two runs were made. */
   note?: string;
   /** The file the flow's PARAMS come from, e.g. "params.json". */

@@ -86,11 +86,16 @@ class Controls:
         return any(self._watch(i, w, cp) for i, w in enumerate(self.watches))
 
     def force(self, cp):
-        """Apply the forces due at `cp`; call it on the checkpoint a run is paused at before moving on."""
+        """Apply the forces due at `cp`, and say which `(branch or loop, value)` they changed.
+
+        Call it on the checkpoint a run is paused at before moving on.
+        """
+        done = []
         for f in self.forces:
             g = self.groups[f["path"]]
-            if cp.when == "after" and cp.origin.path == g["cond"]:
-                self._force(f, g, cp)
+            if cp.when == "after" and cp.origin.path == g["cond"] and self._force(f, g, cp):
+                done.append((f["path"], g["output"]))
+        return done
 
     def _force(self, f, g, cp):
         s = self.session
@@ -107,6 +112,8 @@ class Controls:
             values[r] = want
         if values != current:
             s.set(g["output"], values)
+            return True
+        return False
 
     def _watch(self, i, w, cp):
         if "iteration" in w:

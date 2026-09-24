@@ -27,9 +27,27 @@ def test_a_records_history_lists_each_change_with_the_step_and_iteration():
     assert not h["input"]
 
 
-def test_a_step_that_writes_the_same_value_is_not_a_change():
+def test_a_step_that_writes_the_same_value_is_kept_not_changed():
     h = finished().handle({"cmd": "changes", "name": "term_cap", "row": 1})
-    assert [c["path"] for c in h["changes"]] == ["term/term_cap"]  # the caps leave 36 as it is
+    assert [(c["path"], c.get("kept", False)) for c in h["changes"]] == [
+        ("term/term_cap", False), ("term/cap_by_income", True), ("term/by_sector/cap_public", True)]  # the caps leave 36
+    batch = finished().handle({"cmd": "changes", "name": "term_cap"})
+    assert [c["path"] for c in batch["changes"]] == ["term/term_cap", "term/cap_by_income"]  # 60 → 48 for record 1
+
+
+def test_a_forced_branch_shows_as_its_own_change():
+    b = Bridge()
+    b.start(LOAN, forces=[{"path": "term/by_sector", "arm": 1, "row": 0}])
+    b.handle({"cmd": "resume"})
+    h = b.handle({"cmd": "changes", "name": "is_private", "row": 0})
+    assert [(c["path"], c["value"]) for c in h["changes"]] == [("term/by_sector/is_private", True), ("force@term/by_sector", False)]
+
+
+def test_the_status_says_which_steps_ran_since_a_rewind():
+    b = finished()
+    assert "sizing/shrink_offer/shrink" in b.status()["ran"]
+    r = b.handle({"cmd": "rewind", "path": "sizing"})
+    assert "term/cap_by_income" in r["ran"] and "sizing/shrink_offer/shrink" not in r["ran"]
 
 
 def test_the_batch_history_counts_the_records_each_change_touched():

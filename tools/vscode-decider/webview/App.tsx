@@ -21,7 +21,7 @@ import { Compare } from "./Compare";
 import { FindStep } from "./FindStep";
 import { Graph } from "./Graph";
 import { fold } from "./layout";
-import { ControlsBar, enclosing, GroupControls, groupsOf, hitText, WatchForm } from "./Controls";
+import { ControlsBar, GroupControls, groupsOf, hitText, steered, WatchForm } from "./Controls";
 import { NodePanel } from "./NodePanel";
 import { Params } from "./Params";
 import { Scenarios } from "./Scenarios";
@@ -116,6 +116,8 @@ export function App() {
           if (noteNext.current === undefined) setCodeDiff([]);
           noteNext.current = undefined;
           if (m.current) setSelected(m.current.path);
+          // A breakpoint that fired for some records: show the first of them.
+          if (m.hit?.rows?.length && m.record === null) send({ type: "record", row: m.hit.rows[0] });
           break;
         case "state":
           setColumns(m.columns);
@@ -175,7 +177,7 @@ export function App() {
   );
   const selectedNode = nodes.find((n) => n.path === selected);
   const groups = useMemo(() => (describe ? groupsOf(describe.ir) : []), [describe]);
-  const selectedGroup = selectedNode && enclosing(groups, selectedNode.path);
+  const selectedGroup = selectedNode && steered(groups, selectedNode.path);
   const outputNames = useMemo(() => [...new Set(nodes.flatMap((n) => n.outputs ?? []))].sort(), [nodes]);
   const [controls, setControls] = useState<Controls>({ forces: [], watches: [] });
   const changeControls = (c: Controls) => {
@@ -253,6 +255,14 @@ export function App() {
     setTab("graph");
   };
   const pausedAt = run.current && !run.finished ? `${run.current.when} ${run.current.path || "the start"}` : null;
+  // What the flow decides, for the focused record, as far as the run has got.
+  const decided = run.record !== null && columns ? (describe?.outcome ?? []).map((n) => columns.find((c) => c.name === n)).filter((c) => c && c.value !== null && c.value !== undefined) : [];
+  // A declined record has no offer: its amounts and rates are working values, so they stay out of the outcome.
+  const declinedNow = decided.some((c) => c!.name === "decision" && c!.value === "decline");
+  const said = declinedNow ? decided.filter((c) => typeof c!.value === "string") : decided;
+  const outcome = said.length
+    ? `${run.finished ? "Outcome" : "Outcome so far"} for ${recordLabel(run.record!, keyCol)}: ${said.map((c) => `${c!.name} = ${formatValue(c!.value, c!.name)}`).join(" · ")}${declinedNow ? " · no offer is made" : ""}`
+    : null;
   const shownTreePath = treePath && run.record === treePath.row ? treePath : null;
   const withDetails = details && tab === "graph" && !!selectedNode;
 
@@ -335,7 +345,8 @@ export function App() {
             </div>
           )}
           {note && <div className="banner-note">{note}</div>}
-          {run.hit && <div className="banner-note hit">⏸ Breakpoint: {hitText(run.hit, keyCol)}</div>}
+          {run.hit && <div className="banner-note hit">⏸ Breakpoint: {hitText(run.hit, keyCol, controls.watches[run.hit.watch])}</div>}
+          {outcome && <div className="banner-note outcome">{outcome}</div>}
 
         </div>
       )}
@@ -372,8 +383,8 @@ export function App() {
                     {changedAt >= 0
                       ? changedAt < editCount
                         ? `edit ${changedAt + 1} of ${editCount}: ${changedSteps[changedAt].split("/").pop()}`
-                        : `knock-on ${changedAt - editCount + 1} of ${changedSteps.length - editCount}: ${changedSteps[changedAt].split("/").pop()}`
-                      : `${editCount} edited · ${changedSteps.length - editCount} knock-on`}
+                        : `result ${changedAt - editCount + 1} of ${changedSteps.length - editCount}: ${changedSteps[changedAt].split("/").pop()}`
+                      : `changed steps: ${editCount ? `${editCount} edited, ` : ""}${changedSteps.length - editCount} as a result`}
                   </span>
                   <button title="Next changed step" onClick={() => goChanged(1)}>▶</button>
                 </>
@@ -497,9 +508,7 @@ export function App() {
               noteNext.current = `Skipped ${path.split("/").pop()}; re-ran from there, keeping everything before it, and paused at the next step.`;
               send({ type: "skip", path });
             }}
-            controls={selectedNode && (
-              <>
-                {selectedGroup && (
+            groupControls={selectedNode && selectedGroup && (
                   <GroupControls
                     key={selectedGroup.path}
                     group={selectedGroup}
@@ -514,7 +523,8 @@ export function App() {
                       send({ type: "rewind", path });
                     }}
                   />
-                )}
+            )}
+            controls={selectedNode && (
                 <WatchForm
                   key={selectedNode.path}
                   names={outputNames}
@@ -525,7 +535,6 @@ export function App() {
                   controls={controls}
                   onChange={changeControls}
                 />
-              </>
             )}
             onRestore={(path) => {
               setPending(`Putting the original ${path.split("/").pop()} back and re-running from there…`);

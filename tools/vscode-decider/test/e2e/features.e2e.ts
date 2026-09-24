@@ -75,12 +75,12 @@ describe("steering and tracing stories", () => {
         await wv(c).locator(".group-controls button", { hasText: "Re-run" }).click();
         await wv(c).locator(".pause-banner", { hasText: "product" }).waitFor({ timeout: 120_000 });
         await shot("Clicked 'Re-run product forced'.");
-        await find(c, "refer_to_underwriter");
+        await find(c, "total_cost_of_credit");
         await wv(c).locator("aside button", { hasText: /^Run to/ }).first().click();
-        await wv(c).locator(".pause-banner", { hasText: "refer_to_underwriter" }).waitFor({ timeout: 180_000 });
+        await wv(c).locator(".pause-banner", { hasText: "total_cost_of_credit" }).waitFor({ timeout: 180_000 });
         await wv(c).locator("select[aria-label=explain]").selectOption("offer_rate");
         await wv(c).locator(".timeline").waitFor({ timeout: 30_000 });
-        await shot("Ran on to refer_to_underwriter and picked offer_rate under 'explain a value…'.");
+        await shot("Ran on to total_cost_of_credit, the last step, and picked offer_rate under 'explain a value…'.");
       },
     );
   }, 600_000);
