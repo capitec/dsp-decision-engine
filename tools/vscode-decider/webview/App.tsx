@@ -60,6 +60,7 @@ export function App() {
   // What the last skip or swap did, said in the pause banner until the run moves on.
   const [note, setNote] = useState<string>();
   const noteNext = useRef<string | undefined>(undefined);
+  const runningRef = useRef(false);
   // The value picked with "explain a value": its breakdown stays open whichever step is selected.
   const [explained, setExplained] = useState<string>();
   const [codeDiff, setCodeDiff] = useState<string[]>([]);
@@ -116,6 +117,9 @@ export function App() {
           if (noteNext.current === undefined) setCodeDiff([]);
           noteNext.current = undefined;
           if (m.current) setSelected(m.current.path);
+          // A new debug run: an earlier comparison's colours would read as this run's state.
+          if (m.current && !runningRef.current) setShowDiff(false);
+          runningRef.current = !!m.current && !m.finished;
           // A breakpoint that fired for some records: show the first of them.
           if (m.hit?.rows?.length && m.record === null) send({ type: "record", row: m.hit.rows[0] });
           break;
@@ -164,7 +168,8 @@ export function App() {
 
   // Lineage and history depend on the run's position and the focused record, so ask again when either moves.
   useEffect(() => {
-    if (column && columns?.some((c) => c.name === column)) send({ type: "lineage", name: column });
+    // Also before the value exists (after going back past it): its history says what will set it.
+    if (column && columns) send({ type: "lineage", name: column });
     else {
       setLineage(null);
       setHistory(null);
@@ -413,6 +418,16 @@ export function App() {
               )}
             </span>
           )}
+          <details className="legend">
+            <summary>Key</summary>
+            <div>
+              <span className="swatch paused" /> paused here · <span className="swatch selected" /> selected · ✓ has run
+              <br />
+              <span className="swatch lineage" /> where the value you picked came from · dotted arcs: that value's data flow
+              <br />
+              <span className="swatch changed" /> changed in the comparison · faded: unchanged (untick "changes" to hide)
+            </div>
+          </details>
           <span className="zoom-bar">
             <button title="Zoom out" onClick={() => setZoom((z) => Math.max(0.3, (z === "auto" ? 1 : z) / 1.25))}>−</button>
             <button title="Fit the width, keeping text readable" className={zoom === "auto" ? "primary" : ""} onClick={() => setZoom("auto")}>fit</button>
@@ -514,7 +529,7 @@ export function App() {
             onReveal={(path) => send({ type: "reveal", path })}
             onRewind={(path) => send({ type: "rewind", path })}
             onGoTo={(change) => {
-              noteNext.current = `⤺ Went back to the moment ${column ?? "the value"} changed; everything after it will run again.`;
+              noteNext.current = `⤺ Went back to just after that step, with every value as it was then; everything after it runs again when you continue.`;
               send({ type: "goTo", change });
             }}
             onRunTo={(path) => {
@@ -539,6 +554,7 @@ export function App() {
                     keyCol={keyCol}
                     paused={!!pausedAt}
                     ran={run.finishedPaths.includes(selectedGroup.cond)}
+                    current={run.current}
                     onChange={changeControls}
                     onCompare={(a, b) => send({ type: "compareForces", a, b })}
                     onRerun={(path) => {

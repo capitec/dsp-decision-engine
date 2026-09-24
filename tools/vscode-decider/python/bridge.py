@@ -164,8 +164,17 @@ class Bridge:
         """Every change to `name` so far (for one record, or all), with the step and iteration that made it."""
         return self.timeline.history(name, row)
 
-    def go_to(self, change):
-        """Go back to just after the step made the timeline's `change`, re-running up to there."""
+    def go_to(self, change=None, path=None, row=None):
+        """Go back to just after the step made the timeline's `change`, re-running up to there.
+
+        With `path` instead, go back to just after that step last wrote something (for record `row`).
+        """
+        if change is None:
+            change = next((i for i in range(len(self.timeline.changes) - 1, -1, -1)
+                           if self.timeline.changes[i]["path"] == path
+                           and (row is None or row in self.timeline.changes[i]["rows"] + self.timeline.changes[i]["kept"])), None)
+            if change is None:
+                raise ValueError(f"{path} hasn't written anything to go back to")
         c = self.timeline.changes[change]
         if c["path"].split("@")[0] in ("override", "force"):
             raise ValueError("a value you set has no step to go back to")

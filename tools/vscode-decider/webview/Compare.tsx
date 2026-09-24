@@ -161,6 +161,11 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
           ].join(" · ")}
         </div>
       )}
+      {c.forcedRows && c.forcedRows.length > 0 && (
+        <div className="muted small">
+          Only {c.forcedRows.map((r) => recordLabel(r, c.key)).join(", ")} {c.forcedRows.length === 1 ? "was" : "were"} forced; the other {c.rows - c.forcedRows.length} records ran as they are.
+        </div>
+      )}
       <div className="comparing" title={c.note}>
         Baseline: <strong>{c.a}</strong>{c.note && <span className="muted"> ⓘ</span>}
         <span className="muted"> · {c.rows} records</span>
@@ -285,7 +290,7 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
         </div>
       )}
       <h4>
-        Step by step <span className="muted small">· {count("changed")} step{count("changed") === 1 ? "" : "s"} changed{count("added") ? `, ${count("added")} added` : ""}{count("removed") ? `, ${count("removed")} removed` : ""}{count("not taken") ? `, ${count("not taken")} not taken` : ""}</span>
+        Step by step <span className="muted small">· {count("changed")} step{count("changed") === 1 ? "" : "s"} changed{left.length || entered.length ? ` (${left.length} stopped running, ${entered.length} ran instead, ${count("changed") - entered.length - left.filter((p) => c.steps.find((s) => s.path === p)?.status === "changed").length} changed values)` : ""}{count("added") ? `, ${count("added")} added` : ""}{count("removed") ? `, ${count("removed")} removed` : ""}{count("not taken") ? `, ${count("not taken")} not taken` : ""}</span>
         {c.firstDivergence && (
           <span className="muted small"> · first difference at <a onClick={() => onSelect(c.firstDivergence!)}>{c.firstDivergence}</a></span>
         )}
