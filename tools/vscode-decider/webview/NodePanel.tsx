@@ -70,7 +70,7 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
     pane.current?.scrollTo(0, 0);
     // A lookup table's answer is its matched row: bring it into view once the pane has laid out.
     // So is an open breakdown of a value.
-    const t = setTimeout(() => pane.current?.querySelector(".table-match, .how")?.scrollIntoView({ block: "start" }), 60);
+    const t = setTimeout(() => (pane.current?.querySelector(".table-match") ?? pane.current?.querySelector(".how"))?.scrollIntoView({ block: "start" }), 60);
     return () => clearTimeout(t);
   }, [node?.path, path?.row, card?.name]);
   const atThis = !!node && run.current?.path === node.path && run.current.when === "before" && !run.finished;
@@ -108,7 +108,7 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
               )}
             </div>
           </div>
-          {card && <Explain entry={card} who={who} role="" nodes={nodes} values={values} onPick={onPick} onSelect={onSelect} />}
+          {card && !(path && table) && <Explain entry={card} who={who} role="" nodes={nodes} values={values} onPick={onPick} onSelect={onSelect} />}
           {who && ran && (node.outputs ?? []).length > 0 && (
             <div className="wrote">
               For {who}: {(node.outputs ?? []).map((o) => `${o} = ${valueOf(o) ?? "?"}`).join(", ")}
@@ -175,6 +175,7 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
             <>
               <h4>Row for {who}</h4>
               <TableMatch table={table} expression={node.table} visited={path.visited} result={path.result} outputs={node.outputs ?? []} inputs={(node.inputs ?? []).map((i) => `${i} = ${valueOf(i) ?? "?"}`)} />
+              {card && <Explain entry={card} who={who} role="" nodes={nodes} values={values} onPick={onPick} onSelect={onSelect} />}
             </>
           )}
           {path && !table && (
