@@ -75,7 +75,7 @@ def build_tax_table() -> DecisionTableConfig:
 
 
 def statutory_deductions(
-    gross_monthly_income: float, employment_type_code: int, tax_base: float, tax_rate: float, tax_band_lo: float,
+    gross_monthly_income: float, employment_type_code: float, tax_base: float, tax_rate: float, tax_band_lo: float,
 ) -> float:
     if employment_type_code in NOT_PAYE_WITHHELD:
         return 0.0

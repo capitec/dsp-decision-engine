@@ -218,7 +218,7 @@ class AdjustmentRegister:
         def apply_adjustments(
             adjustment_base_value: float, decision_date: date,
             adjustment_stack_enabled: bool = param(True),
-            product_code: int = missing_as(-1), segment_code: int = missing_as(-1),
+            product_code: float = missing_as(-1.0), segment_code: float = missing_as(-1.0),
             channel_code: int = missing_as(-1), scorecard_id: int = missing_as(-1),
         ) -> tuple[float, float, str, list[str]]:
             provenance = {"product_code": product_code, "segment_code": segment_code,

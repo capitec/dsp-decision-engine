@@ -59,7 +59,7 @@ def test_the_cli_can_build_and_serve_this_pipeline(tmp_path, monkeypatch):
 
     env = {
         "DECIDER_API__CODE_PATH": str(_DIR), "DECIDER_API__PIPELINE": "pipeline:build",
-        "DECIDER_CONFIG__BASEPATH": str(_DIR / "configs"), "DECIDER_API__MODE": "interpreted",
+        "DECIDER_CONFIG__BASEPATH": str(_DIR / "configs"), "DECIDER_API__MODE": "fused",
     }
     import os
     full_env = dict(os.environ)

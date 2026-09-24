@@ -120,7 +120,9 @@ def _p10_unit():
         affordability_phase.build_ratio_ceiling_table().relabel(writes={"cell_id": "ratio_ceiling_cell_id"}),
         affordability_phase.ratio_ceiling_step,
         affordability_phase.pre_buffer_step,
-        affordability_phase.build_buffer_table().relabel(writes={"cell_id": "buffer_cell_id"}),
+        affordability_phase.buffer_channel_code_step,
+        affordability_phase.build_buffer_table().relabel(
+            reads={"channel_code": "buffer_channel_code"}, writes={"cell_id": "buffer_cell_id"}),
         affordability_phase.buffer_adjustment_step().relabel(
             writes={"adjustment_set_id": "buffer_adjustment_set_id", "adjustments_applied": "buffer_adjustments_applied"}),
         affordability_phase.max_affordable_instalment_step,
@@ -144,7 +146,7 @@ def _p12_unit():
     long_term_loading_step = pricing.long_term_loading_step.relabel(reads={"term_months": "offer_term_months"})
 
     initiation_fee_offer = initiation_fee_step.relabel(reads={"offered_amount": "offer_amount"})
-    initiation_fee_capped_offer = initiation_fee_capped_step.relabel(reads={"offered_amount": "offer_amount"})
+    initiation_fee_capped_offer = initiation_fee_capped_step
 
     financed_annuity = instalment_before_fees_step.relabel(
         reads={"offered_amount": "amount_financed", "term_months": "offer_term_months"})
@@ -189,7 +191,7 @@ def _p12_unit():
     )
 
 
-def offer_term_months(term_months: float, term_cap: float) -> int:
+def offer_term_months(term_months: int, term_cap: float) -> int:
     return int(min(term_months, term_cap))
 
 

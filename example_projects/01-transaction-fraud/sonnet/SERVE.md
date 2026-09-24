@@ -72,21 +72,11 @@ because the festive-period threshold-multiplier overlay is in force on
 
 ## Why interpreted mode
 
-Several steps compare a `str` column to a string literal or another `str`
-column (`degraded_mode_code`, `hard_block_code`'s gate-name join,
-`velocity_completeness_band`). Compiled (`fused`/`stepped`) mode rejects
-this at bind time -- the same class of limitation 00's SERVE.md documents
-for its own `str`-comparing step, with a different trigger here:
-
-    ValueError: fraud_interdiction/enrichment_degradation_code: `str` input
-    'velocity_completeness_band' enters a compiled kernel as a code, so a
-    literal in the function body would never match it; declare the literal
-    as a `str` param, e.g. `private: str = param("private")`
-
-Interpreted mode has no such restriction. Given this slice explicitly
-skips the latency target (SCOPE.md), interpreted mode is the pragmatic
-choice; a throughput-sensitive deployment would need every `str`-literal
-comparison rewritten as a `param()`, which NOTES.md flags as future work.
+`fused` mode can't build this pipeline yet: compiling its largest decision
+tree for the fused kernel fails with `RecursionError: maximum recursion depth
+exceeded` inside decider's tree walker. Interpreted mode has no such limit.
+Given this slice explicitly skips the latency target (SCOPE.md), interpreted
+mode is the pragmatic choice.
 
 ## Run the tests
 

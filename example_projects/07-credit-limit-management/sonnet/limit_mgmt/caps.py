@@ -28,7 +28,7 @@ def round_down_500(amount: float) -> float:
     return math.floor(amount / 500.0) * 500.0
 
 
-def cap_product_max(product_code: int) -> float:
+def cap_product_max(product_code: float) -> float:
     return _PRODUCT_MAX.get(product_code, 150_000.0)
 
 

@@ -32,6 +32,7 @@ from __future__ import annotations
 from datetime import date
 
 import polars as pl
+from typing_extensions import TypedDict
 
 from decider import frame_step
 
@@ -204,7 +205,16 @@ _OUTPUT_COLUMNS = [
 ]
 
 
-@frame_step(reads=["entities", "decision_date"], writes=_OUTPUT_COLUMNS)
+class AdverseEvent(TypedDict, total=False):
+    event_date: date
+
+
+class Entity(TypedDict, total=False):
+    adverse_events: list[AdverseEvent]
+
+
+# Typed so a served JSON request's `event_date` strings arrive as dates.
+@frame_step(reads={"entities": list[Entity], "decision_date": date}, writes=_OUTPUT_COLUMNS)
 def resolve_structure(df: pl.DataFrame) -> pl.DataFrame:
     """Explodes the request's nested `entities` (each carrying nested `adverse_events`)
     into the flat, parallel, long-form columns every later stage reads (see module
