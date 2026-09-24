@@ -2299,3 +2299,23 @@ aside .watch-form {
 .swatch.changed {
   border-color: var(--vscode-charts-orange, orange);
 }
+.group-controls button,
+.watch-form button {
+  border: 1px solid var(--vscode-button-border, var(--vscode-focusBorder));
+  background: var(--vscode-button-secondaryBackground, transparent);
+  color: var(--vscode-button-secondaryForeground, inherit);
+  border-radius: 2px;
+  padding: 1px 8px;
+}
+.group-controls button:disabled,
+.watch-form button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  border-style: dashed;
+}
+.group-controls button.link,
+.watch-form button.link {
+  border: none;
+  background: none;
+  padding: 0;
+}

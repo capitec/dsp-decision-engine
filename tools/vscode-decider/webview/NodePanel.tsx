@@ -248,7 +248,7 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
           <LineageTree entry={card} record={run.record} onSelect={onSelect} />
         </details>
       )}
-      {history && history.name === column && <ValueTimeline history={history} who={who} lineage={card} current={run.current} onSelect={onSelect} onGoTo={onGoTo} />}
+      {history && history.name === column && <ValueTimeline history={history} who={who} current={run.current} onSelect={onSelect} onGoTo={onGoTo} />}
     </aside>
   );
 }

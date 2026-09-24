@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { paramChangeLines, paramReaders, same, type Comparison, type ValueDiff } from "../src/compare";
 import { formatValue, recordLabel, type RecordKey } from "../src/protocol";
 import { headline, ResultCards } from "./ResultCards";
@@ -56,6 +56,9 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
   const [onlyChanges, setOnlyChanges] = useState(true);
   const [showDeclinedOnly, setShowDeclinedOnly] = useState(false);
   const [showSwitched, setShowSwitched] = useState(false);
+  // A forced comparison is about its results; the steps behind them open on request.
+  const [stepsOpen, setStepsOpen] = useState(!c?.forced);
+  useEffect(() => setStepsOpen(!c?.forced), [c]);
   const revisionButton = <button onClick={onCompareRevision}>Compare with a git revision…</button>;
   if (busy) return <div className="compare"><div className="empty">{busy}</div></div>;
   if (error) return <div className="compare"><div className="empty error">{error}</div><div className="actions">{revisionButton}</div></div>;
@@ -294,8 +297,12 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
         {c.firstDivergence && (
           <span className="muted small"> · first difference at <a onClick={() => onSelect(c.firstDivergence!)}>{c.firstDivergence}</a></span>
         )}
-        <label className="right small"><input type="checkbox" checked={onlyChanges} onChange={(e) => setOnlyChanges(e.target.checked)} /> only changed steps</label>
+        {" "}
+        <a className="small" onClick={() => setStepsOpen(!stepsOpen)}>{stepsOpen ? "hide" : "show"}</a>
+        {stepsOpen && <label className="right small"><input type="checkbox" checked={onlyChanges} onChange={(e) => setOnlyChanges(e.target.checked)} /> only changed steps</label>}
       </h4>
+      {stepsOpen && (
+        <>
       {(left.length > 0 || entered.length > 0) && (
         <div className="muted small switched">
           {left.length > 0 && <div>{left.length} step{left.length === 1 ? "" : "s"}{within(left) ? ` in ${within(left)}` : ""} no longer ran for {c.rows === 1 ? "this record" : "the records that switched arm"}.</div>}
@@ -334,6 +341,8 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
           {s.outputs.length > 0 && <Diffs diffs={s.outputs} record={record} keyCol={c.key} results={c.results} />}
         </div>
       ))}
+        </>
+      )}
     </div>
   );
 }

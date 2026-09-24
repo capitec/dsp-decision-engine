@@ -26,6 +26,7 @@ visibly met caps at 5. The loop stops at the first of these:
 | 2 | 7.0 | 7 | 7 | 8 | 7 | 6 |
 | 3 | 7.1 | 7.5 | 7 | 8 | 6 | 7 |
 | 4 | 7.4 | 8 | 7 | 8 | 6 | 8 |
+| 5 | 7.2 | 7.5 | 6.5 | 7.5 | 7.5 | 7 |
 
 ## Round 0 (baseline)
 
@@ -215,3 +216,39 @@ The judge's problems, most damaging first:
 10. The Variables pane truncates "(no offer)" so the figures look like an offer.
 11. The record's arm can be off canvas.
 12. "Will re-run" colours are explained only behind the collapsed Key.
+
+## Round 5: 7.2 (1 round without a new best)
+
+Changes:
+
+- The timeline records, for each change and record, an input the step copied unchanged, and which step computed
+  that input. The history reads the same at every pause:
+  - "the number comes from pl_raw_rate; pl_regulated_rate copied it into pl_rate unchanged; pl_rate_floor kept it";
+  - after going back: "Nothing has set pl_rate yet. The number will come from pl_raw_rate…".
+- "Re-run forced" is hidden when the run is already paused just before the condition.
+- The record scope is a picker inside each action ("Send [every record / client_id 20400] down …").
+- The breakpoint summary counts active breakpoints.
+- Disabled buttons look disabled.
+- The Variables pane puts "(no offer)" first.
+- A forced comparison folds its step-by-step list.
+- F2 now starts paused at the last step, then forces and re-runs.
+
+The judge's problems, most damaging first:
+
+1. F2: "stop forcing" reads as plain text. Rename the re-run button "Re-run product with the force".
+2. F2: the status text starts with an unexplained "On.".
+3. F2: re-running from the last step leaves the user before product_arm. Wants to come back to where they were.
+4. F2: the outcome banner shows internal flags and empty fields ("declined = false · decline_reason = ").
+5. F3/F4: "Paused after" while the editor arrow sits on the step's def, as if it hadn't run.
+6. F5: a loop comparison doesn't show what the loop does by itself.
+7. Money is formatted inconsistently: R 49,152 next to R 16,106.13.
+8. An edge label overlaps a node.
+9. F1: the force and compare record pickers change together.
+10. F1: the header and summary are noisy. Wants one sentence: "As a credit card, 20400 would be declined: …;
+    as a personal loan: approved …".
+11. The details panel is crowded:
+    - four go-back links;
+    - "copied R 150,000 into offer unchanged by offer" reads as circular;
+    - "How X changed" should come first.
+12. The action row varies. Breakpoint chips have a red, error-like border. Arcs and teal nodes aren't explained
+    on screen.

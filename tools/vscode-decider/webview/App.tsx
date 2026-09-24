@@ -558,7 +558,7 @@ export function App() {
                     onChange={changeControls}
                     onCompare={(a, b) => send({ type: "compareForces", a, b })}
                     onRerun={(path) => {
-                      noteNext.current = `↺ Re-running ${path.split("/").pop()} with the force; everything before it is kept.`;
+                      noteNext.current = `↺ Went back to just before ${path.split("/").pop()}, keeping everything before it. Step or continue to run it with the force.`;
                       send({ type: "rewind", path });
                     }}
                   />

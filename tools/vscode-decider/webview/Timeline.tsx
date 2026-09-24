@@ -1,12 +1,9 @@
-import { same } from "../src/compare";
-import { formatValue, type Checkpoint, type Lineage, type ValueChange, type ValueHistory } from "../src/protocol";
+import { formatValue, type Checkpoint, type ValueChange, type ValueHistory } from "../src/protocol";
 
 interface Props {
   history: ValueHistory;
   /** The focused record's label, or null for the whole batch. */
   who: string | null;
-  /** The value's breakdown for the focused record: says where a value a step passed through came from. */
-  lineage?: Lineage | null;
   /** Where the debug run is paused, to mark the change it's paused just after. */
   current?: Checkpoint | null;
   onSelect: (path: string) => void;
@@ -19,95 +16,111 @@ const short = (path: string) => path.split("/").pop();
 const when = (c: ValueChange) => (c.iteration ? ` in iteration ${c.iteration}` : "");
 
 /** Each change to a value so far, oldest first, with the step that made it and a way back to that moment. */
-export function ValueTimeline({ history, who, lineage, current, onSelect, onGoTo }: Props) {
+export function ValueTimeline({ history, who, current, onSelect, onGoTo }: Props) {
   const { name, changes } = history;
   const fmt = (v: unknown) => formatValue(v, name);
-  const last = [...changes].reverse().find((c) => !c.kept && !c.pending);
-  // A step that returned one of its inputs unchanged (a cap that didn't bind) passed the value on; name its origin.
-  // Not inside a loop: there the breakdown shows the last iteration, not the one that made this change.
-  const setter = last && lineage && !last.iteration ? find(lineage, name, last.path) : undefined;
-  const passed = setter && same(setter.value, last!.value) ? setter.inputs.find((i) => i.name !== name && !i.via && i.producer && same(i.value, last!.value)) : undefined;
-  const keptBy = last ? changes.filter((c) => c.kept && !c.pending && changes.indexOf(c) > changes.indexOf(last)).map((c) => short(c.path)) : [];
-  // The change the run is paused just after: going back there would go nowhere.
-  const here = (c: ValueChange) => !!current && current.when === "after" && current.path === c.path && (current.iteration ?? null) === (c.iteration ?? null) && !c.pending;
+  const done = changes.filter((c) => !c.pending);
+  const last = [...done].reverse().find((c) => !c.kept);
+  const next = changes.find((c) => c.pending && !c.kept);
+  const keptBy = last ? done.filter((c) => c.kept && done.indexOf(c) > done.indexOf(last)).map((c) => short(c.path)) : [];
+  const isHere = (path: string, iteration?: number | null) =>
+    !!current && current.when === "after" && current.path === path && (current.iteration ?? null) === (iteration ?? null);
+  const link = (path: string) => (
+    <a title={path} onClick={() => onSelect(path)}>{short(path)}</a>
+  );
   const step = (c: ValueChange) =>
-    c.path.startsWith("force@") ? (
-      <span>you, forcing {short(c.path.slice(6))}</span>
-    ) : c.path.startsWith("override@") ? (
-      <span>you</span>
-    ) : (
-      <a title={c.path} onClick={() => onSelect(c.path)}>{short(c.path)}</a>
-    );
-  const goBack = (c: ValueChange, text: string) =>
-    here(c) ? (
+    c.path.startsWith("force@") ? <span>you, forcing {short(c.path.slice(6))}</span> : c.path.startsWith("override@") ? <span>you</span> : link(c.path);
+  const back = (target: number | string, path: string, iteration: number | null | undefined, text: string) =>
+    isHere(path, iteration) ? (
       <span className="here">◀ you are here</span>
     ) : (
-      !byYou(c) && (
-      <button className="link" title={`Re-run to just after ${short(c.path)}${when(c)} and pause there, with every value as it was then`} onClick={() => onGoTo(c.change)}>
+      <button className="link" title={`Re-run to just after ${short(path)}${iteration ? ` in iteration ${iteration}` : ""} and pause there, with every value as it was then`} onClick={() => onGoTo(target)}>
         {text}
       </button>
-      )
     );
+  const origin = (c: ValueChange) =>
+    c.viaPath ? (
+      <>
+        {link(c.viaPath)}, which computed it as <span className="mono">{c.via}</span>
+      </>
+    ) : (
+      <>
+        the data, where it arrived as <span className="mono">{c.via}</span>
+      </>
+    );
+
   return (
     <section className="timeline">
       <h4>How {name} changed{who ? ` for ${who}` : ""}</h4>
       {who && last && (
         <div className="why">
-          {passed ? (
+          {last.via ? (
             <>
-              {name} is <strong>{fmt(last.value)}</strong>: <a title={passed.producer!} onClick={() => onSelect(passed.producer!)}>{short(passed.producer!)}</a> computed it (as{" "}
-              <span className="mono">{passed.name}</span>), then {step(last)} passed it on unchanged{keptBy.length ? ` and ${keptBy.join(", ")} kept it` : ""}.{" "}
-              <button className="link" title={`Re-run to just after ${short(passed.producer!)} and pause there`} onClick={() => onGoTo(passed.producer!)}>⤺ Go back to where it was computed</button>
+              {name} is <strong>{fmt(last.value)}</strong>. The number comes from {origin(last)}; {step(last)} copied it into {name} unchanged
+              {keptBy.length ? ` and ${keptBy.join(", ")} kept it` : ""}.{" "}
+              {last.viaPath ? back(last.viaPath, last.viaPath, null, "⤺ Go back to where it was computed") : back(last.change, last.path, last.iteration, "⤺ Go back to that moment")}
             </>
           ) : (
             <>
               {name} is <strong>{fmt(last.value)}</strong> because {step(last)} set it{when(last)}
               {last.before !== null && last.before !== undefined ? ` (it was ${fmt(last.before)})` : ""}
-              {keptBy.length ? `; ${keptBy.join(", ")} kept it` : ""}. {goBack(last, "⤺ Go back to that moment")}
+              {keptBy.length ? `; ${keptBy.join(", ")} kept it` : ""}. {!byYou(last) && back(last.change, last.path, last.iteration, "⤺ Go back to that moment")}
             </>
           )}
         </div>
       )}
-      {who && !last && <div className="muted">{history.input ? `${name} is still its input value, ${fmt(history.initial)}.` : `Nothing has set ${name} yet.`}</div>}
+      {who && !last && (
+        <div className="why">
+          {next?.via ? (
+            <>
+              Nothing has set {name} yet. The number will come from {origin(next)} ({fmt(next.value)}); {step(next)} copies it into {name} when the run continues.
+            </>
+          ) : history.input ? (
+            `${name} is still its input value, ${fmt(history.initial)}.`
+          ) : (
+            `Nothing has set ${name} yet.`
+          )}
+        </div>
+      )}
       <ol className="history">
         {history.input && <li className="muted">starts as {who ? <span className="mono">{fmt(history.initial)}</span> : "the input column"}</li>}
-        {passed && (
-          <li>
-            <span className="mono">computed <strong>{fmt(passed.value)}</strong></span> <span className="muted">as {passed.name} by</span>{" "}
-            <a title={passed.producer!} onClick={() => onSelect(passed.producer!)}>{short(passed.producer!)}</a>{" "}
-            <button className="link" onClick={() => onGoTo(passed.producer!)}>go back here</button>
-          </li>
-        )}
         {changes.map((c) => (
-          <li key={`${c.change}-${c.path}-${c.iteration}`} className={c.pending ? "pending" : c.kept ? "kept" : ""} title={c.pending ? "Undone by going back: it runs again when you continue" : undefined}>
-            {c.kept ? (
-              <span className="mono muted">kept {fmt(c.value)}</span>
-            ) : who ? (
-              passed && c === last ? (
-                <span className="mono">passed on {fmt(c.value)} unchanged</span>
-              ) : c.before === null || c.before === undefined ? (
-                <span className="mono">set to <strong>{fmt(c.value)}</strong></span>
+          <Row key={`${c.change}-${c.path}-${c.iteration}-${c.pending ? "p" : ""}`} pending={!!c.pending} kept={!!c.kept}>
+            {who && c.via && c.viaPath && !c.kept && (
+              <div>
+                <span className="mono">computed <strong>{fmt(c.value)}</strong></span> <span className="muted">as {c.via} by</span> {link(c.viaPath)}{" "}
+                {back(c.viaPath, c.viaPath, null, "go back here")}
+              </div>
+            )}
+            <div>
+              {c.kept ? (
+                <span className="mono muted">kept {fmt(c.value)}</span>
+              ) : who ? (
+                c.via ? (
+                  <span className="mono">copied {fmt(c.value)} into {name} unchanged</span>
+                ) : c.before === null || c.before === undefined ? (
+                  <span className="mono">set to <strong>{fmt(c.value)}</strong></span>
+                ) : (
+                  <span className="mono">{fmt(c.before)} → <strong>{fmt(c.value)}</strong></span>
+                )
               ) : (
-                <span className="mono">{fmt(c.before)} → <strong>{fmt(c.value)}</strong></span>
-              )
-            ) : (
-              <span className="mono">{c.rows} record{c.rows === 1 ? "" : "s"}: {c.values!.map(fmt).join(", ")}{c.rows! > c.values!.length ? ", …" : ""}</span>
-            )}{" "}
-            <span className="muted">by</span> {step(c)}
-            <span className="muted">{when(c)}</span> {c.pending ? <span className="muted small">· will re-run</span> : goBack(c, "go back here")}
-          </li>
+                <span className="mono">{c.rows} record{c.rows === 1 ? "" : "s"}: {c.values!.map(fmt).join(", ")}{c.rows! > c.values!.length ? ", …" : ""}</span>
+              )}{" "}
+              <span className="muted">by</span> {step(c)}
+              <span className="muted">{when(c)}</span>{" "}
+              {c.pending ? <span className="muted small">· will run again when you continue</span> : !byYou(c) && back(c.change, c.path, c.iteration, "go back here")}
+            </div>
+          </Row>
         ))}
       </ol>
     </section>
   );
 }
 
-/** The entry for `name` as `producer` wrote it, anywhere in a breakdown. */
-function find(l: Lineage, name: string, producer: string): Lineage | undefined {
-  if (l.name === name && l.producer === producer) return l;
-  for (const i of l.inputs) {
-    const hit = find(i, name, producer);
-    if (hit) return hit;
-  }
-  return undefined;
+function Row({ pending, kept, children }: { pending: boolean; kept: boolean; children: React.ReactNode }) {
+  return (
+    <li className={pending ? "pending" : kept ? "kept" : ""} title={pending ? "Undone by going back: it runs again when you continue" : undefined}>
+      {children}
+    </li>
+  );
 }

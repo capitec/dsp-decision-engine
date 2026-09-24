@@ -98,6 +98,16 @@ export function GroupControls({ group, controls, record, keyCol, paused, ran, cu
   const [at, setAt] = useState("");
   const [added, setAdded] = useState<string>();
   const row = one && record !== null ? record : null;
+  // Who a force or comparison applies to: every record, or the focused one.
+  const whom = (what: string) =>
+    record === null ? (
+      <span>every record</span>
+    ) : (
+      <select aria-label={`${name} ${what} for`} value={one ? "one" : "all"} onChange={(e) => setOne(e.target.value === "one")}>
+        <option value="all">every record</option>
+        <option value="one">{recordLabel(record, keyCol)}</option>
+      </select>
+    );
   const name = lastSegment(group.path);
   const mine = controls.forces.filter((f) => f.path === group.path);
   const forced = mine.find((f) => (f.row ?? null) === row);
@@ -130,22 +140,17 @@ export function GroupControls({ group, controls, record, keyCol, paused, ran, cu
         {isLoop ? "Loop" : "Branch"} {name}
         {isLoop && <span className="muted small"> · up to {group.max} iterations</span>}
       </h4>
-      {record !== null && (
-        <label className="small">
-          <input type="checkbox" checked={one} onChange={(e) => setOne(e.target.checked)} /> only {recordLabel(record, keyCol)} (forcing and comparing below)
-        </label>
-      )}
       <h5>Force it in the debug run</h5>
       <div className="control-row">
         {isLoop ? (
           <>
-            Run it exactly{" "}
+            Run it for {whom("force")} exactly{" "}
             <input aria-label={`iterations for ${name}`} className="narrow" type="number" min={0} max={group.max} placeholder="e.g. 5" value={times || (forced?.iterations ?? "")} onChange={(e) => setTimes(e.target.value)} /> times{" "}
             <button disabled={times === ""} onClick={() => (setForce({ iterations: Number(times) }), setTimes(""))}>Force</button>
           </>
         ) : (
           <>
-            Send {row === null ? "every record" : recordLabel(row, keyCol)}{" "}
+            Send {whom("force")}{" "}
             <select aria-label={`force ${name}`} value={forced?.arm ?? ""} onChange={(e) => setForce(e.target.value === "" ? undefined : { arm: Number(e.target.value) })}>
               <option value="">the way the condition says</option>
               {group.arms.map((x, i) => (
@@ -155,7 +160,7 @@ export function GroupControls({ group, controls, record, keyCol, paused, ran, cu
           </>
         )}
         {forced && <button className="link" onClick={() => setForce()}>stop forcing</button>}
-        {paused && mine.length > 0 && (
+        {paused && mine.length > 0 && !(current?.path === group.cond && current.when === "before") && (
           <button title="Go back to just before it, keeping everything earlier, so the force applies" onClick={() => onRerun(group.cond)}>↺ Re-run {name} forced</button>
         )}
       </div>
@@ -170,7 +175,7 @@ export function GroupControls({ group, controls, record, keyCol, paused, ran, cu
       )}
       <h5>Compare two ways</h5>
       <div className="control-row">
-        {pick(a, setA, `${name} what-if a`)} vs {pick(b, setB, `${name} what-if b`)}
+        For {whom("compare")}: {pick(a, setA, `${name} what-if a`)} vs {pick(b, setB, `${name} what-if b`)}
         {isLoop && " iterations"}{" "}
         <button disabled={a === b} title="Run the flow both ways, start to end, and compare every result" onClick={() => onCompare(side(a), side(b))}>Compare</button>
       </div>
@@ -237,7 +242,7 @@ export function WatchForm({ names, step, writes, scopes, name: initial, record, 
   return (
     <>
     <details className="watch-form" open={open} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
-      <summary>⏸ Break when a value…{here.length ? ` (${here.length} on this step)` : ""}</summary>
+      <summary>⏸ Break when a value…{here.length ? ` (${here.length} active that this step can trigger)` : ""}</summary>
       {here.map(({ w, i }) => (
         <div key={i} className="small">
           ⏸ {watchText(w, keyCol)}{" "}
