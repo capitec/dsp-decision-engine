@@ -126,7 +126,7 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
       </div>
       <div className="comparing" title={c.note}>
         Baseline: <strong>{c.a}</strong>{c.note && <span className="muted"> ⓘ</span>}
-        <span className="muted"> · {c.rows} records · {count("changed")} steps changed{count("added") ? `, ${count("added")} added` : ""}{count("removed") ? `, ${count("removed")} removed` : ""}</span>
+        <span className="muted"> · {c.rows} records</span>
       </div>
       <div className="verdict">
         {headline(c) ?? (movedOut.length === 0
@@ -236,7 +236,7 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
       )}
       {downstream > 0 && <div className="muted small">and {downstream} downstream step{downstream === 1 ? "" : "s"} changed as a result: see Step by step below.</div>}
       <h4>
-        Step by step
+        Step by step <span className="muted small">· {count("changed")} steps changed{count("added") ? `, ${count("added")} added` : ""}{count("removed") ? `, ${count("removed")} removed` : ""}</span>
         {c.firstDivergence && (
           <span className="muted small"> · first difference at <a onClick={() => onSelect(c.firstDivergence!)}>{c.firstDivergence}</a></span>
         )}

@@ -1977,3 +1977,24 @@ table.sweep.grid td.changed.tint-down,
 .table-match {
   scroll-margin-top: 110px;
 }
+
+table.sweep.grid td.changed:not(.tint-up):not(.tint-down) {
+  background: none;
+}
+table.sweep.grid th .axes {
+  font-size: 1em;
+  font-weight: 600;
+}
+.tint-up-key,
+.tint-down-key {
+  font-size: 1em;
+}
+
+aside {
+  scroll-padding-top: 110px;
+}
+@media (max-width: 760px) {
+  main.detailed.explaining .graph {
+    height: 28vh;
+  }
+}

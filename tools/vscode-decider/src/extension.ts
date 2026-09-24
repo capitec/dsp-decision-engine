@@ -367,6 +367,9 @@ async function reveal(file: string, line: number | null) {
     const pos = new vscode.Position(line - 1, 0);
     editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
     editor.selection = new vscode.Selection(pos, pos);
+    const flash = vscode.window.createTextEditorDecorationType({ isWholeLine: true, backgroundColor: new vscode.ThemeColor("editor.findMatchHighlightBackground") });
+    editor.setDecorations(flash, [new vscode.Range(pos, pos)]);
+    setTimeout(() => flash.dispose(), 2500);
   }
 }
 

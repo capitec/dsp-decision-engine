@@ -222,7 +222,7 @@ export function App() {
   };
   const pausedAt = run.current && !run.finished ? `${run.current.when} ${run.current.path || "the start"}` : null;
   const shownTreePath = treePath && run.record === treePath.row ? treePath : null;
-  const withDetails = details && tab === "graph";
+  const withDetails = details && tab === "graph" && !!selectedNode;
 
   return (
     <div className="app">
@@ -256,21 +256,12 @@ export function App() {
           {edits.length > 0 && (
             <>
               {" · "}
-              {edits.length <= 2 ? (
-                edits.map(([p, a]) => (
-                  <span key={p} className="edit-chip">
-                    ✎ {editLabel([p, a])}
-                    {edits.length > 1 && (
-                      <button className="link" title="Compare the flow as started with only this edit" onClick={() => compareEdits(p)}>compare with start</button>
-                    )}
-                  </span>
-                ))
+              {edits.length === 1 ? (
+                <span className="edit-chip">✎ {editLabel(edits[0])}</span>
               ) : (
-                <span className="edit-dropdown">
-                  <button className="link" aria-expanded={editsOpen} title="The steps skipped or swapped in this run" onClick={() => setEditsOpen(!editsOpen)}>
-                    {edits.length} edits {editsOpen ? "▴" : "▾"}
-                  </button>
-                </span>
+                <button className="link" aria-expanded={editsOpen} title="The steps skipped or swapped in this run; compare each on its own" onClick={() => setEditsOpen(!editsOpen)}>
+                  ✎ {edits.length} edits {editsOpen ? "▴" : "▾"}
+                </button>
               )}{" "}
               <button className="banner-button" title="Run the flow as started and as edited, start to end, and compare every result" onClick={() => compareEdits()}>
                 {edits.length > 1 ? "Compare with start: all edits" : "Compare with start"}
@@ -281,19 +272,17 @@ export function App() {
             <div className="edit-menu-pop">
               {edits.map(([p, a]) => (
                 <div key={p}>
-                  {editLabel([p, a])}{" "}
-                  {edits.length > 1 && (
-                    <button
-                      className="link"
-                      title="Compare the flow as started with only this edit"
-                      onClick={() => {
-                        setEditsOpen(false);
-                        compareEdits(p);
-                      }}
-                    >
-                      compare this one
-                    </button>
-                  )}
+                  ✎ {editLabel([p, a])}{" "}
+                  <button
+                    className="link"
+                    title="Compare the flow as started with only this edit"
+                    onClick={() => {
+                      setEditsOpen(false);
+                      compareEdits(p);
+                    }}
+                  >
+                    compare with start
+                  </button>
                 </div>
               ))}
             </div>

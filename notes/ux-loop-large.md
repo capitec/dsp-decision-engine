@@ -21,6 +21,7 @@ goal isn't visibly met caps at 5). The loop stops above 8/10 or after 40 rounds.
 | 11 | 7.8 | 8 | 9 | 7 | 8.5 | 6.5 | 8 | 7.5 |
 | 12 | 7.6 | 8 | 8 | 8 | 7 | 7 | 8 | 7 |
 | 13 | 7.7 | 8 | 8 | 8 | 8 | 7 | 8 | 7 |
+| 14 | 7.6 | 8 | 8 | 7 | 8 | 7 | 8 | 7 |
 
 ## Round 0 (baseline)
 
@@ -356,3 +357,29 @@ Judge's problems, most damaging first:
 10. Headlines lead with a big "steps changed" count; declined counts don't add up.
 11. L5: tiny axis labels; 22.855% precision.
 12. L5: the two knob pickers render differently.
+
+## Round 14
+
+Changes: a grid cell is shaded only when the legend's metric moved; axis labels in normal text; percentages to two
+decimals; a step's result for the focused record and a comparison's change block come first in its details; scrolled
+content stops below the sticky header; no empty details pane before a step is picked; the step count moved from the
+headline to Step by step, and declines with a new reason aren't counted again as "internal values only"; the opened
+source line flashes; the banner is one line with the edits behind one control.
+
+Scores have sat between 7.4 and 7.8 for eight rounds. Successive judges now ask for opposite things (edit chips inline
+vs. behind one control; zero parts shown vs. folded), so part of the remaining gap is judge variance.
+
+Judge's problems, most damaging first:
+
+1. L3: the matched row is cut off; nothing scrolls to it.
+2. L3: the summary hides which parts are 0.
+3. L7: the per-edit compare is hidden behind "2 edits ▾".
+4. L7: it isn't said that both versions ran to the end.
+5. The banner, find bar and compare legend squeeze the graph.
+6. First open: blank space below the graph.
+7. L5: which applicants each cell means; shading not labelled.
+8. L5: axis headers ambiguous; current values not marked on the axes.
+9. Results looks empty when no offer changed.
+10. L6: the declined card's internal values are tiny grey text.
+11. Step actions differ by step type; the find box empties after a link.
+12. L1: the opened source is cramped.
