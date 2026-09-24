@@ -180,6 +180,7 @@ export function App() {
   const selectedGroup = selectedNode && steered(groups, selectedNode.path);
   const outputNames = useMemo(() => [...new Set(nodes.flatMap((n) => n.outputs ?? []))].sort(), [nodes]);
   const [controls, setControls] = useState<Controls>({ forces: [], watches: [] });
+  const [hitsOpen, setHitsOpen] = useState(false);
   const changeControls = (c: Controls) => {
     setControls(c);
     send({ type: "setControls", controls: c });
@@ -306,7 +307,7 @@ export function App() {
                   .map((c) => (
                     <option key={c.name} value={c.name}>
                       {c.name} = {formatValue(c.value, c.name)}
-                      {declinedNow && typeof c.value === "number" && describe.outcome?.includes(c.name) ? " (not offered: declined)" : ""}
+                      {declinedNow && typeof c.value === "number" && describe.outcome?.includes(c.name) ? " (no offer)" : ""}
                     </option>
                   ))}
               </select>
@@ -353,12 +354,18 @@ export function App() {
             <div className="banner-note hit">
               ⏸ Breakpoint: {hitText({ ...run.hit, rows: [] }, keyCol, controls.watches[run.hit.watch])}
               {(run.hit.rows ?? []).length > 0 && ": "}
-              {(run.hit.rows ?? []).map((r, i) => (
+              {(run.hit.rows ?? []).slice(0, hitsOpen ? undefined : 3).map((r, i) => (
                 <span key={r}>
                   {i > 0 && ", "}
                   <a title="Focus this record" onClick={() => send({ type: "record", row: r })}>{recordLabel(r, keyCol)}</a> = {formatValue(run.hit!.values?.[i], controls.watches[run.hit!.watch]?.name)}
                 </span>
               ))}
+              {(run.hit.rows ?? []).length > 3 && !hitsOpen && (
+                <>
+                  {" "}
+                  <a onClick={() => setHitsOpen(true)}>and {run.hit.rows!.length - 3} more</a>
+                </>
+              )}
             </div>
           )}
           {outcome && <div className="banner-note outcome">{outcome}</div>}

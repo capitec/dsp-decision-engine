@@ -17,7 +17,8 @@ def _groups(node, out):
     kids = node.get("children", ())
     if node["kind"] in ("branch", "loop") and kids and kids[0]["kind"] == "call" and kids[0].get("outputs"):
         out[node["path"]] = {"kind": node["kind"], "cond": kids[0]["path"], "output": kids[0]["outputs"][0],
-                             "arms": len(kids) - 1, "max": node.get("maxIterations")}
+                             "arms": len(kids) - 1, "names": [k["path"].split("/")[-1] for k in kids[1:]],
+                             "max": node.get("maxIterations")}
     for k in kids:
         _groups(k, out)
     return out

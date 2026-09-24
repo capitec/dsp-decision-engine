@@ -150,6 +150,9 @@ class Bridge:
         c = self.timeline.last(entry["name"], row)
         if c and c["path"].split("@")[0] in ("force", "override"):
             entry.update(setBy=c["path"], was=c["before"][c["rows"].index(row)], inputs=[])
+            group = self.controls.groups.get(c["path"].partition("@")[2])
+            if group and group["kind"] == "branch":
+                entry["arms"] = group["names"]
         for i in entry.get("inputs", ()):
             self._set_by_hand(i, row)
 

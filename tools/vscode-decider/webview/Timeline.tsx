@@ -1,5 +1,5 @@
 import { same } from "../src/compare";
-import { formatValue, type Lineage, type ValueChange, type ValueHistory } from "../src/protocol";
+import { formatValue, type Checkpoint, type Lineage, type ValueChange, type ValueHistory } from "../src/protocol";
 
 interface Props {
   history: ValueHistory;
@@ -7,6 +7,8 @@ interface Props {
   who: string | null;
   /** The value's breakdown for the focused record: says where a value a step passed through came from. */
   lineage?: Lineage | null;
+  /** Where the debug run is paused, to mark the change it's paused just after. */
+  current?: Checkpoint | null;
   onSelect: (path: string) => void;
   onGoTo: (change: number) => void;
 }
@@ -16,13 +18,17 @@ const short = (path: string) => path.split("/").pop();
 const when = (c: ValueChange) => (c.iteration ? ` in iteration ${c.iteration}` : "");
 
 /** Each change to a value so far, oldest first, with the step that made it and a way back to that moment. */
-export function ValueTimeline({ history, who, lineage, onSelect, onGoTo }: Props) {
+export function ValueTimeline({ history, who, lineage, current, onSelect, onGoTo }: Props) {
   const { name, changes } = history;
   const fmt = (v: unknown) => formatValue(v, name);
   const last = [...changes].reverse().find((c) => !c.kept && !c.pending);
   // A step that returned one of its inputs unchanged (a cap that didn't bind) passed the value on; name its origin.
-  const setter = last && lineage ? find(lineage, name, last.path) : undefined;
-  const passed = setter?.inputs.find((i) => same(i.value, last!.value) && i.producer);
+  // Not inside a loop: there the breakdown shows the last iteration, not the one that made this change.
+  const setter = last && lineage && !last.iteration ? find(lineage, name, last.path) : undefined;
+  const passed = setter && same(setter.value, last!.value) ? setter.inputs.find((i) => i.name !== name && !i.via && i.producer && same(i.value, last!.value)) : undefined;
+  const keptBy = last ? changes.filter((c) => c.kept && !c.pending && changes.indexOf(c) > changes.indexOf(last)).map((c) => short(c.path)) : [];
+  // The change the run is paused just after: going back there would go nowhere.
+  const here = (c: ValueChange) => !!current && current.when === "after" && current.path === c.path && (current.iteration ?? null) === (c.iteration ?? null) && !c.pending;
   const step = (c: ValueChange) =>
     c.path.startsWith("force@") ? (
       <span>you, forcing {short(c.path.slice(6))}</span>
@@ -32,23 +38,31 @@ export function ValueTimeline({ history, who, lineage, onSelect, onGoTo }: Props
       <a title={c.path} onClick={() => onSelect(c.path)}>{short(c.path)}</a>
     );
   const goBack = (c: ValueChange, text: string) =>
-    !byYou(c) && (
+    here(c) ? (
+      <span className="here">◀ you are here</span>
+    ) : (
+      !byYou(c) && (
       <button className="link" title={`Re-run to just after ${short(c.path)}${when(c)} and pause there, with every value as it was then`} onClick={() => onGoTo(c.change)}>
         {text}
       </button>
+      )
     );
   return (
     <section className="timeline">
       <h4>How {name} changed{who ? ` for ${who}` : ""}</h4>
       {who && last && (
         <div className="why">
-          {name} is <strong>{fmt(last.value)}</strong> because {step(last)} set it{when(last)}
-          {last.before !== null && last.before !== undefined ? ` (it was ${fmt(last.before)})` : ""}. {goBack(last, "⤺ Go back to that moment")}
-          {passed && (
-            <div className="small">
-              It passed <span className="mono">{passed.name}</span> through unchanged, so the value comes from{" "}
-              <a title={passed.producer!} onClick={() => onSelect(passed.producer!)}>{short(passed.producer!)}</a>.
-            </div>
+          {passed ? (
+            <>
+              {name} is <strong>{fmt(last.value)}</strong>: <a title={passed.producer!} onClick={() => onSelect(passed.producer!)}>{short(passed.producer!)}</a> computed it (as{" "}
+              <span className="mono">{passed.name}</span>), then {step(last)} passed it on unchanged{keptBy.length ? ` and ${keptBy.join(", ")} kept it` : ""}. {goBack(last, "⤺ Go back to that moment")}
+            </>
+          ) : (
+            <>
+              {name} is <strong>{fmt(last.value)}</strong> because {step(last)} set it{when(last)}
+              {last.before !== null && last.before !== undefined ? ` (it was ${fmt(last.before)})` : ""}
+              {keptBy.length ? `; ${keptBy.join(", ")} kept it` : ""}. {goBack(last, "⤺ Go back to that moment")}
+            </>
           )}
         </div>
       )}

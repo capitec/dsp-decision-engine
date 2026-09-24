@@ -37,7 +37,7 @@ export function ResultCards({ c, record, onFocus, onSelect }: { c: Comparison; r
         <thead>
           <tr>
             <th />
-            <th title={c.a}>{heads[0]}</th>
+            <th title={c.a}>{heads[0]} <span className="muted small">(baseline)</span></th>
             <th title={c.b}>{heads[1]}</th>
             <th />
           </tr>
@@ -74,7 +74,7 @@ export function ResultCards({ c, record, onFocus, onSelect }: { c: Comparison; r
         </tbody>
       </table>
       {decision && (c.results.a[decision][r] === "decline" || c.results.b[decision][r] === "decline") && (
-        <div className="muted small">Greyed figures aren't an offer: that side declines{c.results.b.reason_code ? ` (${formatValue(c.results.b.reason_code[r] ?? c.results.a.reason_code?.[r])})` : ""}.</div>
+        <div className="muted small">Struck-through figures aren't an offer: that side declines{c.results.b.reason_code ? ` (${formatValue(c.results.b.reason_code[r] ?? c.results.a.reason_code?.[r])})` : ""}.</div>
       )}
     </div>
   );

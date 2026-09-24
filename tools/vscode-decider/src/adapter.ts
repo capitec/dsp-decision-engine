@@ -356,7 +356,7 @@ export class DeciderDebugSession extends LoggingDebugSession {
   private shown(c: ColumnSummary, declined = false): string {
     if (this.record === null) return previewOf(c, c.name);
     const offer = declined && typeof c.value === "number" && (this.describe?.outcome ?? []).includes(c.name);
-    return `${formatValue(c.value, c.name)}${offer ? "  (not offered: declined)" : ""}`;
+    return `${formatValue(c.value, c.name)}${offer ? "  (no offer)" : ""}`;
   }
 
   private async variablesFor(ref: VarRef): Promise<Variable[]> {
