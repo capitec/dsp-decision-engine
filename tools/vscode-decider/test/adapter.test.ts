@@ -1,7 +1,7 @@
 import * as path from "node:path";
 import { DebugClient } from "@vscode/debugadapter-testsupport";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { compareTraces, type TraceResult } from "../src/compare";
+import { compareTraces, type TraceResult } from "@decider/ui";
 
 const ROOT = path.resolve(__dirname, "..");
 const LOAN = path.join(ROOT, "examples", "loan.py");

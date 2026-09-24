@@ -1,6 +1,6 @@
-import { same } from "../src/compare";
-import { formatValue, isRateName, recordLabel } from "../src/protocol";
-import type { Sweep } from "../src/sweep";
+import { same } from "./model/compare";
+import { formatValue, isRateName, recordLabel } from "./model/protocol";
+import type { Sweep } from "./model/sweep";
 
 const categorical = (v: unknown[] | undefined) => !!v?.length && v.every((x) => typeof x === "string" || typeof x === "boolean");
 

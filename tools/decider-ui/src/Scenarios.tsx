@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { formatValue, isRateName, recordLabel, type ParamInfo, type RecordKey } from "../src/protocol";
-import { scenarios, type Knob, type Scenario, type Sweep } from "../src/sweep";
+import { formatValue, isRateName, recordLabel, type ParamInfo, type RecordKey } from "./model/protocol";
+import { scenarios, type Knob, type Scenario, type Sweep } from "./model/sweep";
 import { Compare } from "./Compare";
 import { SweepResults } from "./SweepResults";
 import { currentValue, parseValue } from "./Params";
@@ -22,8 +22,8 @@ interface Props {
   onRun: (scenarios: Scenario[], fromHere: boolean) => void;
   onOpen: (index: number) => void;
   onSelectStep: (path: string) => void;
-  onCompareRevision: () => void;
-  onOpenDiff: (path: string) => void;
+  onCompareRevision?: () => void;
+  onOpenDiff?: (path: string) => void;
 }
 
 interface Row {

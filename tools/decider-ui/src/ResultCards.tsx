@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { same, type Comparison } from "../src/compare";
-import { formatValue, recordLabel } from "../src/protocol";
+import { same, type Comparison } from "./model/compare";
+import { formatValue, recordLabel } from "./model/protocol";
 
 // Records shown before "show more": enough to scan, few enough to keep the steps in reach.
 const FIRST = 12;

@@ -1,14 +1,12 @@
 import { execFileSync } from "node:child_process";
-import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 import { describe, expect, it } from "vitest";
-import { compareTraces, diffDoc, paramChangeLines, paramReaders, same, type TraceResult } from "../src/compare";
-import { clampNote, evaluate, matchRow, substitute, sumTerms, summaryRows } from "../webview/Explain";
-import { listRefs, materialise } from "../src/git";
-import { scenarios, summariseSweep } from "../src/sweep";
+import { compareTraces, diffDoc, paramChangeLines, paramReaders, same, type TraceResult } from "../src/model/compare";
+import { clampNote, evaluate, matchRow, substitute, sumTerms, summaryRows } from "../src/Explain";
+import { scenarios, summariseSweep } from "../src/model/sweep";
 
-const ROOT = path.resolve(__dirname, "..");
+// The Python bridge and the example flows live with the VS Code extension.
+const ROOT = path.resolve(__dirname, "../../vscode-decider");
 const LOAN = path.join(ROOT, "examples", "loan.py");
 
 function trace(file: string, extra: Record<string, unknown> = {}): TraceResult {
@@ -96,30 +94,6 @@ print(json.dumps(b.sweep([{"label": "cap 6", "params": {"term": {"cap_by_income"
     expect(s.changedColumns).toEqual(["term_cap"]);
     expect(s.outputs[0]!.term_cap).toEqual([6, 6]);
     expect(s.comparisons[0].firstDivergence).toBe("term/cap_by_income");
-  });
-});
-
-describe("git revisions", () => {
-  it("lists refs and extracts a revision's tree without touching the working tree", async () => {
-    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "decider-git-"));
-    const g = (...args: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd: repo });
-    g("init", "-q");
-    fs.writeFileSync(path.join(repo, "flow.py"), "v = 1\n");
-    g("add", ".");
-    g("commit", "-qm", "first");
-    g("tag", "v1");
-    fs.writeFileSync(path.join(repo, "flow.py"), "v = 2\n");
-    g("commit", "-qam", "second");
-    const refs = await listRefs(repo);
-    expect(refs[0].label).toMatch(/^HEAD \(/); // HEAD, its branch and its sha are one entry
-    expect(refs.some((r) => r.label.startsWith("v1"))).toBe(true);
-    expect(refs[0].description).toMatch(/^last commit: second/);
-    expect(refs.length).toBe(2);
-    const cache = path.join(repo, ".cache");
-    const dir = await materialise(repo, "v1", cache);
-    expect(fs.readFileSync(path.join(dir, "flow.py"), "utf8")).toBe("v = 1\n");
-    expect(await materialise(repo, "v1", cache)).toBe(dir);
-    expect(fs.readFileSync(path.join(repo, "flow.py"), "utf8")).toBe("v = 2\n");
   });
 });
 

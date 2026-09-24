@@ -4,12 +4,10 @@ import { DeciderDebugSession } from "./adapter";
 import { analyse, PipelineCodeLens } from "./analysis";
 import { listRefs, materialise, repoRoot } from "./git";
 import { GraphPanel } from "./graphPanel";
-import { editLabel, walk, type CallNodeJson, type ColumnSummary, type Controls, type DescribeResult, type FromWebview, type IRNodeJson, type Lineage, type RecordKey, type RunStatus, type ToWebview, type ValueHistory } from "./protocol";
+import { compareTraces, editLabel, summariseSweep, walk, type CallNodeJson, type ColumnSummary, type Controls, type DescribeResult, type FromUI, type IRNodeJson, type Lineage, type RecordKey, type RunStatus, type Scenario, type SweepResponse, type ToUI, type TraceResult, type ValueHistory } from "@decider/ui";
 import { debugpyLibs, pythonCommand } from "./python";
 import { runComparison, type Side } from "./compareRuns";
-import { compareTraces, type TraceResult } from "./compare";
 import { withBridge } from "./bridge";
-import { summariseSweep, type Scenario, type SweepResponse } from "./sweep";
 import { StructureProvider } from "./structure";
 
 let lineageChannel: vscode.OutputChannel | undefined;
@@ -143,9 +141,9 @@ export function activate(ctx: vscode.ExtensionContext) {
   );
 }
 
-const post = (m: ToWebview) => GraphPanel.post(m);
+const post = (m: ToUI) => GraphPanel.post(m);
 
-async function onWebview(m: FromWebview, describe: DescribeResult) {
+async function onWebview(m: FromUI, describe: DescribeResult) {
   const s = deciderSession();
   switch (m.type) {
     case "reveal": {

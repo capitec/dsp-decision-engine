@@ -1,9 +1,9 @@
 import { useEffect, useRef } from "react";
-import { same, type Comparison } from "../src/compare";
+import { same, type Comparison } from "./model/compare";
 import { clampNote, Explain } from "./Explain";
 import { header } from "./TableGrid";
 import { ValueTimeline } from "./Timeline";
-import { formatValue, recordLabel, type CallNodeJson, type ColumnSummary, type Lineage, type RecordKey, type RunStatus, type ValueHistory } from "../src/protocol";
+import { formatValue, recordLabel, type CallNodeJson, type ColumnSummary, type Lineage, type RecordKey, type RunStatus, type ValueHistory } from "./model/protocol";
 
 interface Props {
   node: CallNodeJson;
@@ -18,16 +18,16 @@ interface Props {
   treePath: { path: string; row: number; visited: string[]; result?: unknown[] } | null;
   onPick: (name?: string) => void;
   onSelect: (path: string) => void;
-  onReveal: (path: string) => void;
+  onReveal?: (path: string) => void;
   onRewind: (path: string) => void;
   onGoTo: (change: number | string) => void;
-  onRunTo: (path: string) => void;
-  onStep: () => void;
+  onRunTo?: (path: string) => void;
+  onStep?: () => void;
   /** Step into the Python of the step the run is paused before. */
-  onDebugStep: () => void;
+  onDebugStep?: () => void;
   /** The comparison the graph is coloured by, if any: params show both sides. */
   comparison: Comparison | null;
-  onOpenDiff: (path: string) => void;
+  onOpenDiff?: (path: string) => void;
   /** The flow's PARAMS document, where lookup tables keep their rows. */
   values: Record<string, unknown>;
   onSkip: (path: string) => void;
@@ -92,17 +92,17 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
       <div className="step-head">
         <h3>{name} {node.path !== name && <span className="muted">in {node.path.slice(0, -(name?.length ?? 0) - 1)}</span>}</h3>
         <div className="actions">
-          <button onClick={() => onReveal(node.path)}>Open source</button>
+          {onReveal && <button onClick={() => onReveal(node.path)}>Open source</button>}
           {run.edits?.[node.path] === "delete" ? null : atThis ? (
             <>
-              <button className="primary" onClick={onStep} title="Run this step and pause just after it">Run through {name}</button>
-              {node.python?.bodyLine && (
+              {onStep && <button className="primary" onClick={onStep} title="Run this step and pause just after it">Run through {name}</button>}
+              {node.python?.bodyLine && onDebugStep && (
                 <button title="Attach the Python debugger and stop on the first line of this step's code, for the focused record; step through it with F10 and F11" onClick={onDebugStep}>
                   Step into the Python
                 </button>
               )}
             </>
-          ) : ran && paused ? null : (
+          ) : ran && paused || !onRunTo ? null : (
             <button className="primary" onClick={() => onRunTo(node.path)} title="Run the flow and pause just before this step">Run to {name}</button>
           )}
           {atThis && !run.edits?.[node.path] && (
@@ -149,7 +149,7 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
           ))}
           {change.structural.includes("code") && (
             <div>
-              code changed{comparison!.files && <> · <a onClick={() => onOpenDiff(node.path)}>view diff</a></>}
+              code changed{comparison!.files && onOpenDiff && <> · <a onClick={() => onOpenDiff(node.path)}>view diff</a></>}
             </div>
           )}
           {change.outputs.flatMap((o) =>

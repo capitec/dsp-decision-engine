@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { docWithDefaults, paramChangeLines, same } from "../src/compare";
-import { formatValue, recordLabel, type Force, type ParamInfo, type RecordKey } from "../src/protocol";
+import { docWithDefaults, paramChangeLines, same } from "./model/compare";
+import { formatValue, recordLabel, type Force, type ParamInfo, type RecordKey } from "./model/protocol";
 import { TableGrid, tableRows } from "./TableGrid";
 import { ForcePicker, forceText, pickedForces, type Group } from "./Controls";
 
