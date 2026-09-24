@@ -1952,3 +1952,28 @@ details.step-code pre {
   cursor: pointer;
   color: var(--vscode-textLink-foreground);
 }
+
+table.changed-table tr.param-row td {
+  font-weight: 600;
+}
+table.changed-table tr.reader-row td {
+  padding-left: 12px;
+}
+
+table.sweep.grid td.changed.tint-up,
+.tint-up-key {
+  background: rgba(55, 148, 255, 0.22);
+}
+table.sweep.grid td.changed.tint-down,
+.tint-down-key {
+  background: rgba(234, 92, 0, 0.22);
+}
+.tint-up-key,
+.tint-down-key {
+  padding: 0 4px;
+  border-radius: 3px;
+}
+
+.table-match {
+  scroll-margin-top: 110px;
+}

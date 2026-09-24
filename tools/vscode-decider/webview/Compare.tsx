@@ -103,6 +103,15 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
     paramChangeLines(c.paramsDocs?.b, c.values?.a)
       .filter((l) => l.startsWith(`${param} row`))
       .map((l) => l.slice(param.length + 1));
+  // Param edits lead: the edit itself, then the steps that moved because they read it.
+  const paramRows = readers.map((r) => {
+    const moved = c.steps.filter((st) => r.steps.includes(st.path) && st.outputs.length);
+    const lines = paramChangeLines(c.paramsDocs?.b, c.values?.a).filter((l) => l.startsWith(`${r.param}:`) || l.startsWith(`${r.param} `));
+    const where = r.steps.length > 1 || (c.values?.b as Record<string, Record<string, unknown>> | undefined)?.shared?.[r.param] !== undefined ? (c.valuesFile ?? "shared params") : (r.steps[0] ?? "").split("/").slice(-2, -1)[0] ?? "";
+    return { param: r.param, steps: r.steps, moved, where, lines: lines.map((l) => l.replace(new RegExp(`^${r.param}:? ?`), "")), records: new Set(moved.flatMap((st) => st.outputs.flatMap((o) => o.changedRows))).size };
+  });
+  // Steps whose own code or structure changed (not only a param they read).
+  const codeCauses = causes.filter((s) => s.status !== "changed" || s.structural.length > 0 || s.paramChanges.length > 0);
   const fileOf = (s: (typeof c.steps)[number]) =>
     rowEdits(readers.find((r) => r.steps.includes(s.path))?.param ?? "").length ? c.valuesFile ?? "PARAMS" : (s.where ?? "").split(":")[0] || s.path;
   const downstream = touched.length - causes.length;
@@ -153,36 +162,56 @@ export function Compare({ comparison: c, busy, error, record, onSelect, onCompar
       <h4>Results</h4>
       <ResultCards c={c} record={record} onFocus={onFocus} onSelect={onSelect} />
       {(paramLines.length > 0 || c.changedInputs.length > 0 || causes.length > 0) && <h4>What changed</h4>}
-      {!causes.length && paramLines.map((l) => (
-        <div key={l} className="mono">{l}</div>
-      ))}
-      {causes.length > 0 && (
+      {(paramRows.length > 0 || codeCauses.length > 0) && (
         <div className="muted small">
-          {causes.length} change{causes.length === 1 ? "" : "s"} in {new Set(causes.map(fileOf)).size} file{new Set(causes.map(fileOf)).size === 1 ? "" : "s"}: {[...new Set(causes.map(fileOf))].join(", ")}
+          {[
+            paramRows.length ? `${paramRows.length} param change${paramRows.length === 1 ? "" : "s"}` : "",
+            codeCauses.length ? `${codeCauses.length} step${codeCauses.length === 1 ? "" : "s"} changed in ${[...new Set(codeCauses.map(fileOf))].join(", ")}` : "",
+          ]
+            .filter(Boolean)
+            .join(" · ")}
         </div>
       )}
       {c.changedInputs.map((i) => (
         <div key={i.name} className="mono">{i.name} → {formatValue(i.after, i.name)} <span className="muted">for {i.scope}</span></div>
       ))}
-      {causes.length > 0 && (
+      {(paramRows.length > 0 || codeCauses.length > 0) && (
         <table className="changed-table">
           <thead>
             <tr>
-              <th>step</th>
-              <th>file</th>
-              <th>what changed</th>
+              <th>what</th>
+              <th>where</th>
+              <th>change</th>
               <th>records changed</th>
             </tr>
           </thead>
           <tbody>
-            {causes.map((s) => (
+            {paramRows.flatMap((p) => [
+              <tr key={p.param} className="param-row">
+                <td className="mono">{p.param}</td>
+                <td className="muted small mono">{p.where}</td>
+                <td>
+                  {p.lines.join("; ")}
+                  <span className="muted"> · read by {p.steps.length} step{p.steps.length === 1 ? "" : "s"}</span>
+                </td>
+                <td className="mono">{p.records}</td>
+              </tr>,
+              ...p.moved.map((st) => (
+                <tr key={`${p.param}-${st.path}`} className="reader-row">
+                  <td>↳ <a onClick={() => onSelect(st.path)}>{st.path.split("/").pop()}</a></td>
+                  <td className="muted small mono">{st.where ?? ""}</td>
+                  <td className="muted">reads {p.param}</td>
+                  <td className="mono">{new Set(st.outputs.flatMap((o) => o.changedRows)).size}</td>
+                </tr>
+              )),
+            ])}
+            {codeCauses.map((s) => (
               <tr key={s.path}>
                 <td><a onClick={() => onSelect(s.path)}>{s.path.split("/").pop()}</a></td>
-                <td className="muted small mono" title={s.path}>{rowEdits(readers.find((r) => r.steps.includes(s.path))?.param ?? "").length ? c.valuesFile ?? "PARAMS" : s.where ?? "—"}</td>
+                <td className="muted small mono" title={s.path}>{s.where ?? "—"}</td>
                 <td>
                   {[
-                    ...s.paramChanges,
-                    ...readers.filter((r) => r.steps.includes(s.path)).flatMap((r) => (rowEdits(r.param).length ? rowEdits(r.param) : [`reads ${r.param}`])),
+                    ...s.paramChanges.map((x) => (s.structural.includes("code") ? `${x} in code` : x)),
                     ...s.structural.filter((x) => x !== "params" && !(x === "code" && s.paramChanges.length)).map((x) => (x === "code" ? "code changed" : `${x} changed`)),
                     ...(s.status === "removed" ? ["skipped / removed"] : s.status === "added" ? ["added"] : []),
                   ].join(", ")}

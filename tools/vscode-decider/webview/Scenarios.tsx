@@ -341,11 +341,27 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
       });
       return [...groups.values()].every((is) => is.every((i) => JSON.stringify(sweep.outputs[i]) === JSON.stringify(sweep.outputs[is[0]])));
     });
+  // Cells are tinted by which way offers moved, so the grid can be read at a glance.
+  const tintBy = numericCols.find((c) => /offer_amount/.test(c)) ?? numericCols.find((c) => /offer/.test(c));
+  const tint = (i: number) => {
+    const d = tintBy ? sweep.comparisons[i].output.find((o) => o.name === tintBy) : undefined;
+    return d ? (avgDelta(tintBy!, i, d.changedRows) > 0 ? "tint-up" : "tint-down") : "";
+  };
+  const changedRecords = (i: number) => {
+    const rows = [...new Set(sweep.comparisons[i].output.flatMap((o) => o.changedRows))];
+    return rows.length ? `\nchanged: ${recordsOf(rows)}` : "";
+  };
   const example = grid ? sweep.labels.map((_, i) => cellText(i, shownMetric)).find((t) => t !== "no change") : undefined;
   const matrix = grid && (
     <div className="sweep-scroll">
+      {outcomes.map((c) => (
+        <div key={c} className="note">
+          <strong>{c === "decision" ? "Approvals" : c} unchanged in all {sweep.labels.length} scenarios:</strong> {overall(sweep.base?.[c])}.
+        </div>
+      ))}
       <div className="muted small">
-        Original run: {[...new Set([...outcomes, ...cols])].map((c) => `${c} ${overall(sweep.base?.[c], undefined, c)}`).join(" · ")}
+        Original run: {cols.filter((c) => !outcomes.includes(c)).map((c) => `${c} ${overall(sweep.base?.[c], undefined, c)}`).join(" · ")}
+        {tintBy && <> · cells: <span className="tint-up-key">{tintBy} up</span> <span className="tint-down-key">{tintBy} down</span></>}
       </div>
       <table className="sweep grid">
         <thead>
@@ -368,7 +384,7 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
                 return i < 0 ? (
                   <td key={j} />
                 ) : (
-                  <td key={j} className={`clickable ${open === i ? "open" : ""} ${cols.every((c) => cellText(i, c) === "no change") ? "unchanged" : "changed"}`} title="See what changed, step by step" onClick={() => onOpen(i)}>
+                  <td key={j} className={`clickable ${open === i ? "open" : ""} ${cols.every((c) => cellText(i, c) === "no change") ? "unchanged" : "changed"} ${tint(i)}`} title={`See what changed, step by step${changedRecords(i)}`} onClick={() => onOpen(i)}>
                     {isCurrent(i) && <div className="current-tag">the current setting</div>}
                     {cols.every((c) => cellText(i, c) === "no change") ? (
                       <div className="muted">no change</div>
@@ -386,11 +402,6 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
           ))}
         </tbody>
       </table>
-      {outcomes.map((c) => (
-        <div key={c} className="muted small">
-          <span className="mono">{c}</span> is the same in every scenario: {overall(sweep.base?.[c])}.
-        </div>
-      ))}
       {idleKnobs.map((k) => (
         <div key={k.name} className="note">
           <span className="mono">{knobShort(k.name)}</span> made no difference in any scenario: every result is the same whichever of its values is used.

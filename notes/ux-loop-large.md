@@ -20,6 +20,7 @@ goal isn't visibly met caps at 5). The loop stops above 8/10 or after 40 rounds.
 | 10 | 7.6 | 8 | 8 | 7 | 8 | 7 | 8 | 7 |
 | 11 | 7.8 | 8 | 9 | 7 | 8.5 | 6.5 | 8 | 7.5 |
 | 12 | 7.6 | 8 | 8 | 8 | 7 | 7 | 8 | 7 |
+| 13 | 7.7 | 8 | 8 | 8 | 8 | 7 | 8 | 7 |
 
 ## Round 0 (baseline)
 
@@ -332,3 +333,26 @@ Judge's problems, most damaging first:
 10. L3: the breakdown repeats cap/floor; zero parts take rows.
 11. Node text cut off; unexplained lane lines.
 12. Units: no "months" on term columns; cents on whole rand amounts.
+
+## Round 13
+
+Changes: "What changed" leads with each param edit (old → new, where it lives, how many steps read it, records
+changed) with the steps that moved because of it indented under it; code changes follow; the sweep states approvals
+up front ("Approvals unchanged in all 6 scenarios") and tints cells by which way offer_amount moved; a table's match
+sentence scrolls clear of the sticky header; an edited step shows its new formula under its name; one name for the
+compare action ("Compare with start"); whole rand amounts drop the cents.
+
+Judge's problems, most damaging first:
+
+1. L5: a cell with no offer_amount change still shows the changed fill, read as "down".
+2. L7: the banner grows to three lines with the chips; the toolbar wraps.
+3. L7: after running the edited step, its result for the focused record isn't on screen.
+4. L3: the graph shrinks to a strip; details scroll under the sticky header.
+5. L1: nothing says which of the four matching rules fired.
+6. L1: no sense of position beyond the breadcrumb.
+7. L1: the opened line is highlighted too faintly in a narrow editor.
+8. The first view: spread-out groups, an empty details pane.
+9. L6: in compared mode the change block is below the fold.
+10. Headlines lead with a big "steps changed" count; declined counts don't add up.
+11. L5: tiny axis labels; 22.855% precision.
+12. L5: the two knob pickers render differently.
