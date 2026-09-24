@@ -220,6 +220,11 @@ def test_a_cases_rule_without_conditions_always_takes_otherwise(run, op, feature
     assert run(flat(rule, output(default="always")), df)["r"].to_list() == ["always", "always"]
 
 
+def test_prioritized_rules_with_no_rules_return_the_default(run):
+    assert run(prioritized([], output("a", default="fallback")), pl.DataFrame({"x": [1.0]}))["r"].to_list() == [
+        "fallback"]
+
+
 def test_a_composite_rule_without_conditions_is_rejected():
     rule = {"type": "composite", "op": "and", "conditions": [], "then": leaf(0), "otherwise": leaf(-1)}
     with pytest.raises(pydantic.ValidationError, match="at least one condition"):

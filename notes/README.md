@@ -24,5 +24,13 @@ Decision records for the consolidated `decider`, each with its measured reason.
 - `wiring-scopes.md`: how names bind to versions: input columns, typo and forward-reference errors, branch/loop scopes, frame barriers, outputs.
 - `vscode-controls.md`: forcing a branch's arm or a loop's iteration count by overriding its condition's output from a predicate breakpoint; value and iteration breakpoints.
 - `vscode-extension-testing.md`: how the VS Code prototype is tested at four levels (pytest, DebugClient, in-editor mocha, Playwright on the Electron binary), and the traps found on the way.
+- `hot-reload-investigation.md` (spike): `Session.reload` diffs checkpoint sequences by content and re-runs from the first change; notebook `watch`, file `ModuleWatcher`, measurements, and why serving never hot reloads.
 
-`progress.md` will hold the task log.
+- `benchmarks-vs-decider2.md`: the last measured numbers against decider2, per workload, and which benchmark script replaced each comparison script.
+- `old-test-coverage.md`: every test of decider_old and decider2 mapped to the test that covers it now, or the reason it was dropped.
+
+`progress.md` holds the task log.
+
+`decider_old/` (decider 0.3), `decider2/`, `experimentation/`, `tests/_legacy/`,
+`Plan.md` and `Prompt.md` were deleted in T7.1. Paths into them cited in these
+notes are history; they are in git before that commit.

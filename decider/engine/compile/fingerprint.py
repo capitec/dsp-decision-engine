@@ -4,6 +4,8 @@ import hashlib
 import types
 from typing import Any, Callable
 
+import numpy as np
+import polars as pl
 from numba.core.dispatcher import Dispatcher
 
 _LITERALS = (int, float, complex, bool, str, bytes, type(None))
@@ -14,7 +16,8 @@ def fingerprint(fn: Callable) -> str:
 
     Covers the bytecode with its constants, the argument layout, closure cell
     values and the globals it reads (functions by their own content, modules
-    by name). Leaves out the function's name, file and line numbers, so
+    by name, numpy arrays and polars DataFrames by value, other objects by
+    identity). Leaves out the function's name, file and line numbers, so
     renaming or moving a step keeps its compiled code, while editing a
     constant, a closure value or a global it reads does not.
 
@@ -78,6 +81,17 @@ def _code(h: Any, code: types.CodeType) -> None:
             h.update(f"{type(const).__name__}:{const!r}".encode())
 
 
+def _frame(h: Any, df: pl.DataFrame) -> None:
+    # ponytail: hashed on every call (~0.5 ms small, ~13 ms per million rows); memoize if big data globals show up.
+    try:
+        rows = df.hash_rows().to_numpy()
+    except Exception:  # a dtype polars can't hash
+        h.update(f"object:DataFrame:{id(df)}".encode())
+        return
+    h.update(f"frame:{df.schema}:".encode())
+    h.update(rows.data)
+
+
 def _names(code: types.CodeType) -> set[str]:
     names = set(code.co_names)
     for const in code.co_consts:
@@ -96,6 +110,12 @@ def _value(h: Any, value: Any, seen: set[int]) -> None:
     elif isinstance(value, tuple):
         for item in value:
             _value(h, item, seen)
+    elif isinstance(value, np.ndarray) and value.dtype != object:
+        # Data by value: a re-imported module's equal constant is the same step, and an in-place edit is not.
+        h.update(f"ndarray:{value.dtype.str}:{value.shape}".encode())
+        h.update(np.ascontiguousarray(value).data)
+    elif isinstance(value, pl.DataFrame):
+        _frame(h, value)
     else:
         # Anything else is compiled in as whatever object it is now: key it by identity.
         h.update(f"object:{type(value).__qualname__}:{id(value)}".encode())

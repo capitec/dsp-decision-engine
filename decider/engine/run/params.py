@@ -47,7 +47,7 @@ class RunParams:
         self.nodes = nodes
         self.lazy = lazy
         self.doc = doc
-        self.key = document_key(doc) if doc else _EMPTY_KEY
+        self.key = cache.key(doc) if doc else _EMPTY_KEY
         self.cache = cache
         self.report = RunReport()
 

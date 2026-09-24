@@ -125,11 +125,19 @@ class Error:
 
 @dataclass(frozen=True, slots=True)
 class Edited:
-    """The step at `path` was replaced or deleted; the run goes on from there (a `Paused` follows)."""
+    """The step at `path` was replaced, added or deleted; the run goes on from there (a `Paused` follows)."""
 
-    action: Literal["replace", "delete"]
+    action: Literal["replace", "add", "delete"]
     path: str
     kind: Literal["edited"] = "edited"
+
+
+@dataclass(frozen=True, slots=True)
+class ReloadFailed:
+    """A watched reload couldn't import or build the edited pipeline; the session keeps the one it had and can go on."""
+
+    error: str
+    kind: Literal["reload_failed"] = "reload_failed"
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,4 +149,4 @@ class RunFinished:
 
 
 Event = Union[RunStarted, NodeStarted, NodeFinished, NodeVisited, Paused, Overridden,
-              ParamsValidated, Warning, Error, Edited, RunFinished]
+              ParamsValidated, Warning, Error, Edited, ReloadFailed, RunFinished]
