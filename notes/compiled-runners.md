@@ -23,10 +23,31 @@ tasks build on.
   not be cached across calls, and needed the sentinel only for absent literals.
   With one table, `score()` reuses the converted bundle and an absent literal
   never matches, as before. The table only grows with param literals, never
-  with data. Kept from decider2, as errors naming the step: a compiled step
-  reading a `str` input must declare a `str` param (a body literal would
-  compare a code against a string and silently never match), may read only one
-  `str` input, and may declare a `str` param only if it reads a `str` input.
+  with data. A kernel can run a step on codes only if it reads one `str`
+  input, compares it with `str` params, and has no `str` literal (a body
+  literal would compare a code against a string and silently never match).
+  decider2 raised for any other `str` step. Here it runs through the Python
+  `Fallback` instead, with one warning per executable naming the step, why
+  and how to make it compile; `SteppedRunner(strict=True)` (and so
+  `exe.runner.strict = True` before the first run) raises as decider2 did.
+  Raising put every example project on interpreted mode because of one
+  inherited step (`norm_table_version`, two `str` inputs), at about 300
+  rows/s.
+- **Only numbers and strings enter a kernel.** A step reading a `date`,
+  `list`, `dict` or other object input is a `Fallback` without asking numba:
+  numba types such an input as float64 and may compile a step that never
+  touches it, and the object column then fails to convert at the first run.
+  A `Fallback` stores any output that isn't `float`/`int`/`bool` or a
+  `Literal` code as an object array. An int column that a step reads as
+  `float` (another step reads it as `int`) is cast to float64 for that
+  kernel; a decision table otherwise reads the int as a missing float slot.
+- **Measured on example projects 07 and 08 (Sonnet), 3000 synthetic rows,
+  fused mode:** about 3.3x (07) and 4x (08) interpreted throughput. Most of
+  what's left is the object boundary (`Series.to_numpy()` on list and struct
+  columns, and building object output columns), frame steps and ~40 Python
+  fallbacks per pipeline, not kernels (under 0.1 s of about 3 s). Outputs
+  match interpreted mode except where a step calls `round(x, 2)`: numba
+  rounds some halves the other way (0.01 on up to 10% of rows).
 - **Nulls behave the same in every mode.** A step returning `None` writes a
   null in interpreted mode too (it used to write `None` as a valid value, or
   NaN for a float). Compiled kernels write a validity mask for an output
