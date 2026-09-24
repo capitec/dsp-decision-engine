@@ -17,7 +17,6 @@ BLOCKS = re.findall(r"```python\n(.*?)```", GUIDE, re.S)
 
 # Examples of behaviour that lands with fixes outside the guide; un-xfail them once merged.
 PENDING = {
-    "trace_output": "tree trace output",
 }
 
 
