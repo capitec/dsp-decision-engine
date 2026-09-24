@@ -367,8 +367,7 @@ function Results({ sweep, row, rows, onRow, onOpen, open }: { sweep: Sweep; row:
         <thead>
           <tr>
             <th>
-              <div className="muted small">rows: {knobShort(knobCols[0].name)}</div>
-              <div className="muted small">columns: {knobShort(knobCols[1].name)}</div>
+              <div className="axes">{knobShort(knobCols[0].name)} ↓ × {knobShort(knobCols[1].name)} →</div>
             </th>
             {uniq(knobCols[1].values).map((v, j) => (
               <th key={j} className="mono">{formatValue(v, knobShort(knobCols[1].name))}</th>
