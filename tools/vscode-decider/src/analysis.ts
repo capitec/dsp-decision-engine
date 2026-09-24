@@ -4,11 +4,7 @@ import { withBridge } from "./bridge";
 import { type DescribeResult } from "./protocol";
 import { pythonCommand } from "./python";
 
-const DECIDER_IMPORT = /^\s*(from\s+decider(_stub)?\b|import\s+decider(_stub)?\b)/m;
-
-export function looksLikeDecider(text: string): boolean {
-  return DECIDER_IMPORT.test(text);
-}
+const DECIDER_IMPORT = /^\s*(from|import)\s+decider\b/m;
 
 const cache = new Map<string, { version: number; result: Promise<DescribeResult> }>();
 
@@ -34,7 +30,7 @@ export class PipelineCodeLens implements vscode.CodeLensProvider {
   readonly onDidChangeCodeLenses = this.changed.event;
 
   async provideCodeLenses(doc: vscode.TextDocument): Promise<vscode.CodeLens[]> {
-    if (!looksLikeDecider(doc.getText())) return [];
+    if (!DECIDER_IMPORT.test(doc.getText())) return [];
     try {
       const d = await analyse(doc);
       return d.pipelines.flatMap((p) => {

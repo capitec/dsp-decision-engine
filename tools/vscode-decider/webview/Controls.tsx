@@ -43,11 +43,9 @@ export function watchText(w: Watch, keyCol: RecordKey): string {
 }
 
 /** Why a breakpoint paused the run; `watch` (the breakpoint as set) words it the way its chip does. */
-export function hitText(hit: Hit, keyCol: RecordKey, watch?: Watch): string {
-  const name = watch?.name ?? hit.text.split(" ")[0];
-  const who = (hit.rows ?? []).map((r, i) => `${recordLabel(r, keyCol)} = ${formatValue(hit.values?.[i], name)}`);
-  const text = watch && watch.name ? `${watch.name} ${watch.op} ${formatValue(watch.value, watch.name)}` : hit.text;
-  return `${text}${hit.path ? ` after ${lastSegment(hit.path)}` : ""}${who.length ? `: ${who.slice(0, 3).join(", ")}${who.length > 3 ? ` and ${who.length - 3} more` : ""}` : ""}`;
+export function hitText(hit: Hit, watch?: Watch): string {
+  const text = watch?.name ? `${watch.name} ${watch.op} ${formatValue(watch.value, watch.name)}` : hit.text;
+  return `${text}${hit.path ? ` after ${lastSegment(hit.path)}` : ""}`;
 }
 
 /** The forces and breakpoints in effect, each removable. */

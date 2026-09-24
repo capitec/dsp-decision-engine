@@ -4,8 +4,6 @@ import type { DescribeResult, FromWebview, ToWebview } from "./protocol";
 /** The graph view: one React webview panel, fed the IR and the session position. */
 export class GraphPanel {
   static current: GraphPanel | undefined;
-  /** The editor column the panel is in. */
-  declare readonly column: vscode.ViewColumn;
   /** Messages sent while the panel is being opened. */
   private static early: ToWebview[] = [];
   private static opening: Promise<void> | undefined;
@@ -41,9 +39,9 @@ export class GraphPanel {
     GraphPanel.current.post({ type: "describe", describe });
   }
 
-  private constructor(ctx: vscode.ExtensionContext, onMessage: (m: FromWebview) => void, column0: vscode.ViewColumn) {
+  private constructor(ctx: vscode.ExtensionContext, onMessage: (m: FromWebview) => void, column: vscode.ViewColumn) {
     const dist = vscode.Uri.joinPath(ctx.extensionUri, "dist", "webview");
-    this.panel = vscode.window.createWebviewPanel("decider.graph", "decider: flow", { viewColumn: column0, preserveFocus: true }, {
+    this.panel = vscode.window.createWebviewPanel("decider.graph", "decider: flow", { viewColumn: column, preserveFocus: true }, {
       enableScripts: true,
       retainContextWhenHidden: true,
       localResourceRoots: [dist],
@@ -63,9 +61,7 @@ export class GraphPanel {
     });
     // While debugging, the debugger opens a paused step's source in the active group. When that is
     // the panel's group, the flow would vanish behind it: move the source to the first group instead.
-    let column = column0;
     this.panel.onDidChangeViewState((e) => (column = e.webviewPanel.viewColumn ?? column));
-    Object.defineProperty(this, "column", { get: () => column });
     const keepInView = vscode.window.tabGroups.onDidChangeTabs(async (e) => {
       if (column === vscode.ViewColumn.One || vscode.debug.activeDebugSession?.type !== "decider") return;
       for (const tab of [...e.opened, ...e.changed]) {

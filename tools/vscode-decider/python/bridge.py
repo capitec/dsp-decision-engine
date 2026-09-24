@@ -15,11 +15,9 @@ drop into the Python of one step.
 """
 from __future__ import annotations
 
-import ast
 import json
 import os
 import queue
-import re
 import sys
 import threading
 from pathlib import Path
@@ -36,7 +34,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from lineage import latest, lineage  # noqa: E402
 from runs import apply_overrides, debug_condition, trace, tree_path  # noqa: E402
 from forks import checkpoint_key, merge, sweep  # noqa: E402
-from loading import TEXTS, load_module, source_diff  # noqa: E402
+from loading import load_module  # noqa: E402
 from controls import Controls  # noqa: E402
 from timeline import Timeline  # noqa: E402
 from describing import assignment_lines, find_pipelines, formula, key_column, node_json, values_file  # noqa: E402
@@ -48,6 +46,8 @@ def base_params(mod, params):
 
 
 def _load_rows(data):
+    if data is None:
+        raise ValueError("no data: pass `data` (rows or a JSON file) or define SAMPLE in the module")
     if isinstance(data, str):
         data = json.loads(Path(data).read_text())
     return pl.DataFrame(data)
@@ -94,12 +94,15 @@ class Bridge:
 
     def trace(self, file, pipeline=None, data=None, params=None, overrides=None, row=None, forces=()):
         """Describe and run `file` to the end on `data` (default: its SAMPLE), with `overrides` and `forces` applied."""
-        described = self.describe(file, pipeline)
-        rows = data if data is not None else getattr(self.mod, "SAMPLE", None)
-        if rows is None:
-            raise ValueError("no data: pass `data` (rows or a JSON file) or define SAMPLE in the module")
-        frame = apply_overrides(_load_rows(rows), overrides, row)
-        return {**described, **trace(self.step, frame, base_params(self.mod, params), self.described["ir"], forces), "data": frame.to_dicts(), "key": key_column(frame)}
+        self.describe(file, pipeline)
+        frame = apply_overrides(self._rows(data), overrides, row)
+        return self._run(self.step, frame, base_params(self.mod, params), forces)
+
+    def _rows(self, data):
+        return _load_rows(data if data is not None else getattr(self.mod, "SAMPLE", None))
+
+    def _run(self, step, frame, params, forces):
+        return {**self.described, **trace(step, frame, params, self.described["ir"], forces), "data": frame.to_dicts(), "key": key_column(frame)}
 
     def _index(self, n, parent):
         self.parents[n["path"]] = parent
@@ -108,14 +111,10 @@ class Bridge:
 
     def start(self, file, pipeline=None, data=None, params=None, breakpoints=(), forces=(), watches=()):
         self.describe(file, pipeline)
-        if data is None:
-            data = getattr(self.mod, "SAMPLE", None)
-        if data is None:
-            raise ValueError("no data: pass `data` (rows or a JSON file) or define SAMPLE in the module")
         self.doc = base_params(self.mod, params)
         self.original = self.step
         self.edits = []  # (path, step or None), so each edit can be compared on its own
-        self.session = Engine().bind(self.step).session(_load_rows(data), self.doc)
+        self.session = Engine().bind(self.step).session(self._rows(data), self.doc)
         self.controls = Controls(self.described["ir"])
         self.controls.set(forces, watches)
         self.controls.session = self.session
@@ -240,8 +239,7 @@ class Bridge:
             result = sweep(self.step, s.frame, s.params, self.history, at, scenarios, self.described["ir"], self.controls.forces)
         else:
             self.describe(file, pipeline)
-            rows = data if data is not None else getattr(self.mod, "SAMPLE", None)
-            frame = _load_rows(rows)
+            frame = self._rows(data)
             at = None
             params = base_params(self.mod, params)
             ir = self.described["ir"]
@@ -265,14 +263,13 @@ class Bridge:
 
     def reload_step(self, path):
         """Re-import the pipeline's files and swap the step now at `path` into the paused run."""
-        old, texts = step_map(self.step).get(path), dict(TEXTS)
         new = step_map(getattr(load_module(self.file), self.name)).get(path)
         if new is None:
             raise KeyError(f"{path!r} is no longer in {self.name}")
         self.session.replace(path, new)
         self.step = self.session.executable.step
         self.edits.append((path, new))
-        return {"diff": source_diff(old, texts, new, TEXTS), "formula": formula(new.fn) if isinstance(new, FunctionStep) else None}
+        return {"formula": formula(new.fn) if isinstance(new, FunctionStep) else None}
 
     def restore(self, path):
         """Put the step at `path` back as the run started it, undoing a skip or a code swap, and re-run from there."""
@@ -292,7 +289,6 @@ class Bridge:
             self.session.replace(path, old)
         self.step = self.session.executable.step
         self.edits = rest
-        return {"diff": [], "formula": None}
 
     def compare_edits(self, path=None):
         """The flow as started and with the edits made since (or only the one at `path`), each run start to end."""
@@ -300,9 +296,8 @@ class Bridge:
         for at, new in self.edits:
             if path is None or at == path:
                 edited = swap(edited, at, new)
-        frame = self.session.frame
-        side = lambda step: {**self.described, **trace(step, frame, self.doc, self.described["ir"], self.controls.forces), "data": frame.to_dicts(), "key": key_column(frame)}  # noqa: E731
-        return {"a": side(self.original), "b": side(edited)}
+        run = lambda step: self._run(step, self.session.frame, self.doc, self.controls.forces)  # noqa: E731
+        return {"a": run(self.original), "b": run(edited)}
 
     def _names(self):
         plan = self.session.executable.plan
@@ -335,13 +330,8 @@ class Bridge:
 
     def column(self, name, row=None):
         st = self.session.state
-        versions = [{"producer": v.producer or "input", "values": st.column(name, v).to_list()}
-                    for v in self._written(name)]
-        if row is not None:
-            for v, version in zip(versions, self._written(name)):
-                v["values"] = v["values"][row:row + 1]
-                valid = st.valid.get(version.id)
-                v["written"] = bool(valid is None or valid[row])
+        rows = slice(None) if row is None else slice(row, row + 1)
+        versions = [{"producer": v.producer or "input", "values": st.column(name, v).to_list()[rows]} for v in self._written(name)]
         return {"name": name, "values": self.session.value(name).to_list(), "versions": versions}
 
     def handle(self, req):
@@ -370,7 +360,7 @@ class Bridge:
         if cmd in ("skip", "reload_step", "restore"):
             edit = getattr(self, cmd)(**args) or {}  # a WiringError changes nothing and comes back as the reply's error
             self.timeline.rewound()
-            return {**self.status(), "diff": edit.get("diff", []), "formula": edit.get("formula")}
+            return {**self.status(), "formula": edit.get("formula")}
         if cmd in ("step", "step_into", "resume", "rewind", "break_at", "clear_break", "set"):
             if cmd in ("step", "step_into", "resume") and s.current is not None:
                 self._force(s.current)  # paused on a condition, its breakpoint check already passed

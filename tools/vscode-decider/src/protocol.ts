@@ -206,18 +206,23 @@ export interface ValueHistory {
 /** The column that names a record, and its value on every row. */
 export type RecordKey = { name: string; values: unknown[] } | null;
 
+/** "cap_by_income skipped" or "cap_by_income edited", for one entry of `RunStatus.edits`. */
+export const editLabel = ([path, action]: [string, string]) => `${lastSegment(path)} ${action === "delete" ? "skipped" : "edited"}`;
+
 /** "client_id 2", or "row 1" when the data has no id column. */
 export function recordLabel(row: number, key: RecordKey): string {
   return key ? `${key.name} ${String(key.values[row])}` : `row ${row}`;
 }
 
-/** Values for people: no float noise; amounts of 100 or more to two decimals (58113.07), smaller ones to four. */
 /** Names whose values read as percentages: rates, loadings, discounts, margins. */
 export const isRateName = (name?: string) => !!name && /(rate|loading|discount|margin|share)s?$/.test(name);
 /** Names whose values are rand amounts. */
-export const isMoneyName = (name?: string) => !!name && /(amount|cost|income|fee|instalment|expenses|offer)s?$/.test(name);
+const isMoneyName = (name?: string) => !!name && /(amount|cost|income|fee|instalment|expenses|offer)s?$/.test(name);
 
-/** A value as the UI shows it; with its column's `name`, a rate below 1 shows as a percentage ("25.2%"). */
+/**
+ * A value as the UI shows it: no float noise; amounts of 100 or more to two decimals (58113.07), smaller ones
+ * to four. With its column's `name`, a rate below 1 shows as a percentage ("25.2%").
+ */
 export function formatValue(v: unknown, name?: string): string {
   if (v === undefined) return "—";
   if (v === null) return "empty";
@@ -239,7 +244,7 @@ export type ToWebview =
   | { type: "compare"; comparison: Comparison | null; busy?: string; error?: string }
   | { type: "tab"; tab: Tab }
   | { type: "select"; path: string }
-  | { type: "edited"; path: string; diff: string[]; formula: string | null; restored?: boolean }
+  | { type: "edited"; path: string; formula: string | null; restored?: boolean }
   | { type: "sweep"; sweep: Sweep | null; busy?: string; error?: string };
 
 export type FromWebview =
@@ -256,7 +261,6 @@ export type FromWebview =
   | { type: "skip"; path: string }
   | { type: "reloadStep"; path: string }
   | { type: "restore"; path: string }
-  | { type: "layout"; wide: boolean }
   | { type: "compareEdits"; label: string; edits: Record<string, "delete" | "replace">; path?: string }
   | { type: "whatIf"; params: unknown; overrides: Record<string, unknown>; row: number | null; label: string; forces?: Force[] }
   | { type: "setControls"; controls: Controls }

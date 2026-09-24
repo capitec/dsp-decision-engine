@@ -6,7 +6,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterAll, describe, it } from "vitest";
-import { ROOT, SHOTS, type Codium } from "./codium";
+import { ROOT, SHOTS } from "./codium";
 import { FILE, find, keys, lens, out, runTo, story, tab, visualise, writeManifest, wv } from "./harness";
 
 out.dir = path.join(SHOTS, "large");

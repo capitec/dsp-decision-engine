@@ -47,7 +47,8 @@ What the small example never showed:
   same second as the last load, at the same length, ran the old code. The
   bridge now compiles every load into a fresh `sys.pycache_prefix`.
 - **`inspect.getsource` reads the file as it is now**, so diffing a step
-  before and after an edit needs the text as it was loaded, kept per file.
+  before and after an edit would need the text as it was loaded, kept per file.
+  The panel shows the old and new formula instead, so the bridge keeps no text.
 - **A custom DAP request without arguments arrives with `args` undefined.**
   Default it to `{}`.
 - **The debugger opens a paused step's source in the active editor group**,
