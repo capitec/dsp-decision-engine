@@ -205,3 +205,35 @@ def test_twenty_eq_and_twenty_in_conditions_in_one_table(run):
     frame = pl.DataFrame({f"ev{i}": [float(i), 999.0 if i == 15 else float(i)] for i in range(20)}
                          | {f"iv{i}": [i + 100.0, float(i)] for i in range(20)})
     assert run(table, frame)["pts"].to_list() == [1, 0]
+
+
+def _graded(rows) -> DecisionTableConfig:
+    return DecisionTableConfig(
+        name="rates", columns={"grade": "Int64", "lo": "Float64", "hi": "Float64", "rate": "Float64"}, rows=rows,
+        expression={"type": "and", "expressions": [
+            {"type": "eq", "variable": "grade", "value_column": "grade"},
+            {"type": "between", "variable": "amount", "lower_bound_column": "lo", "upper_bound_column": "hi"}]},
+        outputs=["rate"])
+
+
+def test_each_group_of_equal_keys_is_its_own_band_ladder_with_open_edges(run):
+    # Rows interleave the two grades; each grade's first band is open below and its last open above.
+    rows = [{"grade": 1, "lo": None, "hi": 10.0, "rate": 0.1}, {"grade": 2, "lo": None, "hi": 20.0, "rate": 0.3},
+            {"grade": 1, "lo": 10.0, "hi": None, "rate": 0.2}, {"grade": 2, "lo": 20.0, "hi": None, "rate": 0.4}]
+    frame = pl.DataFrame({"grade": [1, 1, 2, 2, 3], "amount": [5.0, 50.0, 15.0, 50.0, 5.0]})
+    assert run(_graded(rows), frame)["rate"].to_list() == [0.1, 0.2, 0.3, 0.4, None]
+    # A missing bound comes from the neighbouring row of the same grade, not the next row of the table.
+    rows = [{**r, "lo": None} if r["hi"] is None else r for r in rows]
+    assert run(_graded(rows), frame)["rate"].to_list() == [0.1, 0.2, 0.3, 0.4, None]
+
+
+@pytest.mark.parametrize("rows, message", [
+    ([{"grade": 1, "lo": None, "hi": 10.0, "rate": 0.1}, {"grade": 1, "lo": 12.0, "hi": None, "rate": 0.2},
+      {"grade": 2, "lo": None, "hi": 5.0, "rate": 0.3}], r"Row 0 upper \(10.0\) != row 1 lower \(12.0\)"),
+    ([{"grade": 1, "lo": None, "hi": 5.0, "rate": 0.1}, {"grade": 2, "lo": 0.0, "hi": None, "rate": 0.3},
+      {"grade": 2, "lo": None, "hi": 50.0, "rate": 0.4}],
+     r"Row 1: upper bound unresolvable; only the last row of its group \(rows sharing its eq values\) \(row 2\)"),
+])
+def test_a_gap_or_open_edge_inside_one_group_is_rejected(rows, message):
+    with pytest.raises(ValueError, match=message):
+        _graded(rows)

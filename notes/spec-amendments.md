@@ -176,3 +176,14 @@ where they disagree, this file wins.
   `sample_request.json` when present; JSON inputs are coerced to declared
   `date`/`datetime`/`list`/TypedDict annotations; `RequestHandler.warm_fn` is
   overridable; `from decider.serving import RequestHandler`.
+## 2026-09-24, trees, tables and registry fixes
+
+- **`TreeConfig.trace_output: str | None`** adds a String output holding the
+  ordered path, the ids of every node walked joined with `>`, from both
+  walkers in every mode (per rule in `all` mode; in `first_match`, the path
+  in the rule that answered, else the last rule's).
+- **Decision-table band ladders are per `eq` group.** Rows with equal `eq`
+  column values form one ladder: open edges (`None`), neighbour fill and
+  contiguity apply within it.
+- **Built-in tags resolve lazily.** `tree`, `decision_table` and `scorecard`
+  resolve without their modules imported first (`BaseRegistryModule.lazy`).
