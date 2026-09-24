@@ -96,7 +96,7 @@ describe("branch and loop controls", () => {
     await wv.locator("svg .node", { hasText: "is_private" }).first().click();
     await wv.locator('select[aria-label="force by_sector"]').selectOption("1");
     await wv.locator(".controls-bar .chip", { hasText: "by_sector → cap_public" }).waitFor();
-    await wv.locator(".group-controls button", { hasText: "Re-run by_sector with the force" }).click();
+    await wv.locator(".group-controls button", { hasText: "Re-run from by_sector with this force" }).click();
     await wv.locator(".banner-note", { hasText: "Re-ran from is_private" }).waitFor({ timeout: 60_000 });
     await c.shot("c09-forced-rerun");
   }, 120_000);

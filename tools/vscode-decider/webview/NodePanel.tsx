@@ -57,7 +57,7 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
   const path = treePath && node && treePath.path === node.path && run.record === treePath.row ? treePath : null;
   const paused = run.current && !run.finished;
   const ran = !!node && run.finishedPaths.includes(node.path);
-  const card = lineage && lineage.name === column ? lineage : null;
+  const card = lineage && lineage.name === column && !lineage.unset ? lineage : null;
   const table = node ? tableOf(node, values) : null;
   // A cap or floor step, once run for the focused record: whether its limit bound.
   const raw = (name: string) => columns?.find((x) => x.name === name)?.value;
@@ -117,7 +117,14 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
           {groupControls}
           {controls}
           {history && history.name === column && <ValueTimeline history={history} who={who} current={run.current} onSelect={onSelect} onGoTo={onGoTo} />}
-          {card && !(path && table) && <Explain entry={card} who={who} role="" nodes={nodes} values={values} onPick={onPick} onSelect={onSelect} />}
+          {card && !(path && table) && (history?.name === card.name ? (
+            <details className="breakdown">
+              <summary>How {card.name} is calculated, step by step</summary>
+              <Explain entry={card} who={who} role="" nodes={nodes} values={values} onPick={onPick} onSelect={onSelect} />
+            </details>
+          ) : (
+            <Explain entry={card} who={who} role="" nodes={nodes} values={values} onPick={onPick} onSelect={onSelect} />
+          ))}
           {who && ran && (node.outputs ?? []).length > 0 && (
             <div className="wrote">
               For {who}: {(node.outputs ?? []).map((o) => `${o} = ${valueOf(o) ?? "?"}`).join(", ")}

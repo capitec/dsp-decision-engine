@@ -308,7 +308,7 @@ export class DeciderDebugSession extends LoggingDebugSession {
       for (let up = p; at && !at.file && this.parents.has(up); up = this.parents.get(up)!) at = this.nodes.get(this.parents.get(up)!);
       const src = at?.file ? new Source(path.basename(at.file), at.file) : undefined;
       const when = id === 1 ? `  ${this.current!.when}` : "";
-      const after = id === 1 && this.current!.when === "after" && node?.kind === "call" && node.python?.file === at?.file ? node.python?.bodyLine : null;
+      const after = id === 1 && this.current!.when === "after" && node?.kind === "call" && node.python?.file === at?.file ? node.python?.endLine : null;
       frames.push(new StackFrame(id, `${lastSegment(p)}  [${node ? kindLabel(node) : "?"}]${when}`, src, after ?? at?.line ?? 0, 1));
       p = this.parents.get(p);
     }
@@ -357,7 +357,7 @@ export class DeciderDebugSession extends LoggingDebugSession {
   private shown(c: ColumnSummary, declined = false): string {
     if (this.record === null) return previewOf(c, c.name);
     const offer = declined && typeof c.value === "number" && (this.describe?.outcome ?? []).includes(c.name);
-    return `${offer ? "(no offer) " : ""}${formatValue(c.value, c.name)}`;
+    return `${formatValue(c.value, c.name)}${offer ? " · no offer" : ""}`;
   }
 
   private async variablesFor(ref: VarRef): Promise<Variable[]> {
