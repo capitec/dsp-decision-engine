@@ -1,7 +1,10 @@
 """Compiled code is keyed by content: names and paths never recompile, edits recompile only their kernel."""
 from __future__ import annotations
 
+import json
+import os
 import platform
+import subprocess
 import sys
 
 import numpy as np
@@ -170,3 +173,31 @@ def test_equal_captured_arrays_share_compiled_code_and_a_changed_one_compiles_it
 def test_the_cpu_target_is_recorded():
     triple, cpu, features = cpu_target()
     assert triple.startswith(platform.machine()) and cpu and features
+
+
+_STEP = "def half(x: float) -> float:\n    return round(x * 0.5, 1)\n"
+_CHILD = """
+import json, sys
+import step
+import decider.engine.compile.njit as njit
+njit.SALT = sys.argv[1]
+_, kernel = njit.jit(step.half)
+print(json.dumps([kernel(3.0), len(kernel.stats.cache_hits), len(kernel.stats.cache_misses)]))
+"""
+
+
+def test_a_disk_cached_step_is_reused_only_under_the_same_compile_salt(tmp_path):
+    (tmp_path / "step.py").write_text(_STEP)  # once: numba's index is keyed by the file's mtime
+    (tmp_path / "child.py").write_text(_CHILD)
+    env = dict(os.environ, NUMBA_CACHE_DIR=str(tmp_path / "numba_cache"))
+
+    def run(salt):
+        proc = subprocess.run([sys.executable, "child.py", salt], cwd=tmp_path, env=env, capture_output=True,
+                              text=True, timeout=600, check=False)
+        assert proc.returncode == 0, proc.stderr
+        return json.loads(proc.stdout.splitlines()[-1])
+
+    assert run("a") == [1.5, 0, 1]
+    assert run("a") == [1.5, 1, 0]
+    assert run("b") == [1.5, 0, 1]
+    assert run("a") == [1.5, 1, 0]
