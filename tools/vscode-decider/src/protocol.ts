@@ -185,6 +185,9 @@ export interface ValueChange {
   kept?: boolean;
   /** Undone by going back: it happens again as the run goes on. */
   pending?: boolean;
+  /** The step copied this input into the value unchanged, and the step that computed that input (null: the data). */
+  via?: string;
+  viaPath?: string | null;
   /** For the whole batch: how many records changed, and the first few new values. */
   rows?: number;
   values?: unknown[];

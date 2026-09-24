@@ -50,6 +50,14 @@ def test_the_status_says_which_steps_ran_since_a_rewind():
     assert "term/cap_by_income" in r["ran"] and "sizing/shrink_offer/shrink" not in r["ran"]
 
 
+def test_a_step_that_passes_an_input_on_names_it_and_where_it_came_from():
+    b = finished()
+    first = b.handle({"cmd": "changes", "name": "offer", "row": 0})["changes"][0]
+    assert (first["via"], first["viaPath"]) == ("requested_amount", None)  # offer returns the input as it is
+    shrunk = b.handle({"cmd": "changes", "name": "offer", "row": 0})["changes"][1]
+    assert "via" not in shrunk
+
+
 def test_the_batch_history_counts_the_records_each_change_touched():
     h = finished().handle({"cmd": "changes", "name": "offer"})
     assert h["changes"][0]["rows"] == 2 and h["changes"][1]["rows"] == 1
