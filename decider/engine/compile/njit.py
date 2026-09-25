@@ -26,15 +26,14 @@ FALLBACK_ERRORS = (NumbaError, UnsupportedBytecodeError)
 _DISPATCHERS: dict[str, Dispatcher] = {}
 _REASONS: dict[tuple, str | None] = {}
 
-# numba keys a disk-cached step by its own bytecode only, so a kernel compiled
-# before decider changed what `round` or `**` compile to would still be served.
-# ponytail: salts on cpython.py only; widen the hash if other decider overloads start reaching user steps.
+# Numba keys a disk-cached step by its own bytecode only, so changes to a
+# reachable helper would otherwise keep serving stale machine code.
 SALT = hashlib.sha256(Path(cpython.__file__).read_bytes()).hexdigest()
 
 
 class _SaltedCache(FunctionCache):
     def _index_key(self, sig, codegen):
-        return (*super()._index_key(sig, codegen), SALT)
+        return (*super()._index_key(sig, codegen), SALT, fingerprint(self._py_func))
 
 
 def numpy_dtype(annotation: Any) -> np.dtype:
