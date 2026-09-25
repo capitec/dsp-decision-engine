@@ -79,6 +79,14 @@ export function fold(ir: IRNodeJson, open: (path: string) => boolean, root = tru
   return { ...ir, children: ir.children.map((c) => fold(c, open, false)) };
 }
 
+/** "step 7 of 89 in policy" for a path in a flow of `nodes`. */
+export function positionIn(nodes: { path: string }[], path: string): string | null {
+  const group = path.slice(0, path.lastIndexOf("/"));
+  const siblings = nodes.filter((n) => n.path.slice(0, n.path.lastIndexOf("/")) === group);
+  const i = siblings.findIndex((n) => n.path === path);
+  return i < 0 || siblings.length < 2 ? null : `step ${i + 1} of ${siblings.length} in ${group.split("/").pop()}`;
+}
+
 /** Every group below the root: what "expand all" opens. */
 export function groupPaths(ir: IRNodeJson): Set<string> {
   const out = new Set<string>();

@@ -57,6 +57,8 @@ export interface DescribeResult {
   outcome?: string[];
   /** The file `PARAMS` is read from, when the module names one. */
   valuesFile?: string | null;
+  /** Each value's declared metadata, by name; the rest are guessed (`fieldOf`). */
+  fields?: Record<string, FieldMeta>;
 }
 
 export interface ParamInfo {
@@ -141,6 +143,9 @@ export interface ColumnSummary extends Summary {
   value: unknown;
   producer: string;
   versions: number;
+  /** For the focused record: the last step that wrote the value, and the last that changed it ("input" for neither). */
+  writtenBy?: string;
+  changedBy?: string;
 }
 
 export interface Lineage {
@@ -215,22 +220,57 @@ export function recordLabel(row: number, key: RecordKey): string {
   return key ? `${key.name} ${String(key.values[row])}` : `row ${row}`;
 }
 
-/** Names whose values read as percentages: rates, loadings, discounts, margins. */
-export const isRateName = (name?: string) => !!name && /(rate|loading|discount|margin|share)s?$/.test(name);
-/** Names whose values are rand amounts. */
-const isMoneyName = (name?: string) => !!name && /(amount|cost|income|fee|instalment|expenses|offer)s?$/.test(name);
+/** What a value measures, from decider's `FieldMetadata` (`Money()`, `Percent()`, `Duration("months")`). */
+export interface FieldMeta {
+  kind: string;
+  symbol?: string;
+  cents?: boolean;
+  unit?: string;
+  /** Not declared: guessed from the value's name. */
+  assumed?: boolean;
+}
+
+// ponytail: the shown flow's metadata, module-wide so every formatValue call sees it; pass it down if one view ever shows two flows.
+let declared: Record<string, FieldMeta> = {};
+/** Use the described flow's declared metadata (`DescribeResult.fields`) from now on. */
+export const setFields = (fields: Record<string, FieldMeta> | undefined) => {
+  declared = fields ?? {};
+};
 
 /**
- * A value as the UI shows it: no float noise, no thousands separators (4000, not 4,000); amounts of 100 or more to two decimals (58113.07), smaller ones
- * to four. With its column's `name`, a rate below 1 shows as a percentage ("25.2%").
+ * What the value `name` measures: its declared metadata, else a guess from the name, marked `assumed`.
+ * Rates, loadings, discounts, margins and shares below 1 read as percentages; amounts, costs, income,
+ * fees, instalments, expenses, offers and caps of 1000 or more as rands; `_months`, `_days`, `_years` as durations.
+ */
+export function fieldOf(name?: string, v?: unknown): FieldMeta | undefined {
+  if (!name) return undefined;
+  if (declared[name]) return declared[name];
+  const n = typeof v === "number" ? Math.abs(v) : NaN;
+  if (/(rate|loading|discount|margin|share)s?$/.test(name) && !(n >= 1)) return { kind: "percent", assumed: true };
+  if (/(amount|cost|income|fee|instalment|expenses|offer)s?$/.test(name) || (/cap$/.test(name) && n >= 1000)) return { kind: "money", symbol: "R", assumed: true };
+  const unit = /_(months|days|years)$/.exec(name)?.[1];
+  return unit ? { kind: "duration", unit, assumed: true } : undefined;
+}
+
+/** Whether `name`'s values (like `v`) show as percentages. */
+export const isPercent = (name?: string, v?: unknown) => fieldOf(name, v)?.kind === "percent";
+
+const plain = (v: number, digits: number) => v.toLocaleString("en-US", { useGrouping: false, maximumFractionDigits: digits });
+
+/**
+ * A value as the UI shows it: no float noise, no thousands separators (4000, not 4,000); numbers of 100 or
+ * more to two decimals (58113.07), smaller ones to four. With its column's `name`, by what it measures
+ * (`fieldOf`): "25.2%", "R 4000.00", "36 months".
  */
 export function formatValue(v: unknown, name?: string): string {
   if (v === undefined) return "—";
   if (v === null) return "empty";
-  if (typeof v === "number" && isRateName(name) && Math.abs(v) < 1) return `${Number((v * 100).toFixed(2))}%`;
-  if (typeof v === "number" && (isMoneyName(name) || (!!name && /cap$/.test(name) && Math.abs(v) >= 1000))) return `R\u00a0${v.toLocaleString("en-US", { useGrouping: false, minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  if (typeof v === "number") return v.toLocaleString("en-US", { useGrouping: false, maximumFractionDigits: Math.abs(v) >= 100 ? 2 : 4 });
-  return typeof v === "string" ? v : JSON.stringify(v);
+  if (typeof v !== "number") return typeof v === "string" ? v : JSON.stringify(v);
+  const f = fieldOf(name, v);
+  if (f?.kind === "percent") return `${Number((v * 100).toFixed(2))}%`;
+  if (f?.kind === "money") return `${f.symbol ?? "R"}\u00a0${(f.cents ? v / 100 : v).toLocaleString("en-US", { useGrouping: false, minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (f?.kind === "duration") return `${plain(v, 2)} ${v === 1 ? f.unit?.replace(/s$/, "") : f.unit}`;
+  return plain(v, Math.abs(v) >= 100 ? 2 : 4);
 }
 
 export type Tab = "graph" | "state" | "params" | "scenarios" | "compare";

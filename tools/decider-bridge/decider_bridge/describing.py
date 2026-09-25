@@ -9,6 +9,7 @@ import textwrap
 from pathlib import Path
 
 from decider.engine.ir.nodes import BranchNode, CallNode, LoopNode
+from decider.fields import metadata_of
 from decider.steps import FrameStep, FunctionStep, Step
 
 
@@ -89,6 +90,19 @@ def _fingerprint(fn, step_):
     if hasattr(step_, "model_dump_json"):
         text += step_.model_dump_json()
     return hashlib.sha1(text.encode()).hexdigest()[:12]
+
+
+def field_metadata(node, out=None):
+    """Each value's declared `FieldMetadata` as JSON, by name; the first declaration of a name wins."""
+    out = {} if out is None else out
+    if isinstance(node, CallNode):
+        for d in (*(node.inputs or ()), *(node.outputs or ()), *node.params):
+            if (m := metadata_of(d.annotation)) is not None:
+                out.setdefault(d.name, m.to_json())
+    else:
+        for c in node.children():
+            field_metadata(c, out)
+    return out
 
 
 def node_json(node, steps, located):

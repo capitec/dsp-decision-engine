@@ -2,7 +2,7 @@ import * as path from "node:path";
 import { Breakpoint, Event, Handles, InitializedEvent, LoggingDebugSession, OutputEvent, Scope, Source, StackFrame, StoppedEvent, TerminatedEvent, Thread, Variable } from "@vscode/debugadapter";
 import type { DebugProtocol } from "@vscode/debugprotocol";
 import { Bridge, freePort } from "./bridge";
-import { kindLabel, lastSegment, formatValue, previewOf, readEvents, walk } from "@decider/ui";
+import { kindLabel, lastSegment, formatValue, previewOf, readEvents, setFields, walk } from "@decider/ui";
 import type { Checkpoint, ColumnSummary, Controls, DescribeResult, Hit, IRNodeJson, Lineage, RecordKey, RunStatus, Status, Visits } from "@decider/ui";
 import { nodeAtLine } from "./sourceMap";
 import { optionsFromEnv, type AdapterOptions, type LaunchArgs } from "./launchArgs";
@@ -89,6 +89,7 @@ export class DeciderDebugSession extends LoggingDebugSession {
         if (!this.finished) this.sendEvent(new TerminatedEvent());
       });
       this.describe = await this.bridge.request<DescribeResult>("describe", { file: args.program, pipeline: args.pipeline });
+      setFields(this.describe.fields);
       walk(this.describe.ir, (n, parent) => {
         this.nodes.set(n.path, n);
         if (parent) this.parents.set(n.path, parent.path);

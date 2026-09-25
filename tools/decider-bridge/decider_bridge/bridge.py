@@ -34,9 +34,9 @@ from decider.serving.parse import coerce_record, has_date
 from decider.steps import FunctionStep, Step
 
 from .controls import Controls
-from .describing import assignment_lines, find_pipelines, formula, key_column, node_json, values_file
+from .describing import assignment_lines, field_metadata, find_pipelines, formula, key_column, node_json, values_file
 from .forks import checkpoint_key, merge, sweep
-from .lineage import latest, lineage
+from .lineage import attribution, latest, lineage
 from .loading import load_module
 from .runs import apply_overrides, debug_condition, trace, tree_path
 from .timeline import Timeline
@@ -133,7 +133,7 @@ class Bridge:
             for k, v in vars(m).items():
                 if isinstance(v, Step) and k in lines:
                     located.setdefault(id(v), (str(Path(m.__file__).resolve()), lines[k]))
-        self.parents = {}
+        self.parents, self.calls = {}, set()
         tree = node_json(self.ir, steps, located)
         self._index(tree, None)
         params = {path: {k: {kk: vv for kk, vv in info.items() if kk != "used_by" or path == "shared"} for k, info in ps.items()}
@@ -141,7 +141,7 @@ class Bridge:
         # What the flow decides: what it emits, and what its top-level branches set.
         outcome = [n for n in getattr(self.step, "emits", ()) if "@" not in n]
         outcome += [m for c in tree.get("children", ()) if c["kind"] == "branch" for m in c.get("modifies", ())]
-        self.described = {"pipelines": pipelines, "pipeline": self.name, "ir": tree, "params": params,
+        self.described = {"pipelines": pipelines, "pipeline": self.name, "ir": tree, "params": params, "fields": field_metadata(self.ir),
                           "outcome": list(dict.fromkeys(outcome)),
                           "values": getattr(self.mod, "PARAMS", None) or self._build_params or {},
                           "valuesFile": file and values_file(file)}
@@ -161,6 +161,8 @@ class Bridge:
 
     def _index(self, n, parent):
         self.parents[n["path"]] = parent
+        if n["kind"] == "call":
+            self.calls.add(n["path"])
         for c in n.get("children", ()):
             self._index(c, n["path"])
 
@@ -379,9 +381,13 @@ class Bridge:
                 if row is not None:
                     now[row] = self.session.state.column(name, latest(self.session.state, versions, row))[row]
             at = None if row is None else now[row]
-            cols.append({"name": name, "dtype": str(series.dtype), "rows": series.len(),
-                         "nulls": now.count(None), "preview": now[:5], "value": at,
-                         "producer": versions[-1].producer or "input", "versions": len(versions)})
+            col = {"name": name, "dtype": str(series.dtype), "rows": series.len(),
+                   "nulls": now.count(None), "preview": now[:5], "value": at,
+                   "producer": versions[-1].producer or "input", "versions": len(versions)}
+            if row is not None:
+                written, changed = attribution(self.session.state, name, versions, row, self.calls)
+                col.update(producer=written or "input", writtenBy=written or "input", changedBy=changed or "input")
+            cols.append(col)
         return {"columns": cols, "row": row, "key": key_column(self.session.frame)}
 
     def column(self, name, row=None):

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { formatValue, isRateName, recordLabel, type ParamInfo, type RecordKey } from "./model/protocol";
+import { formatValue, isPercent, recordLabel, type ParamInfo, type RecordKey } from "./model/protocol";
 import { scenarios, type Knob, type Scenario, type Sweep } from "./model/sweep";
 import { Compare } from "./Compare";
 import { SweepResults } from "./SweepResults";
@@ -152,7 +152,7 @@ export function Scenarios({ schema, values, columns, pausedAt, record, keyCol, r
             <input
               aria-label="knob values"
               className={`values ${incomplete[i] && k.key ? "invalid" : ""}`}
-              placeholder={k.key && isRateName(k.key.split("|").pop()) ? "values, e.g. 7%, 7.75%, 8.5%" : "values, e.g. 24, 36, 48"}
+              placeholder={k.key && isPercent(k.key.split("|").pop()) ? "values, e.g. 7%, 7.75%, 8.5%" : "values, e.g. 24, 36, 48"}
               value={k.values}
               onChange={(e) => set(i, { values: e.target.value })}
             />

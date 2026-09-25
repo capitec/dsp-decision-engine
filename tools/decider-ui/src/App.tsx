@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { paramReaders, type Comparison } from "./model/compare";
-import { callNodes, recordLabel, type ColumnSummary, type Controls, type DescribeResult, type FromUI, type Lineage, type RecordKey, type RunStatus, type Tab, type ToUI, type ValueHistory } from "./model/protocol";
+import { callNodes, recordLabel, setFields, type ColumnSummary, type Controls, type DescribeResult, type FromUI, type Lineage, type RecordKey, type RunStatus, type Tab, type ToUI, type ValueHistory } from "./model/protocol";
 import type { Sweep } from "./model/sweep";
 import { Compare } from "./Compare";
 import { FindStep } from "./FindStep";
 import { Graph } from "./Graph";
 import { ChangedNav, Key, ViewMenu } from "./GraphBar";
-import { fold, groupPaths } from "./layout";
+import { fold, groupPaths, positionIn } from "./layout";
 import { ControlsBar, GroupControls, groupsOf, steered, WatchForm } from "./Controls";
 import { NodePanel } from "./NodePanel";
 import { Params } from "./Params";
@@ -103,6 +103,7 @@ function View({ send, listen, can }: AppProps) {
     const stop = listen((m) => {
       switch (m.type) {
         case "describe":
+          setFields(m.describe.fields);
           setDescribe(m.describe);
           // Starting a run describes the flow again: keep what the user was looking at.
           if (shown.current !== m.describe.pipeline) {
@@ -485,14 +486,6 @@ function View({ send, listen, can }: AppProps) {
       </main>
     </div>
   );
-}
-
-/** "step 7 of 89 in policy" for a path in a flow of `nodes`. */
-function positionIn(nodes: { path: string }[], path: string): string | null {
-  const group = path.slice(0, path.lastIndexOf("/"));
-  const siblings = nodes.filter((n) => n.path.slice(0, n.path.lastIndexOf("/")) === group);
-  const i = siblings.findIndex((n) => n.path === path);
-  return i < 0 || siblings.length < 2 ? null : `step ${i + 1} of ${siblings.length} in ${group.split("/").pop()}`;
 }
 
 function producers(l: Lineage): string[] {
