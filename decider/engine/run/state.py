@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import copy
 from functools import lru_cache
-from typing import Any
+from typing import Any, Hashable
 
 import numpy as np
 import polars as pl
 
 from decider.engine.ir.decls import TYPED, Input, NullPolicy, base_annotation
 from decider.engine.wiring.plan import Plan, Version
-from decider.types import Representation
 
 
 class State:
@@ -37,8 +36,8 @@ class State:
         self.chains: dict[str, list[Version]] = {k: list(v) for k, v in plan.chains.items()}
         self._extra = 0
         self._sources: dict[int, tuple[np.ndarray, pl.Series]] = {}
-        self._representations: dict[tuple[int, Representation], np.ndarray] = {}
-        self._representation_alive: dict[tuple[int, Representation], list[np.ndarray]] = {}
+        self._representations: dict[tuple[int, Hashable], np.ndarray] = {}
+        self._representation_alive: dict[tuple[int, Hashable], list[np.ndarray]] = {}
 
     @classmethod
     def from_frame(cls, plan: Plan, frame: pl.DataFrame, n: int | None = None) -> State:
@@ -114,7 +113,7 @@ class State:
         values, series = self._sources.get(version.id, (None, None))
         return series if values is not None and self.values.get(version.id) is values else None
 
-    def representation(self, version: Version, kind: Representation, build) -> np.ndarray:
+    def representation(self, version: Version, kind: Hashable, build) -> np.ndarray:
         """Return cached compiled representation for `version` and `kind`.
 
         `build(values, source, alive)` receives full-column values and may append

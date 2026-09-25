@@ -16,11 +16,12 @@ from numba.core.errors import NumbaError, UnsupportedBytecodeError
 
 from decider.engine.compile import cpython  # registers CPython-compatible round and **
 from decider.engine.compile.fingerprint import fingerprint
+from decider.engine.compile.rows import rows_probe
 from decider.engine.ir.decls import KIND_DTYPES, FeatureKind, Input, NullPolicy, base_annotation, feature_kind
 from decider.engine.ir.nodes import CallNode
 from decider.engine.params import NodeParams
 from decider.steps.helpers import helper_signatures, is_python_only
-from decider.types import is_raw, raw_base
+from decider.types import is_raw, raw_base, rows_item, rows_schema
 
 # UnsupportedBytecodeError (e.g. an `import` inside a step) isn't a NumbaError.
 FALLBACK_ERRORS = (NumbaError, UnsupportedBytecodeError)
@@ -88,8 +89,10 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None]:
     key, dispatcher = jit(node.fn if helper_reason is not None else prepared)
     if helper_reason is not None:
         return key, dispatcher.py_func, helper_reason
+    rows_inputs = [i for i in node.inputs if rows_item(i.annotation) is not None]
     # numba would type a `date` or `list` input as the float64 it can't be converted to.
-    odd = next((i for i in node.inputs if base_annotation(i.annotation) not in (float, int, bool, str, bytes, Any)), None)
+    odd = next((i for i in node.inputs if i not in rows_inputs
+               and base_annotation(i.annotation) not in (float, int, bool, str, bytes, Any)), None)
     if odd is not None:
         return key, dispatcher.py_func, f"reads '{odd.name}' as {odd.annotation}, which no kernel takes"
     # numba types a scalar `bytes` argument as an array, so `==` against a literal compares
@@ -121,6 +124,11 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None]:
     # it once per row (not its raw Python body) boxes the result back automatically.
     if reason is None and string_output is not None:
         return key, dispatcher, f"writes '{string_output.name}' as str, which no fused kernel stores"
+    # Each parent row owns a different number of child rows, so `Rows[Item]` can't sit in the
+    # shared array kernel either; it still runs compiled, one call per row.
+    if reason is None and rows_inputs:
+        names = ", ".join(f"'{i.name}'" for i in rows_inputs)
+        return key, dispatcher, f"reads {names} as Rows[...], which runs one call per row, outside the shared kernel"
     return key, (dispatcher if reason is None else dispatcher.py_func), reason
 
 
@@ -209,6 +217,9 @@ SPAN = types.UniTuple(types.int64, 2)
 
 
 def _input_type(inp: Input) -> Any:
+    item = rows_item(inp.annotation)
+    if item is not None:
+        return typeof(rows_probe(rows_schema(item)))
     raw = is_raw(inp.annotation)
     annotation = base_annotation(inp.annotation)
     if annotation is bytes and raw:

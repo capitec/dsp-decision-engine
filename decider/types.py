@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Generic, NamedTuple, TypeVar, get_args, get_origin
+from typing import Any, Generic, NamedTuple, TypeVar, get_args, get_origin, get_type_hints
 
 T = TypeVar("T")
 _RAW_STR_CODES: dict[str, int] = {}
@@ -33,8 +33,22 @@ class Raw(Generic[T]):
     """Marker annotation requesting Decider's internal representation of `T`."""
 
 
+class Rows(Generic[T]):
+    """Marker: `Item`'s list column, as one array per field, sliced per parent row."""
+
+
+def rows_item(annotation: Any) -> Any | None:
+    """`Item` of a `Rows[Item]` annotation, else `None`."""
+    return get_args(annotation)[0] if get_origin(annotation) is Rows else None
+
+
+def rows_schema(item: Any) -> tuple[tuple[str, Any], ...]:
+    """`Item`'s fields in declaration order, as `(name, type)` pairs."""
+    return tuple(get_type_hints(item).items())
+
+
 def is_raw(annotation: Any) -> bool:
-    if get_origin(annotation) is Raw:
+    if get_origin(annotation) in (Raw, Rows):
         return True
     return any(is_raw(arg) for arg in get_args(annotation) if arg is not type(None))
 

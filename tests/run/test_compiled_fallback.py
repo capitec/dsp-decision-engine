@@ -197,6 +197,13 @@ def test_raw_annotations_use_internal_representations(mode, fn):
     assert out[fn.__name__].to_list() == [True, True]
 
 
+@pytest.mark.parametrize("mode", ("interpreted", *COMPILED))
+def test_raw_string_gives_the_same_answer_in_every_mode(mode):
+    exe = Engine().bind(flow(is_raw_priority, name="p"), mode=mode)
+    out = exe.run(pl.DataFrame({"value": ["priority", "other"]}))
+    assert out["is_raw_priority"].to_list() == [True, False]
+
+
 @pytest.mark.parametrize("mode", COMPILED)
 def test_raw_string_constants_are_preconverted(mode):
     exe = Engine().bind(flow(is_raw_priority, name="p"), mode=mode)
