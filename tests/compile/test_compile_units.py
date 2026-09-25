@@ -5,8 +5,8 @@ import numpy as np
 import pytest
 from numba.core.dispatcher import Dispatcher
 
-from decider import ConfigurableStep, branch, flow, frame_step, step
-from decider.engine.compile import Fallback, Kernel, compile_plan
+from decider import ConfigurableStep, branch, flow, frame_step, helper, python_only, step
+from decider.engine.compile import Fallback, Kernel, compile_plan, jit
 from decider.engine.ir.decls import Input, Output, ParamDecl
 from decider.engine.ir.nodes import CallNode
 from decider.engine.params import param
@@ -38,6 +38,32 @@ def untypable(cap_by_income_band: float) -> float:
 
 def divides(a: float, b: float) -> float:
     return a / b
+
+
+@helper(signatures=[((float,), float), ((int,), int)])
+def twice(value: float | int) -> float | int:
+    return value * 2
+
+
+def uses_twice(value: float) -> float:
+    return twice(value)
+
+
+def plain_helper(value: float) -> float:
+    return value * 2
+
+
+def uses_plain_helper(value: float) -> float:
+    return plain_helper(value)
+
+
+@python_only
+def external_helper(value: float) -> float:
+    return value * 2
+
+
+def uses_python_only(value: float) -> float:
+    return external_helper(value)
 
 
 INPUTS = {
@@ -158,6 +184,35 @@ def test_a_step_numba_cant_compile_splits_the_kernel_around_it(bad, run):
     assert [v.name for v, _ in units[0].writes] == ["affordability_ratio", "cap_by_income_band"]
     out, _ = run(plan, INPUTS)
     assert out["after"].tolist() == [49.0, 49.0, 61.0, 61.0]
+
+
+def test_a_declared_helper_compiles_with_each_declared_signature(run):
+    plan = resolve(flow(uses_twice))
+    (unit,) = _units(compile_plan(plan))
+    assert isinstance(unit, Kernel)
+    out, _ = run(plan, {"value": np.array([1.5, 2.0])})
+    assert out["uses_twice"].tolist() == [3.0, 4.0]
+
+
+def test_a_shared_helper_uses_one_dispatcher_across_callers():
+    def other(value: float) -> float:
+        return twice(value) + 1
+
+    compile_plan(resolve(flow(uses_twice)))
+    compile_plan(resolve(flow(other)))
+    assert jit(twice)[1] is jit(twice)[1]
+
+
+def test_an_unclassified_helper_explains_how_to_classify_it():
+    unit = compile_plan(resolve(flow(uses_plain_helper)))[0]
+    assert isinstance(unit, Fallback)
+    assert "calls 'plain_helper' without @helper or @python_only" in unit.reason
+
+
+def test_a_python_only_helper_is_reported_as_an_intentional_boundary():
+    unit = compile_plan(resolve(flow(uses_python_only)))[0]
+    assert isinstance(unit, Fallback)
+    assert "calls python_only function 'external_helper'" in unit.reason
 
 
 def test_a_runtime_error_in_a_compiled_step_propagates(run):

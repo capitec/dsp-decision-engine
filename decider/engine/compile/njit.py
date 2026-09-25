@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import inspect
 import os
+import types as py_types
 from pathlib import Path
 from typing import Any, Callable
 
@@ -18,6 +19,7 @@ from decider.engine.compile.fingerprint import fingerprint
 from decider.engine.ir.decls import KIND_DTYPES, FeatureKind, Input, NullPolicy, base_annotation, feature_kind
 from decider.engine.ir.nodes import CallNode
 from decider.engine.params import NodeParams
+from decider.steps.helpers import helper_signatures, is_python_only
 
 # UnsupportedBytecodeError (e.g. an `import` inside a step) isn't a NumbaError.
 FALLBACK_ERRORS = (NumbaError, UnsupportedBytecodeError)
@@ -81,7 +83,10 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None]:
 
         key, fn, reason = compile_call(plan.calls[0].node)
     """
-    key, dispatcher = jit(node.fn)
+    prepared, helper_reason = _prepare_function(node.fn)
+    key, dispatcher = jit(node.fn if helper_reason is not None else prepared)
+    if helper_reason is not None:
+        return key, dispatcher.py_func, helper_reason
     # numba would type a `date` or `list` input as the float64 it can't be converted to.
     odd = next((i for i in node.inputs if base_annotation(i.annotation) not in (float, int, bool, str, bytes, Any)), None)
     if odd is not None:
@@ -99,6 +104,58 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None]:
             _REASONS[key, sig] = f"{type(e).__name__}: {e}"
     reason = _REASONS[key, sig]
     return key, (dispatcher if reason is None else dispatcher.py_func), reason
+
+
+def _prepare_function(fn: Callable, stack: tuple[int, ...] = ()) -> tuple[Callable, str | None]:
+    """Replace declared helpers in `fn` globals with shared compiled dispatchers."""
+    if id(fn) in stack:
+        return fn, f"recursive helper call involving '{fn.__name__}' cannot be compiled"
+    globals_ = dict(fn.__globals__)
+    changed = False
+    for name in fn.__code__.co_names:
+        called = globals_.get(name)
+        if not isinstance(called, py_types.FunctionType):
+            continue
+        if is_python_only(called):
+            return fn, f"calls python_only function '{called.__name__}', which runs in Python"
+        signatures = helper_signatures(called)
+        if signatures is None:
+            return fn, f"calls '{called.__name__}' without @helper or @python_only"
+        prepared, reason = _prepare_function(called, stack + (id(fn),))
+        if reason is not None:
+            return fn, f"helper '{called.__name__}': {reason}"
+        key, dispatcher = _compile_helper(prepared, signatures)
+        reason = _REASONS.get((key, "helper"))
+        if reason is not None:
+            return fn, f"helper '{called.__name__}' could not compile: {reason}"
+        globals_[name] = dispatcher
+        changed = True
+    if not changed:
+        return fn, None
+    return py_types.FunctionType(fn.__code__, globals_, fn.__name__, fn.__defaults__, fn.__closure__), None
+
+
+def _compile_helper(fn: Callable, signatures: tuple[tuple[tuple[type, ...], type], ...]) -> tuple[str, Dispatcher]:
+    key, dispatcher = jit(fn)
+    if (key, "helper") in _REASONS:
+        return key, dispatcher
+    try:
+        for inputs, _ in signatures:
+            dispatcher.compile(tuple(_numba_type(t) for t in inputs))
+        _REASONS[key, "helper"] = None
+    except (*FALLBACK_ERRORS, NotImplementedError) as e:
+        _REASONS[key, "helper"] = f"{type(e).__name__}: {e}"
+    return key, dispatcher
+
+
+def _numba_type(annotation: type) -> Any:
+    if annotation is float:
+        return types.float64
+    if annotation is int:
+        return types.int64
+    if annotation is bool:
+        return types.boolean
+    raise TypeError(f"unsupported @helper signature type {annotation!r}; use float, int or bool")
 
 
 def parameters(fn: Callable) -> tuple[str, ...]:
