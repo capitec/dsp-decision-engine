@@ -7,10 +7,13 @@ import numpy as np
 import polars as pl
 
 from decider.engine.boundary.nulls import MissingInputError
+from decider.engine.compile.rows import build_rows
 from decider.engine.ir.decls import Input, NullPolicy, base_annotation
 from decider.engine.run.params import RunParams
+from decider.engine.run.representations import StringCodes, build_raw
 from decider.engine.run.runners.base import Checkpoint
 from decider.engine.run.state import State, dtype_of, fill_missing, from_series
+from decider.types import Representation, representation_for, rows_item, rows_schema
 from decider.engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, Sequence, Version
 
 
@@ -59,6 +62,7 @@ class InterpretedRunner:
 
     def __init__(self) -> None:
         self.visit: Callable[[str], None] = _ignore
+        self._codes = StringCodes()
 
     def iterate(self, plan: Plan, state: State, params: RunParams) -> Iterator[Checkpoint]:
         root = _Scope(None, state.frame, {})
@@ -92,7 +96,8 @@ class InterpretedRunner:
         m = scope.count(state.n)
         bundle = params.bundle(call.id, m)
         # Plain Python scalars, not numpy ones: `x / 0.0` must raise here as it does in a kernel.
-        cols = [_argument(state, v, i, scope.rows, node.origin.path).tolist() for i, v in zip(node.inputs, call.reads)]
+        cols = [_argument(state, v, i, scope.rows, node.origin.path, self._codes).tolist()
+                for i, v in zip(node.inputs, call.reads)]
         rows = zip(*cols) if cols else repeat((), m)
         results: list = []
         append = results.append
@@ -186,8 +191,24 @@ def _note(e: BaseException, text: str) -> None:
         e.add_note(text)
 
 
-def _argument(state: State, version: Version, decl: Input, rows: np.ndarray | None, path: str) -> np.ndarray:
-    values, valid = state.read(version, rows)
+def _argument(state: State, version: Version, decl: Input, rows: np.ndarray | None, path: str,
+             codes: StringCodes) -> np.ndarray:
+    values, valid = state.read(version, None)
+    if values.dtype == object:
+        item = rows_item(decl.annotation)
+        if item is not None:
+            schema = rows_schema(item)
+            values = state.representation(version, ("rows", schema),
+                                          lambda v, s, a: build_rows(v, schema))
+        elif base_annotation(decl.annotation) in (str, bytes):
+            # Never the row-only span/code shape here: interpreted trees keep real str/bytes values.
+            kind = representation_for(decl.annotation, row=False)
+            if kind in (Representation.RAW_STRING, Representation.RAW_BYTES):
+                values = state.representation(version, kind,
+                                              lambda v, s, a: build_raw(kind, v, None, a, s, codes))
+    if rows is not None:
+        values = values[rows]
+        valid = None if valid is None else valid[rows]
     if valid is None or valid.all():
         return values
     missing = ~valid

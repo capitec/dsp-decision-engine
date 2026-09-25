@@ -1,20 +1,22 @@
 from __future__ import annotations
 
-import threading
 import warnings
 from typing import Iterator
 
 import numpy as np
 import polars as pl
+from numba.core.dispatcher import Dispatcher
 
 from decider.engine.boundary.nulls import MissingInputError
 from decider.engine.compile import Fallback, Unit, compile_plan, numpy_dtype
+from decider.engine.compile.rows import build_rows
 from decider.engine.ir.decls import Input, NullPolicy, base_annotation
 from decider.engine.run.params import RunParams
+from decider.engine.run.representations import StringCodes, build_raw
 from decider.engine.run.runners.base import Checkpoint
 from decider.engine.run.runners.interpreted import InterpretedRunner, _absent, _note, _Scope
 from decider.engine.run.state import State, fill_missing
-from decider.types import is_raw, representation_for, raw_base, raw_string_codes
+from decider.types import Representation, is_raw, representation_for, raw_base, rows_item, rows_schema
 from decider.engine.wiring.plan import Call, Plan, Version
 
 
@@ -50,12 +52,10 @@ class SteppedRunner(InterpretedRunner):
         self._reads: dict[int, tuple[tuple[Input, Version, str, np.dtype | None], ...]] = {}
         self._strs: dict[int, tuple[str, ...]] = {}
         self._converted: dict[tuple[str, int], tuple] = {}
-        self._codes: dict[str, int] = {}
+        self._codes = StringCodes()
         self._spans: set[int] = set()
         self._alive: dict[tuple[str, int], dict] = {}
-        self._lock = threading.Lock()
         self._fallbacks: dict[str, str] = {}
-        self._codes.update(raw_string_codes())
 
     def iterate(self, plan: Plan, state: State, params: RunParams) -> Iterator[Checkpoint]:
         # Not a generator itself: one generator frame less per checkpoint on the single-record path.
@@ -114,8 +114,10 @@ class SteppedRunner(InterpretedRunner):
     def _run(self, unit: Unit, state: State, params: RunParams, scope: _Scope) -> None:
         rows = scope.rows
         n = scope.count(state.n)
-        # A fallback runs Python code, which takes Python values: strings, not codes.
-        python = isinstance(unit, Fallback)
+        # A genuinely interpreted fallback runs Python code, which takes Python values: strings,
+        # not codes. A fallback backed by a compiled dispatcher (a `str` output, `Rows[Item]`) still
+        # wants typed/representation values, same as a `Kernel`.
+        python = isinstance(unit, Fallback) and not isinstance(unit.fn, Dispatcher)
         # Every call of a unit runs on every row the unit runs on, so validating
         # them all here is validating exactly the nodes that run.
         bundles = {c.id: params.bundle(c.id, n) if python else self._bundle(c.id, params, n)
@@ -126,11 +128,17 @@ class SteppedRunner(InterpretedRunner):
         for decl, v, path, want in self._reads[id(unit)]:
             x, mask = state.read(v, rows)
             if not python and x.dtype == object:
-                kind = representation_for(decl.annotation, row=any(c.node.kind == "row" for c in unit.calls))
-                full = state.representation(
-                    v, kind,
-                    lambda values, source, kept: self._typed(values, None, decl, kept, source),
-                )
+                item = rows_item(decl.annotation)
+                if item is not None:
+                    schema = rows_schema(item)
+                    full = state.representation(v, ("rows", schema),
+                                                lambda values, source, kept: build_rows(values, schema))
+                else:
+                    kind = representation_for(decl.annotation, row=any(c.node.kind == "row" for c in unit.calls))
+                    full = state.representation(
+                        v, kind,
+                        lambda values, source, kept: self._typed(values, None, decl, kept, source),
+                    )
                 x = full if rows is None else full[rows]
             elif not python and want is not None and x.dtype != want and np.can_cast(x.dtype, want):
                 # An int column read as `float` (another step reads it as `int`): a kernel types what it gets.
@@ -160,14 +168,11 @@ class SteppedRunner(InterpretedRunner):
         annotation = base_annotation(decl.annotation)
         if annotation is bytes:
             try:
-                return _spans(x, mask, alive, source)
+                return build_raw(Representation.RAW_BYTES, x, mask, alive, source, self._codes)
             except TypeError as e:
                 raise TypeError(f"'{decl.name}' is a string input: {e}") from None
         if annotation is str and raw:
-            with self._lock:
-                self._codes.update(raw_string_codes())
-                codes = {s: self._codes.setdefault(s, len(self._codes)) for s in x}
-            return np.fromiter((codes[s] for s in x), np.int32, len(x))
+            return build_raw(Representation.RAW_STRING, x, mask, alive, source, self._codes)
         if annotation is str:
             values = ["" if s is None else str(s) for s in x]
             width = max((len(s) for s in values), default=1)
@@ -190,8 +195,7 @@ class SteppedRunner(InterpretedRunner):
                 self._alive[key] = utf8
                 codes = {k: (b.ctypes.data, len(b)) for k, b in utf8.items()}
             else:
-                with self._lock:
-                    codes = {k: np.int32(self._codes.setdefault(getattr(bundle, k), len(self._codes))) for k in names}
+                codes = {k: self._codes.bundle(k, getattr(bundle, k)) for k in names}
             converted = self._converted[key] = bundle._replace(**codes)
         return converted
 
@@ -208,28 +212,6 @@ def _external(unit: Unit) -> tuple[tuple[Input, Version, str, np.dtype | None], 
 
 def _reads_bytes(call: Call) -> bool:
     return any(base_annotation(i.annotation) is bytes for i in call.node.inputs)
-
-
-def _spans(x: np.ndarray, mask: np.ndarray | None, alive: list, source: pl.Series | None) -> np.ndarray:
-    # Strings reach a kernel as `(address, byte length)` spans into Arrow memory, -1 for a null.
-    from decider.engine.boundary.extract import extract_frame
-
-    if mask is not None:
-        x = np.where(mask, x, None)
-    if len(x) <= 32:
-        # A few records (score): encoding them beats building a frame to export.
-        raw = [None if s is None else str.encode(s) for s in x]
-        buffer = np.frombuffer(b"".join(b for b in raw if b) or bytes(1), np.uint8)
-        alive.append(buffer)
-        lengths = np.array([-1 if b is None else len(b) for b in raw], np.int64)
-        starts = np.cumsum(np.maximum(lengths, 0)) - np.maximum(lengths, 0)
-        return np.stack([buffer.ctypes.data + starts, lengths], axis=1)
-    # The input frame's own column when it holds these values, else a copy (an override, a row subset).
-    if source is None or source.dtype != pl.String:
-        source = pl.Series(x.tolist(), dtype=pl.String)
-    extracted = extract_frame(source.to_frame("s"), [Input("s", bytes, NullPolicy.OPTIONAL)])
-    alive.append(extracted.kernel_frame)
-    return extracted.columns["s"].values
 
 
 def _str_params(call: Call) -> tuple[tuple[str, ...], tuple[str, str] | None]:
