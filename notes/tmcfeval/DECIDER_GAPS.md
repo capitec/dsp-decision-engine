@@ -24,13 +24,13 @@ Each gap has **today** (code that shows the problem, runnable against that commi
 (a sketch of an API that would fix it). The sketches are proposals, not designs.
 
 Contents:
-1. [Silent Python fallback for list inputs](#1-silent-python-fallback-for-list-inputs)
+- [x] 1. [Silent Python fallback for list inputs](#1-silent-python-fallback-for-list-inputs)
 2. [Silent Python fallback when a step calls a plain helper](#2-silent-python-fallback-when-a-step-calls-a-plain-helper)
 3. [Lists of records have no grain of their own](#3-lists-of-records-have-no-grain-of-their-own)
 4. [No fan-out and reduce (search over generated candidates)](#4-no-fan-out-and-reduce)
 5. [Withdrawn: calling a flow from a hand-written kernel](#5-withdrawn-calling-a-flow-from-a-hand-written-kernel)
 6. [A branch condition must be a function step](#6-a-branch-condition-must-be-a-function-step)
-7. [Stale disk cache when a callee changes](#7-stale-disk-cache-when-a-callee-changes)
+- [x] 7. [Stale disk cache when a callee changes](#7-stale-disk-cache-when-a-callee-changes)
 8. [Functions with function arguments can't be disk-cached](#8-functions-with-function-arguments-cant-be-disk-cached)
 9. [Frame step output dtypes are lost between frame steps](#9-frame-step-output-dtypes-are-lost-between-frame-steps)
 10. [Typo heuristic flags legitimate input names](#10-typo-heuristic-flags-legitimate-input-names)
