@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { formatValue, isRateName, type CallNodeJson, type Lineage } from "./model/protocol";
+import { formatValue, isPercent, type CallNodeJson, type Lineage } from "./model/protocol";
 
 interface Props {
   entry: Lineage;
@@ -86,7 +86,7 @@ export function clampNote(formula: string, inputs: { name: string; value: unknow
   const kind = m[1] === "min" ? "cap" : "floor";
   const limit = evaluate(m[3], known);
   const shown = (v: number) => formatValue(v, first.name);
-  const gap = (a: number, b: number) => (isRateName(first.name) ? `${Number((Math.abs(a - b) * 100).toFixed(2))} pp` : formatValue(Math.abs(a - b)));
+  const gap = (a: number, b: number) => (isPercent(first.name, a) ? `${Number((Math.abs(a - b) * 100).toFixed(2))} pp` : formatValue(Math.abs(a - b)));
   if (Math.abs(result - first.value) < 1e-12) {
     return limit === null
       ? `the ${kind} did not apply: ${first.name} passed through`

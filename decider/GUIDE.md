@@ -368,6 +368,24 @@ assert list(step_map(pipeline)) == ["credit/ratio", "credit/approved", "credit"]
 ir = to_ir(pipeline)                     # the checked IR that Engine().bind runs
 ```
 
+Say what a value measures with `Annotated` and the flow debugger shows it that
+way (`R 4000.00`, `25%`, `36 months`); undeclared values are guessed from their
+names. The engine runs the plain type.
+
+```python
+from typing import Annotated
+import polars as pl
+from decider import Duration, Money, Percent, flow, param
+
+def instalment(loan: Annotated[float, Money()], term_months: Annotated[int, Duration("months")],
+               rate: Annotated[float, Percent()] = param(0.25)) -> Annotated[float, Money()]:
+    return loan * (1 + rate) / term_months
+
+assert flow(instalment, name="loan").run(pl.DataFrame({"loan": [1200.0], "term_months": [12]}))["instalment"].to_list() == [125.0]
+```
+
+`Money(cents=True)` is an int of cents; subclass `decider.FieldMetadata` for another kind.
+
 Sessions also `step()`, `step_into()` (branches, loops), `rewind(path)` and
 break on a tree node (`"risk#high"`) or table row (`"band#2"`); see
 `help(decider.engine.debug.Session)`. Test through decider
