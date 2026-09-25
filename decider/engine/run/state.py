@@ -9,6 +9,7 @@ import polars as pl
 
 from decider.engine.ir.decls import TYPED, Input, NullPolicy, base_annotation
 from decider.engine.wiring.plan import Plan, Version
+from decider.types import Representation
 
 
 class State:
@@ -36,6 +37,8 @@ class State:
         self.chains: dict[str, list[Version]] = {k: list(v) for k, v in plan.chains.items()}
         self._extra = 0
         self._sources: dict[int, tuple[np.ndarray, pl.Series]] = {}
+        self._representations: dict[tuple[int, Representation], np.ndarray] = {}
+        self._representation_alive: dict[tuple[int, Representation], list[np.ndarray]] = {}
 
     @classmethod
     def from_frame(cls, plan: Plan, frame: pl.DataFrame, n: int | None = None) -> State:
@@ -111,6 +114,23 @@ class State:
         values, series = self._sources.get(version.id, (None, None))
         return series if values is not None and self.values.get(version.id) is values else None
 
+    def representation(self, version: Version, kind: Representation, build) -> np.ndarray:
+        """Return cached compiled representation for `version` and `kind`.
+
+        `build(values, source, alive)` receives full-column values and may append
+        backing buffers to `alive` when its representation borrows memory.
+        """
+        key = (version.id, kind)
+        values = self._representations.get(key)
+        if values is None:
+            source = self.source(version)
+            alive = self._representation_alive.setdefault(key, [])
+            source_values = self.values.get(version.id)
+            if source_values is None:
+                source_values = np.full(self.n, None, object)
+            values = self._representations[key] = build(source_values, source, alive)
+        return values
+
     def record(self, name: str, producer: str, values: np.ndarray, valid: np.ndarray | None = None) -> Version:
         """Store `values` as a new version of `name`, appended to its chain; for overrides.
 
@@ -142,6 +162,8 @@ class State:
                 else:
                     self.valid.pop(vid, None)
         self.chains, self._extra = old.chains, old._extra
+        self._representations = {k: v for k, v in old._representations.items() if k[0] in keep}
+        self._representation_alive = {k: v for k, v in old._representation_alive.items() if k[0] in keep}
 
     def versions(self, spec: str) -> list[Version]:
         """The versions `spec` names: `name` (the latest), `name@path` (by producer) or `name@*` (all).
