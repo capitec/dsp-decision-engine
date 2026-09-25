@@ -95,6 +95,10 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None]:
     string_output = next((o for o in node.outputs if base_annotation(o.annotation) is str), None)
     if string_output is not None:
         return key, dispatcher.py_func, f"writes '{string_output.name}' as str, which no fused kernel stores"
+    semantic_bytes = next((i for i in node.inputs
+                           if base_annotation(i.annotation) is bytes and not is_raw(i.annotation)), None)
+    if semantic_bytes is not None and node.kind == "scalar":
+        return key, dispatcher.py_func, f"reads '{semantic_bytes.name}' as bytes, which no scalar kernel takes"
     sig = _probe_signature(node)
     if sig is None:
         return key, dispatcher, None

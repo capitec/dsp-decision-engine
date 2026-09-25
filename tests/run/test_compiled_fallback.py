@@ -7,7 +7,7 @@ import pytest
 
 from decider.exceptions import WiringError
 
-from decider import Raw, flow, missing_as
+from decider import Raw, flow, missing_as, raw_str
 from decider.engine import Engine
 from decider.engine.compile import Fallback, Kernel
 from decider.testing import assert_equivalent
@@ -134,8 +134,19 @@ def is_priority(value: str) -> bool:
     return value == "priority"
 
 
+def is_binary_priority(value: bytes) -> bool:
+    return value == b"priority"
+
+
 def has_raw_string(value: Raw[str]) -> bool:
     return value >= 0
+
+
+PRIORITY = raw_str("priority")
+
+
+def is_raw_priority(value: Raw[str]) -> bool:
+    return value == PRIORITY
 
 
 def has_raw_bytes(value: Raw[bytes]) -> bool:
@@ -149,12 +160,27 @@ def test_scalar_string_steps_receive_semantic_strings(mode):
     assert out["is_priority"].to_list() == [True, False]
 
 
+@pytest.mark.parametrize("mode", COMPILED)
+def test_scalar_semantic_bytes_fall_back_until_adapter_exists(mode):
+    exe = Engine().bind(flow(is_binary_priority, name="p"), mode=mode)
+    with pytest.warns(UserWarning, match="reads 'value' as bytes, which no scalar kernel takes"):
+        out = exe.run(pl.DataFrame({"value": [b"priority", b"other"]}))
+    assert out["is_binary_priority"].to_list() == [True, False]
+
+
 @pytest.mark.parametrize("fn", [has_raw_string, has_raw_bytes])
 @pytest.mark.parametrize("mode", COMPILED)
 def test_raw_annotations_use_internal_representations(mode, fn):
     exe = Engine().bind(flow(fn, name="p"), mode=mode)
     out = exe.run(pl.DataFrame({"value": ["priority", "other"]}))
     assert out[fn.__name__].to_list() == [True, True]
+
+
+@pytest.mark.parametrize("mode", COMPILED)
+def test_raw_string_constants_are_preconverted(mode):
+    exe = Engine().bind(flow(is_raw_priority, name="p"), mode=mode)
+    out = exe.run(pl.DataFrame({"value": ["priority", "other"]}))
+    assert out["is_raw_priority"].to_list() == [True, False]
 
 
 @pytest.mark.parametrize("mode", COMPILED)

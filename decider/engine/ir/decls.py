@@ -59,7 +59,8 @@ def feature_kind(annotation: Any) -> FeatureKind:
     >>> feature_kind(int)
     <FeatureKind.I64: 1>
     """
-    return _KIND_BY_ANNOTATION.get(raw_base(annotation), FeatureKind.F64)
+    kind_annotation = raw_base(annotation) if is_raw(annotation) else annotation
+    return _KIND_BY_ANNOTATION.get(kind_annotation, FeatureKind.F64)
 
 
 def base_annotation(annotation: Any) -> Any:
