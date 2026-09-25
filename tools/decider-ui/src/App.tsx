@@ -6,7 +6,7 @@ import { Compare } from "./Compare";
 import { FindStep } from "./FindStep";
 import { Graph } from "./Graph";
 import { ChangedNav, Key, ViewMenu } from "./GraphBar";
-import { fold } from "./layout";
+import { fold, groupPaths } from "./layout";
 import { ControlsBar, GroupControls, groupsOf, steered, WatchForm } from "./Controls";
 import { NodePanel } from "./NodePanel";
 import { Params } from "./Params";
@@ -16,11 +16,11 @@ import { StateTable } from "./StateTable";
 
 const IDLE: RunStatus = { current: null, finished: false, finishedPaths: [], visits: {}, record: null };
 type TreePath = { path: string; row: number; visited: string[]; result?: unknown[] };
-// Flows up to this many steps draw fully open; bigger ones start with their groups folded.
+// Flows up to this many steps start fully open; bigger ones start with their groups folded.
 const OPEN_ALL = 80;
 
 /** Messages only an editor can act on: opening source or diffs, driving its debugger, its window. */
-export type EditorMessage = Extract<FromUI["type"], "reveal" | "maximise" | "openDiff" | "debugStep" | "runTo" | "step" | "compareRevision">;
+export type EditorMessage = Extract<FromUI["type"], "reveal" | "maximise" | "openDiff" | "debugStep" | "run" | "runTo" | "step" | "compareRevision">;
 
 export interface AppProps {
   /** Sends a message to the host. */
@@ -110,7 +110,7 @@ function View({ send, listen, can }: AppProps) {
             setSelected(undefined);
             setColumns(null);
             setRun(IDLE);
-            setOpened(new Set());
+            setOpened(callNodes(m.describe.ir).length <= OPEN_ALL ? groupPaths(m.describe.ir) : new Set());
           }
           shown.current = m.describe.pipeline;
           break;
@@ -226,7 +226,7 @@ function View({ send, listen, can }: AppProps) {
   );
   // Groups drawn open: the ones the user opened, and every one around the selection, the pause and the changes.
   const graphIr = useMemo(() => {
-    if (!describe || nodes.length <= OPEN_ALL) return describe?.ir;
+    if (!describe) return undefined;
     const keep = [selected, run.current?.path, ...(diff ? [...diff].filter(([, s]) => s === "changed" || s === "added").map(([p]) => p) : [])].filter(Boolean) as string[];
     return fold(describe.ir, (p) => opened.has(p) || keep.some((k) => k.startsWith(`${p}/`)));
   }, [describe, nodes, opened, selected, run.current?.path, diff]);
@@ -307,9 +307,9 @@ function View({ send, listen, can }: AppProps) {
       {tab === "graph" && (
         <div className="subbar">
           <FindStep nodes={nodes} onPick={setSelected} selected={selected} />
-          {nodes.length > OPEN_ALL && opened.size > 0 && (
-            <button className="link" title="Fold every group back into one box" onClick={() => setOpened(new Set())}>fold all</button>
-          )}
+          <button className="link" title="Open every group. Click a group's ⊟ label to fold just that one." onClick={() => describe && setOpened(groupPaths(describe.ir))}>expand all</button>
+          <button className="link" title="Fold every group into one box; click a box to open it" onClick={() => setOpened(new Set())}>collapse all</button>
+          {can.has("run") && <button className="primary" title="Run the flow from the start on its sample data. It pauses at your breakpoints; with none it runs to the end." onClick={() => send({ type: "run" })}>▶ Run flow</button>}
           <ViewMenu showData={showData} onShowData={setShowData} details={details} onDetails={setDetails} />
           {compare.comparison && <ChangedNav steps={changedSteps} edited={causes.length} selected={selected} showDiff={showDiff} onShowDiff={setShowDiff} onSelect={setSelected} />}
           <Key />

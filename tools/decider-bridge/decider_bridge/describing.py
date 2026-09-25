@@ -18,13 +18,24 @@ def assignment_lines(file):
             for t in n.targets if isinstance(t, ast.Name)}
 
 
+def _build_line(file):
+    """The line of a top-level `def build` in `file`, the serving default entry point (`pipeline:build`)."""
+    tree = ast.parse(Path(file).read_text(), file)
+    return next((n.lineno for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "build"), None)
+
+
 def find_pipelines(mod, file):
-    """Combinator and config steps assigned at the top of `file` that no other one there contains."""
+    """Combinator and config steps assigned at the top of `file` that no other one there contains,
+    plus a top-level `def build` there, if any."""
     lines = assignment_lines(file)  # imported sub-flows aren't this file's pipelines
     steps = {k: v for k, v in vars(mod).items() if isinstance(v, Step) and not k.startswith("_") and k in lines}
     contained = {id(s) for top in steps.values() for _, s in top.walk() if s is not top}
-    return [{"name": k, "line": lines.get(k), "kind": type(v).__name__} for k, v in steps.items()
-            if id(v) not in contained and not isinstance(v, (FunctionStep, FrameStep))]
+    pipelines = [{"name": k, "line": lines.get(k), "kind": type(v).__name__} for k, v in steps.items()
+                 if id(v) not in contained and not isinstance(v, (FunctionStep, FrameStep))]
+    build_line = _build_line(file)
+    if build_line is not None and inspect.isfunction(getattr(mod, "build", None)):
+        pipelines.append({"name": "build", "line": build_line, "kind": "build"})
+    return pipelines
 
 
 def _statement_line(fn, index):

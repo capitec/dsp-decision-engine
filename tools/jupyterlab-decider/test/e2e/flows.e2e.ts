@@ -92,11 +92,11 @@ describe("decider in JupyterLab", () => {
     await ui().locator('select[aria-label="break when op"]').selectOption("<");
     await ui().locator('input[aria-label="break when value"]').fill("70000");
     await ui().locator(".watch-form button", { hasText: "Add breakpoint" }).click();
-    await ui().locator(".controls-bar .chip", { hasText: "offer < R 70,000.00" }).waitFor();
+    await ui().locator(".controls-bar .chip", { hasText: "offer < R 70000.00" }).waitFor();
     await button("Continue").click();
     await ui().locator(".banner-note.hit", { hasText: "iteration 3 of shrink_offer" }).waitFor({ timeout: 60_000 });
     await button("Continue").click();
-    await ui().locator(".banner-note.hit", { hasText: "offer < R 70,000.00" }).waitFor({ timeout: 30_000 });
+    await ui().locator(".banner-note.hit", { hasText: "offer < R 70000.00" }).waitFor({ timeout: 30_000 });
     expect(await ui().locator(".banner-note.hit").innerText()).toContain("client_id 1");
     await lab.shot("07-value-breakpoint");
   });

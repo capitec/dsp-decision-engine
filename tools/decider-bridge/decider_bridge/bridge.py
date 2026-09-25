@@ -24,10 +24,13 @@ from pathlib import Path
 
 import polars as pl
 
+from decider.config import JsonFileStore
 from decider.engine import Engine
 from decider.engine.debug import EVENT
 from decider.engine.debug.edit import swap
 from decider.engine.ir.context import step_map, to_ir
+from decider.serving.handler import RequestHandler
+from decider.serving.parse import coerce_record, has_date
 from decider.steps import FunctionStep, Step
 
 from .controls import Controls
@@ -39,9 +42,10 @@ from .runs import apply_overrides, debug_condition, trace, tree_path
 from .timeline import Timeline
 
 
-def base_params(mod, params):
-    """The module's `PARAMS` (its tables and tuned values, as the config store holds them) with `params` on top."""
-    return merge(getattr(mod, "PARAMS", None) or {}, params or {}) or None
+def base_params(mod, params, default=None):
+    """The module's `PARAMS` (its tables and tuned values, as the config store holds them), or `default`
+    when it has none, with `params` on top."""
+    return merge(getattr(mod, "PARAMS", None) or default or {}, params or {}) or None
 
 
 def _load_rows(data):
@@ -49,7 +53,43 @@ def _load_rows(data):
         raise ValueError("no data: pass `data` (rows or a JSON file) or define SAMPLE in the module")
     if isinstance(data, str):
         data = json.loads(Path(data).read_text())
+    if isinstance(data, dict):
+        data = [data]  # sample_request.json can be one record, not a list of them
     return pl.DataFrame(data)
+
+
+def _project_root(file):
+    """The nearest ancestor directory of `file` holding a `configs/` directory, as `decider serve` finds one."""
+    directory = Path(file).resolve().parent
+    for candidate in [directory, *directory.parents]:
+        if (candidate / "configs").is_dir():
+            return candidate
+    return None
+
+
+def _date_inputs(step):
+    return {i.name: i.annotation for i in Engine().bind(step).plan.inputs if has_date(i.annotation)}
+
+
+def _build(fn, file):
+    """Call a serving-style `def build(...)`: its config version's documents, like `decider serve` would.
+
+    Returns the built step, that version's `"params"` document (or `None`), and its
+    `sample_request.json` record (or `None`, its dates converted like a request's), from the
+    project root the pipeline's file sits in.
+    """
+    root = _project_root(file) if file else None
+    config = {}
+    if root is not None:
+        store = JsonFileStore(basepath=str(root / "configs"))
+        version = store.latest_version()
+        config = store.read(version).config if version else {}
+    step = RequestHandler(JsonFileStore(), fn).pipeline_fn(config)
+    sample = None
+    candidate = root and root / "sample_request.json"
+    if candidate and candidate.exists():
+        sample = coerce_record(json.loads(candidate.read_text()), _date_inputs(step))
+    return step, config.get("params"), sample
 
 
 class Bridge:
@@ -74,9 +114,13 @@ class Bridge:
         pipelines = (find_pipelines(self.mod, file) if file
                      else [{"name": pipeline, "line": None, "kind": type(getattr(self.mod, pipeline)).__name__}])
         if not pipelines:
-            raise ValueError(f"{file}: no decider pipeline at module level")
+            raise ValueError(f"{file}: no decider pipeline: define `def build()` or assign one at module level")
         self.name = pipeline or pipelines[-1]["name"]
-        self.step = getattr(self.mod, self.name)
+        target = getattr(self.mod, self.name)
+        if isinstance(target, Step):
+            self.step, self._build_params, self._build_sample = target, None, None
+        else:
+            self.step, self._build_params, self._build_sample = _build(target, file)
         self.ir = to_ir(self.step)
         steps = step_map(self.step)
         located = {}
@@ -99,17 +143,18 @@ class Bridge:
         outcome += [m for c in tree.get("children", ()) if c["kind"] == "branch" for m in c.get("modifies", ())]
         self.described = {"pipelines": pipelines, "pipeline": self.name, "ir": tree, "params": params,
                           "outcome": list(dict.fromkeys(outcome)),
-                          "values": getattr(self.mod, "PARAMS", None) or {}, "valuesFile": file and values_file(file)}
+                          "values": getattr(self.mod, "PARAMS", None) or self._build_params or {},
+                          "valuesFile": file and values_file(file)}
         return self.described
 
     def trace(self, file=None, pipeline=None, data=None, params=None, overrides=None, row=None, forces=()):
         """Describe and run `file` to the end on `data` (default: its SAMPLE), with `overrides` and `forces` applied."""
         self.describe(file, pipeline)
         frame = apply_overrides(self._rows(data), overrides, row)
-        return self._run(self.step, frame, base_params(self.mod, params), forces)
+        return self._run(self.step, frame, base_params(self.mod, params, self._build_params), forces)
 
     def _rows(self, data):
-        return _load_rows(data if data is not None else getattr(self.mod, "SAMPLE", None))
+        return _load_rows(data if data is not None else getattr(self.mod, "SAMPLE", None) or self._build_sample)
 
     def _run(self, step, frame, params, forces):
         return {**self.described, **trace(step, frame, params, self.described["ir"], forces), "data": frame.to_dicts(), "key": key_column(frame)}
@@ -121,7 +166,7 @@ class Bridge:
 
     def start(self, file=None, pipeline=None, data=None, params=None, breakpoints=(), forces=(), watches=()):
         self.describe(file, pipeline)
-        self.doc = base_params(self.mod, params)
+        self.doc = base_params(self.mod, params, self._build_params)
         self.original = self.step
         self.edits = []  # (path, step or None), so each edit can be compared on its own
         self.session = Engine().bind(self.step).session(self._rows(data), self.doc)
@@ -251,7 +296,7 @@ class Bridge:
             self.describe(file, pipeline)
             frame = self._rows(data)
             at = None
-            params = base_params(self.mod, params)
+            params = base_params(self.mod, params, self._build_params)
             ir = self.described["ir"]
             base = trace(self.step, frame, params, ir, forces)
             results = []
@@ -273,7 +318,8 @@ class Bridge:
 
     def reload_step(self, path):
         """Re-import the pipeline's files and swap the step now at `path` into the paused run."""
-        new = step_map(getattr(self._load(self.file), self.name)).get(path)
+        target = getattr(self._load(self.file), self.name)
+        new = step_map(target if isinstance(target, Step) else _build(target, self.file)[0]).get(path)
         if new is None:
             raise KeyError(f"{path!r} is no longer in {self.name}")
         self.session.replace(path, new)
