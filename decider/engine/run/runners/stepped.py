@@ -14,7 +14,7 @@ from decider.engine.run.params import RunParams
 from decider.engine.run.runners.base import Checkpoint
 from decider.engine.run.runners.interpreted import InterpretedRunner, _absent, _note, _Scope
 from decider.engine.run.state import State, fill_missing
-from decider.types import Representation, is_raw, raw_base, raw_string_codes
+from decider.types import is_raw, representation_for, raw_base, raw_string_codes
 from decider.engine.wiring.plan import Call, Plan, Version
 
 
@@ -126,13 +126,7 @@ class SteppedRunner(InterpretedRunner):
         for decl, v, path, want in self._reads[id(unit)]:
             x, mask = state.read(v, rows)
             if not python and x.dtype == object:
-                if base_annotation(decl.annotation) is bytes:
-                    kind = (Representation.RAW_BYTES if is_raw(decl.annotation) or
-                        any(c.node.kind == "row" for c in unit.calls) else
-                        Representation.SEMANTIC_BYTES)
-                else:
-                    kind = (Representation.RAW_STRING if is_raw(decl.annotation) else
-                        Representation.SEMANTIC_STRING)
+                kind = representation_for(decl.annotation, row=any(c.node.kind == "row" for c in unit.calls))
                 full = state.representation(
                     v, kind,
                     lambda values, source, kept: self._typed(values, None, decl, kept, source),

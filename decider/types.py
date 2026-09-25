@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Generic, TypeVar, get_args, get_origin
+from typing import Any, Generic, NamedTuple, TypeVar, get_args, get_origin
 
 T = TypeVar("T")
 _RAW_STR_CODES: dict[str, int] = {}
@@ -14,6 +14,19 @@ class Representation(Enum):
     SEMANTIC_BYTES = "semantic_bytes"
     RAW_STRING = "raw_string"
     RAW_BYTES = "raw_bytes"
+
+
+class RepresentationKey(NamedTuple):
+    base_type: type
+    raw_annotation: bool
+
+
+REPRESENTATIONS: dict[RepresentationKey, Representation] = {
+    RepresentationKey(str, False): Representation.SEMANTIC_STRING,
+    RepresentationKey(str, True): Representation.RAW_STRING,
+    RepresentationKey(bytes, False): Representation.SEMANTIC_BYTES,
+    RepresentationKey(bytes, True): Representation.RAW_BYTES,
+}
 
 
 class Raw(Generic[T]):
@@ -32,6 +45,21 @@ def raw_base(annotation: Any) -> Any:
         return raw_base(args[0]) if args and is_raw(args[0]) else annotation
     args = get_args(annotation)
     return args[0] if is_raw(annotation) and args else annotation
+
+
+def representation_key(annotation: Any, *, row: bool = False) -> RepresentationKey:
+    args = [arg for arg in get_args(annotation) if arg is not type(None)]
+    base = raw_base(args[0]) if len(args) == 1 else raw_base(annotation)
+    raw = is_raw(annotation) or (row and base in (str, bytes))
+    return RepresentationKey(base, raw)
+
+
+def representation_for(annotation: Any, *, row: bool = False) -> Representation:
+    key = representation_key(annotation, row=row)
+    try:
+        return REPRESENTATIONS[key]
+    except KeyError:
+        raise TypeError(f"no representation for {key}") from None
 
 
 def raw_str(value: str) -> int:
