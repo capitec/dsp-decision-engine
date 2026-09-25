@@ -7,7 +7,7 @@ import pytest
 
 from decider.exceptions import WiringError
 
-from decider import flow, missing_as
+from decider import Raw, flow, missing_as
 from decider.engine import Engine
 from decider.engine.compile import Fallback, Kernel
 from decider.testing import assert_equivalent
@@ -134,11 +134,27 @@ def is_priority(value: str) -> bool:
     return value == "priority"
 
 
+def has_raw_string(value: Raw[str]) -> bool:
+    return value >= 0
+
+
+def has_raw_bytes(value: Raw[bytes]) -> bool:
+    return value[1] >= 0
+
+
 @pytest.mark.parametrize("mode", COMPILED)
 def test_scalar_string_steps_receive_semantic_strings(mode):
     exe = Engine().bind(flow(is_priority, name="p"), mode=mode)
     out = exe.run(pl.DataFrame({"value": ["priority", "other"]}))
     assert out["is_priority"].to_list() == [True, False]
+
+
+@pytest.mark.parametrize("fn", [has_raw_string, has_raw_bytes])
+@pytest.mark.parametrize("mode", COMPILED)
+def test_raw_annotations_use_internal_representations(mode, fn):
+    exe = Engine().bind(flow(fn, name="p"), mode=mode)
+    out = exe.run(pl.DataFrame({"value": ["priority", "other"]}))
+    assert out[fn.__name__].to_list() == [True, True]
 
 
 @pytest.mark.parametrize("mode", COMPILED)
