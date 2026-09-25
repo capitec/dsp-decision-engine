@@ -51,7 +51,7 @@ class Controls:
 
     def set(self, forces=(), watches=()):
         """Replace the forces and watches. A force is `{"path", "arm" | "iterations", "row"?}`; a watch is
-        `{"name", "op", "value", "scope"?, "row"?}` or `{"path", "iteration"}` for a loop."""
+        `{"name", "op", "value", "scope"?, "row"?}`, `{"path", "iteration"}` for a loop, or `{"path"}` to pause before a step."""
         for f in forces:
             g = self.groups.get(f["path"])
             if g is None:
@@ -122,6 +122,11 @@ class Controls:
             hit = cp.when == "before" and cp.origin.path == g["cond"] and cp.iteration == int(w["iteration"])
             if hit:
                 self.hit = {"watch": i, "text": f"iteration {w['iteration']} of {w['path'].split('/')[-1]}"}
+            return hit
+        if "name" not in w:  # a plain breakpoint: before the step, every time it runs
+            hit = cp.when == "before" and cp.origin.path == w["path"]
+            if hit:
+                self.hit = {"watch": i, "text": f"before {w['path'].split('/')[-1]}"}
             return hit
         name = w["name"]
         if cp.when != "after" or cp.origin.path not in self.writers.get(name, ()):

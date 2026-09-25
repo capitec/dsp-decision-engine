@@ -110,6 +110,7 @@ export interface Force {
 }
 
 /** Pause when `name op value` first holds for a record, just after a step inside `scope` writes it; or before a loop's `iteration`. */
+/** A breakpoint: `{path}` pauses before that step; `{path, iteration}` before a loop's iteration; `{name, op, value}` when a value meets a condition. */
 export interface Watch {
   name?: string;
   op?: "==" | "!=" | "<" | "<=" | ">" | ">=";
@@ -220,15 +221,15 @@ export const isRateName = (name?: string) => !!name && /(rate|loading|discount|m
 const isMoneyName = (name?: string) => !!name && /(amount|cost|income|fee|instalment|expenses|offer)s?$/.test(name);
 
 /**
- * A value as the UI shows it: no float noise; amounts of 100 or more to two decimals (58113.07), smaller ones
+ * A value as the UI shows it: no float noise, no thousands separators (4000, not 4,000); amounts of 100 or more to two decimals (58113.07), smaller ones
  * to four. With its column's `name`, a rate below 1 shows as a percentage ("25.2%").
  */
 export function formatValue(v: unknown, name?: string): string {
   if (v === undefined) return "—";
   if (v === null) return "empty";
   if (typeof v === "number" && isRateName(name) && Math.abs(v) < 1) return `${Number((v * 100).toFixed(2))}%`;
-  if (typeof v === "number" && (isMoneyName(name) || (!!name && /cap$/.test(name) && Math.abs(v) >= 1000))) return `R\u00a0${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  if (typeof v === "number") return v.toLocaleString("en-US", { maximumFractionDigits: Math.abs(v) >= 100 ? 2 : 4 });
+  if (typeof v === "number" && (isMoneyName(name) || (!!name && /cap$/.test(name) && Math.abs(v) >= 1000))) return `R\u00a0${v.toLocaleString("en-US", { useGrouping: false, minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (typeof v === "number") return v.toLocaleString("en-US", { useGrouping: false, maximumFractionDigits: Math.abs(v) >= 100 ? 2 : 4 });
   return typeof v === "string" ? v : JSON.stringify(v);
 }
 
@@ -268,6 +269,8 @@ export type FromUI =
   | { type: "compareForces"; a: { label: string; forces: Force[] }; b: { label: string; forces: Force[] } }
   | { type: "restartWith"; params: unknown }
   | { type: "compareRevision" }
+  /** Run the flow from the start, pausing at its breakpoints. */
+  | { type: "run" }
   | { type: "runTo"; path: string }
   | { type: "maximise" }
   | { type: "step" }
