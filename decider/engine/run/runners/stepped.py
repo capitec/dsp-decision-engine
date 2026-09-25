@@ -155,8 +155,9 @@ class SteppedRunner(InterpretedRunner):
             except TypeError as e:
                 raise TypeError(f"'{decl.name}' is a string input: {e}") from None
         if base_annotation(decl.annotation) is str:
-            get = self._codes.get
-            return np.fromiter((get(s, -1) for s in x), np.int32, len(x))
+            values = ["" if s is None else str(s) for s in x]
+            width = max((len(s) for s in values), default=1)
+            return np.asarray(values, dtype=f"U{max(width, 1)}")
         if mask is not None:
             x = np.where(mask, x, 0)
         return x.astype(numpy_dtype(base_annotation(decl.annotation)))
@@ -218,8 +219,10 @@ def _spans(x: np.ndarray, mask: np.ndarray | None, alive: list, source: pl.Serie
 
 
 def _str_params(call: Call) -> tuple[tuple[str, ...], tuple[str, str] | None]:
-    # The `str` params a kernel takes as codes, and (why, fix) when no kernel can run the step faithfully.
+    # Row kernels over bytes still use encoded params; scalar kernels receive semantic Unicode strings.
     node = call.node
+    if node.kind == "scalar":
+        return (), None
     strs = [i.name for i in node.inputs if base_annotation(i.annotation) is str]
     params = tuple(d.name for d in node.params if d.annotation is str)
     path = node.origin.path

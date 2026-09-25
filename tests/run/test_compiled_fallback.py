@@ -1,4 +1,4 @@
-"""Compiled modes run what no kernel can in Python: `str` comparisons, object outputs, list fills."""
+"""Compiled modes run unsupported values in Python and semantic strings in kernels."""
 import datetime as dt
 import warnings
 
@@ -39,21 +39,19 @@ VERSIONS = pl.DataFrame({"x": [1.0, 4.0, 6.0], "a_version": ["v1", "v2", "v2"], 
                          "band": ["complete", "partial", "complete"]})
 
 
-def test_string_steps_run_in_python_and_give_the_interpreted_answer():
-    with pytest.warns(UserWarning, match="pick: reads several `str` inputs.*runs in Python"):
+def test_string_steps_preserve_semantics_and_fallback_only_for_string_outputs():
+    with pytest.warns(UserWarning, match="p/pick runs in Python.*writes 'pick' as str"):
         out = assert_equivalent(flow(half, pick, same, is_complete, doubled, name="p"), VERSIONS)
     assert out["pick"].to_list() == ["v2", "v2", "v2"]
     assert out["same"].to_list() == [False, True, False]
     assert out["is_complete"].to_list() == [True, False, True]
 
 
-def test_a_python_string_step_splits_the_fused_kernel_around_it():
+def test_semantic_string_steps_share_fused_kernel():
     exe = Engine().bind(flow(half, same, doubled, name="p"), mode="fused")
-    with pytest.warns(UserWarning, match="p/same"):
-        exe.run(VERSIONS)
-    units = [exe.runner.units[c.id] for c in exe.plan.calls]
-    assert [type(u) for u in units] == [Kernel, Fallback, Kernel]
-    assert "several `str` inputs" in units[1].reason
+    exe.run(VERSIONS)
+    units = list({id(u): u for u in exe.runner.units.values()}.values())
+    assert [type(u) for u in units] == [Kernel]
 
 
 def test_the_warning_is_given_once_per_executable():
@@ -63,7 +61,7 @@ def test_the_warning_is_given_once_per_executable():
         exe.run(VERSIONS)
         exe.run(VERSIONS)
         exe.score({"a_version": "v1", "b_version": "v1"})
-    assert len(caught) == 1
+    assert len(caught) == 0
 
 
 def as_dict(x: float) -> dict:
@@ -130,6 +128,17 @@ def test_an_empty_list_fill_fills_each_missing_row(mode):
 
 def order_total(items: list[dict]) -> float:
     return sum(item["price"] for item in items)
+
+
+def is_priority(value: str) -> bool:
+    return value == "priority"
+
+
+@pytest.mark.parametrize("mode", COMPILED)
+def test_scalar_string_steps_receive_semantic_strings(mode):
+    exe = Engine().bind(flow(is_priority, name="p"), mode=mode)
+    out = exe.run(pl.DataFrame({"value": ["priority", "other"]}))
+    assert out["is_priority"].to_list() == [True, False]
 
 
 @pytest.mark.parametrize("mode", COMPILED)
