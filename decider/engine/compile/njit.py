@@ -83,7 +83,7 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None]:
 
         key, fn, reason = compile_call(plan.calls[0].node)
     """
-    prepared, helper_reason = _prepare_function(node.fn)
+    prepared, helper_reason = _prepare_function(node.fn) if node.kind == "scalar" else (node.fn, None)
     key, dispatcher = jit(node.fn if helper_reason is not None else prepared)
     if helper_reason is not None:
         return key, dispatcher.py_func, helper_reason
@@ -91,6 +91,9 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None]:
     odd = next((i for i in node.inputs if base_annotation(i.annotation) not in (float, int, bool, str, bytes, Any)), None)
     if odd is not None:
         return key, dispatcher.py_func, f"reads '{odd.name}' as {odd.annotation}, which no kernel takes"
+    string_output = next((o for o in node.outputs if base_annotation(o.annotation) is str), None)
+    if string_output is not None:
+        return key, dispatcher.py_func, f"writes '{string_output.name}' as str, which no fused kernel stores"
     sig = _probe_signature(node)
     if sig is None:
         return key, dispatcher, None
@@ -108,6 +111,8 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None]:
 
 def _prepare_function(fn: Callable, stack: tuple[int, ...] = ()) -> tuple[Callable, str | None]:
     """Replace declared helpers in `fn` globals with shared compiled dispatchers."""
+    if isinstance(fn, Dispatcher):
+        return fn, None
     if id(fn) in stack:
         return fn, f"recursive helper call involving '{fn.__name__}' cannot be compiled"
     globals_ = dict(fn.__globals__)
@@ -155,6 +160,10 @@ def _numba_type(annotation: type) -> Any:
         return types.int64
     if annotation is bool:
         return types.boolean
+    if annotation is str:
+        return types.unicode_type
+    if annotation is bytes:
+        return types.bytes
     raise TypeError(f"unsupported @helper signature type {annotation!r}; use float, int or bool")
 
 
@@ -184,6 +193,8 @@ def _input_type(inp: Input) -> Any:
     if base_annotation(inp.annotation) is bytes:
         # A null span has length -1, so a `bytes` input is never an Optional.
         return SPAN
+    if base_annotation(inp.annotation) is str:
+        return types.Optional(types.unicode_type) if inp.null_policy is NullPolicy.OPTIONAL else types.unicode_type
     # An OPTIONAL `T | None` arrives as T's array plus a mask, so it is typed `Optional(T)`.
     t = from_dtype(numpy_dtype(base_annotation(inp.annotation)))
     return types.Optional(t) if inp.null_policy is NullPolicy.OPTIONAL else t
