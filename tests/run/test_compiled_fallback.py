@@ -126,3 +126,22 @@ def test_an_empty_list_fill_fills_each_missing_row(mode):
     assert exe.score({"x": 1.0})["total"] == 0.0
     out = exe.run(pl.DataFrame({"hist": [[1.0, 2.0], None]}, schema={"hist": pl.List(pl.Float64)}))
     assert out["total"].to_list() == [3.0, 0.0]
+
+
+def order_total(items: list[dict]) -> float:
+    return sum(item["price"] for item in items)
+
+
+@pytest.mark.parametrize("mode", COMPILED)
+def test_list_input_fallback_warns_and_is_public(mode):
+    exe = Engine().bind(flow(order_total, name="order"), mode=mode)
+    with pytest.warns(UserWarning, match="order/order_total runs in Python, row by row"):
+        assert exe.score({"items": [{"price": 2.0}, {"price": 3.0}]})["order_total"] == 5.0
+    assert "reads 'items' as list[dict], which no kernel takes" in exe.fallbacks()["order/order_total"]
+
+
+@pytest.mark.parametrize("mode", COMPILED)
+def test_list_input_fallback_is_rejected_in_strict_mode(mode):
+    exe = Engine(strict_compile=True).bind(flow(order_total, name="order"), mode=mode)
+    with pytest.raises(ValueError, match="order/order_total runs in Python, row by row"):
+        exe.score({"items": [{"price": 2.0}]})

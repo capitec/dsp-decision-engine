@@ -53,6 +53,7 @@ class SteppedRunner(InterpretedRunner):
         self._spans: set[int] = set()
         self._alive: dict[tuple[str, int], dict] = {}
         self._lock = threading.Lock()
+        self._fallbacks: dict[str, str] = {}
 
     def iterate(self, plan: Plan, state: State, params: RunParams) -> Iterator[Checkpoint]:
         # Not a generator itself: one generator frame less per checkpoint on the single-record path.
@@ -79,12 +80,28 @@ class SteppedRunner(InterpretedRunner):
         strs |= {k: tuple(d.name for d in c.node.params if d.annotation is str)
                  for c in plan.calls if (k := c.id) in self._spans}
         self.units = compile_plan(plan, fuse=self.fuse, python=python)
+        self._fallbacks = {
+            c.node.origin.path: unit.reason
+            for unit in self.units.values() if isinstance(unit, Fallback)
+            for c in unit.calls
+        }
+        for path, reason in self._fallbacks.items():
+            call_id = next(c.id for c in plan.calls if c.node.origin.path == path)
+            if call_id in python:
+                continue
+            message = f"{path} runs in Python, row by row: {reason}"
+            if self.strict:
+                raise ValueError(f"{message}; run it in mode='interpreted'")
+            warnings.warn(message, stacklevel=4)
         self._python = python
         self._reads = {id(unit): _external(unit) for unit in self.units.values()}
         self._strs = {k: v for k, v in strs.items() if v}
         # Converted bundles are keyed by call id, which means another call in another plan.
         self._converted, self._alive = {}, {}
         self._plan = plan
+
+    def fallbacks(self) -> dict[str, str]:
+        return dict(self._fallbacks)
 
     def _call(self, call: Call, state: State, params: RunParams, scope: _Scope) -> None:
         unit = self.units.get(call.id)
