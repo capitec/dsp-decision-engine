@@ -1,4 +1,4 @@
-"""JSON-lines bridge between the VS Code extension and a decider debug session.
+"""JSON-lines bridge between an editor (VS Code, JupyterLab) and a decider debug session.
 
 One request per line on stdin, one reply per line on the reply stream:
 
@@ -30,14 +30,13 @@ from decider.engine.debug.edit import swap
 from decider.engine.ir.context import step_map, to_ir
 from decider.steps import FunctionStep, Step
 
-sys.path.insert(0, os.path.dirname(__file__))
-from lineage import latest, lineage  # noqa: E402
-from runs import apply_overrides, debug_condition, trace, tree_path  # noqa: E402
-from forks import checkpoint_key, merge, sweep  # noqa: E402
-from loading import load_module  # noqa: E402
-from controls import Controls  # noqa: E402
-from timeline import Timeline  # noqa: E402
-from describing import assignment_lines, find_pipelines, formula, key_column, node_json, values_file  # noqa: E402
+from .controls import Controls
+from .describing import assignment_lines, find_pipelines, formula, key_column, node_json, values_file
+from .forks import checkpoint_key, merge, sweep
+from .lineage import latest, lineage
+from .loading import load_module
+from .runs import apply_overrides, debug_condition, trace, tree_path
+from .timeline import Timeline
 
 
 def base_params(mod, params):
@@ -54,15 +53,26 @@ def _load_rows(data):
 
 
 class Bridge:
-    def __init__(self, out=None):
+    """Answers the editor's requests about one pipeline and its debug session.
+
+    `notebook` returns the module a pipeline is read from when a request names no file: a
+    notebook's namespace, with the pipeline, `SAMPLE` rows and `PARAMS` it was handed.
+    """
+
+    def __init__(self, out=None, notebook=None):
         self.out = out or sys.stdout
+        self.notebook = notebook
         self.lock = threading.Lock()
         self.session = None
         self.sent = 0
 
-    def describe(self, file, pipeline=None):
-        self.file, self.mod = file, load_module(file)
-        pipelines = find_pipelines(self.mod, file)
+    def _load(self, file):
+        return load_module(file) if file else self.notebook()
+
+    def describe(self, file=None, pipeline=None):
+        self.file, self.mod = file, self._load(file)
+        pipelines = (find_pipelines(self.mod, file) if file
+                     else [{"name": pipeline, "line": None, "kind": type(getattr(self.mod, pipeline)).__name__}])
         if not pipelines:
             raise ValueError(f"{file}: no decider pipeline at module level")
         self.name = pipeline or pipelines[-1]["name"]
@@ -72,8 +82,8 @@ class Bridge:
         located = {}
         # Steps assigned in any module of the pipeline's package, the pipeline file first.
         top = self.mod.__name__.split(".")[0]
-        mods = [self.mod] + [m for n, m in list(sys.modules.items())
-                             if (n == top or n.startswith(top + ".")) and m is not self.mod and getattr(m, "__file__", None)]
+        mods = [m for m in [self.mod] if file] + [m for n, m in list(sys.modules.items())
+                                                  if (n == top or n.startswith(top + ".")) and m is not self.mod and getattr(m, "__file__", None)]
         for m in mods:
             lines = assignment_lines(m.__file__)
             for k, v in vars(m).items():
@@ -89,10 +99,10 @@ class Bridge:
         outcome += [m for c in tree.get("children", ()) if c["kind"] == "branch" for m in c.get("modifies", ())]
         self.described = {"pipelines": pipelines, "pipeline": self.name, "ir": tree, "params": params,
                           "outcome": list(dict.fromkeys(outcome)),
-                          "values": getattr(self.mod, "PARAMS", None) or {}, "valuesFile": values_file(file)}
+                          "values": getattr(self.mod, "PARAMS", None) or {}, "valuesFile": file and values_file(file)}
         return self.described
 
-    def trace(self, file, pipeline=None, data=None, params=None, overrides=None, row=None, forces=()):
+    def trace(self, file=None, pipeline=None, data=None, params=None, overrides=None, row=None, forces=()):
         """Describe and run `file` to the end on `data` (default: its SAMPLE), with `overrides` and `forces` applied."""
         self.describe(file, pipeline)
         frame = apply_overrides(self._rows(data), overrides, row)
@@ -109,7 +119,7 @@ class Bridge:
         for c in n.get("children", ()):
             self._index(c, n["path"])
 
-    def start(self, file, pipeline=None, data=None, params=None, breakpoints=(), forces=(), watches=()):
+    def start(self, file=None, pipeline=None, data=None, params=None, breakpoints=(), forces=(), watches=()):
         self.describe(file, pipeline)
         self.doc = base_params(self.mod, params)
         self.original = self.step
@@ -263,7 +273,7 @@ class Bridge:
 
     def reload_step(self, path):
         """Re-import the pipeline's files and swap the step now at `path` into the paused run."""
-        new = step_map(getattr(load_module(self.file), self.name)).get(path)
+        new = step_map(getattr(self._load(self.file), self.name)).get(path)
         if new is None:
             raise KeyError(f"{path!r} is no longer in {self.name}")
         self.session.replace(path, new)
@@ -411,7 +421,7 @@ class Bridge:
                 break
 
 
-def main(argv):
+def main(argv=sys.argv[1:]):
     if "--debugpy" in argv:
         import debugpy
         debugpy.listen(("127.0.0.1", int(argv[argv.index("--debugpy") + 1])))
@@ -419,6 +429,3 @@ def main(argv):
     out = os.fdopen(int(argv[argv.index("--fd") + 1]), "w") if "--fd" in argv else None
     Bridge(out).serve()
 
-
-if __name__ == "__main__":
-    main(sys.argv[1:])

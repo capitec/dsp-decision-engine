@@ -7,7 +7,7 @@ import polars as pl
 
 from decider.engine import Engine
 
-from controls import Controls
+from .controls import Controls
 
 
 def apply_overrides(frame: pl.DataFrame, overrides: dict | None, row: int | None) -> pl.DataFrame:

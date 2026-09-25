@@ -124,7 +124,10 @@ export function matchRow(expr: Record<string, unknown>, rows: Record<string, unk
 /** How a value was computed for the focused record: each step's formula with the values it had, level by level. */
 export function Explain({ entry, who, nodes, values, onSelect }: Props) {
   const box = useRef<HTMLDivElement>(null);
-  useEffect(() => box.current?.scrollIntoView({ block: "start", behavior: "smooth" }), [entry.name, entry.producer]);
+  // A block body: newer browsers return a promise from scroll calls, which React would take for a cleanup.
+  useEffect(() => {
+    box.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }, [entry.name, entry.producer]);
   const summary = who && entry.producer !== null ? summaryRows(entry, nodes, values) : null;
   return (
     <div className="how" ref={box}>

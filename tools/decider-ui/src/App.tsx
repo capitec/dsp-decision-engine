@@ -65,6 +65,7 @@ function View({ send, listen, can }: AppProps) {
   const [note, setNote] = useState<string>();
   const noteNext = useRef<string | undefined>(undefined);
   const runningRef = useRef(false);
+  const recordRef = useRef<number | null>(null);
   // After a re-run from the force controls, they stay selected rather than jumping to where the run paused.
   const keepSelected = useRef(false);
   // The value picked with "explain a value": its breakdown stays open whichever step is selected.
@@ -114,6 +115,12 @@ function View({ send, listen, can }: AppProps) {
           shown.current = m.describe.pipeline;
           break;
         case "status":
+          // A breakdown and history are about one record, or the whole batch: stale once that changes.
+          if (m.record !== recordRef.current) {
+            setLineage(null);
+            setHistory(null);
+          }
+          recordRef.current = m.record;
           setRun(m);
           setPending(undefined);
           setNote(noteNext.current);
@@ -239,7 +246,7 @@ function View({ send, listen, can }: AppProps) {
   const causes = touchedSteps.filter(causeOf);
   const changedSteps = [...causes, ...touchedSteps.filter((s) => !causeOf(s))].map((s) => s.path);
 
-  if (!describe) return <div className="empty">Open a pipeline file and choose “Visualise flow”.</div>;
+  if (!describe) return <div className="empty">Loading the flow…</div>;
 
   const recordPicker = (
     <select aria-label="record" value={run.record ?? ""} onChange={(e) => send({ type: "record", row: e.target.value === "" ? null : Number(e.target.value) })}>

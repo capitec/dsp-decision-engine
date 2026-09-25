@@ -9,19 +9,23 @@ next.
 
 ```
 tools/
-  pnpm-workspace.yaml     decider-ui, vscode-decider
+  pnpm-workspace.yaml     decider-ui, vscode-decider, jupyterlab-decider
+  decider-bridge/         decider_bridge: the Python bridge both hosts drive (JSON-lines
+                          process for VS Code, a kernel comm for JupyterLab)
   decider-ui/
-    src/model/            protocol.ts, compare.ts, sweep.ts: bridge shapes, UI messages,
-                          run comparison and scenario sweeps. No DOM, no React.
+    src/model/            protocol.ts, compare.ts, sweep.ts, events.ts: bridge shapes, UI
+                          messages, run comparison, scenario sweeps, folding session events.
+                          No DOM, no React.
     src/*.tsx, layout.ts  the components (App is the root), the graph layout
     src/style.css         every rule nested under .decider
     src/index.ts          exports the model and App
-    test/                 model and layout tests (they start the Python bridge from
-                          vscode-decider/python and use its examples/)
+    test/                 model and layout tests (they import decider_bridge and use
+                          vscode-decider's examples/)
   vscode-decider/
     src/                  extension host and debug adapter; imports the model from @decider/ui
     webview/main.tsx      the host wiring: acquireVsCodeApi, window messages, capabilities
     webview/theme.css     --decider-* from --vscode-*
+  jupyterlab-decider/     the JupyterLab host: see notes/jupyterlab-decider.md
 ```
 
 `model/` is a folder rather than living next to the components because `compare.ts` and
@@ -125,6 +129,10 @@ needs a definite height: VS Code's `theme.css` sets `html, body, #root` to 100%.
 Page-level rules stay with the host: `color-scheme`, the body's margin and background.
 
 ## What a JupyterLab host needs to provide
+
+`tools/jupyterlab-decider` provides all of this (`notes/jupyterlab-decider.md`). The UI side of
+the last item is done: the empty state says "Loading the flow…", and Ctrl+F only acts while
+the focus is in the flow view (or on the page itself).
 
 - A widget that renders `<App>` into its node with a definite size, and unmounts it on dispose.
 - `send`/`listen` over whatever reaches the bridge (a comm, a server extension or a kernel);

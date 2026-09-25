@@ -5,13 +5,13 @@ import { compareTraces, diffDoc, paramChangeLines, paramReaders, same, type Trac
 import { clampNote, evaluate, matchRow, substitute, sumTerms, summaryRows } from "../src/Explain";
 import { scenarios, summariseSweep } from "../src/model/sweep";
 
-// The Python bridge and the example flows live with the VS Code extension.
+// The example flows live with the VS Code extension; the Python bridge is decider-bridge.
 const ROOT = path.resolve(__dirname, "../../vscode-decider");
 const LOAN = path.join(ROOT, "examples", "loan.py");
 
 function trace(file: string, extra: Record<string, unknown> = {}): TraceResult {
-  const script = `import sys, json; sys.path.insert(0, ${JSON.stringify(path.join(ROOT, "python"))})
-from bridge import Bridge
+  const script = `import sys, json; sys.path.insert(0, ${JSON.stringify(path.resolve(__dirname, "../../decider-bridge"))})
+from decider_bridge.bridge import Bridge
 print(json.dumps(Bridge().trace(${JSON.stringify(file)}, **json.loads(sys.argv[1])), default=str))`;
   return JSON.parse(execFileSync("uv", ["run", "python", "-c", script, JSON.stringify(extra)], { cwd: ROOT }).toString());
 }
@@ -84,8 +84,8 @@ describe("scenario sweeps", () => {
   });
 
   it("summarises forks against the original: changed columns and a step diff each", () => {
-    const script = `import sys, json; sys.path.insert(0, ${JSON.stringify(path.join(ROOT, "python"))})
-from bridge import Bridge
+    const script = `import sys, json; sys.path.insert(0, ${JSON.stringify(path.resolve(__dirname, "../../decider-bridge"))})
+from decider_bridge.bridge import Bridge
 b = Bridge(); b.start(${JSON.stringify(LOAN)}, breakpoints=["term/cap_by_income"]); b.handle({"cmd": "resume"})
 print(json.dumps(b.sweep([{"label": "cap 6", "params": {"term": {"cap_by_income": {"cap": 6.0}}}}]), default=str))`;
     const r = JSON.parse(execFileSync("uv", ["run", "python", "-c", script], { cwd: ROOT }).toString());
