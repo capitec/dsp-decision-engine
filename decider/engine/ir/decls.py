@@ -7,6 +7,7 @@ import typing
 from typing import Any, Literal
 
 import numpy as np
+from decider.types import is_raw, raw_base
 
 OnInvalid = Literal["error", "warn", "default"]
 
@@ -58,7 +59,7 @@ def feature_kind(annotation: Any) -> FeatureKind:
     >>> feature_kind(int)
     <FeatureKind.I64: 1>
     """
-    return _KIND_BY_ANNOTATION.get(annotation, FeatureKind.F64)
+    return _KIND_BY_ANNOTATION.get(raw_base(annotation), FeatureKind.F64)
 
 
 def base_annotation(annotation: Any) -> Any:
@@ -67,6 +68,8 @@ def base_annotation(annotation: Any) -> Any:
     >>> base_annotation(int | None)
     <class 'int'>
     """
+    if is_raw(annotation):
+        return raw_base(annotation)
     if typing.get_origin(annotation) in (typing.Union, types.UnionType):
         args = [a for a in typing.get_args(annotation) if a is not type(None)]
         if len(args) == 1:

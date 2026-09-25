@@ -14,6 +14,7 @@ from decider.engine.run.params import RunParams
 from decider.engine.run.runners.base import Checkpoint
 from decider.engine.run.runners.interpreted import InterpretedRunner, _absent, _note, _Scope
 from decider.engine.run.state import State, fill_missing
+from decider.types import is_raw, raw_base
 from decider.engine.wiring.plan import Call, Plan, Version
 
 
@@ -149,12 +150,18 @@ class SteppedRunner(InterpretedRunner):
 
     def _typed(self, x: np.ndarray, mask: np.ndarray | None, decl: Input, alive: list,
                source: pl.Series | None) -> np.ndarray:
-        if base_annotation(decl.annotation) is bytes:
+        raw = is_raw(decl.annotation)
+        annotation = base_annotation(decl.annotation)
+        if annotation is bytes:
             try:
                 return _spans(x, mask, alive, source)
             except TypeError as e:
                 raise TypeError(f"'{decl.name}' is a string input: {e}") from None
-        if base_annotation(decl.annotation) is str:
+        if annotation is str and raw:
+            with self._lock:
+                codes = {s: self._codes.setdefault(s, len(self._codes)) for s in x}
+            return np.fromiter((codes[s] for s in x), np.int32, len(x))
+        if annotation is str:
             values = ["" if s is None else str(s) for s in x]
             width = max((len(s) for s in values), default=1)
             return np.asarray(values, dtype=f"U{max(width, 1)}")

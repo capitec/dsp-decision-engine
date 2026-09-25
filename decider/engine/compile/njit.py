@@ -20,6 +20,7 @@ from decider.engine.ir.decls import KIND_DTYPES, FeatureKind, Input, NullPolicy,
 from decider.engine.ir.nodes import CallNode
 from decider.engine.params import NodeParams
 from decider.steps.helpers import helper_signatures, is_python_only
+from decider.types import is_raw, raw_base
 
 # UnsupportedBytecodeError (e.g. an `import` inside a step) isn't a NumbaError.
 FALLBACK_ERRORS = (NumbaError, UnsupportedBytecodeError)
@@ -154,6 +155,12 @@ def _compile_helper(fn: Callable, signatures: tuple[tuple[tuple[type, ...], type
 
 
 def _numba_type(annotation: type) -> Any:
+    if is_raw(annotation):
+        annotation = raw_base(annotation)
+        if annotation is str:
+            return types.int32
+        if annotation is bytes:
+            return SPAN
     if annotation is float:
         return types.float64
     if annotation is int:
@@ -162,8 +169,6 @@ def _numba_type(annotation: type) -> Any:
         return types.boolean
     if annotation is str:
         return types.unicode_type
-    if annotation is bytes:
-        return types.bytes
     raise TypeError(f"unsupported @helper signature type {annotation!r}; use float, int or bool")
 
 
@@ -190,10 +195,16 @@ SPAN = types.UniTuple(types.int64, 2)
 
 
 def _input_type(inp: Input) -> Any:
-    if base_annotation(inp.annotation) is bytes:
+    raw = is_raw(inp.annotation)
+    annotation = base_annotation(inp.annotation)
+    if annotation is bytes and raw:
+        return SPAN
+    if annotation is bytes:
         # A null span has length -1, so a `bytes` input is never an Optional.
         return SPAN
-    if base_annotation(inp.annotation) is str:
+    if annotation is str and raw:
+        return types.int32
+    if annotation is str:
         return types.Optional(types.unicode_type) if inp.null_policy is NullPolicy.OPTIONAL else types.unicode_type
     # An OPTIONAL `T | None` arrives as T's array plus a mask, so it is typed `Optional(T)`.
     t = from_dtype(numpy_dtype(base_annotation(inp.annotation)))
