@@ -1,7 +1,7 @@
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { DeciderDebugSession } from "./adapter";
-import { analyse, PipelineCodeLens } from "./analysis";
+import { analyse, firstLine, PipelineCodeLens } from "./analysis";
 import { listRefs, materialise, repoRoot } from "./git";
 import { GraphPanel } from "./graphPanel";
 import { compareTraces, editLabel, summariseSweep, walk, type CallNodeJson, type ColumnSummary, type Controls, type DescribeResult, type FromUI, type IRNodeJson, type Lineage, type RecordKey, type RunStatus, type Scenario, type SweepResponse, type ToUI, type TraceResult, type ValueHistory } from "@decider/ui";
@@ -52,6 +52,7 @@ export function activate(ctx: vscode.ExtensionContext) {
         await showGraph(doc.fileName, pipeline ? { ...d, pipeline } : d);
       } catch (e) {
         vscode.window.showErrorMessage(`decider: ${(e as Error).message}`);
+        structure.setError(firstLine((e as Error).message));
       }
     }),
 
