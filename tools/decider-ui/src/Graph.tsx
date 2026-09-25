@@ -49,7 +49,10 @@ export function Graph({ ir, showData, run, selected, highlightColumn, lineage, d
     return () => watch.disconnect();
   }, []);
   // A new flow starts at its top.
-  useEffect(() => box.current?.scrollTo(0, 0), [ir.path]);
+  // A block body: newer browsers return a promise from scroll calls, which React would take for a cleanup.
+  useEffect(() => {
+    box.current?.scrollTo(0, 0);
+  }, [ir.path]);
   const done = new Set(run.finishedPaths);
   const touches = (n: IRNodeJson) =>
     n.kind === "call" && !!highlightColumn && ((n.inputs ?? []).includes(highlightColumn) || (n.outputs ?? []).includes(highlightColumn));

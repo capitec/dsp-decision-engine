@@ -8,9 +8,10 @@ import sys
 import pytest
 
 HERE = os.path.dirname(__file__)
-LOAN = os.path.join(HERE, "..", "examples", "loan.py")
-sys.path.insert(0, HERE)
-from bridge import Bridge  # noqa: E402
+EXAMPLES = os.path.join(HERE, "..", "..", "vscode-decider", "examples")
+LOAN = os.path.join(EXAMPLES, "loan.py")
+sys.path.insert(0, os.path.join(HERE, ".."))
+from decider_bridge.bridge import Bridge  # noqa: E402
 
 
 def started(**kw):
@@ -121,8 +122,9 @@ def test_a_failing_step_is_reported_not_fatal():
     assert r["events"][-1]["kind"] == "error"
 
 
-def run_bridge(*extra, env=None):
-    return subprocess.Popen([sys.executable, os.path.join(HERE, "bridge.py"), *extra], stdin=subprocess.PIPE,
+def run_bridge(*extra, path=()):
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join([*path, os.path.join(HERE, "..")])}
+    return subprocess.Popen([sys.executable, "-m", "decider_bridge", *extra], stdin=subprocess.PIPE,
                             stdout=subprocess.PIPE, text=True, env=env)
 
 
@@ -146,7 +148,7 @@ DEBUGPY_LIBS = sorted(glob.glob(os.path.expanduser("~/.vscode*/extensions/ms-pyt
 
 @pytest.mark.skipif(not DEBUGPY_LIBS, reason="ms-python.debugpy extension not installed")
 def test_debugpy_flag_opens_an_attach_port():
-    p = run_bridge("--debugpy", "5689", env={**os.environ, "PYTHONPATH": DEBUGPY_LIBS[-1]})
+    p = run_bridge("--debugpy", "5689", path=[DEBUGPY_LIBS[-1]])
     try:
         p.stdin.write('{"id": 1, "cmd": "describe", "file": %s}\n' % json.dumps(LOAN))
         p.stdin.flush()
@@ -300,7 +302,7 @@ def test_each_edit_compares_on_its_own(tmp_path):
 
 
 def test_a_param_table_on_a_plain_step_is_described_run_and_edited():
-    ladder = os.path.join(HERE, "..", "examples", "ladder.py")
+    ladder = os.path.join(EXAMPLES, "ladder.py")
     d = Bridge().describe(ladder)
     info = d["params"]["pricing/rate"]["ladder"]
     assert info["type"] == "table" and info["schema"] == {"floor": "int", "rate": "float"} and len(info["default"]) == 2

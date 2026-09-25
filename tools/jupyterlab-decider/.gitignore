@@ -1,0 +1,6 @@
+node_modules/
+lib/
+decider_jupyter/labextension/
+test/e2e/shots/
+tsconfig.tsbuildinfo
+test/e2e/work/

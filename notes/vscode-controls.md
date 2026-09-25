@@ -1,7 +1,7 @@
 # Forcing branches and loops, value breakpoints
 
 How the VS Code debugger forces a branch's arm or a loop's iteration count, and how it
-pauses on a value (`tools/vscode-decider/python/controls.py`).
+pauses on a value (`tools/decider-bridge/decider_bridge/controls.py`).
 
 - **A force is an override of the condition's output.** At the checkpoint just after a
   branch's or loop's condition step, the output is replaced with `session.set`. Arm k

@@ -70,13 +70,13 @@ imports its own pipeline code but today's `decider` package.
 ## How it fits together
 
 ```
-extension host ──DAP──▶ adapter.ts ──JSON lines──▶ python/bridge.py ──▶ Session
+extension host ──DAP──▶ adapter.ts ──JSON lines──▶ decider_bridge (tools/decider-bridge) ──▶ Session
       │                                    (fd 3)            └─ debugpy.listen (optional)
       └── webview (React + dagre, built by Vite)
 ```
 
 - The bridge drives the real `decider.engine.debug.Session` in interpreted mode.
-  Lineage (`python/lineage.py`) walks the plan's versions: calls, branch merges
+  Lineage (`decider_bridge/lineage.py`) walks the plan's versions: calls, branch merges
   and loop carries.
 - Bridge replies use fd 3, so a `print()` inside a step goes to the Debug Console.
 - `examples/.vscode/settings.json` sets `decider.python` to `uv run python`, so the
@@ -85,7 +85,7 @@ extension host ──DAP──▶ adapter.ts ──JSON lines──▶ python/br
 ## Tests
 
 ```sh
-uv run pytest tools/vscode-decider/python -q   # bridge, lineage, traces on the real session
+uv run pytest tools/decider-bridge -q          # bridge, lineage, traces on the real session
 pnpm test                                      # adapter over stdio (DebugClient), layout, comparisons, git
 pnpm test:vscode                               # extension API inside VSCodium (mocha)
 pnpm test:e2e                                  # Playwright drives VSCodium's UI and takes screenshots

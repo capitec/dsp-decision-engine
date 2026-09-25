@@ -24,6 +24,7 @@ Decision records for the consolidated `decider`, each with its measured reason.
 - `wiring-scopes.md`: how names bind to versions: input columns, typo and forward-reference errors, branch/loop scopes, frame barriers, outputs.
 - `vscode-controls.md`: forcing a branch's arm or a loop's iteration count by overriding its condition's output from a predicate breakpoint; value and iteration breakpoints.
 - `vscode-extension-testing.md`: how the VS Code prototype is tested at four levels (pytest, DebugClient, in-editor mocha, Playwright on the Electron binary), and the traps found on the way.
+- `jupyterlab-decider.md`: the JupyterLab host of the flow debugger: the bridge in the kernel over a comm (notebook pipelines and flow files), where the bridge lives now, what's left out, and how it's tested.
 - `hot-reload-investigation.md` (spike): `Session.reload` diffs checkpoint sequences by content and re-runs from the first change; notebook `watch`, file `ModuleWatcher`, measurements, and why serving never hot reloads.
 
 - `benchmarks-vs-decider2.md`: the last measured numbers against decider2, per workload, and which benchmark script replaced each comparison script.

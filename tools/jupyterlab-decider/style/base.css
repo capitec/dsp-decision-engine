@@ -1,0 +1,53 @@
+/* decider's theme from JupyterLab's: the --decider-* variables that have no fallback in the UI, and a
+   few where JupyterLab has a closer colour. The rest keep the UI's own defaults. */
+.jp-DeciderPanel {
+  --decider-font: var(--jp-ui-font-family);
+  --decider-font-size: var(--jp-ui-font-size1);
+  --decider-mono: var(--jp-code-font-family);
+  --decider-fg: var(--jp-ui-font-color1);
+  --decider-bg: var(--jp-layout-color1);
+  --decider-muted: var(--jp-ui-font-color2);
+  --decider-error: var(--jp-error-color1);
+  --decider-link: var(--jp-content-link-color);
+  --decider-border: var(--jp-border-color2);
+  --decider-focus: var(--jp-brand-color1);
+  --decider-widget-bg: var(--jp-layout-color2);
+  --decider-widget-border: var(--jp-border-color1);
+  --decider-shadow: var(--jp-shadow-penumbra-color);
+  --decider-code-bg: var(--jp-layout-color2);
+  --decider-quote-bg: var(--jp-layout-color2);
+  --decider-button-bg: var(--jp-brand-color1);
+  --decider-button-fg: var(--jp-ui-inverse-font-color1);
+  --decider-button2-bg: var(--jp-layout-color3);
+  --decider-button2-fg: var(--jp-ui-font-color1);
+  --decider-input-bg: var(--jp-input-background);
+  --decider-input-fg: var(--jp-ui-font-color1);
+  --decider-input-border: var(--jp-input-border-color);
+  --decider-invalid-border: var(--jp-error-color1);
+  --decider-dropdown-bg: var(--jp-input-background);
+  --decider-dropdown-fg: var(--jp-ui-font-color1);
+  --decider-dropdown-border: var(--jp-input-border-color);
+  --decider-badge-bg: var(--jp-brand-color1);
+  --decider-badge-fg: var(--jp-ui-inverse-font-color1);
+  --decider-hover-bg: var(--jp-layout-color2);
+  --decider-selection-bg: var(--jp-brand-color1);
+  --decider-selection-fg: var(--jp-ui-inverse-font-color1);
+  --decider-inactive-selection-bg: var(--jp-layout-color3);
+  --decider-passed: var(--jp-success-color1);
+  --decider-warning: var(--jp-warn-color1);
+  --decider-red: var(--jp-error-color1);
+  --decider-orange: var(--jp-warn-color1);
+  --decider-green: var(--jp-success-color1);
+  --decider-blue: var(--jp-brand-color1);
+  height: 100%;
+  background: var(--jp-layout-color1);
+}
+
+/* What VS Code's webviews style by default and the UI takes for granted. */
+.jp-DeciderPanel .decider a {
+  color: var(--decider-link);
+}
+
+.jp-DeciderPanel .decider code {
+  font-family: var(--decider-mono);
+}

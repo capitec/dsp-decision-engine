@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from decider.engine import Engine
 from decider.engine.params import document_key
-from runs import collect, steer
+from .runs import collect, steer
 
 
 def checkpoint_key(session):
