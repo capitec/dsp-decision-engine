@@ -14,7 +14,7 @@ from decider.engine.run.params import RunParams
 from decider.engine.run.runners.base import Checkpoint
 from decider.engine.run.runners.interpreted import InterpretedRunner, _absent, _note, _Scope
 from decider.engine.run.state import State, fill_missing
-from decider.types import is_raw, raw_base
+from decider.types import Representation, is_raw, raw_base, raw_string_codes
 from decider.engine.wiring.plan import Call, Plan, Version
 
 
@@ -55,6 +55,7 @@ class SteppedRunner(InterpretedRunner):
         self._alive: dict[tuple[str, int], dict] = {}
         self._lock = threading.Lock()
         self._fallbacks: dict[str, str] = {}
+        self._codes.update(raw_string_codes())
 
     def iterate(self, plan: Plan, state: State, params: RunParams) -> Iterator[Checkpoint]:
         # Not a generator itself: one generator frame less per checkpoint on the single-record path.
@@ -125,7 +126,18 @@ class SteppedRunner(InterpretedRunner):
         for decl, v, path, want in self._reads[id(unit)]:
             x, mask = state.read(v, rows)
             if not python and x.dtype == object:
-                x = self._typed(x, mask, decl, alive, None if rows is not None else state.source(v))
+                if base_annotation(decl.annotation) is bytes:
+                    kind = (Representation.RAW_BYTES if is_raw(decl.annotation) or
+                        any(c.node.kind == "row" for c in unit.calls) else
+                        Representation.SEMANTIC_BYTES)
+                else:
+                    kind = (Representation.RAW_STRING if is_raw(decl.annotation) else
+                        Representation.SEMANTIC_STRING)
+                full = state.representation(
+                    v, kind,
+                    lambda values, source, kept: self._typed(values, None, decl, kept, source),
+                )
+                x = full if rows is None else full[rows]
             elif not python and want is not None and x.dtype != want and np.can_cast(x.dtype, want):
                 # An int column read as `float` (another step reads it as `int`): a kernel types what it gets.
                 x = x.astype(want)
@@ -159,6 +171,7 @@ class SteppedRunner(InterpretedRunner):
                 raise TypeError(f"'{decl.name}' is a string input: {e}") from None
         if annotation is str and raw:
             with self._lock:
+                self._codes.update(raw_string_codes())
                 codes = {s: self._codes.setdefault(s, len(self._codes)) for s in x}
             return np.fromiter((codes[s] for s in x), np.int32, len(x))
         if annotation is str:
