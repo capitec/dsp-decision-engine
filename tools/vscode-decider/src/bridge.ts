@@ -13,7 +13,9 @@ export interface BridgeOptions {
   onOutput?: (text: string, category: "stdout" | "stderr") => void;
 }
 
-export const BRIDGE_PY = path.resolve(__dirname, "..", "python", "bridge.py");
+/** Where the `decider_bridge` package lives; it is shared with the JupyterLab extension. */
+// ponytail: a packaged .vsix does not carry decider-bridge; copy it in next to dist when publishing.
+export const BRIDGE_ROOT = path.resolve(__dirname, "..", "..", "decider-bridge");
 
 /**
  * One Python bridge process. Requests go down stdin as JSON lines; replies come
@@ -28,12 +30,13 @@ export class Bridge {
 
   constructor(opts: BridgeOptions) {
     const [exe, ...pre] = opts.python;
-    const args = [...pre, BRIDGE_PY, "--fd", "3"];
+    const args = [...pre, "-m", "decider_bridge", "--fd", "3"];
     if (opts.debugpyPort) args.push("--debugpy", String(opts.debugpyPort));
-    const env: NodeJS.ProcessEnv = { ...process.env, PYTHONUNBUFFERED: "1" };
-    if (opts.pythonPath?.length) {
-      env.PYTHONPATH = [...opts.pythonPath, process.env.PYTHONPATH ?? ""].filter(Boolean).join(path.delimiter);
-    }
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      PYTHONUNBUFFERED: "1",
+      PYTHONPATH: [...(opts.pythonPath ?? []), BRIDGE_ROOT, process.env.PYTHONPATH ?? ""].filter(Boolean).join(path.delimiter),
+    };
     this.proc = spawn(exe, args, { cwd: opts.cwd, env, stdio: ["pipe", "pipe", "pipe", "pipe"] });
     const replies = readline.createInterface({ input: this.proc.stdio[3] as NodeJS.ReadableStream });
     replies.on("line", (line) => this.onReply(line));

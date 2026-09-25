@@ -1,3 +1,4 @@
 packages:
   - decider-ui
   - vscode-decider
+  - jupyterlab-decider

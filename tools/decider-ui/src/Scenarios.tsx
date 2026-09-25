@@ -106,7 +106,7 @@ export function Scenarios({ schema, values, columns, pausedAt, record, keyCol, r
           }}
         />
         {open !== null && (
-          <div className="inline-compare" ref={(el) => el?.scrollIntoView({ block: "start", behavior: "smooth" })}>
+          <div className="inline-compare" ref={(el) => void el?.scrollIntoView({ block: "start", behavior: "smooth" })}>
             <Compare
               withRevision={false}
               header={

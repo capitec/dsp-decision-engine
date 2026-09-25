@@ -2,9 +2,8 @@ import * as path from "node:path";
 import { Breakpoint, Event, Handles, InitializedEvent, LoggingDebugSession, OutputEvent, Scope, Source, StackFrame, StoppedEvent, TerminatedEvent, Thread, Variable } from "@vscode/debugadapter";
 import type { DebugProtocol } from "@vscode/debugprotocol";
 import { Bridge, freePort } from "./bridge";
-import { kindLabel, lastSegment, formatValue, previewOf, walk } from "@decider/ui";
+import { kindLabel, lastSegment, formatValue, previewOf, readEvents, walk } from "@decider/ui";
 import type { Checkpoint, ColumnSummary, Controls, DescribeResult, Hit, IRNodeJson, Lineage, RecordKey, RunStatus, Status, Visits } from "@decider/ui";
-import { readEvents } from "./events";
 import { nodeAtLine } from "./sourceMap";
 import { optionsFromEnv, type AdapterOptions, type LaunchArgs } from "./launchArgs";
 
