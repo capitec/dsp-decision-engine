@@ -50,6 +50,6 @@ export class PipelineCodeLens implements vscode.CodeLensProvider {
   }
 }
 
-function firstLine(s: string): string {
+export function firstLine(s: string): string {
   return s.split("\n")[0].slice(0, 120);
 }
