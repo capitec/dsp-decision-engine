@@ -92,15 +92,21 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None]:
     odd = next((i for i in node.inputs if base_annotation(i.annotation) not in (float, int, bool, str, bytes, Any)), None)
     if odd is not None:
         return key, dispatcher.py_func, f"reads '{odd.name}' as {odd.annotation}, which no kernel takes"
-    string_output = next((o for o in node.outputs if base_annotation(o.annotation) is str), None)
-    if string_output is not None:
-        return key, dispatcher.py_func, f"writes '{string_output.name}' as str, which no fused kernel stores"
+    # numba types a scalar `bytes` argument as an array, so `==` against a literal compares
+    # elementwise rather than as a whole value; there's no kernel signature for that.
     semantic_bytes = next((i for i in node.inputs
                            if base_annotation(i.annotation) is bytes and not is_raw(i.annotation)), None)
     if semantic_bytes is not None and node.kind == "scalar":
-        return key, dispatcher.py_func, f"reads '{semantic_bytes.name}' as bytes, which no scalar kernel takes"
+        return key, dispatcher.py_func, (f"reads '{semantic_bytes.name}' as bytes: numba can't type a scalar "
+                                          "bytes value, only a byte array, so no kernel can compare it whole")
+    # A `Raw[str]` output is already an int code by the time the function returns it,
+    # so only a true `str` output needs the fallback: no fused array stores a string.
+    string_output = next((o for o in node.outputs
+                          if base_annotation(o.annotation) is str and not is_raw(o.annotation)), None)
     sig = _probe_signature(node)
     if sig is None:
+        if string_output is not None:
+            return key, dispatcher, f"writes '{string_output.name}' as str, which no fused kernel stores"
         return key, dispatcher, None
     if (key, sig) not in _REASONS:
         try:
@@ -111,6 +117,10 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None]:
         except (*FALLBACK_ERRORS, NotImplementedError) as e:
             _REASONS[key, sig] = f"{type(e).__name__}: {e}"
     reason = _REASONS[key, sig]
+    # A compiled function returning `str` still can't join a shared array kernel, but calling
+    # it once per row (not its raw Python body) boxes the result back automatically.
+    if reason is None and string_output is not None:
+        return key, dispatcher, f"writes '{string_output.name}' as str, which no fused kernel stores"
     return key, (dispatcher if reason is None else dispatcher.py_func), reason
 
 

@@ -163,9 +163,30 @@ def test_scalar_string_steps_receive_semantic_strings(mode):
 @pytest.mark.parametrize("mode", COMPILED)
 def test_scalar_semantic_bytes_fall_back_until_adapter_exists(mode):
     exe = Engine().bind(flow(is_binary_priority, name="p"), mode=mode)
-    with pytest.warns(UserWarning, match="reads 'value' as bytes, which no scalar kernel takes"):
+    with pytest.warns(UserWarning, match="reads 'value' as bytes: numba can't type a scalar bytes value"):
         out = exe.run(pl.DataFrame({"value": [b"priority", b"other"]}))
     assert out["is_binary_priority"].to_list() == [True, False]
+
+
+def label(x: float) -> str:
+    return "big" if x > 1 else "small"
+
+
+def label_code(x: float) -> Raw[str]:
+    return PRIORITY if x > 1 else 0
+
+
+@pytest.mark.parametrize("mode", COMPILED)
+def test_str_output_falls_back_but_raw_str_output_joins_the_kernel(mode):
+    exe = Engine().bind(flow(label, name="p"), mode=mode)
+    with pytest.warns(UserWarning, match="writes 'label' as str, which no fused kernel stores"):
+        out = exe.run(pl.DataFrame({"x": [2.0, 0.5]}))
+    assert out["label"].to_list() == ["big", "small"]
+
+    exe = Engine().bind(flow(label_code, name="p"), mode=mode)
+    out = exe.run(pl.DataFrame({"x": [2.0, 0.5]}))
+    assert out["label_code"].to_list() == [PRIORITY, 0]
+    assert exe.fallbacks() == {}
 
 
 @pytest.mark.parametrize("fn", [has_raw_string, has_raw_bytes])

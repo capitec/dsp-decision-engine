@@ -215,6 +215,19 @@ def test_a_python_only_helper_is_reported_as_an_intentional_boundary():
     assert "calls python_only function 'external_helper'" in unit.reason
 
 
+def picks_a_label(half: float) -> str:
+    return "big" if half > 1 else "small"
+
+
+def test_a_string_output_fallback_still_runs_compiled_not_interpreted(run):
+    unit = compile_plan(resolve(flow(picks_a_label)))[0]
+    assert isinstance(unit, Fallback)
+    assert "writes 'picks_a_label' as str" in unit.reason
+    assert isinstance(unit.fn, Dispatcher)
+    out, _ = run(resolve(flow(picks_a_label)), {"half": np.array([2.0, 0.5])})
+    assert out["picks_a_label"].tolist() == ["big", "small"]
+
+
 def test_a_runtime_error_in_a_compiled_step_propagates(run):
     plan = resolve(flow(divides))
     (unit,) = _units(compile_plan(plan))
