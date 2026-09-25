@@ -9,7 +9,7 @@ import polars as pl
 
 from decider.engine.params import NodeParams, ParamsCache
 from decider.engine.run.params import RunParams, RunReport, check_namespaces
-from decider.engine.run.runners.base import Runner
+from decider.engine.run.runners.base import CompiledRunner, Runner
 from decider.engine.run.runners.fused import FusedRunner
 from decider.engine.run.runners.interpreted import InterpretedRunner
 from decider.engine.run.runners.stepped import SteppedRunner
@@ -209,6 +209,14 @@ class Executable:
             values, valid = state.read(v)
             out[k] = None if valid is not None and not valid[0] else values.tolist()[0]
         return out
+
+    def fallbacks(self) -> dict[str, str]:
+        """Return compiled-mode steps that run in Python, keyed by step path."""
+        if not isinstance(self.runner, CompiledRunner):
+            return {}
+        if self.runner._plan is not self.plan:
+            self.runner._compile(self.plan, self.lazy)
+        return self.runner.fallbacks()
 
     def session(self, df: pl.DataFrame, params: Mapping[str, Any] | None = None) -> Session:
         """A debug `Session` over `df`, paused before anything runs.
