@@ -54,6 +54,10 @@
       {
         "command": "decider.whatIf",
         "title": "decider: What-if (params and inputs)"
+      },
+      {
+        "command": "decider.openPipeline",
+        "title": "decider: Open a pipeline.py"
       }
     ],
     "menus": {
@@ -102,6 +106,12 @@
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "decider.structure",
+        "contents": "No flow shown yet.\n\nOpen the file that defines your pipeline, `def build()` or `pipeline = flow(...)`, and click **Visualise flow** in the line above it. The flow's steps appear here and in the flow panel.\n\n[Open a pipeline.py](command:decider.openPipeline)\n\nNo pipeline yet? `decider template NAME` writes a starter project."
+      }
+    ],
     "configuration": {
       "title": "decider",
       "properties": {

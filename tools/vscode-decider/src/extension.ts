@@ -75,6 +75,9 @@ export function activate(ctx: vscode.ExtensionContext) {
 
     vscode.commands.registerCommand("decider.debugStep", debugStep),
 
+    vscode.commands.registerCommand("decider.openPipeline", () => openPipeline(true)),
+    tree.onDidChangeVisibility((e) => e.visible && !shown && openPipeline(false)),
+
     vscode.commands.registerCommand("decider.compareRevision", async (uri?: vscode.Uri) => {
       if (uri || !shown) await vscode.commands.executeCommand("decider.visualise", uri);
       await compareRevision();
@@ -139,9 +142,27 @@ export function activate(ctx: vscode.ExtensionContext) {
       post({ type: "state", columns: null, rows: 0, key: null });
     }),
   );
+  // Opening the sidebar can be what activated the extension: it is already visible.
+  if (tree.visible) void openPipeline(false);
 }
 
 const post = (m: ToUI) => GraphPanel.post(m);
+
+/** Visualise the workspace's pipeline.py; with several, `ask` which, else leave the welcome text up. */
+async function openPipeline(ask: boolean) {
+  const files = await vscode.workspace.findFiles("**/pipeline.py", "**/{node_modules,.venv,.git}/**", 200);
+  let uri = files.length === 1 ? files[0] : undefined;
+  if (!uri && ask && files.length) {
+    const pick = await vscode.window.showQuickPick(files.map((f) => ({ label: vscode.workspace.asRelativePath(f), uri: f })).sort((a, b) => a.label.localeCompare(b.label)), { placeHolder: "Pipeline to visualise" });
+    uri = pick?.uri;
+  }
+  if (!uri) {
+    if (ask && !files.length) void vscode.window.showInformationMessage("decider: no pipeline.py in this workspace. Open the file that defines your pipeline and click Visualise flow.");
+    return;
+  }
+  await vscode.window.showTextDocument(uri, { preview: false });
+  await vscode.commands.executeCommand("decider.visualise", uri);
+}
 
 async function onWebview(m: FromUI, describe: DescribeResult) {
   const s = deciderSession();
@@ -233,6 +254,10 @@ async function onWebview(m: FromUI, describe: DescribeResult) {
     case "sweep":
       await runSweep(m.scenarios, m.fromHere && !!s);
       break;
+    case "run":
+      if (s) await vscode.debug.stopDebugging(s);
+      await startShown();
+      break;
     case "runTo":
       await runTo(m.path);
       break;
@@ -296,7 +321,12 @@ async function runTo(nodePath: string) {
   }
   const s = deciderSession();
   if (s) await s.customRequest("continue", { threadId: 1 });
-  else if (shown)
+  else await startShown();
+}
+
+/** Run the shown flow on its sample from the start, pausing only at breakpoints. */
+async function startShown() {
+  if (shown)
     await vscode.debug.startDebugging(undefined, { type: "decider", request: "launch", name: `decider: ${shown.pipeline}`, program: shown.file, pipeline: shown.pipeline, stopOnEntry: false, internalConsoleOptions: "neverOpen" });
 }
 

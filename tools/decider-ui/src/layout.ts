@@ -79,6 +79,15 @@ export function fold(ir: IRNodeJson, open: (path: string) => boolean, root = tru
   return { ...ir, children: ir.children.map((c) => fold(c, open, false)) };
 }
 
+/** Every group below the root: what "expand all" opens. */
+export function groupPaths(ir: IRNodeJson): Set<string> {
+  const out = new Set<string>();
+  walk(ir, (n) => {
+    if (n.kind !== "call" && n !== ir) out.add(n.path);
+  });
+  return out;
+}
+
 function firstLeaf(n: IRNodeJson): string {
   return isLeaf(n) ? n.path : firstLeaf((n as { children: IRNodeJson[] }).children[0]);
 }
