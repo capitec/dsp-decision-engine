@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import threading
 from enum import Enum
+from functools import lru_cache
 from typing import Any, Generic, NamedTuple, TypeVar, get_args, get_origin, get_type_hints
 
 T = TypeVar("T")
@@ -41,6 +42,11 @@ class Rows(Generic[T]):
     """Marker: `Item`'s list column, as one array per field, sliced per parent row."""
 
 
+# A run asks these of the same annotations once per record, and they are pure.
+_cache = lru_cache(maxsize=1024)
+
+
+@_cache
 def rows_item(annotation: Any) -> Any | None:
     """`Item` of a `Rows[Item]` annotation, else `None`."""
     return get_args(annotation)[0] if get_origin(annotation) is Rows else None
@@ -51,12 +57,14 @@ def rows_schema(item: Any) -> tuple[tuple[str, Any], ...]:
     return tuple(get_type_hints(item).items())
 
 
+@_cache
 def is_raw(annotation: Any) -> bool:
     if get_origin(annotation) in (Raw, Rows):
         return True
     return any(is_raw(arg) for arg in get_args(annotation) if arg is not type(None))
 
 
+@_cache
 def raw_base(annotation: Any) -> Any:
     if get_origin(annotation) is not Raw:
         args = [arg for arg in get_args(annotation) if arg is not type(None)]
@@ -65,6 +73,7 @@ def raw_base(annotation: Any) -> Any:
     return args[0] if is_raw(annotation) and args else annotation
 
 
+@_cache
 def representation_key(annotation: Any, *, row: bool = False) -> RepresentationKey:
     args = [arg for arg in get_args(annotation) if arg is not type(None)]
     base = raw_base(args[0]) if len(args) == 1 else raw_base(annotation)
@@ -72,6 +81,7 @@ def representation_key(annotation: Any, *, row: bool = False) -> RepresentationK
     return RepresentationKey(base, raw)
 
 
+@_cache
 def representation_for(annotation: Any, *, row: bool = False) -> Representation:
     key = representation_key(annotation, row=row)
     try:
