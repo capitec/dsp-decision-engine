@@ -91,14 +91,15 @@ class MissingInputError(DeciderError, ValueError):
 
     _STATUS_CODE = 400
 
-    def __init__(self, input: str, path: str, null_count: int, n_rows: int, absent: bool = False):
+    def __init__(self, input: str, path: str, null_count: int, n_rows: int, absent: bool = False,
+                 fix: str | None = None):
         self.input, self.path, self.null_count = input, path, null_count
         where = f"step '{path}'" if path else "the pipeline"
         found = ("is not in the input frame or record" if absent
                  else f"has {null_count} null row(s) of {n_rows}")
         super().__init__(
             f"input '{input}' of {where} is required but column '{input}' {found}. "
-            f"Fix the data, or declare `{input}: T = missing_as(fill)` or `{input}: T | None`."
+            + (fix or f"Fix the data, or declare `{input}: T = missing_as(fill)` or `{input}: T | None`.")
         )
 
 

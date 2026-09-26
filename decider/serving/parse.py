@@ -9,6 +9,7 @@ from pydantic import ConfigDict, TypeAdapter, ValidationError
 
 from decider.engine.ir.decls import base_annotation
 from decider.exceptions import InputParsingError
+from decider.types import struct_item
 
 
 def parse_application_json(data: bytes) -> t.Union[t.Dict[str, t.Any], pl.DataFrame]:
@@ -84,6 +85,7 @@ _DUMMY = {bool: False, int: 1, str: "", bytes: "", dt.date: dt.date(2000, 1, 1),
 def dummy(annotation: t.Any) -> t.Any:
     # 1 rather than 0 so an ordinary ratio doesn't divide by zero; one element so a list has a dtype.
     a = base_annotation(annotation)
+    a = struct_item(a) or a   # `Struct[Item]` is Item's dict at this boundary
     origin = t.get_origin(a) or a
     if origin is list:
         return [dummy(t.get_args(a)[0])] if t.get_args(a) else [1.0]

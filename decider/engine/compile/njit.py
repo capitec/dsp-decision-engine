@@ -18,11 +18,12 @@ from numba.core.errors import NumbaError, UnsupportedBytecodeError
 from decider.engine.compile import cpython  # registers CPython-compatible round and **
 from decider.engine.compile.fingerprint import fingerprint
 from decider.engine.compile.rows import rows_probe
+from decider.engine.compile.structs import bad_field, struct_dtype, struct_schema
 from decider.engine.ir.decls import KIND_DTYPES, FeatureKind, Input, NullPolicy, base_annotation, feature_kind
 from decider.engine.ir.nodes import CallNode
 from decider.engine.params import NodeParams
 from decider.steps.helpers import helper_signatures, is_python_only
-from decider.types import is_raw, raw_base, rows_item, rows_schema
+from decider.types import is_raw, raw_base, rows_item, rows_schema, struct_item
 
 # UnsupportedBytecodeError (e.g. an `import` inside a step) isn't a NumbaError.
 FALLBACK_ERRORS = (NumbaError, UnsupportedBytecodeError)
@@ -92,8 +93,12 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None]:
     if helper_reason is not None:
         return key, dispatcher.py_func, helper_reason
     rows_inputs = [i for i in node.inputs if rows_item(i.annotation) is not None]
+    struct_inputs = [i for i in node.inputs if struct_item(i.annotation) is not None]
+    struct_reason = _struct_reason(node, struct_inputs)
+    if struct_reason is not None:
+        return key, dispatcher.py_func, struct_reason
     # numba would type a `date` or `list` input as the float64 it can't be converted to.
-    odd = next((i for i in node.inputs if i not in rows_inputs
+    odd = next((i for i in node.inputs if i not in rows_inputs and i not in struct_inputs
                and base_annotation(i.annotation) not in (float, int, bool, str, bytes, Any)), None)
     if odd is not None:
         return key, dispatcher.py_func, f"reads '{odd.name}' as {odd.annotation}, which no kernel takes"
@@ -135,6 +140,24 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None]:
         names = ", ".join(f"'{i.name}'" for i in rows_inputs)
         return key, dispatcher, f"reads {names} as Rows[...], which runs one call per row, outside the shared kernel"
     return key, (dispatcher if reason is None else dispatcher.py_func), reason
+
+
+def _struct_reason(node: CallNode, inputs: list[Input]) -> str | None:
+    # A record has no per-field validity and no variable-length field, so a fill, an
+    # Optional or a field of another type keeps the step on the Python path it has today.
+    for out in node.outputs:
+        if struct_item(out.annotation) is not None:
+            return f"writes '{out.name}' as Struct[...], which no kernel stores"
+    for inp in inputs:
+        schema = struct_schema(struct_item(inp.annotation))
+        bad = bad_field(schema)
+        if bad is not None:
+            return (f"reads field '{inp.name}.{bad[0]}' as {bad[1]}, which no kernel record holds; "
+                    "a struct field must be float, int or bool")
+        if inp.null_policy is not NullPolicy.REQUIRED:
+            return (f"reads '{inp.name}' as Struct[...] with {inp.null_policy.value} nulls, which a kernel "
+                    "record can't hold: it has no per-field validity")
+    return None
 
 
 def _prepare_function(fn: Callable, stack: tuple[int, ...] = ()) -> tuple[Callable, str | None, tuple[str, ...]]:
@@ -239,6 +262,9 @@ def _input_type(inp: Input) -> Any:
     item = rows_item(inp.annotation)
     if item is not None:
         return typeof(rows_probe(rows_schema(item)))
+    item = struct_item(inp.annotation)
+    if item is not None:
+        return from_dtype(struct_dtype(struct_schema(item)))
     raw = is_raw(inp.annotation)
     annotation = base_annotation(inp.annotation)
     if annotation is bytes and raw:
