@@ -62,6 +62,11 @@ def _field(name: str, annotation: Any) -> tuple[np.dtype, bool]:
     return dtype, optional
 
 
+def rows_class(schema: Schema) -> type:
+    """The namedtuple class a `Rows[Item]` value of `schema` is an instance of."""
+    return _layout(schema).nt
+
+
 def rows_probe(schema: Schema) -> Any:
     """A zero-length instance of `schema`'s namedtuple: enough for numba to type the argument.
 
@@ -111,6 +116,45 @@ def build_rows(values: np.ndarray, schema: Schema, source: pl.Series | None = No
 def item_starts(values: np.ndarray) -> list[int]:
     """The flat index each row's items start at, plus the total: `len(values) + 1` entries."""
     return [0, *accumulate(0 if row is None else len(row) for row in values)]
+
+
+class Ragged:
+    """The same flat arrays, unsliced: row `i` owns `fields[k][lo[i]:hi[i]]`.
+
+    What a shared array kernel takes for a `Rows[Item]` input, in place of one
+    namedtuple of views per row. `lo` and `hi` are per-row, so a branch or loop
+    row subset is `rag[rows]` and never touches the child arrays.
+    """
+
+    __slots__ = ("lo", "hi", "fields")
+
+    def __init__(self, lo: np.ndarray, hi: np.ndarray, fields: tuple[np.ndarray, ...]):
+        self.lo, self.hi, self.fields = lo, hi, fields
+
+    def __getitem__(self, rows: np.ndarray) -> Ragged:
+        return Ragged(self.lo[rows], self.hi[rows], self.fields)
+
+    @property
+    def arrays(self) -> tuple[np.ndarray, ...]:
+        return (self.lo, self.hi, *self.fields)
+
+
+def build_ragged(values: np.ndarray, schema: Schema, source: pl.Series | None = None,
+                 alive: list | None = None) -> Ragged:
+    """`values` as flat per-field arrays plus each row's `[lo, hi)` into them.
+
+    Same nulls and same Arrow read as `build_rows`; it just stops before
+    assembling one namedtuple per row.
+    """
+    _, dtypes, optional = _layout(schema)
+    nested = _from_arrow(values, schema, dtypes, optional, source, alive)
+    if nested is not None:
+        return Ragged(np.asarray(nested.starts, np.int64), np.asarray(nested.stops, np.int64),
+                      tuple(nested.fields))
+    fields = tuple(_flat(values, name, dtype, opt)
+                   for (name, _), dtype, opt in zip(schema, dtypes, optional))
+    starts = np.asarray(item_starts(values), np.int64)
+    return Ragged(starts[:-1], starts[1:], fields)
 
 
 def _from_arrow(values, schema, dtypes, optional, source, alive):
