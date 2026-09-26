@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import gc
+from datetime import date
 from typing import TypedDict
 
 import numpy as np
@@ -123,18 +124,18 @@ def test_a_null_item_field_reads_as_nan_when_it_is_declared_optional():
     assert out["discounted"].to_list() == [13.0, 0.0]
 
 
-class Labelled(TypedDict):
+class Dated(TypedDict):
     price: float
-    label: str
+    when: date
 
 
-def test_a_str_item_field_names_itself_in_the_error():
-    def uses(items: Rows[Labelled]) -> float:
+def test_an_item_field_of_an_unsupported_type_names_itself_in_the_error():
+    def uses(items: Rows[Dated]) -> float:
         return float(len(items.price))
 
-    with pytest.raises(TypeError, match="field 'label' is <class 'str'>"):
+    with pytest.raises(TypeError, match="field 'when' is <class 'datetime.date'>"):
         Engine().bind(flow(uses, name="p"), mode="stepped").run(
-            pl.DataFrame({"items": [[{"price": 1.0, "label": "a"}]]}))
+            pl.DataFrame({"items": [[{"price": 1.0, "when": date(2024, 1, 1)}]]}))
 
 
 @pytest.mark.parametrize("dtype,annotation", ((pl.Int64, int), (pl.Float64, float)))

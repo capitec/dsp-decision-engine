@@ -46,3 +46,12 @@ def string_lengths(get_string_addr, view_addr, n, out):
     for i in range(n):
         _, ln = call_get_string(get_string_addr, view_addr, i)
         out[i] = ln
+
+
+@njit(cache=True)
+def string_spans(get_string_addr, view_addr, at, n, out):
+    """`n` values from `at` as `(address, byte length)` pairs in `out`, length -1 for a null."""
+    for i in range(n):
+        addr, ln = call_get_string(get_string_addr, view_addr, at + i)
+        out[i, 0] = addr
+        out[i, 1] = ln
