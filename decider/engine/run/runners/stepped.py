@@ -11,6 +11,7 @@ from numba.core.dispatcher import Dispatcher
 from decider.engine.boundary.nulls import MissingInputError
 from decider.engine.compile import Fallback, Unit, compile_plan, numpy_dtype
 from decider.engine.compile.rows import build_rows
+from decider.engine.compile.structs import build_struct, struct_schema
 from decider.engine.ir.decls import Input, NullPolicy, base_annotation
 from decider.engine.run.params import RunParams
 from decider.engine.run.representations import codes, spans
@@ -18,7 +19,7 @@ from decider.engine.run.runners.base import Checkpoint
 from decider.engine.run.runners.interpreted import InterpretedRunner, _absent, _note, _Scope
 from decider.engine.run.state import State, fill_missing
 from decider.exceptions import FallbackWarning
-from decider.types import Representation, is_raw, representation_for, rows_item, rows_schema
+from decider.types import Representation, is_raw, representation_for, rows_item, rows_schema, struct_item
 from decider.engine.wiring.plan import Call, Plan, Version
 
 
@@ -53,7 +54,7 @@ class SteppedRunner(InterpretedRunner):
         self.strict = strict
         self._plan: Plan | None = None
         self.units: dict[int, Unit] = {}
-        self._reads: dict[int, tuple[tuple[Input, Version, str, np.dtype | None, Any, Any], ...]] = {}
+        self._reads: dict[int, tuple[tuple[Input, Version, str, np.dtype | None, Any, Any, bool], ...]] = {}
         self._strs: dict[int, tuple[str, ...]] = {}
         self._converted: dict[tuple[str, int], tuple] = {}
         self._alive: dict[tuple[str, int], dict] = {}
@@ -126,7 +127,7 @@ class SteppedRunner(InterpretedRunner):
             # `Raw[...]` and `Rows[...]` are a contract about the value, not an optimisation, so
             # their representation is built for a step running in Python too, where every other
             # annotation wants the Python value instead.
-            if x.dtype == object and (raw or not python):
+            if _records(kind, python) or (x.dtype == object and (raw or not python)):
                 if kind is None:
                     # A boxed number (a `missing_as` fill, an input absent from the frame): just cast it.
                     if mask is not None:
@@ -137,7 +138,7 @@ class SteppedRunner(InterpretedRunner):
                     # and the fill is this reader's, not the shared representation's.
                     filled = True
                     x = build(fill_missing(x, mask, decl.fill), None, alive)
-                else:
+                elif not _null_struct(kind, mask):
                     full = state.representation(v, kind, build)
                     x = full if rows is None else full[rows]
             elif not python and want is not None and x.dtype != want and np.can_cast(x.dtype, want):
@@ -188,12 +189,16 @@ def _external(unit: Unit) -> tuple[tuple[Input, Version, str, np.dtype | None, A
     reads += [(Input(v.name, base_annotation(v.annotation)), v, "") for v in getattr(unit, "passthrough", ())]
     row = any(c.node.kind == "row" for c in unit.calls)
     return tuple((i, v, path, numpy_dtype(b) if (b := base_annotation(i.annotation)) in (float, int, bool) else None,
-                  *_boxed(i, row), is_raw(i.annotation)) for i, v, path in reads)
+                  *_boxed(i, row, path), is_raw(i.annotation)) for i, v, path in reads)
 
 
-def _boxed(decl: Input, row: bool) -> tuple[Any, Any]:
+def _boxed(decl: Input, row: bool, path: str) -> tuple[Any, Any]:
     # The `(kind, build)` pair `State.representation` needs for an object array of `decl`, or
     # `(None, dtype)` for a boxed number, which is only ever cast.
+    item = struct_item(decl.annotation)
+    if item is not None:
+        fields = struct_schema(item)
+        return ("struct", fields), lambda values, source, alive: build_struct(fields, values, source, decl.name, path)
     item = rows_item(decl.annotation)
     if item is not None:
         schema = rows_schema(item)
@@ -216,6 +221,17 @@ def _spans(name: str, values: np.ndarray, source: pl.Series | None, alive: list)
         return spans(values, None, alive, source)
     except TypeError as e:
         raise TypeError(f"'{name}' is a string input: {e}") from None
+
+
+def _records(kind: Any, python: bool) -> bool:
+    # A struct column reaches a kernel as a record per row whatever dtype its values arrived in.
+    return not python and type(kind) is tuple and kind[0] == "struct"
+
+
+def _null_struct(kind: Any, mask: np.ndarray | None) -> bool:
+    # A null struct belongs to the null policy, which knows whether the column is absent entirely;
+    # the record builder would only report it as a null field.
+    return type(kind) is tuple and kind[0] == "struct" and mask is not None and not mask.all()
 
 
 def _fills(decl: Input, mask: np.ndarray | None) -> bool:
