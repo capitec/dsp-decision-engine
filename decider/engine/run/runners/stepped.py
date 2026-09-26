@@ -65,8 +65,8 @@ class SteppedRunner(InterpretedRunner):
 
     def _compile(self, plan: Plan, lazy: bool) -> None:
         python: dict[int, str] = {}
-        # A row node reading `bytes` compares bytes, so its `str` params go in as UTF-8 spans.
-        self._spans = {c.id for c in plan.calls if c.node.kind == "row" and _reads_bytes(c)}
+        # A call reading `bytes` compares bytes, so its `str` params go in as UTF-8 spans.
+        self._spans = {c.id for c in plan.calls if _reads_bytes(c)}
         strs = {k: tuple(d.name for d in c.node.params if d.annotation is str)
                 for c in plan.calls if (k := c.id) in self._spans}
         self.units = compile_plan(plan, fuse=self.fuse, python=python)
@@ -208,4 +208,5 @@ def _external(unit: Unit) -> tuple[tuple[Input, Version, str, np.dtype | None], 
 
 
 def _reads_bytes(call: Call) -> bool:
-    return any(base_annotation(i.annotation) is bytes for i in call.node.inputs)
+    # A frame node's lineage is unknown, so it has no declared inputs.
+    return any(base_annotation(i.annotation) is bytes for i in call.node.inputs or ())
