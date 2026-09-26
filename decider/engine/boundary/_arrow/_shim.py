@@ -47,6 +47,7 @@ _SIGNATURES = {
     "sm_view_dictionary": (_vp, _vp),
     "sm_view_n_variadic_buffers": (_int, _vp),
     "sm_view_has_validity": (_int, _vp),
+    "sm_view_buffer": (ctypes.c_uint64, _vp, _i32),
     "sm_array_release": (None, _vp),
     "sm_release": (None, _vp, _vp, _vp, _vp),
     "sm_schema_child_to_string": (_i64, _vp, _i64, _vp, _i64),
