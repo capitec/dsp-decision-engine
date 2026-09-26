@@ -16,7 +16,7 @@ from decider.engine.run.representations import StringCodes, build_raw
 from decider.engine.run.runners.base import Checkpoint
 from decider.engine.run.runners.interpreted import InterpretedRunner, _absent, _note, _Scope
 from decider.engine.run.state import State, fill_missing
-from decider.types import Representation, is_raw, representation_for, raw_base, rows_item, rows_schema
+from decider.types import Representation, is_raw, representation_for, rows_item, rows_schema
 from decider.engine.wiring.plan import Call, Plan, Version
 
 
@@ -64,37 +64,29 @@ class SteppedRunner(InterpretedRunner):
         return super().iterate(plan, state, params)
 
     def _compile(self, plan: Plan, lazy: bool) -> None:
-        strs: dict[int, tuple[str, ...]] = {}
         python: dict[int, str] = {}
-        for c in plan.calls:
-            if c.node.kind != "scalar":
-                continue
-            strs[c.id], problem = _str_params(c)
-            if problem is None:
-                continue
-            why, fix = problem
-            if self.strict:
-                raise ValueError(f"{why}; to compile it, {fix}, or run it in mode='interpreted'")
-            warnings.warn(f"{why}. It runs in Python, row by row, instead; to compile it, {fix}", stacklevel=4)
-            python[c.id] = why
         # A row node reading `bytes` compares bytes, so its `str` params go in as UTF-8 spans.
         self._spans = {c.id for c in plan.calls if c.node.kind == "row" and _reads_bytes(c)}
-        strs |= {k: tuple(d.name for d in c.node.params if d.annotation is str)
-                 for c in plan.calls if (k := c.id) in self._spans}
+        strs = {k: tuple(d.name for d in c.node.params if d.annotation is str)
+                for c in plan.calls if (k := c.id) in self._spans}
         self.units = compile_plan(plan, fuse=self.fuse, python=python)
-        self._fallbacks = {
-            c.node.origin.path: unit.reason
-            for unit in self.units.values() if isinstance(unit, Fallback)
-            for c in unit.calls
-        }
-        for path, reason in self._fallbacks.items():
-            call_id = next(c.id for c in plan.calls if c.node.origin.path == path)
-            if call_id in python:
+        self._fallbacks = {}
+        for unit in self.units.values():
+            if not isinstance(unit, Fallback):
                 continue
-            message = f"{path} runs in Python, row by row: {reason}"
-            if self.strict:
-                raise ValueError(f"{message}; run it in mode='interpreted'")
-            warnings.warn(message, stacklevel=4)
+            # A fallback backed by a dispatcher still runs compiled, just one call per row.
+            compiled = isinstance(unit.fn, Dispatcher)
+            for c in unit.calls:
+                path = c.node.origin.path
+                self._fallbacks[path] = unit.reason
+                if compiled:
+                    warnings.warn(f"{path} runs compiled, one call per row outside the shared "
+                                  f"kernel: {unit.reason}", stacklevel=4)
+                    continue
+                message = f"{path} runs in Python, row by row: {unit.reason}"
+                if self.strict:
+                    raise ValueError(f"{message}; run it in mode='interpreted'")
+                warnings.warn(message, stacklevel=4)
         self._python = python
         self._reads = {id(unit): _external(unit) for unit in self.units.values()}
         self._strs = {k: v for k, v in strs.items() if v}
@@ -133,13 +125,18 @@ class SteppedRunner(InterpretedRunner):
                     schema = rows_schema(item)
                     full = state.representation(v, ("rows", schema),
                                                 lambda values, source, kept: build_rows(values, schema))
-                else:
+                elif base_annotation(decl.annotation) in (str, bytes):
                     kind = representation_for(decl.annotation, row=any(c.node.kind == "row" for c in unit.calls))
                     full = state.representation(
                         v, kind,
                         lambda values, source, kept: self._typed(values, None, decl, kept, source),
                     )
-                x = full if rows is None else full[rows]
+                else:
+                    # A boxed number (a `missing_as` fill, an input absent from the frame): just cast it.
+                    full = None
+                    x = self._typed(x, mask, decl, alive, None)
+                if full is not None:
+                    x = full if rows is None else full[rows]
             elif not python and want is not None and x.dtype != want and np.can_cast(x.dtype, want):
                 # An int column read as `float` (another step reads it as `int`): a kernel types what it gets.
                 x = x.astype(want)
@@ -174,9 +171,9 @@ class SteppedRunner(InterpretedRunner):
         if annotation is str and raw:
             return build_raw(Representation.RAW_STRING, x, mask, alive, source, self._codes)
         if annotation is str:
-            values = ["" if s is None else str(s) for s in x]
-            width = max((len(s) for s in values), default=1)
-            return np.asarray(values, dtype=f"U{max(width, 1)}")
+            # A step reading semantic strings runs one compiled call per row, which takes the
+            # Python values as they are: numba types them as its own unicode.
+            return x
         if mask is not None:
             x = np.where(mask, x, 0)
         return x.astype(numpy_dtype(base_annotation(decl.annotation)))
@@ -212,27 +209,3 @@ def _external(unit: Unit) -> tuple[tuple[Input, Version, str, np.dtype | None], 
 
 def _reads_bytes(call: Call) -> bool:
     return any(base_annotation(i.annotation) is bytes for i in call.node.inputs)
-
-
-def _str_params(call: Call) -> tuple[tuple[str, ...], tuple[str, str] | None]:
-    # Row kernels over bytes still use encoded params; scalar kernels receive semantic Unicode strings.
-    node = call.node
-    if node.kind == "scalar":
-        return (), None
-    strs = [i.name for i in node.inputs if base_annotation(i.annotation) is str]
-    params = tuple(d.name for d in node.params if d.annotation is str)
-    path = node.origin.path
-    if not strs:
-        if params:
-            return (), (f"{path}: `str` param '{params[0]}' reaches a compiled kernel as the code of its "
-                        "literal, which only means something compared with a `str` input, and this step reads none",
-                        "compare it in a step that reads the `str` input, or make it a `bool` or `int` param")
-        return (), None
-    if len(strs) > 1:
-        return (), (f"{path}: reads several `str` inputs {strs}; compiled modes compare a `str` input only "
-                    "with a `str` param", "split the step so each part reads one `str` input")
-    if not params or any(isinstance(v, str) for _, v in node.consts):
-        return (), (f"{path}: `str` input '{strs[0]}' enters a compiled kernel as a code, so a literal in the "
-                    "function body would never match it",
-                    "declare the literal as a `str` param, e.g. `private: str = param(\"private\")`")
-    return params, None

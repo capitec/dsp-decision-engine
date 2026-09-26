@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dis
 import hashlib
 import inspect
 import os
@@ -85,7 +86,8 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None]:
 
         key, fn, reason = compile_call(plan.calls[0].node)
     """
-    prepared, helper_reason = _prepare_function(node.fn) if node.kind == "scalar" else (node.fn, None)
+    prepared, helper_reason, undeclared = (_prepare_function(node.fn) if node.kind == "scalar"
+                                           else (node.fn, None, ()))
     key, dispatcher = jit(node.fn if helper_reason is not None else prepared)
     if helper_reason is not None:
         return key, dispatcher.py_func, helper_reason
@@ -102,15 +104,16 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None]:
     if semantic_bytes is not None and node.kind == "scalar":
         return key, dispatcher.py_func, (f"reads '{semantic_bytes.name}' as bytes: numba can't type a scalar "
                                           "bytes value, only a byte array, so no kernel can compare it whole")
-    # A `Raw[str]` output is already an int code by the time the function returns it,
-    # so only a true `str` output needs the fallback: no fused array stores a string.
-    string_output = next((o for o in node.outputs
-                          if base_annotation(o.annotation) is str and not is_raw(o.annotation)), None)
+    # No fused array kernel can hold a variable-length string: numba's array of strings is fixed
+    # width, so its element type would move with the longest value in the batch and recompile on
+    # every new one. A `Raw[str]` is an int code by then, so only a true `str` needs the per-row call.
+    no_kernel = (next((f"writes '{o.name}' as str, which no fused kernel stores" for o in node.outputs
+                       if base_annotation(o.annotation) is str and not is_raw(o.annotation)), None)
+                 or next((f"reads '{i.name}' as str, which no fused kernel holds" for i in node.inputs
+                          if base_annotation(i.annotation) is str and not is_raw(i.annotation)), None))
     sig = _probe_signature(node)
     if sig is None:
-        if string_output is not None:
-            return key, dispatcher, f"writes '{string_output.name}' as str, which no fused kernel stores"
-        return key, dispatcher, None
+        return key, dispatcher, no_kernel
     if (key, sig) not in _REASONS:
         try:
             dispatcher.compile(sig)
@@ -120,10 +123,12 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None]:
         except (*FALLBACK_ERRORS, NotImplementedError) as e:
             _REASONS[key, sig] = f"{type(e).__name__}: {e}"
     reason = _REASONS[key, sig]
-    # A compiled function returning `str` still can't join a shared array kernel, but calling
-    # it once per row (not its raw Python body) boxes the result back automatically.
-    if reason is None and string_output is not None:
-        return key, dispatcher, f"writes '{string_output.name}' as str, which no fused kernel stores"
+    if reason is not None and undeclared:
+        reason = f"calls '{undeclared[0]}' without @helper or @python_only: {reason}"
+    # A compiled function taking or returning `str` still can't join a shared array kernel, but
+    # calling it once per row (not its raw Python body) keeps numba's unicode semantics.
+    if reason is None and no_kernel is not None:
+        return key, dispatcher, no_kernel
     # Each parent row owns a different number of child rows, so `Rows[Item]` can't sit in the
     # shared array kernel either; it still runs compiled, one call per row.
     if reason is None and rows_inputs:
@@ -132,35 +137,49 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None]:
     return key, (dispatcher if reason is None else dispatcher.py_func), reason
 
 
-def _prepare_function(fn: Callable, stack: tuple[int, ...] = ()) -> tuple[Callable, str | None]:
-    """Replace declared helpers in `fn` globals with shared compiled dispatchers."""
+def _prepare_function(fn: Callable, stack: tuple[int, ...] = ()) -> tuple[Callable, str | None, tuple[str, ...]]:
+    """`fn` with declared helpers pointed at shared dispatchers, why it can't compile, undeclared callees."""
     if isinstance(fn, Dispatcher):
-        return fn, None
+        return fn, None, ()
     if id(fn) in stack:
-        return fn, f"recursive helper call involving '{fn.__name__}' cannot be compiled"
+        return fn, f"recursive helper call involving '{fn.__name__}' cannot be compiled", ()
     globals_ = dict(fn.__globals__)
     changed = False
-    for name in fn.__code__.co_names:
+    undeclared: list[str] = []
+    for name in _global_names(fn.__code__):
         called = globals_.get(name)
         if not isinstance(called, py_types.FunctionType):
             continue
         if is_python_only(called):
-            return fn, f"calls python_only function '{called.__name__}', which runs in Python"
+            return fn, f"calls python_only function '{called.__name__}', which runs in Python", ()
         signatures = helper_signatures(called)
         if signatures is None:
-            return fn, f"calls '{called.__name__}' without @helper or @python_only"
-        prepared, reason = _prepare_function(called, stack + (id(fn),))
+            # numba compiles what it can (an @overload, a supported numpy function) and only
+            # needs this name when it fails.
+            undeclared.append(called.__name__)
+            continue
+        prepared, reason, _ = _prepare_function(called, stack + (id(fn),))
         if reason is not None:
-            return fn, f"helper '{called.__name__}': {reason}"
+            return fn, f"helper '{called.__name__}': {reason}", ()
         key, dispatcher = _compile_helper(prepared, signatures)
         reason = _REASONS.get((key, "helper"))
         if reason is not None:
-            return fn, f"helper '{called.__name__}' could not compile: {reason}"
+            return fn, f"helper '{called.__name__}' could not compile: {reason}", ()
         globals_[name] = dispatcher
         changed = True
+    names = tuple(sorted(undeclared))
     if not changed:
-        return fn, None
-    return py_types.FunctionType(fn.__code__, globals_, fn.__name__, fn.__defaults__, fn.__closure__), None
+        return fn, None, names
+    return py_types.FunctionType(fn.__code__, globals_, fn.__name__, fn.__defaults__, fn.__closure__), None, names
+
+
+def _global_names(code: py_types.CodeType) -> set[str]:
+    # LOAD_GLOBAL only: `co_names` also holds attribute names, and `rates.rate` is not a call to `rate`.
+    names = {i.argval for i in dis.get_instructions(code) if i.opname == "LOAD_GLOBAL"}
+    for const in code.co_consts:
+        if isinstance(const, py_types.CodeType):
+            names |= _global_names(const)
+    return names
 
 
 def _compile_helper(fn: Callable, signatures: tuple[tuple[tuple[type, ...], type], ...]) -> tuple[str, Dispatcher]:

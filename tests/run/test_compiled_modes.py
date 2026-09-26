@@ -109,23 +109,24 @@ def test_retuning_a_string_literal_never_recompiles():
 
 
 @pytest.mark.parametrize("mode", ["stepped", "fused"])
-def test_a_step_reading_two_string_inputs_is_a_clear_error_when_strict(mode):
+def test_a_step_reading_several_string_inputs_compiles_one_call_per_row(mode):
     def same(a: str, b: str, which: str = param("a")) -> float:
-        return 1.0
+        return 1.0 if a == b or a == which else 0.0
 
     exe = Engine(strict_compile=True).bind(flow(same), mode=mode)
-    with pytest.raises(ValueError, match="same: reads several `str` inputs.*split the step"):
-        exe.run(pl.DataFrame({"a": ["x"], "b": ["y"]}))
+    with pytest.warns(UserWarning, match="same runs compiled, one call per row.*as str"):
+        out = exe.run(pl.DataFrame({"a": ["x", "y"], "b": ["y", "y"]}))
+    assert out["same"].to_list() == [0.0, 1.0]
 
 
 @pytest.mark.parametrize("mode", ["stepped", "fused"])
-def test_a_string_param_without_a_string_input_is_a_clear_error_when_strict(mode):
+def test_a_string_param_without_a_string_input_stays_in_the_kernel(mode):
     def speed(x: float, mode: str = param("fast")) -> float:
         return x * 2 if mode == "fast" else x
 
     exe = Engine(strict_compile=True).bind(flow(speed), mode=mode)
-    with pytest.raises(ValueError, match="speed: `str` param 'mode'.*reads none"):
-        exe.run(pl.DataFrame({"x": [1.0]}))
+    assert exe.run(pl.DataFrame({"x": [1.0]}))["speed"].to_list() == [2.0]
+    assert exe.run(pl.DataFrame({"x": [1.0]}), params={"speed": {"mode": "slow"}})["speed"].to_list() == [1.0]
 
 
 def half_or_zero(x: float | None) -> float:
