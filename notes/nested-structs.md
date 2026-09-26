@@ -288,5 +288,15 @@ it.*
 Checked: the block runs as `tests/test_guide.py` execs it (`exec(compile(block,
 "GUIDE.md", "exec"), {"__name__": "guide"})`) with no fixture beyond the temporary
 project, and prints nothing but the expected one-call-per-row `UserWarning` for
-`afford/owed`. If the guide should stay warning-free, drop the `owed` step and the last
-two asserts and keep `Rows[Item]` for its own paragraph.
+`afford/owed`.
+
+That warning is the lesson, so it stays, and the accepted-fallback decorator goes on
+`owed` to close the pair: the step still can't join the kernel, and the author says in
+writing that the per-row call is the price. Both asserts are meant to survive that.
+**The invariant they rest on:** `SteppedRunner._compile` records
+`self._fallbacks[path] = unit.reason` for every `Fallback` *before* it decides whether
+to warn, so `fallbacks()` reports the step whether or not anything was printed. A
+decorator that only skips the `warnings.warn` (and satisfies `strict_compile`) keeps
+`assert "one call per row" in exe.fallbacks()["afford/owed"]` true; one that also drops
+the entry from `fallbacks()` turns this guide block red, and the assert should then
+become `exe.fallbacks() == {}` with the teaching moved into the prose.
