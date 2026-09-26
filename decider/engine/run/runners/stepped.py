@@ -10,13 +10,14 @@ from numba.core.dispatcher import Dispatcher
 from decider.engine.boundary.nulls import MissingInputError
 from decider.engine.compile import Fallback, Unit, compile_plan, numpy_dtype
 from decider.engine.compile.rows import build_rows
+from decider.engine.compile.structs import build_struct, struct_schema
 from decider.engine.ir.decls import Input, NullPolicy, base_annotation
 from decider.engine.run.params import RunParams
 from decider.engine.run.representations import StringCodes, build_raw
 from decider.engine.run.runners.base import Checkpoint
 from decider.engine.run.runners.interpreted import InterpretedRunner, _absent, _note, _Scope
 from decider.engine.run.state import State, fill_missing
-from decider.types import Representation, is_raw, representation_for, rows_item, rows_schema
+from decider.types import Representation, is_raw, representation_for, rows_item, rows_schema, struct_item
 from decider.engine.wiring.plan import Call, Plan, Version
 
 
@@ -49,7 +50,7 @@ class SteppedRunner(InterpretedRunner):
         self.strict = strict
         self._plan: Plan | None = None
         self.units: dict[int, Unit] = {}
-        self._reads: dict[int, tuple[tuple[Input, Version, str, np.dtype | None], ...]] = {}
+        self._reads: dict[int, tuple[tuple[Input, Version, str, np.dtype | None, tuple | None], ...]] = {}
         self._strs: dict[int, tuple[str, ...]] = {}
         self._converted: dict[tuple[str, int], tuple] = {}
         self._codes = StringCodes()
@@ -117,9 +118,18 @@ class SteppedRunner(InterpretedRunner):
         values: dict[int, np.ndarray] = {}
         valid: dict[int, np.ndarray] = {}
         alive: list = []
-        for decl, v, path, want in self._reads[id(unit)]:
+        for decl, v, path, want, fields in self._reads[id(unit)]:
             x, mask = state.read(v, rows)
-            if not python and x.dtype == object:
+            if not python and fields is not None:
+                # A struct column is a record per row, whatever dtype its values arrived in. A null
+                # one is left to the policy below, which knows whether the column is absent entirely.
+                if mask is None or mask.all():
+                    full = state.representation(
+                        v, ("struct", fields),
+                        lambda values, source, kept: build_struct(fields, values, source, decl.name, path),
+                    )
+                    x = full if rows is None else full[rows]
+            elif not python and x.dtype == object:
                 item = rows_item(decl.annotation)
                 if item is not None:
                     schema = rows_schema(item)
@@ -197,13 +207,15 @@ class SteppedRunner(InterpretedRunner):
         return converted
 
 
-def _external(unit: Unit) -> tuple[tuple[Input, Version, str, np.dtype | None], ...]:
-    # What a unit reads from outside itself, with the null policy that applies and the dtype a number is read as.
+def _external(unit: Unit) -> tuple[tuple[Input, Version, str, np.dtype | None, tuple | None], ...]:
+    # What a unit reads from outside itself, with the null policy that applies, the dtype a number is
+    # read as, and the fields of a `Struct[Item]` input.
     inside = {v.id for c in unit.calls for v in c.writes} | getattr(unit, "inner", set())
     reads = [(i, v, c.node.origin.path) for c in unit.calls for i, v in zip(c.node.inputs, c.reads) if v.id not in inside]
     # A value a packed branch or loop only copies needs no policy: a null in it sends the run down the unpacked path.
     reads += [(Input(v.name, base_annotation(v.annotation)), v, "") for v in getattr(unit, "passthrough", ())]
-    return tuple((i, v, path, numpy_dtype(b) if (b := base_annotation(i.annotation)) in (float, int, bool) else None)
+    return tuple((i, v, path, numpy_dtype(b) if (b := base_annotation(i.annotation)) in (float, int, bool) else None,
+                  None if (item := struct_item(i.annotation)) is None else struct_schema(item))
                  for i, v, path in reads)
 
 
