@@ -11,6 +11,7 @@ Decision records for the consolidated `decider`, each with its measured reason.
 - `structure-in-python.md`: pipeline structure is code, and config carries params and `ConfigurableStep` documents only.
 - `origins-out-of-cache-keys.md`: origins are debug metadata, and compiled code and generated names are keyed by content.
 - `single-record-path.md`: `score()` takes a dict, not kwargs, and converted params bundles are cached.
+- `nested-and-raw-api.md`: an annotation says what a value means, never how it is stored, because the best representation depends on `n`; `Raw`/`Rows`/`raw_str` go, a `TypedDict` is the nested schema, and the remaining work is JSON-boundary validation.
 - `python-fallback-numbaerror-only.md`: only compile failures trigger the Python fallback, at kernel boundaries, and runtime errors always propagate.
 - `tree-documents.md`: v3 trees and flat rules both validate into one graph-shaped `Tree`; v0-v2 are rejected by name.
 - `table-rows-as-runtime-arrays.md`: table rows, thresholds and enable flags are runtime arrays, so editing them never recompiles.
