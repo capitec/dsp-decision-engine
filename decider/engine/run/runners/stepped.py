@@ -10,7 +10,7 @@ from numba.core.dispatcher import Dispatcher
 
 from decider.engine.boundary.nulls import MissingInputError
 from decider.engine.compile import Fallback, Unit, compile_plan, numpy_dtype
-from decider.engine.compile.rows import build_rows
+from decider.engine.compile.rows import build_rows, rows_needs_no_fill
 from decider.engine.compile.structs import build_struct, struct_schema
 from decider.engine.ir.decls import Input, NullPolicy, base_annotation
 from decider.engine.run.params import RunParams
@@ -133,7 +133,7 @@ class SteppedRunner(InterpretedRunner):
                     if mask is not None:
                         x = np.where(mask, x, 0)
                     x = x.astype(build)
-                elif _fills(decl, mask):
+                elif _fills(decl, mask, kind):
                     # The fill belongs in the strings: a span or a code cannot be filled afterwards,
                     # and the fill is this reader's, not the shared representation's.
                     filled = True
@@ -147,7 +147,7 @@ class SteppedRunner(InterpretedRunner):
             if mask is not None and not mask.all():
                 if decl.null_policy is NullPolicy.REQUIRED:
                     raise MissingInputError(decl.name, path, int((~mask).sum()), len(mask), absent=_absent(state, v))
-                if not filled and _fills(decl, mask):
+                if not filled and _fills(decl, mask, kind):
                     # ponytail: one fill per version per kernel; two readers with different fills share the first.
                     x = fill_missing(x, mask, decl.fill).astype(x.dtype, copy=False)
                 valid[v.id] = mask
@@ -202,7 +202,7 @@ def _boxed(decl: Input, row: bool, path: str) -> tuple[Any, Any]:
     item = rows_item(decl.annotation)
     if item is not None:
         schema = rows_schema(item)
-        return ("rows", schema), lambda values, source, alive: build_rows(values, schema)
+        return ("rows", schema), lambda values, source, alive: build_rows(values, schema, source, alive)
     annotation = base_annotation(decl.annotation)
     if annotation not in (str, bytes):
         return None, numpy_dtype(annotation)
@@ -234,8 +234,11 @@ def _null_struct(kind: Any, mask: np.ndarray | None) -> bool:
     return type(kind) is tuple and kind[0] == "struct" and mask is not None and not mask.all()
 
 
-def _fills(decl: Input, mask: np.ndarray | None) -> bool:
-    return (decl.null_policy is NullPolicy.MISSING_AS and mask is not None and not mask.all())
+def _fills(decl: Input, mask: np.ndarray | None, kind: Any) -> bool:
+    if decl.null_policy is not NullPolicy.MISSING_AS or mask is None or mask.all():
+        return False
+    # A null `Rows[...]` row already reads as a row with no items, which is what an empty fill asks for.
+    return not rows_needs_no_fill(decl, type(kind) is tuple and kind[0] == "rows")
 
 
 def _reads_bytes(call: Call) -> bool:
