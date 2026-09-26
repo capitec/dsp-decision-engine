@@ -65,8 +65,6 @@ class FusedRunner(SteppedRunner):
         if kernel is None:
             return False
         for v in kernel.guarded:
-            if state.packed.get(v.id) is not None:
-                return False
             mask = state.valid.get(v.id)
             absent = v.id not in state.values
             if absent or mask is not None and not (mask if scope.rows is None else mask[scope.rows]).all():

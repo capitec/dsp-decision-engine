@@ -8,7 +8,7 @@ import polars as pl
 
 from decider.engine.boundary.nulls import MissingInputError
 from decider.engine.compile import Fallback, Unit, compile_plan, numpy_dtype
-from decider.engine.ir.decls import TYPED, Input, NullPolicy, base_annotation
+from decider.engine.ir.decls import Input, NullPolicy, base_annotation
 from decider.engine.run.params import RunParams
 from decider.engine.run.runners.base import Checkpoint
 from decider.engine.run.runners.interpreted import InterpretedRunner, _absent, _note, _Scope
@@ -86,23 +86,13 @@ class SteppedRunner(InterpretedRunner):
         valid: dict[int, np.ndarray] = {}
         alive: list = []
         for decl, v, path in self._reads[id(unit)]:
-            if v.id in state.packed and rows is None and not python:
-                # An Arrow column read in place: the kernel reads its bitmaps, and applies fills itself.
-                bits, mask = state.packed[v.id], state.valid.get(v.id)
-                if bits is not None or mask is not None:
-                    if decl.null_policy is NullPolicy.REQUIRED:
-                        nulls = bits[2] if bits is not None else int((~mask).sum())
-                        raise MissingInputError(decl.name, path, nulls, state.n, absent=False)
-                    valid[v.id] = bits[:2] if bits is not None else mask
-                values.setdefault(v.id, state.values[v.id])
-                continue
             x, mask = state.read(v, rows)
             if x.dtype == object and not python:
                 x = self._typed(x, mask, decl, alive, None if rows is not None else state.source(v))
             if mask is not None and not mask.all():
                 if decl.null_policy is NullPolicy.REQUIRED:
                     raise MissingInputError(decl.name, path, int((~mask).sum()), len(mask), absent=_absent(state, v))
-                if decl.null_policy is NullPolicy.MISSING_AS and (python or base_annotation(decl.annotation) not in TYPED):
+                if decl.null_policy is NullPolicy.MISSING_AS:
                     # ponytail: one fill per version per kernel; two readers with different fills share the first.
                     x = np.where(mask, x, decl.fill).astype(x.dtype)
                 valid[v.id] = mask

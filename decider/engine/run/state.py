@@ -35,9 +35,6 @@ class State:
         self.chains: dict[str, list[Version]] = {k: list(v) for k, v in plan.chains.items()}
         self._extra = 0
         self._sources: dict[int, tuple[np.ndarray, pl.Series]] = {}
-        # Input columns read in place from Arrow: `Version.id` -> `(validity bitmap, bit offset, null count)`
-        # or None. Their `values` may be a `(bitmap, bit offset)` pair (a bool column). `read` unpacks both.
-        self.packed: dict[int, tuple | None] = {}
 
     @classmethod
     def from_frame(cls, plan: Plan, frame: pl.DataFrame, n: int | None = None) -> State:
@@ -52,10 +49,7 @@ class State:
             if v.producer is not None:
                 continue
             col = extracted.get(v.name)
-            if col is not None and (col.bits is not None or isinstance(col.values, tuple)):
-                state.values[v.id] = col.values
-                state.packed[v.id] = col.bits
-            elif col is not None:
+            if col is not None:
                 state.write(v, col.values, valid=col.validity if col.has_nulls else None)
             elif v.name in names:
                 # ponytail: a string column becomes Python objects even when only kernels read it
@@ -74,11 +68,6 @@ class State:
         never touches stay null.
         """
         vid = version.id
-        if vid in self.packed:
-            if rows is None:
-                del self.packed[vid]
-            else:
-                self.unpack(vid)
         if rows is None:
             self.values[vid] = values
             if valid is not None and not valid.all():
@@ -102,23 +91,12 @@ class State:
 
     def read(self, version: Version, rows: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray | None]:
         """`version`'s values and validity mask (`None` = all valid) on `rows`; never written means all null."""
-        if version.id in self.packed:
-            self.unpack(version.id)
         values, valid = self.values.get(version.id), self.valid.get(version.id)
         if values is None:
             values, valid = np.full(self.n, None, object), np.zeros(self.n, bool)
         if rows is None:
             return values, valid
         return values[rows], None if valid is None else valid[rows]
-
-    def unpack(self, vid: int) -> None:
-        """Turn an in-place Arrow column's bitmaps into the bool arrays everything but a kernel reads."""
-        bits = self.packed.pop(vid)
-        x = self.values[vid]
-        if isinstance(x, tuple):
-            self.values[vid] = _unbits(*x, self.n)
-        if bits is not None:
-            self.valid[vid] = _unbits(bits[0], bits[1], self.n)
 
     def source(self, version: Version) -> pl.Series | None:
         """The input frame column `version` was read from, while its values are still that column's.
@@ -157,9 +135,6 @@ class State:
         """
         for vid, values in old.values.items():
             if vid in keep or vid >= len(self.plan.versions):
-                if vid in old.packed:
-                    old.unpack(vid)
-                    values = old.values[vid]
                 self.values[vid] = values
                 if vid in old.valid:
                     self.valid[vid] = old.valid[vid]
@@ -200,10 +175,6 @@ class State:
 def _typed(plan: Plan) -> tuple[Input, ...]:
     # The inputs the boundary reads into typed arrays, nulls kept as a mask.
     return tuple(Input(i.name, t, NullPolicy.OPTIONAL) for i in plan.inputs if (t := base_annotation(i.annotation)) in TYPED)
-
-
-def _unbits(bitmap: np.ndarray, offset: int, n: int) -> np.ndarray:
-    return np.unpackbits(bitmap, count=offset + n, bitorder="little")[offset:].view(np.bool_)
 
 
 def _series(name: str, values: np.ndarray, valid: np.ndarray | None) -> pl.Series:
