@@ -43,6 +43,9 @@ class Span:
     __slots__ = ("bytes", "text")
 
     def __init__(self, value: str | None) -> None:
+        if value is not None and not isinstance(value, str):
+            # `Raw[bytes]` is a string column read as its UTF-8 bytes, the same refusal a kernel gives.
+            raise TypeError(f"{type(value).__name__} is not a string")
         self.text = value
         self.bytes = None if value is None else value.encode()
 
