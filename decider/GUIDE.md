@@ -336,8 +336,8 @@ assert app.run(pl.DataFrame({"income": [1000.0], "total_debt": [100.0]}))["offer
 numba kernel holds only numbers (`float`, `int`, `bool`), so a step reading or
 writing anything else runs on its own, row by row, in Python, and says so once
 per step with a `FallbackWarning`. Only speed changes: such a step runs at
-roughly 0.5M rows/s in a batch instead of a kernel's tens of millions, and
-costs about 5 µs more on a single `score()`. Trees and decision tables read
+under 1M rows/s in a batch instead of a kernel's hundreds of millions, and
+costs under 10 µs more on a single `score()`. Trees and decision tables read
 their strings as byte spans inside their kernels, so a string rule set does not
 pay this at all.
 
