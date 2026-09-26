@@ -46,3 +46,8 @@ A `str` **output** with no `str` input (`label(x: float) -> str`):
   are *worse* than Python on a single record — the per-call setup (code encoding
   under a lock, or an Arrow export for the span buffer) is not amortised by one row.
   That single-record cost is the thing worth attacking, since trees read spans.
+
+Both kernel rows are stale, and none of that per-call cost was the kernel. Codes are
+now 2.2 µs over a pure numeric kernel (`notes/strings-codes.md`); a span is 2.6 µs for
+one row and a string-gated tree `score()` went from 146 to 91 µs
+(`notes/strings-spans.md`).
