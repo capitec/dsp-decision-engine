@@ -15,7 +15,7 @@ from decider.engine.compile.rows import build_ragged, build_rows, rows_needs_no_
 from decider.engine.compile.structs import build_struct, struct_schema
 from decider.engine.ir.decls import Input, NullPolicy, base_annotation
 from decider.engine.run.params import RunParams
-from decider.engine.run.representations import codes, spans
+from decider.engine.run.representations import codes, span_objects, spans
 from decider.engine.run.runners.base import Checkpoint
 from decider.engine.run.runners.interpreted import InterpretedRunner, _absent, _note, _Scope
 from decider.engine.run.state import State, fill_missing
@@ -192,11 +192,15 @@ def _external(unit: Unit) -> tuple[tuple[Input, Version, str, np.dtype | None, A
     # Only a shared array kernel takes the flat arrays; a fallback is called once per row and
     # wants that row's items already sliced.
     kernel = not isinstance(unit, Fallback)
+    # A genuinely interpreted fallback runs a Python body, which compares whole values, so it needs
+    # `Span` objects; a compiled body reads the `(address, length)` pairs through span overloads.
+    python = isinstance(unit, Fallback) and not isinstance(unit.fn, Dispatcher)
     return tuple((i, v, path, numpy_dtype(b) if (b := base_annotation(i.annotation)) in (float, int, bool) else None,
-                  *_boxed(i, row, path, kernel), _declared(i.annotation, row)) for i, v, path in reads)
+                  *_boxed(i, row, path, kernel, python), _declared(i.annotation, row)) for i, v, path in reads)
 
 
-def _boxed(decl: Input, row: bool, path: str, kernel: bool = False) -> tuple[Any, Any]:
+def _boxed(decl: Input, row: bool, path: str, kernel: bool = False,
+           python: bool = False) -> tuple[Any, Any]:
     # The `(kind, build)` pair `State.representation` needs for an object array of `decl`, or
     # `(None, dtype)` for a boxed number, which is only ever cast.
     item = struct_item(decl.annotation)
@@ -214,6 +218,9 @@ def _boxed(decl: Input, row: bool, path: str, kernel: bool = False) -> tuple[Any
         return None, numpy_dtype(annotation)
     kind = representation_for(decl.annotation, row=row)
     if kind is Representation.RAW_BYTES:
+        # The same key interpreted uses, so both share one built representation.
+        if python:
+            return (kind, "objects"), lambda values, source, alive: span_objects(values)
         return kind, partial(_spans, decl.name)
     if annotation is bytes:
         # A semantic `bytes` step runs in Python and compares whole values, so give it real bytes:

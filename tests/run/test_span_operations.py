@@ -133,3 +133,18 @@ def other(sector: Raw[bytes] | None, alias: Raw[bytes] | None) -> bool:
 def test_two_spans_compare_as_strings_in_every_mode():
     frame = pl.DataFrame({"sector": ["private", "public", None], "alias": ["private", WANT, None]})
     assert assert_equivalent(flow(other, name="p"), frame)["other"].to_list() == [True, False, False]
+
+
+def undeclared_identity(value):
+    return value
+
+
+def compares_through_a_helper(sector: Raw[bytes]) -> bool:
+    # No @helper, so the step runs in Python: it must still compare whole values.
+    return undeclared_identity(sector) == "private"
+
+
+def test_a_span_compares_the_same_way_when_the_step_runs_in_python():
+    frame = pl.DataFrame({"sector": ["private", "public"]})
+    out = assert_equivalent(flow(compares_through_a_helper, name="p"), frame)
+    assert out["compares_through_a_helper"].to_list() == [True, False]
