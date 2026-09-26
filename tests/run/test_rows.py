@@ -72,3 +72,17 @@ def test_rows_supports_several_fields():
     frame = pl.DataFrame({"items": [[{"price": 1.0, "weight": 4.0}, {"price": 2.0, "weight": 6.0}], []]})
     out = assert_equivalent(flow(total_weight, name="p"), frame)
     assert out["total_weight"].to_list() == [10.0, 0.0]
+
+
+def undeclared(items):
+    return items
+
+
+def bundle_count(items: Rows[Item]) -> float:
+    # No @helper, so the step can't compile and runs in Python; `Rows[Item]` still holds.
+    return float(len(undeclared(items).price))
+
+
+def test_rows_keeps_its_representation_when_the_step_runs_in_python():
+    out = assert_equivalent(flow(bundle_count, name="p"), FRAME)
+    assert out["bundle_count"].to_list() == [2.0, 1.0, 0.0]

@@ -1,4 +1,4 @@
-"""Compiled modes run unsupported values in Python and semantic strings one call per row."""
+"""Compiled modes run in Python, per step, whatever no kernel holds; @allow_fallback accepts it."""
 import ctypes
 import datetime as dt
 import gc
@@ -8,9 +8,9 @@ import numpy as np
 import polars as pl
 import pytest
 
-from decider.exceptions import WiringError
+from decider.exceptions import FallbackWarning, WiringError
 
-from decider import Raw, branch, flow, missing_as, raw_str, step
+from decider import Raw, allow_fallback, branch, flow, missing_as, raw_str, step
 from decider.engine import Engine
 from decider.engine.boundary._arrow.intrinsics import load_u8
 from decider.engine.compile import Fallback, Kernel
@@ -44,23 +44,24 @@ VERSIONS = pl.DataFrame({"x": [1.0, 4.0, 6.0], "a_version": ["v1", "v2", "v2"], 
                          "band": ["complete", "partial", "complete"]})
 
 
-def test_string_steps_keep_their_semantics_and_run_one_call_per_row():
-    with pytest.warns(UserWarning, match="p/pick runs compiled, one call per row.*writes 'pick' as str"):
+def test_string_steps_keep_their_semantics_and_run_in_python():
+    with pytest.warns(FallbackWarning, match="p/pick runs in Python, row by row.*writes 'pick' as str"):
         out = assert_equivalent(flow(half, pick, same, is_complete, doubled, name="p"), VERSIONS)
     assert out["pick"].to_list() == ["v2", "v2", "v2"]
     assert out["same"].to_list() == [False, True, False]
     assert out["is_complete"].to_list() == [True, False, True]
 
 
-def test_a_semantic_string_step_splits_the_fused_kernel_but_still_compiles():
+def test_a_semantic_string_step_splits_the_fused_kernel_and_runs_in_python():
     from numba.core.dispatcher import Dispatcher
 
     exe = Engine().bind(flow(half, same, doubled, name="p"), mode="fused")
-    with pytest.warns(UserWarning, match="p/same runs compiled, one call per row"):
+    with pytest.warns(FallbackWarning, match="p/same runs in Python, row by row"):
         exe.run(VERSIONS)
     units = [exe.runner.units[c.id] for c in exe.plan.calls]
     assert [type(u) for u in units] == [Kernel, Fallback, Kernel]
-    assert isinstance(units[1].fn, Dispatcher)   # compiled, just not in the array kernel
+    # One compiled call per row costs more than the Python body it replaces, in a batch and on one record.
+    assert not isinstance(units[1].fn, Dispatcher)
 
 
 def test_the_warning_is_given_once_per_executable():
@@ -188,7 +189,7 @@ def label_code(x: float) -> Raw[str]:
 @pytest.mark.parametrize("mode", COMPILED)
 def test_str_output_falls_back_but_raw_str_output_joins_the_kernel(mode):
     exe = Engine().bind(flow(label, name="p"), mode=mode)
-    with pytest.warns(UserWarning, match="writes 'label' as str, which no fused kernel stores"):
+    with pytest.warns(FallbackWarning, match="writes 'label' as str, which no kernel stores"):
         out = exe.run(pl.DataFrame({"x": [2.0, 0.5]}))
     assert out["label"].to_list() == ["big", "small"]
 
@@ -291,3 +292,110 @@ def test_a_span_keeps_the_bytes_it_borrows_alive_while_a_kernel_reads_them(mode)
     s.set("value", ["other", "priority"])
     s.resume()
     assert s.output()["n"].to_list() == per_arm[::-1]
+
+
+@pytest.mark.parametrize("mode", COMPILED)
+def test_a_string_step_is_rejected_in_strict_mode_and_the_message_says_how_to_accept_it(mode):
+    exe = Engine(strict_compile=True).bind(flow(is_priority, name="p"), mode=mode)
+    with pytest.raises(ValueError, match=r"p/is_priority runs in Python, row by row.*@allow_fallback"):
+        exe.score({"value": "priority"})
+
+
+@allow_fallback
+def declared_total(items: list[dict]) -> float:
+    return sum(item["price"] for item in items)
+
+
+@allow_fallback
+def declared_sector(sector: str) -> float:
+    return 1.0 if sector == "private" else 0.0
+
+
+def priced(items: list[dict]) -> float:
+    return sum(item["price"] for item in items)
+
+
+DECLARED_STEP = allow_fallback(step(priced))
+
+
+@pytest.mark.parametrize("fn, name, expected", [(declared_total, "declared_total", 2.0),
+                                                (declared_sector, "declared_sector", 1.0),
+                                                (DECLARED_STEP, "priced", 2.0)])
+@pytest.mark.parametrize("mode", COMPILED)
+def test_allow_fallback_is_silent_and_accepted_by_strict(mode, fn, name, expected):
+    record = {"items": [{"price": 2.0}], "sector": "private"}
+    exe = Engine(strict_compile=True).bind(flow(fn, name="p"), mode=mode)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert exe.score(record)[name] == expected
+    assert exe.fallbacks()[f"p/{name}"].startswith("@allow_fallback: reads ")
+
+
+@pytest.mark.parametrize("mode", COMPILED)
+def test_fallback_warnings_are_silenced_by_their_category(mode):
+    exe = Engine().bind(flow(order_total, name="order"), mode=mode)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        warnings.filterwarnings("ignore", category=FallbackWarning)
+        assert exe.score({"items": [{"price": 2.0}]})["order_total"] == 2.0
+
+
+@pytest.mark.parametrize("bad", ["flow", "scorecard", "frame_step"])
+def test_allow_fallback_refuses_a_step_it_could_not_reach(bad):
+    from decider import frame_step
+    from decider.steps.scorecard.config import DefaultBin, ScorecardConfig, ScoredVariable, ValuesBin
+
+    targets = {
+        "flow": lambda: flow(half, name="p"),
+        "scorecard": lambda: ScorecardConfig(name="c", variables=[ScoredVariable(
+            variable_name="s", bins=[ValuesBin(value=1.0, items=["v"])], default=DefaultBin(value=0.0))]),
+        "frame_step": lambda: frame_step(reads=["x"], writes=["y"])(lambda df: df),
+    }
+    with pytest.raises(TypeError, match=r"takes a function, or step\(\) of one"):
+        allow_fallback(targets[bad]())
+
+
+def undeclared_identity(v):
+    return v
+
+
+def raw_code_through_a_helper(value: Raw[str]) -> bool:
+    # No @helper, so the step can't compile: the `Raw[str]` code must still reach it.
+    return undeclared_identity(value) == PRIORITY
+
+
+def raw_span_through_a_helper(value: Raw[bytes]) -> bool:
+    return undeclared_identity(value)[1] >= 0
+
+
+@pytest.mark.parametrize("fn", [raw_code_through_a_helper, raw_span_through_a_helper])
+def test_a_raw_input_keeps_its_representation_when_the_step_runs_in_python(fn):
+    expected = {"raw_code_through_a_helper": [True, False], "raw_span_through_a_helper": [True, True]}
+    with pytest.warns(FallbackWarning, match=f"p/{fn.__name__} runs in Python, row by row"):
+        out = assert_equivalent(flow(fn, name="p"), pl.DataFrame({"value": ["priority", "other"]}))
+    assert out[fn.__name__].to_list() == expected[fn.__name__]
+
+
+def mixed_list(x: float) -> list[float]:
+    return [1, 2] if x > 1 else [1.5]
+
+
+@pytest.mark.parametrize("mode", COMPILED)
+def test_a_numba_lowering_assert_falls_back_with_a_reason(mode):
+    exe = Engine().bind(flow(mixed_list, name="p"), mode=mode)
+    with pytest.warns(FallbackWarning, match="p/mixed_list runs in Python, row by row: AssertionError"):
+        out = exe.run(pl.DataFrame({"x": [2.0, 0.5]}))
+    assert out["mixed_list"].to_list() == [[1.0, 2.0], [1.5]]
+
+
+def asserts_positive(x: float) -> float:
+    assert x > 0.0
+    return x
+
+
+@pytest.mark.parametrize("mode", COMPILED)
+def test_a_step_asserting_at_runtime_still_raises(mode):
+    exe = Engine().bind(flow(asserts_positive, name="p"), mode=mode)
+    assert exe.score({"x": 1.0})["asserts_positive"] == 1.0
+    with pytest.raises(AssertionError):
+        exe.score({"x": -1.0})

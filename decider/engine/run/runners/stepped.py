@@ -17,7 +17,8 @@ from decider.engine.run.representations import codes, spans
 from decider.engine.run.runners.base import Checkpoint
 from decider.engine.run.runners.interpreted import InterpretedRunner, _absent, _note, _Scope
 from decider.engine.run.state import State, fill_missing
-from decider.types import Representation, representation_for, rows_item, rows_schema
+from decider.exceptions import FallbackWarning
+from decider.types import Representation, is_raw, representation_for, rows_item, rows_schema
 from decider.engine.wiring.plan import Call, Plan, Version
 
 
@@ -27,14 +28,16 @@ class SteppedRunner(InterpretedRunner):
     Pauses at every node, like the interpreted runner. Frame steps, branches
     and loops run in Python. A `Raw[str]` value enters a kernel as the int32
     dictionary code `raw_str()` gives that string. A `bytes` input enters as
-    an `(address, byte length)` span of its UTF-8 bytes, and then so does
-    each `str` param of that node. A Python fallback gets plain Python
-    values.
+    an `(address, byte length)` span of its UTF-8 bytes, and then so does each
+    `str` param of that node. A step running in Python gets plain Python
+    values, except a `Raw[...]` or `Rows[...]` input, whose representation is
+    part of what it declares.
 
-    A step no array kernel can hold (it reads or writes a semantic `str`, or
-    takes `Rows[Item]`) still runs compiled, one call per row, with a warning
-    naming it; one numba cannot compile at all runs in Python instead, and
-    with `strict=True` that raises.
+    A step no kernel holds -- one reading or writing a semantic `str`, a `date`
+    or a `list`, or with a body numba can't compile -- runs in Python, row by
+    row, with one `FallbackWarning` naming it. With `strict=True` it raises
+    instead, unless the step is `@allow_fallback`. A `Rows[Item]` input still
+    runs compiled, one call per row.
 
     Example::
 
@@ -76,15 +79,17 @@ class SteppedRunner(InterpretedRunner):
             compiled = isinstance(unit.fn, Dispatcher)
             for c in unit.calls:
                 path = c.node.origin.path
-                self._fallbacks[path] = unit.reason
+                self._fallbacks[path] = f"@allow_fallback: {unit.reason}" if unit.declared else unit.reason
+                if unit.declared:
+                    continue
                 if compiled:
                     warnings.warn(f"{path} runs compiled, one call per row outside the shared "
-                                  f"kernel: {unit.reason}", stacklevel=4)
+                                  f"kernel: {unit.reason}", FallbackWarning, stacklevel=4)
                     continue
                 message = f"{path} runs in Python, row by row: {unit.reason}"
                 if self.strict:
-                    raise ValueError(f"{message}; run it in mode='interpreted'")
-                warnings.warn(message, stacklevel=4)
+                    raise ValueError(f"{message}; accept it with @allow_fallback, or run mode='interpreted'")
+                warnings.warn(message, FallbackWarning, stacklevel=4)
         self._python = python
         self._reads = {id(unit): _external(unit) for unit in self.units.values()}
         self._strs = strs
@@ -104,9 +109,9 @@ class SteppedRunner(InterpretedRunner):
     def _run(self, unit: Unit, state: State, params: RunParams, scope: _Scope) -> None:
         rows = scope.rows
         n = scope.count(state.n)
-        # A genuinely interpreted fallback runs Python code, which takes Python values: strings,
-        # not codes. A fallback backed by a compiled dispatcher (a `str` output, `Rows[Item]`) still
-        # wants typed/representation values, same as a `Kernel`.
+        # A genuinely interpreted fallback runs Python code, which takes Python values: real strings,
+        # not codes. A fallback backed by a compiled dispatcher (`Rows[Item]`) still wants
+        # typed/representation values, same as a `Kernel`.
         python = isinstance(unit, Fallback) and not isinstance(unit.fn, Dispatcher)
         # Every call of a unit runs on every row the unit runs on, so validating
         # them all here is validating exactly the nodes that run.
@@ -115,9 +120,12 @@ class SteppedRunner(InterpretedRunner):
         values: dict[int, np.ndarray] = {}
         valid: dict[int, np.ndarray] = {}
         alive: list = []
-        for decl, v, path, want, kind, build in self._reads[id(unit)]:
+        for decl, v, path, want, kind, build, raw in self._reads[id(unit)]:
             x, mask = state.read(v, rows)
-            if not python and x.dtype == object:
+            # `Raw[...]` and `Rows[...]` are a contract about the value, not an optimisation, so
+            # their representation is built for a step running in Python too, where every other
+            # annotation wants the Python value instead.
+            if x.dtype == object and (raw or not python):
                 if kind is None:
                     # A boxed number (a `missing_as` fill, an input absent from the frame): just cast it.
                     if mask is not None:
@@ -164,7 +172,7 @@ class SteppedRunner(InterpretedRunner):
         return converted
 
 
-def _external(unit: Unit) -> tuple[tuple[Input, Version, str, np.dtype | None, Any, Any], ...]:
+def _external(unit: Unit) -> tuple[tuple[Input, Version, str, np.dtype | None, Any, Any, bool], ...]:
     # What a unit reads from outside itself, with the null policy that applies, the dtype a number is
     # read as, and how an object array of it becomes what the kernel takes. Everything here is decided
     # once per plan: a single record has no time for annotation introspection per call.
@@ -174,7 +182,7 @@ def _external(unit: Unit) -> tuple[tuple[Input, Version, str, np.dtype | None, A
     reads += [(Input(v.name, base_annotation(v.annotation)), v, "") for v in getattr(unit, "passthrough", ())]
     row = any(c.node.kind == "row" for c in unit.calls)
     return tuple((i, v, path, numpy_dtype(b) if (b := base_annotation(i.annotation)) in (float, int, bool) else None,
-                  *_boxed(i, row)) for i, v, path in reads)
+                  *_boxed(i, row), is_raw(i.annotation)) for i, v, path in reads)
 
 
 def _boxed(decl: Input, row: bool) -> tuple[Any, Any]:
