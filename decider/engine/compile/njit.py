@@ -38,6 +38,10 @@ _COMPILE_ERRORS = (*FALLBACK_ERRORS, NotImplementedError, AssertionError)
 
 _DECLARED_CALLEE = "calls the @allow_fallback function"
 
+# Opt-in: a `Rows[Item]` step joins the shared array kernel, which takes the flat per-field
+# arrays and slices them per row inside it, instead of one dispatcher call per row.
+RAGGED_IN_KERNEL = bool(os.environ.get("DECIDER_RAGGED_IN_KERNEL"))
+
 # ponytail: unbounded, one entry per distinct function content; add eviction if a long session edits steps thousands of times.
 _DISPATCHERS: dict[str, Dispatcher] = {}
 _REASONS: dict[tuple, str | None] = {}
@@ -147,8 +151,12 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None, bool]:
     if reason is not None and undeclared:
         reason = f"calls '{undeclared[0]}' without @helper or @allow_fallback: {reason}"
     # Each parent row owns a different number of child rows, so `Rows[Item]` can't sit in the
-    # shared array kernel; it still runs compiled, one call per row.
-    if reason is None and rows_inputs:
+    # shared array kernel; it still runs compiled, one call per row. An OPTIONAL one stays there
+    # whatever the flag says: one kernel has one signature, and no kernel value is both a
+    # namedtuple of views and `None`.
+    if reason is None and rows_inputs and not (
+            RAGGED_IN_KERNEL and node.kind == "scalar"
+            and all(i.null_policy is not NullPolicy.OPTIONAL for i in rows_inputs)):
         names = ", ".join(f"'{i.name}'" for i in rows_inputs)
         return key, dispatcher, (f"reads {names} as Rows[...], which runs one call per row, "
                                  "outside the shared kernel"), declared
