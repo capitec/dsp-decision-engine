@@ -9,7 +9,7 @@ from numba.core.dispatcher import Dispatcher
 
 from decider.engine.boundary.nulls import MissingInputError
 from decider.engine.compile import Fallback, Unit, compile_plan, numpy_dtype
-from decider.engine.compile.rows import build_rows
+from decider.engine.compile.rows import build_rows, rows_needs_no_fill
 from decider.engine.ir.decls import Input, NullPolicy, base_annotation
 from decider.engine.run.params import RunParams
 from decider.engine.run.representations import StringCodes, build_raw
@@ -49,7 +49,7 @@ class SteppedRunner(InterpretedRunner):
         self.strict = strict
         self._plan: Plan | None = None
         self.units: dict[int, Unit] = {}
-        self._reads: dict[int, tuple[tuple[Input, Version, str, np.dtype | None], ...]] = {}
+        self._reads: dict[int, tuple[tuple[Input, Version, str, np.dtype | None, tuple | None], ...]] = {}
         self._strs: dict[int, tuple[str, ...]] = {}
         self._converted: dict[tuple[str, int], tuple] = {}
         self._codes = StringCodes()
@@ -117,33 +117,33 @@ class SteppedRunner(InterpretedRunner):
         values: dict[int, np.ndarray] = {}
         valid: dict[int, np.ndarray] = {}
         alive: list = []
-        for decl, v, path, want in self._reads[id(unit)]:
+        for decl, v, path, want, schema in self._reads[id(unit)]:
             x, mask = state.read(v, rows)
-            if not python and x.dtype == object:
-                item = rows_item(decl.annotation)
-                if item is not None:
-                    schema = rows_schema(item)
-                    full = state.representation(v, ("rows", schema),
-                                                lambda values, source, kept: build_rows(values, schema))
-                elif base_annotation(decl.annotation) in (str, bytes):
+            if schema is not None and x.dtype == object:
+                # A `Rows[...]` step reads the arrays even in Python: that is the value it declares.
+                full = state.representation(
+                    v, ("rows", schema),
+                    lambda values, source, kept: build_rows(values, schema, source, kept))
+                x = full if rows is None else full[rows]
+            elif not python and x.dtype == object:
+                if base_annotation(decl.annotation) in (str, bytes):
                     kind = representation_for(decl.annotation, row=any(c.node.kind == "row" for c in unit.calls))
                     full = state.representation(
                         v, kind,
                         lambda values, source, kept: self._typed(values, None, decl, kept, source),
                     )
+                    x = full if rows is None else full[rows]
                 else:
                     # A boxed number (a `missing_as` fill, an input absent from the frame): just cast it.
-                    full = None
                     x = self._typed(x, mask, decl, alive, None)
-                if full is not None:
-                    x = full if rows is None else full[rows]
             elif not python and want is not None and x.dtype != want and np.can_cast(x.dtype, want):
                 # An int column read as `float` (another step reads it as `int`): a kernel types what it gets.
                 x = x.astype(want)
             if mask is not None and not mask.all():
                 if decl.null_policy is NullPolicy.REQUIRED:
                     raise MissingInputError(decl.name, path, int((~mask).sum()), len(mask), absent=_absent(state, v))
-                if decl.null_policy is NullPolicy.MISSING_AS:
+                if (decl.null_policy is NullPolicy.MISSING_AS
+                        and not rows_needs_no_fill(decl, schema is not None)):
                     # ponytail: one fill per version per kernel; two readers with different fills share the first.
                     x = fill_missing(x, mask, decl.fill).astype(x.dtype, copy=False)
                 valid[v.id] = mask
@@ -197,13 +197,17 @@ class SteppedRunner(InterpretedRunner):
         return converted
 
 
-def _external(unit: Unit) -> tuple[tuple[Input, Version, str, np.dtype | None], ...]:
-    # What a unit reads from outside itself, with the null policy that applies and the dtype a number is read as.
+def _external(unit: Unit) -> tuple[tuple[Input, Version, str, np.dtype | None, tuple | None], ...]:
+    # What a unit reads from outside itself: the null policy that applies, the dtype a number is
+    # read as, and an `Item` schema for a `Rows[...]` input. Resolved once per plan, so no read
+    # introspects an annotation.
     inside = {v.id for c in unit.calls for v in c.writes} | getattr(unit, "inner", set())
     reads = [(i, v, c.node.origin.path) for c in unit.calls for i, v in zip(c.node.inputs, c.reads) if v.id not in inside]
     # A value a packed branch or loop only copies needs no policy: a null in it sends the run down the unpacked path.
     reads += [(Input(v.name, base_annotation(v.annotation)), v, "") for v in getattr(unit, "passthrough", ())]
-    return tuple((i, v, path, numpy_dtype(b) if (b := base_annotation(i.annotation)) in (float, int, bool) else None)
+    return tuple((i, v, path,
+                  numpy_dtype(b) if (b := base_annotation(i.annotation)) in (float, int, bool) else None,
+                  None if (item := rows_item(i.annotation)) is None else rows_schema(item))
                  for i, v, path in reads)
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
+from functools import lru_cache
 from typing import Any, Generic, NamedTuple, TypeVar, get_args, get_origin, get_type_hints
 
 T = TypeVar("T")
@@ -34,14 +35,39 @@ class Raw(Generic[T]):
 
 
 class Rows(Generic[T]):
-    """Marker: `Item`'s list column, as one array per field, sliced per parent row."""
+    """Read a `list[dict]` column as one array per `Item` field, so a compiled step can loop over it.
+
+    An `Item` field may be `float`, `int`, `bool` or `float | None` (a null
+    reads as NaN); any other null raises, naming the item it is in. A null or
+    absent list follows the input's null policy, and `missing_as([])` reads it
+    as a row with no items.
+
+    Reach for it when the work per item is heavy or the lists are long: it
+    costs about 20 us a `score()` call to build the arrays, so a short list
+    with a one-line body is faster left as a plain `list[dict]` step.
+
+    Example::
+
+        class Item(TypedDict):
+            price: float
+
+        def total(items: Rows[Item]) -> float:
+            t = 0.0
+            for j in range(len(items.price)):
+                t += items.price[j]
+            return t
+    """
 
 
 def rows_item(annotation: Any) -> Any | None:
-    """`Item` of a `Rows[Item]` annotation, else `None`."""
+    """`Item` of a `Rows[Item]` annotation, optional or not, else `None`."""
+    if get_origin(annotation) is not Rows and is_raw(annotation):
+        annotation = raw_base(annotation)
     return get_args(annotation)[0] if get_origin(annotation) is Rows else None
 
 
+# Every run of a step reading `Rows[Item]` asks for this; `get_type_hints` costs tens of microseconds.
+@lru_cache(maxsize=None)
 def rows_schema(item: Any) -> tuple[tuple[str, Any], ...]:
     """`Item`'s fields in declaration order, as `(name, type)` pairs."""
     return tuple(get_type_hints(item).items())
