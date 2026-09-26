@@ -96,7 +96,7 @@ class InterpretedRunner:
         m = scope.count(state.n)
         bundle = params.bundle(call.id, m)
         # Plain Python scalars, not numpy ones: `x / 0.0` must raise here as it does in a kernel.
-        cols = [_argument(state, v, i, scope.rows, node.origin.path).tolist()
+        cols = [_argument(state, v, i, scope.rows, node.origin.path, node.kind).tolist()
                 for i, v in zip(node.inputs, call.reads)]
         rows = zip(*cols) if cols else repeat((), m)
         results: list = []
@@ -193,7 +193,8 @@ def _note(e: BaseException, text: str) -> None:
         e.add_note(text)
 
 
-def _argument(state: State, version: Version, decl: Input, rows: np.ndarray | None, path: str) -> np.ndarray:
+def _argument(state: State, version: Version, decl: Input, rows: np.ndarray | None, path: str,
+              node_kind: str = "scalar") -> np.ndarray:
     values, valid = state.read(version, None)
     span = False
     item = rows_item(decl.annotation) if values.dtype == object else None
@@ -212,6 +213,11 @@ def _argument(state: State, version: Version, decl: Input, rows: np.ndarray | No
                                               lambda v, s, a: _spans(decl.name, v))
             elif kind is Representation.RAW_STRING:
                 values = state.representation(version, kind, lambda v, s, a: codes(v))
+            elif kind is Representation.SEMANTIC_BYTES and node_kind == "scalar":
+                # `bytes` declares how a step reads a string column: as its UTF-8 bytes. A tree
+                # matches on the strings themselves, so only a scalar step is given the bytes.
+                values = state.representation(version, (kind, "encoded"),
+                                              lambda v, s, a: _encoded(decl.name, v))
     if rows is not None:
         values = values[rows]
         valid = None if valid is None else valid[rows]
@@ -231,6 +237,13 @@ def _argument(state: State, version: Version, decl: Input, rows: np.ndarray | No
     values = values.astype(object)
     values[missing] = None
     return values
+
+
+def _encoded(name: str, values: np.ndarray) -> np.ndarray:
+    try:
+        return np.array([v if v is None or isinstance(v, bytes) else str.encode(v) for v in values], object)
+    except TypeError as e:
+        raise TypeError(f"'{name}' is a string input: {e}") from None
 
 
 def _spans(name: str, values: np.ndarray) -> np.ndarray:
