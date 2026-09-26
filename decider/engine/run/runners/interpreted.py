@@ -7,7 +7,7 @@ import numpy as np
 import polars as pl
 
 from decider.engine.boundary.nulls import MissingInputError
-from decider.engine.compile.rows import build_rows
+from decider.engine.compile.rows import build_rows, rows_needs_no_fill
 from decider.engine.ir.decls import Input, NullPolicy, base_annotation
 from decider.engine.run.params import RunParams
 from decider.engine.run.representations import StringCodes, build_raw
@@ -194,18 +194,17 @@ def _note(e: BaseException, text: str) -> None:
 def _argument(state: State, version: Version, decl: Input, rows: np.ndarray | None, path: str,
              codes: StringCodes) -> np.ndarray:
     values, valid = state.read(version, None)
-    if values.dtype == object:
-        item = rows_item(decl.annotation)
-        if item is not None:
-            schema = rows_schema(item)
-            values = state.representation(version, ("rows", schema),
-                                          lambda v, s, a: build_rows(v, schema))
-        elif base_annotation(decl.annotation) in (str, bytes):
-            # Never the row-only span/code shape here: interpreted trees keep real str/bytes values.
-            kind = representation_for(decl.annotation, row=False)
-            if kind in (Representation.RAW_STRING, Representation.RAW_BYTES):
-                values = state.representation(version, kind,
-                                              lambda v, s, a: build_raw(kind, v, None, a, s, codes))
+    item = rows_item(decl.annotation) if values.dtype == object else None
+    if item is not None:
+        schema = rows_schema(item)
+        values = state.representation(version, ("rows", schema),
+                                      lambda v, s, a: build_rows(v, schema, s, a))
+    elif values.dtype == object and base_annotation(decl.annotation) in (str, bytes):
+        # Never the row-only span/code shape here: interpreted trees keep real str/bytes values.
+        kind = representation_for(decl.annotation, row=False)
+        if kind in (Representation.RAW_STRING, Representation.RAW_BYTES):
+            values = state.representation(version, kind,
+                                          lambda v, s, a: build_raw(kind, v, None, a, s, codes))
     if rows is not None:
         values = values[rows]
         valid = None if valid is None else valid[rows]
@@ -215,7 +214,8 @@ def _argument(state: State, version: Version, decl: Input, rows: np.ndarray | No
     if decl.null_policy is NullPolicy.REQUIRED:
         raise MissingInputError(decl.name, path, int(missing.sum()), len(valid), absent=_absent(state, version))
     if decl.null_policy is NullPolicy.MISSING_AS:
-        return fill_missing(values, valid, decl.fill)
+        # A null row of a `Rows[...]` input already reads as a row with no items.
+        return values if rows_needs_no_fill(decl, item is not None) else fill_missing(values, valid, decl.fill)
     values = values.astype(object)
     values[missing] = None
     return values
