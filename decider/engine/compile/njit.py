@@ -38,10 +38,6 @@ _COMPILE_ERRORS = (*FALLBACK_ERRORS, NotImplementedError, AssertionError)
 
 _DECLARED_CALLEE = "calls the @allow_fallback function"
 
-# Opt-in: a `Rows[Item]` step joins the shared array kernel, which takes the flat per-field
-# arrays and slices them per row inside it, instead of one dispatcher call per row.
-RAGGED_IN_KERNEL = bool(os.environ.get("DECIDER_RAGGED_IN_KERNEL"))
-
 # ponytail: unbounded, one entry per distinct function content; add eviction if a long session edits steps thousands of times.
 _DISPATCHERS: dict[str, Dispatcher] = {}
 _REASONS: dict[tuple, str | None] = {}
@@ -150,13 +146,12 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None, bool]:
     reason = _REASONS[key, sig]
     if reason is not None and undeclared:
         reason = f"calls '{undeclared[0]}' without @helper or @allow_fallback: {reason}"
-    # Each parent row owns a different number of child rows, so `Rows[Item]` can't sit in the
-    # shared array kernel; it still runs compiled, one call per row. An OPTIONAL one stays there
-    # whatever the flag says: one kernel has one signature, and no kernel value is both a
-    # namedtuple of views and `None`.
+    # A `Rows[...]` input joins the shared array kernel as flat per-field arrays sliced per row,
+    # unless it's OPTIONAL: one kernel has one signature, and no kernel value is both a namedtuple
+    # of views and `None`. A row node (a tree/table/scorecard feature) keeps the per-row dispatcher
+    # too: nothing wires a ragged source into a row node's feature tuple yet.
     if reason is None and rows_inputs and not (
-            RAGGED_IN_KERNEL and node.kind == "scalar"
-            and all(i.null_policy is not NullPolicy.OPTIONAL for i in rows_inputs)):
+            node.kind == "scalar" and all(i.null_policy is not NullPolicy.OPTIONAL for i in rows_inputs)):
         names = ", ".join(f"'{i.name}'" for i in rows_inputs)
         return key, dispatcher, (f"reads {names} as Rows[...], which runs one call per row, "
                                  "outside the shared kernel"), declared
@@ -298,6 +293,14 @@ def _input_type(inp: Input) -> Any:
     return types.Optional(t) if inp.null_policy is NullPolicy.OPTIONAL else t
 
 
+def _has_span(ins: list) -> bool:
+    # A top-level `bytes` input is typed `SPAN` directly; a `Rows[...]` input is a namedtuple
+    # whose `str` fields are each an array of `SPAN`, so `SPAN in ins` alone misses it.
+    return any(t is SPAN or (isinstance(t, types.BaseNamedTuple)
+                             and any(getattr(f, "dtype", None) is SPAN for f in t.types))
+              for t in ins)
+
+
 def _probe_signature(node: CallNode) -> tuple | None:
     # Typed as the values the kernel will pass; None when a value has no numba
     # type (a table param), and the node then compiles on first use instead.
@@ -307,14 +310,14 @@ def _probe_signature(node: CallNode) -> tuple | None:
         bundle, consts = default_bundle(node), tuple(v for _, v in node.consts)
         ins = [_input_type(i) for i in node.inputs]
         if node.kind == "row":
-            if SPAN in ins and node.params:
+            if _has_span(ins) and node.params:
                 # A `str` param of a node reading `bytes` reaches the kernel as a span of its UTF-8 bytes.
                 bundle = bundle._replace(**{d.name: (0, 0) for d in node.params if d.annotation is str})
             return (types.Tuple(tuple(ins)), typeof(bundle), typeof(consts))
         by_arg = {i.arg: t for i, t in zip(node.inputs, ins)}
-        # A `str` param of a node reading `bytes` reaches the kernel as a span of its UTF-8 bytes;
-        # otherwise as the int32 code of its literal.
-        par = types.UniTuple(types.int64, 2) if SPAN in ins else types.int32
+        # A `str` param of a node reading `bytes` (or a `Rows[...]` item field) reaches the kernel
+        # as a span of its UTF-8 bytes; otherwise as the int32 code of its literal.
+        par = types.UniTuple(types.int64, 2) if _has_span(ins) else types.int32
         by_arg |= {d.arg: par if d.annotation is str else typeof(v) for d, v in zip(node.params, bundle)}
         by_arg |= {name: typeof(v) for name, v in node.consts}
         return tuple(by_arg[p] for p in parameters(node.fn))

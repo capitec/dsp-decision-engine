@@ -1,11 +1,9 @@
 """A `decider.loop` over bundle masks whose body sums the bundle's items, three ways.
 
-Today the body reads `items: Rows[Item]`, which runs one dispatcher call per row and
-keeps the loop out of one kernel. `DECIDER_RAGGED_IN_KERNEL=1` lets it join, so the
-loop packs. The hand-written `@njit` search is the ceiling.
+The body reads `items: Rows[Item]`, sliced out of flat per-field arrays inside the
+loop's own kernel, so the loop packs. The hand-written `@njit` search is the ceiling.
 
     uv run python benchmarks/bundle_search.py [items] [orders]
-    DECIDER_RAGGED_IN_KERNEL=1 uv run python benchmarks/bundle_search.py 16 4
 """
 import gc
 import statistics
