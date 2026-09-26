@@ -9,6 +9,7 @@ from decider.engine.compile.kernel import Spec, fused_kernel
 from decider.engine.compile.njit import FALLBACK_ERRORS, compile_call, numpy_dtype, parameters
 from decider.engine.ir.decls import Input, NullPolicy, base_annotation, nullable
 from decider.engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, Sequence, Version
+from decider.types import rows_item, rows_schema
 
 Values = dict[int, np.ndarray]
 
@@ -31,15 +32,17 @@ class Kernel:
         unit.run(values, {}, bundles, n)
     """
 
-    __slots__ = ("calls", "fn", "reads", "optional", "writes", "_masked", "_layout", "_choices", "_python")
+    __slots__ = ("calls", "fn", "reads", "optional", "ragged", "writes", "_masked", "_layout", "_choices",
+                 "_python")
     # Whether a kernel numba can't build runs its calls one by one instead.
     splits = True
 
-    def __init__(self, calls, fn, reads, optional, writes, masked, layout, choices):
+    def __init__(self, calls, fn, reads, optional, writes, masked, layout, choices, ragged=()):
         self.calls: tuple[Call, ...] = calls
         self.fn = fn
         self.reads: tuple[Version, ...] = reads
         self.optional: tuple[Version, ...] = optional
+        self.ragged: tuple[Version, ...] = ragged
         self.writes: tuple[tuple[Version, np.dtype], ...] = writes
         self._masked: tuple[int, ...] = masked
         self._layout = layout
@@ -63,10 +66,11 @@ class Kernel:
             else:
                 params += bundle
                 params += consts
+        flats = tuple([a for v in self.ragged for a in values[v.id].arrays])
         outs = [np.empty(n, dtype) for _, dtype in self.writes]
         masks = [np.empty(n, np.bool_) for _ in self._masked]
         try:
-            self.fn(n, cols, valids, tuple(params), tuple(outs + masks))
+            self.fn(n, cols, valids, tuple(params), flats, tuple(outs + masks))
         except FALLBACK_ERRORS as e:
             if not self.splits:
                 raise
@@ -290,16 +294,31 @@ class Layout:
     def __init__(self) -> None:
         self.reads: list[Version] = []
         self.optional: list[Version] = []
+        self.ragged: list[Version] = []
         self.layout: list[tuple] = []
         self.produced: dict[int, tuple] = {}
         self._cols: dict[int, int] = {}
         self._masks: dict[int, int] = {}
+        self._rag: dict[int, tuple] = {}
+        self._flats = 0
         self._p = 0
         self._specs = 0
 
     def source(self, v: Version, inp: Input | None = None) -> tuple:
         if v.id in self.produced:
             return self.produced[v.id]
+        if inp is not None and (item := rows_item(inp.annotation)) is not None:
+            schema = rows_schema(item)
+            source = self._rag.get(v.id)
+            if source is None:
+                source = self._rag[v.id] = ("rag", schema, self._flats)
+                self._flats += 2 + len(schema)
+                self.ragged.append(v)
+            elif source[1] != schema:
+                # One `flats` block per column, so a second Item would silently get the first's fields.
+                raise TypeError(f"'{v.name}' is read as Rows[...] with two different Item types in one "
+                                "kernel; give the second reader its own python_only step")
+            return source
         if v.id not in self._cols:
             self._cols[v.id] = len(self.reads)
             self.reads.append(v)
@@ -355,5 +374,5 @@ def _kernel(compiled: list, keep) -> Kernel:
                 choices.append(literal_choices(call.node.outputs[k].annotation))
     fn = fused_kernel(tuple(specs), tuple(outputs))
     return Kernel(calls, fn, tuple(lay.reads), tuple(lay.optional), tuple(writes), tuple(masked), tuple(lay.layout),
-                  tuple(choices))
+                  tuple(choices), tuple(lay.ragged))
 
