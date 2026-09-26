@@ -11,7 +11,7 @@ from typing import Any, Callable
 import numpy as np
 from numba import from_dtype, njit, typeof
 from numba.core import types
-from numba.core.caching import FunctionCache
+from numba.core.caching import FunctionCache, NullCache
 from numba.core.dispatcher import Dispatcher
 from numba.core.errors import NumbaError, UnsupportedBytecodeError
 
@@ -68,10 +68,13 @@ def jit(fn: Callable) -> tuple[str, Dispatcher]:
         return key, _DISPATCHERS.setdefault(key, fn)
     dispatcher = _DISPATCHERS.get(key)
     if dispatcher is None:
-        # numba's disk cache needs a real source file, and never hits for a closure.
         dispatcher = _DISPATCHERS[key] = njit(fn)
-        if fn.__closure__ is None and os.path.isfile(fn.__code__.co_filename):
-            dispatcher._cache = _SaltedCache(fn)
+    # numba's disk cache needs a real source file and never hits for a closure. Dispatchers are
+    # shared by content, so the first sight of this code may have been a notebook cell or an
+    # exec'd block: attach the cache as soon as any copy of it does have a file, or a step stays
+    # uncacheable for the life of the process and `decider build` warms nothing for it.
+    if isinstance(dispatcher._cache, NullCache) and fn.__closure__ is None and os.path.isfile(fn.__code__.co_filename):
+        dispatcher._cache = _SaltedCache(fn)
     return key, dispatcher
 
 
