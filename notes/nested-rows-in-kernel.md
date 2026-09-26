@@ -115,10 +115,13 @@ and 0.206 ms here, i.e. +/- 2.5x of run-to-run noise on the small numbers.
 
 **`run()`, p50:**
 
-| items | bundles | orders | today | in kernel | hand-written |
-|---:|---:|---:|---:|---:|---:|
-| 9 | 511 | 100 | 469.6 ms | **4.73 ms** | 0.73 ms |
-| 16 | 65,535 | 4 | 13,262 ms | **30.2 ms** | 24.4 ms |
+| items | bundles | today | in kernel | hand-written |
+|---:|---:|---:|---:|---:|
+| 9 | 511 | 469.6 ms / 100 orders | **4.73 ms / 100 orders** | 0.73 ms / 100 orders |
+| 16 | 65,535 | 13,262 ms / **1** order | **30.2 ms / 4 orders** | 24.4 ms / 4 orders |
+
+(The 16-item "today" column is one order, because four of them is three and a half
+minutes per repetition. Per order that is 13,262 ms against 7.6 ms.)
 
 And the fallback report, which is the whole question in two lines:
 
