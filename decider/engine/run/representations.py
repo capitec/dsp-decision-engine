@@ -3,49 +3,34 @@ give the same value regardless of `mode=`.
 """
 from __future__ import annotations
 
-import threading
-from typing import Any
+import ctypes
 
 import numpy as np
 import polars as pl
 
 from decider.engine.ir.decls import Input, NullPolicy
-from decider.types import Representation, raw_string_codes
+from decider.types import string_code
+
+# A `bytes` object's own buffer, without the microsecond `np.ndarray.ctypes.data` costs.
+_address = ctypes.pythonapi.PyBytes_AsString
+_address.restype = ctypes.c_void_p
+_address.argtypes = (ctypes.py_object,)
 
 
-class StringCodes:
-    """Codes shared with `raw_str()`'s symbolic constants, plus any value seen at runtime."""
-
-    def __init__(self) -> None:
-        self._codes: dict[str, int] = dict(raw_string_codes())
-        self._lock = threading.Lock()
-
-    def encode(self, values: np.ndarray) -> np.ndarray:
-        with self._lock:
-            self._codes.update(raw_string_codes())
-            codes = {s: self._codes.setdefault(s, len(self._codes)) for s in values}
-        return np.fromiter((codes[s] for s in values), np.int32, len(values))
-
-    def bundle(self, name: str, value: str) -> np.int32:
-        with self._lock:
-            self._codes.update(raw_string_codes())
-            return np.int32(self._codes.setdefault(value, len(self._codes)))
+def codes(values: np.ndarray) -> np.ndarray:
+    """Strings as int32 dictionary codes, the same ones `raw_str()` gives its constants."""
+    return np.fromiter(map(string_code, values), np.int32, len(values))
 
 
 def spans(x: np.ndarray, mask: np.ndarray | None, alive: list, source: pl.Series | None) -> np.ndarray:
     """Strings as `(address, byte length)` spans into Arrow memory, -1 for a null; zero-copy where it can."""
-    from decider.engine.boundary.extract import extract_frame
-
     if mask is not None:
         x = np.where(mask, x, None)
     if len(x) <= 32:
-        # A few records (score): encoding them beats building a frame to export.
-        raw = [None if s is None else str.encode(s) for s in x]
-        buffer = np.frombuffer(b"".join(b for b in raw if b) or bytes(1), np.uint8)
-        alive.append(buffer)
-        lengths = np.array([-1 if b is None else len(b) for b in raw], np.int64)
-        starts = np.cumsum(np.maximum(lengths, 0)) - np.maximum(lengths, 0)
-        return np.stack([buffer.ctypes.data + starts, lengths], axis=1)
+        # A few records (score): borrowing each value's own bytes beats building a frame to export.
+        return _borrowed(x, alive)
+    from decider.engine.boundary.extract import extract_frame
+
     # The input frame's own column when it holds these values, else a copy (an override, a row subset).
     if source is None or source.dtype != pl.String:
         source = pl.Series(x.tolist(), dtype=pl.String)
@@ -54,11 +39,17 @@ def spans(x: np.ndarray, mask: np.ndarray | None, alive: list, source: pl.Series
     return extracted.columns["s"].values
 
 
-def build_raw(kind: Representation, values: np.ndarray, mask: np.ndarray | None, alive: list,
-              source: pl.Series | None, codes: StringCodes) -> np.ndarray:
-    """`RAW_STRING`/`RAW_BYTES`: the same representation in every runner. Other kinds pass through."""
-    if kind is Representation.RAW_BYTES:
-        return spans(values, mask, alive, source)
-    if kind is Representation.RAW_STRING:
-        return codes.encode(values)
-    return values
+def _borrowed(x: np.ndarray, alive: list) -> np.ndarray:
+    # The spans point into the `bytes` objects `kept` holds, so it goes in `alive`
+    # with them: dropping it while a kernel still reads the spans is a dangling pointer.
+    kept: list[bytes] = []
+    flat: list[int] = []
+    for s in x.tolist():
+        if s is None:
+            flat += (0, -1)
+            continue
+        b = str.encode(s)   # unbound: a non-str value is the TypeError the caller names
+        kept.append(b)
+        flat += (_address(b), len(b))
+    alive.append(kept)
+    return np.array(flat, np.int64).reshape(len(x), 2)

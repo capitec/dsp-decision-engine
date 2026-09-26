@@ -1,15 +1,20 @@
 """Compiled modes run unsupported values in Python and semantic strings one call per row."""
+import ctypes
 import datetime as dt
+import gc
 import warnings
 
+import numpy as np
 import polars as pl
 import pytest
 
 from decider.exceptions import WiringError
 
-from decider import Raw, flow, missing_as, raw_str
+from decider import Raw, branch, flow, missing_as, raw_str, step
 from decider.engine import Engine
+from decider.engine.boundary._arrow.intrinsics import load_u8
 from decider.engine.compile import Fallback, Kernel
+from decider.engine.run.representations import spans
 from decider.testing import assert_equivalent
 
 COMPILED = ("stepped", "fused")
@@ -208,11 +213,20 @@ def test_raw_string_gives_the_same_answer_in_every_mode(mode):
     assert out["is_raw_priority"].to_list() == [True, False]
 
 
-@pytest.mark.parametrize("mode", COMPILED)
-def test_raw_string_constants_are_preconverted(mode):
-    exe = Engine().bind(flow(is_raw_priority, name="p"), mode=mode)
-    out = exe.run(pl.DataFrame({"value": ["priority", "other"]}))
-    assert out["is_raw_priority"].to_list() == [True, False]
+def code_of(value: Raw[str]) -> Raw[str]:
+    return value
+
+
+@pytest.mark.parametrize("mode", ("interpreted", *COMPILED))
+def test_a_constant_named_after_a_run_never_renumbers_a_value_it_saw(mode):
+    # raw_str() and the runtime encoder draw codes from one table: two would hand the same
+    # code to a constant and to a value already seen, and a step would match the wrong string.
+    exe = Engine().bind(flow(code_of, name="p"), mode=mode)
+    frame = pl.DataFrame({"value": ["walk-in", "broker"]})
+    before = exe.run(frame)["code_of"].to_list()
+    assert len(set(before)) == 2
+    raw_str("broker")
+    assert exe.run(frame)["code_of"].to_list() == before
 
 
 @pytest.mark.parametrize("mode", COMPILED)
@@ -228,3 +242,52 @@ def test_list_input_fallback_is_rejected_in_strict_mode(mode):
     exe = Engine(strict_compile=True).bind(flow(order_total, name="order"), mode=mode)
     with pytest.raises(ValueError, match="order/order_total runs in Python, row by row"):
         exe.score({"items": [{"price": 2.0}]})
+
+
+def byte_sum(value: Raw[bytes]) -> int:
+    total = 0
+    for k in range(value[1]):
+        total += load_u8(value[0] + k)
+    return total
+
+
+def first_byte(value: Raw[bytes]) -> int:
+    return load_u8(value[0])
+
+
+def is_long(value: Raw[bytes]) -> bool:
+    return value[1] > 5
+
+
+gated_bytes = branch(is_long, step(byte_sum, output="n"), step(first_byte, output="n"),
+                     modifies=["n"], name="by")
+
+
+@pytest.mark.parametrize("mode", COMPILED)
+def test_a_span_keeps_the_bytes_it_borrows_alive_while_a_kernel_reads_them(mode):
+    # A span is an address, so whatever holds the bytes must outlive every kernel that
+    # reads it. Churning the allocator turns a dropped reference into wrong bytes
+    # instead of a lucky pass.
+    values, alive = np.array(["priority", "other"], object), []
+    out = spans(values, None, alive, None)
+    del values
+    gc.collect()
+    churn = [bytes([0x7f]) * n for n in range(1, 40) for _ in range(20)]
+    assert [ctypes.string_at(int(a), int(n)) for a, n in out.tolist()] == [b"priority", b"other"]
+    del churn
+
+    df = pl.DataFrame({"value": ["priority", "other"]})
+    whole = [sum(b"priority"), sum(b"other")]
+    exe = Engine().bind(flow(byte_sum, name="p"), mode=mode)
+    assert exe.run(df)["byte_sum"].to_list() == whole
+    assert [exe.score({"value": v})["byte_sum"] for v in ("priority", "other")] == whole
+
+    # A branch arm reads a row subset of the spans, and a session override replaces the column.
+    per_arm = [sum(b"priority"), ord("o")]
+    assert Engine().bind(gated_bytes, mode=mode).run(df)["n"].to_list() == per_arm
+    s = gated_bytes.session(df, mode=mode)
+    s.break_at("by")
+    s.resume()
+    s.set("value", ["other", "priority"])
+    s.resume()
+    assert s.output()["n"].to_list() == per_arm[::-1]

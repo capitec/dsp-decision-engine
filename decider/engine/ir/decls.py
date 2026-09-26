@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum, IntEnum
+import functools
 import types
 import typing
 from typing import Any, Literal
@@ -63,6 +64,7 @@ def feature_kind(annotation: Any) -> FeatureKind:
     return _KIND_BY_ANNOTATION.get(kind_annotation, FeatureKind.F64)
 
 
+@functools.lru_cache(maxsize=1024)
 def base_annotation(annotation: Any) -> Any:
     """`T` for an optional `T | None`, else the annotation itself.
 

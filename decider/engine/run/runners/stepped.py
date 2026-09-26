@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import warnings
-from typing import Iterator
+from functools import partial
+from typing import Any, Iterator
 
 import numpy as np
 import polars as pl
@@ -12,11 +13,11 @@ from decider.engine.compile import Fallback, Unit, compile_plan, numpy_dtype
 from decider.engine.compile.rows import build_rows
 from decider.engine.ir.decls import Input, NullPolicy, base_annotation
 from decider.engine.run.params import RunParams
-from decider.engine.run.representations import StringCodes, build_raw
+from decider.engine.run.representations import codes, spans
 from decider.engine.run.runners.base import Checkpoint
 from decider.engine.run.runners.interpreted import InterpretedRunner, _absent, _note, _Scope
 from decider.engine.run.state import State, fill_missing
-from decider.types import Representation, is_raw, representation_for, rows_item, rows_schema
+from decider.types import Representation, representation_for, rows_item, rows_schema
 from decider.engine.wiring.plan import Call, Plan, Version
 
 
@@ -24,16 +25,16 @@ class SteppedRunner(InterpretedRunner):
     """Runs every scalar and row node as its own numba kernel, with a Python driver in between.
 
     Pauses at every node, like the interpreted runner. Frame steps, branches
-    and loops run in Python. A `str` value enters a kernel as an int32 code
-    and a `str` param as the code of its literal, so a step compares a `str`
-    input against a `str` param exactly as it does in plain Python. A `bytes`
-    input enters as an `(address, byte length)` span of its UTF-8 bytes, and
-    then so does each `str` param of that node. A Python fallback gets plain
-    Python values.
+    and loops run in Python. A `Raw[str]` value enters a kernel as the int32
+    dictionary code `raw_str()` gives that string. A `bytes` input enters as
+    an `(address, byte length)` span of its UTF-8 bytes, and then so does
+    each `str` param of that node. A Python fallback gets plain Python
+    values.
 
-    A step no kernel can run faithfully (it compares two `str` inputs, or a
-    `str` input with a literal) runs in Python instead, with a warning
-    naming it. With `strict=True` it raises instead.
+    A step no array kernel can hold (it reads or writes a semantic `str`, or
+    takes `Rows[Item]`) still runs compiled, one call per row, with a warning
+    naming it; one numba cannot compile at all runs in Python instead, and
+    with `strict=True` that raises.
 
     Example::
 
@@ -49,11 +50,9 @@ class SteppedRunner(InterpretedRunner):
         self.strict = strict
         self._plan: Plan | None = None
         self.units: dict[int, Unit] = {}
-        self._reads: dict[int, tuple[tuple[Input, Version, str, np.dtype | None], ...]] = {}
+        self._reads: dict[int, tuple[tuple[Input, Version, str, np.dtype | None, Any, Any], ...]] = {}
         self._strs: dict[int, tuple[str, ...]] = {}
         self._converted: dict[tuple[str, int], tuple] = {}
-        self._codes = StringCodes()
-        self._spans: set[int] = set()
         self._alive: dict[tuple[str, int], dict] = {}
         self._fallbacks: dict[str, str] = {}
 
@@ -66,9 +65,8 @@ class SteppedRunner(InterpretedRunner):
     def _compile(self, plan: Plan, lazy: bool) -> None:
         python: dict[int, str] = {}
         # A row node reading `bytes` compares bytes, so its `str` params go in as UTF-8 spans.
-        self._spans = {c.id for c in plan.calls if c.node.kind == "row" and _reads_bytes(c)}
-        strs = {k: tuple(d.name for d in c.node.params if d.annotation is str)
-                for c in plan.calls if (k := c.id) in self._spans}
+        strs = {c.id: names for c in plan.calls if c.node.kind == "row" and _reads_bytes(c)
+                and (names := tuple(d.name for d in c.node.params if d.annotation is str))}
         self.units = compile_plan(plan, fuse=self.fuse, python=python)
         self._fallbacks = {}
         for unit in self.units.values():
@@ -89,7 +87,7 @@ class SteppedRunner(InterpretedRunner):
                 warnings.warn(message, stacklevel=4)
         self._python = python
         self._reads = {id(unit): _external(unit) for unit in self.units.values()}
-        self._strs = {k: v for k, v in strs.items() if v}
+        self._strs = strs
         # Converted bundles are keyed by call id, which means another call in another plan.
         self._converted, self._alive = {}, {}
         self._plan = plan
@@ -117,25 +115,16 @@ class SteppedRunner(InterpretedRunner):
         values: dict[int, np.ndarray] = {}
         valid: dict[int, np.ndarray] = {}
         alive: list = []
-        for decl, v, path, want in self._reads[id(unit)]:
+        for decl, v, path, want, kind, build in self._reads[id(unit)]:
             x, mask = state.read(v, rows)
             if not python and x.dtype == object:
-                item = rows_item(decl.annotation)
-                if item is not None:
-                    schema = rows_schema(item)
-                    full = state.representation(v, ("rows", schema),
-                                                lambda values, source, kept: build_rows(values, schema))
-                elif base_annotation(decl.annotation) in (str, bytes):
-                    kind = representation_for(decl.annotation, row=any(c.node.kind == "row" for c in unit.calls))
-                    full = state.representation(
-                        v, kind,
-                        lambda values, source, kept: self._typed(values, None, decl, kept, source),
-                    )
-                else:
+                if kind is None:
                     # A boxed number (a `missing_as` fill, an input absent from the frame): just cast it.
-                    full = None
-                    x = self._typed(x, mask, decl, alive, None)
-                if full is not None:
+                    if mask is not None:
+                        x = np.where(mask, x, 0)
+                    x = x.astype(build)
+                else:
+                    full = state.representation(v, kind, build)
                     x = full if rows is None else full[rows]
             elif not python and want is not None and x.dtype != want and np.can_cast(x.dtype, want):
                 # An int column read as `float` (another step reads it as `int`): a kernel types what it gets.
@@ -159,25 +148,6 @@ class SteppedRunner(InterpretedRunner):
             state.write(v, values[v.id], rows, valid.get(v.id))
             scope.names[v.name] = v
 
-    def _typed(self, x: np.ndarray, mask: np.ndarray | None, decl: Input, alive: list,
-               source: pl.Series | None) -> np.ndarray:
-        raw = is_raw(decl.annotation)
-        annotation = base_annotation(decl.annotation)
-        if annotation is bytes:
-            try:
-                return build_raw(Representation.RAW_BYTES, x, mask, alive, source, self._codes)
-            except TypeError as e:
-                raise TypeError(f"'{decl.name}' is a string input: {e}") from None
-        if annotation is str and raw:
-            return build_raw(Representation.RAW_STRING, x, mask, alive, source, self._codes)
-        if annotation is str:
-            # A step reading semantic strings runs one compiled call per row, which takes the
-            # Python values as they are: numba types them as its own unicode.
-            return x
-        if mask is not None:
-            x = np.where(mask, x, 0)
-        return x.astype(numpy_dtype(base_annotation(decl.annotation)))
-
     def _bundle(self, call_id: int, params: RunParams, n: int) -> tuple:
         bundle = params.bundle(call_id, n)
         names = self._strs.get(call_id)
@@ -186,25 +156,52 @@ class SteppedRunner(InterpretedRunner):
         key = (params.key, call_id)
         converted = self._converted.get(key)
         if converted is None:
-            if call_id in self._spans:
-                utf8 = {k: np.frombuffer(getattr(bundle, k).encode(), np.uint8) for k in names}
-                # Kept with the cached bundle, whose spans point into them.
-                self._alive[key] = utf8
-                codes = {k: (b.ctypes.data, len(b)) for k, b in utf8.items()}
-            else:
-                codes = {k: self._codes.bundle(k, getattr(bundle, k)) for k in names}
-            converted = self._converted[key] = bundle._replace(**codes)
+            utf8 = {k: np.frombuffer(getattr(bundle, k).encode(), np.uint8) for k in names}
+            # Kept with the cached bundle, whose spans point into them.
+            self._alive[key] = utf8
+            pointers = {k: (b.ctypes.data, len(b)) for k, b in utf8.items()}
+            converted = self._converted[key] = bundle._replace(**pointers)
         return converted
 
 
-def _external(unit: Unit) -> tuple[tuple[Input, Version, str, np.dtype | None], ...]:
-    # What a unit reads from outside itself, with the null policy that applies and the dtype a number is read as.
+def _external(unit: Unit) -> tuple[tuple[Input, Version, str, np.dtype | None, Any, Any], ...]:
+    # What a unit reads from outside itself, with the null policy that applies, the dtype a number is
+    # read as, and how an object array of it becomes what the kernel takes. Everything here is decided
+    # once per plan: a single record has no time for annotation introspection per call.
     inside = {v.id for c in unit.calls for v in c.writes} | getattr(unit, "inner", set())
     reads = [(i, v, c.node.origin.path) for c in unit.calls for i, v in zip(c.node.inputs, c.reads) if v.id not in inside]
     # A value a packed branch or loop only copies needs no policy: a null in it sends the run down the unpacked path.
     reads += [(Input(v.name, base_annotation(v.annotation)), v, "") for v in getattr(unit, "passthrough", ())]
-    return tuple((i, v, path, numpy_dtype(b) if (b := base_annotation(i.annotation)) in (float, int, bool) else None)
-                 for i, v, path in reads)
+    row = any(c.node.kind == "row" for c in unit.calls)
+    return tuple((i, v, path, numpy_dtype(b) if (b := base_annotation(i.annotation)) in (float, int, bool) else None,
+                  *_boxed(i, row)) for i, v, path in reads)
+
+
+def _boxed(decl: Input, row: bool) -> tuple[Any, Any]:
+    # The `(kind, build)` pair `State.representation` needs for an object array of `decl`, or
+    # `(None, dtype)` for a boxed number, which is only ever cast.
+    item = rows_item(decl.annotation)
+    if item is not None:
+        schema = rows_schema(item)
+        return ("rows", schema), lambda values, source, alive: build_rows(values, schema)
+    annotation = base_annotation(decl.annotation)
+    if annotation not in (str, bytes):
+        return None, numpy_dtype(annotation)
+    kind = representation_for(decl.annotation, row=row)
+    if annotation is bytes:
+        return kind, partial(_spans, decl.name)
+    if kind is Representation.RAW_STRING:
+        return kind, lambda values, source, alive: codes(values)
+    # A step reading semantic strings runs one compiled call per row, which takes the Python
+    # values as they are: numba types them as its own unicode.
+    return kind, lambda values, source, alive: values
+
+
+def _spans(name: str, values: np.ndarray, source: pl.Series | None, alive: list) -> np.ndarray:
+    try:
+        return spans(values, None, alive, source)
+    except TypeError as e:
+        raise TypeError(f"'{name}' is a string input: {e}") from None
 
 
 def _reads_bytes(call: Call) -> bool:

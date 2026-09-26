@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from decider.engine.ir.decls import Input, base_annotation
+from decider.types import is_raw
 from decider.engine.ir.nodes import BranchNode, CallNode, IRNode, LoopNode, SequenceNode, iter_nodes
 from decider.engine.wiring.plan import Branch, Call, Carry, Loop, Merge, Plan, Resolved, Sequence, Version
 from decider.exceptions import WiringError
@@ -103,6 +104,7 @@ class _Resolver:
 
     def call(self, node: CallNode, scope: _Scope) -> Call:
         path = node.origin.path
+        _one_string_shape(node, path)
         own = {o.name for o in node.outputs or ()}
         reads = None
         if node.inputs is not None:
@@ -342,6 +344,22 @@ class _Resolver:
             tuple(dict.fromkeys(drops)), {name: tuple(chain) for name, chain in self.chains.items()},
         )
 
+
+
+def _one_string_shape(node: CallNode, path: str) -> None:
+    # A `Raw[str]` is an int32 code and a `str` is the string itself, so a node holding both
+    # compares a code with a string: always False, in every mode, with nothing to warn about.
+    coded, plain = [], []
+    for what, decls in (("input", node.inputs or ()), ("param", node.params or ())):
+        for d in decls:
+            if base_annotation(d.annotation) is str:
+                (coded if is_raw(d.annotation) else plain).append(f"{what} {d.name!r}")
+    if coded and plain:
+        raise WiringError(
+            f"{path}: {coded[0]} is Raw[str], an int32 dictionary code, but {plain[0]} is a plain str, "
+            f"so comparing them is always False. Annotate both Raw[str] to compare codes (a Raw[str] "
+            f"param is still tuned as a string), or neither to compare the strings themselves."
+        )
 
 
 def _is_typo(name: str, near: str) -> bool:
