@@ -56,8 +56,27 @@ subset two fancy indexes with no child copy. Single-record improves rather than
 regressing, because what disappears is building a namedtuple of views per row.
 
 Known limits, kept deliberately: `Rows[Item] | None` cannot join a kernel (one
-signature, no in-band `None`) and keeps the per-row path; two different `Item`
-types over one column raise.
+signature, no in-band `None`) and keeps the per-row path.
+
+**Landed** (`notes/nested-rows-in-kernel-landed.md`): the flag is gone and this
+is simply how a `Rows[...]` input works. Verified on the merged branch, fused
+`score()` per order **0.098 ms** against 60.58 ms before, `run()` over 100
+orders **3.60 ms** against 576, `packed loops: ['order/search']`, suite 1960
+passed. At 16 items and 65,535 masks it is **1.07x a hand-written `@njit`
+search**. Three things the landing turned up that the spike had not:
+
+- `Kernel.run`'s runtime retry called `.dtype` on the ragged value, which has
+  none, so a kernel failing at run time raised `AttributeError` instead of
+  falling back. Fixed, with a test that monkeypatches a joined kernel to raise.
+- The `TypeError` guard for two different `Item` types over one column is
+  **unreachable** through `flow`/`branch`/`loop`: `resolve()`'s wiring pass
+  already refuses two readers of one column declaring different types, before
+  `compile_plan` exists. Tested at the `Layout` level instead.
+- The `_probe_signature` fix for an item's `str` field compared against a `str`
+  param was not the one line the note claimed: the runtime bundle conversion had
+  to broaden too (`_reads_bytes` -> `_reads_span`), or the kernel launch got a
+  numba `unicode_type` where it wanted a span. Found by reproducing end to end
+  rather than trusting the note.
 
 ## Decision 3: an `Item` field may be a `str` — done
 
@@ -78,9 +97,31 @@ nothing breaks, and it measured 2-5x cheaper per call because numba unboxes
 **per namedtuple member**, charging a step for fields its body never reads.
 
 That performance argument was measured against the *per-row dispatcher*, which
-decision 2 removes. So the question was handed back with a measurement attached:
-does a record still pay once the step is in the kernel, or is the remaining case
-purely ergonomic? Until that answer lands, the namedtuple stays.
+decision 2 removes, so it was re-measured at the `Kernel.run` level once the
+step was in the kernel. **The performance argument no longer holds.** Per-row
+construction is now flat regardless of item count, and the residual 1.2-1.5 us
+between a 2-field and an 8-field `Item` moved to being paid **once per kernel
+launch** rather than once per row -- about 2% of a `score()` call, and nothing at
+all for a `run()` or a `loop` over more than a handful of rows.
+
+So the record array is now a **usability** question only, and it is the one the
+user asked for in §3's feedback block: today an item predicate reads
+
+    for j in range(len(items.el_1)):
+        if items.el_1[j] == 400 and items.el_2[j] == "snoop":
+
+where they want
+
+    for i in items:
+        if i.el_1 == 400 and i.el_2 == "snoop":
+
+The go/no-go is whether a record can carry a **span** field robustly, because
+`str` fields shipped in decision 3 and a record would have to keep them. That
+needs a `types.Record` subclass overriding `dtype` (its `__init__` ends with
+`self.bitwidth = self.dtype.itemsize * 8` and `SPAN` has no numpy dtype) plus
+`register_model`, which the spike called spike-grade and numba-version-fragile.
+If that is not solid, the record shape would cost us `str` fields to buy
+syntax, and the namedtuple stays.
 
 Two things that argument settled either way: today's `for i in items:` over the
 namedtuple is a **trap** (with an all-same-dtype `Item` it compiles and
