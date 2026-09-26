@@ -104,7 +104,7 @@ class Fallback:
         call = self.calls[0]
         node = call.node
         bundle = bundles[call.id] if node.params else ()
-        cols = [(i.arg, values[v.id].tolist(), valid.get(v.id) if i.null_policy is NullPolicy.OPTIONAL else None)
+        cols = [(i.arg, _per_row(values[v.id]), valid.get(v.id) if i.null_policy is NullPolicy.OPTIONAL else None)
                 for i, v in zip(node.inputs, call.reads)]
         outs = [np.empty(n, dtype) for _, dtype in self.writes]
         masks = [np.ones(n, np.bool_) for _ in outs]
@@ -129,6 +129,11 @@ class Fallback:
             choices = literal_choices(o.annotation)
             if choices is not None:
                 values[v.id] = _decode(out, choices, valid, v.id)
+
+
+def _per_row(values: np.ndarray) -> list:
+    # A record array's tolist() gives plain tuples, which a step reading a struct's fields can't read.
+    return list(values) if values.dtype.names else values.tolist()
 
 
 Unit = Union[Kernel, Fallback]
