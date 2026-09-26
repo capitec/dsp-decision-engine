@@ -7,13 +7,14 @@ import numpy as np
 import polars as pl
 
 from decider.engine.boundary.nulls import MissingInputError
+from decider.engine.compile import numpy_dtype
 from decider.engine.compile.rows import build_rows, rows_needs_no_fill
 from decider.engine.ir.decls import Input, NullPolicy, base_annotation
 from decider.engine.run.params import RunParams
 from decider.engine.run.representations import codes, span_objects
 from decider.engine.run.runners.base import Checkpoint
 from decider.engine.run.state import State, dtype_of, fill_missing, from_series
-from decider.types import Representation, representation_for, rows_item, rows_schema
+from decider.types import Representation, is_raw, representation_for, rows_item, rows_schema
 from decider.engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, Sequence, Version
 
 
@@ -125,7 +126,9 @@ class InterpretedRunner:
             raise ValueError(f"{node.origin.path}: returned {len(columns)} values per row, "
                              f"but declares {len(node.outputs)} outputs")
         for v, out, values in zip(call.writes, node.outputs, columns):
-            array, valid = _array(values, dtype_of(base_annotation(out.annotation)))
+            # A `Raw[...]` output is stored as a kernel stores it, or the modes disagree on dtype.
+            array, valid = _array(values, numpy_dtype(out.annotation) if is_raw(out.annotation)
+                                  else dtype_of(base_annotation(out.annotation)))
             state.write(v, array, scope.rows, valid)
             scope.names[v.name] = v
 
@@ -205,7 +208,8 @@ def _argument(state: State, version: Version, decl: Input, rows: np.ndarray | No
             # A `Span` answers what a compiled span answers, so both modes agree.
             span = kind is Representation.RAW_BYTES
             if span:
-                values = state.representation(version, (kind, "objects"), lambda v, s, a: span_objects(v))
+                values = state.representation(version, (kind, "objects"),
+                                              lambda v, s, a: _spans(decl.name, v))
             elif kind is Representation.RAW_STRING:
                 values = state.representation(version, kind, lambda v, s, a: codes(v))
     if rows is not None:
@@ -227,6 +231,13 @@ def _argument(state: State, version: Version, decl: Input, rows: np.ndarray | No
     values = values.astype(object)
     values[missing] = None
     return values
+
+
+def _spans(name: str, values: np.ndarray) -> np.ndarray:
+    try:
+        return span_objects(values)
+    except TypeError as e:
+        raise TypeError(f"'{name}' is a string input: {e}") from None
 
 
 def _absent(state: State, version: Version) -> bool:
