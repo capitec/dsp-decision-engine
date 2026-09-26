@@ -130,13 +130,18 @@ class Ragged:
     row subset is `rag[rows]` and never touches the child arrays.
     """
 
-    __slots__ = ("lo", "hi", "fields")
+    __slots__ = ("lo", "hi", "fields", "nt")
 
-    def __init__(self, lo: np.ndarray, hi: np.ndarray, fields: tuple[np.ndarray, ...]):
-        self.lo, self.hi, self.fields = lo, hi, fields
+    def __init__(self, lo: np.ndarray, hi: np.ndarray, fields: tuple[np.ndarray, ...], nt: type):
+        self.lo, self.hi, self.fields, self.nt = lo, hi, fields, nt
 
     def __getitem__(self, rows: np.ndarray) -> Ragged:
-        return Ragged(self.lo[rows], self.hi[rows], self.fields)
+        return Ragged(self.lo[rows], self.hi[rows], self.fields, self.nt)
+
+    def row(self, i: int) -> Any:
+        # `build_rows`'s shape for one row: what a kernel that fails at run time falls back to,
+        # calling the per-row dispatcher directly.
+        return self.nt(*(f[self.lo[i]:self.hi[i]] for f in self.fields))
 
     @property
     def arrays(self) -> tuple[np.ndarray, ...]:
@@ -150,15 +155,15 @@ def build_ragged(values: np.ndarray, schema: Schema, source: pl.Series | None = 
     Same nulls and same Arrow read as `build_rows`; it just stops before
     assembling one namedtuple per row.
     """
-    _, dtypes, optional = _layout(schema)
+    nt, dtypes, optional = _layout(schema)
     nested = _from_arrow(values, schema, dtypes, optional, source, alive)
     if nested is not None:
         return Ragged(np.asarray(nested.starts, np.int64), np.asarray(nested.stops, np.int64),
-                      tuple(nested.fields))
+                      tuple(nested.fields), nt)
     fields = tuple(_flat(values, name, dtype, opt)
                    for (name, _), dtype, opt in zip(schema, dtypes, optional))
     starts = np.asarray(item_starts(values), np.int64)
-    return Ragged(starts[:-1], starts[1:], fields)
+    return Ragged(starts[:-1], starts[1:], fields, nt)
 
 
 def _from_arrow(values, schema, dtypes, optional, source, alive):
