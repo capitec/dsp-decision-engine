@@ -7,6 +7,7 @@ import numpy as np
 
 from decider.engine.compile.kernel import Spec, fused_kernel
 from decider.engine.compile.njit import FALLBACK_ERRORS, compile_call, numpy_dtype, parameters
+from decider.engine.compile.rows import Ragged
 from decider.engine.ir.decls import Input, NullPolicy, base_annotation, nullable
 from decider.engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, Sequence, Version
 from decider.types import rows_item, rows_schema
@@ -137,6 +138,10 @@ class Fallback:
 
 
 def _per_row(values: np.ndarray) -> list:
+    # A kernel that fails at run time retries by calling each step once per row; a `Ragged` (the
+    # shared-kernel shape) has no per-row representation of its own, so give it `build_rows`'s.
+    if isinstance(values, Ragged):
+        return [values.row(i) for i in range(len(values.lo))]
     # A record array's tolist() gives plain tuples, which a step reading a struct's fields can't read.
     return list(values) if values.dtype.names else values.tolist()
 

@@ -182,9 +182,16 @@ PAIRS = pl.DataFrame({"items": [[{"left": WANT, "right": WANT}, {"left": "other"
 
 @pytest.mark.parametrize("fn", (eq_global, eq_other_field, eq_param))
 def test_a_str_field_compares_against_a_constant_a_param_and_another_field(fn):
-    # A `str` param is not a compile-time constant here, so the step falls back to Python and
-    # still answers correctly; what matters is that no mode silently answers False.
     assert assert_equivalent(flow(fn, name="p"), PAIRS)[fn.__name__].to_list() == [1]
+
+
+def test_a_str_field_compared_against_a_param_runs_in_the_kernel():
+    # `_probe_signature` typed `want` from `SPAN in ins`, which only sees a top-level `bytes`
+    # input; a `str` field nested inside a `Rows[...]` input's schema was invisible to it, so
+    # `want` was typed as a Raw[str] code and the step fell back to Python.
+    exe = Engine().bind(flow(eq_param, name="p"), mode="fused")
+    exe.run(PAIRS)
+    assert exe.fallbacks() == {}
 
 
 def optional_nulls(items: Rows[Optional]) -> int:
