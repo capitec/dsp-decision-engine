@@ -96,7 +96,50 @@ the parent stores only the gathered list column. It is ~8x faster than today's
 in a batch**, because polars is right for 30k items in one column and wrong for
 three. That tradeoff is a product call, not a technical one, so it waits.
 
-What it would not buy for free: params and sessions at the child path.
+### Batch: vectorising closed the gap, and `prange` was never the lever
+
+`notes/child-grain-batch.md`. The per-parent-row shape's batch cost is one
+runner pass per parent row -- `InterpretedRunner._call` running the child's
+scalar node once per row in a Python loop. There is no numba loop there to
+parallelise: the vectorised shape's actual kernel measures **0.008 us/record of
+a 13-19 us total**, under 0.1%. `prange` does not apply anywhere in this
+picture.
+
+Exploding every parent's items into **one** child frame and re-nesting with
+`group_by(maintain_order=True).agg(...)` plus a left join does close the batch
+gap: **17.4 us/record against `frame_step`'s 15.8** at 10,000x3, and 63.7
+against 114.4 at 1,000x30. From 6-10x behind to a dead heat.
+
+It cannot be the single-record shape, and the reason is a hard floor rather than
+anything we can fix. Measured on one row of three items: explode+unnest 502 us,
+`group_by().agg()` 630 us, the left join 1074 us -- **2.7 ms for the chain**,
+against 56 us for a `with_columns` on the same frame. polars' set-based
+operations cost that much before touching any data. So the vectorised shape is
+6365 us on a single record against the per-row shape's 221.
+
+**Therefore two shapes, chosen at bind time, not a runtime crossover.** This is
+where the `ARROW_ROWS` pattern does not transfer: `rows.py` picks inside one
+call that already holds the whole column, while these two shapes are different
+`CallNode.kind`s ("scalar" and "frame") and `Executable._record_path` is fixed
+for the whole plan when it binds. So the choice is an argument on `each`, and it
+is a statement about how a binding will be used, not a tuning knob: a served
+pipeline binds one way, a backfill job binds its own.
+
+**The second shape may not be permanent.** The per-row shape's remaining batch
+gap (62.7 us/record against 15.8) is the same Python driver around a ~2 us
+kernel that `notes/serving-latency.md` measures as the engine's 5-7x headroom.
+Fix that and the per-row shape's batch cost falls with it, which would make the
+vectorised shape redundant. Do not treat two implementations as the end state.
+
+**Parallelism: costed, not built, and not worth it.** Two hazards, and the
+nearer one is not about Arrow at all: `Executable.report` and
+`Executable._checked` are shared mutable state with no per-thread pooling, so
+threading parent rows over one child `Executable` is a plain data race today.
+Behind that sits the lifetime rule -- spans and `Rows[Item]` field arrays borrow
+Arrow memory, and a thread pool over a reused buffer is a segfault, not a wrong
+answer.
+
+What `each` would not buy for free: params and sessions at the child path.
 `parameters()` is `{}` for the child and `break_at("order/clean/heavy")` matches
 nothing. The blocker is not `State` but `Checkpoint`, which is
 `(origin, when, arm, iteration)` with no coordinate for *which item*.
