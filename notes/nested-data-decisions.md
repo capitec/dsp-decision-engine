@@ -115,13 +115,50 @@ where they want
     for i in items:
         if i.el_1 == 400 and i.el_2 == "snoop":
 
-The go/no-go is whether a record can carry a **span** field robustly, because
-`str` fields shipped in decision 3 and a record would have to keep them. That
-needs a `types.Record` subclass overriding `dtype` (its `__init__` ends with
-`self.bitwidth = self.dtype.itemsize * 8` and `SPAN` has no numpy dtype) plus
-`register_model`, which the spike called spike-grade and numba-version-fragile.
-If that is not solid, the record shape would cost us `str` fields to buy
-syntax, and the namedtuple stays.
+### The go/no-go: safe in numba, but it costs the zero-copy property. Held.
+
+`notes/item-record-span.md`. The numba question is settled and the fragility
+worry was unfounded: a `types.Record` subclass overriding `dtype` plus
+`register_model(...)(RecordModel)` is sound. `.dtype` is read in exactly one
+place in `Record.__init__` (to set `bitwidth`), nothing else in `numba/core` or
+`numba/np` ever reads `bitwidth`, and the only other consumer is `box_record`,
+which is unreachable here because returning an item already raises
+(`-> Item` and `-> dict` give `TypeError: nested objects are not allowed`).
+`register_model` is public API, not an internals hack. Attribute access,
+iteration and indexing never touch `.dtype`. Verified live, with CPython parity
+for `==`, `len`, `startswith`, `endswith` and `in` over ASCII, empty, and 2-, 3-
+and 4-byte UTF-8, plus the null span.
+
+The superset claim also held for free: `items.el_2[j]`, today's positional
+spelling for a `str` field, keeps working with no extra code, because `el_2` is a
+real field of the record and numba's own `array_record_getattr` handles it.
+
+And the cheaper alternative was tried and is worse. Keeping the namedtuple and
+hand-rolling only iteration (a custom `IteratorType`, `StructModel`,
+`EphemeralPointer` and manual lowering) typed and registered cleanly, then
+**crashed the process**: `malloc(): unaligned tcache chunk detected`. The record
+route's first-pass implementation, built on numba's own hardened `RecordModel`,
+worked. So "just make iteration work" is the fragile option, not the safe one.
+
+**What stops it being a clean swap** is a cost neither earlier note saw.
+`kernel.py`'s `rag()` builds a row's items inside the kernel as a **zero-copy
+namedtuple of array slices** into the separate flat Arrow-backed field buffers —
+and it is the path for *any* non-fallback `Rows[Item]` usage, including a plain
+`score()`, not just loop-nested ones. A record needs one **interleaved** buffer
+per row, which separate per-field buffers cannot present as a view, so a record
+shape means a real copy per parent row. Measured as a proxy (Python numpy, so
+read the scaling rather than the absolutes) for interleaving versus slicing:
+2.3x at 3 items, 4.4x at 30 fields-heavy, **33.9x and 151 us at 3000 items x 8
+fields**. Proportional to items x fields, so cheap at the stated target of line
+items in single digits to low hundreds, and ruinous above that.
+
+**Held, on that basis.** The only remaining argument for the change is
+readability, and it would be bought by giving up the zero-copy property the
+whole `Rows` design rests on. It is a contained change if that trade is ever
+worth making -- one new module mirroring `build_rows`, one line in
+`njit._input_type`, one `kind` in `stepped.py` and `interpreted.py`, and `rag()`
+building a record buffer -- and the honest test before doing it is to measure
+that one interleave inside `rag()` at `Kernel.run` level, not in Python.
 
 Two things that argument settled either way: today's `for i in items:` over the
 namedtuple is a **trap** (with an all-same-dtype `Item` it compiles and
