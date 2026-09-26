@@ -1,11 +1,12 @@
-"""A `Raw[bytes]` value answers string operations in the kernel, exactly as CPython does."""
+"""A `Raw[bytes]` value answers string operations, in every mode, exactly as CPython does."""
 import polars as pl
 import pytest
 from numba.core import types
 from numba.core.errors import TypingError
 
-from decider import Engine, Raw, flow, param
+from decider import Engine, Raw, flow, missing_as, param
 from decider.engine.compile.span import SPAN, _span_eq
+from decider.testing import assert_equivalent
 
 COMPILED = ("stepped", "fused")
 # ASCII, empty, 2-byte, 3-byte, 4-byte and a null.
@@ -52,19 +53,27 @@ def holds(sector: Raw[bytes] | None) -> bool:
 
 
 def is_null(sector: Raw[bytes] | None) -> bool:
-    return len(sector) < 0
+    return sector[1] < 0
 
 
 def byte_length(sector: Raw[bytes] | None) -> int:
     return sector[1]
 
 
+def filled(sector: Raw[bytes] = missing_as("unknown")) -> bool:
+    return sector == "unknown"
+
+
+STEPS = [eq_literal, ne_literal, eq_param, eq_global, code_points,
+         starts, starts_param, ends, holds, is_null, byte_length]
+
 CPYTHON = {
     "eq_literal": [s == WANT for s in VALUES],
     "ne_literal": [s != WANT for s in VALUES],
     "eq_param": [s == WANT for s in VALUES],
     "eq_global": [s == WANT for s in VALUES],
-    "code_points": [-1 if s is None else len(s) for s in VALUES],
+    # A null has no CPython length; it reads as empty in every mode.
+    "code_points": [0 if s is None else len(s) for s in VALUES],
     "starts": [s is not None and s.startswith("priv") for s in VALUES],
     "starts_param": [s is not None and s.startswith("priv") for s in VALUES],
     "ends": [s is not None and s.endswith("énd") for s in VALUES],
@@ -74,13 +83,21 @@ CPYTHON = {
 }
 
 
-@pytest.mark.parametrize("fn", [eq_literal, ne_literal, eq_param, eq_global, code_points,
-                                starts, starts_param, ends, holds, is_null, byte_length])
+@pytest.mark.parametrize("fn", STEPS)
 @pytest.mark.parametrize("mode", COMPILED)
 def test_span_operations_answer_as_cpython_does(mode, fn):
     exe = Engine(strict_compile=True).bind(flow(fn, name="p"), mode=mode)
     assert exe.run(FRAME)[fn.__name__].to_list() == CPYTHON[fn.__name__]
     assert exe.fallbacks() == {}
+
+
+@pytest.mark.parametrize("fn", STEPS)
+def test_every_mode_agrees_on_the_span_operations(fn):
+    assert assert_equivalent(flow(fn, name="p"), FRAME)[fn.__name__].to_list() == CPYTHON[fn.__name__]
+
+
+def test_a_missing_as_fill_reaches_a_span_step_in_every_mode():
+    assert assert_equivalent(flow(filled, name="p"), FRAME)["filled"].to_list() == [False] * 7 + [True]
 
 
 def unrelated_pairs(low: int, high: int) -> int:
@@ -113,14 +130,6 @@ def other(sector: Raw[bytes] | None, alias: Raw[bytes] | None) -> bool:
     return sector == alias
 
 
-@pytest.mark.parametrize("mode", COMPILED)
-def test_two_spans_compare_as_strings(mode):
-    exe = Engine(strict_compile=True).bind(flow(other, name="p"), mode=mode)
-    frame = pl.DataFrame({"sector": ["private", "public", None], "alias": ["private", "priv\u00e9", None]})
-    assert exe.run(frame)["other"].to_list() == [True, False, False]
-
-
-def test_the_span_operations_need_a_compiled_mode():
-    # `Raw[bytes]` hands an interpreted run the span itself, which is not a str.
-    exe = Engine().bind(flow(eq_literal, name="p"), mode="interpreted")
-    assert exe.run(FRAME)["eq_literal"].to_list() == [False] * len(VALUES)
+def test_two_spans_compare_as_strings_in_every_mode():
+    frame = pl.DataFrame({"sector": ["private", "public", None], "alias": ["private", WANT, None]})
+    assert assert_equivalent(flow(other, name="p"), frame)["other"].to_list() == [True, False, False]

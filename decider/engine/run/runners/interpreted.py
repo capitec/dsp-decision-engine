@@ -10,7 +10,7 @@ from decider.engine.boundary.nulls import MissingInputError
 from decider.engine.compile.rows import build_rows
 from decider.engine.ir.decls import Input, NullPolicy, base_annotation
 from decider.engine.run.params import RunParams
-from decider.engine.run.representations import StringCodes, build_raw
+from decider.engine.run.representations import StringCodes, build_raw, span_objects
 from decider.engine.run.runners.base import Checkpoint
 from decider.engine.run.state import State, dtype_of, fill_missing, from_series
 from decider.types import Representation, representation_for, rows_item, rows_schema
@@ -194,6 +194,7 @@ def _note(e: BaseException, text: str) -> None:
 def _argument(state: State, version: Version, decl: Input, rows: np.ndarray | None, path: str,
              codes: StringCodes) -> np.ndarray:
     values, valid = state.read(version, None)
+    span = False
     if values.dtype == object:
         item = rows_item(decl.annotation)
         if item is not None:
@@ -203,7 +204,11 @@ def _argument(state: State, version: Version, decl: Input, rows: np.ndarray | No
         elif base_annotation(decl.annotation) in (str, bytes):
             # Never the row-only span/code shape here: interpreted trees keep real str/bytes values.
             kind = representation_for(decl.annotation, row=False)
-            if kind in (Representation.RAW_STRING, Representation.RAW_BYTES):
+            # A `Span` answers what a compiled span answers, so both give the same result.
+            span = kind is Representation.RAW_BYTES
+            if span:
+                values = state.representation(version, (kind, "objects"), lambda v, s, a: span_objects(v))
+            elif kind is Representation.RAW_STRING:
                 values = state.representation(version, kind,
                                               lambda v, s, a: build_raw(kind, v, None, a, s, codes))
     if rows is not None:
@@ -214,6 +219,11 @@ def _argument(state: State, version: Version, decl: Input, rows: np.ndarray | No
     missing = ~valid
     if decl.null_policy is NullPolicy.REQUIRED:
         raise MissingInputError(decl.name, path, int(missing.sum()), len(valid), absent=_absent(state, version))
+    if span:
+        if decl.null_policy is NullPolicy.MISSING_AS:
+            return span_objects([s.text for s in values], decl.fill, missing)
+        # A null span carries its own -1 length, which None would lose.
+        return values
     if decl.null_policy is NullPolicy.MISSING_AS:
         return fill_missing(values, valid, decl.fill)
     values = values.astype(object)
