@@ -196,9 +196,97 @@ it. Revisit only after `State` stops materialising nested columns eagerly.
   step that runs one compiled call per row (a `str` output, a `Rows[...]` input
   alongside) died in numba's frontend. It now hands out `list(values)` — `np.void`,
   which numba unboxes as a `Record` and Python reads by field name.
+
+  **Why that doesn't break the plain-scalar rule** (a Python fallback must get real
+  Python scalars, so `x / 0.0` raises as it does in a kernel instead of returning
+  `inf`), because the next reader of that line will ask:
+
+  1. `_per_row` diverges **only** for a record dtype. Every other column still goes
+     through `.tolist()`: a float64 column yields `float`, an object column yields the
+     `dict`s and `None`s it holds. Verified directly on the three dtypes.
+  2. A record array only ever reaches `Fallback.run` when the fallback is backed by a
+     **numba dispatcher**. `SteppedRunner._run` sets
+     `python = isinstance(unit, Fallback) and not isinstance(unit.fn, Dispatcher)` and
+     builds the struct representation only when `python` is false, so a genuinely
+     interpreted step reads the object array of dicts and its fields are Python floats.
+  3. On that dispatcher path the body is compiled, and numba's default error model is
+     `python`, so it raises `ZeroDivisionError` too.
+
+  So the only consumer of an `np.void` is compiled code, never a Python body.
+  `test_dividing_by_zero_still_raises_on_the_per_row_path` pins it in all three modes;
+  break either 1 or 2 and it fails.
 - The "warn unless the step declares itself Python-only" knob belongs to the
   semantic-`str` work that owns `compile_call`'s reasons and `_compile`'s warning loop.
   A `Struct[...]` step that refuses to compile (a `str`/`list` field, a fill) produces
   one of those warnings and would be silenced by the same switch; no second knob here.
 - `Struct[Item]` is exported from `decider` and covered by `tests/run/test_struct_columns.py`.
-  It is not in `GUIDE.md` yet — `Rows[Item]` isn't either.
+
+## Draft for `GUIDE.md` (both nested inputs)
+
+`Rows[Item]` was never in the guide either, and `Raw[str]` being in `__all__` and absent
+from it is how 24 example projects came to use none of them. This block belongs as its
+own section, `## Nested inputs: a struct, a list of structs`, after "Branch, loop, frame
+steps" and before "Trees, rule sets, tables, scorecards" — it needs nothing from the
+sections after it, and the cost sentence below reads as a continuation of the
+compiled-modes story that section starts.
+
+Prose before the block: *A record's nested object becomes a `Struct[Item]` input, one
+record per row; a list of objects becomes `Rows[Item]`, one array per field sliced to
+that row. Both declare their fields with a `TypedDict`, and both fields must be `float`,
+`int` or `bool`. A plain `dict` or `list` input still works and still runs in Python, row
+by row — the annotations are how you ask for a kernel.*
+
+```python
+from typing import TypedDict
+
+import polars as pl
+from decider import Engine, Rows, Struct, flow
+
+class Applicant(TypedDict):      # a struct column: one record per row, fields float/int/bool
+    income: float
+    dependants: int
+
+class Account(TypedDict):        # one item of a list-of-structs column
+    balance: float
+
+def disposable(applicant: Struct[Applicant]) -> float:
+    return applicant["income"] - applicant["dependants"] * 250.0
+
+def owed(accounts: Rows[Account]) -> float:
+    total = 0.0
+    for j in range(len(accounts.balance)):       # arrays per field, this row's slice
+        total += accounts.balance[j]
+    return total
+
+def approved(disposable: float, owed: float) -> bool:
+    return owed < disposable
+
+pipeline = flow(disposable, owed, approved, name="afford").emit("disposable", "owed")
+exe = Engine().bind(pipeline, mode="fused")
+
+record = {"applicant": {"income": 4100.0, "dependants": 2},
+          "accounts": [{"balance": 300.0}, {"balance": 50.0}]}
+assert exe.score(record) == {**record, "disposable": 3600.0, "owed": 350.0, "approved": True}
+
+df = pl.DataFrame({"applicant": [{"income": 4100.0, "dependants": 2}],
+                   "accounts": [[{"balance": 300.0}, {"balance": 50.0}]]})
+assert exe.run(df)["approved"].to_list() == [True]
+
+# A struct is flat, so it joins the shared array kernel; a list is ragged, so it can't.
+assert "afford/disposable" not in exe.fallbacks()
+assert "one call per row" in exe.fallbacks()["afford/owed"]
+```
+
+Prose after the block: *A struct is flat — field `k` of row `i` is just `child_k[i]` —
+so a struct step joins the shared array kernel and costs what a step reading two plain
+columns costs. A list is ragged, so a `Rows[Item]` step runs one compiled call per row
+instead, which `fallbacks()` reports and which warns once; that is the price of the
+loop, not a mistake. A field a kernel can't hold (a `str`, a date, a nested list), a
+`missing_as` fill or a `| None` keeps the whole step in Python and says which field did
+it.*
+
+Checked: the block runs as `tests/test_guide.py` execs it (`exec(compile(block,
+"GUIDE.md", "exec"), {"__name__": "guide"})`) with no fixture beyond the temporary
+project, and prints nothing but the expected one-call-per-row `UserWarning` for
+`afford/owed`. If the guide should stay warning-free, drop the `owed` step and the last
+two asserts and keep `Rows[Item]` for its own paragraph.
