@@ -16,6 +16,7 @@ from typing import Any, NamedTuple
 import numpy as np
 import polars as pl
 
+from decider.engine.compile.span import SPAN_DTYPE, span_array, spans_of
 from decider.engine.ir.decls import NullPolicy, base_annotation
 
 Schema = tuple[tuple[str, Any], ...]
@@ -24,7 +25,8 @@ Schema = tuple[tuple[str, Any], ...]
 # costs more than it saves.
 ARROW_ROWS = 256
 
-_DTYPES = {float: np.dtype(np.float64), int: np.dtype(np.int64), bool: np.dtype(np.bool_)}
+_DTYPES = {float: np.dtype(np.float64), int: np.dtype(np.int64), bool: np.dtype(np.bool_),
+           str: SPAN_DTYPE}
 
 
 class _Layout(NamedTuple):
@@ -53,12 +55,11 @@ def _field(name: str, annotation: Any) -> tuple[np.dtype, bool]:
     optional = base is not annotation
     if dtype is None:
         raise TypeError(
-            f"Rows[Item] field '{name}' is {annotation}; a field must be float, int, bool or "
-            "`float | None`" + (". No kernel holds a variable-length string, so drop the field from "
-                                "Item and read the column in a python_only step." if base is str else "."))
-    if optional and base is not float:
+            f"Rows[Item] field '{name}' is {annotation}; a field must be float, int, bool, str, "
+            "`float | None` or `str | None`.")
+    if optional and base not in (float, str):
         raise TypeError(f"Rows[Item] field '{name}' is {annotation}, which has no null value a kernel "
-                        "can hold; only `float | None` does, as NaN")
+                        "can hold; only `float | None` and `str | None` do")
     return dtype, optional
 
 
@@ -70,7 +71,8 @@ def rows_probe(schema: Schema) -> Any:
         typeof(rows_probe((("price", float),)))
     """
     nt, dtypes, _ = _layout(schema)
-    return nt(*(np.empty(0, dtype) for dtype in dtypes))
+    return nt(*(span_array(np.empty((0, 2), np.int64)) if dtype == SPAN_DTYPE else np.empty(0, dtype)
+                for dtype in dtypes))
 
 
 def build_rows(values: np.ndarray, schema: Schema, source: pl.Series | None = None,
@@ -103,8 +105,10 @@ def build_rows(values: np.ndarray, schema: Schema, source: pl.Series | None = No
         starts = item_starts(values)
         stops = starts[1:]
     # One C-level pass per step rather than a Python loop over the rows: a third cheaper.
+    # `ndarray.__getitem__` unbound, so a `SpanArray`'s Python one (which a step's own `[j]`
+    # needs) doesn't cost a Python call per row here.
     windows = list(map(slice, starts, stops))
-    columns = [list(map(f.__getitem__, windows)) for f in fields]
+    columns = [list(map(np.ndarray.__getitem__.__get__(f), windows)) for f in fields]
     return np.fromiter(map(nt, *columns), object, len(values))
 
 
@@ -137,12 +141,16 @@ def rows_needs_no_fill(decl, is_rows: bool) -> bool:
     return True
 
 
-def null_item(name: str, at: int, starts) -> ValueError:
+NULL_FLOAT = "`float | None` to read a null as NaN"
+NULL_STR = "`str | None` to read a null as a null span"
+
+
+def null_item(name: str, at: int, starts, optional: str = NULL_FLOAT) -> ValueError:
     """The error for a null in `Item` field `name`, at flat item index `at`."""
     row = bisect_right(starts, at) - 1
     return ValueError(
         f"'{name}' is null in item {at - starts[row]} of row {row}; a Rows[Item] field cannot hold a "
-        "null. Declare it `float | None` to read a null as NaN, or fill the column in the frame.")
+        f"null. Declare it {optional}, or fill the column in the frame.")
 
 
 def _flat(values: np.ndarray, name: str, dtype: np.dtype, optional: bool) -> np.ndarray:
@@ -153,6 +161,9 @@ def _flat(values: np.ndarray, name: str, dtype: np.dtype, optional: bool) -> np.
                          f"'{name}' field") from None
     except KeyError:
         raise ValueError(f"a Rows[Item] item has no '{name}' field") from None
+    if dtype == SPAN_DTYPE:
+        starts = item_starts(values)
+        return spans_of(items, optional, lambda k: null_item(name, k, starts, NULL_STR))
     # numpy turns a None into NaN for a float field, which would sum silently. `in` costs a
     # tenth of a microsecond on one row, where `np.isnan(...).any()` costs four.
     if not optional and None in items:
