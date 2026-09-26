@@ -61,6 +61,64 @@ python per row over njit per row was 1.5x-8.9x in batch and 1.1x-2.5x on p50,
 including 0.52M vs 0.34M rows/s and 41.8 vs 103.7 µs for the `str`-output
 shape that is nearly a tie above. Read the table as the quieter of the two.
 
+## Re-measured with the annotation cache (`9e4ed91`)
+
+That commit `lru_cache`s the pure annotation helpers (`base_annotation`,
+`is_raw`, `representation_for`, ...) that `_run` asks about the same annotation
+on every call, worth 6.5-19.4 µs a read before. It applies to both arms, so
+the question is only whether it narrows the gap. Measured by wrapping the same
+functions in `lru_cache` in-process before running the same script, rather than
+merging the commit into this branch; re-run `benchmarks/strings_default.py`
+after the merge for the definitive figures. A quieter box, hence the better
+reference row:
+
+| shape | variant | batch rows/s | p50 µs | p99 µs |
+|---|---|---|---|---|
+| numeric kernel (reference) | kernel | 448,707,115 | 19.5 | 26.5 |
+| numeric kernel (reference) | interpreted | 928,524 | 24.0 | 30.7 |
+| `str` input vs `str` param | python per row | 684,224 | 33.0 | 51.4 |
+| `str` input vs `str` param | njit per row | 156,171 | 50.7 | 62.2 |
+| `str` input vs `str` param | interpreted | 840,566 | 29.1 | 38.7 |
+| `str` input vs body literal | python per row | 731,213 | 28.8 | 42.7 |
+| `str` input vs body literal | njit per row | 231,006 | 46.1 | 56.3 |
+| `str` input vs body literal | interpreted | 885,769 | 25.7 | 33.1 |
+| three `str` inputs | python per row | 531,490 | 34.9 | 47.2 |
+| three `str` inputs | njit per row | 105,940 | 105.0 | 213.8 |
+| three `str` inputs | interpreted | 419,454 | 45.5 | 117.7 |
+| `str` output only | python per row | 451,888 | 99.1 | 133.8 |
+| `str` output only | njit per row | 281,242 | 91.3 | 132.2 |
+| `str` output only | interpreted | 637,450 | 36.3 | 56.9 |
+| `str` input and `str` output | python per row | 488,767 | 40.8 | 75.4 |
+| `str` input and `str` output | njit per row | 118,520 | 64.8 | 162.3 |
+| `str` input and `str` output | interpreted | 622,726 | 33.4 | 74.2 |
+| `str` in a branch condition | python per row | 444,807 | 119.4 | 212.2 |
+| `str` in a branch condition | njit per row | 179,785 | 132.5 | 236.4 |
+| `str` in a branch condition | interpreted | 325,525 | 120.0 | 335.6 |
+| `str` in a loop body | python per row | 222,110 | 242.7 | 666.7 |
+| `str` in a loop body | njit per row | 72,552 | 283.4 | 726.2 |
+| `str` in a loop body | interpreted | 119,853 | 203.5 | 443.7 |
+| `.startswith`/`in`/slicing | python per row | 549,899 | 32.9 | 74.6 |
+| `.startswith`/`in`/slicing | njit per row | 159,520 | 61.3 | 102.9 |
+| `.startswith`/`in`/slicing | interpreted | 649,449 | 32.1 | 52.6 |
+
+**The gap does not narrow.** Python per row over njit per row is 1.6x-5.0x in
+batch (was 1.1x-6.2x) and 1.1x-3.0x on p50. The recommendation is unchanged.
+
+The one exception is `str output only`, where njit reads 91.3 µs against
+python's 99.1. Both figures are absurd next to a 19.5 µs reference and a 36.3
+µs interpreted, so that cell is a load spike: the same shape read 30.0 vs 32.6
+in the first run and 41.8 vs 103.7 in the second, and its batch column favours
+python in all three. It remains the shape where the change gains least, for the
+reason below.
+
+A real finding from this run: with the cache, `interpreted` now beats the
+compiled modes on `score()` p50 for a pipeline that is *only* a string step
+(25.7 vs 28.8, 29.1 vs 33.0, 32.1 vs 32.9). That is not an argument against
+compiled mode — its batch throughput collapses on the branch (0.33M vs 0.44M)
+and loop (0.12M vs 0.22M) shapes, and every numeric step around the string one
+still gets a kernel — but it does mean a pipeline of one string rule and
+nothing else has no reason to be compiled.
+
 ## What that says
 
 - **Python per row wins every shape, on both axes.** Batch: 2.6x-4.9x the
@@ -72,10 +130,11 @@ shape that is nearly a tie above. Read the table as the quieter of the two.
   shapes is *unboxing* a Python `str` into numba's unicode on every call, once
   per `str` input. Three inputs is the worst case (0.11M rows/s), which is the
   same ranking `notes/strings.md` found.
-- **A `str` step costs about 5 µs on a single record** over the numeric
-  kernel (30.6 vs 26.0 p50 for the body-literal shape), so the 90% workload
-  barely notices. A `str` *param* adds another 8 µs (38.6), which is params
-  bundle validation per call, not the string.
+- **A `str` step costs under 10 µs on a single record** over the numeric
+  kernel (30.6 vs 26.0 here, 28.8 vs 19.5 with the cache, both for the
+  body-literal shape), so the 90% workload barely notices. A `str` *param*
+  adds a few more µs, which is params bundle validation per call, not the
+  string.
 - **Interpreted mode is faster in batch on single-step shapes** (0.89M vs
   0.65M) and slower everywhere a driver has real work to do: the branch
   condition (0.34M vs 0.59M) and the loop body (0.15M vs 0.27M). So a
@@ -168,15 +227,21 @@ Semantic `str` moved out of it into the second row.
 
 ## Contradicting `notes/strings.md`
 
-Nothing, but two of its numbers were optimistic on this box and one claim
-needs narrowing:
+Its conclusion holds. Three of its details need correcting:
 
-- It reports the numeric ceiling at 173M rows/s and 22.2 µs p50; this run got
-  233M and 26.0 µs. Same order, different day.
+- It reports the numeric ceiling at 173M rows/s and 22.2 µs p50. Across three
+  runs here it read 233M/26.0, 376M/26.2 and 449M/19.5. This box swings by 2x
+  between runs (load average went from 25 to 3 over the afternoon), so treat
+  every absolute figure as a range and only the within-run ordering as solid.
 - "Plain Python per row is ... within 5 µs of a pure numeric kernel on a
-  single record" holds for a `str` compared with a body literal (+4.6 µs) but
-  not for one compared with a `str` param (+12.6 µs). The extra is the params
-  bundle, not the string.
-- Its `str` output row (njit 0.66M vs Python 0.78M) reproduces almost exactly
-  (0.68M vs 0.77M). That is the shape where the old default cost least, and it
-  is still the shape where the change gains least.
+  single record" is too tight. It was +4.6 µs on the first run but +9.3 µs on
+  the cached one, and a `str` *param* adds a further ~4 µs of bundle
+  validation. "Under 10 µs" is the honest claim.
+- Its `str` output row (njit 0.66M vs Python 0.78M) reproduces (0.68M vs
+  0.77M), and its reading of it is right: that is the shape where the old
+  default cost least, because returning a string only *boxes* a result, while
+  every other shape pays to *unbox* a Python `str` into numba's unicode once
+  per `str` input per row. It is also the noisiest cell in the table — its p50
+  pair came out 30.0/32.6, 41.8/103.7 and 99.1/91.3 across three runs — so it
+  is the one place where a single run could argue either way. Its batch column
+  favours Python in all three.
