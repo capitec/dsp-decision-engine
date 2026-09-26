@@ -10,7 +10,8 @@ from numba.core.dispatcher import Dispatcher
 
 from decider.engine.boundary.nulls import MissingInputError
 from decider.engine.compile import Fallback, Unit, compile_plan, numpy_dtype
-from decider.engine.compile.rows import build_rows, rows_needs_no_fill
+from decider.engine.compile.njit import RAGGED_IN_KERNEL
+from decider.engine.compile.rows import build_ragged, build_rows, rows_needs_no_fill
 from decider.engine.compile.structs import build_struct, struct_schema
 from decider.engine.ir.decls import Input, NullPolicy, base_annotation
 from decider.engine.run.params import RunParams
@@ -188,11 +189,14 @@ def _external(unit: Unit) -> tuple[tuple[Input, Version, str, np.dtype | None, A
     # A value a packed branch or loop only copies needs no policy: a null in it sends the run down the unpacked path.
     reads += [(Input(v.name, base_annotation(v.annotation)), v, "") for v in getattr(unit, "passthrough", ())]
     row = any(c.node.kind == "row" for c in unit.calls)
+    # Only a shared array kernel takes the flat arrays; a fallback is called once per row and
+    # wants that row's items already sliced.
+    kernel = not isinstance(unit, Fallback)
     return tuple((i, v, path, numpy_dtype(b) if (b := base_annotation(i.annotation)) in (float, int, bool) else None,
-                  *_boxed(i, row, path), _declared(i.annotation, row)) for i, v, path in reads)
+                  *_boxed(i, row, path, kernel), _declared(i.annotation, row)) for i, v, path in reads)
 
 
-def _boxed(decl: Input, row: bool, path: str) -> tuple[Any, Any]:
+def _boxed(decl: Input, row: bool, path: str, kernel: bool = False) -> tuple[Any, Any]:
     # The `(kind, build)` pair `State.representation` needs for an object array of `decl`, or
     # `(None, dtype)` for a boxed number, which is only ever cast.
     item = struct_item(decl.annotation)
@@ -202,6 +206,8 @@ def _boxed(decl: Input, row: bool, path: str) -> tuple[Any, Any]:
     item = rows_item(decl.annotation)
     if item is not None:
         schema = rows_schema(item)
+        if RAGGED_IN_KERNEL and kernel and not row:
+            return ("ragged", schema), lambda values, source, alive: build_ragged(values, schema, source, alive)
         return ("rows", schema), lambda values, source, alive: build_rows(values, schema, source, alive)
     annotation = base_annotation(decl.annotation)
     if annotation not in (str, bytes):
@@ -255,7 +261,7 @@ def _fills(decl: Input, mask: np.ndarray | None, kind: Any) -> bool:
     if decl.null_policy is not NullPolicy.MISSING_AS or mask is None or mask.all():
         return False
     # A null `Rows[...]` row already reads as a row with no items, which is what an empty fill asks for.
-    return not rows_needs_no_fill(decl, type(kind) is tuple and kind[0] == "rows")
+    return not rows_needs_no_fill(decl, type(kind) is tuple and kind[0] in ("rows", "ragged"))
 
 
 def _reads_bytes(call: Call) -> bool:
