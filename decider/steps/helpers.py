@@ -4,7 +4,7 @@ from collections.abc import Iterable
 from typing import Any, Callable
 
 _HELPER_SIGNATURES = "__decider_helper_signatures__"
-_PYTHON_ONLY = "__decider_python_only__"
+_ALLOW_FALLBACK = "__decider_allow_fallback__"
 
 
 def helper(*, signatures: Iterable[tuple[tuple[type, ...], type]]) -> Callable:
@@ -30,9 +30,30 @@ def helper(*, signatures: Iterable[tuple[tuple[type, ...], type]]) -> Callable:
     return mark
 
 
-def python_only(fn: Callable) -> Callable:
-    """Mark a function as an intentional Python execution boundary."""
-    setattr(fn, _PYTHON_ONLY, True)
+def allow_fallback(fn: Any) -> Any:
+    """Accept how this step runs: no `FallbackWarning`, and `strict_compile=True` allows it.
+
+    On a step it says the author accepts a step compiled modes can't put in a
+    kernel; `Executable.fallbacks()` still reports it, marked
+    `@allow_fallback`. On a function a step calls it marks an intentional
+    Python boundary, so the step runs in Python rather than compiling it.
+
+    Example::
+
+        @allow_fallback
+        def order_total(items: list[dict]) -> float:
+            return sum(item["price"] for item in items)
+    """
+    from decider.steps.base import Step
+    from decider.steps.function import FunctionStep
+
+    target = fn.fn if isinstance(fn, FunctionStep) else fn
+    if isinstance(target, Step) or not callable(target):
+        raise TypeError(
+            f"@allow_fallback takes a function, or step() of one, not {type(fn).__name__}. A tree, table, "
+            "scorecard, branch or loop falls back as a whole: filter decider.FallbackWarning instead."
+        )
+    setattr(target, _ALLOW_FALLBACK, True)
     return fn
 
 
@@ -40,5 +61,5 @@ def helper_signatures(fn: Callable) -> tuple[tuple[tuple[type, ...], type], ...]
     return getattr(fn, _HELPER_SIGNATURES, None)
 
 
-def is_python_only(fn: Callable) -> bool:
-    return bool(getattr(fn, _PYTHON_ONLY, False))
+def allows_fallback(fn: Any) -> bool:
+    return bool(getattr(fn, _ALLOW_FALLBACK, False))
