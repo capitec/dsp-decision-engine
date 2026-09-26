@@ -89,13 +89,14 @@ switched in turn (numeric-kernel ceiling 19.0 µs):
 
 | pipeline | before | + annotation cache | + borrowed spans |
 |---|---|---|---|
-| one `Raw[bytes]` step | 70.5 / 118 | 62.8 / 108 | 34.3 / 49 |
-| string-gated tree, fused | 145.7 / 271 | 121.1 / 152 | **90.7 / 158** |
-| string-gated tree, stepped | 144.0 / 287 | 121.3 / 164 | **90.5 / 149** |
-| numeric tree, fused (control) | 67.1 / 104 | 67.0 / 148 | 65.6 / 74 |
+| one `Raw[bytes]` step | 70.6 / 138 | 64.0 / 79 | 31.0 / 53 |
+| string-gated tree, fused | 144.8 / 188 | 121.5 / 362 | **91.4 / 131** |
+| string-gated tree, stepped | 139.2 / 297 | 126.4 / 219 | **91.8 / 200** |
+| numeric tree, fused (control) | 62.8 / 77 | 66.0 / 155 | 62.3 / 72 |
 
-The string gate's surcharge over the same tree without it: 78.6 → 25.1 µs.
-p99 moves ±50% run to run on this box; p50 repeats within 2 µs.
+The string gate's surcharge over the same tree without it: 82.0 → 29.1 µs.
+p99 moves ±50% run to run on this box, so read the control row first: it is
+within 5% across the three variants here. p50 repeats within 2 µs.
 
 ## The threshold stays at 32
 
@@ -115,10 +116,71 @@ The existing `<= 32` cut is the crossover. Above it nothing changed: batch still
 exports the frame's own buffers, 10.3M rows/s on a one-step `Raw[bytes]`
 pipeline over 200k rows (`notes/strings.md` measured 7.0M on a busier box).
 
+## `Annotated` metadata: the decl keeps it, type logic never sees it
+
+Caching the annotation helpers raised the question of what an unhashable
+annotation would do, and the answer was that it already crashed:
+`Annotated[float, {"unit": "kg"}]` raised a bare `TypeError: unhashable type:
+'dict'`, naming neither the step nor the annotation, in every mode at `d825f31`
+(`declared_dtype` was already an `lru_cache`, and `feature_kind` looks the whole
+annotation up in a dict). Two quieter symptoms came with it: *any* `Annotated`
+input fell back to Python row by row ("reads 'loan' as
+typing.Annotated[float, Money(...)], which no kernel takes"), and
+`Annotated[float | None, ...]` was read as REQUIRED, because `nullable()` sees
+`Annotated` and not the union. `fields.py` had promised the opposite all along:
+"the engine ignores it and runs the plain type".
+
+Stripping it in `harvest()` fixes all three and is wrong: the flow debuggers
+read metadata off the **decls**, not off the function signature
+(`tools/decider-bridge/.../describing.py` walks `CallNode.inputs`/`outputs`/`params`
+and calls `metadata_of(d.annotation)`), so a decl that has been stripped makes
+the debugger guess units from names for every input and output. `pytest` does not
+catch it, because `testpaths = ["tests"]` skips `tools/`. Run the bridge suite
+for anything that touches a declaration:
+
+```sh
+cd tools/decider-bridge && uv run --with pytest --with pytest-asyncio pytest -q tests
+```
+
+So the decl keeps exactly what the caller declared, and the strip happens at the
+type-logic funnels instead: `annotation_cache` in `decider/types.py` wraps each
+cached helper in a thin uncached `plain_annotation` (`get_origin(a) is Annotated`
+-> `a.__origin__`), so metadata never becomes a cache key, and `feature_kind`
+and `nullable` strip before their own dict lookup and union test.
+
+Two things the shape needs:
+
+- **One spelling to look for.** `Optional[Annotated[T, M]]` hides the metadata
+  from `plain_annotation` *and* from `metadata_of`, and its union hashes its
+  `Annotated` member, so it crashed even with the funnels stripping. Normalising
+  it per call costs 12 µs on the string-gated tree's `score()` — the union test
+  needs `get_args`, on the hot path, forever. `harvest()` does it once per
+  declaration instead (`hoist_metadata`: `Annotated[T | None, M]`), which also
+  makes `metadata_of` find metadata in that spelling for the first time.
+- **A param keeps the spelling it was given.** Its annotation goes to pydantic,
+  and `Annotated[float | None, AfterValidator(f)]` checks something different
+  from `Optional[Annotated[float, AfterValidator(f)]]` — the first sees `None`,
+  the second does not. Param annotations reach no cache key (measured: an
+  unhashable one runs clean in every mode), so they are left alone.
+
+Cost of stripping at the funnels rather than at the decl, per string read of one
+`score()` (five helper calls, one `bytes | None` annotation):
+
+| | per read |
+|---|---|
+| uncached, at `d825f31` | 7.5-19.4 µs |
+| cached, annotation already plain | 0.7 µs |
+| cached, wrapper strips (shipped) | 3.8 µs |
+
+The 3.1 µs is five `plain_annotation` calls on a cache hit. Carrying the
+metadata in a field on `Input`/`Output` would recover it, at the price of an IR
+field and a line in the bridge; so would the `_external` precompute below, which
+removes the five calls altogether.
+
 ## Left on the table
 
 `_run` still asks `rows_item`/`base_annotation`/`representation_for` per call,
-now for the price of a cache lookup (~2 µs on a tree). Precomputing the
+now for the price of a cache lookup and a strip (3.8 µs a read). Precomputing the
 representation kind per `(unit, decl)` in `_external`, where the rest of the read
 plan already lives, would remove it, and `ctypes.pythonapi.PyBytes_AsString`
 (0.54 µs) could become `id(b) + bytes.__basicsize__ - 1` (0.21 µs) if 0.3 µs a

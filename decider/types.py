@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import threading
 from enum import Enum
-from functools import lru_cache
-from typing import Any, Generic, NamedTuple, TypeVar, get_args, get_origin, get_type_hints
+from functools import lru_cache, wraps
+from types import UnionType
+from typing import Annotated, Any, Generic, NamedTuple, TypeVar, Union, get_args, get_origin, get_type_hints
 
 T = TypeVar("T")
 # One table per process: a constant from `raw_str()` and a value first seen at runtime must
@@ -42,11 +43,45 @@ class Rows(Generic[T]):
     """Marker: `Item`'s list column, as one array per field, sliced per parent row."""
 
 
-# A run asks these of the same annotations once per record, and they are pure.
-_cache = lru_cache(maxsize=1024)
+def plain_annotation(annotation: Any) -> Any:
+    """`T` for an `Annotated[T, ...]`, else the annotation itself: what the engine runs.
+
+    The metadata stays on the declaration, where tools read it.
+
+    Example::
+
+        plain_annotation(Annotated[float, Money()])   # float
+    """
+    return annotation.__origin__ if get_origin(annotation) is Annotated else annotation
 
 
-@_cache
+def hoist_metadata(annotation: Any) -> Any:
+    """`Optional[Annotated[T, M]]` as the equivalent `Annotated[T | None, M]`, else unchanged.
+
+    Declarations are canonicalised once so that `plain_annotation` and
+    `metadata_of` each need to look in one place.
+    """
+    args = get_args(annotation)
+    if get_origin(annotation) not in (Union, UnionType) or not any(get_origin(a) is Annotated for a in args):
+        return annotation
+    metadata = tuple(m for a in args if get_origin(a) is Annotated for m in a.__metadata__)
+    return Annotated[(Union[tuple(plain_annotation(a) for a in args)], *metadata)]
+
+
+def annotation_cache(fn):
+    # A run asks these of the same annotations once per record, and they are pure. The key
+    # is the plain type, so `Annotated` metadata a caller declared -- which may be a dict,
+    # and unhashable -- never reaches a cache key.
+    cached = lru_cache(maxsize=1024)(fn)
+
+    @wraps(fn)
+    def plain(annotation: Any, **kw: Any) -> Any:
+        return cached(plain_annotation(annotation), **kw)
+
+    return plain
+
+
+@annotation_cache
 def rows_item(annotation: Any) -> Any | None:
     """`Item` of a `Rows[Item]` annotation, else `None`."""
     return get_args(annotation)[0] if get_origin(annotation) is Rows else None
@@ -57,14 +92,14 @@ def rows_schema(item: Any) -> tuple[tuple[str, Any], ...]:
     return tuple(get_type_hints(item).items())
 
 
-@_cache
+@annotation_cache
 def is_raw(annotation: Any) -> bool:
     if get_origin(annotation) in (Raw, Rows):
         return True
     return any(is_raw(arg) for arg in get_args(annotation) if arg is not type(None))
 
 
-@_cache
+@annotation_cache
 def raw_base(annotation: Any) -> Any:
     if get_origin(annotation) is not Raw:
         args = [arg for arg in get_args(annotation) if arg is not type(None)]
@@ -73,7 +108,7 @@ def raw_base(annotation: Any) -> Any:
     return args[0] if is_raw(annotation) and args else annotation
 
 
-@_cache
+@annotation_cache
 def representation_key(annotation: Any, *, row: bool = False) -> RepresentationKey:
     args = [arg for arg in get_args(annotation) if arg is not type(None)]
     base = raw_base(args[0]) if len(args) == 1 else raw_base(annotation)
@@ -81,7 +116,7 @@ def representation_key(annotation: Any, *, row: bool = False) -> RepresentationK
     return RepresentationKey(base, raw)
 
 
-@_cache
+@annotation_cache
 def representation_for(annotation: Any, *, row: bool = False) -> Representation:
     key = representation_key(annotation, row=row)
     try:
