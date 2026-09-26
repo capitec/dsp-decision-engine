@@ -7,7 +7,7 @@ import numpy as np
 import polars as pl
 
 from decider.engine.boundary.nulls import MissingInputError
-from decider.engine.compile.rows import build_rows
+from decider.engine.compile.rows import build_rows, rows_needs_no_fill
 from decider.engine.ir.decls import Input, NullPolicy, base_annotation
 from decider.engine.run.params import RunParams
 from decider.engine.run.representations import codes, span_objects
@@ -193,12 +193,12 @@ def _note(e: BaseException, text: str) -> None:
 def _argument(state: State, version: Version, decl: Input, rows: np.ndarray | None, path: str) -> np.ndarray:
     values, valid = state.read(version, None)
     span = False
+    item = rows_item(decl.annotation) if values.dtype == object else None
     if values.dtype == object:
-        item = rows_item(decl.annotation)
         if item is not None:
             schema = rows_schema(item)
             values = state.representation(version, ("rows", schema),
-                                          lambda v, s, a: build_rows(v, schema))
+                                          lambda v, s, a: build_rows(v, schema, s, a))
         elif base_annotation(decl.annotation) in (str, bytes):
             # Never the row-only span/code shape here: interpreted trees keep real str/bytes values.
             kind = representation_for(decl.annotation, row=False)
@@ -222,7 +222,8 @@ def _argument(state: State, version: Version, decl: Input, rows: np.ndarray | No
         # A null span carries its own -1 length, which None would lose.
         return values
     if decl.null_policy is NullPolicy.MISSING_AS:
-        return fill_missing(values, valid, decl.fill)
+        # A null row of a `Rows[...]` input already reads as a row with no items.
+        return values if rows_needs_no_fill(decl, item is not None) else fill_missing(values, valid, decl.fill)
     values = values.astype(object)
     values[missing] = None
     return values
