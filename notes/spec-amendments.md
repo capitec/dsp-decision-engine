@@ -236,3 +236,26 @@ where they disagree, this file wins.
   with a suggestion (`hi-cut` -> `hi_cut`).
 - Interpreted mode indexes numpy arrays, so a table value is a numpy scalar
   there (`x / 0.0` on one gives `inf` with a warning where a kernel raises).
+
+## 2026-09-26, the fallback policy
+
+- **A semantic `str` step runs in Python, row by row.** No numba array type
+  holds a variable-length string, and calling a compiled dispatcher once per
+  row costs *more* than the Python body it replaces (see
+  `notes/strings-default.md`), so a step reading or writing a plain `str`
+  falls back with `dispatcher.py_func`. `Raw[str]` codes, `bytes` spans and
+  `Rows[Item]` are unchanged; `Rows[Item]` is still the one fallback that runs
+  compiled, one call per row.
+- **`@allow_fallback`** (`from decider import allow_fallback`) replaces
+  `python_only`. On a step it declares that the author accepts the fallback:
+  no warning, and `Engine(strict_compile=True)` allows it.
+  `Executable.fallbacks()` still reports it, with the reason prefixed
+  `@allow_fallback: `. On a function a step *calls* it is an intentional
+  Python boundary, as `python_only` was, and the calling step's fallback
+  counts as declared too. It takes a plain function or `step()` of one;
+  anything else (a tree, table, scorecard, branch, loop) raises `TypeError`.
+- **`decider.FallbackWarning`** (a `UserWarning`) is the category of every
+  fallback warning, so `warnings.filterwarnings("ignore",
+  category=FallbackWarning)` silences the lot without a new engine setting.
+- **`compile_call`** returns `(key, fn, reason, declared)`; `Fallback` gains
+  `declared`.

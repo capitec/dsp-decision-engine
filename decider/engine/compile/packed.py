@@ -98,7 +98,7 @@ def _pack(top: Branch | Loop, outputs: set[int], lazy: bool, python: Collection[
     for c in calls:
         if c.node.kind != "scalar" or any(nullable(o.annotation) for o in c.node.outputs):
             raise _Unpackable
-        key, fn, reason = compile_call(c.node)
+        key, fn, reason, _ = compile_call(c.node)
         if reason is not None:
             raise _Unpackable
         compiled[c.id] = (key, fn)
