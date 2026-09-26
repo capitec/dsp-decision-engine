@@ -113,10 +113,12 @@ def _span_len(x):
         return None
 
     # CPython counts code points, so count the bytes that are not UTF-8 continuations.
+    # A null reads as empty: `len` may not be negative outside a kernel, and the
+    # byte length in `span[1]` is where -1 stays visible.
     def impl(x):
         n = x[1]
         if n < 0:
-            return -1
+            return 0
         points = 0
         for k in range(n):
             if (load_u8(x[0] + k) & 0xC0) != 0x80:

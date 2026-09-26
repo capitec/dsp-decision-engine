@@ -119,6 +119,7 @@ class SteppedRunner(InterpretedRunner):
         alive: list = []
         for decl, v, path, want in self._reads[id(unit)]:
             x, mask = state.read(v, rows)
+            filled = False
             if not python and x.dtype == object:
                 item = rows_item(decl.annotation)
                 if item is not None:
@@ -127,10 +128,16 @@ class SteppedRunner(InterpretedRunner):
                                                 lambda values, source, kept: build_rows(values, schema))
                 elif base_annotation(decl.annotation) in (str, bytes):
                     kind = representation_for(decl.annotation, row=any(c.node.kind == "row" for c in unit.calls))
-                    full = state.representation(
-                        v, kind,
-                        lambda values, source, kept: self._typed(values, None, decl, kept, source),
-                    )
+                    if _fills(decl, mask):
+                        # The fill belongs in the strings: a span or a code cannot be filled afterwards,
+                        # and the fill is this reader's, not the shared representation's.
+                        full, filled = None, True
+                        x = self._typed(fill_missing(x, mask, decl.fill), None, decl, alive, None)
+                    else:
+                        full = state.representation(
+                            v, kind,
+                            lambda values, source, kept: self._typed(values, None, decl, kept, source),
+                        )
                 else:
                     # A boxed number (a `missing_as` fill, an input absent from the frame): just cast it.
                     full = None
@@ -143,7 +150,7 @@ class SteppedRunner(InterpretedRunner):
             if mask is not None and not mask.all():
                 if decl.null_policy is NullPolicy.REQUIRED:
                     raise MissingInputError(decl.name, path, int((~mask).sum()), len(mask), absent=_absent(state, v))
-                if decl.null_policy is NullPolicy.MISSING_AS:
+                if not filled and _fills(decl, mask):
                     # ponytail: one fill per version per kernel; two readers with different fills share the first.
                     x = fill_missing(x, mask, decl.fill).astype(x.dtype, copy=False)
                 valid[v.id] = mask
@@ -205,6 +212,10 @@ def _external(unit: Unit) -> tuple[tuple[Input, Version, str, np.dtype | None], 
     reads += [(Input(v.name, base_annotation(v.annotation)), v, "") for v in getattr(unit, "passthrough", ())]
     return tuple((i, v, path, numpy_dtype(b) if (b := base_annotation(i.annotation)) in (float, int, bool) else None)
                  for i, v, path in reads)
+
+
+def _fills(decl: Input, mask: np.ndarray | None) -> bool:
+    return (decl.null_policy is NullPolicy.MISSING_AS and mask is not None and not mask.all())
 
 
 def _reads_bytes(call: Call) -> bool:

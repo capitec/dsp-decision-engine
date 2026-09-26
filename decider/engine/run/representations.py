@@ -32,6 +32,75 @@ class StringCodes:
             return np.int32(self._codes.setdefault(value, len(self._codes)))
 
 
+def _utf8(value: object) -> bytes | None:
+    if isinstance(value, Span):
+        return value.bytes
+    return value.encode() if isinstance(value, str) else None
+
+
+class Span:
+    """A `Raw[bytes]` value outside a kernel: a string by its operations, `(address, byte length)` by index.
+
+    Answers what a compiled span answers, so a step annotated `Raw[bytes]` gives
+    the same result in every mode. A null is not a string: it equals nothing,
+    including another null, and holds no prefix, suffix or part.
+
+        Span("private") == "private"        # True
+        Span(None) == Span(None)            # False
+        Span(None)[1]                       # -1
+    """
+
+    __slots__ = ("bytes", "text")
+
+    def __init__(self, value: str | None) -> None:
+        self.text = value
+        self.bytes = None if value is None else value.encode()
+
+    def __repr__(self) -> str:
+        return f"Span({self.text!r})"
+
+    def __eq__(self, other: object) -> bool:
+        other = _utf8(other)
+        return self.bytes is not None and other is not None and self.bytes == other
+
+    def __len__(self) -> int:
+        # Code points, as CPython counts them. A null has no length a kernel can
+        # report through `len`, which may not be negative, so it reads as empty.
+        return 0 if self.text is None else len(self.text)
+
+    def __getitem__(self, k: int) -> int:
+        # The kernel's `(address, byte length)`; only the length means anything here.
+        return (0, -1 if self.bytes is None else len(self.bytes))[k]
+
+    def startswith(self, prefix: object) -> bool:
+        prefix = _utf8(prefix)
+        return self.bytes is not None and prefix is not None and self.bytes.startswith(prefix)
+
+    def endswith(self, suffix: object) -> bool:
+        suffix = _utf8(suffix)
+        return self.bytes is not None and suffix is not None and self.bytes.endswith(suffix)
+
+    def __contains__(self, part: object) -> bool:
+        part = _utf8(part)
+        return self.bytes is not None and part is not None and part in self.bytes
+
+
+def span_objects(values: np.ndarray, fill: str | None = None, missing: np.ndarray | None = None) -> np.ndarray:
+    """`values` as `Span` objects, `fill` on the rows `missing` marks.
+
+    Filled element by element: a `Span` has `__len__` and `__getitem__`, so numpy
+    would read a bare one as a sequence.
+    """
+    out = np.empty(len(values), object)
+    for i, value in enumerate(values):
+        out[i] = Span(value)
+    if missing is not None:
+        filled = Span(fill)
+        for i in np.flatnonzero(missing):
+            out[i] = filled
+    return out
+
+
 def spans(x: np.ndarray, mask: np.ndarray | None, alive: list, source: pl.Series | None) -> np.ndarray:
     """Strings as `(address, byte length)` spans into Arrow memory, -1 for a null; zero-copy where it can."""
     from decider.engine.boundary.extract import extract_frame
