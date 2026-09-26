@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import threading
 from enum import Enum
 from typing import Any, Generic, NamedTuple, TypeVar, get_args, get_origin, get_type_hints
 
 T = TypeVar("T")
-_RAW_STR_CODES: dict[str, int] = {}
+# One table per process: a constant from `raw_str()` and a value first seen at runtime must
+# never be given the same code, so both draw from here.
+_RAW_STR_CODES: dict[Any, int] = {}
+_NEW_CODE = threading.Lock()
 
 
 class Representation(Enum):
@@ -76,14 +80,27 @@ def representation_for(annotation: Any, *, row: bool = False) -> Representation:
         raise TypeError(f"no representation for {key}") from None
 
 
+def string_code(value: Any) -> int:
+    """The `Raw[str]` code of `value`, assigned in first-seen order; `None` gets one of its own."""
+    code = _RAW_STR_CODES.get(value)
+    if code is None:
+        with _NEW_CODE:
+            code = _RAW_STR_CODES.setdefault(value, len(_RAW_STR_CODES))
+    return code
+
+
 def raw_str(value: str) -> int:
-    """Return compiled code for a `Raw[str]` constant."""
+    """Return compiled code for a `Raw[str]` constant.
+
+    Example::
+
+        PRIVATE = raw_str("private")
+
+        def is_private(sector: Raw[str]) -> bool:
+            return sector == PRIVATE
+    """
     if not isinstance(value, str):
         raise TypeError("raw_str() requires a str")
-    return _RAW_STR_CODES.setdefault(value, len(_RAW_STR_CODES))
-
-
-def raw_string_codes() -> dict[str, int]:
-    return dict(_RAW_STR_CODES)
+    return string_code(value)
 
 

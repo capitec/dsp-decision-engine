@@ -10,7 +10,7 @@ from decider.engine.boundary.nulls import MissingInputError
 from decider.engine.compile.rows import build_rows
 from decider.engine.ir.decls import Input, NullPolicy, base_annotation
 from decider.engine.run.params import RunParams
-from decider.engine.run.representations import StringCodes, build_raw
+from decider.engine.run.representations import codes, spans
 from decider.engine.run.runners.base import Checkpoint
 from decider.engine.run.state import State, dtype_of, fill_missing, from_series
 from decider.types import Representation, representation_for, rows_item, rows_schema
@@ -62,7 +62,6 @@ class InterpretedRunner:
 
     def __init__(self) -> None:
         self.visit: Callable[[str], None] = _ignore
-        self._codes = StringCodes()
 
     def iterate(self, plan: Plan, state: State, params: RunParams) -> Iterator[Checkpoint]:
         root = _Scope(None, state.frame, {})
@@ -96,7 +95,7 @@ class InterpretedRunner:
         m = scope.count(state.n)
         bundle = params.bundle(call.id, m)
         # Plain Python scalars, not numpy ones: `x / 0.0` must raise here as it does in a kernel.
-        cols = [_argument(state, v, i, scope.rows, node.origin.path, self._codes).tolist()
+        cols = [_argument(state, v, i, scope.rows, node.origin.path).tolist()
                 for i, v in zip(node.inputs, call.reads)]
         rows = zip(*cols) if cols else repeat((), m)
         results: list = []
@@ -191,8 +190,7 @@ def _note(e: BaseException, text: str) -> None:
         e.add_note(text)
 
 
-def _argument(state: State, version: Version, decl: Input, rows: np.ndarray | None, path: str,
-             codes: StringCodes) -> np.ndarray:
+def _argument(state: State, version: Version, decl: Input, rows: np.ndarray | None, path: str) -> np.ndarray:
     values, valid = state.read(version, None)
     if values.dtype == object:
         item = rows_item(decl.annotation)
@@ -203,9 +201,10 @@ def _argument(state: State, version: Version, decl: Input, rows: np.ndarray | No
         elif base_annotation(decl.annotation) in (str, bytes):
             # Never the row-only span/code shape here: interpreted trees keep real str/bytes values.
             kind = representation_for(decl.annotation, row=False)
-            if kind in (Representation.RAW_STRING, Representation.RAW_BYTES):
-                values = state.representation(version, kind,
-                                              lambda v, s, a: build_raw(kind, v, None, a, s, codes))
+            if kind is Representation.RAW_STRING:
+                values = state.representation(version, kind, lambda v, s, a: codes(v))
+            elif kind is Representation.RAW_BYTES:
+                values = state.representation(version, kind, lambda v, s, a: spans(v, None, a, s))
     if rows is not None:
         values = values[rows]
         valid = None if valid is None else valid[rows]

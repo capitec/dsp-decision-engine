@@ -3,33 +3,16 @@ give the same value regardless of `mode=`.
 """
 from __future__ import annotations
 
-import threading
-from typing import Any
-
 import numpy as np
 import polars as pl
 
 from decider.engine.ir.decls import Input, NullPolicy
-from decider.types import Representation, raw_string_codes
+from decider.types import string_code
 
 
-class StringCodes:
-    """Codes shared with `raw_str()`'s symbolic constants, plus any value seen at runtime."""
-
-    def __init__(self) -> None:
-        self._codes: dict[str, int] = dict(raw_string_codes())
-        self._lock = threading.Lock()
-
-    def encode(self, values: np.ndarray) -> np.ndarray:
-        with self._lock:
-            self._codes.update(raw_string_codes())
-            codes = {s: self._codes.setdefault(s, len(self._codes)) for s in values}
-        return np.fromiter((codes[s] for s in values), np.int32, len(values))
-
-    def bundle(self, name: str, value: str) -> np.int32:
-        with self._lock:
-            self._codes.update(raw_string_codes())
-            return np.int32(self._codes.setdefault(value, len(self._codes)))
+def codes(values: np.ndarray) -> np.ndarray:
+    """Strings as int32 dictionary codes, the same ones `raw_str()` gives its constants."""
+    return np.fromiter(map(string_code, values), np.int32, len(values))
 
 
 def spans(x: np.ndarray, mask: np.ndarray | None, alive: list, source: pl.Series | None) -> np.ndarray:
@@ -52,13 +35,3 @@ def spans(x: np.ndarray, mask: np.ndarray | None, alive: list, source: pl.Series
     extracted = extract_frame(source.to_frame("s"), [Input("s", bytes, NullPolicy.OPTIONAL)])
     alive.append(extracted.kernel_frame)
     return extracted.columns["s"].values
-
-
-def build_raw(kind: Representation, values: np.ndarray, mask: np.ndarray | None, alive: list,
-              source: pl.Series | None, codes: StringCodes) -> np.ndarray:
-    """`RAW_STRING`/`RAW_BYTES`: the same representation in every runner. Other kinds pass through."""
-    if kind is Representation.RAW_BYTES:
-        return spans(values, mask, alive, source)
-    if kind is Representation.RAW_STRING:
-        return codes.encode(values)
-    return values

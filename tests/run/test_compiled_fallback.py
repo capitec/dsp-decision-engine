@@ -208,11 +208,20 @@ def test_raw_string_gives_the_same_answer_in_every_mode(mode):
     assert out["is_raw_priority"].to_list() == [True, False]
 
 
-@pytest.mark.parametrize("mode", COMPILED)
-def test_raw_string_constants_are_preconverted(mode):
-    exe = Engine().bind(flow(is_raw_priority, name="p"), mode=mode)
-    out = exe.run(pl.DataFrame({"value": ["priority", "other"]}))
-    assert out["is_raw_priority"].to_list() == [True, False]
+def code_of(value: Raw[str]) -> Raw[str]:
+    return value
+
+
+@pytest.mark.parametrize("mode", ("interpreted", *COMPILED))
+def test_a_constant_named_after_a_run_never_renumbers_a_value_it_saw(mode):
+    # raw_str() and the runtime encoder draw codes from one table: two would hand the same
+    # code to a constant and to a value already seen, and a step would match the wrong string.
+    exe = Engine().bind(flow(code_of, name="p"), mode=mode)
+    frame = pl.DataFrame({"value": ["walk-in", "broker"]})
+    before = exe.run(frame)["code_of"].to_list()
+    assert len(set(before)) == 2
+    raw_str("broker")
+    assert exe.run(frame)["code_of"].to_list() == before
 
 
 @pytest.mark.parametrize("mode", COMPILED)
