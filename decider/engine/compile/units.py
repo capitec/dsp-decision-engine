@@ -7,7 +7,7 @@ import numpy as np
 
 from decider.engine.compile.kernel import Spec, fused_kernel
 from decider.engine.compile.njit import FALLBACK_ERRORS, compile_call, numpy_dtype, parameters
-from decider.engine.ir.decls import TYPED, Input, NullPolicy, base_annotation, nullable
+from decider.engine.ir.decls import Input, NullPolicy, base_annotation, nullable
 from decider.engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, Sequence, Version
 
 Values = dict[int, np.ndarray]
@@ -52,7 +52,7 @@ class Kernel:
                 fallback.run(values, valid, bundles, n)
             return
         cols = tuple([values[v.id] for v in self.reads])
-        valids = tuple([_bitmap(valid.get(v.id), n) for v in self.optional])
+        valids = tuple([valid[v.id] if v.id in valid else np.ones(n, np.bool_) for v in self.optional])
         params: list[Any] = []
         for cid, has_params, consts, row in self._layout:
             bundle = bundles[cid] if has_params else ()
@@ -101,13 +101,14 @@ class Fallback:
         call = self.calls[0]
         node = call.node
         bundle = bundles[call.id] if node.params else ()
-        cols = [(i.arg, *_argument(i, values[v.id], valid.get(v.id), n)) for i, v in zip(node.inputs, call.reads)]
+        cols = [(i.arg, values[v.id].tolist(), valid.get(v.id) if i.null_policy is NullPolicy.OPTIONAL else None)
+                for i, v in zip(node.inputs, call.reads)]
         outs = [np.empty(n, dtype) for _, dtype in self.writes]
         masks = [np.ones(n, np.bool_) for _ in outs]
         consts = tuple(v for _, v in node.consts)
         fixed = dict(node.consts) | {d.arg: b for d, b in zip(node.params, bundle)}
         for r in range(n):
-            args = [(a, fill if m is not None and not m[r] else col[r]) for a, col, m, fill in cols]
+            args = [(a, None if m is not None and not m[r] else col[r]) for a, col, m in cols]
             if node.kind == "row":
                 result = self.fn(tuple(x for _, x in args), bundle, consts)
             else:
@@ -128,42 +129,6 @@ class Fallback:
 
 
 Unit = Union[Kernel, Fallback]
-
-_ONES = np.full(1, 255, np.uint8)
-_ONES.flags.writeable = False
-
-
-def _bitmap(mask, n: int) -> tuple[np.ndarray, int]:
-    # A kernel reads every validity as `(bitmap, bit offset)`, so one specialisation serves Arrow and engine masks.
-    global _ONES
-    if isinstance(mask, tuple):
-        return mask
-    if mask is None:
-        if len(_ONES) * 8 < n:
-            _ONES = np.full((n + 7) // 8, 255, np.uint8)
-            _ONES.flags.writeable = False
-        return _ONES, 0
-    bits = np.packbits(mask, bitorder="little")
-    bits.flags.writeable = False
-    return bits, 0
-
-
-def _argument(decl: Input, x, mask, n: int) -> tuple[list, np.ndarray | None, Any]:
-    # Python values, the mask of rows that take `fill` (None for OPTIONAL, the fill in the column's dtype for MISSING_AS).
-    x = _unbits(x, n)
-    if decl.null_policy is NullPolicy.REQUIRED:
-        return x.tolist(), None, None
-    fill = decl.fill
-    if decl.null_policy is NullPolicy.MISSING_AS and x.dtype != object:
-        fill = x.dtype.type(fill).item()
-    return x.tolist(), _unbits(mask, n), fill
-
-
-def _unbits(x, n: int):
-    # An in-place Arrow bitmap `(bitmap, bit offset)` as a bool array, for Python code.
-    if isinstance(x, tuple):
-        return np.unpackbits(x[0], count=x[1] + n, bitorder="little")[x[1]:].view(np.bool_)
-    return x
 
 
 def compile_plan(plan: Plan, *, fuse: bool = True) -> dict[int, Unit]:
@@ -327,16 +292,12 @@ class Layout:
         if v.id not in self._cols:
             self._cols[v.id] = len(self.reads)
             self.reads.append(v)
-        # A null `bytes` value is a span of length -1, so it needs no mask; the driver fills a `str` code.
-        base = None if inp is None else base_annotation(inp.annotation)
-        if (inp is None or inp.null_policy is NullPolicy.REQUIRED or base is bytes
-                or inp.null_policy is NullPolicy.MISSING_AS and base not in TYPED):
+        # A null `bytes` value is a span of length -1, so it needs no mask.
+        if inp is None or inp.null_policy is not NullPolicy.OPTIONAL or base_annotation(inp.annotation) is bytes:
             return ("col", self._cols[v.id])
         if v.id not in self._masks:
             self._masks[v.id] = len(self.optional)
             self.optional.append(v)
-        if inp.null_policy is NullPolicy.MISSING_AS:
-            return ("fill", self._cols[v.id], self._masks[v.id], numpy_dtype(base).type(inp.fill).item())
         return ("opt", self._cols[v.id], self._masks[v.id])
 
     def spec(self, call: Call, key: str, fn) -> Spec:

@@ -21,6 +21,5 @@ Decision records for the consolidated `decider`, each with its measured reason.
 - `packed-control-flow.md`: in fused mode a branch or loop of plain scalar steps is one kernel with LLVM control flow; the packing rules, when a launch runs unpacked, and throughput against decider2.
 - `tree-walker.md`: a tree is one row node walked by one njit function over packed arrays passed by address, with an independent Python reference; string outputs are `Literal` indices; strings are matched as byte spans in the kernel, regex/case/trim in Python.
 - `wiring-scopes.md`: how names bind to versions: input columns, typo and forward-reference errors, branch/loop scopes, frame barriers, outputs.
-- `zero-copy-arrow-investigation.md`: spike: reading nullable and bool Arrow columns in place in kernels (behind `DECIDER_ZERO_COPY=1`) and `score()` through polars; measured, with a recommendation.
 
 `progress.md` will hold the task log.

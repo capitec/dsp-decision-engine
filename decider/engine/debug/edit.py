@@ -255,8 +255,7 @@ def _carry_over(old: Any, plan: Plan, state: Any, done: list[str]) -> None:
         if v.producer is None or any(d in ("", v.producer) or v.producer.startswith(d + "/") for d in done):
             was = previous.get((v.name, v.producer))
             if was is not None and was.id in old.values:
-                values, valid = old.read(was)
-                state.write(v, values, valid=valid)
+                state.write(v, old.values[was.id], valid=old.valid.get(was.id))
     n = len(plan.versions)
     for v in sorted({v for chain in old.chains.values() for v in chain if v.id >= n}, key=lambda v: v.id):
         state.record(v.name, v.producer, old.values[v.id], old.valid.get(v.id))
