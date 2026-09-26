@@ -18,8 +18,9 @@ def find_best_item(items: <annotation>[Item]):
 2. can a step iterate items and read fields by name, and what does that cost
    against `Rows[Item]`'s `items.el_1[j]`.
 
-Answers, up front: **a `str` field is nearly free in batch and costs about 9 us
-a `score()` call — it is shipped here.** **Iteration is not slower than the
+Answers, up front: **a `str` field costs what one more numeric field costs in
+batch (43-97 ns an item, nothing copied) and 7-11 us a `score()` call — it is
+shipped here.** **Iteration is not slower than the
 positional form, it is 2-5x faster**, because the cost that dominates is
 numba's per-call unboxing of one namedtuple member per field, not the loop —
 so `Rows[Item]`'s physical shape should become a record array per row. That
@@ -363,10 +364,11 @@ def best_price(items: Rows[Item], best_item: int) -> float:
 
 ## 4. Recommendation, ranked
 
-1. **Ship the `str` field.** It is in this branch: ~90 lines across `span.py`,
-   `rows.py`, `_arrow/nested.py` and `_arrow/kernels.py`, no new numba type
-   beyond one `typeof_impl`, no C, `kernel.py`/`units.py` untouched, 25 tests
-   in `tests/run/test_nested_str_fields.py`, and the suite green. 43 ns an item
+1. **Ship the `str` field.** It is in this branch: 127 added lines across
+   `span.py`, `rows.py`, `_arrow/nested.py` and `_arrow/kernels.py`, no new
+   numba type beyond one `typeof_impl`, no C, `kernel.py`/`units.py` untouched,
+   30 tests in `tests/run/test_nested_str_fields.py`, and the suite green
+   (1953 passed). 43-97 ns an item
    in batch and ~8.5 us a `score()` call is a price worth paying to stop telling
    users to "drop the field from Item and read the column in a python_only
    step". The guide draft in `notes/nested-structs.md` needs one edit: "both
