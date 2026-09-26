@@ -229,3 +229,31 @@ def test_a_changed_helper_invalidates_a_disk_cached_caller(tmp_path):
     assert run() == [10.0, 1, 0]
     (tmp_path / "rates.py").write_text(_HELPER.format(factor="0.20"))
     assert run() == [20.0, 0, 1]
+
+
+def test_a_step_first_seen_without_a_file_still_gets_a_disk_cache(tmp_path):
+    # Dispatchers are shared by content: a notebook cell or an exec'd doc block must not leave
+    # the same code uncacheable for every later caller, or `decider build` warms nothing.
+    import importlib.util
+
+    from numba.core.caching import NullCache
+
+    from decider.engine.compile.njit import jit
+
+    src = "def spread(a: float, b: float) -> float:\n    return a - b + 3.0\n"
+    ns: dict = {}
+    # dont_inherit: this module's `from __future__ import annotations` would otherwise
+    # make the exec'd copy's annotations strings, and so a different content key.
+    exec(compile(src, "GUIDE.md", "exec", dont_inherit=True), ns)
+    key_exec, from_exec = jit(ns["spread"])
+    assert isinstance(from_exec._cache, NullCache)
+
+    path = tmp_path / "spread_module.py"
+    path.write_text(src)
+    spec = importlib.util.spec_from_file_location("spread_module", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    key_file, from_file = jit(module.spread)
+
+    assert key_file == key_exec and from_file is from_exec
+    assert not isinstance(from_file._cache, NullCache)
