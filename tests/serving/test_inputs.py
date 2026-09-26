@@ -9,12 +9,12 @@ import polars as pl
 import pytest
 from typing_extensions import TypedDict
 
-from decider import flow, frame_step
+from decider import Engine, Struct, flow, frame_step
 from decider.config import JsonFileStore
 from decider.exceptions import DeciderError, ParamsError
 from decider.serving import RequestHandler
-from decider.serving.handler import construct_handler_from_settings
-from decider.serving.parse import coerce_record, has_date
+from decider.serving.handler import _dates, construct_handler_from_settings
+from decider.serving.parse import coerce_record, dummy, has_date
 from decider.serving.servers.starlette import create_app
 
 from test_serving import _request
@@ -95,6 +95,21 @@ def test_dates_inside_typed_dict_items_are_coerced_and_bare_dicts_are_left_alone
 
 class Dated(TypedDict, total=False):
     opened_date: dt.date
+
+
+class DatedApplicant(TypedDict):
+    income: float
+    opened_date: dt.date
+
+
+def test_a_struct_input_is_warmed_and_coerced_like_the_typed_dict_it_holds():
+    def afford(applicant: Struct[DatedApplicant]) -> float:
+        return applicant["income"]
+
+    assert dummy(Struct[DatedApplicant]) == {"income": 1.0, "opened_date": dt.date(2000, 1, 1)}
+    dates = _dates(Engine().bind(flow(afford, name="p")))
+    out = coerce_record({"applicant": {"income": 1.0, "opened_date": "2026-01-01"}}, dates)
+    assert out["applicant"] == {"income": 1.0, "opened_date": dt.date(2026, 1, 1)}
 
 
 def test_a_typed_dict_declaring_only_its_dates_keeps_its_other_keys():

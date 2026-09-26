@@ -43,6 +43,10 @@ class Rows(Generic[T]):
     """Marker: `Item`'s list column, as one array per field, sliced per parent row."""
 
 
+class Struct(Generic[T]):
+    """Marker: a struct column of `Item`'s fields, as one record per row, read in a kernel."""
+
+
 def plain_annotation(annotation: Any) -> Any:
     """`T` for an `Annotated[T, ...]`, else the annotation itself: what the engine runs.
 
@@ -92,6 +96,11 @@ def annotation_cache(fn):
 def rows_item(annotation: Any) -> Any | None:
     """`Item` of a `Rows[Item]` annotation, else `None`."""
     return get_args(annotation)[0] if get_origin(annotation) is Rows else None
+
+
+def struct_item(annotation: Any) -> Any | None:
+    """`Item` of a `Struct[Item]` annotation, else `None`."""
+    return get_args(annotation)[0] if get_origin(annotation) is Struct else None
 
 
 def rows_schema(item: Any) -> tuple[tuple[str, Any], ...]:
