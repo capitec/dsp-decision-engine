@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import warnings
+from datetime import date
 from typing import TypedDict
 
 import polars as pl
@@ -24,9 +25,9 @@ class Applicant(TypedDict):
     dependants: int
 
 
-class NamedAccount(TypedDict):
+class DatedAccount(TypedDict):
     balance: float
-    name: str
+    opened: date
 
 
 class CountedAccount(TypedDict):
@@ -286,11 +287,11 @@ def test_every_output_shape_comes_back_the_same_in_every_mode(fn, expected):
 
 # --- what each opt-in refuses, naming the field ------------------------------------------------
 
-def test_a_string_field_in_an_item_is_refused_and_says_what_to_do():
-    def total(accounts: Rows[NamedAccount]) -> float:
+def test_a_field_no_kernel_can_hold_is_refused_and_says_what_to_do():
+    def total(accounts: Rows[DatedAccount]) -> float:
         return float(len(accounts.balance))
 
-    with pytest.raises(TypeError, match="'name'"):
+    with pytest.raises(TypeError, match="'opened'"):
         Engine().bind(flow(total, name="p"), mode="fused").run(FRAME)
 
 

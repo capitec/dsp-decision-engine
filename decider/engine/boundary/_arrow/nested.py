@@ -12,9 +12,11 @@ from functools import lru_cache
 import numpy as np
 import polars as pl
 
-from decider.engine.boundary._arrow._shim import lib
+from decider.engine.boundary._arrow._shim import GET_STRING_ADDR, lib
+from decider.engine.boundary._arrow.kernels import string_spans
 from decider.engine.boundary._arrow.plan import ArrowImportError, FramePlan
 from decider.engine.boundary._arrow.view import FrameView, _Borrowed
+from decider.engine.compile.span import SPAN_DTYPE, span_array
 
 # nanoarrow storage types (enum values are API): the list kinds, by offset width.
 _OFFSET_DTYPE = {26: np.int32, 37: np.int64}
@@ -22,6 +24,8 @@ _STRUCT = 27
 # Field storage types this can read, as the numpy dtype of the buffer.
 _FIELD_DTYPE = {13: np.dtype(np.float64), 12: np.dtype(np.float32),
                 10: np.dtype(np.int64), 8: np.dtype(np.int32), 2: None}  # None: bit-packed bool
+# utf8, large_utf8, utf8_view: all three read through nanoarrow's own accessor.
+_STRING = (14, 35, 41)
 
 
 class Nested:
@@ -118,6 +122,8 @@ def _field(child, dtype: np.dtype, optional: bool, name: str, base: int, count: 
     if not child:
         return None
     storage = lib.sm_view_storage_type(child)
+    if dtype == SPAN_DTYPE:
+        return _spans(child, storage, optional, name, base, count, starts, view)
     if storage not in _FIELD_DTYPE:
         return None
     at = lib.sm_view_offset(child) + base
@@ -135,6 +141,23 @@ def _field(child, dtype: np.dtype, optional: bool, name: str, base: int, count: 
         if x.dtype != dtype:
             x = x.astype(dtype)
     return x if valid is None else np.where(valid, x, np.nan)
+
+
+def _spans(child, storage: int, optional: bool, name: str, base: int, count: int, starts,
+           view) -> np.ndarray | None:
+    if storage not in _STRING:
+        return None
+    if not optional and lib.sm_view_null_count(child):
+        valid = _validity(child, lib.sm_view_offset(child) + base, count, view)
+        if not valid.all():
+            from decider.engine.compile.rows import NULL_STR, null_item
+
+            raise null_item(name, int(np.argmin(valid)), starts, NULL_STR)
+    pairs = np.empty((count, 2), np.int64)
+    # The strings stay where Arrow put them; only the addresses are gathered. nanoarrow's
+    # accessor adds the child's own offset, so the index is the window start.
+    string_spans(GET_STRING_ADDR, child, base, count, pairs)
+    return span_array(pairs, kept=view)
 
 
 def _buffer(v, k: int, at: int, n: int, dtype, view: FrameView) -> np.ndarray:

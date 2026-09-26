@@ -7,17 +7,23 @@
 # constant 2 before type inference runs, where no overload can reach it.
 from __future__ import annotations
 
+import ctypes
 import operator
 
 import numpy as np
 from numba.core import types
 from numba.core.datamodel import models
 from numba.core.errors import TypingError
-from numba.extending import intrinsic, overload, overload_method, register_jitable, register_model
+from numba.extending import intrinsic, overload, overload_method, register_jitable, register_model, typeof_impl
 
 from decider.engine.boundary._arrow.intrinsics import load_u8
 
 _PAIR = types.UniTuple(types.int64, 2)
+
+# A `bytes` object's own buffer, without the microsecond `np.ndarray.ctypes.data` costs.
+_address = ctypes.pythonapi.PyBytes_AsString
+_address.restype = ctypes.c_void_p
+_address.argtypes = (ctypes.py_object,)
 
 
 class SpanType(types.Type):
@@ -37,6 +43,72 @@ class SpanType(types.Type):
 register_model(SpanType)(models.UniTupleModel)
 
 SPAN = SpanType()
+
+# One span as numpy stores it: the same 16 bytes `[2 x i64]` the kernel holds.
+SPAN_DTYPE = np.dtype([("address", np.int64), ("length", np.int64)])
+
+
+class SpanArray(np.ndarray):
+    """A column of spans: one element is a span in a kernel and a `Span` in Python.
+
+    The bytes live wherever they were read from, so `kept` holds whatever owns
+    them (an Arrow import, a list of `bytes`) for as long as any view of this
+    array survives.
+    """
+
+    def __getitem__(self, k):
+        value = super().__getitem__(k)
+        if not isinstance(k, (int, np.integer)):
+            return value
+        # The Python-side counterpart of the kernel's span, so a step that falls back to
+        # Python answers `== "x"`, `len` and the rest identically. Imported here because
+        # the representations live under `engine/run`, which reads this module.
+        from decider.engine.run.representations import Span
+
+        length = int(value["length"])
+        return Span(None if length < 0 else ctypes.string_at(int(value["address"]), length).decode())
+
+    def __iter__(self):
+        return map(self.__getitem__, range(len(self)))
+
+
+@typeof_impl.register(SpanArray)
+def _typeof_span_array(val, c):
+    return types.Array(SPAN, 1, "C", readonly=not val.flags.writeable)
+
+
+def span_array(pairs: np.ndarray, kept: object = None) -> SpanArray:
+    """An int64 array of `(address, byte length)` pairs as an array of spans.
+
+    `kept` is whatever owns the bytes the addresses point into.
+
+    Example::
+
+        span_array(np.array([address, 5], np.int64), kept=[b"snoop"])
+    """
+    out = pairs.reshape(-1).view(SPAN_DTYPE).view(SpanArray)
+    out.kept = kept
+    return out
+
+
+def spans_of(values, optional: bool, null) -> SpanArray:
+    """`values`' UTF-8 bytes as an array of spans, holding the `bytes` the addresses point into.
+
+    `null(k)` is raised for a `None` at index `k` unless `optional`.
+    """
+    kept: list[bytes] = []
+    flat: list[int] = []
+    for k, value in enumerate(values):
+        if value is None:
+            if not optional:
+                raise null(k)
+            flat += (0, -1)
+            continue
+        encoded = str.encode(value)   # unbound: a non-str value raises TypeError, as a kernel refuses one
+        kept.append(encoded)
+        flat += (_address(encoded), len(encoded))
+    return span_array(np.array(flat, np.int64), kept)
+
 
 _ADVICE = ("compare a span against a str literal, a module-level str constant or a param(), "
            "not against a string built at run time")
