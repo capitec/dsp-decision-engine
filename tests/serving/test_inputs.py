@@ -1,6 +1,7 @@
 """Serving real-world inputs: warm-up with dates and lists, JSON date coercion, code_path precedence, entry points."""
 import asyncio
 import datetime as dt
+import io
 import json
 import subprocess
 import sys
@@ -245,3 +246,20 @@ def test_a_dotted_handler_in_a_package_is_used_and_a_missing_one_falls_back(
 def test_python_dash_m_decider_runs_the_cli():
     result = subprocess.run([sys.executable, "-m", "decider", "--help"], capture_output=True, text=True)
     assert result.returncode == 0 and "build" in result.stdout
+
+
+def total(a: float, b: float) -> float:
+    return a + b
+
+
+ARROW = "application/vnd.apache.arrow.stream"
+
+
+def test_an_arrow_ipc_body_is_scored_and_comes_back_as_arrow(tmp_path):
+    handler = _handler(tmp_path, flow(total, name="s"))
+    asyncio.run(handler.init_fn())
+    buf = io.BytesIO()
+    pl.DataFrame({"a": [1.0, 2.0], "b": [2.0, 3.0]}).write_ipc_stream(buf)
+    status, body = _request(create_app(handler), "POST", "/invocations", buf.getvalue(), ARROW, ARROW)
+    assert status == 200
+    assert pl.read_ipc_stream(body)["total"].to_list() == [3.0, 5.0]

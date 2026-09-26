@@ -47,7 +47,9 @@ class RequestHandler:
     off the request path, `activate()` swaps it in atomically, `rollback()`
     goes back to the previous one. Errors propagate to the caller, and the
     active version keeps serving. `POST /invocations` with a JSON object
-    scores one record; a JSON array, JSONL, CSV or Parquet body runs as a frame.
+    scores one record; a JSON array, JSONL, CSV, Parquet or Arrow IPC body
+    runs as a frame. Send one record as JSON: Arrow IPC costs more to encode
+    and decode than the pipeline takes to run.
 
     Override any `*_fn` method in a `Handler` subclass in `inference.py` to
     change how requests are parsed, scored or formatted. JSON dates arrive as
