@@ -272,3 +272,18 @@ def test_state_records_an_override_as_a_new_version(bind):
     assert state.versions("term_cap@override@by") == [v]
     assert state.versions("term_cap")[0] is v
     assert v.id == len(exe.plan.versions)
+
+
+def test_a_compiled_representation_is_rebuilt_after_its_values_change():
+    # A loop body writes the same version every iteration: a cached span or code array is stale.
+    from decider.engine.run.state import State
+    from decider.engine.wiring import resolve
+
+    plan = resolve(flow(lambda x: x, name="p"))
+    state = State.from_frame(plan, pl.DataFrame({"x": [1.0, 2.0]}))
+    version = plan.calls[0].writes[0]
+    state.write(version, np.array(["a", "b"], object))
+    first = state.representation(version, "upper", lambda values, source, alive: np.array([s.upper() for s in values]))
+    state.write(version, np.array(["c", "d"], object))
+    again = state.representation(version, "upper", lambda values, source, alive: np.array([s.upper() for s in values]))
+    assert list(first) == ["A", "B"] and list(again) == ["C", "D"]

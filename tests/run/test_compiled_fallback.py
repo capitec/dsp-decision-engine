@@ -1,4 +1,4 @@
-"""Compiled modes run unsupported values in Python and semantic strings in kernels."""
+"""Compiled modes run unsupported values in Python and semantic strings one call per row."""
 import datetime as dt
 import warnings
 
@@ -39,19 +39,23 @@ VERSIONS = pl.DataFrame({"x": [1.0, 4.0, 6.0], "a_version": ["v1", "v2", "v2"], 
                          "band": ["complete", "partial", "complete"]})
 
 
-def test_string_steps_preserve_semantics_and_fallback_only_for_string_outputs():
-    with pytest.warns(UserWarning, match="p/pick runs in Python.*writes 'pick' as str"):
+def test_string_steps_keep_their_semantics_and_run_one_call_per_row():
+    with pytest.warns(UserWarning, match="p/pick runs compiled, one call per row.*writes 'pick' as str"):
         out = assert_equivalent(flow(half, pick, same, is_complete, doubled, name="p"), VERSIONS)
     assert out["pick"].to_list() == ["v2", "v2", "v2"]
     assert out["same"].to_list() == [False, True, False]
     assert out["is_complete"].to_list() == [True, False, True]
 
 
-def test_semantic_string_steps_share_fused_kernel():
+def test_a_semantic_string_step_splits_the_fused_kernel_but_still_compiles():
+    from numba.core.dispatcher import Dispatcher
+
     exe = Engine().bind(flow(half, same, doubled, name="p"), mode="fused")
-    exe.run(VERSIONS)
-    units = list({id(u): u for u in exe.runner.units.values()}.values())
-    assert [type(u) for u in units] == [Kernel]
+    with pytest.warns(UserWarning, match="p/same runs compiled, one call per row"):
+        exe.run(VERSIONS)
+    units = [exe.runner.units[c.id] for c in exe.plan.calls]
+    assert [type(u) for u in units] == [Kernel, Fallback, Kernel]
+    assert isinstance(units[1].fn, Dispatcher)   # compiled, just not in the array kernel
 
 
 def test_the_warning_is_given_once_per_executable():
@@ -61,7 +65,7 @@ def test_the_warning_is_given_once_per_executable():
         exe.run(VERSIONS)
         exe.run(VERSIONS)
         exe.score({"a_version": "v1", "b_version": "v1"})
-    assert len(caught) == 0
+    assert len(caught) == 1
 
 
 def as_dict(x: float) -> dict:

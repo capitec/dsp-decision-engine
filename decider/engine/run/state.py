@@ -36,8 +36,9 @@ class State:
         self.chains: dict[str, list[Version]] = {k: list(v) for k, v in plan.chains.items()}
         self._extra = 0
         self._sources: dict[int, tuple[np.ndarray, pl.Series]] = {}
-        self._representations: dict[tuple[int, Hashable], np.ndarray] = {}
-        self._representation_alive: dict[tuple[int, Hashable], list[np.ndarray]] = {}
+        # Per version id: the compiled representations built from its values, each with the
+        # buffers it borrows. Dropped whenever those values are written again.
+        self._representations: dict[int, dict[Hashable, tuple[np.ndarray, list]]] = {}
 
     @classmethod
     def from_frame(cls, plan: Plan, frame: pl.DataFrame, n: int | None = None) -> State:
@@ -71,6 +72,7 @@ class State:
         never touches stay null.
         """
         vid = version.id
+        self._representations.pop(vid, None)   # built from the values this write replaces
         if rows is None:
             self.values[vid] = values
             if valid is not None and not valid.all():
@@ -119,16 +121,15 @@ class State:
         `build(values, source, alive)` receives full-column values and may append
         backing buffers to `alive` when its representation borrows memory.
         """
-        key = (version.id, kind)
-        values = self._representations.get(key)
-        if values is None:
-            source = self.source(version)
-            alive = self._representation_alive.setdefault(key, [])
-            source_values = self.values.get(version.id)
-            if source_values is None:
-                source_values = np.full(self.n, None, object)
-            values = self._representations[key] = build(source_values, source, alive)
-        return values
+        cached = self._representations.setdefault(version.id, {})
+        entry = cached.get(kind)
+        if entry is None:
+            alive: list = []
+            values = self.values.get(version.id)
+            if values is None:
+                values = np.full(self.n, None, object)
+            entry = cached[kind] = (build(values, self.source(version), alive), alive)
+        return entry[0]
 
     def record(self, name: str, producer: str, values: np.ndarray, valid: np.ndarray | None = None) -> Version:
         """Store `values` as a new version of `name`, appended to its chain; for overrides.
@@ -161,8 +162,7 @@ class State:
                 else:
                     self.valid.pop(vid, None)
         self.chains, self._extra = old.chains, old._extra
-        self._representations = {k: v for k, v in old._representations.items() if k[0] in keep}
-        self._representation_alive = {k: v for k, v in old._representation_alive.items() if k[0] in keep}
+        self._representations = {}   # values this rewinds past may have built them
 
     def versions(self, spec: str) -> list[Version]:
         """The versions `spec` names: `name` (the latest), `name@path` (by producer) or `name@*` (all).
