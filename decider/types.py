@@ -76,7 +76,14 @@ def annotation_cache(fn):
 
     @wraps(fn)
     def plain(annotation: Any, **kw: Any) -> Any:
-        return cached(plain_annotation(annotation), **kw)
+        annotation = plain_annotation(annotation)
+        try:
+            return cached(annotation, **kw)
+        except TypeError:
+            # A param keeps the spelling it was declared with, so metadata a caller nested
+            # inside `| None` can still reach here unhashable. The cache is an optimisation:
+            # answer anyway.
+            return fn(annotation, **kw)
 
     return plain
 
