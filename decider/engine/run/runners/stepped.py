@@ -67,8 +67,8 @@ class SteppedRunner(InterpretedRunner):
 
     def _compile(self, plan: Plan, lazy: bool) -> None:
         python: dict[int, str] = {}
-        # A row node reading `bytes` compares bytes, so its `str` params go in as UTF-8 spans.
-        strs = {c.id: names for c in plan.calls if c.node.kind == "row" and _reads_bytes(c)
+        # Any call reading `bytes` compares bytes, so its `str` params go in as UTF-8 spans.
+        strs = {c.id: names for c in plan.calls if _reads_bytes(c)
                 and (names := tuple(d.name for d in c.node.params if d.annotation is str))}
         self.units = compile_plan(plan, fuse=self.fuse, python=python)
         self._fallbacks = {}
@@ -122,6 +122,7 @@ class SteppedRunner(InterpretedRunner):
         alive: list = []
         for decl, v, path, want, kind, build, raw in self._reads[id(unit)]:
             x, mask = state.read(v, rows)
+            filled = False
             # `Raw[...]` and `Rows[...]` are a contract about the value, not an optimisation, so
             # their representation is built for a step running in Python too, where every other
             # annotation wants the Python value instead.
@@ -131,6 +132,11 @@ class SteppedRunner(InterpretedRunner):
                     if mask is not None:
                         x = np.where(mask, x, 0)
                     x = x.astype(build)
+                elif _fills(decl, mask):
+                    # The fill belongs in the strings: a span or a code cannot be filled afterwards,
+                    # and the fill is this reader's, not the shared representation's.
+                    filled = True
+                    x = build(fill_missing(x, mask, decl.fill), None, alive)
                 else:
                     full = state.representation(v, kind, build)
                     x = full if rows is None else full[rows]
@@ -140,7 +146,7 @@ class SteppedRunner(InterpretedRunner):
             if mask is not None and not mask.all():
                 if decl.null_policy is NullPolicy.REQUIRED:
                     raise MissingInputError(decl.name, path, int((~mask).sum()), len(mask), absent=_absent(state, v))
-                if decl.null_policy is NullPolicy.MISSING_AS:
+                if not filled and _fills(decl, mask):
                     # ponytail: one fill per version per kernel; two readers with different fills share the first.
                     x = fill_missing(x, mask, decl.fill).astype(x.dtype, copy=False)
                 valid[v.id] = mask
@@ -212,5 +218,10 @@ def _spans(name: str, values: np.ndarray, source: pl.Series | None, alive: list)
         raise TypeError(f"'{name}' is a string input: {e}") from None
 
 
+def _fills(decl: Input, mask: np.ndarray | None) -> bool:
+    return (decl.null_policy is NullPolicy.MISSING_AS and mask is not None and not mask.all())
+
+
 def _reads_bytes(call: Call) -> bool:
-    return any(base_annotation(i.annotation) is bytes for i in call.node.inputs)
+    # A frame node's lineage is unknown, so it has no declared inputs.
+    return any(base_annotation(i.annotation) is bytes for i in call.node.inputs or ())

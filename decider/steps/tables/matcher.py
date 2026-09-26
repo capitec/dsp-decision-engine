@@ -64,7 +64,7 @@ def _holds(r, f, b, s, rows, code, n):
             return False
         return (1.0 if z else 0.0) == _f(floats, f0 + r)
     if kind == EQ_S or kind == IN_S:
-        addr, m = s[v]
+        addr, m = s[v][0], s[v][1]
         if m < 0:
             return False
         if kind == EQ_S:
