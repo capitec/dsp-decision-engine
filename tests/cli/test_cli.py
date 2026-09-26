@@ -12,6 +12,7 @@ from click.testing import CliRunner
 import decider.settings as settings_module
 from decider.cli import CPU_TARGET_FILE, cli
 from decider.engine.compile import cpu_target
+from decider.engine.compile.njit import _DISPATCHERS, _REASONS
 from decider.serving.handler import construct_handler_from_settings
 
 
@@ -69,6 +70,10 @@ def test_template_refuses_a_non_empty_directory(project):
 
 
 def test_build_stages_warms_and_records_the_cpu_target(project):
+    # A build is a fresh process in real use. In-process, a dispatcher or a cached compile
+    # verdict from another test means nothing compiles here, so numba would write no .nbi.
+    _DISPATCHERS.clear()
+    _REASONS.clear()
     result = CliRunner().invoke(cli, ["build"])
     assert result.exit_code == 0, result.output
     assert "built config version 0.0.0" in result.output
