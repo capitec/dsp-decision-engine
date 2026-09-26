@@ -24,6 +24,15 @@ class DeciderError(Exception):
         super().__init__(self.message, *args)
 
 
+class FallbackWarning(UserWarning):
+    """A compiled-mode step runs outside the shared kernel; the message names the step and says why.
+
+    Example::
+
+        warnings.filterwarnings("ignore", category=FallbackWarning)   # or @allow_fallback per step
+    """
+
+
 class DeciderMissingDependencyError(DeciderError, ModuleNotFoundError):
     """An optional dependency isn't installed; the message names the extra that provides it."""
 
