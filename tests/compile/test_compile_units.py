@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 from numba.core.dispatcher import Dispatcher
 
-from decider import ConfigurableStep, branch, flow, frame_step, helper, python_only, step
+from decider import ConfigurableStep, allow_fallback, branch, flow, frame_step, helper, step
 from decider.engine.compile import Fallback, Kernel, compile_plan, jit
 from decider.engine.ir.decls import Input, Output, ParamDecl
 from decider.engine.ir.nodes import CallNode
@@ -57,12 +57,12 @@ def uses_plain_helper(value: float) -> float:
     return plain_helper(value)
 
 
-@python_only
+@allow_fallback
 def external_helper(value: float) -> float:
     return value * 2
 
 
-def uses_python_only(value: float) -> float:
+def uses_allow_fallback(value: float) -> float:
     return external_helper(value)
 
 
@@ -206,24 +206,24 @@ def test_a_shared_helper_uses_one_dispatcher_across_callers():
 def test_an_unclassified_helper_explains_how_to_classify_it():
     unit = compile_plan(resolve(flow(uses_plain_helper)))[0]
     assert isinstance(unit, Fallback)
-    assert "calls 'plain_helper' without @helper or @python_only" in unit.reason
+    assert "calls 'plain_helper' without @helper or @allow_fallback" in unit.reason
 
 
-def test_a_python_only_helper_is_reported_as_an_intentional_boundary():
-    unit = compile_plan(resolve(flow(uses_python_only)))[0]
-    assert isinstance(unit, Fallback)
-    assert "calls python_only function 'external_helper'" in unit.reason
+def test_an_allow_fallback_helper_is_a_declared_boundary_for_its_caller():
+    unit = compile_plan(resolve(flow(uses_allow_fallback)))[0]
+    assert isinstance(unit, Fallback) and unit.declared
+    assert "calls the @allow_fallback function 'external_helper'" in unit.reason
 
 
 def picks_a_label(half: float) -> str:
     return "big" if half > 1 else "small"
 
 
-def test_a_string_output_fallback_still_runs_compiled_not_interpreted(run):
+def test_a_string_output_step_runs_in_python(run):
     unit = compile_plan(resolve(flow(picks_a_label)))[0]
     assert isinstance(unit, Fallback)
     assert "writes 'picks_a_label' as str" in unit.reason
-    assert isinstance(unit.fn, Dispatcher)
+    assert not isinstance(unit.fn, Dispatcher)
     out, _ = run(resolve(flow(picks_a_label)), {"half": np.array([2.0, 0.5])})
     assert out["picks_a_label"].tolist() == ["big", "small"]
 

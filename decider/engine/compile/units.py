@@ -82,17 +82,18 @@ class Kernel:
 
 
 class Fallback:
-    """One call numba couldn't compile, run row by row in Python; `reason` says why.
+    """One call that runs on its own, row by row; `reason` says why and `declared` whether the author asked.
 
     Same `run` and `writes` as `Kernel`; it stores every version it writes.
     """
 
-    __slots__ = ("calls", "fn", "reason", "writes")
+    __slots__ = ("calls", "fn", "reason", "declared", "writes")
 
-    def __init__(self, call: Call, fn, reason: str):
+    def __init__(self, call: Call, fn, reason: str, declared: bool = False):
         self.calls = (call,)
         self.fn = fn
         self.reason = reason
+        self.declared = declared
         # Python values come back as they are: a `str`, `dict`, `list` or `date` output is stored as an object.
         self.writes = tuple(
             (v, output_dtype(o.annotation) if literal_choices(o.annotation) is not None
@@ -158,17 +159,17 @@ def compile_plan(plan: Plan, *, fuse: bool = True, python: Mapping[int, str] = {
     keep = _kept(plan) if fuse else None
     units: dict[int, Unit] = {}
     for run in (part for whole in _runs(plan.root, fuse) for part in _split_at_nulls(whole)):
-        compiled = [(call, None, getattr(call.node.fn, "py_func", call.node.fn), python[call.id])
+        compiled = [(call, None, getattr(call.node.fn, "py_func", call.node.fn), python[call.id], False)
                     if call.id in python else (call, *compile_call(call.node)) for call in run]
         start = 0
-        for k, (call, _, fn, reason) in enumerate(compiled + [(None, None, None, "end")]):
+        for k, (call, _, fn, reason, declared) in enumerate(compiled + [(None, None, None, "end", False)]):
             if reason is None:
                 continue
             if start < k:
                 unit = _kernel(compiled[start:k], keep)
                 units.update((c.id, unit) for c in unit.calls)
             if call is not None:
-                units[call.id] = Fallback(call, fn, reason)
+                units[call.id] = Fallback(call, fn, reason, declared)
             start = k + 1
     return units
 
@@ -337,7 +338,7 @@ def _kernel(compiled: list, keep) -> Kernel:
     ids = {c.id for c in calls}
     lay = Layout()
     specs, outputs, writes, masked, choices = [], [], [], [], []
-    for call, key, fn, _ in compiled:
+    for call, key, fn, *_ in compiled:
         spec = lay.spec(call, key, fn)
         specs.append(spec)
         for k, v in enumerate(call.writes):

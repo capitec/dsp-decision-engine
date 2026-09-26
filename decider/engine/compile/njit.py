@@ -21,11 +21,18 @@ from decider.engine.compile.rows import rows_probe
 from decider.engine.ir.decls import KIND_DTYPES, FeatureKind, Input, NullPolicy, base_annotation, feature_kind
 from decider.engine.ir.nodes import CallNode
 from decider.engine.params import NodeParams
-from decider.steps.helpers import helper_signatures, is_python_only
+from decider.steps.helpers import allows_fallback, helper_signatures
 from decider.types import is_raw, raw_base, rows_item, rows_schema
 
 # UnsupportedBytecodeError (e.g. an `import` inside a step) isn't a NumbaError.
 FALLBACK_ERRORS = (NumbaError, UnsupportedBytecodeError)
+
+# Compiling runs no step code, so any of these is numba's own refusal: a NotImplementedError from its
+# bytecode reader meeting an opcode it lacks, or a bare assert from its lowering (a list of int and
+# float). Runtime failures keep the narrower FALLBACK_ERRORS, which never swallows a step's assert.
+_COMPILE_ERRORS = (*FALLBACK_ERRORS, NotImplementedError, AssertionError)
+
+_DECLARED_CALLEE = "calls the @allow_fallback function"
 
 # ponytail: unbounded, one entry per distinct function content; add eviction if a long session edits steps thousands of times.
 _DISPATCHERS: dict[str, Dispatcher] = {}
@@ -78,66 +85,66 @@ def jit(fn: Callable) -> tuple[str, Dispatcher]:
     return key, dispatcher
 
 
-def compile_call(node: CallNode) -> tuple[str, Callable, str | None]:
-    """Compile one scalar or row node now: `(content key, callable, fallback reason)`.
+def compile_call(node: CallNode) -> tuple[str, Callable, str | None, bool]:
+    """Compile one scalar or row node now: `(content key, callable, fallback reason, declared)`.
 
     The callable is the njit dispatcher, or the plain Python function when
-    numba can't compile it (then the reason says why). Only numba's
+    numba can't compile it (then the reason says why). `declared` is true when
+    `@allow_fallback` says the author accepts the fallback. Only numba's
     compile-failure errors fall back; anything else raises.
 
     Example::
 
-        key, fn, reason = compile_call(plan.calls[0].node)
+        key, fn, reason, declared = compile_call(plan.calls[0].node)
     """
     prepared, helper_reason, undeclared = (_prepare_function(node.fn) if node.kind == "scalar"
                                            else (node.fn, None, ()))
+    declared = allows_fallback(node.fn) or (helper_reason or "").startswith(_DECLARED_CALLEE)
     key, dispatcher = jit(node.fn if helper_reason is not None else prepared)
     if helper_reason is not None:
-        return key, dispatcher.py_func, helper_reason
+        return key, dispatcher.py_func, helper_reason, declared
     rows_inputs = [i for i in node.inputs if rows_item(i.annotation) is not None]
     # numba would type a `date` or `list` input as the float64 it can't be converted to.
     odd = next((i for i in node.inputs if i not in rows_inputs
                and base_annotation(i.annotation) not in (float, int, bool, str, bytes, Any)), None)
     if odd is not None:
-        return key, dispatcher.py_func, f"reads '{odd.name}' as {odd.annotation}, which no kernel takes"
+        return key, dispatcher.py_func, f"reads '{odd.name}' as {odd.annotation}, which no kernel takes", declared
     # numba types a scalar `bytes` argument as an array, so `==` against a literal compares
     # elementwise rather than as a whole value; there's no kernel signature for that.
     semantic_bytes = next((i for i in node.inputs
                            if base_annotation(i.annotation) is bytes and not is_raw(i.annotation)), None)
     if semantic_bytes is not None and node.kind == "scalar":
         return key, dispatcher.py_func, (f"reads '{semantic_bytes.name}' as bytes: numba can't type a scalar "
-                                          "bytes value, only a byte array, so no kernel can compare it whole")
-    # No fused array kernel can hold a variable-length string: numba's array of strings is fixed
-    # width, so its element type would move with the longest value in the batch and recompile on
-    # every new one. A `Raw[str]` is an int code by then, so only a true `str` needs the per-row call.
-    no_kernel = (next((f"writes '{o.name}' as str, which no fused kernel stores" for o in node.outputs
+                                         "bytes value, only a byte array, so no kernel can compare it whole"), declared
+    # No array kernel can hold a variable-length string: numba's array of strings is fixed width, so its
+    # element type would move with the longest value in the batch and recompile on every new one. Calling a
+    # compiled dispatcher once per row instead costs more than the Python body it replaces, on a batch and
+    # on one record, so a semantic `str` runs in Python. A `Raw[str]` is an int code by then.
+    no_kernel = (next((f"writes '{o.name}' as str, which no kernel stores" for o in node.outputs
                        if base_annotation(o.annotation) is str and not is_raw(o.annotation)), None)
-                 or next((f"reads '{i.name}' as str, which no fused kernel holds" for i in node.inputs
+                 or next((f"reads '{i.name}' as str, which no kernel holds" for i in node.inputs
                           if base_annotation(i.annotation) is str and not is_raw(i.annotation)), None))
+    if no_kernel is not None:
+        return key, dispatcher.py_func, no_kernel, declared
     sig = _probe_signature(node)
     if sig is None:
-        return key, dispatcher, no_kernel
+        return key, dispatcher, None, declared
     if (key, sig) not in _REASONS:
         try:
             dispatcher.compile(sig)
             _REASONS[key, sig] = None
-        # Compiling runs no step code, so a NotImplementedError here is numba's bytecode reader
-        # meeting an opcode it lacks (Python 3.14's LOAD_COMMON_CONSTANT, from `any(... for ...)`).
-        except (*FALLBACK_ERRORS, NotImplementedError) as e:
-            _REASONS[key, sig] = f"{type(e).__name__}: {e}"
+        except _COMPILE_ERRORS as e:
+            _REASONS[key, sig] = _why(e)
     reason = _REASONS[key, sig]
     if reason is not None and undeclared:
-        reason = f"calls '{undeclared[0]}' without @helper or @python_only: {reason}"
-    # A compiled function taking or returning `str` still can't join a shared array kernel, but
-    # calling it once per row (not its raw Python body) keeps numba's unicode semantics.
-    if reason is None and no_kernel is not None:
-        return key, dispatcher, no_kernel
+        reason = f"calls '{undeclared[0]}' without @helper or @allow_fallback: {reason}"
     # Each parent row owns a different number of child rows, so `Rows[Item]` can't sit in the
-    # shared array kernel either; it still runs compiled, one call per row.
+    # shared array kernel; it still runs compiled, one call per row.
     if reason is None and rows_inputs:
         names = ", ".join(f"'{i.name}'" for i in rows_inputs)
-        return key, dispatcher, f"reads {names} as Rows[...], which runs one call per row, outside the shared kernel"
-    return key, (dispatcher if reason is None else dispatcher.py_func), reason
+        return key, dispatcher, (f"reads {names} as Rows[...], which runs one call per row, "
+                                 "outside the shared kernel"), declared
+    return key, (dispatcher if reason is None else dispatcher.py_func), reason, declared
 
 
 def _prepare_function(fn: Callable, stack: tuple[int, ...] = ()) -> tuple[Callable, str | None, tuple[str, ...]]:
@@ -153,8 +160,8 @@ def _prepare_function(fn: Callable, stack: tuple[int, ...] = ()) -> tuple[Callab
         called = globals_.get(name)
         if not isinstance(called, py_types.FunctionType):
             continue
-        if is_python_only(called):
-            return fn, f"calls python_only function '{called.__name__}', which runs in Python", ()
+        if allows_fallback(called):
+            return fn, f"{_DECLARED_CALLEE} '{called.__name__}', which runs in Python", ()
         signatures = helper_signatures(called)
         if signatures is None:
             # numba compiles what it can (an @overload, a supported numpy function) and only
@@ -193,9 +200,14 @@ def _compile_helper(fn: Callable, signatures: tuple[tuple[tuple[type, ...], type
         for inputs, _ in signatures:
             dispatcher.compile(tuple(_numba_type(t) for t in inputs))
         _REASONS[key, "helper"] = None
-    except (*FALLBACK_ERRORS, NotImplementedError) as e:
-        _REASONS[key, "helper"] = f"{type(e).__name__}: {e}"
+    except _COMPILE_ERRORS as e:
+        _REASONS[key, "helper"] = _why(e)
     return key, dispatcher
+
+
+def _why(e: BaseException) -> str:
+    # numba's lowering asserts carry no message at all.
+    return f"{type(e).__name__}: {str(e) or 'numba could not compile this step'}"
 
 
 def _numba_type(annotation: type) -> Any:
@@ -211,8 +223,6 @@ def _numba_type(annotation: type) -> Any:
         return types.int64
     if annotation is bool:
         return types.boolean
-    if annotation is str:
-        return types.unicode_type
     raise TypeError(f"unsupported @helper signature type {annotation!r}; use float, int or bool")
 
 
@@ -242,17 +252,13 @@ def _input_type(inp: Input) -> Any:
     item = rows_item(inp.annotation)
     if item is not None:
         return typeof(rows_probe(rows_schema(item)))
-    raw = is_raw(inp.annotation)
     annotation = base_annotation(inp.annotation)
-    if annotation is bytes and raw:
-        return SPAN
     if annotation is bytes:
         # A null span has length -1, so a `bytes` input is never an Optional.
         return SPAN
-    if annotation is str and raw:
-        return types.int32
+    # A semantic `str` never reaches a kernel, so only a `Raw[str]` code gets here.
     if annotation is str:
-        return types.Optional(types.unicode_type) if inp.null_policy is NullPolicy.OPTIONAL else types.unicode_type
+        return types.int32
     # An OPTIONAL `T | None` arrives as T's array plus a mask, so it is typed `Optional(T)`.
     t = from_dtype(numpy_dtype(base_annotation(inp.annotation)))
     return types.Optional(t) if inp.null_policy is NullPolicy.OPTIONAL else t
