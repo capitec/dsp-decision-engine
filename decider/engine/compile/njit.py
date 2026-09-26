@@ -15,9 +15,12 @@ from numba.core.caching import FunctionCache, NullCache
 from numba.core.dispatcher import Dispatcher
 from numba.core.errors import NumbaError, UnsupportedBytecodeError
 
-from decider.engine.compile import cpython  # registers CPython-compatible round and **
+# Imported for their registrations (CPython-compatible round and **, the span
+# operations) and hashed into SALT below.
+from decider.engine.compile import cpython, span
 from decider.engine.compile.fingerprint import fingerprint
 from decider.engine.compile.rows import rows_probe
+from decider.engine.compile.span import SPAN
 from decider.engine.ir.decls import KIND_DTYPES, FeatureKind, Input, NullPolicy, base_annotation, feature_kind
 from decider.engine.ir.nodes import CallNode
 from decider.engine.params import NodeParams
@@ -40,7 +43,7 @@ _REASONS: dict[tuple, str | None] = {}
 
 # Numba keys a disk-cached step by its own bytecode only, so changes to a
 # reachable helper would otherwise keep serving stale machine code.
-SALT = hashlib.sha256(Path(cpython.__file__).read_bytes()).hexdigest()
+SALT = hashlib.sha256(b"".join(Path(m.__file__).read_bytes() for m in (cpython, span))).hexdigest()
 
 
 class _SaltedCache(FunctionCache):
@@ -245,9 +248,6 @@ def default_bundle(node: CallNode) -> tuple:
     return NodeParams(node.origin.path, node.params).defaults if node.params else ()
 
 
-SPAN = types.UniTuple(types.int64, 2)
-
-
 def _input_type(inp: Input) -> Any:
     item = rows_item(inp.annotation)
     if item is not None:
@@ -278,8 +278,10 @@ def _probe_signature(node: CallNode) -> tuple | None:
                 bundle = bundle._replace(**{d.name: (0, 0) for d in node.params if d.annotation is str})
             return (types.Tuple(tuple(ins)), typeof(bundle), typeof(consts))
         by_arg = {i.arg: t for i, t in zip(node.inputs, ins)}
-        # A `str` param reaches a scalar kernel as the int32 code of its literal.
-        by_arg |= {d.arg: types.int32 if d.annotation is str else typeof(v) for d, v in zip(node.params, bundle)}
+        # A `str` param of a node reading `bytes` reaches the kernel as a span of its UTF-8 bytes;
+        # otherwise as the int32 code of its literal.
+        par = types.UniTuple(types.int64, 2) if SPAN in ins else types.int32
+        by_arg |= {d.arg: par if d.annotation is str else typeof(v) for d, v in zip(node.params, bundle)}
         by_arg |= {name: typeof(v) for name, v in node.consts}
         return tuple(by_arg[p] for p in parameters(node.fn))
     except (ValueError, KeyError):
