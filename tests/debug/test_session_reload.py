@@ -7,7 +7,7 @@ import polars as pl
 import pytest
 from numba.core import event
 
-from decider import flow, step
+from decider import Raw, flow, raw_str, step
 from decider.engine.debug import Edited, Paused, ReloadFailed
 from decider.engine.debug.hot import ModuleWatcher
 from decider.testing import MODES
@@ -236,3 +236,24 @@ def test_structure_follows_added_and_deleted_steps():
     s.delete("buffer")
     assert "buffer" not in {n["path"] for n in s.structure()}
 
+
+
+def any_code(channel: Raw[str]) -> bool:
+    return channel >= 0
+
+
+def test_a_reloaded_step_matches_the_constant_it_names_against_values_the_run_already_coded():
+    # A reload shallow-copies the runner, so a `Raw[str]` code table it built carries over.
+    # A constant the reloaded step names must be the code that table already holds, or the
+    # step silently matches a different string.
+    frame = pl.DataFrame({"channel": ["walk-in", "broker"]})
+    s = flow(step(any_code, name="c", output="hit"), name="p").session(frame, mode="fused")
+    s.resume()
+    broker = raw_str("broker")
+
+    def is_broker(channel: Raw[str]) -> bool:
+        return channel == broker
+
+    s.reload(flow(step(is_broker, name="c", output="hit"), name="p"))
+    s.resume()
+    assert s.output()["hit"].to_list() == [False, True]
