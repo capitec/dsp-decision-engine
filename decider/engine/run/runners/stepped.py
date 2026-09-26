@@ -189,7 +189,7 @@ def _external(unit: Unit) -> tuple[tuple[Input, Version, str, np.dtype | None, A
     reads += [(Input(v.name, base_annotation(v.annotation)), v, "") for v in getattr(unit, "passthrough", ())]
     row = any(c.node.kind == "row" for c in unit.calls)
     return tuple((i, v, path, numpy_dtype(b) if (b := base_annotation(i.annotation)) in (float, int, bool) else None,
-                  *_boxed(i, row, path), is_raw(i.annotation)) for i, v, path in reads)
+                  *_boxed(i, row, path), _declared(i.annotation, row)) for i, v, path in reads)
 
 
 def _boxed(decl: Input, row: bool, path: str) -> tuple[Any, Any]:
@@ -207,8 +207,12 @@ def _boxed(decl: Input, row: bool, path: str) -> tuple[Any, Any]:
     if annotation not in (str, bytes):
         return None, numpy_dtype(annotation)
     kind = representation_for(decl.annotation, row=row)
-    if annotation is bytes:
+    if kind is Representation.RAW_BYTES:
         return kind, partial(_spans, decl.name)
+    if annotation is bytes:
+        # A semantic `bytes` step runs in Python and compares whole values, so give it real bytes:
+        # the column is strings, and `bytes` declares how this step reads them.
+        return kind, partial(_encoded, decl.name)
     if kind is Representation.RAW_STRING:
         return kind, lambda values, source, alive: codes(values)
     # A step reading semantic strings runs one compiled call per row, which takes the Python
@@ -216,11 +220,24 @@ def _boxed(decl: Input, row: bool, path: str) -> tuple[Any, Any]:
     return kind, lambda values, source, alive: values
 
 
+def _encoded(name: str, values: np.ndarray, source: pl.Series | None, alive: list) -> np.ndarray:
+    try:
+        return np.array([v if v is None or isinstance(v, bytes) else str.encode(v) for v in values], object)
+    except TypeError as e:
+        raise TypeError(f"'{name}' is a string input: {e}") from None
+
+
 def _spans(name: str, values: np.ndarray, source: pl.Series | None, alive: list) -> np.ndarray:
     try:
         return spans(values, None, alive, source)
     except TypeError as e:
         raise TypeError(f"'{name}' is a string input: {e}") from None
+
+
+def _declared(annotation: Any, row: bool) -> bool:
+    # `Raw[...]` and `Rows[...]` say how the value is read, so they hold when the step runs in Python
+    # too. A scalar step's `bytes` says the same; a row node falling back matches on the strings.
+    return is_raw(annotation) or (not row and base_annotation(annotation) is bytes)
 
 
 def _records(kind: Any, python: bool) -> bool:
