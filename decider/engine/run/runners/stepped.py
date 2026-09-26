@@ -16,6 +16,7 @@ from decider.engine.run.representations import StringCodes, build_raw
 from decider.engine.run.runners.base import Checkpoint
 from decider.engine.run.runners.interpreted import InterpretedRunner, _absent, _note, _Scope
 from decider.engine.run.state import State, fill_missing
+from decider.exceptions import FallbackWarning
 from decider.types import Representation, is_raw, representation_for, rows_item, rows_schema
 from decider.engine.wiring.plan import Call, Plan, Version
 
@@ -24,16 +25,15 @@ class SteppedRunner(InterpretedRunner):
     """Runs every scalar and row node as its own numba kernel, with a Python driver in between.
 
     Pauses at every node, like the interpreted runner. Frame steps, branches
-    and loops run in Python. A `str` value enters a kernel as an int32 code
-    and a `str` param as the code of its literal, so a step compares a `str`
-    input against a `str` param exactly as it does in plain Python. A `bytes`
-    input enters as an `(address, byte length)` span of its UTF-8 bytes, and
-    then so does each `str` param of that node. A Python fallback gets plain
-    Python values.
+    and loops run in Python. A `Raw[str]` value enters a kernel as an int32
+    code and a `bytes` input as an `(address, byte length)` span of its UTF-8
+    bytes, and then so does each `str` param of that node. A Python fallback
+    gets plain Python values.
 
-    A step no kernel can run faithfully (it compares two `str` inputs, or a
-    `str` input with a literal) runs in Python instead, with a warning
-    naming it. With `strict=True` it raises instead.
+    A step no kernel holds — one reading or writing a semantic `str`, a
+    `date` or a `list`, or with a body numba can't compile — runs in Python,
+    row by row, with one `FallbackWarning` naming it. With `strict=True` it
+    raises instead, unless the step is `@allow_fallback`.
 
     Example::
 
@@ -78,15 +78,17 @@ class SteppedRunner(InterpretedRunner):
             compiled = isinstance(unit.fn, Dispatcher)
             for c in unit.calls:
                 path = c.node.origin.path
-                self._fallbacks[path] = unit.reason
+                self._fallbacks[path] = f"@allow_fallback: {unit.reason}" if unit.declared else unit.reason
+                if unit.declared:
+                    continue
                 if compiled:
                     warnings.warn(f"{path} runs compiled, one call per row outside the shared "
-                                  f"kernel: {unit.reason}", stacklevel=4)
+                                  f"kernel: {unit.reason}", FallbackWarning, stacklevel=4)
                     continue
                 message = f"{path} runs in Python, row by row: {unit.reason}"
                 if self.strict:
-                    raise ValueError(f"{message}; run it in mode='interpreted'")
-                warnings.warn(message, stacklevel=4)
+                    raise ValueError(f"{message}; accept it with @allow_fallback, or run mode='interpreted'")
+                warnings.warn(message, FallbackWarning, stacklevel=4)
         self._python = python
         self._reads = {id(unit): _external(unit) for unit in self.units.values()}
         self._strs = {k: v for k, v in strs.items() if v}
@@ -106,9 +108,9 @@ class SteppedRunner(InterpretedRunner):
     def _run(self, unit: Unit, state: State, params: RunParams, scope: _Scope) -> None:
         rows = scope.rows
         n = scope.count(state.n)
-        # A genuinely interpreted fallback runs Python code, which takes Python values: strings,
-        # not codes. A fallback backed by a compiled dispatcher (a `str` output, `Rows[Item]`) still
-        # wants typed/representation values, same as a `Kernel`.
+        # A genuinely interpreted fallback runs Python code, which takes Python values: real strings,
+        # not codes. A fallback backed by a compiled dispatcher (`Rows[Item]`) still wants
+        # typed/representation values, same as a `Kernel`.
         python = isinstance(unit, Fallback) and not isinstance(unit.fn, Dispatcher)
         # Every call of a unit runs on every row the unit runs on, so validating
         # them all here is validating exactly the nodes that run.
@@ -119,7 +121,11 @@ class SteppedRunner(InterpretedRunner):
         alive: list = []
         for decl, v, path, want in self._reads[id(unit)]:
             x, mask = state.read(v, rows)
-            if not python and x.dtype == object:
+            # `Raw[...]` and `Rows[...]` are a contract about the value, not an optimisation, so their
+            # representation is built per declaration -- for a step running in Python too, where every
+            # other annotation wants the Python value instead.
+            raw = is_raw(decl.annotation)
+            if x.dtype == object and (raw or not python):
                 item = rows_item(decl.annotation)
                 if item is not None:
                     schema = rows_schema(item)
@@ -161,19 +167,15 @@ class SteppedRunner(InterpretedRunner):
 
     def _typed(self, x: np.ndarray, mask: np.ndarray | None, decl: Input, alive: list,
                source: pl.Series | None) -> np.ndarray:
-        raw = is_raw(decl.annotation)
         annotation = base_annotation(decl.annotation)
         if annotation is bytes:
             try:
                 return build_raw(Representation.RAW_BYTES, x, mask, alive, source, self._codes)
             except TypeError as e:
                 raise TypeError(f"'{decl.name}' is a string input: {e}") from None
-        if annotation is str and raw:
-            return build_raw(Representation.RAW_STRING, x, mask, alive, source, self._codes)
+        # A semantic `str` never reaches a kernel, so a str here is a `Raw[str]` code.
         if annotation is str:
-            # A step reading semantic strings runs one compiled call per row, which takes the
-            # Python values as they are: numba types them as its own unicode.
-            return x
+            return build_raw(Representation.RAW_STRING, x, mask, alive, source, self._codes)
         if mask is not None:
             x = np.where(mask, x, 0)
         return x.astype(numpy_dtype(base_annotation(decl.annotation)))

@@ -109,12 +109,12 @@ def test_retuning_a_string_literal_never_recompiles():
 
 
 @pytest.mark.parametrize("mode", ["stepped", "fused"])
-def test_a_step_reading_several_string_inputs_compiles_one_call_per_row(mode):
+def test_a_step_reading_several_string_inputs_runs_in_python(mode):
     def same(a: str, b: str, which: str = param("a")) -> float:
         return 1.0 if a == b or a == which else 0.0
 
-    exe = Engine(strict_compile=True).bind(flow(same), mode=mode)
-    with pytest.warns(UserWarning, match="same runs compiled, one call per row.*as str"):
+    exe = Engine().bind(flow(same), mode=mode)
+    with pytest.warns(UserWarning, match="same runs in Python, row by row.*as str"):
         out = exe.run(pl.DataFrame({"a": ["x", "y"], "b": ["y", "y"]}))
     assert out["same"].to_list() == [0.0, 1.0]
 
