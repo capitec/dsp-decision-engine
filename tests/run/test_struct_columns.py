@@ -193,6 +193,18 @@ def test_a_struct_reaches_a_step_that_runs_one_compiled_call_per_row():
     assert out["label"].to_list() == ["lo", "hi"]
 
 
+@pytest.mark.parametrize("mode", MODES)
+def test_dividing_by_zero_still_raises_on_the_per_row_path(mode):
+    # A record's fields are numpy scalars, so only a compiled dispatcher is ever handed one:
+    # numba's python error model raises here exactly as a Python body does.
+    def label(applicant: Struct[Applicant]) -> str:
+        return "hi" if applicant["income"] / applicant["age"] > 1.0 else "lo"
+
+    exe = Engine().bind(flow(label, name="p"), mode=mode)
+    with pytest.raises(ZeroDivisionError):
+        exe.run(frame([{"income": 1.0, "age": 0}]))
+
+
 def test_a_fill_keeps_the_step_in_python():
     def afford_fill(applicant: Struct[Applicant] = missing_as({"income": 0.0, "age": 0})) -> float:
         return applicant["income"] * 2.0 + applicant["age"]
