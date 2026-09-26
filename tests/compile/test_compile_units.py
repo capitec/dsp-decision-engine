@@ -1,16 +1,20 @@
 """Grouping calls into units, what a unit keeps, and the Python fallback."""
 from __future__ import annotations
 
+from typing import TypedDict
+
 import numpy as np
 import pytest
 from numba.core.dispatcher import Dispatcher
 
-from decider import ConfigurableStep, allow_fallback, branch, flow, frame_step, helper, step
+from decider import ConfigurableStep, Rows, allow_fallback, branch, flow, frame_step, helper, step
 from decider.engine.compile import Fallback, Kernel, compile_plan, jit
+from decider.engine.compile.units import Layout
 from decider.engine.ir.decls import Input, Output, ParamDecl
 from decider.engine.ir.nodes import CallNode
 from decider.engine.params import param
 from decider.engine.wiring import resolve
+from decider.engine.wiring.plan import Version
 
 
 def disposable_income(net_income: float, expenses: float) -> float:
@@ -297,3 +301,23 @@ def test_a_param_reaches_its_argument_when_its_document_key_differs(run, fuse):
     a, _ = run(plan, INPUTS, fuse=fuse)
     b, _ = run(plan, INPUTS, fuse=fuse, params={"clip": {"upper": 6000.0}})
     assert (a["clip"].tolist(), b["clip"].tolist()) == ([6500.0] * 4, [6000.0] * 4)
+
+
+class ItemA(TypedDict):
+    price: float
+
+
+class ItemB(TypedDict):
+    weight: float
+
+
+def test_two_item_types_over_one_column_in_one_kernel_is_refused():
+    # `resolve()` already refuses two readers of one input column declaring different types
+    # (`WiringError`, before a plan is even built), so this guard only matters for two calls a
+    # caller hands `Layout` reading the same version directly: one `flats` block per column, so
+    # the second reader would silently get the first's fields.
+    v = Version(0, "items", None, None)
+    lay = Layout()
+    lay.source(v, Input("items", Rows[ItemA]))
+    with pytest.raises(TypeError, match="two different Item types"):
+        lay.source(v, Input("items", Rows[ItemB]))

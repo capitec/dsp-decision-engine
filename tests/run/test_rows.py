@@ -9,7 +9,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from decider import Engine, Rows, branch, flow, missing_as, step
+from decider import Engine, Rows, branch, flow, loop, missing_as, step
 from decider.engine.compile.rows import ARROW_ROWS, build_rows
 from decider.engine.run.state import from_series
 from decider.testing import assert_equivalent
@@ -47,10 +47,48 @@ def test_a_row_with_no_items_is_zero_items_not_an_error(mode):
 
 
 @pytest.mark.parametrize("mode", ("stepped", "fused"))
-def test_rows_compiles_but_cannot_join_the_shared_array_kernel(mode):
+def test_rows_joins_the_shared_array_kernel(mode):
     exe = Engine().bind(flow(bundle_total, name="p"), mode=mode)
     exe.run(FRAME)
-    assert "reads 'items' as Rows[...]" in exe.fallbacks()["p/bundle_total"]
+    assert exe.fallbacks() == {}
+    unit = exe.runner.units[exe.plan.calls[0].id]
+    assert unit.ragged, "'items' should reach the kernel as flat arrays, not a per-row dispatcher"
+
+
+def test_a_loop_reading_rows_packs_into_one_kernel():
+    def more(mask: int) -> bool:
+        return mask <= 0b11
+
+    @step(output="best")
+    def keep_best(best: float, bundle_total: float) -> float:
+        return bundle_total if bundle_total > best else best
+
+    @step(output="mask")
+    def advance(mask: int) -> int:
+        return mask + 1
+
+    search = loop(more, flow(bundle_total, keep_best, advance, name="body"),
+                 carries=["mask", "best"], max_iterations=4, name="search")
+    frame = pl.DataFrame({"items": [[{"price": 2.0}, {"price": 3.0}]], "mask": [1], "best": [0.0]})
+    exe = Engine().bind(flow(search, name="p"), mode="fused")
+    assert exe.run(frame)["best"].to_list() == [5.0]
+    assert "p/search" in exe.runner.packed
+
+
+def test_a_kernel_that_fails_at_run_time_falls_back_to_the_per_row_dispatcher():
+    from numba.core.errors import TypingError
+
+    exe = Engine().bind(flow(bundle_total, name="p"), mode="stepped")
+    exe.run(FRAME)
+    unit = exe.runner.units[exe.plan.calls[0].id]
+    assert unit.ragged, "the setup for this test needs 'items' to have joined the kernel"
+
+    def boom(*a):
+        raise TypingError("synthetic failure forcing the retry")
+
+    unit.fn = boom
+    assert exe.run(FRAME)["bundle_total"].to_list() == [5.0, 5.0, 0.0]
+    assert unit._python, "expected the kernel to have fallen back to one call per row"
 
 
 def test_rows_runs_compiled_not_interpreted(mode="stepped"):
@@ -232,6 +270,11 @@ def test_an_optional_rows_input_gives_the_step_none_for_a_null_list():
 
     out = assert_equivalent(flow(maybe, name="p"), NULLS)
     assert out["maybe"].to_list() == [5.0, -1.0, 0.0, 7.0]
+    # One kernel has one signature, and a namedtuple of array views has no in-band None, so an
+    # OPTIONAL Rows[...] input keeps the per-row dispatcher rather than joining the kernel.
+    exe = Engine().bind(flow(maybe, name="p"), mode="fused")
+    exe.run(NULLS)
+    assert "reads 'items' as Rows[...]" in exe.fallbacks()["p/maybe"]
 
 
 def _wide(n: int, items: int = 2) -> pl.DataFrame:

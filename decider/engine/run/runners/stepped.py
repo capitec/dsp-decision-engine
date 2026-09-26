@@ -10,7 +10,6 @@ from numba.core.dispatcher import Dispatcher
 
 from decider.engine.boundary.nulls import MissingInputError
 from decider.engine.compile import Fallback, Unit, compile_plan, numpy_dtype
-from decider.engine.compile.njit import RAGGED_IN_KERNEL
 from decider.engine.compile.rows import build_ragged, build_rows, rows_needs_no_fill
 from decider.engine.compile.structs import build_struct, struct_schema
 from decider.engine.ir.decls import Input, NullPolicy, base_annotation
@@ -69,8 +68,9 @@ class SteppedRunner(InterpretedRunner):
 
     def _compile(self, plan: Plan, lazy: bool) -> None:
         python: dict[int, str] = {}
-        # Any call reading `bytes` compares bytes, so its `str` params go in as UTF-8 spans.
-        strs = {c.id: names for c in plan.calls if _reads_bytes(c)
+        # A call reading `bytes`, or a `Rows[...]` item's `str` field, compares spans, so its
+        # `str` params go in as UTF-8 spans too.
+        strs = {c.id: names for c in plan.calls if _reads_span(c)
                 and (names := tuple(d.name for d in c.node.params if d.annotation is str))}
         self.units = compile_plan(plan, fuse=self.fuse, python=python)
         self._fallbacks = {}
@@ -210,7 +210,9 @@ def _boxed(decl: Input, row: bool, path: str, kernel: bool = False,
     item = rows_item(decl.annotation)
     if item is not None:
         schema = rows_schema(item)
-        if RAGGED_IN_KERNEL and kernel and not row:
+        # A shared array kernel takes the flat arrays and slices them per row itself; a row node's
+        # per-row dispatcher and a per-row `Fallback` still want that row's items already sliced.
+        if kernel and not row:
             return ("ragged", schema), lambda values, source, alive: build_ragged(values, schema, source, alive)
         return ("rows", schema), lambda values, source, alive: build_rows(values, schema, source, alive)
     annotation = base_annotation(decl.annotation)
@@ -271,6 +273,12 @@ def _fills(decl: Input, mask: np.ndarray | None, kind: Any) -> bool:
     return not rows_needs_no_fill(decl, type(kind) is tuple and kind[0] in ("rows", "ragged"))
 
 
-def _reads_bytes(call: Call) -> bool:
+def _reads_span(call: Call) -> bool:
     # A frame node's lineage is unknown, so it has no declared inputs.
-    return any(base_annotation(i.annotation) is bytes for i in call.node.inputs or ())
+    for i in call.node.inputs or ():
+        if base_annotation(i.annotation) is bytes:
+            return True
+        if (item := rows_item(i.annotation)) is not None and any(
+                base_annotation(t) is str for _, t in rows_schema(item)):
+            return True
+    return False

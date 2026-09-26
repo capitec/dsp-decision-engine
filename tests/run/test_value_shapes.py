@@ -103,7 +103,7 @@ SHAPES = [
     (raw_bytes_span, [1.0, 0.0], 1.0, True),
     (raw_bytes_prefix, [7.0, 0.0], 7.0, True),
     (list_of_dicts, [15.0, 3.0], 15.0, False),
-    (rows_of_items, [15.0, 3.0], 15.0, False),
+    (rows_of_items, [15.0, 3.0], 15.0, True),
     (plain_dict, [80.0, 50.0], 80.0, False),
     (struct_record, [80.0, 50.0], 80.0, True),
     (list_of_floats, [3.0, 3.0], 3.0, False),
