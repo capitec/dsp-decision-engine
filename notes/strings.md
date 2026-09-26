@@ -51,3 +51,5 @@ Both kernel rows are stale, and none of that per-call cost was the kernel. Codes
 now 2.2 µs over a pure numeric kernel (`notes/strings-codes.md`); a span is 2.6 µs for
 one row and a string-gated tree `score()` went from 146 to 91 µs
 (`notes/strings-spans.md`).
+  Attacked in `notes/strings-spans.md`: a string-gated tree `score()` went from
+  145 to 91 µs.

@@ -9,6 +9,7 @@ import polars as pl
 
 from decider.engine.ir.decls import TYPED, Input, NullPolicy, base_annotation
 from decider.engine.wiring.plan import Plan, Version
+from decider.types import annotation_cache
 
 
 class State:
@@ -242,7 +243,7 @@ def fill_missing(values: np.ndarray, valid: np.ndarray, fill: Any) -> np.ndarray
     return out
 
 
-@lru_cache(maxsize=256)
+@annotation_cache
 def declared_dtype(annotation: Any) -> pl.DataType | None:
     """The polars dtype of `annotation` (`list[float]` -> `List(Float64)`), or `None` when polars can't say."""
     if annotation is None:
