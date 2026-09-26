@@ -9,7 +9,12 @@ from numba.core import cgutils, types
 from numba.core.typing import signature
 from numba.extending import intrinsic
 
+from decider.engine.compile.rows import rows_class
 from decider.engine.compile.span import SPAN
+
+
+def _slice(arr, lo, hi):
+    return arr[lo:hi]
 
 
 class Spec(NamedTuple):
@@ -20,9 +25,11 @@ class Spec(NamedTuple):
     element, or `None` where validity mask m is false; `("res", s, k)` is
     output k of call s of this kernel; `("var", v)` is variable v (set by a
     `Fork` or `Repeat`); `("par", p)` is `params[p]`;
-    `("row", (source, ...))` is a tuple of sources. `dtypes` are the declared
-    dtypes of the outputs; `unpack` means `fn` returns a tuple of them.
-    `nullable[k]` marks an output declared `T | None`: it may be `None`.
+    `("row", (source, ...))` is a tuple of sources; `("rag", schema, b)` is
+    row i's items, sliced out of `flats[b:]` (`lo`, `hi`, then one flat array
+    per field of `schema`). `dtypes` are the declared dtypes of the outputs;
+    `unpack` means `fn` returns a tuple of them. `nullable[k]` marks an output
+    declared `T | None`: it may be `None`.
     """
 
     key: str
@@ -72,7 +79,7 @@ _KERNELS: dict[tuple, Callable] = {}
 
 
 def fused_kernel(program: tuple, outputs: tuple[tuple, ...], variables: tuple[np.dtype, ...] = ()) -> Callable:
-    """One njit kernel `kernel(n, cols, valids, params, outs)` running `program` for each of n rows.
+    """One njit kernel `kernel(n, cols, valids, params, flats, outs)` running `program` for each of n rows.
 
     `program` is a tuple of `Spec` (one call), `Fork` and `Repeat`; calls are
     numbered in the order they appear, depth first, which is the `s` of a
@@ -88,16 +95,16 @@ def fused_kernel(program: tuple, outputs: tuple[tuple, ...], variables: tuple[np
     Example::
 
         kernel = fused_kernel((Spec(key, fn, (("col", 0),), (np.dtype("f8"),), False),), (("res", 0, 0),))
-        kernel(n, (x,), (), (), (out,))
+        kernel(n, (x,), (), (), (), (out,))
     """
     key = (_key(program), outputs, variables)
     kernel = _KERNELS.get(key)
     if kernel is None:
         body = _row_body(program, outputs, variables)
 
-        def run(n, cols, valids, params, outs):
+        def run(n, cols, valids, params, flats, outs):
             for i in range(n):
-                body(cols, valids, params, outs, i)
+                body(cols, valids, params, flats, outs, i)
 
         kernel = _KERNELS[key] = njit(nogil=True)(run)
     return kernel
@@ -122,9 +129,9 @@ def _row_body(program: tuple, outputs: tuple[tuple, ...], variables: tuple[np.dt
     # Forks and loops are plain LLVM blocks; values crossing them live in
     # stack slots, which LLVM promotes back to registers.
     @intrinsic
-    def body(typingctx, cols, valids, params, outs, i):
+    def body(typingctx, cols, valids, params, flats, outs, i):
         def codegen(context, builder, sig, args):
-            cols_v, valids_v, params_v, outs_v, i_v = args
+            cols_v, valids_v, params_v, flats_v, outs_v, i_v = args
             results: list[list[tuple[Any, Any]]] = []
             vtypes = [from_dtype(d) for d in variables]
             slots = [cgutils.alloca_once(builder, context.get_value_type(t)) for t in vtypes]
@@ -142,6 +149,19 @@ def _row_body(program: tuple, outputs: tuple[tuple, ...], variables: tuple[np.dt
                 getitem = context.get_function(operator.getitem, signature(arr.dtype, arr, i))
                 return getitem(builder, (builder.extract_value(tup_v, j), i_v)), arr.dtype
 
+            def rag(schema, base):
+                # Row i's items: each flat field array sliced `lo[i]:hi[i]`. The field types come
+                # from the arrays themselves, never from a probe: read straight out of Arrow they
+                # are `readonly array(...)`, which is a type of its own.
+                lo, index = element(flats, flats_v, base)
+                hi, _ = element(flats, flats_v, base + 1)
+                fields = [flats.types[base + 2 + k] for k in range(len(schema))]
+                ty = types.NamedTuple(fields, rows_class(schema))
+                views = [context.compile_internal(builder, _slice, signature(at, at, index, index),
+                                                  [builder.extract_value(flats_v, base + 2 + k), lo, hi])
+                         for k, at in enumerate(fields)]
+                return context.make_tuple(builder, ty, views), ty
+
             def load(src):
                 kind = src[0]
                 if kind == "col":
@@ -157,6 +177,8 @@ def _row_body(program: tuple, outputs: tuple[tuple, ...], variables: tuple[np.dt
                     return builder.load(slots[src[1]]), vtypes[src[1]]
                 if kind == "par":
                     return builder.extract_value(params_v, src[1]), params.types[src[1]]
+                if kind == "rag":
+                    return rag(src[1], src[2])
                 loaded = [load(s) for s in src[1]]
                 ty = types.Tuple(tuple(t for _, t in loaded))
                 return context.make_tuple(builder, ty, [v for v, _ in loaded]), ty
@@ -254,7 +276,7 @@ def _row_body(program: tuple, outputs: tuple[tuple, ...], variables: tuple[np.dt
                     store(k, v, t)
             return context.get_dummy_value()
 
-        return types.none(cols, valids, params, outs, i), codegen
+        return types.none(cols, valids, params, flats, outs, i), codegen
 
     return body
 
