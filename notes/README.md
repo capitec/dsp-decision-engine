@@ -27,6 +27,8 @@ Decision records for the consolidated `decider`, each with its measured reason.
 - `jupyterlab-decider.md`: the JupyterLab host of the flow debugger: the bridge in the kernel over a comm (notebook pipelines and flow files), where the bridge lives now, what's left out, and how it's tested.
 - `hot-reload-investigation.md` (spike): `Session.reload` diffs checkpoint sequences by content and re-runs from the first change; notebook `watch`, file `ModuleWatcher`, measurements, and why serving never hot reloads.
 
+- `serving-latency.md`: where one request's microseconds actually go, the kernel-plus-state floor, every transport priced from the caller (HTTP, raw socket, unix socket, shared memory, Arrow IPC, a persistent pyarrow stream), and why an Arrow-native server is not the win.
+
 - `benchmarks-vs-decider2.md`: the last measured numbers against decider2, per workload, and which benchmark script replaced each comparison script.
 - `old-test-coverage.md`: every test of decider_old and decider2 mapped to the test that covers it now, or the reason it was dropped.
 
