@@ -83,6 +83,10 @@ exe = Engine().bind(pipeline, mode="fused")      # bind once, call many times
 assert exe.score({"income": 1000.0, "debt": 350.0, "applied_on": date(2026, 1, 5)}, params)["approved"] is False
 ```
 
+For one record, call `score(record)`, never `run(df)` on a one-row frame: `run`
+builds a frame, exports it through Arrow and assembles an output frame, which
+costs about five times what `score` does on the same record.
+
 ## Branch, loop, frame steps
 
 ```python
