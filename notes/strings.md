@@ -47,6 +47,7 @@ A `str` **output** with no `str` input (`label(x: float) -> str`):
   under a lock, or an Arrow export for the span buffer) is not amortised by one row.
   That single-record cost is the thing worth attacking, since trees read spans.
 
-The `Raw[str]` row is stale: none of that 34 µs was the kernel, and the single-record
-cost is now 2.2 µs over a pure numeric kernel. See `notes/strings-codes.md`. Spans are
-still unattacked.
+Both kernel rows are stale, and none of that per-call cost was the kernel. Codes are
+now 2.2 µs over a pure numeric kernel (`notes/strings-codes.md`); a span is 2.6 µs for
+one row and a string-gated tree `score()` went from 146 to 91 µs
+(`notes/strings-spans.md`).
