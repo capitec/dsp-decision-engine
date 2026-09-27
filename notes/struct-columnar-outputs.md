@@ -13,6 +13,28 @@ a record or a list of records and `optimise` can carry the winner's record back.
   `_series` applies it, so a step returning either keeps its shape on empty
   rows instead of inferring `Null`. A `Struct[Item]`/`Columnar[Item]` *output*
   already runs today — in Python, row by row, with correct results.
+- **Compiled struct output** (decision (a), the tuple return): a step
+  `return rate, code` for a `Struct[Product]` output now compiles and fuses.
+  `output_dtype(Struct[Item])` is a numpy structured dtype; the kernel packs a
+  tuple return into a record scalar (`build_record`) and stores it; `_series`
+  and `score` materialise the record as a dict. A dict return stays on the
+  Python path (a clear fallback reason). `Struct[Item] | None` stays Python
+  too (no record-with-validity-mask kernel store yet).
+- **Struct loop carry**: a `Struct[Item]` can be a `loop` carry and packs into
+  one kernel. The carry slot holds the record's *bytes* (not its pointer), so
+  a record kept across iterations stays valid.
+- **`optimise(record=Item)`**: carries the winner's record back. The evaluate
+  step also writes `record: Struct[Item]`; `optimise` emits `record` as
+  `Struct[Item] | None` (`None` when no candidate survived — gap 4 point 6).
+  The keep-record step is a separate single-record step (a tuple-with-record
+  return is not compilable), and the finalise step runs in Python.
+
+## Not done
+
+- **Columnar output** (decision (d)): a `Columnar[Item]` output is a
+  variable-length list per row, which no shared kernel stores. It stays
+  Python-only for now; a `Ragged`-style offsets+child-buffers output is the
+  honest compiled shape if it is ever wanted.
 
 ## The one decision blocking the rest
 

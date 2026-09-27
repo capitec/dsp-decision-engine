@@ -8,9 +8,10 @@ import numpy as np
 from decider.engine.compile.kernel import Spec, fused_kernel
 from decider.engine.compile.njit import FALLBACK_ERRORS, compile_call, numpy_dtype, parameters
 from decider.engine.compile.rows import Ragged
+from decider.engine.compile.structs import struct_dtype, struct_schema
 from decider.engine.ir.decls import Input, NullPolicy, base_annotation, nullable
 from decider.engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, Sequence, Version
-from decider.types import columnar_item, item_schema
+from decider.types import columnar_item, item_schema, struct_item
 
 Values = dict[int, np.ndarray]
 
@@ -216,6 +217,9 @@ def _runs(r: Resolved, fuse: bool) -> Iterator[list[Call]]:
 def _split_at_nulls(run: list[Call]) -> Iterator[list[Call]]:
     # A value that may be null reaches its readers through the driver, which
     # applies each reader's null policy, so no kernel both writes and reads one.
+    # A struct output is a record scalar (a pointer to a fresh buffer) in flight
+    # but a record array in the state, so a reader splits into the next kernel
+    # and reads the record array its struct input expects.
     part: list[Call] = []
     made: set[int] = set()
     for call in run:
@@ -223,7 +227,8 @@ def _split_at_nulls(run: list[Call]) -> Iterator[list[Call]]:
             yield part
             part, made = [], set()
         part.append(call)
-        made |= {v.id for v, o in zip(call.writes, call.node.outputs) if nullable(o.annotation)}
+        made |= {v.id for v, o in zip(call.writes, call.node.outputs)
+                 if nullable(o.annotation) or struct_item(o.annotation) is not None}
     if part:
         yield part
 
@@ -231,13 +236,17 @@ def _split_at_nulls(run: list[Call]) -> Iterator[list[Call]]:
 def output_dtype(annotation: Any) -> np.dtype:
     """The dtype a kernel stores an output declared `annotation` in: `numpy_dtype` of `T` for `T | None`.
 
-    A `Literal` of strings is stored as the int64 index of its value.
+    A `Literal` of strings is stored as the int64 index of its value; a
+    `Struct[Item]` as one record per row.
 
     >>> output_dtype(int | None)
     dtype('int64')
     """
     if literal_choices(annotation) is not None:
         return np.dtype(np.int64)
+    item = struct_item(base_annotation(annotation))
+    if item is not None:
+        return struct_dtype(struct_schema(item))
     return numpy_dtype(base_annotation(annotation))
 
 
@@ -357,9 +366,11 @@ class Layout:
             args = tuple(by_arg[a] for a in parameters(fn))
         dtypes = tuple(output_dtype(o.annotation) for o in node.outputs)
         nulls = tuple(nullable(o.annotation) for o in node.outputs)
+        structs = tuple(struct_item(base_annotation(o.annotation)) is not None for o in node.outputs)
         s, self._specs = self._specs, self._specs + 1
         self.produced.update((v.id, ("res", s, k)) for k, v in enumerate(call.writes))
-        return Spec(key, fn, args, dtypes, node.kind == "row" or len(dtypes) > 1, nulls if any(nulls) else ())
+        return Spec(key, fn, args, dtypes, node.kind == "row" or len(dtypes) > 1,
+                    nulls if any(nulls) else (), structs if any(structs) else ())
 
 
 def _kernel(compiled: list, keep) -> Kernel:

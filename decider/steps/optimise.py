@@ -15,11 +15,14 @@ from decider.steps.base import Step, as_step
 from decider.steps.function import step
 from decider.steps.loop import loop
 from decider.steps.sequential import flow
+from decider.types import Struct, item_schema
 
 if TYPE_CHECKING:
     from decider.engine.ir.context import IRContext
 
 _CARRIES = ("index", "best_index", "best_score", "evaluated", "disqualified")
+
+_ZERO = {float: 0.0, int: 0, bool: False}
 
 
 def _more(index: int, count: int) -> bool:
@@ -76,19 +79,60 @@ class OptimiseStep(Step):
     score: str
     disqualify: Step | None
     max_candidates: int
+    record: Any = None
 
     def to_ir(self, ctx: IRContext) -> SequenceNode:
         inner = ctx.child(self.name)
         keep = _keep if self.score == "score" else _keep.relabel(reads={"score": self.score})
         dq = _no_reject if self.disqualify is None else _write_as(self.disqualify, "reject")
-        body = flow(self.evaluate, dq, keep, _advance, name="body")
-        search = loop(_more, body, carries=_CARRIES, max_iterations=self.max_candidates, name="search")
+        if self.record is None:
+            body = flow(self.evaluate, dq, keep, _advance, name="body")
+            search = loop(_more, body, carries=_CARRIES, max_iterations=self.max_candidates, name="search")
+            return SequenceNode(ctx.origin(self), (inner.build(_write_as(self.count, "count")),
+                                                   inner.build(_seed), inner.build(search)), drops=("index",))
+        return self._with_record(inner, dq, keep, ctx)
+
+    def _with_record(self, inner: Any, dq: Step, keep: Step, ctx: IRContext) -> SequenceNode:
+        item = self.record
+        schema = item_schema(item)
+        zeros = tuple(_ZERO[t] for _, t in schema)
+
+        def seed_record() -> Struct[item]:
+            return zeros
+
+        seed_record.__annotations__ = {"return": Struct[item]}
+
+        def keep_record(best_record: Struct[item], score: float, best_score: float, reject: bool,
+                        record: Struct[item]) -> Struct[item]:
+            return record if not reject and score > best_score else best_record
+
+        keep_record.__annotations__ = {"best_record": Struct[item], "score": float, "best_score": float,
+                                       "reject": bool, "record": Struct[item], "return": Struct[item]}
+
+        def finalise(best_index: int, best_record: Struct[item]) -> Struct[item] | None:
+            return best_record if best_index >= 0 else None
+
+        finalise.__annotations__ = {"best_index": int, "best_record": Struct[item], "return": Struct[item] | None}
+
+        def pass_index(best_index: int) -> int:
+            return best_index
+
+        body = flow(self.evaluate, dq, step(keep_record, output="best_record", name="keep_record"),
+                    keep, _advance, name="body")
+        search = loop(_more, body, carries=(*_CARRIES, "best_record"),
+                      max_iterations=self.max_candidates, name="search")
         return SequenceNode(ctx.origin(self), (inner.build(_write_as(self.count, "count")),
-                                               inner.build(_seed), inner.build(search)), drops=("index",))
+                                               inner.build(_seed),
+                                               inner.build(step(seed_record, output="best_record", name="seed_record")),
+                                               inner.build(search),
+                                               inner.build(flow(step(finalise, output="record", name="finalise"),
+                                                               step(pass_index, output="best_index", name="pass_index"),
+                                                               name="finalise"))),
+                            drops=("index",))
 
 
 def optimise(count: Any, evaluate: Any, *, score: str = "score", disqualify: Any = None,
-             max_candidates: int, name: str) -> OptimiseStep:
+             max_candidates: int, name: str, record: Any = None) -> OptimiseStep:
     """Run `evaluate` once per candidate and keep the best one, per row.
 
     `evaluate` is a flow of ordinary steps that read `index` (the candidate,
@@ -110,6 +154,10 @@ def optimise(count: Any, evaluate: Any, *, score: str = "score", disqualify: Any
         max_candidates: the most candidates any row may test, the loop's bound.
             `count` per row may be less; a larger `count` than `max_candidates`
             simply stops there.
+        record: an `Item` TypedDict naming the winner's record. With it,
+            `evaluate` must also write a `record` output of `Struct[Item]`, and
+            `optimise` emits that record for the winning candidate (`None` when
+            no candidate survived).
 
     Example::
 
@@ -139,4 +187,10 @@ def optimise(count: Any, evaluate: Any, *, score: str = "score", disqualify: Any
     if score not in interface(to_ir(evaluate))[1]:
         raise WiringError(f"optimise {name!r}: evaluate does not write {score!r}; it writes "
                           f"{sorted(interface(to_ir(evaluate))[1])}")
-    return OptimiseStep(name, count, evaluate, score, dq, max_candidates)
+    if record is not None:
+        from decider.engine.compile.structs import struct_dtype, struct_schema
+        struct_dtype(struct_schema(record))  # raises on a non-TypedDict or a non-float/int/bool field
+        if "record" not in interface(to_ir(evaluate))[1]:
+            raise WiringError(f"optimise {name!r}: evaluate does not write 'record'; it writes "
+                              f"{sorted(interface(to_ir(evaluate))[1])}")
+    return OptimiseStep(name, count, evaluate, score, dq, max_candidates, record)
