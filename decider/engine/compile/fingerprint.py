@@ -78,6 +78,9 @@ def _code(h: Any, code: types.CodeType) -> None:
         if isinstance(const, types.CodeType):
             _code(h, const)
         else:
+            # A set's repr order follows its elements' hash, which the process's
+            # hash seed moves, so a membership test would fingerprint differently per process.
+            const = sorted(const, key=repr) if isinstance(const, (set, frozenset)) else const
             h.update(f"{type(const).__name__}:{const!r}".encode())
 
 
