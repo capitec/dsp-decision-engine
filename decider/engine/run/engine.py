@@ -262,12 +262,12 @@ def _where(path: str, decl: ParamDecl) -> str:
 
 def _concrete(dtype: pl.DataType) -> pl.DataType:
     # `dtype` with every `Null` inside it made `String`: any concrete type holds all-null values.
+    # A `Struct` field is left alone; a null field is still a field, not an empty column, and a
+    # reader falls back to Python rather than silently re-type it.
     if dtype == pl.Null:
         return pl.String
     if isinstance(dtype, pl.List):
         return pl.List(_concrete(dtype.inner))
-    if isinstance(dtype, pl.Struct):
-        return pl.Struct({f.name: _concrete(f.dtype) for f in dtype.fields})
     return dtype
 
 
