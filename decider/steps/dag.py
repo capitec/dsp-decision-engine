@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Sequence
 
 from decider.engine.ir.nodes import IRNode, SequenceNode
 from decider.engine.wiring.interface import interface
@@ -60,14 +60,15 @@ class DagStep(SequentialStep):
         return order
 
 
-def dag(*steps: Any, name: str | None = None) -> Step:
+def dag(*steps: Any, name: str | None = None, inputs: Sequence[str] | None = None) -> Step:
     """Run steps in dependency order: a step reading a name runs after the step writing it.
 
     Two members writing one name is an error: use `flow` for a waterfall, or
     `.relabel(writes=...)` one of them when they are different values. A
     single unnamed step is returned unchanged. As with `flow`, intermediates
     are dropped from the output unless kept with `.emit(...)`; `.drop(...)`
-    removes columns.
+    removes columns. `inputs` declares request fields the typo heuristic would
+    otherwise flag, as `flow(inputs=...)` does.
 
     Example::
 
@@ -78,4 +79,4 @@ def dag(*steps: Any, name: str | None = None) -> Step:
         raise WiringError("dag() needs at least one step")
     if len(steps) == 1 and name is None:
         return as_step(steps[0])
-    return DagStep(tuple(map(as_step, steps)), name)
+    return DagStep(tuple(map(as_step, steps)), name, inputs=tuple(inputs or ()))

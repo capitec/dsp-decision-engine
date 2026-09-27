@@ -246,9 +246,12 @@ def construct_handler_from_settings() -> RequestHandler:
 
     code_path = os.path.abspath(settings.api.code_path)
     # First, even when PYTHONPATH already lists it behind another project with its own pipeline.py.
-    if code_path in sys.path:
-        sys.path.remove(code_path)
-    sys.path.insert(0, code_path)
+    # A project directory that is itself a package resolves from its parent, so put that on the
+    # path too (for the flattened `decider template` layout, `code_path` is the package directory).
+    for path in (os.path.dirname(code_path), code_path):
+        if path in sys.path:
+            sys.path.remove(path)
+        sys.path.insert(0, path)
     pipeline_module = importlib.import_module(settings.api.pipeline.partition(":")[0])
     # Shows a pipeline imported from the wrong project before it serves the wrong answers.
     print(f"decider: pipeline {settings.api.pipeline} from {pipeline_module.__file__}", file=sys.stderr)

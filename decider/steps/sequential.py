@@ -26,6 +26,7 @@ class SequentialStep(Step):
     drops: tuple[str, ...] = ()
     reads: tuple[tuple[str, str], ...] = ()
     writes: tuple[tuple[str, str], ...] = ()
+    inputs: tuple[str, ...] = ()
 
     def emit(self, *names: str) -> SequentialStep:
         """A copy that also outputs these values, which would otherwise be dropped as intermediates.
@@ -65,10 +66,11 @@ class SequentialStep(Step):
                 drops += node.drops
             else:
                 children.append(node)
-        return SequenceNode(ctx.origin(self), tuple(children), tuple(dict.fromkeys(emits)), tuple(dict.fromkeys(drops)))
+        return SequenceNode(ctx.origin(self), tuple(children), tuple(dict.fromkeys(emits)), tuple(dict.fromkeys(drops)),
+                            self.inputs)
 
 
-def flow(*steps: Any, name: str | None = None) -> SequentialStep:
+def flow(*steps: Any, name: str | None = None, inputs: Sequence[str] | None = None) -> SequentialStep:
     """Run steps in written order; a later write of a name wins.
 
     `a | b | c` builds the same flow. Anonymous flows inside are merged in; a
@@ -80,6 +82,12 @@ def flow(*steps: Any, name: str | None = None) -> SequentialStep:
     intermediates are dropped. `.emit(...)` keeps them (one version or every
     version of a name) and `.drop(...)` removes columns.
 
+    Args:
+        inputs: request fields a step reads that resemble a name another step
+            produces, e.g. `inputs=["handling_fee_pct"]` next to an output
+            `quote_handling_fee_pct`. Declaring them stops the typo heuristic
+            from warning or erroring on them.
+
     Example::
 
         term = flow(term_cap, cap_by_income, cap_by_sector, name="term")
@@ -87,4 +95,4 @@ def flow(*steps: Any, name: str | None = None) -> SequentialStep:
     """
     if not steps:
         raise WiringError("flow() needs at least one step")
-    return SequentialStep(tuple(map(as_step, steps)), name)
+    return SequentialStep(tuple(map(as_step, steps)), name, inputs=tuple(inputs or ()))

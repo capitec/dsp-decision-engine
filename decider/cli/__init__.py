@@ -130,21 +130,24 @@ def _serve_sanic(host: str, port: int, workers: int) -> None:
 def template(name: str, directory: Path | None) -> None:
     """Write a starter project called NAME into DIRECTORY (default: ./NAME).
 
+    The project directory is the package, so `import NAME` resolves to it and
+    the repository root goes on sys.path.
+
     \b
-    NAME/pipeline.py    steps and a build() function returning the pipeline
-    NAME/inference.py   the Handler that serves it
-    configs/0.0.0/      a config version with its params document
+    pipeline.py        steps and a build() function returning the pipeline
+    inference.py       the Handler that serves it
+    configs/0.0.0/     a config version with its params document
     sample_request.json one request, used by the tests and to warm up
-    tests/              scores requests through the handler
-    .env                DECIDER_API__PIPELINE=NAME.pipeline:build and friends
-    Then: cd DIRECTORY && pytest && decider build && decider serve
+    tests/             scores requests through the handler
+    .env               DECIDER_API__PIPELINE=NAME.pipeline:build and friends
+    Then: cd NAME && pytest && decider build && decider serve
     """
-    target = directory or Path(name)
-    if target.exists() and any(target.iterdir()):
-        raise click.ClickException(f"{target} exists and is not empty")
     package = re.sub(r"\W+", "_", name).strip("_")
     if not package.isidentifier():
         raise click.ClickException(f"{name!r} can't name a Python package; start it with a letter, e.g. 'fraud_rules'")
+    target = directory or Path(package)
+    if target.exists() and any(target.iterdir()):
+        raise click.ClickException(f"{target} exists and is not empty")
     for src in sorted(TEMPLATES.rglob("*")):
         if src.is_file() and "__pycache__" not in src.parts:
             rel = src.relative_to(TEMPLATES).as_posix().replace("{{name}}", package)
