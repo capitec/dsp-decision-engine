@@ -92,6 +92,11 @@ def test_decimal_rescales_from_any_source_scale_to_cents():
     assert cast_series(s, plan_column("amount", s.dtype, K.I64)).to_list() == [700]
 
 
+def test_a_negative_decimal_truncates_toward_zero_like_a_positive_one():
+    s = pl.Series("amount", [Decimal("19.9950"), Decimal("-19.9950")], dtype=pl.Decimal(18, 4))
+    assert cast_series(s, plan_column("amount", s.dtype, K.I64)).to_list() == [1999, -1999]
+
+
 def test_decimal_declared_float_arrives_as_cents_too():
     s = pl.Series("amount", [Decimal("1.25")], dtype=pl.Decimal(10, 2))
     out = cast_series(s, plan_column("amount", s.dtype, K.F64))
