@@ -7,6 +7,7 @@ from decider.steps.frame import FrameStep, frame_step
 from decider.steps.function import FunctionStep, step
 from decider.steps.helpers import allow_fallback, helper
 from decider.steps.loop import LoopStep, loop
+from decider.steps.optimise import OptimiseStep, optimise
 from decider.steps.sequential import SequentialStep, flow
 from decider.steps.values import ParamRef, TableRef, TableValue, Value
 
@@ -16,7 +17,7 @@ ConfigurableStep.lazy({"tree": "decider.steps.trees", "decision_table": "decider
 
 __all__ = [
     "BranchStep", "ConfigurableStep", "DagStep", "EachMode", "EachStep", "FrameStep", "FunctionStep",
-    "LoopStep", "ParamRef", "SequentialStep", "Step", "StepRef", "TableRef", "TableValue", "Value",
-    "as_step", "branch", "dag", "each", "flow", "frame_step", "loop", "step",
+    "LoopStep", "OptimiseStep", "ParamRef", "SequentialStep", "Step", "StepRef", "TableRef", "TableValue", "Value",
+    "as_step", "branch", "dag", "each", "flow", "frame_step", "loop", "optimise", "step",
     "allow_fallback", "helper",
 ]

@@ -14,7 +14,7 @@ import numpy as np
 import polars as pl
 from numba import njit
 
-from decider import Engine, Rows, flow
+from decider import Engine, Columnar, flow
 from decider.engine.compile.rows import build_rows
 
 N = 200_000
@@ -37,28 +37,28 @@ class Str(TypedDict):
     el_2: str
 
 
-def find_num(items: Rows[Num]) -> int:
+def find_num(items: Columnar[Num]) -> int:
     for j in range(len(items.el_1)):
         if items.el_1[j] == 400:
             return j
     return -1
 
 
-def find_two_num(items: Rows[TwoNum]) -> int:
+def find_two_num(items: Columnar[TwoNum]) -> int:
     for j in range(len(items.el_1)):
         if items.el_1[j] == 400 and items.el_3[j] > 0.5:
             return j
     return -1
 
 
-def find_str(items: Rows[Str]) -> int:
+def find_str(items: Columnar[Str]) -> int:
     for j in range(len(items.el_1)):
         if items.el_1[j] == 400 and items.el_2[j] == "snoop":
             return j
     return -1
 
 
-def find_str_prefix(items: Rows[Str]) -> int:
+def find_str_prefix(items: Columnar[Str]) -> int:
     for j in range(len(items.el_1)):
         if items.el_1[j] == 400 and items.el_2[j].startswith("sno"):
             return j
@@ -126,12 +126,12 @@ def latency(cases: list[tuple]) -> list[tuple[float, float, float]]:
 def end_to_end() -> None:
     print("\n=== 1. a str Item field, end to end (200k rows, fused) ===")
     variants = (
-        ("Rows[Item], one int field", find_num, ("el_1",), "fused"),
-        ("Rows[Item], int + float", find_two_num, ("el_1", "el_3"), "fused"),
-        ("Rows[Item], int + str, == literal", find_str, ("el_1", "el_2"), "fused"),
-        ("Rows[Item], int + str, startswith", find_str_prefix, ("el_1", "el_2"), "fused"),
+        ("Columnar[Item], one int field", find_num, ("el_1",), "fused"),
+        ("Columnar[Item], int + float", find_two_num, ("el_1", "el_3"), "fused"),
+        ("Columnar[Item], int + str, == literal", find_str, ("el_1", "el_2"), "fused"),
+        ("Columnar[Item], int + str, startswith", find_str_prefix, ("el_1", "el_2"), "fused"),
         ("list[dict], Python per row", find_list, ("el_1", "el_2"), "fused"),
-        ("Rows[Item], int + str, interpreted", find_str, ("el_1", "el_2"), "interpreted"),
+        ("Columnar[Item], int + str, interpreted", find_str, ("el_1", "el_2"), "interpreted"),
     )
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -167,7 +167,7 @@ def build_costs() -> None:
 
 
 # ---- 3. arrays per field against a record array per row -----------------------------------------
-# Both shapes take one argument per call, as a step does: `Rows[Item]`'s namedtuple of k arrays,
+# Both shapes take one argument per call, as a step does: `Columnar[Item]`'s namedtuple of k arrays,
 # or one interleaved record array. Bodies touch one field or all k, and either count items or
 # find the first match, which is what the user's snippet does.
 @njit(cache=True)
@@ -236,7 +236,7 @@ def _recs_find(items):
 
 
 def shapes() -> None:
-    print("\n=== 3. Rows[Item] namedtuple against a record array per row (njit, no engine, us per row) ===")
+    print("\n=== 3. Columnar[Item] namedtuple against a record array per row (njit, no engine, us per row) ===")
     print(f"{'shape':34} {'1 field':>9} {'all k':>9} {'find':>9} {'build':>9}")
     for k in (2, 8):
         names = [f"f{i}" for i in range(k)]
