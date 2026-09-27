@@ -22,7 +22,7 @@ from decider.engine.compile.fingerprint import fingerprint
 from decider.engine.compile.rows import rows_probe
 from decider.engine.compile.span import SPAN
 from decider.engine.compile.structs import bad_field, struct_dtype, struct_schema
-from decider.engine.ir.decls import KIND_DTYPES, FeatureKind, Input, NullPolicy, base_annotation, feature_kind
+from decider.engine.ir.decls import KIND_DTYPES, FeatureKind, Input, NullPolicy, base_annotation, feature_kind, nullable
 from decider.engine.ir.nodes import CallNode
 from decider.engine.params import NodeParams
 from decider.steps.helpers import allows_fallback, helper_signatures
@@ -146,6 +146,19 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None, bool]:
     reason = _REASONS[key, sig]
     if reason is not None and undeclared:
         reason = f"calls '{undeclared[0]}' without @helper or @allow_fallback: {reason}"
+    # A nullable struct output has no record array with a per-row validity mask a kernel stores.
+    nullable_struct = next((o for o in node.outputs
+                            if nullable(o.annotation) and struct_item(base_annotation(o.annotation)) is not None), None)
+    if reason is None and nullable_struct is not None:
+        reason = (f"writes '{nullable_struct.name}' as Struct[...] | None, which no kernel stores; "
+                  "return a plain Struct[...] instead")
+    # A `Struct[Item]` output compiles when the step returns a tuple of its fields; a dict return
+    # has no record a kernel stores, so the step stays on the Python path it has today.
+    if reason is None and struct_item(base_annotation(node.outputs[0].annotation) if len(node.outputs) == 1 else "") is not None:
+        ret = dispatcher.overloads[sig].signature.return_type
+        if isinstance(ret, types.DictType):
+            reason = (f"writes '{node.outputs[0].name}' as Struct[...] by returning a dict, which no "
+                      "kernel stores; return a tuple of the fields to compile it")
     # A `Columnar[...]` input joins the shared array kernel as flat per-field arrays sliced per row,
     # unless it's OPTIONAL: one kernel has one signature, and no kernel value is both a namedtuple
     # of views and `None`. A row node (a tree/table/scorecard feature) keeps the per-row dispatcher
@@ -161,9 +174,6 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None, bool]:
 def _struct_reason(node: CallNode, inputs: list[Input]) -> str | None:
     # A record has no per-field validity and no variable-length field, so a fill, an
     # Optional or a field of another type keeps the step on the Python path it has today.
-    for out in node.outputs:
-        if struct_item(out.annotation) is not None:
-            return f"writes '{out.name}' as Struct[...], which no kernel stores"
     for inp in inputs:
         schema = struct_schema(struct_item(inp.annotation))
         bad = bad_field(schema)

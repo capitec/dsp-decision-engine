@@ -14,7 +14,7 @@ from decider.engine.run.params import RunParams
 from decider.engine.run.representations import codes, span_objects
 from decider.engine.run.runners.base import Checkpoint
 from decider.engine.run.state import State, dtype_of, fill_missing, from_series
-from decider.types import Representation, is_raw, representation_for, columnar_item, item_schema
+from decider.types import Representation, is_raw, representation_for, columnar_item, item_schema, struct_item
 from decider.engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, Sequence, Version
 
 
@@ -126,6 +126,12 @@ class InterpretedRunner:
             raise ValueError(f"{node.origin.path}: returned {len(columns)} values per row, "
                              f"but declares {len(node.outputs)} outputs")
         for v, out, values in zip(call.writes, node.outputs, columns):
+            # A `Struct[Item]` step returning a tuple of fields is stored as the dict a reader expects,
+            # so interpreted and compiled modes agree on the value a struct step reads back.
+            if (item := struct_item(out.annotation)) is not None:
+                fields = [name for name, _ in item_schema(item)]
+                values = tuple(None if x is None else (x if isinstance(x, dict) else dict(zip(fields, x)))
+                               for x in values)
             # A `Raw[...]` output is stored as a kernel stores it, or the modes disagree on dtype.
             array, valid = _array(values, numpy_dtype(out.annotation) if is_raw(out.annotation)
                                   else dtype_of(base_annotation(out.annotation)))
