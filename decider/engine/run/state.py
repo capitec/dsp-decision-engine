@@ -87,6 +87,9 @@ class State:
             self.valid[vid] = np.zeros(self.n, bool)
         elif values.dtype == object and target.dtype != object:
             target = self.values[vid] = target.astype(object)
+        elif values.dtype != object and target.dtype == object and values.dtype.names is not None:
+            # A struct carry seeded null (object) is later written as a record; rows still null stay zero records.
+            target = self.values[vid] = np.zeros(self.n, values.dtype)
         target[rows] = values
         mask = self.valid.get(vid)
         if mask is None:
@@ -202,12 +205,37 @@ def _typed(plan: Plan) -> tuple[Input, ...]:
 
 def _series(name: str, values: np.ndarray, valid: np.ndarray | None, annotation: Any = None) -> pl.Series:
     if values.dtype == object:
-        values = (values if valid is None else np.where(valid, values, None)).tolist()
+        rows = (values if valid is None else np.where(valid, values, None))
+        # A compiled struct output read back into Python is a numpy record (np.void); polars reads
+        # dicts (not tuples) for a Struct with nulls, so spell it as the dict a step returns.
+        values = [dict(zip(x.dtype.names, x.tolist())) if isinstance(x, np.void) else x for x in rows.tolist()]
         # Polars infers a list's element type from its first row: `[[1, 2], [1.5]]` would become ints.
         dtype = declared_dtype(annotation)
         return pl.Series(name, values, dtype=dtype if isinstance(dtype, (pl.List, pl.Struct, pl.Array)) else None)
+    if values.dtype.names is not None:
+        # A struct output is a record per row; polars reads dicts (not tuples) for a Struct
+        # with nulls, so spell each row as the dict a step returns.
+        names = values.dtype.names
+        rows = [None if valid is not None and not valid[i] else dict(zip(names, row))
+                for i, row in enumerate(values.tolist())]
+        dtype = declared_dtype(annotation)
+        return pl.Series(name, rows, dtype=dtype if isinstance(dtype, pl.Struct) else None)
     s = pl.Series(name, values)
     return s if valid is None else s.scatter(np.flatnonzero(~valid), None)
+
+
+def record_value(value: Any, annotation: Any = None) -> Any:
+    """A single record row as the dict a step returns, from `values.tolist()[i]`.
+
+    A compiled struct output is a numpy record, which `tolist()` turns into a
+    tuple of fields (or leaves as a `np.void` in an object array); a step
+    returns a dict, so `score` must agree.
+    """
+    item = struct_item(base_annotation(annotation))
+    if item is not None and value is not None and not isinstance(value, dict):
+        return dict(zip((name for name, _ in item_schema(item)),
+                        value.tolist() if isinstance(value, np.void) else value))
+    return value
 
 
 def from_series(s: pl.Series) -> tuple[np.ndarray, np.ndarray | None]:
@@ -253,7 +281,7 @@ def declared_dtype(annotation: Any) -> pl.DataType | None:
     """
     if annotation is None:
         return None
-    item = struct_item(annotation)
+    item = struct_item(base_annotation(annotation))
     if item is not None:
         return _item_dtype(item)
     item = columnar_item(annotation)

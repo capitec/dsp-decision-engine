@@ -6,7 +6,7 @@ from typing import TypedDict
 import polars as pl
 import pytest
 
-from decider import Columnar, Engine, flow, optimise, param, step
+from decider import Columnar, Engine, Struct, flow, optimise, param, step
 from decider.exceptions import WiringError
 from decider.testing import assert_equivalent
 
@@ -106,3 +106,54 @@ def test_the_childrens_params_are_tunable_through_the_document():
 def test_a_missing_score_output_is_rejected():
     with pytest.raises(WiringError):
         optimise(bundles, flow(total, name="evaluate"), score="margin", max_candidates=8, name="best")
+
+
+class Offer(TypedDict):
+    total: float
+    weight: float
+
+
+@step(outputs=("score", "record"))
+def total_with_offer(index: int, items: Columnar[Item]) -> tuple[float, Struct[Offer]]:
+    t = 0.0
+    w = 0.0
+    for j in range(len(items.price)):
+        if (index >> j) & 1:
+            t += items.price[j]
+            w += items.weight[j]
+    return t, (t, w)
+
+
+def record_pipeline():
+    return flow(optimise(bundles, flow(total_with_offer, name="evaluate"),
+                         max_candidates=1 << 8, name="best", record=Offer), name="order")
+
+
+def test_a_record_carries_the_winners_record_and_none_when_nothing_survives():
+    out = assert_equivalent(record_pipeline(), FRAME)
+    assert out["best_index"].to_list() == [7, -1, 3]
+    assert out["record"].to_list() == [
+        {"total": 10.0, "weight": 23.0}, None, {"total": 5.0, "weight": 51.0},
+    ]
+    assert out["record"].dtype == pl.Struct({"total": pl.Float64, "weight": pl.Float64})
+
+
+def too_heavy(record: Struct[Offer]) -> bool:
+    return record["weight"] > 10.0
+
+
+def test_a_record_ignores_a_disqualified_candidate():
+    out = assert_equivalent(flow(optimise(bundles, flow(total_with_offer, name="evaluate"),
+                                          disqualify=too_heavy, max_candidates=1 << 8,
+                                          name="best", record=Offer), name="order"), FRAME)
+    # Row 0's all-three bundle (weight 23) is disqualified, so {0,1} (weight 3) wins.
+    assert out["best_index"].to_list()[0] == 3
+    assert out["record"].to_list()[0] == {"total": 7.0, "weight": 3.0}
+
+
+def test_a_record_carries_through_a_tie_to_the_earlier_candidate():
+    frame = pl.DataFrame({"items": [[{"price": 2.0, "weight": 1.0}, {"price": 2.0, "weight": 1.0},
+                                     {"price": 0.0, "weight": 1.0}]]})
+    out = assert_equivalent(record_pipeline(), frame)
+    assert out["best_index"].to_list() == [3]
+    assert out["record"].to_list() == [{"total": 4.0, "weight": 2.0}]

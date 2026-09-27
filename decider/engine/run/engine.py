@@ -14,7 +14,7 @@ from decider.engine.run.runners.fused import FusedRunner
 from decider.engine.run.runners.interpreted import InterpretedRunner
 from decider.engine.run.runners.stepped import SteppedRunner
 from decider.engine.ir.decls import ParamDecl, base_annotation
-from decider.engine.run.state import State, declared_dtype, dtype_of
+from decider.engine.run.state import State, declared_dtype, dtype_of, record_value
 from decider.engine.wiring import Plan, resolve
 from decider.engine.wiring.plan import Version
 from decider.exceptions import EngineError
@@ -207,7 +207,7 @@ class Executable:
         out = {k: x for k, x in record.items() if k not in self._hidden}
         for k, v in self._results:
             values, valid = state.read(v)
-            out[k] = None if valid is not None and not valid[0] else values.tolist()[0]
+            out[k] = None if valid is not None and not valid[0] else record_value(values.tolist()[0], v.annotation)
         return out
 
     def fallbacks(self) -> dict[str, str]:

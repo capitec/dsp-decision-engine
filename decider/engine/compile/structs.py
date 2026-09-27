@@ -70,6 +70,9 @@ def build_struct(schema: Schema, values: np.ndarray, source: pl.Series | None,
         _from_arrow(schema, source, out, name, path)
     elif values.dtype == object:
         _from_dicts(schema, values, out, name, path)
+    elif values.dtype == struct_dtype(schema):
+        # Already the record array a compiled step produced.
+        return values
     else:
         raise TypeError(f"input {name!r} of step {path!r} is declared Struct[...], but column {name!r} "
                         f"holds {values.dtype} values, not structs; declare the type the data has")

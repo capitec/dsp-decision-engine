@@ -29,7 +29,8 @@ class Spec(NamedTuple):
     row i's items, sliced out of `flats[b:]` (`lo`, `hi`, then one flat array
     per field of `schema`). `dtypes` are the declared dtypes of the outputs;
     `unpack` means `fn` returns a tuple of them. `nullable[k]` marks an output
-    declared `T | None`: it may be `None`.
+    declared `T | None`: it may be `None`. `structs[k]` marks a `Struct[Item]`
+    output, whose `fn` returns a tuple of its fields.
     """
 
     key: str
@@ -38,6 +39,7 @@ class Spec(NamedTuple):
     dtypes: tuple[np.dtype, ...]
     unpack: bool
     nullable: tuple[bool, ...] = ()
+    structs: tuple[bool, ...] = ()
 
 
 class Fork(NamedTuple):
@@ -114,7 +116,7 @@ def _key(program: tuple) -> tuple:
     out = []
     for x in program:
         if isinstance(x, Spec):
-            out.append((x.key, x.args, x.dtypes, x.unpack, x.nullable))
+            out.append((x.key, x.args, x.dtypes, x.unpack, x.nullable, x.structs))
         elif isinstance(x, Fork):
             out.append(("fork", x.test, tuple(_key(a) for a in x.arms), x.merges))
         else:
@@ -134,7 +136,10 @@ def _row_body(program: tuple, outputs: tuple[tuple, ...], variables: tuple[np.dt
             cols_v, valids_v, params_v, flats_v, outs_v, i_v = args
             results: list[list[tuple[Any, Any]]] = []
             vtypes = [from_dtype(d) for d in variables]
-            slots = [cgutils.alloca_once(builder, context.get_value_type(t)) for t in vtypes]
+            # A record scalar is a pointer to its bytes; a carried record's slot holds the bytes so
+            # the pointer stays valid past the iteration that produced it.
+            slots = [cgutils.alloca_once(builder, context.get_data_type(t) if isinstance(t, types.Record)
+                                         else context.get_value_type(t)) for t in vtypes]
 
             def element(tup, tup_v, j):
                 arr = tup.types[j]
@@ -174,7 +179,10 @@ def _row_body(program: tuple, outputs: tuple[tuple, ...], variables: tuple[np.dt
                 if kind == "res":
                     return results[src[1]][src[2]]
                 if kind == "var":
-                    return builder.load(slots[src[1]]), vtypes[src[1]]
+                    t = vtypes[src[1]]
+                    if isinstance(t, types.Record):
+                        return builder.bitcast(slots[src[1]], context.get_value_type(t)), t
+                    return builder.load(slots[src[1]]), t
                 if kind == "par":
                     return builder.extract_value(params_v, src[1]), params.types[src[1]]
                 if kind == "rag":
@@ -187,7 +195,27 @@ def _row_body(program: tuple, outputs: tuple[tuple, ...], variables: tuple[np.dt
                 # Every source is loaded before any variable changes, so no update sees another's new value.
                 loaded = [(var, load(src)) for var, src in pairs]
                 for var, (v, t) in loaded:
-                    builder.store(context.cast(builder, v, t, vtypes[var]), slots[var])
+                    vt = vtypes[var]
+                    if isinstance(vt, types.Record):
+                        # Copy the record's bytes, not its pointer: the source's buffer may be
+                        # an alloca in the block that produced it.
+                        src = context.cast(builder, v, t, vt)
+                        builder.store(builder.load(src), slots[var])
+                    else:
+                        builder.store(context.cast(builder, v, t, vt), slots[var])
+
+            def build_record(fields, rec_ty):
+                # A `Struct[Item]` step returns a tuple of its fields; pack them into a record
+                # scalar (a pointer to a byte buffer the record type names), which flows through
+                # carries and reads like any record.
+                data_ty = context.get_data_type(rec_ty)
+                ptr = cgutils.alloca_once(builder, data_ty)
+                for j, (name, ftype) in enumerate(rec_ty.members):
+                    field = context.cast(builder, fields[j][0], fields[j][1], ftype)
+                    dest = cgutils.get_record_member(builder, ptr, rec_ty.offset(name),
+                                                     context.get_data_type(ftype))
+                    context.pack_value(builder, ftype, field, dest)
+                return builder.bitcast(ptr, context.get_value_type(rec_ty)), rec_ty
 
             def call(spec):
                 loaded = [load(s) for s in spec.args]
@@ -199,8 +227,19 @@ def _row_body(program: tuple, outputs: tuple[tuple, ...], variables: tuple[np.dt
                 parts = ([(builder.extract_value(res, k), rt.types[k]) for k in range(len(spec.dtypes))]
                          if spec.unpack else [(res, rt)])
                 nullable = spec.nullable or (False,) * len(spec.dtypes)
+                structs = spec.structs or (False,) * len(spec.dtypes)
                 wants = [types.Optional(from_dtype(d)) if o else from_dtype(d) for d, o in zip(spec.dtypes, nullable)]
-                results.append([(_cast(context, builder, v, t, w), w) for (v, t), w in zip(parts, wants)])
+                # A struct output's step returns a tuple of its fields (pack them into a record), or an
+                # already-record value (copy it); a non-tuple, non-record return (a dict) cannot be
+                # stored, so the kernel falls back.
+                def struct_value(v, t, w):
+                    if isinstance(t, types.BaseTuple):
+                        return build_record([(builder.extract_value(v, j), t.types[j])
+                                             for j in range(len(t.types))], w)
+                    return v, w
+
+                results.append([struct_value(v, t, w) if f else (_cast(context, builder, v, t, w), w)
+                                for (v, t), w, f in zip(parts, wants, structs)])
 
             def fork(x):
                 v, t = load(x.test)
@@ -262,6 +301,12 @@ def _row_body(program: tuple, outputs: tuple[tuple, ...], variables: tuple[np.dt
                 setitem = context.get_function(operator.setitem, signature(types.none, arr, i, ty))
                 setitem(builder, (builder.extract_value(outs_v, k), i_v, value))
 
+            def store_record(k, value, ty):
+                # `value` is a record scalar; `outs[k]` is the record array it is stored into.
+                arr = outs.types[k]
+                setitem = context.get_function(operator.setitem, signature(types.none, arr, i, arr.dtype))
+                setitem(builder, (builder.extract_value(outs_v, k), i_v, value))
+
             run(program)
             masks = len(outputs)
             for k, src in enumerate(outputs):
@@ -272,6 +317,8 @@ def _row_body(program: tuple, outputs: tuple[tuple, ...], variables: tuple[np.dt
                     store(k, builder.select(opt.valid, opt.data, zero), t.type)
                     store(masks, opt.valid, types.boolean)
                     masks += 1
+                elif isinstance(outs.types[k].dtype, types.Record):
+                    store_record(k, v, t)
                 else:
                     store(k, v, t)
             return context.get_dummy_value()

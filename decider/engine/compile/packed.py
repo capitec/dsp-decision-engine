@@ -7,6 +7,7 @@ from decider.engine.compile.njit import compile_call
 from decider.engine.compile.units import Kernel, Layout, output_dtype
 from decider.engine.ir.decls import TYPED, NullPolicy, base_annotation, nullable
 from decider.engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, Sequence, Version
+from decider.types import struct_item
 
 
 class Packed(Kernel):
@@ -108,7 +109,7 @@ def _pack(top: Branch | Loop, outputs: set[int], lazy: bool, python: Collection[
     passthrough: list[Version] = []
 
     def var(v: Version) -> int:
-        if base_annotation(v.annotation) not in TYPED:
+        if base_annotation(v.annotation) not in TYPED and struct_item(v.annotation) is None:
             raise _Unpackable
         inner.add(v.id)
         lay.produced[v.id] = ("var", len(variables))
