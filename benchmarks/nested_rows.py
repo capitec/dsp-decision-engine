@@ -1,6 +1,6 @@
-"""`Rows[Item]` against plain `list[dict]` and a numeric-kernel ceiling.
+"""`Columnar[Item]` against plain `list[dict]` and a numeric-kernel ceiling.
 
-`Rows[Item]` is the opt-in fast path for a `list[dict]` column, so the bar it
+`Columnar[Item]` is the opt-in fast path for a `list[dict]` column, so the bar it
 has to clear is the plain Python step, on `score()` first. Also compares three
 ways to build the per-row namedtuples in one process: the value-by-value loop
 this replaced, the Python-values path, and the Arrow read.
@@ -16,7 +16,7 @@ from typing import TypedDict
 import numpy as np
 import polars as pl
 
-from decider import Engine, Rows, flow
+from decider import Engine, Columnar, flow
 from decider.engine.compile.rows import build_rows
 from decider.engine.run.state import from_series
 
@@ -30,7 +30,7 @@ class Item(TypedDict):
     qty: int
 
 
-def rows_total(items: Rows[Item]) -> float:
+def rows_total(items: Columnar[Item]) -> float:
     total = 0.0
     for j in range(len(items.price)):
         total += items.price[j] * items.qty[j]
@@ -126,7 +126,7 @@ def end_to_end():
     for name, step, frame, record in (
         ("numeric kernel (the ceiling)", numeric_total, NUMERIC, NUMERIC_RECORD),
         ("list[dict], Python per row", list_total, FRAME, RECORD),
-        ("Rows[Item], compiled per row", rows_total, FRAME, RECORD),
+        ("Columnar[Item], compiled per row", rows_total, FRAME, RECORD),
     ):
         exe = Engine().bind(flow(step, name="p"), mode="stepped")
         p50, p99 = latency(exe, record)

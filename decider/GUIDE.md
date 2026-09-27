@@ -46,6 +46,7 @@ HTTP with `decider serve`.
 | a `list[dict]` column, heavy per-item work in a kernel | `Columnar[Item]` (one array per field) |
 | a `struct` column as one record per row, in a kernel | `Struct[Item]` |
 | per-item rules over a list, as ordinary steps | `each(column, child_flow, name=)` |
+| try every candidate, keep the best (best bundle, term, price) | `optimise(count, evaluate, score=, name=)` |
 | a points scorecard | `ScorecardConfig` |
 | the same step twice, or on other column names | `.named("x")`, `.relabel(reads=, writes=)` |
 | another project's pipeline | import its `build()`; put the step inside yours |
@@ -483,6 +484,52 @@ row in Python — fastest on a single `score()`, slower on a large batch.
 `EachMode.BATCH` explodes the list into one child frame and runs the child once
 over all items — faster on a large batch, slower on a single record. A null list
 reads as a row with no items in both modes.
+
+## Fan-out and reduce: `optimise`
+
+"Try every candidate, keep the best" — best bundle, best term, best price point —
+is `optimise`. It runs your `evaluate` flow once per candidate `index` (from 1 to
+`count`) and keeps the one with the highest `score`. It lowers to a `loop`, so it
+fuses into one kernel like any loop.
+
+```python
+from typing import TypedDict
+
+import polars as pl
+from decider import Columnar, flow, optimise, step
+
+class Item(TypedDict):
+    price: float
+    weight: float
+
+@step(output="count")
+def bundles(items: Columnar[Item]) -> int:
+    return (1 << len(items.price)) - 1
+
+@step(output="score")
+def bundle_total(index: int, items: Columnar[Item]) -> float:
+    total = 0.0
+    for j in range(len(items.price)):
+        if (index >> j) & 1:
+            total += items.price[j]
+    return total
+
+best = optimise(bundles, flow(bundle_total, name="evaluate"), max_candidates=1 << 10, name="best")
+out = flow(best, name="order").run(pl.DataFrame({"items": [
+    [{"price": 2.0, "weight": 1.0}, {"price": 5.0, "weight": 2.0}], []]}))
+assert out["best_index"].to_list() == [3, -1] and out["best_score"].to_list() == [7.0, -1e300]
+```
+
+The winner is `best_index` (`-1` when nothing survives), its `best_score`, and
+the counts `evaluated` / `disqualified`. `score=` names the evaluate output to
+maximise (negate it to minimise); a tie keeps the earlier candidate. Pass a bool
+`disqualify=` step to reject candidates after they are scored — e.g. a
+post-pricing rule — and their count lands in `disqualified`. `max_candidates` is
+the loop's bound; `count` per row may be less, and the loop stops there.
+
+The winner's other evaluate outputs (the product, the rate) aren't carried
+back yet: recompute them on the winner with
+`evaluate.relabel(reads={"index": "best_index"})`, or wait for a struct output.
 
 ## Debugging, testing and introspection
 
