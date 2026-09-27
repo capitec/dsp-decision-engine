@@ -67,6 +67,14 @@ def test_dotted_keys_are_subdirectories(tmp_path):
     assert store.read("0.0.0").config == {"credit.bureau": {"a": 1}, "main": {"b": 2}}
 
 
+@pytest.mark.parametrize("key", ["../evil", "a/../../evil", "..", "", "/abs", "a\\b", "a..b"])
+def test_a_key_that_escapes_the_version_dir_is_rejected(tmp_path, key):
+    store = JsonFileStore(basepath=str(tmp_path))
+    with pytest.raises(ValueError, match="not a safe path"):
+        store.create_version({key: {"a": 1}})
+    assert store.versions() == []
+
+
 def test_stored_version_is_unaffected_by_later_edits_to_the_input(tmp_path):
     store = JsonFileStore(basepath=str(tmp_path))
     doc = {"params": {"cut": 1}}
