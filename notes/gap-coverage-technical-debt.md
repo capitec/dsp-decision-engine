@@ -16,6 +16,12 @@ when it lands, and keep its detail in its own note.
   owns the search loop now, so decider's kernels never take functions as args.
 - 13. Design note: should helper calls be traced? — closed by decision (not
   recommended; business meaning is a step, helpers are arithmetic inside one).
+- 9. Frame step output dtypes are lost between frame steps — `frame_step`
+  now takes a `writes` dict declaring each output's polars dtype
+  (`writes={"clean": pl.List(pl.Struct(...))}`), and `State.frame_of` /
+  `State.column` reuse the Series a frame step returned, so even an
+  *undeclared* all-empty nested column keeps the dtype it was written with,
+  both between frame steps and in the final output.
 
 ## Each: what shipped, what did not
 
@@ -36,10 +42,16 @@ item").
 
 ## Still open in `DECIDER_GAPS.md`
 
-- 9. Frame step output dtypes are lost between frame steps — partial: non-empty
-  lists/structs/dates keep their dtype, but an all-empty `List(Struct)` still
-  reads back as `List(Null)`, and `frame_step(writes={"col": SCHEMA})` isn't
-  there to declare it.
 - 10. Typo heuristic flags legitimate input names.
 - 11. Per-record overhead.
 - 12. Template nests the package (and a place for extensions).
+
+## Deferred (not in `DECIDER_GAPS.md`)
+
+- Type handling on a step's declared columns. Gap 9 now *preserves* dtypes;
+  it does not yet *verify or cast* a frame step's declared `writes` against
+  what it returns. A `type_mode`/`TYPE_HANDLING`-style knob (verify vs cast,
+  warn vs raise) and polars-typed `reads` were discussed but deliberately left
+  out: `reads` stays Python-typed because it also drives JSON date coercion
+  (`notes/tmcfeval/DECIDER_GAPS.md` gap 9, user feedback). Applying the same
+  idea to scalar `@step` inputs is a further follow-up.

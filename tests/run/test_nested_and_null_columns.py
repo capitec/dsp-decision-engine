@@ -34,6 +34,48 @@ def test_list_of_struct_passes_from_one_frame_step_to_another():
     assert out["total"].to_list() == [3.0, 3.0]
 
 
+def test_all_empty_nested_frame_output_keeps_its_declared_dtype():
+    SCHEMA = pl.List(pl.Struct({"price": pl.Float64}))
+
+    @frame_step(reads=["items"], writes={"clean": SCHEMA})
+    def clean(df):
+        return df.with_columns(clean=pl.col("items").list.eval(pl.struct(price=pl.lit(0.0))).cast(SCHEMA))
+
+    @frame_step(reads=["clean"], writes=["seen"])
+    def seen(df):
+        return df.with_columns(seen=pl.lit(str(df.schema["clean"])))
+
+    exe = Engine().bind(flow(clean, seen, name="p"), mode="fused")
+    assert exe.score({"items": []})["seen"] == "List(Struct({'price': Float64}))"
+    assert exe.run(pl.DataFrame({"items": [[]]}))["seen"][0] == "List(Struct({'price': Float64}))"
+
+
+def test_all_empty_nested_frame_output_keeps_its_dtype_without_a_declaration():
+    SCHEMA = pl.List(pl.Struct({"price": pl.Float64}))
+
+    @frame_step(reads=["items"], writes=["clean"])
+    def clean(df):
+        return df.with_columns(clean=pl.col("items").list.eval(pl.struct(price=pl.lit(0.0))).cast(SCHEMA))
+
+    @frame_step(reads=["clean"], writes=["seen"])
+    def seen(df):
+        return df.with_columns(seen=pl.lit(str(df.schema["clean"])))
+
+    out = Engine().bind(flow(clean, seen, name="p"), mode="fused").run(pl.DataFrame({"items": [[]]}))
+    assert out["seen"][0] == "List(Struct({'price': Float64}))"
+
+
+def test_all_empty_nested_frame_output_keeps_its_dtype_in_the_final_result():
+    SCHEMA = pl.List(pl.Struct({"price": pl.Float64}))
+
+    @frame_step(reads=["items"], writes=["clean"])
+    def clean(df):
+        return df.with_columns(clean=pl.col("items").list.eval(pl.struct(price=pl.lit(0.0))).cast(SCHEMA))
+
+    out = Engine().bind(flow(clean, name="p"), mode="fused").run(pl.DataFrame({"items": [[]]}))
+    assert out.schema["clean"] == SCHEMA
+
+
 def test_list_of_list_frame_output_stays_nested_lists():
     @frame_step(reads=["x"], writes=["z"])
     def fl(df):

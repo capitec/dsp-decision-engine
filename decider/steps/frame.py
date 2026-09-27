@@ -28,14 +28,16 @@ class FrameStep(Step):
     reads: tuple[tuple[str, str], ...] = ()
     writes: tuple[tuple[str, str], ...] = ()
     annotations: tuple[tuple[str, Any], ...] = ()
+    write_annotations: tuple[tuple[str, Any], ...] = ()
 
     def __call__(self, df: Any, **params: Any) -> Any:
         return call_with_defaults(self.fn, df, **params)
 
     def to_ir(self, ctx: IRContext) -> CallNode:
         types = dict(self.annotations)
+        write_types = dict(self.write_annotations)
         inputs = None if self.inputs is None else tuple(Input(n, types.get(n, Any)) for n in self.inputs)
-        outputs = None if self.outputs is None else tuple(Output(n, Any) for n in self.outputs)
+        outputs = None if self.outputs is None else tuple(Output(n, write_types.get(n, Any)) for n in self.outputs)
         return CallNode(ctx.origin(self), "frame", self.fn, inputs, outputs, harvest(self.fn)[1])
 
 
@@ -45,7 +47,7 @@ def frame_step(
     *,
     name: str | None = None,
     reads: list[str] | dict[str, Any] | None = None,
-    writes: list[str] | None = None,
+    writes: list[str] | dict[str, Any] | None = None,
 ) -> Any:
     """Make a `DataFrame -> DataFrame` function a step, directly or as a decorator.
 
@@ -60,7 +62,10 @@ def frame_step(
             request's ISO strings become `date`s where a type says so
             (`{"accounts": list[Account]}`, `Account` a TypedDict with a
             `date` field).
-        writes: the columns it adds or replaces; `None` means unknown.
+        writes: the columns it adds or replaces; `None` means unknown. A dict
+            declares each column's polars dtype, which keeps a nested column's
+            shape when its values can't show it (an all-empty list infers
+            `List(Null)`), e.g. `writes={"clean": pl.List(pl.Struct(...))}`.
 
     Example::
 
@@ -75,6 +80,7 @@ def frame_step(
             fn.__name__ if name is None else name, fn,
             None if reads is None else tuple(reads), None if writes is None else tuple(writes),
             annotations=tuple(reads.items()) if isinstance(reads, dict) else (),
+            write_annotations=tuple(writes.items()) if isinstance(writes, dict) else (),
         )
 
     return make if fn is None else make(fn)
