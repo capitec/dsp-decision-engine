@@ -45,6 +45,7 @@ HTTP with `decider serve`.
 | rows a plain step loops over, retuned like a param | `param_table({"col": float}, default=[...])` |
 | a `list[dict]` column, heavy per-item work in a kernel | `Columnar[Item]` (one array per field) |
 | a `struct` column as one record per row, in a kernel | `Struct[Item]` |
+| per-item rules over a list, as ordinary steps | `each(column, child_flow, name=)` |
 | a points scorecard | `ScorecardConfig` |
 | the same step twice, or on other column names | `.named("x")`, `.relabel(reads=, writes=)` |
 | another project's pipeline | import its `build()`; put the step inside yours |
@@ -442,6 +443,46 @@ can hold: binding the step raises a `TypeError` that names the field. Read such
 a column as its plain type instead — `list[dict]` for a list column, `dict` for
 a struct column — which runs in Python and gives the same answers, and say so
 with `@allow_fallback`.
+
+### Per-item rules: `each`
+
+`each(column, item, name=...)` runs a child flow on every element of a list
+column and writes the enriched list back, so per-item rules are ordinary steps
+with `missing_as` and `param` instead of polars expressions. The child's outputs
+become new fields, which a later `Columnar[Item]` step reads in a kernel.
+
+```python
+from typing import TypedDict
+
+import polars as pl
+from decider import Columnar, Engine, each, flow, missing_as, param
+
+def heavy(weight: float = missing_as(0.0), heavy_kg: float = param(20.0)) -> bool:
+    return weight > heavy_kg
+
+class Item(TypedDict):
+    weight: float
+    heavy: bool
+
+def bundle_total(items: Columnar[Item]) -> float:
+    t = 0.0
+    for j in range(len(items.weight)):
+        if items.heavy[j]:
+            t += items.weight[j]
+    return t
+
+pipeline = flow(each("items", flow(heavy, name="item"), name="items"), bundle_total, name="order")
+exe = Engine().bind(pipeline, mode="fused")
+df = pl.DataFrame({"items": [[{"weight": 5.0}, {"weight": 25.0}], []]})
+assert exe.run(df)["bundle_total"].to_list() == [25.0, 0.0]
+assert pipeline.parameters().defaults() == {"order": {"items": {"heavy_kg": 20.0}}}
+```
+
+`execution_mode=EachMode.PER_ROW` (the default) runs the child once per parent
+row in Python — fastest on a single `score()`, slower on a large batch.
+`EachMode.BATCH` explodes the list into one child frame and runs the child once
+over all items — faster on a large batch, slower on a single record. A null list
+reads as a row with no items in both modes.
 
 ## Debugging, testing and introspection
 
