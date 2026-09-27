@@ -44,7 +44,7 @@ class DataFrame(BaseModel):
     def serialize(self) -> t.Any:
         if self.dtypes is None:
             return self.data
-        return {"data": self.data, "schema": self.dtypes.model_dump()}
+        return {"data": self.data, "dtypes": self.dtypes.model_dump()}
 
     @property
     def df(self):
