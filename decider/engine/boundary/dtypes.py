@@ -83,7 +83,8 @@ def _decimal_as_cents(series: pl.Series, *, money_scale: int = 2) -> pl.Series:
     if shift > 0:
         return cents * (10 ** shift)
     if shift < 0:
-        return cents // (10 ** -shift)
+        # Truncate toward zero, so a negative mantissa rescales the same way a positive one does.
+        return cents.sign() * (cents.abs() // (10 ** -shift))
     return cents
 
 
