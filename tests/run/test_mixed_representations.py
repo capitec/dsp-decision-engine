@@ -7,7 +7,7 @@ from typing import TypedDict
 import polars as pl
 import pytest
 
-from decider import Engine, Raw, Rows, Struct, dag, flow, raw_str, step
+from decider import Engine, Raw, Columnar, Struct, dag, flow, raw_str, step
 from decider.exceptions import FallbackWarning, WiringError
 from decider.steps.trees import TreeConfig
 from decider.testing import assert_equivalent
@@ -49,7 +49,7 @@ def listed(accounts: list[dict]) -> float:
     return sum(a["balance"] for a in accounts)
 
 
-def rowed(accounts: Rows[Account]) -> float:
+def rowed(accounts: Columnar[Account]) -> float:
     total = 0.0
     for j in range(len(accounts.balance)):
         total += accounts.balance[j]
@@ -112,7 +112,7 @@ def test_a_raw_str_step_reads_a_semantic_str_step_s_output():
 REFUSED = [
     (semantic, span, "as str", "as bytes"),
     (code, span, "as str", "as bytes"),
-    (listed, rowed, "as list", "as Rows"),
+    (listed, rowed, "as list", "as Columnar"),
     (dicted, structed, "as dict", "as Struct"),
 ]
 

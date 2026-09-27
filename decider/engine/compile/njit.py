@@ -26,7 +26,7 @@ from decider.engine.ir.decls import KIND_DTYPES, FeatureKind, Input, NullPolicy,
 from decider.engine.ir.nodes import CallNode
 from decider.engine.params import NodeParams
 from decider.steps.helpers import allows_fallback, helper_signatures
-from decider.types import is_raw, raw_base, rows_item, rows_schema, struct_item
+from decider.types import is_raw, raw_base, columnar_item, item_schema, struct_item
 
 # UnsupportedBytecodeError (e.g. an `import` inside a step) isn't a NumbaError.
 FALLBACK_ERRORS = (NumbaError, UnsupportedBytecodeError)
@@ -107,14 +107,14 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None, bool]:
     key, dispatcher = jit(node.fn if helper_reason is not None else prepared)
     if helper_reason is not None:
         return key, dispatcher.py_func, helper_reason, declared
-    rows_inputs = [i for i in node.inputs if rows_item(i.annotation) is not None]
+    columnar_inputs = [i for i in node.inputs if columnar_item(i.annotation) is not None]
     struct_inputs = [i for i in node.inputs if struct_item(i.annotation) is not None]
     struct_reason = _struct_reason(node, struct_inputs)
     if struct_reason is not None:
         return key, dispatcher.py_func, struct_reason, declared
     # numba would type a `date` or `list` input as the float64 it can't be converted to.
-    odd = next((i for i in node.inputs if i not in rows_inputs and i not in struct_inputs
-               and base_annotation(i.annotation) not in (float, int, bool, str, bytes, Any)), None)
+    odd = next((i for i in node.inputs if i not in columnar_inputs and i not in struct_inputs
+                and base_annotation(i.annotation) not in (float, int, bool, str, bytes, Any)), None)
     if odd is not None:
         return key, dispatcher.py_func, f"reads '{odd.name}' as {odd.annotation}, which no kernel takes", declared
     # numba types a scalar `bytes` argument as an array, so `==` against a literal compares
@@ -146,14 +146,14 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None, bool]:
     reason = _REASONS[key, sig]
     if reason is not None and undeclared:
         reason = f"calls '{undeclared[0]}' without @helper or @allow_fallback: {reason}"
-    # A `Rows[...]` input joins the shared array kernel as flat per-field arrays sliced per row,
+    # A `Columnar[...]` input joins the shared array kernel as flat per-field arrays sliced per row,
     # unless it's OPTIONAL: one kernel has one signature, and no kernel value is both a namedtuple
     # of views and `None`. A row node (a tree/table/scorecard feature) keeps the per-row dispatcher
     # too: nothing wires a ragged source into a row node's feature tuple yet.
-    if reason is None and rows_inputs and not (
-            node.kind == "scalar" and all(i.null_policy is not NullPolicy.OPTIONAL for i in rows_inputs)):
-        names = ", ".join(f"'{i.name}'" for i in rows_inputs)
-        return key, dispatcher, (f"reads {names} as Rows[...], which runs one call per row, "
+    if reason is None and columnar_inputs and not (
+            node.kind == "scalar" and all(i.null_policy is not NullPolicy.OPTIONAL for i in columnar_inputs)):
+        names = ", ".join(f"'{i.name}'" for i in columnar_inputs)
+        return key, dispatcher, (f"reads {names} as Columnar[...], which runs one call per row, "
                                  "outside the shared kernel"), declared
     return key, (dispatcher if reason is None else dispatcher.py_func), reason, declared
 
@@ -275,9 +275,9 @@ def default_bundle(node: CallNode) -> tuple:
 
 
 def _input_type(inp: Input) -> Any:
-    item = rows_item(inp.annotation)
+    item = columnar_item(inp.annotation)
     if item is not None:
-        return typeof(rows_probe(rows_schema(item)))
+        return typeof(rows_probe(item_schema(item)))
     item = struct_item(inp.annotation)
     if item is not None:
         return from_dtype(struct_dtype(struct_schema(item)))
@@ -294,7 +294,7 @@ def _input_type(inp: Input) -> Any:
 
 
 def _has_span(ins: list) -> bool:
-    # A top-level `bytes` input is typed `SPAN` directly; a `Rows[...]` input is a namedtuple
+    # A top-level `bytes` input is typed `SPAN` directly; a `Columnar[...]` input is a namedtuple
     # whose `str` fields are each an array of `SPAN`, so `SPAN in ins` alone misses it.
     return any(t is SPAN or (isinstance(t, types.BaseNamedTuple)
                              and any(getattr(f, "dtype", None) is SPAN for f in t.types))
@@ -315,7 +315,7 @@ def _probe_signature(node: CallNode) -> tuple | None:
                 bundle = bundle._replace(**{d.name: (0, 0) for d in node.params if d.annotation is str})
             return (types.Tuple(tuple(ins)), typeof(bundle), typeof(consts))
         by_arg = {i.arg: t for i, t in zip(node.inputs, ins)}
-        # A `str` param of a node reading `bytes` (or a `Rows[...]` item field) reaches the kernel
+        # A `str` param of a node reading `bytes` (or a `Columnar[...]` item field) reaches the kernel
         # as a span of its UTF-8 bytes; otherwise as the int32 code of its literal.
         par = types.UniTuple(types.int64, 2) if _has_span(ins) else types.int32
         by_arg |= {d.arg: par if d.annotation is str else typeof(v) for d, v in zip(node.params, bundle)}
