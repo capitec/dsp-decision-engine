@@ -9,7 +9,7 @@ import polars as pl
 
 from decider.engine.ir.decls import TYPED, Input, NullPolicy, base_annotation
 from decider.engine.wiring.plan import Plan, Version
-from decider.types import annotation_cache
+from decider.types import annotation_cache, columnar_item, item_schema, struct_item
 
 
 class State:
@@ -205,7 +205,7 @@ def _series(name: str, values: np.ndarray, valid: np.ndarray | None, annotation:
         values = (values if valid is None else np.where(valid, values, None)).tolist()
         # Polars infers a list's element type from its first row: `[[1, 2], [1.5]]` would become ints.
         dtype = declared_dtype(annotation)
-        return pl.Series(name, values, dtype=dtype if isinstance(dtype, pl.List) else None)
+        return pl.Series(name, values, dtype=dtype if isinstance(dtype, (pl.List, pl.Struct, pl.Array)) else None)
     s = pl.Series(name, values)
     return s if valid is None else s.scatter(np.flatnonzero(~valid), None)
 
@@ -245,9 +245,20 @@ def fill_missing(values: np.ndarray, valid: np.ndarray, fill: Any) -> np.ndarray
 
 @annotation_cache
 def declared_dtype(annotation: Any) -> pl.DataType | None:
-    """The polars dtype of `annotation` (`list[float]` -> `List(Float64)`), or `None` when polars can't say."""
+    """The polars dtype of `annotation` (`list[float]` -> `List(Float64)`), or `None` when polars can't say.
+
+    A `Struct[Item]` is a `Struct` of its fields, a `Columnar[Item]` a
+    `List` of it, so an all-empty such column still keeps its declared shape
+    rather than inferring `Null`.
+    """
     if annotation is None:
         return None
+    item = struct_item(annotation)
+    if item is not None:
+        return _item_dtype(item)
+    item = columnar_item(annotation)
+    if item is not None:
+        return pl.List(_item_dtype(item))
     try:
         dtype = pl.DataType.from_python(base_annotation(annotation))
     except (TypeError, ValueError):
@@ -257,6 +268,15 @@ def declared_dtype(annotation: Any) -> pl.DataType | None:
         inner = inner.inner
     # A bare `list` has no element type (polars gives the class, or `Null`), and `object` no polars one.
     return None if isinstance(inner, type) or inner in (pl.Null, pl.Object) else dtype
+
+
+_POLARS_FIELD = {float: pl.Float64, int: pl.Int64, bool: pl.Boolean, str: pl.String}
+
+
+def _item_dtype(item: Any) -> pl.Struct:
+    fields = [pl.Field(name, _POLARS_FIELD.get(base_annotation(t), pl.Object()))
+              for name, t in item_schema(item)]
+    return pl.Struct(fields)
 
 
 def dtype_of(annotation: Any) -> np.dtype:
