@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, Sequence
 from decider.engine.ir.nodes import BranchNode, CallNode
 from decider.exceptions import IRError, WiringError
 from decider.steps.base import Step, as_step
+from decider.steps.function import step
 
 if TYPE_CHECKING:
     from decider.engine.ir.context import IRContext
@@ -17,6 +18,15 @@ def condition_node(ctx: IRContext, condition: Step, where: str) -> CallNode:
     if not isinstance(node, CallNode) or len(node.outputs or ()) != 1:
         raise IRError(f"{where}: the condition must be one function step producing one value")
     return node
+
+
+def _column_condition(name: str) -> Step:
+    """A bare column name as a condition: an identity step reading that bool column."""
+
+    def identity(value: bool) -> bool:
+        return value
+
+    return step(identity, name=name, output=name).relabel(reads={"value": name})
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -48,6 +58,10 @@ def branch(condition: Any, *arms: Any, modifies: Sequence[str], name: str) -> Br
     or a flow of several; the arms of one branch must agree on the type of
     each name they modify.
 
+    A bare column name is a condition too: `branch("on_card", ...)` reads the
+    existing bool column `on_card`, the same as an identity step
+    `def on_card(on_card: bool) -> bool: return on_card`.
+
     Args:
         modifies: the names the branch passes on; they keep their earlier
             value on rows whose arm doesn't write them. Anything else an arm
@@ -64,6 +78,8 @@ def branch(condition: Any, *arms: Any, modifies: Sequence[str], name: str) -> Br
         raise WiringError(f"branch {name!r} needs at least two arms, got {len(arms)}")
     if not modifies:
         raise WiringError(f"branch {name!r} needs modifies=[...]: the names its arms may change")
+    if isinstance(condition, str):
+        condition = _column_condition(condition)
     # An anonymous arm would share the branch's path, so it is named by position.
     steps = tuple(a if a.name is not None else a.named(f"arm{i}") for i, a in enumerate(map(as_step, arms)))
     return BranchStep(name, as_step(condition), steps, tuple(modifies))

@@ -34,6 +34,21 @@ def seed(requested_term: float) -> float:
 term_cap = step(seed, output="term_cap")
 
 
+def test_a_branch_condition_may_be_a_column_name():
+    plan = resolve(flow(term_cap, branch("on_card", cap_private, cap_public, modifies=["term_cap"], name="by")))
+    _, fork = plan.root.children
+    assert isinstance(fork, Branch) and fork.condition.node.origin.path == "by/on_card"
+    (cond_read,) = fork.condition.reads
+    assert cond_read.name == "on_card" and cond_read.producer is None
+    assert {i.name for i in plan.inputs} == {"requested_term", "on_card"}
+
+
+def test_interface_of_a_branch_reads_a_column_name_condition():
+    reads, writes = interface(to_ir(branch("on_card", cap_private, cap_public, modifies=["term_cap"], name="by")))
+    assert reads == {"on_card", "term_cap"}
+    assert writes == {"term_cap"}
+
+
 def test_a_branch_merges_each_arms_version_of_what_it_modifies():
     plan = resolve(flow(term_cap, branch(is_private, cap_private, cap_public, modifies=["term_cap"], name="by")))
     seeded, fork = plan.root.children
