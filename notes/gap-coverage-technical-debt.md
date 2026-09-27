@@ -12,6 +12,10 @@ when it lands, and keep its detail in its own note.
 - 6. A branch condition must be a function step — `branch("on_card", ...)`.
 - 2. Silent Python fallback when a step calls a plain helper — `@helper` /
   `@allow_fallback`, with a `FallbackWarning` (or raise in `strict_compile`).
+- 8. Functions with function arguments can't be disk-cached — moot: `optimise`
+  owns the search loop now, so decider's kernels never take functions as args.
+- 13. Design note: should helper calls be traced? — closed by decision (not
+  recommended; business meaning is a step, helpers are arithmetic inside one).
 
 ## Each: what shipped, what did not
 
@@ -32,9 +36,10 @@ item").
 
 ## Still open in `DECIDER_GAPS.md`
 
-- 8. Functions with function arguments can't be disk-cached.
-- 9. Frame step output dtypes are lost between frame steps.
+- 9. Frame step output dtypes are lost between frame steps — partial: non-empty
+  lists/structs/dates keep their dtype, but an all-empty `List(Struct)` still
+  reads back as `List(Null)`, and `frame_step(writes={"col": SCHEMA})` isn't
+  there to declare it.
 - 10. Typo heuristic flags legitimate input names.
 - 11. Per-record overhead.
 - 12. Template nests the package (and a place for extensions).
-- 13. Design note: should helper calls be traced?
