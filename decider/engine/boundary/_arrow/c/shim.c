@@ -111,6 +111,13 @@ int sm_view_n_variadic_buffers(const struct ArrowArrayView* v) { return v->n_var
 int sm_view_has_validity(const struct ArrowArrayView* v) {
   return v->buffer_views[0].data.as_uint8 != NULL;
 }
+/* Address of buffer k (0 = validity, 1 = offsets or values), 0 when absent.
+ * Lets a caller read a layout nanoarrow has already decoded, such as a
+ * list<struct<..>>'s offsets and its child struct's flat fields. */
+uint64_t sm_view_buffer(const struct ArrowArrayView* v, int32_t k) {
+  if (k < 0 || k >= NANOARROW_MAX_FIXED_BUFFERS) return 0;
+  return (uint64_t)(uintptr_t)v->buffer_views[k].data.data;
+}
 
 void sm_array_release(struct ArrowArray* array) {
   if (array->release != NULL) ArrowArrayRelease(array);

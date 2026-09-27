@@ -83,6 +83,10 @@ exe = Engine().bind(pipeline, mode="fused")      # bind once, call many times
 assert exe.score({"income": 1000.0, "debt": 350.0, "applied_on": date(2026, 1, 5)}, params)["approved"] is False
 ```
 
+For one record, call `score(record)`, never `run(df)` on a one-row frame: `run`
+builds a frame, exports it through Arrow and assembles an output frame, which
+costs about five times what `score` does on the same record.
+
 ## Branch, loop, frame steps
 
 ```python
@@ -329,6 +333,69 @@ assert app.parameters().defaults() == {"app": {"credit": {"approved": {"limit": 
 assert app.run(pl.DataFrame({"income": [1000.0], "total_debt": [100.0]}))["offer"].to_list() == [2000.0]
 ```
 
+## What compiles, and what falls back
+
+**The plain type always works.** Annotate a step `str`, `date`, `list[dict]`,
+`dict` or a TypedDict and it runs in every mode and gives the same answer. A
+numba kernel holds only numbers (`float`, `int`, `bool`), so a step reading or
+writing anything else runs on its own, row by row, in Python, and says so once
+per step with a `FallbackWarning`. Only speed changes: such a step runs at
+under 1M rows/s in a batch instead of a kernel's hundreds of millions, and
+costs under 10 µs more on a single `score()`. Trees and decision tables read
+their strings as byte spans inside their kernels, so a string rule set does not
+pay this at all.
+
+`@allow_fallback` says you accept that: the warning stops, and
+`Engine(strict_compile=True)` — which otherwise raises on a step that runs in
+Python — allows it. `fallbacks()` still reports it, marked `@allow_fallback`,
+so it stays visible when you are chasing latency. Put it on a function a step
+*calls* and the step falls back rather than compiling it: an intentional
+Python boundary.
+
+```python
+import warnings
+
+import polars as pl
+from decider import Engine, FallbackWarning, allow_fallback, flow
+
+def is_private(sector: str) -> float:        # a str never enters a kernel, so this runs in Python
+    return 1.0 if sector == "private" else 0.0
+
+@allow_fallback                              # ... and this one says so on purpose
+def order_total(items: list[dict]) -> float:
+    return sum(item["price"] for item in items)
+
+pipeline = flow(is_private, order_total, name="p")
+df = pl.DataFrame({"sector": ["private", "public"], "items": [[{"price": 2.0}], [{"price": 5.0}]]})
+
+exe = Engine().bind(pipeline, mode="fused")
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter("always")
+    out = exe.run(df)
+assert out["is_private"].to_list() == [1.0, 0.0] and out["order_total"].to_list() == [2.0, 5.0]
+assert len(caught) == 1 and issubclass(caught[0].category, FallbackWarning)
+assert "p/is_private runs in Python, row by row" in str(caught[0].message)
+assert exe.fallbacks() == {
+    "p/is_private": "reads 'sector' as str, which no kernel holds",
+    "p/order_total": "@allow_fallback: reads 'items' as list[dict], which no kernel takes",
+}
+
+strict = Engine(strict_compile=True).bind(flow(order_total, name="q"), mode="fused")
+assert strict.score({"items": [{"price": 2.0}]})["order_total"] == 2.0
+```
+
+To silence the lot instead of step by step, filter the category once at
+start-up: `warnings.filterwarnings("ignore", category=FallbackWarning)`.
+
+`@allow_fallback` is for function steps. A tree, table, scorecard, branch or
+loop falls back as a whole, so filter `FallbackWarning` for those instead;
+putting the decorator on one raises `TypeError` rather than doing nothing.
+
+For a batch big enough to care, `Raw[str]` compares strings as integer codes
+inside the kernel (`==` and `!=` only) at 4-5x the throughput — but it is
+*slower* on a single record, because the codes have to be built first. Since
+`score()` is the usual workload, reach for it only when a batch is the point.
+
 ## Debugging, testing and introspection
 
 ```python
@@ -367,6 +434,24 @@ with no_recompile():                     # retuning a param never compiles
 assert list(step_map(pipeline)) == ["credit/ratio", "credit/approved", "credit"]
 ir = to_ir(pipeline)                     # the checked IR that Engine().bind runs
 ```
+
+Say what a value measures with `Annotated` and the flow debugger shows it that
+way (`R 4000.00`, `25%`, `36 months`); undeclared values are guessed from their
+names. The engine runs the plain type.
+
+```python
+from typing import Annotated
+import polars as pl
+from decider import Duration, Money, Percent, flow, param
+
+def instalment(loan: Annotated[float, Money()], term_months: Annotated[int, Duration("months")],
+               rate: Annotated[float, Percent()] = param(0.25)) -> Annotated[float, Money()]:
+    return loan * (1 + rate) / term_months
+
+assert flow(instalment, name="loan").run(pl.DataFrame({"loan": [1200.0], "term_months": [12]}))["instalment"].to_list() == [125.0]
+```
+
+`Money(cents=True)` is an int of cents; subclass `decider.FieldMetadata` for another kind.
 
 Sessions also `step()`, `step_into()` (branches, loops), `rewind(path)` and
 break on a tree node (`"risk#high"`) or table row (`"band#2"`); see

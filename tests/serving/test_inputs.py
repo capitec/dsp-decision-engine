@@ -1,6 +1,7 @@
 """Serving real-world inputs: warm-up with dates and lists, JSON date coercion, code_path precedence, entry points."""
 import asyncio
 import datetime as dt
+import io
 import json
 import subprocess
 import sys
@@ -9,12 +10,12 @@ import polars as pl
 import pytest
 from typing_extensions import TypedDict
 
-from decider import flow, frame_step
+from decider import Engine, Struct, flow, frame_step
 from decider.config import JsonFileStore
 from decider.exceptions import DeciderError, ParamsError
 from decider.serving import RequestHandler
-from decider.serving.handler import construct_handler_from_settings
-from decider.serving.parse import coerce_record, has_date
+from decider.serving.handler import _dates, construct_handler_from_settings
+from decider.serving.parse import coerce_record, dummy, has_date
 from decider.serving.servers.starlette import create_app
 
 from test_serving import _request
@@ -95,6 +96,21 @@ def test_dates_inside_typed_dict_items_are_coerced_and_bare_dicts_are_left_alone
 
 class Dated(TypedDict, total=False):
     opened_date: dt.date
+
+
+class DatedApplicant(TypedDict):
+    income: float
+    opened_date: dt.date
+
+
+def test_a_struct_input_is_warmed_and_coerced_like_the_typed_dict_it_holds():
+    def afford(applicant: Struct[DatedApplicant]) -> float:
+        return applicant["income"]
+
+    assert dummy(Struct[DatedApplicant]) == {"income": 1.0, "opened_date": dt.date(2000, 1, 1)}
+    dates = _dates(Engine().bind(flow(afford, name="p")))
+    out = coerce_record({"applicant": {"income": 1.0, "opened_date": "2026-01-01"}}, dates)
+    assert out["applicant"] == {"income": 1.0, "opened_date": dt.date(2026, 1, 1)}
 
 
 def test_a_typed_dict_declaring_only_its_dates_keeps_its_other_keys():
@@ -230,3 +246,20 @@ def test_a_dotted_handler_in_a_package_is_used_and_a_missing_one_falls_back(
 def test_python_dash_m_decider_runs_the_cli():
     result = subprocess.run([sys.executable, "-m", "decider", "--help"], capture_output=True, text=True)
     assert result.returncode == 0 and "build" in result.stdout
+
+
+def total(a: float, b: float) -> float:
+    return a + b
+
+
+ARROW = "application/vnd.apache.arrow.stream"
+
+
+def test_an_arrow_ipc_body_is_scored_and_comes_back_as_arrow(tmp_path):
+    handler = _handler(tmp_path, flow(total, name="s"))
+    asyncio.run(handler.init_fn())
+    buf = io.BytesIO()
+    pl.DataFrame({"a": [1.0, 2.0], "b": [2.0, 3.0]}).write_ipc_stream(buf)
+    status, body = _request(create_app(handler), "POST", "/invocations", buf.getvalue(), ARROW, ARROW)
+    assert status == 200
+    assert pl.read_ipc_stream(body)["total"].to_list() == [3.0, 5.0]

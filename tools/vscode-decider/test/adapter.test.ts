@@ -84,7 +84,7 @@ describe("decider debug adapter", () => {
     const s = await scopes();
     expect(s.map((x) => x.name)).toEqual(["Inputs", "Outputs", "State"]);
     const inputs = await vars(s[0].variablesReference);
-    expect(inputs.map((v) => [v.name, v.value])).toEqual([["term_cap", "60, 36"], ["min_net_salary", "4,000  (1 of 2 empty)"]]);
+    expect(inputs.map((v) => [v.name, v.value])).toEqual([["term_cap", "60, 36"], ["min_net_salary", "4000  (1 of 2 empty)"]]);
   });
 
   it("setVariable overrides a column and the run continues with it", async () => {

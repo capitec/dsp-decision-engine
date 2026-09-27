@@ -1,40 +1,55 @@
 from __future__ import annotations
 
+import dis
 import hashlib
 import inspect
 import os
+import types as py_types
 from pathlib import Path
 from typing import Any, Callable
 
 import numpy as np
 from numba import from_dtype, njit, typeof
 from numba.core import types
-from numba.core.caching import FunctionCache
+from numba.core.caching import FunctionCache, NullCache
 from numba.core.dispatcher import Dispatcher
 from numba.core.errors import NumbaError, UnsupportedBytecodeError
 
-from decider.engine.compile import cpython  # registers CPython-compatible round and **
+# Imported for their registrations (CPython-compatible round and **, the span
+# operations) and hashed into SALT below.
+from decider.engine.compile import cpython, span
 from decider.engine.compile.fingerprint import fingerprint
+from decider.engine.compile.rows import rows_probe
+from decider.engine.compile.span import SPAN
+from decider.engine.compile.structs import bad_field, struct_dtype, struct_schema
 from decider.engine.ir.decls import KIND_DTYPES, FeatureKind, Input, NullPolicy, base_annotation, feature_kind
 from decider.engine.ir.nodes import CallNode
 from decider.engine.params import NodeParams
+from decider.steps.helpers import allows_fallback, helper_signatures
+from decider.types import is_raw, raw_base, rows_item, rows_schema, struct_item
 
 # UnsupportedBytecodeError (e.g. an `import` inside a step) isn't a NumbaError.
 FALLBACK_ERRORS = (NumbaError, UnsupportedBytecodeError)
+
+# Compiling runs no step code, so any of these is numba's own refusal: a NotImplementedError from its
+# bytecode reader meeting an opcode it lacks, or a bare assert from its lowering (a list of int and
+# float). Runtime failures keep the narrower FALLBACK_ERRORS, which never swallows a step's assert.
+_COMPILE_ERRORS = (*FALLBACK_ERRORS, NotImplementedError, AssertionError)
+
+_DECLARED_CALLEE = "calls the @allow_fallback function"
 
 # ponytail: unbounded, one entry per distinct function content; add eviction if a long session edits steps thousands of times.
 _DISPATCHERS: dict[str, Dispatcher] = {}
 _REASONS: dict[tuple, str | None] = {}
 
-# numba keys a disk-cached step by its own bytecode only, so a kernel compiled
-# before decider changed what `round` or `**` compile to would still be served.
-# ponytail: salts on cpython.py only; widen the hash if other decider overloads start reaching user steps.
-SALT = hashlib.sha256(Path(cpython.__file__).read_bytes()).hexdigest()
+# Numba keys a disk-cached step by its own bytecode only, so changes to a
+# reachable helper would otherwise keep serving stale machine code.
+SALT = hashlib.sha256(b"".join(Path(m.__file__).read_bytes() for m in (cpython, span))).hexdigest()
 
 
 class _SaltedCache(FunctionCache):
     def _index_key(self, sig, codegen):
-        return (*super()._index_key(sig, codegen), SALT)
+        return (*super()._index_key(sig, codegen), SALT, fingerprint(self._py_func))
 
 
 def numpy_dtype(annotation: Any) -> np.dtype:
@@ -64,42 +79,180 @@ def jit(fn: Callable) -> tuple[str, Dispatcher]:
         return key, _DISPATCHERS.setdefault(key, fn)
     dispatcher = _DISPATCHERS.get(key)
     if dispatcher is None:
-        # numba's disk cache needs a real source file, and never hits for a closure.
         dispatcher = _DISPATCHERS[key] = njit(fn)
-        if fn.__closure__ is None and os.path.isfile(fn.__code__.co_filename):
-            dispatcher._cache = _SaltedCache(fn)
+    # numba's disk cache needs a real source file and never hits for a closure. Dispatchers are
+    # shared by content, so the first sight of this code may have been a notebook cell or an
+    # exec'd block: attach the cache as soon as any copy of it does have a file, or a step stays
+    # uncacheable for the life of the process and `decider build` warms nothing for it.
+    if isinstance(dispatcher._cache, NullCache) and fn.__closure__ is None and os.path.isfile(fn.__code__.co_filename):
+        dispatcher._cache = _SaltedCache(fn)
     return key, dispatcher
 
 
-def compile_call(node: CallNode) -> tuple[str, Callable, str | None]:
-    """Compile one scalar or row node now: `(content key, callable, fallback reason)`.
+def compile_call(node: CallNode) -> tuple[str, Callable, str | None, bool]:
+    """Compile one scalar or row node now: `(content key, callable, fallback reason, declared)`.
 
     The callable is the njit dispatcher, or the plain Python function when
-    numba can't compile it (then the reason says why). Only numba's
+    numba can't compile it (then the reason says why). `declared` is true when
+    `@allow_fallback` says the author accepts the fallback. Only numba's
     compile-failure errors fall back; anything else raises.
 
     Example::
 
-        key, fn, reason = compile_call(plan.calls[0].node)
+        key, fn, reason, declared = compile_call(plan.calls[0].node)
     """
-    key, dispatcher = jit(node.fn)
+    prepared, helper_reason, undeclared = (_prepare_function(node.fn) if node.kind == "scalar"
+                                           else (node.fn, None, ()))
+    declared = allows_fallback(node.fn) or (helper_reason or "").startswith(_DECLARED_CALLEE)
+    key, dispatcher = jit(node.fn if helper_reason is not None else prepared)
+    if helper_reason is not None:
+        return key, dispatcher.py_func, helper_reason, declared
+    rows_inputs = [i for i in node.inputs if rows_item(i.annotation) is not None]
+    struct_inputs = [i for i in node.inputs if struct_item(i.annotation) is not None]
+    struct_reason = _struct_reason(node, struct_inputs)
+    if struct_reason is not None:
+        return key, dispatcher.py_func, struct_reason, declared
     # numba would type a `date` or `list` input as the float64 it can't be converted to.
-    odd = next((i for i in node.inputs if base_annotation(i.annotation) not in (float, int, bool, str, bytes, Any)), None)
+    odd = next((i for i in node.inputs if i not in rows_inputs and i not in struct_inputs
+               and base_annotation(i.annotation) not in (float, int, bool, str, bytes, Any)), None)
     if odd is not None:
-        return key, dispatcher.py_func, f"reads '{odd.name}' as {odd.annotation}, which no kernel takes"
+        return key, dispatcher.py_func, f"reads '{odd.name}' as {odd.annotation}, which no kernel takes", declared
+    # numba types a scalar `bytes` argument as an array, so `==` against a literal compares
+    # elementwise rather than as a whole value; there's no kernel signature for that.
+    semantic_bytes = next((i for i in node.inputs
+                           if base_annotation(i.annotation) is bytes and not is_raw(i.annotation)), None)
+    if semantic_bytes is not None and node.kind == "scalar":
+        return key, dispatcher.py_func, (f"reads '{semantic_bytes.name}' as bytes: numba can't type a scalar "
+                                         "bytes value, only a byte array, so no kernel can compare it whole"), declared
+    # No array kernel can hold a variable-length string: numba's array of strings is fixed width, so its
+    # element type would move with the longest value in the batch and recompile on every new one. Calling a
+    # compiled dispatcher once per row instead costs more than the Python body it replaces, on a batch and
+    # on one record, so a semantic `str` runs in Python. A `Raw[str]` is an int code by then.
+    no_kernel = (next((f"writes '{o.name}' as str, which no kernel stores" for o in node.outputs
+                       if base_annotation(o.annotation) is str and not is_raw(o.annotation)), None)
+                 or next((f"reads '{i.name}' as str, which no kernel holds" for i in node.inputs
+                          if base_annotation(i.annotation) is str and not is_raw(i.annotation)), None))
+    if no_kernel is not None:
+        return key, dispatcher.py_func, no_kernel, declared
     sig = _probe_signature(node)
     if sig is None:
-        return key, dispatcher, None
+        return key, dispatcher, None, declared
     if (key, sig) not in _REASONS:
         try:
             dispatcher.compile(sig)
             _REASONS[key, sig] = None
-        # Compiling runs no step code, so a NotImplementedError here is numba's bytecode reader
-        # meeting an opcode it lacks (Python 3.14's LOAD_COMMON_CONSTANT, from `any(... for ...)`).
-        except (*FALLBACK_ERRORS, NotImplementedError) as e:
-            _REASONS[key, sig] = f"{type(e).__name__}: {e}"
+        except _COMPILE_ERRORS as e:
+            _REASONS[key, sig] = _why(e)
     reason = _REASONS[key, sig]
-    return key, (dispatcher if reason is None else dispatcher.py_func), reason
+    if reason is not None and undeclared:
+        reason = f"calls '{undeclared[0]}' without @helper or @allow_fallback: {reason}"
+    # A `Rows[...]` input joins the shared array kernel as flat per-field arrays sliced per row,
+    # unless it's OPTIONAL: one kernel has one signature, and no kernel value is both a namedtuple
+    # of views and `None`. A row node (a tree/table/scorecard feature) keeps the per-row dispatcher
+    # too: nothing wires a ragged source into a row node's feature tuple yet.
+    if reason is None and rows_inputs and not (
+            node.kind == "scalar" and all(i.null_policy is not NullPolicy.OPTIONAL for i in rows_inputs)):
+        names = ", ".join(f"'{i.name}'" for i in rows_inputs)
+        return key, dispatcher, (f"reads {names} as Rows[...], which runs one call per row, "
+                                 "outside the shared kernel"), declared
+    return key, (dispatcher if reason is None else dispatcher.py_func), reason, declared
+
+
+def _struct_reason(node: CallNode, inputs: list[Input]) -> str | None:
+    # A record has no per-field validity and no variable-length field, so a fill, an
+    # Optional or a field of another type keeps the step on the Python path it has today.
+    for out in node.outputs:
+        if struct_item(out.annotation) is not None:
+            return f"writes '{out.name}' as Struct[...], which no kernel stores"
+    for inp in inputs:
+        schema = struct_schema(struct_item(inp.annotation))
+        bad = bad_field(schema)
+        if bad is not None:
+            return (f"reads field '{inp.name}.{bad[0]}' as {bad[1]}, which no kernel record holds; "
+                    "a struct field must be float, int or bool")
+        if inp.null_policy is not NullPolicy.REQUIRED:
+            return (f"reads '{inp.name}' as Struct[...] with {inp.null_policy.value} nulls, which a kernel "
+                    "record can't hold: it has no per-field validity")
+    return None
+
+
+def _prepare_function(fn: Callable, stack: tuple[int, ...] = ()) -> tuple[Callable, str | None, tuple[str, ...]]:
+    """`fn` with declared helpers pointed at shared dispatchers, why it can't compile, undeclared callees."""
+    if isinstance(fn, Dispatcher):
+        return fn, None, ()
+    if id(fn) in stack:
+        return fn, f"recursive helper call involving '{fn.__name__}' cannot be compiled", ()
+    globals_ = dict(fn.__globals__)
+    changed = False
+    undeclared: list[str] = []
+    for name in _global_names(fn.__code__):
+        called = globals_.get(name)
+        if not isinstance(called, py_types.FunctionType):
+            continue
+        if allows_fallback(called):
+            return fn, f"{_DECLARED_CALLEE} '{called.__name__}', which runs in Python", ()
+        signatures = helper_signatures(called)
+        if signatures is None:
+            # numba compiles what it can (an @overload, a supported numpy function) and only
+            # needs this name when it fails.
+            undeclared.append(called.__name__)
+            continue
+        prepared, reason, _ = _prepare_function(called, stack + (id(fn),))
+        if reason is not None:
+            return fn, f"helper '{called.__name__}': {reason}", ()
+        key, dispatcher = _compile_helper(prepared, signatures)
+        reason = _REASONS.get((key, "helper"))
+        if reason is not None:
+            return fn, f"helper '{called.__name__}' could not compile: {reason}", ()
+        globals_[name] = dispatcher
+        changed = True
+    names = tuple(sorted(undeclared))
+    if not changed:
+        return fn, None, names
+    return py_types.FunctionType(fn.__code__, globals_, fn.__name__, fn.__defaults__, fn.__closure__), None, names
+
+
+def _global_names(code: py_types.CodeType) -> set[str]:
+    # LOAD_GLOBAL only: `co_names` also holds attribute names, and `rates.rate` is not a call to `rate`.
+    names = {i.argval for i in dis.get_instructions(code) if i.opname == "LOAD_GLOBAL"}
+    for const in code.co_consts:
+        if isinstance(const, py_types.CodeType):
+            names |= _global_names(const)
+    return names
+
+
+def _compile_helper(fn: Callable, signatures: tuple[tuple[tuple[type, ...], type], ...]) -> tuple[str, Dispatcher]:
+    key, dispatcher = jit(fn)
+    if (key, "helper") in _REASONS:
+        return key, dispatcher
+    try:
+        for inputs, _ in signatures:
+            dispatcher.compile(tuple(_numba_type(t) for t in inputs))
+        _REASONS[key, "helper"] = None
+    except _COMPILE_ERRORS as e:
+        _REASONS[key, "helper"] = _why(e)
+    return key, dispatcher
+
+
+def _why(e: BaseException) -> str:
+    # numba's lowering asserts carry no message at all.
+    return f"{type(e).__name__}: {str(e) or 'numba could not compile this step'}"
+
+
+def _numba_type(annotation: type) -> Any:
+    if is_raw(annotation):
+        annotation = raw_base(annotation)
+        if annotation is str:
+            return types.int32
+        if annotation is bytes:
+            return SPAN
+    if annotation is float:
+        return types.float64
+    if annotation is int:
+        return types.int64
+    if annotation is bool:
+        return types.boolean
+    raise TypeError(f"unsupported @helper signature type {annotation!r}; use float, int or bool")
 
 
 def parameters(fn: Callable) -> tuple[str, ...]:
@@ -121,16 +274,31 @@ def default_bundle(node: CallNode) -> tuple:
     return NodeParams(node.origin.path, node.params).defaults if node.params else ()
 
 
-SPAN = types.UniTuple(types.int64, 2)
-
-
 def _input_type(inp: Input) -> Any:
-    if base_annotation(inp.annotation) is bytes:
+    item = rows_item(inp.annotation)
+    if item is not None:
+        return typeof(rows_probe(rows_schema(item)))
+    item = struct_item(inp.annotation)
+    if item is not None:
+        return from_dtype(struct_dtype(struct_schema(item)))
+    annotation = base_annotation(inp.annotation)
+    if annotation is bytes:
         # A null span has length -1, so a `bytes` input is never an Optional.
         return SPAN
+    # A semantic `str` never reaches a kernel, so only a `Raw[str]` code gets here.
+    if annotation is str:
+        return types.int32
     # An OPTIONAL `T | None` arrives as T's array plus a mask, so it is typed `Optional(T)`.
     t = from_dtype(numpy_dtype(base_annotation(inp.annotation)))
     return types.Optional(t) if inp.null_policy is NullPolicy.OPTIONAL else t
+
+
+def _has_span(ins: list) -> bool:
+    # A top-level `bytes` input is typed `SPAN` directly; a `Rows[...]` input is a namedtuple
+    # whose `str` fields are each an array of `SPAN`, so `SPAN in ins` alone misses it.
+    return any(t is SPAN or (isinstance(t, types.BaseNamedTuple)
+                             and any(getattr(f, "dtype", None) is SPAN for f in t.types))
+              for t in ins)
 
 
 def _probe_signature(node: CallNode) -> tuple | None:
@@ -142,13 +310,15 @@ def _probe_signature(node: CallNode) -> tuple | None:
         bundle, consts = default_bundle(node), tuple(v for _, v in node.consts)
         ins = [_input_type(i) for i in node.inputs]
         if node.kind == "row":
-            if SPAN in ins and node.params:
+            if _has_span(ins) and node.params:
                 # A `str` param of a node reading `bytes` reaches the kernel as a span of its UTF-8 bytes.
                 bundle = bundle._replace(**{d.name: (0, 0) for d in node.params if d.annotation is str})
             return (types.Tuple(tuple(ins)), typeof(bundle), typeof(consts))
         by_arg = {i.arg: t for i, t in zip(node.inputs, ins)}
-        # A `str` param reaches a scalar kernel as the int32 code of its literal.
-        by_arg |= {d.arg: types.int32 if d.annotation is str else typeof(v) for d, v in zip(node.params, bundle)}
+        # A `str` param of a node reading `bytes` (or a `Rows[...]` item field) reaches the kernel
+        # as a span of its UTF-8 bytes; otherwise as the int32 code of its literal.
+        par = types.UniTuple(types.int64, 2) if _has_span(ins) else types.int32
+        by_arg |= {d.arg: par if d.annotation is str else typeof(v) for d, v in zip(node.params, bundle)}
         by_arg |= {name: typeof(v) for name, v in node.consts}
         return tuple(by_arg[p] for p in parameters(node.fn))
     except (ValueError, KeyError):

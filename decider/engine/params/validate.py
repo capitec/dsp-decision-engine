@@ -118,7 +118,7 @@ def validate_node(node: NodeParams, doc: Mapping) -> Validation:
         return Validation(Status.INVALID, None, tuple(errors), tuple(warnings))
     if model is None:
         model = node.model.model_validate(values)
-    return Validation(Status.OK, node.bundle_type(*(getattr(model, d.name) for d in node.decls)), (), tuple(warnings))
+    return Validation(Status.OK, node.bundle(getattr(model, d.name) for d in node.decls), (), tuple(warnings))
 
 
 def document_key(doc: Mapping) -> str:

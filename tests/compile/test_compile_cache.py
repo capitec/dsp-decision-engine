@@ -185,6 +185,16 @@ _, kernel = njit.jit(step.half)
 print(json.dumps([kernel(3.0), len(kernel.stats.cache_hits), len(kernel.stats.cache_misses)]))
 """
 
+_HELPER = "from numba import njit\n\n@njit\ndef rate(amount: float) -> float:\n    return amount * {factor}\n"
+_STEP_WITH_HELPER = "from rates import rate\n\ndef fee(amount: float) -> float:\n    return rate(amount)\n"
+_CHILD_WITH_HELPER = """
+import json
+import step
+import decider.engine.compile.njit as njit
+_, kernel = njit.jit(step.fee)
+print(json.dumps([kernel(100.0), len(kernel.stats.cache_hits), len(kernel.stats.cache_misses)]))
+"""
+
 
 def test_a_disk_cached_step_is_reused_only_under_the_same_compile_salt(tmp_path):
     (tmp_path / "step.py").write_text(_STEP)  # once: numba's index is keyed by the file's mtime
@@ -201,3 +211,49 @@ def test_a_disk_cached_step_is_reused_only_under_the_same_compile_salt(tmp_path)
     assert run("a") == [1.5, 1, 0]
     assert run("b") == [1.5, 0, 1]
     assert run("a") == [1.5, 1, 0]
+
+
+def test_a_changed_helper_invalidates_a_disk_cached_caller(tmp_path):
+    (tmp_path / "rates.py").write_text(_HELPER.format(factor="0.10"))
+    (tmp_path / "step.py").write_text(_STEP_WITH_HELPER)
+    (tmp_path / "child.py").write_text(_CHILD_WITH_HELPER)
+    env = dict(os.environ, NUMBA_CACHE_DIR=str(tmp_path / "numba_cache"))
+
+    def run():
+        proc = subprocess.run([sys.executable, "child.py"], cwd=tmp_path, env=env, capture_output=True,
+                              text=True, timeout=600, check=False)
+        assert proc.returncode == 0, proc.stderr
+        return json.loads(proc.stdout.splitlines()[-1])
+
+    assert run() == [10.0, 0, 1]
+    assert run() == [10.0, 1, 0]
+    (tmp_path / "rates.py").write_text(_HELPER.format(factor="0.20"))
+    assert run() == [20.0, 0, 1]
+
+
+def test_a_step_first_seen_without_a_file_still_gets_a_disk_cache(tmp_path):
+    # Dispatchers are shared by content: a notebook cell or an exec'd doc block must not leave
+    # the same code uncacheable for every later caller, or `decider build` warms nothing.
+    import importlib.util
+
+    from numba.core.caching import NullCache
+
+    from decider.engine.compile.njit import jit
+
+    src = "def spread(a: float, b: float) -> float:\n    return a - b + 3.0\n"
+    ns: dict = {}
+    # dont_inherit: this module's `from __future__ import annotations` would otherwise
+    # make the exec'd copy's annotations strings, and so a different content key.
+    exec(compile(src, "GUIDE.md", "exec", dont_inherit=True), ns)
+    key_exec, from_exec = jit(ns["spread"])
+    assert isinstance(from_exec._cache, NullCache)
+
+    path = tmp_path / "spread_module.py"
+    path.write_text(src)
+    spec = importlib.util.spec_from_file_location("spread_module", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    key_file, from_file = jit(module.spread)
+
+    assert key_file == key_exec and from_file is from_exec
+    assert not isinstance(from_file._cache, NullCache)

@@ -2,7 +2,8 @@
 import polars as pl
 import pytest
 
-from decider import branch, flow, missing_as, param, step
+from decider import Raw, branch, flow, missing_as, param, raw_str, step
+from decider.exceptions import WiringError
 from decider.engine import Engine
 from decider.engine.compile import Kernel
 from decider.engine.ir.decls import Input, Output
@@ -108,24 +109,58 @@ def test_retuning_a_string_literal_never_recompiles():
         assert exe.score({"sector": "public"}, params={"sector_rate": {"private": "public"}})["sector_rate"] == 0.9
 
 
+def coded_rate(sector: Raw[str], private: Raw[str] = param("private"), rate: float = param(0.9, gt=0)) -> float:
+    return rate if sector == private else 1.0
+
+
+@pytest.mark.parametrize("mode", MODES)
+def test_a_raw_str_param_is_tuned_as_a_string_and_reaches_the_kernel_as_a_code(mode):
+    exe = Engine().bind(flow(coded_rate), mode=mode)
+    assert exe.run(SECTORS)["coded_rate"].to_list() == [0.9, 1.0, 0.9, 1.0]
+    out = exe.run(SECTORS, params={"coded_rate": {"private": "government"}})
+    assert out["coded_rate"].to_list() == [1.0, 1.0, 1.0, 0.9]
+    # The document holds the string, not the code.
+    assert flow(coded_rate).parameters().defaults()["coded_rate"]["private"] == "private"
+
+
+def test_retuning_a_raw_str_param_never_recompiles():
+    exe = Engine().bind(flow(coded_rate), mode="fused")
+    exe.run(SECTORS)
+    with no_recompile():
+        for literal, expected in [("government", [1.0, 1.0, 1.0, 0.9]), ("martian", [1.0] * 4),
+                                  ("public", [1.0, 0.9, 1.0, 1.0])]:
+            assert exe.run(SECTORS, params={"coded_rate": {"private": literal}})["coded_rate"].to_list() == expected
+        assert exe.score({"sector": "public"}, params={"coded_rate": {"private": "public"}})["coded_rate"] == 0.9
+
+
+def mixed_shapes(sector: Raw[str], private: str = param("private")) -> float:
+    return 0.9 if sector == private else 1.0
+
+
+def test_a_raw_str_input_against_a_plain_str_param_is_refused():
+    with pytest.raises(WiringError, match="is Raw\\[str\\], an int32 dictionary code, but param 'private'"):
+        Engine().bind(flow(mixed_shapes))
+
+
 @pytest.mark.parametrize("mode", ["stepped", "fused"])
-def test_a_step_reading_two_string_inputs_is_a_clear_error_when_strict(mode):
+def test_a_step_reading_several_string_inputs_runs_in_python(mode):
     def same(a: str, b: str, which: str = param("a")) -> float:
-        return 1.0
+        return 1.0 if a == b or a == which else 0.0
 
-    exe = Engine(strict_compile=True).bind(flow(same), mode=mode)
-    with pytest.raises(ValueError, match="same: reads several `str` inputs.*split the step"):
-        exe.run(pl.DataFrame({"a": ["x"], "b": ["y"]}))
+    exe = Engine().bind(flow(same), mode=mode)
+    with pytest.warns(UserWarning, match="same runs in Python, row by row.*as str"):
+        out = exe.run(pl.DataFrame({"a": ["x", "y"], "b": ["y", "y"]}))
+    assert out["same"].to_list() == [0.0, 1.0]
 
 
 @pytest.mark.parametrize("mode", ["stepped", "fused"])
-def test_a_string_param_without_a_string_input_is_a_clear_error_when_strict(mode):
+def test_a_string_param_without_a_string_input_stays_in_the_kernel(mode):
     def speed(x: float, mode: str = param("fast")) -> float:
         return x * 2 if mode == "fast" else x
 
     exe = Engine(strict_compile=True).bind(flow(speed), mode=mode)
-    with pytest.raises(ValueError, match="speed: `str` param 'mode'.*reads none"):
-        exe.run(pl.DataFrame({"x": [1.0]}))
+    assert exe.run(pl.DataFrame({"x": [1.0]}))["speed"].to_list() == [2.0]
+    assert exe.run(pl.DataFrame({"x": [1.0]}), params={"speed": {"mode": "slow"}})["speed"].to_list() == [1.0]
 
 
 def half_or_zero(x: float | None) -> float:

@@ -1,0 +1,10 @@
+src/**
+test/**
+webview/**
+examples/**
+*.ts
+tsconfig.json
+.gitignore
+*.vsix
+**/*.map
+dist/runVsCodeTests.js

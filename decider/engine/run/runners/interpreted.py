@@ -7,10 +7,14 @@ import numpy as np
 import polars as pl
 
 from decider.engine.boundary.nulls import MissingInputError
+from decider.engine.compile import numpy_dtype
+from decider.engine.compile.rows import build_rows, rows_needs_no_fill
 from decider.engine.ir.decls import Input, NullPolicy, base_annotation
 from decider.engine.run.params import RunParams
+from decider.engine.run.representations import codes, span_objects
 from decider.engine.run.runners.base import Checkpoint
 from decider.engine.run.state import State, dtype_of, fill_missing, from_series
+from decider.types import Representation, is_raw, representation_for, rows_item, rows_schema
 from decider.engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, Sequence, Version
 
 
@@ -92,7 +96,8 @@ class InterpretedRunner:
         m = scope.count(state.n)
         bundle = params.bundle(call.id, m)
         # Plain Python scalars, not numpy ones: `x / 0.0` must raise here as it does in a kernel.
-        cols = [_argument(state, v, i, scope.rows, node.origin.path).tolist() for i, v in zip(node.inputs, call.reads)]
+        cols = [_argument(state, v, i, scope.rows, node.origin.path, node.kind).tolist()
+                for i, v in zip(node.inputs, call.reads)]
         rows = zip(*cols) if cols else repeat((), m)
         results: list = []
         append = results.append
@@ -121,7 +126,9 @@ class InterpretedRunner:
             raise ValueError(f"{node.origin.path}: returned {len(columns)} values per row, "
                              f"but declares {len(node.outputs)} outputs")
         for v, out, values in zip(call.writes, node.outputs, columns):
-            array, valid = _array(values, dtype_of(base_annotation(out.annotation)))
+            # A `Raw[...]` output is stored as a kernel stores it, or the modes disagree on dtype.
+            array, valid = _array(values, numpy_dtype(out.annotation) if is_raw(out.annotation)
+                                  else dtype_of(base_annotation(out.annotation)))
             state.write(v, array, scope.rows, valid)
             scope.names[v.name] = v
 
@@ -186,18 +193,64 @@ def _note(e: BaseException, text: str) -> None:
         e.add_note(text)
 
 
-def _argument(state: State, version: Version, decl: Input, rows: np.ndarray | None, path: str) -> np.ndarray:
-    values, valid = state.read(version, rows)
+def _argument(state: State, version: Version, decl: Input, rows: np.ndarray | None, path: str,
+              node_kind: str = "scalar") -> np.ndarray:
+    values, valid = state.read(version, None)
+    span = False
+    item = rows_item(decl.annotation) if values.dtype == object else None
+    if values.dtype == object:
+        if item is not None:
+            schema = rows_schema(item)
+            values = state.representation(version, ("rows", schema),
+                                          lambda v, s, a: build_rows(v, schema, s, a))
+        elif base_annotation(decl.annotation) in (str, bytes):
+            # Never the row-only span/code shape here: interpreted trees keep real str/bytes values.
+            kind = representation_for(decl.annotation, row=False)
+            # A `Span` answers what a compiled span answers, so both modes agree.
+            span = kind is Representation.RAW_BYTES
+            if span:
+                values = state.representation(version, (kind, "objects"),
+                                              lambda v, s, a: _spans(decl.name, v))
+            elif kind is Representation.RAW_STRING:
+                values = state.representation(version, kind, lambda v, s, a: codes(v))
+            elif kind is Representation.SEMANTIC_BYTES and node_kind == "scalar":
+                # `bytes` declares how a step reads a string column: as its UTF-8 bytes. A tree
+                # matches on the strings themselves, so only a scalar step is given the bytes.
+                values = state.representation(version, (kind, "encoded"),
+                                              lambda v, s, a: _encoded(decl.name, v))
+    if rows is not None:
+        values = values[rows]
+        valid = None if valid is None else valid[rows]
     if valid is None or valid.all():
         return values
     missing = ~valid
     if decl.null_policy is NullPolicy.REQUIRED:
         raise MissingInputError(decl.name, path, int(missing.sum()), len(valid), absent=_absent(state, version))
+    if span:
+        if decl.null_policy is NullPolicy.MISSING_AS:
+            return span_objects([s.text for s in values], decl.fill, missing)
+        # A null span carries its own -1 length, which None would lose.
+        return values
     if decl.null_policy is NullPolicy.MISSING_AS:
-        return fill_missing(values, valid, decl.fill)
+        # A null row of a `Rows[...]` input already reads as a row with no items.
+        return values if rows_needs_no_fill(decl, item is not None) else fill_missing(values, valid, decl.fill)
     values = values.astype(object)
     values[missing] = None
     return values
+
+
+def _encoded(name: str, values: np.ndarray) -> np.ndarray:
+    try:
+        return np.array([v if v is None or isinstance(v, bytes) else str.encode(v) for v in values], object)
+    except TypeError as e:
+        raise TypeError(f"'{name}' is a string input: {e}") from None
+
+
+def _spans(name: str, values: np.ndarray) -> np.ndarray:
+    try:
+        return span_objects(values)
+    except TypeError as e:
+        raise TypeError(f"'{name}' is a string input: {e}") from None
 
 
 def _absent(state: State, version: Version) -> bool:

@@ -98,7 +98,7 @@ def _matches(s, n, p, m, mode):
 
 @njit
 def _match(op, span, g, ps, ints, chars, lay):
-    addr, n = span
+    addr, n = span[0], span[1]
     if g < 0:
         p, m = ps[-g - 1]
         return _matches(addr, n, p, m, op)

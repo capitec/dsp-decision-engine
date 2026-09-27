@@ -9,7 +9,7 @@ import polars as pl
 
 from decider.engine.params import NodeParams, ParamsCache
 from decider.engine.run.params import RunParams, RunReport, check_namespaces
-from decider.engine.run.runners.base import Runner
+from decider.engine.run.runners.base import CompiledRunner, Runner
 from decider.engine.run.runners.fused import FusedRunner
 from decider.engine.run.runners.interpreted import InterpretedRunner
 from decider.engine.run.runners.stepped import SteppedRunner
@@ -38,9 +38,9 @@ class Engine:
             params document is first seen and raises on any invalid one;
             `"lazy"` validates a node the first time it runs, so an invalid
             param in a node no row reaches never fails a run.
-        strict_compile: in `"stepped"` and `"fused"` modes, a step no kernel
-            can run faithfully raises at the first run instead of running in
-            Python with a warning.
+        strict_compile: in `"stepped"` and `"fused"` modes, a step that would
+            run in Python raises at the first run instead of warning. Mark the
+            ones you accept `@allow_fallback`.
 
     Example::
 
@@ -209,6 +209,22 @@ class Executable:
             values, valid = state.read(v)
             out[k] = None if valid is not None and not valid[0] else values.tolist()[0]
         return out
+
+    def fallbacks(self) -> dict[str, str]:
+        """Every step that runs outside the shared kernel, keyed by step path, with the reason why.
+
+        A step the author accepted with `@allow_fallback` is reported too, with
+        `"@allow_fallback: "` in front of its reason.
+
+        Example::
+
+            exe.fallbacks()   # {"order/order_total": "reads 'items' as list[dict], which no kernel takes"}
+        """
+        if not isinstance(self.runner, CompiledRunner):
+            return {}
+        if self.runner._plan is not self.plan:
+            self.runner._compile(self.plan, self.lazy)
+        return self.runner.fallbacks()
 
     def session(self, df: pl.DataFrame, params: Mapping[str, Any] | None = None) -> Session:
         """A debug `Session` over `df`, paused before anything runs.

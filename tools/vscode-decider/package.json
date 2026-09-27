@@ -6,6 +6,11 @@
   "publisher": "capitec",
   "private": true,
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/capitec/dsp-decision-engine.git",
+    "directory": "tools/vscode-decider"
+  },
   "engines": {
     "vscode": "^1.120.0"
   },
@@ -49,6 +54,10 @@
       {
         "command": "decider.whatIf",
         "title": "decider: What-if (params and inputs)"
+      },
+      {
+        "command": "decider.openPipeline",
+        "title": "decider: Open a pipeline.py"
       }
     ],
     "menus": {
@@ -97,6 +106,12 @@
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "decider.structure",
+        "contents": "No flow shown yet.\n\nOpen the file that defines your pipeline, `def build()` or `pipeline = flow(...)`, and click `Visualise flow` in the line above it. The flow's steps appear here and in the flow panel.\n\n[Open a pipeline.py](command:decider.openPipeline)\n\nNo pipeline yet? `decider template NAME` writes a starter project."
+      }
+    ],
     "configuration": {
       "title": "decider",
       "properties": {
@@ -176,7 +191,7 @@
     "test:large": "pnpm build && E2E=large vitest run",
     "test:controls": "pnpm build && E2E=controls vitest run",
     "test:features": "pnpm build && E2E=features vitest run",
-    "package": "pnpm build && vsce package --no-dependencies"
+    "package": "pnpm build && cp ../../LICENSE . && vsce package --no-dependencies"
   },
   "devDependencies": {
     "@decider/ui": "workspace:*",

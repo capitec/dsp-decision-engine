@@ -11,6 +11,7 @@ Decision records for the consolidated `decider`, each with its measured reason.
 - `structure-in-python.md`: pipeline structure is code, and config carries params and `ConfigurableStep` documents only.
 - `origins-out-of-cache-keys.md`: origins are debug metadata, and compiled code and generated names are keyed by content.
 - `single-record-path.md`: `score()` takes a dict, not kwargs, and converted params bundles are cached.
+- `nested-and-raw-api.md`: an annotation says what a value means, never how it is stored, because the best representation depends on `n`; `Raw`/`Rows`/`raw_str` go, a `TypedDict` is the nested schema, and the remaining work is JSON-boundary validation.
 - `python-fallback-numbaerror-only.md`: only compile failures trigger the Python fallback, at kernel boundaries, and runtime errors always propagate.
 - `tree-documents.md`: v3 trees and flat rules both validate into one graph-shaped `Tree`; v0-v2 are rejected by name.
 - `table-rows-as-runtime-arrays.md`: table rows, thresholds and enable flags are runtime arrays, so editing them never recompiles.
@@ -26,6 +27,8 @@ Decision records for the consolidated `decider`, each with its measured reason.
 - `vscode-extension-testing.md`: how the VS Code prototype is tested at four levels (pytest, DebugClient, in-editor mocha, Playwright on the Electron binary), and the traps found on the way.
 - `jupyterlab-decider.md`: the JupyterLab host of the flow debugger: the bridge in the kernel over a comm (notebook pipelines and flow files), where the bridge lives now, what's left out, and how it's tested.
 - `hot-reload-investigation.md` (spike): `Session.reload` diffs checkpoint sequences by content and re-runs from the first change; notebook `watch`, file `ModuleWatcher`, measurements, and why serving never hot reloads.
+
+- `serving-latency.md`: where one request's microseconds actually go, the kernel-plus-state floor, every transport priced from the caller (HTTP, raw socket, unix socket, shared memory, Arrow IPC, a persistent pyarrow stream), and why an Arrow-native server is not the win.
 
 - `benchmarks-vs-decider2.md`: the last measured numbers against decider2, per workload, and which benchmark script replaced each comparison script.
 - `old-test-coverage.md`: every test of decider_old and decider2 mapped to the test that covers it now, or the reason it was dropped.

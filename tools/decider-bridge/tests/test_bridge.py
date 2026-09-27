@@ -316,3 +316,25 @@ def test_a_param_table_on_a_plain_step_is_described_run_and_edited():
 
 def test_a_one_line_step_reports_its_formula():
     assert find(Bridge().describe(LOAN)["ir"], "term/term_cap")["formula"] == "min(requested_term, ceiling)"
+
+
+def test_a_records_state_says_which_step_last_wrote_and_last_changed_each_value():
+    b = started()
+    b.handle({"cmd": "resume"})
+    cols = {c["name"]: c for c in b.state(row=1)["columns"]}
+    # The public-sector cap wrote 36 over 36: it wrote the value last, but the first cap set it.
+    assert (cols["term_cap"]["writtenBy"], cols["term_cap"]["changedBy"]) == ("term/by_sector/cap_public", "term/term_cap")
+    assert cols["term_cap"]["producer"] == "term/by_sector/cap_public"  # not the other arm's step
+    cols = {c["name"]: c for c in b.state(row=0)["columns"]}
+    assert (cols["term_cap"]["writtenBy"], cols["term_cap"]["changedBy"]) == ("term/by_sector/cap_private", "term/cap_by_income")
+    assert cols["offer"]["changedBy"] == "sizing/shrink_offer/shrink"
+    assert cols["requested_amount"]["changedBy"] == "input"
+
+
+def test_describe_lists_the_metadata_steps_declare_for_their_values(tmp_path):
+    f = tmp_path / "fees.py"
+    f.write_text("from typing import Annotated\nfrom decider import Money, Percent, flow, param\n\n\n"
+                 "def fee(balance: Annotated[int, Money(cents=True)], rate: Annotated[float, Percent()] = param(0.1)) -> float:\n"
+                 "    return balance * rate\n\n\npipeline = flow(fee, name='fees')\n")
+    fields = Bridge().describe(str(f))["fields"]
+    assert fields == {"balance": {"kind": "money", "symbol": "R", "cents": True}, "rate": {"kind": "percent"}}

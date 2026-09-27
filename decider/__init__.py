@@ -44,9 +44,14 @@ Build, wiring, params and missing-input errors are `decider.exceptions.DeciderEr
 """
 from decider.engine import Engine
 from decider.engine.params import Table, missing_as, param, param_table
-from decider.steps import ConfigurableStep, ParamRef, Value, branch, dag, flow, frame_step, loop, step
+from decider.fields import Duration, FieldMetadata, Money, Percent
+from decider.exceptions import FallbackWarning
+from decider.types import Raw, Rows, Struct, raw_str
+from decider.steps import (ConfigurableStep, ParamRef, Value, allow_fallback, branch, dag, flow, frame_step, helper,
+                           loop, step)
 
 __all__ = [
-    "ConfigurableStep", "Engine", "ParamRef", "Value", "branch", "dag", "flow", "frame_step", "loop",
-    "Table", "missing_as", "param", "param_table", "step",
+    "ConfigurableStep", "Duration", "Engine", "FallbackWarning", "FieldMetadata", "Money", "ParamRef", "Percent",
+    "Raw", "Rows", "Struct", "Value", "allow_fallback", "branch", "dag", "flow", "frame_step", "helper", "loop",
+    "raw_str", "Table", "missing_as", "param", "param_table", "step",
 ]

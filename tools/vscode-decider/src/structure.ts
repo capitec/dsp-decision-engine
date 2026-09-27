@@ -9,12 +9,20 @@ export class StructureProvider implements vscode.TreeDataProvider<IRNodeJson> {
   private current: Checkpoint | null = null;
   private finished = new Set<string>();
   private parents = new Map<string, IRNodeJson>();
+  private error?: string;
 
   setDescribe(d: DescribeResult | undefined) {
     this.describe = d;
+    this.error = undefined;
     this.parents.clear();
     this.current = null;
     this.finished.clear();
+    this.changed.fire(undefined);
+  }
+
+  /** Shown in place of the "visualise a flow" hint when the last attempt failed, so the sidebar says why. */
+  setError(message: string | undefined) {
+    this.error = message;
     this.changed.fire(undefined);
   }
 
@@ -25,6 +33,13 @@ export class StructureProvider implements vscode.TreeDataProvider<IRNodeJson> {
   }
 
   getTreeItem(node: IRNodeJson): vscode.TreeItem {
+    if (node.path === ERROR_PATH) {
+      const item = new vscode.TreeItem("Couldn't load this pipeline", vscode.TreeItemCollapsibleState.None);
+      item.description = "check the Python interpreter";
+      item.tooltip = `${node.source}\n\nCheck the Python interpreter for this workspace has decider installed (command palette: "Python: Select Interpreter"), or set the decider.python setting.`;
+      item.iconPath = new vscode.ThemeIcon("warning");
+      return item;
+    }
     const item = new vscode.TreeItem(
       node.path === "" ? this.describe?.pipeline ?? "pipeline" : lastSegment(node.path),
       node.kind === "call" ? vscode.TreeItemCollapsibleState.None : vscode.TreeItemCollapsibleState.Expanded,
@@ -43,7 +58,7 @@ export class StructureProvider implements vscode.TreeDataProvider<IRNodeJson> {
   }
 
   getChildren(node?: IRNodeJson): IRNodeJson[] {
-    if (!this.describe) return [];
+    if (!this.describe) return !node && this.error ? [errorNode(this.error)] : [];
     if (!node) return [this.describe.ir];
     if (node.kind === "call") return [];
     for (const c of node.children) this.parents.set(c.path, node);
@@ -61,4 +76,10 @@ const ICONS: Record<string, string> = {
 
 function names(xs: string[] | null): string {
   return xs === null ? "?" : xs.join(", ");
+}
+
+const ERROR_PATH = "<error>";
+
+function errorNode(message: string): IRNodeJson {
+  return { path: ERROR_PATH, source: message, file: null, line: null, kind: "sequence", children: [] };
 }

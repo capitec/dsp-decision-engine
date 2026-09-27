@@ -1,5 +1,5 @@
 import { same } from "./model/compare";
-import { formatValue, isRateName, recordLabel } from "./model/protocol";
+import { formatValue, isPercent, recordLabel } from "./model/protocol";
 import type { Sweep } from "./model/sweep";
 
 const categorical = (v: unknown[] | undefined) => !!v?.length && v.every((x) => typeof x === "string" || typeof x === "boolean");
@@ -72,7 +72,7 @@ export function SweepResults({ sweep, row, rows, onRow, onOpen, open }: { sweep:
   const delta = (c: string, i: number, changedRows: number[]) => {
     const d = avgDelta(c, i, changedRows);
     if (!d) return "";
-    const size = isRateName(c) && Math.abs(d) < 1 ? `${Number((Math.abs(d) * 100).toFixed(2))} pp` : formatValue(Math.abs(d), c);
+    const size = isPercent(c, d) ? `${Number((Math.abs(d) * 100).toFixed(2))} pp` : formatValue(Math.abs(d), c);
     return `${d > 0 ? "▲ +" : "▼ −"}${size}`;
   };
   // A scenario whose knobs equal the original run's: it is the setting in force now.

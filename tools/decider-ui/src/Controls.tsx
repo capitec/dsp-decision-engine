@@ -38,6 +38,7 @@ export function forceText(f: Force, groups: Group[], keyCol: RecordKey): string 
 
 export function watchText(w: Watch, keyCol: RecordKey): string {
   if (w.iteration !== undefined) return `before iteration ${w.iteration} of ${lastSegment(w.path!)}`;
+  if (w.name === undefined) return `before ${lastSegment(w.path!)}`;
   const where = w.scope?.length ? ` only in ${w.scope.map((s) => s.split("/").slice(-2).join(" / ")).join(", ")}` : "";
   return `${w.name} ${w.op} ${formatValue(w.value, w.name)}${where}${forWho(w.row, keyCol)}`;
 }
@@ -249,7 +250,7 @@ interface WatchProps {
   onChange: (c: Controls) => void;
 }
 
-/** Pause the first time a record's value meets a condition, anywhere or only inside some steps. */
+/** A breakpoint on the step, and pausing the first time a record's value meets a condition, anywhere or only inside some steps. */
 export function WatchForm({ names, step, writes, scopes, name: initial, record, keyCol, controls, onChange }: WatchProps) {
   const [name, setName] = useState(initial ?? names[0] ?? "");
   const [op, setOp] = useState<NonNullable<Watch["op"]>>(">=");
@@ -262,6 +263,9 @@ export function WatchForm({ names, step, writes, scopes, name: initial, record, 
   const here = controls.watches
     .map((w, i) => ({ w, i }))
     .filter(({ w }) => w.name && writes.includes(w.name) && (!w.scope?.length || w.scope.some((s) => step === s || step.startsWith(`${s}/`))));
+  const plain = controls.watches.findIndex((w) => w.path === step && w.name === undefined && w.iteration === undefined);
+  const togglePlain = () =>
+    onChange({ ...controls, watches: plain < 0 ? [...controls.watches, { path: step }] : controls.watches.filter((_, j) => j !== plain) });
   const add = () => {
     const w: Watch = { name, op, value: parseValue(value, "number"), scope: scope ? [scope] : undefined, row: one && record !== null ? record : null };
     onChange({ ...controls, watches: [...controls.watches, w] });
@@ -271,8 +275,14 @@ export function WatchForm({ names, step, writes, scopes, name: initial, record, 
   };
   return (
     <>
+    <div className="control-row">
+      <button className={plain < 0 ? "" : "primary"} title="Pause just before this step every time it runs, for every record. Then use ▶ Run flow." onClick={togglePlain}>
+        {plain < 0 ? "⏸ Set breakpoint" : "⏸ Remove breakpoint"}
+      </button>
+      <span className="muted small">{plain < 0 ? `Pause before ${lastSegment(step)} whenever the flow reaches it.` : `The run pauses before ${lastSegment(step)}. It's listed at the top; × removes it.`}</span>
+    </div>
     <details className="watch-form" open={open} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
-      <summary>⏸ Break when a value…{here.length ? ` (${here.length} active that this step can trigger)` : ""}</summary>
+      <summary>⏸ Or break only when a value meets a condition…{here.length ? ` (${here.length} active that this step can trigger)` : ""}</summary>
       {here.map(({ w, i }) => (
         <div key={i} className="small">
           ⏸ {watchText(w, keyCol)}{" "}

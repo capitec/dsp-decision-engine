@@ -8,20 +8,21 @@ from decider.engine.ir.decls import Input, NullPolicy, Output, ParamDecl, nullab
 from decider.engine.params.declare import MissingAs, ParamSpec, is_plain_marker
 from decider.engine.params.tables import table_type
 from decider.exceptions import IRError
+from decider.types import hoist_metadata
 
 _EMPTY = inspect.Parameter.empty
 
 
 def _outputs(fn: Callable, names: tuple[str, ...], ret: Any) -> tuple[Output, ...]:
     if len(names) == 1:
-        return (Output(names[0], ret),)
+        return (Output(names[0], hoist_metadata(ret)),)
     args = typing.get_args(ret) if typing.get_origin(ret) is tuple else ()
     if len(args) != len(names) or Ellipsis in args:
         raise IRError(
             f"{fn.__qualname__}: outputs {names} need a return annotation tuple[...] "
             f"of {len(names)} types, got {ret!r}"
         )
-    return tuple(Output(n, a) for n, a in zip(names, args))
+    return tuple(Output(n, hoist_metadata(a)) for n, a in zip(names, args))
 
 
 def harvest(
@@ -52,9 +53,13 @@ def harvest(
                 ann = table_type(d.schema)
             elif ann is Any and not d.required:
                 ann = type(d.default)
+            # A param's annotation goes to pydantic untouched: its metadata may be a validator,
+            # and where that validator sits relative to `| None` changes what it checks.
             params.append(ParamDecl(name, ann, d.default, d.field_info, d.required, d.shared_key, d.on_invalid,
                                     schema=d.schema))
-        elif isinstance(d, MissingAs):
+            continue
+        ann = hoist_metadata(ann)
+        if isinstance(d, MissingAs):
             inputs.append(Input(name, type(d.fill) if ann is Any else ann, NullPolicy.MISSING_AS, d.fill, arg=name))
         elif nullable(ann):
             inputs.append(Input(name, ann, NullPolicy.OPTIONAL, arg=name))

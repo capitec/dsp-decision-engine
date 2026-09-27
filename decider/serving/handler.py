@@ -19,6 +19,7 @@ from decider.config import ConfigStore, Version
 from decider.engine import Engine
 from decider.engine.run import Executable
 from decider.steps import ConfigurableStep, Step
+from decider.types import struct_item
 from .format import DEFAULT_OUTPUT_FORMATTERS, Response
 from .parse import DEFAULT_INPUT_HANDLERS, coerce_frame, coerce_record, dummy, has_date
 
@@ -46,7 +47,9 @@ class RequestHandler:
     off the request path, `activate()` swaps it in atomically, `rollback()`
     goes back to the previous one. Errors propagate to the caller, and the
     active version keeps serving. `POST /invocations` with a JSON object
-    scores one record; a JSON array, JSONL, CSV or Parquet body runs as a frame.
+    scores one record; a JSON array, JSONL, CSV, Parquet or Arrow IPC body
+    runs as a frame. Send one record as JSON: Arrow IPC costs more to encode
+    and decode than the pipeline takes to run.
 
     Override any `*_fn` method in a `Handler` subclass in `inference.py` to
     change how requests are parsed, scored or formatted. JSON dates arrive as
@@ -233,7 +236,8 @@ def _inputs(exe: Executable) -> list:
 
 
 def _dates(exe: Executable) -> dict[str, t.Any]:
-    return {v.name: v.annotation for v in _inputs(exe) if has_date(v.annotation)}
+    # A `Struct[Item]` input arrives as Item's dict, which is what pydantic can validate.
+    return {v.name: struct_item(v.annotation) or v.annotation for v in _inputs(exe) if has_date(v.annotation)}
 
 
 def construct_handler_from_settings() -> RequestHandler:
