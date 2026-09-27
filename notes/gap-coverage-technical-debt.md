@@ -4,6 +4,12 @@ Status of the items in `notes/tmcfeval/DECIDER_GAPS.md` and the deferred work
 from the `each` / `Columnar` work. This is a living ledger: tick an item here
 when it lands, and keep its detail in its own note.
 
+## Shipped since `DECIDER_GAPS.md`
+
+- 3. Lists of records have no grain of their own — `each` + `Columnar[Item]`.
+- 4. No fan-out and reduce — `optimise`. With 3 and 4 landed, gap 5
+  ("calling a flow from a hand-written kernel") is withdrawn as written.
+
 ## Each: what shipped, what did not
 
 `each(column, child_flow, name=, execution_mode=EachMode.PER_ROW | BATCH)` ships
@@ -24,7 +30,6 @@ item").
 ## Still open in `DECIDER_GAPS.md`
 
 - 2. Silent Python fallback when a step calls a plain helper.
-- 4. No fan-out and reduce (search over generated candidates) — `optimise`.
 - 6. A branch condition must be a function step.
 - 8. Functions with function arguments can't be disk-cached.
 - 9. Frame step output dtypes are lost between frame steps.

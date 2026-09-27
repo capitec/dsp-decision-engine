@@ -219,6 +219,20 @@ def test_score_equals_run_row_for_row_through_a_branch_and_nulls():
     assert_equivalent(pipeline, frame)
 
 
+def test_a_branch_condition_may_be_a_column_name_in_every_mode():
+    by_name = branch("on_card", big, small, modifies=["y"], name="by")
+
+    def on_card(on_card: bool) -> bool:
+        return on_card
+
+    by_step = branch(on_card, big, small, modifies=["y"], name="by")
+    frame = pl.DataFrame({"x": [1.0, 200.0, 50.0], "on_card": [True, False, True]})
+    for m in MODES:
+        assert Engine().bind(by_name, mode=m).run(frame)["y"].to_list() == \
+            Engine().bind(by_step, mode=m).run(frame)["y"].to_list()
+    assert Engine().bind(by_name, mode="interpreted").run(frame)["y"].to_list() == [2.0, 200.0, 100.0]
+
+
 def test_fused_lazy_validation_covers_every_step_of_a_kernel_that_runs_and_nothing_else():
     @step(output="z")
     def scaled(y: float, f: float = param(1.0, ge=0)) -> float:
