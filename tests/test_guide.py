@@ -28,7 +28,7 @@ def _marks(block: str):
 def credit_risk_project(tmp_path, monkeypatch):
     monkeypatch.setattr(os, "environ", {k: v for k, v in os.environ.items() if not k.upper().startswith("DECIDER_")})
     monkeypatch.setattr(settings_module, "settings", settings_module.settings)
-    monkeypatch.setattr(sys, "path", [str(tmp_path / "credit_risk"), *sys.path])
+    monkeypatch.setattr(sys, "path", [str(tmp_path), *sys.path])
     for name in [m for m in sys.modules if m.split(".")[0] == "credit_risk"]:
         monkeypatch.delitem(sys.modules, name)
     monkeypatch.chdir(tmp_path)

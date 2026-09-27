@@ -42,7 +42,9 @@ def resolve(ir: Any) -> Plan:
         from decider.engine.ir.context import to_ir
 
         ir = to_ir(ir)
-    resolver = _Resolver({o.name: o.annotation for n in iter_nodes(ir) if isinstance(n, CallNode) for o in n.outputs or ()})
+    declared = frozenset(n for node in iter_nodes(ir) if isinstance(node, SequenceNode) for n in node.inputs)
+    resolver = _Resolver({o.name: o.annotation for n in iter_nodes(ir) if isinstance(n, CallNode) for o in n.outputs or ()},
+                         declared)
     scope = _Scope()
     root = resolver.walk(ir, scope)
     return resolver.finish(root, scope)
@@ -64,8 +66,9 @@ class _Scope:
 
 
 class _Resolver:
-    def __init__(self, annotations: dict[str, Any]) -> None:
+    def __init__(self, annotations: dict[str, Any], declared: frozenset[str] = frozenset()) -> None:
         self.annotations = annotations
+        self.declared = declared
         self.versions: list[Version] = []
         self.calls: list[Call] = []
         self.leaves: dict[str, Version] = {}
@@ -163,7 +166,7 @@ class _Resolver:
             )
         # A node's own outputs are no typo: `term_cap_a` may read `term_cap`.
         produced = {n: v for n, v in scope.names.items() if v.producer is not None and n not in own}
-        near = suggest(name, produced, TYPO_CUTOFF)
+        near = None if name in self.declared else suggest(name, produced, TYPO_CUTOFF)
         if near is not None:
             if _is_typo(name, near):
                 raise WiringError(

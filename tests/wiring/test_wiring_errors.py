@@ -132,6 +132,30 @@ def test_a_similar_but_not_mistyped_name_is_an_input_column_with_a_warning():
     assert [i.name for i in plan.inputs] == ["entity_bureau_score"]
 
 
+def test_a_declared_input_resembling_an_output_is_not_flagged():
+    import warnings
+
+    def entity_base_score() -> float:
+        return 600.0
+
+    def total(entity_base_score: float, entity_bureau_score: float) -> float:
+        return entity_base_score + entity_bureau_score
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        plan = resolve(flow(entity_base_score, total, inputs=["entity_bureau_score"]))
+    assert [i.name for i in plan.inputs] == ["entity_bureau_score"]
+
+
+def test_a_declared_input_that_is_otherwise_a_typo_is_accepted():
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        plan = resolve(flow(disposable_income, ratio, inputs=["disposible_income"]))
+    assert {i.name for i in plan.inputs} == {"net_income", "expenses", "disposible_income", "instalment"}
+
+
 def test_names_differing_only_in_digits_are_no_typo():
     def applicant1_income(x: float) -> float:
         return x

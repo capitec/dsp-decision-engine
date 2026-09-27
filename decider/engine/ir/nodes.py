@@ -66,6 +66,7 @@ class SequenceNode(IRNode):
     children_: tuple[IRNode, ...]
     emits: tuple[str, ...] = ()
     drops: tuple[str, ...] = ()
+    inputs: tuple[str, ...] = ()
 
     def children(self) -> tuple[IRNode, ...]:
         return self.children_
