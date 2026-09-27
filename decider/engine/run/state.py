@@ -188,11 +188,20 @@ class State:
     def column(self, spec: str, version: Version | None = None) -> pl.Series:
         """One version as a polars Series named `spec`, null where invalid."""
         (v,) = [version] if version is not None else self.versions(spec)
+        source = self.source(v)
+        if source is not None:
+            return source if source.name == spec else source.alias(spec)
         return _series(spec, *self.read(v), v.annotation)
 
     def frame_of(self, base: pl.DataFrame, names: dict[str, Version], rows: np.ndarray | None) -> pl.DataFrame:
         """`base` with the current value of every name in `names` on `rows`, for a frame step."""
-        cols = [_series(name, *self.read(v, rows), v.annotation) for name, v in names.items()]
+        cols = []
+        for name, v in names.items():
+            source = self.source(v)
+            if source is not None:
+                cols.append(source if rows is None else source.gather(rows))
+            else:
+                cols.append(_series(name, *self.read(v, rows), v.annotation))
         return base.with_columns(cols) if cols else base
 
 
