@@ -21,19 +21,6 @@ or an equivalent), and `Checkpoint` needs a coordinate for *which item* — see
 `notes/nested-data-decisions.md` ("`Checkpoint` ... has no coordinate for which
 item").
 
-### Edge cases deferred to the next change
-
-- **`_concrete` Null→String** (`engine.py:263-271`): an all-null list column is
-  rewritten to `String` inside nested types, so `each(..., BATCH)` on a single
-  record with an empty or null list fails the `explode`/`unnest` (the child
-  frame's field reads as a string). Fix the rewrite to stop at nested `Null`
-  fields. Worse for a batch shape: a whole column, not one row, can be all-null.
-- **`from_series` / `build_rows` re-conversion** (`rows.py`, `state.py`): the
-  enriched list a `BATCH` `each` writes is a frame-step output, never traced to
-  the input's Arrow buffers, so a later `Columnar[Item]` read pays
-  `Series.to_list()` + a Python loop per item instead of the `ARROW_ROWS` fast
-  path.
-
 ## Still open in `DECIDER_GAPS.md`
 
 - 2. Silent Python fallback when a step calls a plain helper.
