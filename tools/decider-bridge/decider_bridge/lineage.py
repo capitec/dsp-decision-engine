@@ -53,6 +53,26 @@ def _sources(state, how, row):
     return [how[1].last, how[1].initial]
 
 
+def attribution(state, name, versions, row, steps):
+    """The last of `steps` that wrote `name` on `row`, and the last that changed its value there.
+
+    A branch or loop's merge carries its arms' values on, so it is never the one credited.
+    """
+    written = changed = None
+    before = _UNSET = object()
+    for v in versions:
+        valid = state.valid.get(v.id)
+        if valid is not None and not valid[row]:
+            continue
+        value = state.column(name, v)[row]
+        if v.producer in steps:
+            written = v.producer
+            if before is _UNSET or value != before:
+                changed = v.producer
+        before = value
+    return written, changed
+
+
 def latest(state, versions, row):
     """The version a record sees: the latest one written on its row.
 

@@ -10,6 +10,22 @@ pnpm install && pnpm build
 codium --extensionDevelopmentPath="$PWD" examples/
 ```
 
+To distribute, `pnpm package` writes `decider-vscode-<version>.vsix`; install it with
+`code --install-extension decider-vscode-0.0.1.vsix` (or *Extensions → … → Install from VSIX*).
+
+The `.vsix` does not carry the Python side. Before using an installed extension,
+install `decider` and `decider-bridge` into your project's environment (the
+bridge pulls in `decider` and `polars`):
+
+```sh
+uv pip install -e <repo>/tools/decider-bridge
+uv run python -c "import decider, decider_bridge"   # check
+```
+
+The extension runs the `decider.python` setting (e.g. `["uv", "run", "python"]` or
+`["/path/to/.venv/bin/python"]`), else the ms-python interpreter, else `python3`.
+If that interpreter can't import both packages, the *Structure* tree stays empty.
+
 Open `examples/loan.py`. Above `pipeline = ...` there are four lenses:
 
 - **Visualise flow** opens the graph panel and fills the *decider → Structure* tree.
@@ -85,6 +101,7 @@ extension host ──DAP──▶ adapter.ts ──JSON lines──▶ decider_b
 ## Tests
 
 ```sh
+uv pip install -e tools/decider-bridge          # once, from the repo root: decider + decider-bridge
 uv run pytest tools/decider-bridge -q          # bridge, lineage, traces on the real session
 pnpm test                                      # adapter over stdio (DebugClient), layout, comparisons, git
 pnpm test:vscode                               # extension API inside VSCodium (mocha)

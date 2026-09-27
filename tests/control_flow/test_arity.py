@@ -109,11 +109,13 @@ def cap_b(cap: float) -> float:
     return cap + 2.0
 
 
-def test_a_condition_reading_a_str_input_alongside_others_packs():
+def test_a_condition_reading_a_str_input_is_right_but_does_not_pack():
+    # Semantic strings run one compiled call per row, and only what the array kernel holds packs.
     frame = pl.DataFrame({"sector": ["private", "public", "private"], "income": [1.0, 1.0, 0.0],
                           "cap": [10.0, 10.0, 10.0]})
     mixed = branch(sector_and_income, cap_a, cap_b, modifies=["cap"], name="mixed")
     assert assert_equivalent(mixed, frame)["cap"].to_list() == [11.0, 12.0, 12.0]
     exe = Engine().bind(mixed, "fused")
-    exe.run(frame)
-    assert list(exe.runner.packed) == ["mixed"]
+    with pytest.warns(UserWarning, match="reads 'sector' as str"):
+        exe.run(frame)
+    assert list(exe.runner.packed) == []

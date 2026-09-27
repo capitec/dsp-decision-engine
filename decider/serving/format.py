@@ -28,11 +28,18 @@ def _parquet(result: pl.DataFrame) -> bytes:
     return f.getvalue()
 
 
+def _arrow(result: pl.DataFrame) -> bytes:
+    f = BytesIO()
+    result.write_ipc_stream(f)
+    return f.getvalue()
+
+
 # Accept header -> (response media type, writer).
 DEFAULT_OUTPUT_FORMATTERS: dict[str, tuple[str, t.Callable[[pl.DataFrame], bytes]]] = {
     "*/*": ("application/json", _json),
     "application/json": ("application/json", _json),
     "application/jsonl": ("application/jsonl", lambda r: r.write_ndjson().encode()),
     "application/x-parquet": ("application/x-parquet", _parquet),
+    "application/vnd.apache.arrow.stream": ("application/vnd.apache.arrow.stream", _arrow),
     "text/csv": ("text/csv", lambda r: r.write_csv().encode()),
 }
