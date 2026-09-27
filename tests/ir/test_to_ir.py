@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import gc
 
+import polars as pl
 import pytest
 
 from decider import branch, dag, engine, flow, loop, param, step
@@ -129,6 +130,13 @@ def test_table_turns_inline_rows_or_a_ref_into_rows_or_decl():
     assert ctx.table(rows, {"product": "str"}) is rows
     decl = ctx.table(TableRef(table="prices"), {"product": "str", "rate": "float"})
     assert (decl.name, decl.required, decl.schema) == ("prices", True, (("product", "str"), ("rate", "float")))
+
+
+def test_a_dataframe_round_trip_keeps_its_declared_dtypes():
+    frame = DataFrame(data=[{"a": 1}], dtypes={"a": "float64"})
+    reloaded = DataFrame.model_validate(frame.model_dump())
+    assert reloaded.dtypes is not None
+    assert reloaded.df.schema["a"] == pl.Float64
 
 
 def test_a_table_param_reports_its_schema():
