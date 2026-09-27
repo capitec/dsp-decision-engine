@@ -1,4 +1,4 @@
-"""A `str` field of a `Rows[Item]` item: a span into the list's own string buffers."""
+"""A `str` field of a `Columnar[Item]` item: a span into the list's own string buffers."""
 from __future__ import annotations
 
 import gc
@@ -8,7 +8,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from decider import Engine, Rows, flow, missing_as, param
+from decider import Engine, Columnar, flow, missing_as, param
 from decider.engine.compile.rows import ARROW_ROWS, build_rows
 from decider.testing import assert_equivalent
 
@@ -34,7 +34,7 @@ class Optional(TypedDict):
     el_2: str | None
 
 
-def eq_literal(items: Rows[Labelled]) -> int:
+def eq_literal(items: Columnar[Labelled]) -> int:
     n = 0
     for j in range(len(items.label)):
         if items.label[j] == WANT:
@@ -42,21 +42,21 @@ def eq_literal(items: Rows[Labelled]) -> int:
     return n
 
 
-def code_points(items: Rows[Labelled]) -> int:
+def code_points(items: Columnar[Labelled]) -> int:
     n = 0
     for j in range(len(items.label)):
         n += len(items.label[j])
     return n
 
 
-def byte_lengths(items: Rows[Labelled]) -> int:
+def byte_lengths(items: Columnar[Labelled]) -> int:
     n = 0
     for j in range(len(items.label)):
         n += items.label[j][1]
     return n
 
 
-def starts(items: Rows[Labelled]) -> int:
+def starts(items: Columnar[Labelled]) -> int:
     n = 0
     for j in range(len(items.label)):
         if items.label[j].startswith("priv"):
@@ -64,7 +64,7 @@ def starts(items: Rows[Labelled]) -> int:
     return n
 
 
-def ends(items: Rows[Labelled]) -> int:
+def ends(items: Columnar[Labelled]) -> int:
     n = 0
     for j in range(len(items.label)):
         if items.label[j].endswith("énd"):
@@ -72,7 +72,7 @@ def ends(items: Rows[Labelled]) -> int:
     return n
 
 
-def holds(items: Rows[Labelled]) -> int:
+def holds(items: Columnar[Labelled]) -> int:
     n = 0
     for j in range(len(items.label)):
         if "afé" in items.label[j]:
@@ -80,7 +80,7 @@ def holds(items: Rows[Labelled]) -> int:
     return n
 
 
-def iterated(items: Rows[Labelled]) -> int:
+def iterated(items: Columnar[Labelled]) -> int:
     n = 0
     for label in items.label:
         if label == WANT:
@@ -114,7 +114,7 @@ def test_the_arrow_read_answers_the_same_as_the_python_read(fn):
     assert set(exe.run(frame)[fn.__name__].to_list()) == {CPYTHON[fn.__name__]}
 
 
-def find_best_item(items: Rows[Item]) -> int:
+def find_best_item(items: Columnar[Item]) -> int:
     for j in range(len(items.el_1)):
         if items.el_1[j] == 400 and items.el_2[j] == "snoop":
             return j
@@ -153,7 +153,7 @@ class Pair(TypedDict):
     right: str
 
 
-def eq_global(items: Rows[Pair]) -> int:
+def eq_global(items: Columnar[Pair]) -> int:
     n = 0
     for j in range(len(items.left)):
         if items.left[j] == WANT:
@@ -161,7 +161,7 @@ def eq_global(items: Rows[Pair]) -> int:
     return n
 
 
-def eq_other_field(items: Rows[Pair]) -> int:
+def eq_other_field(items: Columnar[Pair]) -> int:
     n = 0
     for j in range(len(items.left)):
         if items.left[j] == items.right[j]:
@@ -169,7 +169,7 @@ def eq_other_field(items: Rows[Pair]) -> int:
     return n
 
 
-def eq_param(items: Rows[Pair], want: str = param(WANT)) -> int:
+def eq_param(items: Columnar[Pair], want: str = param(WANT)) -> int:
     n = 0
     for j in range(len(items.left)):
         if items.left[j] == want:
@@ -187,14 +187,14 @@ def test_a_str_field_compares_against_a_constant_a_param_and_another_field(fn):
 
 def test_a_str_field_compared_against_a_param_runs_in_the_kernel():
     # `_probe_signature` typed `want` from `SPAN in ins`, which only sees a top-level `bytes`
-    # input; a `str` field nested inside a `Rows[...]` input's schema was invisible to it, so
+    # input; a `str` field nested inside a `Columnar[...]` input's schema was invisible to it, so
     # `want` was typed as a Raw[str] code and the step fell back to Python.
     exe = Engine().bind(flow(eq_param, name="p"), mode="fused")
     exe.run(PAIRS)
     assert exe.fallbacks() == {}
 
 
-def optional_nulls(items: Rows[Optional]) -> int:
+def optional_nulls(items: Columnar[Optional]) -> int:
     n = 0
     for j in range(len(items.el_1)):
         # A null is not a string: it equals nothing, holds nothing and reads as empty.
@@ -212,7 +212,7 @@ def test_an_optional_str_field_reads_a_null_as_a_null_span():
     assert assert_equivalent(flow(optional_nulls, name="p"), NULLABLE)["optional_nulls"].to_list() == [2]
 
 
-def null_test(items: Rows[Optional]) -> int:
+def null_test(items: Columnar[Optional]) -> int:
     n = 0
     for j in range(len(items.el_1)):
         if items.el_2[j][1] < 0:
@@ -224,7 +224,7 @@ def test_the_byte_length_is_the_null_test_in_every_mode():
     assert assert_equivalent(flow(null_test, name="p"), NULLABLE)["null_test"].to_list() == [1]
 
 
-def required_str(items: Rows[Item]) -> int:
+def required_str(items: Columnar[Item]) -> int:
     return len(items.el_1)
 
 
@@ -242,7 +242,7 @@ def test_an_int_field_still_refuses_to_be_optional():
         build_rows(np.array([None], object), (("n", int | None),))
 
 
-def n_snoop(items: Rows[Item] = missing_as([])) -> int:
+def n_snoop(items: Columnar[Item] = missing_as([])) -> int:
     n = 0
     for j in range(len(items.el_1)):
         if items.el_2[j] == "snoop":

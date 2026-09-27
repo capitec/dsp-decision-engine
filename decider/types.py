@@ -39,13 +39,19 @@ class Raw(Generic[T]):
     """Marker annotation requesting Decider's internal representation of `T`."""
 
 
-class Rows(Generic[T]):
-    """Read a `list[dict]` column as one array per `Item` field, so a compiled step can loop over it.
+class Columnar(Generic[T]):
+    """Read a `list[dict]` column as one flat array per `Item` field, so a compiled step can loop over it.
 
-    An `Item` field may be `float`, `int`, `bool` or `float | None` (a null
-    reads as NaN); any other null raises, naming the item it is in. A null or
-    absent list follows the input's null policy, and `missing_as([])` reads it
-    as a row with no items.
+    This is a columnar (struct-of-arrays) shape: `items.price` is one array of
+    every item's `price`, read by item position `items.price[j]`. It is *not* a
+    list of per-item dicts — `for i in items` iterates the *fields*, not the
+    items, so index each field by position. An `Item` field may be `float`,
+    `int`, `bool`, `str`, or `float | None` / `str | None` (a null reads as NaN
+    / a null span); any other null raises, naming the item it is in. A field
+    that is itself a list or struct is nested data, which `Columnar` cannot
+    hold: annotate the input `list[dict]` instead (runs in Python; accept with
+    `@allow_fallback`). A null or absent list follows the input's null policy,
+    and `missing_as([])` reads it as a row with no items.
 
     Reach for it when the work per item is heavy or the lists are long: it
     costs about 20 us a `score()` call to build the arrays, so a short list
@@ -56,7 +62,7 @@ class Rows(Generic[T]):
         class Item(TypedDict):
             price: float
 
-        def total(items: Rows[Item]) -> float:
+        def total(items: Columnar[Item]) -> float:
             t = 0.0
             for j in range(len(items.price)):
                 t += items.price[j]
@@ -114,11 +120,11 @@ def annotation_cache(fn):
 
 
 @annotation_cache
-def rows_item(annotation: Any) -> Any | None:
-    """`Item` of a `Rows[Item]` annotation, optional or not, else `None`."""
-    if get_origin(annotation) is not Rows and is_raw(annotation):
+def columnar_item(annotation: Any) -> Any | None:
+    """`Item` of a `Columnar[Item]` annotation, optional or not, else `None`."""
+    if get_origin(annotation) is not Columnar and is_raw(annotation):
         annotation = raw_base(annotation)
-    return get_args(annotation)[0] if get_origin(annotation) is Rows else None
+    return get_args(annotation)[0] if get_origin(annotation) is Columnar else None
 
 
 def struct_item(annotation: Any) -> Any | None:
@@ -126,16 +132,17 @@ def struct_item(annotation: Any) -> Any | None:
     return get_args(annotation)[0] if get_origin(annotation) is Struct else None
 
 
-# Every run of a step reading `Rows[Item]` asks for this; `get_type_hints` costs tens of microseconds.
+# Every run of a step reading `Columnar[Item]` or `Struct[Item]` asks for this; `get_type_hints` costs
+# tens of microseconds.
 @lru_cache(maxsize=None)
-def rows_schema(item: Any) -> tuple[tuple[str, Any], ...]:
+def item_schema(item: Any) -> tuple[tuple[str, Any], ...]:
     """`Item`'s fields in declaration order, as `(name, type)` pairs."""
     return tuple(get_type_hints(item).items())
 
 
 @annotation_cache
 def is_raw(annotation: Any) -> bool:
-    if get_origin(annotation) in (Raw, Rows):
+    if get_origin(annotation) in (Raw, Columnar):
         return True
     return any(is_raw(arg) for arg in get_args(annotation) if arg is not type(None))
 

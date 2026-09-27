@@ -1,6 +1,6 @@
 """A `list<struct<...>>` column read as Arrow already stores it: flat field arrays plus the offsets.
 
-Arrow's layout is the one `Rows[Item]` wants, so nothing is rebuilt: the
+Arrow's layout is the one `Columnar[Item]` wants, so nothing is rebuilt: the
 offsets are the per-row slices and each struct field is already one flat
 array. Only a field whose Arrow width differs from the kernel's, a bit-packed
 bool and a nulled field cost a vectorised pass.
@@ -94,7 +94,7 @@ def _read(view, name, schema, dtypes, optional, index) -> Nested | None:
         view.release()
         return None
     n, top_offset = lib.sm_view_length(top), lib.sm_view_offset(top)
-    # A whole item being null is not a value `Rows[Item]` can hold.
+    # A whole item being null is not a value `Columnar[Item]` can hold.
     if lib.sm_view_null_count(struct):
         view.release()
         return None

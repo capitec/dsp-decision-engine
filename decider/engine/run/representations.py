@@ -1,4 +1,4 @@
-"""Compiled-value representations shared by every runner, so `Raw[str]`/`Raw[bytes]`/`Rows[Item]`
+"""Compiled-value representations shared by every runner, so `Raw[str]`/`Raw[bytes]`/`Columnar[Item]`
 give the same value regardless of `mode=`.
 """
 from __future__ import annotations

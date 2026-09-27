@@ -8,7 +8,7 @@ from typing import TypedDict
 import polars as pl
 import pytest
 
-from decider import Engine, Raw, Rows, Struct, flow, missing_as, raw_str
+from decider import Engine, Raw, Columnar, Struct, flow, missing_as, raw_str
 from decider.exceptions import FallbackWarning
 from decider.testing import assert_equivalent
 
@@ -76,7 +76,7 @@ def list_of_dicts(accounts: list[dict]) -> float:
     return sum(a["balance"] for a in accounts)
 
 
-def rows_of_items(accounts: Rows[Account]) -> float:
+def rows_of_items(accounts: Columnar[Account]) -> float:
     total = 0.0
     for j in range(len(accounts.balance)):
         total += accounts.balance[j]
@@ -143,7 +143,7 @@ def every_shape_at_once(sector: str, accounts: list[dict], applicant: dict, hist
         + applicant["income"] + sum(history)
 
 
-def every_compiled_shape_at_once(sector: Raw[str], accounts: Rows[Account],
+def every_compiled_shape_at_once(sector: Raw[str], accounts: Columnar[Account],
                                  applicant: Struct[Applicant]) -> float:
     total = 0.0
     for j in range(len(accounts.balance)):
@@ -216,7 +216,7 @@ def optional_list(accounts: list[dict] | None) -> float:
     return 0.0 if accounts is None else float(len(accounts))
 
 
-def optional_rows(accounts: Rows[Account] | None) -> float:
+def optional_rows(accounts: Columnar[Account] | None) -> float:
     return 0.0 if accounts is None else float(len(accounts.balance))
 
 
@@ -236,7 +236,7 @@ def filled_list(accounts: list[dict] = missing_as([])) -> float:
     return float(len(accounts))
 
 
-def filled_rows(accounts: Rows[Account] = missing_as([])) -> float:
+def filled_rows(accounts: Columnar[Account] = missing_as([])) -> float:
     return float(len(accounts.balance))
 
 
@@ -288,7 +288,7 @@ def test_every_output_shape_comes_back_the_same_in_every_mode(fn, expected):
 # --- what each opt-in refuses, naming the field ------------------------------------------------
 
 def test_a_field_no_kernel_can_hold_is_refused_and_says_what_to_do():
-    def total(accounts: Rows[DatedAccount]) -> float:
+    def total(accounts: Columnar[DatedAccount]) -> float:
         return float(len(accounts.balance))
 
     with pytest.raises(TypeError, match="'opened'"):
@@ -296,7 +296,7 @@ def test_a_field_no_kernel_can_hold_is_refused_and_says_what_to_do():
 
 
 def test_an_int_or_none_field_in_an_item_is_refused_because_it_has_no_null_value():
-    def total(accounts: Rows[CountedAccount]) -> float:
+    def total(accounts: Columnar[CountedAccount]) -> float:
         return float(len(accounts.balance))
 
     with pytest.raises(TypeError, match=r"'count'.*float \| None"):
@@ -321,7 +321,7 @@ class MaybeAccount(TypedDict):
 
 
 def test_an_optional_item_field_reads_a_null_as_nan_in_every_mode():
-    def first(accounts: Rows[MaybeAccount]) -> float:
+    def first(accounts: Columnar[MaybeAccount]) -> float:
         return accounts.balance[0]
 
     # polars takes a struct field's type from the first row, so a leading null would type the
@@ -332,7 +332,7 @@ def test_an_optional_item_field_reads_a_null_as_nan_in_every_mode():
 
 
 def test_a_null_item_field_that_is_not_optional_names_the_item_and_the_row():
-    def total(accounts: Rows[Account]) -> float:
+    def total(accounts: Columnar[Account]) -> float:
         return accounts.balance[0]
 
     frame = pl.DataFrame({"accounts": [[{"balance": 1.0}], [{"balance": None}]]})

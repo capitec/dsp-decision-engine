@@ -173,16 +173,12 @@ def test_a_field_type_no_record_holds_keeps_the_step_in_python():
         assert exe.run(df)["afford_str"].to_list() == [200.0]
 
 
-def test_a_list_field_keeps_the_step_in_python():
+def test_a_nested_field_is_refused_at_bind_and_points_at_dict():
     def afford_list(applicant: Struct[WithList]) -> float:
         return applicant["income"] + sum(applicant["amounts"])
 
-    df = pl.DataFrame({"applicant": [{"income": 100.0, "amounts": [1.0, 2.0]}]},
-                      schema={"applicant": pl.Struct({"income": pl.Float64,
-                                                      "amounts": pl.List(pl.Float64)})})
-    exe = Engine().bind(flow(afford_list, name="p"), mode="fused")
-    with pytest.warns(UserWarning, match=r"reads field 'applicant\.amounts'"):
-        assert exe.run(df)["afford_list"].to_list() == [103.0]
+    with pytest.raises(TypeError, match=r"field 'amounts' is list\[float\].*as dict"):
+        Engine().bind(flow(afford_list, name="p"), mode="fused")
 
 
 def test_a_struct_reaches_a_step_that_runs_one_compiled_call_per_row():
