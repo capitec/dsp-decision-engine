@@ -47,11 +47,11 @@ from decider.engine.params import Table, missing_as, param, param_table
 from decider.fields import Duration, FieldMetadata, Money, Percent
 from decider.exceptions import FallbackWarning
 from decider.types import Columnar, Raw, Struct, raw_str
-from decider.steps import (ConfigurableStep, ParamRef, Value, allow_fallback, branch, dag, flow, frame_step, helper,
-                           loop, step)
+from decider.steps import (ConfigurableStep, EachMode, ParamRef, Value, allow_fallback, branch, dag, each, flow,
+                           frame_step, helper, loop, step)
 
 __all__ = [
-    "ConfigurableStep", "Duration", "Engine", "FallbackWarning", "FieldMetadata", "Money", "ParamRef", "Percent",
-    "Raw", "Columnar", "Struct", "Value", "allow_fallback", "branch", "dag", "flow", "frame_step", "helper", "loop",
-    "raw_str", "Table", "missing_as", "param", "param_table", "step",
+    "ConfigurableStep", "Duration", "EachMode", "Engine", "FallbackWarning", "FieldMetadata", "Money", "ParamRef",
+    "Percent", "Raw", "Columnar", "Struct", "Value", "allow_fallback", "branch", "dag", "each", "flow",
+    "frame_step", "helper", "loop", "raw_str", "Table", "missing_as", "param", "param_table", "step",
 ]
