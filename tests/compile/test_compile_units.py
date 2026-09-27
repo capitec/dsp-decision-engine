@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 from numba.core.dispatcher import Dispatcher
 
-from decider import ConfigurableStep, Rows, allow_fallback, branch, flow, frame_step, helper, step
+from decider import ConfigurableStep, Columnar, allow_fallback, branch, flow, frame_step, helper, step
 from decider.engine.compile import Fallback, Kernel, compile_plan, jit
 from decider.engine.compile.units import Layout
 from decider.engine.ir.decls import Input, Output, ParamDecl
@@ -318,6 +318,6 @@ def test_two_item_types_over_one_column_in_one_kernel_is_refused():
     # the second reader would silently get the first's fields.
     v = Version(0, "items", None, None)
     lay = Layout()
-    lay.source(v, Input("items", Rows[ItemA]))
+    lay.source(v, Input("items", Columnar[ItemA]))
     with pytest.raises(TypeError, match="two different Item types"):
-        lay.source(v, Input("items", Rows[ItemB]))
+        lay.source(v, Input("items", Columnar[ItemB]))

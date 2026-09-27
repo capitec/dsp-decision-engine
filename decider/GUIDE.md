@@ -43,6 +43,8 @@ HTTP with `decider serve`.
 | a grid (bands, rate cards) fixed in its config document | `DecisionTableConfig`, inline `"rows": [...]` |
 | a grid retuned like a param (params document, per call) | `DecisionTableConfig`, `"rows": {"table": "name"}` |
 | rows a plain step loops over, retuned like a param | `param_table({"col": float}, default=[...])` |
+| a `list[dict]` column, heavy per-item work in a kernel | `Columnar[Item]` (one array per field) |
+| a `struct` column as one record per row, in a kernel | `Struct[Item]` |
 | a points scorecard | `ScorecardConfig` |
 | the same step twice, or on other column names | `.named("x")`, `.relabel(reads=, writes=)` |
 | another project's pipeline | import its `build()`; put the step inside yours |
@@ -395,6 +397,51 @@ For a batch big enough to care, `Raw[str]` compares strings as integer codes
 inside the kernel (`==` and `!=` only) at 4-5x the throughput — but it is
 *slower* on a single record, because the codes have to be built first. Since
 `score()` is the usual workload, reach for it only when a batch is the point.
+
+## Nested columns: `Struct[Item]` and `Columnar[Item]`
+
+A list or struct column reaches a compiled kernel two ways, and reads the same
+as its plain type in every mode:
+
+- **`Struct[Item]`** — a `struct` column as one record per row. `Item` is a
+  `TypedDict` naming the fields; the step reads `applicant["income"]`, compiled
+  into the kernel.
+- **`Columnar[Item]`** — a `list[dict]` column as one flat array per `Item`
+  field, sliced per row. This is a columnar (struct-of-arrays) shape: `items.price`
+  is one array of every item's `price`, read by position `items.price[j]`. It is
+  *not* a list of per-item dicts — `for i in items` iterates the *fields*, not
+  the items, so index each field by position. An `Item` field may be `float`,
+  `int`, `bool`, `str`, or `float | None` / `str | None`; reach for it when the
+  per-item work is heavy or the lists are long (it costs ~20 µs a `score()` call
+  to build the arrays).
+
+```python
+from typing import TypedDict
+
+import polars as pl
+from decider import Columnar, Engine, flow
+
+class Item(TypedDict):
+    price: float
+    qty: int
+
+def total(items: Columnar[Item]) -> float:
+    t = 0.0
+    for j in range(len(items.price)):            # index by position, not `for i in items`
+        t += items.price[j] * items.qty[j]
+    return t
+
+exe = Engine().bind(flow(total, name="p"), mode="fused")
+df = pl.DataFrame({"items": [[{"price": 2.0, "qty": 3}, {"price": 5.0, "qty": 1}], []]})
+assert exe.run(df)["total"].to_list() == [11.0, 0.0]
+assert exe.fallbacks() == {}                     # compiled into the shared kernel
+```
+
+A field that is itself a list or struct is **nested** data, which neither shape
+can hold: binding the step raises a `TypeError` that names the field. Read such
+a column as its plain type instead — `list[dict]` for a list column, `dict` for
+a struct column — which runs in Python and gives the same answers, and say so
+with `@allow_fallback`.
 
 ## Debugging, testing and introspection
 

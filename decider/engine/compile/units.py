@@ -10,7 +10,7 @@ from decider.engine.compile.njit import FALLBACK_ERRORS, compile_call, numpy_dty
 from decider.engine.compile.rows import Ragged
 from decider.engine.ir.decls import Input, NullPolicy, base_annotation, nullable
 from decider.engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, Sequence, Version
-from decider.types import rows_item, rows_schema
+from decider.types import columnar_item, item_schema
 
 Values = dict[int, np.ndarray]
 
@@ -312,8 +312,8 @@ class Layout:
     def source(self, v: Version, inp: Input | None = None) -> tuple:
         if v.id in self.produced:
             return self.produced[v.id]
-        if inp is not None and (item := rows_item(inp.annotation)) is not None:
-            schema = rows_schema(item)
+        if inp is not None and (item := columnar_item(inp.annotation)) is not None:
+            schema = item_schema(item)
             source = self._rag.get(v.id)
             if source is None:
                 source = self._rag[v.id] = ("rag", schema, self._flats)
@@ -321,7 +321,7 @@ class Layout:
                 self.ragged.append(v)
             elif source[1] != schema:
                 # One `flats` block per column, so a second Item would silently get the first's fields.
-                raise TypeError(f"'{v.name}' is read as Rows[...] with two different Item types in one "
+                raise TypeError(f"'{v.name}' is read as Columnar[...] with two different Item types in one "
                                 "kernel; give the second reader its own python_only step")
             return source
         if v.id not in self._cols:

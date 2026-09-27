@@ -15,7 +15,7 @@ import polars as pl
 
 from decider.engine.ir.decls import KIND_DTYPES, Input, NullPolicy, feature_kind
 from decider.exceptions import MissingInputError
-from decider.types import rows_schema
+from decider.types import item_schema
 
 Schema = tuple[tuple[str, Any], ...]
 
@@ -26,7 +26,7 @@ _MISSING = object()
 
 def struct_schema(item: Any) -> Schema:
     """`Item`'s fields in declaration order, as `(name, type)` pairs."""
-    return rows_schema(item)
+    return item_schema(item)
 
 
 def bad_field(schema: Schema) -> tuple[str, Any] | None:
@@ -45,7 +45,9 @@ def struct_dtype(schema: Schema) -> np.dtype:
     if dt is None:
         bad = bad_field(schema)
         if bad is not None:
-            raise TypeError(f"Struct[...] field {bad[0]!r} is {bad[1]}; a record field must be float, int or bool")
+            raise TypeError(f"Struct[...] field {bad[0]!r} is {bad[1]}; a record field must be float, int or "
+                            "bool. A field that is itself a list or struct is nested data, which Struct[...] "
+                            "cannot hold: annotate the input as dict instead.")
         dt = _DTYPES[schema] = np.dtype([(name, KIND_DTYPES[feature_kind(t)]) for name, t in schema], align=True)
     return dt
 

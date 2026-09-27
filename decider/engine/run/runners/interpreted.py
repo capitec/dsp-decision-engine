@@ -14,7 +14,7 @@ from decider.engine.run.params import RunParams
 from decider.engine.run.representations import codes, span_objects
 from decider.engine.run.runners.base import Checkpoint
 from decider.engine.run.state import State, dtype_of, fill_missing, from_series
-from decider.types import Representation, is_raw, representation_for, rows_item, rows_schema
+from decider.types import Representation, is_raw, representation_for, columnar_item, item_schema
 from decider.engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, Sequence, Version
 
 
@@ -197,10 +197,10 @@ def _argument(state: State, version: Version, decl: Input, rows: np.ndarray | No
               node_kind: str = "scalar") -> np.ndarray:
     values, valid = state.read(version, None)
     span = False
-    item = rows_item(decl.annotation) if values.dtype == object else None
+    item = columnar_item(decl.annotation) if values.dtype == object else None
     if values.dtype == object:
         if item is not None:
-            schema = rows_schema(item)
+            schema = item_schema(item)
             values = state.representation(version, ("rows", schema),
                                           lambda v, s, a: build_rows(v, schema, s, a))
         elif base_annotation(decl.annotation) in (str, bytes):
@@ -232,7 +232,7 @@ def _argument(state: State, version: Version, decl: Input, rows: np.ndarray | No
         # A null span carries its own -1 length, which None would lose.
         return values
     if decl.null_policy is NullPolicy.MISSING_AS:
-        # A null row of a `Rows[...]` input already reads as a row with no items.
+        # A null row of a `Columnar[...]` input already reads as a row with no items.
         return values if rows_needs_no_fill(decl, item is not None) else fill_missing(values, valid, decl.fill)
     values = values.astype(object)
     values[missing] = None

@@ -4,10 +4,10 @@ import difflib
 import re
 import warnings
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, get_origin, is_typeddict
 
 from decider.engine.ir.decls import Input, base_annotation
-from decider.types import is_raw
+from decider.types import columnar_item, is_raw, item_schema, struct_item
 from decider.engine.ir.nodes import BranchNode, CallNode, IRNode, LoopNode, SequenceNode, iter_nodes
 from decider.engine.wiring.plan import Branch, Call, Carry, Loop, Merge, Plan, Resolved, Sequence, Version
 from decider.exceptions import WiringError
@@ -105,6 +105,7 @@ class _Resolver:
     def call(self, node: CallNode, scope: _Scope) -> Call:
         path = node.origin.path
         _one_string_shape(node, path)
+        _check_item_fields(node, path)
         own = {o.name for o in node.outputs or ()}
         reads = None
         if node.inputs is not None:
@@ -344,6 +345,41 @@ class _Resolver:
             tuple(dict.fromkeys(drops)), {name: tuple(chain) for name, chain in self.chains.items()},
         )
 
+
+
+def _check_item_fields(node: CallNode, path: str) -> None:
+    # A field that is itself a list or struct is nested data, which neither `Columnar[Item]` nor
+    # `Struct[Item]` can hold. Refuse it at declaration time and point at the Python spelling, which
+    # falls back safely, rather than failing later when the column is built.
+    for inp in node.inputs or ():
+        item = columnar_item(inp.annotation)
+        if item is not None:
+            _reject_nested(path, inp.name, "Columnar", item, "list[dict]")
+            continue
+        item = struct_item(inp.annotation)
+        if item is not None:
+            _reject_nested(path, inp.name, "Struct", item, "dict")
+
+
+def _reject_nested(path: str, name: str, kind: str, item: Any, plain: str) -> None:
+    for field, t in item_schema(item):
+        if _nested(t):
+            raise TypeError(
+                f"{path}: input {name!r} is {kind}[Item], but Item field {field!r} is {t}; a field that is "
+                f"itself a list or struct is nested data, which {kind}[Item] cannot hold. Annotate "
+                f"{name!r} as {plain} instead (it runs in Python; accept with @allow_fallback)."
+            )
+
+
+def _nested(t: Any) -> bool:
+    base = base_annotation(t)
+    if base in (list, dict, set, tuple, frozenset):
+        return True
+    if get_origin(base) in (list, dict, set, tuple, frozenset):
+        return True
+    if columnar_item(base) is not None or struct_item(base) is not None:
+        return True
+    return is_typeddict(base)
 
 
 def _one_string_shape(node: CallNode, path: str) -> None:

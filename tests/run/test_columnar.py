@@ -1,4 +1,4 @@
-"""`Rows[Item]`: a list column's items as arrays per field, sliced per parent row."""
+"""`Columnar[Item]`: a list column's items as arrays per field, sliced per parent row."""
 from __future__ import annotations
 
 import gc
@@ -9,7 +9,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from decider import Engine, Rows, branch, flow, loop, missing_as, step
+from decider import Engine, Columnar, branch, flow, loop, missing_as, step
 from decider.engine.compile.rows import ARROW_ROWS, build_rows
 from decider.engine.run.state import from_series
 from decider.testing import assert_equivalent
@@ -21,7 +21,7 @@ class Item(TypedDict):
     price: float
 
 
-def bundle_total(mask: int, items: Rows[Item]) -> float:
+def bundle_total(mask: int, items: Columnar[Item]) -> float:
     total = 0.0
     for j in range(len(items.price)):
         if (mask >> j) & 1:
@@ -106,7 +106,7 @@ class Item2(TypedDict):
 
 
 def test_rows_supports_several_fields():
-    def total_weight(items: Rows[Item2]) -> float:
+    def total_weight(items: Columnar[Item2]) -> float:
         total = 0.0
         for j in range(len(items.weight)):
             total += items.weight[j]
@@ -123,7 +123,7 @@ class Mixed(TypedDict):
     taxed: bool
 
 
-def taxed_total(items: Rows[Mixed]) -> float:
+def taxed_total(items: Columnar[Mixed]) -> float:
     total = 0.0
     for j in range(len(items.price)):
         if items.taxed[j]:
@@ -146,7 +146,7 @@ class Optional(TypedDict):
     discount: float | None
 
 
-def discounted(items: Rows[Optional]) -> float:
+def discounted(items: Columnar[Optional]) -> float:
     total = 0.0
     for j in range(len(items.price)):
         d = items.discount[j]
@@ -168,12 +168,25 @@ class Dated(TypedDict):
 
 
 def test_an_item_field_of_an_unsupported_type_names_itself_in_the_error():
-    def uses(items: Rows[Dated]) -> float:
+    def uses(items: Columnar[Dated]) -> float:
         return float(len(items.price))
 
     with pytest.raises(TypeError, match="field 'when' is <class 'datetime.date'>"):
         Engine().bind(flow(uses, name="p"), mode="stepped").run(
             pl.DataFrame({"items": [[{"price": 1.0, "when": date(2024, 1, 1)}]]}))
+
+
+class Tagged(TypedDict):
+    name: str
+    tags: list[str]
+
+
+def test_a_nested_item_field_is_refused_at_bind_and_points_at_list_dict():
+    def uses(items: Columnar[Tagged]) -> float:
+        return float(len(items.name))
+
+    with pytest.raises(TypeError, match=r"field 'tags' is list\[str\].*as list\[dict\]"):
+        Engine().bind(flow(uses, name="p"), mode="stepped")
 
 
 @pytest.mark.parametrize("dtype,annotation", ((pl.Int64, int), (pl.Float64, float)))
@@ -210,7 +223,7 @@ NULLS = pl.DataFrame({"items": [[{"price": 2.0}, {"price": 3.0}], None, [], [{"p
                      schema={"items": pl.List(pl.Struct({"price": pl.Float64}))})
 
 
-def total(items: Rows[Item]) -> float:
+def total(items: Columnar[Item]) -> float:
     t = 0.0
     for j in range(len(items.price)):
         t += items.price[j]
@@ -218,7 +231,7 @@ def total(items: Rows[Item]) -> float:
 
 
 @step(output="picked")
-def every_price(items: Rows[Item]) -> float:
+def every_price(items: Columnar[Item]) -> float:
     t = 0.0
     for j in range(len(items.price)):
         t += items.price[j]
@@ -226,7 +239,7 @@ def every_price(items: Rows[Item]) -> float:
 
 
 @step(output="picked")
-def first_price(items: Rows[Item]) -> float:
+def first_price(items: Columnar[Item]) -> float:
     return items.price[0] if len(items.price) else 0.0
 
 
@@ -239,7 +252,7 @@ def test_a_null_list_is_required_like_any_other_input():
 
 
 def test_missing_as_an_empty_list_reads_a_null_list_as_no_items():
-    def filled(items: Rows[Item] = missing_as([])) -> float:
+    def filled(items: Columnar[Item] = missing_as([])) -> float:
         t = 0.0
         for j in range(len(items.price)):
             t += items.price[j]
@@ -252,7 +265,7 @@ def test_missing_as_an_empty_list_reads_a_null_list_as_no_items():
 
 
 def test_missing_as_a_non_empty_list_says_it_cannot_be_held():
-    def filled(items: Rows[Item] = missing_as([{"price": 1.0}])) -> float:
+    def filled(items: Columnar[Item] = missing_as([{"price": 1.0}])) -> float:
         return float(len(items.price))
 
     with pytest.raises(TypeError, match="must be an empty list"):
@@ -260,7 +273,7 @@ def test_missing_as_a_non_empty_list_says_it_cannot_be_held():
 
 
 def test_an_optional_rows_input_gives_the_step_none_for_a_null_list():
-    def maybe(items: Rows[Item] | None) -> float:
+    def maybe(items: Columnar[Item] | None) -> float:
         if items is None:
             return -1.0
         t = 0.0
@@ -271,10 +284,10 @@ def test_an_optional_rows_input_gives_the_step_none_for_a_null_list():
     out = assert_equivalent(flow(maybe, name="p"), NULLS)
     assert out["maybe"].to_list() == [5.0, -1.0, 0.0, 7.0]
     # One kernel has one signature, and a namedtuple of array views has no in-band None, so an
-    # OPTIONAL Rows[...] input keeps the per-row dispatcher rather than joining the kernel.
+    # OPTIONAL Columnar[...] input keeps the per-row dispatcher rather than joining the kernel.
     exe = Engine().bind(flow(maybe, name="p"), mode="fused")
     exe.run(NULLS)
-    assert "reads 'items' as Rows[...]" in exe.fallbacks()["p/maybe"]
+    assert "reads 'items' as Columnar[...]" in exe.fallbacks()["p/maybe"]
 
 
 def _wide(n: int, items: int = 2) -> pl.DataFrame:
@@ -367,8 +380,8 @@ def undeclared(v):
     return v
 
 
-def bundle_count(items: Rows[Item]) -> float:
-    # No @helper, so the step can't compile and runs in Python; `Rows[Item]` still holds.
+def bundle_count(items: Columnar[Item]) -> float:
+    # No @helper, so the step can't compile and runs in Python; `Columnar[Item]` still holds.
     return float(len(undeclared(items).price))
 
 

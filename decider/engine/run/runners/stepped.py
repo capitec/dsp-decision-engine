@@ -19,7 +19,7 @@ from decider.engine.run.runners.base import Checkpoint
 from decider.engine.run.runners.interpreted import InterpretedRunner, _absent, _note, _Scope
 from decider.engine.run.state import State, fill_missing
 from decider.exceptions import FallbackWarning
-from decider.types import Representation, is_raw, representation_for, rows_item, rows_schema, struct_item
+from decider.types import Representation, is_raw, representation_for, columnar_item, item_schema, struct_item
 from decider.engine.wiring.plan import Call, Plan, Version
 
 
@@ -31,13 +31,13 @@ class SteppedRunner(InterpretedRunner):
     dictionary code `raw_str()` gives that string. A `bytes` input enters as
     an `(address, byte length)` span of its UTF-8 bytes, and then so does each
     `str` param of that node. A step running in Python gets plain Python
-    values, except a `Raw[...]` or `Rows[...]` input, whose representation is
+    values, except a `Raw[...]` or `Columnar[...]` input, whose representation is
     part of what it declares.
 
     A step no kernel holds -- one reading or writing a semantic `str`, a `date`
     or a `list`, or with a body numba can't compile -- runs in Python, row by
     row, with one `FallbackWarning` naming it. With `strict=True` it raises
-    instead, unless the step is `@allow_fallback`. A `Rows[Item]` input still
+    instead, unless the step is `@allow_fallback`. A `Columnar[Item]` input still
     runs compiled, one call per row.
 
     Example::
@@ -68,7 +68,7 @@ class SteppedRunner(InterpretedRunner):
 
     def _compile(self, plan: Plan, lazy: bool) -> None:
         python: dict[int, str] = {}
-        # A call reading `bytes`, or a `Rows[...]` item's `str` field, compares spans, so its
+        # A call reading `bytes`, or a `Columnar[...]` item's `str` field, compares spans, so its
         # `str` params go in as UTF-8 spans too.
         strs = {c.id: names for c in plan.calls if _reads_span(c)
                 and (names := tuple(d.name for d in c.node.params if d.annotation is str))}
@@ -112,7 +112,7 @@ class SteppedRunner(InterpretedRunner):
         rows = scope.rows
         n = scope.count(state.n)
         # A genuinely interpreted fallback runs Python code, which takes Python values: real strings,
-        # not codes. A fallback backed by a compiled dispatcher (`Rows[Item]`) still wants
+        # not codes. A fallback backed by a compiled dispatcher (`Columnar[Item]`) still wants
         # typed/representation values, same as a `Kernel`.
         python = isinstance(unit, Fallback) and not isinstance(unit.fn, Dispatcher)
         # Every call of a unit runs on every row the unit runs on, so validating
@@ -125,7 +125,7 @@ class SteppedRunner(InterpretedRunner):
         for decl, v, path, want, kind, build, raw in self._reads[id(unit)]:
             x, mask = state.read(v, rows)
             filled = False
-            # `Raw[...]` and `Rows[...]` are a contract about the value, not an optimisation, so
+            # `Raw[...]` and `Columnar[...]` are a contract about the value, not an optimisation, so
             # their representation is built for a step running in Python too, where every other
             # annotation wants the Python value instead.
             if _records(kind, python) or (x.dtype == object and (raw or not python)):
@@ -207,9 +207,9 @@ def _boxed(decl: Input, row: bool, path: str, kernel: bool = False,
     if item is not None:
         fields = struct_schema(item)
         return ("struct", fields), lambda values, source, alive: build_struct(fields, values, source, decl.name, path)
-    item = rows_item(decl.annotation)
+    item = columnar_item(decl.annotation)
     if item is not None:
-        schema = rows_schema(item)
+        schema = item_schema(item)
         # A shared array kernel takes the flat arrays and slices them per row itself; a row node's
         # per-row dispatcher and a per-row `Fallback` still want that row's items already sliced.
         if kernel and not row:
@@ -250,7 +250,7 @@ def _spans(name: str, values: np.ndarray, source: pl.Series | None, alive: list)
 
 
 def _declared(annotation: Any, row: bool) -> bool:
-    # `Raw[...]` and `Rows[...]` say how the value is read, so they hold when the step runs in Python
+    # `Raw[...]` and `Columnar[...]` say how the value is read, so they hold when the step runs in Python
     # too. A scalar step's `bytes` says the same; a row node falling back matches on the strings.
     return is_raw(annotation) or (not row and base_annotation(annotation) is bytes)
 
@@ -269,7 +269,7 @@ def _null_struct(kind: Any, mask: np.ndarray | None) -> bool:
 def _fills(decl: Input, mask: np.ndarray | None, kind: Any) -> bool:
     if decl.null_policy is not NullPolicy.MISSING_AS or mask is None or mask.all():
         return False
-    # A null `Rows[...]` row already reads as a row with no items, which is what an empty fill asks for.
+    # A null `Columnar[...]` row already reads as a row with no items, which is what an empty fill asks for.
     return not rows_needs_no_fill(decl, type(kind) is tuple and kind[0] in ("rows", "ragged"))
 
 
@@ -278,7 +278,7 @@ def _reads_span(call: Call) -> bool:
     for i in call.node.inputs or ():
         if base_annotation(i.annotation) is bytes:
             return True
-        if (item := rows_item(i.annotation)) is not None and any(
-                base_annotation(t) is str for _, t in rows_schema(item)):
+        if (item := columnar_item(i.annotation)) is not None and any(
+                base_annotation(t) is str for _, t in item_schema(item)):
             return True
     return False

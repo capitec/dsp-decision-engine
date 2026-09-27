@@ -1,4 +1,4 @@
-"""`Rows[Item]`: a list column's items as one array per field, sliced per parent row.
+"""`Columnar[Item]`: a list column's items as one array per field, sliced per parent row.
 
 Physical shape: one flat array per `Item` field (like `param_table`'s bundle),
 sliced `offsets[r]:offsets[r + 1]` for parent row `r`. Two schemas with the
@@ -42,7 +42,7 @@ def _layout(schema: Schema) -> _Layout:
     layout = _LAYOUTS.get(schema)
     if layout is None:
         if not schema:
-            raise TypeError("Rows[Item] needs an Item with at least one field")
+            raise TypeError("Columnar[Item] needs an Item with at least one field")
         fields = [_field(name, t) for name, t in schema]
         nt = namedtuple("Item_" + "_".join(n for n, _ in schema), [n for n, _ in schema])
         layout = _LAYOUTS[schema] = _Layout(nt, tuple(d for d, _ in fields), tuple(o for _, o in fields))
@@ -55,16 +55,17 @@ def _field(name: str, annotation: Any) -> tuple[np.dtype, bool]:
     optional = base is not annotation
     if dtype is None:
         raise TypeError(
-            f"Rows[Item] field '{name}' is {annotation}; a field must be float, int, bool, str, "
-            "`float | None` or `str | None`.")
+            f"Columnar[Item] field '{name}' is {annotation}; a field must be float, int, bool, str, "
+            "`float | None` or `str | None`. A field that is itself a list or struct is nested data, "
+            "which Columnar[Item] cannot hold: annotate the input as list[dict] instead.")
     if optional and base not in (float, str):
-        raise TypeError(f"Rows[Item] field '{name}' is {annotation}, which has no null value a kernel "
+        raise TypeError(f"Columnar[Item] field '{name}' is {annotation}, which has no null value a kernel "
                         "can hold; only `float | None` and `str | None` do")
     return dtype, optional
 
 
 def rows_class(schema: Schema) -> type:
-    """The namedtuple class a `Rows[Item]` value of `schema` is an instance of."""
+    """The namedtuple class a `Columnar[Item]` value of `schema` is an instance of."""
     return _layout(schema).nt
 
 
@@ -125,7 +126,7 @@ def item_starts(values: np.ndarray) -> list[int]:
 class Ragged:
     """The same flat arrays, unsliced: row `i` owns `fields[k][lo[i]:hi[i]]`.
 
-    What a shared array kernel takes for a `Rows[Item]` input, in place of one
+    What a shared array kernel takes for a `Columnar[Item]` input, in place of one
     namedtuple of views per row. `lo` and `hi` are per-row, so a branch or loop
     row subset is `rag[rows]` and never touches the child arrays.
     """
@@ -178,14 +179,14 @@ def _from_arrow(values, schema, dtypes, optional, source, alive):
 
 
 def rows_needs_no_fill(decl, is_rows: bool) -> bool:
-    """True when `decl`'s MISSING_AS fill is already what `Rows[...]` gives a null row: no items.
+    """True when `decl`'s MISSING_AS fill is already what `Columnar[...]` gives a null row: no items.
 
-    Raises when the fill is a non-empty list, which no `Rows[...]` input can hold.
+    Raises when the fill is a non-empty list, which no `Columnar[...]` input can hold.
     """
     if not is_rows or decl.null_policy is not NullPolicy.MISSING_AS:
         return False
     if decl.fill:
-        raise TypeError(f"input '{decl.name}': missing_as({decl.fill!r}) on a Rows[...] input must be an "
+        raise TypeError(f"input '{decl.name}': missing_as({decl.fill!r}) on a Columnar[...] input must be an "
                         "empty list; a null or absent list already reads as a row with no items")
     return True
 
@@ -198,7 +199,7 @@ def null_item(name: str, at: int, starts, optional: str = NULL_FLOAT) -> ValueEr
     """The error for a null in `Item` field `name`, at flat item index `at`."""
     row = bisect_right(starts, at) - 1
     return ValueError(
-        f"'{name}' is null in item {at - starts[row]} of row {row}; a Rows[Item] field cannot hold a "
+        f"'{name}' is null in item {at - starts[row]} of row {row}; a Columnar[Item] field cannot hold a "
         f"null. Declare it {optional}, or fill the column in the frame.")
 
 
@@ -206,10 +207,10 @@ def _flat(values: np.ndarray, name: str, dtype: np.dtype, optional: bool) -> np.
     try:
         items = [item[name] for row in values if row for item in row]
     except TypeError:
-        raise ValueError(f"a Rows[Item] row holds a null item; every item must have a "
+        raise ValueError(f"a Columnar[Item] row holds a null item; every item must have a "
                          f"'{name}' field") from None
     except KeyError:
-        raise ValueError(f"a Rows[Item] item has no '{name}' field") from None
+        raise ValueError(f"a Columnar[Item] item has no '{name}' field") from None
     if dtype == SPAN_DTYPE:
         starts = item_starts(values)
         return spans_of(items, optional, lambda k: null_item(name, k, starts, NULL_STR))
