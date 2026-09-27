@@ -49,6 +49,12 @@ def test_a_null_list_reads_as_no_items():
     assert out["items"].to_list() == [[{"weight": 5.0, "heavy": False}], []]
 
 
+@pytest.mark.parametrize("record", ({"items": []}, {"items": None}))
+def test_batch_handles_empty_and_null_lists_on_a_single_record(record):
+    exe = Engine().bind(pipeline(EachMode.BATCH), mode="fused")
+    assert exe.score(record)["items"] == []
+
+
 def test_the_childs_params_are_tunable_through_the_parent_document():
     exe = Engine().bind(pipeline(), mode="interpreted")
     record = {"items": [{"weight": 25.0}]}
@@ -85,3 +91,13 @@ def test_a_parent_step_reads_the_enriched_list_as_columnar(mode, each_mode):
              bundle_total, name="order")
     exe = Engine().bind(p, mode=mode)
     assert exe.run(FRAME)["bundle_total"].to_list() == [25.0, 0.0, 40.0]
+
+
+def test_a_parent_step_reads_the_enriched_list_as_columnar_past_the_arrow_threshold():
+    from decider.engine.compile.rows import ARROW_ROWS
+
+    frame = pl.DataFrame({"items": [[{"weight": float(i % 3)}, {"weight": 30.0}] for i in range(ARROW_ROWS + 4)]})
+    p = flow(each("items", flow(heavy, name="item"), name="items", execution_mode=EachMode.BATCH),
+             bundle_total, name="order")
+    exe = Engine().bind(p, mode="fused")
+    assert exe.run(frame)["bundle_total"].to_list() == [30.0] * (ARROW_ROWS + 4)

@@ -119,6 +119,11 @@ def _batch(child_ir, column: str, paths):
         nonlocal exe
         if exe is None:
             exe = Engine().bind(child_ir, mode="fused")
+        dtype = df.schema[column]
+        if not (isinstance(dtype, pl.List) and isinstance(dtype.inner, pl.Struct)):
+            # No row holds any items (the column is all null or all empty), so there is nothing to
+            # explode and the child adds no fields: every row reads as an empty list.
+            return df.with_columns(pl.Series(column, [[]] * df.height, dtype=pl.List(pl.Null)))
         doc = _child_doc(child_params, paths)
         idx = df.with_row_index(_PID)
         nonzero = idx.filter(pl.col(column).list.len().fill_null(0) > 0)
