@@ -1,10 +1,12 @@
 # {{name}}
 
-- `{{name}}/pipeline.py`: the steps, and `build()`, which returns the pipeline.
-- `{{name}}/inference.py`: the `Handler` that serves it; override its `*_fn` methods to change request handling.
+- `pipeline.py`: the steps, and `build()`, which returns the pipeline.
+- `inference.py`: the `Handler` that serves it; override its `*_fn` methods to change request handling.
 - `configs/<version>/`: one directory per config version; `params.json` is the params document.
 - `sample_request.json`: one request; `decider build` warms the kernels with it.
 - `.env`: the `DECIDER_*` settings `decider build` and `decider serve` read.
+
+The project directory itself is the package, so `import {{name}}` resolves to it.
 
 ```bash
 pytest -q

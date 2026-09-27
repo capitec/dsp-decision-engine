@@ -279,13 +279,13 @@ decider serve --workers 1     # POST /invocations, GET /ping; needs decider[serv
 curl -s -d @sample_request.json -H 'content-type: application/json' localhost:8080/invocations
 ```
 
-The template writes a package named after the project, never a top-level
-`pipeline.py` (two projects on one path would shadow each other):
+The template writes a project directory that is itself the package (two
+projects on one path never shadow each other):
 
-- `credit_risk/pipeline.py`: `build()` returns the pipeline; each argument of
-  `build` receives the config document of that name.
-- `credit_risk/inference.py`: `Handler(RequestHandler)`; override `input_fn`,
-  `output_fn`, ... to change request handling.
+- `pipeline.py`: `build()` returns the pipeline; each argument of `build`
+  receives the config document of that name.
+- `inference.py`: `Handler(RequestHandler)`; override `input_fn`, `output_fn`,
+  ... to change request handling.
 - `configs/0.0.0/params.json`, `sample_request.json`, `tests/`.
 - `.env`: `DECIDER_API__PIPELINE=credit_risk.pipeline:build` and the other
   settings. Real environment variables win. `decider --help` lists every
