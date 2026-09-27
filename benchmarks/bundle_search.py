@@ -1,6 +1,6 @@
 """A `decider.loop` over bundle masks whose body sums the bundle's items, three ways.
 
-The body reads `items: Rows[Item]`, sliced out of flat per-field arrays inside the
+The body reads `items: Columnar[Item]`, sliced out of flat per-field arrays inside the
 loop's own kernel, so the loop packs. The hand-written `@njit` search is the ceiling.
 
     uv run python benchmarks/bundle_search.py [items] [orders]
@@ -16,7 +16,7 @@ import numba
 import numpy as np
 import polars as pl
 
-from decider import Engine, Rows, flow, loop, step
+from decider import Engine, Columnar, flow, loop, step
 
 ITEMS = int(sys.argv[1]) if len(sys.argv) > 1 else 9
 ORDERS = int(sys.argv[2]) if len(sys.argv) > 2 else 100
@@ -33,7 +33,7 @@ def more(mask: int) -> bool:
 
 
 @step(output="total")
-def bundle_total(mask: int, items: Rows[Item]) -> float:
+def bundle_total(mask: int, items: Columnar[Item]) -> float:
     total = 0.0
     for j in range(len(items.price)):
         if (mask >> j) & 1:
