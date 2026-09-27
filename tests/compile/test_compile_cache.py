@@ -170,6 +170,24 @@ def test_equal_captured_arrays_share_compiled_code_and_a_changed_one_compiles_it
     assert (compiled(1.0), other(1.0)) == (2.0, 5.0)
 
 
+_SET_STEP = ("def tier(grade: str) -> bool:\n"
+             "    return grade in {'gold', 'silver', 'bronze', 'platinum', 'diamond', 'copper'}\n")
+_SET_CHILD = "import step\nfrom decider.engine.compile import fingerprint\nprint(fingerprint(step.tier))\n"
+
+
+def test_the_fingerprint_is_stable_across_hash_seeds(tmp_path):
+    (tmp_path / "step.py").write_text(_SET_STEP)
+    (tmp_path / "child.py").write_text(_SET_CHILD)
+
+    def run(seed):
+        proc = subprocess.run([sys.executable, "child.py"], cwd=tmp_path, env=dict(os.environ, PYTHONHASHSEED=seed),
+                              capture_output=True, text=True, timeout=600, check=False)
+        assert proc.returncode == 0, proc.stderr
+        return proc.stdout.strip()
+
+    assert run("1") == run("2")
+
+
 def test_the_cpu_target_is_recorded():
     triple, cpu, features = cpu_target()
     assert triple.startswith(platform.machine()) and cpu and features
