@@ -58,7 +58,10 @@ class JsonFileStore(ConfigStore):
         # Written aside and renamed into place, so a failed write never shows up as a version.
         staging = Path(tempfile.mkdtemp(prefix=".", dir=self.basepath))
         for key, value in versioned.config.items():
-            path = staging.joinpath(*key.split(".")).with_suffix(".json")
+            parts = key.split(".")
+            if any(part in ("", ".", "..") or "/" in part or "\\" in part for part in parts):
+                raise ValueError(f"config key {key!r} is not a safe path: a dotted key must be plain names")
+            path = staging.joinpath(*parts).with_suffix(".json")
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps(value, indent=2))
         os.rename(staging, final)
