@@ -71,10 +71,15 @@ def _gated(doc: dict) -> dict:
 
 DOC = _document()
 TYPES = {f: "int" for f in INTS}
-frame = pl.DataFrame({**{f: rng.uniform(0, 1, N) for f in FLOATS},
-                      **{f: rng.integers(0, 24, N) for f in INTS},
-                      "channel": rng.choice(["app-ios", "web", "branch", "call centre"], N)})
-ROW = frame.row(0, named=True)
+
+
+def make_frame(n: int = N) -> pl.DataFrame:
+    return pl.DataFrame({**{f: rng.uniform(0, 1, n) for f in FLOATS},
+                         **{f: rng.integers(0, 24, n) for f in INTS},
+                         "channel": rng.choice(["app-ios", "web", "branch", "call centre"], n)})
+
+
+ROW = make_frame(1).row(0, named=True)
 
 
 def _time(f, *args):
@@ -117,7 +122,9 @@ def compare(doc: dict) -> None:
         print(f"{name:<22}{batch:>16,.0f}{1e9 / batch:>10.1f}{p50:>14.1f}{p99:>14.1f}")
 
 
-print("numeric tree")
-compare(DOC)
-print("gated by a string match")
-compare(_gated(DOC))
+if __name__ == "__main__":
+    frame = make_frame(N)
+    print("numeric tree")
+    compare(DOC)
+    print("gated by a string match")
+    compare(_gated(DOC))

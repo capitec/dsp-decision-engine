@@ -1,16 +1,20 @@
 """Grouping calls into units, what a unit keeps, and the Python fallback."""
 from __future__ import annotations
 
+from typing import TypedDict
+
 import numpy as np
 import pytest
 from numba.core.dispatcher import Dispatcher
 
-from decider import ConfigurableStep, branch, flow, frame_step, step
-from decider.engine.compile import Fallback, Kernel, compile_plan
+from decider import ConfigurableStep, Rows, allow_fallback, branch, flow, frame_step, helper, step
+from decider.engine.compile import Fallback, Kernel, compile_plan, jit
+from decider.engine.compile.units import Layout
 from decider.engine.ir.decls import Input, Output, ParamDecl
 from decider.engine.ir.nodes import CallNode
 from decider.engine.params import param
 from decider.engine.wiring import resolve
+from decider.engine.wiring.plan import Version
 
 
 def disposable_income(net_income: float, expenses: float) -> float:
@@ -38,6 +42,32 @@ def untypable(cap_by_income_band: float) -> float:
 
 def divides(a: float, b: float) -> float:
     return a / b
+
+
+@helper(signatures=[((float,), float), ((int,), int)])
+def twice(value: float | int) -> float | int:
+    return value * 2
+
+
+def uses_twice(value: float) -> float:
+    return twice(value)
+
+
+def plain_helper(value: float) -> float:
+    return value * 2
+
+
+def uses_plain_helper(value: float) -> float:
+    return plain_helper(value)
+
+
+@allow_fallback
+def external_helper(value: float) -> float:
+    return value * 2
+
+
+def uses_allow_fallback(value: float) -> float:
+    return external_helper(value)
 
 
 INPUTS = {
@@ -160,6 +190,48 @@ def test_a_step_numba_cant_compile_splits_the_kernel_around_it(bad, run):
     assert out["after"].tolist() == [49.0, 49.0, 61.0, 61.0]
 
 
+def test_a_declared_helper_compiles_with_each_declared_signature(run):
+    plan = resolve(flow(uses_twice))
+    (unit,) = _units(compile_plan(plan))
+    assert isinstance(unit, Kernel)
+    out, _ = run(plan, {"value": np.array([1.5, 2.0])})
+    assert out["uses_twice"].tolist() == [3.0, 4.0]
+
+
+def test_a_shared_helper_uses_one_dispatcher_across_callers():
+    def other(value: float) -> float:
+        return twice(value) + 1
+
+    compile_plan(resolve(flow(uses_twice)))
+    compile_plan(resolve(flow(other)))
+    assert jit(twice)[1] is jit(twice)[1]
+
+
+def test_an_unclassified_helper_explains_how_to_classify_it():
+    unit = compile_plan(resolve(flow(uses_plain_helper)))[0]
+    assert isinstance(unit, Fallback)
+    assert "calls 'plain_helper' without @helper or @allow_fallback" in unit.reason
+
+
+def test_an_allow_fallback_helper_is_a_declared_boundary_for_its_caller():
+    unit = compile_plan(resolve(flow(uses_allow_fallback)))[0]
+    assert isinstance(unit, Fallback) and unit.declared
+    assert "calls the @allow_fallback function 'external_helper'" in unit.reason
+
+
+def picks_a_label(half: float) -> str:
+    return "big" if half > 1 else "small"
+
+
+def test_a_string_output_step_runs_in_python(run):
+    unit = compile_plan(resolve(flow(picks_a_label)))[0]
+    assert isinstance(unit, Fallback)
+    assert "writes 'picks_a_label' as str" in unit.reason
+    assert not isinstance(unit.fn, Dispatcher)
+    out, _ = run(resolve(flow(picks_a_label)), {"half": np.array([2.0, 0.5])})
+    assert out["picks_a_label"].tolist() == ["big", "small"]
+
+
 def test_a_runtime_error_in_a_compiled_step_propagates(run):
     plan = resolve(flow(divides))
     (unit,) = _units(compile_plan(plan))
@@ -229,3 +301,23 @@ def test_a_param_reaches_its_argument_when_its_document_key_differs(run, fuse):
     a, _ = run(plan, INPUTS, fuse=fuse)
     b, _ = run(plan, INPUTS, fuse=fuse, params={"clip": {"upper": 6000.0}})
     assert (a["clip"].tolist(), b["clip"].tolist()) == ([6500.0] * 4, [6000.0] * 4)
+
+
+class ItemA(TypedDict):
+    price: float
+
+
+class ItemB(TypedDict):
+    weight: float
+
+
+def test_two_item_types_over_one_column_in_one_kernel_is_refused():
+    # `resolve()` already refuses two readers of one input column declaring different types
+    # (`WiringError`, before a plan is even built), so this guard only matters for two calls a
+    # caller hands `Layout` reading the same version directly: one `flats` block per column, so
+    # the second reader would silently get the first's fields.
+    v = Version(0, "items", None, None)
+    lay = Layout()
+    lay.source(v, Input("items", Rows[ItemA]))
+    with pytest.raises(TypeError, match="two different Item types"):
+        lay.source(v, Input("items", Rows[ItemB]))

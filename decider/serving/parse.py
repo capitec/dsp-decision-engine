@@ -1,19 +1,21 @@
 import datetime as dt
 import functools
-import json
 import typing as t
 
 import polars as pl
 import typing_extensions as te
 from pydantic import ConfigDict, TypeAdapter, ValidationError
+from pydantic_core import from_json
 
 from decider.engine.ir.decls import base_annotation
 from decider.exceptions import InputParsingError
+from decider.types import struct_item
 
 
 def parse_application_json(data: bytes) -> t.Union[t.Dict[str, t.Any], pl.DataFrame]:
     # An object is one record for the single-record path; an array of objects is a frame.
-    value = json.loads(data)
+    # pydantic_core's parser answers the same values as `json.loads`, about 4x faster.
+    value = from_json(data)
     if isinstance(value, dict):
         return value
     return pl.from_dicts(value, infer_schema_length=None)
@@ -21,6 +23,8 @@ def parse_application_json(data: bytes) -> t.Union[t.Dict[str, t.Any], pl.DataFr
 
 DEFAULT_INPUT_HANDLERS = {
     "application/json": parse_application_json,
+    "application/vnd.apache.arrow.stream": pl.read_ipc_stream,
+    "application/vnd.apache.arrow.file": pl.read_ipc,
     "application/jsonl": pl.read_ndjson,
     "application/x-parquet": pl.read_parquet,
     "text/csv": pl.read_csv,
@@ -84,6 +88,7 @@ _DUMMY = {bool: False, int: 1, str: "", bytes: "", dt.date: dt.date(2000, 1, 1),
 def dummy(annotation: t.Any) -> t.Any:
     # 1 rather than 0 so an ordinary ratio doesn't divide by zero; one element so a list has a dtype.
     a = base_annotation(annotation)
+    a = struct_item(a) or a   # `Struct[Item]` is Item's dict at this boundary
     origin = t.get_origin(a) or a
     if origin is list:
         return [dummy(t.get_args(a)[0])] if t.get_args(a) else [1.0]

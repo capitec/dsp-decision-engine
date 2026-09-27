@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Iterator, Literal, Protocol
+from typing import TYPE_CHECKING, Iterator, Literal, Protocol, runtime_checkable
 
 from decider.engine.ir.origin import Origin
 from decider.engine.wiring.plan import Plan
@@ -44,3 +44,12 @@ class Runner(Protocol):
     """
 
     def iterate(self, plan: Plan, state: State, params: RunParams) -> Iterator[Checkpoint]: ...
+
+
+@runtime_checkable
+class CompiledRunner(Runner, Protocol):
+    _plan: Plan | None
+
+    def _compile(self, plan: Plan, lazy: bool) -> None: ...
+
+    def fallbacks(self) -> dict[str, str]: ...

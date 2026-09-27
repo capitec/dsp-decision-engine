@@ -95,6 +95,14 @@ def test_a_breakpoint_on_an_iteration_pauses_before_it():
     assert b.session.value("offer").to_list()[0] == 96000.0
 
 
+def test_a_step_breakpoint_pauses_before_the_step_every_time_it_runs():
+    b = started(watches=[{"path": "sizing/shrink_offer/shrink"}])
+    r = b.handle({"cmd": "resume"})
+    assert r["current"] == {"path": "sizing/shrink_offer/shrink", "when": "before", "iteration": 1}
+    assert r["hit"]["text"] == "before shrink"
+    assert b.handle({"cmd": "resume"})["current"]["iteration"] == 2
+
+
 def test_a_value_breakpoint_pauses_where_a_record_first_meets_it():
     b = started(watches=[{"name": "offer", "op": "<", "value": 70000}])
     r = b.handle({"cmd": "resume"})

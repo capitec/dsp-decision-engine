@@ -103,7 +103,7 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
               )}
             </>
           ) : ran && paused || !onRunTo ? null : (
-            <button className="primary" onClick={() => onRunTo(node.path)} title="Run the flow and pause just before this step">Run to {name}</button>
+            <button onClick={() => onRunTo(node.path)} title="Run the flow and pause just before this step, once; unlike a breakpoint it isn't kept">Run to {name}</button>
           )}
           {atThis && !run.edits?.[node.path] && (
             <>

@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import copy
 from functools import lru_cache
-from typing import Any
+from typing import Any, Hashable
 
 import numpy as np
 import polars as pl
 
 from decider.engine.ir.decls import TYPED, Input, NullPolicy, base_annotation
 from decider.engine.wiring.plan import Plan, Version
+from decider.types import annotation_cache
 
 
 class State:
@@ -36,6 +37,9 @@ class State:
         self.chains: dict[str, list[Version]] = {k: list(v) for k, v in plan.chains.items()}
         self._extra = 0
         self._sources: dict[int, tuple[np.ndarray, pl.Series]] = {}
+        # Per version id: the compiled representations built from its values, each with the
+        # buffers it borrows. Dropped whenever those values are written again.
+        self._representations: dict[int, dict[Hashable, tuple[np.ndarray, list]]] = {}
 
     @classmethod
     def from_frame(cls, plan: Plan, frame: pl.DataFrame, n: int | None = None) -> State:
@@ -69,6 +73,7 @@ class State:
         never touches stay null.
         """
         vid = version.id
+        self._representations.pop(vid, None)   # built from the values this write replaces
         if rows is None:
             self.values[vid] = values
             if valid is not None and not valid.all():
@@ -111,6 +116,22 @@ class State:
         values, series = self._sources.get(version.id, (None, None))
         return series if values is not None and self.values.get(version.id) is values else None
 
+    def representation(self, version: Version, kind: Hashable, build) -> np.ndarray:
+        """Return cached compiled representation for `version` and `kind`.
+
+        `build(values, source, alive)` receives full-column values and may append
+        backing buffers to `alive` when its representation borrows memory.
+        """
+        cached = self._representations.setdefault(version.id, {})
+        entry = cached.get(kind)
+        if entry is None:
+            alive: list = []
+            values = self.values.get(version.id)
+            if values is None:
+                values = np.full(self.n, None, object)
+            entry = cached[kind] = (build(values, self.source(version), alive), alive)
+        return entry[0]
+
     def record(self, name: str, producer: str, values: np.ndarray, valid: np.ndarray | None = None) -> Version:
         """Store `values` as a new version of `name`, appended to its chain; for overrides.
 
@@ -142,6 +163,7 @@ class State:
                 else:
                     self.valid.pop(vid, None)
         self.chains, self._extra = old.chains, old._extra
+        self._representations = {}   # values this rewinds past may have built them
 
     def versions(self, spec: str) -> list[Version]:
         """The versions `spec` names: `name` (the latest), `name@path` (by producer) or `name@*` (all).
@@ -221,7 +243,7 @@ def fill_missing(values: np.ndarray, valid: np.ndarray, fill: Any) -> np.ndarray
     return out
 
 
-@lru_cache(maxsize=256)
+@annotation_cache
 def declared_dtype(annotation: Any) -> pl.DataType | None:
     """The polars dtype of `annotation` (`list[float]` -> `List(Float64)`), or `None` when polars can't say."""
     if annotation is None:
