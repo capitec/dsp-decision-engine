@@ -10,6 +10,8 @@ when it lands, and keep its detail in its own note.
 - 4. No fan-out and reduce — `optimise`. With 3 and 4 landed, gap 5
   ("calling a flow from a hand-written kernel") is withdrawn as written.
 - 6. A branch condition must be a function step — `branch("on_card", ...)`.
+- 2. Silent Python fallback when a step calls a plain helper — `@helper` /
+  `@allow_fallback`, with a `FallbackWarning` (or raise in `strict_compile`).
 
 ## Each: what shipped, what did not
 
@@ -30,7 +32,6 @@ item").
 
 ## Still open in `DECIDER_GAPS.md`
 
-- 2. Silent Python fallback when a step calls a plain helper.
 - 8. Functions with function arguments can't be disk-cached.
 - 9. Frame step output dtypes are lost between frame steps.
 - 10. Typo heuristic flags legitimate input names.
