@@ -178,7 +178,8 @@ def handle_explicit_type(t: ExplicitType):
     args = tuple()
     extra_dict = {**t.model_extra}
     if issubclass(pl_type, polars_dtypes.NestedType):
-        inner_definition = extra_dict.pop("inner", extra_dict.pop("fields", None))
+        key = "inner" if "inner" in extra_dict else "fields"
+        inner_definition = extra_dict.pop(key, None)
         if inner_definition is None:
             raise ValueError(
                 f"For nested type {t} expected either an 'inner' or a 'fields' config."
