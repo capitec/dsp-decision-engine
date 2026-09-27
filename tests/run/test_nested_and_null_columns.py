@@ -132,6 +132,24 @@ def test_list_of_float_output_keeps_floats_whatever_the_first_row():
     assert out["rates"].to_list() == [[1.0, 2.0], [1.5]]
 
 
+def test_a_nested_null_field_is_not_retyped_as_string():
+    from typing import TypedDict
+
+    from decider import Columnar
+
+    class Item(TypedDict):
+        price: float
+
+    def total(items: Columnar[Item]) -> float:
+        return float(len(items.price))
+
+    # No explicit schema, so every null price makes polars infer a `Null` field. Reading it as a
+    # float must name the null, not silently read the field as a string.
+    frame = pl.DataFrame({"items": [[{"price": None}], [{"price": None}]], "v": [1.0, 2.0]})
+    with pytest.raises(ValueError, match="null in item"):
+        Engine().bind(flow(total, name="p"), mode="fused").run(frame)
+
+
 def test_param_name_in_the_record_warns_once():
     def intensity(base: int, stack_enabled: bool = param(True)) -> int:
         return base + 1 if stack_enabled else base

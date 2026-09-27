@@ -296,6 +296,9 @@ def _frame(call: Call, state: State, scope: _Scope, bundle: tuple) -> None:
     for v in call.writes:
         values, valid = from_series(out[v.name])
         state.write(v, values, scope.rows, valid)
+        # A nested column a frame step writes keeps its Series, so a later `Columnar[Item]` read can
+        # use its Arrow buffers instead of rebuilding the flat arrays from Python objects.
+        state._sources[v.id] = (values, out[v.name])
     if node.outputs is None:
         # Unknown lineage: its frame is all that later nodes see.
         scope.base, scope.names = out, {}
