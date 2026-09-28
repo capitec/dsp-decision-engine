@@ -59,6 +59,20 @@ class CallNode(IRNode):
 
 
 @dataclass(frozen=True, slots=True, eq=False)
+class SubflowNode(CallNode):
+    """A `CallNode` whose `fn` drives another IR tree behind the call (`each` today).
+
+    Wiring, compiling and running still see a plain `CallNode`: `fn` is
+    called exactly as `CallNode.fn` is, and `subflow` is not resolved into
+    this node's own reads, writes or params. `subflow` only makes the child
+    visible to introspection that opts in, via `iter_with_subflows`; every
+    other walk (`iter_nodes`, wiring, compiling) is unaware of it.
+    """
+
+    subflow: IRNode | None = None
+
+
+@dataclass(frozen=True, slots=True, eq=False)
 class SequenceNode(IRNode):
     """Runs its children in order. `emits`/`drops` are `name` or `name@path` specs."""
 
@@ -109,3 +123,22 @@ def iter_nodes(node: IRNode) -> Iterator[IRNode]:
     yield node
     for child in node.children():
         yield from iter_nodes(child)
+
+
+def iter_with_subflows(node: IRNode) -> Iterator[IRNode]:
+    """Every node of an IR tree, parents before children, also unfolding a `SubflowNode`'s child tree.
+
+    `iter_nodes` stays opaque to a `SubflowNode`'s `subflow` (wiring, params
+    and compiling all treat it as one plain call); this is only for
+    introspection that wants to show the child too, such as
+    `Session.structure()`.
+
+    Example::
+
+        paths = [n.origin.path for n in iter_with_subflows(ir)]
+    """
+    yield node
+    for child in node.children():
+        yield from iter_with_subflows(child)
+    if isinstance(node, SubflowNode) and node.subflow is not None:
+        yield from iter_with_subflows(node.subflow)

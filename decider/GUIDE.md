@@ -476,7 +476,7 @@ pipeline = flow(each("items", flow(heavy, name="item"), name="items"), bundle_to
 exe = Engine().bind(pipeline, mode="fused")
 df = pl.DataFrame({"items": [[{"weight": 5.0}, {"weight": 25.0}], []]})
 assert exe.run(df)["bundle_total"].to_list() == [25.0, 0.0]
-assert pipeline.parameters().defaults() == {"order": {"items": {"heavy_kg": 20.0}}}
+assert pipeline.parameters().defaults() == {"order": {"items": {"item": {"heavy": {"heavy_kg": 20.0}}}}}
 ```
 
 `execution_mode=EachMode.PER_ROW` (the default) runs the child once per parent

@@ -14,6 +14,7 @@ from decider.engine.run.runners.fused import FusedRunner
 from decider.engine.run.runners.interpreted import InterpretedRunner
 from decider.engine.run.runners.stepped import SteppedRunner
 from decider.engine.ir.decls import ParamDecl, base_annotation
+from decider.engine.ir.nodes import CallNode, iter_with_subflows
 from decider.engine.run.state import State, declared_dtype, dtype_of, load_record, record_value
 from decider.engine.wiring import Plan, resolve
 from decider.engine.wiring.plan import Version
@@ -94,9 +95,16 @@ class Executable:
         self.runner = runner
         self.lazy = lazy
         self.nodes = {c.id: NodeParams(c.node.origin.path, c.node.params) for c in plan.calls if c.node.params}
+        # Every param node, subflow children included, for `check_namespaces`; `self.nodes` stays the
+        # parent's own calls (keyed by id) so the runner bundles them, while the child's params are
+        # validated lazily by the child's own run and only need to pass the namespace check here.
+        self._namespace = {n.origin.path: NodeParams(n.origin.path, n.params)
+                           for n in iter_with_subflows(plan.root.node) if isinstance(n, CallNode) and n.params}
         self.cache = ParamsCache()
         self._checked: set[str] = set()
-        # ponytail: the latest call's report only; return it per call if concurrent callers need their own.
+        # ponytail: the latest call's report only; concurrent callers race on it. Return it per call
+        # (via `prepare()`'s `RunParams.report`) when concurrent `score()`/`run()` needs its own.
+        # `exe.report` is read by tests and documented, so removing it is a larger API change than this.
         self.report = RunReport()
         written = {o.name for c in plan.calls for o in c.node.outputs or ()}
         self._produced = written - {i.name for i in plan.inputs}
@@ -155,7 +163,7 @@ class Executable:
         run = RunParams(self.nodes, {} if params is None else params, self.cache, self.lazy)
         self.report = run.report
         if run.key not in self._checked:
-            check_namespaces(run.doc, self.nodes)
+            check_namespaces(run.doc, self._namespace)
             if not self.lazy:
                 for call_id in self.nodes:
                     run.bundle(call_id, n)
