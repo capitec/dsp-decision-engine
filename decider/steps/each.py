@@ -55,7 +55,7 @@ class EachStep(Step):
         new_fields = tuple(n for n, v in child_plan.outputs.items() if v.producer is not None)
         params, paths = _hoist(child_plan, self.name)
         out_name = self.output if self.output is not None else self.column
-        fn = _per_row(child_ir, new_fields, paths) if self.mode is EachMode.PER_ROW \
+        fn = _per_row(child_plan, new_fields, paths) if self.mode is EachMode.PER_ROW \
             else _batch(child_ir, self.column, out_name, paths)
         # A null list reads as a row with no items, the same in both modes. `arg="items"` matches
         # the child functions' own parameter name, independent of the column's name.
@@ -92,20 +92,46 @@ def _child_doc(child_params: dict, paths: dict[str, tuple[str, str]]) -> dict:
     return doc
 
 
-def _per_row(child_ir, new_fields: tuple[str, ...], paths):
-    from decider.engine import Engine
+def _per_row(plan: Plan, new_fields: tuple[str, ...], paths):
+    # Drives the child plan directly rather than nesting a whole `Engine`: `each` already knows
+    # exactly which fields it wants back (`new_fields`), so it skips the frame/shadowing/output
+    # bookkeeping `Engine.score` carries for an arbitrary top-level pipeline, and pays for a
+    # `RunParams` once per parent row instead of once per item.
+    import polars as pl
 
-    exe = None
+    from decider.engine.ir.decls import base_annotation
+    from decider.engine.params import NodeParams, ParamsCache
+    from decider.engine.run.params import RunParams, check_namespaces
+    from decider.engine.run.runners.interpreted import InterpretedRunner
+    from decider.engine.run.state import State, dtype_of, load_record, record_value
+
+    runner = InterpretedRunner()
+    nodes = {c.id: NodeParams(c.node.origin.path, c.node.params) for c in plan.calls if c.node.params}
+    cache = ParamsCache()
+    grouped = {}
+    for v in plan.versions:
+        if v.producer is None:
+            grouped.setdefault(dtype_of(base_annotation(v.annotation)), []).append(v)
+    inputs = list(grouped.items())
+    results = [(f, plan.outputs[f]) for f in new_fields]
+    empty_frame = pl.DataFrame()
 
     def run(items, **child_params):
-        nonlocal exe
-        if exe is None:
-            exe = Engine().bind(child_ir, mode="interpreted")
         doc = _child_doc(child_params, paths)
+        check_namespaces(doc, nodes)
+        params = RunParams(nodes, doc, cache, lazy=False)
         out = []
         for item in items or ():
-            row = exe.score(dict(item), params=doc)
-            out.append({**item, **{f: row[f] for f in new_fields}})
+            state = State(plan, empty_frame, 1)
+            for dtype, versions in inputs:
+                load_record(state, item, versions, dtype)
+            for _ in runner.iterate(plan, state, params):
+                pass
+            row = {}
+            for f, v in results:
+                values, valid = state.read(v)
+                row[f] = None if valid is not None and not valid[0] else record_value(values.tolist()[0], v.annotation)
+            out.append({**item, **row})
         return out
 
     return run
