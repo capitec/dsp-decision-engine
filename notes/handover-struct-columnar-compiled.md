@@ -124,9 +124,9 @@ element into the matching field of the structured array.
    `best_index == -1` already signals empty; the struct's `None` is the point-6
    answer.
 
-Columnar output (D) is separate and lower priority: `Columnar[Item]` output is a
-ragged list per row, which no shared kernel stores — plan for a Python-fallback
-store (object) unless/until a `Ragged`-style offsets+child-buffers output is wanted.
+Columnar output (D) is done: see `notes/struct-columnar-outputs.md`'s "Columnar
+output" section for the shipped design (a growable `Sink` buffer, not a
+`Ragged`-style offsets+child-buffers store).
 
 ## Verification
 

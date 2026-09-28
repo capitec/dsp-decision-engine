@@ -22,6 +22,7 @@ class SrcKind(str, Enum):
     VAR = "var"    # variable set by a Fork or Repeat
     PAR = "par"    # element of the flattened params array
     RAG = "rag"    # ragged column: row i's items sliced from flat arrays
+    SINK = "sink"  # a growable output buffer, shared by every row (not indexed by i)
     ROW = "row"    # tuple of sub-sources packed into a single argument
 
 
@@ -39,7 +40,8 @@ class Spec(NamedTuple):
     `Fork` or `Repeat`); `("par", p)` is `params[p]`;
     `("row", (source, ...))` is a tuple of sources; `("rag", schema, b)` is
     row i's items, sliced out of `flats[b:]` (`lo`, `hi`, then one flat array
-    per field of `schema`). `dtypes` are the declared dtypes of the outputs;
+    per field of `schema`); `("sink", b)` is `sinks[b]`, a growable output
+    buffer shared by every row of this call. `dtypes` are the declared dtypes of the outputs;
     `unpack` means `fn` returns a tuple of them. `nullable[k]` marks an output
     declared `T | None`: it may be `None`. `structs[k]` marks a `Struct[Item]`
     output, whose `fn` returns a tuple of its fields.
@@ -93,7 +95,7 @@ _KERNELS: dict[tuple, Callable] = {}
 
 
 def fused_kernel(program: tuple, outputs: tuple[tuple, ...], variables: tuple[np.dtype, ...] = ()) -> Callable:
-    """One njit kernel `kernel(n, cols, valids, params, flats, outs)` running `program` for each of n rows.
+    """One njit kernel `kernel(n, cols, valids, params, flats, sinks, outs)` running `program` for each of n rows.
 
     `program` is a tuple of `Spec` (one call), `Fork` and `Repeat`; calls are
     numbered in the order they appear, depth first, which is the `s` of a
@@ -109,16 +111,16 @@ def fused_kernel(program: tuple, outputs: tuple[tuple, ...], variables: tuple[np
     Example::
 
         kernel = fused_kernel((Spec(key, fn, (("col", 0),), (np.dtype("f8"),), False),), (("res", 0, 0),))
-        kernel(n, (x,), (), (), (), (out,))
+        kernel(n, (x,), (), (), (), (), (out,))
     """
     key = (_key(program), outputs, variables)
     kernel = _KERNELS.get(key)
     if kernel is None:
         body = _row_body(program, outputs, variables)
 
-        def run(n, cols, valids, params, flats, outs):
+        def run(n, cols, valids, params, flats, sinks, outs):
             for i in range(n):
-                body(cols, valids, params, flats, outs, i)
+                body(cols, valids, params, flats, sinks, outs, i)
 
         kernel = _KERNELS[key] = njit(nogil=True)(run)
     return kernel
@@ -143,9 +145,9 @@ def _row_body(program: tuple, outputs: tuple[tuple, ...], variables: tuple[np.dt
     # Forks and loops are plain LLVM blocks; values crossing them live in
     # stack slots, which LLVM promotes back to registers.
     @intrinsic
-    def body(typingctx, cols, valids, params, flats, outs, i):
+    def body(typingctx, cols, valids, params, flats, sinks, outs, i):
         def codegen(context, builder, sig, args):
-            cols_v, valids_v, params_v, flats_v, outs_v, i_v = args
+            cols_v, valids_v, params_v, flats_v, sinks_v, outs_v, i_v = args
             results: list[list[tuple[Any, Any]]] = []
             vtypes = [from_dtype(d) for d in variables]
             # A record scalar is a pointer to its bytes; a carried record's slot holds the bytes so
@@ -205,6 +207,9 @@ def _row_body(program: tuple, outputs: tuple[tuple, ...], variables: tuple[np.dt
                 if kind == SrcKind.RAG:
                     # Ragged columnar input: slice row i's items out of flat arrays
                     return rag(src[1], src[2])
+                if kind == SrcKind.SINK:
+                    # Growable output buffer: one value shared by every row, never indexed by i
+                    return builder.extract_value(sinks_v, src[1]), sinks.types[src[1]]
                 # SrcKind.ROW: pack multiple sub-sources into a single tuple argument
                 loaded = [load(s) for s in src[1]]
                 ty = types.Tuple(tuple(t for _, t in loaded))
@@ -342,7 +347,7 @@ def _row_body(program: tuple, outputs: tuple[tuple, ...], variables: tuple[np.dt
                     store(k, v, t)
             return context.get_dummy_value()
 
-        return types.none(cols, valids, params, flats, outs, i), codegen
+        return types.none(cols, valids, params, flats, sinks, outs, i), codegen
 
     return body
 
