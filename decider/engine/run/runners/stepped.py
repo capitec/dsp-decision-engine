@@ -16,7 +16,7 @@ from decider.engine.ir.decls import Input, NullPolicy, base_annotation
 from decider.engine.run.params import RunParams
 from decider.engine.run.representations import codes, span_objects, spans
 from decider.engine.run.runners.base import Checkpoint
-from decider.engine.run.runners.interpreted import InterpretedRunner, _absent, _note, _Scope
+from decider.engine.run.runners.interpreted import InterpretedRunner, _absent, _encoded, _note, _Scope
 from decider.engine.run.state import State, fill_missing
 from decider.exceptions import FallbackWarning
 from decider.types import Representation, is_raw, representation_for, columnar_item, item_schema, struct_item
@@ -227,19 +227,12 @@ def _boxed(decl: Input, row: bool, path: str, kernel: bool = False,
     if annotation is bytes:
         # A semantic `bytes` step runs in Python and compares whole values, so give it real bytes:
         # the column is strings, and `bytes` declares how this step reads them.
-        return kind, partial(_encoded, decl.name)
+        return kind, lambda values, source, alive: _encoded(decl.name, values)
     if kind is Representation.RAW_STRING:
         return kind, lambda values, source, alive: codes(values)
     # A step reading semantic strings runs one compiled call per row, which takes the Python
     # values as they are: numba types them as its own unicode.
     return kind, lambda values, source, alive: values
-
-
-def _encoded(name: str, values: np.ndarray, source: pl.Series | None, alive: list) -> np.ndarray:
-    try:
-        return np.array([v if v is None or isinstance(v, bytes) else str.encode(v) for v in values], object)
-    except TypeError as e:
-        raise TypeError(f"'{name}' is a string input: {e}") from None
 
 
 def _spans(name: str, values: np.ndarray, source: pl.Series | None, alive: list) -> np.ndarray:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import operator
+from enum import Enum
 from typing import Any, Callable, NamedTuple
 
 import numpy as np
@@ -11,6 +12,17 @@ from numba.extending import intrinsic
 
 from decider.engine.compile.rows import rows_class
 from decider.engine.compile.span import SPAN
+
+
+class SrcKind(str, Enum):
+    """Tag for the first element of a source tuple passed to the kernel IR builder."""
+    COL = "col"    # element at column j
+    OPT = "opt"    # nullable element: col[i] or None where mask is false
+    RES = "res"    # output k of call s earlier in this kernel
+    VAR = "var"    # variable set by a Fork or Repeat
+    PAR = "par"    # element of the flattened params array
+    RAG = "rag"    # ragged column: row i's items sliced from flat arrays
+    ROW = "row"    # tuple of sub-sources packed into a single argument
 
 
 def _slice(arr, lo, hi):
@@ -169,24 +181,31 @@ def _row_body(program: tuple, outputs: tuple[tuple, ...], variables: tuple[np.dt
 
             def load(src):
                 kind = src[0]
-                if kind == "col":
+                if kind == SrcKind.COL:
+                    # Plain column: cols[j][i]
                     return element(cols, cols_v, src[1])
-                if kind == "opt":
+                if kind == SrcKind.OPT:
+                    # Nullable column: cols[j][i] wrapped as Optional, or None where mask[m][i] is false
                     v, t = element(cols, cols_v, src[1])
                     ok, _ = element(valids, valids_v, src[2])
                     some = context.make_optional_value(builder, t, v)
                     return builder.select(ok, some, context.make_optional_none(builder, t)), types.Optional(t)
-                if kind == "res":
+                if kind == SrcKind.RES:
+                    # Earlier call result: results[call_index][output_index]
                     return results[src[1]][src[2]]
-                if kind == "var":
+                if kind == SrcKind.VAR:
+                    # Fork/Repeat variable: load from its stack slot (records need a pointer cast)
                     t = vtypes[src[1]]
                     if isinstance(t, types.Record):
                         return builder.bitcast(slots[src[1]], context.get_value_type(t)), t
                     return builder.load(slots[src[1]]), t
-                if kind == "par":
+                if kind == SrcKind.PAR:
+                    # Flattened params array element
                     return builder.extract_value(params_v, src[1]), params.types[src[1]]
-                if kind == "rag":
+                if kind == SrcKind.RAG:
+                    # Ragged columnar input: slice row i's items out of flat arrays
                     return rag(src[1], src[2])
+                # SrcKind.ROW: pack multiple sub-sources into a single tuple argument
                 loaded = [load(s) for s in src[1]]
                 ty = types.Tuple(tuple(t for _, t in loaded))
                 return context.make_tuple(builder, ty, [v for v, _ in loaded]), ty
