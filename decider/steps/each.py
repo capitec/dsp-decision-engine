@@ -96,16 +96,19 @@ def _per_row(plan: Plan, new_fields: tuple[str, ...], paths):
     # Drives the child plan directly rather than nesting a whole `Engine`: `each` already knows
     # exactly which fields it wants back (`new_fields`), so it skips the frame/shadowing/output
     # bookkeeping `Engine.score` carries for an arbitrary top-level pipeline, and pays for a
-    # `RunParams` once per parent row instead of once per item.
+    # `RunParams` once per parent row instead of once per item. `FusedRunner` compiles the child
+    # plan into numba kernels on its first `iterate()` call (cached on its own `_plan`, same as
+    # `Engine.bind(..., mode="fused")` does), so every item after the first calls compiled code,
+    # not a per-node Python walk; a step that can't compile still runs, one call per row.
     import polars as pl
 
     from decider.engine.ir.decls import base_annotation
     from decider.engine.params import NodeParams, ParamsCache
     from decider.engine.run.params import RunParams, check_namespaces
-    from decider.engine.run.runners.interpreted import InterpretedRunner
+    from decider.engine.run.runners.fused import FusedRunner
     from decider.engine.run.state import State, dtype_of, load_record, record_value
 
-    runner = InterpretedRunner()
+    runner = FusedRunner()
     nodes = {c.id: NodeParams(c.node.origin.path, c.node.params) for c in plan.calls if c.node.params}
     cache = ParamsCache()
     grouped = {}
