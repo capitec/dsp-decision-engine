@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import copy
 from functools import lru_cache
-from typing import Any, Hashable
+from typing import Any, Hashable, Mapping
 
 import numpy as np
 import polars as pl
@@ -246,6 +246,31 @@ def record_value(value: Any, annotation: Any = None) -> Any:
         return dict(zip((name for name, _ in item_schema(item)),
                         value.tolist() if isinstance(value, np.void) else value))
     return despan(value)
+
+
+def load_record(state: State, record: Mapping[str, Any], versions: list[Version], dtype: np.dtype) -> None:
+    """Write `record`'s value of every one-row `versions` `dtype` groups into `state`.
+
+    One array per dtype, viewed per input, is far cheaper than one array per
+    input; shared by `Engine.score`'s record path and `each`'s per-item runs,
+    so both score a plain dict the same way.
+    """
+    given = [v for v in versions if v.name in record]
+    if not given:
+        return
+    xs = [record[v.name] for v in given]
+    nulls = [x is None for x in xs]
+    if dtype == object:
+        block = np.empty(len(xs), object)
+        # One by one, so a list or tuple value stays one element.
+        for k, x in enumerate(xs):
+            block[k] = x
+    else:
+        block = np.array([0 if null else x for x, null in zip(xs, nulls)] if any(nulls) else xs, dtype)
+        # Read-only like a column read from a frame, so one kernel specialisation serves both.
+        block.flags.writeable = False
+    for k, (v, null) in enumerate(zip(given, nulls)):
+        state.write(v, block[k:k + 1], valid=np.zeros(1, bool) if null else None)
 
 
 def from_series(s: pl.Series) -> tuple[np.ndarray, np.ndarray | None]:
