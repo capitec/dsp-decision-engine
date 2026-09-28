@@ -93,10 +93,10 @@ def validate_node(node: NodeParams, doc: Mapping) -> Validation:
     for key in local:
         if key not in node.local_names:
             close = suggest(key, node.local_names)
-            hint = (f"; did you mean '{by_arg[key]}' (it feeds argument '{key}')?" if key in by_arg
-                    else f"; did you mean '{close}'?" if close
-                    else f"; its params are {sorted(node.local_names)}")
-            errors.append(f"{node.path}: unknown param '{key}'{hint}")
+            msg = (f"; did you mean '{by_arg[key]}' (it feeds argument '{key}')?" if key in by_arg
+                   else f"; did you mean '{close}'?" if close
+                   else f"; its params are {sorted(node.local_names)}")
+            errors.append(f"{node.path}: unknown param '{key}'{msg}")
     values = {d.name: local[d.name] for d in node.decls if d.shared_key is None and d.name in local}
     values |= {d.name: shared[d.shared_key] for d in node.decls if d.shared_key is not None and d.shared_key in shared}
 

@@ -80,6 +80,25 @@ def test_an_empty_list_reads_as_no_candidates():
     assert got["evaluated"] == 0 and got["disqualified"] == 0
 
 
+def test_a_candidate_scoring_exactly_minus_1e300_wins():
+    # Regression: the seed used -1e300 as its starting threshold, so a candidate with that exact
+    # score could never beat the seed and was silently excluded even with evaluated=1.
+    @step(output="count")
+    def _one() -> int:
+        return 1
+
+    @step(output="score")
+    def _neg_floor() -> float:
+        return -1e300
+
+    result = assert_equivalent(
+        flow(optimise(_one, flow(_neg_floor, name="e"), max_candidates=1, name="best"), name="p"), pl.DataFrame([{}])
+    )
+    assert result["best_index"].to_list() == [1]
+    assert result["best_score"].to_list() == [-1e300]
+    assert result["evaluated"].to_list() == [1]
+
+
 def test_a_tie_keeps_the_earlier_candidate():
     frame = pl.DataFrame({"items": [[{"price": 2.0, "weight": 1.0}, {"price": 2.0, "weight": 1.0},
                                      {"price": 0.0, "weight": 1.0}]]})

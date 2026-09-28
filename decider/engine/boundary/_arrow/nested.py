@@ -94,16 +94,18 @@ def _read(view, name, schema, dtypes, optional, index) -> Nested | None:
         view.release()
         return None
     n, top_offset = lib.sm_view_length(top), lib.sm_view_offset(top)
-    # A whole item being null is not a value `Columnar[Item]` can hold.
-    if lib.sm_view_null_count(struct):
-        view.release()
-        return None
     offsets = _buffer(top, 1, top_offset, n + 1, offset_dtype, view)
     # A sliced frame keeps the whole child, so each field is windowed to the items these rows own
     # and the offsets are rebased onto that window: a null in a row outside the slice is not ours.
     base = int(offsets[0]) if n else 0
     starts, stops = (offsets[:-1] - base).tolist(), (offsets[1:] - base).tolist()
     count = stops[-1] if stops else 0
+    # A whole item being null is not a value `Columnar[Item]` can hold; check only items in this slice.
+    if count and lib.sm_view_null_count(struct):
+        valid = _validity(struct, lib.sm_view_offset(struct) + base, count, view)
+        if not valid.all():
+            view.release()
+            return None
     fields = []
     for (field, _), dtype, opt in zip(schema, dtypes, optional):
         x = _field(lib.sm_view_child(struct, index[field]), dtype, opt, field, base, count, starts, view)
