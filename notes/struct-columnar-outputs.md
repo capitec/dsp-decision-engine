@@ -29,12 +29,50 @@ a record or a list of records and `optimise` can carry the winner's record back.
   The keep-record step is a separate single-record step (a tuple-with-record
   return is not compilable), and the finalise step runs in Python.
 
-## Not done
+## Columnar output (decision (d), done)
 
-- **Columnar output** (decision (d)): a `Columnar[Item]` output is a
-  variable-length list per row, which no shared kernel stores. It stays
-  Python-only for now; a `Ragged`-style offsets+child-buffers output is the
-  honest compiled shape if it is ever wanted.
+A `Columnar[Item]` output is a variable-length list per row, which no
+fixed-stride kernel column stores — the concern that kept this Python-only.
+Shipped shape: a **growable buffer, one pass, no double-invoking the step**.
+
+- `decider/engine/compile/sink.py`'s `Sink` is a jitclass wrapping one
+  `(rows, n_fields)` float64 buffer (every field widens to float64; a bool or
+  int narrows back once its row is sliced out, in Python) and a `length`.
+  `push(item)` amortized-doubles it, `literal_unroll` reading `item`'s
+  fields positionally since numba has no runtime index into a heterogeneous
+  tuple. One `Sink` shape serves every `Item` schema — no per-schema jitclass.
+- The compiled spelling mirrors `Struct[Item]`'s: a step returns
+  `list[tuple(...)]`, not `list[dict]` (dict stays a `FallbackWarning`, same
+  message shape as the struct case: "return a list of tuples to compile it").
+  `njit.py`'s `_ragged_reason` rejects `Columnar[Item] | None` and a field
+  outside float/int/bool the same way `_struct_reason` does for inputs.
+- `njit.py`'s `_ragged_wrapper(dispatcher)` calls the step once and drains its
+  returned list into the sink, returning the new cumulative length — an
+  ordinary int64 scalar, so `kernel.py`'s existing `store()` needs no new
+  code at all. The wrapper's own signature is fixed arity `(packed, sink)`,
+  not `*args`: `kernel.py`'s hand-rolled IR calls a dispatcher with one typed
+  value per argument, which resolves against a `*args` signature's single
+  packed-tuple type instead of the real arg list — a mismatch only visible
+  from *inside* a fused kernel, never from ordinary compiled call sites (a
+  plain njit function calling a `*args` one works fine). `units.py`'s
+  `Layout.spec` packs the step's own args into one `SrcKind.ROW` tuple (the
+  same mechanism a row node already uses) so the wrapper sees exactly two
+  arguments.
+- `kernel.py` gained one new source kind, `SrcKind.SINK`: the sink is built
+  once per `Kernel.run` (not once per row) and threaded through like `flats`
+  or `params`, never indexed by row.
+- `units.py`'s `Kernel.run` reads the wrapper's per-row cumulative length back
+  as an ordinary output column, turns it into per-row `[lo, hi)` slices of the
+  sink's buffer, and materialises `list[dict]` per row — the exact shape the
+  Python-fallback path already produces, so `state.py` needed no changes.
+- `_split_at_nulls` treats a `Columnar[Item]` output the same way it already
+  treats a `Struct[Item]` one: a reader always starts a new kernel, since
+  what the kernel produces (a length) isn't the value a reader wants.
+
+Not done: a `Columnar[Item]` carry (an `optimise`/`loop` carrying a list
+across iterations) — the sink is a `Kernel.run`-lifetime object, not a
+carry-lifetime one; carrying one across iterations would need it seeded
+once outside the loop and never treated as a per-iteration variable.
 
 ## The one decision blocking the rest
 

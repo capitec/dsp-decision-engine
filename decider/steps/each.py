@@ -41,6 +41,7 @@ class EachStep(Step):
     column: str
     item: Step
     mode: EachMode
+    output: str | None = None
 
     def to_ir(self, ctx: IRContext) -> CallNode:
         from decider.engine.ir.context import IRContext as _Ctx
@@ -53,11 +54,13 @@ class EachStep(Step):
         child_plan: Plan = resolve(child_ir)
         new_fields = tuple(n for n, v in child_plan.outputs.items() if v.producer is not None)
         params, paths = _hoist(child_plan, self.name)
+        out_name = self.output if self.output is not None else self.column
         fn = _per_row(child_ir, new_fields, paths) if self.mode is EachMode.PER_ROW \
-            else _batch(child_ir, self.column, paths)
-        # A null list reads as a row with no items, the same in both modes.
-        inp = Input(self.column, list[dict], NullPolicy.MISSING_AS, [])
-        out = Output(self.column, list[dict])
+            else _batch(child_ir, self.column, out_name, paths)
+        # A null list reads as a row with no items, the same in both modes. `arg="items"` matches
+        # the child functions' own parameter name, independent of the column's name.
+        inp = Input(self.column, list[dict], NullPolicy.MISSING_AS, [], arg="items")
+        out = Output(out_name, list[dict])
         kind = "scalar" if self.mode is EachMode.PER_ROW else "frame"
         return CallNode(ctx.origin(self), kind, fn, (inp,), (out,), params)
 
@@ -108,7 +111,7 @@ def _per_row(child_ir, new_fields: tuple[str, ...], paths):
     return run
 
 
-def _batch(child_ir, column: str, paths):
+def _batch(child_ir, column: str, out_name: str, paths):
     import polars as pl
 
     from decider.engine import Engine
@@ -128,7 +131,7 @@ def _batch(child_ir, column: str, paths):
                          else df[column].is_not_null().any())
             if has_items:
                 raise ValueError(f"each({column!r}): batch mode requires a List(Struct) column, got {dtype}")
-            return df.with_columns(pl.Series(column, [[]] * df.height, dtype=pl.List(pl.Null)))
+            return df.with_columns(pl.Series(out_name, [[]] * df.height, dtype=pl.List(pl.Null)))
         doc = _child_doc(child_params, paths)
         idx = df.with_row_index(_PID)
         nonzero = idx.filter(pl.col(column).list.len().fill_null(0) > 0)
@@ -136,22 +139,22 @@ def _batch(child_ir, column: str, paths):
         result = exe.run(exploded, params=doc)
         pass_through = set(df.columns) - {column}
         names = [c for c in result.columns if c != _PID and c not in pass_through]
-        grouped = (result.select(_PID, pl.struct(names).alias(column))
-                   .group_by(_PID, maintain_order=True).agg(pl.col(column)))
+        grouped = (result.select(_PID, pl.struct(names).alias(out_name))
+                   .group_by(_PID, maintain_order=True).agg(pl.col(out_name)))
         joined = idx.select(_PID).join(grouped, on=_PID, how="left")
         # Null and empty lists explode to zero rows and rejoin as null: read them as no items.
-        return df.with_columns(joined.get_column(column).fill_null([]).alias(column))
+        return df.with_columns(joined.get_column(out_name).fill_null([]).alias(out_name))
 
     return run
 
 
 def each(column: str, item: Any, *, name: str | None = None,
-         execution_mode: EachMode = EachMode.PER_ROW) -> EachStep:
+         execution_mode: EachMode = EachMode.PER_ROW, output: str | None = None) -> EachStep:
     """Run `item` on every element of the list column `column`, writing the enriched list back.
 
     `item` is a flow of ordinary steps reading the item's fields; its outputs
-    are added as new fields of each item. The list is read and written under
-    the same column name.
+    are added as new fields of each item. The list is read under `column` and,
+    by default, written back to it in place.
 
     Args:
         execution_mode: `EachMode.PER_ROW` (default) runs the child once per
@@ -159,6 +162,9 @@ def each(column: str, item: Any, *, name: str | None = None,
             slower on a large batch. `EachMode.BATCH` explodes the list into one
             child frame and runs the child once over all items, which is fastest
             on a batch and slower on a single record.
+        output: the column to write the enriched list to (default: `column`,
+            overwriting it). Set this to keep the original list untouched
+            alongside the enriched one.
 
     Example::
 
@@ -167,4 +173,4 @@ def each(column: str, item: Any, *, name: str | None = None,
 
         pipeline = flow(each("items", flow(heavy, name="item"), name="items"), name="order")
     """
-    return EachStep(column if name is None else name, column, as_step(item), execution_mode)
+    return EachStep(column if name is None else name, column, as_step(item), execution_mode, output)

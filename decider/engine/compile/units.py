@@ -8,7 +8,8 @@ import numpy as np
 from decider.engine.compile.kernel import Spec, SrcKind, fused_kernel
 from decider.engine.compile.njit import FALLBACK_ERRORS, compile_call, numpy_dtype, parameters
 from decider.engine.compile.rows import Ragged
-from decider.engine.compile.structs import struct_dtype, struct_schema
+from decider.engine.compile.sink import Sink
+from decider.engine.compile.structs import Schema, struct_dtype, struct_schema
 from decider.engine.ir.decls import Input, NullPolicy, base_annotation, nullable
 from decider.engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, Sequence, Version
 from decider.types import columnar_item, item_schema, struct_item
@@ -34,17 +35,18 @@ class Kernel:
         unit.run(values, {}, bundles, n)
     """
 
-    __slots__ = ("calls", "fn", "reads", "optional", "ragged", "writes", "_masked", "_layout", "_choices",
-                 "_python")
+    __slots__ = ("calls", "fn", "reads", "optional", "ragged", "sinks", "writes", "_masked", "_layout",
+                 "_choices", "_python")
     # Whether a kernel numba can't build runs its calls one by one instead.
     splits = True
 
-    def __init__(self, calls, fn, reads, optional, writes, masked, layout, choices, ragged=()):
+    def __init__(self, calls, fn, reads, optional, writes, masked, layout, choices, ragged=(), sinks=()):
         self.calls: tuple[Call, ...] = calls
         self.fn = fn
         self.reads: tuple[Version, ...] = reads
         self.optional: tuple[Version, ...] = optional
         self.ragged: tuple[Version, ...] = ragged
+        self.sinks: tuple[tuple[Version, Schema], ...] = sinks
         self.writes: tuple[tuple[Version, np.dtype], ...] = writes
         self._masked: tuple[int, ...] = masked
         self._layout = layout
@@ -69,10 +71,11 @@ class Kernel:
                 params += bundle
                 params += consts
         flats = tuple([a for v in self.ragged for a in values[v.id].arrays])
+        sinks = tuple([Sink(n, len(schema)) for _, schema in self.sinks])
         outs = [np.empty(n, dtype) for _, dtype in self.writes]
         masks = [np.empty(n, np.bool_) for _ in self._masked]
         try:
-            self.fn(n, cols, valids, tuple(params), flats, tuple(outs + masks))
+            self.fn(n, cols, valids, tuple(params), flats, sinks, tuple(outs + masks))
         except FALLBACK_ERRORS as e:
             if not self.splits:
                 raise
@@ -83,6 +86,10 @@ class Kernel:
             return self.run(values, valid, bundles, n)
         for (v, _), out, choices in zip(self.writes, outs, self._choices):
             values[v.id] = out if choices is None else _decode(out, choices, valid, v.id)
+        for (v, schema), sink in zip(self.sinks, sinks):
+            # `values[v.id]` currently holds the cumulative-length column the wrapper just wrote;
+            # turn it into the per-row `[lo, hi)` slices the sink's flat buffer actually holds.
+            values[v.id] = _ragged_values(values[v.id], sink, schema)
         for k, mask in zip(self._masked, masks):
             valid[self.writes[k][0].id] = mask
 
@@ -136,6 +143,24 @@ class Fallback:
             choices = literal_choices(o.annotation)
             if choices is not None:
                 values[v.id] = _decode(out, choices, valid, v.id)
+
+
+def _ragged_values(hi: np.ndarray, sink: Sink, schema: Schema) -> np.ndarray:
+    """One `list[dict]` per row, sliced `[lo, hi)` out of `sink`'s flat buffer.
+
+    `hi[r]` is the cumulative item count after row `r` (an ordinary kernel
+    output); `lo[r]` is the previous row's `hi`, 0 for row 0. Matches the
+    shape a Python-fallback `Columnar[Item]` output already returns, so
+    `state.py` needs no separate path for a compiled one.
+    """
+    lo = np.zeros(len(hi), np.int64)
+    lo[1:] = hi[:-1]
+    out = np.empty(len(hi), object)
+    for r in range(len(hi)):
+        out[r] = [{name: (bool(v) if t is bool else int(v) if t is int else float(v))
+                   for (name, t), v in zip(schema, item)}
+                  for item in sink.data[lo[r]:hi[r]]]
+    return out
 
 
 def _per_row(values: np.ndarray) -> list:
@@ -219,7 +244,10 @@ def _split_at_nulls(run: list[Call]) -> Iterator[list[Call]]:
     # applies each reader's null policy, so no kernel both writes and reads one.
     # A struct output is a record scalar (a pointer to a fresh buffer) in flight
     # but a record array in the state, so a reader splits into the next kernel
-    # and reads the record array its struct input expects.
+    # and reads the record array its struct input expects. A ragged (Columnar[Item])
+    # output has no in-kernel value at all -- what the kernel produces is the
+    # wrapper's item count, not the rows -- so a reader must read the materialised
+    # version from `values`, never the count a same-kernel `RES` source would give it.
     part: list[Call] = []
     made: set[int] = set()
     for call in run:
@@ -228,7 +256,8 @@ def _split_at_nulls(run: list[Call]) -> Iterator[list[Call]]:
             part, made = [], set()
         part.append(call)
         made |= {v.id for v, o in zip(call.writes, call.node.outputs)
-                 if nullable(o.annotation) or struct_item(o.annotation) is not None}
+                 if nullable(o.annotation) or struct_item(o.annotation) is not None
+                 or columnar_item(base_annotation(o.annotation)) is not None}
     if part:
         yield part
 
@@ -237,7 +266,9 @@ def output_dtype(annotation: Any) -> np.dtype:
     """The dtype a kernel stores an output declared `annotation` in: `numpy_dtype` of `T` for `T | None`.
 
     A `Literal` of strings is stored as the int64 index of its value; a
-    `Struct[Item]` as one record per row.
+    `Struct[Item]` as one record per row. A `Columnar[Item]` has no
+    fixed-stride column of its own: this is the cumulative item count its
+    wrapper reports, which `Kernel.run` turns back into the actual rows.
 
     >>> output_dtype(int | None)
     dtype('int64')
@@ -247,6 +278,8 @@ def output_dtype(annotation: Any) -> np.dtype:
     item = struct_item(base_annotation(annotation))
     if item is not None:
         return struct_dtype(struct_schema(item))
+    if columnar_item(base_annotation(annotation)) is not None:
+        return np.dtype(np.int64)
     return numpy_dtype(base_annotation(annotation))
 
 
@@ -309,6 +342,7 @@ class Layout:
         self.reads: list[Version] = []
         self.optional: list[Version] = []
         self.ragged: list[Version] = []
+        self.sinks: list[tuple[Version, Schema]] = []
         self.layout: list[tuple] = []
         self.produced: dict[int, tuple] = {}
         self._cols: dict[int, int] = {}
@@ -317,6 +351,7 @@ class Layout:
         self._flats = 0
         self._p = 0
         self._specs = 0
+        self._sinks = 0
 
     def source(self, v: Version, inp: Input | None = None) -> tuple:
         if v.id in self.produced:
@@ -351,6 +386,7 @@ class Layout:
         if node.params or consts or node.kind == "row":
             self.layout.append((call.id, bool(node.params), consts, node.kind == "row"))
         p = self._p
+        ragged_item = columnar_item(base_annotation(node.outputs[0].annotation)) if len(node.outputs) == 1 else None
         if node.kind == "row":
             args = ((SrcKind.ROW, tuple(sources)), (SrcKind.PAR, p), (SrcKind.PAR, p + 1))
             self._p += 2
@@ -360,10 +396,21 @@ class Layout:
             p += len(node.params)
             by_arg |= {name: (SrcKind.PAR, p + k) for k, (name, _) in enumerate(node.consts)}
             self._p = p + len(node.consts)
-            missing = [a for a in parameters(fn) if a not in by_arg]
+            # `node.fn`'s own names, not `fn`'s: a ragged output's `fn` is the wrapper, whose own
+            # signature is `(packed, sink)` and says nothing about the step's real arguments; every
+            # other `fn` agrees with `node.fn` on names already, since only its globals are rewritten.
+            names = parameters(node.fn)
+            missing = [a for a in names if a not in by_arg]
             if missing:
                 raise ValueError(f"{node.origin.path}: argument(s) {missing} are not an input, const or param")
-            args = tuple(by_arg[a] for a in parameters(fn))
+            if ragged_item is not None:
+                # The wrapper's own signature is fixed arity (packed args, sink), not `*args`: a
+                # star-args callee has no per-argument type kernel.py's hand-rolled IR can bind to.
+                args = ((SrcKind.ROW, tuple(by_arg[a] for a in names)), (SrcKind.SINK, self._sinks))
+                self.sinks.append((call.writes[0], item_schema(ragged_item)))
+                self._sinks += 1
+            else:
+                args = tuple(by_arg[a] for a in names)
         dtypes = tuple(output_dtype(o.annotation) for o in node.outputs)
         nulls = tuple(nullable(o.annotation) for o in node.outputs)
         structs = tuple(struct_item(base_annotation(o.annotation)) is not None for o in node.outputs)
@@ -382,7 +429,11 @@ def _kernel(compiled: list, keep) -> Kernel:
         spec = lay.spec(call, key, fn)
         specs.append(spec)
         for k, v in enumerate(call.writes):
-            if keep is None or v.id in keep[0] or keep[1].get(v.id, set()) - ids:
+            # A ragged output's write always lands in `values[v.id]`: `Kernel.run` reads it back
+            # (the wrapper's hi-count) to materialise the sink into the version's real rows,
+            # whether or not anything else in the plan reads that version.
+            ragged = columnar_item(base_annotation(call.node.outputs[k].annotation)) is not None
+            if ragged or keep is None or v.id in keep[0] or keep[1].get(v.id, set()) - ids:
                 if spec.nullable and spec.nullable[k]:
                     masked.append(len(writes))
                 outputs.append(lay.produced[v.id])
@@ -390,5 +441,5 @@ def _kernel(compiled: list, keep) -> Kernel:
                 choices.append(literal_choices(call.node.outputs[k].annotation))
     fn = fused_kernel(tuple(specs), tuple(outputs))
     return Kernel(calls, fn, tuple(lay.reads), tuple(lay.optional), tuple(writes), tuple(masked), tuple(lay.layout),
-                  tuple(choices), tuple(lay.ragged))
+                  tuple(choices), tuple(lay.ragged), tuple(lay.sinks))
 

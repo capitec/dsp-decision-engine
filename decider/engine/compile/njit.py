@@ -22,7 +22,8 @@ from decider.engine.compile.fingerprint import fingerprint
 from decider.engine.compile.rows import rows_probe
 from decider.engine.compile.span import SPAN
 from decider.engine.compile.structs import bad_field, struct_dtype, struct_schema
-from decider.engine.ir.decls import KIND_DTYPES, FeatureKind, Input, NullPolicy, base_annotation, feature_kind, nullable
+from decider.engine.ir.decls import (KIND_DTYPES, FeatureKind, Input, NullPolicy, Output, base_annotation,
+                                     feature_kind, nullable)
 from decider.engine.ir.nodes import CallNode
 from decider.engine.params import NodeParams
 from decider.steps.helpers import allows_fallback, helper_signatures
@@ -159,6 +160,12 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None, bool]:
         if isinstance(ret, types.DictType):
             reason = (f"writes '{node.outputs[0].name}' as Struct[...] by returning a dict, which no "
                       "kernel stores; return a tuple of the fields to compile it")
+    # Scalar only: the wrapper calls the dispatcher with the step's own positional args, which is
+    # not how a row node's `fn(row, params, consts)` is called.
+    ragged_item = (columnar_item(base_annotation(node.outputs[0].annotation))
+                   if node.kind == "scalar" and len(node.outputs) == 1 else None)
+    if reason is None and ragged_item is not None:
+        reason = _ragged_reason(node.outputs[0], ragged_item, dispatcher, sig)
     # A `Columnar[...]` input joins the shared array kernel as flat per-field arrays sliced per row,
     # unless it's OPTIONAL: one kernel has one signature, and no kernel value is both a namedtuple
     # of views and `None`. A row node (a tree/table/scorecard feature) keeps the per-row dispatcher
@@ -168,7 +175,44 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None, bool]:
         names = ", ".join(f"'{i.name}'" for i in columnar_inputs)
         return key, dispatcher, (f"reads {names} as Columnar[...], which runs one call per row, "
                                  "outside the shared kernel"), declared
+    # A `Columnar[Item]` output has no fixed-stride kernel column of its own (a row emits a variable
+    # number of items); the wrapper drains the step's returned list into a shared growable buffer and
+    # reports back how many items that row added, an ordinary int64 scalar a kernel already stores.
+    if reason is None and ragged_item is not None:
+        return (*jit(_ragged_wrapper(dispatcher)), None, declared)
     return key, (dispatcher if reason is None else dispatcher.py_func), reason, declared
+
+
+def _ragged_reason(output: Output, item: Any, dispatcher: Dispatcher, sig: tuple) -> str | None:
+    if nullable(output.annotation):
+        return (f"writes '{output.name}' as Columnar[...] | None, which no kernel stores; "
+                "return a plain Columnar[...] instead")
+    schema = struct_schema(item)
+    bad = bad_field(schema)
+    if bad is not None:
+        return (f"writes '{output.name}' item field '{bad[0]}' as {bad[1]}, which no kernel stores; "
+                "a Columnar[...] output item must be float, int or bool")
+    ret = dispatcher.overloads[sig].signature.return_type
+    fields = ret.dtype.types if isinstance(ret, types.List) and isinstance(ret.dtype, types.BaseTuple) else None
+    if fields is None or len(fields) != len(schema):
+        return (f"writes '{output.name}' as Columnar[...] by returning a list of dicts, which no "
+                "kernel stores; return a list of tuples to compile it")
+    return None
+
+
+def _ragged_wrapper(dispatcher: Dispatcher) -> Callable:
+    # Fixed arity (`packed`, `sink`), not `*args`: `kernel.py`'s hand-rolled IR calls this with one
+    # value per argument it was typed with, which a `*args` signature resolves against a single
+    # packed tuple type instead -- a mismatch a normal njit call site never hits. `packed` is the
+    # step's own arguments, already packed into one tuple by the caller (mirroring a row node's
+    # `SrcKind.ROW`); a plain function, not `@njit` here, so `jit()` compiles it once its own
+    # content (which closes over `dispatcher`) is fingerprinted, exactly like any other step.
+    def wrapper(packed, sink):
+        for item in dispatcher(*packed):
+            sink.push(item)
+        return sink.length
+
+    return wrapper
 
 
 def _struct_reason(node: CallNode, inputs: list[Input]) -> str | None:
