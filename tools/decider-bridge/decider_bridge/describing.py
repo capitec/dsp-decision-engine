@@ -8,7 +8,7 @@ import re
 import textwrap
 from pathlib import Path
 
-from decider.engine.ir.nodes import BranchNode, CallNode, LoopNode
+from decider.engine.ir.nodes import BranchNode, CallNode, LoopNode, SubflowNode
 from decider.fields import metadata_of
 from decider.steps import FrameStep, FunctionStep, Step
 
@@ -99,6 +99,8 @@ def field_metadata(node, out=None):
         for d in (*(node.inputs or ()), *(node.outputs or ()), *node.params):
             if (m := metadata_of(d.annotation)) is not None:
                 out.setdefault(d.name, m.to_json())
+        if isinstance(node, SubflowNode) and node.subflow is not None:
+            field_metadata(node.subflow, out)
     else:
         for c in node.children():
             field_metadata(c, out)
@@ -115,15 +117,18 @@ def node_json(node, steps, located):
     if isinstance(node, CallNode):
         python = node.reference if node.kind == "row" else node.fn
         rf, rl = _code_location(python)
-        return {**base, "kind": "call", "callKind": node.kind,
-                "inputs": None if node.inputs is None else [i.name for i in node.inputs],
-                "outputs": None if node.outputs is None else [x.name for x in node.outputs],
-                "params": {d.name: d.default for d in node.params}, "code": _fingerprint(python, step_),
-                "doc": (inspect.getdoc(python) or "").split("\n")[0],
-                "formula": formula(python) if isinstance(step_, FunctionStep) else None,
-                "body": _short_source(python) if isinstance(step_, FunctionStep) else None,
-                "table": step_.expression.model_dump(mode="json") if hasattr(step_, "expression") and hasattr(step_, "rows") else None,
-                "python": {"file": rf, "line": rl, "bodyLine": _statement_line(python, 0), "endLine": _statement_line(python, -1)} if rf else None}
+        out = {**base, "kind": "call", "callKind": node.kind,
+               "inputs": None if node.inputs is None else [i.name for i in node.inputs],
+               "outputs": None if node.outputs is None else [x.name for x in node.outputs],
+               "params": {d.name: d.default for d in node.params}, "code": _fingerprint(python, step_),
+               "doc": (inspect.getdoc(python) or "").split("\n")[0],
+               "formula": formula(python) if isinstance(step_, FunctionStep) else None,
+               "body": _short_source(python) if isinstance(step_, FunctionStep) else None,
+               "table": step_.expression.model_dump(mode="json") if hasattr(step_, "expression") and hasattr(step_, "rows") else None,
+               "python": {"file": rf, "line": rl, "bodyLine": _statement_line(python, 0), "endLine": _statement_line(python, -1)} if rf else None}
+        if isinstance(node, SubflowNode) and node.subflow is not None:
+            out["children"] = [node_json(node.subflow, steps, located)]
+        return out
     kind = "branch" if isinstance(node, BranchNode) else "loop" if isinstance(node, LoopNode) else "sequence"
     extra = {"modifies": list(node.modifies)} if kind == "branch" else {}
     if kind == "loop":
