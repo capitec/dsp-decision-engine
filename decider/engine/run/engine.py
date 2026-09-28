@@ -14,7 +14,7 @@ from decider.engine.run.runners.fused import FusedRunner
 from decider.engine.run.runners.interpreted import InterpretedRunner
 from decider.engine.run.runners.stepped import SteppedRunner
 from decider.engine.ir.decls import ParamDecl, base_annotation
-from decider.engine.run.state import State, declared_dtype, dtype_of, record_value
+from decider.engine.run.state import State, declared_dtype, dtype_of, load_record, record_value
 from decider.engine.wiring import Plan, resolve
 from decider.engine.wiring.plan import Version
 from decider.exceptions import EngineError
@@ -200,7 +200,7 @@ class Executable:
         self._check_shadowing(record.keys())
         state = State(self.plan, _NO_FRAME, 1)
         for dtype, versions in self._inputs:
-            _load(state, record, versions, dtype)
+            load_record(state, record, versions, dtype)
         run = self._params(params, 1)
         for _ in self.runner.iterate(self.plan, state, run):
             pass
@@ -271,23 +271,3 @@ def _concrete(dtype: pl.DataType) -> pl.DataType:
     if isinstance(dtype, pl.Array):
         return pl.Array(_concrete(dtype.inner), dtype.size)
     return dtype
-
-
-def _load(state: State, record: Mapping[str, Any], versions: list[Version], dtype: np.dtype) -> None:
-    # One array per dtype, viewed per input: far cheaper than one array per input.
-    given = [v for v in versions if v.name in record]
-    if not given:
-        return
-    xs = [record[v.name] for v in given]
-    nulls = [x is None for x in xs]
-    if dtype == object:
-        block = np.empty(len(xs), object)
-        # One by one, so a list or tuple value stays one element.
-        for k, x in enumerate(xs):
-            block[k] = x
-    else:
-        block = np.array([0 if null else x for x, null in zip(xs, nulls)] if any(nulls) else xs, dtype)
-        # Read-only like a column read from a frame, so one kernel specialisation serves both.
-        block.flags.writeable = False
-    for k, (v, null) in enumerate(zip(given, nulls)):
-        state.write(v, block[k:k + 1], valid=np.zeros(1, bool) if null else None)
