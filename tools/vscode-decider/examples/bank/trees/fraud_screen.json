@@ -1,0 +1,92 @@
+{
+ "type": "tree",
+ "name": "fraud_screen",
+ "tree": {
+  "nodes": [
+   {
+    "id": "enquiry_burst",
+    "data": {
+     "type": "unary",
+     "condition": {
+      "op": ">",
+      "feature": "enquiries_6m",
+      "threshold": {
+       "param": "enquiry_burst_threshold",
+       "default": 6.0
+      }
+     }
+    }
+   },
+   {
+    "id": "enquiry_burst_leaf",
+    "data": {
+     "type": "leaf",
+     "result_idx": 0
+    }
+   },
+   {
+    "id": "new_address",
+    "data": {
+     "type": "unary",
+     "condition": {
+      "op": "<",
+      "feature": "months_at_address",
+      "threshold": {
+       "param": "new_address_threshold",
+       "default": 3.0
+      }
+     }
+    }
+   },
+   {
+    "id": "new_address_leaf",
+    "data": {
+     "type": "leaf",
+     "result_idx": 1
+    }
+   }
+  ],
+  "edges": [
+   {
+    "source": "enquiry_burst",
+    "target": "enquiry_burst_leaf",
+    "data": {
+     "sourceIndex": 0
+    }
+   },
+   {
+    "source": "enquiry_burst",
+    "target": "new_address",
+    "data": {
+     "sourceIndex": 1
+    }
+   },
+   {
+    "source": "new_address",
+    "target": "new_address_leaf",
+    "data": {
+     "sourceIndex": 0
+    }
+   }
+  ],
+  "output": {
+   "data": [
+    {
+     "fraud_referral": true
+    },
+    {
+     "fraud_referral": true
+    }
+   ],
+   "default": {
+    "fraud_referral": false
+   },
+   "dtypes": [
+    [
+     "fraud_referral",
+     "Boolean"
+    ]
+   ]
+  }
+ }
+}

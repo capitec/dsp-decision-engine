@@ -1,0 +1,92 @@
+{
+ "type": "tree",
+ "name": "collections_risk",
+ "tree": {
+  "nodes": [
+   {
+    "id": "chronic_arrears",
+    "data": {
+     "type": "unary",
+     "condition": {
+      "op": ">",
+      "feature": "missed_payments_12m",
+      "threshold": {
+       "param": "chronic_arrears_threshold",
+       "default": 2.0
+      }
+     }
+    }
+   },
+   {
+    "id": "chronic_arrears_leaf",
+    "data": {
+     "type": "leaf",
+     "result_idx": 0
+    }
+   },
+   {
+    "id": "has_judgement",
+    "data": {
+     "type": "unary",
+     "condition": {
+      "op": ">",
+      "feature": "judgements",
+      "threshold": {
+       "param": "has_judgement_threshold",
+       "default": 0.0
+      }
+     }
+    }
+   },
+   {
+    "id": "has_judgement_leaf",
+    "data": {
+     "type": "leaf",
+     "result_idx": 1
+    }
+   }
+  ],
+  "edges": [
+   {
+    "source": "chronic_arrears",
+    "target": "chronic_arrears_leaf",
+    "data": {
+     "sourceIndex": 0
+    }
+   },
+   {
+    "source": "chronic_arrears",
+    "target": "has_judgement",
+    "data": {
+     "sourceIndex": 1
+    }
+   },
+   {
+    "source": "has_judgement",
+    "target": "has_judgement_leaf",
+    "data": {
+     "sourceIndex": 0
+    }
+   }
+  ],
+  "output": {
+   "data": [
+    {
+     "collections_band": 3
+    },
+    {
+     "collections_band": 2
+    }
+   ],
+   "default": {
+    "collections_band": 1
+   },
+   "dtypes": [
+    [
+     "collections_band",
+     "Int64"
+    ]
+   ]
+  }
+ }
+}
