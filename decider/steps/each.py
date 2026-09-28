@@ -6,8 +6,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 from decider.engine.ir.decls import Input, NullPolicy, Output
-from decider.engine.ir.nodes import CallNode
-from decider.exceptions import IRError
+from decider.engine.ir.nodes import SubflowNode
 from decider.steps.base import Step, as_step
 
 if TYPE_CHECKING:
@@ -43,138 +42,132 @@ class EachStep(Step):
     mode: EachMode
     output: str | None = None
 
-    def to_ir(self, ctx: IRContext) -> CallNode:
-        from decider.engine.ir.context import IRContext as _Ctx
+    def to_ir(self, ctx: IRContext) -> SubflowNode:
         from decider.engine.wiring.resolve import resolve
 
-        # The child is its own plan: its inputs are the item's fields, its params read from a
-        # relative document the each node forwards. Built under a fresh root so its paths stay
-        # relative to itself.
-        child_ir = _Ctx().build(self.item)
+        # The child is built under this node's own path, so its steps' origins nest under it
+        # (e.g. "items/item/heavy"), which is what `Session.structure()` and `parameters()` show.
+        child_ir = ctx.child(self.name).build(self.item)
         child_plan: Plan = resolve(child_ir)
         new_fields = tuple(n for n, v in child_plan.outputs.items() if v.producer is not None)
-        params, paths = _hoist(child_plan, self.name)
         out_name = self.output if self.output is not None else self.column
-        fn = _per_row(child_plan, new_fields, paths) if self.mode is EachMode.PER_ROW \
-            else _batch(child_ir, self.column, out_name, paths)
+        fn = _EachRunner(child_plan, new_fields) if self.mode is EachMode.PER_ROW \
+            else _BatchRunner(child_ir, self.column, out_name)
         # A null list reads as a row with no items, the same in both modes. `arg="items"` matches
         # the child functions' own parameter name, independent of the column's name.
         inp = Input(self.column, list[dict], NullPolicy.MISSING_AS, [], arg="items")
         out = Output(out_name, list[dict])
         kind = "scalar" if self.mode is EachMode.PER_ROW else "frame"
-        return CallNode(ctx.origin(self), kind, fn, (inp,), (out,), params)
+        # Empty `params`: the child's params live under `subflow` and are surfaced by
+        # `iter_with_subflows`; declaring them here would list each one twice in `parameters()`.
+        return SubflowNode(ctx.origin(self), kind, fn, (inp,), (out,), (), subflow=child_ir)
 
 
-def _hoist(plan: Plan, name: str) -> tuple[tuple, dict[str, tuple[str, str]]]:
-    # The child's params become the each node's params, so `parameters()` lists them under the
-    # each node's path and a retuned value reaches the child. `paths` maps each param's argument
-    # to the child node path and param name it belongs to, so the forwarder rebuilds the child doc.
-    params, paths = [], {}
-    for call in plan.calls:
-        for d in call.node.params:
-            if d.shared_key is not None:
-                raise IRError(f"each {name!r}: shared param {d.shared_key!r} in the child flow is not supported")
-            if d.arg in paths:
-                raise IRError(f"each {name!r}: two child steps have a param fed by argument {d.arg!r}; rename one")
-            paths[d.arg] = (call.node.origin.path, d.name)
-            params.append(d)
-    return tuple(params), paths
+class _EachRunner:
+    """Runs a PER_ROW each node's child once per item; `runner` is swappable so a Session can step into it."""
 
+    def __init__(self, plan: Plan, new_fields: tuple[str, ...]):
+        # Drives the child plan directly rather than nesting a whole `Engine`: `each` already knows
+        # exactly which fields it wants back (`new_fields`), so it skips the frame/shadowing/output
+        # bookkeeping `Engine.score` carries for an arbitrary top-level pipeline, and pays for a
+        # `RunParams` once per parent row instead of once per item. `FusedRunner` compiles the child
+        # plan into numba kernels on its first `iterate()` call (cached on its own `_plan`, same as
+        # `Engine.bind(..., mode="fused")` does), so every item after the first calls compiled code,
+        # not a per-node Python walk; a step that can't compile still runs, one call per row.
+        # The child's params arrive as `doc`, the parent's whole params document, unmodified: the child
+        # was built under this node's path, so its nodes read their params from their own nested keys.
+        import polars as pl
 
-def _child_doc(child_params: dict, paths: dict[str, tuple[str, str]]) -> dict:
-    doc: dict = {}
-    for arg, value in child_params.items():
-        path, param = paths[arg]
-        target = doc
-        for part in path.split("/"):
-            target = target.setdefault(part, {})
-        target[param] = value
-    return doc
+        from decider.engine.ir.decls import base_annotation
+        from decider.engine.params import NodeParams, ParamsCache
+        from decider.engine.run.runners.fused import FusedRunner
+        from decider.engine.run.state import dtype_of
 
+        self.plan = plan
+        self.new_fields = new_fields
+        self.runner = FusedRunner()
+        self.nodes = {c.id: NodeParams(c.node.origin.path, c.node.params) for c in plan.calls if c.node.params}
+        self.cache = ParamsCache()
+        grouped = {}
+        for v in plan.versions:
+            if v.producer is None:
+                grouped.setdefault(dtype_of(base_annotation(v.annotation)), []).append(v)
+        self.inputs = list(grouped.items())
+        self.results = [(f, plan.outputs[f]) for f in new_fields]
+        self.empty_frame = pl.DataFrame()
 
-def _per_row(plan: Plan, new_fields: tuple[str, ...], paths):
-    # Drives the child plan directly rather than nesting a whole `Engine`: `each` already knows
-    # exactly which fields it wants back (`new_fields`), so it skips the frame/shadowing/output
-    # bookkeeping `Engine.score` carries for an arbitrary top-level pipeline, and pays for a
-    # `RunParams` once per parent row instead of once per item. `FusedRunner` compiles the child
-    # plan into numba kernels on its first `iterate()` call (cached on its own `_plan`, same as
-    # `Engine.bind(..., mode="fused")` does), so every item after the first calls compiled code,
-    # not a per-node Python walk; a step that can't compile still runs, one call per row.
-    import polars as pl
+    def __call__(self, items, doc):
+        from decider.engine.run.params import RunParams
+        from decider.engine.run.state import State, load_record, record_value
 
-    from decider.engine.ir.decls import base_annotation
-    from decider.engine.params import NodeParams, ParamsCache
-    from decider.engine.run.params import RunParams, check_namespaces
-    from decider.engine.run.runners.fused import FusedRunner
-    from decider.engine.run.state import State, dtype_of, load_record, record_value
-
-    runner = FusedRunner()
-    nodes = {c.id: NodeParams(c.node.origin.path, c.node.params) for c in plan.calls if c.node.params}
-    cache = ParamsCache()
-    grouped = {}
-    for v in plan.versions:
-        if v.producer is None:
-            grouped.setdefault(dtype_of(base_annotation(v.annotation)), []).append(v)
-    inputs = list(grouped.items())
-    results = [(f, plan.outputs[f]) for f in new_fields]
-    empty_frame = pl.DataFrame()
-
-    def run(items, **child_params):
-        doc = _child_doc(child_params, paths)
-        check_namespaces(doc, nodes)
-        params = RunParams(nodes, doc, cache, lazy=False)
+        params = RunParams(self.nodes, doc, self.cache, lazy=False)
         out = []
         for item in items or ():
-            state = State(plan, empty_frame, 1)
-            for dtype, versions in inputs:
+            state = State(self.plan, self.empty_frame, 1)
+            for dtype, versions in self.inputs:
                 load_record(state, item, versions, dtype)
-            for _ in runner.iterate(plan, state, params):
+            for _ in self.runner.iterate(self.plan, state, params):
                 pass
             row = {}
-            for f, v in results:
+            for f, v in self.results:
                 values, valid = state.read(v)
                 row[f] = None if valid is not None and not valid[0] else record_value(values.tolist()[0], v.annotation)
             out.append({**item, **row})
         return out
 
-    return run
+    def child_run(self, item, doc, runner):
+        """A `(state, params, checkpoints)` triple for one `item`, run with `runner`; for a stepping `Session`.
+
+        The child is driven a checkpoint at a time by whichever thread drains `checkpoints`, so a
+        session can pause it without the fused `self.runner` used for the real run.
+        """
+        from decider.engine.run.params import RunParams
+        from decider.engine.run.state import State, load_record
+
+        params = RunParams(self.nodes, doc, self.cache, lazy=False)
+        state = State(self.plan, self.empty_frame, 1)
+        for dtype, versions in self.inputs:
+            load_record(state, item, versions, dtype)
+        return state, params, runner.iterate(self.plan, state, params)
 
 
-def _batch(child_ir, column: str, out_name: str, paths):
-    import polars as pl
+class _BatchRunner:
+    """Runs a BATCH each node's child over the exploded frame; `exe` is swappable so a Session can rebind it."""
 
-    from decider.engine import Engine
+    def __init__(self, child_ir, column: str, out_name: str):
+        self.child_ir = child_ir
+        self.column = column
+        self.out_name = out_name
+        self.exe = None
 
-    exe = None
+    def __call__(self, df, doc):
+        import polars as pl
 
-    def run(df, **child_params):
-        nonlocal exe
-        if exe is None:
-            exe = Engine().bind(child_ir, mode="fused")
-        dtype = df.schema[column]
+        from decider.engine import Engine
+
+        if self.exe is None:
+            self.exe = Engine().bind(self.child_ir, mode="fused")
+        dtype = df.schema[self.column]
         if not (isinstance(dtype, pl.List) and isinstance(dtype.inner, pl.Struct)):
             # Not List(Struct): either all rows are empty/null (correct) or the wrong type.
             # prepare() may have cast a fully-null list column to List(String) or String.
             is_list = isinstance(dtype, pl.List)
-            has_items = (df[column].list.len().fill_null(0).sum() > 0 if is_list
-                         else df[column].is_not_null().any())
+            has_items = (df[self.column].list.len().fill_null(0).sum() > 0 if is_list
+                         else df[self.column].is_not_null().any())
             if has_items:
-                raise ValueError(f"each({column!r}): batch mode requires a List(Struct) column, got {dtype}")
-            return df.with_columns(pl.Series(out_name, [[]] * df.height, dtype=pl.List(pl.Null)))
-        doc = _child_doc(child_params, paths)
+                raise ValueError(f"each({self.column!r}): batch mode requires a List(Struct) column, got {dtype}")
+            return df.with_columns(pl.Series(self.out_name, [[]] * df.height, dtype=pl.List(pl.Null)))
         idx = df.with_row_index(_PID)
-        nonzero = idx.filter(pl.col(column).list.len().fill_null(0) > 0)
-        exploded = nonzero.explode(column).unnest(column)
-        result = exe.run(exploded, params=doc)
-        pass_through = set(df.columns) - {column}
+        nonzero = idx.filter(pl.col(self.column).list.len().fill_null(0) > 0)
+        exploded = nonzero.explode(self.column).unnest(self.column)
+        result = self.exe.run(exploded, params=doc)
+        pass_through = set(df.columns) - {self.column}
         names = [c for c in result.columns if c != _PID and c not in pass_through]
-        grouped = (result.select(_PID, pl.struct(names).alias(out_name))
-                   .group_by(_PID, maintain_order=True).agg(pl.col(out_name)))
+        grouped = (result.select(_PID, pl.struct(names).alias(self.out_name))
+                   .group_by(_PID, maintain_order=True).agg(pl.col(self.out_name)))
         joined = idx.select(_PID).join(grouped, on=_PID, how="left")
         # Null and empty lists explode to zero rows and rejoin as null: read them as no items.
-        return df.with_columns(joined.get_column(out_name).fill_null([]).alias(out_name))
-
-    return run
+        return df.with_columns(joined.get_column(self.out_name).fill_null([]).alias(self.out_name))
 
 
 def each(column: str, item: Any, *, name: str | None = None,
