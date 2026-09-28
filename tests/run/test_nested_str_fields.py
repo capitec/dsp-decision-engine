@@ -8,7 +8,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from decider import Engine, Columnar, flow, missing_as, param
+from decider import Engine, Columnar, allow_fallback, flow, missing_as, param, step
 from decider.engine.compile.rows import ARROW_ROWS, build_rows
 from decider.testing import assert_equivalent
 
@@ -258,6 +258,41 @@ def test_a_null_or_empty_list_reads_no_items_beside_a_str_field(mult):
                          schema={"items": pl.List(pl.Struct({"el_1": pl.Int64, "el_2": pl.String}))})
     exe = Engine().bind(flow(n_snoop, name="p"), mode="fused")
     assert exe.run(frame)["n_snoop"].to_list() == [1, 0, 0, 1] * mult
+
+
+class _LabelItem(TypedDict):
+    label: str
+    value: float
+
+
+@step(outputs=("total",))
+def _total_values(items: Columnar[_LabelItem]) -> tuple[float]:
+    t = 0.0
+    for j in range(len(items.value)):
+        t += items.value[j]
+    return (t,)
+
+
+@allow_fallback
+def _collect_labels(items: Columnar[_LabelItem]) -> list[str]:
+    return [items.label[j] for j in range(len(items.label))]
+
+
+_LABEL_FRAME = pl.DataFrame({"items": [[{"label": "a", "value": 1.0}, {"label": "b", "value": 2.0}]]})
+_LABEL_RECORD = {"items": [{"label": "a", "value": 1.0}, {"label": "b", "value": 2.0}]}
+
+
+def test_allow_fallback_returning_list_of_str_gives_plain_strings_in_score():
+    exe = Engine().bind(flow(_total_values, _collect_labels), mode="fused")
+    result = exe.score(_LABEL_RECORD, {})
+    assert result["_collect_labels"] == ["a", "b"]
+    assert all(isinstance(x, str) for x in result["_collect_labels"])
+
+
+def test_allow_fallback_returning_list_of_str_gives_plain_strings_in_run():
+    exe = Engine().bind(flow(_total_values, _collect_labels), mode="fused")
+    result = exe.run(_LABEL_FRAME)
+    assert result["_collect_labels"].to_list() == [["a", "b"]]
 
 
 def test_span_fields_outlive_the_frame_they_were_read_from():

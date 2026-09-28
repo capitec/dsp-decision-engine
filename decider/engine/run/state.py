@@ -8,6 +8,7 @@ import numpy as np
 import polars as pl
 
 from decider.engine.ir.decls import TYPED, Input, NullPolicy, base_annotation
+from decider.engine.run.representations import despan
 from decider.engine.wiring.plan import Plan, Version
 from decider.types import annotation_cache, columnar_item, item_schema, struct_item
 
@@ -217,7 +218,7 @@ def _series(name: str, values: np.ndarray, valid: np.ndarray | None, annotation:
         rows = (values if valid is None else np.where(valid, values, None))
         # A compiled struct output read back into Python is a numpy record (np.void); polars reads
         # dicts (not tuples) for a Struct with nulls, so spell it as the dict a step returns.
-        values = [dict(zip(x.dtype.names, x.tolist())) if isinstance(x, np.void) else x for x in rows.tolist()]
+        values = [dict(zip(x.dtype.names, x.tolist())) if isinstance(x, np.void) else despan(x) for x in rows.tolist()]
         # Polars infers a list's element type from its first row: `[[1, 2], [1.5]]` would become ints.
         dtype = declared_dtype(annotation)
         return pl.Series(name, values, dtype=dtype if isinstance(dtype, (pl.List, pl.Struct, pl.Array)) else None)
@@ -244,7 +245,7 @@ def record_value(value: Any, annotation: Any = None) -> Any:
     if item is not None and value is not None and not isinstance(value, dict):
         return dict(zip((name for name, _ in item_schema(item)),
                         value.tolist() if isinstance(value, np.void) else value))
-    return value
+    return despan(value)
 
 
 def from_series(s: pl.Series) -> tuple[np.ndarray, np.ndarray | None]:

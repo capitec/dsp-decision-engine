@@ -4,6 +4,7 @@ give the same value regardless of `mode=`.
 from __future__ import annotations
 
 import ctypes
+from typing import Any
 
 import numpy as np
 import polars as pl
@@ -76,6 +77,15 @@ class Span:
     def __contains__(self, part: object) -> bool:
         part = _utf8(part)
         return self.bytes is not None and part is not None and part in self.bytes
+
+
+def despan(x: Any) -> Any:
+    """Convert `Span` (or a list containing them) to `str | None` for user-facing output."""
+    if isinstance(x, Span):
+        return x.text
+    if isinstance(x, list):
+        return [v.text if isinstance(v, Span) else v for v in x]
+    return x
 
 
 def span_objects(values: np.ndarray, fill: str | None = None, missing: np.ndarray | None = None) -> np.ndarray:
