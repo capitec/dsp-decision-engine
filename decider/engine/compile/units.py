@@ -5,7 +5,7 @@ from typing import Any, Iterator, Mapping, Union
 
 import numpy as np
 
-from decider.engine.compile.kernel import Spec, fused_kernel
+from decider.engine.compile.kernel import Spec, SrcKind, fused_kernel
 from decider.engine.compile.njit import FALLBACK_ERRORS, compile_call, numpy_dtype, parameters
 from decider.engine.compile.rows import Ragged
 from decider.engine.compile.structs import struct_dtype, struct_schema
@@ -325,7 +325,7 @@ class Layout:
             schema = item_schema(item)
             source = self._rag.get(v.id)
             if source is None:
-                source = self._rag[v.id] = ("rag", schema, self._flats)
+                source = self._rag[v.id] = (SrcKind.RAG, schema, self._flats)
                 self._flats += 2 + len(schema)
                 self.ragged.append(v)
             elif source[1] != schema:
@@ -338,11 +338,11 @@ class Layout:
             self.reads.append(v)
         # A null `bytes` value is a span of length -1, so it needs no mask.
         if inp is None or inp.null_policy is not NullPolicy.OPTIONAL or base_annotation(inp.annotation) is bytes:
-            return ("col", self._cols[v.id])
+            return (SrcKind.COL, self._cols[v.id])
         if v.id not in self._masks:
             self._masks[v.id] = len(self.optional)
             self.optional.append(v)
-        return ("opt", self._cols[v.id], self._masks[v.id])
+        return (SrcKind.OPT, self._cols[v.id], self._masks[v.id])
 
     def spec(self, call: Call, key: str, fn) -> Spec:
         node = call.node
@@ -352,13 +352,13 @@ class Layout:
             self.layout.append((call.id, bool(node.params), consts, node.kind == "row"))
         p = self._p
         if node.kind == "row":
-            args = (("row", tuple(sources)), ("par", p), ("par", p + 1))
+            args = ((SrcKind.ROW, tuple(sources)), (SrcKind.PAR, p), (SrcKind.PAR, p + 1))
             self._p += 2
         else:
             by_arg = {i.arg: src for i, src in zip(node.inputs, sources)}
-            by_arg |= {d.arg: ("par", p + k) for k, d in enumerate(node.params)}
+            by_arg |= {d.arg: (SrcKind.PAR, p + k) for k, d in enumerate(node.params)}
             p += len(node.params)
-            by_arg |= {name: ("par", p + k) for k, (name, _) in enumerate(node.consts)}
+            by_arg |= {name: (SrcKind.PAR, p + k) for k, (name, _) in enumerate(node.consts)}
             self._p = p + len(node.consts)
             missing = [a for a in parameters(fn) if a not in by_arg]
             if missing:
@@ -368,7 +368,7 @@ class Layout:
         nulls = tuple(nullable(o.annotation) for o in node.outputs)
         structs = tuple(struct_item(base_annotation(o.annotation)) is not None for o in node.outputs)
         s, self._specs = self._specs, self._specs + 1
-        self.produced.update((v.id, ("res", s, k)) for k, v in enumerate(call.writes))
+        self.produced.update((v.id, (SrcKind.RES, s, k)) for k, v in enumerate(call.writes))
         return Spec(key, fn, args, dtypes, node.kind == "row" or len(dtypes) > 1,
                     nulls if any(nulls) else (), structs if any(structs) else ())
 

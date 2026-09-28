@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Collection, Iterator
 
-from decider.engine.compile.kernel import Fork, Repeat, fused_kernel
+from decider.engine.compile.kernel import Fork, Repeat, SrcKind, fused_kernel
 from decider.engine.compile.njit import compile_call
 from decider.engine.compile.units import Kernel, Layout, output_dtype
 from decider.engine.ir.decls import TYPED, NullPolicy, base_annotation, nullable
@@ -112,7 +112,7 @@ def _pack(top: Branch | Loop, outputs: set[int], lazy: bool, python: Collection[
         if base_annotation(v.annotation) not in TYPED and struct_item(v.annotation) is None:
             raise _Unpackable
         inner.add(v.id)
-        lay.produced[v.id] = ("var", len(variables))
+        lay.produced[v.id] = (SrcKind.VAR, len(variables))
         variables.append(output_dtype(v.annotation))
         return len(variables) - 1
 
