@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { paramReaders, type Comparison } from "./model/compare";
-import { callNodes, recordLabel, setFields, type ColumnSummary, type Controls, type DescribeResult, type FromUI, type Lineage, type RecordKey, type RunStatus, type Tab, type ToUI, type ValueHistory } from "./model/protocol";
+import { callNodes, recordLabel, setFields, subflowStepsOf, type ColumnSummary, type Controls, type DescribeResult, type FromUI, type Lineage, type RecordKey, type RunStatus, type Tab, type ToUI, type ValueHistory } from "./model/protocol";
 import type { Sweep } from "./model/sweep";
 import { Compare } from "./Compare";
 import { FindStep } from "./FindStep";
@@ -188,7 +188,7 @@ function View({ send, listen, can }: AppProps) {
   }, [column, columns]);
 
   const nodes = useMemo(
-    () => (describe ? callNodes(describe.ir) : []).map((n) => (n.path in formulas ? { ...n, formula: formulas[n.path], formulaBefore: n.formula } : n)),
+    () => (describe ? callNodes(describe.ir) : []).map((n) => ({ ...n, subflowSteps: subflowStepsOf(n), ...(n.path in formulas ? { formula: formulas[n.path], formulaBefore: n.formula } : {}) })),
     [describe, formulas],
   );
   const selectedNode = nodes.find((n) => n.path === selected);
