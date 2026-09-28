@@ -51,7 +51,7 @@ def _keep(index: int, best_index: int, best_score: float, evaluated: int, disqua
         disqualified += 1
     else:
         evaluated += 1
-        if score > best_score:
+        if score > best_score or best_index == -1:
             best_index, best_score = index, score
     return best_index, best_score, evaluated, disqualified
 

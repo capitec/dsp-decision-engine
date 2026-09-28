@@ -268,6 +268,8 @@ def _concrete(dtype: pl.DataType) -> pl.DataType:
         return pl.String
     if isinstance(dtype, pl.List):
         return pl.List(_concrete(dtype.inner))
+    if isinstance(dtype, pl.Array):
+        return pl.Array(_concrete(dtype.inner), dtype.size)
     return dtype
 
 

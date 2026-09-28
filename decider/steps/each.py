@@ -28,7 +28,7 @@ class EachMode(Enum):
     BATCH = "batch"
 
 
-_PID = "_each_parent"
+_PID = "__decider_each_pid__"
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -121,15 +121,21 @@ def _batch(child_ir, column: str, paths):
             exe = Engine().bind(child_ir, mode="fused")
         dtype = df.schema[column]
         if not (isinstance(dtype, pl.List) and isinstance(dtype.inner, pl.Struct)):
-            # No row holds any items (the column is all null or all empty), so there is nothing to
-            # explode and the child adds no fields: every row reads as an empty list.
+            # Not List(Struct): either all rows are empty/null (correct) or the wrong type.
+            # prepare() may have cast a fully-null list column to List(String) or String.
+            is_list = isinstance(dtype, pl.List)
+            has_items = (df[column].list.len().fill_null(0).sum() > 0 if is_list
+                         else df[column].is_not_null().any())
+            if has_items:
+                raise ValueError(f"each({column!r}): batch mode requires a List(Struct) column, got {dtype}")
             return df.with_columns(pl.Series(column, [[]] * df.height, dtype=pl.List(pl.Null)))
         doc = _child_doc(child_params, paths)
         idx = df.with_row_index(_PID)
         nonzero = idx.filter(pl.col(column).list.len().fill_null(0) > 0)
         exploded = nonzero.explode(column).unnest(column)
         result = exe.run(exploded, params=doc)
-        names = [c for c in result.columns if c != _PID]
+        pass_through = set(df.columns) - {column}
+        names = [c for c in result.columns if c != _PID and c not in pass_through]
         grouped = (result.select(_PID, pl.struct(names).alias(column))
                    .group_by(_PID, maintain_order=True).agg(pl.col(column)))
         joined = idx.select(_PID).join(grouped, on=_PID, how="left")

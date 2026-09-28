@@ -59,7 +59,7 @@ class JsonFileStore(ConfigStore):
         staging = Path(tempfile.mkdtemp(prefix=".", dir=self.basepath))
         for key, value in versioned.config.items():
             parts = key.split(".")
-            if any(part in ("", ".", "..") or "/" in part or "\\" in part for part in parts):
+            if any(part in ("", ".", "..") or "/" in part or "\\" in part or "\x00" in part for part in parts):
                 raise ValueError(f"config key {key!r} is not a safe path: a dotted key must be plain names")
             path = staging.joinpath(*parts).with_suffix(".json")
             path.parent.mkdir(parents=True, exist_ok=True)

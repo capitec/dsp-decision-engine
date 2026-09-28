@@ -94,9 +94,8 @@ class PolarsSchema(RootModel):
     @model_validator(mode="after")
     def _convert_schema(self) -> "t.Self":
         schema = handle_type(self.root)
-        assert isinstance(
-            schema, polars_dtypes.Struct
-        ), "Expected upper level to be a struct."
+        if not isinstance(schema, polars_dtypes.Struct):
+            raise ValueError("Expected upper level to be a struct.")
         try:
             self._polars_schema = pl.Schema([(f.name, f.dtype) for f in schema.fields])
         except pl.exceptions.DuplicateError as e:
