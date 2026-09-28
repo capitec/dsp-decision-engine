@@ -93,6 +93,13 @@ def test_a_parent_step_reads_the_enriched_list_as_columnar(mode, each_mode):
     assert exe.run(FRAME)["bundle_total"].to_list() == [25.0, 0.0, 40.0]
 
 
+def test_batch_mode_does_not_inject_parent_frame_columns_into_items():
+    frame = pl.DataFrame({"order_id": [1, 2], "items": [[{"weight": 5.0}, {"weight": 25.0}], []]})
+    exe = Engine().bind(pipeline(EachMode.BATCH), mode="fused")
+    result = exe.run(frame)["items"].to_list()
+    assert result == [[{"weight": 5.0, "heavy": False}, {"weight": 25.0, "heavy": True}], []]
+
+
 def test_a_parent_step_reads_the_enriched_list_as_columnar_past_the_arrow_threshold():
     from decider.engine.compile.rows import ARROW_ROWS
 

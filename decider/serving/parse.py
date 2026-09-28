@@ -18,6 +18,8 @@ def parse_application_json(data: bytes) -> t.Union[t.Dict[str, t.Any], pl.DataFr
     value = from_json(data)
     if isinstance(value, dict):
         return value
+    if not value:
+        raise InputParsingError("request body is an empty array; send at least one record or a single object")
     return pl.from_dicts(value, infer_schema_length=None)
 
 

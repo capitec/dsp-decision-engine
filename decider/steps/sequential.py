@@ -57,17 +57,18 @@ class SequentialStep(Step):
         return self._sequence(ctx, self.steps, [inner.build(s) for s in self.steps])
 
     def _sequence(self, ctx: IRContext, steps: Sequence[Step], nodes: Sequence[IRNode]) -> SequenceNode:
-        children, emits, drops = [], list(self.emits), list(self.drops)
+        children, emits, drops, inputs = [], list(self.emits), list(self.drops), list(self.inputs)
         for s, node in zip(steps, nodes):
             # An anonymous member is transparent: its children join this sequence.
             if s.name is None and isinstance(node, SequenceNode):
                 children += node.children_
                 emits += node.emits
                 drops += node.drops
+                inputs += node.inputs
             else:
                 children.append(node)
         return SequenceNode(ctx.origin(self), tuple(children), tuple(dict.fromkeys(emits)), tuple(dict.fromkeys(drops)),
-                            self.inputs)
+                            tuple(dict.fromkeys(inputs)))
 
 
 def flow(*steps: Any, name: str | None = None, inputs: Sequence[str] | None = None) -> SequentialStep:
