@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Union
 
 from decider.engine.ir.decls import Input
-from decider.engine.ir.nodes import BranchNode, CallNode, LoopNode, SequenceNode
+from decider.engine.ir.nodes import BranchNode, CallNode, LoopNode, SequenceNode, FiniteStateMachineNode, ScatterGatherNode
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -101,8 +101,21 @@ class Loop:
     body: Resolved
     carries: tuple[Carry, ...]
 
+@dataclass(frozen=True, slots=True, eq=False)
+class ScatterGather:
+    """ A way to represent a finite state machine as a node
+    """
+    id: int
+    node: ScatterGatherNode
 
-Resolved = Union[Call, Sequence, Branch, Loop]
+@dataclass(frozen=True, slots=True, eq=False)
+class FiniteStateMachine:
+    """ A way to represent a finite state machine as a node
+    """
+    id: int
+    node: FiniteStateMachineNode
+
+Resolved = Union[Call, Sequence, Branch, Loop, ScatterGather, FiniteStateMachine]
 
 
 @dataclass(frozen=True, slots=True, eq=False)
