@@ -112,6 +112,30 @@ class LoopNode(IRNode):
     def children(self) -> tuple[IRNode, ...]:
         return (self.condition, self.body)
 
+@dataclass(frozen=True, slots=True, eq=False)
+class ScatterGatherNode(IRNode):
+    """Runs the body for every element in a list optionally runs an accumulator."""
+    origin: Origin
+    each: IRNode
+    accumulate: CallNode | None
+
+    def children(self) -> tuple[IRNode, ...]:
+        if self.accumulate is None:
+            return (self.each, )
+        return (self.accumulate, self.each)
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class FiniteStateMachineNode(IRNode):
+    """Runs the transition_function to return the index of the child sequence to run. Continues till the transition_function returns < 0."""
+
+    origin: Origin
+    transition_function: CallNode
+    child_sequences: tuple[IRNode, ...]
+
+    def children(self) -> tuple[IRNode, ...]:
+        return (self.transition_function, *self.child_sequences)
+
 
 def iter_nodes(node: IRNode) -> Iterator[IRNode]:
     """Every node of an IR tree, parents before children.
