@@ -1,0 +1,29 @@
+=== scalar chain: no trace vs one int64 trace output per step ===
+engine                        batch rows/sscore p50 usscore p99 us
+fused no-trace                 887,595,025        25.9        33.8
+fused +1 int64 col             439,738,908        26.6        36.6
+fused +trace col               136,586,334        60.3        72.7
+stepped +trace col              17,129,802       136.5       168.6
+interpreted +trace col              78,548       280.1       335.0
+
+=== branch + loop ===
+engine                        batch rows/sscore p50 usscore p99 us
+fused branch+loop               17,090,699        65.4        80.7
+stepped branch+loop              1,599,108       549.4       653.6
+interpreted branch+loop             30,546       253.9       304.0
+
+=== tree: no trace vs path_output vs trace_output (in-kernel) ===
+engine                        batch rows/sscore p50 usscore p99 us
+fused no trace                  20,005,265        20.6        34.9
+fused path_output                2,778,712        36.2        50.7
+fused trace_output               2,820,303        35.6        57.9
+
+=== table and frame ===
+engine                        batch rows/sscore p50 usscore p99 us
+fused table                      2,983,572        29.5        39.6
+interpreted table                  183,260        37.5        47.2
+fused frame                     91,785,110      1158.5      2675.4
+interpreted frame               84,803,472      1157.8      2711.8
+
+=== override (record path, Session) ===
+override path: set('v0') recorded as override@chain/v0; 26 session events emitted
