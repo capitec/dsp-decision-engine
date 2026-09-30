@@ -60,7 +60,7 @@ class DagStep(SequentialStep):
         return order
 
 
-def dag(*steps: Any, name: str | None = None, inputs: Sequence[str] | None = None) -> Step:
+def dag(*steps: Any, name: str | None = None, inputs: Sequence[str] | None = None, id: str | None = None) -> Step:
     """Run steps in dependency order: a step reading a name runs after the step writing it.
 
     Two members writing one name is an error: use `flow` for a waterfall, or
@@ -77,6 +77,6 @@ def dag(*steps: Any, name: str | None = None, inputs: Sequence[str] | None = Non
     """
     if not steps:
         raise WiringError("dag() needs at least one step")
-    if len(steps) == 1 and name is None:
+    if len(steps) == 1 and name is None and id is None:
         return as_step(steps[0])
-    return DagStep(tuple(map(as_step, steps)), name, inputs=tuple(inputs or ()))
+    return DagStep(tuple(map(as_step, steps)), name, inputs=tuple(inputs or ()), id=id)

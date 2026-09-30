@@ -329,7 +329,7 @@ class Session(Edits):
             return cp
         o = cp.origin
         for locator, rows in self._visits.items():
-            self._emit(NodeVisited(Origin(o.path, o.source, locator), rows))
+            self._emit(NodeVisited(Origin(o.path, o.source, locator, o.id), rows))
         self._visited = set(self._visits)
         self._visits.clear()
         produced = self._produces.get(o.path, ())

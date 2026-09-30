@@ -80,6 +80,7 @@ class OptimiseStep(Step):
     disqualify: Step | None
     max_candidates: int
     record: Any = None
+    id: str | None = None
 
     def to_ir(self, ctx: IRContext) -> SequenceNode:
         inner = ctx.child(self.name)
@@ -132,7 +133,7 @@ class OptimiseStep(Step):
 
 
 def optimise(count: Any, evaluate: Any, *, score: str = "score", disqualify: Any = None,
-             max_candidates: int, name: str, record: Any = None) -> OptimiseStep:
+             max_candidates: int, name: str, record: Any = None, id: str | None = None) -> OptimiseStep:
     """Run `evaluate` once per candidate and keep the best one, per row.
 
     `evaluate` is a flow of ordinary steps that read `index` (the candidate,
@@ -193,4 +194,4 @@ def optimise(count: Any, evaluate: Any, *, score: str = "score", disqualify: Any
         if "record" not in interface(to_ir(evaluate))[1]:
             raise WiringError(f"optimise {name!r}: evaluate does not write 'record'; it writes "
                               f"{sorted(interface(to_ir(evaluate))[1])}")
-    return OptimiseStep(name, count, evaluate, score, dq, max_candidates, record)
+    return OptimiseStep(name, count, evaluate, score, dq, max_candidates, record, id=id)
