@@ -36,11 +36,12 @@ class Kernel:
     """
 
     __slots__ = ("calls", "fn", "reads", "optional", "ragged", "sinks", "writes", "_masked", "_layout",
-                 "_choices", "_python")
+                 "_choices", "_python", "_trace", "_trace_fn")
     # Whether a kernel numba can't build runs its calls one by one instead.
     splits = True
 
-    def __init__(self, calls, fn, reads, optional, writes, masked, layout, choices, ragged=(), sinks=()):
+    def __init__(self, calls, fn, reads, optional, writes, masked, layout, choices, ragged=(), sinks=(),
+                 trace=None):
         self.calls: tuple[Call, ...] = calls
         self.fn = fn
         self.reads: tuple[Version, ...] = reads
@@ -52,8 +53,18 @@ class Kernel:
         self._layout = layout
         self._choices: tuple[tuple | None, ...] = choices
         self._python: tuple[Fallback, ...] = ()
+        # `(program, outputs, variables, refs, factor, exact)` for the trace kernel, or None.
+        self._trace = trace
+        self._trace_fn = None
 
-    def run(self, values: Values, valid: Values, bundles: Mapping[int, tuple], n: int) -> None:
+    def _trace_kernel(self):
+        if self._trace_fn is None:
+            program, outputs, variables, refs, *_ = self._trace
+            self._trace_fn = fused_kernel(program, outputs, variables, trace_refs=refs)
+        return self._trace_fn
+
+    def run(self, values: Values, valid: Values, bundles: Mapping[int, tuple], n: int,
+            trace=None, table=None) -> None:
         if self._python:
             for fallback in self._python:
                 fallback.run(values, valid, bundles, n)
@@ -75,7 +86,17 @@ class Kernel:
         outs = [np.empty(n, dtype) for _, dtype in self.writes]
         masks = [np.empty(n, np.bool_) for _ in self._masked]
         try:
-            self.fn(n, cols, valids, tuple(params), flats, sinks, tuple(outs + masks))
+            if trace is None:
+                self.fn(n, cols, valids, tuple(params), flats, sinks, tuple(outs + masks))
+            else:
+                program, outputs, variables, refs, factor, exact = self._trace
+                fn = self._trace_kernel()
+                header = np.empty(n * len(refs) * factor, np.int64)
+                cursor = np.zeros(1, np.int64)
+                offsets = np.empty(n, np.int64)
+                fn(n, cols, valids, tuple(params), flats, sinks, tuple(outs + masks), header, cursor, offsets)
+                trace.drain_kernel(header, offsets, table, int(cursor[0]),
+                                   None if not exact else n * len(refs))
         except FALLBACK_ERRORS as e:
             if not self.splits:
                 raise
@@ -451,6 +472,9 @@ def _kernel(compiled: list, keep) -> Kernel:
                 writes.append((v, spec.dtypes[k]))
                 choices.append(literal_choices(call.node.outputs[k].annotation))
     fn = fused_kernel(tuple(specs), tuple(outputs))
+    # A straight-line kernel runs every call once per row, so its trace emits
+    # exactly `n * len(calls)` STEP events; refs are the plan-global call refs.
+    trace = (tuple(specs), tuple(outputs), (), tuple(c.id + 1 for c in calls), 1, True)
     return Kernel(calls, fn, tuple(lay.reads), tuple(lay.optional), tuple(writes), tuple(masked), tuple(lay.layout),
-                  tuple(choices), tuple(lay.ragged), tuple(lay.sinks))
+                  tuple(choices), tuple(lay.ragged), tuple(lay.sinks), trace)
 

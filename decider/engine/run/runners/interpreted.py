@@ -15,6 +15,7 @@ from decider.engine.run.params import RunParams
 from decider.engine.run.representations import codes, span_objects
 from decider.engine.run.runners.base import Checkpoint
 from decider.engine.run.state import State, dtype_of, fill_missing, from_series, record_value
+from decider.engine.trace.envelope import Kind
 from decider.types import Representation, is_raw, representation_for, columnar_item, item_schema, struct_item
 from decider.engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, ScatterGather, Sequence, Version
 
@@ -69,11 +70,18 @@ class InterpretedRunner:
 
     def __init__(self) -> None:
         self.visit: Callable[[str], None] = _ignore
+        self._trace = None
+        self._trace_table = None
 
-    def iterate(self, plan: Plan, state: State, params: RunParams) -> Iterator[Checkpoint]:
-        root = _Scope(None, state.frame, {})
-        yield from self._node(plan.root, state, params, root)
-        state.frame = root.base
+    def iterate(self, plan: Plan, state: State, params: RunParams, trace=None, table=None) -> Iterator[Checkpoint]:
+        self._trace = trace
+        self._trace_table = table
+        try:
+            root = _Scope(None, state.frame, {})
+            yield from self._node(plan.root, state, params, root)
+            state.frame = root.base
+        finally:
+            self._trace = None
 
     def _node(self, r: Resolved, state: State, params: RunParams, scope: _Scope) -> Iterator[Checkpoint]:
         if self.skip and (passed := self.skip.get(r)) is not None:
@@ -100,7 +108,7 @@ class InterpretedRunner:
     def _call(self, call: Call, state: State, params: RunParams, scope: _Scope) -> None:
         node = call.node
         if node.kind == "frame":
-            return _frame(call, state, scope, params.bundle(call.id, scope.count(state.n)))
+            return _frame(call, state, scope, params.bundle(call.id, scope.count(state.n)), self._trace)
         m = scope.count(state.n)
         bundle = params.bundle(call.id, m)
         # Plain Python scalars, not numpy ones: `x / 0.0` must raise here as it does in a kernel.
@@ -145,6 +153,17 @@ class InterpretedRunner:
                                   else dtype_of(base_annotation(out.annotation)))
             state.write(v, array, scope.rows, valid)
             scope.names[v.name] = v
+        self._emit_rows(Kind.STEP, node.origin, scope, m, step=call.id + 1)
+
+    def _emit_rows(self, kind: Kind, origin, scope: _Scope, m: int, *, step: int = 0,
+                   value: int | float | None = None) -> None:
+        trace = self._trace
+        if trace is None:
+            return
+        rows = scope.rows
+        for r in range(m):
+            trace.emit(kind, origin, step=step, arm=scope.arm, iteration=scope.iteration,
+                       record=r if rows is None else int(rows[r]), value=value)
 
     def _branch(self, branch: Branch, state: State, params: RunParams, scope: _Scope) -> Iterator[Checkpoint]:
         cond = scope.child()
@@ -163,6 +182,7 @@ class InterpretedRunner:
                 continue
             inner = cond.child(keep)
             inner.arm = k
+            self._emit_rows(Kind.BRANCH_ARM, branch.node.origin, inner, len(inner.rows))
             yield from self._node(resolved, state, params, inner)
             taken.append((k, inner.rows))
         for merge in branch.merges:
@@ -182,6 +202,7 @@ class InterpretedRunner:
         # ponytail: rows still looping at max_iterations stop silently; raise or flag them if that hides bugs.
         for i in range(1, loop.node.max_iterations + 1):
             active.iteration = i
+            self._emit_rows(Kind.LOOP_ITERATION, loop.node.origin, active, active.count(state.n))
             cond = active.child()
             yield from self._node(loop.condition, state, params, cond)
             going, _ = state.read(loop.condition.writes[0], active.rows)
@@ -386,7 +407,7 @@ def _array(values: tuple, dtype: np.dtype) -> tuple[np.ndarray, np.ndarray | Non
     return out, valid
 
 
-def _frame(call: Call, state: State, scope: _Scope, bundle: tuple) -> None:
+def _frame(call: Call, state: State, scope: _Scope, bundle: tuple, trace=None) -> None:
     node = call.node
     path = node.origin.path
     df = state.frame_of(scope.base, scope.names, scope.rows)
@@ -416,3 +437,9 @@ def _frame(call: Call, state: State, scope: _Scope, bundle: tuple) -> None:
         scope.base, scope.names = out, {}
     else:
         scope.names.update((v.name, v) for v in call.writes)
+    if trace is not None:
+        rows = scope.rows
+        m = len(rows) if rows is not None else state.n
+        for r in range(m):
+            trace.emit(Kind.FRAME, node.origin, step=call.id + 1,
+                       record=r if rows is None else int(rows[r]))
