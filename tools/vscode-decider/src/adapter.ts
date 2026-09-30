@@ -3,7 +3,7 @@ import { Breakpoint, Event, Handles, InitializedEvent, LoggingDebugSession, Outp
 import type { DebugProtocol } from "@vscode/debugprotocol";
 import { Bridge, freePort } from "./bridge";
 import { kindLabel, lastSegment, formatValue, previewOf, readEvents, setFields, walk } from "@decider/ui";
-import type { Checkpoint, ColumnSummary, Controls, DescribeResult, Hit, IRNodeJson, Lineage, RecordKey, RunStatus, Status, Visits } from "@decider/ui";
+import type { Checkpoint, ColumnSummary, Controls, DescribeResult, Hit, IRNodeJson, Lineage, RecordKey, RunStatus, Status, TraceStatus, Visits } from "@decider/ui";
 import { nodeAtLine } from "./sourceMap";
 import { optionsFromEnv, type AdapterOptions, type LaunchArgs } from "./launchArgs";
 
@@ -36,6 +36,7 @@ export class DeciderDebugSession extends LoggingDebugSession {
   private edits: Record<string, "delete" | "replace"> = {};
   private record: number | null = null;
   private hit: Hit | null = null;
+  private trace?: TraceStatus;
   private handles = new Handles<VarRef>();
   private frameIds = new Map<number, string>();
   private stateCache?: Promise<{ columns: ColumnSummary[]; key: RecordKey }>;
@@ -117,6 +118,8 @@ export class DeciderDebugSession extends LoggingDebugSession {
       pipeline: a.pipeline,
       data: a.data ?? null,
       params: a.params ?? null,
+      overrides: a.overrides ?? null,
+      row: a.record ?? null,
       breakpoints: this.desiredBreakpoints(),
       forces: a.controls?.forces ?? [],
       watches: a.controls?.watches ?? [],
@@ -189,6 +192,7 @@ export class DeciderDebugSession extends LoggingDebugSession {
     this.current = status.current;
     this.finished = status.finished;
     this.hit = status.hit ?? null;
+    this.trace = status.trace;
     if (this.hit) this.sendEvent(new OutputEvent(`decider: paused on ${this.hit.text}\n`, "console"));
     this.refresh();
     if (!stop) return;
@@ -202,7 +206,7 @@ export class DeciderDebugSession extends LoggingDebugSession {
   private refresh() {
     this.stateCache = undefined;
     this.handles.reset();
-    const body: RunStatus = { current: this.current, finished: this.finished, finishedPaths: this.finishedPaths, visits: this.visits, record: this.record, edits: this.edits, hit: this.hit };
+    const body: RunStatus = { current: this.current, finished: this.finished, finishedPaths: this.finishedPaths, visits: this.visits, record: this.record, edits: this.edits, hit: this.hit, trace: this.trace };
     this.sendEvent(new Event("decider.status", body));
   }
 
@@ -450,6 +454,9 @@ export class DeciderDebugSession extends LoggingDebugSession {
         }
         case "decider.changes":
           response.body = await this.bridge!.request("changes", { name: args.name, row: this.record });
+          break;
+        case "decider.draft":
+          response.body = await this.bridge!.request("draft");
           break;
         case "decider.rerun":
           this.sendResponse(response);

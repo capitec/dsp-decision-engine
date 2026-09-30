@@ -11,6 +11,8 @@ export interface LaunchArgs extends DebugProtocol.LaunchRequestArguments {
   pipeline?: string;
   data?: unknown;
   params?: unknown;
+  /** Input values to change on the run's records, as a saved What-If scenario declares them. */
+  overrides?: Record<string, unknown>;
   /** Show this record's values instead of batch previews. */
   record?: number;
   stopOnEntry?: boolean;

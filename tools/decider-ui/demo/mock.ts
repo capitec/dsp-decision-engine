@@ -1,4 +1,4 @@
-import { callNodes, walk, type CallNodeJson, type DescribeResult, type GroupNodeJson, type IRNodeJson } from "../src/model/protocol";
+import { callNodes, walk, type CallNodeJson, type ColumnSummary, type DescribeResult, type GroupNodeJson, type IRNodeJson, type RunStatus } from "../src/model/protocol";
 
 // Representative describe payloads for the standalone render harness: a small flow with every
 // node kind, and a large nested flow that starts folded.
@@ -79,4 +79,30 @@ export function largeFlow(): DescribeResult {
   };
   const ir = seq("root", [make(depth, "root/0"), make(depth, "root/1"), make(depth, "root/2")]);
   return describeOf("pipeline", ir, [{ name: "pipeline", line: 1, kind: "build", status: "pipeline" }]);
+}
+
+/** A paused run over `smallFlow`, with breakpoints and state, to audit the debug states. */
+export function pausedRun(): { status: RunStatus; columns: ColumnSummary[] } {
+  const col = (name: string, preview: unknown[], value: unknown, producer = "input", extra: Partial<ColumnSummary> = {}): ColumnSummary => ({
+    name, dtype: "Float64", rows: 2, nulls: 0, preview, value, producer, versions: 1, ...extra,
+  });
+  const columns = [
+    col("client_id", [1, 2], 1, "input", { dtype: "Int64" }),
+    col("net_income", [9000, 7200], 9000),
+    col("expenses", [4000, 3600], 4000),
+    col("disposable_income", [5000, 3600], 5000, "affordability/disposable_income"),
+    col("ratio", [0.25, 0.32], 0.25, "affordability/ratio"),
+    col("term_cap", [60, 48], 60, "term/cap_by_income", { writtenBy: "term/cap_by_income", changedBy: "term/cap_by_income" }),
+    col("offer", [150000, 120000], 150000, "sizing/offer", { writtenBy: "override@term/cap_by_income", changedBy: "override@term/cap_by_income" }),
+  ];
+  const status: RunStatus = {
+    current: { path: "risk_tree", when: "after" },
+    finished: false,
+    finishedPaths: ["join_bureau", "affordability/disposable_income", "affordability/ratio", "affordability/affordable", "banding", "term/term_cap", "term/cap_by_income", "sizing/offer", "risk_tree"],
+    visits: { risk_tree: { "bureau_score < 680": 1, "ratio >= 3": 1, "bureau_score >= 680": 1 } },
+    record: null,
+    hit: { watch: 0, text: "risk_tree#bureau_score < 680", path: "risk_tree" },
+    trace: { available: false, reason: "trace capture is off; showing live state" },
+  };
+  return { status, columns };
 }
