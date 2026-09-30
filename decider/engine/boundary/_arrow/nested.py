@@ -51,26 +51,6 @@ def _plan(name: str) -> FramePlan:
     return FramePlan([], (name,))
 
 
-class Exploded:
-    """One `list<struct<...>>` column's flat field arrays, per-field validity and per-row bounds.
-
-    `fields[k]` is field `k`'s values for every item; row `i` owns
-    `fields[k][starts[i]:stops[i]]`. Unlike `Nested`, a null field keeps its
-    mask in `validity[k]` rather than being filled, so `each`'s scatter can
-    hand the mask to the child step's own null policy.
-    """
-
-    __slots__ = ("fields", "validity", "starts", "stops", "view")
-
-    def __init__(self, fields: list[np.ndarray], validity: list[np.ndarray | None],
-                 starts: list[int], stops: list[int], view: FrameView):
-        self.fields = fields
-        self.validity = validity
-        self.starts = starts
-        self.stops = stops
-        self.view = view
-
-
 def _struct_fields(series: pl.Series) -> dict[str, int] | None:
     # polars keeps the struct's field order on export, so the declared names map to child indices.
     dtype = series.dtype
@@ -137,82 +117,6 @@ def _read(view, name, schema, dtypes, optional, index) -> Nested | None:
         # A null list is a row with no items, so it reads nothing rather than its neighbour's items.
         stops = np.where(_validity(top, top_offset, n, view), stops, starts).tolist()
     return Nested(fields, starts, stops, view)
-
-
-def read_exploded(series: pl.Series, schema, dtypes) -> Exploded | None:
-    """`series` as flat field arrays plus per-field validity, or `None` when not readable.
-
-    Only float/int/bool fields (their `dtypes` come from the caller); a `str`
-    field, a field polars can't export, or a struct whose fields don't exactly
-    match `schema` returns `None` so the caller falls back to Python.
-    """
-    index = _struct_fields(series)
-    if index is None or len(index) != len(schema) or any(name not in index for name, _ in schema):
-        return None
-    view = FrameView(_plan(series.name))
-    try:
-        view.bind(series.to_frame(series.name))
-    except ArrowImportError:
-        return None
-    try:
-        return _read_exploded(view, series.name, schema, dtypes, index)
-    except Exception:
-        view.release()
-        raise
-
-
-def _read_exploded(view, name, schema, dtypes, index) -> Exploded | None:
-    top = view.child_view(name)
-    offset_dtype = _OFFSET_DTYPE.get(lib.sm_view_storage_type(top))
-    struct = lib.sm_view_child(top, 0)
-    if offset_dtype is None or not struct or lib.sm_view_storage_type(struct) != _STRUCT:
-        view.release()
-        return None
-    n, top_offset = lib.sm_view_length(top), lib.sm_view_offset(top)
-    offsets = _buffer(top, 1, top_offset, n + 1, offset_dtype, view)
-    base = int(offsets[0]) if n else 0
-    starts, stops = (offsets[:-1] - base).tolist(), (offsets[1:] - base).tolist()
-    count = stops[-1] if stops else 0
-    if count and lib.sm_view_null_count(struct):
-        valid = _validity(struct, lib.sm_view_offset(struct) + base, count, view)
-        if not valid.all():
-            view.release()
-            return None
-    fields, validity = [], []
-    for (field, _), dtype in zip(schema, dtypes):
-        x = _field_exploded(lib.sm_view_child(struct, index[field]), dtype, base, count, view)
-        if x is None:
-            view.release()
-            return None
-        values, valid = x
-        fields.append(values)
-        validity.append(valid)
-    if lib.sm_view_null_count(top):
-        stops = np.where(_validity(top, top_offset, n, view), stops, starts).tolist()
-    return Exploded(fields, validity, starts, stops, view)
-
-
-def _field_exploded(child, dtype: np.dtype, base: int, count: int,
-                    view) -> tuple[np.ndarray, np.ndarray | None] | None:
-    if not child:
-        return None
-    storage = lib.sm_view_storage_type(child)
-    if storage not in _FIELD_DTYPE:
-        return None
-    at = lib.sm_view_offset(child) + base
-    valid = _validity(child, at, count, view) if lib.sm_view_null_count(child) else None
-    if valid is not None and valid.all():
-        valid = None
-    if storage == 2:
-        x = _bits(child, 1, at, count, view).astype(dtype)
-    else:
-        x = _buffer(child, 1, at, count, _FIELD_DTYPE[storage], view)
-        if x.dtype != dtype:
-            x = x.astype(dtype)
-    if valid is not None:
-        # A null holds 0, but a reader sees the mask, never this slot's value.
-        x = np.where(valid, x, 0)
-    return x, valid
 
 
 def _field(child, dtype: np.dtype, optional: bool, name: str, base: int, count: int, starts,

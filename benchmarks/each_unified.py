@@ -20,7 +20,7 @@ from decider import Engine, each, flow, loop, missing_as, param, step
 ARGS = [int(a) for a in sys.argv[1:]]
 ITEMS = ARGS[:4] if ARGS else [1, 5, 20, 100]
 RECORDS = ARGS[4:] if len(ARGS) > 4 else [1, 10, 50, 100, 500, 1000, 10000]
-OUT = Path(__file__).with_name("results_each_jit.csv")
+OUT = Path(__file__).with_name("results_each_unified.csv")
 
 
 def heavy(weight: float = missing_as(0.0), heavy_kg: float = param(20.0)) -> bool:
