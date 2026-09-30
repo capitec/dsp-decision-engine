@@ -9,12 +9,12 @@ import polars as pl
 
 from decider.engine.boundary.nulls import MissingInputError
 from decider.engine.compile import numpy_dtype
-from decider.engine.compile.rows import build_exploded, build_rows, rows_needs_no_fill
+from decider.engine.compile.rows import build_rows, rows_needs_no_fill
 from decider.engine.ir.decls import Input, NullPolicy, base_annotation
 from decider.engine.run.params import RunParams
-from decider.engine.run.representations import codes, despan, span_objects
+from decider.engine.run.representations import codes, span_objects
 from decider.engine.run.runners.base import Checkpoint
-from decider.engine.run.state import State, dtype_of, fill_missing, from_series
+from decider.engine.run.state import State, dtype_of, fill_missing, from_series, record_value
 from decider.types import Representation, is_raw, representation_for, columnar_item, item_schema, struct_item
 from decider.engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, ScatterGather, Sequence, Version
 
@@ -194,120 +194,45 @@ class InterpretedRunner:
     def _scatter_gather(self, sg: ScatterGather, state: State, params: RunParams, scope: _Scope) -> Iterator[Checkpoint]:
         node = sg.node
         lists, _ = state.read(sg.column, scope.rows)
-        schema = tuple((name, v.annotation) for name, v in sg.fields)
-        alive: list = []
-        exploded = build_exploded(lists, schema, state.source(sg.column) if scope.rows is None else None, alive)
-        if exploded is not None:
-            # Explode straight out of Arrow's buffers: flat per-field arrays, offsets and masks,
-            # so no item dict is read or built until the gather.
-            lo, hi, fields, valid = exploded
-            elem_state = State(state.plan, pl.DataFrame(), int(hi[-1]) if len(hi) else 0)
-            for (_, v), values, mask in zip(sg.fields, fields, valid):
-                elem_state.write(v, values, valid=mask)
-        else:
-            names = [name for name, _ in sg.fields]
-            offsets = [0]
-            flat = {name: [] for name in names}
-            for row_list in lists:
-                items = row_list or ()
-                for item in items:
-                    for name in names:
-                        flat[name].append(item[name])
-                offsets.append(offsets[-1] + len(items))
-            lo = np.asarray(offsets[:-1], np.int64)
-            hi = np.asarray(offsets[1:], np.int64)
-            fields = None
-            elem_state = State(state.plan, pl.DataFrame(), offsets[-1])
-            for (name, v) in sg.fields:
-                values, mask = _array(tuple(flat[name]), dtype_of(base_annotation(v.annotation)))
-                elem_state.write(v, values, valid=mask)
+        names = [name for name, _ in sg.fields]
+        # Explode the lists (one per row in scope) into flat per-field element arrays.
+        offsets = [0]
+        flat = {name: [] for name in names}
+        for row_list in lists:
+            items = row_list or ()
+            for item in items:
+                for name in names:
+                    flat[name].append(item[name])
+            offsets.append(offsets[-1] + len(items))
+        elem_state = State(state.plan, pl.DataFrame(), offsets[-1])
+        for (name, v) in sg.fields:
+            values, valid = _array(tuple(flat[name]), dtype_of(base_annotation(v.annotation)))
+            elem_state.write(v, values, valid=valid)
         elem_scope = _Scope(None, elem_state.frame, {name: v for name, v in sg.fields})
         # A child doc forwards the hoisted params from this node's path into the body's nested paths.
         child_params = _forward_params(params, node.origin.path, node.hoist) if node.params else params
         yield from self._node(sg.body, elem_state, child_params, elem_scope)
         # Gather the body's writes back into a list column, one enriched list per row.
-        new = []
-        for v in sg.new_fields:
-            values, mask = elem_state.read(v)
-            new.append((v.name, values.tolist(), mask, _struct_names(v.annotation), values.dtype == object))
+        gathered = {v.name: (elem_state.read(v)[0].tolist(), elem_state.read(v)[1]) for v in sg.new_fields}
         out_lists = np.empty(len(lists), object)
-        if fields is not None:
-            origin = [(f.tolist(), v) for f, v in zip(fields, valid)]
-            field_names = tuple(n for n, _ in sg.fields)
-            for r in range(len(lists)):
-                out = []
-                for j in range(int(lo[r]), int(hi[r])):
-                    item = {name: None if mask is not None and not mask[j] else values[j]
-                            for name, (values, mask) in zip(field_names, origin)}
-                    for name, values, mask, spec, span in new:
-                        item[name] = _gather(values, mask, j, spec, span)
-                    out.append(item)
-                out_lists[r] = out
-        else:
-            for r, row_list in enumerate(lists):
-                items = row_list or ()
-                j0 = int(lo[r])
-                out = []
-                for j, item in enumerate(items):
-                    enriched = dict(item)
-                    for name, values, mask, spec, span in new:
-                        enriched[name] = _gather(values, mask, j0 + j, spec, span)
-                    out.append(enriched)
-                out_lists[r] = out
+        for r, row_list in enumerate(lists):
+            items = row_list or ()
+            lo = offsets[r]
+            out = []
+            for j, item in enumerate(items):
+                enriched = dict(item)
+                for v in sg.new_fields:
+                    values, valid = gathered[v.name]
+                    k = lo + j
+                    enriched[v.name] = None if valid is not None and not valid[k] else record_value(values[k], v.annotation)
+                out.append(enriched)
+            out_lists[r] = out
         state.write(sg.out, out_lists, scope.rows)
-        # A batch's output column is built from the flat arrays in one polars call (a boundary
-        # conversion, not per item), so `state.column` hands it back zero-copy instead of rebuilding
-        # the list from Python dicts. Non-numeric fields keep the `_series` path.
-        if fields is not None:
-            series = _gather_series(sg, lo, hi, fields, valid, new, len(lists))
-            if series is not None:
-                state._sources[sg.out.id] = (out_lists, series)
         scope.names[sg.out.name] = sg.out
 
 
 def _ignore(locator: str) -> None:
     pass
-
-
-def _struct_names(annotation: Any) -> tuple[str, ...] | None:
-    item = struct_item(base_annotation(annotation))
-    return None if item is None else tuple(name for name, _ in item_schema(item))
-
-
-def _gather(values: list, mask: np.ndarray | None, k: int, spec: tuple[str, ...] | None, span: bool) -> Any:
-    if mask is not None and not mask[k]:
-        return None
-    x = values[k]
-    if spec is not None and x is not None and not isinstance(x, dict):
-        return dict(zip(spec, x))
-    return despan(x) if span else x
-
-
-def _flat_series(arr: np.ndarray, mask: np.ndarray | None) -> pl.Series:
-    s = pl.Series(arr)
-    if mask is not None and not mask.all():
-        s = s.scatter(np.flatnonzero(~mask), None)
-    return s
-
-
-def _gather_series(sg: ScatterGather, lo: np.ndarray, hi: np.ndarray, fields: tuple, valid: tuple,
-                   new: list, n_rows: int) -> pl.Series | None:
-    # The enriched list column, built from the flat arrays in one polars pass. None when a new
-    # field is not float/int/bool (a str or struct output), which `_series` materialises instead.
-    names = [name for name, _ in sg.fields]
-    cols = {name: _flat_series(f, v) for (name, _), f, v in zip(sg.fields, fields, valid)}
-    for name, values, mask, _spec, _span in new:
-        arr = np.asarray(values)
-        if arr.dtype == object:
-            return None
-        cols[name] = _flat_series(arr, mask)
-        names.append(name)
-    rid = np.repeat(np.arange(n_rows), hi - lo)
-    grouped = (pl.DataFrame({"rid": rid, **cols})
-               .select(pl.struct(names).alias("item"), "rid")
-               .group_by("rid", maintain_order=True).agg("item"))
-    return (pl.DataFrame({"rid": np.arange(n_rows)}).join(grouped, on="rid", how="left")
-            .with_columns(pl.col("item").fill_null([])).get_column("item"))
 
 
 def _forward_params(params: RunParams, node_path: str, hoist: tuple[tuple[str, str], ...]) -> RunParams:
