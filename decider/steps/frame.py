@@ -29,6 +29,7 @@ class FrameStep(Step):
     writes: tuple[tuple[str, str], ...] = ()
     annotations: tuple[tuple[str, Any], ...] = ()
     write_annotations: tuple[tuple[str, Any], ...] = ()
+    id: str | None = None
 
     def __call__(self, df: Any, **params: Any) -> Any:
         return call_with_defaults(self.fn, df, **params)
@@ -48,6 +49,7 @@ def frame_step(
     name: str | None = None,
     reads: list[str] | dict[str, Any] | None = None,
     writes: list[str] | dict[str, Any] | None = None,
+    id: str | None = None,
 ) -> Any:
     """Make a `DataFrame -> DataFrame` function a step, directly or as a decorator.
 
@@ -81,6 +83,7 @@ def frame_step(
             None if reads is None else tuple(reads), None if writes is None else tuple(writes),
             annotations=tuple(reads.items()) if isinstance(reads, dict) else (),
             write_annotations=tuple(writes.items()) if isinstance(writes, dict) else (),
+            id=id,
         )
 
     return make if fn is None else make(fn)
