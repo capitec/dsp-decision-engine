@@ -103,16 +103,26 @@ class Loop:
 
 @dataclass(frozen=True, slots=True, eq=False)
 class ScatterGather:
-    """ A way to represent a finite state machine as a node
+    """A `ScatterGatherNode` resolved: the list column read, the body, the item fields and the output.
+
+    `fields` pairs each item-field name the body reads with a synthetic version
+    (produced by the node), `new_fields` the versions the body writes to be
+    gathered, and `out` the version the node hands on.
     """
-    id: int
+
     node: ScatterGatherNode
+    column: Version
+    body: Resolved
+    fields: tuple[tuple[str, Version], ...]
+    new_fields: tuple[Version, ...]
+    out: Version
+    accumulate: Call | None
+
 
 @dataclass(frozen=True, slots=True, eq=False)
 class FiniteStateMachine:
-    """ A way to represent a finite state machine as a node
-    """
-    id: int
+    """A `FiniteStateMachineNode` resolved (not yet wired)."""
+
     node: FiniteStateMachineNode
 
 Resolved = Union[Call, Sequence, Branch, Loop, ScatterGather, FiniteStateMachine]
