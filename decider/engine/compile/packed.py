@@ -90,6 +90,18 @@ def _calls(r: Resolved) -> Iterator[Call]:
         yield from _calls(r.body)
 
 
+def _trace_factor(program: tuple) -> int:
+    # The most STEP events one row can emit: a loop's body and condition run up
+    # to its max_iterations times, nested loops multiply, a fork takes one arm.
+    f = 1
+    for x in program:
+        if isinstance(x, Repeat):
+            f *= x.max_iterations * _trace_factor(x.condition) * _trace_factor(x.body)
+        elif isinstance(x, Fork):
+            f *= max((_trace_factor(a) for a in x.arms), default=1)
+    return f
+
+
 def _pack(top: Branch | Loop, outputs: set[int], lazy: bool, python: Collection[int]) -> Packed:
     calls = list(_calls(top))
     conditional = calls[1:]
@@ -107,6 +119,7 @@ def _pack(top: Branch | Loop, outputs: set[int], lazy: bool, python: Collection[
     variables: list = []
     inner = {v.id for c in calls for v in c.writes}
     passthrough: list[Version] = []
+    refs: list[int] = []
 
     def var(v: Version) -> int:
         if base_annotation(v.annotation) not in TYPED and struct_item(v.annotation) is None:
@@ -125,6 +138,7 @@ def _pack(top: Branch | Loop, outputs: set[int], lazy: bool, python: Collection[
 
     def block(r: Resolved) -> list:
         if isinstance(r, Call):
+            refs.append(r.id + 1)
             return [lay.spec(r, *compiled[r.id])]
         if isinstance(r, Sequence):
             return [x for child in r.children for x in block(child)]
@@ -150,9 +164,14 @@ def _pack(top: Branch | Loop, outputs: set[int], lazy: bool, python: Collection[
         raise _Unpackable
     writes = tuple((v, variables[lay.produced[v.id][1]]) for v in kept)
     fn = fused_kernel(program, tuple(lay.produced[v.id] for v in kept), tuple(variables))
+    # A packed branch or loop runs a data-dependent subset of its calls per row,
+    # so its trace has no exact expected count; the capacity factor is the
+    # product of loop max_iterations (an upper bound the buffer is sized to).
+    trace = (program, tuple(lay.produced[v.id] for v in kept), tuple(variables), tuple(refs),
+             _trace_factor(program), False)
     # Only float, int and bool are merged or carried, so no output is a Literal code.
     packed = Packed(tuple(calls), fn, tuple(lay.reads), tuple(lay.optional), writes, (), tuple(lay.layout),
-                    (None,) * len(writes), tuple(lay.ragged))
+                    (None,) * len(writes), tuple(lay.ragged), (), trace)
     packed.inner = frozenset(inner)
     packed.passthrough = tuple(passthrough)
     required = {v.id: v for c in conditional for i, v in zip(c.node.inputs, c.reads)
