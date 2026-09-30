@@ -18,8 +18,12 @@ def test_the_bridge_lives_under_decider_not_a_separate_distribution():
 
 
 def test_the_old_tools_path_no_longer_exists():
+    # The tracked source is gone; untracked build leftovers (a stale `.venv`,
+    # `__pycache__`) may keep the directory itself on disk, so assert on source.
     repo = Path(__file__).resolve().parents[2]
-    assert not (repo / "tools" / "decider-bridge").exists()
+    old = repo / "tools" / "decider-bridge" / "decider_bridge"
+    assert not (old / "bridge.py").exists()
+    assert not (old / "__init__.py").exists()
 
 
 def test_the_bridge_exposes_the_transport_helpers_under_decider():
