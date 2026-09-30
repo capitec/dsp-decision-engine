@@ -18,6 +18,11 @@ from decider.engine.run.state import State, dtype_of, fill_missing, from_series,
 from decider.types import Representation, is_raw, representation_for, columnar_item, item_schema, struct_item
 from decider.engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, ScatterGather, Sequence, Version
 
+# Below this many exploded elements the polars explode+gather (about ten lazy collects, each with
+# Python/Rust round-trip overhead) costs more than the per-element Python loop it replaces.
+_SCATTER_ELEMENTS = 1024
+_PID = "__decider_scatter_pid__"
+
 
 class _Scope:
     """The rows a node runs on, the frame a frame step sees on them, and the names in sight."""
@@ -193,6 +198,12 @@ class InterpretedRunner:
 
     def _scatter_gather(self, sg: ScatterGather, state: State, params: RunParams, scope: _Scope) -> Iterator[Checkpoint]:
         node = sg.node
+        src = state.source(sg.column) if scope.rows is None else None
+        if (src is not None and len(src) > 1 and isinstance(src.dtype, pl.List)
+                and isinstance(src.dtype.inner, pl.Struct)
+                and (src.list.len().sum() or 0) >= _SCATTER_ELEMENTS):
+            yield from self._scatter_gather_vectorized(sg, state, params, scope, src)
+            return
         lists, _ = state.read(sg.column, scope.rows)
         names = [name for name, _ in sg.fields]
         # Explode the lists (one per row in scope) into flat per-field element arrays.
@@ -228,6 +239,40 @@ class InterpretedRunner:
                 out.append(enriched)
             out_lists[r] = out
         state.write(sg.out, out_lists, scope.rows)
+        scope.names[sg.out.name] = sg.out
+
+    def _scatter_gather_vectorized(self, sg: ScatterGather, state: State, params: RunParams,
+                                   scope: _Scope, src: pl.Series) -> Iterator[Checkpoint]:
+        node = sg.node
+        col = src.name
+        idx = src.to_frame().with_row_index(_PID)
+        exploded = (idx.filter(pl.col(col).list.len().fill_null(0) > 0)
+                    .explode(col).unnest(col))
+        elem_state = State(state.plan, pl.DataFrame(), exploded.height)
+        for (name, v) in sg.fields:
+            values, valid = from_series(exploded.get_column(name))
+            dtype = dtype_of(base_annotation(v.annotation))
+            if values.dtype != dtype:
+                values = values.astype(dtype)
+            elem_state.write(v, values, valid=valid)
+        elem_scope = _Scope(None, elem_state.frame, {name: v for name, v in sg.fields})
+        child_params = _forward_params(params, node.origin.path, node.hoist) if node.params else params
+        yield from self._node(sg.body, elem_state, child_params, elem_scope)
+        # Gather: one enriched struct per element, grouped back into a list per parent row.
+        result = exploded.with_columns([elem_state.column(v.name, v) for v in sg.new_fields])
+        struct = pl.struct([c for c in result.columns if c != _PID])
+        grouped = (result.select(_PID, struct.alias(col)).group_by(_PID, maintain_order=True)
+                   .agg(pl.col(col)))
+        joined = idx.select(_PID).join(grouped, on=_PID, how="left")
+        series = joined.get_column(col).fill_null([])
+        lists = series.to_list()
+        out_lists = np.empty(len(lists), object)
+        for i, row in enumerate(lists):
+            out_lists[i] = row
+        state.write(sg.out, out_lists, scope.rows)
+        # Keep the gathered Series too, so downstream reads (the output frame, a `Columnar[Item]`
+        # step) use its Arrow buffers instead of rebuilding them from the Python objects.
+        state._sources[sg.out.id] = (out_lists, series)
         scope.names[sg.out.name] = sg.out
 
 
