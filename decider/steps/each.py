@@ -36,6 +36,7 @@ class EachStep(Step):
     item: Step
     mode: EachMode
     output: str | None = None
+    id: str | None = None
 
     def to_ir(self, ctx: IRContext) -> ScatterGatherNode:
         child_ir = ctx.child(self.name).build(self.item)
@@ -64,7 +65,8 @@ def _hoist(child_ir: IRNode) -> tuple[tuple, tuple[tuple[str, str], ...]]:
 
 
 def each(column: str, item: Any, *, name: str | None = None,
-         execution_mode: EachMode = EachMode.PER_ROW, output: str | None = None) -> EachStep:
+         execution_mode: EachMode = EachMode.PER_ROW, output: str | None = None,
+         id: str | None = None) -> EachStep:
     """Run `item` on every element of the list column `column`, writing the enriched list back.
 
     `item` is a flow of ordinary steps reading the item's fields; its outputs
@@ -83,4 +85,4 @@ def each(column: str, item: Any, *, name: str | None = None,
 
         pipeline = flow(each("items", flow(heavy, name="item"), name="items"), name="order")
     """
-    return EachStep(column if name is None else name, column, as_step(item), execution_mode, output)
+    return EachStep(column if name is None else name, column, as_step(item), execution_mode, output, id=id)

@@ -32,6 +32,7 @@ class FunctionStep(Step):
     reads: tuple[tuple[str, str], ...] = ()
     writes: tuple[tuple[str, str], ...] = ()
     bound: tuple[tuple[str, Any], ...] = ()
+    id: str | None = None
 
     def __post_init__(self) -> None:
         Step.__post_init__(self)
@@ -73,6 +74,7 @@ def step(
     output: str | None = None,
     outputs: tuple[str, ...] | None = None,
     nogil: bool = False,
+    id: str | None = None,
 ) -> Any:
     """Make a function a step, directly or as a decorator.
 
@@ -95,6 +97,8 @@ def step(
         outputs: several names it writes; the return annotation must be a
             `tuple[...]` of the same length.
         nogil: release the GIL in compiled code.
+        id: an optional opaque 12-hex durable id (`"0123abcdef45"`), carried in
+            the step's `Origin` alongside name/path/source.
 
     Example::
 
@@ -115,6 +119,6 @@ def step(
         # A lambda's __name__ is "<lambda>", never a useful column name.
         default = name if name is not None and fn.__name__ == "<lambda>" else fn.__name__
         names = (output,) if output is not None else tuple(outputs) if outputs is not None else (default,)
-        return FunctionStep(fn.__name__ if name is None else name, fn, names, nogil)
+        return FunctionStep(fn.__name__ if name is None else name, fn, names, nogil, id=id)
 
     return make if fn is None else make(fn)
