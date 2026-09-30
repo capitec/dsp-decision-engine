@@ -29,8 +29,47 @@ def test_find_pipelines_lists_a_top_level_build(tmp_path):
     pipeline = tmp_path / "pipeline.py"
     pipeline.write_text("from decider import flow\n\n\ndef label(score: float) -> str:\n    return str(score)\n\n\ndef build():\n    return flow(label, name='bands')\n")
     d = Bridge().describe(str(pipeline))
-    assert {"name": "build", "line": 8, "kind": "build"} in d["pipelines"]
+    assert {"name": "build", "line": 8, "kind": "build", "status": "pipeline"} in d["pipelines"]
     assert d["pipeline"] == "build"
+
+
+def test_find_pipelines_lists_a_zero_arg_factory_and_reports_its_size(tmp_path):
+    pipeline = tmp_path / "pipeline.py"
+    pipeline.write_text("from decider import flow\n\n\ndef label(score: float) -> str:\n    return str(score)\n\n\ndef make_pipeline():\n    return flow(label, name='bands')\n")
+    d = Bridge().describe(str(pipeline))
+    assert {"name": "make_pipeline", "line": 8, "kind": "factory", "status": "pipeline"} in d["pipelines"]
+    assert d["pipeline"] == "make_pipeline"
+    assert d["size"] == {"nodes": 2, "calls": 1}  # the flow group and its one label step
+
+
+def test_find_pipelines_reports_an_unassembled_step_and_a_needy_factory_as_invalid(tmp_path):
+    pipeline = tmp_path / "pipeline.py"
+    pipeline.write_text("from decider import flow, step\n\n\n"
+                        "@step(output='x')\n"
+                        "def lone(x: float) -> float:\n"
+                        "    return x\n\n\n"
+                        "@step(output='y')\n"
+                        "def assembled(y: float) -> float:\n"
+                        "    return y\n\n\n"
+                        "def make_pipeline(rate: float):\n"
+                        "    return flow(assembled, name='bands')\n\n\n"
+                        "pipeline = flow(assembled, name='real')\n")
+    d = Bridge().describe(str(pipeline))
+    statuses = {p["name"]: p for p in d["pipelines"]}
+    assert statuses["lone"]["status"] == "invalid" and "single step" in statuses["lone"]["reason"]
+    assert statuses["make_pipeline"]["status"] == "invalid" and "no arguments" in statuses["make_pipeline"]["reason"]
+    assert statuses["pipeline"]["status"] == "pipeline"
+    assert d["pipeline"] == "pipeline"
+
+
+def test_a_file_with_only_invalid_candidates_reports_why(tmp_path):
+    pipeline = tmp_path / "pipeline.py"
+    pipeline.write_text("from decider import flow, step\n\n\n"
+                        "@step(output='x')\n"
+                        "def lone(x: float) -> float:\n"
+                        "    return x\n")
+    with pytest.raises(ValueError, match="single step"):
+        Bridge().describe(str(pipeline))
 
 
 def test_a_build_with_a_configurable_step_runs_with_its_config_params_and_sample(tmp_path):

@@ -11,6 +11,8 @@ const listen = (on: (m: ToUI) => void) => {
   window.addEventListener("message", onMessage);
   return () => window.removeEventListener("message", onMessage);
 };
-const can = new Set<EditorMessage>(["reveal", "maximise", "openDiff", "debugStep", "run", "runTo", "step", "compareRevision"]);
+
+// Flow exploration only needs the host to open source; the debugger surfaces come later.
+const can = new Set<EditorMessage>(["reveal"]);
 
 createRoot(document.getElementById("root")!).render(<App send={(m) => vscode.postMessage(m)} listen={listen} can={can} />);
