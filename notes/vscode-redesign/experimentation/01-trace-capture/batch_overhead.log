@@ -1,0 +1,5 @@
+batch no trace                574,341,873 rows/s   score p50 76.7 us
+batch +1 int64 trace col      304,685,149 rows/s   score p50 44.3 us
+sample rate 1.0, uncapped: 1,000,000 rows x 10 steps -> 80 MB kept, 0 events dropped (reported in manifest)
+sample rate 0.01, uncapped: 1,000,000 rows x 10 steps -> 1 MB kept, 0 events dropped (reported in manifest)
+sample rate 1.0, cap 10,000,000: 1,000,000 rows x 10 steps -> 80 MB kept, 0 events dropped (reported in manifest)

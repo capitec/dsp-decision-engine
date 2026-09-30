@@ -1,0 +1,6 @@
+GIL released (same kernel, nogil off vs on, 4 threads):
+  gil: 1 thread 18.7 ms vs 4 threads 107.3 ms (5.73x for 4x the work)
+  nogil: 1 thread 18.7 ms vs 4 threads 37.5 ms (2.00x for 4x the work)
+per-invocation buffer: 8 concurrent writers, 12,800,000 events all conserved, per-record order intact
+shared-array, disjoint-region: both writers verified; ownership = per-invocation region, never the same region for two threads
+frame scope: [('before', 'history'), ('before', 'history/join_history'), ('after', 'history/join_history'), ('after', 'history')] -> one frame step = one before/after over all rows (its events are frame-scope, driver-emitted, not per-row kernel writes)
