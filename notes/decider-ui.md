@@ -10,8 +10,6 @@ next.
 ```
 tools/
   pnpm-workspace.yaml     decider-ui, vscode-decider, jupyterlab-decider
-  decider-bridge/         decider_bridge: the Python bridge both hosts drive (JSON-lines
-                          process for VS Code, a kernel comm for JupyterLab)
   decider-ui/
     src/model/            protocol.ts, compare.ts, sweep.ts, events.ts: bridge shapes, UI
                           messages, run comparison, scenario sweeps, folding session events.
@@ -19,7 +17,7 @@ tools/
     src/*.tsx, layout.ts  the components (App is the root), the graph layout
     src/style.css         every rule nested under .decider
     src/index.ts          exports the model and App
-    test/                 model and layout tests (they import decider_bridge and use
+    test/                 model and layout tests (they import decider.debug_bridge and use
                           vscode-decider's examples/)
   vscode-decider/
     src/                  extension host and debug adapter; imports the model from @decider/ui
@@ -27,6 +25,10 @@ tools/
     webview/theme.css     --decider-* from --vscode-*
   jupyterlab-decider/     the JupyterLab host: see notes/jupyterlab-decider.md
 ```
+
+The Python bridge both hosts drive (`decider.debug_bridge`, JSON-lines process
+for VS Code, a kernel comm for JupyterLab) now lives inside the `decider`
+package, not under `tools/`.
 
 `model/` is a folder rather than living next to the components because `compare.ts` and
 `Compare.tsx` would collide on a case-insensitive file system.

@@ -594,6 +594,150 @@ break on a tree node (`"risk#high"`) or table row (`"band#2"`); see
 (`Engine().bind(build())` or the handler), not by calling the functions: only
 that proves the pipeline wires, builds and serves.
 
+## Durable ids, tracing, checks, experiments and MCP
+
+These compose over the same pipeline. Each is opt-in or additive; none changes
+a pipeline's answers.
+
+### Durable ids
+
+`decider ids [PATH]` inserts an opaque `id="0123abcdef45"` into every step and
+named flow that lacks one, and changes no other byte. It is a deliberate,
+reviewable source edit: it refuses to run unless every affected file is
+git-tracked and the tree is clean, and it aborts (before writing) on a syntax
+error, malformed or duplicate id. The pure helper the command wraps is
+`add_ids`, which needs no repository:
+
+```python
+from decider.ids import add_ids
+
+text, changes = add_ids('from decider import flow, step\n\n@step\ndef a(x: float) -> float:\n    return x\n\np = flow(a, name="p")\n')
+assert len(changes) == 2  # the step and the flow each got an id
+```
+
+Ids are additive: with `id=None` (the default) name, path, `step_map` and
+execution are unchanged. A project that never runs the command works exactly as
+before — identity falls back to the derived `path`/`source`. Commit ids where a
+trace, comparison or experiment needs a reference that survives rename, extract
+or reorder.
+
+### Decision tracing
+
+A run captures compact decision evidence only when you pass a `TraceSink`
+(off by default). Each event resolves to a step's durable `Origin` with its
+branch-arm / loop-iteration context and record index; batch capture can be
+bounded with `max_events` or sampled with `sample_rate`, and loss is reported in
+`sink.status()`, never silent.
+
+```python
+import polars as pl
+from decider import Engine, flow, param
+from decider.engine.trace import Kind, TraceSink
+
+def ratio(income: float, debt: float) -> float:
+    return debt / income
+
+def approved(ratio: float, limit: float = param(0.4)) -> bool:
+    return ratio <= limit
+
+pipeline = flow(ratio, approved, name="credit")
+df = pl.DataFrame({"income": [1000.0], "debt": [200.0]})
+sink = TraceSink()
+Engine().bind(pipeline, mode="fused").run(df, trace=sink)
+assert [e.origin.path for e in sink.events() if e.kind is Kind.STEP] == ["credit/ratio", "credit/approved"]
+assert sink.status()["dropped"] == 0
+```
+
+`decider` emits evidence; it does not retain, redact or deliver it. Hand the
+events to an `Adapter` (`TraceSink(adapter)`) to transform, enqueue or export
+them — that adapter owns retention and privacy policy.
+
+### Checks
+
+`decider.check.run(pipeline)` runs the default suite — wall-clock reads,
+shared-state mutation, numeric risk, missing durable ids — and returns a
+structured `Report` a CI pipeline, notebook or editor can render.
+
+```python
+import polars as pl
+from decider import check, flow
+
+def ratio(income: float, debt: float) -> float:
+    return debt / income
+
+pipeline = flow(ratio, name="credit")
+report = check.run(pipeline)
+assert report.ok is True                     # warnings only; the client decides what blocks a release
+assert any("durable id" in f.message for f in report.findings)
+report.model_dump_json()                     # machine-readable, for CI
+```
+
+`decider` reports findings; it never fails a build. A custom check is any
+callable returning `Finding`s, passed in a `suites=` tuple.
+
+### Experiments
+
+One versioned `ExperimentDef` (the `experiments/<slug>/experiment.yaml` asset)
+with two facades — a YAML file and the `Experiment` builder — driving one
+`run_experiment`. Param-only scenarios run on the fused path; a scenario that
+overrides a value or a single record replays a session. See
+`notes/experiment-authoring.md` for the YAML shape.
+
+```python
+import polars as pl
+from decider import flow, param
+from decider.experiments import Experiment, RunStatus
+
+def ratio(income: float, debt: float) -> float:
+    return debt / income
+
+def approved(ratio: float, limit: float = param(0.4)) -> bool:
+    return ratio <= limit
+
+pipeline = flow(ratio, approved, name="credit")
+df = pl.DataFrame({"income": [1000.0, 500.0], "debt": [350.0, 400.0]})
+result = (Experiment("drift", pipeline, df)
+          .scenario("baseline")
+          .scenario("limit_0.3", params={"credit": {"approved": {"limit": 0.3}}})
+          .compare(outputs=("approved",))
+          .run())
+assert result.status is RunStatus.COMPLETED
+assert result.summary["first_divergence"]["scenario"] == "limit_0.3"
+```
+
+Nondeterminism is a first-class result (`NON_REPRODUCIBLE`), never silent; a
+partial or cancelled run never looks like a completed one. Results write to a
+caller-chosen directory; `decider` does not own their storage.
+
+### Data loading and execution scope
+
+`decider.data` loads Redshift-export JSON/CSV/Parquet, suggests a record key,
+and pre-flights a run before anything executes. A frame step must receive the
+whole frame, so a record-only scope over one is redirected, not silently
+shrunk.
+
+```python
+from decider import flow
+from decider.data import ExecutionScope, check_scope, load, preflight
+from decider.contract import describe
+
+def ratio(income: float, debt: float) -> float:
+    return debt / income
+
+pipeline = flow(ratio, name="credit")
+data = load(b'{"income": 1000.0, "debt": 200.0}\n{"income": 500.0, "debt": 400.0}\n', format="json")
+assert data.row_count == 2 and data.suggested_key is None
+assert preflight(pipeline, data.frame).ok
+assert check_scope(describe(pipeline), ExecutionScope.SELECTED_RECORD).redirected is False
+```
+
+### MCP
+
+`decider mcp` serves a FastMCP server over stdio for an agent: structural and
+summarised reads are always available; per-record values and trace events are
+opt-in (`decider mcp --raw`); running code and persisting are confirmation-gated.
+See `notes/vscode-redesign/mcp-guidance.md`.
+
 ## Common mistakes
 
 - Request fields declared as `param()`: they ignore the request. Inputs are plain arguments.
