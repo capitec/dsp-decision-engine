@@ -1,0 +1,5 @@
+single key: offsets r in [0..2] map to [('a',), ('b',), ('c',)]
+composite key: (tenant, client_id) disambiguates the repeated client_id 'a' -> 3 distinct refs
+duplicate key: row 1: duplicate key ('a',) already at row 0 -> rejected (a kernel row index alone would merge two records)
+missing key: ["row 1: missing key in ['client_id'] (null)"] -> driver assigns run-local row id (offsets[r] still names the row)
+frame-only event: RecordRef(keys=(), row=None) (an override or frame-step event; row is None, the per-run frame id is a buffer constant, not a per-event field)
