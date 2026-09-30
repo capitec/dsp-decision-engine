@@ -35,6 +35,9 @@ header {
   border-bottom: 1px solid var(--decider-border);
   flex-wrap: wrap;
   row-gap: 4px;
+  /* A stacking context, so the Discovery dropdown paints above the body panes below. */
+  position: relative;
+  z-index: 1;
 
   .pipeline {
     font-weight: 600;
@@ -249,6 +252,8 @@ header {
 
   button {
     padding: 2px 8px;
+    flex-shrink: 0;
+    white-space: nowrap;
   }
 }
 
