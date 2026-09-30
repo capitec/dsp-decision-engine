@@ -1,172 +1,236 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { kindLabel, type IRNodeJson, type RunStatus } from "./model/protocol";
-import { dataEdges, layout, type LaidNode } from "./layout";
+import { kindLabel, type CallNodeJson, type IRNodeJson } from "./model/protocol";
+import { dataEdges, fold, layout, type LaidNode, type Layout } from "./layout";
+import type { Selection } from "./Inspector";
 
-// Room on the right for data edges, which curve out past the nodes.
-const PAD = 140;
+const MIN_K = 0.1;
+const MAX_K = 4;
+const FIT_PAD = 40;
 
 interface Props {
   ir: IRNodeJson;
-  showData: boolean;
-  run: RunStatus;
-  selected?: string;
-  highlightColumn?: string;
-  lineage: Set<string>;
-  /** Per-step status from a comparison, to colour the graph. */
-  diff?: Map<string, string>;
-  /** The focused record's path through a tree step, shown on that step. */
-  treePath?: { path: string; visited: string[] } | null;
-  /** "auto" fits the panel's width without shrinking text below MIN_AUTO; a number is a fixed scale. */
-  zoom: number | "auto";
-  onSelect: (path: string) => void;
-  onOpen?: (path: string) => void;
-  /** Open a folded group, or fold an open one. */
+  open: (path: string) => boolean;
+  selected?: Selection;
+  onSelect: (s: Selection | undefined) => void;
   onToggle: (path: string) => void;
-  /** Height in pixels set by dragging the split under the graph. */
-  height?: number | null;
+  onReveal?: (path: string) => void;
+  nodes: CallNodeJson[];
 }
 
-// A step whose output many later steps read would bury the graph in arcs; past this, only its inputs are drawn.
-const MAX_OUT = 4;
-
-// Below this, node text gets smaller than the editor's; scroll instead.
-const MIN_AUTO = 0.9;
-
-export function Graph({ ir, showData, run, selected, highlightColumn, lineage, diff, treePath, zoom, onSelect, onOpen, onToggle, height }: Props) {
-  const laid = useMemo(() => layout(ir), [ir]);
-  const flows = useMemo(() => dataEdges(ir), [ir]);
+export function Graph({ ir, open, selected, onSelect, onToggle, onReveal, nodes }: Props) {
+  const shown = useMemo(() => fold(ir, open), [ir, open]);
+  const laid = useMemo(() => layout(shown), [shown]);
+  const flows = useMemo(() => dataEdges(shown), [shown]);
   const at = useMemo(() => new Map(laid.nodes.map((n) => [n.path, n])), [laid]);
-  // Data edges would tangle the layout, so they are drawn over it: all of them, or only the selection's.
-  const outgoing = flows.filter((f) => f.from === selected).length;
-  const shownFlows = flows.filter((f) => showData || f.to === selected || (f.from === selected && outgoing <= MAX_OUT) || f.column === highlightColumn);
+
   const box = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(0);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  const [view, setView] = useState({ x: FIT_PAD, y: FIT_PAD, k: 1 });
+  const fittedFor = useRef<string>();
+
   useEffect(() => {
     const el = box.current;
     if (!el) return;
-    const watch = new ResizeObserver(() => setWidth(el.clientWidth));
+    const watch = new ResizeObserver(() => setSize({ w: el.clientWidth, h: el.clientHeight }));
     watch.observe(el);
     return () => watch.disconnect();
   }, []);
-  // A new flow starts at its top.
-  // A block body: newer browsers return a promise from scroll calls, which React would take for a cleanup.
+
+  // Keep the selected node's screen position through a re-layout (fold/unfold, re-describe).
+  const prevLaid = useRef<Layout>();
+  const selectedPath = selected?.kind === "node" ? selected.path : undefined;
   useEffect(() => {
-    box.current?.scrollTo(0, 0);
-  }, [ir.path]);
-  const done = new Set(run.finishedPaths);
-  const touches = (n: IRNodeJson) =>
-    n.kind === "call" && !!highlightColumn && ((n.inputs ?? []).includes(highlightColumn) || (n.outputs ?? []).includes(highlightColumn));
-  const lines = (n: IRNodeJson): [string, string] => {
-    if (n.kind !== "call") return n.folded ? foldedLines(n.folded) : ["", ""];
-    if (treePath?.path === n.path && n.source.includes("DecisionTable")) return [`row ${Number(treePath.visited[treePath.visited.length - 1]) + 1} matched`, "for the focused record"];
-    if (treePath?.path === n.path) return [fit(treePath.visited.slice(1).join(" → ")), "path of the focused record"];
-    return [fit(`reads ${n.inputs === null ? "?" : n.inputs.join(", ") || "nothing"}`), fit(`→ ${n.outputs === null ? "?" : n.outputs.join(", ")}`)];
+    const old = prevLaid.current;
+    prevLaid.current = laid;
+    if (!old || !selectedPath) return;
+    const before = old.nodes.find((n) => n.path === selectedPath);
+    const after = laid.nodes.find((n) => n.path === selectedPath);
+    if (!before || !after) return;
+    const sx = (before.x + before.width / 2) * view.k + view.x;
+    const sy = (before.y + before.height / 2) * view.k + view.y;
+    setView((v) => ({ ...v, x: sx - (after.x + after.width / 2) * v.k, y: sy - (after.y + after.height / 2) * v.k }));
+  }, [laid, selectedPath]);
+
+  // Fit a flow once it lays out, when the container has a size; not on later size changes (that
+  // would fight a user's zoom/pan). Re-fits once per flow, keyed by the flow's identity.
+  useEffect(() => {
+    if (size.w === 0 || laid.width === 0) return;
+    if (fittedFor.current === ir.path) return;
+    fittedFor.current = ir.path;
+    const k = Math.max(MIN_K, Math.min(1, (size.w - FIT_PAD * 2) / laid.width, (size.h - FIT_PAD * 2) / laid.height));
+    setView({ k, x: (size.w - laid.width * k) / 2, y: (size.h - laid.height * k) / 2 });
+  }, [laid, size, ir.path]);
+
+  // The selected value's touch points, for highlighting.
+  const valueName = selected?.kind === "value" ? selected.name : undefined;
+  const shownFlows = flows.filter((f) =>
+    selected?.kind === "edge" && f.from === selected.from && f.to === selected.to
+      ? true
+      : selected?.kind === "node"
+        ? f.from === selected.path || f.to === selected.path
+        : selected?.kind === "value"
+          ? f.column === selected.name
+          : false,
+  );
+  const selectedEdge = selected?.kind === "edge" ? selected : undefined;
+  const touches = (n: IRNodeJson) => n.kind === "call" && valueName !== undefined && ((n.inputs ?? []).includes(valueName) || (n.outputs ?? []).includes(valueName));
+
+  // ---- gestures ------------------------------------------------------------
+  const zoomAt = (cx: number, cy: number, factor: number) =>
+    setView((v) => {
+      const k = clamp(v.k * factor);
+      const r = k / v.k;
+      return { k, x: cx - (cx - v.x) * r, y: cy - (cy - v.y) * r };
+    });
+
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = el.getBoundingClientRect();
+      zoomAt(e.clientX - rect.left, e.clientY - rect.top, e.deltaY < 0 ? 1.1 : 1 / 1.1);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+
+  const drag = useRef<{ x: number; y: number; ox: number; oy: number; moved: boolean } | null>(null);
+  const panStart = (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    drag.current = { x: e.clientX, y: e.clientY, ox: view.x, oy: view.y, moved: false };
+    (e.currentTarget as Element).setPointerCapture(e.pointerId);
+  };
+  const panMove = (e: React.PointerEvent) => {
+    const d = drag.current;
+    if (!d) return;
+    const dx = e.clientX - d.x;
+    const dy = e.clientY - d.y;
+    if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true;
+    setView((v) => ({ ...v, x: d.ox + dx, y: d.oy + dy }));
+  };
+  const panEnd = (e: React.PointerEvent) => {
+    const d = drag.current;
+    drag.current = null;
+    if (d && !d.moved) onSelect(undefined); // a plain click on empty canvas clears the selection
   };
 
-  // Keep the step the run is at, or the one just clicked, in the middle of the view.
-  useEffect(() => {
-    box.current?.querySelector(".node.current, .cluster.current")?.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
-  }, [run.current?.path, zoom]);
-  useEffect(() => {
-    // After the groups around it open and the layout settles.
-    const t = setTimeout(() => box.current?.querySelector(".node.selected")?.scrollIntoView({ block: "center", inline: "center" }), 80);
-    return () => clearTimeout(t);
-  }, [selected, ir]);
-
-  const pad = shownFlows.length ? PAD : 0;
-
-  const full = laid.width + pad;
-  const scale = zoom === "auto" ? Math.min(1, Math.max(MIN_AUTO, width ? (width - 4) / full : 1)) : zoom;
+  const fit = () => {
+    const k = Math.max(MIN_K, Math.min(1, (size.w - FIT_PAD * 2) / laid.width, (size.h - FIT_PAD * 2) / laid.height));
+    setView({ k, x: (size.w - laid.width * k) / 2, y: (size.h - laid.height * k) / 2 });
+  };
+  const fitSelection = () => {
+    const n = selectedPath && laid.nodes.find((x) => x.path === selectedPath);
+    if (!n) return;
+    setView({ k: 1, x: size.w / 2 - (n.x + n.width / 2), y: size.h / 2 - (n.y + n.height / 2) });
+  };
 
   return (
-    <div className="graph" ref={box} style={height ? { height, flex: "none" } : undefined}>
-      <svg viewBox={`0 0 ${full} ${laid.height}`} width={full * scale} height={laid.height * scale}>
+    <div className="graph" ref={box}>
+      <svg onPointerDown={panStart} onPointerMove={panMove} onPointerUp={panEnd} onPointerLeave={panEnd}>
         <defs>
           <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--decider-fg)" />
           </marker>
         </defs>
-        {laid.clusters.filter((c) => c.path !== ir.path).map((c) => (
-          <g key={c.path} className={`cluster ${c.kind} ${run.current?.path === c.path ? "current" : ""}`}>
-            <rect x={c.x} y={c.y} width={c.width} height={c.height} rx={6} />
-            <text x={c.x + 8} y={c.y + 15} className="fold" onClick={() => onToggle(c.path)}>
-              <title>Fold {c.label} into one box</title>⊟ {c.label} <tspan className="kind">{c.kind}</tspan>
-            </text>
-          </g>
-        ))}
-        {laid.edges.map((e) => {
-          const related = selected && (e.from === selected || e.to === selected);
-          const d = e.points.map((p, i) => `${i ? "L" : "M"}${p.x},${p.y}`).join(" ");
-          const mid = e.points[Math.floor(e.points.length / 2)];
-          return (
-            <g key={e.id} className={`edge ${e.kind} ${related ? "related" : ""}`}>
-              <path d={d} markerEnd="url(#arrow)" />
-              {e.label && <text x={mid.x} y={mid.y - 3} textAnchor="middle">{e.label}</text>}
+        <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
+          {laid.clusters.filter((c) => c.path !== ir.path).map((c) => (
+            <g key={c.path} className={`cluster ${c.kind}`}>
+              <rect x={c.x} y={c.y} width={c.width} height={c.height} rx={8} />
+              <text x={c.x + 10} y={c.y + 16} className="fold" onPointerDown={(e) => e.stopPropagation()} onClick={() => onToggle(c.path)}>
+                ⊟ {c.label} <tspan className="kind">{c.kind}</tspan>
+              </text>
             </g>
-          );
-        })}
-        {shownFlows.map((f, i) => {
-          const a = at.get(f.from);
-          const b = at.get(f.to);
-          if (!a || !b) return null;
-          const onColumn = f.column === highlightColumn;
-          return (
-            <g key={`f${i}`} className={`edge data ${onColumn ? "column" : ""} ${f.from === selected || f.to === selected ? "related" : ""}`}>
-              <path d={curve(a, b)} markerEnd="url(#arrow)" />
-              <text x={(a.x + b.x + a.width) / 2 + 4} y={(a.y + a.height + b.y) / 2}>{f.column}</text>
-            </g>
-          );
-        })}
-        {laid.nodes.map((n) => (
-          <g
-            key={n.path}
-            className={[
-              "node",
-              kindLabel(n.node),
-              n.node.kind !== "call" ? "folded" : "",
-              run.edits?.[n.path] ? `edited-${run.edits[n.path]}` : "",
-              n.node.kind !== "call" && run.current && n.node.folded?.includes(run.current.path) ? "current" : "",
-              n.path === run.current?.path ? `current ${run.current.when}` : "",
-              done.has(n.path) ? "done" : "",
-              n.path === selected ? "selected" : "",
-              touches(n.node) ? "touches" : "",
-              lineage.has(n.path) ? "lineage" : "",
-              diff ? `diff-${(diff.get(n.path) ?? "same").replace(" ", "-")}` : "",
-            ].join(" ")}
-            transform={`translate(${n.x},${n.y})`}
-            onClick={() => (n.node.kind === "call" ? onSelect(n.path) : onToggle(n.path))}
-            onDoubleClick={() => n.node.kind === "call" && onOpen?.(n.path)}
-          >
-            <title>
-              {n.node.kind === "call"
-                ? `${n.path} (${kindLabel(n.node)})${n.node.doc ? `\n${n.node.doc}` : ""}\n${(n.node.inputs ?? ["?"]).join(", ")} → ${(n.node.outputs ?? ["?"]).join(", ")}\nDouble-click to open the source`
-                : `${n.path}: ${n.node.folded?.length} steps. Click to open.`}
-            </title>
-            <rect width={n.width} height={n.height} rx={5} />
-            <text x={n.width / 2} y={19} textAnchor="middle" className="title">
-              {icon(n.node)}
-              {n.label}
-            </text>
-            <text x={n.width / 2} y={35} textAnchor="middle" className="sub">{lines(n.node)[0]}</text>
-            <text x={n.width / 2} y={50} textAnchor="middle" className="sub">{lines(n.node)[1]}</text>
-            {run.edits?.[n.path] && (
-              <text x={n.width - 6} y={13} textAnchor="end" className="edit-mark">{run.edits[n.path] === "delete" ? "✎ skipped" : "✎ edited"}</text>
-            )}
-            {done.has(n.path) && (
-              <text x={6} y={13} className="ran-mark"><title>ran</title>✓</text>
-            )}
-          </g>
-        ))}
+          ))}
+          {laid.edges.map((e) => (
+            <Edge key={e.id} e={e} selected={selectedEdge?.id === e.id} onPick={() => onSelect({ kind: "edge", id: e.id, from: e.from, to: e.to, label: e.label })} />
+          ))}
+          {shownFlows.map((f, i) => {
+            const a = at.get(f.from);
+            const b = at.get(f.to);
+            if (!a || !b) return null;
+            const id = `d${i}`;
+            const isSelected = selectedEdge?.id === id;
+            return (
+              <DataEdge
+                key={id}
+                a={a}
+                b={b}
+                column={f.column}
+                selected={isSelected}
+                onPick={() => onSelect({ kind: "edge", id, from: f.from, to: f.to, columns: [f.column] })}
+              />
+            );
+          })}
+          {laid.nodes.map((n) => {
+            const node = n.node;
+            const call = node.kind === "call" ? node : null;
+            return (
+              <g
+                key={n.path}
+                className={[
+                  "node",
+                  call ? kindLabel(call) : "folded",
+                  n.path === selectedPath ? "selected" : "",
+                  touches(node) ? "touches" : "",
+                ].join(" ")}
+                transform={`translate(${n.x},${n.y})`}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => (call ? onSelect({ kind: "node", path: n.path }) : onToggle(n.path))}
+                onDoubleClick={() => call && onReveal?.(n.path)}
+              >
+                <title>
+                  {call
+                    ? `${n.path} (${kindLabel(call)})${call.doc ? `\n${call.doc}` : ""}\n${(call.inputs ?? ["?"]).join(", ")} → ${(call.outputs ?? ["?"]).join(", ")}\nDouble-click to open the source`
+                    : `${n.path}: ${node.kind === "call" ? "" : node.folded?.length} steps. Click to open.`}
+                </title>
+                <rect width={n.width} height={n.height} rx={6} />
+                <text x={n.width / 2} y={20} textAnchor="middle" className="title">{icon(node)}{n.label}</text>
+                <text x={n.width / 2} y={37} textAnchor="middle" className="sub">{subLine(node)[0]}</text>
+                <text x={n.width / 2} y={51} textAnchor="middle" className="sub">{subLine(node)[1]}</text>
+              </g>
+            );
+          })}
+        </g>
       </svg>
+      <div className="graph-tools">
+        <button title="Zoom out" onClick={() => zoomAt(size.w / 2, size.h / 2, 1 / 1.25)}>−</button>
+        <button title="Fit the whole flow" onClick={fit}>fit</button>
+        <button title="Zoom in" onClick={() => zoomAt(size.w / 2, size.h / 2, 1.25)}>+</button>
+        {selectedPath && <button title="Fit the selected step" onClick={fitSelection}>focus</button>}
+      </div>
+      <div className="graph-hint">wheel to zoom · drag to pan · click a step or edge to inspect</div>
     </div>
   );
 
-  function foldedLines(paths: string[]): [string, string] {
-    const changed = diff ? paths.filter((p) => diff.get(p) === "changed" || diff.get(p) === "added").length : 0;
-    const ran = paths.filter((p) => done.has(p)).length;
-    const status = changed ? `${changed} changed` : ran ? `${ran} of ${paths.length} ran` : "";
-    return [`${paths.length} steps · click to open`, status];
+  function subLine(n: IRNodeJson): [string, string] {
+    if (n.kind !== "call") return n.folded ? [`${n.folded.length} steps`, "click to open"] : ["", ""];
+    return [truncate(`reads ${n.inputs === null ? "?" : n.inputs.join(", ") || "nothing"}`), truncate(`→ ${n.outputs === null ? "?" : n.outputs.join(", ")}`)];
   }
+}
+
+function Edge({ e, selected, onPick }: { e: Layout["edges"][number]; selected: boolean; onPick: () => void }) {
+  const d = e.points.map((p, i) => `${i ? "L" : "M"}${p.x},${p.y}`).join(" ");
+  const mid = e.points[Math.floor(e.points.length / 2)];
+  return (
+    <g className={`edge ${e.kind} ${selected ? "selected" : ""}`}>
+      <path d={d} markerEnd="url(#arrow)" />
+      <path d={d} className="hit" onPointerDown={(ev) => ev.stopPropagation()} onClick={onPick} />
+      {e.label && <text x={mid.x} y={mid.y - 4} textAnchor="middle">{e.label}</text>}
+    </g>
+  );
+}
+
+function DataEdge({ a, b, column, selected, onPick }: { a: LaidNode; b: LaidNode; column: string; selected: boolean; onPick: () => void }) {
+  const d = curve(a, b);
+  const mid = { x: (a.x + a.width + b.x + b.width) / 2, y: (a.y + a.height + b.y) / 2 };
+  return (
+    <g className={`edge data ${selected ? "selected" : ""}`}>
+      <path d={d} markerEnd="url(#arrow)" />
+      <path d={d} className="hit" onPointerDown={(ev) => ev.stopPropagation()} onClick={onPick} />
+      <text x={mid.x + 4} y={mid.y}>{column}</text>
+    </g>
+  );
 }
 
 /** A data edge: out of the right side of the writer, into the right side of the reader. */
@@ -180,6 +244,10 @@ function curve(a: LaidNode, b: LaidNode): string {
 const icon = (n: IRNodeJson) => (n.kind !== "call" ? "⊞ " : n.table ? "▦ " : n.callKind === "row" ? "◇ " : n.callKind === "frame" ? "⊞ " : "");
 
 /** Shortened to fit on a node; the node's tooltip has the whole text. */
-function fit(text: string): string {
+function truncate(text: string): string {
   return text.length > 38 ? `${text.slice(0, 37)}…` : text;
+}
+
+function clamp(k: number): number {
+  return Math.min(MAX_K, Math.max(MIN_K, k));
 }

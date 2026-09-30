@@ -62,14 +62,8 @@ export function dataEdges(ir: IRNodeJson): { from: string; to: string; column: s
   const edges: { from: string; to: string; column: string }[] = [];
   for (const node of callNodes(ir)) {
     for (const input of node.inputs ?? []) {
-      // ponytail: a backward scan is O(n) per input; index outputs by name if edges at 100k+ nodes matter.
-      for (let i = seen.length - 1; i >= 0; i--) {
-        const w = seen[i];
-        if ((w.outputs ?? []).includes(input) && !exclusive(arms.get(w.path)!, arms.get(node.path)!)) {
-          edges.push({ from: w.path, to: node.path, column: input });
-          break;
-        }
-      }
+      const writer = [...seen].reverse().find((w) => (w.outputs ?? []).includes(input) && !exclusive(arms.get(w.path)!, arms.get(node.path)!));
+      if (writer) edges.push({ from: writer.path, to: node.path, column: input });
     }
     seen.push(node);
   }
@@ -100,20 +94,6 @@ export function groupPaths(ir: IRNodeJson): Set<string> {
     if (n.kind !== "call" && n !== ir) out.add(n.path);
   });
   return out;
-}
-
-/** Every node that reads or writes `column`, in walk order. */
-export function touchPoints(ir: IRNodeJson, column: string): CallNodeJson[] {
-  return callNodes(ir).filter((n) => (n.inputs ?? []).includes(column) || (n.outputs ?? []).includes(column));
-}
-
-/** The node at `path`, or undefined. */
-export function findNode(ir: IRNodeJson, path: string): IRNodeJson | undefined {
-  let found: IRNodeJson | undefined;
-  walk(ir, (n) => {
-    if (n.path === path) found ??= n;
-  });
-  return found;
 }
 
 function firstLeaf(n: IRNodeJson): string {

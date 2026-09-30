@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import type { DescribeResult, FromUI, ToUI } from "@decider/ui";
 
-/** The flow panel: one React webview, fed the described flow and the selection from the host. */
+/** The graph view: one React webview panel, fed the IR and the session position. */
 export class GraphPanel {
   static current: GraphPanel | undefined;
   /** Messages sent while the panel is being opened. */
@@ -22,10 +22,13 @@ export class GraphPanel {
       GraphPanel.opening ??= (async () => {
         let column = vscode.ViewColumn.Beside;
         if (vscode.window.tabGroups.all.length === 1) {
+          // The code above and the flow below, both at the window's full width: side by side, neither the code's
+          // lines nor the flow's tables fit. Lay out the groups first and then open the panel in the second.
           await vscode.commands.executeCommand("vscode.setEditorLayout", { orientation: 1, groups: [{ size: 0.3 }, { size: 0.7 }] });
           column = vscode.ViewColumn.Two;
         }
         GraphPanel.current = new GraphPanel(ctx, onMessage, column);
+        // The flow first, then anything sent meanwhile: a describe resets the run state it would carry.
         GraphPanel.current.post({ type: "describe", describe });
         for (const m of GraphPanel.early.splice(0)) GraphPanel.current.post(m);
       })().finally(() => (GraphPanel.opening = undefined));
@@ -56,7 +59,22 @@ export class GraphPanel {
         for (const q of this.queue.splice(0)) w.postMessage(q);
       } else onMessage(m);
     });
+    // While debugging, the debugger opens a paused step's source in the active group. When that is
+    // the panel's group, the flow would vanish behind it: move the source to the first group instead.
+    this.panel.onDidChangeViewState((e) => (column = e.webviewPanel.viewColumn ?? column));
+    const keepInView = vscode.window.tabGroups.onDidChangeTabs(async (e) => {
+      if (column === vscode.ViewColumn.One || vscode.debug.activeDebugSession?.type !== "decider") return;
+      for (const tab of [...e.opened, ...e.changed]) {
+        if (!(tab.input instanceof vscode.TabInputText) || tab.group.viewColumn !== column || !tab.isActive || tab.isDirty) continue;
+        const uri = tab.input.uri;
+        const selection = vscode.window.visibleTextEditors.find((ed) => ed.document.uri.toString() === uri.toString() && ed.viewColumn === column)?.selection;
+        await vscode.window.tabGroups.close(tab, true);
+        await vscode.window.showTextDocument(uri, { viewColumn: vscode.ViewColumn.One, selection, preserveFocus: true });
+        this.panel.reveal(column, true);
+      }
+    });
     this.panel.onDidDispose(() => {
+      keepInView.dispose();
       GraphPanel.current = undefined;
     });
   }
