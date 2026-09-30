@@ -3,8 +3,9 @@
 **Depends on:** 01, 02  
 **Blocks:** 07, 10, 11, 12
 
-**Experiment gate:** `experimentation/01-trace-capture-spike.md` must report
-before the trace schema freezes.
+**Experiment gate:** `experimentation/01-trace-capture-findings.md` validates
+the in-kernel primitive. Its follow-up must report before trace schema,
+delivery, concurrency, or batch-performance guarantees freeze.
 
 ## Outcome
 
@@ -13,8 +14,12 @@ can capture efficiently and clients can export, transform, persist, or render.
 
 ## Work
 
-- Run `experimentation/01-trace-capture-spike.md` during tasks 01–03 and use
-  its results before freezing the event schema.
+- Apply the validated finding: fixed-width numeric capture in kernels, joined
+  to names/metadata in the driver; conservation before post-record adaptation;
+  and live-first delivery compatible with retained/exportable tracing.
+- Complete `experimentation/01-trace-capture-follow-up.md` before freezing
+  record identity mapping, concurrent ordering, event payloads, decode/delivery
+  semantics, or batch tracing policy.
 - Reconcile existing `Session.events` and tree/table `trace_output`/
   `path_output` with the new decision-evidence trace. Preserve cheap path
   columns for population aggregation and use event evidence for explanation.
@@ -32,6 +37,9 @@ can capture efficiently and clients can export, transform, persist, or render.
 - Add trace-point-conservation verification so optimisation cannot remove
   declared evidence without detection.
 - Provide a no-op capture path with negligible overhead when tracing is off.
+- Make batch trace capture opt-in and bounded. Define size limits, sampling or
+  aggregation behaviour, and reported loss/degradation rather than applying
+  the single-record overhead result to high-volume runs.
 - Define the post-record adapter seam. A default pass-through adapter must let
   a client transform, redact, enrich, enqueue, or export events outside JIT
   execution, potentially on another thread or process.
