@@ -6,6 +6,8 @@ import { Graph } from "./Graph";
 import { Inspector, type Runtime, type Selection } from "./Inspector";
 import { groupsOf } from "./Controls";
 import { Structure } from "./Structure";
+import { Experiments } from "./Experiments";
+import type { ExperimentResult, ScenarioResult } from "./model/experiment";
 
 // Flows up to this many steps start fully open; bigger ones start folded, a group at a time.
 const OPEN_ALL = 80;
@@ -40,6 +42,7 @@ function View({ send, listen, can }: AppProps) {
   const [keyCol, setKeyCol] = useState<RecordKey>(null);
   const [controls, setControls] = useState<Controls>({ forces: [], watches: [] });
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [experiment, setExperiment] = useState<ExperimentResult | null>(null);
 
   useEffect(() => {
     const stop = listen((m) => {
@@ -74,6 +77,9 @@ function View({ send, listen, can }: AppProps) {
             for (const p of ancestors(m.path)) next.add(p);
             return next;
           });
+          break;
+        case "experiment":
+          setExperiment(m.experiment);
           break;
       }
     });
@@ -117,6 +123,27 @@ function View({ send, listen, can }: AppProps) {
     });
 
   const runtime: Runtime = { run, columns, rows, keyCol, controls, groups, draft };
+
+  if (experiment) {
+    return (
+      <div className="app">
+        <header>
+          <strong className="pipeline">Experiments</strong>
+          <span className="size-badge">project-owned, reproducible runs</span>
+          <button className="link" style={{ marginLeft: "auto" }} onClick={() => setExperiment(null)}>back to flow</button>
+        </header>
+        <div className="body experiments-body">
+          <Experiments
+            result={experiment}
+            keyCol={keyCol}
+            onDebug={(scenario: ScenarioResult, row?: number) =>
+              send({ type: "debugScenario", params: scenario.params ?? {}, overrides: scenario.overrides ?? {}, row: row ?? scenario.row ?? null, label: scenario.name, forces: [] })
+            }
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="app">

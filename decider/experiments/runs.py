@@ -30,12 +30,16 @@ def steer(session, ir, forces):
 
 
 def collect(session, error):
-    """What every call of a run wrote, and the output if it finished."""
+    """What every call of a run wrote, the branch arms and tree paths taken, and the output if it finished."""
     state = session.state
     steps = {}
     for call in session.executable.plan.calls:
         written = {v.name: state.column(v.name, v).to_list() for v in call.writes if v.id in state.values}
         if written:
             steps[call.node.origin.path] = written
+    paths: dict[str, dict[str, int]] = {}
+    for e in session.events:
+        if e.kind == "node_visited":
+            paths.setdefault(e.origin.path, {})[e.origin.locator] = e.rows
     output = None if error else {c: s.to_list() for c, s in session.output().to_dict().items()}
-    return {"steps": steps, "output": output, "error": error}
+    return {"steps": steps, "paths": paths, "output": output, "error": error}
