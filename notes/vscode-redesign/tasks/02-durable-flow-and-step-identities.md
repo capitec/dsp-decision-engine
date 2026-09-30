@@ -3,6 +3,10 @@
 **Depends on:** 01  
 **Blocks:** 04, 05, 07, 08, 09, 10, 11
 
+**Experiment gate:** `experimentation/05-step-id-findings.md` establishes the
+candidate syntax; `experimentation/05-step-id-follow-up.md` must validate it
+against the real engine and a real source rewrite before the interface freezes.
+
 ## Outcome
 
 Every production pipeline flow and step has a stable identity suitable for trace
@@ -11,8 +15,10 @@ experiment assets, without materially reducing source readability.
 
 ## Work
 
-- Run `experimentation/05-step-id-source-syntax-spike.md` before selecting the
-  generated source syntax or implementing the generator.
+- Apply the validated finding: optional `id=` on constructors/decorators,
+  `secrets.token_hex(6)` opaque IDs, and JSON-config `id` fields. Retain the
+  original syntax spike and complete its follow-up integration proof before
+  implementing the generator.
 - Design the identity model: derived IDs for discovery and explicit committed
   flow/step IDs for durable references.
 - Choose the least noisy source syntax that fits the existing step declarations.
@@ -38,6 +44,7 @@ experiment assets, without materially reducing source readability.
 
 ## Done when
 
-- The generator is safe, deterministic, and produces readable code.
+- The generator is safe, produces readable code, and its actual rewrites are
+  validated against formatting, comments, source mapping, and a Git fixture.
 - Committed flow and step IDs survive the expected code evolution scenarios.
 - All downstream consumers can resolve the same ID to flow structure and source.
