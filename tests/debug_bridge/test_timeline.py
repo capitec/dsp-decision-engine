@@ -1,11 +1,9 @@
 import os
-import sys
 
 HERE = os.path.dirname(__file__)
-EXAMPLES = os.path.join(HERE, "..", "..", "vscode-decider", "examples")
+EXAMPLES = os.path.join(HERE, "..", "..", "tools", "vscode-decider", "examples")
 LOAN = os.path.join(EXAMPLES, "loan.py")
-sys.path.insert(0, os.path.join(HERE, ".."))
-from decider_bridge.bridge import Bridge  # noqa: E402
+from decider.debug_bridge.bridge import Bridge
 
 
 def finished(**kw):

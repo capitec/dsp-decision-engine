@@ -9,8 +9,7 @@ import sys
 import pytest
 
 HERE = os.path.dirname(__file__)
-sys.path.insert(0, os.path.join(HERE, ".."))
-from decider_bridge.bridge import Bridge  # noqa: E402
+from decider.debug_bridge.bridge import Bridge
 
 TABLE_DOC = {
     "type": "decision_table", "name": "bands",
@@ -109,7 +108,7 @@ def test_a_build_with_no_data_at_all_raises_a_clear_error(tmp_path):
         Bridge().trace(str(tmp_path / "pipeline.py"))
 
 
-EXAMPLES = os.path.join(HERE, "..", "..", "..", "example_projects")
+EXAMPLES = os.path.join(HERE, "..", "..", "example_projects")
 
 
 def test_describe_and_trace_the_affordability_and_credit_limit_example_projects():
