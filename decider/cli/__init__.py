@@ -51,6 +51,31 @@ def guide() -> None:
 
 
 @cli.command()
+@click.argument("path", required=False, default=".", type=click.Path(path_type=Path))
+@click.option("--fix", is_flag=True, help="On a duplicate id, assign a fresh id to the later copies instead of aborting.")
+@click.option("--check", is_flag=True, help="Report what would change without writing anything.")
+def ids(path: Path, fix: bool, check: bool) -> None:
+    """Add durable `id=` tokens to every step and named flow missing one.
+
+    \b
+    Rewrites pipeline source in place, inserting the minimal `id="0123abcdef45"`
+    fragment and changing no other byte. Refuses to run unless every affected
+    file is git-tracked and the working tree is clean, and only writes after the
+    whole tree parses and every id passes a repo-wide uniqueness scan.
+    """
+    from decider.ids import IdError, generate
+
+    try:
+        report = generate(path, fix=fix, check=check)
+    except IdError as e:
+        raise click.ClickException(f"{e}\n\nremediation: {e.remediation}") from e
+    verb = "would add" if check else "added"
+    click.echo(f"{verb} {len(report.changes)} id(s) in {report.files} file(s)")
+    for f, lineno, name, id_ in report.changes:
+        click.echo(f"  {f}:{lineno}  {name or '(anonymous)'}  ->  id={id_}")
+
+
+@cli.command()
 @click.argument("version", required=False)
 def build(version: str | None) -> None:
     """Stage config VERSION (default: the latest) exactly as `serve` would, then stop.
