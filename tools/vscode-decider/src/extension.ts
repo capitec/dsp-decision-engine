@@ -4,7 +4,7 @@ import { DeciderDebugSession } from "./adapter";
 import { analyse, firstLine, PipelineCodeLens } from "./analysis";
 import { listRefs, materialise, repoRoot } from "./git";
 import { GraphPanel } from "./graphPanel";
-import { compareTraces, editLabel, summariseSweep, walk, type CallNodeJson, type ColumnSummary, type Controls, type DescribeResult, type Draft, type FromUI, type IRNodeJson, type Lineage, type RecordKey, type RunStatus, type Scenario, type SweepResponse, type ToUI, type TraceResult, type ValueHistory } from "@decider/ui";
+import { compareTraces, editLabel, summariseSweep, walk, type CallNodeJson, type ColumnSummary, type Controls, type DescribeResult, type Draft, type ExperimentResult, type FromUI, type IRNodeJson, type Lineage, type RecordKey, type RunStatus, type Scenario, type SweepResponse, type ToUI, type TraceResult, type ValueHistory } from "@decider/ui";
 import { debugpyLibs, pythonCommand } from "./python";
 import { runComparison, type Side } from "./compareRuns";
 import { withBridge } from "./bridge";
@@ -90,6 +90,8 @@ export function activate(ctx: vscode.ExtensionContext) {
       if (!GraphPanel.current || (target && target.fsPath !== shown?.file)) await vscode.commands.executeCommand("decider.visualise", target);
       post({ type: "tab", tab: "params" });
     }),
+
+    vscode.commands.registerCommand("decider.experiment", runExperiment),
 
     vscode.commands.registerCommand("decider.focusRecord", async () => {
       const s = deciderSession();
@@ -243,7 +245,7 @@ async function onWebview(m: FromUI, describe: DescribeResult) {
       break;
     }
     case "debugScenario": {
-      if (!shown) return;
+      if (!shown) return void vscode.window.showInformationMessage("decider: visualise the pipeline first, then launch the scenario");
       const s = deciderSession();
       if (s) await vscode.debug.stopDebugging(s);
       // One-way and explicit: a saved scenario opens an equivalent, inspectable debug run for one record.
@@ -327,6 +329,26 @@ async function runSweep(list: Scenario[], fromHere: boolean) {
 
 /** The files of the latest revision comparison, for "view code diff". */
 let lastFiles: { a: string; b: string; label: string } | undefined;
+
+/** Run a project-owned `experiments/<slug>/experiment.yaml` headlessly and show its result. */
+async function runExperiment() {
+  const yamls = await vscode.workspace.findFiles("**/experiment.yaml", "**/{node_modules,.venv,.git}/**", 200);
+  if (!yamls.length) return vscode.window.showInformationMessage("decider: no experiment.yaml found (expected experiments/<slug>/experiment.yaml)");
+  const pick = await vscode.window.showQuickPick(
+    yamls.map((u) => ({ label: vscode.workspace.asRelativePath(u), uri: u })).sort((a, b) => a.label.localeCompare(b.label)),
+    { placeHolder: "Experiment to run", matchOnDescription: true },
+  );
+  if (!pick) return;
+  post({ type: "experiment", experiment: null });
+  try {
+    const result = await withBridge({ python: pythonCommand(), cwd: path.dirname(pick.uri.fsPath) }, (b) =>
+      b.request<ExperimentResult>("experiment", { yaml: pick.uri.fsPath }),
+    );
+    post({ type: "experiment", experiment: result });
+  } catch (e) {
+    void vscode.window.showErrorMessage(`decider: experiment failed: ${(e as Error).message}`);
+  }
+}
 
 /** "Run to" breakpoints: gone once the run pauses there or the session ends, like run to cursor. */
 let runToBreakpoints: vscode.FunctionBreakpoint[] = [];
