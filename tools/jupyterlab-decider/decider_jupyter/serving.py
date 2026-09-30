@@ -5,7 +5,7 @@ import json
 import os
 
 from comm import create_comm
-from decider_bridge.bridge import Bridge
+from decider.debug_bridge.bridge import Bridge
 
 TARGET = "decider"
 

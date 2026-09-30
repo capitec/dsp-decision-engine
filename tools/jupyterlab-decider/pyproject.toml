@@ -4,7 +4,7 @@ version = "0.0.1"
 description = "Visualise, run and step through decider pipelines in JupyterLab"
 requires-python = ">=3.10"
 license = "MIT"
-dependencies = ["decider", "decider-bridge", "ipykernel", "comm"]
+dependencies = ["decider", "ipykernel", "comm"]
 
 [dependency-groups]
 dev = ["jupyterlab>=4,<5", "pytest"]
@@ -22,7 +22,6 @@ packages = ["decider_jupyter"]
 
 [tool.uv.sources]
 decider = { path = "../..", editable = true }
-decider-bridge = { path = "../decider-bridge", editable = true }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
