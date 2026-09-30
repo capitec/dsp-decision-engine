@@ -6,11 +6,10 @@ import { callNodes } from "../src/model/protocol";
 import { findSteps } from "../src/FindStep";
 import { dataEdges, fold, layout, orderEdges } from "../src/layout";
 
-// The example flows live with the VS Code extension; the Python bridge is decider-bridge.
+// The example flows live with the VS Code extension; the Python bridge is decider.debug_bridge.
 const ROOT = path.resolve(__dirname, "../../vscode-decider");
 const ir: DescribeResult["ir"] = JSON.parse(
-  execFileSync("uv", ["run", "python", "-c", `import sys; sys.path.insert(0, ${JSON.stringify(path.resolve(__dirname, "../../decider-bridge"))})
-from decider_bridge.bridge import Bridge; import json; print(json.dumps(Bridge().describe(${JSON.stringify(path.join(ROOT, "examples", "loan.py"))})["ir"]))`]).toString(),
+  execFileSync("uv", ["run", "python", "-c", `from decider.debug_bridge.bridge import Bridge; import json; print(json.dumps(Bridge().describe(${JSON.stringify(path.join(ROOT, "examples", "loan.py"))})["ir"]))`]).toString(),
 );
 
 describe("graph edges", () => {

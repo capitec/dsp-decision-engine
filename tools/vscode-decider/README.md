@@ -14,12 +14,11 @@ To distribute, `pnpm package` writes `decider-vscode-<version>.vsix`; install it
 `code --install-extension decider-vscode-0.0.1.vsix` (or *Extensions → … → Install from VSIX*).
 
 The `.vsix` does not carry the Python side. Before using an installed extension,
-install `decider` and `decider-bridge` into your project's environment (the
-bridge pulls in `decider` and `polars`):
+install `decider` into your project's environment (it now carries the bridge):
 
 ```sh
-uv pip install -e <repo>/tools/decider-bridge
-uv run python -c "import decider, decider_bridge"   # check
+uv pip install -e <repo>
+uv run python -c "import decider, decider.debug_bridge"   # check
 ```
 
 The extension runs the `decider.python` setting (e.g. `["uv", "run", "python"]` or
@@ -86,13 +85,13 @@ imports its own pipeline code but today's `decider` package.
 ## How it fits together
 
 ```
-extension host ──DAP──▶ adapter.ts ──JSON lines──▶ decider_bridge (tools/decider-bridge) ──▶ Session
+extension host ──DAP──▶ adapter.ts ──JSON lines──▶ decider.debug_bridge (in decider) ──▶ Session
       │                                    (fd 3)            └─ debugpy.listen (optional)
       └── webview (React + dagre, built by Vite)
 ```
 
 - The bridge drives the real `decider.engine.debug.Session` in interpreted mode.
-  Lineage (`decider_bridge/lineage.py`) walks the plan's versions: calls, branch merges
+  Lineage (`decider/engine/debug/lineage.py`) walks the plan's versions: calls, branch merges
   and loop carries.
 - Bridge replies use fd 3, so a `print()` inside a step goes to the Debug Console.
 - `examples/.vscode/settings.json` sets `decider.python` to `uv run python`, so the
@@ -101,8 +100,8 @@ extension host ──DAP──▶ adapter.ts ──JSON lines──▶ decider_b
 ## Tests
 
 ```sh
-uv pip install -e tools/decider-bridge          # once, from the repo root: decider + decider-bridge
-uv run pytest tools/decider-bridge -q          # bridge, lineage, traces on the real session
+uv pip install -e .                            # once, from the repo root: decider + the bridge
+uv run pytest tests/debug_bridge -q            # bridge, lineage, traces on the real session
 pnpm test                                      # adapter over stdio (DebugClient), layout, comparisons, git
 pnpm test:vscode                               # extension API inside VSCodium (mocha)
 pnpm test:e2e                                  # Playwright drives VSCodium's UI and takes screenshots

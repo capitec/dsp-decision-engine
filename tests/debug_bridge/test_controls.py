@@ -1,13 +1,11 @@
 import os
-import sys
 
 import pytest
 
 HERE = os.path.dirname(__file__)
-EXAMPLES = os.path.join(HERE, "..", "..", "vscode-decider", "examples")
+EXAMPLES = os.path.join(HERE, "..", "..", "tools", "vscode-decider", "examples")
 LOAN = os.path.join(EXAMPLES, "loan.py")
-sys.path.insert(0, os.path.join(HERE, ".."))
-from decider_bridge.bridge import Bridge  # noqa: E402
+from decider.debug_bridge.bridge import Bridge
 
 UNCAPPED = {"term": {"cap_by_income": {"cap": 100.0}}}  # so the sector caps decide term_cap
 

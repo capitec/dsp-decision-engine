@@ -1,14 +1,17 @@
-"""Fork a paused session: re-run from the same point with other params or values, many times.
+"""Fork and sweep a paused session: experiment primitives for comparing scenario runs.
 
-A running generator can't be copied, so a fork is a fresh session replayed to
-the same checkpoint, with the original session's overrides re-applied where
-they were made. Steps are pure, so the replay reaches the same state.
+These are the execution primitives an experiment runner builds on: replay a
+session to a checkpoint with other params or values, or run several scenarios
+next to the unchanged continuation. A running generator can't be copied, so a
+fork is a fresh session replayed to the same checkpoint, with the original
+session's overrides re-applied where they were made. Steps are pure, so the
+replay reaches the same state.
 """
 from __future__ import annotations
 
 from decider.engine import Engine
 from decider.engine.params import document_key
-from .runs import collect, steer
+from decider.experiments.runs import collect, steer
 
 
 def checkpoint_key(session):
