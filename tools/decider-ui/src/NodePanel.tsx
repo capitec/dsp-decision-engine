@@ -173,11 +173,6 @@ export function NodePanel({ node, nodes, onClose, run, columns, keyCol, column, 
         </div>
       )}
       <div className="muted" title={node.source}>{node.table ? "lookup table, matched once per record" : KIND[node.callKind]}{node.doc ? ` · ${node.doc}` : ""}</div>
-      {node.subflowSteps && node.subflowSteps.length > 0 && (
-        <div className="muted small">
-          runs {node.subflowSteps.length} step{node.subflowSteps.length === 1 ? "" : "s"}: {node.subflowSteps.map((s) => s.path.split("/").pop()).join(", ")}
-        </div>
-      )}
       {Object.keys(node.params).length > 0 && !table && (
         <div className="muted small mono">{Object.entries(node.params).map(([k, v]) => `${k} = ${formatValue(v, k)}`).join(" · ")}</div>
       )}

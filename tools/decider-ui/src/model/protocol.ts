@@ -31,8 +31,6 @@ export interface CallNodeJson extends IRNodeBase {
   formulaBefore?: string | null;
   /** A lookup table's match, e.g. `{type: "between", variable, lower_bound_column, upper_bound_column}`. */
   table?: Record<string, unknown> | null;
-  /** An `each(...)` step's child steps, flattened from the bridge's nested `children` tree. */
-  subflowSteps?: CallNodeJson[];
 }
 
 export interface GroupNodeJson extends IRNodeBase {
@@ -331,18 +329,6 @@ export function callNodes(node: IRNodeJson): CallNodeJson[] {
   walk(node, (n) => {
     if (n.kind === "call") out.push(n);
   });
-  return out;
-}
-
-/** The child flow's steps of an `each(...)` step, flattened from its nested `children` tree. */
-export function subflowStepsOf(node: IRNodeJson): CallNodeJson[] {
-  if (node.kind !== "call") return [];
-  const out: CallNodeJson[] = [];
-  const collect = (n: IRNodeJson) => {
-    if (n.kind === "call") out.push(n);
-    else for (const c of n.children) collect(c);
-  };
-  for (const c of (node as CallNodeJson & { children?: IRNodeJson[] }).children ?? []) collect(c);
   return out;
 }
 
