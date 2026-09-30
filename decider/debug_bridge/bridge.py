@@ -415,6 +415,9 @@ class Bridge:
         if cmd in ("describe", "start", "state", "column", "step_out", "trace", "sweep", "compare_edits", "set_controls", "changes", "go_to", "rerun", "draft"):
             result = getattr(self, cmd)(**args)
             return self.status() if cmd == "step_out" else result
+        if cmd == "experiment":
+            from .experiment import run_experiment
+            return run_experiment(self, **args)
         s = self.session
         if s is None:
             raise RuntimeError("no session: send start first")

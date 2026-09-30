@@ -15,7 +15,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 from decider.data import PreflightReport
-from decider.lifecycle import Job, ResultRef, RunManifest
+from decider.lifecycle import Job, ResultRef, Revision, RunManifest
 
 
 class RunStatus(str, Enum):
@@ -68,6 +68,10 @@ class ScenarioResult(BaseModel):
     divergences: tuple[Finding, ...] = ()
     output_ref: ResultRef | None = None
     row_count: int | None = None
+    revision: Revision | None = None
+    params: dict[str, Any] = {}
+    overrides: dict[str, Any] = {}
+    row: int | None = None
 
 
 class ExperimentResult(BaseModel):
@@ -82,7 +86,10 @@ class ExperimentResult(BaseModel):
 
     manifest: RunManifest
     status: RunStatus
+    name: str = ""
     nondeterministic: bool = False
     scenarios: tuple[ScenarioResult, ...] = ()
     preflight: PreflightReport | None = None
     job: Job | None = None
+    summary: dict[str, Any] = {}
+    sankey: dict[str, Any] | None = None
