@@ -4,7 +4,7 @@ import { DeciderDebugSession } from "./adapter";
 import { analyse, firstLine, PipelineCodeLens } from "./analysis";
 import { listRefs, materialise, repoRoot } from "./git";
 import { GraphPanel } from "./graphPanel";
-import { compareTraces, editLabel, summariseSweep, walk, type CallNodeJson, type ColumnSummary, type Controls, type DescribeResult, type FromUI, type IRNodeJson, type Lineage, type RecordKey, type RunStatus, type Scenario, type SweepResponse, type ToUI, type TraceResult, type ValueHistory } from "@decider/ui";
+import { compareTraces, editLabel, summariseSweep, walk, type CallNodeJson, type ColumnSummary, type Controls, type DescribeResult, type Draft, type FromUI, type IRNodeJson, type Lineage, type RecordKey, type RunStatus, type Scenario, type SweepResponse, type ToUI, type TraceResult, type ValueHistory } from "@decider/ui";
 import { debugpyLibs, pythonCommand } from "./python";
 import { runComparison, type Side } from "./compareRuns";
 import { withBridge } from "./bridge";
@@ -240,6 +240,32 @@ async function onWebview(m: FromUI, describe: DescribeResult) {
         { label: "current params", file: shown.file, pipeline: shown.pipeline },
         { label: m.label, file: shown.file, pipeline: shown.pipeline, params: m.params, overrides: m.overrides, row: m.row, forces: m.forces },
       );
+      break;
+    }
+    case "debugScenario": {
+      if (!shown) return;
+      const s = deciderSession();
+      if (s) await vscode.debug.stopDebugging(s);
+      // One-way and explicit: a saved scenario opens an equivalent, inspectable debug run for one record.
+      await vscode.debug.startDebugging(vscode.workspace.getWorkspaceFolder(vscode.Uri.file(shown.file)), {
+        type: "decider",
+        request: "launch",
+        name: `decider: ${m.label}`,
+        program: shown.file,
+        pipeline: shown.pipeline,
+        params: m.params,
+        overrides: m.overrides,
+        record: m.row,
+        controls: { forces: m.forces ?? [], watches: [] },
+        stopOnEntry: true,
+        internalConsoleOptions: "neverOpen",
+      });
+      break;
+    }
+    case "draft": {
+      const s = deciderSession();
+      if (!s) return post({ type: "draft", draft: null });
+      post({ type: "draft", draft: (await s.customRequest("decider.draft")) as Draft });
       break;
     }
     case "setControls":
