@@ -150,6 +150,23 @@ def _serve_sanic(host: str, port: int, workers: int) -> None:
 
 
 @cli.command()
+@click.option("--raw", is_flag=True, help="Enable the raw record/trace tools (decider.mcp.rawData).")
+def mcp(raw: bool) -> None:
+    """Serve the headless FastMCP server over stdio for an MCP host (e.g. an agent).
+
+    \b
+    Read tools (discovery, description, inspection, lineage, source context, run
+    summaries, check reports, experiment definitions/results) are always
+    available. Raw record/trace tools stay off unless `--raw` is set. Running a
+    flow or experiment, starting the debugger and generating ids are marked
+    destructive so the client confirms them before they run.
+    """
+    from decider.mcp import run_stdio
+
+    run_stdio(raw=raw)
+
+
+@cli.command()
 @click.argument("name")
 @click.argument("directory", required=False, type=click.Path(file_okay=False, path_type=Path))
 def template(name: str, directory: Path | None) -> None:

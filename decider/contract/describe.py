@@ -80,12 +80,12 @@ def describe(step: Any) -> FlowDescription:
     """
     ir = to_ir(step)
     plan = resolve(ir)
-    flow = FlowRef(name=ir.origin.path, source=ir.origin.source)
+    flow = FlowRef(flow_id=ir.origin.id, name=ir.origin.path, source=ir.origin.source)
     return FlowDescription(
         flow=flow,
-        nodes=tuple(_node_ref(n) for n in iter_nodes(ir)),
+        nodes=tuple(_node_ref(n, flow.flow_id) for n in iter_nodes(ir)),
         edges=tuple(_control_edges(ir)) + tuple(_data_edges(plan)),
-        value_slots=tuple(ValueSlotRef(name=v.name, path=v.producer) for v in plan.versions),
+        value_slots=tuple(ValueSlotRef(name=v.name, path=v.producer, flow_id=flow.flow_id) for v in plan.versions),
     )
 
 
@@ -134,9 +134,11 @@ def source_location(source: str) -> tuple[str, int] | None:
         return None
 
 
-def _node_ref(node: IRNode) -> StepRef:
+def _node_ref(node: IRNode, flow_id: str | None = None) -> StepRef:
     origin = node.origin
     return StepRef(
+        flow_id=flow_id,
+        step_id=origin.id,
         path=origin.path,
         name=origin.path.rpartition("/")[2],
         source=origin.source,
