@@ -60,6 +60,22 @@ header {
   min-height: 0;
 }
 
+/* ---- debug bar ------------------------------------------------------------- */
+.debug-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--decider-border);
+  background: var(--decider-widget-bg, transparent);
+  font-size: 0.92em;
+
+  .pause-icon { color: var(--decider-pause-icon, var(--decider-warning)); }
+
+  button { margin-left: auto; }
+  button + button { margin-left: 0; }
+}
+
 /* ---- structure tree --------------------------------------------------------- */
 .structure {
   width: 220px;
@@ -205,6 +221,17 @@ header {
     fill: var(--decider-widget-bg, transparent);
     stroke-dasharray: 6 3;
   }
+
+  &.paused rect {
+    stroke: var(--decider-pause-icon, var(--decider-warning));
+    stroke-width: 2.5;
+  }
+
+  &.ran rect { opacity: 0.82; }
+
+  .bp-dot { fill: var(--decider-breakpoint, var(--decider-red)); }
+  .pause-dot { fill: var(--decider-pause-icon, var(--decider-warning)); }
+  .ran-dot { fill: var(--decider-green); }
 }
 
 .edge path {
@@ -373,6 +400,34 @@ header {
     flex-direction: column;
     gap: 1px;
   }
+
+  .paused-here {
+    padding: 4px 7px;
+    border: 1px solid var(--decider-pause-icon, var(--decider-warning));
+    border-radius: 4px;
+    color: var(--decider-pause-icon, var(--decider-warning));
+    margin-bottom: 6px;
+    font-size: 0.9em;
+  }
+
+  .value-row {
+    display: flex;
+    gap: 6px;
+    align-items: baseline;
+    font-size: 0.88em;
+    padding: 1px 0;
+    overflow-wrap: anywhere;
+  }
+
+  .trace {
+    margin-top: 6px;
+
+    summary { cursor: pointer; font-size: 0.82em; color: var(--decider-link); }
+  }
+
+  .trace-off { margin-top: 6px; font-style: italic; }
+
+  .draft-group { margin-bottom: 6px; }
 }
 
 .node-link {
