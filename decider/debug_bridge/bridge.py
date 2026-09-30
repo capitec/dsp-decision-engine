@@ -41,6 +41,7 @@ from decider.steps import FunctionStep, Step
 
 from .loading import load_module
 from .runs import apply_overrides, debug_condition, tree_path
+from .draft import draft_changes
 from .timeline import Timeline
 
 
@@ -171,12 +172,12 @@ class Bridge:
         for c in n.get("children", ()):
             self._index(c, n["path"])
 
-    def start(self, file=None, pipeline=None, data=None, params=None, breakpoints=(), forces=(), watches=()):
+    def start(self, file=None, pipeline=None, data=None, params=None, breakpoints=(), forces=(), watches=(), overrides=None, row=None):
         self.describe(file, pipeline)
         self.doc = base_params(self.mod, params, self._build_params)
         self.original = self.step
         self.edits = []  # (path, step or None), so each edit can be compared on its own
-        self.session = Engine().bind(self.step).session(self._rows(data), self.doc)
+        self.session = Engine().bind(self.step).session(apply_overrides(self._rows(data), overrides, row), self.doc)
         self.controls = Controls(self.described["ir"])
         self.controls.set(forces, watches)
         self.controls.session = self.session
@@ -199,7 +200,10 @@ class Bridge:
                 "current": cur and {"path": cur.origin.path, "when": cur.when, **({"iteration": cur.iteration} if cur.iteration else {})},
                 "hit": self.controls.take_hit(),
                 # What has run since the start or the last rewind, for the graph's ticks.
-                "ran": sorted({p for p, w in self.timeline.log if w == "after"})}
+                "ran": sorted({p for p, w in self.timeline.log if w == "after"}),
+                # A debug session has no task-04 trace sink attached; the runtime views degrade to live state.
+                # ponytail: report the sink's status here once Session accepts one.
+                "trace": {"available": False, "reason": "trace capture is off; showing live state"}}
 
     def _checkpoint(self, cp):
         self.timeline.record(cp)
@@ -362,6 +366,10 @@ class Bridge:
         run = lambda step: self._run(step, self.session.frame, self.doc, self.controls.forces)  # noqa: E731
         return {"a": run(self.original), "b": run(edited)}
 
+    def draft(self):
+        """A paused session as an experiment draft: structured changes become declared overrides, the rest is dropped and listed."""
+        return draft_changes(self.history, self.controls.forces, self.edits)
+
     def _names(self):
         plan = self.session.executable.plan
         return sorted({v.name for v in plan.versions} | set(self.session.state.chains))
@@ -404,7 +412,7 @@ class Bridge:
     def handle(self, req):
         cmd = req["cmd"]
         args = {k: v for k, v in req.items() if k not in ("id", "cmd")}
-        if cmd in ("describe", "start", "state", "column", "step_out", "trace", "sweep", "compare_edits", "set_controls", "changes", "go_to", "rerun"):
+        if cmd in ("describe", "start", "state", "column", "step_out", "trace", "sweep", "compare_edits", "set_controls", "changes", "go_to", "rerun", "draft"):
             result = getattr(self, cmd)(**args)
             return self.status() if cmd == "step_out" else result
         s = self.session
