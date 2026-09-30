@@ -1,7 +1,11 @@
 # 11 — Add FastMCP integration
 
-**Depends on:** 01, 02, 04, 05, 06, 07, 08, 09, 10  
+**Depends on:** 01, 01a, 02, 04, 05, 06, 07, 08, 09, 10
+
 **Blocks:** 12
+
+**Experiment gate:** `experimentation/04-fastmcp-topology-spike.md` must report
+before server transport, lifecycle, or editor IPC freezes.
 
 ## Outcome
 
@@ -19,12 +23,18 @@ screen scraping or inventing workflow state.
   value inspection, lineage, source context, selected-record and trace data,
   run summaries, check reports, experiment definitions, and experiment results.
 - Provide visual-focus tools to highlight/reveal flow entities in VS Code.
+- Make the headless/editor-bound split explicit: core discovery, description,
+  checks, experiment definitions/results/runs, and headless debug are
+  headless; current editor selection, highlight, and reveal are editor-bound.
 - Define confirmation-gated tools for code execution, debugger startup,
   experiment runs, source generation, and any persistence.
 - Implement FastMCP transport, schemas, error reporting, capability discovery,
   and integration tests against VS Code selection/highlighting.
 - Ensure returned data preserves stable identities and makes static/runtime
   context explicit.
+- Provide a workspace/client capability setting that can disable raw
+  record/trace-returning tools while retaining structural metadata and safe
+  summaries.
 
 ## Important decisions
 

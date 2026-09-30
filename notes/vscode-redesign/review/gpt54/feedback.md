@@ -66,6 +66,75 @@ not quietly re-open them.
 7. **Clarify v1 scale limits** everywhere the notes currently imply more than
    local-resource-bounded execution.
 
+## Task-by-task edits I would make
+
+- **Task 01 — architecture contracts**
+  - Make Python models in `decider` the explicit source of truth.
+  - State that JSON Schema, TypeScript types, and MCP schemas derive from the
+    same models.
+  - Add format-version and migration-on-read requirements for persisted and
+    wire formats.
+  - Remove adapter-owned `selection` from the core contract.
+  - Split `Value` into `ValueSlot`, `ObservedValue`, and `TraceEvidence`.
+  - Reserve experiment-asset conventions here, but do not freeze the final
+    `experiment.yaml` shape in this task.
+
+- **New task — job lifecycle**
+  - Introduce a shared model for finite long-running work: job ID, status,
+    progress, cancellation, logs, and partial results.
+  - Cover data load, checks, revision comparison, experiment runs, and debug
+    session launch/setup.
+  - Explicitly exclude the live debug session itself from being modeled as a
+    job.
+
+- **New task — manifests, fingerprints, and staleness**
+  - Define run manifests with authored and resolved revisions, environment
+    capture, dataset fingerprint/schema, filtering/sampling, record selection,
+    and declared overrides.
+  - Define flow/source fingerprints and what becomes stale when source changes.
+  - State that saved reproducible runs require clean committed source and are
+    never silently retargeted.
+
+- **Task 04 — decision tracing**
+  - Keep the retained/exportable trace owned by the post-record adapter.
+  - Require first-class “trace unavailable / redacted / not retained” states
+    for VS Code and MCP consumers.
+  - Consider phasing runtime live evidence ahead of the full retained/export
+    story if delivery pressure appears.
+
+- **Task 06 — data loading and execution scopes**
+  - Add portable dataset references even though v1 remains local.
+  - Make the local-resource bound explicit.
+  - Encode record-identity rules: heuristic default, explicit/composite ID
+    support, and rejection of duplicate/missing IDs when durable record refs
+    are required.
+
+- **Task 09 — experiment module**
+  - Define the portable declarative core explicitly: flow/revision/input refs,
+    filtering/sampling, scenarios, declared overrides, built-in summaries, and
+    result-manifest metadata.
+  - Treat Python tests and custom graphs as optional project hooks outside the
+    portable contract.
+  - Own the least-noisy override-point syntax and validation rules here.
+  - Own the final `experiment.yaml` shape here.
+
+- **Task 10 — experiments and VS Code workflows**
+  - Add creation of the portable finding descriptor.
+  - Make scenario-to-debug reproduction use the run manifest directly.
+  - Ensure invalid, unavailable, or stale override points fail plainly.
+
+- **Task 11 — FastMCP**
+  - Replace “broad reads” with explicit capability classes for structural
+    metadata, safe summaries, and raw record/trace payloads.
+  - Require plain capability/error reporting when raw evidence is unavailable
+    because of adapter policy or environment limits.
+
+- **Task 12 — integration and documentation**
+  - Cover schema/type generation workflow and migration testing.
+  - Cover stale-state behaviour and manifest compatibility.
+  - Cover evidence-unavailable behaviour for traces/findings.
+  - Cover the local-scale promise so docs do not imply distributed execution.
+
 ## Remaining blindspots and ambiguities
 
 These are smaller than before, but still worth tightening:

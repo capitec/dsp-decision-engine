@@ -16,9 +16,13 @@ structured report format.
 - Implement a default suite of static diagnostics, beginning with wall-clock
   reads, non-pure/internal-state behaviour where detectable, and numeric
   overflow/underflow or floating-point-sensitivity risks.
+- Include absent committed durable IDs as a configurable diagnostic that
+  clients may promote to a CI failure.
 - Assess and, where justified, prototype whole-path checks and revision
   comparison: structural equivalence where proven and generated
   threshold/regime cases otherwise.
+- Extend existing equivalence and corpus machinery where it meets the check
+  contract; do not create a parallel version-comparison/test-generation path.
 - Create a supported client extension seam for custom checks without making
   custom checks a dependency of the default suite.
 - Expose reports in VS Code as navigation and explanation surfaces, and make
@@ -39,5 +43,6 @@ structured report format.
   a documented structured report.
 - The default suite identifies representative known defects with source-aware
   findings.
+- Persisted check findings carry capture-time flow/step/source metadata in
+  addition to durable references.
 - The same report is usable from CI and navigable in VS Code.
-

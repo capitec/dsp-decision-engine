@@ -1,6 +1,7 @@
 # 12 — Integrate, validate, and document the redesign
 
-**Depends on:** 03, 04, 05, 06, 07, 08, 10, 11  
+**Depends on:** 01a, 03, 04, 05, 06, 07, 08, 10, 11
+
 **Blocks:** none
 
 ## Outcome
@@ -25,6 +26,9 @@ coverage of the primary user stories.
 - Record supported limits and client-owned responsibilities: trace retention,
   privacy handling, CI release policy, results storage, and sampling for data
   beyond local capacity.
+- Document the extension's default session-memory-only policy for trace/input
+  values, raw-data MCP capability controls, and what is lost when converting
+  an ad-hoc paused-session fork into a reproducible scenario.
 
 ## Important decisions
 

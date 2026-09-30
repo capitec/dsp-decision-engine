@@ -1,6 +1,7 @@
 # 09 — Design and spike the experiment module
 
-**Depends on:** 01, 02, 04, 06  
+**Depends on:** 01, 01a, 02, 04, 06
+
 **Blocks:** 10, 11, 12
 
 ## Outcome
@@ -24,8 +25,22 @@ semantics.
 - Define the experiment asset model in `experiment.yaml`, including flow,
   revision, input reference, scenarios, requested summaries, built-in plots,
   and references to optional Python tests/graphs.
+- Define how override points are explicitly authored on supported step outputs,
+  validated against the static flow contract, surfaced to callers, and
+  suggested without treating automatic discovery as authorisation.
 - Define result ownership: `decider` writes to a caller-selected directory and
   exposes result metadata; it does not own remote storage or Git LFS policy.
+- Design the experiment layer of the versioned run manifest: input
+  fingerprinting, resolved revision, engine/Python environment, equality or
+  tolerance policy, scenario/job status, output references, captured
+  descriptive metadata, and portable finding descriptors.
+- Reuse the task 01a job model for progress, cancellation, timeout,
+  per-scenario failure isolation, partial manifests, and resume only when
+  immutable inputs/manifests match.
+- Define detected nondeterminism as a first-class non-reproducible result
+  state; controlled clocks/seeds remain deferred.
+- Add pre-flight compatibility and run-cost estimation to the experiment
+  definition/run workflow.
 
 ## Important decisions
 
@@ -40,3 +55,5 @@ semantics.
 - A recommended interface is selected with rejected alternatives and evidence.
 - A small prototype validates the hardest semantics and local execution path.
 - The YAML and Python/notebook interface tell one consistent story.
+- Non-reproducible and partially completed runs have unambiguous manifest
+  states rather than appearing equivalent to deterministic completed results.
