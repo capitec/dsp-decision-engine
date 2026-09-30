@@ -34,6 +34,7 @@ export class PipelineCodeLens implements vscode.CodeLensProvider {
     try {
       const d = await analyse(doc);
       return d.pipelines.flatMap((p) => {
+        if (p.status === "invalid") return [];
         const range = new vscode.Range(Math.max((p.line ?? 1) - 1, 0), 0, Math.max((p.line ?? 1) - 1, 0), 0);
         const args = [doc.uri, p.name];
         return [
