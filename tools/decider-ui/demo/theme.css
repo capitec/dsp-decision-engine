@@ -1,0 +1,164 @@
+/* Standalone defaults for the render harness: the same --decider-* tokens the webview reads
+   from VS Code, given concrete values for a plain browser (light, then dark). */
+:root {
+  color-scheme: light dark;
+  --decider-font: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --decider-font-size: 13px;
+  --decider-mono: "SF Mono", ui-monospace, "Cascadia Code", Menlo, Consolas, monospace;
+
+  --decider-fg: #1f2328;
+  --decider-bg: #ffffff;
+  --decider-muted: #57606a;
+  --decider-error: #d1242f;
+  --decider-link: #0969da;
+  --decider-border: #d0d7de;
+  --decider-focus: #0969da;
+  --decider-widget-bg: #f6f8fa;
+  --decider-widget-border: #d0d7de;
+  --decider-shadow: rgba(31, 35, 40, 0.2);
+  --decider-code-bg: #eff1f3;
+  --decider-button-bg: #0969da;
+  --decider-button-fg: #ffffff;
+  --decider-button2-bg: #f6f8fa;
+  --decider-button2-fg: #1f2328;
+  --decider-input-bg: #ffffff;
+  --decider-input-fg: #1f2328;
+  --decider-input-border: #d0d7de;
+  --decider-invalid-border: #d1242f;
+  --decider-dropdown-bg: #ffffff;
+  --decider-dropdown-fg: #1f2328;
+  --decider-dropdown-border: #d0d7de;
+  --decider-badge-bg: #0969da;
+  --decider-badge-fg: #ffffff;
+  --decider-hover-bg: #eaeef2;
+  --decider-selection-bg: #0969da;
+  --decider-selection-fg: #ffffff;
+  --decider-inactive-selection-bg: #d7dce0;
+  --decider-match-bg: #fff1b8;
+  --decider-inserted-bg: #dafbe1;
+  --decider-added-fg: #1a7f37;
+  --decider-deleted-fg: #d1242f;
+  --decider-passed: #1a7f37;
+  --decider-pause-icon: #9a6700;
+  --decider-breakpoint: #d1242f;
+  --decider-warning: #9a6700;
+  --decider-red: #d1242f;
+  --decider-orange: #bf8700;
+  --decider-yellow: #d4a72c;
+  --decider-green: #1a7f37;
+  --decider-blue: #0969da;
+  --decider-purple: #8250df;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --decider-fg: #e6edf3;
+    --decider-bg: #0d1117;
+    --decider-muted: #9198a1;
+    --decider-error: #ff7b72;
+    --decider-link: #58a6ff;
+    --decider-border: #30363d;
+    --decider-focus: #58a6ff;
+    --decider-widget-bg: #161b22;
+    --decider-widget-border: #30363d;
+    --decider-shadow: rgba(0, 0, 0, 0.6);
+    --decider-code-bg: #21262d;
+    --decider-button-bg: #1f6feb;
+    --decider-button-fg: #ffffff;
+    --decider-button2-bg: #21262d;
+    --decider-button2-fg: #e6edf3;
+    --decider-input-bg: #0d1117;
+    --decider-input-fg: #e6edf3;
+    --decider-input-border: #30363d;
+    --decider-invalid-border: #ff7b72;
+    --decider-dropdown-bg: #161b22;
+    --decider-dropdown-fg: #e6edf3;
+    --decider-dropdown-border: #30363d;
+    --decider-badge-bg: #1f6feb;
+    --decider-badge-fg: #ffffff;
+    --decider-hover-bg: #21262d;
+    --decider-selection-bg: #1f6feb;
+    --decider-selection-fg: #ffffff;
+    --decider-inactive-selection-bg: #30363d;
+    --decider-match-bg: #3a2d00;
+    --decider-inserted-bg: #12261e;
+    --decider-added-fg: #3fb950;
+    --decider-deleted-fg: #ff7b72;
+    --decider-passed: #3fb950;
+    --decider-pause-icon: #d29922;
+    --decider-breakpoint: #ff7b72;
+    --decider-warning: #d29922;
+    --decider-red: #ff7b72;
+    --decider-orange: #d29922;
+    --decider-yellow: #e3b341;
+    --decider-green: #3fb950;
+    --decider-blue: #58a6ff;
+    --decider-purple: #bc8cff;
+  }
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background: var(--decider-bg);
+}
+
+.demo {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.demo-bar {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--decider-border);
+  background: var(--decider-bg);
+  font-family: var(--decider-font);
+}
+
+.demo-bar button {
+  font: inherit;
+  padding: 4px 12px;
+  border: 1px solid var(--decider-border);
+  border-radius: 4px;
+  background: var(--decider-button2-bg);
+  color: var(--decider-button2-fg);
+  cursor: pointer;
+}
+
+.demo-bar button.active {
+  background: var(--decider-button-bg);
+  color: var(--decider-button-fg);
+  border-color: var(--decider-button-bg);
+}
+
+.demo-host {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+/* The UI sizes itself to its container; the demo gives it the space directly rather than via a
+   percentage-height chain. */
+.demo-host .decider {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+
+.demo-toast {
+  position: fixed;
+  bottom: 12px;
+  right: 12px;
+  padding: 6px 12px;
+  background: var(--decider-widget-bg);
+  border: 1px solid var(--decider-border);
+  border-radius: 5px;
+  font-family: var(--decider-font);
+  font-size: 13px;
+  color: var(--decider-fg);
+}

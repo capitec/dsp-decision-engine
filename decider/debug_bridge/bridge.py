@@ -114,10 +114,12 @@ class Bridge:
     def describe(self, file=None, pipeline=None):
         self.file, self.mod = file, self._load(file)
         pipelines = (find_pipelines(self.mod, file) if file
-                     else [{"name": pipeline, "line": None, "kind": type(getattr(self.mod, pipeline)).__name__}])
-        if not pipelines:
-            raise ValueError(f"{file}: no decider pipeline: define `def build()` or assign one at module level")
-        self.name = pipeline or pipelines[-1]["name"]
+                     else [{"name": pipeline, "line": None, "kind": type(getattr(self.mod, pipeline)).__name__, "status": "pipeline"}])
+        valid = [p for p in pipelines if p.get("status") != "invalid"]
+        if not valid:
+            reasons = "; ".join(dict.fromkeys(p.get("reason", "") for p in pipelines if p.get("reason")))
+            raise ValueError(f"{file}: no decider pipeline{' (' + reasons + ')' if reasons else ''}: define `def build()` or assign one at module level")
+        self.name = pipeline or valid[-1]["name"]
         target = getattr(self.mod, self.name)
         if isinstance(target, Step):
             self.step, self._build_params, self._build_sample = target, None, None
@@ -145,6 +147,7 @@ class Bridge:
         outcome += [m for c in tree.get("children", ()) if c["kind"] == "branch" for m in c.get("modifies", ())]
         self.described = {"pipelines": pipelines, "pipeline": self.name, "ir": tree, "params": params, "fields": field_metadata(self.ir),
                           "outcome": list(dict.fromkeys(outcome)),
+                          "size": {"nodes": len(self.parents), "calls": len(self.calls)},
                           "values": getattr(self.mod, "PARAMS", None) or self._build_params or {},
                           "valuesFile": file and values_file(file)}
         return self.described

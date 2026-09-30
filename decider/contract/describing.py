@@ -19,24 +19,46 @@ def assignment_lines(file):
             for t in n.targets if isinstance(t, ast.Name)}
 
 
-def _build_line(file):
-    """The line of a top-level `def build` in `file`, the serving default entry point (`pipeline:build`)."""
-    tree = ast.parse(Path(file).read_text(), file)
-    return next((n.lineno for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "build"), None)
-
-
 def find_pipelines(mod, file):
-    """Combinator and config steps assigned at the top of `file` that no other one there contains,
-    plus a top-level `def build` there, if any."""
-    lines = assignment_lines(file)  # imported sub-flows aren't this file's pipelines
-    steps = {k: v for k, v in vars(mod).items() if isinstance(v, Step) and not k.startswith("_") and k in lines}
+    """Pipeline candidates in `file`: module-level steps and zero-arg factories.
+
+    Each is `{"name", "line", "kind", "status"}`: `status` is `"pipeline"` for something a flow
+    can be built from, and `"invalid"` (with `reason`) for a candidate that is not a pipeline —
+    a single step left unassembled, or a factory that needs arguments. A top-level `def build` is
+    always a pipeline: it is the serving entry point, taking the config's documents.
+    """
+    tree = ast.parse(Path(file).read_text(), file)
+    assign = {t.id: n.lineno for n in tree.body if isinstance(n, ast.Assign)
+              for t in n.targets if isinstance(t, ast.Name)}
+    defs = {n.name: n.lineno for n in tree.body if isinstance(n, ast.FunctionDef)}
+    steps = {k: v for k, v in vars(mod).items() if isinstance(v, Step) and not k.startswith("_")}
     contained = {id(s) for top in steps.values() for _, s in top.walk() if s is not top}
-    pipelines = [{"name": k, "line": lines.get(k), "kind": type(v).__name__} for k, v in steps.items()
-                 if id(v) not in contained and not isinstance(v, (FunctionStep, FrameStep))]
-    build_line = _build_line(file)
-    if build_line is not None and inspect.isfunction(getattr(mod, "build", None)):
-        pipelines.append({"name": "build", "line": build_line, "kind": "build"})
-    return pipelines
+    candidates = []
+    for k, v in steps.items():
+        if id(v) in contained:
+            continue
+        line = assign.get(k) or defs.get(k)
+        if line is None:  # imported from another module, not this file's pipeline
+            continue
+        if isinstance(v, (FunctionStep, FrameStep)):
+            candidates.append({"name": k, "line": line, "kind": type(v).__name__, "status": "invalid",
+                               "reason": "a single step, not a pipeline; assign it inside a flow(...)"})
+        else:
+            candidates.append({"name": k, "line": line, "kind": type(v).__name__, "status": "pipeline"})
+    for n in tree.body:
+        if not isinstance(n, ast.FunctionDef) or n.name.startswith("_"):
+            continue
+        args = [a for a in n.args.args if a.arg not in ("self", "cls")]
+        required = len(args) - len(n.args.defaults or [])
+        if n.name == "build" and inspect.isfunction(getattr(mod, "build", None)):
+            candidates.append({"name": "build", "line": n.lineno, "kind": "build", "status": "pipeline"})
+        elif re.search(r"(_pipeline|_flow)$", n.name) or n.name in ("pipeline", "flow"):
+            entry = {"name": n.name, "line": n.lineno, "kind": "factory",
+                     "status": "pipeline" if required == 0 else "invalid"}
+            if required:
+                entry["reason"] = f"a factory must take no arguments; this needs {required}"
+            candidates.append(entry)
+    return candidates
 
 
 def _statement_line(fn, index):
