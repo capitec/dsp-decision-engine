@@ -97,6 +97,19 @@ extension host ──DAP──▶ adapter.ts ──JSON lines──▶ decider.d
 - `examples/.vscode/settings.json` sets `decider.python` to `uv run python`, so the
   bridge finds the `decider` package.
 
+## Durable ids, experiments and MCP
+
+- **Durable ids:** `uv run decider ids` adds `id="…"` to every step and named flow,
+  so traces, comparisons and experiment references survive a rename or refactor.
+  Nothing requires an id; a project that never runs it is unchanged.
+- **Experiments:** authored as `experiments/<slug>/experiment.yaml`, runnable from
+  plain Python (`decider.experiments.Experiment`) or through the MCP server. See
+  `notes/vscode-redesign/experiment-authoring.md`.
+- **MCP:** `uv run decider mcp` exposes an agent server; raw record/trace tools are
+  off by default (`decider.mcp.rawData`). See `notes/vscode-redesign/mcp-guidance.md`.
+- **Limits and ownership:** `notes/vscode-redesign/limits-and-responsibilities.md`. Trace
+  values are session-memory-only; `decider` never retains or delivers them.
+
 ## Tests
 
 ```sh
