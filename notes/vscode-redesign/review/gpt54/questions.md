@@ -150,10 +150,10 @@ flow/step/value/record ref, evidence location, and optional human summary.
 Task 10 owns creation and task 12 owns rendered/deep-link sharing; it does not
 require remote storage. <<<
 
-## My strongest current leanings
+## Strongest conclusions from the answers
 
 - **Core owns refs and evidence; adapters own selection and focus.**
 - **Reproducibility needs a run manifest, not just a saved YAML definition.**
 - **Experiments need a small declarative core plus optional Python hooks around it.**
-- **If “billions of rows” is real, backend choice must be a seam now.**
+- **v1 should stay local-resource-bounded, while preserving portable dataset refs for a later backend if needed.**
 - **MCP permissions should distinguish safe summaries from raw data, not just reads from writes.**
