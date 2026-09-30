@@ -1,0 +1,19 @@
+User story 1 - Understanding a flow
+The user as recently been assigned to a project and they want to quickly understand the project and how things fit together
+They open up the side bar whick allready redirects them nicely to the piplines that it descovered. They can click into the pipline on the codebase or the sidebar and open up the flow. from here it is easy to navigate using cntl and scrolling to zoom and they can easily expand and collapse nodes to get a good understanding. of what runs in what order and which steps modify what. The user can then click on elements and ask their favourate agentic tool about it or ask questions from the flow and the tool should be able to highlight sections for them. The user is easily able to navigate to the appropriate code when clicking on a step in either the navigation view on the left or the node.
+
+Issues at this stage:
+1. the arrows of which steps use what and what gets modified by each step is confusing. the labels on the side dont cleanly show and often have overlapping text. i think the user should be able to click on the arrows to show in the right side panel all the variables edited by the step. and if they click on the step it should be easy to see all the variables used and edited by the node. when debugging it would be nice to get a good variable view of that component.
+2. we dont have mcp integration it would be amazing to add a vscode-decider-mcp that can give agentic tools the ability to interact with the system
+3. the navigation and zooming is only dont by buttons. when you expand nodes it often resets your viewpoint especially for larger flows.
+
+User Story 2
+The user would like to dive deeper into how the tooling behaves on a certain record/s. The user likely has either a json payload/ csv of data or a parquet file they would like to load to run tests with. For the large majority of cases they would lke to load the data and then search for a particular record to run the flow with however for framesteps the user likely needs the whole frame to test them. So i think the user will likely trace a single element but when it gets to a framestep the entire frame should be in view (depending maybe on an execution mode parameter whole frame or single record that can be configured). The user would like to be able to step into code sections maybe adjust the code live or the step live and make sue of normal python code debugging with the debugger console to fully understand what happens each step.
+
+Feedback on current implementaiton:
+1. I really like a lot of the debug functionality as is at this stage where we can dig in and see variables but the ui isnt too intuative and the breakpoints are hard to see where to set. maybe they should be in the diagram or something rather. 
+2. its hard to use the debug console to change values or the debugger variables to also reassign values to see how the process changes.
+3. Debugging and whatifs dont seem to gel together i think they maybe shouldnt there should be debugging and whatifs seperatly? a user can always debug a record seperatly in the whatif page like kick off a debug from a particular scenario rather than from a record.
+
+User Story 3:
+A user is more interested in how the flow behaves overall. They would like to adjust parameters, view different versions of the flow, set conditions to change values in certain steps etc. With these scenarios i think they are more interested to see how many records go down certain paths, where the different experements start to differ in values, which values differ, have aggregates of like same different or unique values. the ability to do plots like sankey diagrams or some custom plots. Ideally reusable assets that can live with the project and be reloaded. Some of this might be better as part of decider in whatif tooling to be used in notebooks and then just exposed through vscode extensions.
