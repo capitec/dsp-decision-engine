@@ -1,0 +1,4 @@
+backpressure: capacity 16, 1,600,000 events drained -> delivered 200,000 records, dropped 1,599,370 events on overflow (producer never blocked)
+overflow semantics: drop + count, never block; the kernel write path is untouched
+adapter failure: 1 failed delivery, 1 errors reported; producer still delivered 1,000 records (failure is the adapter's, not the run's)
+observability: status = {'queue': 0, 'dropped': 0, 'delivered': 1000, 'failed': 1, 'errors': 1} -> a trace manifest carries dropped/failed/queue counters so loss and degradation are reported, never silent

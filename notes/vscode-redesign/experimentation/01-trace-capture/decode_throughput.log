@@ -1,0 +1,9 @@
+buffer: 2,400,000 events x 8 bytes = 19 MB (one int64 envelope)
+per-event Python decode: 1,230,112 events/s  (1951 ms for 2,400,000 events)
+vectorised numpy unpack: 52,675,652 events/s (46 ms) -> 4 int64 columns (step, kind, arm, iteration) in one shift/mask pass
+lazy (no decode until a slice is asked): 0 events decoded up front; a single record's 24 events unpack on demand
+aggregation (kind histogram, no per-event decode): 161,963,178 events/s (15 ms) -> counts per kind directly from the int64s
+
+budget for a 1,000,000-row x 24-step batch (~192 MB):
+  vectorised: 792 ms for 24,000,000 events
+  aggregate: 429 ms for 24,000,000 events

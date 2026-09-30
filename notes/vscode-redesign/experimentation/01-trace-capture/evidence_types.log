@@ -1,0 +1,7 @@
+table row: matched row index 2 fits as the event's arm/iteration (or a dedicated index); the row's label is CONST_TABLE[k], decoded in Python
+tree path: the walker already emits one int64 'path number' (0 kind, path in arm/iter); the '>'-joined node ids stay a constant table (tree trace.py precedent)
+scorecard band: band index 0..n-1 fits as a small int; band label is a constant table
+reason: index 2 -> 'over_limit'; the string never enters the kernel, only the index
+numeric value evidence: 42.125 -> int64 4631125384006467584 (bit reinterpretation) -> 42.125; a float64's 64 bits fit one int64 losslessly, so a value can ride the envelope
+override: kind tag OVERRIDE + a versioned companion payload holding the value; the Session.set producer 'override@<path>' already names it
+conclusion: table rows, tree paths, scorecard bands, reasons and overrides are all small-int indices into a versioned constant table; a float64 value is bit-reinterpreted, not field-packed
