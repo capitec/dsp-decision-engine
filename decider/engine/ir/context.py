@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from decider.engine.ir.decls import ParamDecl
 from decider.engine.ir.nodes import BranchNode, CallNode, IRNode, LoopNode, SequenceNode, iter_nodes
-from decider.engine.ir.origin import Origin, check_name
+from decider.engine.ir.origin import Origin, check_id, check_name
 from decider.engine.params.models import record_shared_type
 from decider.exceptions import IRError, WiringError
 from decider.registry import import_path
@@ -56,7 +56,10 @@ class IRContext:
         """The origin of a node `step` produces here, named `name` (default: the step's name)."""
         source = type(step) if isinstance(step, BaseModel) else getattr(step, "fn", type(step))
         own = step.name if name is None else name
-        return Origin(self.path if own is None else _join(self.path, own), import_path(source), locator)
+        id_ = getattr(step, "id", None)
+        if id_ is not None:
+            check_id(id_)
+        return Origin(self.path if own is None else _join(self.path, own), import_path(source), locator, id_)
 
     def build(self, step: Step) -> IRNode:
         """`step`'s IR placed under this context, with its relabels applied.

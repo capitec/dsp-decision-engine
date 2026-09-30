@@ -41,6 +41,7 @@ class BranchStep(Step):
     modifies: tuple[str, ...]
     reads: tuple[tuple[str, str], ...] = ()
     writes: tuple[tuple[str, str], ...] = ()
+    id: str | None = None
 
     def to_ir(self, ctx: IRContext) -> BranchNode:
         inner = ctx.child(self.name)
@@ -50,7 +51,7 @@ class BranchStep(Step):
         return BranchNode(ctx.origin(self), condition, tuple(inner.build(a) for a in self.arms), self.modifies)
 
 
-def branch(condition: Any, *arms: Any, modifies: Sequence[str], name: str) -> BranchStep:
+def branch(condition: Any, *arms: Any, modifies: Sequence[str], name: str, id: str | None = None) -> BranchStep:
     """Run one arm per row: a bool condition picks the first arm (true) or the second; an int picks by index.
 
     A bool condition sends `True` to arm 0, while an int picks arm `i`, so
@@ -82,4 +83,4 @@ def branch(condition: Any, *arms: Any, modifies: Sequence[str], name: str) -> Br
         condition = _column_condition(condition)
     # An anonymous arm would share the branch's path, so it is named by position.
     steps = tuple(a if a.name is not None else a.named(f"arm{i}") for i, a in enumerate(map(as_step, arms)))
-    return BranchStep(name, as_step(condition), steps, tuple(modifies))
+    return BranchStep(name, as_step(condition), steps, tuple(modifies), id=id)

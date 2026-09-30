@@ -25,6 +25,7 @@ class LoopStep(Step):
     max_iterations: int
     reads: tuple[tuple[str, str], ...] = ()
     writes: tuple[tuple[str, str], ...] = ()
+    id: str | None = None
 
     def to_ir(self, ctx: IRContext) -> LoopNode:
         inner = ctx.child(self.name)
@@ -32,7 +33,8 @@ class LoopStep(Step):
         return LoopNode(ctx.origin(self), condition, inner.build(self.body), self.carries, self.max_iterations)
 
 
-def loop(condition: Any, body: Any, *, carries: Sequence[str], max_iterations: int, name: str) -> LoopStep:
+def loop(condition: Any, body: Any, *, carries: Sequence[str], max_iterations: int, name: str,
+         id: str | None = None) -> LoopStep:
     """Run `body` while `condition` holds, checked per row before each iteration.
 
     The body may be one step or a flow of several. A row that reaches
@@ -69,4 +71,4 @@ def loop(condition: Any, body: Any, *, carries: Sequence[str], max_iterations: i
     # An anonymous body would share the loop's path.
     if body.name is None:
         body = body.named("body")
-    return LoopStep(name, as_step(condition), body, tuple(carries), max_iterations)
+    return LoopStep(name, as_step(condition), body, tuple(carries), max_iterations, id=id)

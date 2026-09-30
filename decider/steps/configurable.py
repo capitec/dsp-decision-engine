@@ -51,6 +51,8 @@ class ConfigurableStep(Step, BaseRegistryModule, root=True):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     name: str
+    # A durable opaque id committed in the JSON next to `name`, dumped and reloaded.
+    id: str | None = None
     # Relabels are placement, set in Python like the pipeline itself, so never dumped.
     reads: SkipJsonSchema[tuple[tuple[str, str], ...]] = Field((), exclude=True, repr=False)
     writes: SkipJsonSchema[tuple[tuple[str, str], ...]] = Field((), exclude=True, repr=False)

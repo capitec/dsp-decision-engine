@@ -27,6 +27,7 @@ class SequentialStep(Step):
     reads: tuple[tuple[str, str], ...] = ()
     writes: tuple[tuple[str, str], ...] = ()
     inputs: tuple[str, ...] = ()
+    id: str | None = None
 
     def emit(self, *names: str) -> SequentialStep:
         """A copy that also outputs these values, which would otherwise be dropped as intermediates.
@@ -71,7 +72,7 @@ class SequentialStep(Step):
                             tuple(dict.fromkeys(inputs)))
 
 
-def flow(*steps: Any, name: str | None = None, inputs: Sequence[str] | None = None) -> SequentialStep:
+def flow(*steps: Any, name: str | None = None, inputs: Sequence[str] | None = None, id: str | None = None) -> SequentialStep:
     """Run steps in written order; a later write of a name wins.
 
     `a | b | c` builds the same flow. Anonymous flows inside are merged in; a
@@ -96,4 +97,4 @@ def flow(*steps: Any, name: str | None = None, inputs: Sequence[str] | None = No
     """
     if not steps:
         raise WiringError("flow() needs at least one step")
-    return SequentialStep(tuple(map(as_step, steps)), name, inputs=tuple(inputs or ()))
+    return SequentialStep(tuple(map(as_step, steps)), name, inputs=tuple(inputs or ()), id=id)
