@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { kindLabel, type CallNodeJson, type IRNodeJson } from "./model/protocol";
+import { kindLabel, type CallNodeJson, type IRNodeJson, type RunStatus } from "./model/protocol";
+import type { BreakpointKind } from "./model/breakpoints";
 import { dataEdges, fold, layout, type LaidNode, type Layout } from "./layout";
 import type { Selection } from "./Inspector";
 
@@ -15,9 +16,11 @@ interface Props {
   onToggle: (path: string) => void;
   onReveal?: (path: string) => void;
   nodes: CallNodeJson[];
+  run?: RunStatus;
+  breakpoints?: Map<string, BreakpointKind>;
 }
 
-export function Graph({ ir, open, selected, onSelect, onToggle, onReveal, nodes }: Props) {
+export function Graph({ ir, open, selected, onSelect, onToggle, onReveal, nodes, run, breakpoints }: Props) {
   const shown = useMemo(() => fold(ir, open), [ir, open]);
   const laid = useMemo(() => layout(shown), [shown]);
   const flows = useMemo(() => dataEdges(shown), [shown]);
@@ -165,6 +168,9 @@ export function Graph({ ir, open, selected, onSelect, onToggle, onReveal, nodes 
           {laid.nodes.map((n) => {
             const node = n.node;
             const call = node.kind === "call" ? node : null;
+            const bk = breakpoints?.get(n.path);
+            const paused = run?.current?.path === n.path;
+            const ran = run ? run.finishedPaths.includes(n.path) : false;
             return (
               <g
                 key={n.path}
@@ -173,6 +179,9 @@ export function Graph({ ir, open, selected, onSelect, onToggle, onReveal, nodes 
                   call ? kindLabel(call) : "folded",
                   n.path === selectedPath ? "selected" : "",
                   touches(node) ? "touches" : "",
+                  bk ? "breakpoint" : "",
+                  paused ? "paused" : "",
+                  ran && !paused ? "ran" : "",
                 ].join(" ")}
                 transform={`translate(${n.x},${n.y})`}
                 onPointerDown={(e) => e.stopPropagation()}
@@ -183,11 +192,15 @@ export function Graph({ ir, open, selected, onSelect, onToggle, onReveal, nodes 
                   {call
                     ? `${n.path} (${kindLabel(call)})${call.doc ? `\n${call.doc}` : ""}\n${(call.inputs ?? ["?"]).join(", ")} → ${(call.outputs ?? ["?"]).join(", ")}\nDouble-click to open the source`
                     : `${n.path}: ${node.kind === "call" ? "" : node.folded?.length} steps. Click to open.`}
+                  {bk ? `\nBreakpoint: ${bk}` : ""}{paused ? `\nPaused ${run!.current!.when}` : ran ? "\nHas run" : ""}
                 </title>
                 <rect width={n.width} height={n.height} rx={6} />
                 <text x={n.width / 2} y={20} textAnchor="middle" className="title">{icon(node)}{n.label}</text>
                 <text x={n.width / 2} y={37} textAnchor="middle" className="sub">{subLine(node)[0]}</text>
                 <text x={n.width / 2} y={51} textAnchor="middle" className="sub">{subLine(node)[1]}</text>
+                {bk && <circle className="bp-dot" cx={n.width - 8} cy={8} r={5} />}
+                {paused && <circle className="pause-dot" cx={8} cy={8} r={5} />}
+                {ran && !paused && <circle className="ran-dot" cx={8} cy={n.height - 8} r={3.5} />}
               </g>
             );
           })}

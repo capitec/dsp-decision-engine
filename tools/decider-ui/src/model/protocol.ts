@@ -113,6 +113,14 @@ export interface Status {
   hit?: Hit | null;
   /** Every step and group that has run since the start or the last rewind. */
   ran?: string[];
+  /** Whether structured decision trace is captured for this run. */
+  trace?: TraceStatus;
+}
+
+/** Whether a run's structured decision trace is captured, and why not when it isn't. */
+export interface TraceStatus {
+  available: boolean;
+  reason?: string;
 }
 
 /** Send a branch's records down `arm`, or run a loop exactly `iterations` times; for one record, or all. */
@@ -189,6 +197,8 @@ export interface RunStatus {
   /** Steps edited in this run: path -> "delete" (skipped) or "replace" (swapped for edited code). */
   edits?: Record<string, "delete" | "replace">;
   hit?: Hit | null;
+  /** Whether structured decision trace is captured, and why not when it isn't. */
+  trace?: TraceStatus;
 }
 
 /** One change to a value: the step (or "override@<path>" for a value you set) and iteration that made it. */
@@ -285,6 +295,28 @@ export function formatValue(v: unknown, name?: string): string {
   return plain(v, Math.abs(v) >= 100 ? 2 : 4);
 }
 
+/** A change a paused session's draft converts into a declared override. */
+export interface DraftOverride {
+  target: string;
+  value: unknown;
+  /** `"set"` (a value overridden mid-run) or `"force"` (a branch/loop forced). */
+  source: string;
+  row?: number | null;
+}
+
+/** A change a draft cannot carry: listed, never silently dropped. */
+export interface DraftDrop {
+  kind: string;
+  path?: string;
+  detail?: string;
+}
+
+/** Converting a paused session into an experiment draft: what becomes declared overrides, what is dropped. */
+export interface Draft {
+  converted: DraftOverride[];
+  dropped: DraftDrop[];
+}
+
 export type Tab = "graph" | "state" | "params" | "scenarios" | "compare";
 
 /** Messages from the host to the UI. */
@@ -298,7 +330,8 @@ export type ToUI =
   | { type: "tab"; tab: Tab }
   | { type: "select"; path: string }
   | { type: "edited"; path: string; formula: string | null; restored?: boolean }
-  | { type: "sweep"; sweep: Sweep | null; busy?: string; error?: string };
+  | { type: "sweep"; sweep: Sweep | null; busy?: string; error?: string }
+  | { type: "draft"; draft: Draft | null };
 
 /** Messages from the UI to the host. */
 export type FromUI =
@@ -317,6 +350,9 @@ export type FromUI =
   | { type: "restore"; path: string }
   | { type: "compareEdits"; label: string; edits: Record<string, "delete" | "replace">; path?: string }
   | { type: "whatIf"; params: unknown; overrides: Record<string, unknown>; row: number | null; label: string; forces?: Force[] }
+  /** Launch an equivalent debugger run for a saved What-If scenario (explicit, one-way). */
+  | { type: "debugScenario"; params: unknown; overrides: Record<string, unknown>; row: number | null; label: string; forces?: Force[] }
+  | { type: "draft" }
   | { type: "setControls"; controls: Controls }
   | { type: "compareForces"; a: { label: string; forces: Force[] }; b: { label: string; forces: Force[] } }
   | { type: "restartWith"; params: unknown }
