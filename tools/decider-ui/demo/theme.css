@@ -113,6 +113,7 @@ body,
 
 .demo-bar {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--decider-border);
@@ -128,6 +129,8 @@ body,
   background: var(--decider-button2-bg);
   color: var(--decider-button2-fg);
   cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .demo-bar button.active {
