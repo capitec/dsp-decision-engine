@@ -1,13 +1,9 @@
-"""Whole runs for comparisons, and per-record views into one node of a live session."""
+"""Per-record views into one node of a live session, and overrides applied to input rows."""
 from __future__ import annotations
 
 import math
 
 import polars as pl
-
-from decider.engine import Engine
-
-from .controls import Controls
 
 
 def apply_overrides(frame: pl.DataFrame, overrides: dict | None, row: int | None) -> pl.DataFrame:
@@ -20,42 +16,6 @@ def apply_overrides(frame: pl.DataFrame, overrides: dict | None, row: int | None
             values[row] = value
             frame = frame.with_columns(pl.Series(name, values, strict=False))
     return frame
-
-
-def trace(step, frame: pl.DataFrame, params: dict | None, ir: dict | None = None, forces=()) -> dict:
-    """Run to the end and keep what every call wrote, for a step-by-step diff against another run.
-
-    `forces` (branch arms or loop iteration counts, see `Controls.set`) need the described `ir`.
-    """
-    session = Engine().bind(step).session(frame, params)
-    if forces:
-        steer(session, ir, forces)
-    error = None
-    try:
-        session.resume()
-        while not session.finished:
-            session.resume()
-    except Exception as e:  # the trace up to the failing step is still worth comparing
-        error = f"{type(e).__name__}: {e}"
-    return collect(session, error)
-
-
-def steer(session, ir, forces):
-    c = Controls(ir)
-    c.set(forces)
-    return c.attach(session)
-
-
-def collect(session, error):
-    """What every call of a run wrote, and the output if it finished."""
-    state = session.state
-    steps = {}
-    for call in session.executable.plan.calls:
-        written = {v.name: state.column(v.name, v).to_list() for v in call.writes if v.id in state.values}
-        if written:
-            steps[call.node.origin.path] = written
-    output = None if error else {c: s.to_list() for c, s in session.output().to_dict().items()}
-    return {"steps": steps, "output": output, "error": error}
 
 
 def _call(session, path):
