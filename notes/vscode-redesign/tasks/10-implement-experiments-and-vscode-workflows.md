@@ -1,6 +1,7 @@
 # 10 — Implement experiments and VS Code workflows
 
-**Depends on:** 05, 06, 07, 09  
+**Depends on:** 01a, 05, 06, 07, 09
+
 **Blocks:** 11, 12
 
 ## Outcome
@@ -23,6 +24,10 @@ and a clear hand-off from an experiment finding into record-level debugging.
 - Allow a selected scenario/record to launch the equivalent debugger run.
 - Support caller-selected result directories and test the documented project
   layout with optional `README.md`, tests, and custom graphs.
+- Create portable finding descriptors from selected experiment/check/trace
+  evidence and render/deep-link them without requiring remote storage.
+- Render non-reproducible and partial results as distinct states, never as
+  deterministic completed comparisons.
 
 ## Important decisions
 
@@ -38,4 +43,4 @@ and a clear hand-off from an experiment finding into record-level debugging.
 - Users can go from aggregate divergence to records, flow, source, and a debug
   session without manually reconstructing context.
 - The UI does not merge exploratory scenarios with mutable live-debug state.
-
+- A plain Python caller runs an experiment end to end without VS Code.

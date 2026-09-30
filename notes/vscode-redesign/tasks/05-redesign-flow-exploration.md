@@ -3,6 +3,9 @@
 **Depends on:** 01, 02  
 **Blocks:** 07, 10, 11, 12
 
+**Experiment gate:** `experimentation/02-flow-scale-and-gesture-spike.md` must
+set and validate graph budgets before implementation freezes.
+
 ## Outcome
 
 Make a flow easy to discover and understand before it is executed, with stable
@@ -26,6 +29,9 @@ navigation between sidebar, graph, values, and source.
   structure.
 - Synchronise selection and navigation across Structure tree, graph, inspector,
   source, and later MCP highlighting.
+- Extend or replace existing extension analysis, structure, source-map, and
+  comparison modules deliberately; do not duplicate their flow/lineage logic
+  behind a new graph-only representation.
 
 ## Important decisions
 

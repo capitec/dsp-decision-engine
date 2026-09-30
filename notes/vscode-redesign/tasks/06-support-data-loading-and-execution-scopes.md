@@ -1,6 +1,7 @@
 # 06 — Support data loading and explicit execution scopes
 
-**Depends on:** 01, 03  
+**Depends on:** 01, 01a, 03
+
 **Blocks:** 07, 09, 10, 11, 12
 
 ## Outcome
@@ -15,10 +16,16 @@ execution scope before tracing or debugging a flow.
 - Surface schema, row count, record identifiers, load failures, missing
   required values, and unavailable defaults before a run starts.
 - Add record search/filtering and a stable focused-record representation.
+- Offer the existing ID-like heuristic as a load-time suggestion, support an
+  explicit ID column or composite key, and reject duplicate/missing durable
+  identity when an experiment or debugger reproduction needs one.
 - Define **selected record** and **whole frame** execution modes. Detect
   frame-step requirements and refuse or redirect invalid record-only execution.
-- Decide whether a hybrid mode is feasible: focus a record while preserving the
-  complete frame for frame steps.
+- Define hybrid inspection as full-frame execution with record-scoped display,
+  tracing, and breakpoints. Defer dependency-closure execution until it can
+  prove identical semantics.
+- Add pre-flight validation for data compatibility, parameter constraints,
+  version capabilities, and an initial run-cost estimate before execution.
 - Integrate Polars where it provides local scalable data execution without
   adding remote-resource provisioning.
 
@@ -37,4 +44,3 @@ execution scope before tracing or debugging a flow.
   launch JSON manually.
 - The execution scope is visible and semantically safe.
 - Frame-sensitive steps never silently run against an insufficient subset.
-

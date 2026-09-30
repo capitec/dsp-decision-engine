@@ -1,6 +1,7 @@
 # 07 — Redesign debugging and runtime inspection
 
-**Depends on:** 03, 04, 05, 06  
+**Depends on:** 01a, 03, 04, 05, 06
+
 **Blocks:** 10, 11, 12
 
 ## Outcome
@@ -23,6 +24,11 @@ reproducible experiments.
   debugger supports them.
 - Make the transition from a saved What-If scenario to an equivalent debugger
   launch explicit, one-way, and reproducible.
+- When converting a paused session into an experiment draft, list every
+  structured change converted to a declared override and every console/state
+  mutation dropped as unconvertible; never silently omit state.
+- Preserve ad-hoc paused-session forks only as a debugging convenience. They
+  are not experiment assets and must not be presented as reproducible scenarios.
 
 ## Important decisions
 
@@ -38,4 +44,3 @@ reproducible experiments.
 - A user can find/set a breakpoint and explain a pause from the graph.
 - Live changes clearly identify their scope and downstream effect.
 - A saved scenario opens an equivalent, inspectable debug run for one record.
-

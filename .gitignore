@@ -183,4 +183,5 @@ projects/*/configs/
 # Leftovers from the decider2 consolidation, pending deletion: never commit them by accident.
 decider2/
 .decider2_cache/
-experimentation/
+.numba_cache_persist/
+experimentation/tree-codegen-vs-interpreted/_generated/

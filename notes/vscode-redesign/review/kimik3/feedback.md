@@ -1,307 +1,181 @@
-# Kimi K3 feedback — notes/vscode-redesign
+# Kimi K3 feedback — notes/vscode-redesign (v2, post-answers)
 
-Independent review of `background.md`, `userstories.md`, and `tasks/01`–`12`.
-Judged against the stated goal: the high-level components should be designed
-well enough that later refinement won't force major changes or core fixes.
+v1 findings are preserved in `feedback-v1-original.md`; the questions and
+answers are in `questions.md`. This version reviews the answers and identifies
+what they newly imply for the task plan.
 
 ## Verdict
 
-The component separation is sound and I would not restructure it: three user
-modes, one shared flow/source model, semantics pushed down into `decider`
-(tracing, checks, experiments), the extension and notebooks as adapters, and a
-deliberately small MCP surface. Those are the right load-bearing walls.
+The answers are decisive, mutually consistent, and resolve every concern I
+raised without weakening the architecture. In particular: the run-manifest
+split (ephemeral session handle vs immutable persisted manifest), per-record
+trace ordering with explicit frame scope, full-frame execution with
+record-scoped observation, and the one-canvas-plus-mode-views UI model are all
+the choices I would have argued for.
 
-The risk is not the walls — it is a set of **cross-cutting semantics that no
-task currently owns**. They are cheap to decide now (a paragraph each in task
-01/04/06/09) and expensive to retrofit, because every consumer (extension,
-MCP, notebooks, saved experiment assets, retained traces) will have baked in
-its own assumption by then. That is precisely the "core fix later" category.
+The answers collectively do one new thing nobody named: **they invent a
+run-manifest-centric provenance model** (A2, A3, D1, D3, D4, G1 all reference
+an "immutable run manifest"), yet no task owns it. That is now the main gap —
+see R1. Everything else below is consequence-tracking, not disagreement.
 
-Below: flaws/oversights grouped by theme, each marked **[core]** (decide now,
-retrofitting hurts) or **[refine]** (safe to work out during implementation).
+## What the answers settle
 
-## 1. Identity and provenance semantics are under-specified
+| Q | Decision |
+|---|---|
+| A1 | Record ID: heuristic default + explicit/composite override; duplicates/missing rejected when references are needed; session row ordinal never persisted |
+| A2 | Input locator in authored YAML; content hash/schema/row count in immutable run manifest; mismatch errors by default; opt-in drift mode writes a new manifest |
+| A3 | Ephemeral session run handle vs immutable persisted run manifest, named separately in the shared model |
+| A4 | Short opaque generated IDs, unique per flow; flow ID + step ID is the global reference |
+| A5 | Unresolvable references: warn, render what resolves, preserve the ID with capture-time metadata for repair |
+| A6 | Missing-ID diagnostic in the default check suite, client-promotable to CI failure |
+| A7 | Composition representable now: per-flow IDs, explicit parent/child boundary in graph and trace; no new composition runtime |
+| B1 | Trace order guaranteed per record stream; frame-level events carry an explicit frame scope; cross-record order unspecified |
+| B2 | Nogil/compiled capture spike runs parallel to tasks 01–03; task 04's schema freezes only after it reports |
+| B3 | Trace = declared decision evidence; DAP = arbitrary live state; inspector merges and degrades to DAP-only |
+| B4 | Debugging uses the stepped/session model; parity per the engine's documented guarantees; task 03 identifies and tests that contract |
+| B5 | Structured edits become scoped overrides; console mutations are visibly untracked and never replayable |
+| B6 | Extension keeps trace values in session memory; a workspace setting can disable raw-data MCP tools while keeping structural summaries |
+| C1 | Hybrid scope = full-frame execution, record-scoped observation; dependency-closure execution only later and only if semantically identical |
+| D1 | Exact equality by default; per-experiment tolerances declared in YAML and recorded in the manifest |
+| D2 | v1 flags nondeterminism-affected comparisons as non-reproducible; controlled clocks/seeds deferred |
+| D3 | Cancellation, partial results, scenario-failure isolation, and resume-on-matching-manifest required for v1; job model designed in task 09 |
+| D4 | Results record resolved Git SHA, `decider`/Python versions, environment; historical revisions only where engine-compatible, with explicit errors |
+| D5 | Forked-session scenarios are a deliberate cut; ad-hoc forks remain a debug-only convenience, never experiment assets |
+| E1 | One shared flow canvas + Explore/Debug/Experiments side views; no editor-group juggling; explicit mode transitions; paused session → draft only via override conversion |
+| E2 | Real-flow scale fixture + gesture spike (`experimentation/02`) before task 05's implementation freezes |
+| F1 | MCP topology spike (`experimentation/04`); direction: `decider`-hosted FastMCP over stdio, authenticated bridge for editor-bound actions, no unauthenticated localhost HTTP |
+| F2 | Headless: discovery, description, checks, experiment definitions/results/runs; editor-bound: highlight/reveal/selection; headless debugging via the bridge |
+| G1 | Stories 4 and 5 accepted: pre-flight validation/cost into tasks 06/09; shareable finding = portable manifest entry in tasks 10/12 |
+| G2 | Task 10 must prove an experiment runs end-to-end from a plain Python caller |
+| G3 | `experiments/` = project assets, `experimentation/` = repo spikes; redesign targets `decider` only |
 
-### 1a. Record identity is still a heuristic [core]
+## What the answers newly imply (the residuals)
 
-`background.md` keeps "first `id`, `*_id`, or `id_*` field" as the record
-identifier. But record IDs become load-bearing in the redesign: search/filter
-(story 2), scenario-to-debug reproduction (task 07), experiment drill-down
-(task 10), MCP references (task 11), saved findings. Unanswered: duplicates in
-one dataset, datasets with no id-like field, composite keys, and whether a
-synthetic row-number fallback is stable under filtering/sorting. Task 01
-defines "input data identity" but not **record identity within** a dataset.
-Decide: explicit ID-column declaration at load time (heuristic stays as a
-default guess), plus behaviour on duplicates/missing.
+### R1. The run manifest is now the backbone and no task owns it [core]
 
-### 1b. Data provenance is named but never defined [core]
+Six answers lean on an "immutable run manifest" (provenance fingerprint,
+tolerances, partial results, version pins, shareable findings). It is the
+single most-referenced artefact in the answers and appears in no task's work
+list. If it is left implicit, tasks 04, 09, 10, and 12 will each design their
+slice and the slices will not compose — the exact core-fix-later failure mode.
+**Owner needed:** task 01 names it a contract entity (identity, immutability,
+version field); task 09 designs the schema. G1's shareable finding and D3's
+resume both become manifest operations, which simplifies those stories.
 
-Story 3's acceptance signal demands "unambiguous baseline and input
-provenance", and `experiment.yaml` is a versioned asset. A file path is not
-provenance — the file can change underneath. Define now: content hash (or
-schema + row-count + hash), how Redshift-sourced extracts are fingerprinted,
-and whether re-run warns or errors on mismatch. One line in task 09's asset
-model; very painful to add once result directories exist in the wild.
+### R2. Capture-time denormalized metadata [core]
 
-### 1c. Run identity lifecycle [core]
+A5's "preserve the unresolved ID and its original descriptive metadata" means
+every persisted reference (trace event, experiment result, check report)
+stores the step/flow names and source locations *as of capture time*. This is
+a schema requirement on tasks 04, 08, and 09 — cheap now, and the kind of
+thing that is nearly impossible to add to already-persisted artefacts later.
 
-Task 01 lists "run" as a shared entity but nothing says whether run IDs are
-ephemeral (a debug session) or persistent (referenced by experiment results
-and traces). If persisted results reference ephemeral run IDs, links rot
-silently. State the lifecycle and the persistence boundary.
+### R3. Flow IDs need the same treatment as step IDs [core]
 
-### 1d. Stable step IDs: the surrounding rules, not the syntax, are the risk [core]
+A4 makes flow ID + step ID the global reference, so flow IDs are durable,
+committed, generated identities too. Task 02 currently only discusses step
+IDs: where does the flow ID live in source, does the same generator command
+emit it, and what are its uniqueness/collision rules? Extend task 02 or
+explicitly split flow-ID identity into task 01.
 
-Task 02 covers generation-safety (tracked + clean tree) well. What's missing:
+### R4. The trace event envelope is now constrained — the spike must validate it [core]
 
-- **Uniqueness scope** — per flow, per workspace, per repo? Collision
-  detection when copy-paste duplicates an ID?
-- **Rename drift** — an explicit ID survives a step rename (that's the point),
-  so IDs and names diverge over time. Is there a check that flags drift, or is
-  divergence accepted?
-- **Merge ergonomics** — two branches each add a step; sequential or
-  name-derived IDs will conflict; opaque IDs won't but hurt readability. The
-  syntax choice should be made *for* merge behaviour, not only readability.
-- **Unresolved references** — an `experiment.yaml`, saved trace, or MCP query
-  references an ID that no longer resolves after a refactor. Error, warn, or
-  best-effort? This will happen constantly; pick the behaviour now.
-- **Enforcement** — "required where traces/comparisons/experiments need
-  durable links" (decision 12) implies a missing-ID diagnostic. That belongs
-  naturally in the task 08 check suite; the tasks don't connect them.
+B1 + A7 fix the envelope: every event carries a record key **or** an explicit
+frame-scope marker, plus flow context (parent/child), plus a schema version.
+The `experimentation/01` spike must prove this exact envelope is encodable in
+the nogil/compiled path (presumably via interned IDs), not just demonstrate
+capture in general — a smaller envelope proven there and enlarged later would
+be a breaking schema change.
 
-## 2. Tracing: ordering, execution modes, and the debugger boundary
+### R5. "Non-reproducible" is a first-class result state [core]
 
-### 2a. Ordering guarantees under concurrency are undefined [core]
+D2 requires that a nondeterminism-affected comparison "must not appear
+equivalent to a deterministic reproduction." That is both a result-schema flag
+(task 09) and a rendering rule (task 10): the UI needs a distinct visual state,
+not a footnote. Add to both tasks' done-when.
 
-Task 04's "done when" says "consume a correctly ordered trace". Ordered *how*?
-Experiments target millions of records with Polars/compiled execution, and the
-engine's own performance work explores parallel kernels. If the trace schema
-assumes a total order and execution later goes parallel (even per-record
-parallel), the schema needs surgery. Decide now: per-record event streams with
-a record key (my recommendation), or a documented total order.
+### R6. Draft conversion must enumerate what doesn't convert [refine]
 
-### 2b. Compiled-kernel trace capture is the highest technical risk — spike it first [core]
+E1 + D5 + B5 together imply: saving a paused session as a scenario draft
+requires converting session changes into declared overrides, and anything that
+can't convert (console mutations, unconvertible state) is dropped. The
+conversion UI must list what converted and what was dropped — silently
+dropping session state would recreate the exact confusion the redesign
+exists to remove. One line in task 07 or 10.
 
-Serving kernels are `nogil=True`; you cannot allocate Python objects or call
-back into Python freely inside them. Task 04 acknowledges "measured spikes
-before the public interface freezes" — good — but the spike sits *inside* a
-task that blocks 07, 10, 11, and 12. If nogil capture forces a buffer-based,
-post-hoc-decoded design, that constraint shapes the entire event schema.
-**Pull the compiled-kernel capture spike out of task 04 and run it as early as
-possible, alongside 01/02.** A late failure here cascades through the whole
-dependency chain.
+### R7. Spike gates need wiring into task dependencies [process]
 
-### 2c. Trace vs. debugger inspection needs one explicit sentence [core]
+`experimentation/01` gates task 04's schema freeze; `experimentation/02` gates
+task 05's implementation freeze; `experimentation/04` gates task 11. The task
+headers should say so explicitly. Also: the spike numbering (01, 02, 04) skips
+03 — align numbering when the files are created, or note what 03 is reserved
+for (the task 09 experiment-interface spike is the natural candidate).
 
-Background says the extension "should consume traces rather than invent its
-own per-step debugging record", and task 07 says runtime views consume trace
-data "where available". But a compact decision trace deliberately does not
-capture arbitrary locals/frame state — which is exactly what a debugger's
-Variables view is for. And with tracing off (the no-op path), the runtime
-inspector still needs to work. State the division of labour: **trace =
-decision evidence (path, rules, reasons); DAP = arbitrary live state**. Both
-feed the inspector; neither replaces the other. Otherwise 07 will either
-starve the debugger or balloon the trace schema.
+### R8. Job-model placement has a dependency tension [core-ish]
 
-### 2d. The extension is itself a trace client — its own data handling is unstated [refine]
+D3 puts the cancellable/partial/resumable job model in task 09, but task 06's
+data loading is also long-running work, and 09 *depends on* 06. Resolve
+explicitly: either v1 data loading is synchronous-with-progress and adopts the
+job model when it lands, or the job model is extracted early enough for 06 to
+use. What must not happen is two job models.
 
-Trace events are "rich by default"; redaction is the client adapter's job. The
-VS Code extension is a client: it will render values in webviews and (today)
-emits lineage to an output channel. State the extension's own policy:
-session-memory only, no disk persistence, what happens on window reload, and
-whether MCP-served trace data follows the same rule.
+### R9. Data-policy items need homes [refine]
 
-## 3. Execution scope and debugging semantics
+B6's workspace setting (disable raw-data MCP tools, keep structural summaries)
+belongs in task 11's work list; the extension's session-memory-only trace
+policy belongs in task 12's documented client responsibilities.
 
-### 3a. The hybrid scope has a dependency trap — say what it actually is [core]
+### R10. Fork behaviour-change note [refine]
 
-Open question 5 / task 06 defer the hybrid mode ("focus a record, keep the
-full frame for frame steps") as "if semantically clear". The trap: if a record
-step runs on one row, its outputs only exist for one row, so a **downstream**
-frame step reading those outputs cannot see the full frame unless the record
-step ran on all rows too. So "minimal execution" is determined by the
-read/write dependency graph, not by the step's own kind.
+D5 keeps ad-hoc forks as a debug convenience but removes them as experiment
+assets. Annotate background's What-If section and task 07 so current users
+read the change as a decision, not a regression.
 
-The cleanest semantics is probably: **always execute the full frame; the
-record focus only scopes tracing, display, and breakpoints.** Record steps are
-row-local by construction, so a per-record trace is well-defined under a
-full-frame run; frame steps get what they need for free. Cost: you always pay
-full-frame execution. If a cheaper mode is wanted, it must be stated as
-"execute the upstream dependency closure of the focused record at frame
-granularity" — derivable, but it must be the written design, not a deferred
-feasibility question. Either way, decide in task 06, not during implementation.
+## Still open (minor; not covered by the answers)
 
-### 3b. Debug-console edits vs. tracked overrides — draw the line [core]
+- **O1. Extension ↔ `decider` version policy.** Once the bridge ships inside
+  `decider` (task 03), the extension needs a minimum-version check and bridge
+  protocol negotiation via task 01's capability reporting — with a guided
+  error, not today's empty Structure tree.
+- **O2. Multi-root workspaces.** Per-folder interpreter (`decider.python`)
+  and discovery scope in monorepos. Safe to refine later; worth one stated
+  assumption in task 01 or 06.
 
-Decision 6 allows live edits "in the style of normal Python debugging", and
-story 2's acceptance signal says "every live override states whether it
-applies to this pause, this run, or a future rerun." But a Python debug
-console permits arbitrary mutation (call functions, rebind globals) whose
-downstream effect is unknowable. Scope/lifetime labelling is only achievable
-for **structured edits** (params/state through the UI or session API). State
-explicitly: console edits are untracked and excluded from any reproducibility
-story; only structured edits become named overrides. Otherwise the acceptance
-signal is unattainable.
+## Updated recommended edits to the plan
 
-### 3c. The What-If narrowing should be admitted as a capability cut [refine]
+1. **Task 01:** add the run manifest as a contract entity (identity,
+   immutability, version field); record-identity rules (A1); flow+step ID
+   model including unresolved-reference semantics (A4/A5); version-evolution
+   policy for all persisted/wire formats; capability reporting extended to
+   bridge protocol version (O1).
+2. **Task 02:** cover flow IDs alongside step IDs (R3); require capture-time
+   descriptive metadata wherever IDs are persisted (R2).
+3. **Task 03:** add "identify and test the current cross-mode semantic parity
+   contract" (B4).
+4. **Task 04:** fix the event envelope (record-key/frame-scope + flow context
+   + schema version, R4); per-record ordering guarantee (B1); trace-vs-DAP
+   division (B3); freeze schema only after `experimentation/01` reports (R7).
+5. **Task 05:** gate implementation on `experimentation/02` budgets (E2/R7).
+6. **Task 06:** record-ID selection UX (A1); write the hybrid scope as
+   full-frame execution + record-scoped observation (C1); absorb story 4's
+   data-compatibility validation share (G1).
+7. **Task 07:** structured-override vs console-edit boundary (B5); draft
+   conversion enumerates unconvertible changes (R6); fork behaviour-change
+   note (R10).
+8. **Task 08:** missing-durable-ID diagnostic in the default suite (A6).
+9. **Task 09:** owns run-manifest schema (R1), the job model —
+   cancellation/partial/resume (D3/R8), equality/tolerance model (D1),
+   nondeterminism flag (D2/R5), version pins (D4), pre-flight cost estimation
+   (G1).
+10. **Task 10:** headless end-to-end experiment run in done-when (G2);
+    shareable finding as manifest entry (G1); distinct rendering for
+    non-reproducible results (R5).
+11. **Task 11:** gate on `experimentation/04` (R7); encode the
+    headless/editor-bound tool split (F2); raw-data-disable setting (B6/R9).
+12. **Task 12:** document the extension's session-memory data policy (B6/R9)
+    and the What-If fork migration note (R10).
 
-Today's What-If can fork a scenario from a paused session *including arbitrary
-session state already present*. Decision 15 constrains reproducible overrides
-to declared override points/step outputs — cleaner and reproducible, but a
-real reduction of current power. The notes never say "we are dropping X".
-Call it out in background/design with the migration story (a forked-session
-workflow becomes: save scenario → relaunch debugger → apply structured
-overrides), so users hitting the missing capability read it as a decision,
-not a regression.
-
-## 4. Experiment model
-
-### 4a. Numeric equality semantics for comparison [core]
-
-Experiments promise changed/unchanged/unique summaries and first-divergence
-detection. The engine accumulates running totals in float64. "Changed" needs
-an equality policy per type — exact for int64 cents, and what for float64:
-exact, tolerance, per-field config? This decision shapes the comparison code,
-the result schema, and every experiment result's meaning. It belongs in task
-09's spike list; retrofitting tolerance semantics invalidates saved results.
-
-### 4b. Nondeterminism: detected for governance, uncontrolled for experiments [core]
-
-Task 08 detects wall-clock reads as a diagnostic. But a baseline-vs-variant
-experiment where a step reads `datetime.now()` (or unseeded randomness)
-produces spurious divergence. The experiment runner needs at minimum to
-surface non-purity warnings at run time; ideally a controllable clock/seed.
-Decide which is in scope.
-
-### 4c. Cancellation, progress, partial results [core-ish]
-
-Background flags "no clear cancellation interaction" for scenario sweeps as a
-current pain point — and then no task picks it up. Millions-of-records ×
-Cartesian scenarios makes cancellation/progress/resumability a first-run
-requirement, not a polish item, and it shapes the runner's interface (job
-handles, partial-result semantics: one failed combination fails the run or is
-reported?). Add to task 09/10.
-
-### 4d. Engine-version pinning [core]
-
-Reproducibility spans code revision *and* engine version — today's revision
-comparison already fails when historical code needs an older `decider`
-interface. `experiment.yaml` should pin/record the engine version, and results
-should state it. Cheap now, unfixable retroactively for old results.
-
-## 5. Contract versioning itself [core]
-
-Task 01 promises "a short, versioned contract" — but nothing anywhere
-addresses **evolution** of the versioned artefacts: the trace schema (retained
-per governance requirements — old traces must remain decodable),
-`experiment.yaml`, result formats, check reports, MCP schemas, and the ID
-format's escape hatch. Each format needs a version field from day one and a
-stated policy (reader supports N-1? migrate-on-load?). This is the single most
-classic "core fix later" trap in the whole plan, and it costs almost nothing
-to pre-commit to.
-
-## 6. UI architecture: the modal model is never stated [core]
-
-This is my largest single ambiguity. The redesign's core promise is three
-modes with "distinct entry points and result views", where users never infer
-which mode they're in. But no task says **how the UI is physically organised**:
-
-- One retained webview that morphs per mode (the state-machine confusion the
-  redesign is trying to escape), or three distinct view types?
-- What happens to the current single retained graph panel, and to the
-  editor-group manipulation that keeps the graph visible during debugging?
-- Mode transitions: experiment → debug is specified (explicit, one-way). What
-  about flow → debug, debug → experiment? Can you "promote" a paused session
-  into a scenario draft?
-- Where do the Structure tree, the contextual inspector, and results views
-  live relative to the graph?
-
-Every task (05, 07, 10) assumes an answer. If the tasks are implemented
-against different implicit answers, merging them *is* the major rewrite.
-Half a page in the design direction fixes it.
-
-## 7. MCP: topology is unspecified [refine, but before task 11 starts]
-
-Decision 9/16 cover permissions well. Unanswered: does the FastMCP server live
-in the extension host (per window), or a separate process per workspace? How
-does a terminal-based agent connect (stdio? HTTP/SSE? port discovery on
-localhost, and what stops a random local process from calling it)? How does
-"highlight/reveal in VS Code" target the right window? Which capabilities work
-**headless** (no VS Code) — decision 16 wants agents to complete workflows
-end-to-end, but an editor-hosted server can't serve a notebook-only agent.
-State the instance model and the headless/editor-bound split in task 01's
-contract or early in 11.
-
-## 8. Orphaned stories [process]
-
-Two candidate stories have no owning task:
-
-- **Story 4 (validate before running)** — data compatibility, parameter
-  constraints, version compatibility, **expected run cost**. No task
-  implements cost estimation or pre-flight validation. Either accept it
-  (fold into 09/10) or explicitly defer.
-- **Story 5 (shareable finding)** — a linkable bundle of flow context,
-  evidence, config, revision. Nothing builds it, and it cuts across tracing,
-  experiments, checks, and IDs. Accept (task 10 or 12) or defer — but say so.
-
-(Stories 6 and 7 are covered by tasks 11 and 04/08 respectively.)
-
-## 9. Smaller, worth fixing in passing
-
-- **Graph library spike [refine]:** decision to "confirm the library's
-  interaction contract first" is right; make it a concrete spike in task 05
-  that renders the largest known real flow and drives every required gesture
-  (viewport-preserving collapse, fit-to-selection, MCP-driven highlight,
-  breakpoint decorations) before the panel rebuild. Also set scale budgets:
-  max nodes rendered, layout time, webview memory — story 3 caps *record*
-  rendering but nothing caps *flow* size.
-- **Notebook adapter claim is never verified [core-ish]:** "notebooks and the
-  extension are adapters over the same experiment interface" is a central
-  architectural bet, but no task builds even a smoke-test notebook consumer.
-  Add to task 10's done-when: an experiment run end-to-end from a plain
-  Python (headless) caller. It also de-risks the MCP headless question.
-- **Extension ↔ decider version skew [core-ish]:** once the bridge ships
-  inside `decider` (task 03), the extension's compatibility with the
-  installed engine version becomes a real axis (old `decider` + new extension
-  = no bridge). Extend task 01's capability reporting to cover a bridge
-  protocol version and a minimum-version check with a helpful error — the
-  current failure mode (empty Structure tree) is exactly what background
-  criticises.
-- **Naming collision [refine]:** the repo already has `experimentation/`
-  (engine spikes); project assets will be `experiments/`. Fine in user
-  projects, confusing in this repo's docs. One disambiguating line, or pick a
-  different asset-dir name now while nothing depends on it.
-- **Engine targeting [refine]:** the notes never state whether the redesigned
-  extension targets `decider` only, or must also drive `decider2` during any
-  migration period. One sentence.
-- **Multi-root workspaces [refine]:** per-folder interpreter (`decider.python`)
-  and discovery scope in monorepos.
-- **Multi-pipeline composition [core]:** everything assumes "a pipeline". If
-  flows call flows (now or plausibly later), identity uniqueness and trace
-  span boundaries must account for it. Even a "single-flow only for v1,
-  IDs scoped per-flow" statement protects the seam.
-
-## Recommended edits to the plan
-
-1. **Task 01:** add record identity, run identity lifecycle, ID uniqueness
-   scope + unresolved-reference semantics, and the version-evolution policy
-   for every persisted/wire format.
-2. **New early spike (or task 04 preamble):** compiled/nogil kernel trace
-   capture + concurrent-execution ordering. Run in parallel with 01–03.
-3. **Task 04:** state trace-vs-DAP division of labour; define ordering as
-   per-record streams; add schema version field.
-4. **Task 06:** replace "decide whether a hybrid mode is feasible" with the
-   chosen semantics (full-frame execution + record-scoped observation, or
-   dependency-closure execution — but written down).
-5. **Task 07:** state the structured-override vs. arbitrary-console-edit
-   boundary.
-6. **Task 09:** add equality semantics, nondeterminism handling, engine
-   version pin, input fingerprinting, cancellation/progress/partial results
-   to the spike list and asset model.
-7. **Task 10:** add a headless (non-VS Code) end-to-end experiment run to
-   done-when; own or explicitly defer stories 4 and 5.
-8. **Design direction (background/userstories):** half a page on the UI modal
-   model — panels, mode transitions, fate of the retained panel.
-9. **Task 01/11:** MCP instance/transport model and the headless split.
-10. **Task 08:** add "missing durable IDs" to the default check suite;
-    connects 02 and 08.
+With those edits made, I have no remaining architectural objections — the
+plan's load-bearing seams (identity, trace envelope, run manifest, execution
+scope, mode separation, MCP topology) would all be pinned at the right level
+of detail for refinement without core rework.
