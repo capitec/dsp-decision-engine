@@ -1,4 +1,5 @@
 import { callNodes, walk, type CallNodeJson, type ColumnSummary, type DescribeResult, type GroupNodeJson, type IRNodeJson, type RunStatus } from "../src/model/protocol";
+import type { ExperimentResult } from "../src/model/experiment";
 
 // Representative describe payloads for the standalone render harness: a small flow with every
 // node kind, and a large nested flow that starts folded.
@@ -105,4 +106,42 @@ export function pausedRun(): { status: RunStatus; columns: ColumnSummary[] } {
     trace: { available: false, reason: "trace capture is off; showing live state" },
   };
   return { status, columns };
+}
+
+/** An experiment result over `smallFlow`: one param-only scenario that diverges, plus a Sankey. */
+export function experimentResult(): ExperimentResult {
+  return {
+    name: "drift",
+    status: "completed",
+    nondeterministic: false,
+    manifest: { revision: { authored: "HEAD", resolved: "6a9a9e" } },
+    scenarios: [
+      { name: "baseline", status: "completed", divergences: [], row_count: 2 },
+      { name: "cap 24", status: "completed", divergences: [{ kind: "divergence", scenario: "cap 24", location: "term_cap[0]", expected: 48, actual: 24 }], params: { term: { cap_by_income: { cap: 24 } } }, overrides: {}, row_count: 2 },
+    ],
+    summary: {
+      outputs: ["term_cap"],
+      first_divergence: { scenario: "cap 24", location: "term_cap[0]" },
+      scenarios: [
+        { name: "baseline", status: "completed", changed: {}, unchanged: { term_cap: 2 }, unique: { term_cap: 2 }, path_counts: {}, step_differences: [], drill_down: {} },
+        { name: "cap 24", status: "completed", changed: { term_cap: [0] }, unchanged: { term_cap: 1 }, unique: { term_cap: 2 }, path_counts: {}, step_differences: [], drill_down: { term_cap: [{ row: 0, expected: 48, actual: 24 }] } },
+      ],
+    },
+    sankey: {
+      outcome: "term_cap",
+      nodes: [
+        { id: "in", label: "2 records", kind: "input" },
+        { id: "term/by_sector#0", label: "cap_private", kind: "arm" },
+        { id: "term/by_sector#1", label: "cap_public", kind: "arm" },
+        { id: "out:48", label: "term_cap 48", kind: "outcome" },
+        { id: "out:60", label: "term_cap 60", kind: "outcome" },
+      ],
+      links: [
+        { source: "in", target: "term/by_sector#0", value: 1 },
+        { source: "in", target: "term/by_sector#1", value: 1 },
+        { source: "term/by_sector#0", target: "out:48", value: 1 },
+        { source: "term/by_sector#1", target: "out:60", value: 1 },
+      ],
+    },
+  };
 }

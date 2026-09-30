@@ -56,6 +56,11 @@
         "title": "decider: What-if (params and inputs)"
       },
       {
+        "command": "decider.experiment",
+        "title": "decider: Run experiment",
+        "icon": "$(beaker)"
+      },
+      {
         "command": "decider.openPipeline",
         "title": "decider: Open a pipeline.py"
       }

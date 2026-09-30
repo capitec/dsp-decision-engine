@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { App, type EditorMessage } from "../src/App";
 import type { FromUI, ToUI } from "../src/model/protocol";
 import "../src/style.css";
-import { largeFlow, pausedRun, smallFlow } from "./mock";
+import { largeFlow, pausedRun, smallFlow, experimentResult } from "./mock";
 import "./theme.css";
 
 // A mock host: delivers one describe payload, can pause the run, and prints the messages the UI
@@ -45,6 +45,10 @@ function Demo() {
         setPaused(false);
         onRef.current({ type: "status", ...IDLE });
         break;
+      case "debugScenario":
+        setToast(`debugger run for ${m.label}${m.row == null ? "" : ` (record ${m.row})`}`);
+        setTimeout(() => setToast(undefined), 2500);
+        break;
       default:
         console.log("[demo] message to host", m);
     }
@@ -73,6 +77,9 @@ function Demo() {
           <button className={paused ? "active" : ""} onClick={() => (paused ? send({ type: "run" }) : pause())}>
             {paused ? "Resume (end run)" : "Pause at risk_tree"}
           </button>
+        )}
+        {flow === "small" && (
+          <button onClick={() => onRef.current({ type: "experiment", experiment: experimentResult() })}>Show experiment</button>
         )}
         <span style={{ marginLeft: "auto", alignSelf: "center", opacity: 0.7 }}>
           render harness — ?flow=large selects the big one

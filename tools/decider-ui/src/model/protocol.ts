@@ -1,4 +1,5 @@
 import type { Comparison } from "./compare";
+import type { ExperimentResult } from "./experiment";
 import type { Scenario, Sweep } from "./sweep";
 
 // Shapes the Python bridge sends, and the messages between a host and the UI.
@@ -331,7 +332,8 @@ export type ToUI =
   | { type: "select"; path: string }
   | { type: "edited"; path: string; formula: string | null; restored?: boolean }
   | { type: "sweep"; sweep: Sweep | null; busy?: string; error?: string }
-  | { type: "draft"; draft: Draft | null };
+  | { type: "draft"; draft: Draft | null }
+  | { type: "experiment"; experiment: ExperimentResult | null };
 
 /** Messages from the UI to the host. */
 export type FromUI =

@@ -52,5 +52,5 @@ class Experiment:
             determinism=determinism)
         return self
 
-    def run(self, *, job: JobHandle | None = None, resume=None):
-        return run_experiment(self.def_, self.step, self.frame, self.params, job=job, resume=resume)
+    def run(self, *, job: JobHandle | None = None, resume=None, out_dir: str | None = None):
+        return run_experiment(self.def_, self.step, self.frame, self.params, job=job, resume=resume, out_dir=out_dir)
