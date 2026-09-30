@@ -9,7 +9,7 @@ import polars as pl
 from numba.core.dispatcher import Dispatcher
 
 from decider.engine.boundary.nulls import MissingInputError
-from decider.engine.compile import Fallback, Unit, compile_plan, numpy_dtype
+from decider.engine.compile import Fallback, Kernel, Unit, compile_plan, numpy_dtype
 from decider.engine.compile.rows import build_ragged, build_rows, rows_needs_no_fill
 from decider.engine.compile.structs import build_struct, struct_schema
 from decider.engine.ir.decls import Input, NullPolicy, base_annotation
@@ -18,6 +18,7 @@ from decider.engine.run.representations import codes, span_objects, spans
 from decider.engine.run.runners.base import Checkpoint
 from decider.engine.run.runners.interpreted import InterpretedRunner, _absent, _encoded, _note, _Scope
 from decider.engine.run.state import State, fill_missing
+from decider.engine.trace.envelope import Kind
 from decider.exceptions import FallbackWarning
 from decider.types import Representation, is_raw, representation_for, columnar_item, item_schema, struct_item
 from decider.engine.wiring.plan import Call, Plan, Version
@@ -60,11 +61,11 @@ class SteppedRunner(InterpretedRunner):
         self._alive: dict[tuple[str, int], dict] = {}
         self._fallbacks: dict[str, str] = {}
 
-    def iterate(self, plan: Plan, state: State, params: RunParams) -> Iterator[Checkpoint]:
+    def iterate(self, plan: Plan, state: State, params: RunParams, trace=None, table=None) -> Iterator[Checkpoint]:
         # Not a generator itself: one generator frame less per checkpoint on the single-record path.
         if plan is not self._plan:
             self._compile(plan, params.lazy)
-        return super().iterate(plan, state, params)
+        return super().iterate(plan, state, params, trace, table)
 
     def _compile(self, plan: Plan, lazy: bool) -> None:
         python: dict[int, str] = {}
@@ -154,7 +155,20 @@ class SteppedRunner(InterpretedRunner):
                 valid[v.id] = mask
             values.setdefault(v.id, x)
         try:
-            unit.run(values, valid, bundles, n)
+            trace = self._trace
+            # In-kernel capture only at a plain top-level scope: a packed
+            # branch or loop carries its own arm/iteration inside the kernel,
+            # but a single-call kernel inside an arm or iteration has neither,
+            # and a subset of rows would mislabel records from the buffer's
+            # row-major offsets.
+            top = scope.rows is None and scope.arm is None and scope.iteration is None
+            if trace is not None and isinstance(unit, Kernel) and top:
+                unit.run(values, valid, bundles, n, trace, self._trace_table)
+            else:
+                unit.run(values, valid, bundles, n)
+                if trace is not None:
+                    for c in unit.calls:
+                        self._emit_rows(Kind.STEP, c.node.origin, scope, n, step=c.id + 1)
         except Exception as e:
             paths = [c.node.origin.path for c in unit.calls]
             _note(e, f"in step {paths[0]}" if len(paths) == 1 else
