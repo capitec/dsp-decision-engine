@@ -259,3 +259,28 @@ where they disagree, this file wins.
   category=FallbackWarning)` silences the lot without a new engine setting.
 - **`compile_call`** returns `(key, fn, reason, declared)`; `Fallback` gains
   `declared`.
+
+## 2026-09-30, durable flow and step identities
+
+- **`Origin.id`** is a durable opaque step/flow id: `id: str | None = None`,
+  a 12-lowercase-hex token (`secrets.token_hex(6)`) committed in source next to
+  the declaration and carried on `Origin` alongside `path`, `source` and
+  `locator`. `check_id()` validates `[0-9a-f]{12}`.
+- **The identity model.** `path`/`name` are *derived* ids, for discovery and
+  display; `id` is the *explicit committed* id, for durable references. Derived
+  ids cannot survive arbitrary refactors; only the committed id is durable. An
+  id is one per *definition*, many per *path*: a reused step keeps one id at
+  each of its placements. `(flow id, step id)` is the global reference; the
+  root flow is the outermost named flow, and anonymous flows stay id-less and
+  transparent.
+- **The `id=` keyword.** Every step constructor/decorator takes an optional
+  `id=`; `ConfigurableStep` carries an `"id"` JSON field next to `name`. An id
+  is additive: name, path, `step_map` and execution are unchanged when it is
+  `None`. An id always gets a home: `dag(single)` collapses only when both
+  `name` and `id` are `None`, so `dag(single, id=…)` forces the wrapper.
+- **`decider ids`** generates ids into pipeline source (byte-splice, no
+  reformat), only on a clean, fully tracked tree, parse-before-write, with a
+  repo-wide uniqueness scan. Persisted references capture name/path/source as
+  they were at capture time, so an unresolved id still renders a repairable
+  partial result after a refactor.
+
