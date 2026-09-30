@@ -167,6 +167,32 @@ def build_ragged(values: np.ndarray, schema: Schema, source: pl.Series | None = 
     return Ragged(starts[:-1], starts[1:], fields, nt)
 
 
+def build_exploded(values: np.ndarray, schema: Schema, source: pl.Series | None,
+                   alive: list | None) -> tuple[np.ndarray, np.ndarray, tuple, tuple] | None:
+    """`values` as flat per-field arrays, per-row `[lo, hi)` offsets and per-field validity masks.
+
+    Reads the Arrow buffers zero-copy, so no item dict is touched. `None` when
+    the column can't be read that way: not Arrow-backed, too few rows, a field
+    that isn't float/int/bool, or a struct with fields beyond `schema`.
+    """
+    dtypes = []
+    for _, annotation in schema:
+        base = base_annotation(annotation)
+        if base not in (float, int, bool):
+            return None
+        dtypes.append(_DTYPES[base])
+    if source is None or alive is None or len(values) < ARROW_ROWS:
+        return None
+    from decider.engine.boundary._arrow.nested import read_exploded
+
+    exploded = read_exploded(source, schema, tuple(dtypes))
+    if exploded is None:
+        return None
+    alive.append(exploded)
+    return (np.asarray(exploded.starts, np.int64), np.asarray(exploded.stops, np.int64),
+            tuple(exploded.fields), tuple(exploded.validity))
+
+
 def _from_arrow(values, schema, dtypes, optional, source, alive):
     if source is None or alive is None or len(values) < ARROW_ROWS:
         return None
