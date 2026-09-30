@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { DescribeResult } from "../src/model/protocol";
 import { callNodes } from "../src/model/protocol";
 import { findSteps } from "../src/FindStep";
-import { dataEdges, fold, layout, orderEdges } from "../src/layout";
+import { dataEdges, findNode, fold, layout, orderEdges, touchPoints } from "../src/layout";
 
 // The example flows live with the VS Code extension; the Python bridge is decider.debug_bridge.
 const ROOT = path.resolve(__dirname, "../../vscode-decider");
@@ -67,5 +67,20 @@ describe("large flows", () => {
     expect(findSteps(nodes, "low earners term")[0].path).toBe("term/cap_by_income");
     expect(findSteps(nodes, "cap")[0].path.split("/").pop()).toMatch(/cap/);
     expect(findSteps(nodes, "nothing like this")).toEqual([]);
+  });
+
+  it("every read and write of a value lists as a touch point", () => {
+    const paths = touchPoints(ir, "term_cap").map((n) => n.path);
+    expect(paths).toContain("term/term_cap");
+    expect(paths).toContain("term/cap_by_income");
+    expect(paths).toContain("term/by_sector/cap_private");
+    expect(paths).toContain("term/by_sector/cap_public");
+    expect(paths).not.toContain("join_bureau");
+  });
+
+  it("findNode resolves a nested path back to its node", () => {
+    expect(findNode(ir, "term/by_sector/cap_public")?.kind).toBe("call");
+    expect(findNode(ir, "term")?.kind).toBe("sequence");
+    expect(findNode(ir, "missing")).toBeUndefined();
   });
 });

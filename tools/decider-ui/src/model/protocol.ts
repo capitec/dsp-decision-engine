@@ -45,9 +45,21 @@ export interface GroupNodeJson extends IRNodeBase {
 
 export type IRNodeJson = CallNodeJson | GroupNodeJson;
 
+/** One pipeline found in a file, or a candidate that could have been one. */
+export interface PipelineCandidate {
+  name: string;
+  line: number | null;
+  kind: string;
+  /** `invalid` candidates are shown with their reason instead of being offered. */
+  status?: "pipeline" | "invalid";
+  reason?: string;
+}
+
 export interface DescribeResult {
-  pipelines: { name: string; line: number | null; kind: string }[];
+  pipelines: PipelineCandidate[];
   pipeline: string;
+  /** The assembled entry-point flow: its node and step counts. */
+  size: { nodes: number; calls: number };
   ir: IRNodeJson;
   /** Node path (or "shared") -> param name -> its type, default and bounds. */
   params: Record<string, Record<string, ParamInfo>>;

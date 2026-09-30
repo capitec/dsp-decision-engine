@@ -1,4 +1,4 @@
-/* decider's theme, read from VS Code's own tokens so the flow panel matches the editor it lives in.
+/* decider's theme from VS Code's: every --decider-* variable the UI reads, from its --vscode-* colour.
    Where VS Code leaves a colour unset, so is decider's, and the UI falls back to its own default. */
 :root {
   color-scheme: light dark;
@@ -16,8 +16,10 @@
   --decider-widget-border: var(--vscode-editorWidget-border);
   --decider-shadow: var(--vscode-widget-shadow);
   --decider-code-bg: var(--vscode-textCodeBlock-background);
+  --decider-quote-bg: var(--vscode-textBlockQuote-background);
   --decider-button-bg: var(--vscode-button-background);
   --decider-button-fg: var(--vscode-button-foreground);
+  --decider-button-border: var(--vscode-button-border);
   --decider-button2-bg: var(--vscode-button-secondaryBackground);
   --decider-button2-fg: var(--vscode-button-secondaryForeground);
   --decider-input-bg: var(--vscode-input-background);
@@ -34,6 +36,7 @@
   --decider-selection-fg: var(--vscode-list-activeSelectionForeground);
   --decider-inactive-selection-bg: var(--vscode-editor-inactiveSelectionBackground);
   --decider-match-bg: var(--vscode-editor-findMatchHighlightBackground);
+  --decider-paused-bg: var(--vscode-editor-stackFrameHighlightBackground);
   --decider-inserted-bg: var(--vscode-diffEditor-insertedTextBackground);
   --decider-added-fg: var(--vscode-gitDecoration-addedResourceForeground);
   --decider-deleted-fg: var(--vscode-gitDecoration-deletedResourceForeground);
