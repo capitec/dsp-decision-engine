@@ -8,6 +8,7 @@ import { compareTraces, editLabel, summariseSweep, walk, type CallNodeJson, type
 import { debugpyLibs, pythonCommand } from "./python";
 import { runComparison, type Side } from "./compareRuns";
 import { withBridge } from "./bridge";
+import { EditorBridge, type EditorAction } from "./editorBridge";
 import { StructureProvider } from "./structure";
 
 let lineageChannel: vscode.OutputChannel | undefined;
@@ -147,6 +148,12 @@ export function activate(ctx: vscode.ExtensionContext) {
   );
   // Opening the sidebar can be what activated the extension: it is already visible.
   if (tree.visible) void openPipeline(false);
+
+  // The per-window editor bridge an MCP process reaches for editor-bound tools.
+  for (const folder of vscode.workspace.workspaceFolders ?? []) {
+    const bridge = new EditorBridge(folder.uri.fsPath, dispatchEditorAction);
+    ctx.subscriptions.push({ dispose: () => bridge.dispose() });
+  }
 }
 
 const post = (m: ToUI) => GraphPanel.post(m);
@@ -506,6 +513,41 @@ async function reveal(file: string, line: number | null) {
     editor.setDecorations(flash, [new vscode.Range(pos, pos)]);
     setTimeout(() => flash.dispose(), 2500);
   }
+}
+
+/** An editor-bound MCP action: focus a node in the flow, reveal source, or read the selection. */
+async function dispatchEditorAction(action: EditorAction): Promise<unknown> {
+  switch (action.kind) {
+    case "highlight": {
+      // The flow view is single-select: focus the first node and report it.
+      // ponytail: no multi-node highlight in the UI; add one if an agent needs it.
+      const focused = action.nodes[0];
+      if (focused !== undefined) post({ type: "select", path: focused });
+      return { ack: true, focused: focused ?? null };
+    }
+    case "reveal":
+      await reveal(action.path, action.line);
+      return { ack: true };
+    case "selection":
+      return selectionContext();
+  }
+}
+
+function selectionContext() {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor) return { file: null, selection: null };
+  const sel = editor.selection;
+  return {
+    file: editor.document.uri.fsPath,
+    languageId: editor.document.languageId,
+    selection: {
+      startLine: sel.start.line + 1,
+      endLine: sel.end.line + 1,
+      startCharacter: sel.start.character,
+      endCharacter: sel.end.character,
+      text: editor.document.getText(sel.isEmpty ? undefined : sel),
+    },
+  };
 }
 
 function findNode(d: DescribeResult, p: string): IRNodeJson | undefined {
