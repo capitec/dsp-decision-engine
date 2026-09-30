@@ -4,11 +4,13 @@ import re
 import subprocess
 from pathlib import Path
 
+import polars as pl
 import pytest
 from click.testing import CliRunner
 
 from decider import engine
 from decider.cli import cli
+from decider.contract import describe
 from decider.engine.ir.nodes import iter_nodes
 from decider.ids import IdError, add_ids, generate
 from decider.steps import flow, step
@@ -256,3 +258,21 @@ def test_cli_ids_adds_ids(repo: Path, monkeypatch):
     result = CliRunner().invoke(cli, ["ids"])
     assert result.exit_code == 0, result.output
     assert "added 5 id(s) in 1 file(s)" in result.output
+
+
+def test_a_pipeline_without_ids_still_runs_and_describes():
+    # Migration: an existing project that never runs `decider ids` is unchanged —
+    # no id is required, and identity falls back to the derived path/source.
+    def ratio(income: float, debt: float) -> float:
+        return debt / income
+
+    def approved(ratio: float) -> bool:
+        return ratio <= 0.4
+
+    pipeline = flow(ratio, approved, name="credit")
+    out = pipeline.run(pl.DataFrame({"income": [1000.0], "debt": [200.0]}))
+    assert out["approved"].to_list() == [True]
+
+    desc = describe(pipeline)
+    assert desc.flow.flow_id is None  # derived identity only, until ids are committed
+    assert sorted(n.path for n in desc.nodes) == ["credit", "credit/approved", "credit/ratio"]
