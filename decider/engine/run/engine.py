@@ -15,6 +15,7 @@ from decider.engine.run.runners.interpreted import InterpretedRunner
 from decider.engine.run.runners.stepped import SteppedRunner
 from decider.engine.ir.decls import ParamDecl, base_annotation
 from decider.engine.run.state import State, declared_dtype, dtype_of, load_record, record_value
+from decider.engine.trace.envelope import StepTable
 from decider.engine.wiring import Plan, resolve
 from decider.engine.wiring.plan import Branch, Call, Loop, ScatterGather, Sequence, Version
 from decider.exceptions import EngineError
@@ -119,6 +120,8 @@ class Executable:
         self._results = [(k, v) for k, v in plan.outputs.items() if v.producer is not None]
         self._hidden = set(plan.drops) | {k for k, _ in self._results}
         self._record_path = not any(c.node.kind == "frame" for c in plan.calls)
+        # The trace's per-run constant table: step ref (call index + 1) -> durable origin.
+        self._trace_table = StepTable(tuple(c.node.origin for c in plan.calls))
 
     def prepare(self, df: pl.DataFrame, params: Mapping[str, Any] | None = None,
                 n: int | None = None) -> tuple[State, RunParams]:
@@ -166,29 +169,30 @@ class Executable:
             self._checked.add(run.key)
         return run
 
-    def run(self, df: pl.DataFrame, params: Mapping[str, Any] | None = None) -> pl.DataFrame:
+    def run(self, df: pl.DataFrame, params: Mapping[str, Any] | None = None, trace=None) -> pl.DataFrame:
         """Run over a frame: the input columns plus every output, minus drops.
 
         `params` is treated as immutable: it is validated once and reused
         while the same object is passed, so pass a new dict to change a value
-        rather than editing one in place.
+        rather than editing one in place. `trace` is an optional `TraceSink`:
+        when it is not given, nothing is captured (no-op).
 
         Example::
 
             out = exe.run(df, params={"shared": {"min_ratio": 0.4}})
         """
         state, run = self.prepare(df, params)
-        for _ in self.runner.iterate(self.plan, state, run):
-            pass
+        self._iterate(state, run, trace)
         return self.output(state)
 
-    def score(self, record: Mapping[str, Any], params: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    def score(self, record: Mapping[str, Any], params: Mapping[str, Any] | None = None,
+              trace=None) -> dict[str, Any]:
         """Run one record, given as a dict of input values; returns a dict of the output row.
 
         Uses the same kernels as `run`. A pipeline without frame steps never
         builds a polars frame on this path. As in `run`, `params` is treated
         as immutable: pass the same document object call after call and it is
-        never hashed or validated again.
+        never hashed or validated again. `trace` is an optional `TraceSink`.
 
         Example::
 
@@ -196,8 +200,7 @@ class Executable:
         """
         if not self._record_path:
             state, run = self.prepare(pl.DataFrame([dict(record)]), params, n=1)
-            for _ in self.runner.iterate(self.plan, state, run):
-                pass
+            self._iterate(state, run, trace)
             return self.output(state).row(0, named=True)
         # A pipeline without frame steps never needs a frame: the record goes
         # straight into one-row arrays and the result straight into a dict.
@@ -206,13 +209,17 @@ class Executable:
         for dtype, versions in self._inputs:
             load_record(state, record, versions, dtype)
         run = self._params(params, 1)
-        for _ in self.runner.iterate(self.plan, state, run):
-            pass
+        self._iterate(state, run, trace)
         out = {k: x for k, x in record.items() if k not in self._hidden}
         for k, v in self._results:
             values, valid = state.read(v)
             out[k] = None if valid is not None and not valid[0] else record_value(values.tolist()[0], v.annotation)
         return out
+
+    def _iterate(self, state: State, run: RunParams, trace) -> None:
+        table = self._trace_table if trace is not None else None
+        for _ in self.runner.iterate(self.plan, state, run, trace, table):
+            pass
 
     def fallbacks(self) -> dict[str, str]:
         """Every step that runs outside the shared kernel, keyed by step path, with the reason why.
