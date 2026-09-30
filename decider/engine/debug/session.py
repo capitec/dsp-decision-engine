@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import copy
-import queue
-import threading
 from collections import Counter
 from dataclasses import fields
 from typing import TYPE_CHECKING, Any, Callable, Mapping
@@ -16,12 +14,12 @@ from decider.engine.debug.events import (Error, Event, NodeFinished, NodeStarted
                                          ParamsValidated, Paused, RunFinished, RunStarted, Warning, summarize)
 from decider.engine.debug.hot import keys
 from decider.engine.ir.context import step_map
-from decider.engine.ir.nodes import CallNode, IRNode, SequenceNode, SubflowNode, iter_nodes, iter_with_subflows
+from decider.engine.ir.nodes import CallNode, IRNode, SequenceNode, iter_nodes
 from decider.engine.ir.origin import Origin
 from decider.engine.run.runners.base import Checkpoint
 from decider.engine.ir.decls import base_annotation
 from decider.engine.run.state import dtype_of
-from decider.engine.wiring.plan import Call, Version
+from decider.engine.wiring.plan import Version
 
 if TYPE_CHECKING:
     from decider.engine.run.engine import Executable
@@ -89,7 +87,6 @@ class Session(Edits):
         self._visits: Counter[str] = Counter()
         self._visited: set[str] = set()
         self._previous: Checkpoint | None = None
-        self._subflow: _SubflowRun | None = None
         self._start()
         self._index()
         # Snapshot now: a later redefinition of a helper a step calls changes the step's content.
@@ -136,9 +133,6 @@ class Session(Edits):
 
             s.step_into().arm   # the arm a branch is running, when inside one
         """
-        call = self._subflow_call()
-        if call is not None:
-            self._open_subflow(call)
         return self._go("step", lambda cp: True)
 
     def resume(self) -> Checkpoint | None:
@@ -176,18 +170,17 @@ class Session(Edits):
             session.state.versions("disposable_income@*")[-1].producer   # "override@affordability_ratio"
         """
         targets = self._targets(name)
-        state = self._active_state()
         dtype = dtype_of(base_annotation(targets[-1].annotation))
-        values, valid = _cast(name, value, dtype, state.n)
+        values, valid = _cast(name, value, dtype, self.state.n)
         previous = summarize(self.value(name))
         # Every version written so far, not only the latest: a loop or branch
         # may still read an earlier one (a carry, a branch's prior value).
         # ponytail: earlier producers' values are overwritten, not kept; keep copies if the audit needs them.
         # ponytail: frame steps read input columns from the frame, so they miss an input override; overlay inputs too if needed.
         for v in targets:
-            state.write(v, values.copy(), valid=None if valid is None else valid.copy())
+            self.state.write(v, values.copy(), valid=None if valid is None else valid.copy())
         path = "" if self.current is None else self.current.origin.path
-        record = state.record(name, f"override@{path}", values, valid)
+        record = self.state.record(name, f"override@{path}", values, valid)
         self._emit(Overridden(name, record.producer, summarize(self.value(name)), previous))
 
     def rewind(self, path: str) -> Checkpoint:
@@ -237,12 +230,11 @@ class Session(Edits):
             session.value("term_cap")
             session.value("term_cap@term/cap_by_income")
         """
-        state = self._active_state()
         if "@" in spec:
-            for v in state.versions(spec):
+            for v in self.state.versions(spec):
                 self._check_stored(spec, v)
-            return state.column(spec)
-        return state.column(spec, self._targets(spec)[-1])
+            return self.state.column(spec)
+        return self.state.column(spec, self._targets(spec)[-1])
 
     def structure(self) -> list[dict[str, str]]:
         """The pipeline's nodes as they are now, parents before children: `path`, `kind` and `source` of each.
@@ -259,7 +251,7 @@ class Session(Edits):
         """
         return [{"path": n.origin.path, "kind": n.kind if isinstance(n, CallNode) else
                  type(n).__name__.removesuffix("Node").lower(), "source": n.origin.source}
-                for n in iter_with_subflows(self.executable.plan.root.node)]
+                for n in iter_nodes(self.executable.plan.root.node)]
 
     def output(self) -> pl.DataFrame:
         """The frame `Executable.run` returns, overrides applied; only once the run has finished.
@@ -315,8 +307,6 @@ class Session(Edits):
         return None
 
     def _next(self) -> Checkpoint | None:
-        if self._subflow is not None:
-            return self._subflow_next()
         if self._iterator is None:
             raise RuntimeError("the run is over" if self.finished else "the run stopped on an error; rewind() it")
         try:
@@ -346,50 +336,6 @@ class Session(Edits):
         self._emit(NodeFinished(o, {v.name: summarize(self.state.column(v.name, v)) for v in produced}))
         return cp
 
-    def _subflow_call(self) -> Call | None:
-        cp = self.current
-        if cp is None or cp.when != "before":
-            return None
-        for call in self.executable.plan.calls:
-            if isinstance(call.node, SubflowNode) and call.node.origin.path == cp.origin.path:
-                return call
-        return None
-
-    def _open_subflow(self, call: Call) -> None:
-        each = call.node.fn
-        if not hasattr(each, "child_run"):
-            return
-        values, _ = self.state.read(call.reads[0])
-        item = next((it for row in values if row for it in row), None)
-        if item is None:
-            return
-        # Step the child interpreted (one checkpoint per node), not fused, so a session can pause inside it.
-        from decider.engine.run.runners.interpreted import InterpretedRunner
-
-        state, params, checkpoints = each.child_run(item, self._params.doc, InterpretedRunner())
-        self._subflow = _SubflowRun(state, checkpoints, each.plan)
-        # `step()` from a child sequence should enter it, not step over it as a leaf.
-        self._sequences |= {n.origin.path for n in iter_nodes(each.plan.root.node) if isinstance(n, SequenceNode)}
-
-    def _active_state(self):
-        return self._subflow.state if self._subflow is not None else self.state
-
-    def _active_plan(self):
-        return self._subflow.plan if self._subflow is not None else self.executable.plan
-
-    def _subflow_next(self) -> Checkpoint | None:
-        cp = self._subflow.next()
-        if cp is None:
-            self._subflow = None
-            return self._next()
-        self._previous, self.current = self.current, cp
-        self._log_params()
-        if cp.when == "before":
-            self._emit(NodeStarted(cp.origin, cp.arm, cp.iteration))
-            return cp
-        self._emit(NodeFinished(cp.origin, {}))
-        return cp
-
     def _hits(self, target: Breakpoint, cp: Checkpoint) -> bool:
         if callable(target):
             return bool(target(cp))
@@ -406,11 +352,9 @@ class Session(Edits):
     def _targets(self, name: str) -> list[Version]:
         # Inputs, then what has been written so far in production order; the
         # override's own records are history, not a place later nodes read.
-        plan = self._active_plan()
-        state = self._active_state()
-        inputs = [v for v in plan.versions if v.producer is None and v.name == name]
-        chain = state.chains.get(name, ())
-        written = [v for v in chain if v.id in state.values and not v.producer.startswith("override@")]
+        inputs = [v for v in self.executable.plan.versions if v.producer is None and v.name == name]
+        chain = self.state.chains.get(name, ())
+        written = [v for v in chain if v.id in self.state.values and not v.producer.startswith("override@")]
         if not inputs + written:
             # ponytail: only when nothing of `name` is stored; a stored earlier version hides a later in-kernel one.
             for v in chain:
@@ -439,45 +383,6 @@ class Session(Edits):
 
     def _emit(self, event: Event) -> None:
         self.events.append(event)
-
-
-class _SubflowRun:
-    """A child `each` run on a worker thread; `next()` hands the session one checkpoint at a time.
-
-    `yield` cannot cross the `fn` that runs the child, so the worker drains the child's runner in the
-    background and blocks on a gate at each checkpoint; the session's thread reads each checkpoint.
-    """
-
-    _DONE = object()
-
-    def __init__(self, state, checkpoints, plan=None):
-        self.state = state
-        self.plan = plan
-        self._queue: queue.Queue = queue.Queue(maxsize=1)
-        self._gate: queue.Queue = queue.Queue(maxsize=1)
-        self._started = False
-        threading.Thread(target=self._run, args=(checkpoints,), daemon=True).start()
-
-    def _run(self, checkpoints) -> None:
-        try:
-            for cp in checkpoints:
-                self._queue.put(cp)
-                self._gate.get()
-        except BaseException as e:
-            self._queue.put(e)
-        else:
-            self._queue.put(self._DONE)
-
-    def next(self) -> Checkpoint | None:
-        if self._started:
-            self._gate.put(None)
-        self._started = True
-        cp = self._queue.get()
-        if cp is self._DONE:
-            return None
-        if isinstance(cp, BaseException):
-            raise cp
-        return cp
 
 
 def _under(path: str, prefix: str) -> bool:

@@ -59,16 +59,9 @@ def test_the_childs_params_are_tunable_through_the_parent_document():
     exe = Engine().bind(pipeline(), mode="interpreted")
     record = {"items": [{"weight": 25.0}]}
     assert exe.score(record)["items"] == [{"weight": 25.0, "heavy": True}]
-    params = {"order": {"items": {"item": {"heavy": {"heavy_kg": 30.0}}}}}
+    params = {"order": {"items": {"heavy_kg": 30.0}}}
     assert exe.score(record, params=params)["items"] == [{"weight": 25.0, "heavy": False}]
-    assert exe.plan is not None  # smoke: the child's param is part of the schema
-
-
-def test_structure_shows_the_childs_steps_at_their_nested_path():
-    session = pipeline().session(FRAME)
-    paths = {n["path"] for n in session.structure()}
-    assert "order/items" in paths
-    assert any(p.startswith("order/items/") for p in paths)
+    assert exe.plan is not None  # smoke: the hoisted param is part of the schema
 
 
 def test_a_missing_item_field_uses_the_childs_fill():

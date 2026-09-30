@@ -28,7 +28,7 @@ export function FindStep({ nodes, onPick, selected }: { nodes: CallNodeJson[]; o
   // After a pick the list closes but the hits stay, to step through with ◀ ▶.
   const [picked, setPicked] = useState<number | null>(null);
   const input = useRef<HTMLInputElement>(null);
-  const hits = findSteps(nodes.flatMap((n) => [n, ...(n.subflowSteps ?? [])]), query);
+  const hits = findSteps(nodes, query);
   useEffect(() => {
     if (picked !== null && hits[picked]?.path !== selected) {
       setQuery("");

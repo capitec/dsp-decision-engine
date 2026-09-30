@@ -13,7 +13,6 @@ from decider.engine.compile import Fallback, Unit, compile_plan, numpy_dtype
 from decider.engine.compile.rows import build_ragged, build_rows, rows_needs_no_fill
 from decider.engine.compile.structs import build_struct, struct_schema
 from decider.engine.ir.decls import Input, NullPolicy, base_annotation
-from decider.engine.ir.nodes import SubflowNode
 from decider.engine.run.params import RunParams
 from decider.engine.run.representations import codes, span_objects, spans
 from decider.engine.run.runners.base import Checkpoint
@@ -104,10 +103,6 @@ class SteppedRunner(InterpretedRunner):
         return dict(self._fallbacks)
 
     def _call(self, call: Call, state: State, params: RunParams, scope: _Scope) -> None:
-        # A `SubflowNode` never compiles: its child runs behind `fn`, so it takes the interpreted
-        # path (which hands `fn` the params document) in every mode.
-        if isinstance(call.node, SubflowNode):
-            return super()._call(call, state, params, scope)
         unit = self.units.get(call.id)
         if unit is None:
             return super()._call(call, state, params, scope)
