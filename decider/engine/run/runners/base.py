@@ -43,7 +43,7 @@ class Runner(Protocol):
             print(checkpoint.when, checkpoint.origin.path)
     """
 
-    def iterate(self, plan: Plan, state: State, params: RunParams) -> Iterator[Checkpoint]: ...
+    def iterate(self, plan: Plan, state: State, params: RunParams, trace=None, table=None) -> Iterator[Checkpoint]: ...
 
 
 @runtime_checkable
