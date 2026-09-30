@@ -24,7 +24,7 @@ from decider.engine.compile.span import SPAN
 from decider.engine.compile.structs import bad_field, struct_dtype, struct_schema
 from decider.engine.ir.decls import (KIND_DTYPES, FeatureKind, Input, NullPolicy, Output, base_annotation,
                                      feature_kind, nullable)
-from decider.engine.ir.nodes import CallNode, SubflowNode
+from decider.engine.ir.nodes import CallNode
 from decider.engine.params import NodeParams
 from decider.steps.helpers import allows_fallback, helper_signatures
 from decider.types import is_raw, raw_base, columnar_item, item_schema, struct_item
@@ -102,11 +102,6 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None, bool]:
 
         key, fn, reason, declared = compile_call(plan.calls[0].node)
     """
-    if node.kind == "scalar" and not isinstance(node.fn, py_types.FunctionType):
-        # A callable object (a subflow's runner) can't become a kernel: run it in Python as-is.
-        reason = "runs a child flow, which no kernel compiles" if isinstance(node, SubflowNode) \
-            else "a callable object, which no kernel compiles"
-        return "", node.fn, reason, False
     prepared, helper_reason, undeclared = (_prepare_function(node.fn) if node.kind == "scalar"
                                            else (node.fn, None, ()))
     declared = allows_fallback(node.fn) or (helper_reason or "").startswith(_DECLARED_CALLEE)

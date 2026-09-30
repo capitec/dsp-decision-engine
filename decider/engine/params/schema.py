@@ -6,7 +6,7 @@ from typing import Annotated, Any
 from pydantic import TypeAdapter
 
 from decider.engine.ir.decls import ParamDecl
-from decider.engine.ir.nodes import CallNode, IRNode, iter_with_subflows
+from decider.engine.ir.nodes import CallNode, IRNode, iter_nodes
 from decider.engine.params.models import type_name
 
 
@@ -99,7 +99,7 @@ def parameters(root: IRNode) -> ParamsSchema:
     shared: dict[str, ParamDecl] = {}
     used_by: dict[str, list[str]] = {}
     local: dict[str, dict[str, ParamDecl]] = {}
-    for node in iter_with_subflows(root):
+    for node in iter_nodes(root):
         if not isinstance(node, CallNode):
             continue
         for d in node.params:

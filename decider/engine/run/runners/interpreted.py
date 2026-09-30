@@ -10,7 +10,6 @@ from decider.engine.boundary.nulls import MissingInputError
 from decider.engine.compile import numpy_dtype
 from decider.engine.compile.rows import build_rows, rows_needs_no_fill
 from decider.engine.ir.decls import Input, NullPolicy, base_annotation
-from decider.engine.ir.nodes import SubflowNode
 from decider.engine.run.params import RunParams
 from decider.engine.run.representations import codes, span_objects
 from decider.engine.run.runners.base import Checkpoint
@@ -92,8 +91,6 @@ class InterpretedRunner:
 
     def _call(self, call: Call, state: State, params: RunParams, scope: _Scope) -> None:
         node = call.node
-        if isinstance(node, SubflowNode):
-            return self._subflow(call, state, params, scope)
         if node.kind == "frame":
             return _frame(call, state, scope, params.bundle(call.id, scope.count(state.n)))
         m = scope.count(state.n)
@@ -138,29 +135,6 @@ class InterpretedRunner:
             # A `Raw[...]` output is stored as a kernel stores it, or the modes disagree on dtype.
             array, valid = _array(values, numpy_dtype(out.annotation) if is_raw(out.annotation)
                                   else dtype_of(base_annotation(out.annotation)))
-            state.write(v, array, scope.rows, valid)
-            scope.names[v.name] = v
-
-    def _subflow(self, call: Call, state: State, params: RunParams, scope: _Scope) -> None:
-        # A `SubflowNode` runs its child behind one `fn` call; `fn` takes the parent's whole params
-        # document so the child, built under this node's own path, reads its params from its keys.
-        node = call.node
-        doc = params.doc
-        if node.kind == "frame":
-            return _frame(call, state, scope, params.bundle(call.id, scope.count(state.n)), doc)
-        m = scope.count(state.n)
-        cols = [_argument(state, v, i, scope.rows, node.origin.path, node.kind).tolist()
-                for i, v in zip(node.inputs, call.reads)]
-        rows = zip(*cols) if cols else repeat((), m)
-        results = [node.fn(*row, doc) for row in rows]
-        if len(node.outputs) == 1:
-            results = [(r,) for r in results]
-        columns = list(zip(*results)) if results else [()] * len(node.outputs)
-        if len(columns) != len(node.outputs):
-            raise ValueError(f"{node.origin.path}: returned {len(columns)} values per row, "
-                             f"but declares {len(node.outputs)} outputs")
-        for v, out, values in zip(call.writes, node.outputs, columns):
-            array, valid = _array(values, dtype_of(base_annotation(out.annotation)))
             state.write(v, array, scope.rows, valid)
             scope.names[v.name] = v
 
@@ -306,12 +280,12 @@ def _array(values: tuple, dtype: np.dtype) -> tuple[np.ndarray, np.ndarray | Non
     return out, valid
 
 
-def _frame(call: Call, state: State, scope: _Scope, bundle: tuple, doc=None) -> None:
+def _frame(call: Call, state: State, scope: _Scope, bundle: tuple) -> None:
     node = call.node
     path = node.origin.path
     df = state.frame_of(scope.base, scope.names, scope.rows)
     try:
-        out = node.fn(df, doc) if doc is not None else node.fn(df, **{d.arg: b for d, b in zip(node.params, bundle)})
+        out = node.fn(df, **{d.arg: b for d, b in zip(node.params, bundle)})
     except Exception as e:
         _note(e, f"in frame step {path}")
         raise

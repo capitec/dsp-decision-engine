@@ -53,9 +53,6 @@ def cpu_target() -> tuple[str, str, str]:
 
 def _function(h: Any, fn: Any, seen: set[int]) -> None:
     fn = getattr(fn, "py_func", fn)
-    if not isinstance(fn, types.FunctionType):
-        h.update(f"object:{type(fn).__qualname__}:{id(fn)}".encode())
-        return
     if id(fn) in seen:
         h.update(b"<recursive>")
         return
