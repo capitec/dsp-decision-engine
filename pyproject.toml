@@ -10,6 +10,7 @@ dependencies = [
     "pydantic-settings",
     "click",
     "numba>=0.67.0",
+    "fastmcp>=4.0.10",
 ]
 
 [project.optional-dependencies]
