@@ -11,7 +11,7 @@ from decider.engine.compile.rows import Ragged
 from decider.engine.compile.sink import Sink
 from decider.engine.compile.structs import Schema, struct_dtype, struct_schema
 from decider.engine.ir.decls import Input, NullPolicy, base_annotation, nullable
-from decider.engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, Sequence, Version
+from decider.engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, ScatterGather, Sequence, Version
 from decider.types import columnar_item, item_schema, struct_item
 
 Values = dict[int, np.ndarray]
@@ -234,9 +234,13 @@ def _runs(r: Resolved, fuse: bool) -> Iterator[list[Call]]:
         yield from _runs(r.condition, fuse)
         for arm in r.arms:
             yield from _runs(arm, fuse)
-    else:
+    elif isinstance(r, Loop):
         yield from _runs(r.condition, fuse)
         yield from _runs(r.body, fuse)
+    else:
+        yield from _runs(r.body, fuse)
+        if r.accumulate is not None:
+            yield from _runs(r.accumulate, fuse)
 
 
 def _split_at_nulls(run: list[Call]) -> Iterator[list[Call]]:
@@ -324,6 +328,13 @@ def _kept(plan: Plan) -> tuple[set[int], dict[int, set[int]]] | None:
             pinned |= {v.id for c in r.carries for v in (c.version, c.initial, c.last)}
             pinned.add(r.condition.writes[0].id)
             stack.append(r.body)
+        elif isinstance(r, ScatterGather):
+            pinned |= {v.id for v in r.new_fields}
+            pinned.add(r.column.id)
+            pinned.add(r.out.id)
+            stack.append(r.body)
+            if r.accumulate is not None:
+                stack.append(r.accumulate)
     readers: dict[int, set[int]] = {}
     for c in plan.calls:
         for v in c.reads:

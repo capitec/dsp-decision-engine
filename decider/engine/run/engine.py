@@ -16,7 +16,7 @@ from decider.engine.run.runners.stepped import SteppedRunner
 from decider.engine.ir.decls import ParamDecl, base_annotation
 from decider.engine.run.state import State, declared_dtype, dtype_of, load_record, record_value
 from decider.engine.wiring import Plan, resolve
-from decider.engine.wiring.plan import Version
+from decider.engine.wiring.plan import Branch, Call, Loop, ScatterGather, Sequence, Version
 from decider.exceptions import EngineError
 
 if TYPE_CHECKING:
@@ -94,6 +94,10 @@ class Executable:
         self.runner = runner
         self.lazy = lazy
         self.nodes = {c.id: NodeParams(c.node.origin.path, c.node.params) for c in plan.calls if c.node.params}
+        # A scatter-gather node's hoisted child params validate and bundle like a call's, under its path.
+        for sg in _scatter_gathers(plan.root):
+            if sg.node.params:
+                self.nodes[sg.node.origin.path] = NodeParams(sg.node.origin.path, sg.node.params)
         self.cache = ParamsCache()
         self._checked: set[str] = set()
         # ponytail: the latest call's report only; return it per call if concurrent callers need their own.
@@ -248,6 +252,24 @@ class Executable:
             # Every frame column passes through: hstack is several times cheaper than a new frame.
             return frame.hstack(results)
         return pl.DataFrame([frame.get_column(c) for c in names if c not in self._hidden] + results)
+
+
+def _scatter_gathers(r) -> Any:
+    if isinstance(r, ScatterGather):
+        yield r
+        yield from _scatter_gathers(r.body)
+        if r.accumulate is not None:
+            yield from _scatter_gathers(r.accumulate)
+    elif isinstance(r, Sequence):
+        for c in r.children:
+            yield from _scatter_gathers(c)
+    elif isinstance(r, Branch):
+        yield from _scatter_gathers(r.condition)
+        for a in r.arms:
+            yield from _scatter_gathers(a)
+    elif isinstance(r, Loop):
+        yield from _scatter_gathers(r.condition)
+        yield from _scatter_gathers(r.body)
 
 
 def _where(path: str, decl: ParamDecl) -> str:

@@ -100,15 +100,27 @@ class LoopNode(IRNode):
 
 @dataclass(frozen=True, slots=True, eq=False)
 class ScatterGatherNode(IRNode):
-    """Runs the body for every element in a list optionally runs an accumulator."""
+    """Runs `each` over every element of the list column `column`, writing the gathered result back.
+
+    `each` reads the element's fields and writes new ones; without `accumulate`
+    the enriched elements are gathered back into a list written to `output`,
+    with `accumulate` the elements are folded `(acc, element) -> acc` instead.
+    `params` holds the child's params hoisted to this node's path, and `hoist`
+    maps each `(arg, child path, param name)` so the runner can forward them.
+    """
+
     origin: Origin
+    column: str
     each: IRNode
     accumulate: CallNode | None
+    output: str
+    params: tuple[ParamDecl, ...] = ()
+    hoist: tuple[tuple[str, str], ...] = ()  # (param name, child path) so the runner forwards hoisted params
 
     def children(self) -> tuple[IRNode, ...]:
         if self.accumulate is None:
-            return (self.each, )
-        return (self.accumulate, self.each)
+            return (self.each,)
+        return (self.each, self.accumulate)
 
 
 @dataclass(frozen=True, slots=True, eq=False)

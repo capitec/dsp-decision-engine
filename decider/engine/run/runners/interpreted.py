@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import copy
 from itertools import repeat
-from typing import Callable, Iterator
+from typing import Any, Callable, Iterator, Mapping
 
 import numpy as np
 import polars as pl
@@ -13,9 +14,9 @@ from decider.engine.ir.decls import Input, NullPolicy, base_annotation
 from decider.engine.run.params import RunParams
 from decider.engine.run.representations import codes, span_objects
 from decider.engine.run.runners.base import Checkpoint
-from decider.engine.run.state import State, dtype_of, fill_missing, from_series
+from decider.engine.run.state import State, dtype_of, fill_missing, from_series, record_value
 from decider.types import Representation, is_raw, representation_for, columnar_item, item_schema, struct_item
-from decider.engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, Sequence, Version
+from decider.engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, ScatterGather, Sequence, Version
 
 
 class _Scope:
@@ -81,8 +82,10 @@ class InterpretedRunner:
             yield from self._sequence(r, state, params, scope)
         elif isinstance(r, Branch):
             yield from self._branch(r, state, params, scope)
-        else:
+        elif isinstance(r, Loop):
             yield from self._loop(r, state, params, scope)
+        else:
+            yield from self._scatter_gather(r, state, params, scope)
         yield scope.checkpoint(origin, "after")
 
     def _sequence(self, seq: Sequence, state: State, params: RunParams, scope: _Scope) -> Iterator[Checkpoint]:
@@ -188,9 +191,67 @@ class InterpretedRunner:
         for carry in loop.carries:
             scope.names[carry.version.name] = carry.version
 
+    def _scatter_gather(self, sg: ScatterGather, state: State, params: RunParams, scope: _Scope) -> Iterator[Checkpoint]:
+        node = sg.node
+        lists, _ = state.read(sg.column, scope.rows)
+        names = [name for name, _ in sg.fields]
+        # Explode the lists (one per row in scope) into flat per-field element arrays.
+        offsets = [0]
+        flat = {name: [] for name in names}
+        for row_list in lists:
+            items = row_list or ()
+            for item in items:
+                for name in names:
+                    flat[name].append(item[name])
+            offsets.append(offsets[-1] + len(items))
+        elem_state = State(state.plan, pl.DataFrame(), offsets[-1])
+        for (name, v) in sg.fields:
+            values, valid = _array(tuple(flat[name]), dtype_of(base_annotation(v.annotation)))
+            elem_state.write(v, values, valid=valid)
+        elem_scope = _Scope(None, elem_state.frame, {name: v for name, v in sg.fields})
+        # A child doc forwards the hoisted params from this node's path into the body's nested paths.
+        child_params = _forward_params(params, node.origin.path, node.hoist) if node.params else params
+        yield from self._node(sg.body, elem_state, child_params, elem_scope)
+        # Gather the body's writes back into a list column, one enriched list per row.
+        gathered = {v.name: (elem_state.read(v)[0].tolist(), elem_state.read(v)[1]) for v in sg.new_fields}
+        out_lists = np.empty(len(lists), object)
+        for r, row_list in enumerate(lists):
+            items = row_list or ()
+            lo = offsets[r]
+            out = []
+            for j, item in enumerate(items):
+                enriched = dict(item)
+                for v in sg.new_fields:
+                    values, valid = gathered[v.name]
+                    k = lo + j
+                    enriched[v.name] = None if valid is not None and not valid[k] else record_value(values[k], v.annotation)
+                out.append(enriched)
+            out_lists[r] = out
+        state.write(sg.out, out_lists, scope.rows)
+        scope.names[sg.out.name] = sg.out
+
 
 def _ignore(locator: str) -> None:
     pass
+
+
+def _forward_params(params: RunParams, node_path: str, hoist: tuple[tuple[str, str], ...]) -> RunParams:
+    # A child body's steps read params at their own nested paths; hoisting surfaces them at the
+    # node's path in the document, so forward each hoisted value down into the child path it feeds.
+    local: Any = params.doc
+    for part in node_path.split("/"):
+        local = local.get(part, {}) if isinstance(local, Mapping) else {}
+    if not isinstance(local, Mapping) or not local:
+        return params
+    doc = copy.deepcopy(dict(params.doc))
+    for name, child_path in hoist:
+        if name not in local:
+            continue
+        target: Any = doc
+        for part in child_path.split("/"):
+            target = target.setdefault(part, {})
+        target[name] = local[name]
+    return RunParams(params.nodes, doc, params.cache, params.lazy)
 
 
 def _note(e: BaseException, text: str) -> None:

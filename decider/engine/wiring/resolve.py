@@ -8,8 +8,10 @@ from typing import Any, get_origin, is_typeddict
 
 from decider.engine.ir.decls import Input, base_annotation
 from decider.types import columnar_item, is_raw, item_schema, struct_item
-from decider.engine.ir.nodes import BranchNode, CallNode, IRNode, LoopNode, SequenceNode, iter_nodes
-from decider.engine.wiring.plan import Branch, Call, Carry, Loop, Merge, Plan, Resolved, Sequence, Version
+from decider.engine.ir.nodes import (BranchNode, CallNode, IRNode, LoopNode, ScatterGatherNode, SequenceNode,
+                                     iter_nodes)
+from decider.engine.wiring.plan import (Branch, Call, Carry, Loop, Merge, Plan, Resolved, ScatterGather, Sequence,
+                                        Version)
 from decider.exceptions import WiringError
 from decider.registry.resolve import TYPO_CUTOFF, hint, suggest
 
@@ -103,6 +105,8 @@ class _Resolver:
             return self.branch(node, scope)
         if isinstance(node, LoopNode):
             return self.loop(node, scope)
+        if isinstance(node, ScatterGatherNode):
+            return self.scatter_gather(node, scope)
         raise TypeError(f"can't resolve {type(node).__name__}")
 
     def call(self, node: CallNode, scope: _Scope) -> Call:
@@ -276,6 +280,35 @@ class _Resolver:
         self.read -= {v.id for v in carried}
         scope.names.update(zip(node.carries, carried))
         return Loop(node, condition, body, tuple(carries))
+
+    def scatter_gather(self, node: ScatterGatherNode, scope: _Scope) -> ScatterGather:
+        path = node.origin.path
+        column = self.lookup(node.column, scope, path, {node.output}, Input(node.column, list[dict]))
+        # The item's fields are the names the body reads but never writes; each is a synthetic version
+        # the runner fills from the element, so it is not a pipeline input and never leaves the node.
+        reads: dict[str, Any] = {}
+        writes: set[str] = set()
+        for n in iter_nodes(node.each):
+            if isinstance(n, CallNode):
+                for i in n.inputs or ():
+                    reads.setdefault(i.name, i.annotation)
+                for o in n.outputs or ():
+                    writes.add(o.name)
+        inner = scope.child()
+        fields: list[tuple[str, Version]] = []
+        for name, annotation in reads.items():
+            if name in writes:
+                continue
+            v = self.new(name, path, annotation)
+            fields.append((name, v))
+            inner.names[name] = v
+        body = self.walk(node.each, inner)
+        new_fields = tuple(v for v in inner.names.values()
+                           if v.producer is not None and v.producer.startswith(path + "/"))
+        out = self.write(node.output, list[dict], path, scope)
+        self.closed[path] = f"each {path}, which passes on only its gathered output"
+        accumulate = self.call(node.accumulate, scope) if node.accumulate is not None else None
+        return ScatterGather(node, column, body, tuple(fields), new_fields, out, accumulate)
 
     def emit(self, where: str, spec: str, scope: _Scope) -> None:
         label = where or "<root>"

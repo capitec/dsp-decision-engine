@@ -6,7 +6,7 @@ from typing import Annotated, Any
 from pydantic import TypeAdapter
 
 from decider.engine.ir.decls import ParamDecl
-from decider.engine.ir.nodes import CallNode, IRNode, iter_nodes
+from decider.engine.ir.nodes import CallNode, IRNode, ScatterGatherNode
 from decider.engine.params.models import type_name
 
 
@@ -90,7 +90,7 @@ class ParamsSchema(dict):
 
 
 def parameters(root: IRNode) -> ParamsSchema:
-    """Collect the params of every `CallNode` in an IR tree.
+    """Collect the params of every `CallNode` in an IR tree, and a `ScatterGatherNode`'s hoisted child params.
 
     Example::
 
@@ -99,14 +99,29 @@ def parameters(root: IRNode) -> ParamsSchema:
     shared: dict[str, ParamDecl] = {}
     used_by: dict[str, list[str]] = {}
     local: dict[str, dict[str, ParamDecl]] = {}
-    for node in iter_nodes(root):
-        if not isinstance(node, CallNode):
+    for node in _param_nodes(root):
+        if isinstance(node, ScatterGatherNode):
+            decls, path = node.params, node.origin.path
+        elif isinstance(node, CallNode):
+            decls, path = node.params, node.origin.path
+        else:
             continue
-        for d in node.params:
+        for d in decls:
             if d.shared_key is None:
-                local.setdefault(node.origin.path, {})[d.name] = d
+                local.setdefault(path, {})[d.name] = d
             else:
                 # Shared defaults may differ per node; the document shows the first.
                 shared.setdefault(d.shared_key, d)
-                used_by.setdefault(d.shared_key, []).append(node.origin.path)
+                used_by.setdefault(d.shared_key, []).append(path)
     return ParamsSchema({"shared": shared, **local} if shared else local, used_by)
+
+
+def _param_nodes(node: IRNode):
+    """Every param-bearing node of an IR tree; a `ScatterGatherNode` is opaque (its child's params are hoisted)."""
+    yield node
+    if isinstance(node, ScatterGatherNode):
+        if node.accumulate is not None:
+            yield from _param_nodes(node.accumulate)
+        return
+    for child in node.children():
+        yield from _param_nodes(child)
