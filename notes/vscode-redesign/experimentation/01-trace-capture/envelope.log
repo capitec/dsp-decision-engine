@@ -1,0 +1,7 @@
+event size: 8 bytes (one int64: 20-bit step ref, 8-bit kind, 16-bit arm, 24-bit iteration)
+schema version: 1 (a buffer/run constant, not per event)
+in-kernel capture: 1,224,636,563 events/s (19.60 ms for 24,000,000 events over 1,000,000 rows x 24 steps)
+capture buffer memory: 192 MB for 24,000,000 events (192 bytes per row, i.e. 192 bytes per row x 24 events)
+post-hoc decode: 1,391,989 events/s
+ordering: row 7 events are step refs [0, 1, 2, 3, 4, 5]... in step order; 24,000,000 events decoded == 24,000,000 captured (conserved)
+adapter backpressure: bounded queue (capacity 10) drops overflow outside the kernel; kernel writes to a preallocated buffer, no per-event Python call or allocation
