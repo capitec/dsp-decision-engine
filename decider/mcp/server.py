@@ -1,7 +1,9 @@
 """The `decider`-hosted FastMCP server over stdio.
 
 `build_server` registers the headless read tools and the confirmation-gated
-(and raw-gated) actions as FastMCP tools. `run_stdio` serves one over stdio for
+(and raw-gated) actions as FastMCP tools; when given an editor bridge it also
+registers the editor-bound highlight/reveal/selection tools, which forward to
+the VS Code window that owns a workspace. `run_stdio` serves one over stdio for
 the agent's MCP host, as the `decider mcp` command does. Confirmation is
 client-side: mutating tools carry a `destructiveHint` annotation; the server
 does not re-approve them.
@@ -11,10 +13,11 @@ from __future__ import annotations
 from fastmcp import FastMCP
 
 from decider.mcp import tools
+from decider.mcp.editor import EditorBridge
 from decider.mcp.policy import Policy
 
 
-def build_server(policy: Policy) -> FastMCP:
+def build_server(policy: Policy, bridge: EditorBridge | None = None) -> FastMCP:
     mcp = FastMCP(name="decider")
 
     @mcp.tool
@@ -92,9 +95,25 @@ def build_server(policy: Policy) -> FastMCP:
         """Add durable ids to source under a path; requires client confirmation (writes source)."""
         return tools.generate_ids(path, check)
 
+    if bridge is not None:
+        @mcp.tool
+        def highlight(workspace: str, flow: str, nodes: list[str]) -> dict:
+            """Focus these flow entities (node paths) in the VS Code window for `workspace`."""
+            return bridge.send(workspace, {"kind": "highlight", "flow": flow, "nodes": nodes})
+
+        @mcp.tool
+        def reveal_source(workspace: str, path: str, line: int) -> dict:
+            """Navigate the VS Code window for `workspace` to a flow entity's source."""
+            return bridge.send(workspace, {"kind": "reveal", "path": path, "line": line})
+
+        @mcp.tool
+        def editor_selection(workspace: str) -> dict:
+            """The VS Code window's current editor selection (file, position, text)."""
+            return bridge.send(workspace, {"kind": "selection"})
+
     return mcp
 
 
 def run_stdio(raw: bool = False) -> None:
-    """Serve the headless MCP server over stdio until the host closes it."""
-    build_server(Policy(raw=raw)).run(transport="stdio")
+    """Serve the MCP server over stdio until the host closes it."""
+    build_server(Policy(raw=raw), EditorBridge()).run(transport="stdio")
