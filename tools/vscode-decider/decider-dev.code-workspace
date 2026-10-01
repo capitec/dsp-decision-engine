@@ -1,0 +1,35 @@
+{
+  "folders": [
+    {
+      "path": ".",
+      "name": "extension"
+    },
+    {
+      "path": "examples",
+      "name": "examples"
+    }
+  ],
+  "settings": {
+    "decider.python": ["uv", "run", "python"],
+    "[typescript]": {
+      "editor.defaultFormatter": "esbenp.prettier-vscode",
+      "editor.formatOnSave": true
+    },
+    "search.exclude": {
+      "dist": true,
+      "node_modules": true
+    }
+  },
+  "launch": {
+    "configurations": [
+      {
+        "name": "Extension + Examples",
+        "type": "extensionHost",
+        "request": "launch",
+        "args": ["${workspaceFolder:examples}"],
+        "outFiles": ["${workspaceFolder:extension}/dist/**/*.js"],
+        "preLaunchTask": "npm: build"
+      }
+    ]
+  }
+}
