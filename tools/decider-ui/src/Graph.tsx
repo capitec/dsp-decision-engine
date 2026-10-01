@@ -7,6 +7,12 @@ import type { Selection } from "./Inspector";
 const MIN_K = 0.1;
 const MAX_K = 4;
 const FIT_PAD = 40;
+// Graph-space margin around the viewport so a pan doesn't pop nodes in right at the edge.
+const CULL_PAD = 100;
+
+function intersectsViewport(v: { x1: number; y1: number; x2: number; y2: number }, x: number, y: number, w: number, h: number): boolean {
+  return x + w >= v.x1 && x <= v.x2 && y + h >= v.y1 && y <= v.y2;
+}
 
 interface Props {
   ir: IRNodeJson;
@@ -78,6 +84,28 @@ export function Graph({ ir, open, selected, onSelect, onToggle, onReveal, nodes,
   const selectedEdge = selected?.kind === "edge" ? selected : undefined;
   const touches = (n: IRNodeJson) => n.kind === "call" && valueName !== undefined && ((n.inputs ?? []).includes(valueName) || (n.outputs ?? []).includes(valueName));
 
+  // Drawing is what chokes on a large flow, not layout: only render what's on screen.
+  const visibleRect = useMemo(
+    () => ({ x1: -view.x / view.k - CULL_PAD, y1: -view.y / view.k - CULL_PAD, x2: (size.w - view.x) / view.k + CULL_PAD, y2: (size.h - view.y) / view.k + CULL_PAD }),
+    [view.x, view.y, view.k, size.w, size.h],
+  );
+  const visibleNodes = useMemo(() => laid.nodes.filter((n) => intersectsViewport(visibleRect, n.x, n.y, n.width, n.height)), [laid, visibleRect]);
+  const visibleClusters = useMemo(
+    () => laid.clusters.filter((c) => c.path !== ir.path && intersectsViewport(visibleRect, c.x, c.y, c.width, c.height)),
+    [laid, visibleRect, ir.path],
+  );
+  const visibleEdges = useMemo(() => {
+    const bbox = (e: Layout["edges"][number]) => {
+      const xs = e.points.map((p) => p.x);
+      const ys = e.points.map((p) => p.y);
+      return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+    };
+    return laid.edges.filter((e) => {
+      const b = bbox(e);
+      return intersectsViewport(visibleRect, b.x, b.y, b.w, b.h);
+    });
+  }, [laid, visibleRect]);
+
   // ---- gestures ------------------------------------------------------------
   const zoomAt = (cx: number, cy: number, factor: number) =>
     setView((v) => {
@@ -137,7 +165,7 @@ export function Graph({ ir, open, selected, onSelect, onToggle, onReveal, nodes,
           </marker>
         </defs>
         <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
-          {laid.clusters.filter((c) => c.path !== ir.path).map((c) => (
+          {visibleClusters.map((c) => (
             <g key={c.path} className={`cluster ${c.kind}`}>
               <rect x={c.x} y={c.y} width={c.width} height={c.height} rx={8} />
               <text x={c.x + 10} y={c.y + 16} className="fold" onPointerDown={(e) => e.stopPropagation()} onClick={() => onToggle(c.path)}>
@@ -145,7 +173,7 @@ export function Graph({ ir, open, selected, onSelect, onToggle, onReveal, nodes,
               </text>
             </g>
           ))}
-          {laid.edges.map((e) => (
+          {visibleEdges.map((e) => (
             <Edge key={e.id} e={e} selected={selectedEdge?.id === e.id} onPick={() => onSelect({ kind: "edge", id: e.id, from: e.from, to: e.to, label: e.label })} />
           ))}
           {shownFlows.map((f, i) => {
@@ -165,7 +193,7 @@ export function Graph({ ir, open, selected, onSelect, onToggle, onReveal, nodes,
               />
             );
           })}
-          {laid.nodes.map((n) => {
+          {visibleNodes.map((n) => {
             const node = n.node;
             const call = node.kind === "call" ? node : null;
             const bk = breakpoints?.get(n.path);

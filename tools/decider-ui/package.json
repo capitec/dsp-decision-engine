@@ -25,9 +25,6 @@
     "demo": "vite",
     "demo:build": "vite build"
   },
-  "dependencies": {
-    "@dagrejs/dagre": "^3.1.1"
-  },
   "peerDependencies": {
     "react": "^18.2.0 || ^19.0.0"
   },

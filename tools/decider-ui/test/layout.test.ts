@@ -5,6 +5,7 @@ import type { DescribeResult } from "../src/model/protocol";
 import { callNodes } from "../src/model/protocol";
 import { findSteps } from "../src/FindStep";
 import { dataEdges, findNode, fold, layout, orderEdges, touchPoints } from "../src/layout";
+import { largeFlow } from "../demo/mock";
 
 // The example flows live with the VS Code extension; the Python bridge is decider.debug_bridge.
 const ROOT = path.resolve(__dirname, "../../vscode-decider");
@@ -60,6 +61,14 @@ describe("large flows", () => {
     const edges = orderEdges(folded).map((e) => `${e.from} -> ${e.to}`);
     expect(edges).toContain("banding -> term");
     expect(edges).toContain("term -> sizing/offer");
+  });
+
+  it("lays out a large, deeply nested flow without crashing", () => {
+    const big = largeFlow().ir;
+    const l = layout(big);
+    expect(l.nodes.length).toBeGreaterThan(2000);
+    expect(l.width).toBeGreaterThan(0);
+    expect(l.height).toBeGreaterThan(0);
   });
 
   it("find matches a step's description word by word, name hits first", () => {
