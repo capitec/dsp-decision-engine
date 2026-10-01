@@ -27,6 +27,24 @@ def find(node, path):
             return hit
 
 
+def test_status_reports_the_dataset_identity():
+    b = started()
+    dataset = b.status()["dataset"]
+    assert dataset["dataset"] == "" and dataset["row_count"] == 2
+    assert ["client_id", "net_income"] == [c for c, _ in dataset["columns"]][:2]
+
+
+def test_start_loads_a_csv_file_by_path(tmp_path):
+    csv = tmp_path / "clients.csv"
+    csv.write_text("client_id,net_income,expenses,instalment,requested_term,min_net_salary,sector_code,requested_amount\n"
+                   "1,9000.0,4000.0,1500.0,72.0,4000.0,1,150000.0\n")
+    b = started(data=str(csv))
+    dataset = b.status()["dataset"]
+    assert dataset["dataset"] == "clients.csv"
+    assert dataset["row_count"] == 1
+    assert dataset["fingerprint"] is not None
+
+
 def test_describe_reports_every_node_kind_with_its_source():
     d = Bridge().describe(LOAN)
     assert d["pipeline"] == "pipeline"

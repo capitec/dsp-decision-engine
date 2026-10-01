@@ -24,9 +24,13 @@ interface Props {
   nodes: CallNodeJson[];
   run?: RunStatus;
   breakpoints?: Map<string, BreakpointKind>;
+  /** Click a step's breakpoint dot to set or clear a plain breakpoint there. */
+  onToggleBreakpoint?: (path: string) => void;
+  /** Right-click a step: the host shows its own context menu (view source, edit breakpoint, …), anchored at the node. */
+  onNodeContextMenu?: (path: string, rect: DOMRect) => void;
 }
 
-export function Graph({ ir, open, selected, onSelect, onToggle, onReveal, nodes, run, breakpoints }: Props) {
+export function Graph({ ir, open, selected, onSelect, onToggle, onReveal, nodes, run, breakpoints, onToggleBreakpoint, onNodeContextMenu }: Props) {
   const shown = useMemo(() => fold(ir, open), [ir, open]);
   const laid = useMemo(() => layout(shown), [shown]);
   const flows = useMemo(() => dataEdges(shown), [shown]);
@@ -182,12 +186,14 @@ export function Graph({ ir, open, selected, onSelect, onToggle, onReveal, nodes,
             if (!a || !b) return null;
             const id = `d${i}`;
             const isSelected = selectedEdge?.id === id;
+            const direction = f.to === selectedPath ? "in" : "out";
             return (
               <DataEdge
                 key={id}
                 a={a}
                 b={b}
                 column={f.column}
+                direction={direction}
                 selected={isSelected}
                 onPick={() => onSelect({ kind: "edge", id, from: f.from, to: f.to, columns: [f.column] })}
               />
@@ -215,6 +221,12 @@ export function Graph({ ir, open, selected, onSelect, onToggle, onReveal, nodes,
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={() => (call ? onSelect({ kind: "node", path: n.path }) : onToggle(n.path))}
                 onDoubleClick={() => call && onReveal?.(n.path)}
+                onContextMenu={(e) => {
+                  if (!call) return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onNodeContextMenu?.(n.path, e.currentTarget.getBoundingClientRect());
+                }}
               >
                 <title>
                   {call
@@ -226,9 +238,29 @@ export function Graph({ ir, open, selected, onSelect, onToggle, onReveal, nodes,
                 <text x={n.width / 2} y={20} textAnchor="middle" className="title">{icon(node)}{n.label}</text>
                 <text x={n.width / 2} y={37} textAnchor="middle" className="sub">{subLine(node)[0]}</text>
                 <text x={n.width / 2} y={51} textAnchor="middle" className="sub">{subLine(node)[1]}</text>
-                {bk && <circle className="bp-dot" cx={n.width - 8} cy={8} r={5} />}
-                {paused && <circle className="pause-dot" cx={8} cy={8} r={5} />}
-                {ran && !paused && <circle className="ran-dot" cx={8} cy={n.height - 8} r={3.5} />}
+                {call && (
+                  paused ? (
+                    // Paused right here: the pause mark takes the breakpoint dot's spot — you
+                    // don't need the breakpoint pointed out on the very step you're stopped at.
+                    <g className="pause-dot" transform={`translate(8,${n.height - 8})`}>
+                      <rect x={-3} y={-4} width={2.5} height={8} rx={0.5} />
+                      <rect x={0.5} y={-4} width={2.5} height={8} rx={0.5} />
+                    </g>
+                  ) : (
+                    <g
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleBreakpoint?.(n.path);
+                      }}
+                    >
+                      <circle className={bk ? "bp-dot set" : "bp-dot"} cx={8} cy={n.height - 8} r={5} />
+                      {bk === "value" && (
+                        <text x={8} y={n.height - 8} textAnchor="middle" dominantBaseline="central" className="bp-eq">=</text>
+                      )}
+                    </g>
+                  )
+                )}
+                {ran && !paused && <circle className="ran-dot" cx={n.width - 8} cy={n.height - 8} r={3.5} />}
               </g>
             );
           })}
@@ -262,11 +294,11 @@ function Edge({ e, selected, onPick }: { e: Layout["edges"][number]; selected: b
   );
 }
 
-function DataEdge({ a, b, column, selected, onPick }: { a: LaidNode; b: LaidNode; column: string; selected: boolean; onPick: () => void }) {
+function DataEdge({ a, b, column, direction, selected, onPick }: { a: LaidNode; b: LaidNode; column: string; direction: "in" | "out"; selected: boolean; onPick: () => void }) {
   const d = curve(a, b);
   const mid = { x: (a.x + a.width + b.x + b.width) / 2, y: (a.y + a.height + b.y) / 2 };
   return (
-    <g className={`edge data ${selected ? "selected" : ""}`}>
+    <g className={`edge data ${direction} ${selected ? "selected" : ""}`}>
       <path d={d} markerEnd="url(#arrow)" />
       <path d={d} className="hit" onPointerDown={(ev) => ev.stopPropagation()} onClick={onPick} />
       <text x={mid.x + 4} y={mid.y}>{column}</text>

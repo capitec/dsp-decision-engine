@@ -75,7 +75,10 @@ export interface ExperimentResult {
   name?: string;
   status: ExperimentRunStatus;
   nondeterministic?: boolean;
-  manifest?: { revision?: { authored?: string; resolved?: string | null } | null };
+  manifest?: {
+    revision?: { authored?: string; resolved?: string | null } | null;
+    input?: { dataset: string; fingerprint: string | null; columns: [string, string][]; row_count: number | null } | null;
+  };
   scenarios: ScenarioResult[];
   summary?: ExperimentSummary;
   sankey?: Sankey | null;

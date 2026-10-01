@@ -22,6 +22,7 @@
     "build": "tsc -p tsconfig.build.json",
     "prepare": "tsc -p tsconfig.build.json",
     "test": "vitest run",
+    "dev": "vite",
     "demo": "vite",
     "demo:build": "vite build"
   },

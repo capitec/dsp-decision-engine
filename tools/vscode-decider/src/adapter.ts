@@ -3,7 +3,7 @@ import { Breakpoint, Event, Handles, InitializedEvent, LoggingDebugSession, Outp
 import type { DebugProtocol } from "@vscode/debugprotocol";
 import { Bridge, freePort } from "./bridge";
 import { kindLabel, lastSegment, formatValue, previewOf, readEvents, setFields, walk } from "@decider/ui";
-import type { Checkpoint, ColumnSummary, Controls, DescribeResult, Hit, IRNodeJson, Lineage, RecordKey, RunStatus, Status, TraceStatus, Visits } from "@decider/ui";
+import type { Checkpoint, ColumnSummary, Controls, DatasetInfo, DescribeResult, Hit, IRNodeJson, Lineage, RecordKey, RunStatus, Status, TraceStatus, Visits } from "@decider/ui";
 import { nodeAtLine } from "./sourceMap";
 import { optionsFromEnv, type AdapterOptions, type LaunchArgs } from "./launchArgs";
 
@@ -37,6 +37,7 @@ export class DeciderDebugSession extends LoggingDebugSession {
   private record: number | null = null;
   private hit: Hit | null = null;
   private trace?: TraceStatus;
+  private dataset: DatasetInfo | null = null;
   private handles = new Handles<VarRef>();
   private frameIds = new Map<number, string>();
   private stateCache?: Promise<{ columns: ColumnSummary[]; key: RecordKey }>;
@@ -193,6 +194,7 @@ export class DeciderDebugSession extends LoggingDebugSession {
     this.finished = status.finished;
     this.hit = status.hit ?? null;
     this.trace = status.trace;
+    this.dataset = status.dataset ? { name: status.dataset.dataset, rowCount: status.dataset.row_count, fingerprint: status.dataset.fingerprint, columns: status.dataset.columns } : null;
     if (this.hit) this.sendEvent(new OutputEvent(`decider: paused on ${this.hit.text}\n`, "console"));
     this.refresh();
     if (!stop) return;
@@ -206,7 +208,7 @@ export class DeciderDebugSession extends LoggingDebugSession {
   private refresh() {
     this.stateCache = undefined;
     this.handles.reset();
-    const body: RunStatus = { current: this.current, finished: this.finished, finishedPaths: this.finishedPaths, visits: this.visits, record: this.record, edits: this.edits, hit: this.hit, trace: this.trace };
+    const body: RunStatus = { current: this.current, finished: this.finished, finishedPaths: this.finishedPaths, visits: this.visits, record: this.record, edits: this.edits, hit: this.hit, trace: this.trace, dataset: this.dataset };
     this.sendEvent(new Event("decider.status", body));
   }
 
@@ -450,6 +452,16 @@ export class DeciderDebugSession extends LoggingDebugSession {
           this.refresh();
           if (this.finished) this.sendEvent(new TerminatedEvent());
           else this.sendEvent(new StoppedEvent("edit", THREAD));
+          return;
+        }
+        case "decider.setValue": {
+          // Same bridge command the Variables pane's native "Edit Value" uses, reached from the Runtime panel instead.
+          const status = await this.bridge!.request<Status>("set", { name: args.name, value: args.value });
+          if (status.error) throw new Error(status.error);
+          this.sendResponse(response);
+          this.apply(status, false);
+          this.refresh();
+          this.sendEvent(new StoppedEvent("edit", THREAD));
           return;
         }
         case "decider.changes":

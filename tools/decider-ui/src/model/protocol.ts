@@ -116,6 +116,8 @@ export interface Status {
   ran?: string[];
   /** Whether structured decision trace is captured for this run. */
   trace?: TraceStatus;
+  /** Identity of the data the run started on, as `InputFingerprint` dumps it. */
+  dataset?: { dataset: string; fingerprint: string | null; columns: [string, string][]; row_count: number | null } | null;
 }
 
 /** Whether a run's structured decision trace is captured, and why not when it isn't. */
@@ -138,6 +140,8 @@ export interface Watch {
   name?: string;
   op?: "==" | "!=" | "<" | "<=" | ">" | ">=";
   value?: unknown;
+  /** A free-text expression to evaluate instead of `name`/`op`/`value`; pauses when it's truthy. */
+  condition?: string;
   scope?: string[];
   row?: number | null;
   path?: string;
@@ -189,6 +193,14 @@ export interface Lineage {
 /** Tree positions a row node reached in its latest run: locator -> rows. */
 export type Visits = Record<string, Record<string, number>>;
 
+/** The data a run started on: its name, row count, columns and content fingerprint. */
+export interface DatasetInfo {
+  name: string;
+  rowCount: number | null;
+  fingerprint: string | null;
+  columns: [string, string][];
+}
+
 export interface RunStatus {
   current: Checkpoint | null;
   finished: boolean;
@@ -200,6 +212,7 @@ export interface RunStatus {
   hit?: Hit | null;
   /** Whether structured decision trace is captured, and why not when it isn't. */
   trace?: TraceStatus;
+  dataset?: DatasetInfo | null;
 }
 
 /** One change to a value: the step (or "override@<path>" for a value you set) and iteration that made it. */
@@ -241,6 +254,11 @@ export const editLabel = ([path, action]: [string, string]) => `${lastSegment(pa
 /** "client_id 2", or "row 1" when the data has no id column. */
 export function recordLabel(row: number, key: RecordKey): string {
   return key ? `${key.name} ${String(key.values[row])}` : `row ${row}`;
+}
+
+/** "loans.parquet · 1,000 rows", or "pasted rows · 3 rows" when the data came from no file. */
+export function datasetLabel(name: string, rowCount: number | null | undefined): string {
+  return `${name || "pasted rows"} · ${rowCount ?? "?"} row${rowCount === 1 ? "" : "s"}`;
 }
 
 /** What a value measures, from decider's `FieldMetadata` (`Money()`, `Percent()`, `Duration("months")`). */
@@ -333,7 +351,8 @@ export type ToUI =
   | { type: "edited"; path: string; formula: string | null; restored?: boolean }
   | { type: "sweep"; sweep: Sweep | null; busy?: string; error?: string }
   | { type: "draft"; draft: Draft | null }
-  | { type: "experiment"; experiment: ExperimentResult | null };
+  | { type: "experiment"; experiment: ExperimentResult | null }
+  | { type: "controls"; controls: Controls };
 
 /** Messages from the UI to the host. */
 export type FromUI =
@@ -350,6 +369,8 @@ export type FromUI =
   | { type: "skip"; path: string }
   | { type: "reloadStep"; path: string }
   | { type: "restore"; path: string }
+  /** Override a value while paused, the same as setting it in VS Code's own Variables pane. */
+  | { type: "setValue"; name: string; value: unknown }
   | { type: "compareEdits"; label: string; edits: Record<string, "delete" | "replace">; path?: string }
   | { type: "whatIf"; params: unknown; overrides: Record<string, unknown>; row: number | null; label: string; forces?: Force[] }
   /** Launch an equivalent debugger run for a saved What-If scenario (explicit, one-way). */
