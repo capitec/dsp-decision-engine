@@ -229,8 +229,14 @@ header {
 
   &.ran rect { opacity: 0.82; }
 
-  .bp-dot { fill: var(--decider-breakpoint, var(--decider-red)); }
-  .pause-dot { fill: var(--decider-pause-icon, var(--decider-warning)); }
+  .bp-dot {
+    fill: transparent;
+    cursor: pointer;
+  }
+  .bp-dot.set { fill: var(--decider-breakpoint, var(--decider-red)); }
+  &:hover .bp-dot:not(.set) { fill: color-mix(in srgb, var(--decider-breakpoint, var(--decider-red)) 35%, transparent); }
+  .bp-eq { fill: var(--decider-button-fg, #fff); font-size: 7px; font-weight: 700; pointer-events: none; }
+  .pause-dot rect { fill: var(--decider-pause-icon, var(--decider-warning)); stroke: none; }
   .ran-dot { fill: var(--decider-green); }
 }
 
@@ -253,8 +259,17 @@ header {
 }
 
 .edge.data path {
-  stroke: var(--lineage);
   stroke-dasharray: 3 3;
+}
+.edge.data.out path {
+  stroke: var(--decider-blue);
+}
+.edge.data.in path {
+  stroke: var(--decider-green);
+}
+.edge.data .hit {
+  opacity: 0;
+  pointer-events: auto;
 }
 .edge.data text {
   font-size: 10px;
@@ -390,11 +405,6 @@ header {
     font-size: 0.9em;
   }
 
-  .source-line {
-    font-size: 0.86em;
-    margin-bottom: 4px;
-  }
-
   .node-list {
     display: flex;
     flex-direction: column;
@@ -419,6 +429,32 @@ header {
     overflow-wrap: anywhere;
   }
 
+  .edit-value {
+    opacity: 0.6;
+    padding: 0 2px;
+  }
+
+  .edit-value:hover { opacity: 1; }
+
+  .value-edit {
+    font: inherit;
+    font-family: var(--decider-mono);
+    font-size: 0.95em;
+    width: 7em;
+    background: var(--decider-input-bg);
+    color: var(--decider-input-fg);
+    border: 1px solid var(--decider-input-border);
+    border-radius: 3px;
+    padding: 1px 4px;
+  }
+
+  .runtime-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 6px;
+  }
+
   .trace {
     margin-top: 6px;
 
@@ -426,8 +462,6 @@ header {
   }
 
   .trace-off { margin-top: 6px; font-style: italic; }
-
-  .draft-group { margin-bottom: 6px; }
 }
 
 .node-link {
@@ -458,47 +492,6 @@ header {
 
   &:hover {
     border-color: var(--lineage);
-  }
-}
-
-/* ---- discovery ------------------------------------------------------------- */
-.discovery {
-  position: relative;
-  z-index: 10;
-  margin-left: auto;
-
-  summary {
-    cursor: pointer;
-    color: var(--decider-link);
-    user-select: none;
-    list-style: none;
-
-    &::after { content: " ▾"; }
-  }
-
-  &[open] summary::after { content: " ▴"; }
-
-  .discovery-body {
-    position: absolute;
-    z-index: 5;
-    right: 0;
-    top: 1.6em;
-    min-width: 260px;
-    max-width: 340px;
-    padding: 8px 10px;
-    background: var(--decider-widget-bg);
-    border: 1px solid var(--decider-border);
-    box-shadow: 0 4px 14px var(--decider-shadow, rgba(0, 0, 0, 0.35));
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    font-size: 0.9em;
-  }
-
-  .candidate-invalid {
-    color: var(--decider-muted);
-
-    s { text-decoration-color: var(--decider-error); }
   }
 }
 

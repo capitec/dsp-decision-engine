@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { breakpointNodes, type BreakpointKind } from "./model/breakpoints";
-import { callNodes, setFields, type ColumnSummary, type Controls, type DescribeResult, type Draft, type FromUI, type RecordKey, type RunStatus, type ToUI } from "./model/protocol";
+import { callNodes, datasetLabel, setFields, type ColumnSummary, type Controls, type DescribeResult, type FromUI, type RecordKey, type RunStatus, type ToUI } from "./model/protocol";
 import { groupPaths } from "./layout";
 import { Graph } from "./Graph";
 import { Inspector, type Runtime, type Selection } from "./Inspector";
@@ -15,12 +15,20 @@ const OPEN_ALL = 80;
 const IDLE: RunStatus = { current: null, finished: false, finishedPaths: [], visits: {}, record: null };
 
 /** Messages only an editor can act on: opening source or driving a debug run. Controls that send any other are hidden. */
-export type EditorMessage = "reveal" | "run" | "runTo" | "step" | "debugStep";
+export type EditorMessage = "reveal" | "run" | "runTo" | "step" | "debugStep" | "rewind";
 
 export interface AppProps {
   send: (m: FromUI) => void;
   listen: (on: (m: ToUI) => void) => () => void;
   can: ReadonlySet<EditorMessage>;
+  /** Hide the in-panel structure tree — set to false when the host already shows one of its own (e.g. a native sidebar view). Default true. */
+  showStructure?: boolean;
+  /** Hide the inspector's breakpoint form — set to false when the host sets breakpoints elsewhere (e.g. a sidebar with its own breakpoint dots). Default true. */
+  showBreakpointForm?: boolean;
+  /** Called with the selected node's path whenever the graph's selection changes, so a host-side view (e.g. a sidebar tree) can mirror it. */
+  onSelectionChange?: (path: string | undefined) => void;
+  /** Right-clicking a step in the graph: the host shows its own context menu (view source, edit breakpoint, …), anchored at `rect`. */
+  onNodeContextMenu?: (path: string, rect: DOMRect) => void;
 }
 
 /**
@@ -32,7 +40,7 @@ export function App(props: AppProps) {
   return <div className="decider"><View {...props} /></div>;
 }
 
-function View({ send, listen, can }: AppProps) {
+function View({ send, listen, can, showStructure = true, showBreakpointForm = true, onSelectionChange, onNodeContextMenu }: AppProps) {
   const [describe, setDescribe] = useState<DescribeResult>();
   const [selected, setSelected] = useState<Selection>();
   const [opened, setOpened] = useState<Set<string>>(new Set());
@@ -41,7 +49,6 @@ function View({ send, listen, can }: AppProps) {
   const [rows, setRows] = useState(0);
   const [keyCol, setKeyCol] = useState<RecordKey>(null);
   const [controls, setControls] = useState<Controls>({ forces: [], watches: [] });
-  const [draft, setDraft] = useState<Draft | null>(null);
   const [experiment, setExperiment] = useState<ExperimentResult | null>(null);
 
   useEffect(() => {
@@ -53,7 +60,6 @@ function View({ send, listen, can }: AppProps) {
           setSelected(undefined);
           setRun(IDLE);
           setColumns(null);
-          setDraft(null);
           setOpened(callNodes(m.describe.ir).length <= OPEN_ALL ? groupPaths(m.describe.ir) : new Set());
           break;
         case "status":
@@ -65,9 +71,6 @@ function View({ send, listen, can }: AppProps) {
           setColumns(m.columns);
           setRows(m.rows);
           setKeyCol(m.key);
-          break;
-        case "draft":
-          setDraft(m.draft);
           break;
         case "select":
           // From the editor's Structure tree: select the node and open the groups around it.
@@ -81,11 +84,19 @@ function View({ send, listen, can }: AppProps) {
         case "experiment":
           setExperiment(m.experiment);
           break;
+        case "controls":
+          // Pushed from outside (e.g. a host-side breakpoint view) — mirror it, don't echo it back.
+          setControls(m.controls);
+          break;
       }
     });
     send({ type: "ready" });
     return stop;
   }, []);
+
+  useEffect(() => {
+    onSelectionChange?.(selected?.kind === "node" ? selected.path : undefined);
+  }, [selected, onSelectionChange]);
 
   const nodes = useMemo(() => (describe ? callNodes(describe.ir) : []), [describe]);
   const breakpoints = useMemo(() => (describe ? breakpointNodes(describe.ir, controls.watches, run.hit ?? null) : new Map<string, BreakpointKind>()), [describe, controls.watches, run.hit]);
@@ -94,6 +105,10 @@ function View({ send, listen, can }: AppProps) {
   const changeControls = (c: Controls) => {
     setControls(c);
     send({ type: "setControls", controls: c });
+  };
+  const toggleBreakpoint = (path: string) => {
+    const i = controls.watches.findIndex((w) => w.path === path && w.name === undefined && w.iteration === undefined);
+    changeControls({ ...controls, watches: i < 0 ? [...controls.watches, { path }] : controls.watches.filter((_, j) => j !== i) });
   };
 
   if (!describe) return <div className="empty">Loading the flow…</div>;
@@ -122,7 +137,7 @@ function View({ send, listen, can }: AppProps) {
       return next;
     });
 
-  const runtime: Runtime = { run, columns, rows, keyCol, controls, groups, draft };
+  const runtime: Runtime = { run, columns, rows, keyCol, controls, groups };
 
   if (experiment) {
     return (
@@ -130,6 +145,11 @@ function View({ send, listen, can }: AppProps) {
         <header>
           <strong className="pipeline">Experiments</strong>
           <span className="size-badge">project-owned, reproducible runs</span>
+          {experiment.manifest?.input && (
+            <span className="size-badge" title={experiment.manifest.input.fingerprint ? `fingerprint ${experiment.manifest.input.fingerprint}` : undefined}>
+              {datasetLabel(experiment.manifest.input.dataset, experiment.manifest.input.row_count)}
+            </span>
+          )}
           <button className="link" style={{ marginLeft: "auto" }} onClick={() => setExperiment(null)}>back to flow</button>
         </header>
         <div className="body experiments-body">
@@ -152,13 +172,17 @@ function View({ send, listen, can }: AppProps) {
         <span className="size-badge" title="The assembled flow: every node, and the steps among them">
           {describe.size.calls} steps · {describe.size.nodes} nodes
         </span>
-        <Discovery describe={describe} />
+        {run.dataset && (
+          <span className="size-badge" title={run.dataset.fingerprint ? `fingerprint ${run.dataset.fingerprint}` : undefined}>
+            {datasetLabel(run.dataset.name, run.dataset.rowCount)}
+          </span>
+        )}
       </header>
       <DebugBar run={run} can={can} send={send} />
       <div className="body">
-        <Structure ir={describe.ir} selected={selectedPath} opened={opened} onSelect={selectNode} onToggle={toggle} />
-        <Graph ir={describe.ir} open={open} selected={selected} onSelect={onSelect} onToggle={toggle} onReveal={reveal} nodes={nodes} run={run} breakpoints={breakpoints} />
-        <Inspector ir={describe.ir} selected={selected} onSelect={onSelect} onReveal={reveal} nodes={nodes} runtime={runtime} can={can} send={send} onChangeControls={changeControls} onDraft={() => { setDraft(null); send({ type: "draft" }); }} />
+        {showStructure && <Structure ir={describe.ir} selected={selectedPath} opened={opened} onSelect={selectNode} onToggle={toggle} />}
+        <Graph ir={describe.ir} open={open} selected={selected} onSelect={onSelect} onToggle={toggle} onReveal={reveal} nodes={nodes} run={run} breakpoints={breakpoints} onToggleBreakpoint={toggleBreakpoint} onNodeContextMenu={onNodeContextMenu} />
+        <Inspector ir={describe.ir} selected={selected} onSelect={onSelect} onReveal={reveal} nodes={nodes} runtime={runtime} can={can} send={send} onChangeControls={changeControls} showBreakpointForm={showBreakpointForm} />
       </div>
     </div>
   );
@@ -176,38 +200,13 @@ function DebugBar({ run, can, send }: { run: RunStatus; can: ReadonlySet<EditorM
         {run.current.iteration ? <> in iteration <strong>{run.current.iteration}</strong></> : null}
       </span>
       {run.hit && <span className="muted small" title="Why a breakpoint paused the run">· {run.hit.text}</span>}
-      {can.has("step") && <button onClick={() => send({ type: "step" })} title="Step to the next checkpoint">Step</button>}
+      {can.has("rewind") && run.finishedPaths.length > 0 && (
+        <button onClick={() => send({ type: "rewind", path: run.finishedPaths[run.finishedPaths.length - 1] })} title="Go back to just before the last step ran">⏮ Step back</button>
+      )}
+      {can.has("step") && <button onClick={() => send({ type: "step" })} title="Step to the next checkpoint">⏭ Step</button>}
       {can.has("debugStep") && <button onClick={() => send({ type: "debugStep" })} title="Attach the Python debugger and step the step's code">Debug step</button>}
       {can.has("run") && <button className="primary" onClick={() => send({ type: "run" })} title="Run the flow from the start, pausing at breakpoints">▶ Run flow</button>}
     </div>
-  );
-}
-
-/** The entry point among the file's candidates, with the ones that were not pipelines and why. */
-function Discovery({ describe }: { describe: DescribeResult }) {
-  const invalid = describe.pipelines.filter((c) => c.status === "invalid");
-  return (
-    <details className="discovery">
-      <summary>Discovery</summary>
-      <div className="discovery-body">
-        <div className="muted">
-          Entry point <strong>{describe.pipeline}</strong> · {describe.size.calls} steps assembled from {describe.size.nodes} nodes.
-        </div>
-        {describe.pipelines.filter((c) => c.status !== "invalid" && c.name !== describe.pipeline).map((c) => (
-          <div key={c.name}>
-            <strong>{c.name}</strong> <span className="muted">{c.kind === "build" || c.kind === "factory" ? "factory" : c.kind}</span>
-          </div>
-        ))}
-        {invalid.map((c) => (
-          <div key={c.name} className="candidate-invalid">
-            <s>{c.name}</s> <span className="muted">{c.reason}</span>
-          </div>
-        ))}
-        {describe.pipelines.filter((c) => c.status !== "invalid").length <= 1 && invalid.length === 0 && (
-          <div className="muted">No other candidates in this file.</div>
-        )}
-      </div>
-    </details>
   );
 }
 

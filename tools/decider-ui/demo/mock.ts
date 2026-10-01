@@ -1,5 +1,6 @@
-import { callNodes, walk, type CallNodeJson, type ColumnSummary, type DescribeResult, type GroupNodeJson, type IRNodeJson, type RunStatus } from "../src/model/protocol";
+import { callNodes, walk, type CallNodeJson, type ColumnSummary, type DescribeResult, type GroupNodeJson, type IRNodeJson, type RecordKey, type RunStatus } from "../src/model/protocol";
 import type { ExperimentResult } from "../src/model/experiment";
+import type { MockDataset } from "./vscode/datasets";
 
 // Representative describe payloads for the standalone render harness: a small flow with every
 // node kind, and a large nested flow that starts folded.
@@ -34,12 +35,36 @@ function loop(path: string, cond: IRNodeJson, body: IRNodeJson, extra: Partial<G
   return { path, source: "", file: null, line: null, kind: "loop", carries: body.kind === "call" ? body.outputs ?? [] : [], maxIterations: 20, children: [cond, body], ...extra };
 }
 
-function describeOf(pipeline: string, ir: IRNodeJson, pipelines: DescribeResult["pipelines"]): DescribeResult {
+function describeOf(pipeline: string, ir: IRNodeJson, pipelines: DescribeResult["pipelines"],
+                     params: DescribeResult["params"] = {}): DescribeResult {
   const nodes = callNodes(ir);
   let total = 0;
   walk(ir, () => total++);
-  return { pipelines, pipeline, size: { nodes: total, calls: nodes.length }, ir, params: {}, fields: {} };
+  return { pipelines, pipeline, size: { nodes: total, calls: nodes.length }, ir, params, fields: {} };
 }
+
+/** The loan example's declared params, by the step that owns each — what the Parameters tab lists. */
+const LOAN_PARAMS: DescribeResult["params"] = {
+  "affordability/affordable": { min_ratio: { type: "float", default: 0.3, ge: 0, le: 1 } },
+  "term/term_cap": { ceiling: { type: "float", default: 60, gt: 0 } },
+  "term/cap_by_income": { cap: { type: "float", default: 48, gt: 0 } },
+  "term/by_sector/cap_private": { cap: { type: "float", default: 54, gt: 0 } },
+  "term/by_sector/cap_public": { cap: { type: "float", default: 60, gt: 0 } },
+  // "shared" is the step map's one non-step-path key, for params no single node owns; it's as
+  // likely to hold a whole table (a decision table or scorecard's rows) as a flat scalar.
+  shared: {
+    currency: { type: "str", default: "ZAR", required: true },
+    risk_bands: {
+      type: "table",
+      default: [
+        { min_score: 0, max_score: 579, band: "D", rate_adj: 0.08 },
+        { min_score: 580, max_score: 669, band: "C", rate_adj: 0.04 },
+        { min_score: 670, max_score: 739, band: "B", rate_adj: 0.02 },
+        { min_score: 740, max_score: 850, band: "A", rate_adj: 0 },
+      ],
+    },
+  },
+};
 
 /** The loan example's shape: a frame join, a nested group, a branch and a loop. */
 export function smallFlow(): DescribeResult {
@@ -65,7 +90,7 @@ export function smallFlow(): DescribeResult {
     ]),
     call("risk_tree", ["bureau_score", "ratio"], ["risk_band"], "row", { doc: "walk the tree to a risk band" }),
   ]);
-  return describeOf("pipeline", ir, [{ name: "pipeline", line: 114, kind: "flow", status: "pipeline" }]);
+  return describeOf("pipeline", ir, [{ name: "pipeline", line: 114, kind: "flow", status: "pipeline" }], LOAN_PARAMS);
 }
 
 /** A deep, wide flow (~2200 steps) that starts fully folded, so only the top groups draw. */
@@ -106,6 +131,31 @@ export function pausedRun(): { status: RunStatus; columns: ColumnSummary[] } {
     trace: { available: false, reason: "trace capture is off; showing live state" },
   };
   return { status, columns };
+}
+
+/** A fresh debug launch (nothing run yet) focused on one record of `dataset`, for "Debug this record". */
+export function pausedRunFor(dataset: MockDataset, record: number): { status: RunStatus; columns: ColumnSummary[]; key: RecordKey } {
+  const rows = dataset.rows;
+  const columns: ColumnSummary[] = dataset.columns.map(([name, dtype]) => ({
+    name,
+    dtype: dtype === "i64" ? "Int64" : dtype === "f64" ? "Float64" : dtype,
+    rows: rows.length,
+    nulls: 0,
+    preview: rows.slice(0, 5).map((r) => r[name] ?? null),
+    value: rows[record]?.[name] ?? null,
+    producer: "input",
+    versions: 1,
+  }));
+  const status: RunStatus = {
+    current: { path: "join_bureau", when: "before" },
+    finished: false,
+    finishedPaths: [],
+    visits: {},
+    record,
+    hit: null,
+    trace: { available: false, reason: "trace capture is off; showing live state" },
+  };
+  return { status, columns, key: { name: "client_id", values: rows.map((r) => r.client_id) } };
 }
 
 /** An experiment result over `smallFlow`: one param-only scenario that diverges, plus a Sankey. */

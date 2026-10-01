@@ -1,6 +1,8 @@
-import { formatValue, kindLabel, lastSegment, previewOf, type CallNodeJson, type ColumnSummary, type Controls, type Draft, type DraftDrop, type DraftOverride, type FromUI, type IRNodeJson, type RecordKey, type RunStatus } from "./model/protocol";
+import { useState } from "react";
+import { formatValue, kindLabel, lastSegment, previewOf, type CallNodeJson, type ColumnSummary, type Controls, type FromUI, type IRNodeJson, type RecordKey, type RunStatus } from "./model/protocol";
 import { findNode, positionIn, touchPoints } from "./layout";
 import { GroupControls, steered, WatchForm, type Group } from "./Controls";
+import { parseValue } from "./Params";
 
 /** What the graph, tree and inspector all agree is selected. */
 export type Selection =
@@ -16,13 +18,12 @@ export interface Runtime {
   keyCol: RecordKey;
   controls: Controls;
   groups: Group[];
-  draft: Draft | null;
 }
 
 // A value read or written by this many steps lists them all; past that, it shows a bound and a hint.
 const TOUCH_BOUND = 50;
 
-export function Inspector({ ir, selected, onSelect, onReveal, nodes, runtime, can, send, onChangeControls, onDraft }: {
+export function Inspector({ ir, selected, onSelect, onReveal, nodes, runtime, can, send, onChangeControls, showBreakpointForm = true }: {
   ir: IRNodeJson;
   selected?: Selection;
   onSelect: (s: Selection) => void;
@@ -32,12 +33,15 @@ export function Inspector({ ir, selected, onSelect, onReveal, nodes, runtime, ca
   can: ReadonlySet<string>;
   send: (m: FromUI) => void;
   onChangeControls: (c: Controls) => void;
-  onDraft: () => void;
+  /** Hide the breakpoint form — set to false when the host sets breakpoints elsewhere. Default true. */
+  showBreakpointForm?: boolean;
 }) {
   if (!selected) return <EmptyHint />;
   return (
     <aside className="inspector">
-      {selected.kind === "node" && <NodeBody ir={ir} path={selected.path} nodes={nodes} onSelect={onSelect} onReveal={onReveal} runtime={runtime} can={can} send={send} onChangeControls={onChangeControls} onDraft={onDraft} />}
+      {selected.kind === "node" && (
+        <NodeBody ir={ir} path={selected.path} nodes={nodes} onSelect={onSelect} onReveal={onReveal} runtime={runtime} can={can} send={send} onChangeControls={onChangeControls} showBreakpointForm={showBreakpointForm} />
+      )}
       {selected.kind === "value" && <ValueBody ir={ir} name={selected.name} onSelect={onSelect} />}
       {selected.kind === "edge" && <EdgeBody selected={selected} nodes={nodes} onSelect={onSelect} />}
     </aside>
@@ -52,11 +56,11 @@ function EmptyHint() {
   );
 }
 
-function NodeBody({ ir, path, nodes, onSelect, onReveal, runtime, can, send, onChangeControls, onDraft }: {
+function NodeBody({ ir, path, nodes, onSelect, onReveal, runtime, can, send, onChangeControls, showBreakpointForm }: {
   ir: IRNodeJson; path: string; nodes: CallNodeJson[];
   onSelect: (s: Selection) => void; onReveal?: (path: string) => void;
   runtime: Runtime; can: ReadonlySet<string>; send: (m: FromUI) => void;
-  onChangeControls: (c: Controls) => void; onDraft: () => void;
+  onChangeControls: (c: Controls) => void; showBreakpointForm: boolean;
 }) {
   const node = findNode(ir, path);
   if (!node) return null;
@@ -101,14 +105,10 @@ function NodeBody({ ir, path, nodes, onSelect, onReveal, runtime, can, send, onC
           <div className="muted">{group!.folded?.length ?? group!.children.length} step{(group!.folded?.length ?? group!.children.length) === 1 ? "" : "s"}</div>
         </Section>
       )}
-      {call && <RuntimeSection call={call} runtime={runtime} onSelect={onSelect} />}
-      <Section title="Source">
-        <div className="source-line mono">{node.file ?? "built-in"}{node.line ? `:${node.line}` : ""}</div>
-        {onReveal && node.file && <button className="link" onClick={() => onReveal(node.path)}>Open source</button>}
-      </Section>
+      {call && <RuntimeSection call={call} runtime={runtime} onSelect={onSelect} onReveal={onReveal} send={send} />}
       {call && (
         <>
-          <BreakpointSection call={call} outputNames={outputNames} runtime={runtime} onChangeControls={onChangeControls} />
+          {showBreakpointForm && <BreakpointSection call={call} outputNames={outputNames} runtime={runtime} onChangeControls={onChangeControls} />}
           {steeredGroup && (
             <GroupControls
               key={steeredGroup.path}
@@ -124,7 +124,6 @@ function NodeBody({ ir, path, nodes, onSelect, onReveal, runtime, can, send, onC
               onRerun={(path, back) => send({ type: "rerun", path, back: back?.path, when: back?.when })}
             />
           )}
-          <DraftSection run={runtime.run} draft={runtime.draft} onDraft={onDraft} />
         </>
       )}
     </>
@@ -132,8 +131,12 @@ function NodeBody({ ir, path, nodes, onSelect, onReveal, runtime, can, send, onC
 }
 
 /** The node's place in the run: paused here, run, or still to come — and its live values. */
-function RuntimeSection({ call, runtime, onSelect }: { call: CallNodeJson; runtime: Runtime; onSelect: (s: Selection) => void }) {
+function RuntimeSection({ call, runtime, onSelect, onReveal, send }: {
+  call: CallNodeJson; runtime: Runtime; onSelect: (s: Selection) => void; onReveal?: (path: string) => void; send: (m: FromUI) => void;
+}) {
   const { run, columns } = runtime;
+  const [editing, setEditing] = useState<string>();
+  const [editValue, setEditValue] = useState("");
   if (!run.current && !run.finished) return null;
   const paused = run.current?.path === call.path;
   const ran = runtime.run.finishedPaths.includes(call.path);
@@ -146,6 +149,47 @@ function RuntimeSection({ call, runtime, onSelect }: { call: CallNodeJson; runti
     const mine = (c.producer?.startsWith("override@") || c.producer?.startsWith("force@") || c.writtenBy?.startsWith("override@") || c.changedBy?.startsWith("override@")) ? " · set by you" : "";
     return `${v}${mine}`;
   };
+  const startEdit = (n: string) => {
+    const c = name(n);
+    setEditing(n);
+    setEditValue(c ? String(run.record === null ? previewOf(c, n) : formatValue(c.value, n)) : "");
+  };
+  const saveEdit = (n: string) => {
+    send({ type: "setValue", name: n, value: parseValue(editValue, name(n)?.dtype) });
+    setEditing(undefined);
+  };
+  const row = (n: string, cls: string) => {
+    const c = name(n);
+    const editable = paused && !!c;
+    return (
+      <div key={n} className={cls}>
+        <button className="link" onClick={() => onSelect({ kind: "value", name: n })}>{n}</button>{" "}
+        {editing === n ? (
+          <>
+            =
+            <input
+              aria-label={`override ${n}`}
+              className="value-edit"
+              autoFocus
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") saveEdit(n);
+                if (e.key === "Escape") setEditing(undefined);
+              }}
+            />
+            <button className="link" title="Save" onClick={() => saveEdit(n)}>✓</button>
+            <button className="link" title="Cancel" onClick={() => setEditing(undefined)}>✕</button>
+          </>
+        ) : (
+          <>
+            = {shown(n)}
+            {editable && <button className="link edit-value" title="Override this value" onClick={() => startEdit(n)}>✎</button>}
+          </>
+        )}
+      </div>
+    );
+  };
   return (
     <Section title="Runtime" hint={paused ? "the run is paused here" : ran ? "this step has run" : "not yet run"}>
       {paused && (
@@ -155,16 +199,16 @@ function RuntimeSection({ call, runtime, onSelect }: { call: CallNodeJson; runti
         </div>
       )}
       {edits && <div className="muted small">{edits === "delete" ? "skipped this session" : "code replaced this session"}</div>}
-      {(call.inputs ?? []).map((n) => (
-        <div key={n} className="mono value-row">
-          <button className="link" onClick={() => onSelect({ kind: "value", name: n })}>{n}</button> = {shown(n)}
+      {(call.inputs ?? []).map((n) => row(n, "mono value-row"))}
+      {(call.outputs ?? []).map((n) => row(n, "mono value-row writes"))}
+      {paused && (
+        <div className="runtime-actions">
+          {onReveal && <button className="link" onClick={() => onReveal(call.path)}>✎ Replace step…</button>}
+          <button className="link" title="Pick up this step's code from its source file, as it's saved now" onClick={() => send({ type: "reloadStep", path: call.path })}>↺ Reload edited code</button>
+          {edits && <button className="link" onClick={() => send({ type: "restore", path: call.path })}>Restore original</button>}
+          <button className="link" onClick={() => send({ type: "skip", path: call.path })}>⊘ Skip this step</button>
         </div>
-      ))}
-      {(call.outputs ?? []).map((n) => (
-        <div key={n} className="mono value-row writes">
-          <button className="link" onClick={() => onSelect({ kind: "value", name: n })}>{n}</button> = {shown(n)}
-        </div>
-      ))}
+      )}
       {runtime.run.visits[call.path] && Object.keys(runtime.run.visits[call.path]).length > 0 && (
         <details className="trace">
           <summary>trace · {Object.keys(runtime.run.visits[call.path]).length} position{Object.keys(runtime.run.visits[call.path]).length === 1 ? "" : "s"} visited</summary>
@@ -197,41 +241,6 @@ function BreakpointSection({ call, outputNames, runtime, onChangeControls }: {
       controls={runtime.controls}
       onChange={onChangeControls}
     />
-  );
-}
-
-/** A paused session as an experiment draft: what converts to declared overrides, what is dropped. */
-function DraftSection({ run, draft, onDraft }: { run: RunStatus; draft: Draft | null; onDraft: () => void }) {
-  if (!run.current && !run.finished) return null;
-  return (
-    <Section title="Convert to draft">
-      {draft ? <DraftList draft={draft} /> : <button className="link" onClick={onDraft}>List changes for an experiment draft…</button>}
-    </Section>
-  );
-}
-
-function DraftList({ draft }: { draft: Draft }) {
-  return (
-    <div className="draft">
-      {draft.converted.length > 0 ? (
-        <div className="draft-group">
-          <div className="muted small">Becomes declared overrides:</div>
-          {draft.converted.map((o: DraftOverride, i) => (
-            <div key={i} className="mono value-row">{o.target} = {formatValue(o.value)}</div>
-          ))}
-        </div>
-      ) : (
-        <div className="muted small">No structured changes to convert.</div>
-      )}
-      {draft.dropped.length > 0 && (
-        <div className="draft-group">
-          <div className="muted small">Dropped (unconvertible):</div>
-          {draft.dropped.map((d: DraftDrop, i) => (
-            <div key={i} className="muted small">✕ {d.path ? `${d.path}: ` : ""}{d.detail}</div>
-          ))}
-        </div>
-      )}
-    </div>
   );
 }
 
