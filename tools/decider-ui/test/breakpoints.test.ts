@@ -28,6 +28,16 @@ describe("breakpoint nodes on the graph", () => {
     expect(marked.has("sizing/shrink/too_big")).toBe(false);
   });
 
+  it("a value watch scoped to one step also matches that step's own input", () => {
+    const marked = breakpointNodes(ir, [{ name: "requested_amount", op: ">", value: 100000, scope: ["sizing/offer"] }], null);
+    expect(marked.get("sizing/offer")).toBe("value");
+  });
+
+  it("a condition watch marks the one step it's scoped to", () => {
+    const marked = breakpointNodes(ir, [{ condition: "requested_amount > 100000", scope: ["sizing/offer"] }], null);
+    expect(marked.get("sizing/offer")).toBe("value");
+  });
+
   it("an iteration watch marks the loop's condition step", () => {
     const marked = breakpointNodes(ir, [{ path: "sizing/shrink", iteration: 3 }], null);
     expect(marked.get("sizing/shrink/too_big")).toBe("iteration");

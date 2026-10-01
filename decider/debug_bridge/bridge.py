@@ -40,6 +40,7 @@ from decider.serving.parse import coerce_record, has_date
 from decider.steps import FunctionStep, Step
 
 from .loading import load_module
+from .rows import load_rows
 from .runs import apply_overrides, debug_condition, tree_path
 from .draft import draft_changes
 from .timeline import Timeline
@@ -49,16 +50,6 @@ def base_params(mod, params, default=None):
     """The module's `PARAMS` (its tables and tuned values, as the config store holds them), or `default`
     when it has none, with `params` on top."""
     return merge(getattr(mod, "PARAMS", None) or default or {}, params or {}) or None
-
-
-def _load_rows(data):
-    if data is None:
-        raise ValueError("no data: pass `data` (rows or a JSON file) or define SAMPLE in the module")
-    if isinstance(data, str):
-        data = json.loads(Path(data).read_text())
-    if isinstance(data, dict):
-        data = [data]  # sample_request.json can be one record, not a list of them
-    return pl.DataFrame(data)
 
 
 def _project_root(file):
@@ -160,7 +151,9 @@ class Bridge:
         return self._run(self.step, frame, base_params(self.mod, params, self._build_params), forces)
 
     def _rows(self, data):
-        return _load_rows(data if data is not None else getattr(self.mod, "SAMPLE", None) or self._build_sample)
+        loaded = load_rows(data if data is not None else getattr(self.mod, "SAMPLE", None) or self._build_sample)
+        self.dataset = loaded.summary
+        return loaded.frame
 
     def _run(self, step, frame, params, forces):
         return {**self.described, **trace(step, frame, params, self.described["ir"], forces), "data": frame.to_dicts(), "key": key_column(frame)}
@@ -201,6 +194,7 @@ class Bridge:
                 "hit": self.controls.take_hit(),
                 # What has run since the start or the last rewind, for the graph's ticks.
                 "ran": sorted({p for p, w in self.timeline.log if w == "after"}),
+                "dataset": getattr(self, "dataset", None) and self.dataset.model_dump(mode="json"),
                 # A debug session has no task-04 trace sink attached; the runtime views degrade to live state.
                 # ponytail: report the sink's status here once Session accepts one.
                 "trace": {"available": False, "reason": "trace capture is off; showing live state"}}

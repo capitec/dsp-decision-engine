@@ -142,7 +142,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       pythonOf.delete(s);
       clearRunTo();
       structure.setStatus(null, []);
-      post({ type: "status", current: null, finished: true, finishedPaths: [], visits: {}, record: null });
+      post({ type: "status", current: null, finished: true, finishedPaths: [], visits: {}, record: null, dataset: null });
       post({ type: "state", columns: null, rows: 0, key: null });
     }),
   );
@@ -238,6 +238,13 @@ async function onWebview(m: FromUI, describe: DescribeResult) {
         if (m.type !== "skip" && r) post({ type: "edited", path: m.path, formula: r.formula ?? null, restored: m.type === "restore" });
       } catch (e) {
         void vscode.window.showErrorMessage(`Couldn't ${m.type === "skip" ? "skip" : m.type === "restore" ? "restore" : "swap in"} ${m.path.split("/").pop()}: ${(e as Error).message}`);
+      }
+      break;
+    case "setValue":
+      try {
+        await s?.customRequest("decider.setValue", { name: m.name, value: m.value });
+      } catch (e) {
+        void vscode.window.showErrorMessage(`Couldn't set ${m.name}: ${(e as Error).message}`);
       }
       break;
     case "restartWith":
@@ -477,15 +484,15 @@ async function pickData(): Promise<unknown | "SAMPLE" | undefined> {
   const choice = await vscode.window.showQuickPick(
     [
       { label: "SAMPLE", description: "the module's SAMPLE rows" },
-      { label: "JSON file…", description: "a file holding a list of records" },
+      { label: "Data file…", description: "a JSON, CSV or Parquet file" },
       { label: "Type rows…", description: "paste JSON records" },
     ],
     { placeHolder: "Input rows for the run" },
   );
   if (!choice) return undefined;
   if (choice.label === "SAMPLE") return "SAMPLE";
-  if (choice.label === "JSON file…") {
-    const picked = await vscode.window.showOpenDialog({ canSelectMany: false, filters: { JSON: ["json"] } });
+  if (choice.label === "Data file…") {
+    const picked = await vscode.window.showOpenDialog({ canSelectMany: false, filters: { Data: ["json", "csv", "parquet"] } });
     return picked?.[0]?.fsPath;
   }
   const text = await vscode.window.showInputBox({

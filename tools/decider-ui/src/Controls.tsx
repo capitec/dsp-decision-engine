@@ -38,6 +38,10 @@ export function forceText(f: Force, groups: Group[], keyCol: RecordKey): string 
 
 export function watchText(w: Watch, keyCol: RecordKey): string {
   if (w.iteration !== undefined) return `before iteration ${w.iteration} of ${lastSegment(w.path!)}`;
+  if (w.condition !== undefined) {
+    const at = w.scope?.length === 1 ? ` at ${lastSegment(w.scope[0])}` : "";
+    return `${w.condition}${at}${forWho(w.row, keyCol)}`;
+  }
   if (w.name === undefined) return `before ${lastSegment(w.path!)}`;
   const where = w.scope?.length ? ` only in ${w.scope.map((s) => s.split("/").slice(-2).join(" / ")).join(", ")}` : "";
   return `${w.name} ${w.op} ${formatValue(w.value, w.name)}${where}${forWho(w.row, keyCol)}`;
