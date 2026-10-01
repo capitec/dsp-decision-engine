@@ -1,4 +1,3 @@
-import dagre from "@dagrejs/dagre";
 import { callNodes, lastSegment, walk, type CallNodeJson, type IRNodeJson } from "./model/protocol";
 
 export interface LaidNode {
@@ -151,27 +150,77 @@ export function orderEdges(ir: IRNodeJson): { from: string; to: string; label?: 
   return edges;
 }
 
+const GAP_X = 30;
+const GAP_Y = 40;
+const CLUSTER_TOP = 28;
+const CLUSTER_SIDE = 12;
+const CLUSTER_BOTTOM = 12;
+
+type Size = { w: number; h: number };
+const kidsOf = (n: IRNodeJson) => (n.kind === "call" ? [] : n.children);
+const column = (s: Size[]): Size => ({ w: Math.max(0, ...s.map((x) => x.w)), h: s.reduce((a, x) => a + x.h, 0) + GAP_Y * Math.max(0, s.length - 1) });
+const row = (s: Size[]): Size => ({ w: s.reduce((a, x) => a + x.w, 0) + GAP_X * Math.max(0, s.length - 1), h: Math.max(0, ...s.map((x) => x.h)) });
+
+/**
+ * `ir`'s own tree shape is the layout: a sequence stacks its children, a branch puts its
+ * condition over a row of arms, a loop puts its condition over its body. No layout library:
+ * recursion goes as deep as the nesting, not the node count, so it doesn't share dagre's
+ * stack-overflow ceiling around ~2 000 nodes.
+ */
 export function layout(ir: IRNodeJson): Layout {
-  const g = new dagre.graphlib.Graph({ compound: true, multigraph: true });
-  g.setGraph({ rankdir: "TB", nodesep: 30, ranksep: 40, marginx: 16, marginy: 16 });
-  g.setDefaultEdgeLabel(() => ({}));
-  walk(ir, (n, parent) => {
-    if (isLeaf(n)) g.setNode(n.path, { width: NODE_W, height: NODE_H });
-    else g.setNode(n.path, { clusterLabelPos: "top" });
-    if (parent) g.setParent(n.path, parent.path);
+  const size = new Map<string, Size>();
+  const measure = (n: IRNodeJson): Size => {
+    let s: Size = { w: NODE_W, h: NODE_H };
+    if (!isLeaf(n)) {
+      const kids = kidsOf(n).map(measure);
+      const inner = n.kind === "branch" ? column([kids[0], row(kids.slice(1))]) : column(kids);
+      s = { w: inner.w + 2 * CLUSTER_SIDE, h: inner.h + CLUSTER_TOP + CLUSTER_BOTTOM };
+    }
+    size.set(n.path, s);
+    return s;
+  };
+  measure(ir);
+
+  const at = new Map<string, LaidNode>();
+  const place = (n: IRNodeJson, x: number, y: number) => {
+    const s = size.get(n.path)!;
+    at.set(n.path, { path: n.path, kind: n.kind, label: lastSegment(n.path), x, y, width: s.w, height: s.h, node: n });
+    if (isLeaf(n)) return;
+    const kids = kidsOf(n);
+    const cw = s.w - 2 * CLUSTER_SIDE;
+    let cy = y + CLUSTER_TOP;
+    const stack = kids.slice(0, n.kind === "branch" ? 1 : kids.length);
+    for (const k of stack) {
+      const ks = size.get(k.path)!;
+      place(k, x + CLUSTER_SIDE + (cw - ks.w) / 2, cy);
+      cy += ks.h + GAP_Y;
+    }
+    if (n.kind !== "branch") return;
+    const arms = kids.slice(1);
+    let cx = x + CLUSTER_SIDE + (cw - row(arms.map((a) => size.get(a.path)!)).w) / 2;
+    for (const a of arms) {
+      place(a, cx, cy);
+      cx += size.get(a.path)!.w + GAP_X;
+    }
+  };
+  place(ir, 0, 0);
+
+  const laidEdges: LaidEdge[] = orderEdges(ir).map((e, i) => {
+    const a = at.get(e.from)!;
+    const b = at.get(e.to)!;
+    const kind = e.back ? ("back" as const) : ("order" as const);
+    if (e.back) {
+      const x = Math.max(a.x + a.width, b.x + b.width) + 16;
+      return { id: `o${i}`, from: e.from, to: e.to, kind, label: e.label, points: [{ x: a.x + a.width, y: a.y + a.height / 2 }, { x, y: a.y + a.height / 2 }, { x, y: b.y + b.height / 2 }, { x: b.x + b.width, y: b.y + b.height / 2 }] };
+    }
+    const [ax, bx, ay, by] = [a.x + a.width / 2, b.x + b.width / 2, a.y + a.height, b.y];
+    const my = (ay + by) / 2;
+    return { id: `o${i}`, from: e.from, to: e.to, kind, label: e.label, points: [{ x: ax, y: ay }, { x: ax, y: my }, { x: bx, y: my }, { x: bx, y: by }] };
   });
-  const edges: Omit<LaidEdge, "points">[] = orderEdges(ir).map((e, i) => ({ id: `o${i}`, from: e.from, to: e.to, kind: e.back ? ("back" as const) : ("order" as const), label: e.label }));
-  for (const e of edges) g.setEdge(e.from, e.to, { width: e.label ? e.label.length * 6 : 0, height: e.label ? 12 : 0 }, e.id);
-  dagre.layout(g);
 
   const nodes: LaidNode[] = [];
   const clusters: LaidNode[] = [];
-  walk(ir, (n) => {
-    const l = g.node(n.path);
-    const laid = { path: n.path, kind: n.kind, label: lastSegment(n.path), x: l.x - l.width / 2, y: l.y - l.height / 2, width: l.width, height: l.height, node: n };
-    (isLeaf(n) ? nodes : clusters).push(laid);
-  });
-  const laidEdges: LaidEdge[] = edges.map((e) => ({ ...e, points: g.edge(e.from, e.to, e.id).points }));
-  const { width = 0, height = 0 } = g.graph();
-  return { width, height, nodes, clusters, edges: laidEdges };
+  walk(ir, (n) => (isLeaf(n) ? nodes : clusters).push(at.get(n.path)!));
+  const root = size.get(ir.path)!;
+  return { width: root.w, height: root.h, nodes, clusters, edges: laidEdges };
 }
