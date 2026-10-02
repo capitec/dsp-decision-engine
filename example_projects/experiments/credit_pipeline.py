@@ -13,7 +13,7 @@ def ratio(income: float, debt: float) -> float:
     return debt / income if income > 0 else 1.0
 
 
-def approved(ratio: float, limit: float = param(0.4)) -> bool:
+def approved(ratio: float, limit: float = param(0.35)) -> bool:
     return ratio <= limit
 
 
