@@ -26,7 +26,7 @@ def test_the_default_report_is_an_overview_then_a_section_per_metric(pipeline, f
     first, second = _order(html, "<h3>divergence</h3>", "<h3>value_counts</h3>")
     assert html.index("completed</span></h2>") < first < second
     assert "at steps matching <code>demo/approved</code>" in html
-    assert html.count("vegaEmbed(outputDiv") == 2  # divergence's own plot, and the built-in Bars for value_counts
+    assert html.count("embed(el,") == 2  # divergence's own plot, and the built-in Bars for value_counts
 
 
 def test_a_report_lays_out_text_tables_and_charts_where_it_says(pipeline, frame):
