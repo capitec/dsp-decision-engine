@@ -1,30 +1,27 @@
-"""The experiment interface: one versioned schema, two thin facades, one runner.
+"""Experiments: run a flow's baseline and scenarios over the same records, and measure them with metrics.
 
-The experiment asset is a `ExperimentDef` (the `experiment.yaml` schema); a YAML
-file and the `Experiment` builder both produce it, and `run_experiment` is the
-only place execution happens. Execution reuses the fork/sweep primitives,
-comparison reads produced outputs, and results layer the experiment states
-(nondeterminism, per-scenario status, findings) over the lifecycle `RunManifest`.
+An `ExperimentDef` (`experiment.json`) or the `Experiment` builder names the
+flow, the input, the scenarios (params, overrides, another git revision), the
+metrics to collect and the plots to draw. The runner only executes: it feeds
+every scenario the same batches and calls the metrics' and callbacks' hooks,
+in the style of a training loop's callbacks. Each metric summarises into a
+typed `Summary`; each plot requires one.
 """
-from decider.experiments.builder import Experiment
-from decider.experiments.forks import checkpoint_key, fork, merge, sweep
-from decider.experiments.graphs import path_sankey
-from decider.experiments.model import (EXPERIMENT_VERSION, ComparisonPolicy, ExperimentDef, FlowSpec, InputSpec,
-                                       Scenario, SummarySpec, Tolerance, check_experiment_version)
-from decider.experiments.plots import BasePlotType, OutcomeCounts, PlotRef, Sankey
-from decider.experiments.result import (ExperimentResult, Finding, RunStatus, ScenarioResult, ScenarioStatus)
+from decider.experiments.callbacks import Batch, Callback, JobProgress, NodeBatch, Progress, Run, WriteOutputs
+from decider.experiments.experiments import (BASELINE, EXPERIMENT_VERSION, Experiment, ExperimentDef,
+                                             ExperimentResult, FlowSpec, InputSpec, RunStatus, Scenario,
+                                             ScenarioResult, ScenarioStatus, check_experiment_version, validate)
+from decider.experiments.metrics import (BranchFlows, Counts, Describe, Divergence, Divergences, Flows, Metric,
+                                         MetricRef, Stats, Summary, ValueCounts)
+from decider.experiments.plots import Bars, Changes, Plot, PlotRef, Sankey
 from decider.experiments.revision import compatible, materialise, remove, resolve
-from decider.experiments.runner import load_flow, resolve_revision, run, run_experiment, validate_scenarios
-from decider.experiments.runs import collect, steer, trace
-from decider.experiments.save import write
-from decider.experiments.summaries import summarise
-from decider.experiments.yaml import dump as dump_yaml
-from decider.experiments.yaml import load as load_yaml
+from decider.experiments.runner import load_flow, run, run_experiment, scan
 
 __all__ = [
-    "EXPERIMENT_VERSION", "BasePlotType", "ComparisonPolicy", "Experiment", "ExperimentDef", "ExperimentResult",
-    "Finding", "FlowSpec", "InputSpec", "OutcomeCounts", "PlotRef", "RunStatus", "Sankey", "Scenario", "ScenarioResult",
-    "ScenarioStatus", "SummarySpec", "Tolerance", "check_experiment_version", "checkpoint_key", "collect", "compatible",
-    "dump_yaml", "fork", "load_flow", "load_yaml", "materialise", "merge", "path_sankey", "remove", "resolve",
-    "resolve_revision", "run", "run_experiment", "steer", "summarise", "sweep", "trace", "validate_scenarios", "write",
+    "BASELINE", "EXPERIMENT_VERSION", "Bars", "Batch", "BranchFlows", "Callback", "Changes", "Counts", "Describe",
+    "Divergence", "Divergences", "Experiment", "ExperimentDef", "ExperimentResult", "Flows", "FlowSpec", "InputSpec",
+    "JobProgress", "Metric", "MetricRef", "NodeBatch", "Plot", "PlotRef", "Progress", "Run", "RunStatus", "Sankey",
+    "Scenario", "ScenarioResult", "ScenarioStatus", "Stats", "Summary", "ValueCounts", "WriteOutputs",
+    "check_experiment_version", "compatible", "load_flow", "materialise", "remove", "resolve", "run",
+    "run_experiment", "scan", "validate",
 ]

@@ -1,53 +1,58 @@
-"""Run an experiment: validate scenarios, run baseline and variants, compare, and write a manifest.
+"""Run an experiment: the baseline and every scenario over the same batches of records, feeding callbacks.
 
-`run_experiment` is the only place execution happens. It reuses the rehomed
-fork/sweep primitives (a fresh session replayed to a checkpoint and overridden)
-for execution, `describe` for the static flow contract, `preflight` for
-compatibility and cost, and the lifecycle `RunManifest`/`JobHandle` for
-provenance and job semantics. Param-only scenarios route to the fused
-`step.run(frame, params=...)` path; a scenario that also overrides a value or a
-single row runs through `fork`. A scenario on a different `revision` runs in a
-fresh subprocess instead (`_subprocess_run`/`_revision_worker`), because that
-revision's module shares the live one's import name. `run` is the headless
-entry point: it resolves the flow and data from the definition, so a plain
-Python caller runs an experiment end to end without VS Code.
+The runner only executes. For each batch it runs the baseline, then each
+scenario, and hands every output (and, to callbacks that select nodes, what
+each matching node wrote) to the shared callbacks and to that scenario's copy
+of each metric. A flow runs fused unless something selects nodes or a scenario
+overrides a produced value; then it runs one compiled kernel per node. A
+scenario on another git revision runs whole in a fresh subprocess
+(`decider.experiments._worker`) and is read back batch by batch, in step with
+the rest.
 """
 from __future__ import annotations
 
 import importlib
 import json
+import pickle
 import platform
 import subprocess
 import sys
 import tempfile
+from collections import Counter
+from dataclasses import replace
+from fnmatch import fnmatchcase
 from importlib import metadata
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator, Sequence
 
 import polars as pl
 
 from decider.contract import describe
 from decider.data import LoadedData, load, preflight
+from decider.engine import Engine
+from decider.engine.debug.session import _cast
+from decider.engine.ir.decls import base_annotation
+from decider.engine.params import merge
+from decider.engine.run.state import State, dtype_of
 from decider.exceptions import DeciderError
-from decider.experiments.compare import close, diff_outputs
-from decider.experiments.forks import fork, merge
-from decider.experiments.graphs import path_sankey
-from decider.experiments.model import ComparisonPolicy, ExperimentDef, Tolerance, check_experiment_version
-from decider.experiments.result import (ExperimentResult, Finding, RunStatus, ScenarioResult, ScenarioStatus)
+from decider.experiments.callbacks import Batch, Callback, JobProgress, NodeBatch, Run, WriteOutputs, overrides
+from decider.experiments.experiments import (BASELINE, ExperimentDef, ExperimentResult, RunStatus, Scenario,
+                                             ScenarioResult, ScenarioStatus, check_experiment_version, validate)
+from decider.experiments.metrics.base import Metric
 from decider.experiments.revision import compatible, materialise, remove, resolve
-from decider.experiments.save import write as write_results
-from decider.experiments.summaries import summarise
-from decider.lifecycle import Environment, JobHandle, ResultRef, Revision, RunManifest, new_manifest_id
+from decider.lifecycle import (Environment, InputFingerprint, JobHandle, ResultRef, Revision, RunManifest,
+                               new_manifest_id)
+
+Frame = pl.DataFrame | pl.LazyFrame
 
 
-def run(def_: ExperimentDef, *, frame: pl.DataFrame | None = None, out_dir: str | None = None,
-        job: JobHandle | None = None, resume: ExperimentResult | None = None) -> ExperimentResult:
-    """Run `def_` headlessly: load the flow by `flow.entry` and, without `frame`, the input by `input.path`.
+def run(def_: ExperimentDef, *, frame: Frame | None = None, out_dir: str | None = None,
+        job: JobHandle | None = None, callbacks: Sequence[Callback] = ()) -> ExperimentResult:
+    """Run `def_` headlessly: load the flow by `flow.entry` and, without `frame`, scan `input.path`.
 
-    A plain Python caller can define, run and compare an experiment end to end
-    with no VS Code::
+    Example::
 
-        def_ = ExperimentDef.model_validate(load_yaml(Path("experiments/drift/experiment.yaml").read_text()))
+        def_ = ExperimentDef.model_validate_json(Path("experiments/drift/experiment.json").read_text())
         result = run(def_, out_dir="results/drift")
     """
     check_experiment_version(def_.version)
@@ -55,156 +60,259 @@ def run(def_: ExperimentDef, *, frame: pl.DataFrame | None = None, out_dir: str 
     if frame is None:
         if not def_.input.path:
             raise DeciderError("no input data: set input.path in the definition, or pass frame=")
-        frame = load(def_.input.path).frame
-    return run_experiment(def_, step, frame, job=job, resume=resume, out_dir=out_dir)
+        frame = scan(def_.input.path)
+    return run_experiment(def_, step, frame, callbacks=callbacks, job=job, out_dir=out_dir)
 
 
-def run_experiment(def_: ExperimentDef, step, frame, params=None, *, job: JobHandle | None = None,
-                   resume: ExperimentResult | None = None, out_dir: str | None = None) -> ExperimentResult:
-    """Run every scenario of `def_` next to a baseline and compare, returning an `ExperimentResult`.
+def scan(path: str | Path) -> pl.LazyFrame:
+    """`path` as a lazy frame: Parquet, CSV and JSON lines are read a batch at a time, other JSON whole."""
+    suffix = Path(path).suffix.lower()
+    if suffix == ".parquet":
+        return pl.scan_parquet(path)
+    if suffix == ".csv":
+        return pl.scan_csv(path)
+    if suffix in (".jsonl", ".ndjson"):
+        return pl.scan_ndjson(path)
+    return load(path).frame.lazy()
 
-    Each scenario runs through `fork` (a fresh session replayed to a checkpoint,
-    with the scenario's params and overrides applied), so one failing scenario
-    never aborts the sweep; a scenario that only changes params runs on the fused
-    `step.run(frame, params=...)` path instead. `job` reports progress and can
-    cancel or time out the run between scenarios; `resume` (a prior
-    `ExperimentResult`) skips a completed scenario only when the input
-    fingerprint and resolved revision still match. `out_dir` writes each
-    scenario's output plus the manifest, summary and Sankey.
+
+def run_experiment(def_: ExperimentDef, step, frame: Frame, params=None, *, callbacks: Sequence[Callback] = (),
+                   job: JobHandle | None = None, out_dir: str | None = None) -> ExperimentResult:
+    """Run the baseline and every scenario of `def_` over `frame`, batch by batch, collecting its metrics.
+
+    `params` is the baseline's params document (the flow's defaults when
+    omitted). `callbacks` see every scenario; `job` reports progress and can
+    cancel or time out the run between batches; `out_dir` gets each scenario's
+    output as parquet plus `result.json`. A failing scenario never stops the
+    others; a failing baseline stops the run.
 
     Example::
 
-        result = run_experiment(def_, pipeline, df, pipeline.parameters().defaults())
-        result.status  # RunStatus.COMPLETED, or NON_REPRODUCIBLE / PARTIAL
+        result = run_experiment(def_, pipeline, df)
+        result.status   # RunStatus.COMPLETED, or NON_REPRODUCIBLE / PARTIAL / FAILED
     """
-    if params is None:
-        params = step.parameters().defaults()
     if def_.flow.decider and not compatible(def_.flow.decider, _decider_version()):
         raise DeciderError(f"flow needs decider {def_.flow.decider}, installed {_decider_version()}")
-    problems = validate_scenarios(def_, step)
+    problems = validate(def_, step)
     if problems:
         raise ValueError("; ".join(problems))
-    report = preflight(step, frame, params=params)
-    if job is not None:
-        job.start()
-        job.progress(0, total=len(def_.scenarios))
+    base_params = params if params is not None else step.parameters().defaults()
+    total = _height(frame)
+    report = preflight(step, _collect(frame.head(def_.batch_size)), params=base_params)
+    scenarios = [Scenario(name=BASELINE), *def_.scenarios]
+    shared = [*callbacks, *([JobProgress(job)] if job else []), *([WriteOutputs(out_dir)] if out_dir else [])]
+    metrics = {sc.name: [_fresh(m) for m in def_.metrics] for sc in scenarios}
+    everyone = [*shared, *(m for ms in metrics.values() for m in ms)]
+    selectors = sorted({cb.nodes for cb in [*shared, *def_.metrics]
+                        if getattr(cb, "nodes", None) and overrides(cb, "on_node_end")})
+    run_ = Run(def_.name, step, tuple(sc.name for sc in scenarios), total, def_.batch_size)
+    errors: dict[str, str] = {}
+    records: Counter[str] = Counter()
+    trees: dict[str, Path] = {}
+    with tempfile.TemporaryDirectory(prefix="decider-experiment-") as tmp:
+        try:
+            executors, revisions = _executors(def_, step, frame, params, base_params, scenarios, selectors,
+                                              Path(tmp), trees, errors)
+            for cb in everyone:
+                cb.on_run_start(run_)
+            nondeterministic = _drive(def_, frame, scenarios, executors, shared, metrics, everyone, run_,
+                                      errors, records)
+        finally:
+            for tree in trees.values():
+                remove(tree)
 
-    baseline = fork(step, frame, params, [], None, {})
-    nondeterministic = False
-    if def_.comparison.determinism:
-        nondeterministic = _diff(baseline["output"], fork(step, frame, params, [], None, {})["output"],
-                                 def_.comparison, exact=True) != ()
-
-    data = LoadedData.from_frame(frame, dataset=Path(def_.input.path).name if def_.input.path else "")
-    resolved = resolve(def_.revision)
-    done = _resumable(resume, data, resolved)
-
-    results: list[ScenarioResult] = []
-    scenario_outputs: dict[str, dict | None] = {}
-    scenario_traces: list[dict] = []
-    materialised: dict[str, Path] = {}
-    try:
-        for i, sc in enumerate(def_.scenarios):
-            if job is not None:
-                if job.timed_out:
-                    job.timeout()
-                if job.cancelled or job.timed_out:
-                    break
-                job.progress(i, total=len(def_.scenarios), message=sc.name)
-            if sc.name in done:
-                results.append(ScenarioResult(name=sc.name, status=ScenarioStatus.RESUMED,
-                                              params=sc.params, overrides=sc.overrides, row=sc.row))
-                continue
-            scenario_revision, step_for_sc, tree = _scenario_revision(def_, sc, step, resolved, materialised)
-            if isinstance(step_for_sc, str):
-                results.append(ScenarioResult(name=sc.name, status=ScenarioStatus.FAILED,
-                                              error=step_for_sc, revision=scenario_revision,
-                                              params=sc.params, overrides=sc.overrides, row=sc.row))
-                continue
-            if tree is not None:
-                trace = _subprocess_run(tree, def_.flow.entry, frame, params, sc)
-            elif _param_only(sc):
-                trace = _fused_run(step_for_sc, frame, params, sc)
-            else:
-                trace = _fork_run(step_for_sc, frame, params, sc)
-            scenario_outputs[sc.name] = trace["output"]
-            scenario_traces.append({"name": sc.name, **trace})
-            if trace["error"]:
-                results.append(ScenarioResult(
-                    name=sc.name, status=ScenarioStatus.FAILED, error=trace["error"], revision=scenario_revision,
-                    params=sc.params, overrides=sc.overrides, row=sc.row,
-                    divergences=(Finding(kind="error", scenario=sc.name, message=trace["error"]),),
-                ))
-            else:
-                results.append(ScenarioResult(
-                    name=sc.name, status=ScenarioStatus.COMPLETED,
-                    divergences=_divergences(baseline["output"], trace["output"], def_.comparison),
-                    output_ref=ResultRef(name=sc.name, location=f"results/{sc.name}.parquet"),
-                    row_count=frame.height, revision=scenario_revision,
-                    params=sc.params, overrides=sc.overrides, row=sc.row,
-                ))
-    finally:
-        for tree in materialised.values():
-            remove(tree)
-
-    status = _run_status(results, nondeterministic, job)
-    manifest = _manifest(def_, step, data, resolved, results)
-    summary = summarise(def_, baseline, scenario_traces)
-    sankey = path_sankey(step, frame, params, baseline, def_.comparison.outputs) if baseline["output"] else None
-    plots = ({p.type: p.visualize(step, frame, params, baseline, def_.comparison.outputs) for p in def_.plots}
-             if baseline["output"] else {})
+    status = _status(run_.stop, errors, nondeterministic)
+    run_.status = status.value
+    for cb in everyone:
+        cb.on_run_end(run_)
+    summaries: dict[str, dict[str, Any]] = {m.key: {} for m in def_.metrics}
+    for sc in scenarios:
+        if sc.name not in errors:
+            for m in metrics[sc.name]:
+                summaries[m.key][sc.name] = m.summarise()
+    results = tuple(ScenarioResult(
+        name=sc.name, status=ScenarioStatus.FAILED if sc.name in errors else ScenarioStatus.COMPLETED,
+        error=errors.get(sc.name), revision=revisions.get(sc.name), params=sc.params, overrides=sc.overrides,
+        at=sc.at, row=sc.row, records=records[sc.name],
+        output_ref=ResultRef(name=sc.name, location=str(Path(out_dir) / sc.name)) if out_dir else None,
+    ) for sc in scenarios)
+    result = ExperimentResult(
+        manifest=_manifest(def_, step, frame, total, resolve(def_.revision), results), status=status,
+        name=def_.name, nondeterministic=nondeterministic, scenarios=results, preflight=report,
+        job=job.snapshot() if job is not None else None, summaries=summaries,
+        plots={p.key: p.render(summaries[p.metric]) for p in def_.plots},
+    )
     if out_dir is not None:
-        written = write_results(out_dir, ExperimentResult(manifest=manifest, status=status), summary, sankey,
-                                {"baseline": baseline["output"], **scenario_outputs})
-        for r in results:
-            if r.output_ref is not None and r.name in written:
-                r.output_ref = r.output_ref.model_copy(update={"location": written[r.name]})
-    if job is not None and not job.terminal:
-        job.succeed(result={"status": status.value, "scenarios": len(results)})
-    return ExperimentResult(manifest=manifest, status=status, name=def_.name, nondeterministic=nondeterministic,
-                            scenarios=tuple(results), preflight=report,
-                            job=job.snapshot() if job is not None else None,
-                            summary=summary, sankey=sankey, plots=plots)
+        Path(out_dir).mkdir(parents=True, exist_ok=True)
+        (Path(out_dir) / "result.json").write_text(result.model_dump_json(indent=2))
+    return result
 
 
-def validate_scenarios(def_: ExperimentDef, step) -> list[str]:
-    """Problems in `def_.scenarios`: overrides at an undeclared point, or no point for a produced value.
-
-    A value the flow produces must name the step output it overrides (`at`); an
-    input column is settable before anything runs and needs no point. Returned,
-    not raised, so a caller surfaces every problem at once.
-    """
-    slots = _override_targets(step)
-    problems = []
-    for sc in def_.scenarios:
-        for name in sc.overrides:
-            paths = slots.get(name)
-            if paths is None:
-                problems.append(f"{sc.name}: override {name!r} is neither an input nor a produced value")
-            elif any(p is None for p in paths):
+def _drive(def_, frame, scenarios, executors, shared, metrics, everyone, run_, errors, records) -> bool:
+    nondeterministic = False
+    for index, (offset, batch) in enumerate(_batches(frame, def_.batch_size)):
+        baseline: pl.DataFrame | None = None
+        baseline_nodes: dict[tuple[str, int | None], NodeBatch] = {}
+        for sc in scenarios:
+            if sc.name in errors:
                 continue
-            elif sc.at is None:
-                problems.append(f"{sc.name}: override {name!r} is produced, not an input; declare 'at: <step path>'")
-            elif not any(p and (p == sc.at or p.startswith(sc.at + "/")) for p in paths):
-                problems.append(f"{sc.name}: no step at/under {sc.at!r} produces {name!r}")
-    return problems
+            try:
+                out, nodes = executors[sc.name].run(index, offset, batch)
+                if sc.name == BASELINE and def_.determinism and not nondeterministic:
+                    nondeterministic = not out.equals(executors[BASELINE].run(index, offset, batch)[0])
+            except Exception as e:  # noqa: BLE001  one failing scenario never stops the others
+                errors[sc.name] = f"{type(e).__name__}: {e}"
+                continue
+            if sc.name == BASELINE:
+                baseline, baseline_nodes = out, {(n.path, n.iteration): n for n in nodes}
+            listeners = [*shared, *metrics[sc.name]]
+            for n in nodes:
+                node = replace(n, scenario=sc.name, baseline=baseline_nodes.get((n.path, n.iteration)))
+                for cb in listeners:
+                    pattern = getattr(cb, "nodes", None)
+                    if pattern and fnmatchcase(node.path, pattern):
+                        cb.on_node_end(node)
+            done = Batch(sc.name, index, offset, out, baseline)
+            for cb in listeners:
+                cb.on_batch_end(done)
+            records[sc.name] += out.height
+        if BASELINE in errors:
+            break
+        for cb in everyone:
+            cb.on_progress(run_, offset + batch.height)
+        if run_.stop:
+            break
+    return nondeterministic
 
 
-def resolve_revision(authored: str) -> str | None:
-    """Resolve an authored revision (`"HEAD"`, `"HEAD^"`) to a git SHA, or `None` when unresolvable."""
-    return resolve(authored)
+def _executors(def_, step, frame, params, base_params, scenarios, selectors, tmp: Path, trees, errors):
+    executors: dict[str, Any] = {}
+    revisions: dict[str, Revision] = {}
+    resolved = resolve(def_.revision)
+    data = None
+    for sc in scenarios:
+        if sc.revision is None:
+            executors[sc.name] = _Local(step, base_params, sc, selectors)
+            continue
+        sha = resolve(sc.revision)
+        revisions[sc.name] = Revision(authored=sc.revision, resolved=sha)
+        if sha is None:
+            errors[sc.name] = f"revision {sc.revision!r} did not resolve"
+        elif sha == resolved or resolved is None:
+            executors[sc.name] = _Local(step, base_params, sc, selectors)
+        else:
+            try:
+                tree = trees[sha] = trees.get(sha) or materialise(sha)
+            except DeciderError as e:
+                errors[sc.name] = str(e)
+                continue
+            if data is None:
+                data = tmp / "input.parquet"
+                frame.sink_parquet(data) if isinstance(frame, pl.LazyFrame) else frame.write_parquet(data)
+            executors[sc.name] = _Revision({
+                "entry": def_.flow.entry, "tree": str(tree), "input": str(data), "params": params,
+                "scenario": sc.model_dump(exclude={"name", "revision"}), "selectors": selectors,
+                "batch_size": def_.batch_size, "out": str(tmp / f"revision-{len(executors)}"),
+            })
+    return executors, revisions
 
 
-def load_flow(entry: str):
-    """Import `entry` (`"module:qualname"`) and call it if it is a zero-argument factory."""
+class _Local:
+    """Runs one scenario's batches in this process."""
+
+    def __init__(self, step, params, sc: Scenario, selectors: Sequence[str]):
+        self.sc = sc
+        self.selectors = selectors
+        self.params = merge(params, sc.params)
+        self.exe = Engine().bind(step, mode="stepped" if selectors or sc.at is not None else "fused")
+        self.calls = {c.node.origin.path: c for c in self.exe.plan.calls}
+
+    def run(self, index: int, offset: int, batch: pl.DataFrame) -> tuple[pl.DataFrame, list[NodeBatch]]:
+        sc = self.sc
+        if sc.overrides and sc.at is None:
+            batch = _set_inputs(batch, sc, offset)
+        state, params = self.exe.prepare(batch, self.params)
+        pending = bool(sc.overrides) and sc.at is not None
+        nodes = []
+        for cp in self.exe.runner.iterate(self.exe.plan, state, params):
+            if cp.when != "after":
+                continue
+            path = cp.origin.path
+            if pending and path == sc.at:
+                _set_values(self.exe.plan, state, sc, offset)
+                pending = False
+            if any(fnmatchcase(path, s) for s in self.selectors):
+                nodes.append(NodeBatch("", path, index, offset, self._values(state, path, cp.rows), cp.rows,
+                                       cp.arm, cp.iteration))
+        return self.exe.output(state), nodes
+
+    def _values(self, state: State, path: str, rows) -> pl.DataFrame:
+        call = self.calls.get(path)
+        if call is None:
+            return pl.DataFrame()
+        frame = pl.DataFrame([state.column(v.name, v) for v in call.writes if v.id in state.values])
+        return frame if rows is None else frame[rows]
+
+
+class _Revision:
+    """Runs one scenario whole in a subprocess on first use, then reads its batches back."""
+
+    def __init__(self, request: dict[str, Any]):
+        self.request = request
+        self.ran = False
+
+    def run(self, index: int, offset: int, batch: pl.DataFrame) -> tuple[pl.DataFrame, list[NodeBatch]]:
+        if not self.ran:
+            self.ran = True
+            proc = subprocess.run([sys.executable, "-m", "decider.experiments._worker"],
+                                  input=json.dumps(self.request), capture_output=True, text=True)
+            reply = _reply(proc.stdout, proc.stderr, proc.returncode)
+            if not reply["ok"]:
+                raise DeciderError(reply["error"])
+        return pickle.loads((Path(self.request["out"]) / f"{index}.pkl").read_bytes())
+
+
+def _reply(stdout: str, stderr: str, returncode: int) -> dict:
+    try:
+        return json.loads(stdout.strip().splitlines()[-1])
+    except (json.JSONDecodeError, IndexError):
+        return {"ok": False, "error": f"revision subprocess exited {returncode}: {(stderr or stdout)[-500:]}"}
+
+
+def _set_inputs(batch: pl.DataFrame, sc: Scenario, offset: int) -> pl.DataFrame:
+    if sc.row is not None and not offset <= sc.row < offset + batch.height:
+        return batch
+    for name, value in sc.overrides.items():
+        new = pl.lit(value).cast(batch.schema[name]) if name in batch.columns else pl.lit(value)
+        if sc.row is not None:
+            new = pl.when(pl.int_range(pl.len()) == sc.row - offset).then(new).otherwise(pl.col(name))
+        batch = batch.with_columns(new.alias(name))
+    return batch
+
+
+def _set_values(plan, state: State, sc: Scenario, offset: int) -> None:
+    # Every version of the name written so far, as a debug session's `set` does: later nodes may read any of them.
+    if sc.row is not None and not offset <= sc.row < offset + state.n:
+        return
+    for name, value in sc.overrides.items():
+        inputs = [v for v in plan.versions if v.producer is None and v.name == name]
+        targets = inputs + [v for v in state.chains.get(name, ()) if v.id in state.values and v not in inputs]
+        if not targets:
+            raise KeyError(f"{name!r} is neither an input column nor a value produced by {sc.at!r}")
+        if sc.row is not None:
+            current = state.column(name, targets[-1]).to_list()
+            current[sc.row - offset] = value
+            value = current
+        values, valid = _cast(name, value, dtype_of(base_annotation(targets[-1].annotation)), state.n)
+        for v in targets:
+            state.write(v, values.copy(), valid=None if valid is None else valid.copy())
+
+
+def load_flow(entry: str, tree: Path | None = None):
+    """Import `entry` (`"module:qualname"`), from `tree` when given, and call it if it is a zero-argument factory."""
     module, _, qualname = entry.partition(":")
     if not module or not qualname:
         raise ValueError(f"entry {entry!r} must be 'module:qualname'")
-    return _load_flow_in(entry)
-
-
-def _load_flow_in(entry: str, tree: Path | None = None):
-    module, _, qualname = entry.partition(":")
     if tree is not None:
         sys.path.insert(0, str(tree))
     try:
@@ -217,141 +325,51 @@ def _load_flow_in(entry: str, tree: Path | None = None):
     return obj() if callable(obj) else obj
 
 
-def _param_only(sc) -> bool:
-    return sc.at is None and not sc.overrides and sc.revision is None and sc.row is None
+def _batches(frame: Frame, size: int) -> Iterator[tuple[int, pl.DataFrame]]:
+    # ponytail: a lazy CSV rescans from the start for each slice; batch with collect_batches if that bites.
+    for offset in range(0, _height(frame), size):
+        yield offset, _collect(frame.slice(offset, size))
 
 
-def _scenario_revision(def_: ExperimentDef, sc, step, resolved: str | None, materialised: dict[str, Path]):
-    """The scenario's resolved revision, the step to run it on, and a checked-out tree for a different
-    revision (run via `_subprocess_run`, so the checked-out code never shares this process's module
-    cache) or `None` for the live one. A string second value is the failure reason."""
-    if sc.revision is None:
-        return None, step, None
-    sha = resolve(sc.revision)
-    revision = Revision(authored=sc.revision, resolved=sha)
-    if sha is None:
-        return revision, f"revision {sc.revision!r} did not resolve", None
-    if not compatible(def_.flow.decider, _decider_version()):
-        return revision, f"revision {sha} is not engine-compatible with decider {_decider_version()}", None
-    if sha == resolved or resolved is None:
-        return revision, step, None
-    tree = materialised.get(sha)
-    if tree is None:
-        tree = materialised[sha] = materialise(sha)
-    return revision, None, tree
+def _height(frame: Frame) -> int:
+    return frame.height if isinstance(frame, pl.DataFrame) else frame.select(pl.len()).collect().item()
 
 
-def _fused_run(step, frame, params, sc) -> dict:
-    doc = merge(params, sc.params)
-    try:
-        out = step.run(frame, params=doc)
-    except Exception as e:
-        return {"output": None, "steps": {}, "paths": {}, "error": f"{type(e).__name__}: {e}"}
-    return {"output": {c: out[c].to_list() for c in out.columns}, "steps": {}, "paths": {}, "error": None}
+def _collect(frame: Frame) -> pl.DataFrame:
+    return frame.collect() if isinstance(frame, pl.LazyFrame) else frame
 
 
-def _fork_run(step, frame, params, sc) -> dict:
-    target = None if sc.at is None else (sc.at, "after", 1)
-    scenario = {"params": sc.params, "overrides": sc.overrides, "row": sc.row}
-    try:
-        return fork(step, frame, params, [], target, scenario)
-    except Exception as e:
-        return {"output": None, "steps": {}, "paths": {}, "error": f"{type(e).__name__}: {e}"}
+def _fresh(metric: Metric) -> Metric:
+    copy = metric.model_copy(deep=True)
+    copy.reset()
+    return copy
 
 
-def _subprocess_run(tree: Path, entry: str, frame: pl.DataFrame, params: Any, sc: Any) -> dict:
-    """Runs one scenario against `entry` loaded from `tree`, in a fresh process (see `_revision_worker`)."""
-    with tempfile.TemporaryDirectory() as tmp:
-        frame_path = Path(tmp) / "frame.parquet"
-        frame.write_parquet(frame_path)
-        request = json.dumps({
-            "entry": entry, "tree": str(tree), "frame_path": str(frame_path), "params": params,
-            "mode": "fused" if _param_only(sc) else "fork",
-            "scenario": {"params": sc.params, "overrides": sc.overrides, "at": sc.at, "row": sc.row},
-        })
-        try:
-            proc = subprocess.run([sys.executable, "-m", "decider.experiments._revision_worker"],
-                                  input=request, capture_output=True, text=True, timeout=120)
-        except subprocess.TimeoutExpired:
-            return {"output": None, "steps": {}, "paths": {}, "error": "revision subprocess timed out"}
-        reply = _parse_reply(proc.stdout, proc.stderr, proc.returncode)
-        if not reply["ok"]:
-            return {"output": None, "steps": {}, "paths": {}, "error": reply["error"]}
-        return reply["result"]
-
-
-def _parse_reply(stdout: str, stderr: str, returncode: int) -> dict:
-    try:
-        return json.loads(stdout.strip().splitlines()[-1])
-    except (json.JSONDecodeError, IndexError):
-        return {"ok": False, "error": f"revision subprocess exited {returncode}: {(stderr or stdout)[-500:]}"}
-
-
-def _override_targets(step) -> dict[str, list[str | None]]:
-    slots: dict[str, list[str | None]] = {}
-    for v in describe(step).value_slots:
-        slots.setdefault(v.name, []).append(v.path)
-    return slots
-
-
-def _diff(base, other, comparison: ComparisonPolicy, exact: bool = False) -> tuple[Finding, ...]:
-    if base is None or other is None:
-        return (Finding(kind="error", message="a run errored"),)
-    tol = Tolerance(rtol=0.0, atol=0.0) if exact else comparison.tolerance
-    cols = comparison.outputs or tuple(base)
-    out = []
-    for col in cols:
-        left, right = base.get(col), other.get(col)
-        if left is None or right is None:
-            continue
-        for i, (a, b) in enumerate(zip(left, right)):
-            if not close(a, b, tol):
-                out.append(Finding(kind="divergence", location=f"{col}[{i}]", expected=a, actual=b))
-    return tuple(out)
-
-
-def _divergences(base, other, comparison: ComparisonPolicy) -> tuple[Finding, ...]:
-    changed = diff_outputs(base, other, comparison)
-    out = []
-    for col, rows in changed.items():
-        for i in rows:
-            out.append(Finding(kind="divergence", location=f"{col}[{i}]",
-                               expected=base[col][i], actual=other[col][i]))
-    return tuple(out)
-
-
-def _run_status(results: list[ScenarioResult], nondeterministic: bool, job: JobHandle | None) -> RunStatus:
-    if job is not None and job.cancelled:
-        return RunStatus.CANCELLED
-    if job is not None and job.timed_out:
-        return RunStatus.TIMED_OUT
+def _status(stop: str | None, errors: dict[str, str], nondeterministic: bool) -> RunStatus:
+    if stop:
+        return RunStatus(stop)
+    if BASELINE in errors:
+        return RunStatus.FAILED
     if nondeterministic:
         return RunStatus.NON_REPRODUCIBLE
-    if all(r.status is ScenarioStatus.COMPLETED for r in results):
-        return RunStatus.COMPLETED
-    return RunStatus.PARTIAL
+    return RunStatus.PARTIAL if errors else RunStatus.COMPLETED
 
 
-def _resumable(resume: ExperimentResult | None, data, resolved: str | None) -> set[str]:
-    if resume is None:
-        return set()
-    if resume.manifest.input is not None and resume.manifest.input.fingerprint != data.fingerprint:
-        return set()
-    if resolved is not None and resume.manifest.revision is not None \
-            and resume.manifest.revision.resolved != resolved:
-        return set()
-    return {s.name for s in resume.scenarios if s.status is ScenarioStatus.COMPLETED}
-
-
-def _manifest(def_: ExperimentDef, step, data: LoadedData, resolved: str | None,
-              results: list[ScenarioResult]) -> RunManifest:
+def _manifest(def_: ExperimentDef, step, frame: Frame, total: int, resolved: str | None,
+              results: tuple[ScenarioResult, ...]) -> RunManifest:
+    dataset = Path(def_.input.path).name if def_.input.path else ""
+    if isinstance(frame, pl.DataFrame):
+        data = LoadedData.from_frame(frame, dataset=dataset).summary
+    else:
+        data = InputFingerprint(dataset=dataset, row_count=total,
+                                columns=tuple((c, str(t)) for c, t in frame.collect_schema().items()))
     return RunManifest(
         manifest_id=new_manifest_id(),
         kind="experiment_run",
         flow=describe(step).flow,
         revision=Revision(authored=def_.revision, resolved=resolved),
         environment=Environment(python=platform.python_version(), decider=_decider_version()),
-        input=data.summary,
+        input=data,
         outputs=tuple(r.output_ref for r in results if r.output_ref is not None),
     )
 

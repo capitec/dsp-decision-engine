@@ -57,7 +57,7 @@ def build_server(policy: Policy, bridge: EditorBridge | None = None) -> FastMCP:
 
     @mcp.tool
     def experiment_definition(path: str) -> dict:
-        """An experiment definition (experiment.yaml or JSON) read from a path."""
+        """An experiment definition (experiment.json) read from a path."""
         return tools.experiment_definition(path)
 
     @mcp.tool

@@ -132,6 +132,19 @@ def document_key(doc: Mapping) -> str:
     return hashlib.sha256(json.dumps(doc, sort_keys=True).encode()).hexdigest()
 
 
+def merge(base: Mapping | None, extra: Mapping | None) -> dict:
+    """`extra` merged over `base`, nested dicts merged key by key; neither is changed.
+
+    Example::
+
+        merge({"term": {"cap": 36.0, "floor": 6.0}}, {"term": {"cap": 48.0}})   # cap 48.0, floor 6.0
+    """
+    out = dict(base or {})
+    for k, v in (extra or {}).items():
+        out[k] = merge(out.get(k), v) if isinstance(v, dict) and isinstance(out.get(k), dict) else v
+    return out
+
+
 class ParamsCache:
     """Validation results per (params document, node path); a document seen before is never revalidated.
 

@@ -1,5 +1,12 @@
 # A `Scenario.revision` scenario runs in a fresh subprocess, not in-process
 
+Since `notes/experiment-metrics-callbacks.md` the worker is
+`decider/experiments/_worker.py`: it runs the scenario over the whole input in
+the parent's batch boundaries and pickles each batch's output and node values,
+which the parent reads back in lockstep; the 120s timeout and the
+fused-or-fork mode switch below are gone. The reasoning for a subprocess is
+unchanged.
+
 ## The bug this starts from
 
 `run_experiment` checks out a scenario's `revision` into a temp git worktree
