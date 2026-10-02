@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter
+from fnmatch import fnmatchcase
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,8 @@ from pydantic import BaseModel, ConfigDict, SerializeAsAny
 
 from decider.contract import describe
 from decider.data import PreflightReport
+from decider.engine.ir.context import to_ir
+from decider.engine.ir.nodes import iter_nodes
 from decider.exceptions import DeciderError
 from decider.experiments.callbacks import Callback
 from decider.experiments.metrics.base import Metric, MetricRef, Summary
@@ -203,6 +206,8 @@ def _where(metric: Metric | None) -> str:
         return ""
     column = getattr(metric, "column", None) or getattr(metric, "outcome", None)
     what = f"`{metric.type}`" + (f" of `{column}`" if column else "")
+    if metric.node_id:
+        return f"{what} at the step with id `{metric.node_id}`"
     return f"{what} at steps matching `{metric.nodes}`" if metric.nodes else f"{what} in the flow's output"
 
 
@@ -261,6 +266,7 @@ def validate(def_: ExperimentDef, step) -> list[str]:
         problems.append(f"{BASELINE!r} is the unchanged run; give the scenario another name")
     problems += [f"two scenarios are named {n!r}" for n, k in names.items() if k > 1]
     problems += _override_problems(def_, step)
+    problems += _node_problems(def_, step)
     metrics: dict[str, Metric] = {}
     for m in def_.metrics:
         if m.key in metrics:
@@ -276,6 +282,20 @@ def validate(def_: ExperimentDef, step) -> list[str]:
         elif not issubclass(m.summary, p.requires):
             problems.append(f"plot {p.key!r} needs a {p.requires.__name__} summary; "
                             f"metric {p.metric!r} gives {m.summary.__name__}")
+    return problems
+
+
+def _node_problems(def_: ExperimentDef, step) -> list[str]:
+    nodes = list(iter_nodes(to_ir(step)))
+    paths, ids = [n.origin.path for n in nodes], {n.origin.id for n in nodes}
+    problems = []
+    for m in def_.metrics:
+        if m.nodes is not None and m.node_id is not None:
+            problems.append(f"metric {m.key!r} sets both nodes and node_id; pick one")
+        elif m.node_id is not None and m.node_id not in ids:
+            problems.append(f"metric {m.key!r}: no step has id {m.node_id!r}")
+        elif m.nodes is not None and not any(fnmatchcase(p, m.nodes) for p in paths):
+            problems.append(f"metric {m.key!r}: nodes={m.nodes!r} matches no step")
     return problems
 
 
@@ -345,10 +365,35 @@ class Experiment:
         return self
 
     def save(self, path: str | Path) -> Path:
-        """Write the definition to `path` as JSON; load it back with `ExperimentDef.model_validate_json`."""
+        """Write the definition to `path` as JSON; `Experiment.load` reads it back."""
         path = Path(path)
         path.write_text(self.def_.model_dump_json(indent=2))
         return path
+
+    @classmethod
+    def load(cls, path: str | Path, *, step=None, frame: pl.DataFrame | pl.LazyFrame | None = None,
+             params=None) -> Experiment:
+        """An experiment from an `experiment.json`, ready to change further or `run`.
+
+        Without `step` the flow is imported from `flow.entry`; without `frame`
+        the input is scanned from `input.path`, relative to the JSON file.
+
+        Example::
+
+            result = Experiment.load("experiments/premium_sweep/experiment.json").run()
+        """
+        from decider.experiments.runner import load_flow, scan
+
+        path = Path(path)
+        def_ = ExperimentDef.model_validate_json(path.read_text())
+        check_experiment_version(def_.version)
+        if frame is None:
+            if not def_.input.path:
+                raise DeciderError(f"{path} has no input.path; pass frame=")
+            frame = scan(path.parent / def_.input.path)
+        exp = cls(def_.name, step if step is not None else load_flow(def_.flow.entry), frame, params=params)
+        exp.def_ = def_
+        return exp
 
     def run(self, *, job: JobHandle | None = None, out_dir: str | None = None) -> ExperimentResult:
         from decider.experiments.runner import run_experiment

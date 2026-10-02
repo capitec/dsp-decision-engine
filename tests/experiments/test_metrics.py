@@ -180,3 +180,13 @@ def test_a_metric_on_a_branch_sees_what_the_branch_passes_on_for_every_record():
     assert merged.count == before.count == 1_000
     assert unsecured.count == (frame["collateral"] == 0).sum()
     assert unsecured.min > before.min
+
+
+def test_a_metric_targets_a_step_by_durable_id_the_same_as_by_path():
+    from example_projects.experiments.loan_pipeline import applications, build
+
+    result = (Experiment("x", build(), applications(500))
+              .metric(Describe(name="by_id", column="rate", node_id="03ed37e0af6b"),
+                      Describe(name="by_path", column="rate", nodes="loans/pricing/unsecured"))
+              .run())
+    assert result.summaries["by_id"] == result.summaries["by_path"]

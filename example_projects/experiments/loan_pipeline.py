@@ -2,7 +2,8 @@
 
 `ratio -> rate -> pricing (secured | unsecured) -> approved, payment`: the
 branch gives metrics a step inside an arm to attach to, and `approved` and
-`payment` are the flow's output.
+`payment` are the flow's output. The branch and the unsecured arm carry
+durable ids, so a metric can target them by `node_id` whatever they are named.
 """
 from __future__ import annotations
 
@@ -29,7 +30,7 @@ def secured(rate: float, discount: float = param(0.02)) -> float:
     return rate - discount
 
 
-@step(output="rate")
+@step(output="rate", id="03ed37e0af6b")
 def unsecured(rate: float, ratio: float, premium: float = param(0.04)) -> float:
     return rate + premium * (1.0 + ratio)
 
@@ -43,7 +44,8 @@ def payment(debt: float, rate: float) -> float:
 
 
 def build():
-    pricing = branch(is_secured, secured, unsecured, modifies=["rate"], name="pricing")
+    pricing = branch(is_secured, secured, unsecured, modifies=["rate"], name="pricing",
+                     id="7c354516dfb1")
     return flow(ratio, rate, pricing, approved, payment, name="loans")
 
 
