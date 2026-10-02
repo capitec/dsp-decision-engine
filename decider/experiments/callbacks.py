@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
+from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Any
 
@@ -60,6 +61,7 @@ class NodeBatch:
 
     scenario: str
     path: str
+    id: str | None
     index: int
     offset: int
     values: pl.DataFrame
@@ -73,8 +75,9 @@ class Callback:
     """Hooks the runner calls; override the ones you need.
 
     `on_node_end` fires only for a callback with a `nodes` attribute, a glob on
-    node paths (`"*"`, `"term/*"`); asking for nodes runs the flow one kernel per
-    node instead of fused, which is still compiled.
+    node paths (`"*"`, `"term/*"`), or a `node_id`, a step's durable id; asking
+    for nodes runs the flow one kernel per node instead of fused, which is
+    still compiled.
 
     Example::
 
@@ -97,6 +100,12 @@ class Callback:
 
     def on_run_end(self, run: Run) -> None:
         pass
+
+
+def selects(callback: Any, path: str, id: str | None) -> bool:
+    """Whether `callback` asks for the node at `path` with durable id `id`, by `nodes` glob or `node_id`."""
+    pattern, node_id = getattr(callback, "nodes", None), getattr(callback, "node_id", None)
+    return bool(pattern and fnmatchcase(path, pattern)) or (node_id is not None and node_id == id)
 
 
 def overrides(callback: Any, hook: str) -> bool:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import typing as t
+from abc import abstractmethod
 from collections import Counter
 
 import numpy as np
@@ -29,15 +30,15 @@ class _ColumnMetric(Metric):
     column: str
 
     def on_batch_end(self, batch: Batch) -> None:
-        if self.nodes is None:
+        if not self.on_steps:
             self._add(batch.output[self.column])
 
     def on_node_end(self, node: NodeBatch) -> None:
         if self.column in node.values.columns:
             self._add(node.values[self.column])
 
-    def _add(self, values: pl.Series) -> None:
-        raise NotImplementedError
+    @abstractmethod
+    def _add(self, values: pl.Series) -> None: ...
 
 
 class ValueCounts(_ColumnMetric):
@@ -138,7 +139,7 @@ class Histogram(_ColumnMetric):
         self._below = self._above = self._nulls = 0
 
     def on_batch_end(self, batch: Batch) -> None:
-        if self.nodes is None:
+        if not self.on_steps:
             self._ensure_edges(batch.baseline[self.column])
             self._add(batch.output[self.column])
 

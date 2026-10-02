@@ -19,9 +19,10 @@ class Metric(BaseRegistryModule, Callback, root=True):
 
     The runner gives every scenario its own copy and calls `reset` on it
     first. `name` keys its summaries in the result and is what a plot names
-    (the type tag when empty); `nodes`, a glob on node paths, makes
-    `on_node_end` fire for matching nodes. `summary` is the `Summary` type
-    `summarise` returns.
+    (the type tag when empty). `nodes`, a glob on node paths, or `node_id`, a
+    step's durable id, makes it a step metric: `on_node_end` fires for the
+    matching steps. Without either it is global and reads the flow's output.
+    `summary` is the `Summary` type `summarise` returns.
 
     Example::
 
@@ -42,10 +43,16 @@ class Metric(BaseRegistryModule, Callback, root=True):
     summary: t.ClassVar[type[Summary]] = Summary
     name: str = ""
     nodes: str | None = None
+    node_id: str | None = None
 
     @property
     def key(self) -> str:
         return self.name or self.type
+
+    @property
+    def on_steps(self) -> bool:
+        """Whether it reads steps (`nodes` or `node_id`) rather than the flow's output."""
+        return self.nodes is not None or self.node_id is not None
 
     def reset(self) -> None:
         pass

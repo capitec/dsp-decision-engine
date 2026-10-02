@@ -37,7 +37,8 @@ from decider.engine.run.state import State, dtype_of
 from decider.engine.wiring.plan import Branch, Loop, ScatterGather
 from decider.engine.wiring.plan import Sequence as Sequence_
 from decider.exceptions import DeciderError
-from decider.experiments.callbacks import Batch, Callback, JobProgress, NodeBatch, Run, WriteOutputs, overrides
+from decider.experiments.callbacks import (Batch, Callback, JobProgress, NodeBatch, Run, WriteOutputs, overrides,
+                                           selects)
 from decider.experiments.experiments import (BASELINE, ExperimentDef, ExperimentResult, RunStatus, Scenario,
                                              ScenarioResult, ScenarioStatus, check_experiment_version, validate)
 from decider.experiments.metrics.base import Metric
@@ -106,8 +107,9 @@ def run_experiment(def_: ExperimentDef, step, frame: Frame, params=None, *, call
     shared = [*callbacks, *([JobProgress(job)] if job else []), *([WriteOutputs(out_dir)] if out_dir else [])]
     metrics = {sc.name: [_fresh(m) for m in def_.metrics] for sc in scenarios}
     everyone = [*shared, *(m for ms in metrics.values() for m in ms)]
-    selectors = sorted({cb.nodes for cb in [*shared, *def_.metrics]
-                        if getattr(cb, "nodes", None) and overrides(cb, "on_node_end")})
+    listening = [cb for cb in [*shared, *def_.metrics] if overrides(cb, "on_node_end")]
+    selectors = {"nodes": sorted({cb.nodes for cb in listening if getattr(cb, "nodes", None)}),
+                 "ids": sorted({cb.node_id for cb in listening if getattr(cb, "node_id", None)})}
     run_ = Run(def_.name, step, tuple(sc.name for sc in scenarios), total, def_.batch_size)
     errors: dict[str, str] = {}
     records: Counter[str] = Counter()
@@ -172,8 +174,7 @@ def _drive(def_, frame, scenarios, executors, shared, metrics, everyone, run_, e
             for n in nodes:
                 node = replace(n, scenario=sc.name, baseline=baseline_nodes.get((n.path, n.iteration)))
                 for cb in listeners:
-                    pattern = getattr(cb, "nodes", None)
-                    if pattern and fnmatchcase(node.path, pattern):
+                    if selects(cb, node.path, node.id):
                         cb.on_node_end(node)
             done = Batch(sc.name, index, offset, out, baseline)
             for cb in listeners:
@@ -223,11 +224,12 @@ def _executors(def_, step, frame, params, base_params, scenarios, selectors, tmp
 class _Local:
     """Runs one scenario's batches in this process."""
 
-    def __init__(self, step, params, sc: Scenario, selectors: Sequence[str]):
+    def __init__(self, step, params, sc: Scenario, selectors: dict[str, list[str]]):
         self.sc = sc
-        self.selectors = selectors
+        self.patterns, self.ids = selectors["nodes"], set(selectors["ids"])
         self.params = merge(params, sc.params)
-        self.exe = Engine().bind(step, mode="stepped" if selectors or sc.at is not None else "fused")
+        stepped = self.patterns or self.ids or sc.at is not None
+        self.exe = Engine().bind(step, mode="stepped" if stepped else "fused")
         # What each node hands a node metric: a call's outputs, a branch's `modifies` names.
         self.writes = {c.node.origin.path: c.writes for c in self.exe.plan.calls}
         self.writes.update((b.node.origin.path, tuple(m.version for m in b.merges))
@@ -247,9 +249,9 @@ class _Local:
             if pending and path == sc.at:
                 _set_values(self.exe.plan, state, sc, offset)
                 pending = False
-            if any(fnmatchcase(path, s) for s in self.selectors):
-                nodes.append(NodeBatch("", path, index, offset, self._values(state, path, cp.rows), cp.rows,
-                                       cp.arm, cp.iteration))
+            if cp.origin.id in self.ids or any(fnmatchcase(path, p) for p in self.patterns):
+                nodes.append(NodeBatch("", path, cp.origin.id, index, offset, self._values(state, path, cp.rows),
+                                       cp.rows, cp.arm, cp.iteration))
         return self.exe.output(state), nodes
 
     def _values(self, state: State, path: str, rows) -> pl.DataFrame:
