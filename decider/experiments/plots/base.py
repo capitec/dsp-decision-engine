@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import typing as t
 import uuid
 
@@ -55,20 +56,63 @@ class Figure(BaseModel):
         ipython_display().display(self)
 
     def _repr_mimebundle_(self, include=None, exclude=None):
-        alt = altair()
-        if self.grammar == "vega-lite":
-            return alt.Chart.from_dict(self.spec)._repr_mimebundle_(include, exclude)
-        return {"text/html": self.html(), "text/plain": f"<Vega chart: {self.spec.get('title', {}).get('text', '')}>"}
+        return {"text/html": self.html(), "text/plain": f"<{self.grammar} chart>"}
 
     def html(self) -> str:
-        """The figure as an HTML fragment that loads Vega from the CDN and draws itself, in a page or a notebook."""
-        alt = altair()
-        from altair.utils.html import spec_to_html
+        """The figure as an HTML fragment that draws itself, in a page or a notebook.
 
-        # altair's notebook template: it waits for the scripts to load before drawing, wherever it is inserted.
-        return spec_to_html(self.spec, mode=self.grammar, vega_version=alt.VEGA_VERSION,
-                            vegaembed_version=alt.VEGAEMBED_VERSION, vegalite_version=alt.VEGALITE_VERSION,
-                            output_div=f"vis-{uuid.uuid4().hex}", fullhtml=False, template="universal")
+        Every figure on a page shares one load of Vega from the CDN; a chart
+        whose scripts don't load says which URL failed.
+        """
+        div = f"vis-{uuid.uuid4().hex}"
+        spec = json.dumps(self.spec).replace("</", "<\\/")
+        return (f'<div id="{div}"></div><script>(function () {{\n'
+                f'  const el = document.currentScript.previousElementSibling || document.getElementById("{div}");\n'
+                f"  ({_loader()}).then(embed => embed(el, {spec}, {{mode: \"{self.grammar}\"}})).catch(err => {{\n"
+                '    el.innerHTML = "<pre style=\\"color:#b91c1c;white-space:pre-wrap\\">" + err + "</pre>";\n'
+                "  });\n})();</script>")
+
+
+# One load of vega, vega-lite and vega-embed per page, however many figures it holds, in order and before any
+# figure embeds: figures that each load their own race each other, and an empty vega-lite reads as
+# "compile is not a function". Through requirejs when the page has it, as altair does; altair's own charts
+# then see the libraries as loaded (VEGA_DEBUG) and don't load them again.
+_LOADER = """window.deciderVega = window.deciderVega || new Promise(function (resolve, reject) {
+  var urls = %(urls)s, names = ["vega", "vega-lite", "vega-embed"];
+  function ready() {
+    if (!window.vegaLite || typeof window.vegaLite.compile !== "function") {
+      return reject(new Error("vega-lite did not load from " + urls[1] + "; is the CDN blocked?"));
+    }
+    window.VEGA_DEBUG = Object.assign(window.VEGA_DEBUG || {}, %(debug)s);
+    resolve(window.vegaEmbed);
+  }
+  if (window.vegaEmbed && window.vegaLite && window.vega) return ready();
+  if (typeof define === "function" && define.amd) {
+    var paths = {};
+    names.forEach(function (name, i) { paths[name] = urls[i] + "?noext"; });
+    requirejs.config({paths: paths});
+    return require(["vega-embed"], resolve, function (err) { reject(new Error("could not load " + err.requireModules)); });
+  }
+  urls.reduce(function (loaded, url) {
+    return loaded.then(function () {
+      return new Promise(function (done, fail) {
+        var s = document.createElement("script");
+        s.src = url;
+        s.onload = done;
+        s.onerror = function () { fail(new Error("could not load " + url + "; is the CDN blocked?")); };
+        document.head.appendChild(s);
+      });
+    });
+  }, Promise.resolve()).then(ready, reject);
+})"""
+
+
+def _loader() -> str:
+    alt = altair()
+    versions = (alt.VEGA_VERSION, alt.VEGALITE_VERSION, alt.VEGAEMBED_VERSION)
+    urls = [f"https://cdn.jsdelivr.net/npm/{lib}@{v}" for lib, v in zip(("vega", "vega-lite", "vega-embed"), versions)]
+    debug = dict(zip(("vega_version", "vegalite_version", "vegaembed_version"), versions))
+    return _LOADER % {"urls": json.dumps(urls), "debug": json.dumps(debug)}
 
 
 class Plot(BaseRegistryModule, root=True):
@@ -77,7 +121,8 @@ class Plot(BaseRegistryModule, root=True):
     `metric` names the metric it draws (its `name`, or its type tag when
     unnamed), and keys the plot in `result.plots` unless `name` is set;
     `requires` is the `Summary` type it can draw, checked before the run
-    starts. `render` returns an altair chart, or a full Vega spec for what
+    starts; `width` and `height` size it in pixels. `render` returns an
+    altair chart, or a full Vega spec for what
     Vega-Lite can't express; the result keeps it as a `Figure`.
 
     Example::
@@ -95,10 +140,16 @@ class Plot(BaseRegistryModule, root=True):
     requires: t.ClassVar[type[Summary]] = Summary
     metric: str
     name: str = ""
+    width: int | None = None
+    height: int | None = None
 
     @property
     def key(self) -> str:
         return self.name or self.metric
+
+    def size(self) -> dict[str, int]:
+        """The `width` and `height` set, in pixels, for `chart.properties(**self.size())`."""
+        return {k: v for k, v in (("width", self.width), ("height", self.height)) if v is not None}
 
     def render(self, summaries: dict[str, Summary]) -> t.Any:
         raise NotImplementedError
