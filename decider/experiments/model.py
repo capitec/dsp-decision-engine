@@ -1,9 +1,11 @@
 """The experiment asset: a versioned `experiment.yaml` schema, in Python.
 
 An experiment is data, never code: a flow entry point, an authored revision, an
-input reference, scenarios, a comparison policy and requested summaries.
-Optional Python `tests/` and `graphs/` are references from the YAML, not code
-embedded in it.
+input reference, scenarios, a comparison policy, requested summaries and
+plots. A plot is named by its registered `BasePlotType` tag (see
+`decider.experiments.plots`), the same reference-by-tag the registry already
+uses for steps; optional Python `tests/` and `graphs/` are bare file-path
+references instead.
 """
 from __future__ import annotations
 
@@ -12,6 +14,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 from decider.exceptions import DeciderError
+from decider.experiments.plots import PlotRef
 
 EXPERIMENT_VERSION = "1"
 
@@ -111,6 +114,7 @@ class ExperimentDef(BaseModel):
     scenarios: list[Scenario] = []
     comparison: ComparisonPolicy = ComparisonPolicy()
     summaries: list[SummarySpec] = []
+    plots: list[PlotRef] = []
     tests: str = ""
     graphs: str = ""
 
