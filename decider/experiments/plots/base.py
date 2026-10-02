@@ -58,13 +58,17 @@ class Figure(BaseModel):
         alt = altair()
         if self.grammar == "vega-lite":
             return alt.Chart.from_dict(self.spec)._repr_mimebundle_(include, exclude)
+        return {"text/html": self.html(), "text/plain": f"<Vega chart: {self.spec.get('title', {}).get('text', '')}>"}
+
+    def html(self) -> str:
+        """The figure as an HTML fragment that loads Vega from the CDN and draws itself, in a page or a notebook."""
+        alt = altair()
         from altair.utils.html import spec_to_html
 
-        # altair's notebook template, in Vega mode: it waits for the scripts to load before drawing.
-        html = spec_to_html(self.spec, mode="vega", vega_version=alt.VEGA_VERSION,
+        # altair's notebook template: it waits for the scripts to load before drawing, wherever it is inserted.
+        return spec_to_html(self.spec, mode=self.grammar, vega_version=alt.VEGA_VERSION,
                             vegaembed_version=alt.VEGAEMBED_VERSION, vegalite_version=alt.VEGALITE_VERSION,
-                            output_div=f"vega-{uuid.uuid4().hex}", fullhtml=False, template="universal")
-        return {"text/html": html, "text/plain": f"<Vega chart: {self.spec.get('title', {}).get('text', '')}>"}
+                            output_div=f"vis-{uuid.uuid4().hex}", fullhtml=False, template="universal")
 
 
 class Plot(BaseRegistryModule, root=True):

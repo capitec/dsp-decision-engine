@@ -19,7 +19,7 @@ serve-starlette = ["uvicorn", "starlette"]
 serve-sanic     = ["sanic"]
 visualise       = ["streamlit", "graphviz"]
 notebook        = ["ipython"]
-experiments     = ["altair", "ipython"]
+experiments     = ["altair", "ipython", "markdown-it-py"]
 eval            = ["simpleeval"]
 dev = [
     "pytest",

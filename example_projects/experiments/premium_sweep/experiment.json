@@ -113,5 +113,65 @@
     }
   ],
   "batch_size": 5000,
-  "determinism": true
+  "determinism": true,
+  "report": {
+    "title": "Unsecured premium sweep",
+    "blocks": [
+      {
+        "type": "overview"
+      },
+      {
+        "type": "text",
+        "markdown": "Raising the **unsecured premium** only reprices loans without collateral; this shows how far that moves their rates, everyone's payments, and who is approved."
+      },
+      {
+        "type": "section",
+        "title": "Approvals",
+        "blocks": [
+          {
+            "type": "row",
+            "blocks": [
+              {
+                "type": "chart",
+                "plot": "divergence"
+              },
+              {
+                "type": "table",
+                "metric": "divergence"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "section",
+        "title": "Rates and payments",
+        "blocks": [
+          {
+            "type": "row",
+            "blocks": [
+              {
+                "type": "chart",
+                "plot": "unsecured_rate"
+              },
+              {
+                "type": "chart",
+                "plot": "payment"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "section",
+        "title": "Who goes where",
+        "blocks": [
+          {
+            "type": "chart",
+            "plot": "flows_premium_0.08"
+          }
+        ]
+      }
+    ]
+  }
 }
