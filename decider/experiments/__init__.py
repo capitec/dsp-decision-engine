@@ -11,6 +11,7 @@ from decider.experiments.forks import checkpoint_key, fork, merge, sweep
 from decider.experiments.graphs import path_sankey
 from decider.experiments.model import (EXPERIMENT_VERSION, ComparisonPolicy, ExperimentDef, FlowSpec, InputSpec,
                                        Scenario, SummarySpec, Tolerance, check_experiment_version)
+from decider.experiments.plots import BasePlotType, OutcomeCounts, PlotRef, Sankey
 from decider.experiments.result import (ExperimentResult, Finding, RunStatus, ScenarioResult, ScenarioStatus)
 from decider.experiments.revision import compatible, materialise, remove, resolve
 from decider.experiments.runner import load_flow, resolve_revision, run, run_experiment, validate_scenarios
@@ -21,9 +22,9 @@ from decider.experiments.yaml import dump as dump_yaml
 from decider.experiments.yaml import load as load_yaml
 
 __all__ = [
-    "EXPERIMENT_VERSION", "ComparisonPolicy", "Experiment", "ExperimentDef", "ExperimentResult", "Finding", "FlowSpec",
-    "InputSpec", "RunStatus", "Scenario", "ScenarioResult", "ScenarioStatus", "SummarySpec", "Tolerance",
-    "check_experiment_version", "checkpoint_key", "collect", "compatible", "dump_yaml", "fork", "load_flow", "load_yaml",
-    "materialise", "merge", "path_sankey", "remove", "resolve", "resolve_revision", "run", "run_experiment", "steer",
-    "summarise", "sweep", "trace", "validate_scenarios", "write",
+    "EXPERIMENT_VERSION", "BasePlotType", "ComparisonPolicy", "Experiment", "ExperimentDef", "ExperimentResult",
+    "Finding", "FlowSpec", "InputSpec", "OutcomeCounts", "PlotRef", "RunStatus", "Sankey", "Scenario", "ScenarioResult",
+    "ScenarioStatus", "SummarySpec", "Tolerance", "check_experiment_version", "checkpoint_key", "collect", "compatible",
+    "dump_yaml", "fork", "load_flow", "load_yaml", "materialise", "merge", "path_sankey", "remove", "resolve",
+    "resolve_revision", "run", "run_experiment", "steer", "summarise", "sweep", "trace", "validate_scenarios", "write",
 ]

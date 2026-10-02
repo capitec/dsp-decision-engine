@@ -93,3 +93,4 @@ class ExperimentResult(BaseModel):
     job: Job | None = None
     summary: dict[str, Any] = {}
     sankey: dict[str, Any] | None = None
+    plots: dict[str, Any] = {}

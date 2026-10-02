@@ -144,6 +144,8 @@ def run_experiment(def_: ExperimentDef, step, frame, params=None, *, job: JobHan
     manifest = _manifest(def_, step, data, resolved, results)
     summary = summarise(def_, baseline, scenario_traces)
     sankey = path_sankey(step, frame, params, baseline, def_.comparison.outputs) if baseline["output"] else None
+    plots = ({p.type: p.visualize(step, frame, params, baseline, def_.comparison.outputs) for p in def_.plots}
+             if baseline["output"] else {})
     if out_dir is not None:
         written = write_results(out_dir, ExperimentResult(manifest=manifest, status=status), summary, sankey,
                                 {"baseline": baseline["output"], **scenario_outputs})
@@ -155,7 +157,7 @@ def run_experiment(def_: ExperimentDef, step, frame, params=None, *, job: JobHan
     return ExperimentResult(manifest=manifest, status=status, name=def_.name, nondeterministic=nondeterministic,
                             scenarios=tuple(results), preflight=report,
                             job=job.snapshot() if job is not None else None,
-                            summary=summary, sankey=sankey)
+                            summary=summary, sankey=sankey, plots=plots)
 
 
 def validate_scenarios(def_: ExperimentDef, step) -> list[str]:
