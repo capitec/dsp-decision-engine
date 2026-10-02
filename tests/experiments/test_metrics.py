@@ -145,4 +145,4 @@ def test_branch_flows_counts_every_record_once_through_arms_and_outcomes():
     assert links == {("in", "demo/by_sector#0"): 1, ("in", "demo/by_sector#1"): 2,
                      ("demo/by_sector#0", "out:54.0"): 1, ("demo/by_sector#1", "out:60.0"): 2}
     assert [n["label"] for n in flows.nodes if n["kind"] == "arm"] == ["cap_a", "cap_b"]
-    assert result.plots["sankey"]["scenarios"]["baseline"]["outcome"] == "term_cap"
+    assert result.plots["sankey"].grammar == "vega"

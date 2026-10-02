@@ -19,6 +19,7 @@ serve-starlette = ["uvicorn", "starlette"]
 serve-sanic     = ["sanic"]
 visualise       = ["streamlit", "graphviz"]
 notebook        = ["ipython"]
+experiments     = ["altair", "ipython"]
 eval            = ["simpleeval"]
 dev = [
     "pytest",
@@ -37,6 +38,7 @@ all = [
     "sanic",
     "streamlit", "graphviz",
     "ipython",
+    "altair",
     "simpleeval",
     "pytest",
     "pytest-asyncio",
@@ -80,6 +82,7 @@ dev = [
     "pytest-cov>=7.1.0",
     "starlette>=1.2.1",
     "ipython>=8.39.0",
+    "altair",
 ]
 
 # ── pytest ────────────────────────────────────────────────────────────────────

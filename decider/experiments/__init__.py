@@ -13,15 +13,15 @@ from decider.experiments.experiments import (BASELINE, EXPERIMENT_VERSION, Exper
                                              ScenarioResult, ScenarioStatus, check_experiment_version, validate)
 from decider.experiments.metrics import (BranchFlows, Counts, Describe, Divergence, Divergences, Flows, Metric,
                                          MetricRef, Stats, Summary, ValueCounts)
-from decider.experiments.plots import Bars, Changes, Plot, PlotRef, Sankey
+from decider.experiments.plots import Bars, Changes, Figure, Plot, PlotRef, Sankey
 from decider.experiments.revision import compatible, materialise, remove, resolve
 from decider.experiments.runner import load_flow, run, run_experiment, scan
 
 __all__ = [
     "BASELINE", "EXPERIMENT_VERSION", "Bars", "Batch", "BranchFlows", "Callback", "Changes", "Counts", "Describe",
-    "Divergence", "Divergences", "Experiment", "ExperimentDef", "ExperimentResult", "Flows", "FlowSpec", "InputSpec",
-    "JobProgress", "Metric", "MetricRef", "NodeBatch", "Plot", "PlotRef", "Progress", "Run", "RunStatus", "Sankey",
-    "Scenario", "ScenarioResult", "ScenarioStatus", "Stats", "Summary", "ValueCounts", "WriteOutputs",
+    "Divergence", "Divergences", "Experiment", "ExperimentDef", "ExperimentResult", "Figure", "Flows", "FlowSpec",
+    "InputSpec", "JobProgress", "Metric", "MetricRef", "NodeBatch", "Plot", "PlotRef", "Progress", "Run", "RunStatus",
+    "Sankey", "Scenario", "ScenarioResult", "ScenarioStatus", "Stats", "Summary", "ValueCounts", "WriteOutputs",
     "check_experiment_version", "compatible", "load_flow", "materialise", "remove", "resolve", "run",
     "run_experiment", "scan", "validate",
 ]
