@@ -11,18 +11,20 @@ from typing import Any
 import polars as pl
 
 from decider.experiments.model import ComparisonPolicy, ExperimentDef, FlowSpec, InputSpec, Scenario, Tolerance
+from decider.experiments.plots import BasePlotType
 from decider.experiments.runner import run_experiment
 from decider.lifecycle import JobHandle
 
 
 class Experiment:
-    """A builder for one experiment: name, flow, input, scenarios, comparison, then `run`.
+    """A builder for one experiment: name, flow, input, scenarios, plots, comparison, then `run`.
 
     Example::
 
         exp = (Experiment("drift", pipeline, df)
                .scenario("baseline")
-               .scenario("limit_0.3", params={"demo": {"approved": {"limit": 0.3}}}))
+               .scenario("limit_0.3", params={"demo": {"approved": {"limit": 0.3}}})
+               .plot(OutcomeCounts(type="outcome_counts", column="approved")))
         result = exp.run()
     """
 
@@ -43,6 +45,10 @@ class Experiment:
                  revision: str | None = None, row: int | None = None) -> "Experiment":
         self.def_.scenarios.append(Scenario(name=name, params=params or {}, overrides=overrides or {},
                                             at=at, revision=revision, row=row))
+        return self
+
+    def plot(self, plot: BasePlotType) -> "Experiment":
+        self.def_.plots.append(plot)
         return self
 
     def compare(self, *, baseline: str = "baseline", outputs: tuple[str, ...] = (),
