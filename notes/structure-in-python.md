@@ -6,6 +6,10 @@ bodies, table rows, scorecards), and it references code only by registered tag.
 Config-defined structure stays possible later, as configurable forms of the
 combining steps, without a redesign.
 
+**Amended:** flow files (`notes/flow-files.md`) state structure in YAML/JSON
+that lives with the code, as the only copy of it. Structure still never lives in
+a config version.
+
 **Why:** decider_old had structure in config, and it produced two sources of
 truth that drifted apart:
 - Execution order was kept by hand in JSON with typed UUIDs, and it was known to

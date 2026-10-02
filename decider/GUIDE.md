@@ -37,6 +37,7 @@ HTTP with `decider serve`.
 | steps in written order; a waterfall where a later write wins | `flow(a, b, name=...)` |
 | steps in dependency order | `dag(...)` |
 | different logic per row (eligibility, suppression) | `branch(cond, if_true, if_false, modifies=[...], name=)` |
+| apply logic only where a bool condition holds, else pass through | `branch(cond, if_true, modifies=[...], name=)` |
 | iterate per row (a solve, a schedule) | `loop(cond, body, carries=[...], max_iterations=n, name=)` |
 | whole-frame work (joins, group-bys, ragged lists) | `@frame_step(reads=, writes=)` |
 | a decision tree, or a flat rule set | `TreeConfig` (`prioritized_flat_rule`, `mode: "all"`) |
@@ -50,6 +51,7 @@ HTTP with `decider serve`.
 | a points scorecard | `ScorecardConfig` |
 | the same step twice, or on other column names | `.named("x")`, `.relabel(reads=, writes=)` |
 | another project's pipeline | import its `build()`; put the step inside yours |
+| structure in a YAML/JSON file, steps in Python | `decider.flowfile.load_flow`, `DECIDER_API__PIPELINE=flow.yaml` |
 | immutable config versions | `decider.config.JsonFileStore` (`ConfigStore`) |
 | why a record got its answer; what-if | `pipeline.session(df)` |
 | modes, batch and single record agree | `decider.testing.assert_equivalent` |
@@ -132,6 +134,11 @@ out = pipeline.run(pl.DataFrame({"client_id": [1, 2], "age": [30, 16], "income":
                                  "balance": [1000.0, 500.0], "instalment": [100.0, 100.0], "months": [0, 0]}))
 assert out["limit"].to_list() == [3000.0, 0.0] and out["months"].to_list() == [11, 6]
 assert out["prior_defaults"].to_list() == [2, 0]
+
+# One arm: false rows run nothing and keep their earlier `limit`.
+only_eligible = branch(eligible, full_limit, modifies=["limit"], name="only_eligible")
+out2 = only_eligible.run(pl.DataFrame({"age": [30, 16], "income": [1000.0, 800.0], "limit": [0.0, 500.0]}))
+assert out2["limit"].to_list() == [3000.0, 500.0]
 ```
 
 ## Trees, rule sets, tables, scorecards
@@ -336,6 +343,82 @@ app = flow(build_core().relabel(reads={"debt": "total_debt"}), offer, name="app"
 assert app.parameters().defaults() == {"app": {"credit": {"approved": {"limit": 0.4}}}}
 assert app.run(pl.DataFrame({"income": [1000.0], "total_debt": [100.0]}))["offer"].to_list() == [2000.0]
 ```
+
+## A pipeline from a flow file
+
+`decider.flowfile.load_flow` builds the same `Step` tree from a YAML or JSON
+file instead of Python: the structure is reviewable and diffable on its own,
+while the steps stay plain Python functions.
+
+```
+myapp/
+  flow.yaml              # the root: {flow, components, steps}
+  flows/
+    screen.yaml           # a `flow: screen` node with no `steps:` looks here
+  components/
+    __init__.py           # plain functions and Step instances, by name
+  configs/
+    0.0.0/
+      params.json
+      limit_band.json      # a scorecard/table/tree document; step: limit_band loads it
+```
+
+```yaml
+flow: credit
+components: myapp.components
+steps:
+  - flow: screen                                 # flows/screen.yaml
+  - branch: affordable
+    when: {expr: "score >= 600 and crc_model == \"CrC3.0\""}
+    modifies: [limit]
+    then: [{step: limit_band}]                   # a decision_table document writing limit
+  - loop: payoff
+    while: {expr: "balance > 0"}
+    carries: [balance]
+    max: 10
+    steps: [{step: pay}]
+```
+
+```python
+import json
+import tempfile
+import types
+from pathlib import Path
+
+import polars as pl
+
+from decider.flowfile import load_flow
+
+def eligible(score: float) -> bool:
+    return score > 50.0
+
+def approved(eligible: bool) -> bool:
+    return eligible
+
+components = types.ModuleType(__name__)   # stands in for a `components` package
+components.eligible = eligible
+components.approved = approved
+
+project = Path(tempfile.mkdtemp())
+(project / "flow.json").write_text(json.dumps(
+    {"flow": "credit", "steps": [{"step": "eligible"}, {"step": "approved"}]}))
+
+pipeline = load_flow(project / "flow.json", components=components)
+df = pl.DataFrame({"score": [60.0, 10.0]})
+assert pipeline.run(df)["approved"].to_list() == [True, False]
+```
+
+A `.yaml`/`.yml` file loads the same way (`pip install 'decider[yaml]'` for
+the YAML parser); serve one with `DECIDER_API__PIPELINE=flow.yaml`, exactly
+like `DECIDER_API__PIPELINE=myapp.pipeline:build`.
+
+- `modifies` on a `branch` and `carries` on a `loop` are required, as they are
+  in Python.
+- an omitted `else` passes false rows through unchanged.
+- a name defined in both `components` and `documents` is an error.
+- an `expr` condition is false wherever an input it reads is null.
+- flow files live with the code (reviewed and deployed with it); params and
+  documents stay versioned in `configs/<version>/`.
 
 ## What compiles, and what falls back
 
