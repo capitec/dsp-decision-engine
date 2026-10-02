@@ -9,8 +9,9 @@ import pytest
 
 from decider import branch, flow, param, step
 from decider.exceptions import DeciderError
-from decider.experiments import (Bars, BranchFlows, Changes, Describe, Distribution, Divergence, Experiment,
-                                 ExperimentResult, Figure, Histogram, Plot, Ranges, Sankey, Stats, ValueCounts)
+from decider.experiments import (Bars, BranchFlows, Changes, Counts, Describe, Distribution, Divergence,
+                                 Experiment, ExperimentResult, Figure, Histogram, Plot, Ranges, Sankey, Stats,
+                                 ValueCounts)
 from decider.experiments.plots.sankey import TEMPLATE
 
 LIMIT_03 = {"demo": {"approved": {"limit": 0.3}}}
@@ -109,9 +110,9 @@ def test_sankey_draws_the_scenario_it_names():
 
 def test_figures_show_in_a_notebook_through_altairs_renderers(pipeline, frame):
     result = _sweep(pipeline, frame)
-    assert "vega-embed" in result.plots["divergence"]._repr_mimebundle_()["text/html"]
+    assert "embed(el," in result.plots["divergence"]._repr_mimebundle_()["text/html"]
     vega = Figure(grammar="vega", spec={"$schema": "https://vega.github.io/schema/vega/v5.json", "marks": []})
-    assert "vega-embed" in vega._repr_mimebundle_()["text/html"]
+    assert 'mode: "vega"' in vega._repr_mimebundle_()["text/html"]
 
 
 def test_distribution_overlays_each_scenarios_histogram_with_overflow_at_the_ends():
@@ -129,13 +130,54 @@ def test_distribution_overlays_each_scenarios_histogram_with_overflow_at_the_end
     assert result.plots["histogram"].spec["params"][0]["bind"] == "legend"
 
 
+def _bins_summaries():
+    from decider.experiments import Bins
+    return {name: Bins(column="rate", edges=[0.0, 0.5, 1.0], counts=counts, below=0, above=0, nulls=0)
+            for name, counts in (("baseline", [3, 1]), ("faster", [1, 3]))}
+
+
+def test_distribution_layouts_place_scenarios_over_beside_on_top_or_in_rows():
+    def encoding(layout):
+        spec = Figure.of(Distribution(metric="m", layout=layout).render(_bins_summaries())).spec
+        return spec.get("spec", spec)["encoding"], spec
+
+    overlay, _ = encoding("overlay")
+    assert overlay["y"].get("stack", "missing") is None and overlay["x"]["bin"] == "binned"
+    assert encoding("stacked")[0]["y"]["stack"] == "zero"
+    beside, _ = encoding("side_by_side")
+    assert beside["xOffset"]["field"] == "scenario" and beside["x"]["sort"] == ["0–0.5", "0.5–1"]
+    _, rows = encoding("rows")
+    assert rows["facet"]["row"]["field"] == "scenario"
+
+
+def test_bars_layouts_and_a_plots_size():
+    def spec(**kwargs):
+        summaries = {"a": Counts(column="x", counts={"T": 1}), "b": Counts(column="x", counts={"T": 2})}
+        return Figure.of(Bars(metric="m", **kwargs).render(summaries)).spec
+
+    assert "xOffset" in spec()["encoding"] and "xOffset" not in spec(layout="stacked")["encoding"]
+    assert spec(layout="rows")["facet"]["row"]["field"] == "scenario"
+    assert (spec(width=500, height=120)["width"], spec(width=500, height=120)["height"]) == (500, 120)
+
+
+def test_changes_draws_one_horizontal_bar_per_scenario(pipeline, frame):
+    changes = _sweep(pipeline, frame).plots["divergence"].spec
+    assert changes["encoding"]["y"]["field"] == "scenario" and changes["encoding"]["x"]["field"] == "changed"
+
+
+def test_every_figure_on_a_page_shares_one_load_of_vega_and_escapes_its_spec():
+    html = Figure(grammar="vega", spec={"title": "</script><b>x</b>"}).html()
+    assert html.count("</script>") == 1 and "<\\/script>" in html
+    assert "window.deciderVega = window.deciderVega ||" in html
+
+
 def test_ranges_draws_min_mean_and_max_per_scenario(pipeline, frame):
     result = (Experiment("x", pipeline, frame).scenario("limit_0.3", params=LIMIT_03)
               .metric(Describe(column="tier")).plot(Ranges(metric="describe")).run())
     ranges = result.plots["describe"]
     marks = [layer["mark"] for layer in ranges.spec["layer"]]
     assert [m["type"] if isinstance(m, dict) else m for m in marks] == ["rule", "point"]
-    assert "vega-embed" in ranges._repr_mimebundle_()["text/html"]  # a layered chart shows as one too
+    assert "embed(el," in ranges._repr_mimebundle_()["text/html"]  # a layered chart shows as one too
 
 
 def test_a_result_with_plots_round_trips_through_json(pipeline, frame):

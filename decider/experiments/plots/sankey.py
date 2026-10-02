@@ -39,6 +39,7 @@ class Sankey(Plot):
                  for link in flows.links]
         spec = json.loads(TEMPLATE.read_text())
         spec["title"]["text"] = f"{flows.outcome}: {self.scenario}"
+        spec.update(self.size())
         spec["data"][0]["values"] = nodes + links
         return spec
 

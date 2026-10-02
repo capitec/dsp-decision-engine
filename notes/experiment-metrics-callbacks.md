@@ -46,10 +46,21 @@ experiments/
   (`{"grammar": "vega-lite" | "vega", "spec": {...}}`) that shows itself in a
   notebook through altair's renderers (`spec_to_html(mode="vega")` for Vega).
   `ExperimentResult.show()` lays a run out with IPython `Markdown`, polars
-  tables and the figures. Vega figures use altair's `"universal"` HTML
-  template: the `"standard"` one runs its embed before the CDN scripts load
-  when a notebook inserts the output, so a Sankey drew nothing (checked in
-  headless Chrome with notebook-style insertion). altair and IPython are the `experiments` extra and
+  tables and the figures. Every figure embeds through one shared loader
+  (`plots/base.py`): it loads vega, vega-lite and vega-embed once per page,
+  in order, before any figure embeds, through requirejs when the page has it,
+  and names the URL when a script doesn't load. altair's `"standard"`
+  template drew no Sankey once a notebook inserted it (it embeds before the
+  scripts load); its `"universal"` one loads per chart, and in VS Code a
+  report of several charts showed vega-embed's "compile is not a function"
+  (vega-lite empty), which headless Chrome never reproduced, even with slow
+  scripts and requirejs. A slow or filtering proxy in front of the CDN is the
+  likely difference; one load per page removes the overlap, and a blocked
+  script now says so.
+- **Plot options.** Every plot takes `width`/`height`; `Distribution` takes
+  `layout` (`overlay`, `stacked`, `side_by_side`, `rows`) and `Bars` takes
+  `side_by_side`, `stacked` or `rows`. `Changes` is horizontal, so a couple
+  of scenarios don't make a tall thin chart. altair and IPython are the `experiments` extra and
   are imported only when a plot renders or something shows; a missing one
   raises a `DeciderError` naming the extra.
 - **Sankey is the one spec we own.** Vega-Lite has no Sankey and there is no
