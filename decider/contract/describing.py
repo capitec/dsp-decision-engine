@@ -133,7 +133,7 @@ def node_json(node, steps, located):
     file, line = located.get(id(step_), (None, None))
     if isinstance(step_, (FunctionStep, FrameStep)):
         file, line = _code_location(step_.fn)
-    base = {"path": o.path, "source": o.source, "file": file, "line": line}
+    base = {"path": o.path, "source": o.source, "file": file, "line": line, "id": o.id}
     if isinstance(node, CallNode):
         python = node.reference if node.kind == "row" else node.fn
         rf, rl = _code_location(python)

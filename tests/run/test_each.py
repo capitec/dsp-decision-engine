@@ -71,6 +71,12 @@ def test_a_missing_item_field_uses_the_childs_fill():
     assert out["items"].to_list() == [[{"weight": None, "heavy": False}]]
 
 
+@pytest.mark.parametrize("mode", MODES)
+def test_an_item_dict_missing_the_key_entirely_uses_the_childs_fill(mode):
+    exe = Engine().bind(pipeline(), mode=mode)
+    assert exe.score({"items": [{}]})["items"] == [{"heavy": False}]
+
+
 class Item(TypedDict):
     weight: float
     heavy: bool

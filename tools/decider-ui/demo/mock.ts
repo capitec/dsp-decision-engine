@@ -1,5 +1,5 @@
 import { callNodes, walk, type CallNodeJson, type ColumnSummary, type DescribeResult, type GroupNodeJson, type IRNodeJson, type RecordKey, type RunStatus } from "../src/model/protocol";
-import type { ExperimentResult } from "../src/model/experiment";
+import type { ExperimentDef, ExperimentResult } from "../src/model/experiment";
 import type { MockDataset } from "./vscode/datasets";
 
 // Representative describe payloads for the standalone render harness: a small flow with every
@@ -158,40 +158,36 @@ export function pausedRunFor(dataset: MockDataset, record: number): { status: Ru
   return { status, columns, key: { name: "client_id", values: rows.map((r) => r.client_id) } };
 }
 
-/** An experiment result over `smallFlow`: one param-only scenario that diverges, plus a Sankey. */
+/** An experiment result over `smallFlow`: one param-only scenario that diverges, plus its chart. */
 export function experimentResult(): ExperimentResult {
+  const definition: ExperimentDef = {
+    name: "drift",
+    flow: { entry: "demo:smallFlow" },
+    scenarios: [{ name: "cap_24", params: { term: { cap_by_income: { cap: 24 } } } }],
+    metrics: [{ type: "divergence", column: "term_cap" }],
+    plots: [{ type: "changes", metric: "divergence" }],
+  };
   return {
     name: "drift",
     status: "completed",
     nondeterministic: false,
     manifest: { revision: { authored: "HEAD", resolved: "6a9a9e" } },
     scenarios: [
-      { name: "baseline", status: "completed", divergences: [], row_count: 2 },
-      { name: "cap 24", status: "completed", divergences: [{ kind: "divergence", scenario: "cap 24", location: "term_cap[0]", expected: 48, actual: 24 }], params: { term: { cap_by_income: { cap: 24 } } }, overrides: {}, row_count: 2 },
+      { name: "baseline", status: "completed", records: 2, params: {}, overrides: {} },
+      { name: "cap_24", status: "completed", records: 2, params: { term: { cap_by_income: { cap: 24 } } }, overrides: {} },
     ],
-    summary: {
-      outputs: ["term_cap"],
-      first_divergence: { scenario: "cap 24", location: "term_cap[0]" },
-      scenarios: [
-        { name: "baseline", status: "completed", changed: {}, unchanged: { term_cap: 2 }, unique: { term_cap: 2 }, path_counts: {}, step_differences: [], drill_down: {} },
-        { name: "cap 24", status: "completed", changed: { term_cap: [0] }, unchanged: { term_cap: 1 }, unique: { term_cap: 2 }, path_counts: {}, step_differences: [], drill_down: { term_cap: [{ row: 0, expected: 48, actual: 24 }] } },
-      ],
+    summaries: { divergence: { cap_24: { changed: 1, first: 0 } } },
+    plots: {
+      divergence: {
+        grammar: "vega-lite",
+        spec: {
+          $schema: "https://vega.github.io/schema/vega-lite/v6.json",
+          data: { values: [{ scenario: "cap_24", changed: 1 }] },
+          mark: "bar",
+          encoding: { x: { field: "scenario", type: "nominal" }, y: { field: "changed", type: "quantitative" } },
+        },
+      },
     },
-    sankey: {
-      outcome: "term_cap",
-      nodes: [
-        { id: "in", label: "2 records", kind: "input" },
-        { id: "term/by_sector#0", label: "cap_private", kind: "arm" },
-        { id: "term/by_sector#1", label: "cap_public", kind: "arm" },
-        { id: "out:48", label: "term_cap 48", kind: "outcome" },
-        { id: "out:60", label: "term_cap 60", kind: "outcome" },
-      ],
-      links: [
-        { source: "in", target: "term/by_sector#0", value: 1 },
-        { source: "in", target: "term/by_sector#1", value: 1 },
-        { source: "term/by_sector#0", target: "out:48", value: 1 },
-        { source: "term/by_sector#1", target: "out:60", value: 1 },
-      ],
-    },
+    definition,
   };
 }
