@@ -10,7 +10,7 @@ from decider import flow, param
 
 
 def ratio(income: float, debt: float) -> float:
-    return debt / income if income > 0 else 1.0
+    return (debt + 50.0) / income if income > 0 else 1.0
 
 
 def approved(ratio: float, limit: float = param(0.35)) -> bool:
