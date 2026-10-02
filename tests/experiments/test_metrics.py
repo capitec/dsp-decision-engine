@@ -5,8 +5,8 @@ import typing as t
 import polars as pl
 
 from decider import branch, flow, param, step
-from decider.experiments import (Batch, BranchFlows, Describe, Divergence, Experiment, ExperimentDef, Metric,
-                                 Sankey, Summary)
+from decider.experiments import (Batch, BranchFlows, Describe, Divergence, Experiment, ExperimentDef, Histogram,
+                                 Metric, Sankey, Summary)
 
 LIMIT_03 = {"demo": {"approved": {"limit": 0.3}}}
 
@@ -145,4 +145,38 @@ def test_branch_flows_counts_every_record_once_through_arms_and_outcomes():
     assert links == {("in", "demo/by_sector#0"): 1, ("in", "demo/by_sector#1"): 2,
                      ("demo/by_sector#0", "out:54.0"): 1, ("demo/by_sector#1", "out:60.0"): 2}
     assert [n["label"] for n in flows.nodes if n["kind"] == "arm"] == ["cap_a", "cap_b"]
-    assert result.plots["sankey"].grammar == "vega"
+    assert result.plots["branch_flows"].grammar == "vega"
+
+
+def _histogram(batches, **kwargs):
+    m = Histogram(column="x", **kwargs)
+    m.reset()
+    for i, (output, baseline) in enumerate(batches):
+        m.on_batch_end(_batch(output, baseline, offset=i * 10))
+    return m.summarise()
+
+
+def test_histogram_bins_span_the_baselines_first_batch_for_every_scenario():
+    bins = _histogram([([0.0, 5.0, 10.0, 99.0, None], [0.0, 10.0, 5.0, 5.0, 5.0]), ([-1.0, 2.0], [0.0, 0.0])], bins=2)
+    assert bins.edges == [0.0, 5.0, 10.0]
+    assert (bins.counts, bins.below, bins.above, bins.nulls) == ([2, 2], 1, 1, 1)
+
+
+def test_histogram_range_and_edges_fix_the_bins_up_front():
+    assert _histogram([([0.5, 1.5], [9.0, 9.0])], bins=4, range=(0.0, 2.0)).counts == [0, 1, 0, 1]
+    assert _histogram([([0.5, 1.5], [9.0, 9.0])], edges=[0.0, 1.0, 3.0]).counts == [1, 1]
+
+
+def test_a_metric_on_a_branch_sees_what_the_branch_passes_on_for_every_record():
+    from example_projects.experiments.loan_pipeline import applications, build
+
+    frame = applications(1_000)
+    result = (Experiment("x", build(), frame)
+              .metric(Describe(name="merged", column="rate", nodes="loans/pricing"),
+                      Describe(name="unsecured", column="rate", nodes="loans/pricing/unsecured"),
+                      Describe(name="before", column="rate", nodes="loans/rate"))
+              .run())
+    merged, unsecured, before = (result.summaries[k]["baseline"] for k in ("merged", "unsecured", "before"))
+    assert merged.count == before.count == 1_000
+    assert unsecured.count == (frame["collateral"] == 0).sum()
+    assert unsecured.min > before.min

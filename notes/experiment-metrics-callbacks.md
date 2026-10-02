@@ -23,8 +23,8 @@ experiments/
   experiments.py   ExperimentDef / Scenario / results / validate / Experiment builder
   runner.py        batches x scenarios -> hooks; nothing else
   callbacks.py     Callback hooks, Batch / NodeBatch / Run, Progress, JobProgress, WriteOutputs
-  metrics/         Metric + Summary base; ValueCounts, Describe, Divergence, BranchFlows
-  plots/           Plot + Figure; Bars, Changes (altair), Sankey (vendored Vega template)
+  metrics/         Metric + Summary base; ValueCounts, Describe, Histogram, Divergence, BranchFlows
+  plots/           Plot + Figure; Bars, Changes, Distribution, Ranges (altair), Sankey (Vega template)
   revision.py      git resolve / worktree checkout
   _worker.py       subprocess for another revision
 ```
@@ -57,6 +57,19 @@ experiments/
   injects one row per node and link; a node's stack is its longest path from
   the input, so nested arms take one stack per branch depth and sequential
   branches don't collapse into one column; outcomes are always the last stack.
+- **What a node hands a metric.** A call node hands its outputs; a branch
+  node hands what it passes on (its `modifies` names, merged over every
+  record); a step inside an arm hands its outputs on only the records that arm
+  took (`NodeBatch.rows`). Sequences and loops hand nothing yet.
+- **Histogram bins are shared.** `Histogram` takes `edges`, or `range` and
+  `bins`; without either it spans the baseline's first batch, which every
+  scenario sees in lockstep, so all scenarios count into the same bins.
+  Values past the bins count as `below`/`above`, which `Distribution` draws
+  as one more bin at either end.
+- **`result.show()`** shows a heading, the scenarios with what each changed,
+  then one section per metric: what it measures and where, its summary
+  table, and its plots, or the built-in plot for its summary type when none is
+  attached. An unnamed plot is keyed by the metric it draws.
 - **Lockstep batches.** For each batch the baseline runs first, then every
   scenario on the same records; `Batch.baseline` and `NodeBatch.baseline`
   carry the baseline's values for those records, so any metric can compare in

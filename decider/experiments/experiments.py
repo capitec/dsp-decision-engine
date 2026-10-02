@@ -150,24 +150,70 @@ class ExperimentResult(BaseModel):
     job: Job | None = None
     summaries: dict[str, dict[str, SerializeAsAny[Summary]]] = {}
     plots: dict[str, Figure] = {}
+    definition: ExperimentDef | None = None
 
     def show(self) -> None:
-        """Show the run in a notebook: its status, a table of scenarios and one per metric, then every plot."""
+        """Show the run in a notebook: its status and scenarios, then each metric with its table and charts.
+
+        A metric no plot draws gets the built-in plot for its summary type, so every summary is drawn.
+        """
         ipy = ipython_display()
-        revision = self.manifest.revision
-        lines = [f"### {self.name}: {self.status.value}",
-                 f"{self.manifest.input.row_count if self.manifest.input else '?'} records at "
-                 f"{(revision.resolved or revision.authored)[:12] if revision else '?'}"]
-        if self.nondeterministic:
-            lines.append("A rerun of the baseline differed: this flow is not reproducible.")
-        ipy.display(ipy.Markdown("\n\n".join(lines)), pl.DataFrame([{
+        ipy.display(ipy.Markdown(self._heading()), pl.DataFrame([{
             "scenario": s.name, "status": s.status.value, "records": s.records,
-            "revision": s.revision.resolved[:12] if s.revision and s.revision.resolved else None, "error": s.error,
+            "revision": s.revision.resolved[:12] if s.revision and s.revision.resolved else None,
+            "changes": _changes(s), "error": s.error,
         } for s in self.scenarios]))
-        for metric, by_scenario in self.summaries.items():
+        metrics = {m.key: m for m in self.definition.metrics} if self.definition else {}
+        plots = self.definition.plots if self.definition else []
+        for key, by_scenario in self.summaries.items():
+            metric = metrics.get(key)
             rows = [{"scenario": name, **_flat(s.model_dump())} for name, s in by_scenario.items()]
-            ipy.display(ipy.Markdown(f"**{metric}**"), pl.DataFrame(rows, infer_schema_length=None))
-        ipy.display(*self.plots.values())
+            figures = [self.plots[p.key] for p in plots if p.metric == key and p.key in self.plots]
+            if not figures and by_scenario:
+                figures = [Figure.of(p.render(by_scenario)) for p in _default_plots(key, by_scenario)]
+            ipy.display(ipy.Markdown(f"#### {key}\n\n{_where(metric)}"),
+                        pl.DataFrame(rows, infer_schema_length=None), *figures)
+
+    def _heading(self) -> str:
+        revision = self.manifest.revision
+        records = self.manifest.input.row_count if self.manifest.input else None
+        parts = [f"{records:,} records" if records is not None else "",
+                 f"revision `{(revision.resolved or revision.authored)[:12]}`" if revision else "",
+                 f"{len(self.scenarios) - 1} scenario(s) next to the baseline"]
+        lines = [f"### {self.name}: {self.status.value}", " · ".join(p for p in parts if p)]
+        if self.nondeterministic:
+            lines.append("**A rerun of the baseline differed: this flow is not reproducible.**")
+        return "\n\n".join(lines)
+
+
+def _changes(s: ScenarioResult) -> str:
+    bits = []
+    if s.params:
+        bits.append(f"params {json.dumps(s.params)}")
+    if s.overrides:
+        where = (f" after {s.at}" if s.at else "") + (f" on record {s.row}" if s.row is not None else "")
+        bits.append(f"set {json.dumps(s.overrides)}{where}")
+    if s.revision:
+        bits.append(f"revision {s.revision.authored}")
+    return "; ".join(bits) or "unchanged"
+
+
+def _where(metric: Metric | None) -> str:
+    if metric is None:
+        return ""
+    column = getattr(metric, "column", None) or getattr(metric, "outcome", None)
+    what = f"`{metric.type}`" + (f" of `{column}`" if column else "")
+    return f"{what} at steps matching `{metric.nodes}`" if metric.nodes else f"{what} in the flow's output"
+
+
+def _default_plots(key: str, by_scenario: dict[str, Summary]) -> list[Plot]:
+    summary = type(next(iter(by_scenario.values())))
+    found = [cls for cls in _subclasses(Plot) if cls.requires is summary and cls.__module__.startswith("decider.")]
+    return [found[0](metric=key)] if found else []
+
+
+def _subclasses(cls: type) -> list[type]:
+    return [c for sub in cls.__subclasses__() for c in (sub, *_subclasses(sub))]
 
 
 def _flat(fields: dict[str, Any], prefix: str = "") -> dict[str, Any]:
@@ -175,9 +221,19 @@ def _flat(fields: dict[str, Any], prefix: str = "") -> dict[str, Any]:
     for key, value in fields.items():
         if isinstance(value, dict):
             out.update(_flat(value, f"{prefix}{key}."))
+        elif isinstance(value, list):
+            out[prefix + key] = _short(value)
         else:
-            out[prefix + key] = json.dumps(value, default=str) if isinstance(value, list) else value
+            out[prefix + key] = value
     return out
+
+
+def _short(values: list) -> str:
+    if values and all(isinstance(v, (int, float)) for v in values):
+        shown = ", ".join(f"{v:.4g}" if isinstance(v, float) else str(v) for v in values[:6])
+        return f"[{shown}{', …' if len(values) > 6 else ''}] ({len(values)})"
+    text = json.dumps(values, default=str)
+    return text if len(text) <= 80 else text[:77] + "..."
 
 
 def check_experiment_version(version: str | None) -> None:
@@ -211,7 +267,8 @@ def validate(def_: ExperimentDef, step) -> list[str]:
             problems.append(f"two metrics are named {m.key!r}; set name= on one")
         metrics[m.key] = m
     plots = Counter(p.key for p in def_.plots)
-    problems += [f"two plots are named {n!r}; set name= on one" for n, k in plots.items() if k > 1]
+    problems += [f"two plots are named {n!r} (an unnamed plot takes its metric's name); set name= on one"
+                 for n, k in plots.items() if k > 1]
     for p in def_.plots:
         m = metrics.get(p.metric)
         if m is None:
