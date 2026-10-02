@@ -7,6 +7,7 @@ to draw from them. Execution lives in `decider.experiments.runner`.
 """
 from __future__ import annotations
 
+import json
 from collections import Counter
 from enum import Enum
 from pathlib import Path
@@ -20,7 +21,7 @@ from decider.data import PreflightReport
 from decider.exceptions import DeciderError
 from decider.experiments.callbacks import Callback
 from decider.experiments.metrics.base import Metric, MetricRef, Summary
-from decider.experiments.plots.base import Plot, PlotRef
+from decider.experiments.plots.base import Figure, Plot, PlotRef, ipython_display
 from decider.lifecycle import Job, JobHandle, ResultRef, Revision, RunManifest
 
 EXPERIMENT_VERSION = "2"
@@ -134,7 +135,8 @@ class ExperimentResult(BaseModel):
     """A finished (or stopped) run: the manifest, statuses, and what the metrics and plots produced.
 
     `summaries` is `{metric: {scenario: Summary}}`, for scenarios that
-    completed; `plots` is `{plot: payload}`.
+    completed; `plots` is `{plot: Figure}`. In a notebook, `show()` lays the
+    whole run out, and `plots[name].show()` one chart.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -147,7 +149,35 @@ class ExperimentResult(BaseModel):
     preflight: PreflightReport | None = None
     job: Job | None = None
     summaries: dict[str, dict[str, SerializeAsAny[Summary]]] = {}
-    plots: dict[str, Any] = {}
+    plots: dict[str, Figure] = {}
+
+    def show(self) -> None:
+        """Show the run in a notebook: its status, a table of scenarios and one per metric, then every plot."""
+        ipy = ipython_display()
+        revision = self.manifest.revision
+        lines = [f"### {self.name}: {self.status.value}",
+                 f"{self.manifest.input.row_count if self.manifest.input else '?'} records at "
+                 f"{(revision.resolved or revision.authored)[:12] if revision else '?'}"]
+        if self.nondeterministic:
+            lines.append("A rerun of the baseline differed: this flow is not reproducible.")
+        ipy.display(ipy.Markdown("\n\n".join(lines)), pl.DataFrame([{
+            "scenario": s.name, "status": s.status.value, "records": s.records,
+            "revision": s.revision.resolved[:12] if s.revision and s.revision.resolved else None, "error": s.error,
+        } for s in self.scenarios]))
+        for metric, by_scenario in self.summaries.items():
+            rows = [{"scenario": name, **_flat(s.model_dump())} for name, s in by_scenario.items()]
+            ipy.display(ipy.Markdown(f"**{metric}**"), pl.DataFrame(rows, infer_schema_length=None))
+        ipy.display(*self.plots.values())
+
+
+def _flat(fields: dict[str, Any], prefix: str = "") -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for key, value in fields.items():
+        if isinstance(value, dict):
+            out.update(_flat(value, f"{prefix}{key}."))
+        else:
+            out[prefix + key] = json.dumps(value, default=str) if isinstance(value, list) else value
+    return out
 
 
 def check_experiment_version(version: str | None) -> None:

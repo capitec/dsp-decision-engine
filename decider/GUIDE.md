@@ -682,9 +682,11 @@ other params, an overridden value, another git revision — over the same
 records, one batch at a time, and measures them with metrics. The runner only
 executes; a `Metric` collects through hooks (`on_batch_end` for the flow's
 output, `on_node_end` for what nodes matching its `nodes` glob wrote) and
-`summarise`s into a typed `Summary`, which a `Plot` requiring that type draws.
-The definition saves as `experiment.json`; subclass `Metric`, `Plot` or
-`Callback` for your own.
+`summarise`s into a typed `Summary`, which a `Plot` requiring that type draws
+with altair (`pip install 'decider[experiments]'`). The definition saves as
+`experiment.json`; subclass `Metric`, `Plot` or `Callback` for your own. In a
+notebook, `result.show()` lays out the run and `result.plots[name].show()` one
+chart.
 
 ```python
 import polars as pl
@@ -706,7 +708,7 @@ result = (Experiment("drift", pipeline, df)
           .run())
 assert result.status is RunStatus.COMPLETED
 assert result.summaries["divergence"]["limit_0.3"].first == 0
-assert result.plots["changes"]["mark"] == "bar"   # a Vega-Lite spec
+assert result.plots["changes"].grammar == "vega-lite"   # result.plots["changes"].show() in a notebook
 ```
 
 Nondeterminism is a first-class result (`NON_REPRODUCIBLE`), never silent; a
