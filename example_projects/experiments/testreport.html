@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>snapshot</title></head><body><div class="decider-report"><style>
+.decider-report { font-family: system-ui, -apple-system, sans-serif; max-width: 1200px; line-height: 1.4; }
+.decider-report h1 { font-size: 1.6em; margin: 0.4em 0; }
+.decider-report h2 { font-size: 1.3em; margin: 1.2em 0 0.4em; }
+.decider-report h3 { font-size: 1.1em; margin: 1em 0 0.2em; }
+.decider-report .facts, .decider-report .where { color: #555; margin: 0.2em 0 0.6em; }
+.decider-report .status { font-size: 0.7em; padding: 0.15em 0.6em; border-radius: 1em; vertical-align: middle;
+  background: #fde68a; color: #713f12; }
+.decider-report .status.completed { background: #bbf7d0; color: #14532d; }
+.decider-report .status.failed { background: #fecaca; color: #7f1d1d; }
+.decider-report .warning { background: #fef3c7; padding: 0.4em 0.8em; border-left: 4px solid #f59e0b; }
+.decider-report .table { overflow-x: auto; margin: 0.4em 0; }
+.decider-report table { border-collapse: collapse; font-size: 0.85em; }
+.decider-report th, .decider-report td { border-bottom: 1px solid #e5e7eb; padding: 0.3em 0.7em; text-align: left;
+  white-space: nowrap; }
+.decider-report th { background: #f3f4f6; }
+.decider-report .row { display: flex; flex-wrap: wrap; gap: 1.5em; align-items: flex-start; }
+.decider-report section.metric { border-top: 1px solid #e5e7eb; margin-top: 1em; }
+.decider-report code { background: #f3f4f6; padding: 0 0.3em; border-radius: 3px; }
+</style><h2>snapshot <span class="status completed">completed</span></h2><p class="facts">200,000 records · revision 1cc5fd8257d5 · 0 scenario(s) next to the baseline</p><div class="table"><table><thead><tr><th>scenario</th><th>status</th><th>records</th><th>revision</th><th>changes</th><th>error</th></tr></thead><tbody><tr><td>baseline</td><td>completed</td><td>200,000</td><td></td><td>unchanged</td><td></td></tr></tbody></table></div><section class="metric"><h3>value_counts</h3><p class="where"><code>value_counts</code> of <code>approved</code> in the flow's output</p><div class="table"><table><thead><tr><th>scenario</th><th>column</th><th>counts.True</th><th>counts.False</th></tr></thead><tbody><tr><td>baseline</td><td>approved</td><td>153,081</td><td>46,919</td></tr></tbody></table></div><div class="row"><div class="chart">
+<style>
+  #vis-840e371f5c4849ba87330bd432f9ff7e.vega-embed {
+    width: 100%;
+    display: flex;
+  }
+
+  #vis-840e371f5c4849ba87330bd432f9ff7e.vega-embed details,
+  #vis-840e371f5c4849ba87330bd432f9ff7e.vega-embed details summary {
+    position: relative;
+  }
+</style>
+<div id="vis-840e371f5c4849ba87330bd432f9ff7e"></div>
+<script type="text/javascript">
+  var VEGA_DEBUG = (typeof VEGA_DEBUG == "undefined") ? {} : VEGA_DEBUG;
+  (function(spec, embedOpt){
+    let outputDiv = document.currentScript.previousElementSibling;
+    if (outputDiv.id !== "vis-840e371f5c4849ba87330bd432f9ff7e") {
+      outputDiv = document.getElementById("vis-840e371f5c4849ba87330bd432f9ff7e");
+    }
+
+    const paths = {
+      "vega": "https://cdn.jsdelivr.net/npm/vega@6?noext",
+      "vega-lib": "https://cdn.jsdelivr.net/npm/vega-lib?noext",
+      "vega-lite": "https://cdn.jsdelivr.net/npm/vega-lite@6.4.1?noext",
+      "vega-embed": "https://cdn.jsdelivr.net/npm/vega-embed@7?noext",
+    };
+
+    function maybeLoadScript(lib, version) {
+      var key = `${lib.replace("-", "")}_version`;
+      return (VEGA_DEBUG[key] == version) ?
+        Promise.resolve(paths[lib]) :
+        new Promise(function(resolve, reject) {
+          var s = document.createElement('script');
+          document.getElementsByTagName("head")[0].appendChild(s);
+          s.async = true;
+          s.onload = () => {
+            VEGA_DEBUG[key] = version;
+            return resolve(paths[lib]);
+          };
+          s.onerror = () => reject(`Error loading script: ${paths[lib]}`);
+          s.src = paths[lib];
+        });
+    }
+
+    function showError(err) {
+      outputDiv.innerHTML = `<div class="error" style="color:red;">${err}</div>`;
+      throw err;
+    }
+
+    function displayChart(vegaEmbed) {
+      vegaEmbed(outputDiv, spec, embedOpt)
+        .catch(err => showError(`Javascript Error: ${err.message}<br>This usually means there's a typo in your chart specification. See the javascript console for the full traceback.`));
+    }
+
+    if(typeof define === "function" && define.amd) {
+      requirejs.config({paths});
+      let deps = ["vega-embed"];
+      require(deps, displayChart, err => showError(`Error loading script: ${err.message}`));
+    } else {
+      maybeLoadScript("vega", "6")
+        .then(() => maybeLoadScript("vega-lite", "6.4.1"))
+        .then(() => maybeLoadScript("vega-embed", "7"))
+        .catch(showError)
+        .then(() => displayChart(vegaEmbed));
+    }
+  })({"config": {"view": {"continuousWidth": 300, "continuousHeight": 300}}, "data": {"values": [{"scenario": "baseline", "value": "True", "records": 153081}, {"scenario": "baseline", "value": "False", "records": 46919}]}, "mark": {"type": "bar"}, "encoding": {"color": {"field": "scenario", "type": "nominal"}, "tooltip": [{"field": "scenario", "type": "nominal"}, {"field": "value", "type": "nominal"}, {"field": "records", "type": "quantitative"}], "x": {"field": "value", "title": "approved", "type": "nominal"}, "xOffset": {"field": "scenario", "type": "nominal"}, "y": {"field": "records", "type": "quantitative"}}, "title": "approved", "$schema": "https://vega.github.io/schema/vega-lite/v6.4.1.json"}, {"mode": "vega-lite"});
+</script></div></div></section><section class="metric"><h3>describe</h3><p class="where"><code>describe</code> of <code>payment</code> in the flow's output</p><div class="table"><table><thead><tr><th>scenario</th><th>column</th><th>count</th><th>nulls</th><th>mean</th><th>min</th><th>max</th></tr></thead><tbody><tr><td>baseline</td><td>payment</td><td>200,000</td><td>0</td><td>106.309</td><td>0.0950037</td><td>1,282.99</td></tr></tbody></table></div><div class="row"><div class="chart">
+<style>
+  #vis-1ea4575ddf7f450da43d4b77762a285e.vega-embed {
+    width: 100%;
+    display: flex;
+  }
+
+  #vis-1ea4575ddf7f450da43d4b77762a285e.vega-embed details,
+  #vis-1ea4575ddf7f450da43d4b77762a285e.vega-embed details summary {
+    position: relative;
+  }
+</style>
+<div id="vis-1ea4575ddf7f450da43d4b77762a285e"></div>
+<script type="text/javascript">
+  var VEGA_DEBUG = (typeof VEGA_DEBUG == "undefined") ? {} : VEGA_DEBUG;
+  (function(spec, embedOpt){
+    let outputDiv = document.currentScript.previousElementSibling;
+    if (outputDiv.id !== "vis-1ea4575ddf7f450da43d4b77762a285e") {
+      outputDiv = document.getElementById("vis-1ea4575ddf7f450da43d4b77762a285e");
+    }
+
+    const paths = {
+      "vega": "https://cdn.jsdelivr.net/npm/vega@6?noext",
+      "vega-lib": "https://cdn.jsdelivr.net/npm/vega-lib?noext",
+      "vega-lite": "https://cdn.jsdelivr.net/npm/vega-lite@6.4.1?noext",
+      "vega-embed": "https://cdn.jsdelivr.net/npm/vega-embed@7?noext",
+    };
+
+    function maybeLoadScript(lib, version) {
+      var key = `${lib.replace("-", "")}_version`;
+      return (VEGA_DEBUG[key] == version) ?
+        Promise.resolve(paths[lib]) :
+        new Promise(function(resolve, reject) {
+          var s = document.createElement('script');
+          document.getElementsByTagName("head")[0].appendChild(s);
+          s.async = true;
+          s.onload = () => {
+            VEGA_DEBUG[key] = version;
+            return resolve(paths[lib]);
+          };
+          s.onerror = () => reject(`Error loading script: ${paths[lib]}`);
+          s.src = paths[lib];
+        });
+    }
+
+    function showError(err) {
+      outputDiv.innerHTML = `<div class="error" style="color:red;">${err}</div>`;
+      throw err;
+    }
+
+    function displayChart(vegaEmbed) {
+      vegaEmbed(outputDiv, spec, embedOpt)
+        .catch(err => showError(`Javascript Error: ${err.message}<br>This usually means there's a typo in your chart specification. See the javascript console for the full traceback.`));
+    }
+
+    if(typeof define === "function" && define.amd) {
+      requirejs.config({paths});
+      let deps = ["vega-embed"];
+      require(deps, displayChart, err => showError(`Error loading script: ${err.message}`));
+    } else {
+      maybeLoadScript("vega", "6")
+        .then(() => maybeLoadScript("vega-lite", "6.4.1"))
+        .then(() => maybeLoadScript("vega-embed", "7"))
+        .catch(showError)
+        .then(() => displayChart(vegaEmbed));
+    }
+  })({"config": {"view": {"continuousWidth": 300, "continuousHeight": 300}}, "layer": [{"mark": {"type": "rule"}, "encoding": {"x": {"field": "min", "title": "payment", "type": "quantitative"}, "x2": {"field": "max"}, "y": {"field": "scenario", "sort": null, "type": "nominal"}}, "title": "payment: min, mean and max"}, {"mark": {"type": "point", "filled": true, "size": 80}, "encoding": {"tooltip": [{"field": "scenario", "type": "nominal"}, {"field": "min", "type": "quantitative"}, {"field": "mean", "type": "quantitative"}, {"field": "max", "type": "quantitative"}, {"field": "count", "type": "quantitative"}], "x": {"field": "mean", "type": "quantitative"}, "y": {"field": "scenario", "sort": null, "type": "nominal"}}, "title": "payment: min, mean and max"}], "data": {"values": [{"scenario": "baseline", "min": 0.09500375, "mean": 106.30877387630426, "max": 1282.99335860017, "count": 200000}]}, "$schema": "https://vega.github.io/schema/vega-lite/v6.4.1.json"}, {"mode": "vega-lite"});
+</script></div></div></section><section class="metric"><h3>ratio</h3><p class="where"><code>histogram</code> of <code>ratio</code> at steps matching <code>loans/ratio</code></p><div class="table"><table><thead><tr><th>scenario</th><th>column</th><th>edges</th><th>counts</th><th>below</th><th>above</th><th>nulls</th></tr></thead><tbody><tr><td>baseline</td><td>ratio</td><td>[0.0005, 0.04671, 0.09292, 0.1391, 0.1853, 0.2315, …] (21)</td><td>[5741, 14326, 19334, 22090, 22705, 21442, …] (20)</td><td>0</td><td>1</td><td>0</td></tr></tbody></table></div><div class="row"><div class="chart">
+<style>
+  #vis-73514b1eebb5460e95a56c99c10a4379.vega-embed {
+    width: 100%;
+    display: flex;
+  }
+
+  #vis-73514b1eebb5460e95a56c99c10a4379.vega-embed details,
+  #vis-73514b1eebb5460e95a56c99c10a4379.vega-embed details summary {
+    position: relative;
+  }
+</style>
+<div id="vis-73514b1eebb5460e95a56c99c10a4379"></div>
+<script type="text/javascript">
+  var VEGA_DEBUG = (typeof VEGA_DEBUG == "undefined") ? {} : VEGA_DEBUG;
+  (function(spec, embedOpt){
+    let outputDiv = document.currentScript.previousElementSibling;
+    if (outputDiv.id !== "vis-73514b1eebb5460e95a56c99c10a4379") {
+      outputDiv = document.getElementById("vis-73514b1eebb5460e95a56c99c10a4379");
+    }
+
+    const paths = {
+      "vega": "https://cdn.jsdelivr.net/npm/vega@6?noext",
+      "vega-lib": "https://cdn.jsdelivr.net/npm/vega-lib?noext",
+      "vega-lite": "https://cdn.jsdelivr.net/npm/vega-lite@6.4.1?noext",
+      "vega-embed": "https://cdn.jsdelivr.net/npm/vega-embed@7?noext",
+    };
+
+    function maybeLoadScript(lib, version) {
+      var key = `${lib.replace("-", "")}_version`;
+      return (VEGA_DEBUG[key] == version) ?
+        Promise.resolve(paths[lib]) :
+        new Promise(function(resolve, reject) {
+          var s = document.createElement('script');
+          document.getElementsByTagName("head")[0].appendChild(s);
+          s.async = true;
+          s.onload = () => {
+            VEGA_DEBUG[key] = version;
+            return resolve(paths[lib]);
+          };
+          s.onerror = () => reject(`Error loading script: ${paths[lib]}`);
+          s.src = paths[lib];
+        });
+    }
+
+    function showError(err) {
+      outputDiv.innerHTML = `<div class="error" style="color:red;">${err}</div>`;
+      throw err;
+    }
+
+    function displayChart(vegaEmbed) {
+      vegaEmbed(outputDiv, spec, embedOpt)
+        .catch(err => showError(`Javascript Error: ${err.message}<br>This usually means there's a typo in your chart specification. See the javascript console for the full traceback.`));
+    }
+
+    if(typeof define === "function" && define.amd) {
+      requirejs.config({paths});
+      let deps = ["vega-embed"];
+      require(deps, displayChart, err => showError(`Error loading script: ${err.message}`));
+    } else {
+      maybeLoadScript("vega", "6")
+        .then(() => maybeLoadScript("vega-lite", "6.4.1"))
+        .then(() => maybeLoadScript("vega-embed", "7"))
+        .catch(showError)
+        .then(() => displayChart(vegaEmbed));
+    }
+  })({"config": {"view": {"continuousWidth": 300, "continuousHeight": 300}}, "data": {"values": [{"scenario": "baseline", "start": 0.0005, "end": 0.046709939759036145, "records": 5741}, {"scenario": "baseline", "start": 0.046709939759036145, "end": 0.09291987951807229, "records": 14326}, {"scenario": "baseline", "start": 0.09291987951807229, "end": 0.13912981927710844, "records": 19334}, {"scenario": "baseline", "start": 0.13912981927710844, "end": 0.18533975903614458, "records": 22090}, {"scenario": "baseline", "start": 0.18533975903614458, "end": 0.23154969879518073, "records": 22705}, {"scenario": "baseline", "start": 0.23154969879518073, "end": 0.27775963855421687, "records": 21442}, {"scenario": "baseline", "start": 0.27775963855421687, "end": 0.323969578313253, "records": 20063}, {"scenario": "baseline", "start": 0.323969578313253, "end": 0.37017951807228916, "records": 17515}, {"scenario": "baseline", "start": 0.37017951807228916, "end": 0.4163894578313253, "records": 14817}, {"scenario": "baseline", "start": 0.4163894578313253, "end": 0.46259939759036145, "records": 12228}, {"scenario": "baseline", "start": 0.46259939759036145, "end": 0.5088093373493976, "records": 9449}, {"scenario": "baseline", "start": 0.5088093373493976, "end": 0.5550192771084337, "records": 6993}, {"scenario": "baseline", "start": 0.5550192771084337, "end": 0.6012292168674698, "records": 5025}, {"scenario": "baseline", "start": 0.6012292168674698, "end": 0.647439156626506, "records": 3488}, {"scenario": "baseline", "start": 0.647439156626506, "end": 0.6936490963855422, "records": 2282}, {"scenario": "baseline", "start": 0.6936490963855422, "end": 0.7398590361445783, "records": 1297}, {"scenario": "baseline", "start": 0.7398590361445783, "end": 0.7860689759036144, "records": 725}, {"scenario": "baseline", "start": 0.7860689759036144, "end": 0.8322789156626506, "records": 321}, {"scenario": "baseline", "start": 0.8322789156626506, "end": 0.8784888554216868, "records": 116}, {"scenario": "baseline", "start": 0.8784888554216868, "end": 0.9246987951807228, "records": 42}, {"scenario": "baseline", "start": 0.9246987951807228, "end": 0.9709087349397589, "records": 1}]}, "mark": {"type": "bar"}, "encoding": {"color": {"field": "scenario", "type": "nominal"}, "opacity": {"condition": {"param": "param_366548e304bb77de", "value": 0.55}, "value": 0.05}, "tooltip": [{"field": "scenario", "type": "nominal"}, {"field": "start", "format": ".4g", "type": "quantitative"}, {"field": "end", "format": ".4g", "type": "quantitative"}, {"field": "records", "type": "quantitative"}], "x": {"bin": "binned", "field": "start", "title": "ratio", "type": "quantitative"}, "x2": {"field": "end"}, "y": {"field": "records", "stack": null, "type": "quantitative"}}, "params": [{"name": "param_366548e304bb77de", "select": {"type": "point", "fields": ["scenario"]}, "bind": "legend"}], "title": "ratio by scenario", "$schema": "https://vega.github.io/schema/vega-lite/v6.4.1.json"}, {"mode": "vega-lite"});
+</script></div></div></section><section class="metric"><h3>branch_flows</h3><p class="where"><code>branch_flows</code> of <code>approved</code> at steps matching <code>*</code></p><div class="table"><table><thead><tr><th>scenario</th><th>outcome</th><th>nodes</th><th>links</th></tr></thead><tbody><tr><td>baseline</td><td>approved</td><td>[{&quot;id&quot;: &quot;in&quot;, &quot;label&quot;: &quot;200000 records&quot;, &quot;kind&quot;: &quot;input&quot;}, {&quot;id&quot;: &quot;loans/pric...</td><td>[{&quot;source&quot;: &quot;in&quot;, &quot;target&quot;: &quot;loans/pricing#0&quot;, &quot;value&quot;: 120003}, {&quot;source&quot;: &quot;...</td></tr></tbody></table></div><div class="row"><div class="chart">
+<style>
+  #vis-1d787e4351bc46d786115405247916e5.vega-embed {
+    width: 100%;
+    display: flex;
+  }
+
+  #vis-1d787e4351bc46d786115405247916e5.vega-embed details,
+  #vis-1d787e4351bc46d786115405247916e5.vega-embed details summary {
+    position: relative;
+  }
+</style>
+<div id="vis-1d787e4351bc46d786115405247916e5"></div>
+<script type="text/javascript">
+  var VEGA_DEBUG = (typeof VEGA_DEBUG == "undefined") ? {} : VEGA_DEBUG;
+  (function(spec, embedOpt){
+    let outputDiv = document.currentScript.previousElementSibling;
+    if (outputDiv.id !== "vis-1d787e4351bc46d786115405247916e5") {
+      outputDiv = document.getElementById("vis-1d787e4351bc46d786115405247916e5");
+    }
+
+    const paths = {
+      "vega": "https://cdn.jsdelivr.net/npm/vega@6?noext",
+      "vega-lib": "https://cdn.jsdelivr.net/npm/vega-lib?noext",
+      "vega-lite": "https://cdn.jsdelivr.net/npm/vega-lite@6.4.1?noext",
+      "vega-embed": "https://cdn.jsdelivr.net/npm/vega-embed@7?noext",
+    };
+
+    function maybeLoadScript(lib, version) {
+      var key = `${lib.replace("-", "")}_version`;
+      return (VEGA_DEBUG[key] == version) ?
+        Promise.resolve(paths[lib]) :
+        new Promise(function(resolve, reject) {
+          var s = document.createElement('script');
+          document.getElementsByTagName("head")[0].appendChild(s);
+          s.async = true;
+          s.onload = () => {
+            VEGA_DEBUG[key] = version;
+            return resolve(paths[lib]);
+          };
+          s.onerror = () => reject(`Error loading script: ${paths[lib]}`);
+          s.src = paths[lib];
+        });
+    }
+
+    function showError(err) {
+      outputDiv.innerHTML = `<div class="error" style="color:red;">${err}</div>`;
+      throw err;
+    }
+
+    function displayChart(vegaEmbed) {
+      vegaEmbed(outputDiv, spec, embedOpt)
+        .catch(err => showError(`Javascript Error: ${err.message}<br>This usually means there's a typo in your chart specification. See the javascript console for the full traceback.`));
+    }
+
+    if(typeof define === "function" && define.amd) {
+      requirejs.config({paths});
+      let deps = ["vega-embed"];
+      require(deps, displayChart, err => showError(`Error loading script: ${err.message}`));
+    } else {
+      maybeLoadScript("vega", "6")
+        .then(() => maybeLoadScript("vega-lite", "6.4.1"))
+        .then(() => maybeLoadScript("vega-embed", "7"))
+        .catch(showError)
+        .then(() => displayChart(vegaEmbed));
+    }
+  })({"$schema": "https://vega.github.io/schema/vega/v5.json", "description": "Record flow through branch arms into an outcome. Adapted from David Bacci's Sankey chart (https://github.com/PBI-David/Deneb-Showcase, MIT License, Copyright (c) 2023 Davide Bacci); see sankey.vg.LICENSE.", "width": 720, "height": 360, "padding": {"bottom": 20, "left": 110, "right": 130, "top": 30}, "title": {"text": "approved: baseline", "fontSize": 16, "anchor": "start", "offset": 10}, "signals": [{"name": "standardGap", "value": 8, "description": "Gap as a percentage of full domain"}, {"name": "base", "value": "center", "description": "How to stack(center or zero)"}], "data": [{"name": "input", "values": [{"category": "in", "label": "all records", "stack": 1, "sort": 0, "labels": "left"}, {"category": "loans/pricing#0", "label": "secured", "stack": 2, "sort": 1, "labels": "right"}, {"category": "loans/pricing#1", "label": "unsecured", "stack": 2, "sort": 2, "labels": "right"}, {"category": "out:False", "label": "approved False", "stack": 3, "sort": 3, "labels": "right"}, {"category": "out:True", "label": "approved True", "stack": 3, "sort": 4, "labels": "right"}, {"source": "in", "destination": "loans/pricing#0", "value": 120003}, {"source": "in", "destination": "loans/pricing#1", "value": 79997}, {"source": "loans/pricing#0", "destination": "out:False", "value": 28218}, {"source": "loans/pricing#0", "destination": "out:True", "value": 91785}, {"source": "loans/pricing#1", "destination": "out:False", "value": 18701}, {"source": "loans/pricing#1", "destination": "out:True", "value": 61296}], "description": "Filled per render: one row per node {category, label, stack, sort, labels} and one per link {source, destination, value}."}, {"name": "stacks", "source": "input", "transform": [{"type": "filter", "expr": "datum.source != null"}, {"type": "formula", "as": "end", "expr": "['source','destination']"}, {"type": "formula", "as": "name", "expr": "[ datum.source,datum.destination]"}, {"type": "project", "fields": ["end", "name", "value"]}, {"type": "flatten", "fields": ["end", "name"]}, {"type": "lookup", "from": "input", "key": "category", "values": ["stack", "sort", "gap", "labels", "label"], "fields": ["name"], "as": ["stack", "sort", "gap", "labels", "label"]}, {"type": "aggregate", "fields": ["value", "stack", "sort", "gap", "labels", "label"], "groupby": ["end", "name"], "ops": ["sum", "max", "max", "max", "max", "max"], "as": ["value", "stack", "sort", "gap", "labels", "label"]}, {"type": "aggregate", "fields": ["value", "stack", "sort", "gap", "labels", "label"], "groupby": ["name"], "ops": ["max", "max", "max", "max", "max", "max"], "as": ["value", "stack", "sort", "gap", "labels", "label"]}, {"type": "formula", "as": "gap", "expr": "datum.gap?datum.gap:0"}]}, {"name": "maxValue", "source": ["stacks"], "transform": [{"type": "aggregate", "fields": ["value"], "groupby": ["stack"], "ops": ["sum"], "as": ["value"]}, {"type": "aggregate", "fields": ["value"], "ops": ["max"], "as": ["value"]}]}, {"name": "plottedStacks", "source": ["stacks"], "transform": [{"type": "formula", "as": "spacer", "expr": " (data('maxValue')[0].value/100)*(standardGap+datum.gap)"}, {"type": "formula", "as": "type", "expr": "['data','spacer']"}, {"type": "formula", "as": "spacedValue", "expr": "[datum.value,datum.spacer]"}, {"type": "flatten", "fields": ["type", "spacedValue"]}, {"type": "stack", "groupby": ["stack"], "sort": {"field": "sort", "order": "descending"}, "field": "spacedValue", "offset": {"signal": "base"}}, {"type": "formula", "expr": "((datum.value)/2)+datum.y0", "as": "yc"}]}, {"name": "finalTable", "source": ["plottedStacks"], "transform": [{"type": "filter", "expr": "datum.type == 'data'"}]}, {"name": "linkTable", "source": ["input"], "transform": [{"type": "filter", "expr": "datum.source != null"}, {"type": "lookup", "from": "finalTable", "key": "name", "values": ["y0", "y1", "stack", "sort", "label"], "fields": ["source"], "as": ["sourceStacky0", "sourceStacky1", "sourceStack", "sourceSort", "sourceLabel"]}, {"type": "lookup", "from": "finalTable", "key": "name", "values": ["y0", "y1", "stack", "sort", "label"], "fields": ["destination"], "as": ["destinationStacky0", "destinationStacky1", "destinationStack", "destinationSort", "destinationLabel"]}, {"type": "stack", "groupby": ["source"], "sort": {"field": "destinationSort", "order": "descending"}, "field": "value", "offset": "zero", "as": ["syi0", "syi1"]}, {"type": "formula", "expr": "datum.syi0+datum.sourceStacky0", "as": "sy0"}, {"type": "formula", "expr": "datum.sy0+datum.value", "as": "sy1"}, {"type": "stack", "groupby": ["destination"], "sort": {"field": "sourceSort", "order": "descending"}, "field": "value", "offset": "zero", "as": ["dyi0", "dyi1"]}, {"type": "formula", "expr": "datum.dyi0+datum.destinationStacky0", "as": "dy0"}, {"type": "formula", "expr": "datum.dy0+datum.value", "as": "dy1"}, {"type": "formula", "expr": "((datum.value)/2)+datum.sy0", "as": "syc"}, {"type": "formula", "expr": "((datum.value)/2)+datum.dy0", "as": "dyc"}, {"type": "linkpath", "orient": "horizontal", "shape": "diagonal", "sourceY": {"expr": "scale('y', datum.syc)"}, "sourceX": {"expr": "scale('x', toNumber(  datum.sourceStack))+ bandwidth('x')"}, "targetY": {"expr": "scale('y', datum.dyc)"}, "targetX": {"expr": "scale('x', datum.destinationStack)"}}, {"type": "formula", "expr": "range('y')[0]-scale('y', datum.value)", "as": "strokeWidth"}]}], "scales": [{"name": "x", "type": "band", "range": "width", "domain": {"data": "finalTable", "field": "stack", "sort": true}, "paddingInner": 0.88}, {"name": "y", "type": "linear", "range": "height", "domain": {"data": "finalTable", "field": "y1"}, "reverse": false}, {"name": "color", "type": "ordinal", "range": {"scheme": "rainbow"}, "domain": {"data": "stacks", "field": "name"}}], "marks": [{"type": "rect", "from": {"data": "finalTable"}, "encode": {"update": {"x": {"scale": "x", "field": "stack"}, "width": {"scale": "x", "band": 1}, "y": {"scale": "y", "field": "y0"}, "y2": {"scale": "y", "field": "y1"}, "fill": {"scale": "color", "field": "name"}, "fillOpacity": {"value": 0.75}, "strokeWidth": {"value": 0}, "stroke": {"scale": "color", "field": "name"}}, "hover": {"tooltip": {"signal": "{'Node': datum.label, 'Records': format(datum.value, ',')}"}, "fillOpacity": {"value": 1}}}}, {"type": "path", "name": "links", "from": {"data": "linkTable"}, "clip": true, "encode": {"update": {"strokeWidth": {"field": "strokeWidth"}, "path": {"field": "path"}, "strokeOpacity": {"signal": "0.3"}, "stroke": {"field": "destination", "scale": "color"}}, "hover": {"strokeOpacity": {"value": 1}, "tooltip": {"signal": "{'From': datum.sourceLabel, 'To': datum.destinationLabel, 'Records': format(datum.value, ',')}"}}}}, {"type": "group", "name": "labelText", "zindex": 1, "from": {"facet": {"data": "finalTable", "name": "labelFacet", "groupby": ["name", "stack", "yc", "value", "labels", "label"]}}, "clip": false, "encode": {"update": {"strokeWidth": {"value": 1}, "stroke": {"value": "red"}, "x": {"signal": "datum.labels=='left'?scale('x', datum.stack)-8 : scale('x', datum.stack) + (bandwidth('x')) +8"}, "yc": {"scale": "y", "signal": "datum.yc"}, "width": {"signal": "0"}, "height": {"signal": "0"}, "fillOpacity": {"signal": "0.1"}}}, "marks": [{"type": "text", "name": "heading", "from": {"data": "labelFacet"}, "encode": {"update": {"x": {"value": 0}, "y": {"value": -2}, "text": {"field": "label"}, "align": {"signal": "datum.labels=='left'?'right':'left'"}, "fontWeight": {"value": "normal"}}}}, {"type": "text", "name": "amount", "from": {"data": "labelFacet"}, "encode": {"update": {"x": {"value": 0}, "y": {"value": 12}, "text": {"signal": "format(datum.value, ',') + ' records'"}, "align": {"signal": "datum.labels=='left'?'right':'left'"}}}}]}, {"type": "rect", "from": {"data": "labelText"}, "encode": {"update": {"x": {"field": "bounds.x1", "offset": -2}, "x2": {"field": "bounds.x2", "offset": 2}, "y": {"field": "bounds.y1", "offset": -2}, "y2": {"field": "bounds.y2", "offset": 2}, "fill": {"value": "white"}, "opacity": {"value": 0.8}, "cornerRadius": {"value": 4}}}}], "config": {"view": {"stroke": "transparent"}, "text": {"fontSize": 13, "fill": "#333333"}}}, {"mode": "vega"});
+</script></div></div></section></div></body></html>

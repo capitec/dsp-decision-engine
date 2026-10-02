@@ -185,3 +185,5 @@ decider2/
 .decider2_cache/
 .numba_cache_persist/
 experimentation/tree-codegen-vs-interpreted/_generated/
+
+notes/recommendations-for-decider-v2.md
