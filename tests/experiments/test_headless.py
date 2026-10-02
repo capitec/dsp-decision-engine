@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import sys
 
 import polars as pl
 
@@ -137,3 +136,29 @@ def test_resolve_revision_turns_head_symbols_into_a_sha():
     sha = resolve("HEAD^")
     assert sha and len(sha) == 40 and all(c in "0123456789abcdef" for c in sha)
     assert resolve("HEAD") == resolve("HEAD")
+
+
+def test_a_revision_scenario_runs_the_checked_out_code_even_if_the_live_module_is_already_imported():
+    # Building `Experiment` needs the live pipeline object, so its module is
+    # already in `sys.modules` under the same dotted name a `revision` scenario
+    # would load from a temp checkout. Importing it again in this process would
+    # risk the cached (live) module instead of the checked-out one, at whatever
+    # depth the entry module's own imports go — the whole reason this runs in a
+    # subprocess instead. `example_projects/experiments/credit_pipeline.py` has
+    # two real commits: HEAD added a flat $50 affordability fee, HEAD^ is the
+    # commit before it.
+    import example_projects.experiments.credit_pipeline as live_module
+
+    entry = "example_projects.experiments.credit_pipeline:build"
+    pipeline = live_module.build()
+    frame = pl.DataFrame({"income": [1000.0, 2000.0, 1500.0, 800.0], "debt": [350.0, 900.0, 700.0, 300.0]})
+    exp = (Experiment("version-drift", pipeline, frame, entry=entry)
+           .scenario("previous_revision", revision="HEAD^")
+           .compare(outputs=("approved",)))
+    result = exp.run()
+
+    assert result.status is RunStatus.COMPLETED
+    scenario = result.scenarios[0]
+    assert scenario.status is ScenarioStatus.COMPLETED
+    assert len(scenario.divergences) == 1  # the fee pushes exactly one record's ratio over the limit
+    assert live_module.build() is not None  # the live module itself is untouched
