@@ -868,6 +868,8 @@ experiments = [
     { name = "altair" },
     { name = "ipython", version = "8.39.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "ipython", version = "9.14.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "markdown-it-py", version = "3.0.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "markdown-it-py", version = "4.2.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
 ]
 notebook = [
     { name = "ipython", version = "8.39.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -912,6 +914,7 @@ requires-dist = [
     { name = "ipython", marker = "extra == 'all'" },
     { name = "ipython", marker = "extra == 'experiments'" },
     { name = "ipython", marker = "extra == 'notebook'" },
+    { name = "markdown-it-py", marker = "extra == 'experiments'" },
     { name = "myst-nb", marker = "extra == 'all'" },
     { name = "myst-nb", marker = "extra == 'docs'" },
     { name = "numba", specifier = ">=0.67.0" },

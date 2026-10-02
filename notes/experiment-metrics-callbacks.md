@@ -71,6 +71,17 @@ experiments/
   `experiment.json`; `load` imports `flow.entry` and scans `input.path`
   relative to the file (`example_projects/experiments/premium_sweep/`).
   `Metric.json_schema()` / `Plot.json_schema()` give a UI one form per type.
+- **Reports are blocks in the JSON.** `ExperimentDef.report` is a tree of
+  registry blocks (`Overview`, `Text`, `Table`, `Chart`, `MetricSection`,
+  `Row`, `Section`), so a UI edits it like metrics and plots; `validate`
+  checks every metric and plot a block names. `result.show()` displays it as
+  one HTML fragment and `result.save_html()` as a page; without one, the
+  default is an overview and a `MetricSection` per metric. Inspired by
+  Datapane's block tree and Evidently's metrics-to-HTML report; Quarto or
+  nbconvert templates were rejected as code-first and not UI-editable.
+  Markdown renders with markdown-it-py with raw HTML off, since a report can
+  come from a UI. Not built yet: tabs, and inlining Vega's scripts for
+  offline pages (altair's `inline` template needs vl-convert).
 - **Histogram bins are shared.** `Histogram` takes `edges`, or `range` and
   `bins`; without either it spans the baseline's first batch, which every
   scenario sees in lockstep, so all scenarios count into the same bins.
