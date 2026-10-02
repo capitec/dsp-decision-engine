@@ -1,0 +1,14 @@
+"""Metrics: pluggable collectors the runner feeds batch by batch, each summarising into a typed `Summary`.
+
+A metric is global (it reads the flow's output in `on_batch_end`) or, with a
+`nodes` glob, per node (it reads what matching nodes wrote in `on_node_end`).
+Define your own by subclassing `Metric` with a `type` alias; an experiment
+names it by that alias, so it loads from JSON.
+"""
+from decider.experiments.metrics.base import Metric, MetricRef, Summary
+from decider.experiments.metrics.compare import Divergence, Divergences
+from decider.experiments.metrics.outputs import Counts, Describe, Stats, ValueCounts
+from decider.experiments.metrics.paths import BranchFlows, Flows
+
+__all__ = ["BranchFlows", "Counts", "Describe", "Divergence", "Divergences", "Flows", "Metric", "MetricRef", "Stats",
+           "Summary", "ValueCounts"]

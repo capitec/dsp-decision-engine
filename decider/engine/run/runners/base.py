@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Iterator, Literal, Protocol, runtime_checkable
+
+import numpy as np
 
 from decider.engine.ir.origin import Origin
 from decider.engine.wiring.plan import Plan
@@ -23,12 +25,14 @@ class Checkpoint:
         arm: inside a branch arm, the arm's index (of the innermost branch).
         iteration: inside a loop, the iteration from 1 (of the innermost loop);
             the condition checked before iteration `k` carries `k` too.
+        rows: the indices of the records the node runs on, or `None` for every record.
     """
 
     origin: Origin
     when: Literal["before", "after"]
     arm: int | None = None
     iteration: int | None = None
+    rows: np.ndarray | None = field(default=None, compare=False, repr=False)
 
 
 class Runner(Protocol):

@@ -49,7 +49,7 @@ class _Scope:
         return _Scope(rows, base, dict(self.names), self.arm, self.iteration)
 
     def checkpoint(self, origin, when: str) -> Checkpoint:
-        return Checkpoint(origin, when, self.arm, self.iteration)
+        return Checkpoint(origin, when, self.arm, self.iteration, self.rows)
 
 
 class InterpretedRunner:
