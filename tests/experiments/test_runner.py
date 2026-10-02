@@ -171,8 +171,8 @@ def test_a_revision_scenario_runs_the_checked_out_code_even_with_the_live_module
                          capture_output=True, text=True, check=True).stdout.strip()
 
     frame = pl.DataFrame({"income": [1000.0, 2000.0, 1500.0, 800.0], "debt": [350.0, 900.0, 700.0, 300.0]})
-    result = (Experiment("version-drift", live.build(), frame, entry="example_projects.experiments.credit_pipeline:build",
-                         batch_size=3)
+    entry = "example_projects.experiments.credit_pipeline:build"
+    result = (Experiment("version-drift", live.build(), frame, entry=entry, batch_size=3)
               .scenario("previous", revision=f"{fee}^")
               .metric(Divergence(column="approved"), Divergence(name="ratio", column="ratio", nodes="credit/ratio"))
               .run())

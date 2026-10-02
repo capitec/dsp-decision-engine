@@ -9,8 +9,8 @@ import pytest
 
 from decider import branch, flow, param, step
 from decider.exceptions import DeciderError
-from decider.experiments import (Bars, BranchFlows, Changes, Describe, Divergence, Experiment, ExperimentResult,
-                                 Figure, Plot, Sankey, Stats, ValueCounts)
+from decider.experiments import (Bars, BranchFlows, Changes, Describe, Distribution, Divergence, Experiment,
+                                 ExperimentResult, Figure, Histogram, Plot, Ranges, Sankey, Stats, ValueCounts)
 from decider.experiments.plots.sankey import TEMPLATE
 
 LIMIT_03 = {"demo": {"approved": {"limit": 0.3}}}
@@ -29,7 +29,7 @@ def _sweep(pipeline, frame):
 
 
 def test_bars_draws_value_counts_per_scenario_as_an_altair_chart(pipeline, frame):
-    bars = _sweep(pipeline, frame).plots["bars"]
+    bars = _sweep(pipeline, frame).plots["value_counts"]
 
     assert bars.grammar == "vega-lite"
     assert bars.spec["$schema"].startswith("https://vega.github.io/schema/vega-lite/")
@@ -38,7 +38,7 @@ def test_bars_draws_value_counts_per_scenario_as_an_altair_chart(pipeline, frame
 
 
 def test_changes_draws_records_changed_per_scenario(pipeline, frame):
-    changes = _sweep(pipeline, frame).plots["changes"]
+    changes = _sweep(pipeline, frame).plots["divergence"]
     assert [(r["scenario"], r["changed"]) for r in _rows(changes)] == [("baseline", 0), ("limit_0.3", 1)]
 
 
@@ -58,7 +58,7 @@ def test_a_custom_plot_returns_an_altair_chart_of_the_metric_it_names(pipeline, 
               .metric(Describe(name="tier", column="tier"))
               .plot(Means(metric="tier"))
               .run())
-    assert [r["mean"] for r in _rows(result.plots["test_means"])] == [0.875, 0.75]
+    assert [r["mean"] for r in _rows(result.plots["tier"])] == [0.875, 0.75]
 
 
 def _nested():
@@ -85,7 +85,7 @@ def test_sankey_fills_the_vega_template_one_stack_per_branch_depth_with_the_outc
               .metric(BranchFlows(outcome="term_cap"))
               .plot(Sankey(metric="branch_flows"))
               .run())
-    sankey = result.plots["sankey"]
+    sankey = result.plots["branch_flows"]
 
     assert sankey.grammar == "vega"
     assert sankey.spec["$schema"] == "https://vega.github.io/schema/vega/v5.json"
@@ -109,27 +109,58 @@ def test_sankey_draws_the_scenario_it_names():
 
 def test_figures_show_in_a_notebook_through_altairs_renderers(pipeline, frame):
     result = _sweep(pipeline, frame)
-    assert "vega-embed" in result.plots["changes"]._repr_mimebundle_()["text/html"]
+    assert "vega-embed" in result.plots["divergence"]._repr_mimebundle_()["text/html"]
     vega = Figure(grammar="vega", spec={"$schema": "https://vega.github.io/schema/vega/v5.json", "marks": []})
     assert "vega-embed" in vega._repr_mimebundle_()["text/html"]
 
 
-def test_result_show_lays_out_status_scenarios_metrics_and_plots(pipeline, frame, monkeypatch):
+def test_distribution_overlays_each_scenarios_histogram_with_overflow_at_the_ends():
+    from example_projects.experiments.loan_pipeline import applications, build
+
+    result = (Experiment("x", build(), applications(2_000))
+              .scenario("premium_6pct", params={"loans": {"pricing": {"unsecured": {"premium": 0.06}}}})
+              .metric(Histogram(column="rate", nodes="loans/pricing/unsecured", bins=10))
+              .plot(Distribution(metric="histogram"))
+              .run())
+    rows = _rows(result.plots["histogram"])
+    shifted = result.summaries["histogram"]["premium_6pct"]
+    assert shifted.above > 0
+    assert sum(r["records"] for r in rows if r["scenario"] == "premium_6pct") == sum(shifted.counts) + shifted.above
+    assert result.plots["histogram"].spec["params"][0]["bind"] == "legend"
+
+
+def test_ranges_draws_min_mean_and_max_per_scenario(pipeline, frame):
+    result = (Experiment("x", pipeline, frame).scenario("limit_0.3", params=LIMIT_03)
+              .metric(Describe(column="tier")).plot(Ranges(metric="describe")).run())
+    ranges = result.plots["describe"]
+    marks = [layer["mark"] for layer in ranges.spec["layer"]]
+    assert [m["type"] if isinstance(m, dict) else m for m in marks] == ["rule", "point"]
+    assert "vega-embed" in ranges._repr_mimebundle_()["text/html"]  # a layered chart shows as one too
+
+
+def test_result_show_gives_each_metric_its_table_and_charts(pipeline, frame, monkeypatch):
     import IPython.display
 
     shown = []
     monkeypatch.setattr(IPython.display, "display", lambda *objs: shown.extend(objs))
-    result = _sweep(pipeline, frame)
+    result = (Experiment("x", pipeline, frame)
+              .scenario("limit_0.3", params=LIMIT_03)
+              .metric(Divergence(column="tier"), ValueCounts(column="approved", nodes="demo/approved"))
+              .plot(Changes(metric="divergence"))
+              .run())
     result.show()
 
     assert shown[0].data.startswith("### x: completed")
-    assert shown[1]["scenario"].to_list() == ["baseline", "limit_0.3"]
-    assert shown[5]["counts.True"].to_list() == [3, 2]
-    assert shown[-2:] == list(result.plots.values())
+    assert shown[1]["changes"].to_list() == ["unchanged", 'params {"demo": {"approved": {"limit": 0.3}}}']
+    assert shown[2].data == "#### divergence\n\n`divergence` of `tier` in the flow's output"
+    assert shown[4] is result.plots["divergence"]
+    assert shown[5].data == "#### value_counts\n\n`value_counts` of `approved` at steps matching `demo/approved`"
+    assert shown[6]["counts.True"].to_list() == [3, 2]
+    assert shown[7].grammar == "vega-lite"  # no plot named value_counts, so the built-in Bars draws it
 
     shown.clear()
-    result.plots["bars"].show()
-    assert shown == [result.plots["bars"]]
+    result.plots["divergence"].show()
+    assert shown == [result.plots["divergence"]]
 
 
 def test_a_result_with_plots_round_trips_through_json(pipeline, frame):

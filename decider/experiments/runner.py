@@ -34,6 +34,8 @@ from decider.engine.debug.session import _cast
 from decider.engine.ir.decls import base_annotation
 from decider.engine.params import merge
 from decider.engine.run.state import State, dtype_of
+from decider.engine.wiring.plan import Branch, Loop, ScatterGather
+from decider.engine.wiring.plan import Sequence as Sequence_
 from decider.exceptions import DeciderError
 from decider.experiments.callbacks import Batch, Callback, JobProgress, NodeBatch, Run, WriteOutputs, overrides
 from decider.experiments.experiments import (BASELINE, ExperimentDef, ExperimentResult, RunStatus, Scenario,
@@ -141,7 +143,7 @@ def run_experiment(def_: ExperimentDef, step, frame: Frame, params=None, *, call
         manifest=_manifest(def_, step, frame, total, resolve(def_.revision), results), status=status,
         name=def_.name, nondeterministic=nondeterministic, scenarios=results, preflight=report,
         job=job.snapshot() if job is not None else None, summaries=summaries,
-        plots={p.key: Figure.of(p.render(summaries[p.metric])) for p in def_.plots},
+        plots={p.key: Figure.of(p.render(summaries[p.metric])) for p in def_.plots}, definition=def_,
     )
     if out_dir is not None:
         Path(out_dir).mkdir(parents=True, exist_ok=True)
@@ -226,7 +228,10 @@ class _Local:
         self.selectors = selectors
         self.params = merge(params, sc.params)
         self.exe = Engine().bind(step, mode="stepped" if selectors or sc.at is not None else "fused")
-        self.calls = {c.node.origin.path: c for c in self.exe.plan.calls}
+        # What each node hands a node metric: a call's outputs, a branch's `modifies` names.
+        self.writes = {c.node.origin.path: c.writes for c in self.exe.plan.calls}
+        self.writes.update((b.node.origin.path, tuple(m.version for m in b.merges))
+                           for b in _branches(self.exe.plan.root))
 
     def run(self, index: int, offset: int, batch: pl.DataFrame) -> tuple[pl.DataFrame, list[NodeBatch]]:
         sc = self.sc
@@ -248,10 +253,7 @@ class _Local:
         return self.exe.output(state), nodes
 
     def _values(self, state: State, path: str, rows) -> pl.DataFrame:
-        call = self.calls.get(path)
-        if call is None:
-            return pl.DataFrame()
-        frame = pl.DataFrame([state.column(v.name, v) for v in call.writes if v.id in state.values])
+        frame = pl.DataFrame([state.column(v.name, v) for v in self.writes.get(path, ()) if v.id in state.values])
         return frame if rows is None else frame[rows]
 
 
@@ -271,6 +273,21 @@ class _Revision:
             if not reply["ok"]:
                 raise DeciderError(reply["error"])
         return pickle.loads((Path(self.request["out"]) / f"{index}.pkl").read_bytes())
+
+
+def _branches(r) -> Iterator[Branch]:
+    children: tuple = ()
+    if isinstance(r, Branch):
+        yield r
+        children = (r.condition, *r.arms)
+    elif isinstance(r, Sequence_):
+        children = r.children
+    elif isinstance(r, Loop):
+        children = (r.condition, r.body)
+    elif isinstance(r, ScatterGather):
+        children = (r.body,) if r.accumulate is None else (r.body, r.accumulate)
+    for child in children:
+        yield from _branches(child)
 
 
 def _reply(stdout: str, stderr: str, returncode: int) -> dict:
