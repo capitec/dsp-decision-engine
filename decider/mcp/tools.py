@@ -20,8 +20,8 @@ from decider.data import load
 from decider.debug_bridge.loading import load_module
 from decider.engine import Engine
 from decider.engine.trace import TraceSink
-from decider.experiments import ExperimentDef, ExperimentResult, load_flow, load_yaml, run_experiment
-from decider.experiments.runs import trace as run_trace
+from decider.debug_bridge.replay import trace as run_trace
+from decider.experiments import ExperimentDef, ExperimentResult, load_flow, run_experiment
 from decider.mcp.policy import REDACTED, Policy
 
 _EXCLUDED = {".git", "__pycache__", ".venv", "venv", "node_modules",
@@ -123,8 +123,8 @@ def check_report(entry: str) -> dict:
 
 
 def experiment_definition(path: str) -> dict:
-    """An `experiment.yaml` (or JSON) definition, read from `path`."""
-    return ExperimentDef.model_validate(load_yaml(Path(path).read_text())).model_dump(mode="json")
+    """An `experiment.json` definition, read from `path`."""
+    return ExperimentDef.model_validate_json(Path(path).read_text()).model_dump(mode="json")
 
 
 def experiment_results(path: str) -> dict:
@@ -162,8 +162,8 @@ def run_flow(entry: str, data: str) -> dict:
 
 
 def run_experiment(definition: str, data: str) -> dict:
-    """Run the experiment in `definition` (an experiment.yaml) over `data`; confirmation-gated."""
-    def_ = ExperimentDef.model_validate(load_yaml(Path(definition).read_text()))
+    """Run the experiment in `definition` (an experiment.json) over `data`; confirmation-gated."""
+    def_ = ExperimentDef.model_validate_json(Path(definition).read_text())
     step = load_flow(def_.flow.entry)
     result = run_experiment(def_, step, load(data).frame)
     return result.model_dump(mode="json")

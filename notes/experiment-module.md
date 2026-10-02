@@ -1,5 +1,10 @@
 # Experiment module
 
+Execution, comparison and summaries are superseded by
+`notes/experiment-metrics-callbacks.md` (callbacks and metrics over lockstep
+batches, `experiment.json`); the one-schema, scenarios-not-types decision here
+still stands.
+
 The chosen interface, rejected alternatives, and the schema the module layers on
 `decider.experiments` (fork/sweep), `decider.lifecycle` (manifest/job) and
 `decider.data` (load/identity/preflight).

@@ -6,7 +6,7 @@ import pytest
 from fastmcp.exceptions import ToolError
 
 from decider.data import load
-from decider.experiments import Experiment, load_flow
+from decider.experiments import Divergence, Experiment, load_flow
 from decider.mcp import Policy, build_server
 from decider.mcp.policy import REDACTED
 
@@ -158,14 +158,11 @@ def test_experiment_definition_and_results_read_files(workspace, tmp_path):
     mcp = build_server(Policy())
     exp = (Experiment("drift", load_flow(workspace["entry"]), load(workspace["data"]).frame,
                       entry=workspace["entry"])
-           .scenario("baseline")
-           .compare(outputs=("tier",)))
+           .metric(Divergence(column="tier")))
     result = exp.run()
     result_path = tmp_path / "result.json"
     result_path.write_text(result.model_dump_json())
     assert _call(mcp, "experiment_results", path=str(result_path))["status"] == "completed"
 
-    from decider.experiments import dump_yaml
-    def_path = tmp_path / "experiment.yaml"
-    def_path.write_text(dump_yaml(exp.def_.model_dump()))
+    def_path = exp.save(tmp_path / "experiment.json")
     assert _call(mcp, "experiment_definition", path=str(def_path))["name"] == "drift"

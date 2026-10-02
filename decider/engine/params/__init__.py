@@ -4,5 +4,5 @@ from decider.engine.params.harvest import call_with_defaults, harvest
 from decider.engine.params.tables import Table, param_table
 from decider.engine.params.models import NodeParams, record_shared_type
 from decider.engine.params.validate import (
-    ParamsCache, ParamsError, Status, Validation, check_namespaces, document_key, validate_node,
+    ParamsCache, ParamsError, Status, Validation, check_namespaces, document_key, merge, validate_node,
 )

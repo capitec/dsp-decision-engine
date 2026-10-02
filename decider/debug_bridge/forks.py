@@ -1,7 +1,6 @@
-"""Fork and sweep a paused session: experiment primitives for comparing scenario runs.
+"""Fork and sweep a paused session, for comparing scenario runs in the debugger.
 
-These are the execution primitives an experiment runner builds on: replay a
-session to a checkpoint with other params or values, or run several scenarios
+Replay a session to a checkpoint with other params or values, or run several scenarios
 next to the unchanged continuation. A running generator can't be copied, so a
 fork is a fresh session replayed to the same checkpoint, with the original
 session's overrides re-applied where they were made. Steps are pure, so the
@@ -10,8 +9,8 @@ replay reaches the same state.
 from __future__ import annotations
 
 from decider.engine import Engine
-from decider.engine.params import document_key
-from decider.experiments.runs import collect, steer
+from decider.engine.params import document_key, merge
+from decider.debug_bridge.replay import collect, steer
 
 
 def checkpoint_key(session):
@@ -22,13 +21,6 @@ def checkpoint_key(session):
     kind = "node_started" if cp.when == "before" else "node_finished"
     n = sum(1 for e in session.events if e.kind == kind and e.origin.path == cp.origin.path)
     return cp.origin.path, cp.when, n
-
-
-def merge(base, extra):
-    out = dict(base or {})
-    for k, v in (extra or {}).items():
-        out[k] = merge(out.get(k), v) if isinstance(v, dict) and isinstance(out.get(k), dict) else v
-    return out
 
 
 def fork(step, frame, params, history, target, scenario, ir=None, forces=()):

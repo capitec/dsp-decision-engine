@@ -677,16 +677,19 @@ callable returning `Finding`s, passed in a `suites=` tuple.
 
 ### Experiments
 
-One versioned `ExperimentDef` (the `experiments/<slug>/experiment.yaml` asset)
-with two facades — a YAML file and the `Experiment` builder — driving one
-`run_experiment`. Param-only scenarios run on the fused path; a scenario that
-overrides a value or a single record replays a session. See
-`notes/experiment-authoring.md` for the YAML shape.
+An experiment runs the unchanged flow (the baseline) and each scenario —
+other params, an overridden value, another git revision — over the same
+records, one batch at a time, and measures them with metrics. The runner only
+executes; a `Metric` collects through hooks (`on_batch_end` for the flow's
+output, `on_node_end` for what nodes matching its `nodes` glob wrote) and
+`summarise`s into a typed `Summary`, which a `Plot` requiring that type draws.
+The definition saves as `experiment.json`; subclass `Metric`, `Plot` or
+`Callback` for your own.
 
 ```python
 import polars as pl
 from decider import flow, param
-from decider.experiments import Experiment, RunStatus
+from decider.experiments import Changes, Divergence, Experiment, RunStatus, ValueCounts
 
 def ratio(income: float, debt: float) -> float:
     return debt / income
@@ -697,17 +700,20 @@ def approved(ratio: float, limit: float = param(0.4)) -> bool:
 pipeline = flow(ratio, approved, name="credit")
 df = pl.DataFrame({"income": [1000.0, 500.0], "debt": [350.0, 400.0]})
 result = (Experiment("drift", pipeline, df)
-          .scenario("baseline")
           .scenario("limit_0.3", params={"credit": {"approved": {"limit": 0.3}}})
-          .compare(outputs=("approved",))
+          .metric(Divergence(column="approved"), ValueCounts(name="ratios", column="ratio", nodes="credit/ratio"))
+          .plot(Changes(metric="divergence"))
           .run())
 assert result.status is RunStatus.COMPLETED
-assert result.summary["first_divergence"]["scenario"] == "limit_0.3"
+assert result.summaries["divergence"]["limit_0.3"].first == 0
+assert result.plots["changes"]["mark"] == "bar"   # a Vega-Lite spec
 ```
 
 Nondeterminism is a first-class result (`NON_REPRODUCIBLE`), never silent; a
-partial or cancelled run never looks like a completed one. Results write to a
-caller-chosen directory; `decider` does not own their storage.
+partial or cancelled run never looks like a completed one. A metric that reads
+nodes runs the flow one compiled kernel per node instead of fused, still
+compiled. Results write to a caller-chosen `out_dir`; `decider` does not own
+their storage.
 
 ### Data loading and execution scope
 
