@@ -7,6 +7,7 @@ from decider.engine.ir.nodes import BranchNode, CallNode
 from decider.exceptions import IRError, WiringError
 from decider.steps.base import Step, as_step
 from decider.steps.function import step
+from decider.steps.sequential import SequentialStep
 
 if TYPE_CHECKING:
     from decider.engine.ir.context import IRContext
@@ -42,12 +43,16 @@ class BranchStep(Step):
     reads: tuple[tuple[str, str], ...] = ()
     writes: tuple[tuple[str, str], ...] = ()
     id: str | None = None
+    implicit_else: bool = False
 
     def to_ir(self, ctx: IRContext) -> BranchNode:
         inner = ctx.child(self.name)
         condition = condition_node(inner, self.condition, f"branch {self.name!r}")
-        if condition.outputs[0].annotation is bool and len(self.arms) != 2:
-            raise WiringError(f"branch {self.name!r}: a bool condition takes 2 arms, got {len(self.arms)}")
+        if condition.outputs[0].annotation is bool:
+            if len(self.arms) != 2:
+                raise WiringError(f"branch {self.name!r}: a bool condition takes 2 arms, got {len(self.arms)}")
+        elif self.implicit_else:
+            raise WiringError(f"branch {self.name!r}: a single arm needs a bool condition, not int")
         return BranchNode(ctx.origin(self), condition, tuple(inner.build(a) for a in self.arms), self.modifies)
 
 
@@ -57,7 +62,8 @@ def branch(condition: Any, *arms: Any, modifies: Sequence[str], name: str, id: s
     A bool condition sends `True` to arm 0, while an int picks arm `i`, so
     switching a flag from bool to 0/1 swaps the arms. An arm may be one step
     or a flow of several; the arms of one branch must agree on the type of
-    each name they modify.
+    each name they modify. A single arm is allowed for a bool condition: the
+    false rows run nothing and keep their earlier `modifies` values.
 
     A bare column name is a condition too: `branch("on_card", ...)` reads the
     existing bool column `on_card`, the same as an identity step
@@ -75,12 +81,15 @@ def branch(condition: Any, *arms: Any, modifies: Sequence[str], name: str, id: s
         by_sector = branch(is_private, cap_private, cap_public, modifies=["term_cap"], name="by_sector")
         flow(term_cap, by_sector, name="term").emit("is_private@term/by_sector/is_private")
     """
-    if len(arms) < 2:
-        raise WiringError(f"branch {name!r} needs at least two arms, got {len(arms)}")
+    if not arms:
+        raise WiringError(f"branch {name!r} needs at least one arm, got {len(arms)}")
     if not modifies:
         raise WiringError(f"branch {name!r} needs modifies=[...]: the names its arms may change")
     if isinstance(condition, str):
         condition = _column_condition(condition)
     # An anonymous arm would share the branch's path, so it is named by position.
     steps = tuple(a if a.name is not None else a.named(f"arm{i}") for i, a in enumerate(map(as_step, arms)))
-    return BranchStep(name, as_step(condition), steps, tuple(modifies), id=id)
+    implicit_else = len(steps) == 1
+    if implicit_else:
+        steps += (SequentialStep((), "arm1"),)
+    return BranchStep(name, as_step(condition), steps, tuple(modifies), id=id, implicit_else=implicit_else)

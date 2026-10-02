@@ -9,6 +9,7 @@ Decision records for the consolidated `decider`, each with its measured reason.
 - `money-rounding-and-overflow.md`: money is int64 cents, running totals are float64, and there is no bare `round()`, because CPython and numba round differently.
 - `registry-dispatch-by-lookup.md`: nested steps dispatch by tag lookup instead of rebuilt unions, and `StepRef` uses `SerializeAsAny`.
 - `structure-in-python.md`: pipeline structure is code, and config carries params and `ConfigurableStep` documents only.
+- `flow-files.md`: a flow file is a front end that builds ordinary `flow`/`branch`/`loop` steps; it lives with the code, never in a config version.
 - `origins-out-of-cache-keys.md`: origins are debug metadata, and compiled code and generated names are keyed by content.
 - `single-record-path.md`: `score()` takes a dict, not kwargs, and converted params bundles are cached.
 - `nested-and-raw-api.md`: an annotation says what a value means, never how it is stored, because the best representation depends on `n`; `Raw`/`Rows`/`raw_str` go, a `TypedDict` is the nested schema, and the remaining work is JSON-boundary validation.

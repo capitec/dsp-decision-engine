@@ -49,7 +49,7 @@ def test_build_and_run_failures_are_caught_by_decider_error():
     with pytest.raises(WiringError):           # two writers in a dag
         to_ir(dag(ratio, step(ratio, name="again")))
     with pytest.raises(WiringError):           # branch shape
-        branch(ratio, ratio, modifies=["ratio"], name="b")
+        branch(ratio, modifies=["ratio"], name="b")
 
 
 def test_shared_params_of_different_types_are_an_ir_error():

@@ -834,6 +834,7 @@ all = [
     { name = "myst-nb" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
+    { name = "pyyaml" },
     { name = "sanic" },
     { name = "simpleeval" },
     { name = "sphinx", version = "8.1.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -886,6 +887,9 @@ visualise = [
     { name = "graphviz" },
     { name = "streamlit" },
 ]
+yaml = [
+    { name = "pyyaml" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -926,6 +930,8 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "pytest-asyncio", marker = "extra == 'all'" },
     { name = "pytest-asyncio", marker = "extra == 'dev'" },
+    { name = "pyyaml", marker = "extra == 'all'" },
+    { name = "pyyaml", marker = "extra == 'yaml'" },
     { name = "sanic", marker = "extra == 'all'" },
     { name = "sanic", marker = "extra == 'serve-sanic'" },
     { name = "simpleeval", marker = "extra == 'all'" },
@@ -943,7 +949,7 @@ requires-dist = [
     { name = "uvicorn", marker = "extra == 'all'" },
     { name = "uvicorn", marker = "extra == 'serve-starlette'" },
 ]
-provides-extras = ["all", "dev", "docs", "eval", "experiments", "notebook", "serve-sanic", "serve-starlette", "visualise"]
+provides-extras = ["all", "dev", "docs", "eval", "experiments", "notebook", "serve-sanic", "serve-starlette", "visualise", "yaml"]
 
 [package.metadata.requires-dev]
 dev = [
