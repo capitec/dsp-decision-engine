@@ -6,15 +6,20 @@ for execution, `describe` for the static flow contract, `preflight` for
 compatibility and cost, and the lifecycle `RunManifest`/`JobHandle` for
 provenance and job semantics. Param-only scenarios route to the fused
 `step.run(frame, params=...)` path; a scenario that also overrides a value or a
-single row runs through `fork`. `run` is the headless entry point: it resolves
-the flow and data from the definition, so a plain Python caller runs an
-experiment end to end without VS Code.
+single row runs through `fork`. A scenario on a different `revision` runs in a
+fresh subprocess instead (`_subprocess_run`/`_revision_worker`), because that
+revision's module shares the live one's import name. `run` is the headless
+entry point: it resolves the flow and data from the definition, so a plain
+Python caller runs an experiment end to end without VS Code.
 """
 from __future__ import annotations
 
 import importlib
+import json
 import platform
+import subprocess
 import sys
+import tempfile
 from importlib import metadata
 from pathlib import Path
 from typing import Any
@@ -97,7 +102,7 @@ def run_experiment(def_: ExperimentDef, step, frame, params=None, *, job: JobHan
     results: list[ScenarioResult] = []
     scenario_outputs: dict[str, dict | None] = {}
     scenario_traces: list[dict] = []
-    trees: list[Path] = []
+    materialised: dict[str, Path] = {}
     try:
         for i, sc in enumerate(def_.scenarios):
             if job is not None:
@@ -110,13 +115,15 @@ def run_experiment(def_: ExperimentDef, step, frame, params=None, *, job: JobHan
                 results.append(ScenarioResult(name=sc.name, status=ScenarioStatus.RESUMED,
                                               params=sc.params, overrides=sc.overrides, row=sc.row))
                 continue
-            scenario_revision, step_for_sc = _scenario_revision(def_, sc, step, resolved, trees)
+            scenario_revision, step_for_sc, tree = _scenario_revision(def_, sc, step, resolved, materialised)
             if isinstance(step_for_sc, str):
                 results.append(ScenarioResult(name=sc.name, status=ScenarioStatus.FAILED,
                                               error=step_for_sc, revision=scenario_revision,
                                               params=sc.params, overrides=sc.overrides, row=sc.row))
                 continue
-            if _param_only(sc):
+            if tree is not None:
+                trace = _subprocess_run(tree, def_.flow.entry, frame, params, sc)
+            elif _param_only(sc):
                 trace = _fused_run(step_for_sc, frame, params, sc)
             else:
                 trace = _fork_run(step_for_sc, frame, params, sc)
@@ -137,7 +144,7 @@ def run_experiment(def_: ExperimentDef, step, frame, params=None, *, job: JobHan
                     params=sc.params, overrides=sc.overrides, row=sc.row,
                 ))
     finally:
-        for tree in trees:
+        for tree in materialised.values():
             remove(tree)
 
     status = _run_status(results, nondeterministic, job)
@@ -214,21 +221,24 @@ def _param_only(sc) -> bool:
     return sc.at is None and not sc.overrides and sc.revision is None and sc.row is None
 
 
-def _scenario_revision(def_: ExperimentDef, sc, step, resolved: str | None, trees: list[Path]):
-    """The scenario's resolved revision and the step to run it on; a string return is the failure reason."""
+def _scenario_revision(def_: ExperimentDef, sc, step, resolved: str | None, materialised: dict[str, Path]):
+    """The scenario's resolved revision, the step to run it on, and a checked-out tree for a different
+    revision (run via `_subprocess_run`, so the checked-out code never shares this process's module
+    cache) or `None` for the live one. A string second value is the failure reason."""
     if sc.revision is None:
-        return None, step
+        return None, step, None
     sha = resolve(sc.revision)
     revision = Revision(authored=sc.revision, resolved=sha)
     if sha is None:
-        return revision, f"revision {sc.revision!r} did not resolve"
+        return revision, f"revision {sc.revision!r} did not resolve", None
     if not compatible(def_.flow.decider, _decider_version()):
-        return revision, f"revision {sha} is not engine-compatible with decider {_decider_version()}"
+        return revision, f"revision {sha} is not engine-compatible with decider {_decider_version()}", None
     if sha == resolved or resolved is None:
-        return revision, step
-    tree = materialise(sha)
-    trees.append(tree)
-    return revision, _load_flow_in(def_.flow.entry, tree)
+        return revision, step, None
+    tree = materialised.get(sha)
+    if tree is None:
+        tree = materialised[sha] = materialise(sha)
+    return revision, None, tree
 
 
 def _fused_run(step, frame, params, sc) -> dict:
@@ -247,6 +257,34 @@ def _fork_run(step, frame, params, sc) -> dict:
         return fork(step, frame, params, [], target, scenario)
     except Exception as e:
         return {"output": None, "steps": {}, "paths": {}, "error": f"{type(e).__name__}: {e}"}
+
+
+def _subprocess_run(tree: Path, entry: str, frame: pl.DataFrame, params: Any, sc: Any) -> dict:
+    """Runs one scenario against `entry` loaded from `tree`, in a fresh process (see `_revision_worker`)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        frame_path = Path(tmp) / "frame.parquet"
+        frame.write_parquet(frame_path)
+        request = json.dumps({
+            "entry": entry, "tree": str(tree), "frame_path": str(frame_path), "params": params,
+            "mode": "fused" if _param_only(sc) else "fork",
+            "scenario": {"params": sc.params, "overrides": sc.overrides, "at": sc.at, "row": sc.row},
+        })
+        try:
+            proc = subprocess.run([sys.executable, "-m", "decider.experiments._revision_worker"],
+                                  input=request, capture_output=True, text=True, timeout=120)
+        except subprocess.TimeoutExpired:
+            return {"output": None, "steps": {}, "paths": {}, "error": "revision subprocess timed out"}
+        reply = _parse_reply(proc.stdout, proc.stderr, proc.returncode)
+        if not reply["ok"]:
+            return {"output": None, "steps": {}, "paths": {}, "error": reply["error"]}
+        return reply["result"]
+
+
+def _parse_reply(stdout: str, stderr: str, returncode: int) -> dict:
+    try:
+        return json.loads(stdout.strip().splitlines()[-1])
+    except (json.JSONDecodeError, IndexError):
+        return {"ok": False, "error": f"revision subprocess exited {returncode}: {(stderr or stdout)[-500:]}"}
 
 
 def _override_targets(step) -> dict[str, list[str | None]]:
