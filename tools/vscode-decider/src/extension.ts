@@ -4,22 +4,29 @@ import { DeciderDebugSession } from "./adapter";
 import { analyse, firstLine, PipelineCodeLens } from "./analysis";
 import { listRefs, materialise, repoRoot } from "./git";
 import { GraphPanel } from "./graphPanel";
-import { compareTraces, editLabel, summariseSweep, walk, type CallNodeJson, type ColumnSummary, type Controls, type DescribeResult, type Draft, type ExperimentResult, type FromUI, type IRNodeJson, type Lineage, type RecordKey, type RunStatus, type Scenario, type SweepResponse, type ToUI, type TraceResult, type ValueHistory } from "@decider/ui";
+import { compareTraces, editLabel, summariseSweep, walk, type CallNodeJson, type ColumnSummary, type Controls, type DescribeResult, type Draft, type ExperimentDef, type ExperimentResult, type FromUI, type IRNodeJson, type Lineage, type RecordKey, type RunStatus, type Scenario, type SweepResponse, type ToUI, type TraceResult, type ValueHistory } from "@decider/ui";
 import { debugpyLibs, pythonCommand } from "./python";
 import { runComparison, type Side } from "./compareRuns";
 import { withBridge } from "./bridge";
 import { EditorBridge, type EditorAction } from "./editorBridge";
 import { StructureProvider } from "./structure";
+import { ExperimentsProvider, exists, resultUri, type ExperimentItem } from "./experiments";
 
 let lineageChannel: vscode.OutputChannel | undefined;
 /** The pipeline the views show: its file and name. */
 let shown: { file: string; pipeline: string } | undefined;
 /** Forces and value breakpoints set in the flow panel; every decider launch starts with them. */
 let controls: Controls = { forces: [], watches: [] };
+let extensionContext: vscode.ExtensionContext;
+/** The experiment the summary view has open: run and open-report act on it. */
+let openExperimentUri: vscode.Uri | undefined;
 
 export function activate(ctx: vscode.ExtensionContext) {
+  extensionContext = ctx;
   const structure = new StructureProvider();
   const tree = vscode.window.createTreeView("decider.structure", { treeDataProvider: structure, showCollapseAll: true });
+  const experiments = new ExperimentsProvider();
+  const experimentsTree = vscode.window.createTreeView("decider.experiments", { treeDataProvider: experiments });
 
   const showGraph = (file: string, describe: DescribeResult) => {
     shown = { file, pipeline: describe.pipeline };
@@ -32,6 +39,8 @@ export function activate(ctx: vscode.ExtensionContext) {
       resolveDebugConfiguration: (_folder, config) => ({ ...config, controls: config.controls ?? controls }),
     }),
     tree,
+    experimentsTree,
+    { dispose: () => experiments.dispose() },
     vscode.languages.registerCodeLensProvider({ language: "python" }, new PipelineCodeLens()),
     vscode.debug.registerDebugAdapterDescriptorFactory("decider", {
       createDebugAdapterDescriptor: () =>
@@ -93,6 +102,9 @@ export function activate(ctx: vscode.ExtensionContext) {
     }),
 
     vscode.commands.registerCommand("decider.experiment", runExperiment),
+    vscode.commands.registerCommand("decider.openExperiment", openExperiment),
+    vscode.commands.registerCommand("decider.openExperimentReport", openExperimentReport),
+    vscode.commands.registerCommand("decider.newExperiment", newExperiment),
 
     vscode.commands.registerCommand("decider.focusRecord", async () => {
       const s = deciderSession();
@@ -174,11 +186,11 @@ async function openPipeline(ask: boolean) {
   await vscode.commands.executeCommand("decider.visualise", uri);
 }
 
-async function onWebview(m: FromUI, describe: DescribeResult) {
+async function onWebview(m: FromUI, describe?: DescribeResult) {
   const s = deciderSession();
   switch (m.type) {
     case "reveal": {
-      const node = findNode(describe, m.path);
+      const node = describe && findNode(describe, m.path);
       if (node?.file) await reveal(node.file, node.line);
       break;
     }
@@ -315,11 +327,17 @@ async function onWebview(m: FromUI, describe: DescribeResult) {
       break;
     case "openDiff":
       if (lastFiles) {
-        const node = findNode(describe, m.path);
+        const node = describe && findNode(describe, m.path);
         await vscode.commands.executeCommand("vscode.diff", vscode.Uri.file(lastFiles.a), vscode.Uri.file(lastFiles.b), `${path.basename(lastFiles.b)}: ${lastFiles.label} ↔ working tree`, {
           selection: node?.line ? new vscode.Range(node.line - 1, 0, node.line - 1, 0) : undefined,
         });
       }
+      break;
+    case "experimentRun":
+      if (openExperimentUri) await runExperiment(openExperimentUri, { pickDataset: m.pickDataset });
+      break;
+    case "experimentOpenReport":
+      if (openExperimentUri) await openExperimentReport(openExperimentUri);
       break;
   }
 }
@@ -344,24 +362,120 @@ async function runSweep(list: Scenario[], fromHere: boolean) {
 /** The files of the latest revision comparison, for "view code diff". */
 let lastFiles: { a: string; b: string; label: string } | undefined;
 
-/** Run a project-owned `experiments/<slug>/experiment.yaml` headlessly and show its result. */
-async function runExperiment() {
-  const yamls = await vscode.workspace.findFiles("**/experiment.yaml", "**/{node_modules,.venv,.git}/**", 200);
-  if (!yamls.length) return vscode.window.showInformationMessage("decider: no experiment.yaml found (expected experiments/<slug>/experiment.yaml)");
-  const pick = await vscode.window.showQuickPick(
-    yamls.map((u) => ({ label: vscode.workspace.asRelativePath(u), uri: u })).sort((a, b) => a.label.localeCompare(b.label)),
-    { placeHolder: "Experiment to run", matchOnDescription: true },
-  );
-  if (!pick) return;
-  post({ type: "experiment", experiment: null });
-  try {
-    const result = await withBridge({ python: pythonCommand(), cwd: path.dirname(pick.uri.fsPath) }, (b) =>
-      b.request<ExperimentResult>("experiment", { yaml: pick.uri.fsPath }),
-    );
-    post({ type: "experiment", experiment: result });
-  } catch (e) {
-    void vscode.window.showErrorMessage(`decider: experiment failed: ${(e as Error).message}`);
+/** Every `experiment.json` in the workspace, or `undefined` with a message when there's none. */
+async function pickExperiment(): Promise<vscode.Uri | undefined> {
+  const files = await vscode.workspace.findFiles("**/experiment.json", "**/{node_modules,.venv,.git}/**", 200);
+  if (!files.length) {
+    void vscode.window.showInformationMessage("decider: no experiment.json found (expected experiments/<slug>/experiment.json)");
+    return undefined;
   }
+  const pick = await vscode.window.showQuickPick(
+    files.map((u) => ({ label: vscode.workspace.asRelativePath(u), uri: u })).sort((a, b) => a.label.localeCompare(b.label)),
+    { placeHolder: "Experiment" },
+  );
+  return pick?.uri;
+}
+
+/** The tree view passes its `ExperimentItem`; the palette passes nothing. */
+function experimentUri(arg?: vscode.Uri | ExperimentItem): vscode.Uri | undefined {
+  return arg instanceof vscode.Uri ? arg : arg?.uri;
+}
+
+/** A dataset file to run on instead of the definition's own `input.path`, or `undefined` if cancelled. */
+async function pickDataset(): Promise<string | undefined> {
+  const picked = await vscode.window.showOpenDialog({
+    canSelectMany: false,
+    openLabel: "Run on this dataset",
+    filters: { "Data files": ["parquet", "csv", "jsonl", "ndjson", "json"] },
+  });
+  return picked?.[0]?.fsPath;
+}
+
+/** Run a project-owned `experiment.json` headlessly, with a cancellable progress notification, and show its
+ * result. `pickDataset` asks for a dataset to run on first, instead of the definition's own `input.path`. */
+async function runExperiment(arg?: vscode.Uri | ExperimentItem, opts: { pickDataset?: boolean } = {}) {
+  const target = experimentUri(arg) ?? (await pickExperiment());
+  if (!target) return;
+  const input = opts.pickDataset ? await pickDataset() : undefined;
+  if (opts.pickDataset && input === undefined) return;
+  openExperimentUri = target;
+  await GraphPanel.ensureOpen(extensionContext, (m) => onWebview(m));
+  post({ type: "experiment", experiment: null });
+  await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: `decider: running ${vscode.workspace.asRelativePath(target)}`, cancellable: true },
+    async (progress, token) => {
+      try {
+        const result = await withBridge({ python: pythonCommand(), cwd: path.dirname(target.fsPath) }, async (b) => {
+          const id = b.peekNextId();
+          const sub = token.onCancellationRequested(() => void b.cancel(id));
+          let done = 0;
+          try {
+            return await b.request<ExperimentResult>("experiment", { definition: target.fsPath, ...(input ? { input } : {}) }, (p) => {
+              progress.report({
+                message: p.total ? `${p.done.toLocaleString()}/${p.total.toLocaleString()} records` : `${p.done.toLocaleString()} records`,
+                increment: p.total ? ((p.done - done) / p.total) * 100 : undefined,
+              });
+              done = p.done;
+            });
+          } finally {
+            sub.dispose();
+          }
+        });
+        post({ type: "experiment", experiment: result });
+      } catch (e) {
+        void vscode.window.showErrorMessage(`decider: experiment failed: ${(e as Error).message}`);
+      }
+    },
+  );
+}
+
+/** Open `experiment.json`'s summary: its scenarios, metrics, plots and report, read-only (editing stays in
+ * Python), with buttons to run it and to open its last report. */
+async function openExperiment(arg?: vscode.Uri | ExperimentItem) {
+  const target = experimentUri(arg) ?? (await pickExperiment());
+  if (!target) return;
+  const definition = JSON.parse((await vscode.workspace.fs.readFile(target)).toString()) as ExperimentDef;
+  openExperimentUri = target;
+  await GraphPanel.ensureOpen(extensionContext, (m) => onWebview(m));
+  try {
+    const hasResult = await exists(resultUri(target));
+    const { problems } = await withBridge({ python: pythonCommand(), cwd: path.dirname(target.fsPath) }, (b) =>
+      b.request<{ problems: string[] }>("experiment_validate", { definition: target.fsPath }),
+    );
+    post({ type: "experimentSummary", definition, hasResult, problems });
+  } catch (e) {
+    void vscode.window.showErrorMessage(`decider: couldn't open ${vscode.workspace.asRelativePath(target)}: ${(e as Error).message}`);
+  }
+}
+
+/** Open the `result.json` next to an experiment, if a run has left one. */
+async function openExperimentReport(arg?: vscode.Uri | ExperimentItem) {
+  const target = experimentUri(arg) ?? (await pickExperiment());
+  if (!target) return;
+  try {
+    const experiment = JSON.parse((await vscode.workspace.fs.readFile(resultUri(target))).toString()) as ExperimentResult;
+    openExperimentUri = target;
+    await GraphPanel.ensureOpen(extensionContext, (m) => onWebview(m));
+    post({ type: "experiment", experiment });
+  } catch {
+    void vscode.window.showInformationMessage("decider: no result.json next to this experiment yet; run it first");
+  }
+}
+
+/** Scaffold a minimal `experiment.json` under `experiments/<slug>/` and open it. */
+async function newExperiment() {
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  if (!folder) return void vscode.window.showInformationMessage("decider: open a workspace folder first");
+  const name = await vscode.window.showInputBox({ prompt: "Experiment name" });
+  if (!name) return;
+  const entry = await vscode.window.showInputBox({ prompt: "Flow entry point", placeHolder: "my_pipeline:build" });
+  if (!entry) return;
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "experiment";
+  const file = vscode.Uri.joinPath(folder.uri, "experiments", slug, "experiment.json");
+  if (await exists(file)) return void vscode.window.showErrorMessage(`decider: ${vscode.workspace.asRelativePath(file)} already exists`);
+  const definition: ExperimentDef = { version: "2", name, flow: { entry }, scenarios: [], metrics: [], plots: [] };
+  await vscode.workspace.fs.writeFile(file, Buffer.from(JSON.stringify(definition, null, 2) + "\n"));
+  await openExperiment(file);
 }
 
 /** "Run to" breakpoints: gone once the run pauses there or the session ends, like run to cursor. */

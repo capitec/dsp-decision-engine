@@ -8,7 +8,8 @@ One request per line on stdin, one reply per line on the reply stream:
 `describe` imports the file and reports its pipelines and IR without running
 anything. `start` opens a session; the stepping commands mirror `Session`.
 Replies to stepping commands carry the events produced since the last reply.
-`pause` is answered at once, even while a `resume` is running.
+`pause` is answered at once, even while a `resume` is running; so is `cancel`
+(`target`: another request's id), stopping its job at the next batch.
 
 Run with `--debugpy PORT` to also listen for a debugpy attach, so the IDE can
 drop into the Python of one step.
@@ -34,6 +35,7 @@ from decider.engine.debug.edit import swap
 from decider.engine.debug.lineage import attribution, latest, lineage
 from decider.engine.ir.context import step_map, to_ir
 from decider.debug_bridge.forks import checkpoint_key, sweep
+from decider.lifecycle import JobHandle
 from decider.debug_bridge.replay import trace
 from decider.engine.params import merge
 from decider.serving.handler import RequestHandler
@@ -100,6 +102,7 @@ class Bridge:
         self.lock = threading.Lock()
         self.session = None
         self.sent = 0
+        self._jobs: dict[int, JobHandle] = {}
 
     def _load(self, file):
         return load_module(file) if file else self.notebook()
@@ -410,9 +413,9 @@ class Bridge:
         if cmd in ("describe", "start", "state", "column", "step_out", "trace", "sweep", "compare_edits", "set_controls", "changes", "go_to", "rerun", "draft"):
             result = getattr(self, cmd)(**args)
             return self.status() if cmd == "step_out" else result
-        if cmd == "experiment":
-            from .experiment import run_experiment
-            return run_experiment(self, **args)
+        if cmd in ("experiment", "experiment_schema", "experiment_validate"):
+            from . import experiment
+            return experiment.run_experiment(self, req, **args) if cmd == "experiment" else getattr(experiment, cmd)(self, **args)
         s = self.session
         if s is None:
             raise RuntimeError("no session: send start first")
@@ -466,12 +469,12 @@ class Bridge:
                 if not line.strip():
                     continue
                 req = json.loads(line)
-                if req.get("cmd") == "pause":
-                    if self.session is not None:
-                        self.session.pause()
-                    self._reply(req, {"ok": True, "result": {}})
-                else:
-                    requests.put(req)
+                cmd = req.get("cmd")
+                if cmd == "pause" and self.session is not None:
+                    self.session.pause()
+                elif cmd == "cancel" and (job := self._jobs.get(req.get("target"))) is not None:
+                    job.cancel()
+                self._reply(req, {"ok": True, "result": {}}) if cmd in ("pause", "cancel") else requests.put(req)
             requests.put(None)
 
         threading.Thread(target=read, daemon=True).start()

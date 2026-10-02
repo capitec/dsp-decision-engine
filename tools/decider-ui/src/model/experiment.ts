@@ -1,96 +1,134 @@
-// The experiment result as `decider.experiments.run` serialises it, and the
-// pure helpers the experiments view renders with. Kept JSON-shaped on purpose:
-// the wire form is the contract, and these helpers are what the UI unit-tests.
+// `experiment.json` (`ExperimentDef`) and its result as `decider.experiments.run` serialises them, plus the pure
+// helpers the summary and results views render with. Kept JSON-shaped on purpose: the wire form is the contract.
 
-export type ExperimentRunStatus =
-  | "completed"
-  | "non_reproducible"
-  | "partial"
-  | "failed"
-  | "cancelled"
-  | "timed_out";
+export type ExperimentRunStatus = "completed" | "non_reproducible" | "partial" | "failed" | "cancelled" | "timed_out";
+export type ScenarioStatus = "completed" | "failed";
 
-export type ScenarioStatus = "completed" | "failed" | "resumed" | "skipped";
-
-export interface Finding {
-  kind: string;
-  scenario?: string;
-  location?: string;
-  expected?: unknown;
-  actual?: unknown;
-  message?: string;
+export interface FlowSpec {
+  entry: string;
+  decider?: string;
 }
+
+export interface InputSpec {
+  path?: string;
+}
+
+export interface ScenarioDef {
+  name: string;
+  revision?: string | null;
+  params?: Record<string, unknown>;
+  overrides?: Record<string, unknown>;
+  at?: string | null;
+  row?: number | null;
+}
+
+/** A registered `Metric`/`Plot`/report `Block`: `type` picks the shape, the rest is type-specific and kept open
+ * so a definition round-trips through editing even for a type this build doesn't know about. */
+export interface Typed {
+  type: string;
+  [key: string]: unknown;
+}
+
+export interface MetricDef extends Typed {
+  name?: string;
+  nodes?: string | null;
+  node_id?: string | null;
+}
+
+export interface PlotDef extends Typed {
+  metric: string;
+  name?: string;
+  width?: number | null;
+  height?: number | null;
+}
+
+export type ReportBlock = Typed & { blocks?: ReportBlock[] };
+
+export interface Report {
+  title?: string;
+  blocks: ReportBlock[];
+}
+
+export interface ExperimentDef {
+  version?: string;
+  name: string;
+  description?: string;
+  flow: FlowSpec;
+  revision?: string;
+  input?: InputSpec;
+  scenarios: ScenarioDef[];
+  metrics: MetricDef[];
+  plots: PlotDef[];
+  batch_size?: number;
+  determinism?: boolean;
+  report?: Report | null;
+}
+
+/** A plot or chart, already rendered: `vega-embed` draws either grammar from the same `spec`. */
+export interface Figure {
+  grammar: "vega-lite" | "vega";
+  spec: Record<string, unknown>;
+}
+
+/** One metric's result for one scenario; its shape depends on the metric type, so it stays open. */
+export type MetricSummary = Record<string, unknown>;
 
 export interface ScenarioResult {
   name: string;
   status: ScenarioStatus;
   error?: string | null;
-  divergences: Finding[];
-  output_ref?: { name: string; location: string; row_count?: number | null } | null;
-  row_count?: number | null;
   revision?: { authored: string; resolved?: string | null } | null;
   params?: Record<string, unknown>;
   overrides?: Record<string, unknown>;
+  at?: string | null;
   row?: number | null;
-}
-
-export interface ExperimentScenarioSummary {
-  name: string;
-  status: ScenarioStatus;
-  error?: string | null;
-  changed: Record<string, number[]>;
-  unchanged: Record<string, number>;
-  unique: Record<string, number>;
-  path_counts: Record<string, Record<string, number>>;
-  step_differences: string[];
-  drill_down: Record<string, { row: number; expected: unknown; actual: unknown }[]>;
-}
-
-export interface ExperimentSummary {
-  outputs: string[];
-  first_divergence: { scenario: string; location: string } | null;
-  scenarios: ExperimentScenarioSummary[];
-}
-
-export interface SankeyNode {
-  id: string;
-  label: string;
-  kind: "input" | "arm" | "outcome";
-}
-
-export interface SankeyLink {
-  source: string;
-  target: string;
-  value: number;
-}
-
-export interface Sankey {
-  outcome: string;
-  nodes: SankeyNode[];
-  links: SankeyLink[];
-  paths?: Record<string, Record<string, number>>;
+  records: number;
+  output_ref?: { name: string; location: string } | null;
 }
 
 export interface ExperimentResult {
-  name?: string;
-  status: ExperimentRunStatus;
-  nondeterministic?: boolean;
   manifest?: {
     revision?: { authored?: string; resolved?: string | null } | null;
     input?: { dataset: string; fingerprint: string | null; columns: [string, string][]; row_count: number | null } | null;
   };
+  status: ExperimentRunStatus;
+  name?: string;
+  nondeterministic?: boolean;
   scenarios: ScenarioResult[];
-  summary?: ExperimentSummary;
-  sankey?: Sankey | null;
   job?: { message?: string; error?: string | null; done?: number; total?: number | null } | null;
+  summaries: Record<string, Record<string, MetricSummary>>;
+  plots: Record<string, Figure>;
+  definition?: ExperimentDef | null;
+}
+
+/** One registered type's JSON Schema, from the `experiment_schema` bridge command. */
+export interface TypeSchema {
+  properties: Record<string, { type?: string; default?: unknown; description?: string; [key: string]: unknown }>;
+  required?: string[];
+  /** The Python `Summary` subclass's name: what a metric gives, or what a plot needs; matching the two picks valid plots for a metric. */
+  summary?: string;
+  requires?: string;
+  [key: string]: unknown;
+}
+
+export interface ExperimentSchema {
+  metrics: Record<string, TypeSchema>;
+  plots: Record<string, TypeSchema>;
+  blocks: Record<string, TypeSchema>;
+}
+
+/** The plot types whose `requires` matches the metric's `summary`, for the plot type picker. */
+export function plotTypesFor(schema: ExperimentSchema, metricType: string): string[] {
+  const summary = schema.metrics[metricType]?.summary;
+  return Object.entries(schema.plots)
+    .filter(([, s]) => s.requires === summary)
+    .map(([type]) => type);
 }
 
 /** One line that says what the run is, never letting a non-reproducible or partial run read as done. */
 export function experimentHeadline(r: ExperimentResult): string {
-  const scenarioCount = (r.scenarios ?? []).length;
-  const divergences = (r.scenarios ?? []).reduce((t, s) => t + (s.divergences?.length ?? 0), 0);
+  const scenarioCount = r.scenarios.length;
   const bits = [`${scenarioCount} scenario${scenarioCount === 1 ? "" : "s"}`];
-  if (divergences) bits.push(`${divergences} divergence${divergences === 1 ? "" : "s"}`);
   if (r.status === "non_reproducible") bits.push("non-reproducible: a baseline rerun diverged");
   if (r.status === "partial") bits.push("partial: some scenarios did not finish");
   if (r.status === "cancelled") bits.push("cancelled");
@@ -98,96 +136,106 @@ export function experimentHeadline(r: ExperimentResult): string {
   return bits.join(" · ");
 }
 
-/** The status as the badge reads: the three non-completed states are named, never "done". */
+/** The status as the badge reads: the five non-completed states are named, never "done". */
 export function statusLabel(status: ExperimentRunStatus): string {
-  return {
-    completed: "completed",
-    non_reproducible: "non-reproducible",
-    partial: "partial",
-    failed: "failed",
-    cancelled: "cancelled",
-    timed_out: "timed out",
-  }[status] ?? status;
+  return (
+    {
+      completed: "completed",
+      non_reproducible: "non-reproducible",
+      partial: "partial",
+      failed: "failed",
+      cancelled: "cancelled",
+      timed_out: "timed out",
+    }[status] ?? status
+  );
 }
 
-/** Whether the run counts as a deterministic, finished comparison. */
-export function isDeterministicComplete(r: ExperimentResult): boolean {
-  return r.status === "completed" && !r.nondeterministic;
+/** The report to render: the run's own, or Python's default (an overview, then a section per metric). */
+export function reportOf(r: ExperimentResult): Report {
+  return r.definition?.report ?? { title: "", blocks: defaultReportBlocks(r) };
 }
 
-/** A scenario is a candidate for the debug hand-off only when it actually ran. */
-export function isRunnableScenario(s: ScenarioResult): boolean {
-  return s.status === "completed" || s.status === "failed";
+function defaultReportBlocks(r: ExperimentResult): ReportBlock[] {
+  return [{ type: "overview" }, ...Object.keys(r.summaries).map((metric) => ({ type: "metric_section", metric }))];
 }
 
-/** A flat list of nodes at `depth` (shortest path from the source), for a layered Sankey layout. */
-export function sankeyDepths(s: Sankey): Map<string, number> {
-  const depth = new Map<string, number>();
-  const adj = new Map<string, string[]>();
-  for (const l of s.links) {
-    if (!adj.has(l.source)) adj.set(l.source, []);
-    adj.get(l.source)!.push(l.target);
-    if (!adj.has(l.target)) adj.set(l.target, []);
-  }
-  const source = s.nodes.find((n) => n.kind === "input")?.id ?? s.links[0]?.source ?? "";
-  const queue = [source];
-  depth.set(source, 0);
-  while (queue.length) {
-    const id = queue.shift()!;
-    for (const next of adj.get(id) ?? []) {
-      if (!depth.has(next)) {
-        depth.set(next, depth.get(id)! + 1);
-        queue.push(next);
-      }
+/** The plots that draw `metric`, by their key in `result.plots` (a plot's own `name`, or its `metric`). */
+export function plotsForMetric(def: ExperimentDef | null | undefined, metric: string): string[] {
+  return (def?.plots ?? []).filter((p) => p.metric === metric).map((p) => (p.name ? p.name : p.metric));
+}
+
+/** One summary flattened into a table row's cells, nested objects joined with `.` like the Python report. */
+export function flattenSummary(summary: MetricSummary): Record<string, string> {
+  const out: Record<string, string> = {};
+  const walk = (value: unknown, prefix: string) => {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      for (const [k, v] of Object.entries(value)) walk(v, prefix ? `${prefix}.${k}` : k);
+    } else {
+      out[prefix] = formatCell(value);
     }
-  }
-  for (const n of s.nodes) if (!depth.has(n.id)) depth.set(n.id, 0);
-  return depth;
+  };
+  for (const [k, v] of Object.entries(summary)) walk(v, k);
+  return out;
 }
 
-export interface SankeyLayout {
-  nodes: { id: string; x: number; y: number; w: number; h: number; label: string; kind: SankeyNode["kind"] }[];
-  links: { source: string; target: string; value: number; x1: number; y1: number; x2: number; y2: number }[];
-  width: number;
-  height: number;
+function formatCell(value: unknown): string {
+  if (value == null) return "";
+  if (Array.isArray(value)) {
+    const shown = value.slice(0, 6).map((v) => (typeof v === "number" ? String(Math.round(v * 10000) / 10000) : String(v)));
+    return `[${shown.join(", ")}${value.length > 6 ? ", …" : ""}] (${value.length})`;
+  }
+  return String(value);
 }
 
-const NODE_W = 120;
-const NODE_H = 26;
-const GAP = 18;
-const MARGIN = 10;
+/** A table's rows (one per scenario) and the union of columns across them, for a generic summary table. */
+export function summaryTable(byScenario: Record<string, MetricSummary>): { columns: string[]; rows: Record<string, string>[] } {
+  const rows = Object.entries(byScenario).map(([scenario, s]) => ({ scenario, ...flattenSummary(s) }));
+  const columns = [...new Set(rows.flatMap((r) => Object.keys(r)))];
+  return { columns, rows };
+}
 
-/** Lay out a Sankey in columns by depth, one node per row, sized by its flow. */
-export function sankeyLayout(s: Sankey): SankeyLayout {
-  const depth = sankeyDepths(s);
-  const maxDepth = Math.max(0, ...depth.values());
-  const total = s.links.reduce((t, l) => t + l.value, 0);
-  const byDepth = new Map<number, SankeyNode[]>();
-  for (const n of s.nodes) {
-    const d = depth.get(n.id) ?? 0;
-    if (!byDepth.has(d)) byDepth.set(d, []);
-    byDepth.get(d)!.push(n);
+/** What a scenario changed, for the overview table: its params, overrides (and where), or another revision. */
+export function scenarioChanges(s: ScenarioResult): string {
+  const bits: string[] = [];
+  if (s.params && Object.keys(s.params).length) bits.push(`params ${JSON.stringify(s.params)}`);
+  if (s.overrides && Object.keys(s.overrides).length) {
+    const where = (s.at ? ` after ${s.at}` : "") + (s.row != null ? ` on record ${s.row}` : "");
+    bits.push(`set ${JSON.stringify(s.overrides)}${where}`);
   }
-  const height = Math.max(200, (Math.max(...[...byDepth.values()].map((v) => v.length), 1)) * (NODE_H + GAP) + MARGIN * 2);
-  const width = (maxDepth + 1) * (NODE_W + GAP) + MARGIN;
-  const flow = (id: string) => s.links.filter((l) => l.target === id).reduce((t, l) => t + l.value, 0) || total;
-  const nodes = [] as SankeyLayout["nodes"];
-  const pos = new Map<string, { x: number; y: number; w: number; h: number }>();
-  for (const [d, list] of byDepth) {
-    const x = MARGIN + d * (NODE_W + GAP);
-    const colH = list.length * (NODE_H + GAP) - GAP;
-    let y = (height - colH) / 2;
-    for (const n of list) {
-      const h = Math.max(NODE_H, (flow(n.id) / Math.max(total, 1)) * height * 0.6);
-      pos.set(n.id, { x, y, w: NODE_W, h });
-      nodes.push({ id: n.id, x, y, w: NODE_W, h, label: n.label, kind: n.kind });
-      y += h + GAP;
-    }
+  if (s.revision) bits.push(`revision ${s.revision.authored}`);
+  return bits.join("; ") || "unchanged";
+}
+
+/** What a scenario (in the definition, not a result) changes, for the read-only summary. */
+export function scenarioDefSummary(s: ScenarioDef): string {
+  const bits: string[] = [];
+  if (s.params && Object.keys(s.params).length) bits.push(`params ${JSON.stringify(s.params)}`);
+  if (s.overrides && Object.keys(s.overrides).length) {
+    const where = (s.at ? ` after ${s.at}` : "") + (s.row != null ? ` on record ${s.row}` : "");
+    bits.push(`set ${JSON.stringify(s.overrides)}${where}`);
   }
-  const links = s.links.map((l) => {
-    const a = pos.get(l.source);
-    const b = pos.get(l.target);
-    return { ...l, x1: a ? a.x + a.w : 0, y1: a ? a.y + a.h / 2 : 0, x2: b ? b.x : 0, y2: b ? b.y + b.h / 2 : 0 };
-  });
-  return { nodes, links, width, height };
+  if (s.revision) bits.push(`revision ${s.revision}`);
+  return bits.join("; ") || "unchanged";
+}
+
+/** A `Typed`'s fields beyond the given ones, as `key: value` pairs, for a read-only metric/plot/block line. */
+export function typedFields(t: Typed, skip: Set<string>): [string, string][] {
+  return Object.entries(t)
+    .filter(([k, v]) => !skip.has(k) && v != null && v !== "")
+    .map(([k, v]) => [k, typeof v === "object" ? JSON.stringify(v) : String(v)]);
+}
+
+/** `markdown` as HTML: escaped first, then `**bold**` and `*italic*`, paragraphs on blank lines.
+ * Not CommonMark — a `text` block's prose rarely needs more, and a full parser is a dependency for 20 lines. */
+export function renderMarkdownLite(markdown: string): string {
+  const escape = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const inline = (s: string) =>
+    escape(s)
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/(?<!\*)\*(?!\*)(.+?)\*(?!\*)/g, "<em>$1</em>")
+      .replace(/\n/g, "<br/>");
+  return markdown
+    .split(/\n\s*\n/)
+    .map((p) => `<p>${inline(p)}</p>`)
+    .join("");
 }

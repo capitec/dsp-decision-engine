@@ -176,18 +176,56 @@ them. `merge` moved to `decider.engine.params`.
 
 ## Follow-up: the UI and the VS Code extension
 
-Not ported in this pass:
+Ported, against this contract:
 
-- `tools/vscode-decider/src/extension.ts` finds `**/experiment.yaml` and sends
-  `{yaml: path}`; the bridge command now takes `{definition: path}` and the
-  asset is `experiment.json`.
-- `tools/decider-ui/src/model/experiment.ts`, `Experiments.tsx`,
-  `Sankey.tsx` read `summary` (changed/unchanged/unique/drill_down,
-  first_divergence), `sankey`, `ScenarioResult.divergences` and
-  `resumed`/`skipped` statuses. The result now has `summaries`
-  (`{metric: {scenario: summary}}`) and `plots` (`{plot: {grammar, spec}}`);
-  `vega-embed` renders either grammar, so the UI can drop its own Sankey
-  drawing. The old nodes/links shape is still `summaries[<branch_flows>]`.
+- The bridge (`decider/debug_bridge/experiment.py`) gained `experiment_schema`
+  (`Metric`/`Plot`/`Block` JSON Schemas, each metric/plot schema carrying its
+  `summary`/`requires` class name) and `experiment_validate`
+  (`decider.experiments.validate` without running anything). `experiment`
+  itself now streams `{"progress": {"done", "total"}}` lines on its request
+  id — the bridge's lock around `_reply` already let a second writer
+  interleave (the existing `pause` ack proved it), so this needed no new
+  transport, just a `Callback` that calls `bridge._reply`. `cancel` (naming a
+  `target` request id) is handled out-of-band by the same reader thread that
+  already special-cases `pause`, via a small `Bridge._jobs` registry of
+  `JobHandle`s. `node_json` (`decider/contract/describing.py`) now carries
+  each step's durable `id`. `experiment` also takes `input=`, overriding the
+  definition's own `input.path` for that one run.
+- `tools/vscode-decider/src/bridge.ts`'s `Bridge.request` takes an optional
+  `onProgress`; it only resolves (and drops the message from `pending`) on a
+  reply that has an `"ok"` key, forwarding anything else to `onProgress`.
+- The VS Code extension reuses the single `GraphPanel` webview (now openable
+  without a flow `describe`, via `GraphPanel.ensureOpen`) for the experiment
+  summary and the result view alike, switching on the `ToUI` message's type —
+  the same pattern the flow graph and the old experiment result already
+  used, rather than a second panel class. A `decider.experiments` tree view
+  lists every `experiment.json`; `decider.openExperiment` opens a read-only
+  summary of its scenarios, metrics, plots and report (`experiment_validate`'s
+  problems shown inline), with buttons to run it — optionally on another
+  dataset, via a native file picker — and to open its last report;
+  `decider.experiment` (Run) and `decider.openExperimentReport` do the same
+  from the tree. A first pass built a full in-webview form editor
+  (scenarios table, metric/plot pickers off `experiment_schema`, a report
+  outline); it was dropped after review — editing stays in Python (the file,
+  or the `Experiment` builder), the webview only browses and runs what's
+  already there. `experiment_schema` stays in the bridge regardless: it's a
+  small, independently useful capability, just not one this UI calls today.
+- `tools/decider-ui/src/model/experiment.ts` is now `ExperimentDef` and
+  `ExperimentResult` as the Python side actually serialises them:
+  `summaries` (`{metric: {scenario: summary}}`), `plots`
+  (`{plot: {grammar, spec}}`), and a `definition.report` tree. `VegaChart.tsx`
+  is the one `vega-embed` touchpoint (dynamically imported, so it's its own
+  lazy-loaded chunk); `Sankey.tsx`'s hand-rolled layout is gone along with it
+  — a branch-flows Sankey arrives as a ready Vega spec like any other plot.
+  `vega`/`vega-lite`/`vega-embed` are real npm dependencies (peer + dev on
+  `@decider/ui`, matching how it already depends on `react`), not a CDN; the
+  extension host's own esbuild/Rolldown bundle externalises them, since only
+  the webview ever renders a chart.
+- Not built: a step picker for a metric's `nodes`/`node_id` (plain text
+  fields today, with `experiment_validate` catching a bad one) — it would
+  need a bridge command that describes a flow by its `entry` string rather
+  than a file, which nothing offers yet; `decider.contract.describe` (over
+  `load_flow(entry)`) is the natural fit when this is worth building.
 
 ## Open
 

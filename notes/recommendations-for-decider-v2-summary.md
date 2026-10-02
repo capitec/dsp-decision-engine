@@ -65,3 +65,5 @@
 **Where it fits in `decider`, and the honest limitation.** `decider` deliberately keeps pipeline *structure* in Python, for a recorded reason: in its predecessor, structure lived in both code and configuration and the two disagreed — a flow declaring 51 steps, a generated file with 120, and a real flow with 192. That is sound, and it means this recommendation can only apply to the parts of a flow that are already data: its parameter documents and its configurable trees, decision tables and scorecards under `configs/`. That is, in practice, where most day-to-day policy change happens. Structure defined in Python would remain reviewed as code.
 >>> i think we can in steps have an id that we auto assign somehow in a determanistic way and allow the user to add a custom step id if they want maybe even s form of code gen where we automatically assign step ids or names on the first run or with use of a decider command <<< - Might be usefult for both debugging and parameters
 
+
+

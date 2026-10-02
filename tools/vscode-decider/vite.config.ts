@@ -15,7 +15,9 @@ export default defineConfig({
       fileName: (_fmt, name) => `${name}.js`,
     },
     rollupOptions: {
-      external: ["vscode", "mocha", ...builtinModules, ...builtinModules.map((m) => `node:${m}`)],
+      // vega-embed (reached via @decider/ui's App, for the experiment report) is browser-only: the extension
+      // host never renders it, and vega-canvas's top-level `await import("canvas")` can't bundle for cjs anyway.
+      external: ["vscode", "mocha", "vega", "vega-lite", "vega-embed", ...builtinModules, ...builtinModules.map((m) => `node:${m}`)],
     },
     outDir: "dist",
     emptyOutDir: false,

@@ -21,10 +21,19 @@ export interface BridgeOptions {
  * back on fd 3, so user `print()`s in steps go to stdout and cannot corrupt the
  * protocol.
  */
+/** A `{"done", "total"}` line an in-flight request reports before its final reply. */
+export interface Progress {
+  done: number;
+  total: number | null;
+}
+
 export class Bridge {
   private proc: ChildProcess;
   private nextId = 1;
-  private pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
+  private pending = new Map<
+    number,
+    { resolve: (v: unknown) => void; reject: (e: Error) => void; onProgress?: (p: Progress) => void }
+  >();
   readonly exited: Promise<number | null>;
 
   constructor(opts: BridgeOptions) {
@@ -58,7 +67,7 @@ export class Bridge {
   }
 
   private onReply(line: string) {
-    let msg: { id: number; ok: boolean; result?: unknown; error?: string };
+    let msg: { id: number; ok?: boolean; result?: unknown; error?: string; progress?: Progress };
     try {
       msg = JSON.parse(line);
     } catch {
@@ -66,16 +75,30 @@ export class Bridge {
     }
     const p = this.pending.get(msg.id);
     if (!p) return;
+    if (!("ok" in msg)) {
+      if (msg.progress) p.onProgress?.(msg.progress);
+      return;
+    }
     this.pending.delete(msg.id);
     msg.ok ? p.resolve(msg.result) : p.reject(new Error(msg.error));
   }
 
-  request<T = unknown>(cmd: string, args: Record<string, unknown> = {}): Promise<T> {
+  request<T = unknown>(cmd: string, args: Record<string, unknown> = {}, onProgress?: (p: Progress) => void): Promise<T> {
     const id = this.nextId++;
     return new Promise<T>((resolve, reject) => {
-      this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject });
+      this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject, onProgress });
       this.proc.stdin!.write(JSON.stringify({ id, cmd, ...args }) + "\n");
     });
+  }
+
+  /** Stop the in-flight request `id` (an `experiment` run) at its next batch boundary. */
+  cancel(id: number): Promise<void> {
+    return this.request<void>("cancel", { target: id });
+  }
+
+  /** The id the next `request()` call will use; read it just before that call, with nothing else racing it. */
+  peekNextId(): number {
+    return this.nextId;
   }
 
   async dispose(): Promise<void> {
