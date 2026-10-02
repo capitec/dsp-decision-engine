@@ -24,7 +24,7 @@ experiments/
   runner.py        batches x scenarios -> hooks; nothing else
   callbacks.py     Callback hooks, Batch / NodeBatch / Run, Progress, JobProgress, WriteOutputs
   metrics/         Metric + Summary base; ValueCounts, Describe, Divergence, BranchFlows
-  plots/           Plot base (requires a Summary type); Bars, Changes (Vega-Lite), Sankey
+  plots/           Plot + Figure; Bars, Changes (altair), Sankey (vendored Vega template)
   revision.py      git resolve / worktree checkout
   _worker.py       subprocess for another revision
 ```
@@ -40,9 +40,23 @@ experiments/
   (`on_batch_end`, the flow's output) or per node (`nodes="term/*"`, an
   `fnmatch` glob on node paths, fed by `on_node_end`).
 - **Plots require a summary type.** `Plot.requires` is checked against the
-  named metric's `summary` in `validate`, before anything runs. Bars and
-  Changes return Vega-Lite specs (interactive in JupyterLab and VS Code with
-  no extra dependency); Sankey keeps the nodes/links shape the UI draws.
+  named metric's `summary` in `validate`, before anything runs. `render`
+  returns an altair chart (Bars, Changes) or, for what Vega-Lite can't
+  express, a full Vega spec; the result keeps a `Figure`
+  (`{"grammar": "vega-lite" | "vega", "spec": {...}}`) that shows itself in a
+  notebook through altair's renderers (`spec_to_html(mode="vega")` for Vega).
+  `ExperimentResult.show()` lays a run out with IPython `Markdown`, polars
+  tables and the figures. altair and IPython are the `experiments` extra and
+  are imported only when a plot renders or something shows; a missing one
+  raises a `DeciderError` naming the extra.
+- **Sankey is the one spec we own.** Vega-Lite has no Sankey and there is no
+  maintained Python builder for full Vega, so `plots/sankey.vg.json` is David
+  Bacci's Vega Sankey (MIT, `plots/sankey.vg.LICENSE`) with its data emptied,
+  node labels and record counts in labels and tooltips, the footer dropped
+  and the stack domain sorted (upstream relied on its data's order). `Sankey`
+  injects one row per node and link; a node's stack is its longest path from
+  the input, so nested arms take one stack per branch depth and sequential
+  branches don't collapse into one column; outcomes are always the last stack.
 - **Lockstep batches.** For each batch the baseline runs first, then every
   scenario on the same records; `Batch.baseline` and `NodeBatch.baseline`
   carry the baseline's values for those records, so any metric can compare in
@@ -126,9 +140,9 @@ Not ported in this pass:
   `Sankey.tsx` read `summary` (changed/unchanged/unique/drill_down,
   first_divergence), `sankey`, `ScenarioResult.divergences` and
   `resumed`/`skipped` statuses. The result now has `summaries`
-  (`{metric: {scenario: summary}}`) and `plots` (`{plot: payload}`); a Sankey
-  is `plots[<name>].scenarios[<scenario>]` with the old nodes/links shape, and
-  Bars/Changes are Vega-Lite specs (`vega-embed` renders them).
+  (`{metric: {scenario: summary}}`) and `plots` (`{plot: {grammar, spec}}`);
+  `vega-embed` renders either grammar, so the UI can drop its own Sankey
+  drawing. The old nodes/links shape is still `summaries[<branch_flows>]`.
 
 ## Open
 

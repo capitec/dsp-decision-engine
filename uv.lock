@@ -825,6 +825,7 @@ dependencies = [
 
 [package.optional-dependencies]
 all = [
+    { name = "altair" },
     { name = "anyio" },
     { name = "furo" },
     { name = "graphviz" },
@@ -863,6 +864,11 @@ docs = [
 eval = [
     { name = "simpleeval" },
 ]
+experiments = [
+    { name = "altair" },
+    { name = "ipython", version = "8.39.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "ipython", version = "9.14.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+]
 notebook = [
     { name = "ipython", version = "8.39.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "ipython", version = "9.14.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
@@ -881,6 +887,7 @@ visualise = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "altair" },
     { name = "anyio" },
     { name = "ipython", version = "8.39.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "ipython", version = "9.14.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
@@ -892,6 +899,8 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "altair", marker = "extra == 'all'" },
+    { name = "altair", marker = "extra == 'experiments'" },
     { name = "anyio", marker = "extra == 'all'" },
     { name = "anyio", marker = "extra == 'dev'" },
     { name = "click" },
@@ -901,6 +910,7 @@ requires-dist = [
     { name = "graphviz", marker = "extra == 'all'" },
     { name = "graphviz", marker = "extra == 'visualise'" },
     { name = "ipython", marker = "extra == 'all'" },
+    { name = "ipython", marker = "extra == 'experiments'" },
     { name = "ipython", marker = "extra == 'notebook'" },
     { name = "myst-nb", marker = "extra == 'all'" },
     { name = "myst-nb", marker = "extra == 'docs'" },
@@ -930,10 +940,11 @@ requires-dist = [
     { name = "uvicorn", marker = "extra == 'all'" },
     { name = "uvicorn", marker = "extra == 'serve-starlette'" },
 ]
-provides-extras = ["all", "dev", "docs", "eval", "notebook", "serve-sanic", "serve-starlette", "visualise"]
+provides-extras = ["all", "dev", "docs", "eval", "experiments", "notebook", "serve-sanic", "serve-starlette", "visualise"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "altair" },
     { name = "anyio" },
     { name = "ipython", specifier = ">=8.39.0" },
     { name = "pytest" },

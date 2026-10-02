@@ -39,6 +39,7 @@ from decider.experiments.callbacks import Batch, Callback, JobProgress, NodeBatc
 from decider.experiments.experiments import (BASELINE, ExperimentDef, ExperimentResult, RunStatus, Scenario,
                                              ScenarioResult, ScenarioStatus, check_experiment_version, validate)
 from decider.experiments.metrics.base import Metric
+from decider.experiments.plots.base import Figure
 from decider.experiments.revision import compatible, materialise, remove, resolve
 from decider.lifecycle import (Environment, InputFingerprint, JobHandle, ResultRef, Revision, RunManifest,
                                new_manifest_id)
@@ -140,7 +141,7 @@ def run_experiment(def_: ExperimentDef, step, frame: Frame, params=None, *, call
         manifest=_manifest(def_, step, frame, total, resolve(def_.revision), results), status=status,
         name=def_.name, nondeterministic=nondeterministic, scenarios=results, preflight=report,
         job=job.snapshot() if job is not None else None, summaries=summaries,
-        plots={p.key: p.render(summaries[p.metric]) for p in def_.plots},
+        plots={p.key: Figure.of(p.render(summaries[p.metric])) for p in def_.plots},
     )
     if out_dir is not None:
         Path(out_dir).mkdir(parents=True, exist_ok=True)
