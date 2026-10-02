@@ -3,6 +3,7 @@ from __future__ import annotations
 import typing as t
 from collections import Counter
 
+import numpy as np
 import polars as pl
 
 from decider.experiments.callbacks import Batch, NodeBatch
@@ -93,3 +94,87 @@ class Describe(_ColumnMetric):
         mean = self._total / self._count if self._count else None
         return Stats(column=self.column, count=self._count, nulls=self._nulls, mean=mean,
                      min=self._min, max=self._max)
+
+
+class Bins(Summary):
+    """Records per bin of `column`: `counts[i]` lies in `[edges[i], edges[i + 1])`, the last bin closed.
+
+    `below`, `above` and `nulls` count what fell outside the bins.
+    """
+
+    column: str
+    edges: list[float]
+    counts: list[int]
+    below: int
+    above: int
+    nulls: int
+
+
+class Histogram(_ColumnMetric):
+    """How `column`'s values spread over bins, accumulated batch by batch.
+
+    `edges` fixes the bins, or `range` spans `bins` equal-width ones; without
+    either they span the baseline's first batch, so every scenario counts into
+    the same bins. Give a `range` when a scenario moves values past the
+    baseline's, or they only count as `above`/`below`.
+
+    Example::
+
+        Histogram(column="rate", nodes="loans/pricing/*", bins=30, range=(0.0, 0.4))
+    """
+
+    type: t.Literal["histogram"] = "histogram"
+    summary: t.ClassVar = Bins
+    bins: int = 20
+    range: tuple[float, float] | None = None
+    edges: list[float] | None = None
+
+    def reset(self) -> None:
+        if self.edges is not None:
+            self._edges = np.asarray(self.edges, float)
+        else:
+            self._edges = None if self.range is None else np.linspace(*self.range, self.bins + 1)
+        self._counts = None
+        self._below = self._above = self._nulls = 0
+
+    def on_batch_end(self, batch: Batch) -> None:
+        if self.nodes is None:
+            self._ensure_edges(batch.baseline[self.column])
+            self._add(batch.output[self.column])
+
+    def on_node_end(self, node: NodeBatch) -> None:
+        if self.column in node.values.columns:
+            # ponytail: a scenario reaching a node the baseline's first batch skipped bins on its own values.
+            reference = node.baseline.values if node.baseline is not None else node.values
+            self._ensure_edges(reference[self.column])
+            self._add(node.values[self.column])
+
+    def _ensure_edges(self, reference: pl.Series) -> None:
+        if self._edges is not None:
+            return
+        values = _numbers(reference)
+        lo, hi = (float(values.min()), float(values.max())) if values.size else (0.0, 1.0)
+        if lo == hi:
+            lo, hi = lo - 0.5, hi + 0.5
+        self._edges = np.linspace(lo, hi, self.bins + 1)
+
+    def _add(self, values: pl.Series) -> None:
+        numbers = _numbers(values)
+        self._nulls += values.len() - numbers.size
+        lo, hi = self._edges[0], self._edges[-1]
+        self._below += int((numbers < lo).sum())
+        self._above += int((numbers > hi).sum())
+        counts = np.histogram(numbers, self._edges)[0]
+        self._counts = counts if self._counts is None else self._counts + counts
+
+    def summarise(self) -> Bins:
+        edges = [] if self._edges is None else self._edges.tolist()
+        counts = [0] * max(len(edges) - 1, 0) if self._counts is None else self._counts.tolist()
+        return Bins(column=self.column, edges=edges, counts=counts, below=self._below, above=self._above,
+                    nulls=self._nulls)
+
+
+def _numbers(values: pl.Series) -> np.ndarray:
+    # Nulls and NaN have no bin.
+    numbers = values.drop_nulls().cast(pl.Float64).to_numpy()
+    return numbers[~np.isnan(numbers)]

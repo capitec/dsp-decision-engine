@@ -35,7 +35,7 @@ class Figure(BaseModel):
 
     Example::
 
-        result.plots["changes"].show()
+        result.plots["divergence"].show()
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -57,7 +57,7 @@ class Figure(BaseModel):
     def _repr_mimebundle_(self, include=None, exclude=None):
         alt = altair()
         if self.grammar == "vega-lite":
-            return alt.Chart.from_dict(self.spec, validate=False)._repr_mimebundle_(include, exclude)
+            return alt.Chart.from_dict(self.spec)._repr_mimebundle_(include, exclude)
         from altair.utils.html import spec_to_html
 
         html = spec_to_html(self.spec, mode="vega", vega_version=alt.VEGA_VERSION,
@@ -70,8 +70,9 @@ class Plot(BaseRegistryModule, root=True):
     """A pluggable plot of one metric's summaries, one per scenario.
 
     `metric` names the metric it draws (its `name`, or its type tag when
-    unnamed); `requires` is the `Summary` type it can draw, checked before the
-    run starts. `render` returns an altair chart, or a full Vega spec for what
+    unnamed), and keys the plot in `result.plots` unless `name` is set;
+    `requires` is the `Summary` type it can draw, checked before the run
+    starts. `render` returns an altair chart, or a full Vega spec for what
     Vega-Lite can't express; the result keeps it as a `Figure`.
 
     Example::
@@ -92,7 +93,7 @@ class Plot(BaseRegistryModule, root=True):
 
     @property
     def key(self) -> str:
-        return self.name or self.type
+        return self.name or self.metric
 
     def render(self, summaries: dict[str, Summary]) -> t.Any:
         raise NotImplementedError

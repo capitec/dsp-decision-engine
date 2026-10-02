@@ -708,7 +708,7 @@ result = (Experiment("drift", pipeline, df)
           .run())
 assert result.status is RunStatus.COMPLETED
 assert result.summaries["divergence"]["limit_0.3"].first == 0
-assert result.plots["changes"].grammar == "vega-lite"   # result.plots["changes"].show() in a notebook
+assert result.plots["divergence"].grammar == "vega-lite"   # .show() draws it in a notebook
 ```
 
 Nondeterminism is a first-class result (`NON_REPRODUCIBLE`), never silent; a
