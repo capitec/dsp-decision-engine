@@ -684,9 +684,12 @@ executes; a `Metric` collects through hooks (`on_batch_end` for the flow's
 output, `on_node_end` for what nodes matching its `nodes` glob wrote) and
 `summarise`s into a typed `Summary`, which a `Plot` requiring that type draws
 with altair (`pip install 'decider[experiments]'`). The definition saves as
-`experiment.json`; subclass `Metric`, `Plot` or `Callback` for your own. In a
-notebook, `result.show()` lays out the run and `result.plots[name].show()` one
-chart.
+`experiment.json` (`Experiment.save` / `Experiment.load`); subclass `Metric`,
+`Plot`, `Callback` or a report `Block` for your own. A metric reads the flow's
+output, or steps by `nodes="<glob>"` or a durable `node_id`. `.report(...)`
+lays out blocks (`Overview`, `Text`, `Table`, `Chart`, `Row`, `Section`) that
+`result.show()` draws in a notebook and `result.save_html(path)` writes as a
+page; without one it shows an overview and a section per metric.
 
 ```python
 import polars as pl

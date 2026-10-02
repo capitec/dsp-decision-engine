@@ -138,31 +138,6 @@ def test_ranges_draws_min_mean_and_max_per_scenario(pipeline, frame):
     assert "vega-embed" in ranges._repr_mimebundle_()["text/html"]  # a layered chart shows as one too
 
 
-def test_result_show_gives_each_metric_its_table_and_charts(pipeline, frame, monkeypatch):
-    import IPython.display
-
-    shown = []
-    monkeypatch.setattr(IPython.display, "display", lambda *objs: shown.extend(objs))
-    result = (Experiment("x", pipeline, frame)
-              .scenario("limit_0.3", params=LIMIT_03)
-              .metric(Divergence(column="tier"), ValueCounts(column="approved", nodes="demo/approved"))
-              .plot(Changes(metric="divergence"))
-              .run())
-    result.show()
-
-    assert shown[0].data.startswith("### x: completed")
-    assert shown[1]["changes"].to_list() == ["unchanged", 'params {"demo": {"approved": {"limit": 0.3}}}']
-    assert shown[2].data == "#### divergence\n\n`divergence` of `tier` in the flow's output"
-    assert shown[4] is result.plots["divergence"]
-    assert shown[5].data == "#### value_counts\n\n`value_counts` of `approved` at steps matching `demo/approved`"
-    assert shown[6]["counts.True"].to_list() == [3, 2]
-    assert shown[7].grammar == "vega-lite"  # no plot named value_counts, so the built-in Bars draws it
-
-    shown.clear()
-    result.plots["divergence"].show()
-    assert shown == [result.plots["divergence"]]
-
-
 def test_a_result_with_plots_round_trips_through_json(pipeline, frame):
     result = _sweep(pipeline, frame)
     restored = ExperimentResult.model_validate_json(result.model_dump_json())

@@ -7,7 +7,6 @@ to draw from them. Execution lives in `decider.experiments.runner`.
 """
 from __future__ import annotations
 
-import json
 from collections import Counter
 from fnmatch import fnmatchcase
 from enum import Enum
@@ -24,7 +23,9 @@ from decider.engine.ir.nodes import iter_nodes
 from decider.exceptions import DeciderError
 from decider.experiments.callbacks import Callback
 from decider.experiments.metrics.base import Metric, MetricRef, Summary
+from decider.experiments import report
 from decider.experiments.plots.base import Figure, Plot, PlotRef, ipython_display
+from decider.experiments.report import Block, Report
 from decider.lifecycle import Job, JobHandle, ResultRef, Revision, RunManifest
 
 EXPERIMENT_VERSION = "2"
@@ -78,7 +79,8 @@ class ExperimentDef(BaseModel):
     The baseline is the unchanged flow, always run first, under the name
     `"baseline"`. `batch_size` records run per batch, so progress shows and no
     metric needs the whole input; `determinism` reruns each baseline batch and
-    flags a differing rerun as non-reproducible.
+    flags a differing rerun as non-reproducible. `report` lays out what
+    `result.show()` and `result.save_html()` show.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -94,6 +96,7 @@ class ExperimentDef(BaseModel):
     plots: list[PlotRef] = []
     batch_size: int = 100_000
     determinism: bool = True
+    report: Report | None = None
 
 
 class RunStatus(str, Enum):
@@ -138,8 +141,8 @@ class ExperimentResult(BaseModel):
     """A finished (or stopped) run: the manifest, statuses, and what the metrics and plots produced.
 
     `summaries` is `{metric: {scenario: Summary}}`, for scenarios that
-    completed; `plots` is `{plot: Figure}`. In a notebook, `show()` lays the
-    whole run out, and `plots[name].show()` one chart.
+    completed; `plots` is `{plot: Figure}`. In a notebook, `show()` draws the
+    report and `plots[name].show()` one chart; `save_html` writes the report.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -156,89 +159,19 @@ class ExperimentResult(BaseModel):
     definition: ExperimentDef | None = None
 
     def show(self) -> None:
-        """Show the run in a notebook: its status and scenarios, then each metric with its table and charts.
-
-        A metric no plot draws gets the built-in plot for its summary type, so every summary is drawn.
-        """
+        """Show the report in a notebook: the experiment's own, or an overview and a section per metric."""
         ipy = ipython_display()
-        ipy.display(ipy.Markdown(self._heading()), pl.DataFrame([{
-            "scenario": s.name, "status": s.status.value, "records": s.records,
-            "revision": s.revision.resolved[:12] if s.revision and s.revision.resolved else None,
-            "changes": _changes(s), "error": s.error,
-        } for s in self.scenarios]))
-        metrics = {m.key: m for m in self.definition.metrics} if self.definition else {}
-        plots = self.definition.plots if self.definition else []
-        for key, by_scenario in self.summaries.items():
-            metric = metrics.get(key)
-            rows = [{"scenario": name, **_flat(s.model_dump())} for name, s in by_scenario.items()]
-            figures = [self.plots[p.key] for p in plots if p.metric == key and p.key in self.plots]
-            if not figures and by_scenario:
-                figures = [Figure.of(p.render(by_scenario)) for p in _default_plots(key, by_scenario)]
-            ipy.display(ipy.Markdown(f"#### {key}\n\n{_where(metric)}"),
-                        pl.DataFrame(rows, infer_schema_length=None), *figures)
+        ipy.display(ipy.HTML(report.fragment(self)))
 
-    def _heading(self) -> str:
-        revision = self.manifest.revision
-        records = self.manifest.input.row_count if self.manifest.input else None
-        parts = [f"{records:,} records" if records is not None else "",
-                 f"revision `{(revision.resolved or revision.authored)[:12]}`" if revision else "",
-                 f"{len(self.scenarios) - 1} scenario(s) next to the baseline"]
-        lines = [f"### {self.name}: {self.status.value}", " · ".join(p for p in parts if p)]
-        if self.nondeterministic:
-            lines.append("**A rerun of the baseline differed: this flow is not reproducible.**")
-        return "\n\n".join(lines)
+    def html(self) -> str:
+        """The report as a standalone HTML page."""
+        return report.page(self)
 
-
-def _changes(s: ScenarioResult) -> str:
-    bits = []
-    if s.params:
-        bits.append(f"params {json.dumps(s.params)}")
-    if s.overrides:
-        where = (f" after {s.at}" if s.at else "") + (f" on record {s.row}" if s.row is not None else "")
-        bits.append(f"set {json.dumps(s.overrides)}{where}")
-    if s.revision:
-        bits.append(f"revision {s.revision.authored}")
-    return "; ".join(bits) or "unchanged"
-
-
-def _where(metric: Metric | None) -> str:
-    if metric is None:
-        return ""
-    column = getattr(metric, "column", None) or getattr(metric, "outcome", None)
-    what = f"`{metric.type}`" + (f" of `{column}`" if column else "")
-    if metric.node_id:
-        return f"{what} at the step with id `{metric.node_id}`"
-    return f"{what} at steps matching `{metric.nodes}`" if metric.nodes else f"{what} in the flow's output"
-
-
-def _default_plots(key: str, by_scenario: dict[str, Summary]) -> list[Plot]:
-    summary = type(next(iter(by_scenario.values())))
-    found = [cls for cls in _subclasses(Plot) if cls.requires is summary and cls.__module__.startswith("decider.")]
-    return [found[0](metric=key)] if found else []
-
-
-def _subclasses(cls: type) -> list[type]:
-    return [c for sub in cls.__subclasses__() for c in (sub, *_subclasses(sub))]
-
-
-def _flat(fields: dict[str, Any], prefix: str = "") -> dict[str, Any]:
-    out: dict[str, Any] = {}
-    for key, value in fields.items():
-        if isinstance(value, dict):
-            out.update(_flat(value, f"{prefix}{key}."))
-        elif isinstance(value, list):
-            out[prefix + key] = _short(value)
-        else:
-            out[prefix + key] = value
-    return out
-
-
-def _short(values: list) -> str:
-    if values and all(isinstance(v, (int, float)) for v in values):
-        shown = ", ".join(f"{v:.4g}" if isinstance(v, float) else str(v) for v in values[:6])
-        return f"[{shown}{', …' if len(values) > 6 else ''}] ({len(values)})"
-    text = json.dumps(values, default=str)
-    return text if len(text) <= 80 else text[:77] + "..."
+    def save_html(self, path: str | Path) -> Path:
+        """Write the report to `path` as one HTML page; its charts load Vega from the CDN when opened."""
+        path = Path(path)
+        path.write_text(self.html())
+        return path
 
 
 def check_experiment_version(version: str | None) -> None:
@@ -275,6 +208,8 @@ def validate(def_: ExperimentDef, step) -> list[str]:
     plots = Counter(p.key for p in def_.plots)
     problems += [f"two plots are named {n!r} (an unnamed plot takes its metric's name); set name= on one"
                  for n, k in plots.items() if k > 1]
+    if def_.report is not None:
+        problems += report.problems(def_.report, set(metrics), set(plots))
     for p in def_.plots:
         m = metrics.get(p.metric)
         if m is None:
@@ -357,6 +292,11 @@ class Experiment:
 
     def plot(self, *plots: Plot) -> Experiment:
         self.def_.plots.extend(plots)
+        return self
+
+    def report(self, *blocks: Block, title: str = "") -> Experiment:
+        """Lay out the report `result.show()` draws, top to bottom; see `decider.experiments.report`."""
+        self.def_.report = Report(title=title, blocks=list(blocks))
         return self
 
     def callback(self, *callbacks: Callback) -> Experiment:
