@@ -155,6 +155,10 @@ class RequestHandler:
         self.activate()
 
     def pipeline_fn(self, config: dict[str, t.Any]) -> Step:
+        if _is_flow_file(self.pipeline):
+            from decider.flowfile import load_flow
+
+            return load_flow(self.pipeline, documents=config)
         target = pkgutil.resolve_name(self.pipeline) if isinstance(self.pipeline, str) else self.pipeline
         if isinstance(target, Step):
             return target
@@ -240,6 +244,10 @@ def _dates(exe: Executable) -> dict[str, t.Any]:
     return {v.name: struct_item(v.annotation) or v.annotation for v in _inputs(exe) if has_date(v.annotation)}
 
 
+def _is_flow_file(pipeline: t.Any) -> bool:
+    return isinstance(pipeline, str) and pipeline.endswith((".yaml", ".yml", ".json"))
+
+
 def construct_handler_from_settings() -> RequestHandler:
     """The handler `settings.api` describes: `Handler` from `inference.py` in `code_path` if there is one."""
     from decider.settings import settings
@@ -252,9 +260,14 @@ def construct_handler_from_settings() -> RequestHandler:
         if path in sys.path:
             sys.path.remove(path)
         sys.path.insert(0, path)
-    pipeline_module = importlib.import_module(settings.api.pipeline.partition(":")[0])
-    # Shows a pipeline imported from the wrong project before it serves the wrong answers.
-    print(f"decider: pipeline {settings.api.pipeline} from {pipeline_module.__file__}", file=sys.stderr)
+    pipeline = settings.api.pipeline
+    if _is_flow_file(pipeline):
+        pipeline = os.path.join(code_path, pipeline)
+        print(f"decider: pipeline from flow file {pipeline}", file=sys.stderr)
+    else:
+        pipeline_module = importlib.import_module(pipeline.partition(":")[0])
+        # Shows a pipeline imported from the wrong project before it serves the wrong answers.
+        print(f"decider: pipeline {pipeline} from {pipeline_module.__file__}", file=sys.stderr)
     module_name, _, class_name = settings.api.handler.partition(":")
     constructor = RequestHandler
     try:
@@ -269,5 +282,5 @@ def construct_handler_from_settings() -> RequestHandler:
                 f"{handler_module.__file__} has no {class_name!r}; define `class {class_name}(RequestHandler)` "
                 f"there, or point DECIDER_API__HANDLER at the module:class that holds your handler.")
         print(f"decider: handler {settings.api.handler} from {handler_module.__file__}", file=sys.stderr)
-    return constructor(settings.config.get(), settings.api.pipeline, settings.api.mode,
+    return constructor(settings.config.get(), pipeline, settings.api.mode,
                        sample_request=os.path.join(code_path, "sample_request.json"))

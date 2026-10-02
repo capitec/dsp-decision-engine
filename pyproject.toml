@@ -21,6 +21,7 @@ visualise       = ["streamlit", "graphviz"]
 notebook        = ["ipython"]
 experiments     = ["altair", "ipython", "markdown-it-py"]
 eval            = ["simpleeval"]
+yaml            = ["pyyaml"]
 dev = [
     "pytest",
     "pytest-asyncio",
@@ -40,6 +41,7 @@ all = [
     "ipython",
     "altair",
     "simpleeval",
+    "pyyaml",
     "pytest",
     "pytest-asyncio",
     "anyio",

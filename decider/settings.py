@@ -20,7 +20,8 @@ class ServeSettings(BaseModel):
 
 
 class APISettings(BaseModel):
-    """What the server serves: `pipeline` and `handler` are import paths, resolved from `code_path`."""
+    """What the server serves: `handler` is an import path; `pipeline` is an import path or a
+    `.yaml`/`.yml`/`.json` flow file, both resolved from `code_path`."""
     code_path: str = "."
     pipeline: str = "pipeline:build"
     handler: str = "inference:Handler"

@@ -299,8 +299,8 @@ def test_branch_names_anonymous_arms_by_position():
 
 
 def test_branch_needs_arms_modifies_and_a_name():
-    with pytest.raises(ValueError, match="two arms"):
-        branch(is_private, ratio, modifies=["ratio"], name="b")
+    with pytest.raises(ValueError, match="at least one arm"):
+        branch(is_private, modifies=["ratio"], name="b")
     with pytest.raises(ValueError, match="modifies"):
         branch(is_private, ratio, ratio, modifies=[], name="b")
     with pytest.raises(TypeError):
