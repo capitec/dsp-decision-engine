@@ -234,7 +234,7 @@ class InterpretedRunner:
             items = row_list or ()
             for item in items:
                 for name in names:
-                    flat[name].append(item[name])
+                    flat[name].append(item.get(name))
             offsets.append(offsets[-1] + len(items))
         elem_state = State(state.plan, pl.DataFrame(), offsets[-1])
         for (name, v) in sg.fields:

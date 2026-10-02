@@ -18,6 +18,12 @@ export class GraphPanel {
   }
 
   static async show(ctx: vscode.ExtensionContext, describe: DescribeResult, onMessage: (m: FromUI) => void): Promise<void> {
+    await GraphPanel.ensureOpen(ctx, onMessage);
+    GraphPanel.current!.post({ type: "describe", describe });
+  }
+
+  /** Open the panel (or reveal it) without describing a flow — for a view, like the experiment editor, that isn't one. */
+  static async ensureOpen(ctx: vscode.ExtensionContext, onMessage: (m: FromUI) => void): Promise<void> {
     if (!GraphPanel.current) {
       GraphPanel.opening ??= (async () => {
         let column = vscode.ViewColumn.Beside;
@@ -26,14 +32,12 @@ export class GraphPanel {
           column = vscode.ViewColumn.Two;
         }
         GraphPanel.current = new GraphPanel(ctx, onMessage, column);
-        GraphPanel.current.post({ type: "describe", describe });
         for (const m of GraphPanel.early.splice(0)) GraphPanel.current.post(m);
       })().finally(() => (GraphPanel.opening = undefined));
       await GraphPanel.opening;
       return;
     }
     GraphPanel.current.panel.reveal(undefined, true);
-    GraphPanel.current.post({ type: "describe", describe });
   }
 
   private constructor(ctx: vscode.ExtensionContext, onMessage: (m: FromUI) => void, column: vscode.ViewColumn) {

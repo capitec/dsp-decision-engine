@@ -7,7 +7,8 @@ import { Inspector, type Runtime, type Selection } from "./Inspector";
 import { groupsOf } from "./Controls";
 import { Structure } from "./Structure";
 import { Experiments } from "./Experiments";
-import type { ExperimentResult, ScenarioResult } from "./model/experiment";
+import { ExperimentSummary } from "./ExperimentSummary";
+import type { ExperimentDef, ExperimentResult, ScenarioResult } from "./model/experiment";
 
 // Flows up to this many steps start fully open; bigger ones start folded, a group at a time.
 const OPEN_ALL = 80;
@@ -50,6 +51,7 @@ function View({ send, listen, can, showStructure = true, showBreakpointForm = tr
   const [keyCol, setKeyCol] = useState<RecordKey>(null);
   const [controls, setControls] = useState<Controls>({ forces: [], watches: [] });
   const [experiment, setExperiment] = useState<ExperimentResult | null>(null);
+  const [summary, setSummary] = useState<{ definition: ExperimentDef; hasResult: boolean; problems: string[] } | null>(null);
 
   useEffect(() => {
     const stop = listen((m) => {
@@ -83,6 +85,11 @@ function View({ send, listen, can, showStructure = true, showBreakpointForm = tr
           break;
         case "experiment":
           setExperiment(m.experiment);
+          setSummary(null);
+          break;
+        case "experimentSummary":
+          setSummary({ definition: m.definition, hasResult: m.hasResult, problems: m.problems });
+          setExperiment(null);
           break;
         case "controls":
           // Pushed from outside (e.g. a host-side breakpoint view) — mirror it, don't echo it back.
@@ -139,6 +146,20 @@ function View({ send, listen, can, showStructure = true, showBreakpointForm = tr
 
   const runtime: Runtime = { run, columns, rows, keyCol, controls, groups };
 
+  if (summary) {
+    return (
+      <ExperimentSummary
+        definition={summary.definition}
+        hasResult={summary.hasResult}
+        problems={summary.problems}
+        onRun={() => send({ type: "experimentRun" })}
+        onRunOnDataset={() => send({ type: "experimentRun", pickDataset: true })}
+        onOpenReport={() => send({ type: "experimentOpenReport" })}
+        onClose={() => setSummary(null)}
+      />
+    );
+  }
+
   if (experiment) {
     return (
       <div className="app">
@@ -155,9 +176,8 @@ function View({ send, listen, can, showStructure = true, showBreakpointForm = tr
         <div className="body experiments-body">
           <Experiments
             result={experiment}
-            keyCol={keyCol}
-            onDebug={(scenario: ScenarioResult, row?: number) =>
-              send({ type: "debugScenario", params: scenario.params ?? {}, overrides: scenario.overrides ?? {}, row: row ?? scenario.row ?? null, label: scenario.name, forces: [] })
+            onDebug={(scenario: ScenarioResult) =>
+              send({ type: "debugScenario", params: scenario.params ?? {}, overrides: scenario.overrides ?? {}, row: scenario.row ?? null, label: scenario.name, forces: [] })
             }
           />
         </div>

@@ -58,7 +58,22 @@
       {
         "command": "decider.experiment",
         "title": "decider: Run experiment",
-        "icon": "$(beaker)"
+        "icon": "$(play)"
+      },
+      {
+        "command": "decider.openExperiment",
+        "title": "decider: Open experiment",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "decider.openExperimentReport",
+        "title": "decider: Open experiment report",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "decider.newExperiment",
+        "title": "decider: New experiment…",
+        "icon": "$(add)"
       },
       {
         "command": "decider.openPipeline",
@@ -71,6 +86,30 @@
           "command": "decider.compareRevision",
           "when": "resourceLangId == python",
           "group": "navigation"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "decider.newExperiment",
+          "when": "view == decider.experiments",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "decider.experiment",
+          "when": "view == decider.experiments",
+          "group": "inline"
+        },
+        {
+          "command": "decider.openExperiment",
+          "when": "view == decider.experiments",
+          "group": "inline"
+        },
+        {
+          "command": "decider.openExperimentReport",
+          "when": "view == decider.experiments && viewItem == experiment.hasResult",
+          "group": "inline"
         }
       ],
       "debug/toolBar": [
@@ -108,6 +147,10 @@
         {
           "id": "decider.structure",
           "name": "Structure"
+        },
+        {
+          "id": "decider.experiments",
+          "name": "Experiments"
         }
       ]
     },
@@ -115,6 +158,10 @@
       {
         "view": "decider.structure",
         "contents": "No flow shown yet.\n\nOpen the file that defines your pipeline, `def build()` or `pipeline = flow(...)`, and click `Visualise flow` in the line above it. The flow's steps appear here and in the flow panel.\n\n[Open a pipeline.py](command:decider.openPipeline)\n\nNo pipeline yet? `decider template NAME` writes a starter project."
+      },
+      {
+        "view": "decider.experiments",
+        "contents": "No experiment.json found.\n\nAn experiment runs a flow's baseline and scenarios over the same data and measures them.\n\n[New experiment…](command:decider.newExperiment)"
       }
     ],
     "configuration": {

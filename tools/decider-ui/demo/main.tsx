@@ -148,6 +148,19 @@ function Demo() {
       case "skip":
         flashToast(`skipping ${m.path.split("/").pop()} — not wired in this harness`);
         break;
+      case "experimentRun": {
+        const note = m.pickDataset ? "picking a dataset, then running" : "running";
+        flashToast(`${note} — no real bridge in this harness, showing the canned result`);
+        const result = experimentResult();
+        const input = { dataset: activeDataset.name, fingerprint: activeDataset.fingerprint, columns: activeDataset.columns, row_count: activeDataset.rowCount };
+        onRef.current({ type: "experiment", experiment: { ...result, manifest: { ...result.manifest, input } } });
+        break;
+      }
+      case "experimentOpenReport": {
+        const result = experimentResult();
+        onRef.current({ type: "experiment", experiment: result });
+        break;
+      }
       default:
         console.log("[demo] message to host", m);
     }
@@ -247,8 +260,11 @@ function Demo() {
     onRef.current({ type: "experiment", experiment: { ...result, manifest: { ...result.manifest, input } } });
   };
 
-  // Not wired yet — the sidebar only names and filters experiments for now.
-  const selectExperiment = (experiment: MockExperiment) => flashToast(`not wired in this harness: open ${experiment.name}`);
+  // Opens the editor for an experiment with no run yet, or its report when the mock says it has one.
+  const selectExperiment = (experiment: MockExperiment) => {
+    openTab({ id: "flow", kind: "flow" });
+    onRef.current({ type: "experimentSummary", definition: experiment.definition, hasResult: !!experiment.hasResult, problems: [] });
+  };
 
   // Picking a dataset in the sidebar stands in for pickData()'s quickpick/file dialog, plus
   // opens its own tab to preview — the real extension today has no equivalent of the second part.

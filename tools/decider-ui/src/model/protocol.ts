@@ -1,5 +1,5 @@
 import type { Comparison } from "./compare";
-import type { ExperimentResult } from "./experiment";
+import type { ExperimentDef, ExperimentResult } from "./experiment";
 import type { Scenario, Sweep } from "./sweep";
 
 // Shapes the Python bridge sends, and the messages between a host and the UI.
@@ -9,6 +9,8 @@ export interface IRNodeBase {
   source: string;
   file: string | null;
   line: number | null;
+  /** The step's durable id (12 hex), surviving renames; absent or `null` for a step that never got one. */
+  id?: string | null;
 }
 
 export interface CallNodeJson extends IRNodeBase {
@@ -352,6 +354,7 @@ export type ToUI =
   | { type: "sweep"; sweep: Sweep | null; busy?: string; error?: string }
   | { type: "draft"; draft: Draft | null }
   | { type: "experiment"; experiment: ExperimentResult | null }
+  | { type: "experimentSummary"; definition: ExperimentDef; hasResult: boolean; problems: string[] }
   | { type: "controls"; controls: Controls };
 
 /** Messages from the UI to the host. */
@@ -388,7 +391,12 @@ export type FromUI =
   /** Attach the Python debugger and stop on the first line of the step the run is paused before. */
   | { type: "debugStep" }
   | { type: "openDiff"; path: string }
-  | { type: "sweep"; scenarios: Scenario[]; fromHere: boolean };
+  | { type: "sweep"; scenarios: Scenario[]; fromHere: boolean }
+  /** Run the open experiment; `pickDataset` asks (via the host's file picker) for a dataset to run it on
+   * instead of its own `input.path`. */
+  | { type: "experimentRun"; pickDataset?: boolean }
+  /** Open the result next to the open experiment, if a run has left one. */
+  | { type: "experimentOpenReport" };
 
 export function walk(node: IRNodeJson, fn: (n: IRNodeJson, parent: IRNodeJson | null) => void, parent: IRNodeJson | null = null) {
   fn(node, parent);
