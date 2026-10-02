@@ -25,7 +25,7 @@ class Divergence(Metric):
     """How many records' `column` differs from the baseline's.
 
     Floats compare with polars `is_close` (`rtol`/`atol`, NaN equals NaN),
-    everything else exactly; null equals only null. With `nodes`, it compares
+    everything else exactly; null equals only null. On steps, it compares
     what the matching nodes wrote, on the records both runs sent through them.
 
     Example::
@@ -46,7 +46,7 @@ class Divergence(Metric):
         self._samples: list[dict[str, t.Any]] = []
 
     def on_batch_end(self, batch: Batch) -> None:
-        if self.nodes is None:
+        if not self.on_steps:
             rows = pl.Series(_ROW, np.arange(batch.offset, batch.offset + batch.output.height))
             self._compare(batch.output[self.column], batch.baseline[self.column], rows)
 

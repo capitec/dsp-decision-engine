@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from decider.exceptions import DeciderError
-from decider.experiments import (Bars, Changes, Divergence, Experiment, ExperimentDef, ValueCounts,
+from decider.experiments import (Bars, Changes, Describe, Divergence, Experiment, ExperimentDef, ValueCounts,
                                  check_experiment_version, compatible, validate)
 
 LIMIT_03 = {"demo": {"approved": {"limit": 0.3}}}
@@ -70,3 +70,33 @@ def test_the_engine_window_is_a_version_specifier():
     assert compatible(">=1.0,<2.0", "1.4.2")
     assert not compatible(">=1.0,<2.0", "2.0.0")
     assert compatible("", "0.1")
+
+
+def test_a_step_metric_must_name_a_step_that_exists():
+    from example_projects.experiments.loan_pipeline import build
+
+    def problems(**kwargs):
+        return validate(ExperimentDef(name="x", flow={"entry": "e:f"}, metrics=[Describe(column="rate", **kwargs)]),
+                        build())
+
+    assert problems(node_id="03ed37e0af6b") == [] and problems(nodes="loans/pricing/*") == []
+    assert problems(node_id="000000000000") == ["metric 'describe': no step has id '000000000000'"]
+    assert problems(nodes="loans/pricng/*") == ["metric 'describe': nodes='loans/pricng/*' matches no step"]
+    assert "pick one" in problems(nodes="loans/rate", node_id="03ed37e0af6b")[0]
+
+
+def test_an_experiment_loads_from_json_with_its_flow_and_input_beside_it(tmp_path):
+    from example_projects.experiments.loan_pipeline import applications, build
+
+    applications(300).write_parquet(tmp_path / "applications.parquet")
+    exp = (Experiment("x", build(), applications(1), entry="example_projects.experiments.loan_pipeline:build",
+                      input_path="applications.parquet")
+           .scenario("premium_8pct", params={"loans": {"pricing": {"unsecured": {"premium": 0.08}}}})
+           .metric(Divergence(column="approved"), Describe(column="rate", node_id="03ed37e0af6b"))
+           .plot(Changes(metric="divergence")))
+    loaded = Experiment.load(exp.save(tmp_path / "experiment.json"))
+
+    assert loaded.def_ == exp.def_
+    result = loaded.run()
+    assert result.manifest.input.row_count == 300
+    assert set(result.summaries["describe"]) == {"baseline", "premium_8pct"}

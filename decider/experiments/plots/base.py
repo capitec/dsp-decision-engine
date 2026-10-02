@@ -60,10 +60,11 @@ class Figure(BaseModel):
             return alt.Chart.from_dict(self.spec)._repr_mimebundle_(include, exclude)
         from altair.utils.html import spec_to_html
 
+        # altair's notebook template, in Vega mode: it waits for the scripts to load before drawing.
         html = spec_to_html(self.spec, mode="vega", vega_version=alt.VEGA_VERSION,
                             vegaembed_version=alt.VEGAEMBED_VERSION, vegalite_version=alt.VEGALITE_VERSION,
-                            output_div=f"vega-{uuid.uuid4().hex}", fullhtml=False)
-        return {"text/html": html, "text/plain": f"<Vega chart: {self.spec.get('description', '')}>"}
+                            output_div=f"vega-{uuid.uuid4().hex}", fullhtml=False, template="universal")
+        return {"text/html": html, "text/plain": f"<Vega chart: {self.spec.get('title', {}).get('text', '')}>"}
 
 
 class Plot(BaseRegistryModule, root=True):

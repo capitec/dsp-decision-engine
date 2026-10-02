@@ -46,7 +46,10 @@ experiments/
   (`{"grammar": "vega-lite" | "vega", "spec": {...}}`) that shows itself in a
   notebook through altair's renderers (`spec_to_html(mode="vega")` for Vega).
   `ExperimentResult.show()` lays a run out with IPython `Markdown`, polars
-  tables and the figures. altair and IPython are the `experiments` extra and
+  tables and the figures. Vega figures use altair's `"universal"` HTML
+  template: the `"standard"` one runs its embed before the CDN scripts load
+  when a notebook inserts the output, so a Sankey drew nothing (checked in
+  headless Chrome with notebook-style insertion). altair and IPython are the `experiments` extra and
   are imported only when a plot renders or something shows; a missing one
   raises a `DeciderError` naming the extra.
 - **Sankey is the one spec we own.** Vega-Lite has no Sankey and there is no
@@ -61,6 +64,13 @@ experiments/
   node hands what it passes on (its `modifies` names, merged over every
   record); a step inside an arm hands its outputs on only the records that arm
   took (`NodeBatch.rows`). Sequences and loops hand nothing yet.
+- **Steps by durable id.** `node_id=` matches a step's `Origin.id` (12 hex,
+  from `decider ids`) exactly, beside `nodes=` path globs; `validate` rejects
+  an id the flow lacks, a glob matching no step, or both at once.
+- **JSON is the asset.** `Experiment.save` / `Experiment.load` write and read
+  `experiment.json`; `load` imports `flow.entry` and scans `input.path`
+  relative to the file (`example_projects/experiments/premium_sweep/`).
+  `Metric.json_schema()` / `Plot.json_schema()` give a UI one form per type.
 - **Histogram bins are shared.** `Histogram` takes `edges`, or `range` and
   `bins`; without either it spans the baseline's first batch, which every
   scenario sees in lockstep, so all scenarios count into the same bins.
