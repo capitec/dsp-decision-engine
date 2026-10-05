@@ -100,7 +100,8 @@ class Report(BaseModel):
         sarif = report.to_sarif()
     """
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    # "ignore" so a dumped report, with its computed `ok` and `counts`, loads back.
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     flow: FlowRef
     findings: tuple[Finding, ...] = ()

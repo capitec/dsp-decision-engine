@@ -27,7 +27,8 @@ from typing import Any, Iterator, Sequence
 import polars as pl
 
 from decider.contract import describe
-from decider.data import LoadedData, preflight, scan
+from decider import checks
+from decider.data import LoadedData, scan
 from decider import Engine
 from decider._engine.debug.session import _cast
 from decider._engine.ir.decls import base_annotation
@@ -45,6 +46,7 @@ from decider.experiments.metrics._base import Metric
 from decider.experiments.plots._base import Figure
 from decider.diff._revisions import compatible, materialise, remove, resolve
 from decider.experiments._entry import import_flow, infer_entry
+from decider.experiments._cost import estimate_cost
 from decider.experiments._handle import RunHandle
 from decider.contract import Environment, InputFingerprint, JobHandle, ResultRef, Revision, RunManifest
 from decider.contract._manifest import new_manifest_id
@@ -103,7 +105,8 @@ def _run(def_: ExperimentDef, step, frame: Frame, params=None, *, callbacks: Seq
         raise ValueError("; ".join(problems))
     base_params = params if params is not None else step.parameters().defaults()
     total = _height(frame)
-    report = preflight(step, _collect(frame.head(def_.batch_size)), params=base_params)
+    sample = _collect(frame.head(def_.batch_size))
+    report = checks.run(step, ["missing_required", "invalid_params_doc"], data=sample, params=base_params)
     scenarios = [Scenario(name=BASELINE), *def_.scenarios]
     shared = [*callbacks, *([JobProgress(job)] if job else []), *([WriteOutputs(out_dir)] if out_dir else [])]
     metrics = {sc.name: [_fresh(m) for m in def_.metrics] for sc in scenarios}
@@ -144,7 +147,7 @@ def _run(def_: ExperimentDef, step, frame: Frame, params=None, *, callbacks: Seq
     ) for sc in scenarios)
     result = ExperimentResult(
         manifest=_manifest(def_, step, frame, total, resolve(def_.revision), results), status=status,
-        name=def_.name, nondeterministic=nondeterministic, scenarios=results, preflight=report,
+        name=def_.name, nondeterministic=nondeterministic, scenarios=results, preflight=report, cost=estimate_cost(step, sample.height),
         job=job.snapshot() if job is not None else None, summaries=summaries,
         plots={p.key: Figure.of(p.render(summaries[p.metric])) for p in def_.plots}, definition=def_,
     )

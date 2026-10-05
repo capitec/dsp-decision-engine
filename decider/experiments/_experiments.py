@@ -17,7 +17,9 @@ import polars as pl
 from pydantic import BaseModel, ConfigDict, SerializeAsAny, model_validator
 
 from decider.contract import describe
-from decider.data import PreflightReport, dataset, scan
+from decider.checks import Report as CheckReport
+from decider.data import dataset, scan
+from decider.experiments._cost import CostEstimate
 from decider.ir import iter_nodes, to_ir
 from decider.exceptions import DeciderError
 from decider.experiments.callbacks import Callback
@@ -160,7 +162,8 @@ class ExperimentResult(BaseModel):
     name: str = ""
     nondeterministic: bool = False
     scenarios: tuple[ScenarioResult, ...] = ()
-    preflight: PreflightReport | None = None
+    preflight: CheckReport | None = None
+    cost: CostEstimate | None = None
     job: Job | None = None
     summaries: dict[str, dict[str, SerializeAsAny[Summary]]] = {}
     plots: dict[str, Figure] = {}
