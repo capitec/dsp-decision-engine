@@ -157,6 +157,26 @@ def test_a_plain_python_caller_runs_a_json_definition_end_to_end(tmp_path, monke
     assert result.summaries["divergence"]["limit_0.3"].changed == 1
 
 
+def test_run_given_a_path_reads_the_input_relative_to_the_definition_file(tmp_path, monkeypatch):
+    (tmp_path / "credit.py").write_text(
+        "from decider import flow\n"
+        "def ratio(income, debt):\n"
+        "    return debt / income if income > 0 else 1.0\n"
+        "pipeline = flow(ratio, name='credit')\n"
+    )
+    pl.DataFrame({"income": [1000.0, 1000.0], "debt": [200.0, 350.0]}).write_parquet(tmp_path / "loans.parquet")
+    (tmp_path / "experiment.json").write_text(ExperimentDef(
+        name="drift", flow={"entry": "credit:pipeline"}, input={"path": "loans.parquet"},
+    ).model_dump_json())
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.chdir(elsewhere)
+
+    for given in (tmp_path / "experiment.json", str(tmp_path / "experiment.json")):
+        assert run(given).status is RunStatus.COMPLETED
+
+
 def test_resolve_turns_head_symbols_into_a_sha():
     sha = resolve("HEAD^")
     assert sha and len(sha) == 40 and all(c in "0123456789abcdef" for c in sha)

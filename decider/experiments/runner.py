@@ -41,7 +41,8 @@ from decider.exceptions import DeciderError
 from decider.experiments.callbacks import (Batch, Callback, JobProgress, NodeBatch, Run, WriteOutputs, overrides,
                                            selects)
 from decider.experiments.experiments import (BASELINE, ExperimentDef, ExperimentResult, RunStatus, Scenario,
-                                             ScenarioResult, ScenarioStatus, check_experiment_version, input_frame, validate)
+                                             ScenarioResult, ScenarioStatus, check_experiment_version, input_frame, read_definition,
+                                             validate)
 from decider.experiments.metrics.base import Metric
 from decider.experiments.plots.base import Figure
 from decider.experiments.revision import compatible, materialise, remove, resolve
@@ -51,19 +52,26 @@ from decider.lifecycle import (Environment, InputFingerprint, JobHandle, ResultR
 Frame = pl.DataFrame | pl.LazyFrame
 
 
-def run(def_: ExperimentDef, *, frame: Frame | None = None, out_dir: str | None = None,
+def run(def_: ExperimentDef | str | Path, *, frame: Frame | None = None, out_dir: str | None = None,
         job: JobHandle | None = None, callbacks: Sequence[Callback] = ()) -> ExperimentResult:
-    """Run `def_` headlessly: load the flow by `flow.entry` and, without `frame`, scan `input.path` or `input.dataset`.
+    """Run an experiment headlessly: load the flow by `flow.entry` and, without `frame`, scan `input.path` or `input.dataset`.
+
+    Give the path of an `experiment.json` and `input.path` is relative to that file and
+    `input.dataset` is looked up in its project. Given an `ExperimentDef`, `input.path`
+    is relative to the working directory.
 
     Example::
 
-        def_ = ExperimentDef.model_validate_json(Path("experiments/drift/experiment.json").read_text())
-        result = run(def_, out_dir="results/drift")
+        result = run("experiments/drift/experiment.json", out_dir="results/drift")
     """
+    file = None
+    if not isinstance(def_, ExperimentDef):
+        file = Path(def_)
+        def_ = read_definition(file)
     check_experiment_version(def_.version)
     step = load_flow(def_.flow.entry)
     if frame is None:
-        frame = input_frame(def_)
+        frame = input_frame(def_, file)
     return run_experiment(def_, step, frame, callbacks=callbacks, job=job, out_dir=out_dir)
 
 
