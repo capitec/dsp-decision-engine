@@ -782,6 +782,18 @@ assert any("durable id" in f.message for f in report.findings)
 report.model_dump_json()                     # machine-readable, for CI
 ```
 
+A step names the checks it suppresses (aliases or codes); `flow`, `dag`,
+`branch`, `loop`, `each` and `optimise` take the same keyword, as does a
+`suppress_checks:` key in a flow file or a `ConfigurableStep` field.
+
+```python
+from decider import step
+
+@step(suppress_checks=["int64_overflow"])
+def capped(cents: int) -> int:
+    return cents * 1000
+```
+
 `decider` reports findings; it never fails a build. A custom check is any
 callable returning `Finding`s, passed in a `suites=` tuple.
 

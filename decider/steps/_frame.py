@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Sequence
 
 from decider._engine.ir.decls import Input, Output
 from decider._engine.ir.nodes import CallNode
@@ -31,6 +31,7 @@ class FrameStep(Step):
     annotations: tuple[tuple[str, Any], ...] = ()
     write_annotations: tuple[tuple[str, Any], ...] = ()
     id: str | None = None
+    suppress_checks: tuple[str, ...] = ()
 
     def __call__(self, df: Any, **params: Any) -> Any:
         return call_with_defaults(self.fn, df, **params)
@@ -51,6 +52,7 @@ def frame_step(
     reads: list[str] | dict[str, Any] | None = None,
     writes: list[str] | dict[str, Any] | None = None,
     id: str | None = None,
+    suppress_checks: Sequence[str] = (),
 ) -> Any:
     """Make a `DataFrame -> DataFrame` function a step, directly or as a decorator.
 
@@ -70,6 +72,8 @@ def frame_step(
             shape when its values can't show it (an all-empty list infers
             `List(Null)`), e.g. `writes={"clean": pl.List(pl.Struct(...))}`.
 
+        suppress_checks: check aliases or codes to silence for this step.
+
     Example::
 
         @frame_step(reads=["client_id"], writes=["bureau_score"])
@@ -84,7 +88,7 @@ def frame_step(
             None if reads is None else tuple(reads), None if writes is None else tuple(writes),
             annotations=tuple(reads.items()) if isinstance(reads, dict) else (),
             write_annotations=tuple(writes.items()) if isinstance(writes, dict) else (),
-            id=id,
+            id=id, suppress_checks=tuple(suppress_checks),
         )
 
     return make if fn is None else make(fn)

@@ -59,7 +59,8 @@ class IRContext:
         id_ = getattr(step, "id", None)
         if id_ is not None:
             check_id(id_)
-        return Origin(self.path if own is None else _join(self.path, own), import_path(source), locator, id_)
+        suppress = tuple(getattr(step, "suppress_checks", ()))
+        return Origin(self.path if own is None else _join(self.path, own), import_path(source), locator, id_, suppress)
 
     def build(self, step: Step) -> IRNode:
         """`step`'s IR placed under this context, with its relabels applied.

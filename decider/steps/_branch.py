@@ -45,6 +45,7 @@ class BranchStep(Step):
     writes: tuple[tuple[str, str], ...] = ()
     id: str | None = None
     implicit_else: bool = False
+    suppress_checks: tuple[str, ...] = ()
 
     def to_ir(self, ctx: IRContext) -> BranchNode:
         inner = ctx.child(self.name)
@@ -57,7 +58,8 @@ class BranchStep(Step):
         return BranchNode(ctx.origin(self), condition, tuple(inner.build(a) for a in self.arms), self.modifies)
 
 
-def branch(condition: Any, *arms: Any, modifies: Sequence[str], name: str, id: str | None = None) -> BranchStep:
+def branch(condition: Any, *arms: Any, modifies: Sequence[str], name: str, id: str | None = None,
+           suppress_checks: Sequence[str] = ()) -> BranchStep:
     """Run one arm per row: a bool condition picks the first arm (true) or the second; an int picks by index.
 
     A bool condition sends `True` to arm 0, while an int picks arm `i`, so
@@ -76,6 +78,7 @@ def branch(condition: Any, *arms: Any, modifies: Sequence[str], name: str, id: s
             (or the condition) writes stays inside the branch: reading it
             after the branch, or emitting it by bare name, is an error, but
             `.emit("name@path")` on the enclosing flow still outputs it.
+        suppress_checks: check aliases or codes to silence for every step inside.
 
     Example::
 
@@ -93,4 +96,5 @@ def branch(condition: Any, *arms: Any, modifies: Sequence[str], name: str, id: s
     implicit_else = len(steps) == 1
     if implicit_else:
         steps += (SequentialStep((), "arm1"),)
-    return BranchStep(name, as_step(condition), steps, tuple(modifies), id=id, implicit_else=implicit_else)
+    return BranchStep(name, as_step(condition), steps, tuple(modifies), id=id, implicit_else=implicit_else,
+                      suppress_checks=tuple(suppress_checks))
