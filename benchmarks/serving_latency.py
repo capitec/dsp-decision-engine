@@ -23,8 +23,8 @@ from pydantic_core import from_json, to_json
 
 from decider import flow, param
 from decider.config import JsonFileStore
-from decider.engine.run.engine import _NO_FRAME, _load
-from decider.engine.run.state import State
+from decider.engine.run.engine import _NO_FRAME
+from decider.engine.run.state import State, load_record as _load
 from decider.serving.handler import RequestHandler
 from decider.serving.parse import coerce_record, parse_application_json
 
@@ -221,7 +221,7 @@ def _floors(exe, state, run, row, result):
 
     def dispatch():
         for fn, cols, valids, params, outs in args:
-            fn(1, cols, valids, params, outs)
+            fn(1, cols, valids, params, (), (), outs)
 
     def via_run():
         for unit, values, valid, bundles in units:
@@ -245,7 +245,7 @@ def _floors(exe, state, run, row, result):
         for name, arr in slots:
             arr[0] = record[name]
         for fn, cols, valids, params, outs in args:
-            fn(1, cols, valids, params, outs)
+            fn(1, cols, valids, params, (), (), outs)
         for k, arr in result_slots:
             out[k] = arr[0].item()
         return to_json(out)
@@ -265,7 +265,7 @@ def _units(exe, state, run):
         values = {v.id: state.values[v.id] for v in unit.reads}
         for v, dtype in unit.writes:
             values.setdefault(v.id, np.empty(1, dtype))
-        out.append((unit, values, {}, {c.id: runner._bundle(c.id, run, 1) for c in unit.calls if c.node.params}))
+        out.append((unit, values, {}, {c.id: runner._bundle(runner._compiled, c.id, run, 1) for c in unit.calls if c.node.params}))
     return out
 
 

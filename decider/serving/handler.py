@@ -10,6 +10,7 @@ import sys
 import threading
 import typing as t
 from dataclasses import dataclass, field
+from types import MappingProxyType
 
 import polars as pl
 from pydantic_core import to_json
@@ -30,7 +31,7 @@ class Live(t.NamedTuple):
     version: Version
     executable: Executable
     params: dict[str, t.Any] | None
-    dates: dict[str, t.Any] = {}
+    dates: t.Mapping[str, t.Any] = MappingProxyType({})
 
 
 @dataclass

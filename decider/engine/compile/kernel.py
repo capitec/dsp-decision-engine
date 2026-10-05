@@ -12,6 +12,7 @@ from numba.extending import intrinsic
 
 from decider.engine.compile.rows import rows_class
 from decider.engine.compile.span import SPAN
+from decider.engine.concurrency import Cache, once
 from decider.engine.trace.envelope import ITER_SHIFT, Kind, pack
 
 
@@ -92,7 +93,7 @@ class ArmOutOfRange(ValueError):
 
 
 # ponytail: unbounded like the step dispatchers; evict with them if sessions ever churn through edits.
-_KERNELS: dict[tuple, Callable] = {}
+_KERNELS = Cache()
 
 
 def fused_kernel(program: tuple, outputs: tuple[tuple, ...], variables: tuple[np.dtype, ...] = (),
@@ -124,24 +125,26 @@ def fused_kernel(program: tuple, outputs: tuple[tuple, ...], variables: tuple[np
     """
     trace = trace_refs is not None
     key = (_key(program), outputs, variables, trace, trace_refs)
-    kernel = _KERNELS.get(key)
-    if kernel is None:
-        body = _row_body(program, outputs, variables, trace, trace_refs)
+    return once(_KERNELS, key, lambda: _build_kernel(program, outputs, variables, trace, trace_refs))
 
-        if trace:
 
-            def run(n, cols, valids, params, flats, sinks, outs, header, cursor, offsets):
-                for i in range(n):
-                    body(cols, valids, params, flats, sinks, outs, i, header, cursor)
-                    offsets[i] = cursor[0]
-        else:
+def _build_kernel(program: tuple, outputs: tuple[tuple, ...], variables: tuple[np.dtype, ...],
+                  trace: bool, trace_refs: tuple[int, ...] | None) -> Callable:
+    body = _row_body(program, outputs, variables, trace, trace_refs)
 
-            def run(n, cols, valids, params, flats, sinks, outs):
-                for i in range(n):
-                    body(cols, valids, params, flats, sinks, outs, i)
+    if trace:
 
-        kernel = _KERNELS[key] = njit(nogil=True)(run)
-    return kernel
+        def run(n, cols, valids, params, flats, sinks, outs, header, cursor, offsets):
+            for i in range(n):
+                body(cols, valids, params, flats, sinks, outs, i, header, cursor)
+                offsets[i] = cursor[0]
+    else:
+
+        def run(n, cols, valids, params, flats, sinks, outs):
+            for i in range(n):
+                body(cols, valids, params, flats, sinks, outs, i)
+
+    return njit(nogil=True)(run)
 
 
 def _key(program: tuple) -> tuple:
