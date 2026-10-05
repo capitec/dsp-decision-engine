@@ -4,7 +4,7 @@ from typing import Any, Callable, Iterable, Sequence
 
 from decider.check.models import Finding, Report
 from decider.contract.refs import FlowRef
-from decider.engine.ir.context import to_ir
+from decider.ir import to_ir
 from decider.exceptions import DeciderError
 
 Check = Callable[[Any], Iterable[Finding]]

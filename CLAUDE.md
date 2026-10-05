@@ -41,9 +41,10 @@ example in `GUIDE.md` runs in `tests/test_guide.py`; keep it that way.
 ## Layout
 
 - `decider/` is the package. Its layout follows `Design.md` §8, with the file
-  split for `steps/` and `engine/ir/` in `IR.md` §9; the code is the truth
+  split for `steps/` and `_engine/ir/` in `IR.md` §9; the code is the truth
   where they differ.
-- `engine/` imports nothing from `steps/trees|tables|scorecard`, `config/` or
+- Target layout and the layer rule: `notes/pythonapi-redesign/directory-structure.md`.
+- `_engine/` imports nothing from `steps/trees|tables|scorecard`, `config/` or
   `serving/`.
 - `benchmarks/` holds plain scripts (`uv run python benchmarks/<name>.py`),
   not tests. The last numbers against decider2 are in

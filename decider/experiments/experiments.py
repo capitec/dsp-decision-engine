@@ -19,8 +19,7 @@ from pydantic import BaseModel, ConfigDict, SerializeAsAny, model_validator
 from decider.contract import describe
 from decider.data import PreflightReport, dataset
 from decider.data.formats import scan
-from decider.engine.ir.context import to_ir
-from decider.engine.ir.nodes import iter_nodes
+from decider.ir import iter_nodes, to_ir
 from decider.exceptions import DeciderError
 from decider.experiments.callbacks import Callback
 from decider.experiments.metrics.base import Metric, MetricRef, Summary

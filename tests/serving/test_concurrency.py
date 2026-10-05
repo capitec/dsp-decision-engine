@@ -19,10 +19,10 @@ from numba.core.errors import NumbaError
 
 from decider import ConfigurableStep, Engine, Raw, branch, each, flow, missing_as, param, step
 from decider.config import JsonFileStore
-from decider.engine.compile.njit import jit
-from decider.engine.compile.rows import rows_class
-from decider.engine.params import ParamsCache
-from decider.engine.trace import TraceSink
+from decider._engine.compile.njit import jit
+from decider._engine.compile.rows import rows_class
+from decider._engine.params import ParamsCache
+from decider._engine.trace import TraceSink
 from decider.serving.handler import Live, RequestHandler
 
 MODES = ("interpreted", "stepped", "fused")

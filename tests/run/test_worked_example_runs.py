@@ -2,7 +2,7 @@
 import polars as pl
 
 from decider import branch, dag, flow, frame_step, missing_as, param, step
-from decider.engine import Engine
+from decider._engine import Engine
 from decider.steps.trees import TreeConfig
 from decider.testing import assert_equivalent
 

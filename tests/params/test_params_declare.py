@@ -3,8 +3,8 @@ import pytest
 from pydantic import BaseModel, ConfigDict, Field, create_model
 
 from decider import missing_as, param
-from decider.engine.ir.decls import FeatureKind, NullPolicy, Output, feature_kind
-from decider.engine.params import MissingAs, NodeParams, ParamSpec, call_with_defaults, harvest
+from decider._engine.ir.decls import FeatureKind, NullPolicy, Output, feature_kind
+from decider._engine.params import MissingAs, NodeParams, ParamSpec, call_with_defaults, harvest
 
 
 # --- param(): the default itself, plus a declaration -------------------------

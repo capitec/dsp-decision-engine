@@ -3,14 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Sequence
 
-from decider.engine.ir.nodes import BranchNode, CallNode
+from decider._engine.ir.nodes import BranchNode, CallNode
 from decider.exceptions import IRError, WiringError
 from decider.steps.base import Step, as_step
 from decider.steps.function import step
 from decider.steps.sequential import SequentialStep
 
 if TYPE_CHECKING:
-    from decider.engine.ir.context import IRContext
+    from decider._engine.ir.context import IRContext
 
 
 def condition_node(ctx: IRContext, condition: Step, where: str) -> CallNode:

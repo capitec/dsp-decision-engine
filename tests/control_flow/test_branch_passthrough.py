@@ -3,7 +3,7 @@ import polars as pl
 import pytest
 
 from decider import branch, flow, param, step
-from decider.engine import Engine
+from decider._engine import Engine
 from decider.exceptions import WiringError
 from decider.testing import assert_equivalent
 

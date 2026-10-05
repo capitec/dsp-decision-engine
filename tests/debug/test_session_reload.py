@@ -8,8 +8,8 @@ import pytest
 from numba.core import event
 
 from decider import Raw, flow, raw_str, step
-from decider.engine.debug import Edited, Paused, ReloadFailed
-from decider.engine.debug.hot import ModuleWatcher
+from decider._engine.debug import Edited, Paused, ReloadFailed
+from decider._engine.debug.hot import ModuleWatcher
 from decider.testing import MODES
 
 FRAME = pl.DataFrame({"net_income": [9200.0, 4100.0], "expenses": [3100.0, 1500.0], "instalment": [1200.0, 800.0]})

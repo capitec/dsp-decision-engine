@@ -3,7 +3,7 @@ import typing as t
 
 from pydantic import field_validator
 
-from decider.engine.ir.nodes import CallNode
+from decider._engine.ir.nodes import CallNode
 from decider.steps.configurable import ConfigurableStep
 from decider.steps.trees.condition import expr_condition
 from decider.steps.trees.encode import encode, kind_of

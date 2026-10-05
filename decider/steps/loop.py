@@ -3,13 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Sequence
 
-from decider.engine.ir.nodes import LoopNode
+from decider._engine.ir.nodes import LoopNode
 from decider.exceptions import WiringError
 from decider.steps.base import Step, as_step
 from decider.steps.branch import condition_node
 
 if TYPE_CHECKING:
-    from decider.engine.ir.context import IRContext
+    from decider._engine.ir.context import IRContext
 
 
 @dataclass(frozen=True, slots=True, eq=False)

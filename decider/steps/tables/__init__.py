@@ -8,8 +8,8 @@ from dataclasses import replace
 import polars as pl
 from pydantic import AfterValidator, BeforeValidator, Field, model_validator
 
-from decider.engine.ir.decls import Input, NullPolicy, Output
-from decider.engine.ir.nodes import CallNode
+from decider._engine.ir.decls import Input, NullPolicy, Output
+from decider._engine.ir.nodes import CallNode
 from decider.steps.configurable import ConfigurableStep
 from decider.steps.tables.encode import Shape, check_columns, dtypes, kind, pack, program, typed, variables
 from decider.steps.tables.matcher import match

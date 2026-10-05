@@ -6,11 +6,11 @@ import polars as pl
 import pytest
 
 from decider import branch, dag, flow, frame_step, loop, param, step
-from decider.engine import Engine
-from decider.engine.ir.origin import Origin
-from decider.engine.trace import (Kind, PassThroughAdapter, StepTable, TraceEvent, TraceLossError, TraceSink,
+from decider._engine import Engine
+from decider._engine.ir.origin import Origin
+from decider._engine.trace import (Kind, PassThroughAdapter, StepTable, TraceEvent, TraceLossError, TraceSink,
                                   decode, pack, unpack)
-from decider.engine.trace.envelope import SCHEMA_VERSION
+from decider._engine.trace.envelope import SCHEMA_VERSION
 
 MODES = ("interpreted", "stepped", "fused")
 

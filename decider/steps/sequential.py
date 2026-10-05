@@ -3,12 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Sequence
 
-from decider.engine.ir.nodes import IRNode, SequenceNode
+from decider._engine.ir.nodes import IRNode, SequenceNode
 from decider.exceptions import WiringError
 from decider.steps.base import Step, as_step
 
 if TYPE_CHECKING:
-    from decider.engine.ir.context import IRContext
+    from decider._engine.ir.context import IRContext
 
 
 @dataclass(frozen=True, slots=True, eq=False)

@@ -4,8 +4,7 @@ from typing import Any
 
 from decider.check import Check, Finding, Severity
 from decider.checks._common import call_nodes, helper_calls, step_ref
-from decider.engine.ir.context import to_ir
-from decider.engine.ir.nodes import CallNode
+from decider.ir import CallNode, to_ir
 
 
 def durable_ids(severity: Severity = Severity.WARNING) -> Check:

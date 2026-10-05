@@ -7,8 +7,8 @@ from __future__ import annotations
 import argparse
 import sys
 
-from decider.engine import Engine
-from decider.engine.run.runners import interpreted
+from decider import Engine
+from decider._engine.run.runners import interpreted
 
 from .bridge import Bridge, base_params
 

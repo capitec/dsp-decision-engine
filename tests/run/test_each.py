@@ -107,7 +107,7 @@ def test_batch_mode_does_not_inject_parent_frame_columns_into_items():
 
 
 def test_a_parent_step_reads_the_enriched_list_as_columnar_past_the_arrow_threshold():
-    from decider.engine.compile.rows import ARROW_ROWS
+    from decider._engine.compile.rows import ARROW_ROWS
 
     frame = pl.DataFrame({"items": [[{"weight": float(i % 3)}, {"weight": 30.0}] for i in range(ARROW_ROWS + 4)]})
     p = flow(each("items", flow(heavy, name="item"), name="items", execution_mode=EachMode.BATCH),

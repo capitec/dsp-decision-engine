@@ -8,7 +8,7 @@ from dataclasses import dataclass
 import numpy as np
 import polars as pl
 
-from decider.engine.params.tables import rows_like
+from decider._engine.params.tables import rows_like
 from decider.serializable.schema import PolarsSchema
 from decider.steps.tables.schema import (
     AndExpression,

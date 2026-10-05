@@ -2,8 +2,8 @@
 import polars as pl
 import pytest
 
-from decider import engine
-from decider.engine import Engine
+from decider import _engine as engine
+from decider._engine import Engine
 from decider.steps.trees import TreeConfig
 
 

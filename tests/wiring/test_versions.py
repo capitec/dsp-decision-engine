@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from decider import dag, flow, param, step
-from decider.engine.wiring import Call, resolve
+from decider._engine.wiring import Call, resolve
 
 
 def _term_cap_step(name: str, delta: float):
@@ -151,7 +151,7 @@ def test_ids_do_not_depend_on_names():
 
 
 def test_resolve_accepts_a_built_ir():
-    from decider import engine
+    from decider import _engine as engine
 
     def a(x: float) -> float:
         return x

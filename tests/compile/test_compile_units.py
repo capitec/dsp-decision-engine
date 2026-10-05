@@ -8,13 +8,13 @@ import pytest
 from numba.core.dispatcher import Dispatcher
 
 from decider import ConfigurableStep, Columnar, allow_fallback, branch, flow, frame_step, helper, step
-from decider.engine.compile import Fallback, Kernel, compile_plan, jit
-from decider.engine.compile.units import Layout
-from decider.engine.ir.decls import Input, Output, ParamDecl
-from decider.engine.ir.nodes import CallNode
-from decider.engine.params import param
-from decider.engine.wiring import resolve
-from decider.engine.wiring.plan import Version
+from decider._engine.compile import Fallback, Kernel, compile_plan, jit
+from decider._engine.compile.units import Layout
+from decider._engine.ir.decls import Input, Output, ParamDecl
+from decider._engine.ir.nodes import CallNode
+from decider._engine.params import param
+from decider._engine.wiring import resolve
+from decider._engine.wiring.plan import Version
 
 
 def disposable_income(net_income: float, expenses: float) -> float:

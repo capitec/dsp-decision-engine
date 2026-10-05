@@ -10,12 +10,12 @@ import sys
 import numpy as np
 
 from decider import flow
-from decider.engine.compile import compile_plan, cpu_target, fingerprint, jit
-from decider.engine.ir.decls import Input, Output
-from decider.engine.ir.nodes import CallNode, SequenceNode
-from decider.engine.ir.origin import Origin
-from decider.engine.params import param
-from decider.engine.wiring import resolve
+from decider._engine.compile import compile_plan, cpu_target, fingerprint, jit
+from decider._engine.ir.decls import Input, Output
+from decider._engine.ir.nodes import CallNode, SequenceNode
+from decider._engine.ir.origin import Origin
+from decider._engine.params import param
+from decider._engine.wiring import resolve
 
 RATE = 0.1
 
@@ -172,7 +172,7 @@ def test_equal_captured_arrays_share_compiled_code_and_a_changed_one_compiles_it
 
 _SET_STEP = ("def tier(grade: str) -> bool:\n"
              "    return grade in {'gold', 'silver', 'bronze', 'platinum', 'diamond', 'copper'}\n")
-_SET_CHILD = "import step\nfrom decider.engine.compile import fingerprint\nprint(fingerprint(step.tier))\n"
+_SET_CHILD = "import step\nfrom decider._engine.compile import fingerprint\nprint(fingerprint(step.tier))\n"
 
 
 def test_the_fingerprint_is_stable_across_hash_seeds(tmp_path):
@@ -197,7 +197,7 @@ _STEP = "def half(x: float) -> float:\n    return round(x * 0.5, 1)\n"
 _CHILD = """
 import json, sys
 import step
-import decider.engine.compile.njit as njit
+import decider._engine.compile.njit as njit
 njit.SALT = sys.argv[1]
 _, kernel = njit.jit(step.half)
 print(json.dumps([kernel(3.0), len(kernel.stats.cache_hits), len(kernel.stats.cache_misses)]))
@@ -208,7 +208,7 @@ _STEP_WITH_HELPER = "from rates import rate\n\ndef fee(amount: float) -> float:\
 _CHILD_WITH_HELPER = """
 import json
 import step
-import decider.engine.compile.njit as njit
+import decider._engine.compile.njit as njit
 _, kernel = njit.jit(step.fee)
 print(json.dumps([kernel(100.0), len(kernel.stats.cache_hits), len(kernel.stats.cache_misses)]))
 """
@@ -256,7 +256,7 @@ def test_a_step_first_seen_without_a_file_still_gets_a_disk_cache(tmp_path):
 
     from numba.core.caching import NullCache
 
-    from decider.engine.compile.njit import jit
+    from decider._engine.compile.njit import jit
 
     src = "def spread(a: float, b: float) -> float:\n    return a - b + 3.0\n"
     ns: dict = {}

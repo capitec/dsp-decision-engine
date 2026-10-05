@@ -9,9 +9,10 @@ import pytest
 from polars.testing import assert_frame_equal
 from pydantic import TypeAdapter
 
-from decider import ConfigurableStep, Engine, ParamRef, Value, engine, flow, step
+from decider import ConfigurableStep, Engine, ParamRef, Value, flow, step
+from decider import _engine as engine
 from decider.config import JsonFileStore
-from decider.engine.ir import ParamDecl
+from decider._engine.ir import ParamDecl
 from decider.registry import import_path
 from decider.steps import StepRef
 

@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable
 
-from decider.engine.ir.origin import check_id, check_name
+from decider._engine.ir.origin import check_id, check_name
 from decider.exceptions import WiringError
 
 _SCALAR = {"step", "frame_step"}

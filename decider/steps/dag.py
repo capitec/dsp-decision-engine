@@ -3,14 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Sequence
 
-from decider.engine.ir.nodes import IRNode, SequenceNode
-from decider.engine.wiring.interface import interface
+from decider._engine.ir.nodes import IRNode, SequenceNode
+from decider._engine.wiring.interface import interface
 from decider.exceptions import WiringError
 from decider.steps.base import Step, as_step
 from decider.steps.sequential import SequentialStep
 
 if TYPE_CHECKING:
-    from decider.engine.ir.context import IRContext
+    from decider._engine.ir.context import IRContext
 
 
 @dataclass(frozen=True, slots=True, eq=False)

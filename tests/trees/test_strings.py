@@ -7,9 +7,9 @@ import pytest
 from numba import typeof
 
 from decider import flow
-from decider.engine import Engine
-from decider.engine.compile import compile_call
-from decider.engine.ir.context import to_ir
+from decider._engine import Engine
+from decider._engine.compile import compile_call
+from decider._engine.ir.context import to_ir
 from decider.testing import no_recompile
 from decider.steps.trees import TreeConfig
 

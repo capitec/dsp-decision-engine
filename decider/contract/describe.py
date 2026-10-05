@@ -9,11 +9,11 @@ from typing import Any, Sequence
 from pydantic import BaseModel, ConfigDict
 
 from decider.contract.refs import CONTRACT_VERSION, EdgeRef, FlowDescription, FlowRef, StepRef, ValueSlotRef
-from decider.engine.ir.context import to_ir
-from decider.engine.ir.nodes import (BranchNode, CallNode, FiniteStateMachineNode, IRNode, LoopNode, ScatterGatherNode,
+from decider._engine.ir.context import to_ir
+from decider._engine.ir.nodes import (BranchNode, CallNode, FiniteStateMachineNode, IRNode, LoopNode, ScatterGatherNode,
                                      SequenceNode, iter_nodes)
-from decider.engine.run.engine import RUNNERS
-from decider.engine.wiring import Plan, resolve
+from decider._engine.run.engine import RUNNERS
+from decider._engine.wiring import Plan, resolve
 
 _NODE_TYPE = {
     CallNode: "call",

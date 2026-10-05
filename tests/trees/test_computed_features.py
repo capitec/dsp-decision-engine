@@ -2,9 +2,9 @@
 import polars as pl
 import pytest
 
-from decider import engine
-from decider.engine import Engine
-from decider.engine.compile import kernel
+from decider import _engine as engine
+from decider._engine import Engine
+from decider._engine.compile import kernel
 from decider.steps.expr import parse
 from decider.steps.trees import TreeConfig, walker
 

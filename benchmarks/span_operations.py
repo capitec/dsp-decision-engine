@@ -10,7 +10,7 @@ import numpy as np
 import polars as pl
 
 from decider import Raw, flow, param, python_only
-from decider.engine import Engine
+from decider._engine import Engine
 
 N = 200_000
 CALLS = 3000

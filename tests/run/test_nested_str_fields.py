@@ -9,7 +9,7 @@ import polars as pl
 import pytest
 
 from decider import Engine, Columnar, allow_fallback, flow, missing_as, param, step
-from decider.engine.compile.rows import ARROW_ROWS, build_rows
+from decider._engine.compile.rows import ARROW_ROWS, build_rows
 from decider.testing import assert_equivalent
 
 MODES = ("interpreted", "stepped", "fused")

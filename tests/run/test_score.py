@@ -6,8 +6,8 @@ import time
 import pytest
 
 from decider import flow, missing_as, param
-from decider.engine import Engine
-from decider.engine.params import ParamsError
+from decider._engine import Engine
+from decider._engine.params import ParamsError
 
 
 def disposable_income(net_income: float, expenses: float) -> float:

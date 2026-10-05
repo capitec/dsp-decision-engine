@@ -6,8 +6,8 @@ import pytest
 from pydantic import TypeAdapter
 
 from decider.config import JsonFileStore, Version, VersionPart
-from decider.engine.ir.decls import Input, Output
-from decider.engine.ir.nodes import CallNode
+from decider._engine.ir.decls import Input, Output
+from decider._engine.ir.nodes import CallNode
 from decider.settings import DeciderConfigSettings
 from decider.steps import ConfigurableStep, ParamRef, StepRef, Value
 

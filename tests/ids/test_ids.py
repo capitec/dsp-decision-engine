@@ -8,10 +8,10 @@ import polars as pl
 import pytest
 from click.testing import CliRunner
 
-from decider import engine
+from decider import _engine as engine
 from decider.cli import cli
 from decider.contract import describe
-from decider.engine.ir.nodes import iter_nodes
+from decider._engine.ir.nodes import iter_nodes
 from decider.ids import IdError, add_ids, generate
 from decider.steps import flow, step
 

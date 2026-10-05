@@ -10,8 +10,8 @@ import time
 import polars as pl
 
 from decider import flow, param
-from decider.engine import Engine
-from decider.engine.trace import TraceSink
+from decider._engine import Engine
+from decider._engine.trace import TraceSink
 
 
 def ratio(income: float, debt: float) -> float:

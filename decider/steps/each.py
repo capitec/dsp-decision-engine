@@ -10,12 +10,12 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
-from decider.engine.ir.nodes import CallNode, IRNode, ScatterGatherNode, iter_nodes
+from decider._engine.ir.nodes import CallNode, IRNode, ScatterGatherNode, iter_nodes
 from decider.exceptions import IRError
 from decider.steps.base import Step, as_step
 
 if TYPE_CHECKING:
-    from decider.engine.ir.context import IRContext
+    from decider._engine.ir.context import IRContext
 
 
 class EachMode(Enum):

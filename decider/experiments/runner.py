@@ -30,13 +30,13 @@ import polars as pl
 from decider.contract import describe
 from decider.data import LoadedData, preflight
 from decider.data.formats import scan
-from decider.engine import Engine
-from decider.engine.debug.session import _cast
-from decider.engine.ir.decls import base_annotation
-from decider.engine.params import merge
-from decider.engine.run.state import State, dtype_of
-from decider.engine.wiring.plan import Branch, Loop, ScatterGather
-from decider.engine.wiring.plan import Sequence as Sequence_
+from decider import Engine
+from decider._engine.debug.session import _cast
+from decider._engine.ir.decls import base_annotation
+from decider._engine.params import merge
+from decider._engine.run.state import State, dtype_of
+from decider._engine.wiring.plan import Branch, Loop, ScatterGather
+from decider._engine.wiring.plan import Sequence as Sequence_
 from decider.exceptions import DeciderError
 from decider.experiments.callbacks import (Batch, Callback, JobProgress, NodeBatch, Run, WriteOutputs, overrides,
                                            selects)

@@ -619,7 +619,7 @@ back yet: recompute them on the winner with
 ```python
 import polars as pl
 from decider import Engine, flow, param
-from decider.engine import step_map, to_ir
+from decider.ir import step_map, to_ir
 from decider.testing import assert_equivalent, corpus, no_recompile
 
 def ratio(income: float, debt: float) -> float:
@@ -673,7 +673,7 @@ assert flow(instalment, name="loan").run(pl.DataFrame({"loan": [1200.0], "term_m
 
 Sessions also `step()`, `step_into()` (branches, loops), `rewind(path)` and
 break on a tree node (`"risk#high"`) or table row (`"band#2"`); see
-`help(decider.engine.debug.Session)`. Test through decider
+`help(decider.debug.Session)`. Test through decider
 (`Engine().bind(build())` or the handler), not by calling the functions: only
 that proves the pipeline wires, builds and serves.
 
@@ -715,7 +715,7 @@ bounded with `max_events` or sampled with `sample_rate`, and loss is reported in
 ```python
 import polars as pl
 from decider import Engine, flow, param
-from decider.engine.trace import Kind, TraceSink
+from decider.trace import Kind, TraceSink
 
 def ratio(income: float, debt: float) -> float:
     return debt / income

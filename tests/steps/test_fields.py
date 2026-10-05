@@ -3,8 +3,8 @@ from typing import Annotated, Optional
 import polars as pl
 
 from decider import Duration, Engine, Money, Percent, flow, param
-from decider.engine.ir.decls import NullPolicy, base_annotation
-from decider.engine.params.harvest import harvest
+from decider._engine.ir.decls import NullPolicy, base_annotation
+from decider._engine.params.harvest import harvest
 from decider.fields import metadata_of
 
 

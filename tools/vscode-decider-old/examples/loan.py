@@ -2,8 +2,8 @@
 import polars as pl
 
 from decider import ConfigurableStep, branch, dag, flow, frame_step, loop, missing_as, param, step
-from decider.engine.ir.decls import Input, Output
-from decider.engine.ir.nodes import CallNode
+from decider._engine.ir.decls import Input, Output
+from decider._engine.ir.nodes import CallNode
 
 BUREAU = pl.DataFrame({"client_id": [1, 2], "bureau_score": [640.0, 710.0]})
 

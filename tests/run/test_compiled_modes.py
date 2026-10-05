@@ -4,11 +4,11 @@ import pytest
 
 from decider import Raw, branch, flow, missing_as, param, raw_str, step
 from decider.exceptions import WiringError
-from decider.engine import Engine
-from decider.engine.compile import Kernel
-from decider.engine.ir.decls import Input, Output
-from decider.engine.ir.nodes import CallNode
-from decider.engine.ir.origin import Origin
+from decider._engine import Engine
+from decider._engine.compile import Kernel
+from decider._engine.ir.decls import Input, Output
+from decider._engine.ir.nodes import CallNode
+from decider._engine.ir.origin import Origin
 from decider.testing import assert_equivalent, no_recompile
 
 MODES = ("interpreted", "stepped", "fused")

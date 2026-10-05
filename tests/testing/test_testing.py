@@ -4,9 +4,9 @@ import pytest
 from numba.extending import overload
 
 from decider import flow, missing_as, param
-from decider.engine import Engine
-from decider.engine.debug import Session
-from decider.engine.run import Executable
+from decider._engine import Engine
+from decider._engine.debug import Session
+from decider._engine.run import Executable
 from decider.testing import assert_equivalent, corpus, no_recompile
 
 

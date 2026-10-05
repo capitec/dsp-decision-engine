@@ -6,8 +6,7 @@ from collections import Counter
 import numpy as np
 import polars as pl
 
-from decider.engine.ir.context import to_ir
-from decider.engine.ir.nodes import BranchNode, iter_nodes
+from decider.ir import BranchNode, iter_nodes, to_ir
 from decider.experiments.callbacks import Batch, NodeBatch, Run
 from decider.experiments.metrics.base import Metric, Summary
 

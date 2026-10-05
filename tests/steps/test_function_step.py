@@ -5,8 +5,9 @@ import dataclasses
 import polars as pl
 import pytest
 
-from decider import dag, engine, flow, param, step
-from decider.engine.ir.decls import NullPolicy
+from decider import dag, flow, param, step
+from decider import _engine as engine
+from decider._engine.ir.decls import NullPolicy
 from decider.exceptions import ParamsError
 from decider.steps import FunctionStep, as_step
 
