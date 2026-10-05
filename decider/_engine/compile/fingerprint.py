@@ -16,7 +16,8 @@ def fingerprint(fn: Callable) -> str:
 
     Covers the bytecode with its constants, the argument layout, closure cell
     values and the globals it reads (functions by their own content, modules
-    by name, numpy arrays and polars DataFrames by value, other objects by
+    by name plus the functions and submodules the function reaches through
+    them, numpy arrays and polars DataFrames by value, other objects by
     identity). Leaves out the function's name, file and line numbers, so
     renaming or moving a step keeps its compiled code, while editing a
     constant, a closure value or a global it reads does not.
@@ -64,10 +65,11 @@ def _function(h: Any, fn: Any, seen: set[int]) -> None:
             _value(h, cell.cell_contents, seen)
         except ValueError:  # an empty cell
             h.update(b"<empty>")
-    for name in sorted(_names(code)):
+    names = _names(code)
+    for name in sorted(names):
         if name in fn.__globals__:
             h.update(name.encode())
-            _value(h, fn.__globals__[name], seen)
+            _value(h, fn.__globals__[name], seen, names)
 
 
 def _code(h: Any, code: types.CodeType) -> None:
@@ -103,11 +105,21 @@ def _names(code: types.CodeType) -> set[str]:
     return names
 
 
-def _value(h: Any, value: Any, seen: set[int]) -> None:
+def _value(h: Any, value: Any, seen: set, names: frozenset | set = frozenset()) -> None:
     if isinstance(value, (types.FunctionType, Dispatcher)):
         _function(h, value, seen)
     elif isinstance(value, types.ModuleType):
         h.update(f"module:{value.__name__}".encode())
+        # `mod.f(x)` reads `f` off the module: follow the attributes the function names, so editing `f` changes the key.
+        key = (id(value), frozenset(names))
+        if key in seen:
+            return
+        seen.add(key)
+        for name in sorted(names):
+            attr = value.__dict__.get(name)
+            if isinstance(attr, (types.FunctionType, Dispatcher, types.ModuleType)):
+                h.update(name.encode())
+                _value(h, attr, seen, names)
     elif isinstance(value, _LITERALS):
         h.update(f"{type(value).__name__}:{value!r}".encode())
     elif isinstance(value, tuple):
