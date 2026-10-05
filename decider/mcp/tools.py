@@ -13,7 +13,7 @@ from pathlib import Path
 
 import polars as pl
 
-from decider import check
+from decider import checks
 from decider.contract import StepRef, describe, resolve_step, source_location
 from decider.contract.describing import find_pipelines
 from decider.data import load
@@ -119,7 +119,7 @@ def run_summary(entry: str, data: str) -> dict:
 
 def check_report(entry: str) -> dict:
     """The default check suite over `entry`, as the structured `Report`."""
-    return check.run(load_flow(entry)).model_dump(mode="json")
+    return checks.run(load_flow(entry)).model_dump(mode="json")
 
 
 def experiment_definition(path: str) -> dict:

@@ -737,19 +737,19 @@ them — that adapter owns retention and privacy policy.
 
 ### Checks
 
-`decider.check.run(pipeline)` runs the default suite — wall-clock reads,
+`decider.checks.run(pipeline)` runs the default suite — wall-clock reads,
 shared-state mutation, numeric risk, missing durable ids — and returns a
 structured `Report` a CI pipeline, notebook or editor can render.
 
 ```python
 import polars as pl
-from decider import check, flow
+from decider import checks, flow
 
 def ratio(income: float, debt: float) -> float:
     return debt / income
 
 pipeline = flow(ratio, name="credit")
-report = check.run(pipeline)
+report = checks.run(pipeline)
 assert report.ok is True                     # warnings only; the client decides what blocks a release
 assert any("durable id" in f.message for f in report.findings)
 report.model_dump_json()                     # machine-readable, for CI

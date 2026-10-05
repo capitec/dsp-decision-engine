@@ -3,7 +3,7 @@ from __future__ import annotations
 import ast
 from typing import Any, Iterator
 
-from decider.check import Finding, Severity
+from decider.checks.models import Finding, Severity
 from decider.checks._common import call_nodes, function_source, step_ref
 from decider.ir import CallNode, to_ir
 

@@ -284,3 +284,9 @@ where they disagree, this file wins.
   they were at capture time, so an unresolved id still renders a repairable
   partial result after a refactor.
 
+## 2026-10-05
+
+- **`decider.check` merged into `decider.checks`.** VS Code decision 13 now
+  reads `decider.checks.run(pipeline, suites=[decider.checks.default_suite])`;
+  `decider.check.run` no longer exists. `Check`, `Finding`, `Report`,
+  `Severity`, `Suite` and `run` are exported from `decider.checks`.

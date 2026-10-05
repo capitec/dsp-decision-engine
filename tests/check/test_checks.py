@@ -4,8 +4,8 @@ import time
 
 import numpy as np
 
-from decider import ConfigurableStep, Table, Value, check, checks, flow, param_table, step
-from decider.check import Finding, Severity
+from decider import ConfigurableStep, Table, Value, checks, flow, param_table, step
+from decider.checks import Finding, Severity
 from decider.steps.trees import TreeConfig
 
 
@@ -46,7 +46,7 @@ CHANGED = flow(net, scaled_changed, name="term")
 
 
 def test_a_wall_clock_read_is_reported_with_its_source():
-    report = check.run(flow(stamped, name="term"))
+    report = checks.run(flow(stamped, name="term"))
     wall = [f for f in report.findings if f.check == "wall_clock"]
     assert len(wall) == 1
     finding = wall[0]
@@ -58,7 +58,7 @@ def test_a_wall_clock_read_is_reported_with_its_source():
 
 
 def test_a_flow_without_durable_ids_is_reported_per_flow_and_step():
-    report = check.run(flow(cap, name="term"))
+    report = checks.run(flow(cap, name="term"))
     missing = [f for f in report.findings if f.check == "durable_ids"]
     assert {f.detail["kind"] for f in missing} == {"flow", "step"}
     flow_finding = next(f for f in missing if f.detail["kind"] == "flow")
@@ -68,13 +68,13 @@ def test_a_flow_without_durable_ids_is_reported_per_flow_and_step():
 
 
 def test_a_flow_with_committed_ids_has_no_missing_id_findings():
-    report = check.run(flow(cap_id, name="term", id="fedcba543210"))
+    report = checks.run(flow(cap_id, name="term", id="fedcba543210"))
     assert not [f for f in report.findings if f.check == "durable_ids"]
 
 
 def test_missing_durable_id_diagnostic_is_client_promotable():
     strict = checks.durable_ids(Severity.ERROR)
-    report = check.run(flow(cap, name="term"), suites=[(strict,)])
+    report = checks.run(flow(cap, name="term"), suites=[(strict,)])
     assert all(f.severity is Severity.ERROR for f in report.findings)
     assert not report.ok
 
@@ -83,20 +83,20 @@ def test_a_custom_check_runs_and_is_named_after_its_function():
     def always_warn(pipeline):
         return [Finding(severity=Severity.WARNING, message="custom finding")]
 
-    report = check.run(flow(cap, name="term"), suites=[(always_warn,)])
+    report = checks.run(flow(cap, name="term"), suites=[(always_warn,)])
     assert [f.check for f in report.findings] == ["always_warn"]
     assert report.findings[0].message == "custom finding"
 
 
 def test_default_suite_finds_known_defects_without_arguments():
-    report = check.run(flow(stamped, scale, name="term"))
+    report = checks.run(flow(stamped, scale, name="term"))
     checks_found = {f.check for f in report.findings}
     assert {"wall_clock", "numeric", "durable_ids"} <= checks_found
     assert all(f.step is not None or f.detail.get("kind") == "flow" for f in report.findings)
 
 
 def test_report_serialises_to_json_with_string_severities():
-    report = check.run(flow(stamped, name="term"))
+    report = checks.run(flow(stamped, name="term"))
     data = json.loads(report.model_dump_json())
     assert data["flow"]["name"] == "term"
     assert data["findings"]
@@ -172,7 +172,7 @@ def test_equivalence_check_surfaces_a_generated_regime_defect():
     def ratio(x: float, y: float) -> float:
         return x / y
 
-    report = check.run(flow(ratio, name="term"), suites=[(checks.equivalence(),)])
+    report = checks.run(flow(ratio, name="term"), suites=[(checks.equivalence(),)])
     findings = [f for f in report.findings if f.check == "equivalence"]
     assert findings and all(f.severity is Severity.ERROR for f in findings)
     assert any("division by zero" in f.message for f in findings)
