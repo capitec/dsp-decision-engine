@@ -7,7 +7,7 @@ from numba import njit
 
 from decider import flow
 from decider._engine import Engine
-from decider._engine.compile.cpython import cpython_round
+from decider._engine.compile.semantics.numbers import cpython_round
 
 # Decimal halves: the double sits just below or above the .5 (or on it, 0.125),
 # and numba's scale-round-unscale gets some of them wrong (2.675, 1234.565).
