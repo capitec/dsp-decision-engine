@@ -6,7 +6,7 @@ from typing import Any, Iterable, Sequence
 import numpy as np
 
 from decider._engine.ir.decls import FeatureKind
-from decider.exceptions import ArrowImportError, ArrowKindError  # noqa: F401  (re-exported)
+from decider._engine.boundary.errors import ArrowImportError, ArrowKindError  # noqa: F401  (re-exported)
 
 F64, I64, BOOL, CODE, STR = (
     FeatureKind.F64, FeatureKind.I64, FeatureKind.BOOL, FeatureKind.CODE, FeatureKind.STR,

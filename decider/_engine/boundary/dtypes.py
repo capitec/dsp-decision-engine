@@ -8,7 +8,7 @@ import polars as pl
 
 from decider._engine.boundary._arrow.plan import BOOL, CODE, F64, I64, STR
 from decider._engine.ir.decls import FeatureKind, Input, NullPolicy, feature_kind
-from decider.exceptions import ArrowKindError, NeedsKernelSplit
+from decider._engine.boundary.errors import ArrowKindError, NeedsKernelSplit
 
 
 @dataclass(frozen=True)

@@ -16,6 +16,8 @@ import polars as pl
 from pydantic_core import to_json
 
 import decider.exceptions as exc
+from decider.serving._errors import (InputParsingError, OutputFormattingError, UnsupportedAcceptError,
+                                     UnsupportedContentTypeError)
 from decider.config import ConfigStore, Version
 from decider import Engine
 from decider._engine.run import Executable
@@ -181,11 +183,11 @@ class RequestHandler:
     async def input_fn(self, data: bytes, content_type: str) -> dict[str, t.Any] | pl.DataFrame:
         handler = DEFAULT_INPUT_HANDLERS.get(content_type)
         if handler is None:
-            raise exc.UnsupportedContentTypeError(f"Unsupported content type: {content_type!r}")
+            raise UnsupportedContentTypeError(f"Unsupported content type: {content_type!r}")
         try:
             return handler(data)
         except Exception as e:
-            raise exc.InputParsingError(str(e))
+            raise InputParsingError(str(e))
 
     def output_fn(self, output: dict[str, t.Any] | pl.DataFrame, accept: str) -> Response:
         if isinstance(output, dict):
@@ -194,12 +196,12 @@ class RequestHandler:
             output = pl.DataFrame([output])
         formatter = DEFAULT_OUTPUT_FORMATTERS.get(accept)
         if formatter is None:
-            raise exc.UnsupportedAcceptError(f"Unsupported Accept type: {accept!r}")
+            raise UnsupportedAcceptError(f"Unsupported Accept type: {accept!r}")
         media_type, write = formatter
         try:
             return Response(write(output), media_type)
         except Exception as e:
-            raise exc.OutputFormattingError(str(e))
+            raise OutputFormattingError(str(e))
 
     async def process_fn(self, data: bytes, accept: str, content_type: str) -> Response:
         live = self.module_fn()
