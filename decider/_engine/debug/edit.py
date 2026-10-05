@@ -12,7 +12,7 @@ from decider.exceptions import WiringError
 
 if TYPE_CHECKING:
     from decider._engine.run.runners.base import Checkpoint
-    from decider.steps.base import Step
+    from decider.steps import Step
 
 # Fields through which a step holds its members.
 _MEMBERS = ("steps", "arms", "condition", "body")
@@ -43,7 +43,7 @@ class Edits:
             s.resume()
             s.output()["term_cap"]      # computed by cap_by_income_v2
         """
-        from decider.steps.base import as_step
+        from decider.steps import as_step
 
         return self._edit("replace", path, as_step(step))
 
@@ -85,7 +85,7 @@ class Edits:
             s.output()["affordable"]
         """
         from decider._engine import step_map
-        from decider.steps.base import as_step
+        from decider.steps import as_step
 
         root = as_step(pipeline)
         plan = resolve(root)
@@ -150,7 +150,7 @@ class Edits:
             raise
 
     def _edit(self, action: str, path: str, new: Step | None) -> Checkpoint | None:
-        from decider.steps.base import as_step
+        from decider.steps import as_step
 
         before = self.executable
         root = swap(as_step(before.step), path, new)
@@ -248,7 +248,7 @@ def swap(root: Step, path: str, new: Step | None) -> Step:
 
 
 def _swap(step: Step, here: str, path: str, new: Step | None) -> Step:
-    from decider.steps.base import Step
+    from decider.steps import Step
 
     changes = {}
     for field in _MEMBERS:

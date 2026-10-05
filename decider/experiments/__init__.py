@@ -8,16 +8,16 @@ in the style of a training loop's callbacks. Each metric summarises into a
 typed `Summary`; each plot requires one; a `Report` lays them out.
 """
 from decider.experiments.callbacks import Batch, Callback, JobProgress, NodeBatch, Progress, Run, WriteOutputs
-from decider.experiments.experiments import (BASELINE, EXPERIMENT_VERSION, Experiment, ExperimentDef,
+from decider.experiments._experiments import (BASELINE, EXPERIMENT_VERSION, Experiment, ExperimentDef,
                                              ExperimentResult, FlowSpec, InputSpec, RunStatus, Scenario,
                                              ScenarioResult, ScenarioStatus, check_experiment_version, validate)
 from decider.experiments.metrics import (Bins, BranchFlows, Counts, Describe, Divergence, Divergences, Flows,
                                          Histogram, Metric, MetricRef, Stats, Summary, ValueCounts)
-from decider.experiments.report import (Block, BlockRef, Chart, MetricSection, Overview, Report, Row, Section,
+from decider.experiments._report import (Block, BlockRef, Chart, MetricSection, Overview, Report, Row, Section,
                                         Table, Text)
 from decider.experiments.plots import Bars, Changes, Distribution, Figure, Plot, PlotRef, Ranges, Sankey
-from decider.experiments.revision import compatible, materialise, remove, resolve
-from decider.experiments.runner import load_flow, run, run_experiment
+from decider.experiments._revision import compatible, materialise, remove, resolve
+from decider.experiments._runner import load_flow, run, run_experiment
 
 __all__ = [
     "BASELINE", "Bars", "Batch", "Bins", "Block", "BlockRef", "BranchFlows", "Callback", "Changes", "Chart",

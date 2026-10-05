@@ -39,8 +39,8 @@ from decider._bridge.forks import checkpoint_key, sweep
 from decider.contract import JobHandle
 from decider._bridge.replay import trace
 from decider._engine.params import merge
-from decider.serving.handler import RequestHandler
-from decider.serving.parse import coerce_record, has_date
+from decider.serving import RequestHandler
+from decider.serving._parse import coerce_record, has_date
 from decider.steps import FunctionStep, Step
 
 from .loading import components, flow_components, flow_name, is_flow_file, latest_config, load_module, project_root

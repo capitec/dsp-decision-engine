@@ -27,10 +27,10 @@ Example::
     handle.start()
     handle.succeed()
 """
-from decider.contract.describe import Capabilities, capabilities, describe, resolve_step, source_location
-from decider.contract.refs import (CONTRACT_VERSION, EdgeRef, FlowDescription, FlowRef, RecordRef, StepRef,
+from decider.contract._describe import Capabilities, capabilities, describe, resolve_step, source_location
+from decider.contract._refs import (CONTRACT_VERSION, EdgeRef, FlowDescription, FlowRef, RecordRef, StepRef,
                                    ValueSlotRef, check_version)
-from decider.contract.schema import json_schema, typescript
+from decider.contract._schema import json_schema, typescript
 from decider.contract._jobs import Job, JobHandle, JobStatus, PartialResult, TERMINAL_STATUSES
 from decider.contract._manifest import (MANIFEST_VERSION, Environment, InputFingerprint, Override, ResultRef, Revision,
                                         RunManifest, Sample, Selection, SourceState, check_manifest_version,

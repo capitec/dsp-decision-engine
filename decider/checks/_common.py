@@ -3,7 +3,7 @@ from __future__ import annotations
 import inspect
 from typing import Any
 
-from decider.contract.refs import StepRef
+from decider.contract import StepRef
 from decider._engine.ir.nodes import (BranchNode, CallNode, FiniteStateMachineNode, IRNode, LoopNode,
                                      ScatterGatherNode, SequenceNode, iter_nodes)
 

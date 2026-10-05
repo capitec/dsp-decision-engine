@@ -6,7 +6,7 @@ from decider import _engine as engine
 from decider._engine import Engine
 from decider._engine.compile import kernel
 from decider.steps.expr import parse
-from decider.steps.trees import TreeConfig, walker
+from decider.steps.trees import TreeConfig, _walker as walker
 
 FRAME = pl.DataFrame({"x": [25.0, 15.0], "y": [10.0, 10.0]})
 

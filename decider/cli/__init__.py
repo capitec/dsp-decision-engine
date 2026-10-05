@@ -88,7 +88,7 @@ def build(version: str | None) -> None:
     warns when it runs on a different one.
     """
     from decider._engine.compile import cpu_target
-    from decider.serving.handler import construct_handler_from_settings
+    from decider.serving._handler import construct_handler_from_settings
 
     s = _settings()
     try:
@@ -133,7 +133,7 @@ def serve(host, port, workers, mode, server) -> None:
         import uvicorn
     except ImportError:
         raise click.ClickException("serving with starlette needs uvicorn: pip install 'decider[serve-starlette]'")
-    uvicorn.run("decider.serving.servers.starlette:create_app", factory=True,
+    uvicorn.run("decider.serving._servers.starlette:create_app", factory=True,
                 host=s.serve.host, port=s.serve.port, workers=workers)
 
 
@@ -142,7 +142,7 @@ def _serve_sanic(host: str, port: int, workers: int) -> None:
         from sanic.worker.loader import AppLoader
     except ImportError:
         raise click.ClickException("serving with sanic needs sanic: pip install 'decider[serve-sanic]'")
-    from decider.serving.servers.sanic import create_app
+    from decider.serving._servers.sanic import create_app
 
     # The loader calls the factory inside every worker process, so each one registers its own app.
     loader = AppLoader(factory=create_app)

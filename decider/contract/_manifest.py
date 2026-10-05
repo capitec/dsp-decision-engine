@@ -5,7 +5,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
-from decider.contract.refs import FlowRef, RecordRef
+from decider.contract._refs import FlowRef, RecordRef
 from decider.exceptions import DeciderError
 
 MANIFEST_VERSION = "1"

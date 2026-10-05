@@ -41,7 +41,7 @@ def test_decider_build_stages_the_config_version(monkeypatch):
 
 def test_sample_request_scores_through_the_handler(monkeypatch, sample_record, params):
     """No server: exactly as `SERVE.md` documents scoring without one."""
-    from decider.serving.handler import construct_handler_from_settings
+    from decider.serving._handler import construct_handler_from_settings
 
     monkeypatch.setenv("DECIDER_API__CODE_PATH", str(PROJECT_ROOT))
     monkeypatch.setenv("DECIDER_API__PIPELINE", "pipeline:build")

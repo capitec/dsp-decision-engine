@@ -18,7 +18,7 @@ from decider.steps.trees import (
     detect_format,
     load_document,
 )
-from decider.steps.values import ParamRef
+from decider.steps._values import ParamRef
 
 OUTPUT = {
     "data": [{"r": "low"}, {"r": "mid"}, {"r": "high"}, {"r": "adult"}],

@@ -31,7 +31,7 @@ sys.path.insert(0, PROJECT_ROOT)
 EXTENSIONS_DIR = os.path.join(PROJECT_DIR, "decider_extensions")
 
 from decider.initialization import initialize_decider
-from decider.config.file import JsonFileConfigManager
+from decider.config._file import JsonFileConfigManager
 from decider.modules import GraphModule
 
 CONFIGS_DIR = os.path.join(PROJECT_DIR, "configs")
@@ -117,10 +117,10 @@ before any config is parsed.
   export Decider_ext__extension_path={os.path.abspath(EXTENSIONS_DIR)}
 
   # Starlette (uvicorn):
-  uvicorn decider.serving.servers.starlette:app --host 0.0.0.0 --port 8080
+  uvicorn decider.serving._servers.starlette:app --host 0.0.0.0 --port 8080
 
   # Sanic:
-  python -m sanic decider.serving.servers.sanic:app --host 0.0.0.0 --port 8080
+  python -m sanic decider.serving._servers.sanic:app --host 0.0.0.0 --port 8080
 
 Test request:
   curl -X POST http://localhost:8080/predict \

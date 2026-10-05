@@ -8,7 +8,7 @@ from click.testing import CliRunner
 
 from decider.cli import cli
 from decider.config import JsonFileStore
-from decider.serving.handler import RequestHandler
+from decider.serving._handler import RequestHandler
 
 COMPONENTS = """\
 from decider import param

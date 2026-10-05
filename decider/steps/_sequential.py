@@ -1,0 +1,100 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING, Any, Sequence
+
+from decider._engine.ir.nodes import IRNode, SequenceNode
+from decider.exceptions import WiringError
+from decider.steps._base import Step, as_step
+
+if TYPE_CHECKING:
+    from decider._engine.ir.context import IRContext
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class SequentialStep(Step):
+    """Members run in written order; a later write of a name wins (the waterfall).
+
+    Build one with `flow(...)` or `a | b | c`.
+    """
+
+    __module__ = "decider.steps"
+
+    steps: tuple[Step, ...]
+    name: str | None = None
+    emits: tuple[str, ...] = ()
+    drops: tuple[str, ...] = ()
+    reads: tuple[tuple[str, str], ...] = ()
+    writes: tuple[tuple[str, str], ...] = ()
+    inputs: tuple[str, ...] = ()
+    id: str | None = None
+
+    def emit(self, *names: str) -> SequentialStep:
+        """A copy that also outputs these values, which would otherwise be dropped as intermediates.
+
+        `name` is the final value; `name@path` the value one step wrote, with
+        `path` relative to this flow (`cap_by_income`) or absolute as in
+        `step_map`, run reports and the params document
+        (`term/cap_by_income`); `name@*` every version. Values written inside
+        a branch arm or by its condition are emitted by path.
+
+        Example::
+
+            pipeline.emit("disposable_income", "term_cap@*", "term_cap@term/by_sector/cap_private")
+        """
+        return replace(self, emits=tuple(dict.fromkeys(self.emits + names)))
+
+    def drop(self, *names: str) -> SequentialStep:
+        """A copy that leaves these columns out of its output.
+
+        Example::
+
+            pipeline.drop("min_net_salary")
+        """
+        return replace(self, drops=tuple(dict.fromkeys(self.drops + names)))
+
+    def to_ir(self, ctx: IRContext) -> SequenceNode:
+        inner = ctx.child(self.name)
+        return self._sequence(ctx, self.steps, [inner.build(s) for s in self.steps])
+
+    def _sequence(self, ctx: IRContext, steps: Sequence[Step], nodes: Sequence[IRNode]) -> SequenceNode:
+        children, emits, drops, inputs = [], list(self.emits), list(self.drops), list(self.inputs)
+        for s, node in zip(steps, nodes):
+            # An anonymous member is transparent: its children join this sequence.
+            if s.name is None and isinstance(node, SequenceNode):
+                children += node.children_
+                emits += node.emits
+                drops += node.drops
+                inputs += node.inputs
+            else:
+                children.append(node)
+        return SequenceNode(ctx.origin(self), tuple(children), tuple(dict.fromkeys(emits)), tuple(dict.fromkeys(drops)),
+                            tuple(dict.fromkeys(inputs)))
+
+
+def flow(*steps: Any, name: str | None = None, inputs: Sequence[str] | None = None, id: str | None = None) -> SequentialStep:
+    """Run steps in written order; a later write of a name wins.
+
+    `a | b | c` builds the same flow. Anonymous flows inside are merged in; a
+    named flow stays one unit (its members sit under its name). Plain
+    functions have no `|`, so a flow of only functions is written `flow(f, g)`
+    or `step(f) | g`.
+
+    The output holds the input columns plus the values nothing reads;
+    intermediates are dropped. `.emit(...)` keeps them (one version or every
+    version of a name) and `.drop(...)` removes columns.
+
+    Args:
+        inputs: request fields a step reads that resemble a name another step
+            produces, e.g. `inputs=["handling_fee_pct"]` next to an output
+            `quote_handling_fee_pct`. Declaring them stops the typo heuristic
+            from warning or erroring on them.
+
+    Example::
+
+        term = flow(term_cap, cap_by_income, cap_by_sector, name="term")
+        term.emit("term_cap@*").drop("requested_term").run(df)
+    """
+    if not steps:
+        raise WiringError("flow() needs at least one step")
+    return SequentialStep(tuple(map(as_step, steps)), name, inputs=tuple(inputs or ()), id=id)

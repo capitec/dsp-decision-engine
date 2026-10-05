@@ -15,8 +15,8 @@ from pathlib import Path
 
 import polars as pl
 
-from decider.experiments.experiments import Scenario
-from decider.experiments.runner import _batches, _Local, load_flow
+from decider.experiments._experiments import Scenario
+from decider.experiments._runner import _batches, _Local, load_flow
 
 
 def main(stdin=sys.stdin, stdout=sys.stdout) -> None:

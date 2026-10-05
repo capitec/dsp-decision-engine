@@ -16,11 +16,11 @@ Example::
     checks.run(pipeline, suites=[checks.default_suite, (checks.equivalence(),)])
     checks.compare(term_old, term_new).equivalent
 """
-from decider.checks.models import Finding, Report, Severity
-from decider.checks.run import Check, Suite, run
-from decider.checks.durable_ids import durable_ids
-from decider.checks.equivalence import Equivalence, compare, equivalence
-from decider.checks.static import impure, numeric, wall_clock
+from decider.checks._model import Finding, Report, Severity
+from decider.checks._run import Check, Suite, run
+from decider.checks._durable_ids import durable_ids
+from decider.checks._equivalence import Equivalence, compare, equivalence
+from decider.checks._static import impure, numeric, wall_clock
 
 default_suite = (wall_clock, impure, numeric, durable_ids())
 

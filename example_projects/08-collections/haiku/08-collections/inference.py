@@ -1,5 +1,5 @@
 """Request handler for collections treatment pipeline."""
-from decider.serving.handler import RequestHandler
+from decider.serving._handler import RequestHandler
 
 
 class Handler(RequestHandler):

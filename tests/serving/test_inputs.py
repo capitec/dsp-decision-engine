@@ -14,9 +14,9 @@ from decider import Engine, Struct, flow, frame_step
 from decider.config import JsonFileStore
 from decider.exceptions import DeciderError, ParamsError
 from decider.serving import RequestHandler
-from decider.serving.handler import _dates, construct_handler_from_settings
-from decider.serving.parse import coerce_record, dummy, has_date
-from decider.serving.servers.starlette import create_app
+from decider.serving._handler import _dates, construct_handler_from_settings
+from decider.serving._parse import coerce_record, dummy, has_date
+from decider.serving._servers.starlette import create_app
 
 from test_serving import _request
 

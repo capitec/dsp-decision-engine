@@ -6,7 +6,7 @@ from decider import _engine as engine
 from decider._engine import Engine
 from decider._engine.compile import kernel
 from decider._engine.ir.decls import base_annotation
-from decider.steps.trees import TreeConfig, walker
+from decider.steps.trees import TreeConfig, _walker as walker
 
 BIG = 9007199254740992  # 2**53: the first integer float64 can't tell from its successor
 MODES = ("interpreted", "stepped", "fused")

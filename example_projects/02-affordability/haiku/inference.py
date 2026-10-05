@@ -1,5 +1,5 @@
 """Request handling for affordability assessment."""
-from decider.serving.handler import RequestHandler
+from decider.serving._handler import RequestHandler
 
 
 class Handler(RequestHandler):

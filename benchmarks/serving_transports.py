@@ -68,7 +68,7 @@ SCHEMA_MSG, BODIES["arrow_batch"] = split_ipc(BODIES["arrow"])
 
 def build():
     from decider.config import JsonFileStore
-    from decider.serving.handler import RequestHandler
+    from decider.serving._handler import RequestHandler
 
     store = JsonFileStore(basepath=tempfile.mkdtemp(dir=".scratch"))
     store.create_version({"params": {}})
@@ -238,7 +238,7 @@ def serve_shm(kind):
 
 def serve_http(kind, fast=False):
     import uvicorn
-    from decider.serving.servers.starlette import create_app
+    from decider.serving._servers.starlette import create_app
 
     handler = build()
     extra = {"loop": "uvloop", "http": "httptools"} if fast else {}

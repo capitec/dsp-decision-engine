@@ -6,7 +6,7 @@ import pytest
 
 from decider.data import (DatasetError, DatasetProvider, FileProvider, FolderProvider, dataset, dataset_documents, datasets,
                          datasets_folder)
-from decider.data.providers import project_root
+from decider.data._providers import project_root
 
 FRAME = pl.DataFrame({"client_id": [1, 2]})
 
