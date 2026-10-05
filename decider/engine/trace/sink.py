@@ -70,6 +70,8 @@ class TraceSink:
     Events are ordered within one record's stream; cross-record order is the
     driver's, unspecified. `status()` reports delivery and loss, never silently.
 
+    Not thread-safe: use one per call.
+
     Example::
 
         sink = TraceSink()

@@ -60,6 +60,8 @@ class Session(Edits):
     re-run from the edit, keeping every value upstream of it; `reload(pipeline)`
     diffs a whole edited pipeline, and `watch` reloads after each notebook cell.
 
+    Not thread-safe: use one per thread.
+
     Example::
 
         s = pipeline.session(df)
