@@ -8,6 +8,8 @@ from dotenv import load_dotenv
 
 from decider import _settings as settings_module
 
+__all__ = ["cli"]
+
 TEMPLATES = Path(__file__).parent / "templates"
 GUIDE = Path(__file__).parent.parent / "GUIDE.md"
 CPU_TARGET_FILE = "decider-cpu-target.json"

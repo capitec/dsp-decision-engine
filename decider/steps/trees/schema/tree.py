@@ -10,6 +10,14 @@ from decider.steps.trees.schema.conditions import SchemaModel
 from decider.steps.trees.schema.nodes import NodeData, arity
 from decider.steps._values import ParamRef
 
+__all__ = [
+    "Node",
+    "ParameterInfo",
+    "Rule",
+    "Tree",
+    "TreeOutput",
+]
+
 
 class TreeOutput(BaseModel):
     """The rows a tree's leaves select: `data[result_idx]`, or `default` for -1.

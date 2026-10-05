@@ -9,6 +9,34 @@ from pydantic import BaseModel, BeforeValidator, Discriminator, Field, PrivateAt
 from decider.steps import expr
 from decider.steps._values import ParamRef, Value
 
+__all__ = [
+    "CompositeCondition",
+    "ComputedFeature",
+    "Feature",
+    "IsInCondition",
+    "LogicOp",
+    "NullHandling",
+    "RangeCondition",
+    "RangeEndLogic",
+    "StringMatchCondition",
+    "StringMatchType",
+    "TCondition",
+    "TUnaryOp",
+    "Threshold",
+    "UnaryBetween",
+    "UnaryEqual",
+    "UnaryGreaterThan",
+    "UnaryGreaterThanEqual",
+    "UnaryIsFalse",
+    "UnaryIsIn",
+    "UnaryIsTrue",
+    "UnaryLessThan",
+    "UnaryLessThanEqual",
+    "UnaryNotEqual",
+    "UnaryStringMatch",
+    "validate_range_conditions",
+]
+
 
 class RangeEndLogic(str, enum.Enum):
     """Which end of a range band is closed: `[lo, hi)` or `(lo, hi]`."""

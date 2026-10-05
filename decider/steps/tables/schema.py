@@ -7,6 +7,11 @@ from pydantic import BaseModel, Field, model_validator
 
 from decider.steps.trees.schema import RangeEndLogic
 
+__all__ = [
+    "AndExpression", "BetweenExpression", "BoundMode", "EqExpression", "Expression", "InExpression",
+    "IsTrueExpression", "Leaf", "OrExpression",
+]
+
 BoundMode = RangeEndLogic
 """`lower_inclusive` is `[lower, upper)`, `upper_inclusive` is `(lower, upper]`."""
 
