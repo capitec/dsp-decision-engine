@@ -71,8 +71,9 @@ def test_changed_code_is_not_proven_and_carries_the_structure_as_evidence():
     assert [c.ref.path for c in proof.evidence.changed_steps] == ["term/scaled_changed"] or proof.evidence.removed
 
 
-def test_a_differing_constant_is_not_proven_identical():
-    assert diff.prove(_threshold_tree(5.0), _threshold_tree(6.0)).identical is None
+def test_a_differing_threshold_is_refuted_with_a_counterexample():
+    proof = diff.prove(_threshold_tree(5.0), _threshold_tree(6.0))
+    assert (proof.tier, proof.identical) == ("smt", False)
 
 
 def test_equal_constants_are_proven_identical():
