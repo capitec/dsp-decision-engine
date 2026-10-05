@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from decider import Engine
-from decider._engine.debug.controls import Controls
+from decider._bridge.controls import Controls
 
 
 def trace(step, frame, params: dict | None, ir: dict | None = None, forces=()) -> dict:

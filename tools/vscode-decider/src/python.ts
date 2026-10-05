@@ -23,12 +23,12 @@ export function configuredExecutable(cwd: string): string | undefined {
 }
 
 /**
- * Ask a short-lived `decider.debug_bridge` one question. Replies come back on
+ * Ask a short-lived `decider._bridge` one question. Replies come back on
  * fd 3, so a `print()` in a step can't corrupt them.
  */
 export function ask<T>(cwd: string, cmd: string, args: Record<string, unknown>): Promise<T> {
   const [exe, ...pre] = pythonCommand();
-  const proc = spawn(exe, [...pre, "-m", "decider.debug_bridge", "--fd", "3"], {
+  const proc = spawn(exe, [...pre, "-m", "decider._bridge", "--fd", "3"], {
     cwd,
     env: { ...process.env, PYTHONUNBUFFERED: "1" },
     stdio: ["pipe", "ignore", "pipe", "pipe"],

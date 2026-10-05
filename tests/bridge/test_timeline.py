@@ -3,7 +3,7 @@ import os
 HERE = os.path.dirname(__file__)
 EXAMPLES = os.path.join(HERE, "..", "..", "tools", "vscode-decider", "examples")
 LOAN = os.path.join(EXAMPLES, "loan.py")
-from decider.debug_bridge.bridge import Bridge
+from decider._bridge.bridge import Bridge
 
 
 def finished(**kw):

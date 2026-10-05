@@ -4,13 +4,13 @@ import sys
 import pytest
 
 from decider.config import JsonFileStore
-from decider.debug_bridge.bridge import Bridge
-from decider.debug_bridge.loading import components
-from decider.debug_bridge.run import main, node_path
+from decider._bridge.bridge import Bridge
+from decider._bridge.loading import components
+from decider._bridge.run import main, node_path
 
 STEPS = """\
 from decider import param, step
-from decider.debug_bridge.run import node_path
+from decider._bridge.run import node_path
 
 SEEN = []
 

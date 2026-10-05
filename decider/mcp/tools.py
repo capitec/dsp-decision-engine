@@ -15,12 +15,12 @@ import polars as pl
 
 from decider import checks
 from decider.contract import StepRef, describe, resolve_step, source_location
-from decider.contract.describing import find_pipelines
+from decider._bridge.describing import find_pipelines
 from decider.data import load
-from decider.debug_bridge.loading import load_module
+from decider._bridge.loading import load_module
 from decider import Engine
 from decider.trace import TraceSink
-from decider.debug_bridge.replay import trace as run_trace
+from decider._bridge.replay import trace as run_trace
 from decider.experiments import ExperimentDef, ExperimentResult, load_flow, run_experiment
 from decider.mcp.policy import REDACTED, Policy
 

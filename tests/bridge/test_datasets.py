@@ -6,8 +6,8 @@ import sys
 import polars as pl
 import pytest
 
-from decider.debug_bridge.bridge import Bridge
-from decider.debug_bridge.run import main
+from decider._bridge.bridge import Bridge
+from decider._bridge.run import main
 
 FLOW = {"flow": "credit", "steps": [{"step": "double"}]}
 STEPS = """\
@@ -103,7 +103,7 @@ def test_run_script_rejects_a_row_past_the_end(project):
 
 def test_the_json_lines_protocol_answers_datasets_from_the_project_cwd(project):
     r, w = os.pipe()
-    proc = subprocess.Popen([sys.executable, "-m", "decider.debug_bridge", "--fd", str(w)], cwd=project,
+    proc = subprocess.Popen([sys.executable, "-m", "decider._bridge", "--fd", str(w)], cwd=project,
                             stdin=subprocess.PIPE, pass_fds=(w,), text=True)
     os.close(w)
     proc.stdin.write('{"id": 1, "cmd": "datasets"}\n{"id": 2, "cmd": "exit"}\n')

@@ -43,7 +43,7 @@ export async function debugFlow(file: string, pipeline?: string, dataset?: strin
     type: "debugpy",
     request: "launch",
     name: `decider: ${pipeline ?? path.basename(file)}${dataset ? ` · ${dataset}${row == null ? "" : `#${row}`}` : ""}`,
-    module: "decider.debug_bridge.run",
+    module: "decider._bridge.run",
     args: [file, ...(pipeline ? ["--pipeline", pipeline] : []), ...(rows ? ["--data", rows] : []), ...(dataset ? ["--dataset", dataset] : []), ...(row == null ? [] : ["--row", String(row)])],
     cwd: path.dirname(file),
     justMyCode: true,

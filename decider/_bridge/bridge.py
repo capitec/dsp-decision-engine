@@ -27,17 +27,17 @@ import polars as pl
 
 from decider.config import JsonFileStore
 from decider.data import dataset as named_dataset
-from decider.contract.describing import (assignment_lines, field_metadata, find_pipelines, formula, key_column,
+from decider._bridge.describing import (assignment_lines, field_metadata, find_pipelines, formula, key_column,
                                          node_json, values_file)
 from decider import Engine
 from decider._engine.debug import EVENT
-from decider._engine.debug.controls import Controls
+from decider._bridge.controls import Controls
 from decider._engine.debug.edit import swap
-from decider._engine.debug.lineage import attribution, latest, lineage
+from decider._bridge.lineage import attribution, latest, lineage
 from decider.ir import step_map, to_ir
-from decider.debug_bridge.forks import checkpoint_key, sweep
+from decider._bridge.forks import checkpoint_key, sweep
 from decider.contract import JobHandle
-from decider.debug_bridge.replay import trace
+from decider._bridge.replay import trace
 from decider._engine.params import merge
 from decider.serving.handler import RequestHandler
 from decider.serving.parse import coerce_record, has_date

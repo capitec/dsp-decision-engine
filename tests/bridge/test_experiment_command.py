@@ -7,7 +7,7 @@ import time
 
 import polars as pl
 
-from decider.debug_bridge.bridge import Bridge
+from decider._bridge.bridge import Bridge
 
 
 def _definition(tmp_path, monkeypatch, *, rows=2, batch_size=None, **extra):

@@ -133,7 +133,7 @@ describe("a real experiment run end to end", () => {
       { income: 1000.0, debt: 350.0 },
     ];
     const script = `import io, json
-from decider.debug_bridge.bridge import Bridge
+from decider._bridge.bridge import Bridge
 b = Bridge(out=io.StringIO())  # progress lines go to a throwaway stream, not stdout's one JSON reply
 r = b.handle({"id": 1, "cmd": "experiment", "file": ${JSON.stringify(path.join(dir, "credit.py"))}, "def_": ${JSON.stringify(DEF)}, "data": ${JSON.stringify(data)}})
 print(json.dumps(r))`;
