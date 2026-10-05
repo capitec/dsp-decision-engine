@@ -73,6 +73,7 @@ class OptimiseStep(Step):
     """Runs `evaluate` once per candidate `index` in `1..count` and keeps the best. Build with `optimise()`."""
 
     __module__ = "decider.steps"
+    kind = "optimise"
 
     name: str
     count: Step

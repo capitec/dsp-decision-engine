@@ -17,6 +17,7 @@ class LoopStep(Step):
     """Runs a body while a condition holds. Build one with `loop()`."""
 
     __module__ = "decider.steps"
+    kind = "loop"
 
     name: str
     condition: Step

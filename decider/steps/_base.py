@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Iterator
+from typing import TYPE_CHECKING, Any, ClassVar, Iterator
 
 from decider._engine.ir.origin import check_name
 
@@ -31,6 +31,9 @@ class Step(ABC):
     """
 
     __slots__ = ("__weakref__",)
+
+    kind: ClassVar[str]
+    """What sort of step this is: "function", "frame", "sequence", "dag", "branch", "loop", "each", "optimise" or "configurable"."""
 
     def __post_init__(self) -> None:
         if self.name is not None:

@@ -24,6 +24,7 @@ class FunctionStep(Step):
 
     # Origins name the public import path.
     __module__ = "decider.steps"
+    kind = "function"
 
     name: str
     fn: Callable

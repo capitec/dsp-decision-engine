@@ -20,6 +20,7 @@ class FrameStep(Step):
     """
 
     __module__ = "decider.steps"
+    kind = "frame"
 
     name: str
     fn: Callable

@@ -9,7 +9,8 @@ from decider import dag, flow, param, step
 from decider import _engine as engine
 from decider._engine.ir.decls import NullPolicy
 from decider.exceptions import ParamsError
-from decider.steps import FunctionStep, as_step
+from decider.steps._base import as_step
+from decider.steps._function import FunctionStep
 
 
 def cap_by_income_band(term_cap: float, min_net_salary: float,

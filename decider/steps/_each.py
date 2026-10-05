@@ -30,6 +30,7 @@ class EachStep(Step):
     """Runs `item` on every element of `column`, adding the child's outputs as fields. Build with `each()`."""
 
     __module__ = "decider.steps"
+    kind = "each"
 
     name: str
     column: str

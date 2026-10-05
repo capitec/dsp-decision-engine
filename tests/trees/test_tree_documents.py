@@ -1,7 +1,7 @@
 import pydantic
 import pytest
 
-from decider.steps.trees import (
+from decider.steps.trees.schema import (
     CasesRanges,
     FlatRuleDocument,
     LeafNode,

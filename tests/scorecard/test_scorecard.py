@@ -6,12 +6,12 @@ import json
 import polars as pl
 import pytest
 
-from decider.steps.scorecard import (
+from decider.steps.scorecard import ScorecardConfig
+from decider.steps.scorecard._config import (
     AdjustedVariable,
     BoundBin,
     ConstantScore,
     DefaultBin,
-    ScorecardConfig,
     ScoredVariable,
     ValuesBin,
 )
