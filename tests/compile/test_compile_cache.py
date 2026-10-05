@@ -3,10 +3,12 @@ from __future__ import annotations
 
 import json
 import os
+import pickle
 import platform
 import subprocess
 import sys
 
+import numba
 import numpy as np
 
 from decider import flow
@@ -275,3 +277,35 @@ def test_a_step_first_seen_without_a_file_still_gets_a_disk_cache(tmp_path):
 
     assert key_file == key_exec and from_file is from_exec
     assert not isinstance(from_file._cache, NullCache)
+
+
+_CHILD_MODES = """
+import json
+import polars as pl
+import step
+from decider import Engine, flow
+
+out = [Engine().bind(flow(step.half, name="p"), mode=mode).run(pl.DataFrame({"x": [3.0]}))["half"].to_list()
+       for mode in ("stepped", "fused")]
+print(json.dumps(out))
+"""
+
+
+def test_an_unreadable_disk_cache_index_is_a_miss_and_is_rewritten(tmp_path):
+    # An index written by another decider version can name a module that no longer exists.
+    (tmp_path / "step.py").write_text(_STEP)
+    (tmp_path / "child.py").write_text(_CHILD_MODES)
+    env = dict(os.environ, NUMBA_CACHE_DIR=str(tmp_path / "numba_cache"))
+
+    def run():
+        proc = subprocess.run([sys.executable, "child.py"], cwd=tmp_path, env=env, capture_output=True,
+                              text=True, timeout=600, check=False)
+        assert proc.returncode == 0, proc.stderr
+        assert json.loads(proc.stdout.splitlines()[-1]) == [[1.5], [1.5]]
+
+    run()
+    (index,) = (tmp_path / "numba_cache").rglob("step.half*.nbi")
+    stale = pickle.dumps(numba.__version__, protocol=-1) + b"cmodule_that_does_not_exist\nSpan\n."
+    index.write_bytes(stale)
+    run()
+    assert index.read_bytes() != stale
