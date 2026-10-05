@@ -58,6 +58,7 @@ Check.lazy({
     "wall_clock": "decider.checks._builtin.determinism", "impure": "decider.checks._builtin.determinism",
     "numeric": "decider.checks._builtin.numeric",
     "durable_ids": "decider.checks._builtin.ids", "unknown_suppression": "decider.checks._builtin.ids",
+    "missing_required": "decider.checks._builtin.data", "invalid_params_doc": "decider.checks._builtin.params",
     "crash_probe": "decider.checks._builtin.runtime", "mode_divergence": "decider.checks._builtin.runtime",
 })
 

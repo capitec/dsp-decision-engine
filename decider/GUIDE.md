@@ -1054,11 +1054,12 @@ their storage.
 ### Data loading
 
 `decider.data` reads Redshift-export JSON/CSV/Parquet (`read` for a frame,
-`scan` for a lazy one) and pre-flights a run before anything executes.
+`scan` for a lazy one); `checks.run(..., ["missing_required"], data=frame)` flags required
+inputs the data lacks before anything executes.
 
 ```python
-from decider import flow
-from decider.data import preflight, read
+from decider import checks, flow
+from decider.data import read
 
 def ratio(income: float, debt: float) -> float:
     return debt / income
@@ -1066,7 +1067,7 @@ def ratio(income: float, debt: float) -> float:
 pipeline = flow(ratio, name="credit")
 df = read(b'{"income": 1000.0, "debt": 200.0}\n{"income": 500.0, "debt": 400.0}\n', format="json")
 assert df.height == 2
-assert preflight(pipeline, df).ok
+assert checks.run(pipeline, ["missing_required"], data=df).ok
 ```
 
 ### Datasets

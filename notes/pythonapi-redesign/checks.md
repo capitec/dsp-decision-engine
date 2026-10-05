@@ -238,7 +238,7 @@ DCD002 and DCD003 messages say why it matters: served steps run concurrently on 
 | DCD301 | `param_unconstrained` | `param()` without bounds; `Percent` without `ge=0, le=1` | info; warning for Money/Percent |
 | DCD302 | `param_default_out_of_bounds` | a default that breaks its own bounds; `on_invalid` hiding bad values | warning |
 | DCD303 | `param_unused` | a declared param the body never reads | warning |
-| DCD304 | `params_doc_unknown_key` | a key in the params document that matches no step (a typo); needs the document | error |
+| DCD304 | `invalid_params_doc` | a key matching no step, or a value its param rejects; needs the document | error |
 
 ### Ids (DCD4xx)
 

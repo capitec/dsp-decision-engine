@@ -42,6 +42,7 @@ def test_baseline_and_a_variant_run_with_a_manifest(pipeline, frame):
     assert result.manifest.input.row_count == 4
     assert result.manifest.revision.authored == "HEAD"
     assert result.preflight.ok
+    assert result.cost.rows == 4
 
 
 def test_every_scenario_runs_each_batch_before_the_next_batch_starts(pipeline, frame):
