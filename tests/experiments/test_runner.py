@@ -7,7 +7,7 @@ import polars as pl
 from decider import flow
 from decider.experiments import Experiment, ExperimentDef, RunStatus, run
 from decider.experiments._experiments import ScenarioStatus
-from decider.experiments._revision import resolve
+from decider.diff._revisions import resolve
 from decider.experiments.callbacks import Callback
 from decider.experiments.metrics import Divergence, ValueCounts
 from decider.contract import JobHandle

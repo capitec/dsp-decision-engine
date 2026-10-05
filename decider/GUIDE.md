@@ -835,6 +835,44 @@ def capped(cents: int) -> int:
 `decider` reports findings; it never fails a build. A custom check is any
 callable returning `Finding`s, passed in a `suites=` tuple.
 
+### Comparing versions
+
+`decider.diff` compares two versions of a pipeline. `structure` says what changed
+without running anything (steps added, removed, renamed or changed, params,
+wiring), `outputs` says which rows and columns change over a frame and by how
+much, and `prove` returns `identical=True` only when both versions have the
+same IR content hash. It never claims it from sampled rows: otherwise
+`identical` is `None`, with the structure diff as evidence.
+
+```python
+import polars as pl
+from decider import diff, flow, step
+
+def ratio(income: float, debt: float) -> float:
+    return debt / income
+
+@step(output="ratio")
+def ratio_fee(income: float, debt: float) -> float:
+    return (debt + 50.0) / income
+
+old = flow(ratio, name="credit")
+new = flow(ratio_fee, name="credit")
+frame = pl.DataFrame({"id": ["a", "b"], "income": [1000.0, 500.0], "debt": [350.0, 400.0]})
+
+s = diff.structure(old, new)
+assert not s.identical and s.added and s.removed
+o = diff.outputs(old, new, frame, key="id")
+assert o.rows_changed == 2 and o.columns["ratio"].max_abs > 0
+assert o.table().columns == ["id", "column", "old", "new", "delta"]
+assert diff.prove(old, flow(ratio, name="credit")).identical is True
+assert diff.prove(old, new).identical is None
+```
+
+Between git revisions, each loads in its own process:
+`diff.revisions("main", "HEAD", entry="credit.pipeline:build").outputs(frame)`, or
+`decider diff main HEAD credit.pipeline:build --data loans [--key id] [--format json]`.
+The command exits 1 when anything differs.
+
 ### Experiments
 
 An experiment runs the unchanged flow (the baseline) and each scenario —

@@ -50,7 +50,7 @@ def numeric(step: Any) -> list[Finding]:
     overflow — int64 wraps silently), true division by an integer constant
     (cents lose precision when cast to float), and `==`/`!=` against a float
     constant (fragile on floats). Confirm each against threshold/regime cases
-    with `decider.checks._equivalence`.
+    with `checks.equivalence()`.
     """
     return list(_flagged(step, "numeric", _numeric_findings))
 

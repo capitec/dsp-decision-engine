@@ -2,11 +2,8 @@
 import json
 import time
 
-import numpy as np
-
-from decider import ConfigurableStep, ParamTable, Value, checks, flow, param_table, step
+from decider import checks, flow, step
 from decider.checks import Finding, Severity
-from decider.steps.trees import TreeConfig
 
 
 @step(output="x")
@@ -27,22 +24,6 @@ def cap(x: float) -> float:
 @step(output="x", id="0123abcdef45")
 def cap_id(x: float) -> float:
     return x
-
-
-def net(a: float, b: float) -> float:
-    return a - b
-
-
-def scaled(net: float) -> float:
-    return net * 2.0
-
-
-def scaled_changed(net: float) -> float:
-    return net * 3.0
-
-
-PIPELINE = flow(net, scaled, name="term")
-CHANGED = flow(net, scaled_changed, name="term")
 
 
 def test_a_wall_clock_read_is_reported_with_its_source():
@@ -102,70 +83,6 @@ def test_report_serialises_to_json_with_string_severities():
     assert data["findings"]
     assert all(isinstance(f["severity"], str) for f in data["findings"])
     assert all("step" in f and "message" in f for f in data["findings"])
-
-
-def test_compare_reports_structural_equivalence_when_sources_match():
-    result = checks.compare(PIPELINE, PIPELINE)
-    assert result.structurally_equivalent
-    assert result.method == "structure"
-    assert result.equivalent
-
-
-def test_compare_falls_back_to_corpus_evidence_when_revisions_differ():
-    result = checks.compare(PIPELINE, CHANGED)
-    assert not result.structurally_equivalent
-    assert result.method == "corpus"
-    assert not result.equivalent
-    assert result.frames_compared >= 1
-    assert result.divergences
-
-
-def _threshold_tree(threshold):
-    rule = {"meta": {"name": "r"}, "rule": {"type": "unary", "then": {"id": "hit", "type": "leaf", "result_idx": 0},
-            "condition": {"op": ">", "feature": "amount", "threshold": threshold}}}
-    return TreeConfig.load({"type": "tree", "name": "t", "path_output": "leaf", "tree": {
-        "type": "prioritized_flat_rule", "mode": "all", "rules": [rule],
-        "output": {"data": [{"hit": 1}], "default": {"hit": 0}, "dtypes": [["hit", "Int64"]]}}})
-
-
-def test_compare_does_not_prove_flows_equivalent_when_only_a_const_differs():
-    assert checks.compare(_threshold_tree(5.0), _threshold_tree(6.0)).method == "corpus"
-
-
-def test_compare_does_not_prove_flows_equivalent_when_only_a_param_default_differs():
-    low, high = ({"param": "limit", "default": d} for d in (5.0, 6.0))
-    assert checks.compare(_threshold_tree(low), _threshold_tree(high)).method == "corpus"
-
-
-class _Banded(ConfigurableStep):
-    column: str
-    factor: Value[float]
-    bump: int = -1
-
-    def to_ir(self, ctx):
-        table = np.zeros(2000)
-        table[self.bump] = 1.0
-        return ctx.call(self, _banded, inputs={"x": self.column}, values={"factor": self.factor, "table": table})
-
-
-def _banded(x: float, factor: float, table: object) -> float:
-    return x * factor
-
-
-def test_compare_does_not_prove_flows_equivalent_when_a_large_const_differs_in_an_elided_element():
-    one, other = (_Banded(name="s", column="x", factor=2.0, bump=b) for b in (500, 1000))
-    assert checks.compare(one, other).method == "corpus"
-
-
-def test_compare_does_not_prove_flows_equivalent_when_a_param_table_differs_in_one_middle_row():
-    def ladder(rate_at_25):
-        rows = [{"floor": i, "rate": rate_at_25 if i == 25 else 0.2} for i in range(50)]
-
-        def rate(score: int, ladder: ParamTable = param_table({"floor": int, "rate": float}, default=rows)) -> float:
-            return 0.0
-        return flow(rate, name="pricing")
-
-    assert checks.compare(ladder(0.1), ladder(0.3)).method == "corpus"
 
 
 def test_equivalence_check_surfaces_a_generated_regime_defect():
