@@ -61,14 +61,16 @@ def find_pipelines(mod, file):
     return candidates
 
 
-def _statement_line(fn, index):
-    # The first statement is where a debugpy breakpoint stops on the call rather than the def.
+def _body_lines(fn):
+    # The first statement past a docstring is where a debugpy breakpoint stops on the call rather than the def.
     try:
         src, first = inspect.getsourcelines(fn)
-        node = ast.parse(textwrap.dedent("".join(src))).body[0]
-        return first + node.body[index].lineno - 1
+        body = ast.parse(textwrap.dedent("".join(src))).body[0].body
+        if len(body) > 1 and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant) and isinstance(body[0].value.value, str):
+            body = body[1:]
+        return first + body[0].lineno - 1, first + body[-1].end_lineno - 1
     except (OSError, TypeError, SyntaxError, IndexError, AttributeError):
-        return None
+        return None, None
 
 
 def _short_source(fn, limit=15):
@@ -145,7 +147,7 @@ def node_json(node, steps, located):
                 "formula": formula(python) if isinstance(step_, FunctionStep) else None,
                 "body": _short_source(python) if isinstance(step_, FunctionStep) else None,
                 "table": step_.expression.model_dump(mode="json") if hasattr(step_, "expression") and hasattr(step_, "rows") else None,
-                "python": {"file": rf, "line": rl, "bodyLine": _statement_line(python, 0), "endLine": _statement_line(python, -1)} if rf else None}
+                "python": {"file": rf, "line": rl, **dict(zip(("bodyLine", "endLine"), _body_lines(python)))} if rf else None}
     kind = "branch" if isinstance(node, BranchNode) else "loop" if isinstance(node, LoopNode) else "sequence"
     extra = {"modifies": list(node.modifies)} if kind == "branch" else {}
     if kind == "loop":

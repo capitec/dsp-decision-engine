@@ -9,6 +9,7 @@ from typing import Any
 import polars as pl
 from pydantic import BaseModel, PrivateAttr
 
+from decider.data.formats import format_of, scan
 from decider.data.identity import suggest_key
 from decider.exceptions import DeciderError
 from decider.lifecycle import InputFingerprint, JobHandle
@@ -41,11 +42,11 @@ class LoadedData(BaseModel):
 
     @classmethod
     def from_frame(cls, frame: pl.DataFrame, dataset: str = "",
-                   suggested_key: tuple[str, ...] | None = None) -> "LoadedData":
+                   suggested_key: tuple[str, ...] | None = None, fingerprint: str | None = None) -> "LoadedData":
         columns = tuple((name, str(dtype)) for name, dtype in frame.schema.items())
         data = cls(
             summary=InputFingerprint(dataset=dataset, columns=columns, row_count=frame.height,
-                                     fingerprint=_fingerprint(frame)),
+                                     fingerprint=fingerprint or _fingerprint(frame)),
             suggested_key=suggested_key,
         )
         data._frame = frame
@@ -113,12 +114,14 @@ def _read(source: Any, format: str | None) -> pl.DataFrame:
         return source
     fmt = format
     if fmt is None and not isinstance(source, (bytes, bytearray)):
-        fmt = _format_from_name(str(source))
+        fmt = format_of(str(source))
     if fmt is None:
         raise LoadError("no data format given; pass format='json'|'csv'|'parquet' or use a .json/.csv/.parquet path")
     if fmt not in FORMATS:
         raise LoadError(f"unknown data format {fmt!r}; expected one of {', '.join(FORMATS)}")
-    return {"json": _read_json, "csv": pl.read_csv, "parquet": pl.read_parquet}[fmt](source)
+    if isinstance(source, (bytes, bytearray)):
+        return {"json": _read_json, "csv": pl.read_csv, "parquet": pl.read_parquet}[fmt](source)
+    return scan(str(source), fmt).collect()
 
 
 def _read_json(source: Any) -> pl.DataFrame:
@@ -127,17 +130,6 @@ def _read_json(source: Any) -> pl.DataFrame:
         return pl.read_ndjson(source)
     except Exception:
         return pl.read_json(source)
-
-
-def _format_from_name(name: str) -> str | None:
-    lower = name.lower()
-    if lower.endswith((".json", ".jsonl", ".ndjson")):
-        return "json"
-    if lower.endswith(".csv"):
-        return "csv"
-    if lower.endswith(".parquet"):
-        return "parquet"
-    return None
 
 
 def _name(source: Any) -> str:

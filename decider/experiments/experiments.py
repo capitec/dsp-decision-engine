@@ -14,10 +14,11 @@ from pathlib import Path
 from typing import Any
 
 import polars as pl
-from pydantic import BaseModel, ConfigDict, SerializeAsAny
+from pydantic import BaseModel, ConfigDict, SerializeAsAny, model_validator
 
 from decider.contract import describe
-from decider.data import PreflightReport
+from decider.data import PreflightReport, dataset
+from decider.data.formats import scan
 from decider.engine.ir.context import to_ir
 from decider.engine.ir.nodes import iter_nodes
 from decider.exceptions import DeciderError
@@ -47,11 +48,18 @@ class FlowSpec(BaseModel):
 
 
 class InputSpec(BaseModel):
-    """The input data: a `.parquet`, `.csv`, `.json` or `.jsonl` path."""
+    """The input data: a `.parquet`, `.csv`, `.json` or `.jsonl` `path`, or the `dataset` name of one of the project's datasets, not both."""
 
     model_config = ConfigDict(extra="forbid")
 
     path: str = ""
+    dataset: str = ""
+
+    @model_validator(mode="after")
+    def _one_source(self):
+        if self.path and self.dataset:
+            raise ValueError("set input.path or input.dataset, not both")
+        return self
 
 
 class Scenario(BaseModel):
@@ -186,6 +194,16 @@ def check_experiment_version(version: str | None) -> None:
         raise DeciderError(f"experiment version {version} is newer than {EXPERIMENT_VERSION}; upgrade decider")
 
 
+def input_frame(def_: ExperimentDef, file: Path | None = None) -> pl.LazyFrame:
+    """The lazy frame `def_.input` names; `file` is the definition's own path, which paths and the project are found from."""
+    spec = def_.input
+    if spec.dataset:
+        return dataset(spec.dataset, start=file).scan()
+    if not spec.path:
+        raise DeciderError("no input data: set input.path or input.dataset in the definition, or pass frame=")
+    return scan(str(file.parent / spec.path if file else spec.path))
+
+
 def validate(def_: ExperimentDef, step) -> list[str]:
     """Every problem in `def_` against `step`, returned rather than raised so a caller shows them all.
 
@@ -270,14 +288,14 @@ class Experiment:
     """
 
     def __init__(self, name: str, step, frame: pl.DataFrame | pl.LazyFrame, *, params=None, revision: str = "HEAD",
-                 entry: str = "", decider: str = "", input_path: str = "", batch_size: int = 100_000,
+                 entry: str = "", decider: str = "", input_path: str = "", input_dataset: str = "", batch_size: int = 100_000,
                  determinism: bool = True):
         self.step = step
         self.frame = frame
         self.params = params
         self.callbacks: list[Callback] = []
         self.def_ = ExperimentDef(name=name, flow=FlowSpec(entry=entry, decider=decider), revision=revision,
-                                  input=InputSpec(path=input_path), batch_size=batch_size, determinism=determinism)
+                                  input=InputSpec(path=input_path, dataset=input_dataset), batch_size=batch_size, determinism=determinism)
 
     def scenario(self, name: str, *, params: dict[str, Any] | None = None,
                  overrides: dict[str, Any] | None = None, at: str | None = None,
@@ -316,21 +334,20 @@ class Experiment:
         """An experiment from an `experiment.json`, ready to change further or `run`.
 
         Without `step` the flow is imported from `flow.entry`; without `frame`
-        the input is scanned from `input.path`, relative to the JSON file.
+        the input is scanned from `input.path` (relative to the JSON file) or
+        `input.dataset` (of the project holding the JSON file).
 
         Example::
 
             result = Experiment.load("experiments/premium_sweep/experiment.json").run()
         """
-        from decider.experiments.runner import load_flow, scan
+        from decider.experiments.runner import load_flow
 
         path = Path(path)
         def_ = ExperimentDef.model_validate_json(path.read_text())
         check_experiment_version(def_.version)
         if frame is None:
-            if not def_.input.path:
-                raise DeciderError(f"{path} has no input.path; pass frame=")
-            frame = scan(path.parent / def_.input.path)
+            frame = input_frame(def_, path)
         exp = cls(def_.name, step if step is not None else load_flow(def_.flow.entry), frame, params=params)
         exp.def_ = def_
         return exp

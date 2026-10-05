@@ -17,7 +17,8 @@ from decider.experiments.report import (Block, BlockRef, Chart, MetricSection, O
                                         Table, Text)
 from decider.experiments.plots import Bars, Changes, Distribution, Figure, Plot, PlotRef, Ranges, Sankey
 from decider.experiments.revision import compatible, materialise, remove, resolve
-from decider.experiments.runner import load_flow, run, run_experiment, scan
+from decider.data.formats import scan
+from decider.experiments.runner import load_flow, run, run_experiment
 
 __all__ = [
     "BASELINE", "Bars", "Batch", "Bins", "Block", "BlockRef", "BranchFlows", "Callback", "Changes", "Chart",

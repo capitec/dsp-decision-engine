@@ -20,7 +20,7 @@ export interface CallNodeJson extends IRNodeBase {
   inputs: string[] | null;
   outputs: string[] | null;
   params: Record<string, unknown>;
-  /** The Python that runs in interpreted mode: `fn`, or a row node's `reference`. */
+  /** The Python that runs in interpreted mode: `fn`, or a row node's `reference`. `bodyLine` is its first statement past a docstring, `endLine` its last line. */
   python: { file: string; line: number; bodyLine: number | null; endLine?: number | null } | null;
   /** Changes when the code or config behind the node changes. */
   code: string;
