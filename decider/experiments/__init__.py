@@ -17,7 +17,6 @@ from decider.experiments.report import (Block, BlockRef, Chart, MetricSection, O
                                         Table, Text)
 from decider.experiments.plots import Bars, Changes, Distribution, Figure, Plot, PlotRef, Ranges, Sankey
 from decider.experiments.revision import compatible, materialise, remove, resolve
-from decider.data.formats import scan
 from decider.experiments.runner import load_flow, run, run_experiment
 
 __all__ = [
@@ -27,5 +26,5 @@ __all__ = [
     "Metric", "MetricRef", "MetricSection", "NodeBatch", "Overview", "Plot", "PlotRef", "Progress", "Ranges",
     "Report", "Row", "Run", "RunStatus", "Sankey", "Scenario", "ScenarioResult", "ScenarioStatus", "Section",
     "Stats", "Summary", "Table", "Text", "ValueCounts", "WriteOutputs", "check_experiment_version", "compatible",
-    "load_flow", "materialise", "remove", "resolve", "run", "run_experiment", "scan", "validate",
+    "load_flow", "materialise", "remove", "resolve", "run", "run_experiment", "validate",
 ]

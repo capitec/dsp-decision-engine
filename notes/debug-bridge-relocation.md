@@ -44,12 +44,10 @@ them.
 
 ## Transports and consumers preserved
 
-Two transports over the same session, plus the debugpy flag:
+One transport over the session, plus the debugpy flag:
 
 - stdio JSON-lines (`Bridge.serve`, replies on the fd given by `--fd`, 3 in
   the extension) — VS Code.
-- starlette websocket (`decider.serving.session_ws.session_app`) — unchanged,
-  still core.
 - `--debugpy PORT` on the stdio bridge also listens for a debugpy attach — VS
   Code "Debug this step in Python".
 

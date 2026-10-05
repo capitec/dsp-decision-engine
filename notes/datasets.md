@@ -103,8 +103,8 @@ per name, so one bad entry doesn't hide the rest.
 - `data/formats.py` holds the one suffix-to-reader table, used by `file`,
   `folder`, `load()` and experiments. `load(path)` becomes `scan().collect()`
   plus the fingerprint. Bytes and frame sources stay as they are.
-  `experiments.runner.scan` is deleted; `decider.experiments.scan` re-exports
-  the formats one because it is public.
+  `experiments.runner.scan` is deleted; `scan` lives in `decider.data.formats`
+  and is not re-exported from `decider.experiments`.
 - `InputSpec` gains `dataset: str` next to `path`. That name is what goes into
   `InputFingerprint.dataset` and `RecordRef.dataset`.
 

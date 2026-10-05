@@ -803,17 +803,14 @@ nodes runs the flow one compiled kernel per node instead of fused, still
 compiled. Results write to a caller-chosen `out_dir`; `decider` does not own
 their storage.
 
-### Data loading and execution scope
+### Data loading
 
 `decider.data` loads Redshift-export JSON/CSV/Parquet, suggests a record key,
-and pre-flights a run before anything executes. A frame step must receive the
-whole frame, so a record-only scope over one is redirected, not silently
-shrunk.
+and pre-flights a run before anything executes.
 
 ```python
 from decider import flow
-from decider.data import ExecutionScope, check_scope, load, preflight
-from decider.contract import describe
+from decider.data import load, preflight
 
 def ratio(income: float, debt: float) -> float:
     return debt / income
@@ -822,7 +819,6 @@ pipeline = flow(ratio, name="credit")
 data = load(b'{"income": 1000.0, "debt": 200.0}\n{"income": 500.0, "debt": 400.0}\n', format="json")
 assert data.row_count == 2 and data.suggested_key is None
 assert preflight(pipeline, data.frame).ok
-assert check_scope(describe(pipeline), ExecutionScope.SELECTED_RECORD).redirected is False
 ```
 
 ### Datasets
