@@ -9,7 +9,7 @@ from typing import Any, Callable
 import numpy as np
 from numba import from_dtype, njit, typeof
 from numba.core import types
-from numba.core.caching import FunctionCache, NullCache
+from numba.core.caching import FunctionCache, IndexDataCacheFile, NullCache
 from numba.core.dispatcher import Dispatcher
 from numba.core.errors import NumbaError, UnsupportedBytecodeError
 
@@ -43,7 +43,22 @@ _DISPATCHERS = Cache()
 _REASONS = Cache()
 
 
+class _TolerantIndexFile(IndexDataCacheFile):
+    def _load_index(self):
+        # An index from another decider version can name a type that has since moved; numba
+        # unpickles the whole index before it compares keys, so treat any failure as empty.
+        try:
+            return super()._load_index()
+        except Exception:
+            return {}
+
+
 class _SaltedCache(FunctionCache):
+    def __init__(self, py_func):
+        super().__init__(py_func)
+        f = self._cache_file
+        self._cache_file = _TolerantIndexFile(f._cache_path, self._impl.filename_base, f._source_stamp)
+
     def _index_key(self, sig, codegen):
         return (*super()._index_key(sig, codegen), SALT, fingerprint(self._py_func))
 
