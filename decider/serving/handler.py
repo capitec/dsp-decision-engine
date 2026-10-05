@@ -157,7 +157,7 @@ class RequestHandler:
 
     def pipeline_fn(self, config: dict[str, t.Any]) -> Step:
         if _is_flow_file(self.pipeline):
-            from decider.flowfile import load_flow
+            from decider.steps.flowfile import load_flow
 
             return load_flow(self.pipeline, documents=config)
         target = pkgutil.resolve_name(self.pipeline) if isinstance(self.pipeline, str) else self.pipeline
