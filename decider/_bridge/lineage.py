@@ -5,7 +5,7 @@ from decider._engine.wiring.plan import Branch, Call, Loop, Sequence
 
 
 def _producers(root) -> dict[int, tuple]:
-    """Version id -> how it was made: ("call", Call), ("merge", Branch, Merge) or ("carry", Carry)."""
+    """NodeVersion id -> how it was made: ("call", Call), ("merge", Branch, Merge) or ("carry", Carry)."""
     out: dict[int, tuple] = {}
 
     def visit(r):

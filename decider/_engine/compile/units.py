@@ -11,7 +11,7 @@ from decider._engine.compile.rows import Ragged
 from decider._engine.compile.sink import Sink
 from decider._engine.compile.structs import Schema, struct_dtype, struct_schema
 from decider._engine.ir.decls import Input, NullPolicy, base_annotation, nullable
-from decider._engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, ScatterGather, Sequence, Version
+from decider._engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, ScatterGather, Sequence, NodeVersion
 from decider._engine.types import columnar_item, item_schema, struct_item
 
 Values = dict[int, np.ndarray]
@@ -44,11 +44,11 @@ class Kernel:
                  trace=None):
         self.calls: tuple[Call, ...] = calls
         self.fn = fn
-        self.reads: tuple[Version, ...] = reads
-        self.optional: tuple[Version, ...] = optional
-        self.ragged: tuple[Version, ...] = ragged
-        self.sinks: tuple[tuple[Version, Schema], ...] = sinks
-        self.writes: tuple[tuple[Version, np.dtype], ...] = writes
+        self.reads: tuple[NodeVersion, ...] = reads
+        self.optional: tuple[NodeVersion, ...] = optional
+        self.ragged: tuple[NodeVersion, ...] = ragged
+        self.sinks: tuple[tuple[NodeVersion, Schema], ...] = sinks
+        self.writes: tuple[tuple[NodeVersion, np.dtype], ...] = writes
         self._masked: tuple[int, ...] = masked
         self._layout = layout
         self._choices: tuple[tuple | None, ...] = choices
@@ -371,10 +371,10 @@ class Layout:
     """
 
     def __init__(self) -> None:
-        self.reads: list[Version] = []
-        self.optional: list[Version] = []
-        self.ragged: list[Version] = []
-        self.sinks: list[tuple[Version, Schema]] = []
+        self.reads: list[NodeVersion] = []
+        self.optional: list[NodeVersion] = []
+        self.ragged: list[NodeVersion] = []
+        self.sinks: list[tuple[NodeVersion, Schema]] = []
         self.layout: list[tuple] = []
         self.produced: dict[int, tuple] = {}
         self._cols: dict[int, int] = {}
@@ -385,7 +385,7 @@ class Layout:
         self._specs = 0
         self._sinks = 0
 
-    def source(self, v: Version, inp: Input | None = None) -> tuple:
+    def source(self, v: NodeVersion, inp: Input | None = None) -> tuple:
         if v.id in self.produced:
             return self.produced[v.id]
         if inp is not None and (item := columnar_item(inp.annotation)) is not None:

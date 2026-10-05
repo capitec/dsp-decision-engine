@@ -11,13 +11,13 @@ PREVIEW_ROWS = 5
 
 
 @dataclass(frozen=True, slots=True)
-class Summary:
+class RunSummary:
     """What an event says about a column: never the full values, which may be personal data.
 
     Example::
 
         summarize(pl.Series([1.0, None, 3.0]))
-        # Summary(dtype="Float64", rows=3, nulls=1, preview=(1.0, None, 3.0))
+        # RunSummary(dtype="Float64", rows=3, nulls=1, preview=(1.0, None, 3.0))
     """
 
     dtype: str
@@ -26,9 +26,9 @@ class Summary:
     preview: tuple[Any, ...]
 
 
-def summarize(series: pl.Series) -> Summary:
-    """A `Summary` of `series`: dtype, row and null counts, the first few values."""
-    return Summary(str(series.dtype), series.len(), series.null_count(), tuple(series.head(PREVIEW_ROWS).to_list()))
+def summarize(series: pl.Series) -> RunSummary:
+    """A `RunSummary` of `series`: dtype, row and null counts, the first few values."""
+    return RunSummary(str(series.dtype), series.len(), series.null_count(), tuple(series.head(PREVIEW_ROWS).to_list()))
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,7 +54,7 @@ class NodeFinished:
     """A node ran; `outputs` summarises every value it produced, by name."""
 
     origin: Origin
-    outputs: dict[str, Summary]
+    outputs: dict[str, RunSummary]
     kind: Literal["node_finished"] = "node_finished"
 
 
@@ -92,8 +92,8 @@ class Overridden:
 
     name: str
     producer: str
-    value: Summary
-    previous: Summary
+    value: RunSummary
+    previous: RunSummary
     kind: Literal["overridden"] = "overridden"
 
 
@@ -107,7 +107,7 @@ class ParamsValidated:
 
 
 @dataclass(frozen=True, slots=True)
-class Warning:
+class WarningEvent:
     """A params value was replaced by its default."""
 
     message: str
@@ -115,7 +115,7 @@ class Warning:
 
 
 @dataclass(frozen=True, slots=True)
-class Error:
+class ErrorEvent:
     """The run raised while in the node at `path`; the session can `rewind` but not go on."""
 
     message: str
@@ -144,9 +144,9 @@ class ReloadFailed:
 class RunFinished:
     """The run reached the end; `output` summarises every column of `session.output()`."""
 
-    output: dict[str, Summary]
+    output: dict[str, RunSummary]
     kind: Literal["run_finished"] = "run_finished"
 
 
 Event = Union[RunStarted, NodeStarted, NodeFinished, NodeVisited, Paused, Overridden,
-              ParamsValidated, Warning, Error, Edited, ReloadFailed, RunFinished]
+              ParamsValidated, WarningEvent, ErrorEvent, Edited, ReloadFailed, RunFinished]

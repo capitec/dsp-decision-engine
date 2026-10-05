@@ -7,7 +7,7 @@ from decider._engine.debug.events import Edited, Paused, ReloadFailed
 from decider._engine.debug.hot import ModuleWatcher, keys, same
 from decider._engine.ir.nodes import CallNode, iter_nodes
 from decider._engine.wiring import resolve
-from decider._engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, Sequence, Version
+from decider._engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, Sequence, NodeVersion
 from decider.exceptions import WiringError
 
 if TYPE_CHECKING:
@@ -196,7 +196,7 @@ class Edits:
             here = None if self.current is None else pos(self.current.when, self.current.origin.path)
             stop = target if here is None else min(target, here)
 
-        skip: dict[Resolved, list[Version]] = {}
+        skip: dict[Resolved, list[NodeVersion]] = {}
         done: list[str] = []
         if stop is not None:
             _skips(plan.root, stop, spans, units, skip, done)
@@ -333,7 +333,7 @@ def _skips(r: Resolved, stop: int, spans: dict, units: dict, skip: dict, done: l
             _skips(child, stop, spans, units, skip, done)
 
 
-def _passes(r: Resolved, units: dict) -> list[Version]:
+def _passes(r: Resolved, units: dict) -> list[NodeVersion]:
     # The versions a node leaves in sight of the nodes after it.
     if isinstance(r, Call):
         unit = units.get(r.id)

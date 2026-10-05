@@ -10,8 +10,8 @@ import polars as pl
 
 from decider._engine.debug.commands import Command
 from decider._engine.debug.edit import Edits
-from decider._engine.debug.events import (Error, Event, NodeFinished, NodeStarted, NodeVisited, Overridden,
-                                         ParamsValidated, Paused, RunFinished, RunStarted, Warning, summarize)
+from decider._engine.debug.events import (ErrorEvent, Event, NodeFinished, NodeStarted, NodeVisited, Overridden,
+                                         ParamsValidated, Paused, RunFinished, RunStarted, WarningEvent, summarize)
 from decider._engine.debug.hot import keys
 from decider._engine.ir.context import step_map
 from decider._engine.ir.nodes import CallNode, IRNode, SequenceNode, iter_nodes
@@ -19,7 +19,7 @@ from decider._engine.ir.origin import Origin
 from decider._engine.run.runners.base import Checkpoint
 from decider._engine.ir.decls import base_annotation
 from decider._engine.run.state import dtype_of
-from decider._engine.wiring.plan import Version
+from decider._engine.wiring.plan import NodeVersion
 
 if TYPE_CHECKING:
     from decider._engine.run.engine import Executable
@@ -276,7 +276,7 @@ class Session(Edits):
         # A fused runner compiles on `iterate`, so call this once the run has started.
         plan = self.executable.plan
         self._sequences = {n.origin.path for n in iter_nodes(plan.root.node) if isinstance(n, SequenceNode)}
-        self._produces: dict[str, list[Version]] = {}
+        self._produces: dict[str, list[NodeVersion]] = {}
         for v in plan.versions:
             self._produces.setdefault(v.producer, []).append(v)
         self._kernels: dict[str, tuple[str, ...]] = {}
@@ -322,7 +322,7 @@ class Session(Edits):
         except Exception as e:
             self._iterator = None
             self._log_params()
-            self._emit(Error(f"{type(e).__name__}: {e}", None if self.current is None else self.current.origin.path))
+            self._emit(ErrorEvent(f"{type(e).__name__}: {e}", None if self.current is None else self.current.origin.path))
             raise
         self._previous, self.current = self.current, cp
         self._log_params()
@@ -351,7 +351,7 @@ class Session(Edits):
     def _covers(self, cp: Checkpoint, prefix: str) -> bool:
         return any(_under(p, prefix) for p in self._kernels.get(cp.origin.path, (cp.origin.path,)))
 
-    def _targets(self, name: str) -> list[Version]:
+    def _targets(self, name: str) -> list[NodeVersion]:
         # Inputs, then what has been written so far in production order; the
         # override's own records are history, not a place later nodes read.
         inputs = [v for v in self.executable.plan.versions if v.producer is None and v.name == name]
@@ -364,7 +364,7 @@ class Session(Edits):
             raise KeyError(f"{name!r} is neither an input column nor a value produced so far")
         return inputs + written
 
-    def _check_stored(self, spec: str, v: Version) -> None:
+    def _check_stored(self, spec: str, v: NodeVersion) -> None:
         kernel = self._internal.get(v.id)
         # Stored after all when a packed branch or loop took the unpacked path (a null it can't carry).
         if kernel is not None and v.id not in self.state.values:
@@ -380,7 +380,7 @@ class Session(Edits):
         if len(report.validated) > n_valid or len(report.invalid) > n_invalid:
             self._emit(ParamsValidated(tuple(report.validated[n_valid:]), tuple(report.invalid[n_invalid:])))
         for message in report.warnings[n_warn:]:
-            self._emit(Warning(message))
+            self._emit(WarningEvent(message))
         self._logged = (len(report.validated), len(report.invalid), len(report.warnings))
 
     def _emit(self, event: Event) -> None:

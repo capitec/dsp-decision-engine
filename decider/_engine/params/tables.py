@@ -11,7 +11,7 @@ from typing_extensions import TypedDict
 from decider._engine.params.bundles import bundle_class
 from decider._engine.params.declare import _NO_DEFAULT, ParamSpec, _carrier_class, _mark
 
-Table = Any
+ParamTable = Any
 """The annotation of a `param_table()` argument: a namedtuple with one read-only numpy array per column."""
 
 _TYPES = {"int": (int, np.int64), "float": (float, np.float64), "bool": (bool, np.bool_)}
@@ -44,7 +44,7 @@ def param_table(
 
     Example::
 
-        def rate(score: int, rates: Table = param_table({"floor": int, "rate": float},
+        def rate(score: int, rates: ParamTable = param_table({"floor": int, "rate": float},
                                                          default=[{"floor": 0, "rate": 0.2}])) -> float:
             r = 0.0
             for i in range(len(rates.floor)):

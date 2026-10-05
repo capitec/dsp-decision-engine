@@ -6,7 +6,7 @@ from decider._engine.compile.kernel import Fork, Repeat, SrcKind, fused_kernel
 from decider._engine.compile.njit import compile_call
 from decider._engine.compile.units import Kernel, Layout, output_dtype
 from decider._engine.ir.decls import TYPED, NullPolicy, base_annotation, nullable
-from decider._engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, Sequence, Version
+from decider._engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, Sequence, NodeVersion
 from decider._engine.types import struct_item
 
 
@@ -118,10 +118,10 @@ def _pack(top: Branch | Loop, outputs: set[int], lazy: bool, python: Collection[
     lay = Layout()
     variables: list = []
     inner = {v.id for c in calls for v in c.writes}
-    passthrough: list[Version] = []
+    passthrough: list[NodeVersion] = []
     refs: list[int] = []
 
-    def var(v: Version) -> int:
+    def var(v: NodeVersion) -> int:
         if base_annotation(v.annotation) not in TYPED and struct_item(v.annotation) is None:
             raise _Unpackable
         inner.add(v.id)
@@ -129,7 +129,7 @@ def _pack(top: Branch | Loop, outputs: set[int], lazy: bool, python: Collection[
         variables.append(output_dtype(v.annotation))
         return len(variables) - 1
 
-    def value(v: Version, into: int) -> tuple:
+    def value(v: NodeVersion, into: int) -> tuple:
         if output_dtype(v.annotation) != variables[into]:
             raise _Unpackable
         if v.id not in inner and v not in passthrough:

@@ -24,7 +24,7 @@ import numba
 import numpy as np
 import polars as pl
 
-from decider import Columnar, Engine, Table, flow, loop, optimise, param, param_table, step
+from decider import Columnar, Engine, ParamTable, flow, loop, optimise, param, param_table, step
 
 ITEMS = int(sys.argv[1]) if len(sys.argv) > 1 else 6
 ORDERS = int(sys.argv[2]) if len(sys.argv) > 2 else 200
@@ -57,7 +57,7 @@ def bundle_total(index: int, items: Columnar[Item]) -> float:
     return t
 
 
-def rate(bundle_weight: float, ladder: Table = param_table({"floor": int, "rate": float},
+def rate(bundle_weight: float, ladder: ParamTable = param_table({"floor": int, "rate": float},
                                                             default=LADDER)) -> float:
     r = 0.0
     for i in range(len(ladder.floor)):

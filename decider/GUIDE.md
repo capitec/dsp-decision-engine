@@ -209,10 +209,10 @@ read-only numpy array per column, the same in every mode, so loop over it:
 
 ```python
 import polars as pl
-from decider import Engine, Table, flow, param_table
+from decider import Engine, ParamTable, flow, param_table
 from decider.testing import no_recompile
 
-def rate(score: int, ladder: Table = param_table({"floor": int, "rate": float},
+def rate(score: int, ladder: ParamTable = param_table({"floor": int, "rate": float},
                                                   default=[{"floor": 0, "rate": 0.2}])) -> float:
     r = 0.0
     for i in range(len(ladder.floor)):
