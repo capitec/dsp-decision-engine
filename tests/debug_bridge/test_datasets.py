@@ -90,6 +90,17 @@ def test_run_script_takes_a_dataset_name(project, capsys):
     assert "6" in capsys.readouterr().out
 
 
+def test_run_script_runs_only_the_chosen_row(project, capsys):
+    main([str(project / "flow.yaml"), "--dataset", "loans", "--row", "1"])
+    out = capsys.readouterr().out
+    assert "shape: (1, 2)" in out and "│ 2         ┆ 4" in out
+
+
+def test_run_script_rejects_a_row_past_the_end(project):
+    with pytest.raises(SystemExit):
+        main([str(project / "flow.yaml"), "--dataset", "loans", "--row", "3"])
+
+
 def test_the_json_lines_protocol_answers_datasets_from_the_project_cwd(project):
     r, w = os.pipe()
     proc = subprocess.Popen([sys.executable, "-m", "decider.debug_bridge", "--fd", str(w)], cwd=project,
