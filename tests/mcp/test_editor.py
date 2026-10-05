@@ -7,7 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from decider.mcp import EditorBridge, Policy, build_server, editor_dir, ws_hash
+from decider.mcp import Policy, build_server
+from decider.mcp._editor import EditorBridge, editor_dir, ws_hash
 from tests.mcp.test_mcp import _call, _tools
 
 

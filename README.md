@@ -18,6 +18,8 @@ stepped through in a debug session.
 pip install decider                        # library and CLI
 pip install "decider[serve-starlette]"     # HTTP serving with uvicorn + starlette
 pip install "decider[serve-sanic]"         # or sanic
+pip install "decider[mcp]"                 # `decider mcp` server for agents (fastmcp)
+pip install "decider[prove]"               # symbolic proofs (z3-solver)
 ```
 
 From a checkout: `uv sync`, then `uv run pytest`.

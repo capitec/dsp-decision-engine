@@ -6,7 +6,8 @@ import pytest
 
 from decider import branch, dag, flow, param, step
 from decider.contract import (CONTRACT_VERSION, EdgeRef, FlowDescription, FlowRef, RecordRef, StepRef, ValueSlotRef,
-                              capabilities, check_version, describe, json_schema, resolve_step, typescript)
+                              capabilities, describe, json_schema, resolve_step, typescript)
+from decider.contract._refs import check_version
 from decider.exceptions import DeciderError
 
 

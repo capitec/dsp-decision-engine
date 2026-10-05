@@ -10,11 +10,13 @@ does not re-approve them.
 """
 from __future__ import annotations
 
-from fastmcp import FastMCP
-
+from decider.exceptions import wrap_import_errors
 from decider.mcp import _tools as tools
 from decider.mcp._editor import EditorBridge
 from decider.mcp._policy import Policy
+
+with wrap_import_errors("mcp"):
+    from fastmcp import FastMCP
 
 
 def build_server(policy: Policy, bridge: EditorBridge | None = None) -> FastMCP:

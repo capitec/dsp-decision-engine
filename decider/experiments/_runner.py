@@ -45,8 +45,8 @@ from decider.experiments._experiments import (BASELINE, ExperimentDef, Experimen
 from decider.experiments.metrics._base import Metric
 from decider.experiments.plots._base import Figure
 from decider.experiments._revision import compatible, materialise, remove, resolve
-from decider.contract import (Environment, InputFingerprint, JobHandle, ResultRef, Revision, RunManifest,
-                               new_manifest_id)
+from decider.contract import Environment, InputFingerprint, JobHandle, ResultRef, Revision, RunManifest
+from decider.contract._manifest import new_manifest_id
 
 Frame = pl.DataFrame | pl.LazyFrame
 

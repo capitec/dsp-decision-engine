@@ -14,7 +14,7 @@ NO_ALL: dict[str, str] = {  # {module path relative to decider/: reason}
 
 BIG_ALL: dict[str, str] = {  # {package path relative to decider/: reason}
     ".": "trimmed to the build/run/extend list in the surface phase",
-    "contract": "trimmed when the contract surface is cut",
+    "contract": "the integration contract exports every versioned model an integrator receives",
     "steps": "trimmed to the target list in the surface phase",
     "steps/trees/schema": "permanent: the document grammar is public by design",
 }
@@ -31,6 +31,7 @@ PRIVATE_IMPORT: dict[str, str] = {  # {"importer -> imported": reason}
     "_bridge.experiment -> experiments._experiments": "InputSpec is not public; the bridge overrides a definition's input",
     "_bridge.experiment -> experiments._runner": "run_experiment and load_flow run and validate over a live step",
     "mcp._tools -> experiments._runner": "run_experiment and load_flow run and validate over a live step",
+    "experiments._runner -> contract._manifest": "new_manifest_id is minting, not part of the contract surface",
     "checks._common -> _engine.ir.nodes": "FiniteStateMachineNode and ScatterGatherNode are not in decider.ir",
     "cli -> _engine.compile": "cpu_target has no public home",
     "data._preflight -> _engine.run.params": "param bundles and namespace checks; goes with data/preflight",

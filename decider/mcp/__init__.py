@@ -8,8 +8,7 @@ confirmation-gated (destructive). The editor-bound highlight/reveal/selection
 tools are only registered when an `EditorBridge` is given, and forward to the
 VS Code window that owns a workspace over an authenticated per-window socket.
 """
-from decider.mcp._editor import EditorBridge, editor_dir, ws_hash
-from decider.mcp._policy import REDACTED, Policy
+from decider.mcp._policy import Policy
 from decider.mcp._server import build_server, run_stdio
 
-__all__ = ["Policy", "REDACTED", "EditorBridge", "editor_dir", "ws_hash", "build_server", "run_stdio"]
+__all__ = ["run_stdio", "build_server", "Policy"]

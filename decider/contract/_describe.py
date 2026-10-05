@@ -31,6 +31,8 @@ _OPTIONAL_EXTRAS = {
     "serve-sanic": "sanic",
     "notebook": "IPython",
     "eval": "simpleeval",
+    "mcp": "fastmcp",
+    "prove": "z3",
 }
 
 
