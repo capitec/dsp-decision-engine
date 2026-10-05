@@ -118,9 +118,14 @@ def run_summary(entry: str, data: str) -> dict:
     return _summarise(entry, data)
 
 
-def check_report(entry: str) -> dict:
-    """The default check suite over `entry`, as the structured `Report`."""
-    return checks.run(import_flow(entry)).model_dump(mode="json")
+def check_report(entry: str, config: str | None = None, data: str | None = None) -> dict:
+    """The checks over `entry` as the structured `Report`: the project's policy, or `config`; data checks need `data`."""
+    return checks.run(import_flow(entry), config=config, data=read(data) if data else None).model_dump(mode="json")
+
+
+def checks_list() -> list[dict]:
+    """Every registered check: alias, code, family, whether it needs data or executes, severity, config schema."""
+    return checks.catalogue()
 
 
 def experiment_definition(path: str) -> dict:

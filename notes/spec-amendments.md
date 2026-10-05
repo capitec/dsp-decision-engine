@@ -287,6 +287,7 @@ where they disagree, this file wins.
 ## 2026-10-05
 
 - **`decider.check` merged into `decider.checks`.** VS Code decision 13 now
-  reads `decider.checks.run(pipeline, suites=[decider.checks.default_suite])`;
-  `decider.check.run` no longer exists. `Check`, `Finding`, `Report`,
-  `Severity`, `Suite` and `run` are exported from `decider.checks`.
+  reads `decider.checks.run(pipeline)`: the project's `checks.yaml` policy, or
+  `checks.standard` without one. `decider.check.run`, `default_suite` and
+  `suites=` no longer exist. Checks are `Check` registry modules with stable
+  codes (`decider.checks.catalogue()`); findings carry contract `StepRef`s.
