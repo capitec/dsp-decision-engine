@@ -917,6 +917,32 @@ assert result.summaries["divergence"]["limit_0.3"].first == 0
 assert result.plots["divergence"].grammar == "vega-lite"   # .show() draws it in a notebook
 ```
 
+Run a saved `experiment.json` headlessly, from CI or a script; `input.path`
+is relative to the file. `start()` runs it in a background thread and returns a
+handle with `.status`, `.progress`, `.cancel()` and `.result()`.
+
+```python
+import polars as pl
+from datetime import date
+from pathlib import Path
+from decider.experiments import Experiment, ExperimentDef, RunStatus, run
+
+pl.DataFrame({"income": [1000.0, 500.0], "debt": [350.0, 400.0],
+              "applied_on": [date(2026, 1, 15)] * 2}).write_parquet("loans.parquet")
+def_ = ExperimentDef(name="drift", flow={"entry": "credit_risk.pipeline:build"}, input={"path": "loans.parquet"},
+                     scenarios=[{"name": "tight", "params": {"credit_risk": {"approved": {"limit": 0.2}}}}],
+                     metrics=[{"type": "divergence", "column": "approved"}])
+Path("experiment.json").write_text(def_.model_dump_json())
+
+assert run("experiment.json", out_dir="results").status is RunStatus.COMPLETED
+handle = Experiment.from_def(def_).start()
+assert handle.result().status is RunStatus.COMPLETED and handle.progress == 1.0
+```
+
+```bash
+decider experiment run experiment.json --out results   # exit 0 if completed, 1 otherwise
+```
+
 Nondeterminism is a first-class result (`NON_REPRODUCIBLE`), never silent; a
 partial or cancelled run never looks like a completed one. A metric that reads
 nodes runs the flow one compiled kernel per node instead of fused, still

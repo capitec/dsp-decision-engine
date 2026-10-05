@@ -25,7 +25,9 @@ from decider.experiments.metrics._base import Metric, MetricRef, Summary
 from decider.experiments.report import _blocks as report
 from decider.experiments.plots._base import Figure, Plot, PlotRef, ipython_display
 from decider.experiments.report import Block, Report
-from decider.contract import Job, JobHandle, ResultRef, Revision, RunManifest
+from decider.contract import Job, ResultRef, Revision, RunManifest
+from decider.experiments._entry import import_flow, infer_entry
+from decider.experiments._handle import RunHandle
 
 EXPERIMENT_VERSION = "2"
 BASELINE = "baseline"
@@ -212,7 +214,7 @@ def validate(def_: ExperimentDef, step) -> list[str]:
     """Every problem in `def_` against `step`, returned rather than raised so a caller shows them all.
 
     Checks scenario names, that a scenario on another revision has a flow
-    `entry` to import, that each override targets an input or a produced
+    `entry` to import (or one that can be inferred from the pipeline), that each override targets an input or a produced
     value (a produced one needs `at`), that metric and plot names are unique,
     and that each plot's metric exists and gives the summary the plot requires.
     """
@@ -221,8 +223,9 @@ def validate(def_: ExperimentDef, step) -> list[str]:
     if BASELINE in names:
         problems.append(f"{BASELINE!r} is the unchanged run; give the scenario another name")
     problems += [f"two scenarios are named {n!r}" for n, k in names.items() if k > 1]
-    if not def_.flow.entry:
-        problems += [f"{sc.name}: revision {sc.revision!r} runs in a subprocess that imports flow.entry; set entry="
+    if not def_.flow.entry and any(sc.revision for sc in def_.scenarios) and not infer_entry(step):
+        problems += [f"{sc.name}: revision {sc.revision!r} runs in a subprocess that imports flow.entry, and the "
+                     "pipeline's module has no variable or zero-argument function that rebuilds it; set flow.entry"
                      for sc in def_.scenarios if sc.revision]
     problems += _override_problems(def_, step)
     problems += _node_problems(def_, step)
@@ -296,14 +299,30 @@ class Experiment:
     """
 
     def __init__(self, name: str, step, frame: pl.DataFrame | pl.LazyFrame, *, params=None, revision: str = "HEAD",
-                 entry: str = "", decider: str = "", input_path: str = "", input_dataset: str = "", batch_size: int = 100_000,
-                 determinism: bool = True):
+                 batch_size: int = 100_000):
         self.step = step
         self.frame = frame
         self.params = params
         self.callbacks: list[Callback] = []
-        self.def_ = ExperimentDef(name=name, flow=FlowSpec(entry=entry, decider=decider), revision=revision,
-                                  input=InputSpec(path=input_path, dataset=input_dataset), batch_size=batch_size, determinism=determinism)
+        self.def_ = ExperimentDef(name=name, flow=FlowSpec(entry=""), revision=revision, batch_size=batch_size)
+
+    @classmethod
+    def from_def(cls, def_: ExperimentDef, step=None, frame: pl.DataFrame | pl.LazyFrame | None = None, *,
+                 params=None) -> Experiment:
+        """An experiment from a whole `ExperimentDef`, including its protocol-only fields (`flow`, `input`, `determinism`).
+
+        Without `step` the flow is imported from `flow.entry`; without `frame`
+        the input is scanned from `input.path` or `input.dataset`.
+
+        Example::
+
+            exp = Experiment.from_def(ExperimentDef(name="x", flow={"entry": "credit:build"}, input={"path": "loans.parquet"}))
+        """
+        check_experiment_version(def_.version)
+        exp = cls(def_.name, step if step is not None else import_flow(def_.flow.entry),
+                  frame if frame is not None else input_frame(def_), params=params)
+        exp.def_ = def_
+        return exp
 
     def scenario(self, name: str, *, params: dict[str, Any] | None = None,
                  overrides: dict[str, Any] | None = None, at: str | None = None,
@@ -331,9 +350,15 @@ class Experiment:
         return self
 
     def save(self, path: str | Path) -> Path:
-        """Write the definition to `path` as JSON; `Experiment.load` reads it back."""
+        """Write the definition to `path` as JSON; `Experiment.load` reads it back.
+
+        An empty `flow.entry` is filled from the pipeline when it can be inferred, so the file runs elsewhere.
+        """
         path = Path(path)
-        path.write_text(self.def_.model_dump_json(indent=2))
+        def_ = self.def_
+        if not def_.flow.entry:
+            def_ = def_.model_copy(update={"flow": def_.flow.model_copy(update={"entry": infer_entry(self.step)})})
+        path.write_text(def_.model_dump_json(indent=2))
         return path
 
     @classmethod
@@ -349,18 +374,26 @@ class Experiment:
 
             result = Experiment.load("experiments/premium_sweep/experiment.json").run()
         """
-        from decider.experiments._runner import load_flow
-
         path = Path(path)
         def_ = read_definition(path)
-        if frame is None:
-            frame = input_frame(def_, path)
-        exp = cls(def_.name, step if step is not None else load_flow(def_.flow.entry), frame, params=params)
-        exp.def_ = def_
-        return exp
+        return cls.from_def(def_, step, frame if frame is not None else input_frame(def_, path), params=params)
 
-    def run(self, *, job: JobHandle | None = None, out_dir: str | None = None) -> ExperimentResult:
-        from decider.experiments._runner import run_experiment
+    def run(self, *, out_dir: str | None = None) -> ExperimentResult:
+        """Run the baseline and every scenario to the end; `out_dir` gets each scenario's output and `result.json`."""
+        from decider.experiments._runner import _run
 
-        return run_experiment(self.def_, self.step, self.frame, self.params, callbacks=self.callbacks, job=job,
-                              out_dir=out_dir)
+        return _run(self.def_, self.step, self.frame, self.params, callbacks=self.callbacks, out_dir=out_dir)
+
+    def start(self, *, out_dir: str | None = None) -> RunHandle:
+        """Run in a background thread and return a handle with `.status`, `.progress`, `.cancel()` and `.result()`.
+
+        Example::
+
+            handle = experiment.start()
+            handle.cancel()          # stops at the next batch
+            handle.result().status   # RunStatus.CANCELLED
+        """
+        from decider.experiments._runner import _run
+
+        return RunHandle(lambda job: _run(self.def_, self.step, self.frame, self.params, callbacks=self.callbacks,
+                                          job=job, out_dir=out_dir))

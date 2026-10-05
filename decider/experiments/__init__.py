@@ -12,7 +12,8 @@ plots, report blocks and callbacks live in the subnamespaces
 from decider.experiments import callbacks, metrics, plots, report  # noqa: F401  (registers the built-in types)
 from decider.experiments._experiments import (BASELINE, Experiment, ExperimentDef, ExperimentResult, RunStatus,
                                               Scenario, ScenarioResult, validate)
-from decider.experiments._runner import run
+from decider.experiments._handle import RunHandle
+from decider.experiments._runner import run, start
 
-__all__ = ["BASELINE", "Experiment", "ExperimentDef", "ExperimentResult", "RunStatus", "Scenario", "ScenarioResult",
-           "run", "validate"]
+__all__ = ["BASELINE", "Experiment", "ExperimentDef", "ExperimentResult", "RunHandle", "RunStatus", "Scenario", "ScenarioResult",
+           "run", "start", "validate"]

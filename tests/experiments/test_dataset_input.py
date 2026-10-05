@@ -57,7 +57,8 @@ def test_experiment_load_finds_the_dataset_from_the_file_location(project, monke
 
 def test_python_built_experiment_records_the_dataset_name(project):
     frame = pl.DataFrame({"income": [1000.0], "debt": [1.0]})
-    exp = Experiment("d", __import__("credit").pipeline, frame, input_dataset="loans")
+    exp = Experiment("d", __import__("credit").pipeline, frame)
+    exp.def_.input.dataset = "loans"
     assert exp.run().manifest.input.dataset == "loans"
 
 

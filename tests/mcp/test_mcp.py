@@ -7,7 +7,7 @@ from fastmcp.exceptions import ToolError
 
 from decider.data import read
 from decider.experiments import Experiment
-from decider.experiments._runner import load_flow
+from decider.experiments._entry import import_flow
 from decider.experiments.metrics import Divergence
 from decider.mcp import Policy, build_server
 from decider.mcp._policy import REDACTED
@@ -158,8 +158,7 @@ def test_an_error_surfaces_as_a_tool_error():
 
 def test_experiment_definition_and_results_read_files(workspace, tmp_path):
     mcp = build_server(Policy())
-    exp = (Experiment("drift", load_flow(workspace["entry"]), read(workspace["data"]),
-                      entry=workspace["entry"])
+    exp = (Experiment("drift", import_flow(workspace["entry"]), read(workspace["data"]))
            .metric(Divergence(column="tier")))
     result = exp.run()
     result_path = tmp_path / "result.json"

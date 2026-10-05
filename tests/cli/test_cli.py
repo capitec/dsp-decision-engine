@@ -6,6 +6,7 @@ import sys
 import types
 from datetime import date
 
+import polars as pl
 import pytest
 from click.testing import CliRunner
 
@@ -171,3 +172,35 @@ def test_serve_with_sanic_missing_is_a_clean_error(project, monkeypatch):
     result = CliRunner().invoke(cli, ["serve", "--server", "sanic"])
     assert result.exit_code != 0
     assert "pip install 'decider[serve-sanic]'" in result.output
+
+
+def _experiment_json(tmp_path, monkeypatch, limit_ok=True):
+    (tmp_path / "xp_credit.py").write_text(
+        "from decider import flow\n"
+        "def ratio(income, debt):\n"
+        "    return debt / income\n"
+        "pipeline = flow(ratio, name='credit')\n"
+    )
+    pl.DataFrame({"income": [1000.0, 1000.0 if limit_ok else 0.0], "debt": [200.0, 350.0]}).write_parquet(
+        tmp_path / "loans.parquet")
+    file = tmp_path / "experiment.json"
+    file.write_text(json.dumps({"name": "xp", "flow": {"entry": "xp_credit:pipeline"}, "input": {"path": "loans.parquet"}}))
+    monkeypatch.syspath_prepend(str(tmp_path))
+    return file
+
+
+def test_experiment_run_exits_zero_when_completed_and_writes_results(tmp_path, monkeypatch):
+    file = _experiment_json(tmp_path, monkeypatch)
+    result = CliRunner().invoke(cli, ["experiment", "run", str(file), "--out", str(tmp_path / "out")])
+
+    assert result.exit_code == 0, result.output
+    assert "xp: completed" in result.output
+    assert (tmp_path / "out" / "result.json").exists()
+
+
+def test_experiment_run_exits_one_when_the_run_is_not_completed(tmp_path, monkeypatch):
+    file = _experiment_json(tmp_path, monkeypatch, limit_ok=False)  # divides by zero: the baseline fails
+    result = CliRunner().invoke(cli, ["experiment", "run", str(file)])
+
+    assert result.exit_code == 1
+    assert "xp: failed" in result.output
