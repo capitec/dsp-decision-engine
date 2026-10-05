@@ -171,6 +171,11 @@ def mcp(raw: bool) -> None:
     run_stdio(raw=raw)
 
 
+from decider.cli._experiment import experiment  # noqa: E402
+
+cli.add_command(experiment)
+
+
 @cli.command()
 @click.argument("name")
 @click.argument("directory", required=False, type=click.Path(file_okay=False, path_type=Path))

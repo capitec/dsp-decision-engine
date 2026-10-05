@@ -3,14 +3,15 @@ from __future__ import annotations
 import subprocess
 
 import polars as pl
+import pytest
 
 from decider import flow
-from decider.experiments import Experiment, ExperimentDef, RunStatus, run
+from decider.experiments import Experiment, ExperimentDef, RunStatus, run, start
 from decider.experiments._experiments import ScenarioStatus
 from decider.diff._revisions import resolve
 from decider.experiments.callbacks import Callback
 from decider.experiments.metrics import Divergence, ValueCounts
-from decider.contract import JobHandle
+from decider.contract import JobStatus
 
 LIMIT_03 = {"demo": {"approved": {"limit": 0.3}}}
 
@@ -110,17 +111,36 @@ def test_a_row_override_changes_only_that_record_even_in_a_later_batch(pipeline,
     assert (poor.changed, poor.first) == (1, 1)
 
 
-def test_a_job_reports_progress_and_cancelling_it_stops_after_the_batch(pipeline, frame):
+def test_cancelling_a_started_run_stops_it_after_the_batch(pipeline, frame):
     class CancelAfterFirst(Callback):
         def on_batch_end(self, batch):
-            job.cancel()
+            handle.cancel()
 
-    job = JobHandle(job_id="j1", kind="experiment_run")
     record = Record()
-    result = Experiment("x", pipeline, frame, batch_size=1).callback(CancelAfterFirst(), record).run(job=job)
+    handle = Experiment("x", pipeline, frame, batch_size=1).callback(CancelAfterFirst(), record).start()
+    result = handle.result()
 
     assert result.status is RunStatus.CANCELLED
     assert record.done == [1]
+    assert handle.status is JobStatus.CANCELLED
+
+
+def test_a_started_run_reports_status_and_progress_and_returns_its_result(pipeline, frame):
+    handle = Experiment("x", pipeline, frame, batch_size=2).start()
+    result = handle.result()
+
+    assert result.status is RunStatus.COMPLETED
+    assert handle.status is JobStatus.SUCCEEDED
+    assert handle.progress == 1.0
+
+
+def test_a_started_run_that_raises_fails_and_result_re_raises(pipeline, frame):
+    exp = Experiment("x", pipeline, frame).scenario("bad", overrides={"nope": 1})
+    handle = exp.start()
+
+    with pytest.raises(ValueError, match="nope"):
+        handle.result()
+    assert handle.status is JobStatus.FAILED
 
 
 def test_out_dir_gets_each_scenarios_output_batches_and_the_result(pipeline, frame, tmp_path):
@@ -194,8 +214,9 @@ def test_a_revision_scenario_runs_the_checked_out_code_even_with_the_live_module
                          capture_output=True, text=True, check=True).stdout.strip()
 
     frame = pl.DataFrame({"income": [1000.0, 2000.0, 1500.0, 800.0], "debt": [350.0, 900.0, 700.0, 300.0]})
-    entry = "example_projects.experiments.credit_pipeline:build"
-    result = (Experiment("version-drift", live.build(), frame, entry=entry, batch_size=3)
+    exp = Experiment("version-drift", live.build(), frame, batch_size=3)
+    exp.def_.flow.entry = "example_projects.experiments.credit_pipeline:build"
+    result = (exp
               .scenario("previous", revision=f"{fee}^")
               .metric(Divergence(column="approved"), Divergence(name="ratio", column="ratio", nodes="credit/ratio"))
               .run())
@@ -204,3 +225,18 @@ def test_a_revision_scenario_runs_the_checked_out_code_even_with_the_live_module
     assert result.scenarios[1].revision.resolved == resolve(f"{fee}^")
     assert result.summaries["divergence"]["previous"].changed == 1  # the fee pushes one record over the limit
     assert result.summaries["ratio"]["previous"].changed == 4       # and changes every ratio
+
+
+def test_start_runs_a_definition_file_in_the_background(tmp_path, monkeypatch):
+    (tmp_path / "credit_bg.py").write_text(
+        "from decider import flow\n"
+        "def ratio(income, debt):\n"
+        "    return debt / income if income > 0 else 1.0\n"
+        "pipeline = flow(ratio, name='credit')\n"
+    )
+    pl.DataFrame({"income": [1000.0], "debt": [200.0]}).write_parquet(tmp_path / "loans.parquet")
+    (tmp_path / "experiment.json").write_text(ExperimentDef(
+        name="bg", flow={"entry": "credit_bg:pipeline"}, input={"path": "loans.parquet"}).model_dump_json())
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    assert start(tmp_path / "experiment.json").result().status is RunStatus.COMPLETED

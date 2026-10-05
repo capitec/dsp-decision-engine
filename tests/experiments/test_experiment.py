@@ -17,11 +17,12 @@ def _def(**kwargs):
 
 
 def test_json_round_trips_the_definition_with_its_metrics_and_plots(pipeline, frame, tmp_path):
-    exp = (Experiment("demo-drift", pipeline, frame, entry="demo:build")
+    exp = (Experiment("demo-drift", pipeline, frame)
            .scenario("limit_0.3", params=LIMIT_03)
            .scenario("force_ratio", at="demo/ratio", overrides={"ratio": 0.1})
            .metric(Divergence(column="tier", rtol=0.01), ValueCounts(column="approved", nodes="demo/approved"))
            .plot(Changes(metric="divergence"), Bars(metric="value_counts")))
+    exp.def_.flow.entry = "demo:build"
     restored = ExperimentDef.model_validate_json(exp.save(tmp_path / "experiment.json").read_text())
 
     assert restored == exp.def_
@@ -99,11 +100,12 @@ def test_an_experiment_loads_from_json_with_its_flow_and_input_beside_it(tmp_pat
     from example_projects.experiments.loan_pipeline import applications, build
 
     applications(300).write_parquet(tmp_path / "applications.parquet")
-    exp = (Experiment("x", build(), applications(1), entry="example_projects.experiments.loan_pipeline:build",
-                      input_path="applications.parquet")
+    exp = (Experiment("x", build(), applications(1))
            .scenario("premium_8pct", params={"loans": {"pricing": {"unsecured": {"premium": 0.08}}}})
            .metric(Divergence(column="approved"), Describe(column="rate", node_id="03ed37e0af6b"))
            .plot(Changes(metric="divergence")))
+    exp.def_.flow.entry = "example_projects.experiments.loan_pipeline:build"
+    exp.def_.input.path = "applications.parquet"
     loaded = Experiment.load(exp.save(tmp_path / "experiment.json"))
 
     assert loaded.def_ == exp.def_

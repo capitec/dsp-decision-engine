@@ -16,13 +16,14 @@ from pathlib import Path
 import polars as pl
 
 from decider.experiments._experiments import Scenario
-from decider.experiments._runner import _batches, _Local, load_flow
+from decider.experiments._entry import import_flow
+from decider.experiments._runner import _batches, _Local
 
 
 def main(stdin=sys.stdin, stdout=sys.stdout) -> None:
     try:
         request = json.loads(stdin.read())
-        step = load_flow(request["entry"], Path(request["tree"]))
+        step = import_flow(request["entry"], Path(request["tree"]))
         params = request["params"] if request["params"] is not None else step.parameters().defaults()
         local = _Local(step, params, Scenario(name="revision", **request["scenario"]), request["selectors"])
         out = Path(request["out"])

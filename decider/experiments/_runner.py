@@ -11,7 +11,6 @@ the rest.
 """
 from __future__ import annotations
 
-import importlib
 import json
 import pickle
 import platform
@@ -45,6 +44,8 @@ from decider.experiments._experiments import (BASELINE, ExperimentDef, Experimen
 from decider.experiments.metrics._base import Metric
 from decider.experiments.plots._base import Figure
 from decider.diff._revisions import compatible, materialise, remove, resolve
+from decider.experiments._entry import import_flow, infer_entry
+from decider.experiments._handle import RunHandle
 from decider.contract import Environment, InputFingerprint, JobHandle, ResultRef, Revision, RunManifest
 from decider.contract._manifest import new_manifest_id
 
@@ -52,43 +53,49 @@ Frame = pl.DataFrame | pl.LazyFrame
 
 
 def run(def_: ExperimentDef | str | Path, *, frame: Frame | None = None, out_dir: str | None = None,
-        job: JobHandle | None = None, callbacks: Sequence[Callback] = ()) -> ExperimentResult:
+        callbacks: Sequence[Callback] = ()) -> ExperimentResult:
     """Run an experiment headlessly: load the flow by `flow.entry` and, without `frame`, scan `input.path` or `input.dataset`.
 
     Give the path of an `experiment.json` and `input.path` is relative to that file and
     `input.dataset` is looked up in its project. Given an `ExperimentDef`, `input.path`
-    is relative to the working directory.
+    is relative to the working directory. `callbacks` see every scenario; `out_dir` gets
+    each scenario's output as parquet plus `result.json`. A failing scenario never stops
+    the others; a failing baseline stops the run.
 
     Example::
 
         result = run("experiments/drift/experiment.json", out_dir="results/drift")
+        result.status   # RunStatus.COMPLETED, or NON_REPRODUCIBLE / PARTIAL / FAILED
     """
+    return _run(*_load(def_, frame), callbacks=callbacks, out_dir=out_dir)
+
+
+def start(def_: ExperimentDef | str | Path, *, frame: Frame | None = None, out_dir: str | None = None,
+          callbacks: Sequence[Callback] = ()) -> RunHandle:
+    """`run` in a background thread; the handle has `.status`, `.progress`, `.cancel()` and `.result()`.
+
+    Example::
+
+        handle = start("experiments/drift/experiment.json")
+        handle.result().status
+    """
+    return RunHandle(lambda job: _run(*_load(def_, frame), callbacks=callbacks, job=job, out_dir=out_dir))
+
+
+def _load(def_: ExperimentDef | str | Path, frame: Frame | None) -> tuple[ExperimentDef, Any, Frame]:
     file = None
     if not isinstance(def_, ExperimentDef):
         file = Path(def_)
         def_ = read_definition(file)
     check_experiment_version(def_.version)
-    step = load_flow(def_.flow.entry)
-    if frame is None:
-        frame = input_frame(def_, file)
-    return run_experiment(def_, step, frame, callbacks=callbacks, job=job, out_dir=out_dir)
+    return def_, import_flow(def_.flow.entry), frame if frame is not None else input_frame(def_, file)
 
 
-def run_experiment(def_: ExperimentDef, step, frame: Frame, params=None, *, callbacks: Sequence[Callback] = (),
-                   job: JobHandle | None = None, out_dir: str | None = None) -> ExperimentResult:
-    """Run the baseline and every scenario of `def_` over `frame`, batch by batch, collecting its metrics.
-
-    `params` is the baseline's params document (the flow's defaults when
-    omitted). `callbacks` see every scenario; `job` reports progress and can
-    cancel or time out the run between batches; `out_dir` gets each scenario's
-    output as parquet plus `result.json`. A failing scenario never stops the
-    others; a failing baseline stops the run.
-
-    Example::
-
-        result = run_experiment(def_, pipeline, df)
-        result.status   # RunStatus.COMPLETED, or NON_REPRODUCIBLE / PARTIAL / FAILED
-    """
+def _run(def_: ExperimentDef, step, frame: Frame, params=None, *, callbacks: Sequence[Callback] = (),
+         job: JobHandle | None = None, out_dir: str | None = None) -> ExperimentResult:
+    # `job` reports progress and can cancel or time out the run between batches; `params` is the baseline's document.
+    if not def_.flow.entry and any(sc.revision for sc in def_.scenarios):
+        def_ = def_.model_copy(update={"flow": def_.flow.model_copy(update={"entry": infer_entry(step)})})
     if def_.flow.decider and not compatible(def_.flow.decider, _decider_version()):
         raise DeciderError(f"flow needs decider {def_.flow.decider}, installed {_decider_version()}")
     problems = validate(def_, step)
@@ -320,23 +327,6 @@ def _set_values(plan, state: State, sc: Scenario, offset: int) -> None:
         values, valid = _cast(name, value, dtype_of(base_annotation(targets[-1].annotation)), state.n)
         for v in targets:
             state.write(v, values.copy(), valid=None if valid is None else valid.copy())
-
-
-def load_flow(entry: str, tree: Path | None = None):
-    """Import `entry` (`"module:qualname"`), from `tree` when given, and call it if it is a zero-argument factory."""
-    module, _, qualname = entry.partition(":")
-    if not module or not qualname:
-        raise ValueError(f"entry {entry!r} must be 'module:qualname'")
-    if tree is not None:
-        sys.path.insert(0, str(tree))
-    try:
-        obj = importlib.import_module(module)
-    finally:
-        if tree is not None:
-            sys.path.pop(0)
-    for part in qualname.split("."):
-        obj = getattr(obj, part)
-    return obj() if callable(obj) else obj
 
 
 def _batches(frame: Frame, size: int) -> Iterator[tuple[int, pl.DataFrame]]:

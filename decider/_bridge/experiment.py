@@ -24,9 +24,8 @@ def run_experiment(bridge, req, definition=None, def_=None, file=None, pipeline=
     (running the same experiment on other data). Streams `{"progress": {"done", "total"}}` lines on `req`'s id while it runs; a `{"cmd": "cancel",
     "target": <that id>}` line stops it at the next batch boundary.
     """
-    from decider.experiments import run
     from decider.experiments._experiments import InputSpec
-    from decider.experiments._runner import run_experiment
+    from decider.experiments._runner import _load, _run
     from decider.experiments.callbacks import Callback
 
     class _StreamProgress(Callback):
@@ -42,10 +41,10 @@ def run_experiment(bridge, req, definition=None, def_=None, file=None, pipeline=
     bridge._jobs[req["id"]] = job
     try:
         if definition is not None:
-            result = run(d, job=job, callbacks=[_StreamProgress()], out_dir=out_dir)
+            _, step, frame = _load(d, None)
         else:
-            result = run_experiment(d, bridge.step, bridge._rows(data), job=job, callbacks=[_StreamProgress()],
-                                    out_dir=out_dir)
+            step, frame = bridge.step, bridge._rows(data)
+        result = _run(d, step, frame, job=job, callbacks=[_StreamProgress()], out_dir=out_dir)
     finally:
         bridge._jobs.pop(req["id"], None)
     return result.model_dump(mode="json")
@@ -73,8 +72,8 @@ def experiment_schema(bridge):
 def experiment_validate(bridge, definition=None, def_=None, file=None, pipeline=None):
     """Every problem in the definition against its flow (unknown steps, bad overrides, ...), without running it."""
     from decider.experiments import validate
-    from decider.experiments._runner import load_flow
+    from decider.experiments._entry import import_flow
 
     d = _load_definition(bridge, definition, def_, file, pipeline)
-    step = load_flow(d.flow.entry) if definition is not None else bridge.step
+    step = import_flow(d.flow.entry) if definition is not None else bridge.step
     return {"problems": validate(d, step)}

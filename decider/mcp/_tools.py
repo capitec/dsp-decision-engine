@@ -3,7 +3,7 @@
 These are the read and confirmation-gated actions an agent drives over `decider`
 core. They are plain functions (no FastMCP), so they test without a server; the
 server in `decider.mcp._server` wraps each one as a tool. Flows are named by
-import path (`module:qualname`), the same identity `decider.experiments.load_flow`
+import path (`module:qualname`), the same identity `decider.experiments._entry.import_flow`
 resolves, and every returned step carries the contract's stable `flow_id`/`step_id`.
 """
 from __future__ import annotations
@@ -21,8 +21,8 @@ from decider._bridge.loading import load_module
 from decider import Engine
 from decider.trace import TraceSink
 from decider._bridge.replay import trace as run_trace
-from decider.experiments import ExperimentDef, ExperimentResult
-from decider.experiments._runner import load_flow, run_experiment
+from decider.experiments import ExperimentDef, ExperimentResult, run
+from decider.experiments._entry import import_flow
 from decider.mcp._policy import REDACTED, Policy
 
 _EXCLUDED = {".git", "__pycache__", ".venv", "venv", "node_modules",
@@ -52,7 +52,7 @@ def discover_flows(root: str = ".") -> dict:
 
 def describe_flow(entry: str, subgraph: str | None = None) -> dict:
     """The static structure of `entry` as a `FlowDescription`, or of the subtree under `subgraph`."""
-    desc = describe(load_flow(entry))
+    desc = describe(import_flow(entry))
     if subgraph is None:
         return desc.model_dump(mode="json")
     keep = {n.path for n in desc.nodes if n.path == subgraph or n.path.startswith(subgraph + "/")}
@@ -68,7 +68,7 @@ def describe_flow(entry: str, subgraph: str | None = None) -> dict:
 
 def inspect_step(entry: str, path: str) -> dict:
     """One node of `entry` (stable identity, source location) and the edges touching it."""
-    desc = describe(load_flow(entry))
+    desc = describe(import_flow(entry))
     node = resolve_step(desc, StepRef(path=path))
     loc = source_location(node.source) if node.source else None
     return {
@@ -82,7 +82,7 @@ def inspect_step(entry: str, path: str) -> dict:
 
 def lineage(entry: str, name: str) -> dict:
     """Every slot, writer and reader of value `name` across `entry`."""
-    desc = describe(load_flow(entry))
+    desc = describe(import_flow(entry))
     slots = [s for s in desc.value_slots if s.name == name]
     return {
         "name": name,
@@ -94,7 +94,7 @@ def lineage(entry: str, name: str) -> dict:
 
 def source_context(entry: str, path: str) -> dict:
     """The file, line and a short window of source around the step `path` in `entry`."""
-    desc = describe(load_flow(entry))
+    desc = describe(import_flow(entry))
     node = resolve_step(desc, StepRef(path=path))
     file, line, lines = None, None, []
     if node.source:
@@ -120,7 +120,7 @@ def run_summary(entry: str, data: str) -> dict:
 
 def check_report(entry: str) -> dict:
     """The default check suite over `entry`, as the structured `Report`."""
-    return checks.run(load_flow(entry)).model_dump(mode="json")
+    return checks.run(import_flow(entry)).model_dump(mode="json")
 
 
 def experiment_definition(path: str) -> dict:
@@ -137,7 +137,7 @@ def raw_record(policy: Policy, entry: str, data: str, record: int) -> dict:
     """Per-step values for one record of `entry` (raw data, opt-in)."""
     if not policy.raw:
         return {"redacted": REDACTED}
-    step = load_flow(entry)
+    step = import_flow(entry)
     result = run_trace(step, read(data), None)
     return {
         "entry": entry, "record": record,
@@ -150,7 +150,7 @@ def raw_trace(policy: Policy, entry: str, data: str, record: int) -> dict:
     """The decision-trace events for one record of `entry` (raw data, opt-in)."""
     if not policy.raw:
         return {"redacted": REDACTED}
-    step = load_flow(entry)
+    step = import_flow(entry)
     sink = TraceSink()
     Engine().bind(step).run(read(data), trace=sink)
     return {"entry": entry, "record": record,
@@ -164,9 +164,7 @@ def run_flow(entry: str, data: str) -> dict:
 
 def run_experiment(definition: str, data: str) -> dict:
     """Run the experiment in `definition` (an experiment.json) over `data`; confirmation-gated."""
-    def_ = ExperimentDef.model_validate_json(Path(definition).read_text())
-    step = load_flow(def_.flow.entry)
-    result = run_experiment(def_, step, read(data))
+    result = run(definition, frame=read(data))
     return result.model_dump(mode="json")
 
 
@@ -176,7 +174,7 @@ def start_debug(entry: str, data: str) -> dict:
     Stepping is a stateful editor-bound interaction (task 11b); this opens and
     describes the paused session only.
     """
-    step = load_flow(entry)
+    step = import_flow(entry)
     frame = read(data)
     session = Engine().bind(step).session(frame)
     return {"entry": entry, "rows": frame.height, "finished": session.finished,
@@ -193,7 +191,7 @@ def generate_ids(path: str = ".", check: bool = True) -> dict:
 
 
 def _summarise(entry: str, data: str) -> dict:
-    step = load_flow(entry)
+    step = import_flow(entry)
     frame = read(data)
     exe = Engine().bind(step)
     out = exe.run(frame)
