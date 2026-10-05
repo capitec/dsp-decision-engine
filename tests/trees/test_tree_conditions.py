@@ -24,7 +24,7 @@ from decider.steps.trees import (
     UnaryStringMatch,
     V3TreeDocument,
 )
-from decider.steps.values import ParamRef
+from decider.steps._values import ParamRef
 
 
 def test_a_computed_feature_reports_the_columns_it_reads():

@@ -3,7 +3,7 @@ mandatory verification), and the 09-C evidence minimum (spec 09 §5.15) is prese
 every record."""
 import os
 
-from decider.serving.handler import construct_handler_from_settings
+from decider.serving._handler import construct_handler_from_settings
 
 from inference import _typed_sample_record
 

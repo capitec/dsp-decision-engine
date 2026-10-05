@@ -343,7 +343,7 @@ def test_fallback_warnings_are_silenced_by_their_category(mode):
 @pytest.mark.parametrize("bad", ["flow", "scorecard", "frame_step"])
 def test_allow_fallback_refuses_a_step_it_could_not_reach(bad):
     from decider import frame_step
-    from decider.steps.scorecard.config import DefaultBin, ScorecardConfig, ScoredVariable, ValuesBin
+    from decider.steps.scorecard._config import DefaultBin, ScorecardConfig, ScoredVariable, ValuesBin
 
     targets = {
         "flow": lambda: flow(half, name="p"),

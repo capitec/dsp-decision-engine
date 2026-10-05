@@ -10,10 +10,10 @@ from pydantic import AfterValidator, BeforeValidator, Field, model_validator
 
 from decider._engine.ir.decls import Input, NullPolicy, Output
 from decider._engine.ir.nodes import CallNode
-from decider.steps.configurable import ConfigurableStep
-from decider.steps.tables.encode import Shape, check_columns, dtypes, kind, pack, program, typed, variables
-from decider.steps.tables.matcher import match
-from decider.steps.tables.reference import reference
+from decider.steps._configurable import ConfigurableStep
+from decider.steps.tables._encode import Shape, check_columns, dtypes, kind, pack, program, typed, variables
+from decider.steps.tables._matcher import match
+from decider.steps.tables._reference import reference
 from decider.steps.tables.schema import (
     AndExpression,
     BetweenExpression,
@@ -26,7 +26,7 @@ from decider.steps.tables.schema import (
     check_rows,
     leaves,
 )
-from decider.steps.values import TableRef, TableValue
+from decider.steps._values import TableRef, TableValue
 
 __all__ = [
     "DecisionTableConfig", "AndExpression", "BetweenExpression", "BoundMode", "EqExpression", "Expression",

@@ -8,7 +8,7 @@ import types
 from pathlib import Path
 
 from decider.config import JsonFileStore
-from decider.data.providers import project_root  # noqa: F401  (re-exported for bridge.py)
+from decider.data import project_root  # noqa: F401  (re-exported for bridge.py)
 
 
 def load_module(file):

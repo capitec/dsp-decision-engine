@@ -8,7 +8,7 @@ from fastmcp.exceptions import ToolError
 from decider.data import load
 from decider.experiments import Divergence, Experiment, load_flow
 from decider.mcp import Policy, build_server
-from decider.mcp.policy import REDACTED
+from decider.mcp._policy import REDACTED
 
 PIPELINE_SRC = '''\
 from decider import flow, param, step

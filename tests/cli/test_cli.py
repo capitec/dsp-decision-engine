@@ -12,7 +12,7 @@ from click.testing import CliRunner
 from decider.cli import CPU_TARGET_FILE, cli
 from decider._engine.compile import cpu_target
 from decider._engine.compile.njit import _DISPATCHERS, _REASONS
-from decider.serving.handler import construct_handler_from_settings
+from decider.serving._handler import construct_handler_from_settings
 
 
 
@@ -143,7 +143,7 @@ def uvicorn_calls(monkeypatch):
 def test_serve_starts_the_starlette_factory_with_the_given_settings(project, uvicorn_calls):
     result = CliRunner().invoke(cli, ["serve", "--port", "9001", "--workers", "3", "--mode", "stepped"])
     assert result.exit_code == 0, result.output
-    assert uvicorn_calls == [(("decider.serving.servers.starlette:create_app",),
+    assert uvicorn_calls == [(("decider.serving._servers.starlette:create_app",),
                               {"factory": True, "host": "0.0.0.0", "port": 9001, "workers": 3})]
     # What each worker's app factory builds its handler from; the pipeline comes from the project's .env.
     handler = construct_handler_from_settings()

@@ -25,8 +25,8 @@ from decider import flow, param
 from decider.config import JsonFileStore
 from decider._engine.run.engine import _NO_FRAME
 from decider._engine.run.state import State, load_record as _load
-from decider.serving.handler import RequestHandler
-from decider.serving.parse import coerce_record, parse_application_json
+from decider.serving._handler import RequestHandler
+from decider.serving._parse import coerce_record, parse_application_json
 
 sys.path.insert(0, "benchmarks")
 import tree_walk  # noqa: E402  the tree document the tree benchmark uses

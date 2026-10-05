@@ -12,7 +12,7 @@ from decider.exceptions import DeciderError
 from decider.experiments import (Bars, BranchFlows, Changes, Counts, Describe, Distribution, Divergence,
                                  Experiment, ExperimentResult, Figure, Histogram, Plot, Ranges, Sankey, Stats,
                                  ValueCounts)
-from decider.experiments.plots.sankey import TEMPLATE
+from decider.experiments.plots._sankey import TEMPLATE
 
 LIMIT_03 = {"demo": {"approved": {"limit": 0.3}}}
 
@@ -187,7 +187,7 @@ def test_a_result_with_plots_round_trips_through_json(pipeline, frame):
 
 
 def test_core_decider_and_the_metrics_never_import_altair():
-    code = ("import sys, decider, decider.experiments, decider.mcp.tools; "
+    code = ("import sys, decider, decider.experiments, decider.mcp._tools; "
             "assert 'altair' not in sys.modules and 'IPython' not in sys.modules")
     subprocess.run([sys.executable, "-c", code], check=True)
 

@@ -7,7 +7,7 @@ from decider import flow
 from decider import _engine as engine
 from decider._engine import Engine
 from decider._engine.compile import kernel
-from decider.steps.trees import TreeConfig, walker
+from decider.steps.trees import TreeConfig, _walker as walker
 from decider.testing import assert_equivalent
 
 

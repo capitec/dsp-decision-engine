@@ -14,7 +14,7 @@ from decider.exceptions import IRError, WiringError
 from decider.registry import import_path
 
 if TYPE_CHECKING:
-    from decider.steps.base import Step
+    from decider.steps import Step
 
 # Built IR and the path -> Step entries of its members, per (step object,
 # parent path). Keyed by id() because pydantic steps compare by value; the
@@ -119,7 +119,7 @@ class IRContext:
             ctx.value(ParamRef(param="hi_thresh", default=0.7), float, arg="threshold")
             # ParamDecl("hi_thresh", float, 0.7, arg="threshold")
         """
-        from decider.steps.values import ParamRef
+        from decider.steps import ParamRef
 
         if not isinstance(value, ParamRef):
             return value
@@ -190,7 +190,7 @@ class IRContext:
             ctx.table(TableRef(table="prices"), {"product": "str", "rate": "float"})
         """
         from decider._polars_docs.frame import FrameDoc
-        from decider.steps.values import TableRef
+        from decider.steps import TableRef
 
         if not isinstance(value, TableRef):
             return value
@@ -226,7 +226,7 @@ def step_map(step: Any) -> dict[str, Step]:
 
 
 def _build(step: Any) -> tuple[IRNode, dict[str, Step]]:
-    from decider.steps.base import as_step
+    from decider.steps import as_step
 
     ctx = IRContext()
     root = ctx.build(as_step(step))

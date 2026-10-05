@@ -23,7 +23,7 @@ from decider._engine.compile.njit import jit
 from decider._engine.compile.rows import rows_class
 from decider._engine.params import ParamsCache
 from decider._engine.trace import TraceSink
-from decider.serving.handler import Live, RequestHandler
+from decider.serving._handler import Live, RequestHandler
 
 MODES = ("interpreted", "stepped", "fused")
 THREADS = 16

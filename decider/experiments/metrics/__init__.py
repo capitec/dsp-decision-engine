@@ -5,10 +5,10 @@ A metric is global (it reads the flow's output in `on_batch_end`) or, with a
 Define your own by subclassing `Metric` with a `type` alias; an experiment
 names it by that alias, so it loads from JSON.
 """
-from decider.experiments.metrics.base import Metric, MetricRef, Summary
-from decider.experiments.metrics.compare import Divergence, Divergences
-from decider.experiments.metrics.outputs import Bins, Counts, Describe, Histogram, Stats, ValueCounts
-from decider.experiments.metrics.paths import BranchFlows, Flows
+from decider.experiments.metrics._base import Metric, MetricRef, Summary
+from decider.experiments.metrics._compare import Divergence, Divergences
+from decider.experiments.metrics._outputs import Bins, Counts, Describe, Histogram, Stats, ValueCounts
+from decider.experiments.metrics._paths import BranchFlows, Flows
 
 __all__ = ["Bins", "BranchFlows", "Counts", "Describe", "Divergence", "Divergences", "Flows", "Histogram", "Metric",
            "MetricRef", "Stats", "Summary", "ValueCounts"]

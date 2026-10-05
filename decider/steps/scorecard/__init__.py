@@ -1,5 +1,5 @@
 """Points scorecards as configurable steps."""
-from decider.steps.scorecard.config import (
+from decider.steps.scorecard._config import (
     AdjustedVariable,
     BoundBin,
     ConstantScore,

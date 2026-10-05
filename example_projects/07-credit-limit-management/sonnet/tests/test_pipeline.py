@@ -50,7 +50,7 @@ def test_sample_request_scores_through_the_handler(monkeypatch):
         monkeypatch.setenv(k, v)
     monkeypatch.syspath_prepend(str(PROJECT_DIR))
     monkeypatch.chdir(PROJECT_DIR)
-    from decider.serving.handler import construct_handler_from_settings
+    from decider.serving._handler import construct_handler_from_settings
     handler = construct_handler_from_settings()
     handler.stage()
     handler.activate()
@@ -73,7 +73,7 @@ def test_replay_reproduces_the_decision_to_the_cent(monkeypatch, sample_record):
         monkeypatch.setenv(k, v)
     monkeypatch.syspath_prepend(str(PROJECT_DIR))
     monkeypatch.chdir(PROJECT_DIR)
-    from decider.serving.handler import construct_handler_from_settings
+    from decider.serving._handler import construct_handler_from_settings
     handler = construct_handler_from_settings()
     handler.stage(); handler.activate()
     live = handler.module_fn()

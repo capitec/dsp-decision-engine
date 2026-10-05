@@ -8,7 +8,7 @@ import datetime
 import json
 from pathlib import Path
 
-from decider.serving.handler import RequestHandler
+from decider.serving._handler import RequestHandler
 
 _SAMPLE_REQUEST_PATH = Path(__file__).parent / "sample_request.json"
 

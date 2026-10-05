@@ -4,7 +4,7 @@ Staging warms up with `sample_request.json`.
 """
 from __future__ import annotations
 
-from decider.serving.handler import RequestHandler
+from decider.serving._handler import RequestHandler
 
 
 class Handler(RequestHandler):

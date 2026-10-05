@@ -1,3 +1,3 @@
-from .handler import RequestHandler
+from ._handler import RequestHandler
 
 __all__ = ["RequestHandler"]

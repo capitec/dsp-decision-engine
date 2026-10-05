@@ -11,8 +11,8 @@ import pytest
 from decider import ConfigurableStep, Value, flow, param
 from decider.config import JsonFileStore, Version
 from decider.exceptions import MissingInputError
-from decider.serving.handler import RequestHandler
-from decider.serving.servers.starlette import create_app
+from decider.serving._handler import RequestHandler
+from decider.serving._servers.starlette import create_app
 from decider.testing import no_recompile
 
 
@@ -275,8 +275,8 @@ def test_an_unsupported_content_type_is_a_415(handler):
 
 
 INFERENCE = '''
-from decider.serving.format import Response
-from decider.serving.handler import RequestHandler
+from decider.serving._format import Response
+from decider.serving._handler import RequestHandler
 
 class Handler(RequestHandler):
     def output_fn(self, output, accept):

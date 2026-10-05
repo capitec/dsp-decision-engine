@@ -14,12 +14,12 @@ Example::
     data = load("loans.parquet")
     preflight(pipeline, data.frame)
 """
-from decider.data.identity import (DuplicateRecordKeyError, MissingKeyColumnError, MissingRecordKeyError,
+from decider.data._keys import (DuplicateRecordKeyError, MissingKeyColumnError, MissingRecordKeyError,
                                    RecordKeyError, check_key, suggest_key)
-from decider.data.load import FORMATS, LoadError, LoadedData, load
-from decider.data.providers import (DatasetError, DatasetProvider, FileProvider, FolderProvider, dataset, dataset_documents,
+from decider.data._load import FORMATS, LoadError, LoadedData, load
+from decider.data._providers import (DatasetError, DatasetProvider, FileProvider, FolderProvider, dataset, dataset_documents,
                                     datasets, datasets_folder, project_root)
-from decider.data.preflight import CostEstimate, PreflightReport, preflight
+from decider.data._preflight import CostEstimate, PreflightReport, preflight
 
 __all__ = [
     "DatasetError", "DatasetProvider", "FileProvider", "FolderProvider", "dataset", "dataset_documents", "datasets", "datasets_folder",

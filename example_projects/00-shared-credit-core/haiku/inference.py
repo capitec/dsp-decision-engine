@@ -1,5 +1,5 @@
 """Request handling for the shared credit core library."""
-from decider.serving.handler import RequestHandler
+from decider.serving._handler import RequestHandler
 
 
 class Handler(RequestHandler):
