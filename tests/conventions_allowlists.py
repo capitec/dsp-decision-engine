@@ -51,8 +51,6 @@ NO_ALL: dict[str, str] = {  # {module path relative to decider/: reason}
     "flowfile/load.py": "moves to steps/flowfile/ with a leading underscore",
     "flowfile/schema.py": "moves to steps/flowfile/ with a leading underscore",
     "ids.py": "moves to _tools/ids.py",
-    "lifecycle/job.py": "moves to contract/_manifest.py and contract/_jobs.py",
-    "lifecycle/manifest.py": "moves to contract/_manifest.py and contract/_jobs.py",
     "mcp/editor.py": "implementation file; gets a leading underscore when its package is made thin",
     "mcp/policy.py": "implementation file; gets a leading underscore when its package is made thin",
     "mcp/server.py": "implementation file; gets a leading underscore when its package is made thin",
@@ -109,6 +107,7 @@ NO_ALL: dict[str, str] = {  # {module path relative to decider/: reason}
 
 BIG_ALL: dict[str, str] = {  # {package path relative to decider/: reason}
     ".": "trimmed to the build/run/extend list in the surface phase",
+    "contract": "trimmed when the contract surface is cut",
     "experiments": "trimmed when experiments __all__ is cut",
     "steps": "trimmed to the target list in the surface phase",
     "steps/trees/schema": "permanent: the document grammar is public by design",

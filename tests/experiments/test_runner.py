@@ -7,7 +7,7 @@ import polars as pl
 from decider import flow
 from decider.experiments import (Callback, Divergence, Experiment, ExperimentDef, RunStatus, ScenarioStatus,
                                  ValueCounts, resolve, run)
-from decider.lifecycle import JobHandle
+from decider.contract import JobHandle
 
 LIMIT_03 = {"demo": {"approved": {"limit": 0.3}}}
 

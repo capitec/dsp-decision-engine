@@ -239,7 +239,7 @@ def source_is_stale(captured: str | None, current: str) -> bool:
     return captured is not None and captured != current
 
 
-def json_schema() -> dict[str, Any]:
+def manifest_schema() -> dict[str, Any]:
     """The versioned JSON Schema of the run-manifest contract, generated from the Python models.
 
     `RunManifest` and every model it names appear under `$defs` (the reused
@@ -248,7 +248,7 @@ def json_schema() -> dict[str, Any]:
 
     Example::
 
-        schema = json_schema()
+        schema = manifest_schema()
         schema["manifest_version"]  # "1"
     """
     schema = RunManifest.model_json_schema()

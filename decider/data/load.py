@@ -12,7 +12,7 @@ from pydantic import BaseModel, PrivateAttr
 from decider.data.formats import format_of, scan
 from decider.data.identity import suggest_key
 from decider.exceptions import DeciderError
-from decider.lifecycle import InputFingerprint, JobHandle
+from decider.contract import InputFingerprint, JobHandle
 
 FORMATS = ("json", "csv", "parquet")
 
