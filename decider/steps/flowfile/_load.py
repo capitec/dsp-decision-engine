@@ -14,12 +14,14 @@ from pydantic import ValidationError
 from decider.exceptions import WiringError, wrap_import_errors
 from decider._suggest import hint
 from decider.steps._base import Step, as_step
-from decider.steps._branch import _column_condition, branch
+from decider.steps._branch import _column_condition
+from decider.steps._composites import COMPOSITES
 from decider.steps._configurable import ConfigurableStep
-from decider.steps._loop import loop
 from decider.steps._sequential import flow
 
-from decider.steps.flowfile._schema import NODE_MODELS, BranchNode, ExprCondition, FlowNode, LoopNode, RootDoc, StepNode
+from decider.steps.flowfile._schema import (
+    BranchNode, DagNode, EachNode, ExprCondition, FlowNode, LoopNode, OptimiseNode, RootDoc, StepNode,
+)
 
 _EXTS = ("yaml", "yml", "json")
 
@@ -108,18 +110,11 @@ def _as_flow_or_single(nodes: Sequence[dict], loc: str, ctx: _Context) -> Step:
 def _build_node(raw: Any, loc: str, ctx: _Context) -> Step:
     if not isinstance(raw, Mapping):
         raise WiringError(f"{loc}: a node must be a mapping, got {raw!r}")
-    present = [k for k in NODE_MODELS if k in raw]
+    present = [k for k in _NODES if k in raw]
     if len(present) != 1:
-        raise WiringError(f"{loc}: a node needs exactly one of step/flow/branch/loop, got {present or 'none'}")
-    kind = present[0]
-    node = _validate(NODE_MODELS[kind], raw, loc)
-    if isinstance(node, StepNode):
-        return _build_step(node, loc, ctx)
-    if isinstance(node, FlowNode):
-        return _build_flow(node, loc, ctx)
-    if isinstance(node, BranchNode):
-        return _build_branch(node, loc, ctx)
-    return _build_loop(node, loc, ctx)
+        raise WiringError(f"{loc}: a node needs exactly one of {'/'.join(_NODES)}, got {present or 'none'}")
+    model, build = _NODES[present[0]]
+    return build(_validate(model, raw, loc), loc, ctx)
 
 
 def _resolve_name(name: str, loc: str, ctx: _Context) -> Step:
@@ -158,7 +153,7 @@ def _build_flow(node: FlowNode, loc: str, ctx: _Context) -> Step:
         if matches:
             raise WiringError(f"{loc}: flow {node.flow!r} has inline steps, but {matches[0]} also exists")
         built = _build_list(node.steps, loc, ctx)
-        return flow(*built, name=node.flow, id=node.id, suppress_checks=node.suppress_checks)
+        return COMPOSITES["flow"](*built, name=node.flow, id=node.id, suppress_checks=node.suppress_checks)
     built = _build_flow_reference(node.flow, matches, loc, ctx)
     return built._replace(suppress_checks=(*built.suppress_checks, *node.suppress_checks)) if node.suppress_checks else built
 
@@ -199,7 +194,7 @@ def _build_branch(node: BranchNode, loc: str, ctx: _Context) -> Step:
     arms = [_as_flow_or_single(node.then, f"{loc}.then", ctx)]
     if node.else_ is not None:
         arms.append(_as_flow_or_single(node.else_, f"{loc}.else", ctx))
-    return branch(condition, *arms, modifies=node.modifies, name=node.branch, id=node.id,
+    return COMPOSITES["branch"](condition, *arms, modifies=node.modifies, name=node.branch, id=node.id,
                   suppress_checks=node.suppress_checks)
 
 
@@ -208,8 +203,33 @@ def _build_loop(node: LoopNode, loc: str, ctx: _Context) -> Step:
     if isinstance(condition, str):
         condition = _column_condition(condition)
     body = _as_flow_or_single(node.steps, f"{loc}.steps", ctx)
-    return loop(condition, body, carries=node.carries, max_iterations=node.max, name=node.loop, id=node.id,
+    return COMPOSITES["loop"](condition, body, carries=node.carries, max_iterations=node.max, name=node.loop, id=node.id,
                 suppress_checks=node.suppress_checks)
+
+
+def _build_dag(node: DagNode, loc: str, ctx: _Context) -> Step:
+    return COMPOSITES["dag"](*_build_list(node.steps, f"{loc}.steps", ctx), name=node.dag, inputs=node.inputs,
+                             id=node.id, suppress_checks=node.suppress_checks)
+
+
+def _build_each(node: EachNode, loc: str, ctx: _Context) -> Step:
+    return COMPOSITES["each"](node.column, _as_flow_or_single(node.steps, f"{loc}.steps", ctx), name=node.each,
+                              output=node.output, id=node.id, suppress_checks=node.suppress_checks)
+
+
+def _build_optimise(node: OptimiseNode, loc: str, ctx: _Context) -> Step:
+    disqualify = node.disqualify and _as_flow_or_single(node.disqualify, f"{loc}.disqualify", ctx)
+    return COMPOSITES["optimise"](
+        _as_flow_or_single(node.count, f"{loc}.count", ctx), _as_flow_or_single(node.evaluate, f"{loc}.evaluate", ctx),
+        score=node.score, disqualify=disqualify, max_candidates=node.max_candidates, name=node.optimise,
+        id=node.id, suppress_checks=node.suppress_checks)
+
+
+# Every composite constructor has a node kind, and `step` references a named step.
+_NODES = {"step": (StepNode, _build_step), "flow": (FlowNode, _build_flow), "dag": (DagNode, _build_dag),
+          "branch": (BranchNode, _build_branch), "loop": (LoopNode, _build_loop),
+          "each": (EachNode, _build_each), "optimise": (OptimiseNode, _build_optimise)}
+assert set(_NODES) == {"step", *COMPOSITES}
 
 
 def components(module: ModuleType | None) -> dict[str, Any]:

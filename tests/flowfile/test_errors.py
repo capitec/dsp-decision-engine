@@ -37,7 +37,7 @@ def test_root_level_typo_key_is_an_error(tmp_path):
 
 def test_node_with_no_recognized_kind_key_is_an_error(tmp_path):
     path = _write(tmp_path, "flow.yaml", {"flow": "f", "steps": [{"stpe": "x"}]})
-    with pytest.raises(WiringError, match="step/flow/branch/loop"):
+    with pytest.raises(WiringError, match="step/flow/dag/branch/loop/each/optimise"):
         load_flow(path)
 
 

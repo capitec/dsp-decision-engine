@@ -11,7 +11,7 @@ from decider.registry import BaseRegistryModule
 from ._versions import Version, VersionedConfig, VersionPart
 
 
-class ConfigStore(BaseRegistryModule, root=True):
+class ConfigStore(BaseRegistryModule, root=True, group="config_stores"):
     """Versioned params and `ConfigurableStep` documents; subclass it for a new backend.
 
     A store holds immutable versions and never loads one by itself: a caller

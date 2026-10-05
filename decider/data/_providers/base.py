@@ -17,7 +17,7 @@ class DatasetError(DeciderError, ValueError):
     _STATUS_CODE = 400
 
 
-class DatasetProvider(BaseRegistryModule, root=True):
+class DatasetProvider(BaseRegistryModule, root=True, group="datasets"):
     """One dataset: where it lives and how to read it; subclass it for a new source.
 
     `key` is the data's unique record key; `load()` rejects duplicate or null keys.

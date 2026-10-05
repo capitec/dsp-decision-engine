@@ -12,10 +12,6 @@ from decider.steps._sequential import flow
 from decider.steps._values import ParamRef, Value
 from decider.steps.flowfile import load_flow
 
-# Built-in types load by tag without their (numba-heavy) modules imported up front.
-ConfigurableStep.lazy({"tree": "decider.steps.trees", "decision_table": "decider.steps.tables",
-                       "scorecard": "decider.steps.scorecard"})
-
 __all__ = [
     "step", "frame_step", "flow", "dag", "branch", "loop", "each", "optimise", "EachMode", "Step",
     "ConfigurableStep", "Value", "ParamRef", "StepRef", "allow_fallback", "helper", "load_flow",

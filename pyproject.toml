@@ -58,6 +58,13 @@ all = [
 [project.scripts]
 decider = "decider.cli:cli"
 
+# Packages that ship types for decider declare them in these entry-point groups,
+# named by the type tag: decider.steps, decider.config_stores, decider.metrics,
+# decider.plots, decider.blocks, decider.datasets, decider.checks. For example,
+# in the package's own pyproject.toml:
+#   [project.entry-points."decider.steps"]
+#   scaled = "credit_risk.steps:Scaled"
+
 # ── build ─────────────────────────────────────────────────────────────────────
 
 [build-system]

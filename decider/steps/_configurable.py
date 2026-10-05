@@ -11,7 +11,7 @@ from decider.registry import BaseRegistryModule, ref
 from decider.steps._base import Step
 
 
-class ConfigurableStep(Step, BaseRegistryModule, root=True):
+class ConfigurableStep(Step, BaseRegistryModule, root=True, group="steps"):
     """A serialisable, config-driven step (trees, tables, scorecards): subclass it and implement `to_ir`.
 
     Every subclass loads by its import path (`"credit.steps:Scaled"`), or by a
@@ -98,3 +98,7 @@ Example::
         def to_ir(self, ctx):
             return ctx.expand(self, flow(*self.rules))
 """
+
+# Built-in types load by tag without their (numba-heavy) modules imported up front.
+ConfigurableStep.lazy({"tree": "decider.steps.trees", "decision_table": "decider.steps.tables",
+                       "scorecard": "decider.steps.scorecard"})
