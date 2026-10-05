@@ -26,6 +26,13 @@ def test_json_round_trips_the_definition_with_its_metrics_and_plots(pipeline, fr
     assert isinstance(restored.plots[1], Bars)
 
 
+def test_a_revision_scenario_without_a_flow_entry_is_invalid(pipeline):
+    scenarios = [{"name": "old", "revision": "HEAD^"}]
+    problems = validate(ExperimentDef(name="x", flow={"entry": ""}, scenarios=scenarios), pipeline)
+    assert any("old" in p and "flow.entry" in p for p in problems)
+    assert validate(_def(scenarios=scenarios), pipeline) == []
+
+
 def test_undeclared_produced_override_is_rejected(pipeline):
     problems = validate(_def(scenarios=[{"name": "x", "overrides": {"ratio": 0.1}}]), pipeline)
     assert any("produced" in p for p in problems)

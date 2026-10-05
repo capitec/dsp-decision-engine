@@ -194,6 +194,12 @@ def check_experiment_version(version: str | None) -> None:
         raise DeciderError(f"experiment version {version} is newer than {EXPERIMENT_VERSION}; upgrade decider")
 
 
+def read_definition(path: Path) -> ExperimentDef:
+    def_ = ExperimentDef.model_validate_json(path.read_text())
+    check_experiment_version(def_.version)
+    return def_
+
+
 def input_frame(def_: ExperimentDef, file: Path | None = None) -> pl.LazyFrame:
     """The lazy frame `def_.input` names; `file` is the definition's own path, which paths and the project are found from."""
     spec = def_.input
@@ -207,7 +213,8 @@ def input_frame(def_: ExperimentDef, file: Path | None = None) -> pl.LazyFrame:
 def validate(def_: ExperimentDef, step) -> list[str]:
     """Every problem in `def_` against `step`, returned rather than raised so a caller shows them all.
 
-    Checks scenario names, that each override targets an input or a produced
+    Checks scenario names, that a scenario on another revision has a flow
+    `entry` to import, that each override targets an input or a produced
     value (a produced one needs `at`), that metric and plot names are unique,
     and that each plot's metric exists and gives the summary the plot requires.
     """
@@ -216,6 +223,9 @@ def validate(def_: ExperimentDef, step) -> list[str]:
     if BASELINE in names:
         problems.append(f"{BASELINE!r} is the unchanged run; give the scenario another name")
     problems += [f"two scenarios are named {n!r}" for n, k in names.items() if k > 1]
+    if not def_.flow.entry:
+        problems += [f"{sc.name}: revision {sc.revision!r} runs in a subprocess that imports flow.entry; set entry="
+                     for sc in def_.scenarios if sc.revision]
     problems += _override_problems(def_, step)
     problems += _node_problems(def_, step)
     metrics: dict[str, Metric] = {}
@@ -344,8 +354,7 @@ class Experiment:
         from decider.experiments.runner import load_flow
 
         path = Path(path)
-        def_ = ExperimentDef.model_validate_json(path.read_text())
-        check_experiment_version(def_.version)
+        def_ = read_definition(path)
         if frame is None:
             frame = input_frame(def_, path)
         exp = cls(def_.name, step if step is not None else load_flow(def_.flow.entry), frame, params=params)
