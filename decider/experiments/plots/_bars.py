@@ -4,7 +4,7 @@ import typing as t
 
 from decider.experiments.metrics._compare import Divergences
 from decider.experiments.metrics._outputs import Counts
-from decider.experiments.plots._base import Plot, altair
+from decider.experiments.plots._base import Plot, require_altair
 
 
 class Bars(Plot):
@@ -24,7 +24,7 @@ class Bars(Plot):
     layout: t.Literal["side_by_side", "stacked", "rows"] = "side_by_side"
 
     def render(self, summaries: dict[str, Counts]):
-        alt = altair()
+        alt = require_altair()
         rows = [{"scenario": name, "value": value, "records": n}
                 for name, s in summaries.items() for value, n in s.counts.items()]
         column = next(iter(summaries.values())).column if summaries else ""
@@ -51,7 +51,7 @@ class Changes(Plot):
     requires: t.ClassVar = Divergences
 
     def render(self, summaries: dict[str, Divergences]):
-        alt = altair()
+        alt = require_altair()
         rows = [{"scenario": name, "changed": s.changed, "compared": s.compared, "first": s.first,
                  "share": s.changed / s.compared if s.compared else 0.0} for name, s in summaries.items()]
         column = next(iter(summaries.values())).column if summaries else ""

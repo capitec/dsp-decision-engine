@@ -3,7 +3,6 @@
 NO_ALL: dict[str, str] = {  # {module path relative to decider/: reason}
     "cli/__init__.py": "stays public; gets __all__ when the surface is trimmed",
     "exceptions.py": "stays public; gets __all__ when the surface is trimmed",
-    "experiments/callbacks.py": "stays public; gets __all__ when the surface is trimmed",
     "steps/tables/schema.py": "stays public; gets __all__ when the surface is trimmed",
     "steps/trees/schema/conditions.py": "stays public; gets __all__ when the surface is trimmed",
     "steps/trees/schema/document.py": "stays public; gets __all__ when the surface is trimmed",
@@ -16,7 +15,6 @@ NO_ALL: dict[str, str] = {  # {module path relative to decider/: reason}
 BIG_ALL: dict[str, str] = {  # {package path relative to decider/: reason}
     ".": "trimmed to the build/run/extend list in the surface phase",
     "contract": "trimmed when the contract surface is cut",
-    "experiments": "trimmed when experiments __all__ is cut",
     "steps": "trimmed to the target list in the surface phase",
     "steps/trees/schema": "permanent: the document grammar is public by design",
 }
@@ -29,6 +27,9 @@ PRIVATE_IMPORT: dict[str, str] = {  # {"importer -> imported": reason}
     "cli -> serving._servers.sanic": "the sanic app factory has no public home",
     "experiments._experiments -> data._formats": "scan is not exported from data yet",
     "experiments._runner -> data._formats": "scan is not exported from data yet",
+    "_bridge.experiment -> experiments._experiments": "InputSpec is not public; the bridge overrides a definition's input",
+    "_bridge.experiment -> experiments._runner": "run_experiment and load_flow run and validate over a live step",
+    "mcp._tools -> experiments._runner": "run_experiment and load_flow run and validate over a live step",
     "checks._common -> _engine.ir.nodes": "FiniteStateMachineNode and ScatterGatherNode are not in decider.ir",
     "cli -> _engine.compile": "cpu_target has no public home",
     "data._preflight -> _engine.run.params": "param bundles and namespace checks; goes with data/preflight",

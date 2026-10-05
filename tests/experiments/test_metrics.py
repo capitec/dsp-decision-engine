@@ -5,8 +5,9 @@ import typing as t
 import polars as pl
 
 from decider import branch, flow, param, step
-from decider.experiments import (Batch, BranchFlows, Describe, Divergence, Experiment, ExperimentDef, Histogram,
-                                 Metric, Sankey, Summary)
+from decider.experiments import Experiment, ExperimentDef
+from decider.experiments.metrics import Batch, BranchFlows, Describe, Divergence, Histogram, Metric, Summary
+from decider.experiments.plots import Sankey
 
 LIMIT_03 = {"demo": {"approved": {"limit": 0.3}}}
 

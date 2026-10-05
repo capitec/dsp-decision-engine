@@ -772,12 +772,16 @@ with altair (`pip install 'decider[experiments]'`). The definition saves as
 output, or steps by `nodes="<glob>"` or a durable `node_id`. `.report(...)`
 lays out blocks (`Overview`, `Text`, `Table`, `Chart`, `Row`, `Section`) that
 `result.show()` draws in a notebook and `result.save_html(path)` writes as a
-page; without one it shows an overview and a section per metric.
+page; without one it shows an overview and a section per metric. Metrics are in
+`decider.experiments.metrics`, plots in `.plots`, report blocks in `.report`
+and callbacks in `.callbacks`.
 
 ```python
 import polars as pl
 from decider import flow, param
-from decider.experiments import Changes, Divergence, Experiment, RunStatus, ValueCounts
+from decider.experiments import Experiment, RunStatus
+from decider.experiments.metrics import Divergence, ValueCounts
+from decider.experiments.plots import Changes
 
 def ratio(income: float, debt: float) -> float:
     return debt / income

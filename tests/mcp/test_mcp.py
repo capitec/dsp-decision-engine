@@ -6,7 +6,9 @@ import pytest
 from fastmcp.exceptions import ToolError
 
 from decider.data import load
-from decider.experiments import Divergence, Experiment, load_flow
+from decider.experiments import Experiment
+from decider.experiments._runner import load_flow
+from decider.experiments.metrics import Divergence
 from decider.mcp import Policy, build_server
 from decider.mcp._policy import REDACTED
 

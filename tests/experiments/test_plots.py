@@ -9,9 +9,9 @@ import pytest
 
 from decider import branch, flow, param, step
 from decider.exceptions import DeciderError
-from decider.experiments import (Bars, BranchFlows, Changes, Counts, Describe, Distribution, Divergence,
-                                 Experiment, ExperimentResult, Figure, Histogram, Plot, Ranges, Sankey, Stats,
-                                 ValueCounts)
+from decider.experiments import Experiment, ExperimentResult
+from decider.experiments.metrics import BranchFlows, Counts, Describe, Divergence, Histogram, Stats, ValueCounts
+from decider.experiments.plots import Bars, Changes, Distribution, Figure, Plot, Ranges, Sankey
 from decider.experiments.plots._sankey import TEMPLATE
 
 LIMIT_03 = {"demo": {"approved": {"limit": 0.3}}}
@@ -131,7 +131,7 @@ def test_distribution_overlays_each_scenarios_histogram_with_overflow_at_the_end
 
 
 def _bins_summaries():
-    from decider.experiments import Bins
+    from decider.experiments.metrics import Bins
     return {name: Bins(column="rate", edges=[0.0, 0.5, 1.0], counts=counts, below=0, above=0, nulls=0)
             for name, counts in (("baseline", [3, 1]), ("faster", [1, 3]))}
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing as t
 
 from decider.experiments.metrics._outputs import Bins, Stats
-from decider.experiments.plots._base import Plot, altair
+from decider.experiments.plots._base import Plot, require_altair
 
 Layout = t.Literal["overlay", "stacked", "side_by_side", "rows"]
 
@@ -26,7 +26,7 @@ class Distribution(Plot):
     layout: Layout = "overlay"
 
     def render(self, summaries: dict[str, Bins]):
-        alt = altair()
+        alt = require_altair()
         rows = [row for name, s in summaries.items() for row in _bins(name, s)]
         column = next(iter(summaries.values())).column if summaries else ""
         pick = alt.selection_point(fields=["scenario"], bind="legend")
@@ -59,7 +59,7 @@ class Ranges(Plot):
     requires: t.ClassVar = Stats
 
     def render(self, summaries: dict[str, Stats]):
-        alt = altair()
+        alt = require_altair()
         rows = [{"scenario": name, "min": s.min, "mean": s.mean, "max": s.max, "count": s.count}
                 for name, s in summaries.items()]
         column = next(iter(summaries.values())).column if summaries else ""

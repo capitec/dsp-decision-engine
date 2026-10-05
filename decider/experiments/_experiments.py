@@ -23,9 +23,9 @@ from decider.ir import iter_nodes, to_ir
 from decider.exceptions import DeciderError
 from decider.experiments.callbacks import Callback
 from decider.experiments.metrics._base import Metric, MetricRef, Summary
-from decider.experiments import _report as report
+from decider.experiments.report import _blocks as report
 from decider.experiments.plots._base import Figure, Plot, PlotRef, ipython_display
-from decider.experiments._report import Block, Report
+from decider.experiments.report import Block, Report
 from decider.contract import Job, JobHandle, ResultRef, Revision, RunManifest
 
 EXPERIMENT_VERSION = "2"
@@ -322,7 +322,7 @@ class Experiment:
         return self
 
     def report(self, *blocks: Block, title: str = "") -> Experiment:
-        """Lay out the report `result.show()` draws, top to bottom; see `decider.experiments._report`."""
+        """Lay out the report `result.show()` draws, top to bottom; see `decider.experiments.report`."""
         self.def_.report = Report(title=title, blocks=list(blocks))
         return self
 
