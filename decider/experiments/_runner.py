@@ -28,8 +28,7 @@ from typing import Any, Iterator, Sequence
 import polars as pl
 
 from decider.contract import describe
-from decider.data import LoadedData, preflight
-from decider.data._formats import scan
+from decider.data import LoadedData, preflight, scan
 from decider import Engine
 from decider._engine.debug.session import _cast
 from decider._engine.ir.decls import base_annotation

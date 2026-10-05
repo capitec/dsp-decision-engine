@@ -10,7 +10,7 @@ registry in `decider/data/providers/`.
   effects) is the pattern `BaseRegistryModule` already replaces: lookup by
   import path, lazy aliases, `json_schema()` for forms, no `model_rebuild` per
   registration.
-- Today two readers exist: `decider.data.load` (eager) and
+- Two readers existed: `decider.data.load` (eager, now `read`) and
   `experiments.runner.scan` (lazy). Experiments and debug runs name data by raw
   path, so nothing remote can be referenced portably.
 - Neither extension has a datasets view. The new one has a `Sample` /
@@ -101,8 +101,8 @@ per name, so one bad entry doesn't hide the rest.
 ## Consolidation
 
 - `data/formats.py` holds the one suffix-to-reader table, used by `file`,
-  `folder`, `load()` and experiments. `load(path)` becomes `scan().collect()`
-  plus the fingerprint. Bytes and frame sources stay as they are.
+  `folder`, `load()` and experiments. `read(path)` is `scan().collect()`;
+  the fingerprint comes with `dataset(...).load()`. Bytes and frame sources stay as they are.
   `experiments.runner.scan` is deleted; `scan` lives in `decider.data.formats`
   and is not re-exported from `decider.experiments`.
 - `InputSpec` gains `dataset: str` next to `path`. That name is what goes into

@@ -17,8 +17,7 @@ import polars as pl
 from pydantic import BaseModel, ConfigDict, SerializeAsAny, model_validator
 
 from decider.contract import describe
-from decider.data import PreflightReport, dataset
-from decider.data._formats import scan
+from decider.data import PreflightReport, dataset, scan
 from decider.ir import iter_nodes, to_ir
 from decider.exceptions import DeciderError
 from decider.experiments.callbacks import Callback

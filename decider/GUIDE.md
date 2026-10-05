@@ -809,20 +809,20 @@ their storage.
 
 ### Data loading
 
-`decider.data` loads Redshift-export JSON/CSV/Parquet, suggests a record key,
-and pre-flights a run before anything executes.
+`decider.data` reads Redshift-export JSON/CSV/Parquet (`read` for a frame,
+`scan` for a lazy one) and pre-flights a run before anything executes.
 
 ```python
 from decider import flow
-from decider.data import load, preflight
+from decider.data import preflight, read
 
 def ratio(income: float, debt: float) -> float:
     return debt / income
 
 pipeline = flow(ratio, name="credit")
-data = load(b'{"income": 1000.0, "debt": 200.0}\n{"income": 500.0, "debt": 400.0}\n', format="json")
-assert data.row_count == 2 and data.suggested_key is None
-assert preflight(pipeline, data.frame).ok
+df = read(b'{"income": 1000.0, "debt": 200.0}\n{"income": 500.0, "debt": 400.0}\n', format="json")
+assert df.height == 2
+assert preflight(pipeline, df).ok
 ```
 
 ### Datasets

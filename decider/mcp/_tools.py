@@ -16,7 +16,7 @@ import polars as pl
 from decider import checks
 from decider.contract import StepRef, describe, resolve_step, source_location
 from decider._bridge.describing import find_pipelines
-from decider.data import load
+from decider.data import read
 from decider._bridge.loading import load_module
 from decider import Engine
 from decider.trace import TraceSink
@@ -138,7 +138,7 @@ def raw_record(policy: Policy, entry: str, data: str, record: int) -> dict:
     if not policy.raw:
         return {"redacted": REDACTED}
     step = load_flow(entry)
-    result = run_trace(step, load(data).frame, None)
+    result = run_trace(step, read(data), None)
     return {
         "entry": entry, "record": record,
         "values": {path: {name: vals[record] for name, vals in written.items()}
@@ -152,7 +152,7 @@ def raw_trace(policy: Policy, entry: str, data: str, record: int) -> dict:
         return {"redacted": REDACTED}
     step = load_flow(entry)
     sink = TraceSink()
-    Engine().bind(step).run(load(data).frame, trace=sink)
+    Engine().bind(step).run(read(data), trace=sink)
     return {"entry": entry, "record": record,
             "events": [_event(e) for e in sink.events() if e.record is None or e.record == record]}
 
@@ -166,7 +166,7 @@ def run_experiment(definition: str, data: str) -> dict:
     """Run the experiment in `definition` (an experiment.json) over `data`; confirmation-gated."""
     def_ = ExperimentDef.model_validate_json(Path(definition).read_text())
     step = load_flow(def_.flow.entry)
-    result = run_experiment(def_, step, load(data).frame)
+    result = run_experiment(def_, step, read(data))
     return result.model_dump(mode="json")
 
 
@@ -177,7 +177,7 @@ def start_debug(entry: str, data: str) -> dict:
     describes the paused session only.
     """
     step = load_flow(entry)
-    frame = load(data).frame
+    frame = read(data)
     session = Engine().bind(step).session(frame)
     return {"entry": entry, "rows": frame.height, "finished": session.finished,
             "structure": session.structure()}
@@ -194,7 +194,7 @@ def generate_ids(path: str = ".", check: bool = True) -> dict:
 
 def _summarise(entry: str, data: str) -> dict:
     step = load_flow(entry)
-    frame = load(data).frame
+    frame = read(data)
     exe = Engine().bind(step)
     out = exe.run(frame)
     produced = [c for c in out.columns if c not in frame.columns]
