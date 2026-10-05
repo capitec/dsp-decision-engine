@@ -1,4 +1,4 @@
-"""Load Redshift-export data (JSON, CSV, Parquet) into a frame, with schema, row count, key and fingerprint."""
+"""Read Redshift-export data (JSON, CSV, Parquet) into a frame; `LoadedData` adds the schema, row count, key and fingerprint a run records."""
 from __future__ import annotations
 
 import hashlib
@@ -10,11 +10,10 @@ import polars as pl
 from pydantic import BaseModel, PrivateAttr
 
 from decider.data._formats import format_of, scan
-from decider.data._keys import suggest_key
 from decider.exceptions import DeciderError
-from decider.contract import InputFingerprint, JobHandle
+from decider.contract import InputFingerprint
 
-FORMATS = ("json", "csv", "parquet")
+_FORMATS = ("json", "csv", "parquet")
 
 
 class LoadError(DeciderError):
@@ -27,12 +26,12 @@ class LoadedData(BaseModel):
     """A loaded dataset: the polars frame plus the summary a run manifest records.
 
     `frame` is the data; `summary` is the `InputFingerprint` (schema, row count,
-    content fingerprint) a run manifest binds; `suggested_key` is the load-time
-    record-key suggestion, `None` when no column looks like an id.
+    content fingerprint) a run manifest binds; `suggested_key` is the record-key
+    suggestion, `None` when no column looks like an id.
 
     Example::
 
-        data = load("loans.parquet")
+        data = dataset("loans").load()
         data.row_count, data.columns, data.suggested_key
     """
 
@@ -73,40 +72,20 @@ class LoadedData(BaseModel):
         return self.summary.fingerprint
 
 
-def load(source: Any, *, format: str | None = None, job: JobHandle | None = None) -> LoadedData:
-    """Load `source` — a `.json`/`.jsonl`/`.csv`/`.parquet` path, bytes, or a polars frame — as `LoadedData`.
+def read(source: Any, *, format: str | None = None) -> pl.DataFrame:
+    """Read `source`, a `.json`/`.jsonl`/`.csv`/`.parquet` path, bytes or a polars frame, into a frame.
 
     JSON is one object per line (a Redshift UNLOAD) or an array of objects.
-    `format` is required only when the source has no file extension. A
-    `JobHandle` passed as `job` reports progress and can cancel the load: its
-    progress is coarse (reading, describing), so a cancel takes effect between
-    those phases rather than inside one read.
+    `format` is required only when the source has no file extension.
 
     Example::
 
-        data = load("loans.parquet")
+        df = read("loans.parquet")
     """
-    dataset = _name(source)
-    if job is not None:
-        job.start()
-        job.progress(0, total=3, message="reading")
-    if job is not None and job.cancelled:
-        raise LoadError(f"load of {dataset!r} was cancelled")
     try:
-        frame = _read(source, format)
+        return _read(source, format)
     except Exception as e:
-        if job is not None:
-            job.fail(str(e))
-        raise LoadError(f"could not load {dataset!r}: {e}") from e
-    if job is not None:
-        job.progress(1, total=3, message="describing")
-    data = LoadedData.from_frame(frame, dataset=dataset, suggested_key=suggest_key(frame.columns))
-    if job is not None:
-        if job.cancelled:
-            raise LoadError(f"load of {dataset!r} was cancelled")
-        job.progress(2, total=3, message="done")
-        job.succeed(result=data.summary)
-    return data
+        raise LoadError(f"could not load {_name(source)!r}: {e}") from e
 
 
 def _read(source: Any, format: str | None) -> pl.DataFrame:
@@ -117,8 +96,8 @@ def _read(source: Any, format: str | None) -> pl.DataFrame:
         fmt = format_of(str(source))
     if fmt is None:
         raise LoadError("no data format given; pass format='json'|'csv'|'parquet' or use a .json/.csv/.parquet path")
-    if fmt not in FORMATS:
-        raise LoadError(f"unknown data format {fmt!r}; expected one of {', '.join(FORMATS)}")
+    if fmt not in _FORMATS:
+        raise LoadError(f"unknown data format {fmt!r}; expected one of {', '.join(_FORMATS)}")
     if isinstance(source, (bytes, bytearray)):
         return {"json": _read_json, "csv": pl.read_csv, "parquet": pl.read_parquet}[fmt](source)
     return scan(str(source), fmt).collect()

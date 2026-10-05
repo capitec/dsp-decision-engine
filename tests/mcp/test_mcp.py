@@ -5,7 +5,7 @@ import asyncio
 import pytest
 from fastmcp.exceptions import ToolError
 
-from decider.data import load
+from decider.data import read
 from decider.experiments import Experiment
 from decider.experiments._runner import load_flow
 from decider.experiments.metrics import Divergence
@@ -158,7 +158,7 @@ def test_an_error_surfaces_as_a_tool_error():
 
 def test_experiment_definition_and_results_read_files(workspace, tmp_path):
     mcp = build_server(Policy())
-    exp = (Experiment("drift", load_flow(workspace["entry"]), load(workspace["data"]).frame,
+    exp = (Experiment("drift", load_flow(workspace["entry"]), read(workspace["data"]),
                       entry=workspace["entry"])
            .metric(Divergence(column="tier")))
     result = exp.run()
