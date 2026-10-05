@@ -4,8 +4,8 @@ import pytest
 
 from decider.contract import FlowRef, RecordRef
 from decider.exceptions import DeciderError
-from decider.lifecycle import (MANIFEST_VERSION, InputFingerprint, Override, ResultRef, Revision, RunManifest,
-                               check_manifest_version, json_schema, new_manifest_id, source_is_stale)
+from decider.contract import (MANIFEST_VERSION, InputFingerprint, Override, ResultRef, Revision, RunManifest,
+                               check_manifest_version, manifest_schema, new_manifest_id, source_is_stale)
 
 
 def make_manifest(**fields) -> RunManifest:
@@ -70,8 +70,8 @@ def test_source_is_stale_only_when_a_fingerprint_differs():
     assert not source_is_stale(None, "cd34")
 
 
-def test_json_schema_is_versioned_and_self_contained():
-    schema = json_schema()
+def test_manifest_schema_is_versioned_and_self_contained():
+    schema = manifest_schema()
     assert schema["manifest_version"] == MANIFEST_VERSION
     assert schema["title"] == "RunManifest"
     assert "FlowRef" in schema.get("$defs", {})

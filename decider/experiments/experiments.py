@@ -26,7 +26,7 @@ from decider.experiments.metrics.base import Metric, MetricRef, Summary
 from decider.experiments import report
 from decider.experiments.plots.base import Figure, Plot, PlotRef, ipython_display
 from decider.experiments.report import Block, Report
-from decider.lifecycle import Job, JobHandle, ResultRef, Revision, RunManifest
+from decider.contract import Job, JobHandle, ResultRef, Revision, RunManifest
 
 EXPERIMENT_VERSION = "2"
 BASELINE = "baseline"

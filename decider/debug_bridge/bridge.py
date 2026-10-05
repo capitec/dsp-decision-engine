@@ -36,7 +36,7 @@ from decider._engine.debug.edit import swap
 from decider._engine.debug.lineage import attribution, latest, lineage
 from decider.ir import step_map, to_ir
 from decider.debug_bridge.forks import checkpoint_key, sweep
-from decider.lifecycle import JobHandle
+from decider.contract import JobHandle
 from decider.debug_bridge.replay import trace
 from decider._engine.params import merge
 from decider.serving.handler import RequestHandler

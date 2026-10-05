@@ -16,7 +16,7 @@ from typing import Any
 import numpy as np
 import polars as pl
 
-from decider.lifecycle import JobHandle
+from decider.contract import JobHandle
 
 
 @dataclass

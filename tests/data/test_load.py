@@ -6,7 +6,7 @@ import polars as pl
 import pytest
 
 from decider.data import LoadError, load
-from decider.lifecycle import JobHandle, JobStatus
+from decider.contract import JobHandle, JobStatus
 
 
 def _loans() -> pl.DataFrame:

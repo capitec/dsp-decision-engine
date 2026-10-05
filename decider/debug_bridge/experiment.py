@@ -1,7 +1,7 @@
 """The bridge's experiment commands: run headlessly with live progress, build schemas, and validate."""
 from pathlib import Path
 
-from decider.lifecycle import JobHandle
+from decider.contract import JobHandle
 
 
 def _load_definition(bridge, definition, def_, file, pipeline):
