@@ -159,9 +159,9 @@ If the spike shows a cost that the serving path can't afford, or typing traps, k
 | 6 | Money overloads (if the spike says go) and `Money(rounding=)`; DCD103's fix hint; the rest of `ops.decimal` (scaled fixed point at any scale) |
 | 7 | `decider.ops.credit` and the other credit homes (`credit-functions.md`) |
 
-## Questions for the user
+## Decisions (2026-10-05)
 
-1. **Decided: the domains are `credit`, `strings`, `decimal` and `general`**, with `strings` replacing the proposed `str` for the reason above. Confirm the rename.
-2. **Decimal scale.** Is it per field (`Money(scale=2)`, extending `Money(cents=True)`) or per call? And is overflow handled with float64 intermediates (exact to 2⁵³) or exact 128-bit products (the `_two_product` trick in `cpython.py`)?
-3. **`round(2.675, 2)`.** Exact-double semantics give `2.67` in every mode. It is consistent and testable, but it surprises people. The alternative is rounding the shortest decimal repr (`"2.675"` → `2.68`), which costs a string round-trip and can't be done cheaply in a kernel. The recommendation is exact-double, with money kept in integer cents so the case rarely arises. Confirm.
-4. **`Cents + int`.** Should it be a type error (unit safety: catches adding a count to an amount) or allowed (treat the int as cents)? The recommendation is an error, with an explicit `Cents(n)` to say "this int is cents".
+1. **Domains:** `credit`, `strings`, `decimal`, `general` (`strings`, not `str`).
+2. **Decimal scale is per field:** `Money(scale=2)` extends `Money(cents=True)`. **Overflow:** float64 intermediates (exact to 2⁵³); int64 overflow stays the checks' job (DCD101).
+3. **`round(2.675, 2)`:** exact-double semantics, `2.67` in every mode. Money stays in integer cents.
+4. **`Cents + int` is a type error.** Write `Cents(n)` to say an int is cents.
