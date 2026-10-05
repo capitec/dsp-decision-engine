@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import Iterable, Iterator
 
-from decider.engine.compile import FALLBACK_ERRORS, ArmOutOfRange, Packed, compile_packed
+from decider.engine.compile import FALLBACK_ERRORS, ArmOutOfRange, compile_packed
 from decider.engine.run.params import RunParams
 from decider.engine.run.runners.base import Checkpoint
 from decider.engine.run.runners.interpreted import _Scope
-from decider.engine.run.runners.stepped import SteppedRunner, _external
+from decider.engine.run.runners.stepped import Compiled, SteppedRunner, _external
 from decider.engine.run.state import State
 from decider.engine.wiring.plan import Branch, Call, Loop, Plan, Sequence
 
@@ -30,18 +30,16 @@ class FusedRunner(SteppedRunner):
 
     fuse = True
 
-    def __init__(self, strict: bool = False) -> None:
-        super().__init__(strict)
-        self.packed: dict[str, Packed] = {}
-
-    def _compile(self, plan: Plan, lazy: bool) -> None:
-        super()._compile(plan, lazy)
-        self.packed = compile_packed(plan, lazy, self._python)
-        self._reads.update((id(k), _external(k)) for k in self.packed.values())
+    def _build(self, plan: Plan, lazy: bool) -> Compiled:
+        compiled = super()._build(plan, lazy)
+        packed = compile_packed(plan, lazy, compiled.python)
+        compiled.reads.update((id(k), _external(k)) for k in packed.values())
+        return compiled._replace(packed=packed)
 
     def _sequence(self, seq: Sequence, state: State, params: RunParams, scope: _Scope) -> Iterator[Checkpoint]:
+        units = scope.ctx.compiled.units
         for child in seq.children:
-            unit = self.units.get(child.id) if isinstance(child, Call) else None
+            unit = units.get(child.id) if isinstance(child, Call) else None
             if unit is None or len(unit.calls) == 1:
                 yield from self._node(child, state, params, scope)
             elif unit.calls[0] is child:
@@ -61,7 +59,8 @@ class FusedRunner(SteppedRunner):
 
     def _packed(self, r: Branch | Loop, state: State, params: RunParams, scope: _Scope) -> bool:
         path = r.node.origin.path
-        kernel = self.packed.get(path)
+        compiled = scope.ctx.compiled
+        kernel = compiled.packed.get(path)
         if kernel is None:
             return False
         for v in kernel.guarded:
@@ -76,6 +75,12 @@ class FusedRunner(SteppedRunner):
             return False
         except FALLBACK_ERRORS:
             # ponytail: dropped for the rest of this runner's life; retry per call if a kernel only fails on some inputs.
-            self.packed.pop(path, None)
+            self._drop(compiled, path)
             return False
         return True
+
+    def _drop(self, compiled: Compiled, path: str) -> None:
+        with self._lock:
+            now = self._compiled
+            if now.plan is compiled.plan:
+                self._compiled = now._replace(packed={k: v for k, v in now.packed.items() if k != path})

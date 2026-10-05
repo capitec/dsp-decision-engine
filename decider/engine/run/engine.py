@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import threading
 import warnings
 from typing import TYPE_CHECKING, Any, Literal, Mapping
 
 import numpy as np
 import polars as pl
 
+from decider.engine.concurrency import Cache, once
 from decider.engine.params import NodeParams, ParamsCache
 from decider.engine.run.params import RunParams, RunReport, check_namespaces
 from decider.engine.run.runners.base import CompiledRunner, Runner
@@ -79,8 +81,9 @@ class Engine:
 class Executable:
     """A bound pipeline: `run` a frame, or `score` one record.
 
-    `report` describes the params validation of the latest call; `step` is
-    what it was bound from (a step, a function or an IR).
+    `report` describes the params validation of the latest call on the
+    calling thread; `step` is what it was bound from (a step, a function or
+    an IR). Safe to call from many threads at once.
 
     Example::
 
@@ -100,9 +103,8 @@ class Executable:
             if sg.node.params:
                 self.nodes[sg.node.origin.path] = NodeParams(sg.node.origin.path, sg.node.params)
         self.cache = ParamsCache()
-        self._checked: set[str] = set()
-        # ponytail: the latest call's report only; return it per call if concurrent callers need their own.
-        self.report = RunReport()
+        self._checked = Cache()
+        self._latest = threading.local()
         written = {o.name for c in plan.calls for o in c.node.outputs or ()}
         self._produced = written - {i.name for i in plan.inputs}
         self._params_at = {d.shared_key or d.name: _where(n.path, d) for n in self.nodes.values() for d in n.decls}
@@ -110,7 +112,7 @@ class Executable:
             self._params_at.pop(i.name, None)
         # One set test on the hot path covers both checks; nothing else happens unless it hits.
         self._watched = self._produced | self._params_at.keys()
-        self._warned: set[str] = set()
+        self._warned = Cache()
         self._declared = {i.name: declared_dtype(i.annotation) for i in plan.inputs}
         inputs: dict[np.dtype, list[Version]] = {}
         for v in plan.versions:
@@ -145,10 +147,8 @@ class Executable:
         hit = self._watched.intersection(columns)
         if not hit:
             return
-        for name in sorted(hit - self._produced - self._warned):
-            self._warned.add(name)
-            warnings.warn(f"'{name}' is a param, not an input, so its value in the record or frame is ignored; "
-                          f"pass it in the params document instead: {self._params_at[name]}", stacklevel=2)
+        for name in sorted(hit - self._produced - self._warned.keys()):
+            once(self._warned, name, lambda: self._warn_param(name))
         shadowed = sorted(hit & self._produced)
         if shadowed:
             name = shadowed[0]
@@ -158,16 +158,31 @@ class Executable:
                 f"(`.relabel(writes={{'{name}': '{name}_2'}})`), so neither silently shadows the other."
             )
 
+    def _warn_param(self, name: str) -> bool:
+        warnings.warn(f"'{name}' is a param, not an input, so its value in the record or frame is ignored; "
+                      f"pass it in the params document instead: {self._params_at[name]}", stacklevel=5)
+        return True
+
+    @property
+    def report(self) -> RunReport:
+        return getattr(self._latest, "report", None) or RunReport()
+
     def _params(self, params: Mapping[str, Any] | None, n: int) -> RunParams:
         run = RunParams(self.nodes, {} if params is None else params, self.cache, self.lazy)
-        self.report = run.report
+        self._latest.report = run.report
         if run.key not in self._checked:
-            check_namespaces(run.doc, self.nodes)
-            if not self.lazy:
-                for call_id in self.nodes:
-                    run.bundle(call_id, n)
-            self._checked.add(run.key)
+            self._check_once(run, n)
         return run
+
+    def _check_once(self, run: RunParams, n: int) -> None:
+        once(self._checked, run.key, lambda: self._check(run, n))
+
+    def _check(self, run: RunParams, n: int) -> bool:
+        check_namespaces(run.doc, self.nodes)
+        if not self.lazy:
+            for call_id in self.nodes:
+                run.bundle(call_id, n)
+        return True
 
     def run(self, df: pl.DataFrame, params: Mapping[str, Any] | None = None, trace=None) -> pl.DataFrame:
         """Run over a frame: the input columns plus every output, minus drops.

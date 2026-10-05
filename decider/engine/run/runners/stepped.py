@@ -1,27 +1,42 @@
 from __future__ import annotations
 
+import threading
 import warnings
 from functools import partial
-from typing import Any, Iterator
+from typing import Any, Iterator, NamedTuple
 
 import numpy as np
 import polars as pl
 from numba.core.dispatcher import Dispatcher
 
 from decider.engine.boundary.nulls import MissingInputError
-from decider.engine.compile import Fallback, Kernel, Unit, compile_plan, numpy_dtype
+from decider.engine.compile import Fallback, Kernel, Packed, Unit, compile_plan, numpy_dtype
 from decider.engine.compile.rows import build_ragged, build_rows, rows_needs_no_fill
 from decider.engine.compile.structs import build_struct, struct_schema
 from decider.engine.ir.decls import Input, NullPolicy, base_annotation
 from decider.engine.run.params import RunParams
 from decider.engine.run.representations import codes, span_objects, spans
 from decider.engine.run.runners.base import Checkpoint
-from decider.engine.run.runners.interpreted import InterpretedRunner, _absent, _encoded, _note, _Scope
+from decider.engine.run.runners.interpreted import InterpretedRunner, _absent, _Context, _encoded, _note, _Scope
 from decider.engine.run.state import State, fill_missing
 from decider.engine.trace.envelope import Kind
 from decider.exceptions import FallbackWarning
 from decider.types import Representation, is_raw, representation_for, columnar_item, item_schema, struct_item
 from decider.engine.wiring.plan import Call, Plan, Version
+
+
+# Everything a runner compiles for one plan, published whole so a call never sees half of it.
+class Compiled(NamedTuple):
+    plan: Plan | None
+    units: dict[int, Unit]
+    reads: dict[int, tuple[tuple[Input, Version, str, np.dtype | None, Any, Any, bool], ...]]
+    strs: dict[int, tuple[str, ...]]
+    fallbacks: dict[str, str]
+    python: dict[int, str]
+    # Keyed by call id, which means another call in another plan. Entries are written once and never
+    # replaced: `(bundle, utf8)`, the bundle's spans pointing into the buffers beside it.
+    converted: dict[tuple[str, int], tuple]
+    packed: dict[str, Packed]
 
 
 class SteppedRunner(InterpretedRunner):
@@ -53,58 +68,68 @@ class SteppedRunner(InterpretedRunner):
     def __init__(self, strict: bool = False) -> None:
         super().__init__()
         self.strict = strict
-        self._plan: Plan | None = None
-        self.units: dict[int, Unit] = {}
-        self._reads: dict[int, tuple[tuple[Input, Version, str, np.dtype | None, Any, Any, bool], ...]] = {}
-        self._strs: dict[int, tuple[str, ...]] = {}
-        self._converted: dict[tuple[str, int], tuple] = {}
-        self._alive: dict[tuple[str, int], dict] = {}
-        self._fallbacks: dict[str, str] = {}
+        self._lock = threading.Lock()
+        self._compiled = Compiled(None, {}, {}, {}, {}, {}, {}, {})
+
+    @property
+    def _plan(self) -> Plan | None:
+        return self._compiled.plan
+
+    @property
+    def units(self) -> dict[int, Unit]:
+        return self._compiled.units
+
+    @property
+    def packed(self) -> dict[str, Packed]:
+        return self._compiled.packed
 
     def iterate(self, plan: Plan, state: State, params: RunParams, trace=None, table=None) -> Iterator[Checkpoint]:
-        # Not a generator itself: one generator frame less per checkpoint on the single-record path.
-        if plan is not self._plan:
-            self._compile(plan, params.lazy)
-        return super().iterate(plan, state, params, trace, table)
+        compiled = self._compiled
+        if compiled.plan is not plan:
+            compiled = self._compile(plan, params.lazy)
+        return self._drive(state, params, _Context(trace, table, compiled), plan)
 
-    def _compile(self, plan: Plan, lazy: bool) -> None:
+    def _compile(self, plan: Plan, lazy: bool) -> Compiled:
+        with self._lock:
+            compiled = self._compiled
+            if compiled.plan is not plan:
+                compiled = self._compiled = self._build(plan, lazy)
+            return compiled
+
+    def _build(self, plan: Plan, lazy: bool) -> Compiled:
         python: dict[int, str] = {}
         # A call reading `bytes`, or a `Columnar[...]` item's `str` field, compares spans, so its
         # `str` params go in as UTF-8 spans too.
         strs = {c.id: names for c in plan.calls if _reads_span(c)
                 and (names := tuple(d.name for d in c.node.params if d.annotation is str))}
-        self.units = compile_plan(plan, fuse=self.fuse, python=python)
-        self._fallbacks = {}
-        for unit in self.units.values():
+        units = compile_plan(plan, fuse=self.fuse, python=python)
+        fallbacks: dict[str, str] = {}
+        for unit in units.values():
             if not isinstance(unit, Fallback):
                 continue
             # A fallback backed by a dispatcher still runs compiled, just one call per row.
             compiled = isinstance(unit.fn, Dispatcher)
             for c in unit.calls:
                 path = c.node.origin.path
-                self._fallbacks[path] = f"@allow_fallback: {unit.reason}" if unit.declared else unit.reason
+                fallbacks[path] = f"@allow_fallback: {unit.reason}" if unit.declared else unit.reason
                 if unit.declared:
                     continue
                 if compiled:
                     warnings.warn(f"{path} runs compiled, one call per row outside the shared "
-                                  f"kernel: {unit.reason}", FallbackWarning, stacklevel=4)
+                                  f"kernel: {unit.reason}", FallbackWarning, stacklevel=5)
                     continue
                 message = f"{path} runs in Python, row by row: {unit.reason}"
                 if self.strict:
                     raise ValueError(f"{message}; accept it with @allow_fallback, or run mode='interpreted'")
-                warnings.warn(message, FallbackWarning, stacklevel=4)
-        self._python = python
-        self._reads = {id(unit): _external(unit) for unit in self.units.values()}
-        self._strs = strs
-        # Converted bundles are keyed by call id, which means another call in another plan.
-        self._converted, self._alive = {}, {}
-        self._plan = plan
+                warnings.warn(message, FallbackWarning, stacklevel=5)
+        reads = {id(unit): _external(unit) for unit in units.values()}
+        return Compiled(plan, units, reads, strs, fallbacks, python, {}, {})
 
     def fallbacks(self) -> dict[str, str]:
-        return dict(self._fallbacks)
+        return dict(self._compiled.fallbacks)
 
     def _call(self, call: Call, state: State, params: RunParams, scope: _Scope) -> None:
-        unit = self.units.get(call.id)
+        unit = scope.ctx.compiled.units.get(call.id)
         if unit is None:
             return super()._call(call, state, params, scope)
         self._run(unit, state, params, scope)
@@ -118,12 +143,14 @@ class SteppedRunner(InterpretedRunner):
         python = isinstance(unit, Fallback) and not isinstance(unit.fn, Dispatcher)
         # Every call of a unit runs on every row the unit runs on, so validating
         # them all here is validating exactly the nodes that run.
-        bundles = {c.id: params.bundle(c.id, n) if python else self._bundle(c.id, params, n)
+        ctx = scope.ctx
+        compiled = ctx.compiled
+        bundles = {c.id: params.bundle(c.id, n) if python else self._bundle(compiled, c.id, params, n)
                    for c in unit.calls if c.node.params}
         values: dict[int, np.ndarray] = {}
         valid: dict[int, np.ndarray] = {}
         alive: list = []
-        for decl, v, path, want, kind, build, raw in self._reads[id(unit)]:
+        for decl, v, path, want, kind, build, raw in compiled.reads[id(unit)]:
             x, mask = state.read(v, rows)
             filled = False
             # `Raw[...]` and `Columnar[...]` are a contract about the value, not an optimisation, so
@@ -155,7 +182,7 @@ class SteppedRunner(InterpretedRunner):
                 valid[v.id] = mask
             values.setdefault(v.id, x)
         try:
-            trace = self._trace
+            trace = ctx.trace
             # In-kernel capture only at a plain top-level scope: a packed
             # branch or loop carries its own arm/iteration inside the kernel,
             # but a single-call kernel inside an arm or iteration has neither,
@@ -163,7 +190,7 @@ class SteppedRunner(InterpretedRunner):
             # row-major offsets.
             top = scope.rows is None and scope.arm is None and scope.iteration is None
             if trace is not None and isinstance(unit, Kernel) and top:
-                unit.run(values, valid, bundles, n, trace, self._trace_table)
+                unit.run(values, valid, bundles, n, trace, ctx.table)
             else:
                 unit.run(values, valid, bundles, n)
                 if trace is not None:
@@ -178,20 +205,20 @@ class SteppedRunner(InterpretedRunner):
             state.write(v, values[v.id], rows, valid.get(v.id))
             scope.names[v.name] = v
 
-    def _bundle(self, call_id: int, params: RunParams, n: int) -> tuple:
+    def _bundle(self, compiled: Compiled, call_id: int, params: RunParams, n: int) -> tuple:
         bundle = params.bundle(call_id, n)
-        names = self._strs.get(call_id)
+        names = compiled.strs.get(call_id)
         if names is None:
             return bundle
         key = (params.key, call_id)
-        converted = self._converted.get(key)
-        if converted is None:
+        entry = compiled.converted.get(key)
+        if entry is None:
             utf8 = {k: np.frombuffer(getattr(bundle, k).encode(), np.uint8) for k in names}
-            # Kept with the cached bundle, whose spans point into them.
-            self._alive[key] = utf8
             pointers = {k: (b.ctypes.data, len(b)) for k, b in utf8.items()}
-            converted = self._converted[key] = bundle._replace(**pointers)
-        return converted
+            # A thread that lost the race uses the winner's entry, so the buffers its spans point
+            # into are never freed under a running kernel.
+            entry = compiled.converted.setdefault(key, (bundle._replace(**pointers), utf8))
+        return entry[0]
 
 
 def _external(unit: Unit) -> tuple[tuple[Input, Version, str, np.dtype | None, Any, Any, bool], ...]:

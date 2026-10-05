@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import threading
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import NamedTuple, Sequence
@@ -12,6 +11,7 @@ from decider.engine.boundary._arrow.plan import ColumnSpec, FramePlan
 from decider.engine.boundary._arrow.view import FrameView
 from decider.engine.boundary.dtypes import ColumnPlan, cast_frame, plan_column
 from decider.engine.boundary.nulls import check_required
+from decider.engine.concurrency import checkin, checkout
 from decider.engine.ir.decls import FeatureKind, Input, NullPolicy, feature_kind
 
 
@@ -80,20 +80,15 @@ def _fill_for(decl: Input, kind: FeatureKind):
 # ponytail: unbounded, bound it if schemas ever vary per request.
 _schema_plan = lru_cache(maxsize=None)(_SchemaPlan)
 
-# FrameViews hold row buffers, so they're pooled per thread: serving runs
-# concurrent calls on one pipeline.
-_local = threading.local()
-
 
 def _checkout(plan: FramePlan) -> FrameView:
-    pool = _local.__dict__.setdefault("views", {})
-    # Popped while in use, so a re-entrant call on the same thread gets its own view.
-    return pool.pop(plan, None) or FrameView(plan)
+    # FrameViews hold row buffers, so they're pooled per thread: serving runs concurrent calls on one pipeline.
+    return checkout("views", plan, FrameView)
 
 
 def _checkin(plan: FramePlan, view: FrameView) -> None:
     view.release()
-    _local.views[plan] = view
+    checkin("views", plan, view)
 
 
 def extract_frame(frame: pl.DataFrame, inputs: Sequence[Input], *, path: str = "") -> ExtractedFrame:

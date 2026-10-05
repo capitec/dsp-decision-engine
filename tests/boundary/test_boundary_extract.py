@@ -11,7 +11,8 @@ pytest.importorskip("decider.engine.boundary._arrow._shim", exc_type=ImportError
 
 from decider.engine.boundary._arrow.plan import ArrowKindError  # noqa: E402
 from decider.engine.boundary.dtypes import NeedsKernelSplit  # noqa: E402
-from decider.engine.boundary.extract import _local, _schema_plan, extract_frame  # noqa: E402
+from decider.engine.boundary.extract import _schema_plan, extract_frame  # noqa: E402
+from decider.engine.concurrency import _local  # noqa: E402
 from decider.engine.boundary.nulls import MissingInputError  # noqa: E402
 from decider.engine.ir.decls import Input, NullPolicy  # noqa: E402
 

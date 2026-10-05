@@ -25,16 +25,29 @@ _SCATTER_ELEMENTS = 1024
 _PID = "__decider_scatter_pid__"
 
 
+class _Context:
+    # What one call needs besides the plan: its trace sink, the sink's step table, and the runner's
+    # compiled snapshot (none for the interpreted runner). Nothing per call lives on the runner.
+    # A slotted class, not a NamedTuple: it is built on every call, and this is twice as fast.
+    __slots__ = ("trace", "table", "compiled")
+
+    def __init__(self, trace: Any, table: Any, compiled: Any):
+        self.trace = trace
+        self.table = table
+        self.compiled = compiled
+
+
 class _Scope:
     """The rows a node runs on, the frame a frame step sees on them, and the names in sight."""
 
-    __slots__ = ("rows", "base", "names", "arm", "iteration")
+    __slots__ = ("rows", "base", "names", "ctx", "arm", "iteration")
 
-    def __init__(self, rows: np.ndarray | None, base: pl.DataFrame, names: dict[str, Version],
+    def __init__(self, rows: np.ndarray | None, base: pl.DataFrame, names: dict[str, Version], ctx: _Context,
                  arm: int | None = None, iteration: int | None = None):
         self.rows = rows
         self.base = base
         self.names = names
+        self.ctx = ctx
         self.arm = arm
         self.iteration = iteration
 
@@ -43,10 +56,10 @@ class _Scope:
 
     def child(self, keep: np.ndarray | None = None) -> _Scope:
         if keep is None:
-            return _Scope(self.rows, self.base, dict(self.names), self.arm, self.iteration)
+            return _Scope(self.rows, self.base, dict(self.names), self.ctx, self.arm, self.iteration)
         rows = np.flatnonzero(keep) if self.rows is None else self.rows[keep]
         base = self.base.filter(pl.Series(keep)) if self.base.width else self.base
-        return _Scope(rows, base, dict(self.names), self.arm, self.iteration)
+        return _Scope(rows, base, dict(self.names), self.ctx, self.arm, self.iteration)
 
     def checkpoint(self, origin, when: str) -> Checkpoint:
         return Checkpoint(origin, when, self.arm, self.iteration, self.rows)
@@ -70,18 +83,15 @@ class InterpretedRunner:
 
     def __init__(self) -> None:
         self.visit: Callable[[str], None] = _ignore
-        self._trace = None
-        self._trace_table = None
 
     def iterate(self, plan: Plan, state: State, params: RunParams, trace=None, table=None) -> Iterator[Checkpoint]:
-        self._trace = trace
-        self._trace_table = table
-        try:
-            root = _Scope(None, state.frame, {})
-            yield from self._node(plan.root, state, params, root)
-            state.frame = root.base
-        finally:
-            self._trace = None
+        # Not a generator itself: one generator frame less per checkpoint on the single-record path.
+        return self._drive(state, params, _Context(trace, table, None), plan)
+
+    def _drive(self, state: State, params: RunParams, ctx: _Context, plan: Plan) -> Iterator[Checkpoint]:
+        root = _Scope(None, state.frame, {}, ctx)
+        yield from self._node(plan.root, state, params, root)
+        state.frame = root.base
 
     def _node(self, r: Resolved, state: State, params: RunParams, scope: _Scope) -> Iterator[Checkpoint]:
         if self.skip and (passed := self.skip.get(r)) is not None:
@@ -108,7 +118,7 @@ class InterpretedRunner:
     def _call(self, call: Call, state: State, params: RunParams, scope: _Scope) -> None:
         node = call.node
         if node.kind == "frame":
-            return _frame(call, state, scope, params.bundle(call.id, scope.count(state.n)), self._trace)
+            return _frame(call, state, scope, params.bundle(call.id, scope.count(state.n)), scope.ctx.trace)
         m = scope.count(state.n)
         bundle = params.bundle(call.id, m)
         # Plain Python scalars, not numpy ones: `x / 0.0` must raise here as it does in a kernel.
@@ -157,7 +167,7 @@ class InterpretedRunner:
 
     def _emit_rows(self, kind: Kind, origin, scope: _Scope, m: int, *, step: int = 0,
                    value: int | float | None = None) -> None:
-        trace = self._trace
+        trace = scope.ctx.trace
         if trace is None:
             return
         rows = scope.rows
@@ -240,7 +250,7 @@ class InterpretedRunner:
         for (name, v) in sg.fields:
             values, valid = _array(tuple(flat[name]), dtype_of(base_annotation(v.annotation)))
             elem_state.write(v, values, valid=valid)
-        elem_scope = _Scope(None, elem_state.frame, {name: v for name, v in sg.fields})
+        elem_scope = _Scope(None, elem_state.frame, {name: v for name, v in sg.fields}, scope.ctx)
         # A child doc forwards the hoisted params from this node's path into the body's nested paths.
         child_params = _forward_params(params, node.origin.path, node.hoist) if node.params else params
         yield from self._node(sg.body, elem_state, child_params, elem_scope)
@@ -276,7 +286,7 @@ class InterpretedRunner:
             if values.dtype != dtype:
                 values = values.astype(dtype)
             elem_state.write(v, values, valid=valid)
-        elem_scope = _Scope(None, elem_state.frame, {name: v for name, v in sg.fields})
+        elem_scope = _Scope(None, elem_state.frame, {name: v for name, v in sg.fields}, scope.ctx)
         child_params = _forward_params(params, node.origin.path, node.hoist) if node.params else params
         yield from self._node(sg.body, elem_state, child_params, elem_scope)
         # Gather: one enriched struct per element, grouped back into a list per parent row.
