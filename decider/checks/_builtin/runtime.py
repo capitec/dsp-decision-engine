@@ -10,13 +10,6 @@ from decider.testing import MODES, assert_equivalent, corpus
 __all__ = ["CrashProbe", "ModeDivergence"]
 
 
-def _cases(ctx: CheckContext):
-    try:
-        return corpus(ctx.pipeline)
-    except ValueError:
-        return {}  # the flow reads no input, so there are no cases to generate
-
-
 class CrashProbe(Check):
     """Runs the flow over the generated boundary cases (zero, negative, null, extremes) and reports crashes by case."""
 
@@ -27,7 +20,7 @@ class CrashProbe(Check):
 
     def run(self, ctx: CheckContext) -> Iterator[Finding]:
         exe = Engine().bind(ctx.pipeline)
-        for name, frame in _cases(ctx).items():
+        for name, frame in corpus(ctx.pipeline).items():
             try:
                 exe.run(frame, ctx.params)
             except Exception as e:
@@ -45,7 +38,7 @@ class ModeDivergence(Check):
     modes: tuple[str, ...] = MODES
 
     def run(self, ctx: CheckContext) -> Iterator[Finding]:
-        for name, frame in _cases(ctx).items():
+        for name, frame in corpus(ctx.pipeline).items():
             try:
                 assert_equivalent(ctx.pipeline, frame, ctx.params, self.modes)
             except AssertionError as e:
