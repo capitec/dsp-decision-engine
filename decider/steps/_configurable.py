@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, ClassVar, Mapping
 
 from pydantic import ConfigDict, Field
 from pydantic.json_schema import SkipJsonSchema
@@ -49,6 +49,7 @@ class ConfigurableStep(Step, BaseRegistryModule, root=True):
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    kind: ClassVar[str] = "configurable"
 
     name: str
     # A durable opaque id committed in the JSON next to `name`, dumped and reloaded.

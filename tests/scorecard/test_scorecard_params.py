@@ -9,12 +9,12 @@ from decider._engine import Engine
 from decider._engine.compile import Fallback, Kernel, compile_plan, default_bundle
 from decider._engine.wiring import resolve
 from decider.steps import ParamRef
-from decider.steps.scorecard import (
+from decider.steps.scorecard import ScorecardConfig
+from decider.steps.scorecard._config import (
     AdjustedVariable,
     BoundBin,
     ConstantScore,
     DefaultBin,
-    ScorecardConfig,
     ScoredVariable,
     ValuesBin,
 )

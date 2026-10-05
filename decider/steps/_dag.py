@@ -18,6 +18,7 @@ class DagStep(SequentialStep):
     """Members run in dependency order; each name has one writer. Build one with `dag(...)`."""
 
     __module__ = "decider.steps"
+    kind = "dag"
 
     def to_ir(self, ctx: IRContext) -> SequenceNode:
         inner = ctx.child(self.name)

@@ -5,7 +5,9 @@ import pytest
 from decider import branch, dag, flow, frame_step, loop, missing_as, param, step
 from decider import _engine as engine
 from decider._engine.ir.nodes import BranchNode, CallNode, LoopNode, SequenceNode
-from decider.steps import DagStep, FunctionStep, SequentialStep
+from decider.steps._dag import DagStep
+from decider.steps._function import FunctionStep
+from decider.steps._sequential import SequentialStep
 
 
 def disposable_income(net_income: float, expenses: float) -> float:

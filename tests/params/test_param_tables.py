@@ -5,7 +5,7 @@ import pytest
 
 from decider import Engine, ParamRef, ParamTable, flow, param, param_table
 from decider.exceptions import ParamsError
-from decider.steps.tables import TableRef
+from decider.steps._values import TableRef
 from decider.testing import no_recompile
 
 ROWS = [{"floor": 0, "rate": 0.2}, {"floor": 600, "rate": 0.1}]

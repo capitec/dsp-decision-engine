@@ -19,6 +19,7 @@ class SequentialStep(Step):
     """
 
     __module__ = "decider.steps"
+    kind = "sequence"
 
     steps: tuple[Step, ...]
     name: str | None = None

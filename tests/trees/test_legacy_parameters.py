@@ -1,12 +1,12 @@
 """Param references and computed features give decider_old's answers."""
 import polars as pl
 
-from decider.steps.trees import (
+from decider.steps.trees import TreeConfig
+from decider.steps.trees.schema import (
     FlatRuleDocument,
     LeafRule,
     ParameterInfo,
     RuleRoot,
-    TreeConfig,
     TreeOutput,
     UnaryBetween,
     UnaryLessThan,

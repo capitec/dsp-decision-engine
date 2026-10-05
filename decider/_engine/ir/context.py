@@ -190,7 +190,7 @@ class IRContext:
             ctx.table(TableRef(table="prices"), {"product": "str", "rate": "float"})
         """
         from decider._polars_docs.frame import FrameDoc
-        from decider.steps import TableRef
+        from decider.steps._values import TableRef
 
         if not isinstance(value, TableRef):
             return value
@@ -226,7 +226,7 @@ def step_map(step: Any) -> dict[str, Step]:
 
 
 def _build(step: Any) -> tuple[IRNode, dict[str, Step]]:
-    from decider.steps import as_step
+    from decider.steps._base import as_step
 
     ctx = IRContext()
     root = ctx.build(as_step(step))

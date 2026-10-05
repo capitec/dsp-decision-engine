@@ -43,7 +43,7 @@ class Edits:
             s.resume()
             s.output()["term_cap"]      # computed by cap_by_income_v2
         """
-        from decider.steps import as_step
+        from decider.steps._base import as_step
 
         return self._edit("replace", path, as_step(step))
 
@@ -85,7 +85,7 @@ class Edits:
             s.output()["affordable"]
         """
         from decider._engine import step_map
-        from decider.steps import as_step
+        from decider.steps._base import as_step
 
         root = as_step(pipeline)
         plan = resolve(root)
@@ -150,7 +150,7 @@ class Edits:
             raise
 
     def _edit(self, action: str, path: str, new: Step | None) -> Checkpoint | None:
-        from decider.steps import as_step
+        from decider.steps._base import as_step
 
         before = self.executable
         root = swap(as_step(before.step), path, new)

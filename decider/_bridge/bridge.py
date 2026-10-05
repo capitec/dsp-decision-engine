@@ -41,7 +41,7 @@ from decider._bridge.replay import trace
 from decider._engine.params import merge
 from decider.serving import RequestHandler
 from decider.serving._parse import coerce_record, has_date
-from decider.steps import FunctionStep, Step
+from decider.steps import Step
 
 from .loading import components, flow_components, flow_name, is_flow_file, latest_config, load_module, project_root
 from .rows import load_rows
@@ -331,7 +331,7 @@ class Bridge:
         self.session.replace(path, new)
         self.step = self.session.executable.step
         self.edits.append((path, new))
-        return {"formula": formula(new.fn) if isinstance(new, FunctionStep) else None}
+        return {"formula": formula(new.fn) if new.kind == "function" else None}
 
     def restore(self, path):
         """Put the step at `path` back as the run started it, undoing a skip or a code swap, and re-run from there."""

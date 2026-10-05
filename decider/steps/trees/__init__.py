@@ -8,12 +8,10 @@ from decider.steps._configurable import ConfigurableStep
 from decider.steps.trees._condition import expr_condition
 from decider.steps.trees._encode import encode, kind_of
 from decider.steps.trees._reference import reference
-from decider.steps.trees.schema import *  # noqa: F401,F403
 from decider.steps.trees.schema import Node, TreeDocument
-from decider.steps.trees.schema import __all__ as _schema
 from decider.steps.trees._walker import walk
 
-__all__ = ["TreeConfig", "expr_condition", *_schema]
+__all__ = ["TreeConfig", "expr_condition"]
 
 
 class TreeConfig(ConfigurableStep):

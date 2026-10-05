@@ -3,7 +3,8 @@ import polars as pl
 import pytest
 
 from decider.exceptions import MissingInputError
-from decider.steps.trees import (
+from decider.steps.trees import TreeConfig
+from decider.steps.trees.schema import (
     CasesBranch,
     CasesIsInRule,
     CasesRangesRule,
@@ -21,7 +22,6 @@ from decider.steps.trees import (
     RuleMeta,
     RuleRoot,
     StringMatchCondition,
-    TreeConfig,
     TreeOutput,
     UnaryBetween,
     UnaryEqual,

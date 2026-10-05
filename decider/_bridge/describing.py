@@ -10,7 +10,7 @@ from pathlib import Path
 
 from decider.ir import BranchNode, CallNode, LoopNode
 from decider._annotations import metadata_of
-from decider.steps import FrameStep, FunctionStep, Step
+from decider.steps import Step
 
 
 def assignment_lines(file):
@@ -40,11 +40,11 @@ def find_pipelines(mod, file):
         line = assign.get(k) or defs.get(k)
         if line is None:  # imported from another module, not this file's pipeline
             continue
-        if isinstance(v, (FunctionStep, FrameStep)):
-            candidates.append({"name": k, "line": line, "kind": type(v).__name__, "status": "invalid",
+        if v.kind in ("function", "frame"):
+            candidates.append({"name": k, "line": line, "kind": v.kind, "status": "invalid",
                                "reason": "a single step, not a pipeline; assign it inside a flow(...)"})
         else:
-            candidates.append({"name": k, "line": line, "kind": type(v).__name__, "status": "pipeline"})
+            candidates.append({"name": k, "line": line, "kind": v.kind, "status": "pipeline"})
     for n in tree.body:
         if not isinstance(n, ast.FunctionDef) or n.name.startswith("_"):
             continue
@@ -133,7 +133,7 @@ def node_json(node, steps, located):
     o = node.origin
     step_ = steps.get(o.path)
     file, line = located.get(id(step_), (None, None))
-    if isinstance(step_, (FunctionStep, FrameStep)):
+    if step_ is not None and step_.kind in ("function", "frame"):
         file, line = _code_location(step_.fn)
     base = {"path": o.path, "source": o.source, "file": file, "line": line, "id": o.id}
     if isinstance(node, CallNode):
@@ -144,8 +144,8 @@ def node_json(node, steps, located):
                 "outputs": None if node.outputs is None else [x.name for x in node.outputs],
                 "params": {d.name: d.default for d in node.params}, "code": _fingerprint(python, step_),
                 "doc": (inspect.getdoc(python) or "").split("\n")[0],
-                "formula": formula(python) if isinstance(step_, FunctionStep) else None,
-                "body": _short_source(python) if isinstance(step_, FunctionStep) else None,
+                "formula": formula(python) if getattr(step_, "kind", None) == "function" else None,
+                "body": _short_source(python) if getattr(step_, "kind", None) == "function" else None,
                 "table": step_.expression.model_dump(mode="json") if hasattr(step_, "expression") and hasattr(step_, "rows") else None,
                 "python": {"file": rf, "line": rl, **dict(zip(("bodyLine", "endLine"), _body_lines(python)))} if rf else None}
     kind = "branch" if isinstance(node, BranchNode) else "loop" if isinstance(node, LoopNode) else "sequence"

@@ -4,8 +4,9 @@ import pytest
 
 from decider import flow
 from decider._engine import Engine
-from decider.steps.tables import BoundMode, DecisionTableConfig
-from decider.steps.trees import RangeEndLogic
+from decider.steps.tables import DecisionTableConfig
+from decider.steps.tables.schema import BoundMode
+from decider.steps.trees.schema import RangeEndLogic
 
 BANDS = [{"lo": None, "hi": 30.0, "pts": 1}, {"lo": 30.0, "hi": 70.0, "pts": 2}, {"lo": 70.0, "hi": None, "pts": 3}]
 

@@ -15,11 +15,13 @@ NO_ALL: dict[str, str] = {  # {module path relative to decider/: reason}
 BIG_ALL: dict[str, str] = {  # {package path relative to decider/: reason}
     ".": "the authoring vocabulary is one namespace by design",
     "contract": "the integration contract exports every versioned model an integrator receives",
-    "steps": "trimmed to the target list in the surface phase",
     "steps/trees/schema": "permanent: the document grammar is public by design",
 }
 
 PRIVATE_IMPORT: dict[str, str] = {  # {"importer -> imported": reason}
+    "_engine.debug.edit -> steps._base": "as_step is internal; a session edit converts a function to a step",
+    "_engine.ir.context -> steps._base": "as_step is internal; step_map converts a function to a step",
+    "_engine.ir.context -> steps._values": "TableRef is internal; ctx.table tells a reference from inline rows",
     "_bridge.bridge -> serving._parse": "request parsing helpers have no public home",
     "_bridge.datasets -> data._formats": "format_of has no public home",
     "_bridge.datasets -> data._providers": "dataset_documents and datasets_folder are bridge helpers with no public home",

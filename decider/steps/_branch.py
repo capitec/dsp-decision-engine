@@ -35,6 +35,7 @@ class BranchStep(Step):
     """Runs one of its arms per row, chosen by a condition. Build one with `branch()`."""
 
     __module__ = "decider.steps"
+    kind = "branch"
 
     name: str
     condition: Step
