@@ -5,6 +5,9 @@ The debug bridge moved from its own package (`tools/decider-bridge`) into the
 boundary. This documents where each piece landed and the guarantees the move
 preserved.
 
+The `debug_bridge/` package is planned to move to `_bridge/`; see
+`notes/pythonapi-redesign/directory-structure.md`.
+
 ## The boundary
 
 `decider.engine.debug.Session` is the session. It stays in core and is the only
@@ -21,34 +24,39 @@ launch; it is not a second session implementation.
 | `decider_bridge/bridge.py` | `decider/debug_bridge/bridge.py` | transport: JSON-lines loop, debugpy attach, `Bridge` |
 | `decider_bridge/loading.py` | `decider/debug_bridge/loading.py` | process launch: import a pipeline's files |
 | `decider_bridge/timeline.py` | `decider/debug_bridge/timeline.py` | adapter-side observation of a session |
-| `decider_bridge/runs.py` | `decider/debug_bridge/runs.py` | per-record views + input overrides (the run-and-collect primitives moved out) |
+| `decider_bridge/runs.py` | `decider/debug_bridge/runs.py` | per-record views + input overrides (the run-and-collect primitives moved to `replay.py`) |
 | `decider_bridge/__main__.py` | `decider/debug_bridge/__main__.py` | entry point (`python -m decider.debug_bridge`) |
 | `decider_bridge/controls.py` | `decider/engine/debug/controls.py` | session steering (forces, value breakpoints) |
 | `decider_bridge/lineage.py` | `decider/engine/debug/lineage.py` | runtime lineage query over a session's state |
 | `decider_bridge/describing.py` | `decider/contract/describing.py` | flow description: pipelines, IR as JSON, source locations |
-| `decider_bridge/forks.py` | `decider/experiments/forks.py` | experiment primitives: `fork`, `sweep`, `checkpoint_key`, `merge` |
-| `decider_bridge/runs.py` (`collect`, `steer`, `trace`) | `decider/experiments/runs.py` | experiment primitives: run-and-collect |
+| `decider_bridge/forks.py` | `decider/debug_bridge/forks.py` | fork primitives: `fork`, `sweep`, `checkpoint_key` (`merge` is `decider.engine.params.merge`, imported) |
+| `decider_bridge/runs.py` (`collect`, `steer`, `trace`) | `decider/debug_bridge/replay.py` | run-and-collect |
+
+`debug_bridge/` also holds modules that were not in the old package:
+`datasets.py`, `draft.py`, `experiment.py`, `rows.py` and `run.py`.
 
 `Controls` landed in `engine.debug` because it steers a session (forces and
 value breakpoints attach to a `Session`); it happens to take the described IR
 dict, which `contract.describing` produces, but it imports nothing from it.
-The `experiments` package is the seam task 09 builds its full experiment
-interface on; it is not that interface yet.
+`forks` and `replay` stay in `debug_bridge`; `decider.experiments` is a
+separate package (experiment definitions, runner, reports) and does not hold
+them.
 
 ## Transports and consumers preserved
 
-Three transports over the same session, both consumers:
+Two transports over the same session, plus the debugpy flag:
 
-- stdio JSON-lines (`Bridge.serve`, fd 3 for replies) — VS Code.
-- debugpy attach (`--debugpy PORT`) — VS Code "Debug this step in Python".
+- stdio JSON-lines (`Bridge.serve`, replies on the fd given by `--fd`, 3 in
+  the extension) — VS Code.
 - starlette websocket (`decider.serving.session_ws.session_app`) — unchanged,
   still core.
+- `--debugpy PORT` on the stdio bridge also listens for a debugpy attach — VS
+  Code "Debug this step in Python".
 
-VS Code (`tools/vscode-decider`) now runs `python -m decider.debug_bridge`; the
-bridge is inside the installed `decider`, so the extension no longer adds a
-bridge package to `PYTHONPATH`. JupyterLab (`tools/jupyterlab-decider`) imports
-`decider.debug_bridge.bridge.Bridge` in the kernel and no longer depends on a
-separate `decider-bridge` distribution.
+VS Code (`tools/vscode-decider`) runs `python -m decider.debug_bridge`; the
+bridge is inside the installed `decider`, so the extension does not set
+`PYTHONPATH` or add a bridge package. There is no JupyterLab extension in
+`tools/` any more.
 
 ## Cross-mode parity
 
@@ -62,7 +70,8 @@ covers the contract itself.
 
 ## Compile/fallback rule
 
-Compile-time failures and per-step compiled modes refuse to fall back to Python
-per step (a warning, or `Engine(strict_compile=True)` raises). Runtime errors
-always propagate. The bridge reports a failing step in its reply and keeps the
-trace up to the failing step; it does not silently fall back.
+In `stepped` and `fused` modes, a compile-time failure or a step the compiled
+mode refuses falls back to Python for that step with a warning;
+`Engine(strict_compile=True)` raises instead. Runtime errors always propagate.
+The bridge reports a failing step in its reply (`error`), and `replay.trace`
+keeps what ran up to the failing step.
