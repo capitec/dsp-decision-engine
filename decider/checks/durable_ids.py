@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from decider.check import Check, Finding, Severity
+from decider.checks.models import Finding, Severity
+from decider.checks.run import Check
 from decider.checks._common import call_nodes, helper_calls, step_ref
 from decider.ir import CallNode, to_ir
 
@@ -18,7 +19,7 @@ def durable_ids(severity: Severity = Severity.WARNING) -> Check:
 
     Example::
 
-        check.run(pipeline, suites=[(durable_ids(Severity.ERROR),)])
+        checks.run(pipeline, suites=[(durable_ids(Severity.ERROR),)])
     """
 
     def check(step: Any) -> list[Finding]:

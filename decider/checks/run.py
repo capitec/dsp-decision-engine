@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Iterable, Sequence
 
-from decider.check.models import Finding, Report
+from decider.checks.models import Finding, Report
 from decider.contract.refs import FlowRef
 from decider.ir import to_ir
 from decider.exceptions import DeciderError
@@ -32,7 +32,7 @@ def run(step: Any, suites: Sequence[Suite] | None = None) -> Report:
         def my_check(pipeline):
             return [Finding(severity=Severity.WARNING, message="...")]
 
-        report = check.run(pipeline, suites=[checks.default_suite, (my_check,)])
+        report = checks.run(pipeline, suites=[checks.default_suite, (my_check,)])
         report.ok
         report.model_dump_json()   # machine-readable, for CI / notebooks / editors
 

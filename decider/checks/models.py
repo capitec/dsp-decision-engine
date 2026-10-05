@@ -52,7 +52,7 @@ class Finding(BaseModel):
 
 
 class Report(BaseModel):
-    """The result of one `check.run`: the flow checked and its findings.
+    """The result of one `checks.run`: the flow checked and its findings.
 
     Serialisable as-is for CI, notebooks and editors
     (`report.model_dump_json()`); `ok` is True when no finding is `error`
@@ -60,7 +60,7 @@ class Report(BaseModel):
 
     Example::
 
-        report = check.run(pipeline)
+        report = checks.run(pipeline)
         report.ok
         [f.message for f in report.findings if f.severity is Severity.ERROR]
     """

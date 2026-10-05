@@ -1,8 +1,8 @@
 """Today's violations of each convention rule; every entry is a to-do for a later phase."""
 
 NO_ALL: dict[str, str] = {  # {module path relative to decider/: reason}
-    "check/models.py": "merges into checks/ with leading underscores",
-    "check/run.py": "merges into checks/ with leading underscores",
+    "checks/models.py": "implementation file; gets a leading underscore when its package is made thin",
+    "checks/run.py": "implementation file; gets a leading underscore when its package is made thin",
     "checks/durable_ids.py": "merges into checks/ with leading underscores",
     "checks/equivalence.py": "deleted in the deletions phase",
     "checks/static.py": "merges into checks/ with leading underscores",
@@ -149,8 +149,6 @@ UPWARD_IMPORT: dict[str, str] = {  # {"importer module -> imported module": reas
 LAYER_CYCLE: dict[str, str] = {  # {"package -> package": reason}
     "_engine -> steps": "engine reaches steps.base, helpers and values lazily; removed when that goes through the IR",
     "steps -> _engine": "steps bind through the engine; goes with the engine -> steps edge",
-    "check -> checks": "check and checks merge into checks/",
-    "checks -> check": "check and checks merge into checks/",
 }
 
 SHARED_STATE: dict[str, str] = {  # {"path::Class.method": reason}

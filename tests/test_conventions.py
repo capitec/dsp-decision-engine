@@ -56,7 +56,7 @@ LAYERS = {
     0: "exceptions registry ops _annotations _settings _suggest _polars_docs fields types serializable settings",
     1: "__init__ steps ir trace debug config _engine",
     2: "contract",
-    3: "checks check diff experiments data testing credit",
+    3: "checks diff experiments data testing credit",
     4: "serving mcp cli _bridge _tools ids debug_bridge __main__",
 }
 LAYER = {name: n for n, names in LAYERS.items() for name in names.split()}

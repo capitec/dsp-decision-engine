@@ -7,7 +7,8 @@ import polars as pl
 from polars.testing import assert_frame_equal
 from pydantic import BaseModel, ConfigDict
 
-from decider.check import Check, Finding, Severity
+from decider.checks.models import Finding, Severity
+from decider.checks.run import Check
 from decider.checks._common import function_source
 from decider.ir import CallNode, iter_nodes, to_ir
 from decider.testing import MODES, assert_equivalent, corpus
@@ -48,7 +49,7 @@ def equivalence(modes: tuple[str, ...] = MODES) -> Check:
 
     Example::
 
-        check.run(pipeline, suites=[checks.default_suite, (equivalence(),)])
+        checks.run(pipeline, suites=[checks.default_suite, (equivalence(),)])
     """
 
     def check(step: Any) -> list[Finding]:
