@@ -282,3 +282,11 @@ Tests (`tests/ops/`, `tests/compile/`, `tests/boundary/`):
 10. **`Money`:** remove `cents=`, keep `Money()` as display for floats, no alias. Or remove `Money`
     entirely once `Currency["R"]` drives the debugger formatting. Recommend the first now, the
     second when the debugger reads units from `Currency`.
+
+## 10. Decisions (2026-10-05)
+
+- **Operator rounding is half-even, matching polars** (question 3 reversed). Explicit rounding keeps every mode: `decimal.round(x, scale=1, mode=Rounding.HALF_UP)` gives banking rounding when a step wants it.
+- **`Decimal ± int` is legal**; the int is whole units (question 5).
+- **Units are a client-supplied display string** (`units="R"`); no Babel (question 7).
+- Questions 1, 2, 4, 9 and 10 take the recommendations above.
+- **Still open:** question 8, `Currency(2.675)` from a float (2.67 exact double, or 2.68 shortest repr as polars casts). Settle before building.
