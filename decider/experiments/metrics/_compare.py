@@ -5,6 +5,7 @@ import typing as t
 import numpy as np
 import polars as pl
 
+from decider.diff._outputs import changed
 from decider.experiments.callbacks import Batch, NodeBatch
 from decider.experiments.metrics._base import Metric, Summary
 
@@ -65,23 +66,15 @@ class Divergence(Metric):
         return node.values.select(self.column).with_columns(pl.Series(_ROW, rows + node.offset))
 
     def _compare(self, actual: pl.Series, expected: pl.Series, rows: pl.Series) -> None:
-        changed = _changed(actual, expected, self.rtol, self.atol)
-        n = int(changed.sum())
-        self._compared += changed.len()
+        mask = changed(expected, actual, self.rtol, self.atol)
+        n = int(mask.sum())
+        self._compared += mask.len()
         self._changed += n
         if not n:
             return
         if self._first is None:
-            self._first = int(rows.filter(changed)[0])
+            self._first = int(rows.filter(mask)[0])
         room = self.samples - len(self._samples)
         if room > 0:
-            hits = pl.DataFrame({"row": rows, "expected": expected, "actual": actual}).filter(changed)
+            hits = pl.DataFrame({"row": rows, "expected": expected, "actual": actual}).filter(mask)
             self._samples += hits.head(room).to_dicts()
-
-
-def _changed(actual: pl.Series, expected: pl.Series, rtol: float, atol: float) -> pl.Series:
-    if actual.dtype.is_float() and expected.dtype.is_float():
-        same = actual.is_close(expected, abs_tol=atol, rel_tol=rtol, nans_equal=True)
-    else:
-        same = actual.eq(expected)
-    return ~same.fill_null(actual.is_null() & expected.is_null())

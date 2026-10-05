@@ -44,7 +44,7 @@ from decider.experiments._experiments import (BASELINE, ExperimentDef, Experimen
                                              validate)
 from decider.experiments.metrics._base import Metric
 from decider.experiments.plots._base import Figure
-from decider.experiments._revision import compatible, materialise, remove, resolve
+from decider.diff._revisions import compatible, materialise, remove, resolve
 from decider.contract import Environment, InputFingerprint, JobHandle, ResultRef, Revision, RunManifest
 from decider.contract._manifest import new_manifest_id
 

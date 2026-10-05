@@ -7,6 +7,7 @@ import click
 from dotenv import load_dotenv
 
 from decider import _settings as settings_module
+from decider.cli._diff import diff
 
 __all__ = ["cli"]
 
@@ -202,3 +203,6 @@ def template(name: str, directory: Path | None) -> None:
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_text(src.read_text().replace("{{name}}", package))
             click.echo(f"created {dest}")
+
+
+cli.add_command(diff)

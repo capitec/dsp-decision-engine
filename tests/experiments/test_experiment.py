@@ -5,7 +5,7 @@ import pytest
 from decider.exceptions import DeciderError
 from decider.experiments import Experiment, ExperimentDef, validate
 from decider.experiments._experiments import check_experiment_version
-from decider.experiments._revision import compatible
+from decider.diff._revisions import compatible
 from decider.experiments.metrics import Describe, Divergence, ValueCounts
 from decider.experiments.plots import Bars, Changes
 
