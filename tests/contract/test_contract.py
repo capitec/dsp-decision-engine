@@ -6,7 +6,7 @@ import pytest
 
 from decider import branch, dag, flow, param, step
 from decider.contract import (CONTRACT_VERSION, EdgeRef, FlowDescription, FlowRef, RecordRef, StepRef, ValueSlotRef,
-                              capabilities, check_version, describe, json_schema, mcp_schema, resolve_step, typescript)
+                              capabilities, check_version, describe, json_schema, resolve_step, typescript)
 from decider.exceptions import DeciderError
 
 
@@ -106,7 +106,6 @@ def test_json_schema_is_versioned_and_self_contained():
     assert schema["contract_version"] == CONTRACT_VERSION
     assert "StepRef" in schema["$defs"]
     assert "FlowDescription" in schema["$defs"] or schema["title"] == "decider static-flow contract"
-    assert schema == mcp_schema()
 
 
 def test_typescript_generates_every_reference_type():

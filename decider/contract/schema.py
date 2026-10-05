@@ -40,20 +40,6 @@ def json_schema() -> dict[str, Any]:
     return schema
 
 
-def mcp_schema() -> dict[str, Any]:
-    """The MCP schema for describing a flow: the same versioned JSON Schema, used as a tool's output.
-
-    An MCP server hosted in `decider` declares its `describe_flow` tool's
-    result with this schema, so a client's structural-metadata reads match the
-    Python models exactly rather than a hand-written approximation.
-
-    Example::
-
-        mcp_schema()["$defs"]["StepRef"]
-    """
-    return json_schema()
-
-
 def typescript() -> str:
     """TypeScript interfaces for the contract, generated from the Python models.
 

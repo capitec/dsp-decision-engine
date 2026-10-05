@@ -8,7 +8,7 @@ events a session emitted — live on `RunReport` and `Session.events` and are
 deliberately out of scope here.
 
 The reference models (`FlowRef`, `StepRef`, `EdgeRef`, `ValueSlotRef`,
-`RecordRef`) are the contract owner: `json_schema`, `mcp_schema` and
+`RecordRef`) are the contract owner: `json_schema` and
 `typescript` are generated from them, so every consumer shares one schema.
 
 Example::
@@ -21,10 +21,10 @@ Example::
 from decider.contract.describe import Capabilities, capabilities, describe, resolve_step, source_location
 from decider.contract.refs import (CONTRACT_VERSION, EdgeRef, FlowDescription, FlowRef, RecordRef, StepRef,
                                    ValueSlotRef, check_version)
-from decider.contract.schema import json_schema, mcp_schema, typescript
+from decider.contract.schema import json_schema, typescript
 
 __all__ = [
     "CONTRACT_VERSION", "Capabilities", "EdgeRef", "FlowDescription", "FlowRef", "RecordRef", "StepRef",
-    "ValueSlotRef", "capabilities", "check_version", "describe", "json_schema", "mcp_schema", "resolve_step",
+    "ValueSlotRef", "capabilities", "check_version", "describe", "json_schema", "resolve_step",
     "source_location", "typescript",
 ]

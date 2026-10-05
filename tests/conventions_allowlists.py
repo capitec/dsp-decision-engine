@@ -21,7 +21,6 @@ NO_ALL: dict[str, str] = {  # {module path relative to decider/: reason}
     "data/providers/base.py": "implementation file; gets a leading underscore when its package is made thin",
     "data/providers/catalog.py": "implementation file; gets a leading underscore when its package is made thin",
     "data/providers/files.py": "implementation file; gets a leading underscore when its package is made thin",
-    "data/scope.py": "deleted in the deletions phase",
     "debug_bridge/__init__.py": "moves with debug_bridge to _bridge/",
     "debug_bridge/bridge.py": "moves with debug_bridge to _bridge/",
     "debug_bridge/datasets.py": "moves with debug_bridge to _bridge/",
@@ -118,7 +117,6 @@ NO_ALL: dict[str, str] = {  # {module path relative to decider/: reason}
     "serving/servers/core.py": "implementation file; gets a leading underscore when its package is made thin",
     "serving/servers/sanic.py": "implementation file; gets a leading underscore when its package is made thin",
     "serving/servers/starlette.py": "implementation file; gets a leading underscore when its package is made thin",
-    "serving/session_ws.py": "deleted in the deletions phase",
     "settings.py": "becomes _settings.py",
     "steps/base.py": "implementation file; gets a leading underscore when its package is made thin",
     "steps/branch.py": "implementation file; gets a leading underscore when its package is made thin",
@@ -159,7 +157,6 @@ NO_ALL: dict[str, str] = {  # {module path relative to decider/: reason}
 
 BIG_ALL: dict[str, str] = {  # {package path relative to decider/: reason}
     ".": "trimmed to the build/run/extend list in the surface phase",
-    "data": "trimmed to the target list in the surface phase",
     "engine/debug": "private once engine becomes _engine",
     "experiments": "trimmed when experiments __all__ is cut",
     "steps": "trimmed to the target list in the surface phase",
