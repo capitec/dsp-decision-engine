@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pickle
 from typing import Any, Literal
 
 import polars as pl
@@ -17,7 +18,8 @@ class Equivalence(BaseModel):
     """The result of comparing two revisions.
 
     `structurally_equivalent` is True only when both flows have identical
-    structure and step source — a proof only for pure steps (non-determinism is
+    structure, step source, constants and params (defaults and tables
+    included) — a proof only for pure steps (non-determinism is
     flagged separately by `wall_clock`). Otherwise `method` is `"corpus"`: both
     revisions ran over generated threshold/regime frames and their outputs were
     compared; `equivalent` is True when none diverged, and `divergences` names
@@ -72,7 +74,8 @@ def equivalence(modes: tuple[str, ...] = MODES) -> Check:
 def compare(baseline: Any, revision: Any, frames: list[pl.DataFrame] | None = None) -> Equivalence:
     """Compare two revisions: structural equivalence where proven, corpus evidence otherwise.
 
-    When both flows have identical structure and step source, the result is
+    When both flows have identical structure, step source, constants and
+    params, the result is
     `method="structure"` (proven only for pure steps). Otherwise both revisions
     run over `frames` (default: the generated boundary corpus of `baseline`)
     and their outputs are compared row for row; `equivalent` is True only when
@@ -107,7 +110,16 @@ def _signature(root: Any) -> tuple[tuple, ...]:
     for node in iter_nodes(root):
         if isinstance(node, CallNode):
             src = function_source(node.fn)
-            parts.append((node.origin.path, node.kind, node.origin.source, src[0] if src else None))
+            parts.append((node.origin.path, node.kind, node.origin.source, src[0] if src else None,
+                          _state(node)))
         else:
             parts.append((node.origin.path, type(node).__name__, node.origin.source))
     return tuple(parts)
+
+
+def _state(node: CallNode) -> Any:
+    # Pickled so big tables and arrays compare in full; what can't pickle never matches.
+    try:
+        return pickle.dumps((node.consts, node.params))
+    except Exception:
+        return object()
