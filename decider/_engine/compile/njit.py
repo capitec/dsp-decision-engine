@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import dis
-import hashlib
 import inspect
 import os
 import types as py_types
-from pathlib import Path
 from typing import Any, Callable
 
 import numpy as np
@@ -15,9 +13,9 @@ from numba.core.caching import FunctionCache, NullCache
 from numba.core.dispatcher import Dispatcher
 from numba.core.errors import NumbaError, UnsupportedBytecodeError
 
-# Imported for their registrations (CPython-compatible round and **, the span
-# operations) and hashed into SALT below.
-from decider._engine.compile import cpython, span
+# Importing `semantics` registers the overloads that make kernel arithmetic and span operations answer
+# as CPython does; its SALT keys numba's disk cache.
+from decider._engine.compile.semantics import SALT
 from decider._engine.concurrency import Cache, once
 from decider._engine.compile.fingerprint import fingerprint
 from decider._engine.compile.rows import rows_probe
@@ -43,10 +41,6 @@ _DECLARED_CALLEE = "calls the @allow_fallback function"
 # ponytail: unbounded, one entry per distinct function content; add eviction if a long session edits steps thousands of times.
 _DISPATCHERS = Cache()
 _REASONS = Cache()
-
-# Numba keys a disk-cached step by its own bytecode only, so changes to a
-# reachable helper would otherwise keep serving stale machine code.
-SALT = hashlib.sha256(b"".join(Path(m.__file__).read_bytes() for m in (cpython, span))).hexdigest()
 
 
 class _SaltedCache(FunctionCache):

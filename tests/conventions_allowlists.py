@@ -136,8 +136,6 @@ SHARED_STATE: dict[str, str] = {  # {"path::Class.method": reason}
 
 KERNEL_DECORATOR: dict[str, str] = {  # {path relative to decider/: reason}
     "_engine/boundary/_arrow/intrinsics.py": "permanent: the Arrow intrinsics stay with the boundary",
-    "_engine/compile/cpython.py": "moves to _engine/compile/semantics/numbers.py",
-    "_engine/compile/span.py": "operations half moves to _engine/compile/semantics/strings.py",
     "_engine/compile/kernel.py": "the generated kernel body is an intrinsic; to be confirmed as an internal kernel",
     "steps/scorecard/kernels.py": "permanent: internal kernels may use register_jitable",
     "steps/tables/matcher.py": "internal kernel registers inlining overloads; rewrite as register_jitable",

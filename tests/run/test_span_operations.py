@@ -5,7 +5,8 @@ from numba.core import types
 from numba.core.errors import TypingError
 
 from decider import Engine, Raw, flow, missing_as, param
-from decider._engine.compile.span import SPAN, _span_eq
+from decider._engine.compile.semantics.strings import _span_eq
+from decider._engine.compile.span import SPAN
 from decider.testing import assert_equivalent
 
 COMPILED = ("stepped", "fused")
