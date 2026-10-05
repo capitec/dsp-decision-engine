@@ -8,7 +8,7 @@ from pydantic import ConfigDict, TypeAdapter, ValidationError
 from pydantic_core import from_json
 
 from decider._engine.ir.decls import base_annotation
-from decider.exceptions import InputParsingError
+from decider.serving._errors import InputParsingError
 from decider._engine.types import struct_item
 
 

@@ -45,26 +45,6 @@ class DeciderMissingDependencyError(DeciderError, ModuleNotFoundError):
         )
 
 
-class UnsupportedContentTypeError(DeciderError):
-    _STATUS_CODE = 415
-    _MESSAGE = "Unsupported content type."
-
-
-class InputParsingError(DeciderError):
-    _STATUS_CODE = 400
-    _MESSAGE = "Failed to parse request input."
-
-
-class UnsupportedAcceptError(DeciderError):
-    _STATUS_CODE = 406
-    _MESSAGE = "Unsupported Accept media type."
-
-
-class OutputFormattingError(DeciderError):
-    _STATUS_CODE = 500
-    _MESSAGE = "Failed to format the output."
-
-
 class WiringError(DeciderError, ValueError):
     """A pipeline can't be wired: its message names the step path and suggests a fix.
 
@@ -110,31 +90,6 @@ class MissingInputError(DeciderError, ValueError):
             f"input '{input}' of {where} is required but column '{input}' {found}. "
             + (fix or f"Fix the data, or declare `{input}: T = missing_as(fill)` or `{input}: T | None`.")
         )
-
-
-class ArrowKindError(DeciderError, TypeError):
-    """A column's Arrow type can't be read as its declared kind.
-
-    Carries `column`, `kind` and `arrow_type` when the import (rather than the
-    dtype table) refused it.
-    """
-
-
-class NeedsKernelSplit(ArrowKindError):
-    """A declared column has no flat-array form (List, Struct, Array, Object, Binary, an overflowing Decimal).
-
-    The caller splits the kernel around the column; `column` and `dtype` name it.
-    """
-
-    def __init__(self, name: str, dtype: object, reason: str = ""):
-        self.column = name
-        self.dtype = dtype
-        message = f"column '{name}' ({dtype}) has no flat-array extraction; needs the kernel-split escape"
-        super().__init__(f"{message} ({reason})" if reason else message)
-
-
-class ArrowImportError(DeciderError, RuntimeError):
-    """nanoarrow refused what `__arrow_c_stream__()` handed over."""
 
 
 class EngineError(DeciderError, ValueError):

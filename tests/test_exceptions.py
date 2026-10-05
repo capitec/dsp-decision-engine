@@ -11,9 +11,12 @@ from decider._engine.boundary._arrow.plan import ArrowKindError as ArrowKindFrom
 from decider._engine.boundary.dtypes import NeedsKernelSplit as NeedsKernelSplitFromDtypes
 from decider._engine.boundary.nulls import MissingInputError as MissingFromNulls
 from decider._engine.params import ParamsError as ParamsFromParams
+from decider._engine.boundary.errors import ArrowImportError, ArrowKindError, NeedsKernelSplit
 from decider.exceptions import (
-    ArrowImportError, ArrowKindError, DeciderError, EngineError, ExprError, IRError, MissingInputError,
-    NeedsKernelSplit, ParamsError, RegistryError, WiringError,
+    DeciderError, EngineError, ExprError, IRError, MissingInputError, ParamsError, RegistryError, WiringError,
+)
+from decider.serving._errors import (
+    InputParsingError, OutputFormattingError, UnsupportedAcceptError, UnsupportedContentTypeError,
 )
 from decider.steps import ConfigurableStep
 from decider.steps.expr import ExprError as ExprFromExpr, parse
@@ -23,6 +26,8 @@ from decider.steps.expr import ExprError as ExprFromExpr, parse
     (WiringError, ValueError), (IRError, TypeError), (ParamsError, ValueError), (MissingInputError, ValueError),
     (ArrowKindError, TypeError), (NeedsKernelSplit, TypeError), (ArrowImportError, RuntimeError),
     (EngineError, ValueError), (RegistryError, LookupError), (ExprError, ValueError),
+    (UnsupportedContentTypeError, Exception), (InputParsingError, Exception), (UnsupportedAcceptError, Exception),
+    (OutputFormattingError, Exception),
 ])
 def test_each_library_error_is_a_decider_error_and_its_builtin(error, builtin):
     assert issubclass(error, DeciderError) and issubclass(error, builtin)
