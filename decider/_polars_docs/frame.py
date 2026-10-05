@@ -22,7 +22,7 @@ def build_polars_df(
         raise ValueError(f"Could not load data into schema ({schema_str}): {e}") from e
 
 
-class DataFrame(BaseModel):
+class FrameDoc(BaseModel):
     data: TDataFrameData
     dtypes: t.Optional[PolarsSchema] = None
 

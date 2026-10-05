@@ -11,7 +11,7 @@ from pydantic import ValidationError
 from decider._engine.params.models import NodeParams
 from decider._engine.params.tables import rows_like
 from decider.exceptions import ParamsError
-from decider.registry.resolve import hint, suggest
+from decider._suggest import hint, suggest
 
 
 class Status(Enum):

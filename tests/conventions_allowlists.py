@@ -35,16 +35,11 @@ NO_ALL: dict[str, str] = {  # {module path relative to decider/: reason}
     "experiments/revision.py": "implementation file; gets a leading underscore when its package is made thin",
     "experiments/runner.py": "implementation file; gets a leading underscore when its package is made thin",
     "fields.py": "splits into _annotations and _engine/types",
-    "ids.py": "moves to _tools/ids.py",
     "mcp/editor.py": "implementation file; gets a leading underscore when its package is made thin",
     "mcp/policy.py": "implementation file; gets a leading underscore when its package is made thin",
     "mcp/server.py": "implementation file; gets a leading underscore when its package is made thin",
     "mcp/tools.py": "implementation file; gets a leading underscore when its package is made thin",
     "registry/core.py": "implementation file; gets a leading underscore when its package is made thin",
-    "registry/resolve.py": "becomes _suggest.py",
-    "serializable/__init__.py": "becomes _polars_docs/",
-    "serializable/dataframe.py": "becomes _polars_docs/",
-    "serializable/schema.py": "becomes _polars_docs/",
     "serving/format.py": "implementation file; gets a leading underscore when its package is made thin",
     "serving/handler.py": "implementation file; gets a leading underscore when its package is made thin",
     "serving/parse.py": "implementation file; gets a leading underscore when its package is made thin",
@@ -52,7 +47,6 @@ NO_ALL: dict[str, str] = {  # {module path relative to decider/: reason}
     "serving/servers/core.py": "implementation file; gets a leading underscore when its package is made thin",
     "serving/servers/sanic.py": "implementation file; gets a leading underscore when its package is made thin",
     "serving/servers/starlette.py": "implementation file; gets a leading underscore when its package is made thin",
-    "settings.py": "becomes _settings.py",
     "steps/base.py": "implementation file; gets a leading underscore when its package is made thin",
     "steps/branch.py": "implementation file; gets a leading underscore when its package is made thin",
     "steps/configurable.py": "implementation file; gets a leading underscore when its package is made thin",
@@ -116,7 +110,7 @@ PRIVATE_IMPORT: dict[str, str] = {  # {"importer -> imported": reason}
     "experiments.runner -> _engine.params": "param merge has no public home",
     "experiments.runner -> _engine.run.state": "batch state and dtype mapping are internal",
     "experiments.runner -> _engine.wiring.plan": "walks the resolved plan, which is internal",
-    "ids -> _engine.ir.origin": "check_id and check_name are not in decider.ir",
+    "_tools.ids -> _engine.ir.origin": "check_id and check_name are not in decider.ir",
     "serving.handler -> _engine.run": "Executable is not exported from decider yet",
     "serving.parse -> _engine.ir.decls": "base_annotation is not in decider.ir",
     "testing.corpus -> _engine.ir.decls": "base_annotation is not in decider.ir",
@@ -128,7 +122,7 @@ PRIVATE_IMPORT: dict[str, str] = {  # {"importer -> imported": reason}
 }
 
 UPWARD_IMPORT: dict[str, str] = {  # {"importer module -> imported module": reason}
-    "settings -> config": "settings builds a config store; settled when settings becomes _settings with a lazy get_settings",
+    "_settings -> config": "the settings build a config store from its type tag",
 }
 
 LAYER_CYCLE: dict[str, str] = {  # {"package -> package": reason}

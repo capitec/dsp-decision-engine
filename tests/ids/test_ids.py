@@ -12,7 +12,7 @@ from decider import _engine as engine
 from decider.cli import cli
 from decider.contract import describe
 from decider._engine.ir.nodes import iter_nodes
-from decider.ids import IdError, add_ids, generate
+from decider._tools.ids import IdError, add_ids, generate
 from decider.steps import flow, step
 
 PIPELINE = '''"""A retail credit pipeline, kept readable."""

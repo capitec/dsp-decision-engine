@@ -5,7 +5,7 @@ import typing as t
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
-from decider.serializable.schema import TStruct
+from decider._polars_docs.schema import TStruct
 from decider.steps.trees.schema.conditions import SchemaModel
 from decider.steps.trees.schema.nodes import NodeData, arity
 from decider.steps.values import ParamRef

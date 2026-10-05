@@ -2,7 +2,7 @@ def test_package_imports():
     import decider
     import decider.serving
     import decider.serving.handler
-    import decider.settings
+    import decider._settings
 
 
 def test_engine_and_config_value_types_are_top_level():

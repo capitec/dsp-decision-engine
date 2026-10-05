@@ -1,3 +1,4 @@
+import functools
 import os
 import typing as t
 from pydantic import BaseModel, Field, ConfigDict
@@ -51,7 +52,18 @@ class DeciderSettings(BaseSettings):
     api: APISettings = Field(default_factory=APISettings)
     config: DeciderConfigSettings = Field(default_factory=DeciderConfigSettings)
     datasets_path: str = "${PROJECT_ROOT}/datasets"  # folder of named datasets; `${PROJECT_ROOT}` is the nearest ancestor holding `configs/`
+    checks_path: str = "${PROJECT_ROOT}/checks.yaml"  # the project's checks file; resolved like `datasets_path`
 
 
-settings = DeciderSettings()
+@functools.cache
+def get_settings() -> DeciderSettings:
+    """The process's settings, read from the environment on first use.
+
+    `get_settings.cache_clear()` makes the next call read the environment again.
+
+    Example::
+
+        get_settings().serve.port  # 8080
+    """
+    return DeciderSettings()
 

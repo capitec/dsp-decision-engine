@@ -184,7 +184,7 @@ def start_debug(entry: str, data: str) -> dict:
 
 def generate_ids(path: str = ".", check: bool = True) -> dict:
     """Add durable `id=` tokens to the source under `path`; confirmation-gated persistence."""
-    from decider.ids import generate
+    from decider._tools.ids import generate
 
     report = generate(path, check=check)
     return {"changes": [[str(f), lineno, name, id_] for f, lineno, name, id_ in report.changes],

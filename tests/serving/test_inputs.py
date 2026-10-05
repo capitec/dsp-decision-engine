@@ -192,7 +192,9 @@ def build():
 
 def test_code_path_wins_over_an_earlier_path_entry_and_the_pipeline_file_is_reported(
         tmp_path, monkeypatch, capsys):
-    from decider.settings import settings
+    from decider._settings import get_settings
+
+    settings = get_settings()
 
     for name in ("mine", "other"):
         (tmp_path / name).mkdir()
@@ -221,7 +223,9 @@ def test_code_path_wins_over_an_earlier_path_entry_and_the_pipeline_file_is_repo
 ])
 def test_a_dotted_handler_in_a_package_is_used_and_a_missing_one_falls_back(
         tmp_path, monkeypatch, handler_path, expected):
-    from decider.settings import settings
+    from decider._settings import get_settings
+
+    settings = get_settings()
 
     package = tmp_path / "credit_risk"
     package.mkdir()
