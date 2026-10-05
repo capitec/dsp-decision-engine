@@ -24,7 +24,9 @@ def run_experiment(bridge, req, definition=None, def_=None, file=None, pipeline=
     (running the same experiment on other data). Streams `{"progress": {"done", "total"}}` lines on `req`'s id while it runs; a `{"cmd": "cancel",
     "target": <that id>}` line stops it at the next batch boundary.
     """
-    from decider.experiments import InputSpec, run, run_experiment
+    from decider.experiments import run
+    from decider.experiments._experiments import InputSpec
+    from decider.experiments._runner import run_experiment
     from decider.experiments.callbacks import Callback
 
     class _StreamProgress(Callback):
@@ -55,7 +57,9 @@ def experiment_schema(bridge):
     Each metric/plot schema also carries the `Summary` type it gives or needs (`summary`/`requires`, by class
     name), so a UI can offer only the plot types that fit a chosen metric.
     """
-    from decider.experiments import Block, Metric, Plot
+    from decider.experiments.metrics import Metric
+    from decider.experiments.plots import Plot
+    from decider.experiments.report import Block
 
     def annotate(root, attr):
         schemas = root.json_schema()
@@ -69,7 +73,7 @@ def experiment_schema(bridge):
 def experiment_validate(bridge, definition=None, def_=None, file=None, pipeline=None):
     """Every problem in the definition against its flow (unknown steps, bad overrides, ...), without running it."""
     from decider.experiments import validate
-    from decider.experiments import load_flow
+    from decider.experiments._runner import load_flow
 
     d = _load_definition(bridge, definition, def_, file, pipeline)
     step = load_flow(d.flow.entry) if definition is not None else bridge.step

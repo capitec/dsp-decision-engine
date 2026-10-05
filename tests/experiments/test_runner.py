@@ -5,8 +5,11 @@ import subprocess
 import polars as pl
 
 from decider import flow
-from decider.experiments import (Callback, Divergence, Experiment, ExperimentDef, RunStatus, ScenarioStatus,
-                                 ValueCounts, resolve, run)
+from decider.experiments import Experiment, ExperimentDef, RunStatus, run
+from decider.experiments._experiments import ScenarioStatus
+from decider.experiments._revision import resolve
+from decider.experiments.callbacks import Callback
+from decider.experiments.metrics import Divergence, ValueCounts
 from decider.contract import JobHandle
 
 LIMIT_03 = {"demo": {"approved": {"limit": 0.3}}}

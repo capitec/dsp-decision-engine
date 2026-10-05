@@ -11,7 +11,7 @@ from decider.experiments.metrics._base import Summary
 from decider.registry import BaseRegistryModule, ref
 
 
-def altair():
+def require_altair():
     """The `altair` module, or a `DeciderError` saying how to install it."""
     try:
         import altair
@@ -108,7 +108,7 @@ _LOADER = """window.deciderVega = window.deciderVega || new Promise(function (re
 
 
 def _loader() -> str:
-    alt = altair()
+    alt = require_altair()
     versions = (alt.VEGA_VERSION, alt.VEGALITE_VERSION, alt.VEGAEMBED_VERSION)
     urls = [f"https://cdn.jsdelivr.net/npm/{lib}@{v}" for lib, v in zip(("vega", "vega-lite", "vega-embed"), versions)]
     debug = dict(zip(("vega_version", "vegalite_version", "vegaembed_version"), versions))
@@ -127,12 +127,15 @@ class Plot(BaseRegistryModule, root=True):
 
     Example::
 
+        import typing as t
+        from decider.experiments.plots import Plot, require_altair
+
         class Totals(Plot):
             type: t.Literal["totals"] = "totals"
             requires: t.ClassVar = Total
 
             def render(self, summaries):
-                alt = altair()
+                alt = require_altair()
                 rows = [{"scenario": name, "n": s.n} for name, s in summaries.items()]
                 return alt.Chart(alt.Data(values=rows)).mark_bar().encode(x="scenario:N", y="n:Q")
     """

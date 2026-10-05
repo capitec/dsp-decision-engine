@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import pytest
 
-from decider.experiments import (Changes, Chart, Divergence, Experiment, ExperimentDef, MetricSection, Overview,
-                                 Report, Row, Section, Table, Text, ValueCounts, validate)
+from decider.experiments import Experiment, ExperimentDef, validate
+from decider.experiments.metrics import Divergence, ValueCounts
+from decider.experiments.plots import Changes
+from decider.experiments.report import Chart, MetricSection, Overview, Report, Row, Section, Table, Text
 
 LIMIT_03 = {"demo": {"approved": {"limit": 0.3}}}
 

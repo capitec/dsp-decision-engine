@@ -8,7 +8,8 @@ from pydantic import ValidationError
 
 from decider.data import DatasetError
 from decider._bridge.bridge import Bridge
-from decider.experiments import Experiment, ExperimentDef, InputSpec, run
+from decider.experiments import Experiment, ExperimentDef, run
+from decider.experiments._experiments import InputSpec
 
 
 @pytest.fixture

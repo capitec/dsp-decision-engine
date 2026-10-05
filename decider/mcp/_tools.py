@@ -21,7 +21,8 @@ from decider._bridge.loading import load_module
 from decider import Engine
 from decider.trace import TraceSink
 from decider._bridge.replay import trace as run_trace
-from decider.experiments import ExperimentDef, ExperimentResult, load_flow, run_experiment
+from decider.experiments import ExperimentDef, ExperimentResult
+from decider.experiments._runner import load_flow, run_experiment
 from decider.mcp._policy import REDACTED, Policy
 
 _EXCLUDED = {".git", "__pycache__", ".venv", "venv", "node_modules",
