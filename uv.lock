@@ -909,6 +909,7 @@ dev = [
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
     { name = "starlette" },
+    { name = "z3-solver" },
 ]
 
 [package.metadata]
@@ -972,6 +973,7 @@ dev = [
     { name = "pytest-asyncio" },
     { name = "pytest-cov", specifier = ">=7.1.0" },
     { name = "starlette", specifier = ">=1.2.1" },
+    { name = "z3-solver" },
 ]
 
 [[package]]
