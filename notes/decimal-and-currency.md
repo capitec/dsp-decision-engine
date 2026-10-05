@@ -289,4 +289,8 @@ Tests (`tests/ops/`, `tests/compile/`, `tests/boundary/`):
 - **`Decimal ± int` is legal**; the int is whole units (question 5).
 - **Units are a client-supplied display string** (`units="R"`); no Babel (question 7).
 - Questions 1, 2, 4, 9 and 10 default to the recommendations above; the user has not been asked them yet.
-- **Question 8 is sidestepped, not answered:** a `Currency` is built from integers, `Currency(2, 675)` for 2.675, rather than from a float. Converting a float to a `Currency` still works but warns that it may lose precision. The second integer is the fractional digits as written, the same as `f"{major}.{minor}"`: `Currency(2, 6)` is 2.6 and `Currency(2, 67)` is 2.67, whatever the scale. A fraction with a leading zero (2.05) can't be written this way; that path is still to be chosen when this is built.
+- **Building a `Currency` (question 8):**
+  - **From a float, no warning:** `Currency(2.65)` scales by 10⁴ and rounds, so 2.6499999… becomes 26500 raw (2.6500). Rounding to the scale absorbs the float error. This is exact while |raw| < 2⁵³ (about 900bn at scale 4).
+  - **From two integers, for exactness:** `Currency(major, minor)`. `minor` is in units of the type's scale, the same at every scale: at scale 4, `Currency(2, 6)` is 2.0006 and `Currency(2, 6500)` is 2.65.
+  - **Negatives:** the sign of `major` applies to the whole value, so `Currency(-2, 5)` is −2.0005, and `-Currency(2, 5000)` is −2.5.
+  - **Edge cases, defaults until reviewed:** when `major` is 0, `minor` carries the sign (`Currency(0, -5)` is −0.0005). Otherwise `minor` must be in `0 ≤ minor < 10**scale`; anything else is a `ValueError`.
