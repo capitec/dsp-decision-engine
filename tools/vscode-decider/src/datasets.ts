@@ -1,6 +1,6 @@
 import * as path from "node:path";
 import * as vscode from "vscode";
-import { datasetLabel, escapeHtml, htmlTable, isUnder, projectRoots, type Columns, type Dataset } from "./datasetFormat";
+import { datasetLabel, datasetPage, isUnder, projectRoots, type Columns, type Dataset } from "./datasetFormat";
 import { debugFlow } from "./debugging";
 import { discover, isDir } from "./flows";
 import { projectRoot } from "./projects";
@@ -11,6 +11,9 @@ type Node = Project | { project: string } | { column: [string, string] } | { mes
 const EXCLUDE = "**/{node_modules,.venv,venv,.git,__pycache__,site-packages,dist,build}/**";
 const cwd = () => vscode.workspace.workspaceFolders?.[0].uri.fsPath ?? process.cwd();
 
+// The flow the Structure view shows: debugging a dataset uses it without asking.
+let shown: { file: string; pipeline?: string } | undefined;
+
 /** The Datasets view: what the project's datasets folder offers, with each one's columns underneath. */
 export class DatasetsProvider implements vscode.TreeDataProvider<Node>, vscode.Disposable {
   private changed = new vscode.EventEmitter<void>();
@@ -20,7 +23,8 @@ export class DatasetsProvider implements vscode.TreeDataProvider<Node>, vscode.D
   view?: vscode.TreeView<Node>;
 
   /** Show the datasets of the project owning `file`; all projects when it has none. */
-  follow(file: string | undefined) {
+  follow(file: string | undefined, pipeline?: string) {
+    shown = file ? { file, pipeline } : undefined;
     const root = file && projectRoot(file, isDir);
     if (root === this.followed) return;
     this.followed = root;
@@ -96,28 +100,41 @@ export class DatasetsProvider implements vscode.TreeDataProvider<Node>, vscode.D
   }
 }
 
-/** Show a dataset's first rows in a webview. */
+const previews = new Map<string, vscode.WebviewPanel>();
+
+/** Show a dataset's first rows in a webview, where each can be sorted, filtered and sent to the debugger. */
 export async function previewDataset(d: Project): Promise<void> {
-  const panel = vscode.window.createWebviewPanel("decider.datasetPreview", `${d.name} (preview)`, vscode.ViewColumn.Active, {});
-  const style = `body{color:var(--vscode-editor-foreground);background:var(--vscode-editor-background);font-family:var(--vscode-editor-font-family);font-size:var(--vscode-editor-font-size)}
-table{border-collapse:collapse}th,td{border:1px solid var(--vscode-panel-border);padding:2px 8px;text-align:left}
-th{background:var(--vscode-editorWidget-background)}small{color:var(--vscode-descriptionForeground);font-weight:normal}`;
+  const key = `${d.cwd}\0${d.name}`;
+  const open = previews.get(key);
+  if (open) return open.reveal();
+  const panel = vscode.window.createWebviewPanel("decider.datasetPreview", `${d.name} (preview)`, vscode.ViewColumn.Active, { enableScripts: true });
+  previews.set(key, panel);
+  panel.onDidDispose(() => previews.delete(key));
   try {
-    const h = await ask<{ columns: Columns; rows: Record<string, unknown>[] }>(d.cwd, "dataset_head", { name: d.name, n: 100 });
-    panel.webview.html = `<style>${style}</style>${htmlTable(h.columns, h.rows)}`;
+    const [h, s] = await Promise.all([
+      ask<{ columns: Columns; rows: Record<string, unknown>[] }>(d.cwd, "dataset_head", { name: d.name, n: 1000 }),
+      ask<{ row_count: number | null }>(d.cwd, "dataset_schema", { name: d.name }),
+    ]);
+    panel.webview.html = datasetPage(Math.random().toString(36).slice(2));
+    panel.webview.onDidReceiveMessage((m: { type: string; row?: number }) => {
+      if (m.type === "ready") panel.webview.postMessage({ type: "dataset", name: d.name, columns: h.columns, rows: h.rows, rowCount: s.row_count });
+      else if (m.type === "debugRecord") void debugWithDataset(d, m.row);
+    });
   } catch (e) {
-    panel.webview.html = `<style>${style}</style><p>${escapeHtml((e as Error).message)}</p>`;
+    panel.webview.html = `<p>${(e as Error).message.replace(/[&<]/g, (c) => `&#${c.charCodeAt(0)};`)}</p>`;
   }
 }
 
-/** Pick a workspace flow and debug it on the dataset. */
-export async function debugWithDataset(d: Project): Promise<void> {
+/** Debug the shown flow on the dataset, or pick one of its project's flows when none is shown. */
+export async function debugWithDataset(d: Project, row?: number): Promise<void> {
+  // A dataset name resolves from the flow's project, so a flow shown from another project can't use it.
+  if (shown && isUnder(d.cwd, shown.file)) return debugFlow(shown.file, shown.pipeline, d.name, row);
   const flows = (await discover()).filter((f) => isUnder(d.cwd, f.file));
   const pick = await vscode.window.showQuickPick(
     flows.map((f) => ({ label: f.label, description: vscode.workspace.asRelativePath(f.file), f })),
     { placeHolder: `Flow to debug on ${d.name}` },
   );
-  if (pick) await debugFlow(pick.f.file, pick.f.pipeline, d.name);
+  if (pick) await debugFlow(pick.f.file, pick.f.pipeline, d.name, row);
 }
 
 export const revealDataset = (d: Dataset) =>

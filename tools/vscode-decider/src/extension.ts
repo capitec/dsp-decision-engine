@@ -90,7 +90,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     const file = uri?.fsPath ?? vscode.window.activeTextEditor?.document.uri.fsPath;
     if (!file) return;
     if (shown?.file !== file || shown.pipeline !== pipeline) shown = { file, pipeline };
-    datasets.follow(file);
+    datasets.follow(file, pipeline);
     vscode.commands.executeCommand("setContext", "decider.flowShown", true);
     vscode.commands.executeCommand("setContext", "decider.yamlFlow", isFlowPath(file));
     if (graph) GraphPanel.show(ctx, onPanel);

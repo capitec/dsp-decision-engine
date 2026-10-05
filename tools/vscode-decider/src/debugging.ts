@@ -16,7 +16,7 @@ export interface DebugHooks {
 }
 
 /** Run a pipeline to the end under debugpy, in plain Python, so breakpoints in its steps stop. */
-export async function debugFlow(file: string, pipeline?: string, dataset?: string): Promise<void> {
+export async function debugFlow(file: string, pipeline?: string, dataset?: string, row?: number): Promise<void> {
   let rows: string | undefined;
   if (!dataset) {
     const named = await ask<{ datasets: { name: string; type: string; error?: string }[] }>(path.dirname(file), "datasets", { file })
@@ -42,9 +42,9 @@ export async function debugFlow(file: string, pipeline?: string, dataset?: strin
   await vscode.debug.startDebugging(vscode.workspace.getWorkspaceFolder(vscode.Uri.file(file)), {
     type: "debugpy",
     request: "launch",
-    name: `decider: ${pipeline ?? path.basename(file)}`,
+    name: `decider: ${pipeline ?? path.basename(file)}${dataset ? ` · ${dataset}${row == null ? "" : `#${row}`}` : ""}`,
     module: "decider.debug_bridge.run",
-    args: [file, ...(pipeline ? ["--pipeline", pipeline] : []), ...(rows ? ["--data", rows] : []), ...(dataset ? ["--dataset", dataset] : [])],
+    args: [file, ...(pipeline ? ["--pipeline", pipeline] : []), ...(rows ? ["--data", rows] : []), ...(dataset ? ["--dataset", dataset] : []), ...(row == null ? [] : ["--row", String(row)])],
     cwd: path.dirname(file),
     justMyCode: true,
     console: "integratedTerminal",

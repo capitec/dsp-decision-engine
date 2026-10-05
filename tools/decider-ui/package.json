@@ -24,7 +24,8 @@
     "test": "vitest run",
     "dev": "vite",
     "demo": "vite",
-    "demo:build": "vite build"
+    "demo:build": "vite build",
+    "bench": "node --no-warnings --experimental-strip-types --import ./bench/register.mjs bench/layout.ts"
   },
   "peerDependencies": {
     "react": "^18.2.0 || ^19.0.0",

@@ -69,9 +69,8 @@ Why this matters for a facelift: the graph can now reasonably show far more than
 what's pleasant to look at, not a performance constraint. Don't assume the old small numbers
 still apply if you're designing around scale.
 
-Findings doc, if you want the detail: `notes/vscode-redesign/experimentation/02-flow-scale-library-swap-findings.md`.
-It also covers why xyflow/Cytoscape/ELK were considered and rejected — worth reading before
-proposing a graph library, so you don't re-run work that's already done.
+Layout timings for the custom layout that replaced dagre are in `notes/flow-layout-scale.md`.
+No xyflow/Cytoscape/ELK comparison numbers were recorded anywhere; that comparison was never written up.
 
 ## How to run it and see your changes
 

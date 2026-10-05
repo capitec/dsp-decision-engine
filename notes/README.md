@@ -39,6 +39,8 @@ Decision records for the consolidated `decider`, each with its measured reason.
 - `benchmarks-vs-decider2.md`: the last measured numbers against decider2, per workload, and which benchmark script replaced each comparison script.
 - `old-test-coverage.md`: every test of decider_old and decider2 mapped to the test that covers it now, or the reason it was dropped.
 
+- `flow-layout-scale.md`: the custom flow layout times at 100 to 10 000 calls (under 10 ms layout, under 1 ms fold/unfold) against the flow-scale budgets, with the dagre baseline and how to rerun `pnpm bench`.
+
 `progress.md` holds the task log.
 
 `decider_old/` (decider 0.3), `decider2/`, `experimentation/`, `tests/_legacy/`,
