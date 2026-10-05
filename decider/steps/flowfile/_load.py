@@ -71,7 +71,7 @@ def load_flow(path: str | Path, *, components: str | ModuleType | None = None,
         chain=(root.flow,),
     )
     built = _build_list(root.steps, f"{path}: steps", ctx)
-    return flow(*built, name=root.flow, id=root.id)
+    return flow(*built, name=root.flow, id=root.id, suppress_checks=root.suppress_checks)
 
 
 def _validate(model: type, raw: Any, loc: str) -> Any:
@@ -141,7 +141,11 @@ def _resolve_name(name: str, loc: str, ctx: _Context) -> Step:
 
 def _build_step(node: StepNode, loc: str, ctx: _Context) -> Step:
     built = _resolve_name(node.step, loc, ctx)
-    return built.named(node.as_) if node.as_ else built
+    built = built.named(node.as_) if node.as_ else built
+    if not node.suppress_checks:
+        return built
+    merged = tuple(dict.fromkeys((*built.suppress_checks, *node.suppress_checks)))
+    return built._replace(suppress_checks=list(merged) if isinstance(built, ConfigurableStep) else merged)
 
 
 def _flow_files(project_dir: Path, name: str) -> list[Path]:
@@ -154,8 +158,9 @@ def _build_flow(node: FlowNode, loc: str, ctx: _Context) -> Step:
         if matches:
             raise WiringError(f"{loc}: flow {node.flow!r} has inline steps, but {matches[0]} also exists")
         built = _build_list(node.steps, loc, ctx)
-        return flow(*built, name=node.flow, id=node.id)
-    return _build_flow_reference(node.flow, matches, loc, ctx)
+        return flow(*built, name=node.flow, id=node.id, suppress_checks=node.suppress_checks)
+    built = _build_flow_reference(node.flow, matches, loc, ctx)
+    return built._replace(suppress_checks=(*built.suppress_checks, *node.suppress_checks)) if node.suppress_checks else built
 
 
 def _build_flow_reference(name: str, matches: list, loc: str, ctx: _Context) -> Step:
@@ -176,7 +181,7 @@ def _build_flow_reference(name: str, matches: list, loc: str, ctx: _Context) -> 
             f"{file_path}: components {sub.components!r} does not match the root's {ctx.root_components!r}"
         )
     built = _build_list(sub.steps, f"{file_path}: steps", ctx.push(name))
-    return flow(*built, name=name, id=sub.id)
+    return flow(*built, name=name, id=sub.id, suppress_checks=sub.suppress_checks)
 
 
 def _resolve_condition(raw: Any, node_name: str, suffix: str, loc: str, ctx: _Context) -> Any:
@@ -194,7 +199,8 @@ def _build_branch(node: BranchNode, loc: str, ctx: _Context) -> Step:
     arms = [_as_flow_or_single(node.then, f"{loc}.then", ctx)]
     if node.else_ is not None:
         arms.append(_as_flow_or_single(node.else_, f"{loc}.else", ctx))
-    return branch(condition, *arms, modifies=node.modifies, name=node.branch, id=node.id)
+    return branch(condition, *arms, modifies=node.modifies, name=node.branch, id=node.id,
+                  suppress_checks=node.suppress_checks)
 
 
 def _build_loop(node: LoopNode, loc: str, ctx: _Context) -> Step:
@@ -202,7 +208,8 @@ def _build_loop(node: LoopNode, loc: str, ctx: _Context) -> Step:
     if isinstance(condition, str):
         condition = _column_condition(condition)
     body = _as_flow_or_single(node.steps, f"{loc}.steps", ctx)
-    return loop(condition, body, carries=node.carries, max_iterations=node.max, name=node.loop, id=node.id)
+    return loop(condition, body, carries=node.carries, max_iterations=node.max, name=node.loop, id=node.id,
+                suppress_checks=node.suppress_checks)
 
 
 def components(module: ModuleType | None) -> dict[str, Any]:

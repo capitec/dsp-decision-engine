@@ -18,6 +18,9 @@ class Origin:
         locator: a position inside a `row` node (`"n17"`), shown as `path#n17`.
         id: an optional opaque durable step id (`"0123abcdef45"`), committed in
             source and carried alongside the path.
+        suppress_checks: check aliases or codes the step suppresses, for the
+            checks package to read. Metadata like the rest: never part of a
+            cache key or the IR fingerprint.
 
     Example::
 
@@ -28,6 +31,7 @@ class Origin:
     source: str
     locator: str | None = None
     id: str | None = None
+    suppress_checks: tuple[str, ...] = ()
 
 
 _ID = re.compile(r"[0-9a-f]{12}\Z")

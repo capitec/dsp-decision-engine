@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Sequence
 
 from pydantic.fields import FieldInfo
 
@@ -34,6 +34,7 @@ class FunctionStep(Step):
     writes: tuple[tuple[str, str], ...] = ()
     bound: tuple[tuple[str, Any], ...] = ()
     id: str | None = None
+    suppress_checks: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         Step.__post_init__(self)
@@ -76,6 +77,7 @@ def step(
     outputs: tuple[str, ...] | None = None,
     nogil: bool = False,
     id: str | None = None,
+    suppress_checks: Sequence[str] = (),
 ) -> Any:
     """Make a function a step, directly or as a decorator.
 
@@ -100,10 +102,11 @@ def step(
         nogil: release the GIL in compiled code.
         id: an optional opaque 12-hex durable id (`"0123abcdef45"`), carried in
             the step's `Origin` alongside name/path/source.
+        suppress_checks: check aliases or codes to silence for this step (by alias, e.g. `"int64_overflow"`, or code).
 
     Example::
 
-        @step(output="term_cap")
+        @step(output="term_cap", suppress_checks=["int64_overflow"])
         def cap_by_income(term_cap: float, cap: float = param(48.0)) -> float:
             return min(term_cap, cap)
 
@@ -120,6 +123,6 @@ def step(
         # A lambda's __name__ is "<lambda>", never a useful column name.
         default = name if name is not None and fn.__name__ == "<lambda>" else fn.__name__
         names = (output,) if output is not None else tuple(outputs) if outputs is not None else (default,)
-        return FunctionStep(fn.__name__ if name is None else name, fn, names, nogil, id=id)
+        return FunctionStep(fn.__name__ if name is None else name, fn, names, nogil, id=id, suppress_checks=tuple(suppress_checks))
 
     return make if fn is None else make(fn)

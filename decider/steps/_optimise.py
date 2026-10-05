@@ -7,7 +7,7 @@ to a plain `loop`, so it fuses into one kernel like any other loop.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Sequence
 
 from decider._engine.ir.nodes import SequenceNode
 from decider.exceptions import WiringError
@@ -83,6 +83,7 @@ class OptimiseStep(Step):
     max_candidates: int
     record: Any = None
     id: str | None = None
+    suppress_checks: tuple[str, ...] = ()
 
     def to_ir(self, ctx: IRContext) -> SequenceNode:
         inner = ctx.child(self.name)
@@ -135,7 +136,8 @@ class OptimiseStep(Step):
 
 
 def optimise(count: Any, evaluate: Any, *, score: str = "score", disqualify: Any = None,
-             max_candidates: int, name: str, record: Any = None, id: str | None = None) -> OptimiseStep:
+             max_candidates: int, name: str, record: Any = None, id: str | None = None,
+             suppress_checks: Sequence[str] = ()) -> OptimiseStep:
     """Run `evaluate` once per candidate and keep the best one, per row.
 
     `evaluate` is a flow of ordinary steps that read `index` (the candidate,
@@ -161,6 +163,7 @@ def optimise(count: Any, evaluate: Any, *, score: str = "score", disqualify: Any
             `evaluate` must also write a `record` output of `Struct[Item]`, and
             `optimise` emits that record for the winning candidate (`None` when
             no candidate survived).
+        suppress_checks: check aliases or codes to silence for every step inside.
 
     Example::
 
@@ -196,4 +199,4 @@ def optimise(count: Any, evaluate: Any, *, score: str = "score", disqualify: Any
         if "record" not in interface(to_ir(evaluate))[1]:
             raise WiringError(f"optimise {name!r}: evaluate does not write 'record'; it writes "
                               f"{sorted(interface(to_ir(evaluate))[1])}")
-    return OptimiseStep(name, count, evaluate, score, dq, max_candidates, record, id=id)
+    return OptimiseStep(name, count, evaluate, score, dq, max_candidates, record, id=id, suppress_checks=tuple(suppress_checks))

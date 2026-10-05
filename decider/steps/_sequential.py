@@ -29,6 +29,7 @@ class SequentialStep(Step):
     writes: tuple[tuple[str, str], ...] = ()
     inputs: tuple[str, ...] = ()
     id: str | None = None
+    suppress_checks: tuple[str, ...] = ()
 
     def emit(self, *names: str) -> SequentialStep:
         """A copy that also outputs these values, which would otherwise be dropped as intermediates.
@@ -73,7 +74,8 @@ class SequentialStep(Step):
                             tuple(dict.fromkeys(inputs)))
 
 
-def flow(*steps: Any, name: str | None = None, inputs: Sequence[str] | None = None, id: str | None = None) -> SequentialStep:
+def flow(*steps: Any, name: str | None = None, inputs: Sequence[str] | None = None, id: str | None = None,
+         suppress_checks: Sequence[str] = ()) -> SequentialStep:
     """Run steps in written order; a later write of a name wins.
 
     `a | b | c` builds the same flow. Anonymous flows inside are merged in; a
@@ -90,6 +92,7 @@ def flow(*steps: Any, name: str | None = None, inputs: Sequence[str] | None = No
             produces, e.g. `inputs=["handling_fee_pct"]` next to an output
             `quote_handling_fee_pct`. Declaring them stops the typo heuristic
             from warning or erroring on them.
+        suppress_checks: check aliases or codes to silence for every step inside.
 
     Example::
 
@@ -98,4 +101,5 @@ def flow(*steps: Any, name: str | None = None, inputs: Sequence[str] | None = No
     """
     if not steps:
         raise WiringError("flow() needs at least one step")
-    return SequentialStep(tuple(map(as_step, steps)), name, inputs=tuple(inputs or ()), id=id)
+    return SequentialStep(tuple(map(as_step, steps)), name, inputs=tuple(inputs or ()), id=id,
+                          suppress_checks=tuple(suppress_checks))

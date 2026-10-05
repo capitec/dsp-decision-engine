@@ -135,3 +135,33 @@ def test_a_referenced_file_may_name_the_components_passed_as_an_argument(tmp_pat
     path = _write(tmp_path, "flow.yaml", {"flow": "credit", "steps": [{"flow": "sub"}]})
     loaded = load_flow(path, components=comp)
     _assert_same_shape(loaded, flow(flow(comp.full_limit, name="sub"), name="credit"), FRAME)
+
+
+def test_suppress_checks_keys_reach_the_origins(tmp_path):
+    from decider._engine import to_ir
+
+    doc = {
+        "flow": "credit", "components": "tests.flowfile.components", "suppress_checks": ["DCD101"],
+        "steps": [
+            {"step": "eligible", "suppress_checks": ["int64_overflow"]},
+            {"flow": "inner", "suppress_checks": ["shadowed_write"], "steps": [{"step": "full_limit"}]},
+            {"branch": "b", "when": "eligible", "modifies": ["limit"], "suppress_checks": ["a"],
+             "then": [{"step": "full_limit"}]},
+            {"loop": "lp", "while": {"expr": "balance > 0"}, "carries": ["balance"], "max": 3,
+             "suppress_checks": ["b"], "steps": [{"step": "pay"}]},
+        ],
+    }
+    root = to_ir(load_flow(_write(tmp_path, "credit.yaml", doc)))
+    assert root.origin.suppress_checks == ("DCD101",)
+    by_path = {n.origin.path: n.origin.suppress_checks for n in _iter(root)}
+    assert by_path["credit/eligible"] == ("int64_overflow",)
+    assert by_path["credit/inner"] == ("shadowed_write",)
+    assert by_path["credit/b"] == ("a",)
+    assert by_path["credit/lp"] == ("b",)
+    assert by_path["credit/inner/full_limit"] == ()
+
+
+def _iter(root):
+    from decider._engine.ir.nodes import iter_nodes
+
+    return iter_nodes(root)

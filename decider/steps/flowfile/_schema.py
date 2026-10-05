@@ -22,6 +22,7 @@ class RootDoc(BaseModel):
     flow: str
     components: str | None = None
     id: str | None = None
+    suppress_checks: list[str] = []
     steps: list[dict[str, Any]] = Field(min_length=1)
 
 
@@ -30,6 +31,7 @@ class StepNode(BaseModel):
 
     step: str
     as_: str | None = Field(None, alias="as")
+    suppress_checks: list[str] = []
 
 
 class FlowNode(BaseModel):
@@ -38,6 +40,7 @@ class FlowNode(BaseModel):
     flow: str
     steps: list[dict[str, Any]] | None = None
     id: str | None = None
+    suppress_checks: list[str] = []
 
 
 class BranchNode(BaseModel):
@@ -49,6 +52,7 @@ class BranchNode(BaseModel):
     then: list[dict[str, Any]]
     else_: list[dict[str, Any]] | None = Field(None, alias="else")
     id: str | None = None
+    suppress_checks: list[str] = []
 
 
 class LoopNode(BaseModel):
@@ -60,6 +64,7 @@ class LoopNode(BaseModel):
     max: int
     steps: list[dict[str, Any]]
     id: str | None = None
+    suppress_checks: list[str] = []
 
 
 NODE_MODELS: dict[str, type[BaseModel]] = {"step": StepNode, "flow": FlowNode, "branch": BranchNode, "loop": LoopNode}

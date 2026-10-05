@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Sequence
 
 from decider._engine.ir.nodes import CallNode, IRNode, ScatterGatherNode, iter_nodes
 from decider.exceptions import IRError
@@ -38,6 +38,7 @@ class EachStep(Step):
     mode: EachMode
     output: str | None = None
     id: str | None = None
+    suppress_checks: tuple[str, ...] = ()
 
     def to_ir(self, ctx: IRContext) -> ScatterGatherNode:
         child_ir = ctx.child(self.name).build(self.item)
@@ -67,7 +68,7 @@ def _hoist(child_ir: IRNode) -> tuple[tuple, tuple[tuple[str, str], ...]]:
 
 def each(column: str, item: Any, *, name: str | None = None,
          execution_mode: EachMode = EachMode.PER_ROW, output: str | None = None,
-         id: str | None = None) -> EachStep:
+         id: str | None = None, suppress_checks: Sequence[str] = ()) -> EachStep:
     """Run `item` on every element of the list column `column`, writing the enriched list back.
 
     `item` is a flow of ordinary steps reading the item's fields; its outputs
@@ -78,6 +79,7 @@ def each(column: str, item: Any, *, name: str | None = None,
         output: the column to write the enriched list to (default: `column`,
             overwriting it). Set this to keep the original list untouched
             alongside the enriched one.
+        suppress_checks: check aliases or codes to silence for every step inside.
 
     Example::
 
@@ -86,4 +88,4 @@ def each(column: str, item: Any, *, name: str | None = None,
 
         pipeline = flow(each("items", flow(heavy, name="item"), name="items"), name="order")
     """
-    return EachStep(column if name is None else name, column, as_step(item), execution_mode, output, id=id)
+    return EachStep(column if name is None else name, column, as_step(item), execution_mode, output, id=id, suppress_checks=tuple(suppress_checks))
