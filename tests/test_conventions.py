@@ -53,11 +53,11 @@ ENGINE = "_engine"
 CORE = {"__init__", "steps", "ir", "trace", "debug", "contract", ENGINE}
 ALL_BUDGET = 25
 LAYERS = {
-    0: "exceptions registry ops _annotations _settings _suggest _polars_docs fields types serializable settings",
+    0: "exceptions registry ops _annotations _settings _suggest _polars_docs fields types",
     1: "__init__ steps ir trace debug config _engine",
     2: "contract",
     3: "checks diff experiments data testing credit",
-    4: "serving mcp cli _bridge _tools ids __main__",
+    4: "serving mcp cli _bridge _tools __main__",
 }
 LAYER = {name: n for n, names in LAYERS.items() for name in names.split()}
 KERNEL_DECORATORS = {"overload", "overload_method", "overload_attribute", "overload_classmethod", "intrinsic"}

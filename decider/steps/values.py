@@ -5,7 +5,7 @@ import typing as t
 
 from pydantic import AfterValidator, BaseModel, ConfigDict
 
-from decider.serializable.dataframe import DataFrame
+from decider._polars_docs.frame import FrameDoc
 
 T = t.TypeVar("T")
 
@@ -69,6 +69,6 @@ class TableRef(BaseModel):
 Value = t.Union[T, ParamRef]
 """`Value[float]` accepts a literal (`0.7`) or a `ParamRef` dict."""
 
-TableValue = t.Union[DataFrame, TableRef]
+TableValue = t.Union[FrameDoc, TableRef]
 """A table field: rows inline (a list of row dicts, or `{"data": [...]}`), or `{"table": "<param>"}` for rows
 from the params document (see `TableRef`)."""

@@ -189,13 +189,13 @@ class IRContext:
 
             ctx.table(TableRef(table="prices"), {"product": "str", "rate": "float"})
         """
-        from decider.serializable.dataframe import DataFrame
+        from decider._polars_docs.frame import FrameDoc
         from decider.steps.values import TableRef
 
         if not isinstance(value, TableRef):
             return value
         return ParamDecl(
-            value.table, DataFrame, required=True, shared_key=value.table if value.shared else None,
+            value.table, FrameDoc, required=True, shared_key=value.table if value.shared else None,
             schema=tuple(schema.items()),
         )
 

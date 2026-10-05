@@ -13,7 +13,7 @@ from decider._engine.ir.nodes import (BranchNode, CallNode, IRNode, LoopNode, Sc
 from decider._engine.wiring.plan import (Branch, Call, Carry, Loop, Merge, Plan, Resolved, ScatterGather, Sequence,
                                         Version)
 from decider.exceptions import WiringError
-from decider.registry.resolve import TYPO_CUTOFF, hint, suggest
+from decider._suggest import TYPO_CUTOFF, hint, suggest
 
 
 def resolve(ir: Any) -> Plan:

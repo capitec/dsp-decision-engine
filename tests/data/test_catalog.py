@@ -4,7 +4,6 @@ import typing as t
 import polars as pl
 import pytest
 
-import decider.settings
 from decider.data import (DatasetError, DatasetProvider, FileProvider, FolderProvider, dataset, dataset_documents, datasets,
                          datasets_folder)
 from decider.data.providers import project_root
@@ -120,7 +119,6 @@ def test_datasets_path_comes_from_the_environment(tmp_path, monkeypatch):
     (tmp_path / "d").mkdir()
     FRAME.write_csv(tmp_path / "d" / "loans.csv")
     monkeypatch.setenv("Decider_DATASETS_PATH", str(tmp_path / "d"))
-    monkeypatch.setattr(decider.settings, "settings", decider.settings.DeciderSettings())
     assert list(datasets()) == ["loans"]
 
 

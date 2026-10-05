@@ -10,7 +10,7 @@ from pydantic import BaseModel, SerializeAsAny, WrapValidator, model_validator
 
 from decider.exceptions import RegistryError
 
-from .resolve import hint
+from decider._suggest import hint
 
 R = t.TypeVar("R", bound="BaseRegistryModule")
 

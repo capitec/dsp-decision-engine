@@ -155,7 +155,7 @@ def _walk(step: Step, parent: str) -> Iterator[tuple[str, Step]]:
 
 def _compose(step: Step, kind: str, old: tuple, new: dict | None, known: set[str] | None) -> tuple:
     from decider.exceptions import WiringError
-    from decider.registry.resolve import hint
+    from decider._suggest import hint
 
     mapping = dict(old)
     current = {v: k for k, v in mapping.items()}

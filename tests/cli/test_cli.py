@@ -9,7 +9,6 @@ from datetime import date
 import pytest
 from click.testing import CliRunner
 
-import decider.settings as settings_module
 from decider.cli import CPU_TARGET_FILE, cli
 from decider._engine.compile import cpu_target
 from decider._engine.compile.njit import _DISPATCHERS, _REASONS
@@ -22,7 +21,6 @@ def project(tmp_path, monkeypatch):
     # The CLI reads settings from the environment and imports the project's package by name,
     # so each test gets a clean environment, settings object and module cache.
     monkeypatch.setattr(os, "environ", {k: v for k, v in os.environ.items() if not k.upper().startswith("DECIDER_")})
-    monkeypatch.setattr(settings_module, "settings", settings_module.settings)
     monkeypatch.setattr(sys, "path", list(sys.path))
     for name in [m for m in sys.modules if m.split(".")[0] == "proj"]:
         monkeypatch.delitem(sys.modules, name)

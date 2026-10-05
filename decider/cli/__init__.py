@@ -6,7 +6,7 @@ from pathlib import Path
 import click
 from dotenv import load_dotenv
 
-import decider.settings as settings_module
+from decider import _settings as settings_module
 
 TEMPLATES = Path(__file__).parent / "templates"
 GUIDE = Path(__file__).parent.parent / "GUIDE.md"
@@ -20,8 +20,8 @@ def _settings(**overrides) -> settings_module.DeciderSettings:
     for key, value in overrides.items():
         if value is not None:
             os.environ[f"DECIDER_{key.upper()}"] = str(value)
-    settings_module.settings = settings_module.DeciderSettings()
-    return settings_module.settings
+    settings_module.get_settings.cache_clear()
+    return settings_module.get_settings()
 
 
 def _cpu_target_path(s: settings_module.DeciderSettings) -> Path:
@@ -63,7 +63,7 @@ def ids(path: Path, fix: bool, check: bool) -> None:
     file is git-tracked and the working tree is clean, and only writes after the
     whole tree parses and every id passes a repo-wide uniqueness scan.
     """
-    from decider.ids import IdError, generate
+    from decider._tools.ids import IdError, generate
 
     try:
         report = generate(path, fix=fix, check=check)

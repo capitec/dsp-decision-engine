@@ -692,7 +692,7 @@ error, malformed or duplicate id. The pure helper the command wraps is
 `add_ids`, which needs no repository:
 
 ```python
-from decider.ids import add_ids
+from decider._tools.ids import add_ids
 
 text, changes = add_ids('from decider import flow, step\n\n@step\ndef a(x: float) -> float:\n    return x\n\np = flow(a, name="p")\n')
 assert len(changes) == 2  # the step and the flow each got an id

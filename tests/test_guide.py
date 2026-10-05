@@ -9,7 +9,6 @@ import pytest
 from click.testing import CliRunner
 
 import decider
-import decider.settings as settings_module
 from decider.cli import cli
 
 GUIDE = (Path(decider.__file__).parent / "GUIDE.md").read_text()
@@ -27,7 +26,6 @@ def _marks(block: str):
 @pytest.fixture
 def credit_risk_project(tmp_path, monkeypatch):
     monkeypatch.setattr(os, "environ", {k: v for k, v in os.environ.items() if not k.upper().startswith("DECIDER_")})
-    monkeypatch.setattr(settings_module, "settings", settings_module.settings)
     monkeypatch.setattr(sys, "path", [str(tmp_path), *sys.path])
     for name in [m for m in sys.modules if m.split(".")[0] == "credit_risk"]:
         monkeypatch.delitem(sys.modules, name)

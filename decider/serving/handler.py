@@ -251,7 +251,9 @@ def _is_flow_file(pipeline: t.Any) -> bool:
 
 def construct_handler_from_settings() -> RequestHandler:
     """The handler `settings.api` describes: `Handler` from `inference.py` in `code_path` if there is one."""
-    from decider.settings import settings
+    from decider._settings import get_settings
+
+    settings = get_settings()
 
     code_path = os.path.abspath(settings.api.code_path)
     # First, even when PYTHONPATH already lists it behind another project with its own pipeline.py.

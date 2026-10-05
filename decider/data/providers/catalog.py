@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import decider.settings
+from decider._settings import get_settings
 from decider.data.providers.base import DatasetError, DatasetProvider
 
 _FILE_SUFFIXES = (".csv", ".parquet", ".jsonl", ".ndjson", ".json")
@@ -97,7 +97,7 @@ def _validated(name, doc) -> DatasetProvider:
 
 
 def datasets_folder(start=None, path=None) -> Path:
-    text = path or decider.settings.settings.datasets_path
+    text = path or get_settings().datasets_path
     if "${PROJECT_ROOT}" in text:
         root = project_root(start or Path.cwd()) or Path.cwd()
         text = text.replace("${PROJECT_ROOT}", str(root))

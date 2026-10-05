@@ -10,7 +10,7 @@ from decider import _engine as engine
 from decider._engine.ir.context import _BUILT, IRContext
 from decider._engine.ir.decls import Input, Output, ParamDecl
 from decider._engine.ir.nodes import CallNode, SequenceNode, iter_nodes
-from decider.serializable.dataframe import DataFrame
+from decider._polars_docs.frame import FrameDoc
 from decider.steps import ConfigurableStep, ParamRef, Step, TableRef, TableValue, Value
 
 
@@ -127,15 +127,15 @@ def test_value_turns_a_literal_or_ref_into_a_literal_or_decl():
 
 def test_table_turns_inline_rows_or_a_ref_into_rows_or_decl():
     ctx = IRContext()
-    rows = DataFrame(data=[{"product": "a", "rate": 1.0}])
+    rows = FrameDoc(data=[{"product": "a", "rate": 1.0}])
     assert ctx.table(rows, {"product": "str"}) is rows
     decl = ctx.table(TableRef(table="prices"), {"product": "str", "rate": "float"})
     assert (decl.name, decl.required, decl.schema) == ("prices", True, (("product", "str"), ("rate", "float")))
 
 
 def test_a_dataframe_round_trip_keeps_its_declared_dtypes():
-    frame = DataFrame(data=[{"a": 1}], dtypes={"a": "float64"})
-    reloaded = DataFrame.model_validate(frame.model_dump())
+    frame = FrameDoc(data=[{"a": 1}], dtypes={"a": "float64"})
+    reloaded = FrameDoc.model_validate(frame.model_dump())
     assert reloaded.dtypes is not None
     assert reloaded.df.schema["a"] == pl.Float64
 

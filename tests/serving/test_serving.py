@@ -285,7 +285,9 @@ class Handler(RequestHandler):
 
 
 def test_startup_uses_the_inference_handler_and_activates_the_latest_version(store, tmp_path, monkeypatch):
-    from decider.settings import settings
+    from decider._settings import get_settings
+
+    settings = get_settings()
 
     code = tmp_path / "code"
     code.mkdir()

@@ -12,7 +12,7 @@ from typing import Any, Mapping, Sequence
 from pydantic import ValidationError
 
 from decider.exceptions import WiringError, wrap_import_errors
-from decider.registry.resolve import hint
+from decider._suggest import hint
 from decider.steps.base import Step, as_step
 from decider.steps.branch import _column_condition, branch
 from decider.steps.configurable import ConfigurableStep
