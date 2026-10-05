@@ -922,8 +922,11 @@ such step.
 without running anything (steps added, removed, renamed or changed, params,
 wiring), `outputs` says which rows and columns change over a frame and by how
 much, and `prove` returns `identical=True` only when both versions have the
-same IR content hash. It never claims it from sampled rows: otherwise
-`identical` is `None`, with the structure diff as evidence.
+same IR content hash, or, with the `decider[prove]` extra, when the only changed
+steps are trees and decision tables that z3 shows agree on every input
+(`tier="smt"`; a counterexample row comes back as `identical=False`). It never
+claims it from sampled rows: otherwise `identical` is `None`, with the structure
+diff as evidence and a `reason`.
 
 ```python
 import polars as pl
@@ -947,6 +950,24 @@ assert o.rows_changed == 2 and o.columns["ratio"].max_abs > 0
 assert o.table().columns == ["id", "column", "old", "new", "delta"]
 assert diff.prove(old, flow(ratio, name="credit")).identical is True
 assert diff.prove(old, new).identical is None
+
+try:
+    import z3  # noqa: F401
+except ImportError:
+    pass
+else:
+    from decider.steps.trees import TreeConfig
+
+    def bands(limit):
+        return TreeConfig.load({"type": "tree", "name": "band", "tree": {"nodes": [
+            {"id": "root", "data": {"type": "unary", "condition": {"op": ">", "feature": "debt", "threshold": limit}}},
+            {"id": "high", "data": {"type": "leaf", "result_idx": 0}}],
+            "edges": [{"source": "root", "target": "high", "data": {"sourceIndex": 0}}],
+            "output": {"data": [{"risky": 1}], "default": {"risky": 0}, "dtypes": [["risky", "Int64"]]}}})
+
+    proof = diff.prove(bands(300.0), bands(350.0))
+    assert (proof.tier, proof.identical) == ("smt", False)
+    assert 300.0 < proof.evidence.counterexample["debt"] <= 350.0
 ```
 
 Between git revisions, each loads in its own process:

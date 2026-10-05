@@ -19,6 +19,8 @@ PRIVATE_IMPORT: dict[str, str] = {  # {"importer -> imported": reason}
     "_bridge.rows -> data._keys": "suggest_key has no public home",
     "_engine.compile.njit -> steps._helpers": "allows_fallback and helper_signatures have no public home",
     "diff._hash -> _engine.compile.fingerprint": "fingerprint has no public home",
+    "diff._smt -> steps.trees._encode": "feature_kinds and kind_of have no public home",
+    "diff._smt -> steps.tables._encode": "variables, dtypes, kind and typed have no public home",
     "experiments._runner -> diff._revisions": "revision checkout helpers have no public home",
     "experiments.metrics._compare -> diff._outputs": "the changed-value primitive is shared with Divergence and has no public home",
     "cli -> serving._handler": "construct_handler_from_settings has no public home",

@@ -12,11 +12,11 @@ Example::
     diff.prove(old, new).identical      # True, or None when it can't tell
 """
 from decider.diff._outputs import ColumnDiff, OutputDiff, outputs
-from decider.diff._prove import Proof, prove
+from decider.diff._prove import Proof, SmtEvidence, prove
 from decider.diff._revisions import Revisions, revisions
 from decider.diff._structure import (EdgeChange, ParamChange, StepChange, StepMove, StructureDiff, structure)
 
 __all__ = [
-    "ColumnDiff", "EdgeChange", "OutputDiff", "ParamChange", "Proof", "Revisions", "StepChange", "StepMove",
+    "ColumnDiff", "EdgeChange", "OutputDiff", "ParamChange", "Proof", "Revisions", "SmtEvidence", "StepChange", "StepMove",
     "StructureDiff", "outputs", "prove", "revisions", "structure",
 ]
