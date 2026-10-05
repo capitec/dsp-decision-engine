@@ -51,7 +51,7 @@ HTTP with `decider serve`.
 | a points scorecard | `ScorecardConfig` |
 | the same step twice, or on other column names | `.named("x")`, `.relabel(reads=, writes=)` |
 | another project's pipeline | import its `build()`; put the step inside yours |
-| structure in a YAML/JSON file, steps in Python | `decider.flowfile.load_flow`, `DECIDER_API__PIPELINE=flow.yaml` |
+| structure in a YAML/JSON file, steps in Python | `decider.steps.flowfile.load_flow`, `DECIDER_API__PIPELINE=flow.yaml` |
 | immutable config versions | `decider.config.JsonFileStore` (`ConfigStore`) |
 | why a record got its answer; what-if | `pipeline.session(df)` |
 | modes, batch and single record agree | `decider.testing.assert_equivalent` |
@@ -346,7 +346,7 @@ assert app.run(pl.DataFrame({"income": [1000.0], "total_debt": [100.0]}))["offer
 
 ## A pipeline from a flow file
 
-`decider.flowfile.load_flow` builds the same `Step` tree from a YAML or JSON
+`decider.steps.flowfile.load_flow` builds the same `Step` tree from a YAML or JSON
 file instead of Python: the structure is reviewable and diffable on its own,
 while the steps stay plain Python functions.
 
@@ -387,7 +387,7 @@ from pathlib import Path
 
 import polars as pl
 
-from decider.flowfile import load_flow
+from decider.steps.flowfile import load_flow
 
 def eligible(score: float) -> bool:
     return score > 50.0

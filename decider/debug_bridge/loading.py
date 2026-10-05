@@ -47,14 +47,14 @@ def is_flow_file(file):
 
 
 def flow_name(file):
-    from decider.flowfile.load import _parse
+    from decider.steps.flowfile import read_flow
 
-    return _parse(Path(file))["flow"]
+    return read_flow(Path(file))["flow"]
 
 
 def flow_components(file):
     """The module a flow file's `components:` names, imported from beside the file; a blank module when it names none."""
-    from decider.flowfile.load import _parse
+    from decider.steps.flowfile import read_flow
 
     path = Path(file).resolve()
     project = path.parent.parent if path.parent.name == "flows" else path.parent
@@ -64,7 +64,7 @@ def flow_components(file):
     for p in dict.fromkeys([str(root), str(project)]):
         if p not in sys.path:
             sys.path.insert(0, p)
-    name = _parse(path).get("components")
+    name = read_flow(path).get("components")
     return importlib.import_module(name) if name else types.ModuleType(path.stem)
 
 
@@ -78,7 +78,7 @@ def latest_config(root):
 
 def components(file):
     """The names a flow file's `step:` nodes can use: its components' functions and steps, then its config's documents."""
-    from decider.flowfile.load import _components_index
+    from decider.steps.flowfile import components as component_index
 
     docs = [n for n, d in latest_config(project_root(file)).items() if n != "params" and isinstance(d, dict) and "type" in d]
-    return sorted(_components_index(flow_components(file))) + sorted(docs)
+    return sorted(component_index(flow_components(file))) + sorted(docs)

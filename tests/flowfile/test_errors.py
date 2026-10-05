@@ -5,7 +5,7 @@ import pytest
 import yaml
 
 from decider.exceptions import WiringError
-from decider.flowfile import load_flow
+from decider.steps.flowfile import load_flow
 
 
 def _write(tmp_path, name, doc):

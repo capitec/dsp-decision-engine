@@ -18,9 +18,8 @@ from decider.steps.branch import _column_condition, branch
 from decider.steps.configurable import ConfigurableStep
 from decider.steps.loop import loop
 from decider.steps.sequential import flow
-from decider.steps.trees import expr_condition
 
-from decider.flowfile.schema import NODE_MODELS, BranchNode, ExprCondition, FlowNode, LoopNode, RootDoc, StepNode
+from decider.steps.flowfile.schema import NODE_MODELS, BranchNode, ExprCondition, FlowNode, LoopNode, RootDoc, StepNode
 
 _EXTS = ("yaml", "yml", "json")
 
@@ -55,7 +54,7 @@ def load_flow(path: str | Path, *, components: str | ModuleType | None = None,
         load_flow("flow.yaml", components="credit_risk.steps")
     """
     path = Path(path)
-    root = _validate(RootDoc, _parse(path), str(path))
+    root = _validate(RootDoc, read_flow(path), str(path))
     project_dir = path.parent.parent if path.parent.name == "flows" else path.parent
     documents = documents or {}
     components = components if components is not None else root.components
@@ -64,7 +63,7 @@ def load_flow(path: str | Path, *, components: str | ModuleType | None = None,
     ctx = _Context(
         project_dir=project_dir,
         root_components=components and components.__name__,
-        components_index=_components_index(components),
+        components_index=_index(components),
         documents=documents,
         documents_index={n for n, d in documents.items() if n != "params" and isinstance(d, Mapping) and "type" in d},
         cache={},
@@ -82,7 +81,13 @@ def _validate(model: type, raw: Any, loc: str) -> Any:
         raise WiringError(f"{loc}: {e}") from e
 
 
-def _parse(path: Path) -> Any:
+def read_flow(path: Path) -> Any:
+    """Read a flow file (YAML or JSON) into its raw dict, without building steps.
+
+    Example::
+
+        read_flow(Path("flows/credit.yaml"))["flow"]  # "credit"
+    """
     text = path.read_text()
     if path.suffix == ".json":
         return json.loads(text)
@@ -162,7 +167,7 @@ def _build_flow_reference(name: str, matches: list, loc: str, ctx: _Context) -> 
         raise WiringError(f"{loc}: flow reference cycle: {' -> '.join((*ctx.chain, name))}")
     file_path = matches[0]
     if file_path not in ctx.file_cache:
-        ctx.file_cache[file_path] = _parse(file_path)
+        ctx.file_cache[file_path] = read_flow(file_path)
     sub = _validate(RootDoc, ctx.file_cache[file_path], str(file_path))
     if sub.flow != name:
         raise WiringError(f"{file_path}: declares flow {sub.flow!r}, expected {name!r}")
@@ -176,6 +181,8 @@ def _build_flow_reference(name: str, matches: list, loc: str, ctx: _Context) -> 
 
 def _resolve_condition(raw: Any, node_name: str, suffix: str, loc: str, ctx: _Context) -> Any:
     if isinstance(raw, ExprCondition):
+        from decider.steps.trees import expr_condition
+
         return expr_condition(raw.expr, name=f"{node_name}_{suffix}", feature_types=raw.feature_types)
     if raw in ctx.components_index:
         return _resolve_name(raw, loc, ctx)
@@ -198,7 +205,14 @@ def _build_loop(node: LoopNode, loc: str, ctx: _Context) -> Step:
     return loop(condition, body, carries=node.carries, max_iterations=node.max, name=node.loop, id=node.id)
 
 
-def _components_index(module: ModuleType | None) -> dict[str, Any]:
+def components(module: ModuleType | None) -> dict[str, Any]:
+    """The steps and step functions a components module (and its submodules) defines, by name.
+
+    Example::
+
+        import my_project.components
+        components(my_project.components)["full_limit"]
+    """
     if module is None:
         return {}
     modules = [module]
@@ -222,3 +236,6 @@ def _components_index(module: ModuleType | None) -> dict[str, Any]:
                 raise WiringError(f"component {name!r} is defined in both {found[name][1]} and {mod.__name__}")
             found[name] = (obj, mod.__name__)
     return {name: obj for name, (obj, _) in found.items()}
+
+
+_index = components  # load_flow's `components` parameter shadows the function
