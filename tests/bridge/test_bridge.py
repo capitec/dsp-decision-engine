@@ -11,6 +11,8 @@ HERE = os.path.dirname(__file__)
 EXAMPLES = os.path.join(HERE, "..", "..", "tools", "vscode-decider", "examples")
 LOAN = os.path.join(EXAMPLES, "loan.py")
 from decider._bridge.bridge import Bridge
+from decider.contract import CONTRACT_VERSION
+from decider.contract._messages import PROTOCOL_VERSION
 
 
 def started(**kw):
@@ -355,3 +357,16 @@ def test_describe_lists_the_metadata_steps_declare_for_their_values(tmp_path):
                  "    return balance * rate\n\n\npipeline = flow(fee, name='fees')\n")
     fields = Bridge().describe(str(f))["fields"]
     assert fields == {"balance": {"kind": "money", "symbol": "R", "cents": True}, "rate": {"kind": "percent"}}
+
+
+def test_hello_reports_protocol_contract_and_capabilities():
+    reply = Bridge().handle({"cmd": "hello"})
+    assert reply["protocol"] == PROTOCOL_VERSION
+    assert reply["contract_version"] == CONTRACT_VERSION
+    assert "interpreted" in reply["capabilities"]["modes"]
+
+
+def test_describe_carries_the_contracts_flow_and_step_ids():
+    d = Bridge().describe(LOAN)
+    assert "flow_id" in d
+    assert d["ir"]["step_id"] == d["ir"]["id"]
