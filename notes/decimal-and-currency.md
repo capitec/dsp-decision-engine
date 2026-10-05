@@ -293,4 +293,4 @@ Tests (`tests/ops/`, `tests/compile/`, `tests/boundary/`):
   - **From a float, no warning:** `Currency(2.65)` scales by 10⁴ and rounds, so 2.6499999… becomes 26500 raw (2.6500). Rounding to the scale absorbs the float error. This is exact while |raw| < 2⁵³ (about 900bn at scale 4).
   - **From two integers, for exactness:** `Currency(major, minor)`. `minor` is in units of the type's scale, the same at every scale: at scale 4, `Currency(2, 6)` is 2.0006 and `Currency(2, 6500)` is 2.65.
   - **Negatives:** the sign of `major` applies to the whole value, so `Currency(-2, 5)` is −2.0005, and `-Currency(2, 5000)` is −2.5.
-  - **Edge cases, defaults until reviewed:** when `major` is 0, `minor` carries the sign (`Currency(0, -5)` is −0.0005). Otherwise `minor` must be in `0 ≤ minor < 10**scale`; anything else is a `ValueError`.
+  - **`minor` is never negative:** it must satisfy `0 ≤ minor < 10**scale`, or the constructor raises `ValueError` (a negative minor, or more precision than the scale holds). A negative value under one unit is written `-Currency(0, 5)` (−0.0005).
