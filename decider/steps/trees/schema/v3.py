@@ -8,6 +8,16 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from decider.steps.trees.schema.nodes import NodeData, arity
 from decider.steps.trees.schema.tree import BaseTreeDocument, Node, Rule, Tree, add_node
 
+__all__ = [
+    "MultiEdgeData",
+    "MultiSourceEdge",
+    "Position",
+    "PositionedNode",
+    "SubTree",
+    "TreeMetadata",
+    "V3TreeDocument",
+]
+
 
 class Position(BaseModel):
     x: float = 0.0

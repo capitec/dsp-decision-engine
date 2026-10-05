@@ -10,6 +10,13 @@ from decider.steps.trees.schema.conditions import get_field
 from decider.steps.trees.schema.flat import FlatRuleDocument, PrioritizedFlatRuleDocument
 from decider.steps.trees.schema.v3 import V3TreeDocument
 
+__all__ = [
+    "SUPPORTED",
+    "TreeDocument",
+    "detect_format",
+    "load_document",
+]
+
 SUPPORTED = ("v3", "flat_rule", "prioritized_flat_rule")
 
 

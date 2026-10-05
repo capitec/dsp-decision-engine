@@ -62,7 +62,8 @@ HTTP with `decider serve`.
 from datetime import date
 
 import polars as pl
-from decider import flow, missing_as, param
+from decider import DeciderError, Executable, flow, missing_as, param
+from decider.exceptions import ParamsError
 
 def debt_ratio(income: float, debt: float = missing_as(0.0)) -> float:
     return debt / income
@@ -85,7 +86,15 @@ assert params == {"credit": {"approved": {"limit": 0.4, "month_end_limit": 0.3}}
 params["credit"]["approved"]["limit"] = 0.3
 assert pipeline.run(df, params=params)["approved"].to_list() == [False, True]
 
-exe = pipeline.compile("fused")      # compile once, call many times
+pipeline.parameters().validate(params).check()   # a Validation; check() raises if the document is invalid
+bad = {"credit": {"approved": {"limit": "high"}}}
+assert pipeline.parameters().validate(bad).errors
+try:
+    pipeline.run(df, params=bad)
+except DeciderError as error:        # the base of every error a user handles; ParamsError is one
+    assert isinstance(error, ParamsError)
+
+exe: Executable = pipeline.compile("fused")      # compile once, call many times
 assert exe.score({"income": 1000.0, "debt": 350.0, "applied_on": date(2026, 1, 5)}, params)["approved"] is False
 ```
 
@@ -193,6 +202,31 @@ tree = TreeConfig.load({"type": "tree", "name": "risk", "trace_output": "risk_pa
     "edges": [{"source": "root", "target": "high", "data": {"sourceIndex": 0}}],
     "output": {"data": [{"risk": 1}], "default": {"risk": 0}, "dtypes": [["risk", "Int64"]]}}})
 assert tree.run(pl.DataFrame({"ratio": [0.9]}))["risk_path"].to_list()[0].split(">")[-1] == "high"
+```
+
+A step type of your own is a `ConfigurableStep` subclass whose `to_ir` calls
+`ctx.call` on a plain function; `Value[float]` fields accept a param. Anything
+past `ctx.call` (row kernels, packed tables) is the `decider.ir` kit
+(`Input`, `Output`, `ParamDecl`, `NullPolicy`, `CallNode`, `IRContext`).
+
+```python
+from typing import Literal
+import polars as pl
+from decider import ConfigurableStep, Value, flow
+
+def scale(x: float, factor: float) -> float:
+    return x * factor
+
+class Markup(ConfigurableStep):
+    type: Literal["markup"] = "markup"
+    column: str
+    factor: Value[float] = 1.0
+
+    def to_ir(self, ctx):
+        return ctx.call(self, scale, inputs={"x": self.column}, values={"factor": self.factor})
+
+step = ConfigurableStep.load({"type": "markup", "name": "doubled", "column": "income", "factor": 2.0})
+assert flow(step, name="p").run(pl.DataFrame({"income": [10.0]}))["doubled"].to_list() == [20.0]
 ```
 
 ## Parameter tables
@@ -616,7 +650,7 @@ back yet: recompute them on the winner with
 
 ```python
 import polars as pl
-from decider import Engine, flow, param
+from decider import Engine, describe, flow, param
 from decider.ir import step_map, to_ir
 from decider.testing import assert_equivalent, corpus, no_recompile
 
@@ -649,6 +683,7 @@ with no_recompile():                     # retuning a param never compiles
 
 assert list(step_map(pipeline)) == ["credit/ratio", "credit/approved", "credit"]
 ir = to_ir(pipeline)                     # the checked IR that Engine().bind runs
+assert {n.path for n in describe(pipeline).nodes} >= {"credit/ratio", "credit/approved"}   # nodes, edges, value slots
 ```
 
 Say what a value measures with `Annotated` and the flow debugger shows it that
@@ -671,7 +706,8 @@ assert flow(instalment, name="loan").run(pl.DataFrame({"loan": [1200.0], "term_m
 
 Sessions also `step()`, `step_into()` (branches, loops), `rewind(path)` and
 break on a tree node (`"risk#high"`) or table row (`"band#2"`); see
-`help(decider.debug.Session)`. Test through decider
+`help(decider.debug.Session)`. `s.events` holds the `decider.debug` events
+(`Paused`, `NodeFinished`, ...). Test through decider
 (`Engine().bind(build())` or the handler), not by calling the functions: only
 that proves the pipeline wires, builds and serves.
 
@@ -686,15 +722,8 @@ a pipeline's answers.
 named flow that lacks one, and changes no other byte. It is a deliberate,
 reviewable source edit: it refuses to run unless every affected file is
 git-tracked and the tree is clean, and it aborts (before writing) on a syntax
-error, malformed or duplicate id. The pure helper the command wraps is
-`add_ids`, which needs no repository:
-
-```python
-from decider._tools.ids import add_ids
-
-text, changes = add_ids('from decider import flow, step\n\n@step\ndef a(x: float) -> float:\n    return x\n\np = flow(a, name="p")\n')
-assert len(changes) == 2  # the step and the flow each got an id
-```
+error, malformed or duplicate id. It is a command only: there is no
+Python API for it.
 
 Ids are additive: with `id=None` (the default) name, path, `step_map` and
 execution are unchanged. A project that never runs the command works exactly as
@@ -766,7 +795,8 @@ output, `on_node_end` for what nodes matching its `nodes` glob wrote) and
 `summarise`s into a typed `Summary`, which a `Plot` requiring that type draws
 with altair (`pip install 'decider[experiments]'`). The definition saves as
 `experiment.json` (`Experiment.save` / `Experiment.load`); subclass `Metric`,
-`Plot`, `Callback` or a report `Block` for your own. A metric reads the flow's
+`Plot` (`from decider.experiments.plots import Plot, require_altair`),
+`Callback` or a report `Block` for your own. A metric reads the flow's
 output, or steps by `nodes="<glob>"` or a durable `node_id`. `.report(...)`
 lays out blocks (`Overview`, `Text`, `Table`, `Chart`, `Row`, `Section`) that
 `result.show()` draws in a notebook and `result.save_html(path)` writes as a

@@ -3,6 +3,12 @@ from __future__ import annotations
 from contextlib import contextmanager
 
 
+__all__ = [
+    "DeciderError", "DeciderMissingDependencyError", "EngineError", "ExprError", "FallbackWarning", "IRError",
+    "MissingInputError", "ParamsError", "RegistryError", "WiringError",
+]
+
+
 class DeciderError(Exception):
     """Base class of every error decider raises; catch it to handle them all.
 

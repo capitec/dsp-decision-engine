@@ -1,16 +1,6 @@
 """Today's violations of each convention rule; every entry is a to-do for a later phase."""
 
-NO_ALL: dict[str, str] = {  # {module path relative to decider/: reason}
-    "cli/__init__.py": "stays public; gets __all__ when the surface is trimmed",
-    "exceptions.py": "stays public; gets __all__ when the surface is trimmed",
-    "steps/tables/schema.py": "stays public; gets __all__ when the surface is trimmed",
-    "steps/trees/schema/conditions.py": "stays public; gets __all__ when the surface is trimmed",
-    "steps/trees/schema/document.py": "stays public; gets __all__ when the surface is trimmed",
-    "steps/trees/schema/flat.py": "stays public; gets __all__ when the surface is trimmed",
-    "steps/trees/schema/nodes.py": "stays public; gets __all__ when the surface is trimmed",
-    "steps/trees/schema/tree.py": "stays public; gets __all__ when the surface is trimmed",
-    "steps/trees/schema/v3.py": "stays public; gets __all__ when the surface is trimmed",
-}
+NO_ALL: dict[str, str] = {}  # {module path relative to decider/: reason}
 
 BIG_ALL: dict[str, str] = {  # {package path relative to decider/: reason}
     ".": "the authoring vocabulary is one namespace by design",
