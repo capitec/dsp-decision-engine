@@ -1,0 +1,26 @@
+"""Credit origination: features, trees, one arm per product, then the decision."""
+from decider import branch, flow
+
+from bank.decision import decision, product_arm
+from bank.features import behaviour, debt, derived, household, income, stability
+from bank.products.credit_card import credit_card
+from bank.products.home_loan import home_loan
+from bank.products.overdraft import overdraft
+from bank.products.personal_loan import personal_loan
+from bank.shared_tables import channel_discounts, credit_life_rates
+from bank.trees import bureau_grade, collections_risk, fraud_screen
+
+features = flow(income, debt, stability, behaviour, household, derived, name="features")
+risk = flow(bureau_grade, fraud_screen, collections_risk, name="risk")
+pricing_inputs = flow(channel_discounts, credit_life_rates, name="pricing_inputs")
+product = branch(
+    product_arm, personal_loan, credit_card, overdraft, home_loan,
+    modifies=["offer_amount", "offer_term", "offer_rate", "monthly_instalment", "declined", "decline_reason"],
+    name="product",
+)
+origination = flow(features, risk, pricing_inputs, product, decision, name="origination").emit("decision", "offer_amount")
+
+
+def build():
+    """The origination pipeline: `decider build` and `decider serve` call this for each config version."""
+    return origination

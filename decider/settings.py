@@ -50,6 +50,7 @@ class DeciderSettings(BaseSettings):
     serve: ServeSettings = Field(default_factory=ServeSettings)
     api: APISettings = Field(default_factory=APISettings)
     config: DeciderConfigSettings = Field(default_factory=DeciderConfigSettings)
+    datasets_path: str = "${PROJECT_ROOT}/datasets"  # folder of named datasets; `${PROJECT_ROOT}` is the nearest ancestor holding `configs/`
 
 
 settings = DeciderSettings()

@@ -1,0 +1,30 @@
+{
+  "type": "scorecard",
+  "name": "card",
+  "output_name": "card_score",
+  "variables": [
+    {
+      "type": "scored",
+      "variable_name": "age",
+      "default": {
+        "value": 0
+      },
+      "bins": [
+        {
+          "value": 5,
+          "upper_bound": {
+            "param": "young",
+            "default": 25
+          }
+        },
+        {
+          "value": 10,
+          "lower_bound": {
+            "param": "young",
+            "default": 25
+          }
+        }
+      ]
+    }
+  ]
+}

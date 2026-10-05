@@ -20,10 +20,14 @@ Example::
 from decider.data.identity import (DuplicateRecordKeyError, MissingKeyColumnError, MissingRecordKeyError,
                                    RecordKeyError, check_key, record_ref, resolve_key, suggest_key)
 from decider.data.load import FORMATS, LoadError, LoadedData, load
+from decider.data.providers import (DatasetError, DatasetProvider, FileProvider, FolderProvider, dataset, dataset_documents,
+                                    datasets, datasets_folder, project_root)
 from decider.data.preflight import CostEstimate, PreflightReport, preflight
 from decider.data.scope import ExecutionScope, ScopeCheck, ScopeError, check_scope, frame_steps
 
 __all__ = [
+    "DatasetError", "DatasetProvider", "FileProvider", "FolderProvider", "dataset", "dataset_documents", "datasets", "datasets_folder",
+    "project_root",
     "CostEstimate", "DuplicateRecordKeyError", "ExecutionScope", "FORMATS", "LoadError", "LoadedData",
     "MissingKeyColumnError", "MissingRecordKeyError", "PreflightReport", "RecordKeyError", "ScopeCheck", "ScopeError",
     "check_key", "check_scope", "frame_steps", "load", "preflight", "record_ref", "resolve_key", "suggest_key",

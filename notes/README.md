@@ -26,7 +26,10 @@ Decision records for the consolidated `decider`, each with its measured reason.
 - `wiring-scopes.md`: how names bind to versions: input columns, typo and forward-reference errors, branch/loop scopes, frame barriers, outputs.
 - `vscode-controls.md`: forcing a branch's arm or a loop's iteration count by overriding its condition's output from a predicate breakpoint; value and iteration breakpoints.
 - `vscode-extension-testing.md`: how the VS Code prototype is tested at four levels (pytest, DebugClient, in-editor mocha, Playwright on the Electron binary), and the traps found on the way.
+- `vscode-native-debugging.md`: the VS Code extension debugs with plain debugpy; the flow mirrors where it is paused (`node_path()`) and which nodes have breakpoints; flow-file trees come from the YAML so a broken flow stays editable.
+- `datasets.md`: one `DatasetProvider` per dataset, inferred from `datasets/` (file or folder) or named in `datasets/config.json`; an optional `key`; read-only; the Datasets view and its bridge commands.
 - `jupyterlab-decider.md`: the JupyterLab host of the flow debugger: the bridge in the kernel over a comm (notebook pipelines and flow files), where the bridge lives now, what's left out, and how it's tested.
+- `pythonapi-redesign/` (proposal): developer user stories against today's API; the target namespace in layers and how to hide internals; one registry-based `decider.checks` with a standard catalogue; a new `decider.diff`; extensibility gaps and wrong-way coupling; bugs found on the way.
 - `hot-reload-investigation.md` (spike): `Session.reload` diffs checkpoint sequences by content and re-runs from the first change; notebook `watch`, file `ModuleWatcher`, measurements, and why serving never hot reloads.
 
 - `serving-latency.md`: where one request's microseconds actually go, the kernel-plus-state floor, every transport priced from the caller (HTTP, raw socket, unix socket, shared memory, Arrow IPC, a persistent pyarrow stream), and why an Arrow-native server is not the win.
