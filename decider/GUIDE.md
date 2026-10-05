@@ -102,6 +102,25 @@ For one record, call `score(record)`, never `run(df)` on a one-row frame: `run`
 builds a frame, exports it through Arrow and assembles an output frame, which
 costs about five times what `score` does on the same record.
 
+### Rounding
+
+`round(x, 2)` rounds the exact value of the double, half to even, like CPython.
+For another mode, call `decimal.round` from `decider.ops`; it runs the same in
+plain Python and inside a compiled step, and `Rounding` is `HALF_UP` (the
+default, away from zero), `HALF_EVEN` or `DOWN` (toward zero).
+
+```python
+from decider import flow, param
+from decider.ops import decimal
+from decider.ops.decimal import Rounding
+
+def instalment(amount: float, months: float = param(12.0)) -> float:
+    return decimal.round(amount / months, 2, mode=Rounding.HALF_EVEN)
+
+assert flow(instalment).compile("fused").score({"amount": 100.0})["instalment"] == 8.33
+assert decimal.round(2.5) == 3.0 and decimal.round(2.5, mode=Rounding.HALF_EVEN) == 2.0
+```
+
 ## Branch, loop, frame steps
 
 ```python

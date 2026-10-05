@@ -251,6 +251,42 @@ def test_a_changed_helper_invalidates_a_disk_cached_caller(tmp_path):
     assert run() == [20.0, 0, 1]
 
 
+_STEP_THROUGH_MODULE = "import rates\n\ndef fee(amount: float) -> float:\n    return rates.rate(amount)\n"
+
+
+def test_a_changed_function_called_through_a_module_invalidates_a_disk_cached_caller(tmp_path):
+    (tmp_path / "rates.py").write_text(_HELPER.format(factor="0.10"))
+    (tmp_path / "step.py").write_text(_STEP_THROUGH_MODULE)
+    (tmp_path / "child.py").write_text(_CHILD_WITH_HELPER)
+    env = dict(os.environ, NUMBA_CACHE_DIR=str(tmp_path / "numba_cache"))
+
+    def run():
+        proc = subprocess.run([sys.executable, "child.py"], cwd=tmp_path, env=env, capture_output=True,
+                              text=True, timeout=600, check=False)
+        assert proc.returncode == 0, proc.stderr
+        return json.loads(proc.stdout.splitlines()[-1])
+
+    assert run() == [10.0, 0, 1]
+    assert run() == [10.0, 1, 0]
+    (tmp_path / "rates.py").write_text(_HELPER.format(factor="0.20"))
+    assert run() == [20.0, 0, 1]
+
+
+def test_the_fingerprint_follows_module_attribute_calls_to_the_function(tmp_path, monkeypatch):
+    import importlib
+
+    (tmp_path / "helpermod.py").write_text("def f(x):\n    return x * 2.0\n")
+    (tmp_path / "stepmod.py").write_text("import helpermod\n\ndef s(x: float) -> float:\n    return helpermod.f(x)\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    stepmod = importlib.import_module("stepmod")
+    before = fingerprint(stepmod.s)
+    (tmp_path / "helpermod.py").write_text("def f(x):\n    return x * 30.0\n")
+    importlib.reload(sys.modules["helpermod"])
+    assert fingerprint(stepmod.s) != before
+    for name in ("stepmod", "helpermod"):
+        sys.modules.pop(name)
+
+
 def test_a_step_first_seen_without_a_file_still_gets_a_disk_cache(tmp_path):
     # Dispatchers are shared by content: a notebook cell or an exec'd doc block must not leave
     # the same code uncacheable for every later caller, or `decider build` warms nothing.
