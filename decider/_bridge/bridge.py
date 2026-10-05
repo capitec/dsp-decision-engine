@@ -25,7 +25,6 @@ from pathlib import Path
 
 import polars as pl
 
-from decider.config import JsonFileStore
 from decider.data import dataset as named_dataset
 from decider._bridge.describing import (assignment_lines, field_metadata, find_pipelines, formula, key_column,
                                          node_json, values_file)
@@ -36,46 +35,19 @@ from decider._engine.debug.edit import swap
 from decider._bridge.lineage import attribution, latest, lineage
 from decider.ir import step_map, to_ir
 from decider._bridge.forks import checkpoint_key, sweep
-from decider.contract import JobHandle
+from decider.contract import CONTRACT_VERSION, JobHandle, capabilities
+from decider.contract._messages import PROTOCOL_VERSION, DescribeResult, Draft, Hello, Lineage, StateResult, Status
 from decider._bridge.replay import trace
 from decider._engine.params import merge
-from decider.serving import RequestHandler
-from decider.serving._parse import coerce_record, has_date
 from decider.steps import Step
 
-from .loading import components, flow_components, flow_name, is_flow_file, latest_config, load_module, project_root
+from .loading import components, flow_components, flow_name, is_flow_file, load_module
 from .rows import load_rows
 from .runs import apply_overrides, debug_condition, tree_path
+from .building import base_params, build_step
 from .datasets import dataset_head, dataset_schema, datasets
 from .draft import draft_changes
 from .timeline import Timeline
-
-
-def base_params(mod, params, default=None):
-    """The module's `PARAMS` (its tables and tuned values, as the config store holds them), or `default`
-    when it has none, with `params` on top."""
-    return merge(getattr(mod, "PARAMS", None) or default or {}, params or {}) or None
-
-
-def _date_inputs(step):
-    return {i.name: i.annotation for i in Engine().bind(step).plan.inputs if has_date(i.annotation)}
-
-
-def _build(fn, file):
-    """Call a serving-style `def build(...)`: its config version's documents, like `decider serve` would.
-
-    Returns the built step, that version's `"params"` document (or `None`), and its
-    `sample_request.json` record (or `None`, its dates converted like a request's), from the
-    project root the pipeline's file sits in.
-    """
-    root = project_root(file) if file else None
-    config = latest_config(root)
-    step = RequestHandler(JsonFileStore(), fn).pipeline_fn(config)
-    sample = None
-    candidate = root and root / "sample_request.json"
-    if candidate and candidate.exists():
-        sample = coerce_record(json.loads(candidate.read_text()), _date_inputs(step))
-    return step, config.get("params"), sample
 
 
 class Bridge:
@@ -114,7 +86,7 @@ class Bridge:
         if isinstance(target, Step):
             self.step, self._build_params, self._build_sample = target, None, None
         else:
-            self.step, self._build_params, self._build_sample = _build(target, file)
+            self.step, self._build_params, self._build_sample = build_step(target, file)
         self.ir = to_ir(self.step)
         steps = step_map(self.step)
         located = {}
@@ -135,11 +107,10 @@ class Bridge:
         # What the flow decides: what it emits, and what its top-level branches set.
         outcome = [n for n in getattr(self.step, "emits", ()) if "@" not in n]
         outcome += [m for c in tree.get("children", ()) if c["kind"] == "branch" for m in c.get("modifies", ())]
-        self.described = {"pipelines": pipelines, "pipeline": self.name, "ir": tree, "params": params, "fields": field_metadata(self.ir),
-                          "outcome": list(dict.fromkeys(outcome)),
-                          "size": {"nodes": len(self.parents), "calls": len(self.calls)},
-                          "values": getattr(self.mod, "PARAMS", None) or self._build_params or {},
-                          "valuesFile": file and values_file(file)}
+        self.described = DescribeResult(
+            pipelines=pipelines, pipeline=self.name, flow_id=self.ir.origin.id, ir=tree, params=params, fields=field_metadata(self.ir),
+            outcome=list(dict.fromkeys(outcome)), size={"nodes": len(self.parents), "calls": len(self.calls)},
+            values=getattr(self.mod, "PARAMS", None) or self._build_params or {}, valuesFile=file and values_file(file)).wire()
         return self.described
 
     def trace(self, file=None, pipeline=None, data=None, params=None, overrides=None, row=None, forces=(), dataset=None):
@@ -190,15 +161,16 @@ class Bridge:
         events = [EVENT.dump_python(e, mode="json") for e in s.events[self.sent:]]
         self.sent = len(s.events)
         cur = s.current
-        return {"finished": s.finished, "events": events,
-                "current": cur and {"path": cur.origin.path, "when": cur.when, **({"iteration": cur.iteration} if cur.iteration else {})},
-                "hit": self.controls.take_hit(),
-                # What has run since the start or the last rewind, for the graph's ticks.
-                "ran": sorted({p for p, w in self.timeline.log if w == "after"}),
-                "dataset": getattr(self, "dataset", None) and self.dataset.model_dump(mode="json"),
-                # A debug session has no task-04 trace sink attached; the runtime views degrade to live state.
-                # ponytail: report the sink's status here once Session accepts one.
-                "trace": {"available": False, "reason": "trace capture is off; showing live state"}}
+        return Status(
+            finished=s.finished, events=events,
+            current=cur and {"path": cur.origin.path, "when": cur.when, **({"iteration": cur.iteration} if cur.iteration else {})},
+            hit=self.controls.take_hit(),
+            # What has run since the start or the last rewind, for the graph's ticks.
+            ran=sorted({p for p, w in self.timeline.log if w == "after"}),
+            dataset=getattr(self, "dataset", None) and self.dataset.model_dump(mode="json"),
+            # A debug session has no trace sink attached; the runtime views degrade to live state.
+            # ponytail: report the sink's status here once Session accepts one.
+            trace={"available": False, "reason": "trace capture is off; showing live state"}).wire()
 
     def _checkpoint(self, cp):
         self.timeline.record(cp)
@@ -325,7 +297,7 @@ class Bridge:
     def reload_step(self, path):
         """Re-import the pipeline's files and swap the step now at `path` into the paused run."""
         target = getattr(self._load(self.file), self.name)
-        new = step_map(target if isinstance(target, Step) else _build(target, self.file)[0]).get(path)
+        new = step_map(target if isinstance(target, Step) else build_step(target, self.file)[0]).get(path)
         if new is None:
             raise KeyError(f"{path!r} is no longer in {self.name}")
         self.session.replace(path, new)
@@ -363,7 +335,7 @@ class Bridge:
 
     def draft(self):
         """A paused session as an experiment draft: structured changes become declared overrides, the rest is dropped and listed."""
-        return draft_changes(self.history, self.controls.forces, self.edits)
+        return Draft(**draft_changes(self.history, self.controls.forces, self.edits)).wire()
 
     def _names(self):
         plan = self.session.executable.plan
@@ -396,7 +368,7 @@ class Bridge:
                 written, changed = attribution(self.session.state, name, versions, row, self.calls)
                 col.update(producer=written or "input", writtenBy=written or "input", changedBy=changed or "input")
             cols.append(col)
-        return {"columns": cols, "row": row, "key": key_column(self.session.frame)}
+        return StateResult(columns=cols, row=row, key=key_column(self.session.frame)).wire()
 
     def column(self, name, row=None):
         st = self.session.state
@@ -406,6 +378,8 @@ class Bridge:
 
     def handle(self, req):
         cmd = req["cmd"]
+        if cmd == "hello":
+            return Hello(protocol=PROTOCOL_VERSION, contract_version=CONTRACT_VERSION, capabilities=capabilities().model_dump()).wire()
         args = {k: v for k, v in req.items() if k not in ("id", "cmd")}
         if cmd in ("describe", "start", "state", "column", "step_out", "trace", "sweep", "compare_edits", "set_controls", "changes", "go_to", "rerun", "draft"):
             result = getattr(self, cmd)(**args)
@@ -425,11 +399,11 @@ class Bridge:
             now = self.timeline.now.get(args["name"])
             # Not set yet for this record (after going back past it): nothing to break down, and not an error.
             if row is not None and args["name"] not in s.frame.columns and (now is None or now[row] is None):
-                return {"name": args["name"], "producer": None, "value": None, "inputs": [], "unset": True}
+                return Lineage(name=args["name"], producer=None, value=None, inputs=[], unset=True).wire()
             entry = lineage(s, **args)
             if args.get("row") is not None:
                 self._set_by_hand(entry, args["row"])
-            return entry
+            return Lineage(**entry).wire()
         if cmd == "tree_path":
             return tree_path(s, **args)
         if cmd == "debug_condition":

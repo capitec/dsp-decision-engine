@@ -10,7 +10,8 @@ import sys
 from decider import Engine
 from decider._engine.run.runners import interpreted
 
-from .bridge import Bridge, base_params
+from .bridge import Bridge
+from .building import base_params
 
 _CALLERS = (interpreted.InterpretedRunner._call.__code__, interpreted._frame.__code__)
 

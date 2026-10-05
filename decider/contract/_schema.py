@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from pydantic import BaseModel
+
 from decider.contract._refs import (CONTRACT_VERSION, EdgeRef, FlowDescription, FlowRef, RecordRef, StepRef,
                                    ValueSlotRef)
 
@@ -59,11 +61,29 @@ def typescript() -> str:
                        for name in names) + "\n"
 
 
+def interfaces(models: tuple[type[BaseModel], ...]) -> str:
+    """TypeScript interfaces for `models` and the models they embed, in the order given."""
+    defs: dict[str, Any] = {}
+    for model in models:
+        schema = model.model_json_schema()
+        defs.update(schema.pop("$defs", {}))
+        defs.setdefault(model.__name__, schema)
+    names = [m.__name__ for m in models]
+    names += sorted(set(defs) - set(names))
+    return "\n\n".join(_interface(name, defs[name], defs) for name in names) + "\n"
+
+
 def _interface(name: str, node: dict[str, Any], defs: dict[str, Any]) -> str:
     required = set(node.get("required", []))
-    fields = [f"  {field}{'' if field in required else '?'}: {_ts(schema, defs)};"
+    fields = [f"{_doc(schema)}  {field}{'' if field in required else '?'}: {_ts(schema, defs)};"
               for field, schema in node.get("properties", {}).items()]
+    if node.get("additionalProperties") is True:
+        fields.append("  [k: string]: any;")
     return f"export interface {name} {{\n" + "\n".join(fields) + "\n}"
+
+
+def _doc(schema: dict[str, Any]) -> str:
+    return f"  /** {schema['description']} */\n" if "description" in schema else ""
 
 
 def _ts(node: dict[str, Any], defs: dict[str, Any]) -> str:

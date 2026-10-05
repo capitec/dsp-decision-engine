@@ -2,26 +2,46 @@ import type { Comparison } from "./compare";
 import type { ExperimentDef, ExperimentResult } from "./experiment";
 import type { Scenario, Sweep } from "./sweep";
 
-// Shapes the Python bridge sends, and the messages between a host and the UI.
+// Shapes the Python bridge sends (the generated block), and the messages between a host and the UI.
 
-export interface IRNodeBase {
+// <generated: uv run python -m decider.contract._messages>
+export interface Hello {
+  protocol: string;
+  contract_version: string;
+  capabilities: Capabilities;
+}
+
+export interface Capabilities {
+  contract_version?: string;
+  modes: Array<string>;
+  optional_dependencies: Record<string, boolean>;
+  source_mapping?: boolean;
+}
+
+export interface PythonLocation {
+  file: string;
+  line: number;
+  bodyLine: number | null;
+  endLine?: number | null;
+}
+
+export interface CallNodeJson {
   path: string;
   source: string;
   file: string | null;
   line: number | null;
   /** The step's durable id (12 hex), surviving renames; absent or `null` for a step that never got one. */
   id?: string | null;
-}
-
-export interface CallNodeJson extends IRNodeBase {
+  /** The contract's `StepRef.step_id`: the same durable id as `id`. */
+  step_id?: string | null;
   kind: "call";
   callKind: "scalar" | "row" | "frame";
   /** `null`: a frame step of unknown lineage. */
-  inputs: string[] | null;
-  outputs: string[] | null;
-  params: Record<string, unknown>;
+  inputs: Array<string> | null;
+  outputs: Array<string> | null;
+  params: Record<string, any>;
   /** The Python that runs in interpreted mode: `fn`, or a row node's `reference`. `bodyLine` is its first statement past a docstring, `endLine` its last line. */
-  python: { file: string; line: number; bodyLine: number | null; endLine?: number | null } | null;
+  python: PythonLocation | null;
   /** Changes when the code or config behind the node changes. */
   code: string;
   /** The first line of the step's docstring. */
@@ -33,22 +53,27 @@ export interface CallNodeJson extends IRNodeBase {
   /** Set once the step's code was edited mid-run: the formula it had before. */
   formulaBefore?: string | null;
   /** A lookup table's match, e.g. `{type: "between", variable, lower_bound_column, upper_bound_column}`. */
-  table?: Record<string, unknown> | null;
+  table?: Record<string, any> | null;
 }
 
-export interface GroupNodeJson extends IRNodeBase {
+export interface GroupNodeJson {
+  path: string;
+  source: string;
+  file: string | null;
+  line: number | null;
+  /** The step's durable id (12 hex), surviving renames; absent or `null` for a step that never got one. */
+  id?: string | null;
+  /** The contract's `StepRef.step_id`: the same durable id as `id`. */
+  step_id?: string | null;
   kind: "sequence" | "branch" | "loop";
-  modifies?: string[];
-  carries?: string[];
+  modifies?: Array<string>;
+  carries?: Array<string>;
   maxIterations?: number;
-  children: IRNodeJson[];
+  children: Array<CallNodeJson | GroupNodeJson>;
   /** Set on a group drawn folded: the paths of the steps inside it. */
-  folded?: string[];
+  folded?: Array<string>;
 }
 
-export type IRNodeJson = CallNodeJson | GroupNodeJson;
-
-/** One pipeline found in a file, or a candidate that could have been one. */
 export interface PipelineCandidate {
   name: string;
   line: number | null;
@@ -59,32 +84,39 @@ export interface PipelineCandidate {
 }
 
 export interface DescribeResult {
-  pipelines: PipelineCandidate[];
+  pipelines: Array<PipelineCandidate>;
   pipeline: string;
+  /** The contract's `FlowRef.flow_id`: the durable id of the assembled flow. */
+  flow_id?: string | null;
   /** The assembled entry-point flow: its node and step counts. */
-  size: { nodes: number; calls: number };
-  ir: IRNodeJson;
+  size: FlowSize;
+  ir: CallNodeJson | GroupNodeJson;
   /** Node path (or "shared") -> param name -> its type, default and bounds. */
   params: Record<string, Record<string, ParamInfo>>;
   /** The module's `PARAMS` document: the values the flow runs with (tables' rows included). */
-  values?: Record<string, unknown>;
+  values?: Record<string, any>;
   /** What the flow decides: its emitted values and what its top-level branches set. */
-  outcome?: string[];
+  outcome?: Array<string>;
   /** The file `PARAMS` is read from, when the module names one. */
   valuesFile?: string | null;
   /** Each value's declared metadata, by name; the rest are guessed (`fieldOf`). */
   fields?: Record<string, FieldMeta>;
 }
 
+export interface FlowSize {
+  nodes: number;
+  calls: number;
+}
+
 export interface ParamInfo {
   type: string;
-  default?: unknown;
+  default?: any;
   required?: boolean;
   ge?: number;
   le?: number;
   gt?: number;
   lt?: number;
-  [k: string]: unknown;
+  [k: string]: any;
 }
 
 export interface Checkpoint {
@@ -98,35 +130,133 @@ export interface Summary {
   dtype: string;
   rows: number;
   nulls: number;
-  preview: unknown[];
+  preview: Array<any>;
+}
+
+export interface SessionOrigin {
+  path: string;
+  source: string;
+  locator: string | null;
+  [k: string]: any;
 }
 
 export interface SessionEvent {
   kind: string;
-  origin?: { path: string; source: string; locator: string | null };
-  [k: string]: unknown;
+  origin?: SessionOrigin;
+  [k: string]: any;
 }
 
 export interface Status {
   finished: boolean;
   current: Checkpoint | null;
-  events: SessionEvent[];
+  events: Array<SessionEvent>;
   error?: string;
   /** Set when a value or iteration breakpoint paused the run. */
   hit?: Hit | null;
   /** Every step and group that has run since the start or the last rewind. */
-  ran?: string[];
+  ran?: Array<string>;
   /** Whether structured decision trace is captured for this run. */
   trace?: TraceStatus;
   /** Identity of the data the run started on, as `InputFingerprint` dumps it. */
-  dataset?: { dataset: string; fingerprint: string | null; columns: [string, string][]; row_count: number | null } | null;
+  dataset?: InputFingerprint | null;
 }
 
-/** Whether a run's structured decision trace is captured, and why not when it isn't. */
 export interface TraceStatus {
   available: boolean;
   reason?: string;
 }
+
+export interface Hit {
+  watch: number;
+  text: string;
+  path?: string;
+  rows?: Array<number>;
+  values?: Array<any>;
+}
+
+export interface InputFingerprint {
+  dataset?: string;
+  fingerprint?: string | null;
+  columns?: Array<[string, string]>;
+  row_count?: number | null;
+}
+
+export interface ColumnSummary {
+  dtype: string;
+  rows: number;
+  nulls: number;
+  preview: Array<any>;
+  name: string;
+  /** The focused record's value, when a record is focused. */
+  value: any;
+  producer: string;
+  versions: number;
+  /** For the focused record: the last step that wrote the value, and the last that changed it ("input" for neither). */
+  writtenBy?: string;
+  changedBy?: string;
+}
+
+export interface StateResult {
+  columns: Array<ColumnSummary>;
+  row: number | null;
+  key: KeyColumn | null;
+}
+
+export interface KeyColumn {
+  name: string;
+  values: Array<any>;
+}
+
+export interface Lineage {
+  name: string;
+  producer: string | null;
+  value: any;
+  via?: "merge" | "carry";
+  inputs: Array<Lineage>;
+  /** Records a comparison forced; the others ran as they are. */
+  forcedRows?: Array<number>;
+  /** Set when the value came from you: "force@<branch or loop>" or "override@<path>", and what it was before. */
+  setBy?: string;
+  was?: any;
+  /** Not set yet for the focused record: there is nothing to break down. */
+  unset?: boolean;
+  /** Nothing has written this value yet. */
+  missing?: boolean;
+  /** For a forced branch condition: its arms by name, so a value reads as the arm it picks. */
+  arms?: Array<string>;
+}
+
+export interface FieldMeta {
+  kind: string;
+  symbol?: string;
+  cents?: boolean;
+  unit?: string;
+  /** Not declared: guessed from the value's name. */
+  assumed?: boolean;
+  [k: string]: any;
+}
+
+export interface Draft {
+  converted: Array<DraftOverride>;
+  dropped: Array<DraftDrop>;
+}
+
+export interface DraftOverride {
+  target: string;
+  value: any;
+  /** `"set"` (a value overridden mid-run) or `"force"` (a branch/loop forced). */
+  source: string;
+  row?: number | null;
+}
+
+export interface DraftDrop {
+  kind: string;
+  path?: string;
+  detail?: string;
+}
+// </generated>
+
+export type IRNodeJson = CallNodeJson | GroupNodeJson;
 
 /** Send a branch's records down `arm`, or run a loop exactly `iterations` times; for one record, or all. */
 export interface Force {
@@ -153,43 +283,6 @@ export interface Watch {
 export interface Controls {
   forces: Force[];
   watches: Watch[];
-}
-
-/** Why a watch paused the run: which records newly meet it there, and their values. */
-export interface Hit {
-  watch: number;
-  text: string;
-  path?: string;
-  rows?: number[];
-  values?: unknown[];
-}
-
-export interface ColumnSummary extends Summary {
-  name: string;
-  /** The focused record's value, when a record is focused. */
-  value: unknown;
-  producer: string;
-  versions: number;
-  /** For the focused record: the last step that wrote the value, and the last that changed it ("input" for neither). */
-  writtenBy?: string;
-  changedBy?: string;
-}
-
-export interface Lineage {
-  name: string;
-  producer: string | null;
-  value: unknown;
-  via?: "merge" | "carry";
-  inputs: Lineage[];
-  /** Records a comparison forced; the others ran as they are. */
-  forcedRows?: number[];
-  /** Set when the value came from you: "force@<branch or loop>" or "override@<path>", and what it was before. */
-  setBy?: string;
-  was?: unknown;
-  /** Not set yet for the focused record: there is nothing to break down. */
-  unset?: boolean;
-  /** For a forced branch condition: its arms by name, so a value reads as the arm it picks. */
-  arms?: string[];
 }
 
 /** Tree positions a row node reached in its latest run: locator -> rows. */
@@ -263,16 +356,6 @@ export function datasetLabel(name: string, rowCount: number | null | undefined):
   return `${name || "pasted rows"} · ${rowCount ?? "?"} row${rowCount === 1 ? "" : "s"}`;
 }
 
-/** What a value measures, from decider's `FieldMetadata` (`Money()`, `Percent()`, `Duration("months")`). */
-export interface FieldMeta {
-  kind: string;
-  symbol?: string;
-  cents?: boolean;
-  unit?: string;
-  /** Not declared: guessed from the value's name. */
-  assumed?: boolean;
-}
-
 // ponytail: the shown flow's metadata, module-wide so every formatValue call sees it; pass it down if one view ever shows two flows.
 let declared: Record<string, FieldMeta> = {};
 /** Use the described flow's declared metadata (`DescribeResult.fields`) from now on. */
@@ -314,28 +397,6 @@ export function formatValue(v: unknown, name?: string): string {
   if (f?.kind === "money") return `${f.symbol ?? "R"}\u00a0${(f.cents ? v / 100 : v).toLocaleString("en-US", { useGrouping: false, minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   if (f?.kind === "duration") return `${plain(v, 2)} ${v === 1 ? f.unit?.replace(/s$/, "") : f.unit}`;
   return plain(v, Math.abs(v) >= 100 ? 2 : 4);
-}
-
-/** A change a paused session's draft converts into a declared override. */
-export interface DraftOverride {
-  target: string;
-  value: unknown;
-  /** `"set"` (a value overridden mid-run) or `"force"` (a branch/loop forced). */
-  source: string;
-  row?: number | null;
-}
-
-/** A change a draft cannot carry: listed, never silently dropped. */
-export interface DraftDrop {
-  kind: string;
-  path?: string;
-  detail?: string;
-}
-
-/** Converting a paused session into an experiment draft: what becomes declared overrides, what is dropped. */
-export interface Draft {
-  converted: DraftOverride[];
-  dropped: DraftDrop[];
 }
 
 export type Tab = "graph" | "state" | "params" | "scenarios" | "compare";
