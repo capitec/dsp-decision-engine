@@ -10,7 +10,6 @@ dependencies = [
     "pydantic-settings",
     "click",
     "numba>=0.67.0",
-    "fastmcp>=4.0.10",
     "packaging",
 ]
 
@@ -22,6 +21,8 @@ notebook        = ["ipython"]
 experiments     = ["altair", "ipython", "markdown-it-py"]
 eval            = ["simpleeval"]
 yaml            = ["pyyaml"]
+mcp             = ["fastmcp>=4.0.10"]
+prove           = ["z3-solver"]
 dev = [
     "pytest",
     "pytest-asyncio",
@@ -42,6 +43,8 @@ all = [
     "altair",
     "simpleeval",
     "pyyaml",
+    "fastmcp>=4.0.10",
+    "z3-solver",
     "pytest",
     "pytest-asyncio",
     "anyio",
@@ -85,6 +88,7 @@ dev = [
     "starlette>=1.2.1",
     "ipython>=8.39.0",
     "altair",
+    "fastmcp>=4.0.10",
 ]
 
 # ── pytest ────────────────────────────────────────────────────────────────────

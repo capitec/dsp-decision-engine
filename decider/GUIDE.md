@@ -896,7 +896,7 @@ VS Code extension's Datasets view lists, previews and debugs a flow on one.
 
 ### MCP
 
-`decider mcp` serves a FastMCP server over stdio for an agent: structural and
+`decider mcp` (needs `pip install 'decider[mcp]'`) serves a FastMCP server over stdio for an agent: structural and
 summarised reads are always available; per-record values and trace events are
 opt-in (`decider mcp --raw`); running code and persisting are confirmation-gated.
 See `notes/vscode-redesign/mcp-guidance.md`.

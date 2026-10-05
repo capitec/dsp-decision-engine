@@ -4,8 +4,9 @@ import pytest
 
 from decider.contract import FlowRef, RecordRef
 from decider.exceptions import DeciderError
-from decider.contract import (MANIFEST_VERSION, InputFingerprint, Override, ResultRef, Revision, RunManifest,
-                               check_manifest_version, manifest_schema, new_manifest_id, source_is_stale)
+from decider.contract import InputFingerprint, Override, ResultRef, Revision, RunManifest, manifest_schema
+from decider.contract._manifest import (MANIFEST_VERSION, check_manifest_version, new_manifest_id,
+                                        source_is_stale)
 
 
 def make_manifest(**fields) -> RunManifest:

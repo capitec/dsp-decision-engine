@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from decider.contract import Job, JobHandle, JobStatus, PartialResult, TERMINAL_STATUSES
+from decider.contract import Job, JobHandle, JobStatus, PartialResult
+from decider.contract._jobs import TERMINAL_STATUSES
 
 
 def test_job_starts_queued_and_immutable():
