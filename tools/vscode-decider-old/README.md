@@ -18,7 +18,7 @@ install `decider` into your project's environment (it now carries the bridge):
 
 ```sh
 uv pip install -e <repo>
-uv run python -c "import decider, decider.debug_bridge"   # check
+uv run python -c "import decider, decider._bridge"   # check
 ```
 
 The extension runs the `decider.python` setting (e.g. `["uv", "run", "python"]` or
@@ -85,7 +85,7 @@ imports its own pipeline code but today's `decider` package.
 ## How it fits together
 
 ```
-extension host ──DAP──▶ adapter.ts ──JSON lines──▶ decider.debug_bridge (in decider) ──▶ Session
+extension host ──DAP──▶ adapter.ts ──JSON lines──▶ decider._bridge (in decider) ──▶ Session
       │                                    (fd 3)            └─ debugpy.listen (optional)
       └── webview (React + dagre, built by Vite)
 ```
@@ -114,7 +114,7 @@ extension host ──DAP──▶ adapter.ts ──JSON lines──▶ decider.d
 
 ```sh
 uv pip install -e .                            # once, from the repo root: decider + the bridge
-uv run pytest tests/debug_bridge -q            # bridge, lineage, traces on the real session
+uv run pytest tests/bridge -q            # bridge, lineage, traces on the real session
 pnpm test                                      # adapter over stdio (DebugClient), layout, comparisons, git
 pnpm test:vscode                               # extension API inside VSCodium (mocha)
 pnpm test:e2e                                  # Playwright drives VSCodium's UI and takes screenshots

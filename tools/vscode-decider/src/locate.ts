@@ -2,7 +2,7 @@ import * as path from "node:path";
 import { callNodes, type CallNodeJson, type IRNodeJson } from "@decider/ui";
 
 /** Evaluated in a paused Python frame: the flow node running on that thread, or `None`. */
-export const NODE_PATH = "__import__('decider.debug_bridge.run', fromlist=['node_path']).node_path()";
+export const NODE_PATH = "__import__('decider._bridge.run', fromlist=['node_path']).node_path()";
 
 export interface SourceLine {
   file: string;

@@ -7,10 +7,10 @@ import { findSteps } from "../src/FindStep";
 import { dataEdges, findNode, fold, layout, orderEdges, touchPoints } from "../src/layout";
 import { largeFlow } from "../demo/mock";
 
-// The example flows live with the VS Code extension; the Python bridge is decider.debug_bridge.
+// The example flows live with the VS Code extension; the Python bridge is decider._bridge.
 const ROOT = path.resolve(__dirname, "../../vscode-decider");
 const ir: DescribeResult["ir"] = JSON.parse(
-  execFileSync("uv", ["run", "python", "-c", `from decider.debug_bridge.bridge import Bridge; import json; print(json.dumps(Bridge().describe(${JSON.stringify(path.join(ROOT, "examples", "loan.py"))})["ir"]))`]).toString(),
+  execFileSync("uv", ["run", "python", "-c", `from decider._bridge.bridge import Bridge; import json; print(json.dumps(Bridge().describe(${JSON.stringify(path.join(ROOT, "examples", "loan.py"))})["ir"]))`]).toString(),
 );
 
 describe("graph edges", () => {

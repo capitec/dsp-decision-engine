@@ -59,7 +59,7 @@ Your own launch configuration works too:
 
 ```json
 { "type": "debugpy", "request": "launch", "name": "decider: credit",
-  "module": "decider.debug_bridge.run", "args": ["${workspaceFolder}/credit_flow/flow.yaml"] }
+  "module": "decider._bridge.run", "args": ["${workspaceFolder}/credit_flow/flow.yaml"] }
 ```
 
 Any Python debug session that pauses inside the shown flow's steps is mirrored,
@@ -69,7 +69,7 @@ including your own scripts and tests, as long as the pipeline runs interpreted
 ## Tests
 
 ```sh
-uv run pytest tests/debug_bridge -q    # describe of flow files, the runner, node_path
+uv run pytest tests/bridge -q    # describe of flow files, the runner, node_path
 pnpm test                              # YAML outline and edits, breakpoint/pause mapping
 pnpm test:vscode                       # inside VS Code: show, breakpoint, debug, pause mapping
 ```

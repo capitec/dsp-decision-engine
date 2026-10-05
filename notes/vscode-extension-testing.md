@@ -28,6 +28,13 @@ Findings that cost time:
   the extension depends on.
 - **Headless works with `--ozone-platform=headless`.** Screenshots still render,
   so no Xvfb is needed and no window appears.
+- **Point the extension at the worktree's decider.** Without `decider.python` it
+  falls back to the system `python3`, which has no `decider`. Put
+  `{"decider.python": ["uv", "run", "python"]}` in `<user-data-dir>/User/settings.json`
+  and open a workspace folder inside the worktree: `uv run` then finds that
+  worktree's project and virtualenv. `ms-python.debugpy` must be a copy in
+  `--extensions-dir`, together with `ms-python.python` and
+  `ms-python.vscode-python-envs`; a symlinked extension fails to activate.
 - **Webview content is two iframes deep:** `iframe.webview.ready`, then
   `#active-frame`. Playwright's `frameLocator` chains through both.
 - **A fresh profile needs quiet settings** (no parent-folder git prompt, no
