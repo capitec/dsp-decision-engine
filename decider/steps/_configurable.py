@@ -85,6 +85,8 @@ class ConfigurableStep(Step, BaseRegistryModule, root=True):
 StepRef = ref(ConfigurableStep)
 """A pydantic field type holding any `ConfigurableStep`, chosen by its `type` tag.
 
+Not `decider.contract.StepRef`, which names a node in a `FlowDescription`.
+
 Example::
 
     class RuleSet(ConfigurableStep):

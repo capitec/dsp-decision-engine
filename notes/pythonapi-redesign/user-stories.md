@@ -112,7 +112,7 @@ pipeline.run(df, params=params)
 
 After:
 ```python
-problems = pipeline.parameters().validate(params)   # Validation; .raise_for_errors()
+problems = pipeline.parameters().validate(params)   # Validation; .check()
 ```
 
 ### B3. Load a dataset — awkward
@@ -208,7 +208,7 @@ exe.score({"income": 1000.0, "debt": 200.0}, params)
 After:
 ```python
 from decider import Executable
-exe: Executable = pipeline.bind("fused")      # Engine(strict_compile=True).bind(...) still there
+exe: Executable = pipeline.compile("fused")   # Engine(strict_compile=True).bind(...) still there
 ```
 
 ### E2. Serve a project over HTTP — clean (CLI), awkward (code)

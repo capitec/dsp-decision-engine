@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Annotated, Any
+from typing import Annotated, Any, Mapping
 
 from pydantic import TypeAdapter
 
 from decider._engine.ir.decls import ParamDecl
 from decider._engine.ir.nodes import CallNode, IRNode, ScatterGatherNode
-from decider._engine.params.models import type_name
+from decider._engine.params.models import NodeParams, type_name
+from decider._engine.params.validate import Status, Validation, check_namespaces, validate_node
+from decider.exceptions import ParamsError
 
 
 _JSON_TYPES = {"int": "integer", "float": "number", "bool": "boolean"}
@@ -48,11 +50,14 @@ class ParamsSchema(dict):
         schema["shared"]["min_ratio"]["used_by"]  # ["affordability/affordable"]
         schema.defaults()                     # a params document of every default
         schema.json_schema()                  # JSON Schema of the params document
+        schema.validate(doc).check()          # raises ParamsError listing every problem in `doc`
     """
 
-    def __init__(self, decls: dict[str, dict[str, ParamDecl]], used_by: dict[str, list[str]]):
+    def __init__(self, decls: dict[str, dict[str, ParamDecl]], used_by: dict[str, list[str]],
+                 nodes: dict[str, tuple[ParamDecl, ...]] | None = None):
         super().__init__()
         self.decls = decls
+        self._nodes = nodes or {}
         for path, params in decls.items():
             self[path] = {name: _info(d) for name, d in params.items()}
         for key, paths in used_by.items():
@@ -74,6 +79,29 @@ class ParamsSchema(dict):
                     target = target.setdefault(part, {})
                 target.update(values)
         return doc
+
+    def validate(self, doc: Mapping[str, Any]) -> Validation:
+        """Check a params document without running anything.
+
+        Returns a `Validation` over the whole document: `errors` lists every
+        problem (unknown step or param, wrong type, out of bounds, missing
+        required), `warnings` the values replaced by their default, and `bundle`
+        is `None`. `.check()` raises `ParamsError` when there are errors.
+
+        Example::
+
+            problems = pipeline.parameters().validate({"term": {"cap_by_income": {"cap": 99.0}}})
+            problems.errors   # ("term/cap_by_income: param 'cap': ... (got 99.0)",)
+        """
+        nodes = {path: NodeParams(path, decls) for path, decls in self._nodes.items()}
+        try:
+            check_namespaces(doc, nodes)
+        except ParamsError as e:
+            return Validation(Status.INVALID, None, (str(e),))
+        results = [validate_node(n, doc) for n in nodes.values()]
+        errors = tuple(e for r in results for e in r.errors)
+        warnings = tuple(w for r in results for w in r.warnings)
+        return Validation(Status.INVALID if errors else Status.OK, None, errors, warnings)
 
     def json_schema(self) -> dict[str, Any]:
         """JSON Schema of the params document, for rendering forms. Shared params use their first declaration."""
@@ -99,6 +127,7 @@ def parameters(root: IRNode) -> ParamsSchema:
     shared: dict[str, ParamDecl] = {}
     used_by: dict[str, list[str]] = {}
     local: dict[str, dict[str, ParamDecl]] = {}
+    nodes: dict[str, tuple[ParamDecl, ...]] = {}
     for node in _param_nodes(root):
         if isinstance(node, ScatterGatherNode):
             decls, path = node.params, node.origin.path
@@ -106,6 +135,8 @@ def parameters(root: IRNode) -> ParamsSchema:
             decls, path = node.params, node.origin.path
         else:
             continue
+        if decls:
+            nodes[path] = tuple(decls)
         for d in decls:
             if d.shared_key is None:
                 local.setdefault(path, {})[d.name] = d
@@ -113,7 +144,7 @@ def parameters(root: IRNode) -> ParamsSchema:
                 # Shared defaults may differ per node; the document shows the first.
                 shared.setdefault(d.shared_key, d)
                 used_by.setdefault(d.shared_key, []).append(path)
-    return ParamsSchema({"shared": shared, **local} if shared else local, used_by)
+    return ParamsSchema({"shared": shared, **local} if shared else local, used_by, nodes)
 
 
 def _param_nodes(node: IRNode):
