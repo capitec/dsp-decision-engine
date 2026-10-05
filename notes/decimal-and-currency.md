@@ -289,4 +289,4 @@ Tests (`tests/ops/`, `tests/compile/`, `tests/boundary/`):
 - **`Decimal ± int` is legal**; the int is whole units (question 5).
 - **Units are a client-supplied display string** (`units="R"`); no Babel (question 7).
 - Questions 1, 2, 4, 9 and 10 default to the recommendations above; the user has not been asked them yet.
-- **Question 8 is sidestepped, not answered:** a `Currency` is built from integers, `Currency(2, 675)` for 2.675, rather than from a float. Converting a float to a `Currency` still works but warns that it may lose precision. Open detail: how the second integer reads when it has leading zeros (2.05).
+- **Question 8 is sidestepped, not answered:** a `Currency` is built from integers, `Currency(2, 675)` for 2.675, rather than from a float. Converting a float to a `Currency` still works but warns that it may lose precision. The second integer is the fractional digits as written, the same as `f"{major}.{minor}"`: `Currency(2, 6)` is 2.6 and `Currency(2, 67)` is 2.67, whatever the scale. A fraction with a leading zero (2.05) can't be written this way; that path is still to be chosen when this is built.
