@@ -34,4 +34,13 @@ exports.run = async function () {
   await vscode.commands.executeCommand("workbench.action.debug.continue");
   await until("the run to end", () => !vscode.debug.activeDebugSession);
   vscode.debug.removeBreakpoints(vscode.debug.breakpoints);
+
+  // With a flow shown, debugging a dataset record starts at once on that flow: no flow picker.
+  let launched;
+  const sub = vscode.debug.onDidStartDebugSession((s) => (launched = s.configuration));
+  await vscode.commands.executeCommand("decider.debugWithDataset", { name: "applicants", cwd: path.dirname(flow) }, 2);
+  await until("the dataset run to start", () => launched, 10000);
+  sub.dispose();
+  assert.deepStrictEqual(launched.args, [flow, "--dataset", "applicants", "--row", "2"]);
+  await until("the dataset run to end", () => !vscode.debug.activeDebugSession);
 };

@@ -39,10 +39,16 @@ def main(argv=None):
     source = p.add_mutually_exclusive_group()
     source.add_argument("--data", help="rows: a JSON/CSV/Parquet file (default: SAMPLE or sample_request.json)")
     source.add_argument("--dataset", help="a dataset name from the project's datasets folder")
+    p.add_argument("--row", type=int, help="run only this record: its 0-based position in the rows")
     a = p.parse_args(argv)
     b = Bridge()
     b.describe(a.file, a.pipeline)
-    out = Engine().bind(b.step).run(b._rows(a.data, a.dataset, a.file), params=base_params(b.mod, None, b._build_params))
+    rows = b._rows(a.data, a.dataset, a.file)
+    if a.row is not None:
+        if not 0 <= a.row < rows.height:
+            p.error(f"--row {a.row} is out of range: the data has {rows.height} rows")
+        rows = rows.slice(a.row, 1)
+    out = Engine().bind(b.step).run(rows, params=base_params(b.mod, None, b._build_params))
     print(out)
 
 
