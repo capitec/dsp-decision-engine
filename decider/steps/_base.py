@@ -12,7 +12,8 @@ if TYPE_CHECKING:
     from decider._engine.ir.context import IRContext
     from decider._engine.ir.nodes import IRNode
     from decider._engine.params.schema import ParamsSchema
-    from decider._engine.run.engine import Mode
+    from decider._engine.run.engine import Executable, Mode
+    from decider._engine.debug import Session
     from decider.steps._sequential import SequentialStep
 
 
@@ -111,10 +112,24 @@ class Step(ABC):
         """
         return _walk(self, "")
 
-    def run(self, data: Any, **kwargs: Any) -> Any:
-        """Run the step over a polars frame, interpreted; `kwargs` go to `Executable.run` (e.g. `params=`).
+    def compile(self, mode: Mode = "interpreted") -> Executable:
+        """Compile the pipeline for a mode once; call the returned `Executable` many times.
 
-        For repeated runs, bind once with `Engine().bind(step)` instead.
+        `Engine(strict_compile=True).bind(step, mode)` raises instead of falling back.
+
+        Example::
+
+            exe = pipeline.compile("fused")
+            exe.score({"income": 1000.0, "debt": 200.0})
+        """
+        from decider._engine import Engine
+
+        return Engine().bind(self, mode)
+
+    def run(self, data: Any, params: Any = None, trace: Any = None) -> Any:
+        """Run the step over a polars frame, interpreted; `trace` is an optional `TraceSink`.
+
+        For repeated runs, `compile` once instead.
 
         Example::
 
@@ -122,9 +137,9 @@ class Step(ABC):
         """
         from decider._engine import Engine
 
-        return Engine().bind(self).run(data, **kwargs)
+        return Engine().bind(self).run(data, params, trace)
 
-    def session(self, data: Any, params: Any = None, mode: Mode = "interpreted", **engine_kwargs: Any) -> Any:
+    def session(self, data: Any, params: Any = None, mode: Mode = "interpreted", **engine_kwargs: Any) -> Session:
         """Open a debug `Session` over a polars frame; `engine_kwargs` go to `Engine` (e.g. `params_validation=`).
 
         `mode` is the `Engine.bind` mode; `"fused"` pauses at kernel boundaries only.

@@ -23,7 +23,7 @@ HTTP with `decider serve`.
   a `param()`**: a param ignores the request.
 - **Outputs**: `run` returns the input columns plus every value nothing reads;
   intermediates are dropped unless kept with `.emit("name")`.
-- **Modes**: `Engine().bind(p, mode=...)`: `"interpreted"` (plain Python; what
+- **Modes**: `p.compile(mode)`: `"interpreted"` (plain Python; what
   `p.run` uses), `"stepped"` or `"fused"` (numba; `decider serve`'s default).
   All modes give the same answers.
 
@@ -51,7 +51,7 @@ HTTP with `decider serve`.
 | a points scorecard | `ScorecardConfig` |
 | the same step twice, or on other column names | `.named("x")`, `.relabel(reads=, writes=)` |
 | another project's pipeline | import its `build()`; put the step inside yours |
-| structure in a YAML/JSON file, steps in Python | `decider.steps.flowfile.load_flow`, `DECIDER_API__PIPELINE=flow.yaml` |
+| structure in a YAML/JSON file, steps in Python | `load_flow`, `DECIDER_API__PIPELINE=flow.yaml` |
 | immutable config versions | `decider.config.JsonFileStore` (`ConfigStore`) |
 | why a record got its answer; what-if | `pipeline.session(df)` |
 | modes, batch and single record agree | `decider.testing.assert_equivalent` |
@@ -62,7 +62,7 @@ HTTP with `decider serve`.
 from datetime import date
 
 import polars as pl
-from decider import Engine, flow, missing_as, param
+from decider import flow, missing_as, param
 
 def debt_ratio(income: float, debt: float = missing_as(0.0)) -> float:
     return debt / income
@@ -85,7 +85,7 @@ assert params == {"credit": {"approved": {"limit": 0.4, "month_end_limit": 0.3}}
 params["credit"]["approved"]["limit"] = 0.3
 assert pipeline.run(df, params=params)["approved"].to_list() == [False, True]
 
-exe = Engine().bind(pipeline, mode="fused")      # bind once, call many times
+exe = pipeline.compile("fused")      # compile once, call many times
 assert exe.score({"income": 1000.0, "debt": 350.0, "applied_on": date(2026, 1, 5)}, params)["approved"] is False
 ```
 
@@ -150,9 +150,7 @@ Each loads from a JSON document (`TreeConfig.load(doc)`, or
 
 ```python
 import polars as pl
-from decider.steps.scorecard import ScorecardConfig
-from decider.steps.tables import DecisionTableConfig
-from decider.steps.trees import TreeConfig
+from decider import DecisionTableConfig, ScorecardConfig, TreeConfig
 
 def rule(name, feature, op, threshold):
     return {"meta": {"name": name}, "rule": {"type": "unary", "then": {"id": f"{name}_hit", "type": "leaf", "result_idx": 0},
@@ -187,7 +185,7 @@ also takes a v3 node/edge tree:
 
 ```python
 import polars as pl
-from decider.steps.trees import TreeConfig
+from decider import TreeConfig
 
 tree = TreeConfig.load({"type": "tree", "name": "risk", "trace_output": "risk_path", "tree": {
     "nodes": [{"id": "root", "data": {"type": "unary", "condition": {"op": ">", "feature": "ratio", "threshold": 0.7}}},
@@ -209,7 +207,7 @@ read-only numpy array per column, the same in every mode, so loop over it:
 
 ```python
 import polars as pl
-from decider import Engine, ParamTable, flow, param_table
+from decider import ParamTable, flow, param_table
 from decider.testing import no_recompile
 
 def rate(score: int, ladder: ParamTable = param_table({"floor": int, "rate": float},
@@ -228,7 +226,7 @@ params["pricing"]["rate"]["ladder"] = [{"floor": 0, "rate": 0.2}, {"floor": 600,
 df = pl.DataFrame({"score": [550, 720]})
 assert pricing.run(df, params=params)["rate"].to_list() == [0.2, 0.1]     # interpreted
 
-exe = Engine().bind(pricing, mode="fused")
+exe = pricing.compile("fused")
 assert exe.run(df, params=params)["rate"].to_list() == [0.2, 0.1]
 with no_recompile():                              # more rows, new values: same kernel
     params = {"pricing": {"rate": {"ladder": [{"floor": 0, "rate": 0.25}, {"floor": 500, "rate": 0.15},
@@ -252,8 +250,8 @@ parameter table must be an `Enum` column, so its values are known up front.
 
 ```python
 import polars as pl
-from decider import Engine
-from decider.steps.tables import DecisionTableConfig
+
+from decider import DecisionTableConfig
 from decider.testing import no_recompile
 
 price = DecisionTableConfig.load({"type": "decision_table", "name": "price",
@@ -265,7 +263,7 @@ assert price.parameters() == {"price": {"prices": {"type": "table", "schema": {"
                                                    "required": True}}}
 
 params = {"price": {"prices": [{"product": "loan", "rate": 0.12}, {"product": "card", "rate": 0.2}]}}
-exe = Engine().bind(price, mode="fused")
+exe = price.compile("fused")
 df = pl.DataFrame({"product": ["loan", "card", "car"]})
 assert exe.run(df, params=params)["rate"].to_list() == [0.12, 0.2, 0.0]
 with no_recompile():
@@ -346,7 +344,7 @@ assert app.run(pl.DataFrame({"income": [1000.0], "total_debt": [100.0]}))["offer
 
 ## A pipeline from a flow file
 
-`decider.steps.flowfile.load_flow` builds the same `Step` tree from a YAML or JSON
+`load_flow` builds the same `Step` tree from a YAML or JSON
 file instead of Python: the structure is reviewable and diffable on its own,
 while the steps stay plain Python functions.
 
@@ -387,7 +385,7 @@ from pathlib import Path
 
 import polars as pl
 
-from decider.steps.flowfile import load_flow
+from decider import load_flow
 
 def eligible(score: float) -> bool:
     return score > 50.0
@@ -455,7 +453,7 @@ def order_total(items: list[dict]) -> float:
 pipeline = flow(is_private, order_total, name="p")
 df = pl.DataFrame({"sector": ["private", "public"], "items": [[{"price": 2.0}], [{"price": 5.0}]]})
 
-exe = Engine().bind(pipeline, mode="fused")
+exe = pipeline.compile("fused")
 with warnings.catch_warnings(record=True) as caught:
     warnings.simplefilter("always")
     out = exe.run(df)
@@ -504,7 +502,7 @@ as its plain type in every mode:
 from typing import TypedDict
 
 import polars as pl
-from decider import Columnar, Engine, flow
+from decider import Columnar, flow
 
 class Item(TypedDict):
     price: float
@@ -516,7 +514,7 @@ def total(items: Columnar[Item]) -> float:
         t += items.price[j] * items.qty[j]
     return t
 
-exe = Engine().bind(flow(total, name="p"), mode="fused")
+exe = flow(total, name="p").compile("fused")
 df = pl.DataFrame({"items": [[{"price": 2.0, "qty": 3}, {"price": 5.0, "qty": 1}], []]})
 assert exe.run(df)["total"].to_list() == [11.0, 0.0]
 assert exe.fallbacks() == {}                     # compiled into the shared kernel
@@ -539,7 +537,7 @@ become new fields, which a later `Columnar[Item]` step reads in a kernel.
 from typing import TypedDict
 
 import polars as pl
-from decider import Columnar, Engine, each, flow, missing_as, param
+from decider import Columnar, each, flow, missing_as, param
 
 def heavy(weight: float = missing_as(0.0), heavy_kg: float = param(20.0)) -> bool:
     return weight > heavy_kg
@@ -556,7 +554,7 @@ def bundle_total(items: Columnar[Item]) -> float:
     return t
 
 pipeline = flow(each("items", flow(heavy, name="item"), name="items"), bundle_total, name="order")
-exe = Engine().bind(pipeline, mode="fused")
+exe = pipeline.compile("fused")
 df = pl.DataFrame({"items": [[{"weight": 5.0}, {"weight": 25.0}], []]})
 assert exe.run(df)["bundle_total"].to_list() == [25.0, 0.0]
 assert pipeline.parameters().defaults() == {"order": {"items": {"heavy_kg": 20.0}}}
@@ -644,7 +642,7 @@ assert out["approved"].to_list() == [False, True]
 for frame in corpus(pipeline).values():  # zeros, negatives, empty and chunked frames
     assert_equivalent(pipeline, frame)
 
-exe = Engine().bind(pipeline, mode="fused")
+exe = pipeline.compile("fused")
 exe.run(df)
 with no_recompile():                     # retuning a param never compiles
     exe.run(df, params={"credit": {"approved": {"limit": 0.9}}})
@@ -714,7 +712,7 @@ bounded with `max_events` or sampled with `sample_rate`, and loss is reported in
 
 ```python
 import polars as pl
-from decider import Engine, flow, param
+from decider import flow, param
 from decider.trace import Kind, TraceSink
 
 def ratio(income: float, debt: float) -> float:
@@ -726,7 +724,7 @@ def approved(ratio: float, limit: float = param(0.4)) -> bool:
 pipeline = flow(ratio, approved, name="credit")
 df = pl.DataFrame({"income": [1000.0], "debt": [200.0]})
 sink = TraceSink()
-Engine().bind(pipeline, mode="fused").run(df, trace=sink)
+pipeline.compile("fused").run(df, trace=sink)
 assert [e.origin.path for e in sink.events() if e.kind is Kind.STEP] == ["credit/ratio", "credit/approved"]
 assert sink.status()["dropped"] == 0
 ```

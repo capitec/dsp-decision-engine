@@ -38,6 +38,8 @@ class FlowRef(BaseModel):
 class StepRef(BaseModel):
     """One node of a flow.
 
+    Not `decider.StepRef`, the field type for a nested step.
+
     The durable global reference is `(flow_id, step_id)`: both come from
     committed source, so a trace or finding links to a step that survives
     renames and reordering. `path` is the derived path (`Origin.path`), unique

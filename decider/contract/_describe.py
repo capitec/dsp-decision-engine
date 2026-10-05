@@ -12,7 +12,6 @@ from decider.contract._refs import CONTRACT_VERSION, EdgeRef, FlowDescription, F
 from decider._engine.ir.context import to_ir
 from decider._engine.ir.nodes import (BranchNode, CallNode, FiniteStateMachineNode, IRNode, LoopNode, ScatterGatherNode,
                                      SequenceNode, iter_nodes)
-from decider._engine.run.engine import RUNNERS
 from decider._engine.wiring import Plan, resolve
 
 _NODE_TYPE = {
@@ -60,6 +59,8 @@ class Capabilities(BaseModel):
 
 def capabilities() -> Capabilities:
     """The capabilities of the installed decider."""
+    from decider._engine.run.engine import RUNNERS  # imports numba
+
     return Capabilities(
         modes=tuple(sorted(RUNNERS)),
         optional_dependencies={extra: importlib.util.find_spec(module) is not None
@@ -73,6 +74,7 @@ def describe(step: Any) -> FlowDescription:
     Layers over the IR and wiring: nodes and control edges come from the IR
     tree, data edges and value slots from `resolve` (which knows which node
     wrote each value). A wiring problem raises the engine's own `WiringError`.
+    Also importable as `decider.describe`.
 
     Example::
 

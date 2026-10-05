@@ -7,7 +7,7 @@ an older version. The guide and the docstrings are current.
 Quickstart::
 
     import polars as pl
-    from decider import Engine, flow, param
+    from decider import flow, param
 
     def ratio(income: float, debt: float) -> float:                  # plain arguments: request data
         return debt / income
@@ -18,7 +18,7 @@ Quickstart::
     pipeline = flow(ratio, affordable, name="afford")
     df = pl.DataFrame({"income": [1000.0, 500.0], "debt": [200.0, 400.0]})
     pipeline.run(df)                                          # income, debt, affordable
-    Engine().bind(pipeline, mode="fused").score({"income": 1000.0, "debt": 200.0})   # one record, as a dict
+    pipeline.compile("fused").score({"income": 1000.0, "debt": 200.0})   # compile once, then one record at a time (a dict)
 
 A function's arguments are the columns it reads and its name is the column it
 writes. `flow` runs steps in written order (a later write wins), `dag` in
@@ -36,21 +36,74 @@ More::
     s = pipeline.session(df); s.break_at("afford/affordable"); s.resume()   # debug step by step
 
 `decider template NAME` writes a starter project; `decider build` and
-`decider serve` build and serve it. Elsewhere: `decider.serving`
-(`RequestHandler`), `decider.config` (`JsonFileStore`), `decider.steps.trees`,
-`.tables` and `.scorecard` (`TreeConfig`, `DecisionTableConfig`,
-`ScorecardConfig`), `decider.testing` (`assert_equivalent`, `no_recompile`).
-Build, wiring, params and missing-input errors are `decider.exceptions.DeciderError`s.
+`decider serve` build and serve it. Companion packages, one per task:
+
+- `decider.checks`: static checks and the findings report
+- `decider.experiments`: run an experiment definition and read its report
+- `decider.data`: read datasets and the project's dataset catalog
+- `decider.testing`: `assert_equivalent`, `no_recompile`
+- `decider.serving`: `RequestHandler` and the HTTP app
+- `decider.config`: `JsonFileStore`, versioned params documents
+- `decider.debug`: `Session` and the events it emits
+- `decider.trace`: `TraceSink`, per-record decision traces
+- `decider.ir`: the intermediate representation, for step-type authors
+- `decider.registry`: `BaseRegistryModule`, to register your own step types
+- `decider.contract`: the integration contract (refs, run manifest, jobs, message schemas)
+
+Tree, table and scorecard documents are `TreeConfig`, `DecisionTableConfig` and
+`ScorecardConfig`, loaded on first use. Build, wiring, params and missing-input
+errors are `DeciderError`s (`decider.exceptions` has the subclasses).
 """
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
 from decider._annotations import Columnar, Duration, FieldMetadata, Money, Percent, Raw, Struct, raw_str
-from decider._engine import Engine
 from decider._engine.params import ParamTable, missing_as, param, param_table
-from decider.exceptions import FallbackWarning
-from decider.steps import (ConfigurableStep, EachMode, ParamRef, Value, allow_fallback, branch, dag, each, flow,
-                           frame_step, helper, loop, optimise, step)
+from decider.contract import describe
+from decider.exceptions import DeciderError, FallbackWarning
+from decider.steps import (ConfigurableStep, EachMode, ParamRef, Step, StepRef, Value, allow_fallback, branch, dag,
+                           each, flow, frame_step, helper, loop, optimise, step)
+from decider.steps.flowfile import load_flow
+
+if TYPE_CHECKING:
+    from decider._engine.run import Engine, Executable
+    from decider.steps.scorecard import ScorecardConfig
+    from decider.steps.tables import DecisionTableConfig
+    from decider.steps.trees import TreeConfig
 
 __all__ = [
-    "ConfigurableStep", "Duration", "EachMode", "Engine", "FallbackWarning", "FieldMetadata", "Money", "ParamRef",
-    "Percent", "Raw", "Columnar", "Struct", "Value", "allow_fallback", "branch", "dag", "each", "flow",
-    "frame_step", "helper", "loop", "optimise", "raw_str", "ParamTable", "missing_as", "param", "param_table", "step",
+    # build
+    "step", "frame_step", "flow", "dag", "branch", "loop", "each", "optimise", "EachMode", "allow_fallback",
+    "helper", "param", "param_table", "missing_as", "ParamTable", "Money", "Percent", "Duration", "FieldMetadata",
+    "Columnar", "Struct", "Raw", "raw_str", "TreeConfig", "DecisionTableConfig", "ScorecardConfig",
+    # run
+    "Engine", "Executable", "load_flow", "describe",
+    # extend
+    "Step", "ConfigurableStep", "Value", "ParamRef", "StepRef",
+    # errors
+    "DeciderError", "FallbackWarning",
 ]
+
+# Names whose modules import numba load on first use, so `import decider` stays light.
+_LAZY = {
+    "Engine": "decider._engine.run",
+    "Executable": "decider._engine.run",
+    "TreeConfig": "decider.steps.trees",
+    "DecisionTableConfig": "decider.steps.tables",
+    "ScorecardConfig": "decider.steps.scorecard",
+}
+
+
+def __getattr__(name: str) -> Any:
+    if name in _LAZY:
+        import importlib
+
+        value = getattr(importlib.import_module(_LAZY[name]), name)
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module 'decider' has no attribute {name!r}")
+
+
+def __dir__() -> list[str]:
+    return sorted(__all__)

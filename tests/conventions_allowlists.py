@@ -13,7 +13,7 @@ NO_ALL: dict[str, str] = {  # {module path relative to decider/: reason}
 }
 
 BIG_ALL: dict[str, str] = {  # {package path relative to decider/: reason}
-    ".": "trimmed to the build/run/extend list in the surface phase",
+    ".": "the authoring vocabulary is one namespace by design",
     "contract": "the integration contract exports every versioned model an integrator receives",
     "steps": "trimmed to the target list in the surface phase",
     "steps/trees/schema": "permanent: the document grammar is public by design",
@@ -49,7 +49,6 @@ PRIVATE_IMPORT: dict[str, str] = {  # {"importer -> imported": reason}
     "experiments._runner -> _engine.wiring.plan": "walks the resolved plan, which is internal",
     "_tools.ids -> _engine.ir.origin": "check_id and check_name are not in decider.ir",
     "serving._handler -> _engine.types": "struct_item has no public home",
-    "serving._handler -> _engine.run": "Executable is not exported from decider yet",
     "serving._parse -> _engine.types": "struct_item has no public home",
     "serving._parse -> _engine.ir.decls": "base_annotation is not in decider.ir",
     "testing._corpus -> _engine.ir.decls": "base_annotation is not in decider.ir",
@@ -61,6 +60,7 @@ PRIVATE_IMPORT: dict[str, str] = {  # {"importer -> imported": reason}
 }
 
 UPWARD_IMPORT: dict[str, str] = {  # {"importer module -> imported module": reason}
+    "__init__ -> contract": "permanent: describe is the one deliberate second path, for users",
     "_settings -> config": "the settings build a config store from its type tag",
 }
 
