@@ -10,7 +10,7 @@ import numpy as np
 import polars as pl
 
 from decider._engine.ir.decls import Input, NullPolicy
-from decider.types import string_code
+from decider._annotations import string_code
 
 # A `bytes` object's own buffer, without the microsecond `np.ndarray.ctypes.data` costs.
 _address = ctypes.pythonapi.PyBytes_AsString

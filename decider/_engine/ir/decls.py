@@ -7,7 +7,7 @@ import typing
 from typing import Any, Literal
 
 import numpy as np
-from decider.types import annotation_cache, is_raw, plain_annotation, raw_base
+from decider._engine.types import annotation_cache, is_raw, plain_annotation, raw_base
 
 OnInvalid = Literal["error", "warn", "default"]
 

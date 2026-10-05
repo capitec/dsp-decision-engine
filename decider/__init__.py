@@ -42,11 +42,10 @@ More::
 `ScorecardConfig`), `decider.testing` (`assert_equivalent`, `no_recompile`).
 Build, wiring, params and missing-input errors are `decider.exceptions.DeciderError`s.
 """
+from decider._annotations import Columnar, Duration, FieldMetadata, Money, Percent, Raw, Struct, raw_str
 from decider._engine import Engine
 from decider._engine.params import Table, missing_as, param, param_table
-from decider.fields import Duration, FieldMetadata, Money, Percent
 from decider.exceptions import FallbackWarning
-from decider.types import Columnar, Raw, Struct, raw_str
 from decider.steps import (ConfigurableStep, EachMode, ParamRef, Value, allow_fallback, branch, dag, each, flow,
                            frame_step, helper, loop, optimise, step)
 

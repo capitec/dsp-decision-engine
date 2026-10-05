@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any, get_origin, is_typeddict
 
 from decider._engine.ir.decls import Input, base_annotation
-from decider.types import columnar_item, is_raw, item_schema, struct_item
+from decider._engine.types import columnar_item, is_raw, item_schema, struct_item
 from decider._engine.ir.nodes import (BranchNode, CallNode, IRNode, LoopNode, ScatterGatherNode, SequenceNode,
                                      iter_nodes)
 from decider._engine.wiring.plan import (Branch, Call, Carry, Loop, Merge, Plan, Resolved, ScatterGather, Sequence,

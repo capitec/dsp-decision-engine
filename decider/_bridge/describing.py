@@ -9,7 +9,7 @@ import textwrap
 from pathlib import Path
 
 from decider.ir import BranchNode, CallNode, LoopNode
-from decider.fields import metadata_of
+from decider._annotations import metadata_of
 from decider.steps import FrameStep, FunctionStep, Step
 
 

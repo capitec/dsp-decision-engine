@@ -8,7 +8,7 @@ from decider._engine.ir.decls import Input, NullPolicy, Output, ParamDecl, nulla
 from decider._engine.params.declare import MissingAs, ParamSpec, is_plain_marker
 from decider._engine.params.tables import table_type
 from decider.exceptions import IRError
-from decider.types import hoist_metadata
+from decider._engine.types import hoist_metadata
 
 _EMPTY = inspect.Parameter.empty
 

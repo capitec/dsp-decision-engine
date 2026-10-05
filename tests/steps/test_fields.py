@@ -5,7 +5,7 @@ import polars as pl
 from decider import Duration, Engine, Money, Percent, flow, param
 from decider._engine.ir.decls import NullPolicy, base_annotation
 from decider._engine.params.harvest import harvest
-from decider.fields import metadata_of
+from decider._annotations import metadata_of
 
 
 def instalment(loan: Annotated[float, Money()], rate: Annotated[float, Percent()] = param(0.12)) -> Annotated[float, Money()]:
