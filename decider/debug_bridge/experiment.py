@@ -17,11 +17,11 @@ def _load_definition(bridge, definition, def_, file, pipeline):
 
 
 def run_experiment(bridge, req, definition=None, def_=None, file=None, pipeline=None, data=None, out_dir=None,
-                   input=None):
+                   input=None, dataset=None):
     """Run an experiment from an `experiment.json` path (or its text), or an inline `def_` over `file`'s pipeline.
 
-    `input`, when given, overrides the definition's own `input.path` (running the same experiment on another
-    dataset). Streams `{"progress": {"done", "total"}}` lines on `req`'s id while it runs; a `{"cmd": "cancel",
+    `input` (a path) or `dataset` (a project dataset name), when given, override the definition's own input
+    (running the same experiment on other data). Streams `{"progress": {"done", "total"}}` lines on `req`'s id while it runs; a `{"cmd": "cancel",
     "target": <that id>}` line stops it at the next batch boundary.
     """
     from decider.experiments import InputSpec, run, run_experiment
@@ -34,6 +34,8 @@ def run_experiment(bridge, req, definition=None, def_=None, file=None, pipeline=
     d = _load_definition(bridge, definition, def_, file, pipeline)
     if input is not None:
         d.input = InputSpec(path=input)
+    elif dataset is not None:
+        d.input = InputSpec(dataset=dataset)
     job = JobHandle(job_id=str(req["id"]), kind="experiment_run")
     bridge._jobs[req["id"]] = job
     try:

@@ -825,6 +825,75 @@ assert preflight(pipeline, data.frame).ok
 assert check_scope(describe(pipeline), ExecutionScope.SELECTED_RECORD).redirected is False
 ```
 
+### Datasets
+
+`decider.data.datasets()` lists the project's named datasets, read from
+`datasets/` beside `configs/`. `name.csv|parquet|jsonl|ndjson|json` is a `file`
+dataset; a `name/` folder of part files of one format is a `folder` dataset
+(`region=za/` subfolders become a `region` column; mixed formats are an error).
+
+```python
+import polars as pl
+from pathlib import Path
+from decider.data import datasets
+
+Path("datasets/loans").mkdir(parents=True)
+pl.DataFrame({"client_id": [1, 2], "income": [1000.0, 500.0]}).write_parquet("datasets/clients.parquet")
+Path("datasets/loans/part-0.csv").write_text("client_id,debt\n1,350\n")
+Path("datasets/loans/part-1.csv").write_text("client_id,debt\n2,400\n")
+Path("datasets/config.json").write_text('{"loans": {"type": "folder", "path": "loans", "key": ["client_id"]}}')
+
+found = datasets()
+assert {n: p.type for n, p in found.items()} == {"clients": "file", "loans": "folder"}
+loaded = found["loans"].load()
+assert loaded.dataset == "loans" and loaded.suggested_key == ("client_id",)
+assert loaded.frame.height == 2
+```
+
+`datasets/config.json` maps `name` to a provider document and replaces an
+inferred dataset of that name; relative `path`s resolve against `datasets/`.
+`key` is the record key: `load()` rejects null or duplicate keys. Other
+members: `scan()` (lazy), `schema()`, `head(n=50)`, `fingerprint(frame)`.
+
+For another source, subclass `DatasetProvider` and implement `scan()`.
+Name it in `config.json` by its `type`, or by `"package.module:Class"`, which
+is imported on demand. Credentials are the provider's business.
+
+```python
+import sqlite3
+import typing as t
+import polars as pl
+from pathlib import Path
+from decider.data import DatasetProvider, datasets
+
+class SqliteTable(DatasetProvider):
+    type: t.Literal["sqlite"] = "sqlite"
+    database: str
+    table: str
+
+    def scan(self) -> pl.LazyFrame:
+        return pl.read_database(f"select * from {self.table}", sqlite3.connect(self.database)).lazy()
+
+Path("datasets").mkdir()
+with sqlite3.connect("clients.db") as db:
+    db.execute("create table clients (client_id integer, income real)")
+    db.execute("insert into clients values (1, 1000.0), (2, 500.0)")
+Path("datasets/config.json").write_text(
+    '{"clients": {"type": "sqlite", "database": "clients.db", "table": "clients", "key": ["client_id"]}}'
+)
+
+loaded = datasets()["clients"].load()
+assert loaded.frame.height == 2 and loaded.suggested_key == ("client_id",)
+```
+
+Set a different folder with `DECIDER_DATASETS_PATH`; the default is
+`${PROJECT_ROOT}/datasets`. In a `.env`, `decider` expands `${...}` itself
+(python-dotenv), even in single quotes, so `${PROJECT_ROOT}` becomes empty:
+use an absolute path, or a relative one (relative to the cwd).
+
+An experiment can take `input={"dataset": "<name>"}` instead of `path`. The
+VS Code extension's Datasets view lists, previews and debugs a flow on one.
+
 ### MCP
 
 `decider mcp` serves a FastMCP server over stdio for an agent: structural and

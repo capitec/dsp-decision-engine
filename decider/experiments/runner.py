@@ -28,7 +28,8 @@ from typing import Any, Iterator, Sequence
 import polars as pl
 
 from decider.contract import describe
-from decider.data import LoadedData, load, preflight
+from decider.data import LoadedData, preflight
+from decider.data.formats import scan
 from decider.engine import Engine
 from decider.engine.debug.session import _cast
 from decider.engine.ir.decls import base_annotation
@@ -40,7 +41,7 @@ from decider.exceptions import DeciderError
 from decider.experiments.callbacks import (Batch, Callback, JobProgress, NodeBatch, Run, WriteOutputs, overrides,
                                            selects)
 from decider.experiments.experiments import (BASELINE, ExperimentDef, ExperimentResult, RunStatus, Scenario,
-                                             ScenarioResult, ScenarioStatus, check_experiment_version, validate)
+                                             ScenarioResult, ScenarioStatus, check_experiment_version, input_frame, validate)
 from decider.experiments.metrics.base import Metric
 from decider.experiments.plots.base import Figure
 from decider.experiments.revision import compatible, materialise, remove, resolve
@@ -52,7 +53,7 @@ Frame = pl.DataFrame | pl.LazyFrame
 
 def run(def_: ExperimentDef, *, frame: Frame | None = None, out_dir: str | None = None,
         job: JobHandle | None = None, callbacks: Sequence[Callback] = ()) -> ExperimentResult:
-    """Run `def_` headlessly: load the flow by `flow.entry` and, without `frame`, scan `input.path`.
+    """Run `def_` headlessly: load the flow by `flow.entry` and, without `frame`, scan `input.path` or `input.dataset`.
 
     Example::
 
@@ -62,22 +63,8 @@ def run(def_: ExperimentDef, *, frame: Frame | None = None, out_dir: str | None 
     check_experiment_version(def_.version)
     step = load_flow(def_.flow.entry)
     if frame is None:
-        if not def_.input.path:
-            raise DeciderError("no input data: set input.path in the definition, or pass frame=")
-        frame = scan(def_.input.path)
+        frame = input_frame(def_)
     return run_experiment(def_, step, frame, callbacks=callbacks, job=job, out_dir=out_dir)
-
-
-def scan(path: str | Path) -> pl.LazyFrame:
-    """`path` as a lazy frame: Parquet, CSV and JSON lines are read a batch at a time, other JSON whole."""
-    suffix = Path(path).suffix.lower()
-    if suffix == ".parquet":
-        return pl.scan_parquet(path)
-    if suffix == ".csv":
-        return pl.scan_csv(path)
-    if suffix in (".jsonl", ".ndjson"):
-        return pl.scan_ndjson(path)
-    return load(path).frame.lazy()
 
 
 def run_experiment(def_: ExperimentDef, step, frame: Frame, params=None, *, callbacks: Sequence[Callback] = (),
@@ -377,7 +364,7 @@ def _status(stop: str | None, errors: dict[str, str], nondeterministic: bool) ->
 
 def _manifest(def_: ExperimentDef, step, frame: Frame, total: int, resolved: str | None,
               results: tuple[ScenarioResult, ...]) -> RunManifest:
-    dataset = Path(def_.input.path).name if def_.input.path else ""
+    dataset = def_.input.dataset or Path(def_.input.path).name
     if isinstance(frame, pl.DataFrame):
         data = LoadedData.from_frame(frame, dataset=dataset).summary
     else:

@@ -19,6 +19,13 @@ Findings that cost time:
   constructor that takes options must accept and ignore it.
 - **`/usr/bin/codium` is a wrapper that detaches.** Test runners have to launch
   `/usr/share/codium/codium`, the Electron binary itself.
+- **On macOS, run `Contents/MacOS/Code`, not the `code` CLI** (it hands off to
+  the running app). From a terminal inside VS Code, unset
+  `ELECTRON_RUN_AS_NODE` first, or the binary runs as Node and rejects
+  `--user-data-dir`. Give it an absolute, short `--user-data-dir` (a relative
+  one resolves against `/`, and a long one overflows the 104-byte socket path
+  limit), and point `--extensions-dir` at one with `ms-python.debugpy`, which
+  the extension depends on.
 - **Headless works with `--ozone-platform=headless`.** Screenshots still render,
   so no Xvfb is needed and no window appears.
 - **Webview content is two iframes deep:** `iframe.webview.ready`, then

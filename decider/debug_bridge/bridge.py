@@ -26,6 +26,7 @@ from pathlib import Path
 import polars as pl
 
 from decider.config import JsonFileStore
+from decider.data import dataset as named_dataset
 from decider.contract.describing import (assignment_lines, field_metadata, find_pipelines, formula, key_column,
                                          node_json, values_file)
 from decider.engine import Engine
@@ -42,9 +43,10 @@ from decider.serving.handler import RequestHandler
 from decider.serving.parse import coerce_record, has_date
 from decider.steps import FunctionStep, Step
 
-from .loading import load_module
+from .loading import components, flow_components, flow_name, is_flow_file, latest_config, load_module, project_root
 from .rows import load_rows
 from .runs import apply_overrides, debug_condition, tree_path
+from .datasets import dataset_head, dataset_schema, datasets
 from .draft import draft_changes
 from .timeline import Timeline
 
@@ -53,15 +55,6 @@ def base_params(mod, params, default=None):
     """The module's `PARAMS` (its tables and tuned values, as the config store holds them), or `default`
     when it has none, with `params` on top."""
     return merge(getattr(mod, "PARAMS", None) or default or {}, params or {}) or None
-
-
-def _project_root(file):
-    """The nearest ancestor directory of `file` holding a `configs/` directory, as `decider serve` finds one."""
-    directory = Path(file).resolve().parent
-    for candidate in [directory, *directory.parents]:
-        if (candidate / "configs").is_dir():
-            return candidate
-    return None
 
 
 def _date_inputs(step):
@@ -75,12 +68,8 @@ def _build(fn, file):
     `sample_request.json` record (or `None`, its dates converted like a request's), from the
     project root the pipeline's file sits in.
     """
-    root = _project_root(file) if file else None
-    config = {}
-    if root is not None:
-        store = JsonFileStore(basepath=str(root / "configs"))
-        version = store.latest_version()
-        config = store.read(version).config if version else {}
+    root = project_root(file) if file else None
+    config = latest_config(root)
     step = RequestHandler(JsonFileStore(), fn).pipeline_fn(config)
     sample = None
     candidate = root and root / "sample_request.json"
@@ -108,15 +97,20 @@ class Bridge:
         return load_module(file) if file else self.notebook()
 
     def describe(self, file=None, pipeline=None):
-        self.file, self.mod = file, self._load(file)
-        pipelines = (find_pipelines(self.mod, file) if file
-                     else [{"name": pipeline, "line": None, "kind": type(getattr(self.mod, pipeline)).__name__, "status": "pipeline"}])
-        valid = [p for p in pipelines if p.get("status") != "invalid"]
-        if not valid:
-            reasons = "; ".join(dict.fromkeys(p.get("reason", "") for p in pipelines if p.get("reason")))
-            raise ValueError(f"{file}: no decider pipeline{' (' + reasons + ')' if reasons else ''}: define `def build()` or assign one at module level")
-        self.name = pipeline or valid[-1]["name"]
-        target = getattr(self.mod, self.name)
+        self.file = file
+        if file and is_flow_file(file):
+            self.mod, self.name = flow_components(file), flow_name(file)
+            pipelines, target = [{"name": self.name, "line": 1, "kind": "flow file", "status": "pipeline"}], file
+        else:
+            self.mod = self._load(file)
+            pipelines = (find_pipelines(self.mod, file) if file
+                         else [{"name": pipeline, "line": None, "kind": type(getattr(self.mod, pipeline)).__name__, "status": "pipeline"}])
+            valid = [p for p in pipelines if p.get("status") != "invalid"]
+            if not valid:
+                reasons = "; ".join(dict.fromkeys(p.get("reason", "") for p in pipelines if p.get("reason")))
+                raise ValueError(f"{file}: no decider pipeline{' (' + reasons + ')' if reasons else ''}: define `def build()` or assign one at module level")
+            self.name = pipeline or valid[-1]["name"]
+            target = getattr(self.mod, self.name)
         if isinstance(target, Step):
             self.step, self._build_params, self._build_sample = target, None, None
         else:
@@ -126,7 +120,7 @@ class Bridge:
         located = {}
         # Steps assigned in any module of the pipeline's package, the pipeline file first.
         top = self.mod.__name__.split(".")[0]
-        mods = [m for m in [self.mod] if file] + [m for n, m in list(sys.modules.items())
+        mods = [m for m in [self.mod] if file and getattr(m, "__file__", None)] + [m for n, m in list(sys.modules.items())
                                                   if (n == top or n.startswith(top + ".")) and m is not self.mod and getattr(m, "__file__", None)]
         for m in mods:
             lines = assignment_lines(m.__file__)
@@ -148,14 +142,17 @@ class Bridge:
                           "valuesFile": file and values_file(file)}
         return self.described
 
-    def trace(self, file=None, pipeline=None, data=None, params=None, overrides=None, row=None, forces=()):
-        """Describe and run `file` to the end on `data` (default: its SAMPLE), with `overrides` and `forces` applied."""
+    def trace(self, file=None, pipeline=None, data=None, params=None, overrides=None, row=None, forces=(), dataset=None):
+        """Describe and run `file` to the end on `data` or the named `dataset` (default: its SAMPLE), with `overrides` and `forces` applied."""
         self.describe(file, pipeline)
-        frame = apply_overrides(self._rows(data), overrides, row)
+        frame = apply_overrides(self._rows(data, dataset, file), overrides, row)
         return self._run(self.step, frame, base_params(self.mod, params, self._build_params), forces)
 
-    def _rows(self, data):
-        loaded = load_rows(data if data is not None else getattr(self.mod, "SAMPLE", None) or self._build_sample)
+    def _rows(self, data, dataset=None, start=None):
+        if dataset is not None and data is not None:
+            raise ValueError("pass either data or dataset, not both")
+        loaded = (named_dataset(dataset, start).load() if dataset is not None
+                  else load_rows(data if data is not None else getattr(self.mod, "SAMPLE", None) or self._build_sample))
         self.dataset = loaded.summary
         return loaded.frame
 
@@ -169,12 +166,12 @@ class Bridge:
         for c in n.get("children", ()):
             self._index(c, n["path"])
 
-    def start(self, file=None, pipeline=None, data=None, params=None, breakpoints=(), forces=(), watches=(), overrides=None, row=None):
+    def start(self, file=None, pipeline=None, data=None, params=None, breakpoints=(), forces=(), watches=(), overrides=None, row=None, dataset=None):
         self.describe(file, pipeline)
         self.doc = base_params(self.mod, params, self._build_params)
         self.original = self.step
         self.edits = []  # (path, step or None), so each edit can be compared on its own
-        self.session = Engine().bind(self.step).session(apply_overrides(self._rows(data), overrides, row), self.doc)
+        self.session = Engine().bind(self.step).session(apply_overrides(self._rows(data, dataset, file), overrides, row), self.doc)
         self.controls = Controls(self.described["ir"])
         self.controls.set(forces, watches)
         self.controls.session = self.session
@@ -289,7 +286,7 @@ class Bridge:
         finally:
             s.clear_break(target)
 
-    def sweep(self, scenarios, from_here=True, file=None, pipeline=None, data=None, params=None, forces=()):
+    def sweep(self, scenarios, from_here=True, file=None, pipeline=None, data=None, params=None, forces=(), dataset=None):
         """Run every scenario from the paused point (or from the start) next to the unchanged run.
 
         Each scenario is `{"label", "params", "overrides", "row", "forces"}`. From the start,
@@ -303,7 +300,7 @@ class Bridge:
             result = sweep(self.step, s.frame, s.params, self.history, at, scenarios, self.described["ir"], self.controls.forces)
         else:
             self.describe(file, pipeline)
-            frame = self._rows(data)
+            frame = self._rows(data, dataset, file)
             at = None
             params = base_params(self.mod, params, self._build_params)
             ir = self.described["ir"]
@@ -413,6 +410,10 @@ class Bridge:
         if cmd in ("describe", "start", "state", "column", "step_out", "trace", "sweep", "compare_edits", "set_controls", "changes", "go_to", "rerun", "draft"):
             result = getattr(self, cmd)(**args)
             return self.status() if cmd == "step_out" else result
+        if cmd in ("datasets", "dataset_schema", "dataset_head"):
+            return {"datasets": datasets, "dataset_schema": dataset_schema, "dataset_head": dataset_head}[cmd](**args)
+        if cmd == "components":
+            return components(**args)
         if cmd in ("experiment", "experiment_schema", "experiment_validate"):
             from . import experiment
             return experiment.run_experiment(self, req, **args) if cmd == "experiment" else getattr(experiment, cmd)(self, **args)
