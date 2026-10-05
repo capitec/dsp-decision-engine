@@ -76,11 +76,11 @@ flowchart LR
         C["ConfigurableStep<br/>(pydantic JSON: trees, tables, ...)"]
     end
 
-    subgraph IR["IR (decider.engine.ir): closed set"]
+    subgraph IR["IR (decider._engine.ir): closed set"]
         N["SequenceNode / CallNode /<br/>BranchNode / LoopNode<br/>each with an Origin"]
     end
 
-    subgraph Engine["Engine (decider.engine)"]
+    subgraph Engine["Engine (decider._engine)"]
         B["bind(mode)<br/>interpreted | stepped | fused"]
         X["Executable"]
     end

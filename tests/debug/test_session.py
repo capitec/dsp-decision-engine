@@ -3,10 +3,10 @@ import polars as pl
 import pytest
 
 from decider import branch, flow, param, step
-from decider.engine import Engine
-from decider.engine.debug import (NodeFinished, NodeVisited, Overridden, ParamsValidated, Paused, RunFinished,
+from decider._engine import Engine
+from decider._engine.debug import (NodeFinished, NodeVisited, Overridden, ParamsValidated, Paused, RunFinished,
                                   SetValue)
-from decider.engine.run.runners import InterpretedRunner
+from decider._engine.run.runners import InterpretedRunner
 from decider.steps.trees import TreeConfig
 
 

@@ -5,10 +5,11 @@ import gc
 import polars as pl
 import pytest
 
-from decider import branch, dag, engine, flow, loop, param, step
-from decider.engine.ir.context import _BUILT, IRContext
-from decider.engine.ir.decls import Input, Output, ParamDecl
-from decider.engine.ir.nodes import CallNode, SequenceNode, iter_nodes
+from decider import branch, dag, flow, loop, param, step
+from decider import _engine as engine
+from decider._engine.ir.context import _BUILT, IRContext
+from decider._engine.ir.decls import Input, Output, ParamDecl
+from decider._engine.ir.nodes import CallNode, SequenceNode, iter_nodes
 from decider.serializable.dataframe import DataFrame
 from decider.steps import ConfigurableStep, ParamRef, Step, TableRef, TableValue, Value
 

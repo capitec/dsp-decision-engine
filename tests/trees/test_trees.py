@@ -3,9 +3,10 @@ import numpy as np
 import polars as pl
 import pytest
 
-from decider import engine, flow
-from decider.engine import Engine
-from decider.engine.compile import kernel
+from decider import flow
+from decider import _engine as engine
+from decider._engine import Engine
+from decider._engine.compile import kernel
 from decider.steps.trees import TreeConfig, walker
 from decider.testing import assert_equivalent
 

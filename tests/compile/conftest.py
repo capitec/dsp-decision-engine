@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from decider.engine.compile import compile_plan, default_bundle
+from decider._engine.compile import compile_plan, default_bundle
 
 
 def run_plan(plan, inputs, *, fuse=True, params=None, valid=None, units=None):

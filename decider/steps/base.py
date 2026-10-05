@@ -4,15 +4,15 @@ import dataclasses
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Iterator
 
-from decider.engine.ir.origin import check_name
+from decider._engine.ir.origin import check_name
 
 if TYPE_CHECKING:
     from typing import Self
 
-    from decider.engine.ir.context import IRContext
-    from decider.engine.ir.nodes import IRNode
-    from decider.engine.params.schema import ParamsSchema
-    from decider.engine.run.engine import Mode
+    from decider._engine.ir.context import IRContext
+    from decider._engine.ir.nodes import IRNode
+    from decider._engine.params.schema import ParamsSchema
+    from decider._engine.run.engine import Mode
     from decider.steps.sequential import SequentialStep
 
 
@@ -75,9 +75,9 @@ class Step(ABC):
             ratio.relabel(reads={"instalment": "monthly_instalment"}, writes={"ratio": "dti"})
             ratio.relabel(writes={"ratio": "dti"}).relabel(writes={"dti": "dti_pct"})  # writes dti_pct
         """
-        from decider.engine.ir.context import IRContext
-        from decider.engine.ir.nodes import CallNode, iter_nodes
-        from decider.engine.wiring.interface import interface
+        from decider._engine.ir.context import IRContext
+        from decider._engine.ir.nodes import CallNode, iter_nodes
+        from decider._engine.wiring.interface import interface
 
         node = IRContext().build(self)
         calls = [n for n in iter_nodes(node) if isinstance(n, CallNode)]
@@ -96,8 +96,8 @@ class Step(ABC):
 
             pipeline.parameters().defaults()   # a complete params document of defaults
         """
-        from decider.engine import to_ir
-        from decider.engine.params.schema import parameters
+        from decider._engine import to_ir
+        from decider._engine.params.schema import parameters
 
         return parameters(to_ir(self))
 
@@ -120,7 +120,7 @@ class Step(ABC):
 
             out = pipeline.run(df, params={"term": {"cap_by_income": {"cap": 36.0}}})
         """
-        from decider.engine import Engine
+        from decider._engine import Engine
 
         return Engine().bind(self).run(data, **kwargs)
 
@@ -138,7 +138,7 @@ class Step(ABC):
             s.resume()
             s.output()
         """
-        from decider.engine import Engine
+        from decider._engine import Engine
 
         return Engine(**engine_kwargs).bind(self, mode).session(data, params)
 

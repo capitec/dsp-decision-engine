@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from decider import branch, dag, flow, frame_step, missing_as, param, step
-from decider.engine.wiring import Branch, Sequence, resolve
+from decider._engine.wiring import Branch, Sequence, resolve
 
 
 def disposable_income(net_income: float, expenses: float) -> float:

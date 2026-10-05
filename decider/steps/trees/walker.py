@@ -4,7 +4,7 @@ from __future__ import annotations
 from numba import njit, types
 from numba.extending import intrinsic, overload
 
-from decider.engine.boundary._arrow.intrinsics import load_f64, load_i64, load_u8
+from decider._engine.boundary._arrow.intrinsics import load_f64, load_i64, load_u8
 from decider.steps.expr.postfix import evaluate
 from decider.steps.trees.ops import EQ, GE, GT, LE, LT
 

@@ -42,8 +42,8 @@ More::
 `ScorecardConfig`), `decider.testing` (`assert_equivalent`, `no_recompile`).
 Build, wiring, params and missing-input errors are `decider.exceptions.DeciderError`s.
 """
-from decider.engine import Engine
-from decider.engine.params import Table, missing_as, param, param_table
+from decider._engine import Engine
+from decider._engine.params import Table, missing_as, param, param_table
 from decider.fields import Duration, FieldMetadata, Money, Percent
 from decider.exceptions import FallbackWarning
 from decider.types import Columnar, Raw, Struct, raw_str

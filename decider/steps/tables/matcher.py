@@ -4,7 +4,7 @@ from __future__ import annotations
 from numba import njit, types
 from numba.extending import overload
 
-from decider.engine.boundary._arrow.intrinsics import load_f64, load_i64
+from decider._engine.boundary._arrow.intrinsics import load_f64, load_i64
 from decider.steps.tables.encode import (
     BETWEEN,
     ELSE,

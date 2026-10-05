@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from decider import branch, dag, engine, flow, frame_step, loop, missing_as, param, step
-from decider.engine.ir.nodes import BranchNode, CallNode, LoopNode, SequenceNode
+from decider import branch, dag, flow, frame_step, loop, missing_as, param, step
+from decider import _engine as engine
+from decider._engine.ir.nodes import BranchNode, CallNode, LoopNode, SequenceNode
 from decider.steps import DagStep, FunctionStep, SequentialStep
 
 

@@ -13,7 +13,7 @@ import time
 import numpy as np
 import polars as pl
 
-from decider.engine import Engine
+from decider._engine import Engine
 from decider.steps.tables import DecisionTableConfig
 
 N = 1_000_000

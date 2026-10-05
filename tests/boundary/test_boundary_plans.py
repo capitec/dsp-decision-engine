@@ -3,12 +3,12 @@ import numpy as np
 import polars as pl
 import pytest
 
-pytest.importorskip("decider.engine.boundary._arrow._shim", exc_type=ImportError, reason="the Arrow shim can't be built here")
+pytest.importorskip("decider._engine.boundary._arrow._shim", exc_type=ImportError, reason="the Arrow shim can't be built here")
 
-from decider.engine.boundary.extract import extract_frame  # noqa: E402
-from decider.engine.boundary.nulls import MissingInputError  # noqa: E402
-from decider.engine.ir.decls import FeatureKind as K  # noqa: E402
-from decider.engine.ir.decls import Input, NullPolicy  # noqa: E402
+from decider._engine.boundary.extract import extract_frame  # noqa: E402
+from decider._engine.boundary.nulls import MissingInputError  # noqa: E402
+from decider._engine.ir.decls import FeatureKind as K  # noqa: E402
+from decider._engine.ir.decls import Input, NullPolicy  # noqa: E402
 
 # (annotation, a column with a null at row 1, the fill to declare, the value the kernel dtype gives the fill)
 _KIND_CASES = {

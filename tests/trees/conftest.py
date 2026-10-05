@@ -1,7 +1,7 @@
 import polars as pl
 import pytest
 
-from decider.engine import Engine
+from decider._engine import Engine
 
 MODES = ("interpreted", "stepped", "fused")
 

@@ -3,7 +3,7 @@ import polars as pl
 import pytest
 
 from decider import flow
-from decider.engine import Engine
+from decider._engine import Engine
 from decider.steps.tables import BoundMode, DecisionTableConfig
 from decider.steps.trees import RangeEndLogic
 

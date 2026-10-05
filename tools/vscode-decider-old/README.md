@@ -90,8 +90,8 @@ extension host ──DAP──▶ adapter.ts ──JSON lines──▶ decider.d
       └── webview (React + dagre, built by Vite)
 ```
 
-- The bridge drives the real `decider.engine.debug.Session` in interpreted mode.
-  Lineage (`decider/engine/debug/lineage.py`) walks the plan's versions: calls, branch merges
+- The bridge drives the real `decider._engine.debug.Session` in interpreted mode.
+  Lineage (`decider/_engine/debug/lineage.py`) walks the plan's versions: calls, branch merges
   and loop carries.
 - Bridge replies use fd 3, so a `print()` inside a step goes to the Debug Console.
 - `examples/.vscode/settings.json` sets `decider.python` to `uv run python`, so the

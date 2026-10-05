@@ -4,7 +4,7 @@ import polars as pl
 import pydantic
 import pytest
 
-from decider.engine import Engine
+from decider._engine import Engine
 from decider.exceptions import MissingInputError
 from decider.steps.trees import TreeConfig
 

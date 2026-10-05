@@ -3,7 +3,7 @@ import polars as pl
 import pytest
 
 from decider import branch, flow, loop, step
-from decider.engine.debug import EVENT_LOG, NodeStarted, Paused
+from decider._engine.debug import EVENT_LOG, NodeStarted, Paused
 from decider.testing import assert_equivalent
 
 

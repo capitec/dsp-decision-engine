@@ -5,7 +5,7 @@ import polars as pl
 import pytest
 
 from decider import flow, param
-from decider.engine.params import ParamsError
+from decider._engine.params import ParamsError
 
 FRAME = pl.DataFrame({"term_cap": [60.0, 60.0]})
 

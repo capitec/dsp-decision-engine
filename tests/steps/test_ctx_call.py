@@ -7,8 +7,8 @@ import polars as pl
 import pytest
 
 from decider import ConfigurableStep, Value, missing_as
-from decider.engine import to_ir
-from decider.engine.ir import CallNode, NullPolicy, ParamDecl
+from decider._engine import to_ir
+from decider._engine.ir import CallNode, NullPolicy, ParamDecl
 from decider.exceptions import IRError
 
 

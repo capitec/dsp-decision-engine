@@ -8,10 +8,11 @@ import sys
 import polars as pl
 import pytest
 
-from decider import engine, flow
-from decider.engine import Engine
-from decider.engine.compile import kernel
-from decider.engine.debug import NodeVisited
+from decider import flow
+from decider import _engine as engine
+from decider._engine import Engine
+from decider._engine.compile import kernel
+from decider._engine.debug import NodeVisited
 from decider.steps import ConfigurableStep
 from decider.steps.trees import LeafNode, TreeConfig, walker
 from decider.testing import assert_equivalent
@@ -292,7 +293,7 @@ def test_a_path_output_named_like_an_output_column_is_refused():
 _CHILD = """
 import contextlib, io, json
 import polars as pl
-from decider.engine import Engine
+from decider._engine import Engine
 from decider.steps.trees import TreeConfig
 
 tree = TreeConfig(name="t", tree=json.loads(%r))

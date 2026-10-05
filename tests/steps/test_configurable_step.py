@@ -5,9 +5,10 @@ import typing as t
 import pytest
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
-from decider import engine, step
-from decider.engine.ir.decls import Input, Output, ParamDecl
-from decider.engine.ir.nodes import CallNode
+from decider import step
+from decider import _engine as engine
+from decider._engine.ir.decls import Input, Output, ParamDecl
+from decider._engine.ir.nodes import CallNode
 from decider.registry import import_path
 from decider.steps import ConfigurableStep, ParamRef, SequentialStep, StepRef, Value
 

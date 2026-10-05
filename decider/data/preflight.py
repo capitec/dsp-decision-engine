@@ -7,9 +7,9 @@ import polars as pl
 from pydantic import BaseModel, ConfigDict
 
 from decider.contract import capabilities
-from decider.engine.ir.decls import NullPolicy
-from decider.engine.run.params import NodeParams, ParamsCache, RunParams, check_namespaces
-from decider.engine.wiring import Plan, resolve
+from decider.ir import NullPolicy
+from decider._engine.run.params import NodeParams, ParamsCache, RunParams, check_namespaces
+from decider._engine.wiring import Plan, resolve
 from decider.exceptions import ParamsError, WiringError
 
 

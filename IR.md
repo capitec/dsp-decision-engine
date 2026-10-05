@@ -620,12 +620,12 @@ decider/steps/                 # the authoring layer (public API)
   configurable.py              # ConfigurableStep
   values.py                    # Value, ParamRef, TableValue, TableRef
   trees/  tables/  scorecard/  # built-in ConfigurableSteps (later tasks)
-decider/engine/ir/             # the IR (engine-facing)
+decider/_engine/ir/             # the IR (engine-facing)
   nodes.py                     # IRNode, CallNode, SequenceNode, BranchNode, LoopNode
   origin.py                    # Origin
   context.py                   # IRContext, engine.to_ir entry and its checks
   decls.py                     # Input, Output, ParamDecl
-decider/engine/params/         # harvesting, param(), missing_as(), models, parameters()
+decider/_engine/params/         # harvesting, param(), missing_as(), models, parameters()
 ```
 
 ---
@@ -657,7 +657,7 @@ decider/engine/params/         # harvesting, param(), missing_as(), models, para
    - a duplicate alias raises.
 10. `to_ir` is cached: calling it twice on an unchanged step returns the same IR
     object.
-11. `decider/steps/` and `decider/engine/ir/` import neither numba nor polars.
+11. `decider/steps/` and `decider/_engine/ir/` import neither numba nor polars.
 
 ---
 

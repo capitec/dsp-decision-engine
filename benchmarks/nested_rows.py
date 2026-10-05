@@ -17,8 +17,8 @@ import numpy as np
 import polars as pl
 
 from decider import Engine, Columnar, flow
-from decider.engine.compile.rows import build_rows
-from decider.engine.run.state import from_series
+from decider._engine.compile.rows import build_rows
+from decider._engine.run.state import from_series
 
 N = int(sys.argv[1]) if len(sys.argv) > 1 else 200_000
 ITEMS = int(sys.argv[2]) if len(sys.argv) > 2 else 3
@@ -135,7 +135,7 @@ def end_to_end():
 
 def builders():
     """The three builders at every size; the Arrow read is forced, to show where it wins."""
-    from decider.engine.compile import rows as rows_mod
+    from decider._engine.compile import rows as rows_mod
 
     threshold = rows_mod.ARROW_ROWS
     print(f"\n{'rows':>8}{'v0 (copy loop)':>18}{'python values':>16}{'arrow':>10}{'from_series':>14}")

@@ -4,8 +4,8 @@ from __future__ import annotations
 import pytest
 
 from decider import branch, flow, frame_step, loop, step
-from decider.engine.wiring import Branch, Call, Loop, Sequence, interface, resolve
-from decider.engine import to_ir
+from decider._engine.wiring import Branch, Call, Loop, Sequence, interface, resolve
+from decider._engine import to_ir
 from decider.exceptions import WiringError
 
 

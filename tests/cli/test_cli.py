@@ -11,8 +11,8 @@ from click.testing import CliRunner
 
 import decider.settings as settings_module
 from decider.cli import CPU_TARGET_FILE, cli
-from decider.engine.compile import cpu_target
-from decider.engine.compile.njit import _DISPATCHERS, _REASONS
+from decider._engine.compile import cpu_target
+from decider._engine.compile.njit import _DISPATCHERS, _REASONS
 from decider.serving.handler import construct_handler_from_settings
 
 

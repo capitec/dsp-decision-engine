@@ -9,8 +9,7 @@ from pydantic import BaseModel, ConfigDict
 
 from decider.check import Check, Finding, Severity
 from decider.checks._common import function_source
-from decider.engine.ir.context import to_ir
-from decider.engine.ir.nodes import CallNode, iter_nodes
+from decider.ir import CallNode, iter_nodes, to_ir
 from decider.testing import MODES, assert_equivalent, corpus
 
 

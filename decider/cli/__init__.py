@@ -87,7 +87,7 @@ def build(version: str | None) -> None:
     compiling them. Records the CPU target the cache was built for; `serve`
     warns when it runs on a different one.
     """
-    from decider.engine.compile import cpu_target
+    from decider._engine.compile import cpu_target
     from decider.serving.handler import construct_handler_from_settings
 
     s = _settings()
@@ -112,7 +112,7 @@ def serve(host, port, workers, mode, server) -> None:
     DECIDER_API__CODE_PATH (default: the current directory), then stages and
     activates the store's latest version before answering /ping.
     """
-    from decider.engine.compile import cpu_target
+    from decider._engine.compile import cpu_target
 
     s = _settings(serve__host=host, serve__port=port, serve__workers=workers, api__mode=mode, serve__server=server)
     recorded = _cpu_target_path(s)

@@ -8,8 +8,8 @@ replay reaches the same state.
 """
 from __future__ import annotations
 
-from decider.engine import Engine
-from decider.engine.params import document_key, merge
+from decider import Engine
+from decider._engine.params import document_key, merge
 from decider.debug_bridge.replay import collect, steer
 
 

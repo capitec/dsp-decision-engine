@@ -2,10 +2,10 @@
 import polars as pl
 import pytest
 
-from decider import engine
-from decider.engine import Engine
-from decider.engine.compile import kernel
-from decider.engine.ir.decls import base_annotation
+from decider import _engine as engine
+from decider._engine import Engine
+from decider._engine.compile import kernel
+from decider._engine.ir.decls import base_annotation
 from decider.steps.trees import TreeConfig, walker
 
 BIG = 9007199254740992  # 2**53: the first integer float64 can't tell from its successor

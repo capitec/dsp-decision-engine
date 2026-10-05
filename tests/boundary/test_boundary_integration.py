@@ -7,12 +7,12 @@ import polars as pl
 import pytest
 from numba import njit
 
-pytest.importorskip("decider.engine.boundary._arrow._shim", exc_type=ImportError, reason="the Arrow shim can't be built here")
+pytest.importorskip("decider._engine.boundary._arrow._shim", exc_type=ImportError, reason="the Arrow shim can't be built here")
 
-from decider.engine.boundary._arrow.plan import ArrowKindError  # noqa: E402
-from decider.engine.boundary.dtypes import NeedsKernelSplit  # noqa: E402
-from decider.engine.boundary.extract import extract_frame  # noqa: E402
-from decider.engine.ir.decls import Input, NullPolicy  # noqa: E402
+from decider._engine.boundary._arrow.plan import ArrowKindError  # noqa: E402
+from decider._engine.boundary.dtypes import NeedsKernelSplit  # noqa: E402
+from decider._engine.boundary.extract import extract_frame  # noqa: E402
+from decider._engine.ir.decls import Input, NullPolicy  # noqa: E402
 
 
 @njit(cache=False, nogil=True)

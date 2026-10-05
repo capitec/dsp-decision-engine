@@ -4,10 +4,10 @@ from __future__ import annotations
 import numpy as np
 import polars as pl
 
-from decider import engine
-from decider.engine import Engine
-from decider.engine.compile import Fallback, Kernel, compile_plan, default_bundle
-from decider.engine.wiring import resolve
+from decider import _engine as engine
+from decider._engine import Engine
+from decider._engine.compile import Fallback, Kernel, compile_plan, default_bundle
+from decider._engine.wiring import resolve
 from decider.steps import ParamRef
 from decider.steps.scorecard import (
     AdjustedVariable,

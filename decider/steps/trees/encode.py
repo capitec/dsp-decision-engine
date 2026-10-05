@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from decider.engine.ir.decls import Input, NullPolicy, Output, ParamDecl
+from decider._engine.ir.decls import Input, NullPolicy, Output, ParamDecl
 from decider.steps.expr.postfix import to_postfix
 from decider.steps.trees.ops import EQ, GE, GT, LE, LT, NE, OPCODE
 from decider.steps.trees.schema import (

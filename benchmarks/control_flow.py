@@ -8,7 +8,7 @@ import numpy as np
 import polars as pl
 
 import decider
-from decider.engine import Engine
+from decider._engine import Engine
 
 N_BRANCH = 1_000_000
 N_LOOP = 200_000

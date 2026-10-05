@@ -19,16 +19,16 @@ import polars as pl
 import pytest
 from numba import njit
 
-pytest.importorskip("decider.engine.boundary._arrow._shim", exc_type=ImportError, reason="the Arrow shim can't be built here (no C compiler)")
+pytest.importorskip("decider._engine.boundary._arrow._shim", exc_type=ImportError, reason="the Arrow shim can't be built here (no C compiler)")
 
-import decider.engine.boundary._arrow as arrow  # noqa: E402
-from decider.engine.boundary._arrow import _build  # noqa: E402
-from decider.engine.boundary._arrow._shim import GET_STRING_ADDR  # noqa: E402
-from decider.engine.boundary._arrow.intrinsics import load_f64, load_i64, load_u8  # noqa: E402
-from decider.engine.boundary._arrow.kernels import string_lengths  # noqa: E402
-from decider.engine.boundary._arrow.plan import ArrowKindError, ColumnSpec, FramePlan  # noqa: E402
-from decider.engine.boundary._arrow.view import FrameView  # noqa: E402
-from decider.engine.ir.decls import FeatureKind as K  # noqa: E402
+import decider._engine.boundary._arrow as arrow  # noqa: E402
+from decider._engine.boundary._arrow import _build  # noqa: E402
+from decider._engine.boundary._arrow._shim import GET_STRING_ADDR  # noqa: E402
+from decider._engine.boundary._arrow.intrinsics import load_f64, load_i64, load_u8  # noqa: E402
+from decider._engine.boundary._arrow.kernels import string_lengths  # noqa: E402
+from decider._engine.boundary._arrow.plan import ArrowKindError, ColumnSpec, FramePlan  # noqa: E402
+from decider._engine.boundary._arrow.view import FrameView  # noqa: E402
+from decider._engine.ir.decls import FeatureKind as K  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # helpers
@@ -369,11 +369,11 @@ _CACHE_CHILD = textwrap.dedent(
     import contextlib, io, json, warnings
     warnings.filterwarnings("ignore")
     import numpy as np, polars as pl
-    from decider.engine.boundary._arrow._shim import GET_STRING_ADDR
-    from decider.engine.boundary._arrow.kernels import string_lengths
-    from decider.engine.boundary._arrow.plan import FramePlan
-    from decider.engine.boundary._arrow.view import FrameView
-    from decider.engine.ir.decls import FeatureKind as K
+    from decider._engine.boundary._arrow._shim import GET_STRING_ADDR
+    from decider._engine.boundary._arrow.kernels import string_lengths
+    from decider._engine.boundary._arrow.plan import FramePlan
+    from decider._engine.boundary._arrow.view import FrameView
+    from decider._engine.ir.decls import FeatureKind as K
     df = pl.DataFrame({"s": ["dog", None, "a much longer merchant descriptor"], "f": [1.0, None, 3.0]})
     log = io.StringIO()
     with contextlib.redirect_stdout(log):
@@ -461,11 +461,11 @@ def test_the_vendored_nanoarrow_matches_its_manifest_and_the_header_matches_the_
 _MISSING_CHILD = textwrap.dedent(
     """
     import json
-    import decider.engine.boundary._arrow as a
+    import decider._engine.boundary._arrow as a
     d = a.diagnose()
     assert d["shim"] == "unavailable", d
     try:
-        from decider.engine.boundary._arrow import view
+        from decider._engine.boundary._arrow import view
     except ImportError as e:
         print(json.dumps({"error": str(e), "diagnose_error": d["error"]}))
     else:
@@ -491,7 +491,7 @@ _CORRUPT_CHILD = textwrap.dedent(
     """
     import json
     try:
-        import decider.engine.boundary._arrow.view
+        import decider._engine.boundary._arrow.view
     except ImportError as e:
         print(json.dumps({"error": str(e)}))
     else:

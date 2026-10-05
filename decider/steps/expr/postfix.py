@@ -7,7 +7,7 @@ import typing as t
 import numpy as np
 from numba import njit
 
-from decider.engine.boundary._arrow.intrinsics import load_f64, load_i64
+from decider._engine.boundary._arrow.intrinsics import load_f64, load_i64
 from decider.steps.expr import Expr
 
 PUSH, NAME, ADD, SUB, MUL, DIV, FLOORDIV, MOD, POW, NEG, NOT = range(11)

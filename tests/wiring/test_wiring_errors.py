@@ -4,7 +4,7 @@ from __future__ import annotations
 import pytest
 
 from decider import dag, flow, param, step
-from decider.engine.wiring import resolve
+from decider._engine.wiring import resolve
 
 
 def disposable_income(net_income: float, expenses: float) -> float:

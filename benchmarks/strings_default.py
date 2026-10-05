@@ -13,10 +13,10 @@ import numpy as np
 import polars as pl
 
 from decider import Engine, FallbackWarning, branch, flow, loop, param, step
-from decider.engine.compile import Fallback
-from decider.engine.compile.njit import jit
-from decider.engine.ir.decls import base_annotation
-from decider.engine.run.runners.stepped import SteppedRunner
+from decider._engine.compile import Fallback
+from decider._engine.compile.njit import jit
+from decider._engine.ir.decls import base_annotation
+from decider._engine.run.runners.stepped import SteppedRunner
 from decider.types import is_raw
 
 N = 200_000

@@ -5,8 +5,8 @@ import polars as pl
 import pytest
 
 from decider import flow, param, step
-from decider.engine import Engine
-from decider.engine.params import ParamsError
+from decider._engine import Engine
+from decider._engine.params import ParamsError
 
 
 def inv(x: float) -> float:

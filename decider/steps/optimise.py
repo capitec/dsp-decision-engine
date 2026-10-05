@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from decider.engine.ir.nodes import SequenceNode
+from decider._engine.ir.nodes import SequenceNode
 from decider.exceptions import WiringError
 from decider.steps.base import Step, as_step
 from decider.steps.function import step
@@ -18,7 +18,7 @@ from decider.steps.sequential import flow
 from decider.types import Struct, item_schema
 
 if TYPE_CHECKING:
-    from decider.engine.ir.context import IRContext
+    from decider._engine.ir.context import IRContext
 
 _CARRIES = ("index", "best_index", "best_score", "evaluated", "disqualified")
 
@@ -57,8 +57,8 @@ def _keep(index: int, best_index: int, best_score: float, evaluated: int, disqua
 
 
 def _write_as(step: Step, name: str) -> Step:
-    from decider.engine import to_ir
-    from decider.engine.wiring.interface import interface
+    from decider._engine import to_ir
+    from decider._engine.wiring.interface import interface
 
     writes = interface(to_ir(step))[1]
     if len(writes) != 1:
@@ -182,14 +182,14 @@ def optimise(count: Any, evaluate: Any, *, score: str = "score", disqualify: Any
     evaluate = as_step(evaluate)
     count = as_step(count)
     dq = None if disqualify is None else as_step(disqualify)
-    from decider.engine import to_ir
-    from decider.engine.wiring.interface import interface
+    from decider._engine import to_ir
+    from decider._engine.wiring.interface import interface
 
     if score not in interface(to_ir(evaluate))[1]:
         raise WiringError(f"optimise {name!r}: evaluate does not write {score!r}; it writes "
                           f"{sorted(interface(to_ir(evaluate))[1])}")
     if record is not None:
-        from decider.engine.compile.structs import struct_dtype, struct_schema
+        from decider._engine.compile.structs import struct_dtype, struct_schema
         struct_dtype(struct_schema(record))  # raises on a non-TypedDict or a non-float/int/bool field
         if "record" not in interface(to_ir(evaluate))[1]:
             raise WiringError(f"optimise {name!r}: evaluate does not write 'record'; it writes "

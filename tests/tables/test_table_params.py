@@ -3,7 +3,7 @@ import polars as pl
 import pytest
 
 from decider import flow
-from decider.engine import Engine
+from decider._engine import Engine
 from decider.exceptions import ParamsError
 from decider.steps.tables import DecisionTableConfig
 from decider.testing import no_recompile

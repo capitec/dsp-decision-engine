@@ -54,7 +54,7 @@ CORE = {"__init__", "steps", "ir", "trace", "debug", "contract", ENGINE}
 ALL_BUDGET = 25
 LAYERS = {
     0: "exceptions registry ops _annotations _settings _suggest _polars_docs fields types serializable settings",
-    1: "__init__ steps ir trace debug config _engine engine flowfile",
+    1: "__init__ steps ir trace debug config _engine flowfile",
     2: "contract lifecycle",
     3: "checks check diff experiments data testing credit",
     4: "serving mcp cli _bridge _tools ids debug_bridge __main__",
@@ -217,8 +217,8 @@ def test_no_import_cycles_between_packages_in_a_layer():
 
 
 def _runner_files():
-    run = [DECIDER / d / "run" for d in ("engine", ENGINE)]
-    return [p for d in run for p in [d / "engine.py", *sorted((d / "runners").glob("*.py"))] if p.exists()]
+    d = DECIDER / ENGINE / "run"
+    return [p for p in [d / "engine.py", *sorted((d / "runners").glob("*.py"))] if p.exists()]
 
 
 def _self_rooted(node):
@@ -291,8 +291,7 @@ def test_cache_salt_covers_every_semantics_and_ops_file():
     files = [p for d in (DECIDER / ENGINE / "compile" / "semantics", DECIDER / "ops") for p in sorted(d.rglob("*.py"))]
     if not files:
         pytest.skip("semantics/ and ops/ do not exist yet")
-    module = next(m for m in (f"decider.{ENGINE}.compile.njit", "decider.engine.compile.njit") if _exists(m))
-    salt = importlib.import_module(module).SALT
+    salt = importlib.import_module(f"decider.{ENGINE}.compile.njit").SALT
     assert salt == hashlib.sha256(b"".join(p.read_bytes() for p in files)).hexdigest(), (
         "SALT must hash every file under semantics/ and ops/, found by walking the directories"
     )

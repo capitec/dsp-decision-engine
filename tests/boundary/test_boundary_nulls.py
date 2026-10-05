@@ -1,8 +1,8 @@
 import polars as pl
 import pytest
 
-from decider.engine.boundary.nulls import MissingInputError, check_required
-from decider.engine.ir.decls import Input, NullPolicy
+from decider._engine.boundary.nulls import MissingInputError, check_required
+from decider._engine.ir.decls import Input, NullPolicy
 
 
 def test_a_null_in_a_required_input_names_the_input_the_step_path_and_the_row_count():

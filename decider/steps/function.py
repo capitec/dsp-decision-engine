@@ -5,13 +5,13 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from pydantic.fields import FieldInfo
 
-from decider.engine.ir.decls import ParamDecl
-from decider.engine.ir.nodes import CallNode
-from decider.engine.params import call_with_defaults, harvest
+from decider._engine.ir.decls import ParamDecl
+from decider._engine.ir.nodes import CallNode
+from decider._engine.params import call_with_defaults, harvest
 from decider.steps.base import Step
 
 if TYPE_CHECKING:
-    from decider.engine.ir.context import IRContext
+    from decider._engine.ir.context import IRContext
 
 
 @dataclass(frozen=True, slots=True, eq=False)

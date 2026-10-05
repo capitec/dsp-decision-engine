@@ -5,13 +5,13 @@ import numpy as np
 import pytest
 
 from decider import flow, step
-from decider.engine.compile import Fallback, Kernel, compile_plan, numpy_dtype
-from decider.engine.ir.decls import FeatureKind as K
-from decider.engine.ir.decls import Input, NullPolicy, Output, ParamDecl, feature_kind
-from decider.engine.ir.nodes import CallNode, SequenceNode
-from decider.engine.ir.origin import Origin
-from decider.engine.params import param
-from decider.engine.wiring import resolve
+from decider._engine.compile import Fallback, Kernel, compile_plan, numpy_dtype
+from decider._engine.ir.decls import FeatureKind as K
+from decider._engine.ir.decls import Input, NullPolicy, Output, ParamDecl, feature_kind
+from decider._engine.ir.nodes import CallNode, SequenceNode
+from decider._engine.ir.origin import Origin
+from decider._engine.params import param
+from decider._engine.wiring import resolve
 
 
 def disposable_income(net_income: float, expenses: float) -> float:

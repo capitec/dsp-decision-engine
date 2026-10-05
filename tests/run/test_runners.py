@@ -6,8 +6,8 @@ import polars as pl
 import pytest
 
 from decider import branch, flow, frame_step, loop, step
-from decider.engine import Engine
-from decider.engine.run import Checkpoint
+from decider._engine import Engine
+from decider._engine.run import Checkpoint
 
 
 def seed(requested_term: float) -> float:
@@ -241,9 +241,9 @@ def test_a_frame_step_inside_an_arm_sees_only_that_arms_rows(bind):
 
 
 def test_a_row_node_without_a_reference_is_called_with_row_params_and_consts(bind):
-    from decider.engine.ir.decls import Input, Output
-    from decider.engine.ir.nodes import CallNode
-    from decider.engine.ir.origin import Origin
+    from decider._engine.ir.decls import Input, Output
+    from decider._engine.ir.nodes import CallNode
+    from decider._engine.ir.origin import Origin
 
     def kernel(row, params, consts):
         return (row[0] * consts[0],)
@@ -276,8 +276,8 @@ def test_state_records_an_override_as_a_new_version(bind):
 
 def test_a_compiled_representation_is_rebuilt_after_its_values_change():
     # A loop body writes the same version every iteration: a cached span or code array is stale.
-    from decider.engine.run.state import State
-    from decider.engine.wiring import resolve
+    from decider._engine.run.state import State
+    from decider._engine.wiring import resolve
 
     plan = resolve(flow(lambda x: x, name="p"))
     state = State.from_frame(plan, pl.DataFrame({"x": [1.0, 2.0]}))

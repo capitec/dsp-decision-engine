@@ -18,8 +18,8 @@ from decider.contract import StepRef, describe, resolve_step, source_location
 from decider.contract.describing import find_pipelines
 from decider.data import load
 from decider.debug_bridge.loading import load_module
-from decider.engine import Engine
-from decider.engine.trace import TraceSink
+from decider import Engine
+from decider.trace import TraceSink
 from decider.debug_bridge.replay import trace as run_trace
 from decider.experiments import ExperimentDef, ExperimentResult, load_flow, run_experiment
 from decider.mcp.policy import REDACTED, Policy

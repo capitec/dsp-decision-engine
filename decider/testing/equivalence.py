@@ -6,8 +6,8 @@ from typing import Any, Callable, Mapping
 import polars as pl
 from polars.testing import assert_frame_equal
 
-from decider.engine import Engine
-from decider.engine.debug import Session
+from decider import Engine
+from decider.debug import Session
 
 MODES = ("interpreted", "stepped", "fused")
 

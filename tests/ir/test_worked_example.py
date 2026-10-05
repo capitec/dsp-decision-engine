@@ -3,8 +3,9 @@ import json
 
 import polars as pl
 
-from decider import branch, dag, engine, flow, frame_step, missing_as, param, step
-from decider.engine.ir.nodes import CallNode
+from decider import branch, dag, flow, frame_step, missing_as, param, step
+from decider import _engine as engine
+from decider._engine.ir.nodes import CallNode
 from decider.steps.trees import TreeConfig
 
 RISK_TREE = """

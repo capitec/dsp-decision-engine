@@ -6,11 +6,11 @@ import pytest
 
 import decider
 from decider import branch, dag, flow, param, step
-from decider.engine import Engine, to_ir
-from decider.engine.boundary._arrow.plan import ArrowKindError as ArrowKindFromPlan
-from decider.engine.boundary.dtypes import NeedsKernelSplit as NeedsKernelSplitFromDtypes
-from decider.engine.boundary.nulls import MissingInputError as MissingFromNulls
-from decider.engine.params import ParamsError as ParamsFromParams
+from decider._engine import Engine, to_ir
+from decider._engine.boundary._arrow.plan import ArrowKindError as ArrowKindFromPlan
+from decider._engine.boundary.dtypes import NeedsKernelSplit as NeedsKernelSplitFromDtypes
+from decider._engine.boundary.nulls import MissingInputError as MissingFromNulls
+from decider._engine.params import ParamsError as ParamsFromParams
 from decider.exceptions import (
     ArrowImportError, ArrowKindError, DeciderError, EngineError, ExprError, IRError, MissingInputError,
     NeedsKernelSplit, ParamsError, RegistryError, WiringError,

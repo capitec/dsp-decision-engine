@@ -6,8 +6,8 @@ import typing as t
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Discriminator, Field, Tag, field_validator, model_validator
 
-from decider.engine.ir.decls import Input, NullPolicy, Output, ParamDecl
-from decider.engine.ir.nodes import CallNode, SequenceNode
+from decider._engine.ir.decls import Input, NullPolicy, Output, ParamDecl
+from decider._engine.ir.nodes import CallNode, SequenceNode
 from decider.steps.configurable import ConfigurableStep
 from decider.steps.scorecard import kernels
 from decider.steps.values import ParamRef, Value

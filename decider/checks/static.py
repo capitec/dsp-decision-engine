@@ -5,8 +5,7 @@ from typing import Any, Iterator
 
 from decider.check import Finding, Severity
 from decider.checks._common import call_nodes, function_source, step_ref
-from decider.engine.ir.context import to_ir
-from decider.engine.ir.nodes import CallNode
+from decider.ir import CallNode, to_ir
 
 _WALL_CLOCK: dict[str, set[str]] = {
     "time": {"time", "time_ns", "perf_counter", "perf_counter_ns", "monotonic", "monotonic_ns",

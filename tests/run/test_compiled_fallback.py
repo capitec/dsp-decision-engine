@@ -11,10 +11,10 @@ import pytest
 from decider.exceptions import FallbackWarning, WiringError
 
 from decider import Raw, allow_fallback, branch, flow, missing_as, raw_str, step
-from decider.engine import Engine
-from decider.engine.boundary._arrow.intrinsics import load_u8
-from decider.engine.compile import Fallback, Kernel
-from decider.engine.run.representations import spans
+from decider._engine import Engine
+from decider._engine.boundary._arrow.intrinsics import load_u8
+from decider._engine.compile import Fallback, Kernel
+from decider._engine.run.representations import spans
 from decider.testing import assert_equivalent
 
 COMPILED = ("stepped", "fused")

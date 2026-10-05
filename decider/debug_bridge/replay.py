@@ -1,8 +1,8 @@
 """Run a pipeline to the end and keep what each call wrote, for comparisons."""
 from __future__ import annotations
 
-from decider.engine import Engine
-from decider.engine.debug.controls import Controls
+from decider import Engine
+from decider._engine.debug.controls import Controls
 
 
 def trace(step, frame, params: dict | None, ir: dict | None = None, forces=()) -> dict:

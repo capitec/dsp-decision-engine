@@ -1,0 +1,314 @@
+from __future__ import annotations
+
+import weakref
+from dataclasses import dataclass, field, replace
+from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
+
+from pydantic import BaseModel
+
+from decider._engine.ir.decls import ParamDecl
+from decider._engine.ir.nodes import BranchNode, CallNode, IRNode, LoopNode, SequenceNode, iter_nodes
+from decider._engine.ir.origin import Origin, check_id, check_name
+from decider._engine.params.models import record_shared_type
+from decider.exceptions import IRError, WiringError
+from decider.registry import import_path
+
+if TYPE_CHECKING:
+    from decider.steps.base import Step
+
+# Built IR and the path -> Step entries of its members, per (step object,
+# parent path). Keyed by id() because pydantic steps compare by value; the
+# finalizer drops the entry before the id can be reused.
+_BUILT: dict[int, dict[str, tuple[IRNode, dict[str, Step]]]] = {}
+
+
+def _join(parent: str, name: str) -> str:
+    check_name(name)
+    return f"{parent}/{name}" if parent else name
+
+
+@dataclass(frozen=True, slots=True)
+class IRContext:
+    """What a step's `to_ir` knows about where it is placed: the path of its parent.
+
+    A `ConfigurableStep` usually needs one of two helpers: `ctx.call` for one
+    function called per row, or `ctx.expand` to assemble other steps.
+
+    Example::
+
+        class Scaled(ConfigurableStep):
+            column: str
+            factor: Value[float]
+
+            def to_ir(self, ctx):
+                return ctx.call(self, scale, inputs={"x": self.column}, values={"factor": self.factor})
+    """
+
+    path: str = ""
+    # Every step built under this context, by the path of its node.
+    steps: dict[str, Step] = field(default_factory=dict, compare=False, repr=False)
+
+    def child(self, name: str | None) -> IRContext:
+        """The context for members of a step called `name`; `None` (anonymous) is transparent."""
+        return self if name is None else IRContext(_join(self.path, name), self.steps)
+
+    def origin(self, step: Step, name: str | None = None, locator: str | None = None) -> Origin:
+        """The origin of a node `step` produces here, named `name` (default: the step's name)."""
+        source = type(step) if isinstance(step, BaseModel) else getattr(step, "fn", type(step))
+        own = step.name if name is None else name
+        id_ = getattr(step, "id", None)
+        if id_ is not None:
+            check_id(id_)
+        return Origin(self.path if own is None else _join(self.path, own), import_path(source), locator, id_)
+
+    def build(self, step: Step) -> IRNode:
+        """`step`'s IR placed under this context, with its relabels applied.
+
+        Composite steps call this for each member. The result is cached per
+        step object and path, so an unchanged step returns the same IR.
+        """
+        key = id(step)
+        built = _BUILT.get(key)
+        if built is None:
+            built = _BUILT[key] = {}
+            weakref.finalize(step, _BUILT.pop, key, None)
+        entry = built.get(self.path)
+        if entry is None:
+            # A fresh map per build, so a cached subtree brings its own entries along.
+            scope = IRContext(self.path)
+            node = step.to_ir(scope)
+            reads, writes = dict(getattr(step, "reads", ())), dict(getattr(step, "writes", ()))
+            if reads or writes:
+                node = _relabel(node, reads, writes, set())
+            entry = built[self.path] = (node, scope.steps)
+        node, members = entry
+        self.steps.update(members)
+        # Kept out of the cache entry, which would otherwise keep the step alive.
+        # Set last, so a step owns its path over an anonymous member or helper sharing it.
+        self.steps[self.child(step.name).path] = step
+        return node
+
+    def expand(self, owner: Step, helper: Step) -> IRNode:
+        """Build `helper` as the body of `owner`: its nodes sit under `owner`'s name, its root takes `owner`'s origin.
+
+        For a `ConfigurableStep` whose `to_ir` assembles other steps.
+
+        Example::
+
+            class Affordability(ConfigurableStep):
+                def to_ir(self, ctx):
+                    return ctx.expand(self, flow(disposable_income, ratio))
+        """
+        node = self.child(owner.name).build(helper)
+        return replace(node, origin=self.origin(owner))
+
+    def value(self, value: Any, annotation: Any = None, arg: str | None = None) -> Any:
+        """A `Value[T]`: the literal itself, or a `ParamDecl` for a `ParamRef`.
+
+        A `ParamRef` without a default is a required param. `annotation`
+        defaults to the type of the ref's default. A literal goes in the
+        node's `consts` as `(arg, literal)`, a `ParamDecl` in its `params`.
+
+        Args:
+            arg: the function argument a scalar call feeds, whatever the
+                ref's param is called in the params document.
+
+        Example::
+
+            ctx.value(0.7)                                            # 0.7
+            ctx.value(ParamRef(param="hi_thresh", default=0.7), float, arg="threshold")
+            # ParamDecl("hi_thresh", float, 0.7, arg="threshold")
+        """
+        from decider.steps.values import ParamRef
+
+        if not isinstance(value, ParamRef):
+            return value
+        return ParamDecl(
+            value.param, annotation or type(value.default), value.default, required=value.default is None,
+            shared_key=value.param if value.shared else None, arg=arg,
+        )
+
+    def call(
+        self,
+        owner: Step,
+        fn: Callable,
+        inputs: Mapping[str, str] | None = None,
+        outputs: Sequence[str] | None = None,
+        values: Mapping[str, Any] | None = None,
+    ) -> CallNode:
+        """A scalar `CallNode` for `owner` calling `fn` per row, read from `fn`'s signature like `step(fn)`.
+
+        Args:
+            inputs: function argument -> column it reads, for arguments not
+                reading the column of their own name.
+            outputs: the names `fn` writes (default: `owner.name`); several
+                need a `tuple[...]` return annotation.
+            values: function argument -> a config's `Value[T]` field. A
+                literal is passed as is; a `ParamRef` becomes a param, so
+                retuning it never rebuilds anything.
+
+        Example::
+
+            def threshold(x: float, cut: float) -> bool:
+                return x > cut
+
+            class Threshold(ConfigurableStep):
+                column: str
+                cut: Value[float]
+
+                def to_ir(self, ctx):
+                    return ctx.call(self, threshold, inputs={"x": self.column}, values={"cut": self.cut})
+        """
+        from decider._engine.params.harvest import harvest
+
+        inputs, values = dict(inputs or {}), dict(values or {})
+        declared, params, outs = harvest(fn, tuple(outputs or (owner.name,)))
+        args = {i.arg: i for i in declared}
+        unknown = sorted((set(inputs) | set(values)) - set(args))
+        if unknown:
+            raise IRError(f"{self.child(owner.name).path}: {fn.__qualname__} has no argument(s) {unknown}; "
+                          f"its inputs are {sorted(args)}")
+        wired = tuple(replace(i, name=inputs.get(i.arg, i.arg)) for i in declared if i.arg not in values)
+        consts = []
+        for arg, value in values.items():
+            annotation = args[arg].annotation
+            value = self.value(value, None if annotation is Any else annotation, arg=arg)
+            if isinstance(value, ParamDecl):
+                params += (value,)
+            else:
+                consts.append((arg, value))
+        return CallNode(self.origin(owner), "scalar", fn, wired, outs, params, consts=tuple(consts))
+
+    def table(self, value: Any, schema: dict[str, str]) -> Any:
+        """A `TableValue`: inline rows as given, or a required table `ParamDecl` for a `TableRef`.
+
+        `schema` maps each column to its dtype; the param carries it so rows
+        are checked when they arrive.
+
+        Example::
+
+            ctx.table(TableRef(table="prices"), {"product": "str", "rate": "float"})
+        """
+        from decider.serializable.dataframe import DataFrame
+        from decider.steps.values import TableRef
+
+        if not isinstance(value, TableRef):
+            return value
+        return ParamDecl(
+            value.table, DataFrame, required=True, shared_key=value.table if value.shared else None,
+            schema=tuple(schema.items()),
+        )
+
+
+def to_ir(step: Any) -> IRNode:
+    """Build the IR of a step (or plain function) and check it.
+
+    Checks that every node has an origin, paths are unique, no step is named
+    `shared`, and shared params agree on their type. Unchanged steps return
+    the IR built before.
+
+    Example::
+
+        from decider.ir import to_ir
+        ir = to_ir(pipeline)
+    """
+    return _build(step)[0]
+
+
+def step_map(step: Any) -> dict[str, Step]:
+    """The step object behind each node path of `to_ir(step)`, conditions, arms and loop bodies included.
+
+    Example::
+
+        step_map(pipeline)["term/by_sector/cap_private"]  # the FunctionStep
+    """
+    return _build(step)[1]
+
+
+def _build(step: Any) -> tuple[IRNode, dict[str, Step]]:
+    from decider.steps.base import as_step
+
+    ctx = IRContext()
+    root = ctx.build(as_step(step))
+    _check(root)
+    return root, ctx.steps
+
+
+def _check(root: IRNode) -> None:
+    seen: dict[str, Origin] = {}
+    shared: dict[str, tuple[Any, str]] = {}
+    for node in iter_nodes(root):
+        origin = getattr(node, "origin", None)
+        if not isinstance(origin, Origin) or not origin.source:
+            raise IRError(f"{type(node).__name__} {origin!r} has no origin; build it with ctx.origin(step)")
+        path = origin.path
+        if "shared" in path.split("/"):
+            raise WiringError(f"{path}: no step may be named 'shared'; that key holds the shared params")
+        if path in seen:
+            name = path.rpartition("/")[2]
+            raise WiringError(
+                f"two nodes have path {path!r} ({seen[path].source} and {origin.source}); "
+                f"did you mean to name one of them, e.g. .named({name + '_2'!r})?"
+            )
+        seen[path] = origin
+        if isinstance(node, CallNode):
+            for decl in node.params:
+                if not isinstance(decl, ParamDecl):
+                    raise IRError(
+                        f"{path}: params holds {decl!r}, not a ParamDecl; pass literals as consts=((name, value),)"
+                    )
+                if decl.shared_key is not None:
+                    record_shared_type(shared, decl, path)
+
+
+def _relabel(node: IRNode, reads: dict, writes: dict, produced: set) -> IRNode:
+    # A name read after the relabelled step produced it is one of its own
+    # writes; before that it comes from outside, so `reads` applies.
+    def read(name: str) -> str:
+        return writes.get(name, name) if name in produced else reads.get(name, name)
+
+    if isinstance(node, CallNode):
+        inputs = None if node.inputs is None else tuple(replace(i, name=read(i.name)) for i in node.inputs)
+        outputs = None if node.outputs is None else tuple(replace(o, name=writes.get(o.name, o.name)) for o in node.outputs)
+        produced.update(o.name for o in node.outputs or ())
+        fn = node.fn
+        if node.kind == "frame":
+            into = {i.name: j.name for i, j in zip(node.inputs or (), inputs or ()) if i.name != j.name}
+            out = {o.name: p.name for o, p in zip(node.outputs or (), outputs or ()) if o.name != p.name}
+            if (into or out) and (node.inputs is None or node.outputs is None):
+                raise IRError(f"{node.origin.path}: relabel needs a frame step's reads= and writes= declared, "
+                              "so it knows which columns to rename; declare them or rename in the function")
+            if into or out:
+                fn = _renamed_frame(fn, into, out)
+        return replace(node, fn=fn, inputs=inputs, outputs=outputs)
+    if isinstance(node, SequenceNode):
+        children = tuple(_relabel(c, reads, writes, produced) for c in node.children_)
+        emits = tuple(writes.get(n, n) + at + where for n, at, where in (e.partition("@") for e in node.emits))
+        drops = tuple(writes.get(d, reads.get(d, d)) for d in node.drops)
+        return replace(node, children_=children, emits=emits, drops=drops)
+    if isinstance(node, BranchNode):
+        condition = _relabel(node.condition, reads, writes, produced)
+        before, arms = set(produced), []
+        for arm in node.arms:
+            seen = set(before)
+            arms.append(_relabel(arm, reads, writes, seen))
+            produced |= seen
+        return replace(node, condition=condition, arms=tuple(arms), modifies=tuple(writes.get(m, m) for m in node.modifies))
+    if isinstance(node, LoopNode):
+        # ponytail: a carry renamed differently by reads and writes gets two names; rejecting that waits for loop execution.
+        condition = _relabel(node.condition, reads, writes, produced)
+        body = _relabel(node.body, reads, writes, produced)
+        return replace(node, condition=condition, body=body, carries=tuple(writes.get(c, c) for c in node.carries))
+    raise TypeError(f"can't relabel {type(node).__name__}")
+
+
+def _renamed_frame(fn: Callable, into: dict[str, str], out: dict[str, str]) -> Callable:
+    # Copies, not renames: the frame may already hold a column of the target name.
+    import polars as pl
+
+    def frame(df: Any, **params: Any) -> Any:
+        df = df.with_columns(pl.col(outer).alias(inner) for inner, outer in into.items())
+        result = fn(df, **params)
+        return result.with_columns(pl.col(inner).alias(outer) for inner, outer in out.items())
+
+    return frame
