@@ -39,6 +39,7 @@ PRIVATE_IMPORT: dict[str, str] = {  # {"importer -> imported": reason}
     "experiments._runner -> _engine.params": "param merge has no public home",
     "experiments._runner -> _engine.run.state": "batch state and dtype mapping are internal",
     "experiments._runner -> _engine.wiring.plan": "walks the resolved plan, which is internal",
+    "_tools.ids -> steps._composites": "the constructor names are shared with flow files and have no public home",
     "_tools.ids -> _engine.ir.origin": "check_id and check_name are not in decider.ir",
     "serving._handler -> _engine.types": "struct_item has no public home",
     "serving._parse -> _engine.types": "struct_item has no public home",

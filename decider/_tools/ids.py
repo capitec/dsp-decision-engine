@@ -22,11 +22,11 @@ from typing import Callable, Iterable
 
 from decider._engine.ir.origin import check_id, check_name
 from decider.exceptions import WiringError
+from decider.steps._composites import COMPOSITES, SCALARS
 
-_SCALAR = {"step", "frame_step"}
-_COMPOSITE = {"flow", "dag", "branch", "loop", "each", "optimise"}
-_CONSTRUCTORS = _SCALAR | _COMPOSITE
-_DECORATORS = {"step", "frame_step"}
+_SCALAR = set(SCALARS)
+_CONSTRUCTORS = _SCALAR | set(COMPOSITES)
+_DECORATORS = _SCALAR
 _EXCLUDED = {".git", "__pycache__", ".venv", "venv", "node_modules",
              ".mypy_cache", ".pytest_cache", ".ruff_cache", "site-packages", "dist", "build"}
 

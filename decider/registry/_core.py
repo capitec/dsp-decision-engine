@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import importlib.metadata
 import inspect
 import threading
 import typing as t
@@ -33,7 +34,9 @@ def _alias(cls: type[BaseRegistryModule]) -> str | None:
 class BaseRegistryModule(BaseModel, ABC):
     """Base for pydantic classes that config addresses by a `type` tag.
 
-    `class Root(BaseRegistryModule, root=True)` opens an independent registry.
+    `class Root(BaseRegistryModule, root=True)` opens an independent registry;
+    `root=True, group="steps"` also lets installed packages ship types for it
+    (see `decider.registry`).
     Every non-abstract subclass below it registers itself on definition under
     its import path `"<module>:<QualName>"`, and under an alias too if it
     declares `type: Literal["alias"]`. Either spelling loads it; dumps write
@@ -59,13 +62,16 @@ class BaseRegistryModule(BaseModel, ABC):
     # Held to change or list the registry, never while importing: an import runs class bodies that register.
     _lock: t.ClassVar[t.Any]
     _tag: t.ClassVar[str | None] = None
+    # Entry-point group suffix (`decider.<group>`) where installed packages declare types for this root.
+    _group: t.ClassVar[str | None] = None
 
-    def __init_subclass__(cls, root: bool = False, **kwargs: t.Any) -> None:
+    def __init_subclass__(cls, root: bool = False, group: str | None = None, **kwargs: t.Any) -> None:
         super().__init_subclass__(**kwargs)
         if root:
             cls._is_registry_root = True
             cls._registry = {}
             cls._lazy = {}
+            cls._group = group
             cls._lock = threading.RLock()
 
     # Fields are only final here, not in `__init_subclass__`.
@@ -129,7 +135,8 @@ class BaseRegistryModule(BaseModel, ABC):
     def resolve(cls: type[R], tag: str) -> type[R]:
         """The registered subclass of `cls` for an alias or import path.
 
-        An import path whose module isn't loaded yet is imported first. Only a
+        An import path whose module isn't loaded yet is imported first, and an
+        alias an installed package declares as an entry point is loaded. Only a
         class that registered under this root is ever returned, so a config
         can't name arbitrary code (`"os:system"` is rejected).
 
@@ -145,6 +152,9 @@ class BaseRegistryModule(BaseModel, ABC):
                 importlib.import_module(tag.partition(":")[0])
             except ImportError:
                 pass
+        if tag not in registry and root._group:
+            for entry in importlib.metadata.entry_points(group=f"decider.{root._group}", name=tag):
+                entry.load()
         found = registry.get(tag)
         if found is not None and issubclass(found, cls):
             return found

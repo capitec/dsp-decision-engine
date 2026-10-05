@@ -14,7 +14,7 @@ class Summary(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
-class Metric(BaseRegistryModule, Callback, root=True):
+class Metric(BaseRegistryModule, Callback, root=True, group="metrics"):
     """A pluggable collector: its hooks accumulate one scenario's batches, `summarise` reduces them.
 
     The runner gives every scenario its own copy and calls `reset` on it

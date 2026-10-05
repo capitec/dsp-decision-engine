@@ -276,3 +276,11 @@ def test_a_pipeline_without_ids_still_runs_and_describes():
     desc = describe(pipeline)
     assert desc.flow.flow_id is None  # derived identity only, until ids are committed
     assert sorted(n.path for n in desc.nodes) == ["credit", "credit/approved", "credit/ratio"]
+
+
+def test_ids_cover_every_composite_constructor():
+    from decider.steps._composites import COMPOSITES
+
+    src = "".join(f'x{i} = {kind}(name="n{i}")\n' for i, kind in enumerate(COMPOSITES))
+    _, changes = add_ids(src)
+    assert len(changes) == len(COMPOSITES)

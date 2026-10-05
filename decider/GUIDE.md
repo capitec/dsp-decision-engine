@@ -229,6 +229,21 @@ step = ConfigurableStep.load({"type": "markup", "name": "doubled", "column": "in
 assert flow(step, name="p").run(pl.DataFrame({"income": [10.0]}))["doubled"].to_list() == [20.0]
 ```
 
+### Shipping a step type in a package
+
+To make `"markup"` load without the user importing your package, declare it
+as an entry point in the package's `pyproject.toml`, named by its tag:
+
+```toml
+[project.entry-points."decider.steps"]
+markup = "credit_risk.steps:Markup"
+```
+
+`ConfigurableStep.load({"type": "markup", ...})` imports the package on the
+first lookup. Only a registered `ConfigurableStep` is ever returned. Other
+roots use `decider.config_stores`, `decider.metrics`, `decider.plots`,
+`decider.blocks` and `decider.datasets`.
+
 ## Parameter tables
 
 A table-valued param holds rows in the params document (rate ladders, fee
@@ -447,6 +462,10 @@ like `DECIDER_API__PIPELINE=myapp.pipeline:build`.
 - `modifies` on a `branch` and `carries` on a `loop` are required, as they are
   in Python.
 - an omitted `else` passes false rows through unchanged.
+- `dag: name` (with `steps`, optional `inputs`), `each: name` (with `column`,
+  `steps`, optional `output`) and `optimise: name` (with `count`, `evaluate`,
+  `max_candidates`, optional `score` and `disqualify`, each a list of nodes) take
+  the arguments of the Python constructors; `optimise` has no `record`.
 - a name defined in both `components` and `documents` is an error.
 - an `expr` condition is false wherever an input it reads is null.
 - flow files live with the code (reviewed and deployed with it); params and

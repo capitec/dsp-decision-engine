@@ -115,7 +115,7 @@ def _loader() -> str:
     return _LOADER % {"urls": json.dumps(urls), "debug": json.dumps(debug)}
 
 
-class Plot(BaseRegistryModule, root=True):
+class Plot(BaseRegistryModule, root=True, group="plots"):
     """A pluggable plot of one metric's summaries, one per scenario.
 
     `metric` names the metric it draws (its `name`, or its type tag when

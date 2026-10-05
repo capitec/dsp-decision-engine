@@ -15,7 +15,7 @@ if t.TYPE_CHECKING:
     from decider.experiments._experiments import ExperimentResult
 
 
-class Block(BaseRegistryModule, root=True):
+class Block(BaseRegistryModule, root=True, group="blocks"):
     """A piece of a report: `html` renders it from a finished result.
 
     `metrics` and `plots` are the names it reads, which `validate` checks

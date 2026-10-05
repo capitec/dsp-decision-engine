@@ -267,3 +267,56 @@ def test_built_in_tags_resolve_before_their_modules_are_imported():
 def test_an_unknown_tag_says_to_import_its_module():
     with pytest.raises(LookupError, match="Import the module that defines it"):
         ConfigurableStep.resolve("no_such_step")
+
+
+def _install_plugin(tmp_path, monkeypatch, group, tag, target, source):
+    (tmp_path / "ep_plugin.py").write_text(source)
+    dist = tmp_path / "ep_plugin-1.0.dist-info"
+    dist.mkdir()
+    (dist / "METADATA").write_text("Metadata-Version: 2.1\nName: ep-plugin\nVersion: 1.0\n")
+    (dist / "entry_points.txt").write_text(f"[decider.{group}]\n{tag} = {target}\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.delitem(sys.modules, "ep_plugin", raising=False)
+
+
+def test_a_step_type_loads_from_an_entry_point_without_importing_it(tmp_path, monkeypatch):
+    _install_plugin(tmp_path, monkeypatch, "steps", "ep_scaled", "ep_plugin:EpScaled", '''
+from typing import Literal
+from decider import ConfigurableStep
+
+class EpScaled(ConfigurableStep):
+    type: Literal["ep_scaled"] = "ep_scaled"
+    factor: float = 2.0
+
+    def to_ir(self, ctx):
+        raise NotImplementedError
+''')
+    assert "ep_plugin" not in sys.modules
+    loaded = ConfigurableStep.load({"type": "ep_scaled", "name": "s", "factor": 3.0})
+    assert type(loaded).__name__ == "EpScaled" and loaded.factor == 3.0
+
+
+def test_a_metric_type_loads_from_an_entry_point(tmp_path, monkeypatch):
+    from decider.experiments.metrics import Metric
+
+    _install_plugin(tmp_path, monkeypatch, "metrics", "ep_metric", "ep_plugin", '''
+from typing import Literal
+from decider.experiments.metrics import Metric
+
+class EpMetric(Metric):
+    type: Literal["ep_metric"] = "ep_metric"
+''')
+    assert Metric.resolve("ep_metric").__name__ == "EpMetric"
+
+
+def test_an_entry_point_naming_an_unregistered_class_is_rejected(tmp_path, monkeypatch):
+    _install_plugin(tmp_path, monkeypatch, "steps", "ep_rogue", "ep_plugin:Rogue", "class Rogue: ...\n")
+    with pytest.raises(LookupError, match="not a registered ConfigurableStep type"):
+        ConfigurableStep.resolve("ep_rogue")
+
+
+def test_an_unknown_tag_still_raises_registry_error():
+    from decider.exceptions import RegistryError
+
+    with pytest.raises(RegistryError, match="not a registered ConfigurableStep type"):
+        ConfigurableStep.resolve("no_such_type")
