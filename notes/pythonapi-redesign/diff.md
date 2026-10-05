@@ -60,7 +60,7 @@ A corpus-based diff has three requirements that `checks.compare` doesn't meet to
 
 ## Can we prove two versions identical?
 
-**Verdict:** general proof stays on the back burner. Tier 1 is cheap, so ship it. Every result carries the tier it reached, and nothing returns `identical=True` from sampled evidence.
+**Verdict:** arbitrary Python can't be proven. Tier 1 is cheap, so ship it first. z3 (tier 4) is worth adding for trees, tables and expressions. Every result carries the tier it reached, and nothing returns `identical=True` from sampled evidence.
 
 | Tier | Method | Cost | What it proves | Caveats |
 |---|---|---|---|---|
@@ -68,13 +68,20 @@ A corpus-based diff has three requirements that `checks.compare` doesn't meet to
 | 1 | **IR content hash.** Per `CallNode`: `fingerprint(fn)` (bytecode, consts, closure, referenced globals; already used for the numba cache key in `engine/compile/fingerprint.py`) + kind, inputs, outputs, ParamDecls (name, annotation, default, bounds, shared_key, on_invalid) + `consts` + param-table content + the tree shape. Paths and names are labels, not hashed. | days | Both versions compute the same thing and bind the same data. Exact for pure steps, which `wall_clock` / `impure` police. | `fingerprint` hashes unknown objects by identity, so equal logic can read as different. That is a false negative, which is the safe direction. |
 | 2 | Normalised config documents for trees, tables and scorecards: sorted ranges, merged identical adjacent leaves, defaults filled, then compare | 1–2 weeks | Two documents that differ in layout or format version but not in decisions | needs one normal form per document type |
 | 3 | Exhaustive enumeration over small domains. Partition each numeric input at every threshold literal in either version (±ε, NaN, null, ±inf), take bool and code inputs whole, and run the full product if it's under about 1e6 rows. | days (the corpus machinery exists) | Exact for piecewise-constant decision logic (trees, tables) | only evidence for arithmetic steps such as `cents * rate / 12` |
-| 4 | SMT (z3) over trees and tables, which are linear predicates: ask for x where `old(x) != new(x)` | weeks, plus a new dependency | Complete for flows that are only trees and tables | Breaks on arbitrary Python, strings, rounding semantics, int64 wrap and NaN. Would need the restricted `steps/expr` language. |
+| 4 | SMT (z3, as the `decider[prove]` extra) over trees and tables, which are linear predicates: ask for x where `old(x) != new(x)` | weeks | Complete for flows that are only trees and tables | Breaks on arbitrary Python, strings, rounding semantics, int64 wrap and NaN. Would need the restricted `steps/expr` language. |
 | 5 | Symbolic equivalence of arbitrary Python | not feasible | | |
 
 **Recommendation:**
 - Build tier 1 now, together with the fix for the `compare` bug. It is also what makes `diff.structure` meaningful.
 - Offer tier 3 as an evidence generator: `diff.outputs(..., domain="thresholds")`. Report it as evidence unless every step is piecewise-constant.
-- Park tiers 2 and 4. Experiments already cover "run both over real data and look".
+- **Build tier 4 with z3**, using `z3-solver` as the optional `decider[prove]` extra. A missing extra makes `prove` stop at tier 3 and say so; it doesn't fail. Scope it to what z3 handles cleanly:
+  - tree and table steps, which are linear predicates over inputs;
+  - `steps/expr` expressions;
+  - integer and comparison arithmetic.
+
+  A step outside that scope makes the proof fall back to a lower tier for the path through it. Worked counterexamples (`old(x) != new(x)` for this `x`) come back as `evidence`, which is often worth more than the proof.
+- The same encoding also powers two checks: `unreachable_branch` (DCD201, "is this arm satisfiable?") for trees and tables, and table row overlap and gaps. So z3 earns its place in `checks` as well.
+- Park tier 2. Normalised documents are mostly subsumed by tier 4 for trees and tables.
 
 ```python
 class Proof(BaseModel):

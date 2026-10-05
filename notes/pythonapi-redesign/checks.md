@@ -28,11 +28,11 @@ decider/checks/
   __init__.py     Check CheckContext Finding Severity Report run standard catalogue check(decorator)
   _model.py       Severity Finding Report SkippedCheck Suppression
   _base.py        Check (registry root), CheckContext, the @check decorator
-  _run.py         run(): select, configure, suppress, collect
-  _report.py      to_text / to_json / to_sarif
-  _suppress.py    inline comments + config suppressions
+  _run.py         run(): select, configure, apply step suppressions, collect
+  _config.py      checks.yaml / checks.json: find, load, validate
+  _report.py      to_text / to_sarif (JSON is model_dump_json)
   _ast.py         shared step-source walker (source, lines, names bound to IR annotations)
-  builtin/        one family per file, each under 500 lines
+  _builtin/       one family per file, each under 500 lines
     determinism.py numeric.py structure.py params.py ids.py data.py runtime.py
 ```
 
@@ -106,27 +106,61 @@ Rules for writing checks:
 - **Locations are contract refs**, so a finding survives renames and links straight to the editor.
 - **Findings come from one `StepRef` builder.** That is `contract.describe`; `_common.step_ref` goes.
 
-## Configuration and suppression
+## Project config: `checks.yaml`
 
-```json
-{
-  "extends": "standard",
-  "checks": [
-    {"type": "int64_overflow", "severity": "error"},
-    {"type": "durable_ids", "severity": "error"},
-    {"type": "acme.checks:NoFloatMoney", "allow": ["fee"]}
-  ],
-  "disable": ["DCD107"],
-  "suppress": [{"code": "DCD101", "step_id": "0123abcdef45", "reason": "capped upstream"}]
-}
+This file is the project's **check policy**. It sets:
+- which checks run: start from `standard`, then add data, runtime or custom checks;
+- their severities and options;
+- what is switched off project-wide.
+
+It is what `decider check`, VS Code and MCP read, so all three agree with CI. With no file, `standard` runs with default severities.
+
+```yaml
+extends: standard
+checks:
+  - {type: int64_overflow, severity: error}
+  - {type: durable_ids, severity: error}
+  - {type: missing_required}                  # data check: runs when a frame is given
+  - {type: "acme.checks:NoFloatMoney", allow: [fee]}
+disable: [float_equality]                     # alias or code
+fail_on: error                                # default gate for `decider check`
 ```
 
-Suppression works at three levels, from narrowest to widest:
-1. **Inline:** `# decider: ignore[DCD101] reason`. A bare `ignore` with no code is rejected.
-2. **By durable step id in config.** This survives refactors and gets reviewed in the PR.
-3. **`disable` or a severity override for a whole check.**
+**Where it lives:**
+- At the project root as `checks.yaml` (or `checks.json`), beside `configs/` and `datasets/`.
+- It is found the same way datasets are. The nearest ancestor holding `configs/` is the project root (`project_root`). The path is a setting, `checks_path = "${PROJECT_ROOT}/checks.yaml"`, overridable with `DECIDER_CHECKS_PATH`, exactly like `datasets_path`.
+- Pass `checks.run(..., config=path)` or `decider check --config path` to use another file.
 
-Where the file lives is decision 3, and whether inline comments are allowed is decision 4 (both in the README).
+**Why not `configs/`:** `configs/` is the versioned runtime store that `decider serve` stages and activates. Check policy is a dev and CI concern that is never served. Keeping it out of `configs/` means it is never versioned or deployed with params. YAML needs `pyyaml`, which is already an optional dependency for flow files.
+
+## Suppression: on the step
+
+A finding is suppressed where the step is defined, not in a comment and not in the config:
+
+```python
+@step(suppress_checks=["int64_overflow"])        # alias or code ("DCD101")
+def capped(cents: int) -> int:
+    return cents * 1000
+
+flow(a, b, name="legacy", suppress_checks=["shadowed_write"])   # a composite covers every step inside
+```
+
+```yaml
+- step: capped                                    # flow files take the same key
+  suppress_checks: [int64_overflow]
+```
+
+```python
+class Scaled(ConfigurableStep):                   # and so does every ConfigurableStep, as a field
+    ...
+Scaled(name="s", column="income", suppress_checks=["param_unconstrained"])
+```
+
+- **Every constructor takes it.** That is `step`, `frame_step`, `flow`, `dag`, `branch`, `loop`, `each` and `optimise`, plus a base `ConfigurableStep` field and a flow-file key.
+- **It is stored on the node's `Origin`.** Origins are kept out of cache keys (`origins-out-of-cache-keys.md`), so adding a suppression never recompiles. `CheckContext.finding` checks the node and its ancestors.
+- **Suppressed findings stay in the report** with `suppressed` set to the path that suppressed them. They don't count against `ok`, so a review can still list them.
+- **An unknown name is itself a finding** (DCD403 `unknown_suppression`, warning). It isn't a build error, because a custom check may not be imported when the flow is built. It also catches typos and suppressions left behind after a check is renamed.
+- **There are no inline `# ignore` comments and no id-based suppressions in config.** The step is the one place to look. A suppression moves with the step and gets reviewed in the same diff.
 
 ## Running
 
@@ -134,12 +168,12 @@ Where the file lives is decision 3, and whether inline comments are allowed is d
 from decider import checks
 report = checks.run(pipeline)                                        # checks.standard
 report = checks.run(pipeline, [checks.standard, NoFloatMoney()])     # flat list of checks or check sets
-report = checks.run(pipeline, config="checks.json", data=frame, params=doc)
+report = checks.run(pipeline, config="checks.yaml", data=frame, params=doc)   # default: the project's checks.yaml
 checks.catalogue()                                                   # alias, code, family, needs_data, severity, schema
 ```
 
 ```bash
-decider check credit.pipeline:build [--config checks.json] [--data loans|file.parquet]
+decider check credit.pipeline:build [--config checks.yaml] [--data loans|file.parquet]
               [--format text|json|sarif] [--fail-on error|warning] [--select DCD1] [--list]
 ```
 
@@ -169,13 +203,15 @@ So type-aware checks are cheap: the AST gives the expression shape, and the IR g
 | DCD002 | `impure` | `global` / `nonlocal`, mutable defaults | Exists. Add keyword-only defaults (`kw_defaults`), which are ignored today. |
 | DCD003 | `mutates_input` | `.append`, `x[k] = ...` or in-place frame ops on an argument | New |
 
+DCD002 and DCD003 messages say why it matters: served steps run concurrently on one `Executable` (`thread-safety.md`), so shared state in a step is a race, not just impurity.
+
 ### Numeric (DCD1xx)
 
 | Code | Alias | Detects | Default severity |
 |---|---|---|---|
 | DCD101 | `int64_overflow` | int × int, `**`, `<<`, int running `+=` / `sum` where both operands are int-typed | warning; **error** when an operand is `Money(cents=True)`. Replaces today's blunt "int constant `*`" rule. |
 | DCD102 | `float_money` | money held as float; float arithmetic flowing into a cents int output; `int(x * 100)` truncation | warning |
-| DCD103 | `bare_round` | `round(x, n)` / `np.round` in a step (CPython and numba differ on `.xx5`) | warning; **error** on a Money output. Ship the rounding helper the money note calls for, and link it in `fix`. |
+| DCD103 | `bare_round` | `round(x, n)` / `np.round` in a step (CPython and numba differ on `.xx5`) | warning; **error** on a Money output. The `fix` points at `decider.ops.decimal.round` (`kernel-functions.md`), which lands first. |
 | DCD104 | `division_by_variable` | `/`, `//` or `%` by something not provably non-zero (no dominating guard, no `max(b, eps)`, not a param with `gt=0`) | warning |
 | DCD105 | `int_true_division` | true division of two **int-typed** values | info. Replaces the false-positive `float_precision` rule. |
 | DCD106 | `pow_exp_overflow` | `**`, `exp` or `pow` with a non-constant exponent: overflow to inf, underflow to 0 | warning |
@@ -210,6 +246,7 @@ So type-aware checks are cheap: the AST gives the expression shape, and the IR g
 |---|---|---|---|
 | DCD401 | `durable_ids` | missing flow or step ids | warning. Exists. |
 | DCD402 | `duplicate_ids` | two definitions with one id | error |
+| DCD403 | `unknown_suppression` | a `suppress_checks` entry that names no registered check | warning |
 
 ### Data and runtime (DCD5xx, opt-in)
 

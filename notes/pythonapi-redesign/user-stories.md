@@ -139,10 +139,10 @@ datasets()["loans"].load(); dataset("loans").scan()
 ```
 The same namespace also holds `dataset_documents`, `datasets_folder` and `project_root`, which are bridge helpers. There is no way to register a dataset in a notebook.
 
-After: the bridge helpers become private, and an in-memory registration is added:
+After: the bridge helpers become private, and `datasets()` returns a mapping you can add to in memory:
 ```python
-from decider.data import catalog, FileProvider
-catalog().add("tmp", FileProvider(path="x.csv"))
+from decider.data import datasets, FileProvider
+datasets().add("tmp", FileProvider(path="x.csv"))
 ```
 
 ### B5. Compare baseline params against a scenario — clean
@@ -176,8 +176,8 @@ s.break_at("credit/approved"); s.resume(); s.set("ratio", 0.1); s.resume(); s.ou
 
 After:
 ```python
-from decider import Session         # Step.session -> Session
-from decider.debug import Paused, NodeFinished   # events read from s.events
+from decider.debug import Session   # Step.session -> Session
+from decider.debug import Paused, NodeFinished    # events read from s.events
 ```
 The wire models (`Command`, `COMMAND`, `EVENT`, ...) become private.
 
@@ -221,14 +221,14 @@ The awkward parts are:
 - `decider.settings` builds a global `DeciderSettings()` at import time, so `DECIDER_*` env vars and `.env` change library behaviour without you asking.
 - "A thing that gives a Step" has three spellings: a `Step`, a `"module:build"` string and a `.yaml` path.
 
-After: settings become lazy (`get_settings()`) and live with `serving`. The handler surface is left alone for now; it is fixed by the SageMaker contract.
+After: settings become lazy (`decider._settings.get_settings()`, read on first use, not at import). The handler surface is left alone for now; it is fixed by the SageMaker contract.
 
 ### E3. Run checks in CI — missing
 Today you write Python: `check.run(...)` then `assert report.ok`.
 
 After:
 ```bash
-decider check credit.pipeline:build --config checks.json --fail-on error --format sarif > checks.sarif
+decider check credit.pipeline:build --format sarif > checks.sarif      # policy and gate from the project's checks.yaml
 ```
 
 ### E4. Run an experiment.json in CI — awkward, with a bug
@@ -371,12 +371,13 @@ def sq(cents: int) -> int: return cents ** 2              # flagged (correct)
 ```
 After: `DCD103 bare_round` fires (an error, because the output is Money), `DCD104 division_by_variable` fires on `ratio`, and `DCD101 int64_overflow` fires on `sq`. `inst` raises no false positive. The full catalogue is in `checks.md`.
 
-### R3. Accept a known-safe finding with a reason — missing
-After, either of these:
+### R3. Accept a known-safe finding — missing
+After:
 ```python
-return cents * 1000   # decider: ignore[DCD101] capped to 1e9 upstream
+@step(suppress_checks=["int64_overflow"])     # or the code, "DCD101"; also on flow/dag/branch/... and flow files
+def capped(cents: int) -> int: return cents * 1000
 ```
-or a `{"code": "DCD101", "step_id": "...", "reason": "..."}` entry in the check config. A suppressed finding stays in the report and is marked suppressed.
+A suppressed finding stays in the report and is marked suppressed. An unknown name is reported as DCD403. See `checks.md`.
 
 ### R4. Run data-dependent checks against my dataset — awkward
 Today, `decider.data.preflight` returns free-text `errors: tuple[str]` with no location. It is a third report shape, separate from checks.
