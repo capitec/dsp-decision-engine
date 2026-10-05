@@ -1,6 +1,6 @@
 # Python API redesign
 
-Status: proposal, 2026-10-05. Nothing here is implemented yet.
+Status: proposal, 2026-10-05; decisions taken the same day (below). Nothing here is implemented yet.
 
 Much of the work for the VS Code redesign (`notes/vscode-redesign/`) landed as
 public Python API. The result is hard to read. You can't tell the typical
@@ -11,10 +11,15 @@ records an audit of the whole surface and a target shape.
 
 | File | What it covers |
 |---|---|
+| `HANDOVER.md` | **Start here to implement it.** A brief for an orchestrator agent: what to read, settled decisions, questions to ask first, work packages by phase with model tiers and gates, traps, suggested skills. |
 | `user-stories.md` | What developers actually do with decider, by role. For each story: the code it takes today, a rating, and the code it should take. |
-| `layout-and-visibility.md` | The target namespace in layers (core, companion libraries, extension kit, integration contract, private). Also what moves, what gets renamed, how to hide internals and how to enforce it. |
+| `directory-structure.md` | **The plan.** Every current file and where it goes, the layer map, what gets deleted, changes outside `decider/`, migration phases and the convention tests. |
+| `layout-and-visibility.md` | Why the namespace is shaped this way: principles, the table of moves and renames, name clashes, and how internals are hidden. |
 | `checks.md` | One `decider.checks` package: checks as registry modules, a stable `Finding` format, suppression, config, CLI, and a standard catalogue (overflow, rounding, division, dead code, params...). |
 | `diff.md` | New `decider.diff`: comparing two versions of a pipeline by structure and by outputs, and how far "provably identical" can go. |
+| `thread-safety.md` | The serving-path thread-safety contract, rules, the re-checked race list (3 new), fixes with no API change, and the stress and convention tests that keep it fixed. |
+| `kernel-functions.md` | Where functions that run in kernels live: implicit CPython-equal semantics (numbers, strings) in `_engine/compile/semantics/`, explicit `decider.ops` (`decimal` with three rounding modes, `general`, `strings`, `credit`) for users, money operator overloads behind a spike, one contract, and a cache-salt fix. |
+| `credit-functions.md` | Where the coming credit and data-science functions fit: per-record in `decider.ops.credit`, fitting in `decider.credit` (`ScorecardConfig.fit`), metrics in `experiments.metrics`; phase 7. |
 | `extensibility-and-coupling.md` | What is pluggable today, what is a closed list, cross-package edges that point the wrong way, and private-name imports. |
 
 ## The shape in one picture
@@ -22,18 +27,18 @@ records an audit of the whole surface and a target shape.
 ```
 import decider                      CORE: write and run a pipeline
   flow dag branch loop each optimise step frame_step   param param_table missing_as
-  Engine Executable Session load_flow describe   Step ConfigurableStep Value ParamRef
-  TreeConfig DecisionTableConfig ScorecardConfig (lazy)   Money Percent Duration ...
+  Engine Executable load_flow describe   Step ConfigurableStep Value ParamRef StepRef
+  TreeConfig DecisionTableConfig ScorecardConfig (lazy)   ParamTable Money Percent Duration ...
   DeciderError FallbackWarning
 
 decider.checks  decider.diff  decider.experiments(.metrics .plots .report)
 decider.data    decider.testing  decider.serving  decider.config
-decider.debug   decider.trace                     COMPANION LIBRARIES: one task each
+decider.debug (Session) decider.trace             COMPANION LIBRARIES: one task each
 
 decider.ir  decider.registry                      EXTENSION KIT: custom steps and plugins
 
 decider.contract                                  INTEGRATION CONTRACT: versioned models
-  refs, FlowDescription, RunManifest, Job, generated schemas      for VS Code / MCP
+  refs, FlowDescription, RunManifest, Job, bridge messages, schemas   for VS Code / MCP
 
 decider._engine  decider._bridge  ...             PRIVATE: no stability promise
 ```
@@ -86,40 +91,26 @@ These need fixing regardless of the redesign. Each was confirmed by reading the 
 | A revision scenario silently needs `entry=` | `Experiment(..., entry="")` default; `validate` never checks it | Fails inside the worker subprocess instead of at validation |
 | `experiments.run(def_)` resolves `input.path` / `input.dataset` against the cwd | `runner.py:66` calls `input_frame(def_)` without the file | `Experiment.load(path).run()` and `run(def_)` read different data for the same JSON |
 | `numeric` check gets money wrong in three ways | `checks/static.py` | It raises a false positive on `cents * rate / 12` (rate is float). It misses `a / b` and misses bare `round()` on a `Money(cents=True)` output. `money-rounding-and-overflow.md` specified the `round()` lint, but it was never built. |
+| Serving-path races: a use-after-free of `str` param spans, a cold-start compile race, the trace sink stored on the shared runner, and a last-writer-wins `exe.report` | `stepped.py`, `interpreted.py`, `engine.py`, from `racecondition_investigation_results.md` re-checked | Wrong or garbage results under concurrent calls on one `Executable`. See `thread-safety.md`. |
 | `notes/debug-bridge-relocation.md` is stale | | It says `forks`/`runs` moved to `experiments/` (they didn't). It also names `tools/jupyterlab-decider`, which doesn't exist. |
 
 ## Work order
 
-Each step keeps `uv run pytest` green and is worth doing on its own.
+The phased plan, with a "done when" for each phase, is in `directory-structure.md`. In short:
+0. Fix the bugs, including the serving-path races in `thread-safety.md`, with a concurrency stress test.
+1. Add the convention tests, with an allowlist of today's violations.
+2. Delete what nothing calls.
+3. Mechanical moves, one commit each, with `engine` → `_engine` first.
+4. Trim the surfaces and add the facades and top-level names.
+5. New features: checks registry, `diff`, a unified experiment run, CLI commands, entry points, the bridge handshake.
+6. The check catalogue (money-safety first) and the diff tiers, including z3.
 
-1. **Fix the bugs above.** Add a regression test for each.
-2. **Add the layering and visibility tests.** These go in `tests/test_conventions.py` (see `layout-and-visibility.md`). Then fix the six cross-package private imports. No renames yet.
-3. **Pure additions to the core namespace.**
-   - Add the missing top-level names.
-   - Type `Step.session -> Session`.
-   - Add `Step.bind(mode)`.
-   - Add `pipeline.parameters().validate(doc)`.
-4. **Trim `__all__`.** This covers `steps`, `steps.trees/tables/scorecard`, `experiments` (into `.metrics` / `.plots` / `.report`), `engine.debug`, `lifecycle`, `mcp` and `data`. Delete stray re-exports such as `experiments.scan`.
-5. **Merge `check` and `checks` into a registry-based `decider.checks`.** Give findings codes and add `decider check`. See `checks.md`.
-6. **Create `decider.diff`.** Move comparison out of checks and the revision machinery out of experiments. See `diff.md`.
-7. **Unify the experiment run.** One `experiments.run(def_or_path, ...)`, plus a `decider experiment run` command.
-8. **Moves and renames.** These are the big mechanical diffs:
-   - `flowfile` → `decider.load_flow`.
-   - `lifecycle` → `decider.contract`.
-   - `describing.py` → the bridge.
-   - `engine` → `_engine` behind facades.
-   - `debug_bridge` → `_bridge`, with shims for the two TS entry modules.
-   - Split `types`, `exceptions` and `settings`.
-9. **Standard check catalogue and diff tiers.** The money-safety checks come first.
+## Decisions (2026-10-05)
 
-## Decisions needed
-
-These are not guessed. Each changes what gets built.
-
-1. **Break or shim?** HEAD is "out with the old decider", so this looks like a breaking window. Can moved names just move, or do they need `__getattr__` deprecation shims for a release? The recommendation is to move them. Keep shims only for paths outside this repo (the TS entry modules and `decider.serving.RequestHandler` in templates).
-2. **Rename `engine` → `_engine` in one go?** The alternative is underscoring its five internal subpackages one by one. The single rename is a larger diff but leaves one rule ("nothing outside `_engine` is engine internals"). It also means updating the engine rule in `CLAUDE.md`.
-3. **Check config location.** The options are `checks.json` beside `configs/`, `[tool.decider.checks]` in `pyproject.toml`, or a key in `experiment.json`.
-4. **Suppression mechanism.** The options are in-source `# decider: ignore[DCD101] reason` comments, id-based suppressions in config (which survive refactors), or both.
-5. **`z3` as an optional extra.** This only matters if the SMT tier of `diff.prove` is ever built. Recommendation: not now.
-6. **Rename `Table` → `ParamTable` and `optimise` → `optimize`?** Recommendation: rename `Table` (it clashes); leave `optimise` alone (renaming gains little).
-7. **`decider.data.scope` and most of `decider.data.identity`.** About 25 names have no caller outside tests. They were meant for the VS Code "selected record" flow, which was never wired. Delete them, or park them privately until a caller exists?
+1. **No shims.** This is a fresh version: names move, and callers change in the same commit, including the three bridge paths in `tools/vscode-decider`.
+2. **`engine` → `_engine` in one `git mv`**, after the `ir` / `trace` / `debug` facades exist. Reasons are in `layout-and-visibility.md`.
+3. **The check policy is `checks.yaml` (or `.json`) at the project root**, beside `configs/` and `datasets/`, and is found the way datasets are (setting `checks_path`). It is not in `configs/`, because that is the served, versioned store. See `checks.md`.
+4. **Suppression lives on the step:** `suppress_checks=[alias or code]` on every constructor, as a `ConfigurableStep` field and as a flow-file key. There are no inline comments and no config suppressions. It is stored on `Origin`, so it never recompiles.
+5. **z3 is in**, as the `decider[prove]` extra. It handles tier 4 of `diff.prove` and the satisfiability checks for trees and tables.
+6. **`Table` → `ParamTable`**, with no alias. `optimise` stays.
+7. **Delete `data/scope.py` and `identity.resolve_key` / `record_ref`.** On 2026-10-05 a grep found callers only in the GUIDE (815–825) and in `tests/data/test_scope.py` / `test_identity.py`. `suggest_key`, `check_key` and the key errors are used by `load.py` and the providers, so they stay, privately in `data/_keys.py`. Re-grep at deletion time.
