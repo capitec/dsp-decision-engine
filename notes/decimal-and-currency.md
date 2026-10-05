@@ -289,4 +289,4 @@ Tests (`tests/ops/`, `tests/compile/`, `tests/boundary/`):
 - **`Decimal ± int` is legal**; the int is whole units (question 5).
 - **Units are a client-supplied display string** (`units="R"`); no Babel (question 7).
 - Questions 1, 2, 4, 9 and 10 default to the recommendations above; the user has not been asked them yet.
-- **Still open:** question 8, `Currency(2.675)` from a float (2.67 exact double, or 2.68 shortest repr as polars casts). Settle before building.
+- **Question 8 is sidestepped, not answered:** a `Currency` is built from integers, `Currency(2, 675)` for 2.675, rather than from a float. Converting a float to a `Currency` still works but warns that it may lose precision. Open detail: how the second integer reads when it has leading zeros (2.05).
