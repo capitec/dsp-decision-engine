@@ -5,11 +5,11 @@ Example::
     from decider.debug import Session
     help(Session)
 """
-from decider._engine.debug import (Edited, Error, Event, NodeFinished, NodeStarted, NodeVisited, Overridden,
-                                   ParamsValidated, Paused, ReloadFailed, RunFinished, RunStarted, Session, Summary,
-                                   Warning)
+from decider._engine.debug import (Edited, ErrorEvent, Event, NodeFinished, NodeStarted, NodeVisited, Overridden,
+                                   ParamsValidated, Paused, ReloadFailed, RunFinished, RunStarted, Session, RunSummary,
+                                   WarningEvent)
 
 __all__ = [
-    "Edited", "Error", "Event", "NodeFinished", "NodeStarted", "NodeVisited", "Overridden", "ParamsValidated",
-    "Paused", "ReloadFailed", "RunFinished", "RunStarted", "Session", "Summary", "Warning",
+    "Edited", "ErrorEvent", "Event", "NodeFinished", "NodeStarted", "NodeVisited", "Overridden", "ParamsValidated",
+    "Paused", "ReloadFailed", "RunFinished", "RunStarted", "Session", "RunSummary", "WarningEvent",
 ]

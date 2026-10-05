@@ -11,7 +11,7 @@ from decider._engine.types import columnar_item, is_raw, item_schema, struct_ite
 from decider._engine.ir.nodes import (BranchNode, CallNode, IRNode, LoopNode, ScatterGatherNode, SequenceNode,
                                      iter_nodes)
 from decider._engine.wiring.plan import (Branch, Call, Carry, Loop, Merge, Plan, Resolved, ScatterGather, Sequence,
-                                        Version)
+                                        NodeVersion)
 from decider.exceptions import WiringError
 from decider._suggest import TYPO_CUTOFF, hint, suggest
 
@@ -54,7 +54,7 @@ def resolve(ir: Any) -> Plan:
 
 @dataclass(slots=True)
 class _Scope:
-    names: dict[str, Version] = field(default_factory=dict)
+    names: dict[str, NodeVersion] = field(default_factory=dict)
     barrier: Call | None = None
     # name -> path of the first node that read it as an input column
     leaf_readers: dict[str, str] = field(default_factory=dict)
@@ -71,22 +71,22 @@ class _Resolver:
     def __init__(self, annotations: dict[str, Any], declared: frozenset[str] = frozenset()) -> None:
         self.annotations = annotations
         self.declared = declared
-        self.versions: list[Version] = []
+        self.versions: list[NodeVersion] = []
         self.calls: list[Call] = []
-        self.leaves: dict[str, Version] = {}
+        self.leaves: dict[str, NodeVersion] = {}
         self.inputs: dict[str, Input] = {}
-        self.chains: dict[str, list[Version]] = {}
+        self.chains: dict[str, list[NodeVersion]] = {}
         self.read: set[int] = set()
         self.passthrough: set[int] = set()
-        self.emitted: dict[str, Version] = {}
+        self.emitted: dict[str, NodeVersion] = {}
         self.drops: list[tuple[str, str]] = []
         # Finished branch/loop path -> the names it passes on, for errors about the ones it hides.
         self.closed: dict[str, str] = {}
         # Input column -> (first typed reader, its type), so every reader agrees on the column's type.
         self.input_types: dict[str, tuple[str, Any]] = {}
 
-    def new(self, name: str, producer: str | None, annotation: Any) -> Version:
-        v = Version(len(self.versions), name, producer, annotation)
+    def new(self, name: str, producer: str | None, annotation: Any) -> NodeVersion:
+        v = NodeVersion(len(self.versions), name, producer, annotation)
         self.versions.append(v)
         if producer is not None:
             self.chains.setdefault(name, []).append(v)
@@ -131,7 +131,7 @@ class _Resolver:
             call.writes = tuple(self.write(o.name, o.annotation, path, scope) for o in node.outputs)
         return call
 
-    def lookup(self, name: str, scope: _Scope, reader: str, own: set[str] = frozenset(), decl: Input | None = None) -> Version:
+    def lookup(self, name: str, scope: _Scope, reader: str, own: set[str] = frozenset(), decl: Input | None = None) -> NodeVersion:
         v = scope.names.get(name)
         if v is None:
             v = scope.names[name] = self.unbound(name, scope, reader, own, decl)
@@ -156,7 +156,7 @@ class _Resolver:
                 f"in the step that needs the other type."
             )
 
-    def unbound(self, name: str, scope: _Scope, reader: str, own: set[str], decl: Input | None) -> Version:
+    def unbound(self, name: str, scope: _Scope, reader: str, own: set[str], decl: Input | None) -> NodeVersion:
         annotation = decl.annotation if decl is not None else self.annotations.get(name)
         if scope.barrier is not None:
             return self.from_barrier(name, scope.barrier, annotation)
@@ -190,7 +190,7 @@ class _Resolver:
             self.passthrough.add(self.leaves[name].id)
         return self.leaves[name]
 
-    def from_barrier(self, name: str, barrier: Call, annotation: Any) -> Version:
+    def from_barrier(self, name: str, barrier: Call, annotation: Any) -> NodeVersion:
         for v in barrier.writes:
             if v.name == name:
                 return v
@@ -199,7 +199,7 @@ class _Resolver:
         self.passthrough.add(v.id)
         return v
 
-    def write(self, name: str, annotation: Any, writer: str, scope: _Scope) -> Version:
+    def write(self, name: str, annotation: Any, writer: str, scope: _Scope) -> NodeVersion:
         old = scope.names.get(name)
         reader = scope.leaf_readers.get(name)
         if (old is None or old.producer is None) and reader not in (None, writer):
@@ -211,7 +211,7 @@ class _Resolver:
         v = scope.names[name] = self.new(name, writer, annotation)
         return v
 
-    def hidden(self, name: str) -> tuple[Version, str] | None:
+    def hidden(self, name: str) -> tuple[NodeVersion, str] | None:
         """The last version of `name`, if it was written inside a finished branch or loop, and that branch or loop."""
         # Only the last: an earlier one may have been passed on, into a sibling arm's scope say.
         for v in self.chains.get(name, ())[-1:]:
@@ -220,7 +220,7 @@ class _Resolver:
                 return v, self.closed[max(owners, key=len)]
         return None
 
-    def final(self, name: str, inner: _Scope, owner: str) -> Version | None:
+    def final(self, name: str, inner: _Scope, owner: str) -> NodeVersion | None:
         """The version of `name` that nodes under `owner` left in `inner`, or `None` if they left it alone."""
         prefix = owner + "/"
         v = inner.names.get(name)
@@ -295,7 +295,7 @@ class _Resolver:
                 for o in n.outputs or ():
                     writes.add(o.name)
         inner = scope.child()
-        fields: list[tuple[str, Version]] = []
+        fields: list[tuple[str, NodeVersion]] = []
         for name, annotation in reads.items():
             if name in writes:
                 continue

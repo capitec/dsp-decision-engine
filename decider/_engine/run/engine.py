@@ -19,7 +19,7 @@ from decider._engine.ir.decls import ParamDecl, base_annotation
 from decider._engine.run.state import State, declared_dtype, dtype_of, load_record, record_value
 from decider._engine.trace.envelope import StepTable
 from decider._engine.wiring import Plan, resolve
-from decider._engine.wiring.plan import Branch, Call, Loop, ScatterGather, Sequence, Version
+from decider._engine.wiring.plan import Branch, Call, Loop, ScatterGather, Sequence, NodeVersion
 from decider.exceptions import EngineError
 
 if TYPE_CHECKING:
@@ -114,7 +114,7 @@ class Executable:
         self._watched = self._produced | self._params_at.keys()
         self._warned = Cache()
         self._declared = {i.name: declared_dtype(i.annotation) for i in plan.inputs}
-        inputs: dict[np.dtype, list[Version]] = {}
+        inputs: dict[np.dtype, list[NodeVersion]] = {}
         for v in plan.versions:
             if v.producer is None:
                 inputs.setdefault(dtype_of(base_annotation(v.annotation)), []).append(v)

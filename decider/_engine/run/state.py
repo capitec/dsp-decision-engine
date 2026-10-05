@@ -9,16 +9,16 @@ import polars as pl
 
 from decider._engine.ir.decls import TYPED, Input, NullPolicy, base_annotation
 from decider._engine.run.representations import despan
-from decider._engine.wiring.plan import Plan, Version
+from decider._engine.wiring.plan import Plan, NodeVersion
 from decider._engine.types import annotation_cache, columnar_item, item_schema, struct_item
 
 
 class State:
-    """Every value of one run: a numpy array per `Version.id`, a validity mask for nullable ones.
+    """Every value of one run: a numpy array per `NodeVersion.id`, a validity mask for nullable ones.
 
     Args:
-        values: `Version.id` -> array of `n` values.
-        valid: `Version.id` -> bool mask of `n` rows; absent means every row is valid.
+        values: `NodeVersion.id` -> array of `n` values.
+        valid: `NodeVersion.id` -> bool mask of `n` rows; absent means every row is valid.
         frame: the frame unread columns pass through from: the input frame,
             replaced by what an unknown-lineage frame step returns.
 
@@ -35,7 +35,7 @@ class State:
         self.n = frame.height if n is None else n
         self.values: dict[int, np.ndarray] = {}
         self.valid: dict[int, np.ndarray] = {}
-        self.chains: dict[str, list[Version]] = {k: list(v) for k, v in plan.chains.items()}
+        self.chains: dict[str, list[NodeVersion]] = {k: list(v) for k, v in plan.chains.items()}
         self._extra = 0
         self._sources: dict[int, tuple[np.ndarray, pl.Series]] = {}
         # Per version id: the compiled representations built from its values, each with the
@@ -66,7 +66,7 @@ class State:
                 state._sources[v.id] = (values, series)
         return state
 
-    def write(self, version: Version, values: np.ndarray, rows: np.ndarray | None = None,
+    def write(self, version: NodeVersion, values: np.ndarray, rows: np.ndarray | None = None,
               valid: np.ndarray | None = None) -> None:
         """Store `values` for `version` on `rows`; `valid` marks which of them are non-null.
 
@@ -99,7 +99,7 @@ class State:
             mask = self.valid[vid] = np.ones(self.n, bool)
         mask[rows] = True if valid is None else valid
 
-    def read(self, version: Version, rows: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray | None]:
+    def read(self, version: NodeVersion, rows: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray | None]:
         """`version`'s values and validity mask (`None` = all valid) on `rows`; never written means all null."""
         values, valid = self.values.get(version.id), self.valid.get(version.id)
         if values is None:
@@ -108,7 +108,7 @@ class State:
             return values, valid
         return values[rows], None if valid is None else valid[rows]
 
-    def source(self, version: Version) -> pl.Series | None:
+    def source(self, version: NodeVersion) -> pl.Series | None:
         """The input frame column `version` was read from, while its values are still that column's.
 
         Lets a compiled step read an object column's Arrow buffers in place.
@@ -120,7 +120,7 @@ class State:
         values, series = self._sources.get(version.id, (None, None))
         return series if values is not None and self.values.get(version.id) is values else None
 
-    def representation(self, version: Version, kind: Hashable, build) -> np.ndarray:
+    def representation(self, version: NodeVersion, kind: Hashable, build) -> np.ndarray:
         """Return cached compiled representation for `version` and `kind`.
 
         `build(values, source, alive)` receives full-column values and may append
@@ -136,7 +136,7 @@ class State:
             entry = cached[kind] = (build(values, self.source(version), alive), alive)
         return entry[0]
 
-    def record(self, name: str, producer: str, values: np.ndarray, valid: np.ndarray | None = None) -> Version:
+    def record(self, name: str, producer: str, values: np.ndarray, valid: np.ndarray | None = None) -> NodeVersion:
         """Store `values` as a new version of `name`, appended to its chain; for overrides.
 
         Example::
@@ -144,7 +144,7 @@ class State:
             state.record("disposable_income", "override@term/cap_by_income", np.full(state.n, 1200.0))
         """
         self._extra += 1
-        v = Version(len(self.plan.versions) + self._extra - 1, name, producer)
+        v = NodeVersion(len(self.plan.versions) + self._extra - 1, name, producer)
         self.chains.setdefault(name, []).append(v)
         self.write(v, values, valid=valid)
         return v
@@ -169,7 +169,7 @@ class State:
         self.chains, self._extra = old.chains, old._extra
         self._representations = {}   # values this rewinds past may have built them
 
-    def versions(self, spec: str) -> list[Version]:
+    def versions(self, spec: str) -> list[NodeVersion]:
         """The versions `spec` names: `name` (the latest), `name@path` (by producer) or `name@*` (all).
 
         Example::
@@ -186,7 +186,7 @@ class State:
             return chain[-1:]
         return [v for v in self.plan.versions if v.producer is None and v.name == name]
 
-    def column(self, spec: str, version: Version | None = None) -> pl.Series:
+    def column(self, spec: str, version: NodeVersion | None = None) -> pl.Series:
         """One version as a polars Series named `spec`, null where invalid."""
         (v,) = [version] if version is not None else self.versions(spec)
         source = self.source(v)
@@ -194,7 +194,7 @@ class State:
             return source if source.name == spec else source.alias(spec)
         return _series(spec, *self.read(v), v.annotation)
 
-    def frame_of(self, base: pl.DataFrame, names: dict[str, Version], rows: np.ndarray | None) -> pl.DataFrame:
+    def frame_of(self, base: pl.DataFrame, names: dict[str, NodeVersion], rows: np.ndarray | None) -> pl.DataFrame:
         """`base` with the current value of every name in `names` on `rows`, for a frame step."""
         cols = []
         for name, v in names.items():
@@ -248,7 +248,7 @@ def record_value(value: Any, annotation: Any = None) -> Any:
     return despan(value)
 
 
-def load_record(state: State, record: Mapping[str, Any], versions: list[Version], dtype: np.dtype) -> None:
+def load_record(state: State, record: Mapping[str, Any], versions: list[NodeVersion], dtype: np.dtype) -> None:
     """Write `record`'s value of every one-row `versions` `dtype` groups into `state`.
 
     One array per dtype, viewed per input, is far cheaper than one array per

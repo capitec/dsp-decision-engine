@@ -3,7 +3,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from decider import Engine, ParamRef, Table, flow, param, param_table
+from decider import Engine, ParamRef, ParamTable, flow, param, param_table
 from decider.exceptions import ParamsError
 from decider.steps.tables import TableRef
 from decider.testing import no_recompile
@@ -11,7 +11,7 @@ from decider.testing import no_recompile
 ROWS = [{"floor": 0, "rate": 0.2}, {"floor": 600, "rate": 0.1}]
 
 
-def rate(score: int, rates: Table = param_table({"floor": int, "rate": float}, default=ROWS)) -> float:
+def rate(score: int, rates: ParamTable = param_table({"floor": int, "rate": float}, default=ROWS)) -> float:
     r = 0.0
     for i in range(len(rates.floor)):
         if score >= rates.floor[i]:
@@ -19,7 +19,7 @@ def rate(score: int, rates: Table = param_table({"floor": int, "rate": float}, d
     return r
 
 
-def fee(amount: float, fees: Table = param_table({"cap": float, "on": bool}, required=True)) -> float:
+def fee(amount: float, fees: ParamTable = param_table({"cap": float, "on": bool}, required=True)) -> float:
     total = 0.0
     for i in range(len(fees.cap)):
         if fees.on[i]:
@@ -27,12 +27,12 @@ def fee(amount: float, fees: Table = param_table({"cap": float, "on": bool}, req
     return total
 
 
-def points(score: int, bands: Table = param_table({"floor": int, "rate": float}, shared_key="bands",
+def points(score: int, bands: ParamTable = param_table({"floor": int, "rate": float}, shared_key="bands",
                                                   default=ROWS)) -> float:
     return rate(score, bands) * 100
 
 
-def other(score: int, bands: Table = param_table({"floor": int, "rate": float}, shared_key="bands",
+def other(score: int, bands: ParamTable = param_table({"floor": int, "rate": float}, shared_key="bands",
                                                  default=ROWS)) -> float:
     return rate(score, bands) * 100
 
@@ -48,7 +48,7 @@ FRAME = pl.DataFrame({"score": [100, 700]})
 def test_the_step_receives_read_only_column_arrays():
     seen = []
 
-    def spy(score: int, rates: Table = param_table({"floor": int, "rate": float}, default=ROWS)) -> float:
+    def spy(score: int, rates: ParamTable = param_table({"floor": int, "rate": float}, default=ROWS)) -> float:
         seen.append(rates)
         return 0.0
 
@@ -147,7 +147,7 @@ def test_rows_are_retuned_in_every_mode_without_recompiling(mode):
         assert exe.score({"score": 60}, doc([]))["rate"] == 0.0
 
 
-def capped(score: int, rates: Table = param_table({"floor": int, "rate": float}, default=ROWS),
+def capped(score: int, rates: ParamTable = param_table({"floor": int, "rate": float}, default=ROWS),
            cap: float = param(0.15)) -> float:
     r = 0.0
     for i in range(len(rates.floor)):

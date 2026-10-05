@@ -17,7 +17,7 @@ from decider._engine.run.runners.base import Checkpoint
 from decider._engine.run.state import State, dtype_of, fill_missing, from_series, record_value
 from decider._engine.trace.envelope import Kind
 from decider._engine.types import Representation, is_raw, representation_for, columnar_item, item_schema, struct_item
-from decider._engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, ScatterGather, Sequence, Version
+from decider._engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, ScatterGather, Sequence, NodeVersion
 
 # Below this many exploded elements the polars explode+gather (about ten lazy collects, each with
 # Python/Rust round-trip overhead) costs more than the per-element Python loop it replaces.
@@ -42,7 +42,7 @@ class _Scope:
 
     __slots__ = ("rows", "base", "names", "ctx", "arm", "iteration")
 
-    def __init__(self, rows: np.ndarray | None, base: pl.DataFrame, names: dict[str, Version], ctx: _Context,
+    def __init__(self, rows: np.ndarray | None, base: pl.DataFrame, names: dict[str, NodeVersion], ctx: _Context,
                  arm: int | None = None, iteration: int | None = None):
         self.rows = rows
         self.base = base
@@ -79,7 +79,7 @@ class InterpretedRunner:
 
     # Nodes to pass over as already run, each with the versions it passes on; their values are in the
     # state already. A debug session sets it while it replays a run up to an edit.
-    skip: dict[Resolved, list[Version]] = {}
+    skip: dict[Resolved, list[NodeVersion]] = {}
 
     def __init__(self) -> None:
         self.visit: Callable[[str], None] = _ignore
@@ -336,7 +336,7 @@ def _note(e: BaseException, text: str) -> None:
         e.add_note(text)
 
 
-def _argument(state: State, version: Version, decl: Input, rows: np.ndarray | None, path: str,
+def _argument(state: State, version: NodeVersion, decl: Input, rows: np.ndarray | None, path: str,
               node_kind: str = "scalar") -> np.ndarray:
     values, valid = state.read(version, None)
     span = False
@@ -396,7 +396,7 @@ def _spans(name: str, values: np.ndarray) -> np.ndarray:
         raise TypeError(f"'{name}' is a string input: {e}") from None
 
 
-def _absent(state: State, version: Version) -> bool:
+def _absent(state: State, version: NodeVersion) -> bool:
     # A state stores every input column it was given, so one never written was absent.
     return version.producer is None and version.id not in state.values
 

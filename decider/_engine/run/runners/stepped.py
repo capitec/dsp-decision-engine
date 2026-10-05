@@ -22,14 +22,14 @@ from decider._engine.run.state import State, fill_missing
 from decider._engine.trace.envelope import Kind
 from decider.exceptions import FallbackWarning
 from decider._engine.types import Representation, is_raw, representation_for, columnar_item, item_schema, struct_item
-from decider._engine.wiring.plan import Call, Plan, Version
+from decider._engine.wiring.plan import Call, Plan, NodeVersion
 
 
 # Everything a runner compiles for one plan, published whole so a call never sees half of it.
 class Compiled(NamedTuple):
     plan: Plan | None
     units: dict[int, Unit]
-    reads: dict[int, tuple[tuple[Input, Version, str, np.dtype | None, Any, Any, bool], ...]]
+    reads: dict[int, tuple[tuple[Input, NodeVersion, str, np.dtype | None, Any, Any, bool], ...]]
     strs: dict[int, tuple[str, ...]]
     fallbacks: dict[str, str]
     python: dict[int, str]
@@ -221,7 +221,7 @@ class SteppedRunner(InterpretedRunner):
         return entry[0]
 
 
-def _external(unit: Unit) -> tuple[tuple[Input, Version, str, np.dtype | None, Any, Any, bool], ...]:
+def _external(unit: Unit) -> tuple[tuple[Input, NodeVersion, str, np.dtype | None, Any, Any, bool], ...]:
     # What a unit reads from outside itself, with the null policy that applies, the dtype a number is
     # read as, and how an object array of it becomes what the kernel takes. Everything here is decided
     # once per plan: a single record has no time for annotation introspection per call.

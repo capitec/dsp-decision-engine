@@ -14,7 +14,7 @@ from decider._engine.ir.decls import Input, Output, ParamDecl
 from decider._engine.ir.nodes import CallNode
 from decider._engine.params import param
 from decider._engine.wiring import resolve
-from decider._engine.wiring.plan import Version
+from decider._engine.wiring.plan import NodeVersion
 
 
 def disposable_income(net_income: float, expenses: float) -> float:
@@ -316,7 +316,7 @@ def test_two_item_types_over_one_column_in_one_kernel_is_refused():
     # (`WiringError`, before a plan is even built), so this guard only matters for two calls a
     # caller hands `Layout` reading the same version directly: one `flats` block per column, so
     # the second reader would silently get the first's fields.
-    v = Version(0, "items", None, None)
+    v = NodeVersion(0, "items", None, None)
     lay = Layout()
     lay.source(v, Input("items", Columnar[ItemA]))
     with pytest.raises(TypeError, match="two different Item types"):

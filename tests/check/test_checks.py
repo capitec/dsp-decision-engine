@@ -4,7 +4,7 @@ import time
 
 import numpy as np
 
-from decider import ConfigurableStep, Table, Value, checks, flow, param_table, step
+from decider import ConfigurableStep, ParamTable, Value, checks, flow, param_table, step
 from decider.checks import Finding, Severity
 from decider.steps.trees import TreeConfig
 
@@ -161,7 +161,7 @@ def test_compare_does_not_prove_flows_equivalent_when_a_param_table_differs_in_o
     def ladder(rate_at_25):
         rows = [{"floor": i, "rate": rate_at_25 if i == 25 else 0.2} for i in range(50)]
 
-        def rate(score: int, ladder: Table = param_table({"floor": int, "rate": float}, default=rows)) -> float:
+        def rate(score: int, ladder: ParamTable = param_table({"floor": int, "rate": float}, default=rows)) -> float:
             return 0.0
         return flow(rate, name="pricing")
 

@@ -8,7 +8,7 @@ from decider._engine.ir.nodes import BranchNode, CallNode, LoopNode, SequenceNod
 
 
 @dataclass(frozen=True, slots=True, eq=False)
-class Version:
+class NodeVersion:
     """One written value of a name: the state a runner stores and a reader reads.
 
     Args:
@@ -20,7 +20,7 @@ class Version:
 
     Example::
 
-        Version(3, "term_cap", "term/cap_by_income", float)
+        NodeVersion(3, "term_cap", "term/cap_by_income", float)
     """
 
     id: int
@@ -42,8 +42,8 @@ class Call:
 
     id: int
     node: CallNode
-    reads: tuple[Version, ...] | None
-    writes: tuple[Version, ...]
+    reads: tuple[NodeVersion, ...] | None
+    writes: tuple[NodeVersion, ...]
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -63,9 +63,9 @@ class Merge:
     is `None` only when every arm writes the name.
     """
 
-    version: Version
-    prior: Version | None
-    arms: tuple[Version | None, ...]
+    version: NodeVersion
+    prior: NodeVersion | None
+    arms: tuple[NodeVersion | None, ...]
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -87,9 +87,9 @@ class Carry:
     what nodes after the loop read.
     """
 
-    version: Version
-    initial: Version
-    last: Version
+    version: NodeVersion
+    initial: NodeVersion
+    last: NodeVersion
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -111,11 +111,11 @@ class ScatterGather:
     """
 
     node: ScatterGatherNode
-    column: Version
+    column: NodeVersion
     body: Resolved
-    fields: tuple[tuple[str, Version], ...]
-    new_fields: tuple[Version, ...]
-    out: Version
+    fields: tuple[tuple[str, NodeVersion], ...]
+    new_fields: tuple[NodeVersion, ...]
+    out: NodeVersion
     accumulate: Call | None
 
 
@@ -136,7 +136,7 @@ class Plan:
         root: the resolved tree, same shape as the IR.
         calls: every `Call` in execution order (a condition before its arms);
             `calls[i].id == i`.
-        versions: every `Version`; `versions[i].id == i`.
+        versions: every `NodeVersion`; `versions[i].id == i`.
         inputs: the pipeline input columns, as declared by their first reader.
             Their versions are the ones with `producer is None`.
         outputs: output column name -> version: input columns, values nothing
@@ -154,8 +154,8 @@ class Plan:
 
     root: Resolved
     calls: tuple[Call, ...]
-    versions: tuple[Version, ...]
+    versions: tuple[NodeVersion, ...]
     inputs: tuple[Input, ...]
-    outputs: dict[str, Version]
+    outputs: dict[str, NodeVersion]
     drops: tuple[str, ...]
-    chains: dict[str, tuple[Version, ...]]
+    chains: dict[str, tuple[NodeVersion, ...]]
