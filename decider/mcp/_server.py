@@ -53,9 +53,14 @@ def build_server(policy: Policy, bridge: EditorBridge | None = None) -> FastMCP:
         return tools.run_summary(entry, data)
 
     @mcp.tool
-    def check_report(entry: str) -> dict:
-        """The default check suite over a flow, as the structured Report."""
-        return tools.check_report(entry)
+    def check_report(entry: str, config: str | None = None, data: str | None = None) -> dict:
+        """The checks over a flow as the structured Report; `config` names a checks file, `data` enables data checks."""
+        return tools.check_report(entry, config, data)
+
+    @mcp.tool
+    def checks_list() -> list[dict]:
+        """Every registered check: alias, code, family, needs_data, executes, severity and config schema."""
+        return tools.checks_list()
 
     @mcp.tool
     def experiment_definition(path: str) -> dict:

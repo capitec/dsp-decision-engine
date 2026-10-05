@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, ClassVar, Mapping
+from typing import Any, ClassVar, Iterable, Mapping
 
 from pydantic import ConfigDict, Field
 from pydantic.json_schema import SkipJsonSchema
@@ -59,6 +59,19 @@ class ConfigurableStep(Step, BaseRegistryModule, root=True, group="steps"):
     # Relabels are placement, set in Python like the pipeline itself, so never dumped.
     reads: SkipJsonSchema[tuple[tuple[str, str], ...]] = Field((), exclude=True, repr=False)
     writes: SkipJsonSchema[tuple[tuple[str, str], ...]] = Field((), exclude=True, repr=False)
+
+    def check(self, ctx: Any) -> Iterable[Any]:
+        """Findings about this step's own document, which AST checks can't see; `checks.run` calls it for each such step.
+
+        `ctx` is the `CheckContext`: build findings with `ctx.finding(ctx.node, message, code=..., check=...)`.
+
+        Example::
+
+            def check(self, ctx):
+                if self.low > self.high:
+                    yield ctx.finding(ctx.node, "low is above high", code="ACME010", check="empty_range")
+        """
+        return ()
 
     @classmethod
     def load(cls, source: str | Path | Mapping[str, Any]) -> Any:

@@ -802,9 +802,11 @@ them — that adapter owns retention and privacy policy.
 
 ### Checks
 
-`decider.checks.run(pipeline)` runs the default suite — wall-clock reads,
-shared-state mutation, numeric risk, missing durable ids — and returns a
-structured `Report` a CI pipeline, notebook or editor can render.
+`decider.checks.run(pipeline)` runs `checks.standard` (wall-clock reads,
+shared-state writes, numeric risk, missing durable ids, unknown suppressions)
+and returns a `Report` a CI job, notebook or editor can render. Every finding has
+a stable `code` (`DCD401`), the check's `check` alias, the contract `step`
+reference, `file` and `line`, and a one-line `fix`.
 
 ```python
 import polars as pl
@@ -814,26 +816,105 @@ def ratio(income: float, debt: float) -> float:
     return debt / income
 
 pipeline = flow(ratio, name="credit")
-report = checks.run(pipeline)
+report = checks.run(pipeline)                # checks.standard, or the project's checks.yaml
 assert report.ok is True                     # warnings only; the client decides what blocks a release
-assert any("durable id" in f.message for f in report.findings)
-report.model_dump_json()                     # machine-readable, for CI
+assert any(f.code == "DCD401" for f in report.findings)
+assert report.counts[checks.Severity.WARNING] >= 1
+print(report.to_text())
+report.model_dump_json()                     # machine-readable; report.to_sarif() for code scanning
+```
+
+Add checks with a flat list of check instances, aliases or sets. Checks that
+need data (`needs_data`) are listed under `report.skipped` until you pass
+`data=`, and the rest of the catalogue is `checks.catalogue()`.
+
+```python
+import polars as pl
+from typing import Literal
+from decider import checks, flow
+from decider.checks import Check
+
+def ratio(income: float, debt: float) -> float:
+    return debt / income
+
+class MinRows(Check):
+    type: Literal["min_rows"] = "min_rows"
+    code = "ACME003"
+    needs_data = True
+    rows: int = 100
+
+    def run(self, ctx):
+        if ctx.frame.height < self.rows:
+            yield ctx.finding(ctx.ir, f"only {ctx.frame.height} rows", fix="use a bigger sample")
+
+pipeline = flow(ratio, name="credit")
+assert checks.run(pipeline, [MinRows()]).skipped[0].code == "ACME003"
+frame = pl.DataFrame({"income": [1000.0], "debt": [350.0]})
+assert checks.run(pipeline, [checks.standard, MinRows()], data=frame).findings[-1].code == "ACME003"
+```
+
+A custom check is a `Check` subclass like `MinRows` (give it a `type` alias and a
+`code` with your own prefix; config names it by alias, or `"module:Class"`),
+or a function decorated for a one-off rule. An installed package can ship
+checks under the `decider.checks` entry-point group.
+
+```python
+from decider import checks, flow, step
+
+@checks.check(code="ACME002", severity="info")
+def single_step(ctx):
+    if len(ctx.calls()) == 1:
+        yield ctx.finding(ctx.ir, "a one-step flow")
+
+@step(output="y")
+def double(x: float) -> float:
+    return x * 2.0
+
+assert checks.run(flow(double, name="d"), [single_step]).findings[0].code == "ACME002"
 ```
 
 A step names the checks it suppresses (aliases or codes); `flow`, `dag`,
 `branch`, `loop`, `each` and `optimise` take the same keyword, as does a
-`suppress_checks:` key in a flow file or a `ConfigurableStep` field.
+`suppress_checks:` key in a flow file or a `ConfigurableStep` field. A finding
+inside a suppressing step or any step above it stays in the report, marked
+`suppressed`, and doesn't count against `ok`. A name that matches no check is
+reported as `DCD403`.
 
 ```python
-from decider import step
+from decider import checks, flow, step
 
-@step(suppress_checks=["int64_overflow"])
+@step(output="cents", suppress_checks=["durable_ids"])      # or the code, "DCD401"
 def capped(cents: int) -> int:
     return cents * 1000
+
+report = checks.run(flow(capped, name="loan"), ["durable_ids"])
+step_finding = next(f for f in report.findings if f.step.path == "loan/capped")
+assert step_finding.suppressed.name == "durable_ids"
+assert sum(f.suppressed is None for f in report.findings) == 1     # the flow's own missing id
 ```
 
-`decider` reports findings; it never fails a build. A custom check is any
-callable returning `Finding`s, passed in a `suites=` tuple.
+The project's check policy is `checks.yaml` (or `checks.json`) beside `configs/`.
+It sets which checks run, their severities and options, what is disabled, and
+the default gate for `decider check`:
+
+```yaml
+extends: standard
+checks:
+  - {type: durable_ids, severity: error}
+  - {type: "acme.checks:NoFloatMoney", allow: [fee]}
+disable: [numeric]                  # alias or code
+fail_on: error
+```
+
+```bash
+decider check credit.pipeline:build [--config checks.yaml] [--data loans|file.parquet] \
+    [--format text|json|sarif] [--fail-on error|warning] [--select DCD1] [--list]
+decider check credit.pipeline:build --format sarif > checks.sarif   # exits 1 when the gate fails
+```
+
+A `ConfigurableStep` can report on its own document, which the source checks
+can't see, by overriding `check(self, ctx)`; `checks.run` calls it for each
+such step.
 
 ### Comparing versions
 

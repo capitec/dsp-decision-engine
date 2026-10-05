@@ -61,7 +61,7 @@ def test_server_exposes_the_headless_read_tools():
     tools = _tools(build_server(Policy()))
     assert {
         "discover_flows", "describe_flow", "inspect_step", "lineage", "source_context",
-        "run_summary", "check_report", "experiment_definition", "experiment_results",
+        "run_summary", "check_report", "checks_list", "experiment_definition", "experiment_results",
         "raw_record", "raw_trace",
     } <= set(tools)
     assert not {"highlight", "reveal_source", "editor_selection"} & set(tools)
@@ -112,11 +112,24 @@ def test_run_summary_returns_tallies_not_per_record_values(workspace):
     assert {"value": 1.0, "count": 1} in summary["outputs"]["tier"]
 
 
-def test_check_report_returns_the_default_suite(workspace):
+def test_check_report_returns_the_standard_checks(workspace):
     mcp = build_server(Policy())
     report = _call(mcp, "check_report", entry=workspace["entry"])
     assert report["flow"]["name"] == "credit"
     assert report["findings"]  # missing durable ids on ratio/approved
+    assert report["ok"] is True and "skipped" in report
+
+
+def test_check_report_takes_a_config_file(workspace, tmp_path):
+    config = tmp_path / "checks.yaml"
+    config.write_text("extends: null\nchecks: [{type: durable_ids, severity: error}]\n")
+    report = _call(build_server(Policy()), "check_report", entry=workspace["entry"], config=str(config))
+    assert {f["code"] for f in report["findings"]} == {"DCD401"} and report["ok"] is False
+
+
+def test_checks_list_lists_the_catalogue():
+    rows = _call(build_server(Policy()), "checks_list")["result"]
+    assert {"DCD001", "DCD401", "DCD505"} <= {r["code"] for r in rows}
 
 
 def test_mutating_tools_are_confirmation_gated():
