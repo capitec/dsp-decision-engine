@@ -9,7 +9,7 @@ from pydantic_core import from_json
 
 from decider._engine.ir.decls import base_annotation
 from decider.exceptions import InputParsingError
-from decider.types import struct_item
+from decider._engine.types import struct_item
 
 
 def parse_application_json(data: bytes) -> t.Union[t.Dict[str, t.Any], pl.DataFrame]:

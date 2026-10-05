@@ -28,7 +28,7 @@ from decider._engine.ir.decls import (KIND_DTYPES, FeatureKind, Input, NullPolic
 from decider._engine.ir.nodes import CallNode
 from decider._engine.params import NodeParams
 from decider.steps.helpers import allows_fallback, helper_signatures
-from decider.types import is_raw, raw_base, columnar_item, item_schema, struct_item
+from decider._engine.types import is_raw, raw_base, columnar_item, item_schema, struct_item
 
 # UnsupportedBytecodeError (e.g. an `import` inside a step) isn't a NumbaError.
 FALLBACK_ERRORS = (NumbaError, UnsupportedBytecodeError)

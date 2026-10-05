@@ -16,7 +16,7 @@ import polars as pl
 from decider._engine.concurrency import Cache, once
 from decider._engine.ir.decls import KIND_DTYPES, Input, NullPolicy, feature_kind
 from decider.exceptions import MissingInputError
-from decider.types import item_schema
+from decider._engine.types import item_schema
 
 Schema = tuple[tuple[str, Any], ...]
 

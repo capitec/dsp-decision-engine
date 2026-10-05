@@ -15,7 +15,8 @@ from decider.steps.base import Step, as_step
 from decider.steps.function import step
 from decider.steps.loop import loop
 from decider.steps.sequential import flow
-from decider.types import Struct, item_schema
+from decider._engine.types import item_schema
+from decider._annotations import Struct
 
 if TYPE_CHECKING:
     from decider._engine.ir.context import IRContext

@@ -8,7 +8,8 @@ from pydantic import ConfigDict, Field, TypeAdapter, create_model
 from decider._engine.ir.decls import ParamDecl
 from decider._engine.params.bundles import bundle_class
 from decider.exceptions import IRError
-from decider.types import is_raw, raw_base, string_code
+from decider._engine.types import is_raw, raw_base
+from decider._annotations import string_code
 
 
 def type_name(annotation: Any) -> str:

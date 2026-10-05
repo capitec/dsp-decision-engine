@@ -34,7 +34,6 @@ NO_ALL: dict[str, str] = {  # {module path relative to decider/: reason}
     "experiments/report.py": "implementation file; gets a leading underscore when its package is made thin",
     "experiments/revision.py": "implementation file; gets a leading underscore when its package is made thin",
     "experiments/runner.py": "implementation file; gets a leading underscore when its package is made thin",
-    "fields.py": "splits into _annotations and _engine/types",
     "mcp/editor.py": "implementation file; gets a leading underscore when its package is made thin",
     "mcp/policy.py": "implementation file; gets a leading underscore when its package is made thin",
     "mcp/server.py": "implementation file; gets a leading underscore when its package is made thin",
@@ -83,7 +82,6 @@ NO_ALL: dict[str, str] = {  # {module path relative to decider/: reason}
     "testing/corpus.py": "implementation file; gets a leading underscore when its package is made thin",
     "testing/equivalence.py": "implementation file; gets a leading underscore when its package is made thin",
     "testing/recompile.py": "implementation file; gets a leading underscore when its package is made thin",
-    "types.py": "splits into _annotations and _engine/types",
 }
 
 BIG_ALL: dict[str, str] = {  # {package path relative to decider/: reason}
@@ -111,7 +109,9 @@ PRIVATE_IMPORT: dict[str, str] = {  # {"importer -> imported": reason}
     "experiments.runner -> _engine.run.state": "batch state and dtype mapping are internal",
     "experiments.runner -> _engine.wiring.plan": "walks the resolved plan, which is internal",
     "_tools.ids -> _engine.ir.origin": "check_id and check_name are not in decider.ir",
+    "serving.handler -> _engine.types": "struct_item has no public home",
     "serving.handler -> _engine.run": "Executable is not exported from decider yet",
+    "serving.parse -> _engine.types": "struct_item has no public home",
     "serving.parse -> _engine.ir.decls": "base_annotation is not in decider.ir",
     "testing.corpus -> _engine.ir.decls": "base_annotation is not in decider.ir",
     "testing.corpus -> _engine.wiring.resolve": "resolve is internal",
