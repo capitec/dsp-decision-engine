@@ -1,9 +1,11 @@
 """The testing helpers: every mode, score and a session agree; boundary corpus; no recompiles."""
+from typing import Annotated
+
 import polars as pl
 import pytest
 from numba.extending import overload
 
-from decider import flow, missing_as, param
+from decider import Money, flow, missing_as, param
 from decider._engine import Engine
 from decider._engine.debug import Session
 from decider._engine.run import Executable
@@ -211,14 +213,6 @@ def test_corpus_nulls_only_inputs_no_step_requires():
     assert _case("null:extra")["extra"].item() is None
 
 
-def test_corpus_needs_a_step_that_reads_something():
-    def constant() -> float:
-        return 1.0
-
-    with pytest.raises(ValueError, match="reads no input"):
-        corpus(flow(constant))
-
-
 # --- no_recompile ----------------------------------------------------------------
 
 
@@ -241,3 +235,39 @@ def test_no_recompile_fails_when_something_compiles():
     with pytest.raises(AssertionError, match="numba compiled .*shifted"):
         with no_recompile():
             Engine().bind(flow(shifted), mode="stepped").run(pl.DataFrame({"x": [1.0]}))
+
+
+def test_corpus_adds_rounding_ties_for_every_float_input():
+    cases = corpus(pipeline)["boundary"]["case"].to_list()
+    assert "tie:2.675:a" in cases and "tie:-2.5:b" in cases
+    assert not any(c.startswith("tie:") and c.endswith(":n") for c in cases)
+    assert _case("tie:2.675:a")["a"].item() == 2.675
+
+
+def interest(principal: Annotated[int, Money(cents=True)], count: int, rate: float = param(0.0875)) -> int:
+    return round(principal * rate)
+
+
+def test_corpus_adds_large_principals_only_for_cents_money_ints():
+    boundary = corpus(flow(interest))["boundary"]
+    cases = boundary["case"].to_list()
+    assert {c for c in cases if c.startswith("large:")} == {
+        f"large:{k}:principal" for k in ("10**11", "10**13", "2**62//1000")}
+    assert boundary.filter(pl.col("case") == "large:10**13:principal")["principal"].item() == 10**13
+    assert "int_near_2**53:count" in cases
+
+
+def test_every_mode_agrees_over_the_money_corpus():
+    flow_ = flow(interest)
+    for frame in corpus(flow_).values():
+        assert_equivalent(flow_, frame)
+
+
+def test_corpus_of_a_step_with_no_inputs_runs_in_every_mode():
+    def constant() -> float:
+        return 1.0
+
+    frames = corpus(flow(constant))
+    assert frames["boundary"].columns == ["case"] and frames["boundary"].height == 1
+    for frame in frames.values():
+        assert_equivalent(flow(constant), frame)
