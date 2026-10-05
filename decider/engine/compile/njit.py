@@ -18,6 +18,7 @@ from numba.core.errors import NumbaError, UnsupportedBytecodeError
 # Imported for their registrations (CPython-compatible round and **, the span
 # operations) and hashed into SALT below.
 from decider.engine.compile import cpython, span
+from decider.engine.concurrency import Cache, once
 from decider.engine.compile.fingerprint import fingerprint
 from decider.engine.compile.rows import rows_probe
 from decider.engine.compile.span import SPAN
@@ -40,8 +41,8 @@ _COMPILE_ERRORS = (*FALLBACK_ERRORS, NotImplementedError, AssertionError)
 _DECLARED_CALLEE = "calls the @allow_fallback function"
 
 # ponytail: unbounded, one entry per distinct function content; add eviction if a long session edits steps thousands of times.
-_DISPATCHERS: dict[str, Dispatcher] = {}
-_REASONS: dict[tuple, str | None] = {}
+_DISPATCHERS = Cache()
+_REASONS = Cache()
 
 # Numba keys a disk-cached step by its own bytecode only, so changes to a
 # reachable helper would otherwise keep serving stale machine code.
@@ -78,16 +79,31 @@ def jit(fn: Callable) -> tuple[str, Dispatcher]:
     key = fingerprint(fn)
     if isinstance(fn, Dispatcher):
         return key, _DISPATCHERS.setdefault(key, fn)
-    dispatcher = _DISPATCHERS.get(key)
-    if dispatcher is None:
-        dispatcher = _DISPATCHERS[key] = njit(fn)
-    # numba's disk cache needs a real source file and never hits for a closure. Dispatchers are
-    # shared by content, so the first sight of this code may have been a notebook cell or an
-    # exec'd block: attach the cache as soon as any copy of it does have a file, or a step stays
-    # uncacheable for the life of the process and `decider build` warms nothing for it.
+    dispatcher = once(_DISPATCHERS, key, lambda: _attach_cache(njit(fn), fn))
+    # Dispatchers are shared by content, so the first sight of this code may have been a notebook
+    # cell or an exec'd block: attach the cache as soon as any copy of it does have a file, or a
+    # step stays uncacheable for the life of the process and `decider build` warms nothing for it.
+    if isinstance(dispatcher._cache, NullCache):
+        with _DISPATCHERS.lock:
+            _attach_cache(dispatcher, fn)
+    return key, dispatcher
+
+
+def _attach_cache(dispatcher: Dispatcher, fn: Callable) -> Dispatcher:
+    # numba's disk cache needs a real source file and never hits for a closure. Attached before the
+    # dispatcher is shared, so no thread compiles through it half set up.
     if isinstance(dispatcher._cache, NullCache) and fn.__closure__ is None and os.path.isfile(fn.__code__.co_filename):
         dispatcher._cache = _SaltedCache(fn)
-    return key, dispatcher
+    return dispatcher
+
+
+def _refused(compile: Callable, *args: Any) -> str | None:
+    # Why numba refused to compile, or None when it did.
+    try:
+        compile(*args)
+    except _COMPILE_ERRORS as e:
+        return _why(e)
+    return None
 
 
 def compile_call(node: CallNode) -> tuple[str, Callable, str | None, bool]:
@@ -138,13 +154,7 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None, bool]:
     sig = _probe_signature(node)
     if sig is None:
         return key, dispatcher, None, declared
-    if (key, sig) not in _REASONS:
-        try:
-            dispatcher.compile(sig)
-            _REASONS[key, sig] = None
-        except _COMPILE_ERRORS as e:
-            _REASONS[key, sig] = _why(e)
-    reason = _REASONS[key, sig]
+    reason = once(_REASONS, (key, sig), lambda: _refused(dispatcher.compile, sig))
     if reason is not None and undeclared:
         reason = f"calls '{undeclared[0]}' without @helper or @allow_fallback: {reason}"
     # A nullable struct output has no record array with a per-row validity mask a kernel stores.
@@ -277,14 +287,12 @@ def _global_names(code: py_types.CodeType) -> set[str]:
 
 def _compile_helper(fn: Callable, signatures: tuple[tuple[tuple[type, ...], type], ...]) -> tuple[str, Dispatcher]:
     key, dispatcher = jit(fn)
-    if (key, "helper") in _REASONS:
-        return key, dispatcher
-    try:
+
+    def compile_all() -> None:
         for inputs, _ in signatures:
             dispatcher.compile(tuple(_numba_type(t) for t in inputs))
-        _REASONS[key, "helper"] = None
-    except _COMPILE_ERRORS as e:
-        _REASONS[key, "helper"] = _why(e)
+
+    once(_REASONS, (key, "helper"), lambda: _refused(compile_all))
     return key, dispatcher
 
 

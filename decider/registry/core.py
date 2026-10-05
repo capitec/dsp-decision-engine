@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import inspect
+import threading
 import typing as t
 from abc import ABC
 
@@ -55,6 +56,8 @@ class BaseRegistryModule(BaseModel, ABC):
     _registry: t.ClassVar[dict[str, type[BaseRegistryModule]]]
     # Alias -> the module that registers it, imported on first use.
     _lazy: t.ClassVar[dict[str, str]]
+    # Held to change or list the registry, never while importing: an import runs class bodies that register.
+    _lock: t.ClassVar[t.Any]
     _tag: t.ClassVar[str | None] = None
 
     def __init_subclass__(cls, root: bool = False, **kwargs: t.Any) -> None:
@@ -63,6 +66,7 @@ class BaseRegistryModule(BaseModel, ABC):
             cls._is_registry_root = True
             cls._registry = {}
             cls._lazy = {}
+            cls._lock = threading.RLock()
 
     # Fields are only final here, not in `__init_subclass__`.
     @classmethod
@@ -72,17 +76,19 @@ class BaseRegistryModule(BaseModel, ABC):
             return
         path = import_path(cls)
         alias = _alias(cls)
-        registry = cls._root()._registry
-        if alias is not None:
-            existing = registry.get(alias)
-            if existing is not None and import_path(existing) != path:
-                raise ValueError(
-                    f"type alias {alias!r} is claimed by both {import_path(existing)} and {path}; "
-                    "give one its own `type` (a new `Literal` alias, or `str` for the import path)."
-                )
-            registry[alias] = cls
-        # Same import path means the class was redefined (a notebook reload): replace it.
-        registry[path] = cls
+        root = cls._root()
+        registry = root._registry
+        with root._lock:
+            if alias is not None:
+                existing = registry.get(alias)
+                if existing is not None and import_path(existing) != path:
+                    raise ValueError(
+                        f"type alias {alias!r} is claimed by both {import_path(existing)} and {path}; "
+                        "give one its own `type` (a new `Literal` alias, or `str` for the import path)."
+                    )
+                registry[alias] = cls
+            # Same import path means the class was redefined (a notebook reload): replace it.
+            registry[path] = cls
         cls._tag = alias or path
 
     @model_validator(mode="before")
@@ -115,7 +121,9 @@ class BaseRegistryModule(BaseModel, ABC):
         Example:
             ConfigurableStep.lazy({"tree": "decider.steps.trees"})
         """
-        cls._root()._lazy.update(aliases)
+        root = cls._root()
+        with root._lock:
+            root._lazy.update(aliases)
 
     @classmethod
     def resolve(cls: type[R], tag: str) -> type[R]:
@@ -140,16 +148,22 @@ class BaseRegistryModule(BaseModel, ABC):
         found = registry.get(tag)
         if found is not None and issubclass(found, cls):
             return found
-        known = sorted({k for k, c in registry.items() if issubclass(c, cls)} | set(root._lazy))
+        with root._lock:
+            known = sorted({k for k, c in registry.items() if issubclass(c, cls)} | set(root._lazy))
         raise RegistryError(f"{tag!r} is not a registered {cls.__name__} type.{hint(tag, known)} Import the "
                             "module that defines it first, or name it by import path, '<module>:<Class>'.")
 
     @classmethod
     def json_schema(cls) -> dict[str, dict[str, t.Any]]:
         """`{tag: JSON schema}` for every registered subclass of `cls`, for UI forms."""
-        for module in cls._root()._lazy.values():
+        root = cls._root()
+        with root._lock:
+            modules = list(root._lazy.values())
+        for module in modules:
             importlib.import_module(module)
-        classes = {c._tag: c for c in cls._root()._registry.values() if issubclass(c, cls)}
+        with root._lock:
+            registered = list(root._registry.values())
+        classes = {c._tag: c for c in registered if issubclass(c, cls)}
         schemas = {}
         for tag, klass in sorted(classes.items()):
             schema = klass.model_json_schema()

@@ -5,6 +5,7 @@ switches threads every microsecond so the interleavings are forced, and every an
 with the one a single thread gets.
 """
 import asyncio
+import importlib
 import sys
 import threading
 import typing as t
@@ -18,8 +19,11 @@ from numba.core.errors import NumbaError
 
 from decider import ConfigurableStep, Engine, Raw, branch, each, flow, missing_as, param, step
 from decider.config import JsonFileStore
-from decider.serving.handler import RequestHandler
+from decider.engine.compile.njit import jit
+from decider.engine.compile.rows import rows_class
+from decider.engine.params import ParamsCache
 from decider.engine.trace import TraceSink
+from decider.serving.handler import Live, RequestHandler
 
 MODES = ("interpreted", "stepped", "fused")
 THREADS = 16
@@ -397,3 +401,87 @@ def test_a_session_opened_on_a_shared_executable_neither_disturbs_nor_is_disturb
         for f in futures:
             f.result()
     assert not wrong
+
+
+# --- shared build caches: one thing built per key, however many threads ask ----------
+
+
+_fresh = iter(range(1000, 10**9))
+
+
+def scaled_by(k):
+    def scale(x: float) -> float:
+        return x * k
+
+    return scale
+
+
+def test_concurrent_jit_of_one_function_gives_one_dispatcher():
+    for _ in range(15):
+        k = float(next(_fresh))
+        dispatchers = together(lambda f: jit(f)[1], [scaled_by(k) for _ in range(THREADS)])
+        assert len({id(d) for d in dispatchers}) == 1
+
+
+def test_concurrent_row_layouts_of_one_schema_are_one_class():
+    for _ in range(15):
+        schema = ((f"price_{next(_fresh)}", float),)
+        assert len(set(together(lambda _: rows_class(schema), range(THREADS)))) == 1
+
+
+@pytest.mark.parametrize("mode", ("stepped", "fused"))
+def test_cold_executables_sharing_a_kernel_compile_at_once_and_agree(mode):
+    for _ in range(8):
+        k = float(next(_fresh))
+        exes = [Engine().bind(flow(scaled_by(k), name=f"p{i}"), mode=mode) for i in range(THREADS)]
+        assert together(lambda e: e.score({"x": 2.0})["scale"], exes) == [2.0 * k] * THREADS
+
+
+def test_concurrent_first_validations_of_one_document_share_one_result():
+    exe = Engine().bind(pipeline(), mode="interpreted")
+    node = next(iter(exe.nodes.values()))
+    for i in range(30):
+        doc = {"p": {"by_sector": {"cap_private": {"cap": 50.0 + i}, "cap_public": {"cap": 80.0 + i}}}}
+        cache = ParamsCache()
+        key = cache.key(doc)
+        assert len({id(v) for v in together(lambda _: cache.validate(key, doc, node), range(THREADS))}) == 1
+
+
+def test_registry_resolves_a_lazy_module_and_lists_while_classes_register(tmp_path, monkeypatch):
+    (tmp_path / "conc_root.py").write_text(
+        "from decider.registry import BaseRegistryModule\n\n"
+        "class Root(BaseRegistryModule, root=True):\n    pass\n")
+    (tmp_path / "conc_leaf.py").write_text(
+        "import typing as t\nfrom conc_root import Root\n\n"
+        "class Leaf(Root):\n    type: t.Literal['leaf'] = 'leaf'\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    root = importlib.import_module("conc_root").Root
+    root.lazy({"leaf": "conc_leaf"})
+    stop = threading.Event()
+
+    def define():
+        for i in range(100):
+            type(f"Extra{i}", (root,), {"__annotations__": {"type": t.Literal[f"extra_{i}"]}, "type": f"extra_{i}"})
+        stop.set()
+
+    def ask(_):
+        while not stop.is_set():
+            with pytest.raises(LookupError):
+                root.resolve("nope")
+
+    try:
+        with ThreadPoolExecutor(THREADS) as pool:
+            futures = [pool.submit(ask, i) for i in range(THREADS - 1)] + [pool.submit(define)]
+            for f in futures:
+                f.result()
+        classes = together(lambda _: root.resolve("leaf"), range(THREADS))
+        assert len(set(classes)) == 1 and classes[0].__name__ == "Leaf"
+    finally:
+        for name in ("conc_root", "conc_leaf"):
+            sys.modules.pop(name, None)
+
+
+def test_the_default_dates_of_a_live_version_cannot_be_changed():
+    live = Live(None, None, None)
+    with pytest.raises(TypeError):
+        live.dates["when"] = None

@@ -13,6 +13,7 @@ from typing import Any
 import numpy as np
 import polars as pl
 
+from decider.engine.concurrency import Cache, once
 from decider.engine.ir.decls import KIND_DTYPES, Input, NullPolicy, feature_kind
 from decider.exceptions import MissingInputError
 from decider.types import item_schema
@@ -20,7 +21,7 @@ from decider.types import item_schema
 Schema = tuple[tuple[str, Any], ...]
 
 FIELD_TYPES = (float, int, bool)
-_DTYPES: dict[Schema, np.dtype] = {}
+_DTYPES = Cache()
 _MISSING = object()
 
 
@@ -41,15 +42,17 @@ def struct_dtype(schema: Schema) -> np.dtype:
 
         struct_dtype((("income", float), ("age", int)))
     """
-    dt = _DTYPES.get(schema)
-    if dt is None:
-        bad = bad_field(schema)
-        if bad is not None:
-            raise TypeError(f"Struct[...] field {bad[0]!r} is {bad[1]}; a record field must be float, int or "
-                            "bool. A field that is itself a list or struct is nested data, which Struct[...] "
-                            "cannot hold: annotate the input as dict instead.")
-        dt = _DTYPES[schema] = np.dtype([(name, KIND_DTYPES[feature_kind(t)]) for name, t in schema], align=True)
-    return dt
+    # The get comes first so a warm call builds no closure.
+    return _DTYPES.get(schema) or once(_DTYPES, schema, lambda: _record_dtype(schema))
+
+
+def _record_dtype(schema: Schema) -> np.dtype:
+    bad = bad_field(schema)
+    if bad is not None:
+        raise TypeError(f"Struct[...] field {bad[0]!r} is {bad[1]}; a record field must be float, int or "
+                        "bool. A field that is itself a list or struct is nested data, which Struct[...] "
+                        "cannot hold: annotate the input as dict instead.")
+    return np.dtype([(name, KIND_DTYPES[feature_kind(t)]) for name, t in schema], align=True)
 
 
 def build_struct(schema: Schema, values: np.ndarray, source: pl.Series | None,

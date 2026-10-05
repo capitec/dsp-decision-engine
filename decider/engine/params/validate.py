@@ -188,7 +188,8 @@ class ParamsCache:
     def validate(self, key: str, doc: Mapping, node: NodeParams) -> Validation:
         result = self._results.get((key, node.path))
         if result is None:
-            result = self._results[(key, node.path)] = validate_node(node, doc)
+            # setdefault: threads validating the same node at once all end up using the first result.
+            result = self._results.setdefault((key, node.path), validate_node(node, doc))
         return result
 
 

@@ -17,6 +17,7 @@ import numpy as np
 import polars as pl
 
 from decider.engine.compile.span import SPAN_DTYPE, span_array, spans_of
+from decider.engine.concurrency import Cache, once
 from decider.engine.ir.decls import NullPolicy, base_annotation
 
 Schema = tuple[tuple[str, Any], ...]
@@ -35,18 +36,20 @@ class _Layout(NamedTuple):
     optional: tuple[bool, ...]
 
 
-_LAYOUTS: dict[Schema, _Layout] = {}
+_LAYOUTS = Cache()
 
 
 def _layout(schema: Schema) -> _Layout:
-    layout = _LAYOUTS.get(schema)
-    if layout is None:
-        if not schema:
-            raise TypeError("Columnar[Item] needs an Item with at least one field")
-        fields = [_field(name, t) for name, t in schema]
-        nt = namedtuple("Item_" + "_".join(n for n, _ in schema), [n for n, _ in schema])
-        layout = _LAYOUTS[schema] = _Layout(nt, tuple(d for d, _ in fields), tuple(o for _, o in fields))
-    return layout
+    # The get comes first so a warm call builds no closure.
+    return _LAYOUTS.get(schema) or once(_LAYOUTS, schema, lambda: _make_layout(schema))
+
+
+def _make_layout(schema: Schema) -> _Layout:
+    if not schema:
+        raise TypeError("Columnar[Item] needs an Item with at least one field")
+    fields = [_field(name, t) for name, t in schema]
+    nt = namedtuple("Item_" + "_".join(n for n, _ in schema), [n for n, _ in schema])
+    return _Layout(nt, tuple(d for d, _ in fields), tuple(o for _, o in fields))
 
 
 def _field(name: str, annotation: Any) -> tuple[np.dtype, bool]:
