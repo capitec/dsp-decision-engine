@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from decider import Engine
 from decider._engine.params import document_key, merge
-from decider._bridge.replay import collect, steer
+from decider._tooling.bridge.replay import collect, steer
 
 
 def checkpoint_key(session):

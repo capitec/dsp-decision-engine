@@ -3,7 +3,6 @@ from __future__ import annotations
 import ast
 from typing import Iterator, Literal
 
-from decider._annotations import Money, metadata_of
 from decider.checks._base import Check, CheckContext
 from decider.checks._builtin.numeric._scope import DEC, FLOAT, INT, kind_of, scopes
 from decider.checks._report import Finding, Severity
@@ -56,7 +55,7 @@ def _in_loop(scope, e: ast.AST) -> bool:
 
 
 class FloatMoney(Check):
-    """Money held as a float (`Money()` on a float), a float returned into a Decimal output, and `int(x * 100)` truncation."""
+    """A float returned into a Decimal output, and `int(x * 100)` truncation."""
 
     type: Literal["float_money"] = "float_money"
     code = "DCD102"
@@ -64,11 +63,6 @@ class FloatMoney(Check):
     def run(self, ctx: CheckContext) -> Iterator[Finding]:
         for node, src, scope in scopes(ctx):
             path = node.origin.path
-            floats = [d.name for d in (*(node.inputs or ()), *(node.outputs or ()))
-                      if isinstance(metadata_of(d.annotation), Money) and kind_of(d.annotation) == FLOAT]
-            if floats:
-                yield ctx.finding(node, f"{path}: {', '.join(floats)} holds money as a float; cents drift in float",
-                                  "annotate it Currency, which is exact to four places", names=floats)
             decimal_out = any(kind_of(o.annotation) == DEC for o in node.outputs or ())
             for e in scope.walk():
                 if isinstance(e, ast.Call) and isinstance(e.func, ast.Name) and e.func.id == "int" and e.args:
@@ -87,7 +81,7 @@ class FloatMoney(Check):
 
 
 class BareRound(Check):
-    """`round(x, n)` and `np.round` differ between CPython and numba on .xx5 ties; an error on a Money output."""
+    """`round(x, n)` and `np.round` differ between CPython and numba on .xx5 ties; an error on a Decimal output."""
 
     type: Literal["bare_round"] = "bare_round"
     code = "DCD103"

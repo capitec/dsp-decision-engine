@@ -4,7 +4,7 @@ import dis
 import inspect
 import os
 import types as py_types
-from typing import Any, Callable
+from typing import Any, Callable, Literal, get_origin
 
 import numpy as np
 from numba import from_dtype, njit, typeof
@@ -26,7 +26,7 @@ from decider._engine.ir.decls import (KIND_DTYPES, FeatureKind, Input, NullPolic
 from decider._engine.ir.nodes import CallNode
 from decider._engine.params import NodeParams
 from decider.steps._helpers import allows_fallback, helper_signatures
-from decider._annotations import struct_item
+from decider.ops.nested import struct_item
 from decider._engine.compile.decimal_type import DecimalType
 from decider._engine.types import decimal_scale, is_raw, raw_base, columnar_item, item_schema
 
@@ -156,11 +156,13 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None, bool]:
     # No array kernel can hold a variable-length string: numba's array of strings is fixed width, so its
     # element type would move with the longest value in the batch and recompile on every new one. Calling a
     # compiled dispatcher once per row instead costs more than the Python body it replaces, on a batch and
-    # on one record, so a semantic `str` runs in Python. A `Raw[str]` is an int code by then.
+    # on one record, so a semantic `str` runs in Python, and so does a function step's `Literal`
+    # output: only a tree or table returns one as the index of its value.
     no_kernel = (next((f"writes '{o.name}' as str, which no kernel stores" for o in node.outputs
-                       if base_annotation(o.annotation) is str and not is_raw(o.annotation)), None)
+                       if base_annotation(o.annotation) is str
+                       or (node.kind == "scalar" and get_origin(base_annotation(o.annotation)) is Literal)), None)
                  or next((f"reads '{i.name}' as str, which no kernel holds" for i in node.inputs
-                          if base_annotation(i.annotation) is str and not is_raw(i.annotation)), None))
+                          if base_annotation(i.annotation) is str), None))
     if no_kernel is not None:
         return key, dispatcher.py_func, no_kernel, declared
     sig = _probe_signature(node)
@@ -318,8 +320,6 @@ def _numba_type(annotation: type) -> Any:
         return DecimalType(scale)
     if is_raw(annotation):
         annotation = raw_base(annotation)
-        if annotation is str:
-            return types.int32
         if annotation is bytes:
             return SPAN
     if annotation is float:
@@ -363,9 +363,6 @@ def _input_type(inp: Input) -> Any:
     if annotation is bytes:
         # A null span has length -1, so a `bytes` input is never an Optional.
         return SPAN
-    # A semantic `str` never reaches a kernel, so only a `Raw[str]` code gets here.
-    if annotation is str:
-        return types.int32
     # An OPTIONAL `T | None` arrives as T's array plus a mask, so it is typed `Optional(T)`.
     t = from_dtype(numpy_dtype(base_annotation(inp.annotation)))
     return types.Optional(t) if inp.null_policy is NullPolicy.OPTIONAL else t

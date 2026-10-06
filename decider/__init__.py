@@ -38,7 +38,9 @@ More::
 `decider template NAME` writes a starter project; `decider build` and
 `decider serve` build and serve it. Companion packages, one per task:
 
+- `decider.ops`: the value types a step declares (`Text`, `Currency`, `Columnar`, `Percent`, ...)
 - `decider.checks`: static checks and the findings report
+- `decider.diff`: compare two versions of a pipeline, by structure, outputs or proof
 - `decider.experiments`: run an experiment definition and read its report
 - `decider.data`: read datasets and the project's dataset catalog
 - `decider.testing`: `assert_equivalent`, `no_recompile`
@@ -58,7 +60,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from decider._annotations import Columnar, Duration, FieldMetadata, Money, Percent, Raw, Struct, raw_str
 from decider._engine.params import ParamTable, missing_as, param, param_table
 from decider.contract import describe
 from decider.exceptions import DeciderError, FallbackWarning
@@ -75,8 +76,7 @@ if TYPE_CHECKING:
 __all__ = [
     # build
     "step", "frame_step", "flow", "dag", "branch", "loop", "each", "optimise", "EachMode", "allow_fallback",
-    "helper", "param", "param_table", "missing_as", "ParamTable", "Money", "Percent", "Duration", "FieldMetadata",
-    "Columnar", "Struct", "Raw", "raw_str", "TreeConfig", "DecisionTableConfig", "ScorecardConfig",
+    "helper", "param", "param_table", "missing_as", "ParamTable", "TreeConfig", "DecisionTableConfig", "ScorecardConfig",
     # run
     "Engine", "Executable", "load_flow", "describe",
     # extend

@@ -65,7 +65,7 @@ def test_the_cli_can_build_and_serve_this_pipeline(tmp_path, monkeypatch):
     full_env = dict(os.environ)
     full_env.update(env)
     result = subprocess.run(
-        [sys.executable, "-c", "from decider.cli import cli; cli()", "build"], cwd=str(_DIR), env=full_env,
+        [sys.executable, "-c", "from decider._tooling.cli import cli; cli()", "build"], cwd=str(_DIR), env=full_env,
         capture_output=True, text=True, timeout=180,
     )
     assert result.returncode == 0, result.stderr

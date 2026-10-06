@@ -59,7 +59,7 @@ Your own launch configuration works too:
 
 ```json
 { "type": "debugpy", "request": "launch", "name": "decider: credit",
-  "module": "decider._bridge.run", "args": ["${workspaceFolder}/credit_flow/flow.yaml"] }
+  "module": "decider._tooling.bridge.run", "args": ["${workspaceFolder}/credit_flow/flow.yaml"] }
 ```
 
 Any Python debug session that pauses inside the shown flow's steps is mirrored,

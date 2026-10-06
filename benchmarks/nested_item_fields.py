@@ -14,7 +14,8 @@ import numpy as np
 import polars as pl
 from numba import njit
 
-from decider import Engine, Columnar, flow
+from decider import Engine, flow
+from decider.ops import Columnar
 from decider._engine.compile.rows import build_rows
 
 N = 200_000

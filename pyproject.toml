@@ -56,7 +56,7 @@ all = [
 ]
 
 [project.scripts]
-decider = "decider.cli:cli"
+decider = "decider._tooling.cli:cli"
 
 # Packages that ship types for decider declare them in these entry-point groups,
 # named by the type tag: decider.steps, decider.config_stores, decider.metrics,

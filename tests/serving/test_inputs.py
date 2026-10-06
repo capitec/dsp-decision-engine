@@ -10,7 +10,8 @@ import polars as pl
 import pytest
 from typing_extensions import TypedDict
 
-from decider import Engine, Struct, flow, frame_step
+from decider import Engine, flow, frame_step
+from decider.ops import Struct
 from decider.config import JsonFileStore
 from decider.exceptions import DeciderError, ParamsError
 from decider.serving import RequestHandler

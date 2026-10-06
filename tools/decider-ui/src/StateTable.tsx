@@ -18,7 +18,7 @@ function TypeCell({ c }: { c: ColumnSummary }) {
   const title = !f
     ? undefined
     : f.assumed
-      ? `Shown as ${f.kind}, guessed from the name. Declare it on the step to be sure: Annotated[float, Money()] (or Percent(), Duration("months")) from decider.`
+      ? `Shown as ${f.kind}, guessed from the name. Declare it on the step to be sure: Currency["R"], or Annotated[float, Percent()] or Annotated[int, Duration("months")], from decider.ops.`
       : `Shown as ${f.kind}: declared on a step.`;
   return <td className="muted" title={title}>{c.dtype}{f ? ` · ${f.kind}${f.assumed ? "?" : ""}` : ""}</td>;
 }

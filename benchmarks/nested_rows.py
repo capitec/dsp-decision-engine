@@ -16,7 +16,8 @@ from typing import TypedDict
 import numpy as np
 import polars as pl
 
-from decider import Engine, Columnar, flow
+from decider import Engine, flow
+from decider.ops import Columnar
 from decider._engine.compile.rows import build_rows
 from decider._engine.run.state import from_series
 

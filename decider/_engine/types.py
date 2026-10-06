@@ -8,7 +8,9 @@ from typing import Annotated, Any, NamedTuple, Union, get_args, get_origin, get_
 
 import numpy as np
 
-from decider._annotations import Columnar, DecimalSpec, Raw
+from decider.ops.measures import DecimalSpec
+from decider.ops.nested import Columnar
+from decider.ops.text import Text
 
 
 class Representation(Enum):
@@ -16,7 +18,6 @@ class Representation(Enum):
 
     SEMANTIC_STRING = "semantic_string"
     SEMANTIC_BYTES = "semantic_bytes"
-    RAW_STRING = "raw_string"
     RAW_BYTES = "raw_bytes"
 
 
@@ -27,7 +28,6 @@ class RepresentationKey(NamedTuple):
 
 REPRESENTATIONS: dict[RepresentationKey, Representation] = {
     RepresentationKey(str, False): Representation.SEMANTIC_STRING,
-    RepresentationKey(str, True): Representation.RAW_STRING,
     RepresentationKey(bytes, False): Representation.SEMANTIC_BYTES,
     RepresentationKey(bytes, True): Representation.RAW_BYTES,
 }
@@ -40,7 +40,7 @@ def plain_annotation(annotation: Any) -> Any:
 
     Example::
 
-        plain_annotation(Annotated[float, Money()])   # float
+        plain_annotation(Annotated[float, Percent()])   # float
     """
     return annotation.__origin__ if get_origin(annotation) is Annotated else annotation
 
@@ -96,25 +96,33 @@ def item_schema(item: Any) -> tuple[tuple[str, Any], ...]:
 
 @annotation_cache
 def is_raw(annotation: Any) -> bool:
-    if get_origin(annotation) in (Raw, Columnar):
+    if annotation is Text or get_origin(annotation) is Columnar:
         return True
     return any(is_raw(arg) for arg in get_args(annotation) if arg is not type(None))
 
 
+def text_as_str(annotation: Any) -> Any:
+    # `Text` says how an input is read; a param or output holding one is the `str` it is.
+    if annotation is Text:
+        return str
+    if get_origin(annotation) in (Union, UnionType) and Text in get_args(annotation):
+        return Union[tuple(str if a is Text else a for a in get_args(annotation))]
+    return annotation
+
+
 @annotation_cache
 def raw_base(annotation: Any) -> Any:
-    if get_origin(annotation) is not Raw:
-        args = [arg for arg in get_args(annotation) if arg is not type(None)]
-        return raw_base(args[0]) if args and is_raw(args[0]) else annotation
-    args = get_args(annotation)
-    return args[0] if is_raw(annotation) and args else annotation
+    if annotation is Text:
+        return bytes
+    args = [arg for arg in get_args(annotation) if arg is not type(None)]
+    return raw_base(args[0]) if args and is_raw(args[0]) else annotation
 
 
 @annotation_cache
 def representation_key(annotation: Any, *, row: bool = False) -> RepresentationKey:
     args = [arg for arg in get_args(annotation) if arg is not type(None)]
     base = raw_base(args[0]) if len(args) == 1 else raw_base(annotation)
-    raw = is_raw(annotation) or (row and base in (str, bytes))
+    raw = is_raw(annotation) or (row and base is bytes)
     return RepresentationKey(base, raw)
 
 

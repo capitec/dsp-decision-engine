@@ -10,7 +10,7 @@ import pytest
 HERE = os.path.dirname(__file__)
 EXAMPLES = os.path.join(HERE, "..", "..", "tools", "vscode-decider", "examples")
 LOAN = os.path.join(EXAMPLES, "loan.py")
-from decider._bridge.bridge import Bridge
+from decider._tooling.bridge.bridge import Bridge
 from decider.contract import CONTRACT_VERSION
 from decider.contract._messages import PROTOCOL_VERSION
 
@@ -143,7 +143,7 @@ def test_a_failing_step_is_reported_not_fatal():
 
 def run_bridge(*extra, path=()):
     env = {**os.environ, "PYTHONPATH": os.pathsep.join([*path])}
-    return subprocess.Popen([sys.executable, "-m", "decider._bridge", *extra], stdin=subprocess.PIPE,
+    return subprocess.Popen([sys.executable, "-m", "decider._tooling.bridge", *extra], stdin=subprocess.PIPE,
                             stdout=subprocess.PIPE, text=True, env=env)
 
 
@@ -352,7 +352,7 @@ def test_a_records_state_says_which_step_last_wrote_and_last_changed_each_value(
 
 def test_describe_lists_the_metadata_steps_declare_for_their_values(tmp_path):
     f = tmp_path / "fees.py"
-    f.write_text("from typing import Annotated\nfrom decider import Percent, flow, param\nfrom decider.ops.decimal import Currency\n\n\n"
+    f.write_text("from typing import Annotated\nfrom decider import flow, param\nfrom decider.ops import Currency, Percent\n\n\n"
                  "def fee(balance: Currency['R'], rate: Annotated[float, Percent()] = param(0.1)) -> float:\n"
                  "    return float(balance) * rate\n\n\npipeline = flow(fee, name='fees')\n")
     fields = Bridge().describe(str(f))["fields"]

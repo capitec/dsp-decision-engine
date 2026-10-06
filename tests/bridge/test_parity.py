@@ -10,7 +10,7 @@ import os
 
 from decider.testing import assert_equivalent
 
-from decider._bridge.bridge import Bridge
+from decider._tooling.bridge.bridge import Bridge
 
 FLOW = """from decider import flow, param
 

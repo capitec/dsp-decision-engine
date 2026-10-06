@@ -10,7 +10,8 @@ import pytest
 
 from decider.exceptions import FallbackWarning, WiringError
 
-from decider import Raw, allow_fallback, branch, flow, missing_as, raw_str, step
+from decider import allow_fallback, branch, flow, missing_as, step
+from decider.ops import Text
 from decider._engine import Engine
 from decider._engine.boundary._arrow.intrinsics import load_u8
 from decider._engine.compile import Fallback, Kernel
@@ -148,18 +149,7 @@ def is_binary_priority(value: bytes) -> bool:
     return value == b"priority"
 
 
-def has_raw_string(value: Raw[str]) -> bool:
-    return value >= 0
-
-
-PRIORITY = raw_str("priority")
-
-
-def is_raw_priority(value: Raw[str]) -> bool:
-    return value == PRIORITY
-
-
-def has_raw_bytes(value: Raw[bytes]) -> bool:
+def has_raw_bytes(value: Text) -> bool:
     return value[1] >= 0
 
 
@@ -182,52 +172,34 @@ def label(x: float) -> str:
     return "big" if x > 1 else "small"
 
 
-def label_code(x: float) -> Raw[str]:
-    return PRIORITY if x > 1 else 0
+def echo(value: Text | None) -> Text | None:
+    return value
 
 
 @pytest.mark.parametrize("mode", COMPILED)
-def test_str_output_falls_back_but_raw_str_output_joins_the_kernel(mode):
+def test_str_and_text_outputs_fall_back_and_are_written_as_strings(mode):
     exe = Engine().bind(flow(label, name="p"), mode=mode)
     with pytest.warns(FallbackWarning, match="writes 'label' as str, which no kernel stores"):
         out = exe.run(pl.DataFrame({"x": [2.0, 0.5]}))
     assert out["label"].to_list() == ["big", "small"]
 
-    exe = Engine().bind(flow(label_code, name="p"), mode=mode)
-    out = exe.run(pl.DataFrame({"x": [2.0, 0.5]}))
-    assert out["label_code"].to_list() == [PRIORITY, 0]
-    assert exe.fallbacks() == {}
+    exe = Engine().bind(flow(echo, name="p"), mode=mode)
+    with pytest.warns(FallbackWarning, match="writes 'echo' as str, which no kernel stores"):
+        out = exe.run(pl.DataFrame({"value": ["walk-in", None]}))
+    assert out["echo"].to_list() == ["walk-in", None]
+    assert exe.score({"value": "broker"})["echo"] == "broker"
 
 
-@pytest.mark.parametrize("fn", [has_raw_string, has_raw_bytes])
+def test_a_text_output_is_the_same_string_in_every_mode():
+    out = assert_equivalent(flow(echo, name="p"), pl.DataFrame({"value": ["walk-in", None]}))
+    assert out["echo"].to_list() == ["walk-in", None]
+
+
 @pytest.mark.parametrize("mode", COMPILED)
-def test_raw_annotations_use_internal_representations(mode, fn):
-    exe = Engine().bind(flow(fn, name="p"), mode=mode)
+def test_a_text_input_is_read_as_a_span(mode):
+    exe = Engine(strict_compile=True).bind(flow(has_raw_bytes, name="p"), mode=mode)
     out = exe.run(pl.DataFrame({"value": ["priority", "other"]}))
-    assert out[fn.__name__].to_list() == [True, True]
-
-
-@pytest.mark.parametrize("mode", ("interpreted", *COMPILED))
-def test_raw_string_gives_the_same_answer_in_every_mode(mode):
-    exe = Engine().bind(flow(is_raw_priority, name="p"), mode=mode)
-    out = exe.run(pl.DataFrame({"value": ["priority", "other"]}))
-    assert out["is_raw_priority"].to_list() == [True, False]
-
-
-def code_of(value: Raw[str]) -> Raw[str]:
-    return value
-
-
-@pytest.mark.parametrize("mode", ("interpreted", *COMPILED))
-def test_a_constant_named_after_a_run_never_renumbers_a_value_it_saw(mode):
-    # raw_str() and the runtime encoder draw codes from one table: two would hand the same
-    # code to a constant and to a value already seen, and a step would match the wrong string.
-    exe = Engine().bind(flow(code_of, name="p"), mode=mode)
-    frame = pl.DataFrame({"value": ["walk-in", "broker"]})
-    before = exe.run(frame)["code_of"].to_list()
-    assert len(set(before)) == 2
-    raw_str("broker")
-    assert exe.run(frame)["code_of"].to_list() == before
+    assert out["has_raw_bytes"].to_list() == [True, True]
 
 
 @pytest.mark.parametrize("mode", COMPILED)
@@ -245,18 +217,18 @@ def test_list_input_fallback_is_rejected_in_strict_mode(mode):
         exe.score({"items": [{"price": 2.0}]})
 
 
-def byte_sum(value: Raw[bytes]) -> int:
+def byte_sum(value: Text) -> int:
     total = 0
     for k in range(value[1]):
         total += load_u8(value[0] + k)
     return total
 
 
-def first_byte(value: Raw[bytes]) -> int:
+def first_byte(value: Text) -> int:
     return load_u8(value[0])
 
 
-def is_long(value: Raw[bytes]) -> bool:
+def is_long(value: Text) -> bool:
     return value[1] > 5
 
 
@@ -359,21 +331,15 @@ def undeclared_identity(v):
     return v
 
 
-def raw_code_through_a_helper(value: Raw[str]) -> bool:
-    # No @helper, so the step can't compile: the `Raw[str]` code must still reach it.
-    return undeclared_identity(value) == PRIORITY
-
-
-def raw_span_through_a_helper(value: Raw[bytes]) -> bool:
+def span_through_a_helper(value: Text) -> bool:
+    # No @helper, so the step can't compile: the span must still reach it.
     return undeclared_identity(value)[1] >= 0
 
 
-@pytest.mark.parametrize("fn", [raw_code_through_a_helper, raw_span_through_a_helper])
-def test_a_raw_input_keeps_its_representation_when_the_step_runs_in_python(fn):
-    expected = {"raw_code_through_a_helper": [True, False], "raw_span_through_a_helper": [True, True]}
-    with pytest.warns(FallbackWarning, match=f"p/{fn.__name__} runs in Python, row by row"):
-        out = assert_equivalent(flow(fn, name="p"), pl.DataFrame({"value": ["priority", "other"]}))
-    assert out[fn.__name__].to_list() == expected[fn.__name__]
+def test_a_text_input_keeps_its_representation_when_the_step_runs_in_python():
+    with pytest.warns(FallbackWarning, match="p/span_through_a_helper runs in Python, row by row"):
+        out = assert_equivalent(flow(span_through_a_helper, name="p"), pl.DataFrame({"value": ["priority", "other"]}))
+    assert out["span_through_a_helper"].to_list() == [True, True]
 
 
 def mixed_list(x: float) -> list[float]:

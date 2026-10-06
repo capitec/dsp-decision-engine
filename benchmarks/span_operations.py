@@ -9,7 +9,8 @@ import warnings
 import numpy as np
 import polars as pl
 
-from decider import Raw, flow, param, python_only
+from decider import flow, param, python_only
+from decider.ops import Text
 from decider._engine import Engine
 
 N = 200_000
@@ -30,15 +31,15 @@ def semantic_str_python(sector: str) -> bool:
     return sector == "private"
 
 
-def span_readable(sector: Raw[bytes]) -> bool:
+def span_readable(sector: Text) -> bool:
     return sector == "private"
 
 
-def span_readable_param(sector: Raw[bytes], want: str = param("private")) -> bool:
+def span_readable_param(sector: Text, want: str = param("private")) -> bool:
     return sector == want
 
 
-def span_index(sector: Raw[bytes]) -> bool:
+def span_index(sector: Text) -> bool:
     return sector[1] >= 0
 
 

@@ -11,9 +11,9 @@ does not re-approve them.
 from __future__ import annotations
 
 from decider.exceptions import wrap_import_errors
-from decider.mcp import _tools as tools
-from decider.mcp._editor import EditorBridge
-from decider.mcp._policy import Policy
+from decider._tooling.mcp import _tools as tools
+from decider._tooling.mcp._editor import EditorBridge
+from decider._tooling.mcp._policy import Policy
 
 with wrap_import_errors("mcp"):
     from fastmcp import FastMCP
@@ -74,12 +74,12 @@ def build_server(policy: Policy, bridge: EditorBridge | None = None) -> FastMCP:
 
     @mcp.tool
     def raw_record(entry: str, data: str, record: int) -> dict:
-        """Per-step values for one record (raw data, off until decider.mcp.rawData)."""
+        """Per-step values for one record (raw data, off until decider._tooling.mcp.rawData)."""
         return tools.raw_record(policy, entry, data, record)
 
     @mcp.tool
     def raw_trace(entry: str, data: str, record: int) -> dict:
-        """The decision-trace events for one record (raw data, off until decider.mcp.rawData)."""
+        """The decision-trace events for one record (raw data, off until decider._tooling.mcp.rawData)."""
         return tools.raw_trace(policy, entry, data, record)
 
     @mcp.tool(annotations={"destructiveHint": True})

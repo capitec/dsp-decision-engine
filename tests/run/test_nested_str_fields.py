@@ -8,7 +8,8 @@ import numpy as np
 import polars as pl
 import pytest
 
-from decider import Engine, Columnar, allow_fallback, flow, missing_as, param, step
+from decider import Engine, allow_fallback, flow, missing_as, param, step
+from decider.ops import Columnar
 from decider._engine.compile.rows import ARROW_ROWS, build_rows
 from decider.testing import assert_equivalent
 
@@ -188,7 +189,7 @@ def test_a_str_field_compares_against_a_constant_a_param_and_another_field(fn):
 def test_a_str_field_compared_against_a_param_runs_in_the_kernel():
     # `_probe_signature` typed `want` from `SPAN in ins`, which only sees a top-level `bytes`
     # input; a `str` field nested inside a `Columnar[...]` input's schema was invisible to it, so
-    # `want` was typed as a Raw[str] code and the step fell back to Python.
+    # `want` was typed as an int32 and the step fell back to Python.
     exe = Engine().bind(flow(eq_param, name="p"), mode="fused")
     exe.run(PAIRS)
     assert exe.fallbacks() == {}

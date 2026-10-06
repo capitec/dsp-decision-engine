@@ -6,7 +6,7 @@ from typing import Annotated, Iterator, Literal
 
 from pydantic import TypeAdapter, ValidationError
 
-from decider._annotations import Money, Percent, metadata_of
+from decider.ops.measures import Percent, metadata_of
 from decider.checks._base import Check, CheckContext
 from decider.checks._report import Finding, Severity
 
@@ -44,7 +44,7 @@ def _bounds(p) -> tuple[float | None, float | None]:
 
 
 class ParamUnconstrained(Check):
-    """A numeric `param()` with no bounds; a `Percent` without `ge=0, le=1`, or a `Money` with none, is a warning."""
+    """A numeric `param()` with no bounds; a `Percent` without `ge=0, le=1` is a warning."""
 
     type: Literal["param_unconstrained"] = "param_unconstrained"
     code = "DCD301"
@@ -63,7 +63,7 @@ class ParamUnconstrained(Check):
                 bound, fix = "no bounds", "add `ge=`/`le=` so a bad params document is refused"
             else:
                 continue
-            severity = max(self.severity, Severity.WARNING, key=lambda s: s.rank) if isinstance(meta, (Money, Percent)) else None
+            severity = max(self.severity, Severity.WARNING, key=lambda s: s.rank) if isinstance(meta, Percent) else None
             yield ctx.finding(node, f"param {p.name!r} of {node.origin.path} has {bound}", fix=fix,
                               severity=severity, param=p.name)
 

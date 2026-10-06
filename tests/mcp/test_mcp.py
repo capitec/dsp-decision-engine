@@ -9,8 +9,8 @@ from decider.data import read
 from decider.experiments import Experiment
 from decider.steps._entry import import_flow
 from decider.experiments.metrics import Divergence
-from decider.mcp import Policy, build_server
-from decider.mcp._policy import REDACTED
+from decider._tooling.mcp import Policy, build_server
+from decider._tooling.mcp._policy import REDACTED
 
 PIPELINE_SRC = '''\
 from decider import flow, param, step

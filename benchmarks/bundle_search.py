@@ -16,7 +16,8 @@ import numba
 import numpy as np
 import polars as pl
 
-from decider import Engine, Columnar, flow, loop, step
+from decider import Engine, flow, loop, step
+from decider.ops import Columnar
 
 ITEMS = int(sys.argv[1]) if len(sys.argv) > 1 else 9
 ORDERS = int(sys.argv[2]) if len(sys.argv) > 2 else 100

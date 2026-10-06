@@ -2,7 +2,7 @@
 
 These are the read and confirmation-gated actions an agent drives over `decider`
 core. They are plain functions (no FastMCP), so they test without a server; the
-server in `decider.mcp._server` wraps each one as a tool. Flows are named by
+server in `decider._tooling.mcp._server` wraps each one as a tool. Flows are named by
 import path (`module:qualname`), the same identity `decider.steps._entry.import_flow`
 resolves, and every returned step carries the contract's stable `flow_id`/`step_id`.
 """
@@ -15,15 +15,15 @@ import polars as pl
 
 from decider import checks
 from decider.contract import StepRef, describe, resolve_step, source_location
-from decider._bridge.describing import find_pipelines
+from decider._tooling.bridge.describing import find_pipelines
 from decider.data import read
-from decider._bridge.loading import load_module
+from decider._tooling.bridge.loading import load_module
 from decider import Engine
 from decider.trace import TraceSink
-from decider._bridge.replay import trace as run_trace
+from decider._tooling.bridge.replay import trace as run_trace
 from decider.experiments import ExperimentDef, ExperimentResult, run
 from decider.steps._entry import import_flow
-from decider.mcp._policy import REDACTED, Policy
+from decider._tooling.mcp._policy import REDACTED, Policy
 
 _EXCLUDED = {".git", "__pycache__", ".venv", "venv", "node_modules",
              ".mypy_cache", ".pytest_cache", ".ruff_cache", "site-packages", "dist", "build"}
@@ -188,7 +188,7 @@ def start_debug(entry: str, data: str) -> dict:
 
 def generate_ids(path: str = ".", check: bool = True) -> dict:
     """Add durable `id=` tokens to the source under `path`; confirmation-gated persistence."""
-    from decider._tools.ids import generate
+    from decider._tooling.cli.ids import generate
 
     report = generate(path, check=check)
     return {"changes": [[str(f), lineno, name, id_] for f, lineno, name, id_ in report.changes],

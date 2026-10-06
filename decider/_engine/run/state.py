@@ -10,7 +10,7 @@ import polars as pl
 from decider._engine.ir.decls import Input, NullPolicy, base_annotation, is_typed
 from decider._engine.run.representations import despan
 from decider._engine.wiring.plan import Plan, NodeVersion
-from decider._annotations import struct_item
+from decider.ops.nested import struct_item
 from decider._engine.types import annotation_cache, columnar_item, decimal_info, is_decimal, item_schema, to_raw_input
 
 

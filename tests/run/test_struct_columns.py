@@ -8,7 +8,8 @@ import numpy as np
 import polars as pl
 import pytest
 
-from decider import Engine, Struct, branch, flow, frame_step, missing_as, step
+from decider import Engine, branch, flow, frame_step, missing_as, step
+from decider.ops import Struct
 from decider.exceptions import MissingInputError, WiringError
 from decider.testing import assert_equivalent
 

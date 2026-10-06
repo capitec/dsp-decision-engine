@@ -104,7 +104,6 @@ class ParamInfo(_Open):
 
 class FieldMeta(_Open):
     kind: str
-    symbol: str = None
     precision: int = None
     scale: int = None
     units: str = None

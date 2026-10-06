@@ -10,7 +10,7 @@ import polars as pl
 import pytest
 from click.testing import CliRunner
 
-from decider.cli import CPU_TARGET_FILE, cli
+from decider._tooling.cli import CPU_TARGET_FILE, cli
 from decider._engine.compile import cpu_target
 from decider._engine.compile.njit import _DISPATCHERS, _REASONS
 from decider.serving._handler import construct_handler_from_settings

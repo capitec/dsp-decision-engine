@@ -6,7 +6,8 @@ from typing import TypedDict
 import polars as pl
 import pytest
 
-from decider import Columnar, EachMode, Engine, each, flow, missing_as, param
+from decider import EachMode, Engine, each, flow, missing_as, param
+from decider.ops import Columnar
 from decider.testing import assert_equivalent
 
 MODES = ("interpreted", "stepped", "fused")

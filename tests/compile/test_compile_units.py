@@ -7,7 +7,8 @@ import numpy as np
 import pytest
 from numba.core.dispatcher import Dispatcher
 
-from decider import ConfigurableStep, Columnar, allow_fallback, branch, flow, frame_step, helper, step
+from decider import ConfigurableStep, allow_fallback, branch, flow, frame_step, helper, step
+from decider.ops import Columnar
 from decider._engine.compile import Fallback, Kernel, compile_plan, jit
 from decider._engine.compile.units import Layout
 from decider._engine.ir.decls import Input, Output, ParamDecl

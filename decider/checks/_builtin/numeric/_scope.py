@@ -6,7 +6,6 @@ import typing
 from functools import reduce
 from typing import Any, Iterator
 
-from decider._annotations import Money, metadata_of
 from decider.checks._base import CheckContext
 from decider.ir import CallNode, decimal_info
 
@@ -158,9 +157,8 @@ class Scope:
         return False
 
     def money_output(self) -> bool:
-        """Whether an output is an amount of money: a Decimal or Currency, or annotated `Money()`."""
-        return any(decimal_info(o.annotation) is not None or isinstance(metadata_of(o.annotation), Money)
-                   for o in self.node.outputs or ())
+        """Whether an output is an amount of money: a Decimal or Currency."""
+        return any(decimal_info(o.annotation) is not None for o in self.node.outputs or ())
 
 
 def scopes(ctx: CheckContext) -> Iterator[tuple[CallNode, Any, Scope]]:

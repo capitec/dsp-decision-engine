@@ -15,13 +15,13 @@ from decider._engine.compile.rows import build_ragged, build_rows, rows_needs_no
 from decider._engine.compile.structs import build_struct, struct_schema
 from decider._engine.ir.decls import Input, NullPolicy, base_annotation, is_typed, stored_fill
 from decider._engine.run.params import RunParams
-from decider._engine.run.representations import codes, span_objects, spans
+from decider._engine.run.representations import span_objects, spans
 from decider._engine.run.runners.base import Checkpoint
 from decider._engine.run.runners.interpreted import InterpretedRunner, _absent, _Context, _encoded, _note, _Scope
 from decider._engine.run.state import State, fill_missing
 from decider._engine.trace.envelope import Kind
 from decider.exceptions import FallbackWarning
-from decider._annotations import struct_item
+from decider.ops.nested import struct_item
 from decider._engine.types import Representation, is_raw, representation_for, columnar_item, item_schema
 from decider._engine.wiring.plan import Call, Plan, NodeVersion
 
@@ -44,11 +44,10 @@ class SteppedRunner(InterpretedRunner):
     """Runs every scalar and row node as its own numba kernel, with a Python driver in between.
 
     Pauses at every node, like the interpreted runner. Frame steps, branches
-    and loops run in Python. A `Raw[str]` value enters a kernel as the int32
-    dictionary code `raw_str()` gives that string. A `bytes` input enters as
+    and loops run in Python. A `Text` or `bytes` input enters as
     an `(address, byte length)` span of its UTF-8 bytes, and then so does each
     `str` param of that node. A step running in Python gets plain Python
-    values, except a `Raw[...]` or `Columnar[...]` input, whose representation is
+    values, except a `Text` or `Columnar[...]` input, whose representation is
     part of what it declares.
 
     A step no kernel holds -- one reading or writing a semantic `str`, a `date`
@@ -154,7 +153,7 @@ class SteppedRunner(InterpretedRunner):
         for decl, v, path, want, kind, build, raw in compiled.reads[id(unit)]:
             x, mask = state.read(v, rows)
             filled = False
-            # `Raw[...]` and `Columnar[...]` are a contract about the value, not an optimisation, so
+            # `Text` and `Columnar[...]` are a contract about the value, not an optimisation, so
             # their representation is built for a step running in Python too, where every other
             # annotation wants the Python value instead.
             if _records(kind, python) or (x.dtype == object and (raw or not python)):
@@ -235,7 +234,7 @@ def _external(unit: Unit) -> tuple[tuple[Input, NodeVersion, str, np.dtype | Non
     # wants that row's items already sliced.
     kernel = not isinstance(unit, Fallback)
     # A genuinely interpreted fallback runs a Python body, which compares whole values, so it needs
-    # `Span` objects; a compiled body reads the `(address, length)` pairs through span overloads.
+    # `Text` objects; a compiled body reads the `(address, length)` pairs through span overloads.
     python = isinstance(unit, Fallback) and not isinstance(unit.fn, Dispatcher)
     return tuple((i, v, path, numpy_dtype(b) if is_typed(b := base_annotation(i.annotation)) else None,
                   *_boxed(i, row, path, kernel, python), _declared(i.annotation, row)) for i, v, path in reads)
@@ -270,8 +269,6 @@ def _boxed(decl: Input, row: bool, path: str, kernel: bool = False,
         # A semantic `bytes` step runs in Python and compares whole values, so give it real bytes:
         # the column is strings, and `bytes` declares how this step reads them.
         return kind, lambda values, source, alive: _encoded(decl.name, values)
-    if kind is Representation.RAW_STRING:
-        return kind, lambda values, source, alive: codes(values)
     # A step reading semantic strings runs one compiled call per row, which takes the Python
     # values as they are: numba types them as its own unicode.
     return kind, lambda values, source, alive: values
@@ -285,7 +282,7 @@ def _spans(name: str, values: np.ndarray, source: pl.Series | None, alive: list)
 
 
 def _declared(annotation: Any, row: bool) -> bool:
-    # `Raw[...]` and `Columnar[...]` say how the value is read, so they hold when the step runs in Python
+    # `Text` and `Columnar[...]` say how the value is read, so they hold when the step runs in Python
     # too. A scalar step's `bytes` says the same; a row node falling back matches on the strings.
     return is_raw(annotation) or (not row and base_annotation(annotation) is bytes)
 

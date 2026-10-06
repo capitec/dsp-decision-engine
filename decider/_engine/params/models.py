@@ -5,15 +5,13 @@ from typing import Any, Iterable
 import decimal as stdlib
 from typing import Annotated
 
-import numpy as np
 from pydantic import BeforeValidator, ConfigDict, Field, TypeAdapter, create_model
 
 from decider._engine.ir.decls import ParamDecl
 from decider._engine.params.bundles import bundle_class
 from decider.exceptions import IRError
 from decider._engine.ir.decls import nullable
-from decider._engine.types import decimal_info, is_raw, raw_base, to_raw_input
-from decider._annotations import string_code
+from decider._engine.types import decimal_info, to_raw_input
 
 
 def type_name(annotation: Any) -> str:
@@ -50,27 +48,20 @@ def _std(value: Any) -> Any:
 def tuned_type(annotation: Any) -> Any:
     """The type a param's value is validated and documented as.
 
-    A `Raw[str]` param is a plain string, and a Decimal one a number or string
-    pydantic reads as a `decimal.Decimal` (so `ge=` and `le=` work); only the
-    bundle a step receives holds the code or the int64.
+    A Decimal param is a number or string pydantic reads as a `decimal.Decimal`
+    (so `ge=` and `le=` work); only the bundle a step receives holds the int64.
     """
     if decimal_info(annotation) is not None:
         checked = Annotated[stdlib.Decimal, BeforeValidator(_std)]
         return checked | None if nullable(annotation) else checked
-    return raw_base(annotation) if is_raw(annotation) else annotation
-
-
-def _as_code(value: str) -> np.int32:
-    # int32 whatever the value, so retuning the string never moves the kernel's signature.
-    return np.int32(string_code(value))
+    return annotation
 
 
 def _conversion(annotation: Any) -> Any:
-    # A `Raw[str]` param reaches a step as the same int32 code a `Raw[str]` input does, and a
-    # Decimal as its int64, so no object crosses the dispatcher.
+    # A Decimal reaches a step as its int64, so no object crosses the dispatcher.
     if (info := decimal_info(annotation)) is not None:
         return lambda v: None if v is None else to_raw_input(v, info.scale)
-    return _as_code if is_raw(annotation) and raw_base(annotation) is str else None
+    return None
 
 
 def _placeholder(annotation: Any) -> Any:

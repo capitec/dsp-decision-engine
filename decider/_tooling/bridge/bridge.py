@@ -26,18 +26,18 @@ from pathlib import Path
 import polars as pl
 
 from decider.data import dataset as named_dataset
-from decider._bridge.describing import (assignment_lines, field_metadata, find_pipelines, formula, key_column,
+from decider._tooling.bridge.describing import (assignment_lines, field_metadata, find_pipelines, formula, key_column,
                                          node_json, values_file)
 from decider import Engine
 from decider._engine.debug import EVENT
-from decider._bridge.controls import Controls
+from decider._tooling.bridge.controls import Controls
 from decider._engine.debug.edit import swap
-from decider._bridge.lineage import attribution, latest, lineage
+from decider._tooling.bridge.lineage import attribution, latest, lineage
 from decider.ir import step_map, to_ir
-from decider._bridge.forks import checkpoint_key, sweep
+from decider._tooling.bridge.forks import checkpoint_key, sweep
 from decider.contract import CONTRACT_VERSION, JobHandle, capabilities
 from decider.contract._messages import PROTOCOL_VERSION, DescribeResult, Draft, Hello, Lineage, StateResult, Status
-from decider._bridge.replay import trace
+from decider._tooling.bridge.replay import trace
 from decider._engine.params import merge
 from decider.steps import Step
 
