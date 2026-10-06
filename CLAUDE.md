@@ -46,6 +46,8 @@ example in `GUIDE.md` runs in `tests/test_guide.py`; keep it that way.
 - Target layout and the layer rule: `notes/pythonapi-redesign/directory-structure.md`.
 - `_engine/` imports nothing from `steps/trees|tables|scorecard`, `config/` or
   `serving/`.
+- Packages import only downward per the layer map in `directory-structure.md`;
+  `tests/test_conventions.py` enforces it.
 - `benchmarks/` holds plain scripts (`uv run python benchmarks/<name>.py`),
   not tests. The last numbers against decider2 are in
   `notes/benchmarks-vs-decider2.md`.
@@ -63,7 +65,8 @@ example in `GUIDE.md` runs in `tests/test_guide.py`; keep it that way.
   name.
 - Serving kernels are `nogil=True`. `fastmath` is off by default.
 - Kernels use CPython-equal `round(x, n)` and `x ** n`; int64 still wraps silently. Money
-  is int64 cents; running totals accumulate in float64.
+  is `Currency` / `Decimal[p, s]`: an int64 mantissa with the scale in the type, half-even
+  operators, `decider.ops.decimal.round` for other modes. Running totals accumulate in float64.
 - Compile-time failures and steps compiled modes refuse fall back to Python per
   step (with a warning; `Engine(strict_compile=True)` raises). Runtime errors
   always propagate.

@@ -1,6 +1,6 @@
 # Python API redesign
 
-Status: proposal, 2026-10-05; decisions taken the same day (below). Nothing here is implemented yet.
+Status: implemented 2026-10-06 on branch `feature/python-api-redesign`, from `b8aa6ed` to `931de03`. The full list is `git log 78021e4..feature/python-api-redesign`. Decisions were taken 2026-10-05 (below); deviations are in "As built" at the end.
 
 Much of the work for the VS Code redesign (`notes/vscode-redesign/`) landed as
 public Python API. The result is hard to read. You can't tell the typical
@@ -114,3 +114,18 @@ The phased plan, with a "done when" for each phase, is in `directory-structure.m
 5. **z3 is in**, as the `decider[prove]` extra. It handles tier 4 of `diff.prove` and the satisfiability checks for trees and tables.
 6. **`Table` → `ParamTable`**, with no alias. `optimise` stays.
 7. **Delete `data/scope.py` and `identity.resolve_key` / `record_ref`.** On 2026-10-05 a grep found callers only in the GUIDE (815–825) and in `tests/data/test_scope.py` / `test_identity.py`. `suggest_key`, `check_key` and the key errors are used by `load.py` and the providers, so they stay, privately in `data/_keys.py`. Re-grep at deletion time.
+
+## As built
+
+Deviations from the plan:
+
+- `Step.compile(mode)` replaces `bind`; `FunctionStep.bind(**values)` stays.
+- `Validation.check()` exists.
+- `config.VersionedConfig` stays, because it has callers.
+- The contract `__all__` has 28 names, by decision.
+- `Cents` is dropped for `Decimal` / `Currency` (`notes/decimal-and-currency.md`).
+- DCD304 keeps an alias, `invalid_params_doc`.
+- `import_flow` lives in `steps/_entry.py`.
+- z3 counterexamples are step-level evidence (`identical=None`).
+- Diff tiers 2 and 3 and `first_divergent_step` are deferred.
+- `data.preflight` became DCD304 / DCD504.

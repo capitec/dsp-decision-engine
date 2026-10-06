@@ -6,7 +6,9 @@ Decision records for the consolidated `decider`, each with its measured reason.
 - `numba-compile-cache.md`: cached code lives in real files imported by module name, generated names come from a content hash, and the CPU target is recorded and checked with the cache.
 - `fusion-is-explicit.md`: kernel grouping is a fixed rule, never a cost heuristic, because fusion is non-monotone and depends on body cost.
 - `kernel-flags-nogil-fastmath.md`: serving kernels use `nogil=True` (without it, p99 was 12.7× the budget at 16 threads), and `fastmath` is off by default.
-- `money-rounding-and-overflow.md`: money is int64 cents, running totals are float64, and there is no bare `round()`, because CPython and numba round differently.
+- `money-rounding-and-overflow.md`: running totals are float64, and there is no bare `round()`, because CPython and numba round differently. (Its int64-cents money is superseded by `decimal-and-currency.md`.)
+- `money-overloads.md` (spike): operators on an int64 money type cost nothing measurable on the serving path and agree in every mode; the traps to fix in the real build.
+- `decimal-and-currency.md`: `Decimal` (int64 mantissa, scale in the type) and `Currency` (scale 4) replace `Cents`; half-even operators, explicit rounding modes in `decider.ops.decimal`, units as a display string, and what was built.
 - `registry-dispatch-by-lookup.md`: nested steps dispatch by tag lookup instead of rebuilt unions, and `StepRef` uses `SerializeAsAny`.
 - `structure-in-python.md`: pipeline structure is code, and config carries params and `ConfigurableStep` documents only.
 - `flow-files.md`: a flow file is a front end that builds ordinary `flow`/`branch`/`loop` steps; it lives with the code, never in a config version.
@@ -29,7 +31,7 @@ Decision records for the consolidated `decider`, each with its measured reason.
 - `vscode-native-debugging.md`: the VS Code extension debugs with plain debugpy; the flow mirrors where it is paused (`node_path()`) and which nodes have breakpoints; flow-file trees come from the YAML so a broken flow stays editable.
 - `datasets.md`: one `DatasetProvider` per dataset, inferred from `datasets/` (file or folder) or named in `datasets/config.json`; an optional `key`; read-only; the Datasets view and its bridge commands.
 - `jupyterlab-decider.md`: the JupyterLab host of the flow debugger: the bridge in the kernel over a comm (notebook pipelines and flow files), where the bridge lives now, what's left out, and how it's tested.
-- `pythonapi-redesign/` (proposal): developer user stories against today's API; the target namespace in layers and how to hide internals; one registry-based `decider.checks` with a standard catalogue; a new `decider.diff`; extensibility gaps and wrong-way coupling; bugs found on the way.
+- `pythonapi-redesign/` (implemented 2026-10-06): developer user stories; the target namespace in layers (`directory-structure.md`, `layout-and-visibility.md`); one registry-based `decider.checks` (`checks.md`); `decider.diff` (`diff.md`); `thread-safety.md`; kernel and credit function homes (`kernel-functions.md`, `credit-functions.md`); extensibility gaps (`extensibility-and-coupling.md`); `HANDOVER.md`; and `README.md` with the "As built" deviations.
 - `hot-reload-investigation.md` (spike): `Session.reload` diffs checkpoint sequences by content and re-runs from the first change; notebook `watch`, file `ModuleWatcher`, measurements, and why serving never hot reloads.
 
 - `serving-latency.md`: where one request's microseconds actually go, the kernel-plus-state floor, every transport priced from the caller (HTTP, raw socket, unix socket, shared memory, Arrow IPC, a persistent pyarrow stream), and why an Arrow-native server is not the win.

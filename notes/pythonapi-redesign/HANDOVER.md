@@ -1,3 +1,5 @@
+Executed 2026-10-05/06; see README.md → As built.
+
 # Handover: orchestrating the Python API redesign
 
 Written 2026-10-05 for an orchestrator agent. You don't write most of the code yourself. You split the work into packages, brief workers, check each phase against its gate, and stop to ask the user when something is undecided.
