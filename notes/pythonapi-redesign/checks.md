@@ -230,6 +230,8 @@ DCD002 and DCD003 messages say why it matters: served steps run concurrently on 
 | DCD204 | `unused_input` | an argument the body never uses | info |
 | DCD205 | `unbounded_loop` | huge or absent `max_iterations`, or a condition that is independent of the carries | warning |
 | DCD206 | `opaque_frame_step` | a frame step with unknown lineage, which blocks lineage checks, fusion and single-record scope. It absorbs `data.scope.frame_steps`. | info |
+| DCD207 | `table_overlap` | two live decision table rows that can both match one input (z3; the earlier row wins; tables of more than 40 rows are not compared in pairs) | info |
+| DCD208 | `table_gap` | an input no decision table row matches (z3; null inputs excluded, since a null never matches) | info; warning when the table has no `default` |
 
 ### Params (DCD3xx)
 
