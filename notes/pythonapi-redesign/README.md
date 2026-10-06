@@ -1,6 +1,6 @@
 # Python API redesign
 
-Status: implemented 2026-10-06 on branch `feature/python-api-redesign`, from `b8aa6ed` to `931de03`. The full list is `git log 78021e4..feature/python-api-redesign`. Decisions were taken 2026-10-05 (below); deviations are in "As built" at the end.
+Status: implemented 2026-10-06 on branch `feature/python-api-redesign`, from `b8aa6ed` to `d29244f`. The full list is `git log 78021e4..feature/python-api-redesign`. Decisions were taken 2026-10-05 (below); deviations are in "As built" at the end.
 
 Much of the work for the VS Code redesign (`notes/vscode-redesign/`) landed as
 public Python API. The result is hard to read. You can't tell the typical
