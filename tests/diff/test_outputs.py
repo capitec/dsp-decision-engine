@@ -2,7 +2,7 @@
 import polars as pl
 import pytest
 
-from decider import Money, diff, flow
+from decider import diff, flow
 from decider.diff import _outputs
 
 
@@ -13,7 +13,7 @@ def _version(rate: float, label: str = "a", offer_cents: int = 100):
     def tier(x: float) -> str:
         return label if x < 2.5 else "z"
 
-    def offer(x: float) -> Money(cents=True):
+    def offer(x: float) -> int:
         return offer_cents * int(x)
 
     return flow(score, tier, offer, name="t")
@@ -47,7 +47,7 @@ def test_a_float_difference_inside_the_tolerance_is_not_a_change():
     assert diff.outputs(_version(2.0), _version(2.0 + 1e-12), FRAME, rtol=0, atol=0).rows_changed == 3
 
 
-def test_money_deltas_are_exact_integers():
+def test_integer_deltas_are_exact():
     o = diff.outputs(_version(2.0), _version(2.0, offer_cents=101), FRAME)
     c = o.columns["offer"]
     assert isinstance(c.max_abs, int) and c.max_abs == 3

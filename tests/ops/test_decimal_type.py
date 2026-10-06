@@ -74,7 +74,7 @@ def test_non_finite_float_is_a_value_error(bad):
         Decimal(bad, 2)
 
 
-@pytest.mark.parametrize("bad", [None, [1], (1, 2), b"1", 1j, stdlib.Decimal(1)])
+@pytest.mark.parametrize("bad", [None, [1], (1, 2), b"1", 1j])
 def test_other_types_are_a_type_error(bad):
     with pytest.raises(TypeError):
         Decimal(bad)
@@ -84,6 +84,14 @@ def test_other_types_are_a_type_error(bad):
 def test_value_outside_int64_is_an_overflow_error(args):
     with pytest.raises(OverflowError):
         Decimal(*args)
+
+
+def test_a_decimal_or_a_stdlib_decimal_is_read_by_the_construction_rules():
+    assert Decimal(stdlib.Decimal("2.675")).raw == 2675 and Decimal(stdlib.Decimal("2.675")).scale == 3
+    assert Decimal(stdlib.Decimal("2.675"), 2).raw == 268 and Decimal(Decimal("2.675"), 2).raw == 268
+    assert Currency(Decimal("2.5", units="R")).units == "R" and Currency(stdlib.Decimal("2.5")).raw == 25000
+    with pytest.raises(ValueError, match="finite"):
+        Decimal(stdlib.Decimal("NaN"))
 
 
 def test_int64_bounds_are_accepted():
@@ -185,9 +193,10 @@ def test_units_survive_arithmetic_when_they_agree_and_drop_when_they_do_not():
     assert (1.5 * r).units == "R" and abs(r).units == "R"
 
 
-def test_arithmetic_on_a_currency_returns_a_plain_decimal():
+def test_arithmetic_on_a_currency_returns_a_plain_decimal_but_negation_and_abs_stay_a_currency():
     assert type(Currency(1) + Currency(1)) is Decimal
-    assert type(-Currency(1)) is Decimal
+    assert type(-Currency(1)) is Currency and type(abs(Currency(-1))) is Currency
+    assert repr(-Currency(2, 6500, units="R")) == "R -2.6500"
 
 
 # ---- equality, ordering and hash
@@ -219,6 +228,11 @@ def test_comparison_with_other_types_is_not_implemented():
     assert Decimal(1) != "1" and Decimal(1) != None  # noqa: E711
     with pytest.raises(TypeError):
         Decimal(1) < "1"
+
+
+def test_comparison_with_a_stdlib_decimal_is_exact():
+    assert Decimal("2.50") == stdlib.Decimal("2.5") and Decimal("2.5") < stdlib.Decimal("2.51")
+    assert Decimal("2.5") != stdlib.Decimal("NaN") and not Decimal("2.5") < stdlib.Decimal("NaN")
 
 
 def test_decimal_is_hashable_and_a_dict_key():

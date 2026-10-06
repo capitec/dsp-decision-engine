@@ -8,8 +8,8 @@ import re
 import textwrap
 from pathlib import Path
 
-from decider.ir import BranchNode, CallNode, LoopNode
-from decider._annotations import metadata_of
+from decider.ir import BranchNode, CallNode, LoopNode, decimal_info
+from decider._annotations import DecimalSpec, metadata_of
 from decider.steps import Step
 
 
@@ -121,7 +121,9 @@ def field_metadata(node, out=None):
     out = {} if out is None else out
     if isinstance(node, CallNode):
         for d in (*(node.inputs or ()), *(node.outputs or ()), *node.params):
-            if (m := metadata_of(d.annotation)) is not None:
+            if (info := decimal_info(d.annotation)) is not None:
+                out.setdefault(d.name, DecimalSpec(info.precision, info.scale, info.units).to_json())
+            elif (m := metadata_of(d.annotation)) is not None:
                 out.setdefault(d.name, m.to_json())
     else:
         for c in node.children():

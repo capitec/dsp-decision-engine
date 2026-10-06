@@ -352,11 +352,11 @@ def test_a_records_state_says_which_step_last_wrote_and_last_changed_each_value(
 
 def test_describe_lists_the_metadata_steps_declare_for_their_values(tmp_path):
     f = tmp_path / "fees.py"
-    f.write_text("from typing import Annotated\nfrom decider import Money, Percent, flow, param\n\n\n"
-                 "def fee(balance: Annotated[int, Money(cents=True)], rate: Annotated[float, Percent()] = param(0.1)) -> float:\n"
-                 "    return balance * rate\n\n\npipeline = flow(fee, name='fees')\n")
+    f.write_text("from typing import Annotated\nfrom decider import Percent, flow, param\nfrom decider.ops.decimal import Currency\n\n\n"
+                 "def fee(balance: Currency['R'], rate: Annotated[float, Percent()] = param(0.1)) -> float:\n"
+                 "    return float(balance) * rate\n\n\npipeline = flow(fee, name='fees')\n")
     fields = Bridge().describe(str(f))["fields"]
-    assert fields == {"balance": {"kind": "money", "symbol": "R", "cents": True}, "rate": {"kind": "percent"}}
+    assert fields == {"balance": {"kind": "decimal", "precision": 19, "scale": 4, "units": "R"}, "rate": {"kind": "percent"}}
 
 
 def test_hello_reports_protocol_contract_and_capabilities():

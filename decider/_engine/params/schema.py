@@ -1,18 +1,26 @@
 from __future__ import annotations
 
 import dataclasses
+import warnings
 from typing import Annotated, Any, Mapping
 
 from pydantic import TypeAdapter
 
 from decider._engine.ir.decls import ParamDecl
 from decider._engine.ir.nodes import CallNode, IRNode, ScatterGatherNode
-from decider._engine.params.models import NodeParams, type_name
+from decider._engine.params.models import NodeParams, tuned_type, type_name
+from decider._engine.types import decimal_info
 from decider._engine.params.validate import Status, Validation, check_namespaces, validate_node
 from decider.exceptions import ParamsError
 
 
 _JSON_TYPES = {"int": "integer", "float": "number", "bool": "boolean"}
+
+
+def _default(decl: ParamDecl) -> Any:
+    # A Decimal default is written in a params document as its digits, without units.
+    x = decl.default
+    return str(type(x).from_raw(x.raw, x.scale)) if decimal_info(decl.annotation) is not None and hasattr(x, "raw") else x
 
 
 def _info(decl: ParamDecl) -> dict[str, Any]:
@@ -21,7 +29,7 @@ def _info(decl: ParamDecl) -> dict[str, Any]:
     if decl.required:
         info["required"] = True
     else:
-        info["default"] = decl.default
+        info["default"] = _default(decl)
     for constraint in () if table else getattr(decl.field_info, "metadata", ()):
         if dataclasses.is_dataclass(constraint):
             info.update(dataclasses.asdict(constraint))
@@ -32,12 +40,16 @@ def _json_schema(decl: ParamDecl) -> dict[str, Any]:
     if decl.schema is not None:
         columns = {c: {"type": _JSON_TYPES[d]} if d in _JSON_TYPES else {} for c, d in decl.schema}
         items = {"type": "object", "properties": columns, "required": list(columns), "additionalProperties": False}
-        return {"type": "array", "items": items, **({} if decl.required else {"default": decl.default})}
+        return {"type": "array", "items": items, **({} if decl.required else {"default": _default(decl)})}
     # ponytail: types that need $defs (enums, models) keep dangling refs; hoist $defs when such a param appears.
     if decl.field_info is not None:
-        return TypeAdapter(Annotated[decl.annotation, decl.field_info]).json_schema()
-    schema = TypeAdapter(decl.annotation).json_schema()
-    return schema if decl.required else {**schema, "default": decl.default}
+        with warnings.catch_warnings():
+            # A Decimal default is written as its digits below, not serialised by pydantic.
+            warnings.simplefilter("ignore")
+            schema = TypeAdapter(Annotated[tuned_type(decl.annotation), decl.field_info]).json_schema()
+        return schema if decl.required or "default" in schema else {**schema, "default": _default(decl)}
+    schema = TypeAdapter(tuned_type(decl.annotation)).json_schema()
+    return schema if decl.required else {**schema, "default": _default(decl)}
 
 
 class ParamsSchema(dict):
@@ -71,7 +83,7 @@ class ParamsSchema(dict):
         """
         doc: dict[str, Any] = {}
         for path, params in self.decls.items():
-            values = {name: [] if d.required else d.default
+            values = {name: [] if d.required else _default(d)
                       for name, d in params.items() if not d.required or d.schema is not None}
             if values:
                 target = doc

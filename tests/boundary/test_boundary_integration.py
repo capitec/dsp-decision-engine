@@ -12,6 +12,7 @@ pytest.importorskip("decider._engine.boundary._arrow._shim", exc_type=ImportErro
 from decider._engine.boundary._arrow.plan import ArrowKindError  # noqa: E402
 from decider._engine.boundary.dtypes import NeedsKernelSplit  # noqa: E402
 from decider._engine.boundary.extract import extract_frame  # noqa: E402
+from decider.ops.decimal import Currency
 from decider._engine.ir.decls import Input, NullPolicy  # noqa: E402
 
 
@@ -88,9 +89,9 @@ def test_a_column_the_kernel_cannot_read_fails_by_name():
     with pytest.raises(ArrowKindError, match=r"column 'x' is Arrow string_view but is declared F64"):
         extract_frame(pl.DataFrame({"x": ["not a number"]}), [Input("x", float)])
     ok = extract_frame(pl.DataFrame({"x": pl.Series([Decimal("1.25")], dtype=pl.Decimal(10, 2))}), [Input("x", float)])
-    assert ok.columns["x"].values.tolist() == [125.0]
-    with pytest.raises(ArrowKindError, match=r"column 'x' \(Decimal\(precision=38, scale=0\)\).*cast to Float64 failed"):
-        extract_frame(pl.DataFrame({"x": pl.Series([Decimal("9" * 30)], dtype=pl.Decimal(38, 0))}), [Input("x", float)])
+    assert ok.columns["x"].values.tolist() == [1.25]
+    with pytest.raises(ArrowKindError, match=r"column 'x' \(Decimal\(precision=38, scale=0\)\).*does not fit a Decimal at scale 4"):
+        extract_frame(pl.DataFrame({"x": pl.Series([Decimal("9" * 30)], dtype=pl.Decimal(38, 0))}), [Input("x", Currency)])
 
 
 def test_a_nullable_int64_at_100k_rows_stays_int64_with_its_fill_and_no_float_round_trip():

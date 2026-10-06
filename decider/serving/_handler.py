@@ -35,6 +35,15 @@ class Live(t.NamedTuple):
     dates: t.Mapping[str, t.Any] = MappingProxyType({})
 
 
+def _json_fallback(value: t.Any) -> str:
+    # A Decimal or Currency goes out as its digits in a string, as pydantic writes a decimal.Decimal.
+    from decider.ops.decimal import Decimal
+
+    if isinstance(value, Decimal):
+        return str(Decimal.from_raw(value.raw, value.scale))
+    raise TypeError(f"{type(value).__name__} is not JSON serializable")
+
+
 @dataclass
 class RequestHandler:
     """Serves a pipeline from code with params and `ConfigurableStep` documents from a config store.
@@ -191,7 +200,7 @@ class RequestHandler:
     def output_fn(self, output: dict[str, t.Any] | pl.DataFrame, accept: str) -> Response:
         if isinstance(output, dict):
             if accept in ("*/*", "application/json"):
-                return Response(to_json(output), "application/json")
+                return Response(to_json(output, fallback=_json_fallback), "application/json")
             output = pl.DataFrame([output])
         formatter = DEFAULT_OUTPUT_FORMATTERS.get(accept)
         if formatter is None:

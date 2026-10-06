@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from enum import Enum
 from functools import lru_cache, wraps
 from types import UnionType
@@ -7,7 +8,7 @@ from typing import Annotated, Any, NamedTuple, Union, get_args, get_origin, get_
 
 import numpy as np
 
-from decider._annotations import Columnar, Raw
+from decider._annotations import Columnar, DecimalSpec, Raw
 
 
 class Representation(Enum):
@@ -140,3 +141,122 @@ def cast_values(name: str, value: Any, dtype: np.dtype, n: int) -> tuple[np.ndar
         except (TypeError, ValueError):
             raise ValueError(f"can't set {name!r} to {value!r}: it doesn't cast to {dtype}") from None
     return raw, None if valid.all() else valid
+
+
+class _NoDecimal:
+    """Stands for Decimal until `decider.ops.decimal` is imported, so nothing is one."""
+
+
+def _decimals() -> tuple[type, type]:
+    # Whatever annotates a value with a Decimal has imported `decider.ops.decimal` already, and
+    # importing it here would bring in numba, which `import decider` must not.
+    module = sys.modules.get("decider.ops.decimal")
+    return (module.Decimal, module.Currency) if module is not None else (_NoDecimal, _NoDecimal)
+
+
+class DecimalInfo(NamedTuple):
+    """What an annotation says about a `Decimal` value: its class, int64 scale and display units."""
+
+    cls: type
+    scale: int
+    units: str | None
+    precision: int = 19
+
+
+def decimal_info(annotation: Any) -> DecimalInfo | None:
+    """The `DecimalInfo` of `Decimal[p, s]`, `Currency` or `Currency["R"]` (optional or not), else `None`.
+
+    A bare `Decimal` has no scale and raises `TypeError`.
+
+    Example::
+
+        decimal_info(Decimal[18, 2]).scale   # 2
+    """
+    try:
+        return _decimal_info(annotation)
+    except TypeError as e:
+        if "unhashable" not in str(e):
+            raise
+        return _decimal_info.__wrapped__(annotation)
+
+
+def _strip(annotation: Any) -> tuple[Any, DecimalSpec | None]:
+    # The class under `Annotated[...]` and `| None`, and the DecimalSpec on the way.
+    spec = None
+    t = annotation
+    for _ in range(3):
+        if get_origin(t) is Annotated:
+            spec = spec or next((m for m in t.__metadata__ if isinstance(m, DecimalSpec)), None)
+            t = t.__origin__
+        elif get_origin(t) in (Union, UnionType):
+            args = [a for a in get_args(t) if a is not type(None)]
+            if len(args) != 1:
+                break
+            t = args[0]
+    return t, spec
+
+
+def is_decimal(annotation: Any) -> bool:
+    """Whether `annotation` is a Decimal or Currency, optional or not, with or without its scale.
+
+    >>> is_decimal(int), is_decimal(Currency | None)
+    (False, True)
+    """
+    t, _ = _strip(annotation)
+    return isinstance(t, type) and issubclass(t, _decimals()[0])
+
+
+@lru_cache(maxsize=1024)
+def _decimal_info(annotation: Any) -> DecimalInfo | None:
+    t, spec = _strip(annotation)
+    Decimal, Currency = _decimals()
+    if not (isinstance(t, type) and issubclass(t, Decimal)):
+        return None
+    if spec is not None:
+        return DecimalInfo(t, spec.scale, spec.units, spec.precision)
+    if issubclass(t, Currency):
+        return DecimalInfo(t, 4, None)
+    raise TypeError("a Decimal annotation needs its precision and scale: write Decimal[18, 2], or use Currency")
+
+
+def decimal_scale(annotation: Any) -> int | None:
+    """The scale of a Decimal or Currency annotation, else `None`."""
+    info = decimal_info(annotation)
+    return None if info is None else info.scale
+
+
+def decimal_boxer(annotation: Any) -> Any:
+    """A function making the Python `Decimal` (or `Currency`) of a stored int64 for this annotation, else `None`."""
+    info = decimal_info(annotation)
+    if info is None:
+        return None
+    cls, scale, units, _ = info
+    return lambda raw: cls.from_raw(raw, scale, units)
+
+
+def to_raw(value: Any, scale: int) -> int:
+    """The int64 a value is stored as at `scale`: a Decimal, int, float or str, rounded half-even.
+
+    A step returning a float for a Decimal output is a `TypeError`, not a silent rounding.
+    """
+    Decimal = _decimals()[0]
+    if isinstance(value, Decimal) or type(value) is int:
+        return value.raw if getattr(value, "scale", None) == scale else Decimal(value, scale).raw
+    raise TypeError(f"expected a Decimal or an int for a Decimal value, got {type(value).__name__}")
+
+
+def to_raw_input(value: Any, scale: int) -> int:
+    """`to_raw` for what a caller hands in: also a float, a str or a `decimal.Decimal`, by the construction rules."""
+    Decimal = _decimals()[0]
+    return to_raw(value, scale) if isinstance(value, (int, Decimal)) else Decimal(value, scale).raw
+
+
+
+def raw_values(annotation: Any, value: Any) -> Any:
+    """`value` (one value or a list of them, `None` for null) as the int64s a Decimal annotation stores; others unchanged."""
+    scale = decimal_scale(annotation)
+    if scale is None:
+        return value
+    if isinstance(value, list):
+        return [None if x is None else to_raw_input(x, scale) for x in value]
+    return None if value is None else to_raw_input(value, scale)

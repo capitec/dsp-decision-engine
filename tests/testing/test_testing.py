@@ -1,11 +1,13 @@
 """The testing helpers: every mode, score and a session agree; boundary corpus; no recompiles."""
-from typing import Annotated
+import decimal as stdlib
 
 import polars as pl
 import pytest
 from numba.extending import overload
 
-from decider import Money, flow, missing_as, param
+from decider import flow, missing_as, param
+from decider.ops import decimal
+from decider.ops.decimal import Currency
 from decider._engine import Engine
 from decider._engine.debug import Session
 from decider._engine.run import Executable
@@ -244,17 +246,19 @@ def test_corpus_adds_rounding_ties_for_every_float_input():
     assert _case("tie:2.675:a")["a"].item() == 2.675
 
 
-def interest(principal: Annotated[int, Money(cents=True)], count: int, rate: float = param(0.0875)) -> int:
-    return round(principal * rate)
+def interest(principal: Currency, count: int, rate: float = param(0.0875)) -> Currency:
+    return decimal.round(principal * rate, 2) * count
 
 
-def test_corpus_adds_large_principals_only_for_cents_money_ints():
+def test_corpus_gives_a_decimal_input_a_decimal_column_with_large_amounts():
     boundary = corpus(flow(interest))["boundary"]
     cases = boundary["case"].to_list()
+    assert boundary.schema["principal"] == pl.Decimal(38, 4)
     assert {c for c in cases if c.startswith("large:")} == {
         f"large:{k}:principal" for k in ("10**11", "10**13", "2**62//1000")}
-    assert boundary.filter(pl.col("case") == "large:10**13:principal")["principal"].item() == 10**13
-    assert "int_near_2**53:count" in cases
+    assert boundary.filter(pl.col("case") == "large:10**13:principal")["principal"].item() == stdlib.Decimal(10**13).scaleb(-4)
+    assert boundary.filter(pl.col("case") == "int_near_2**53:principal")["principal"].item() == stdlib.Decimal(2**53 + 1).scaleb(-4)
+    assert {"zero:principal", "negative:principal", "int_near_2**53:count"} <= set(cases)
 
 
 def test_every_mode_agrees_over_the_money_corpus():

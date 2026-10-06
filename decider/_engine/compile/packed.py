@@ -5,7 +5,7 @@ from typing import Collection, Iterator
 from decider._engine.compile.kernel import Fork, Repeat, SrcKind, fused_kernel
 from decider._engine.compile.njit import compile_call
 from decider._engine.compile.units import Kernel, Layout, output_dtype
-from decider._engine.ir.decls import TYPED, NullPolicy, base_annotation, nullable
+from decider._engine.ir.decls import NullPolicy, base_annotation, is_typed, nullable
 from decider._engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, Sequence, NodeVersion
 from decider._annotations import struct_item
 
@@ -122,7 +122,7 @@ def _pack(top: Branch | Loop, outputs: set[int], lazy: bool, python: Collection[
     refs: list[int] = []
 
     def var(v: NodeVersion) -> int:
-        if base_annotation(v.annotation) not in TYPED and struct_item(v.annotation) is None:
+        if not is_typed(base_annotation(v.annotation)) and struct_item(v.annotation) is None:
             raise _Unpackable
         inner.add(v.id)
         lay.produced[v.id] = (SrcKind.VAR, len(variables))

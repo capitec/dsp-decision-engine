@@ -18,9 +18,9 @@ describe("formatting by what a value measures", () => {
   });
 
   it("uses declared metadata over the name", () => {
-    setFields({ net_income: { kind: "value" }, balance: { kind: "money", symbol: "R", cents: true }, term: { kind: "duration", unit: "months" } });
+    setFields({ net_income: { kind: "value" }, balance: { kind: "decimal", precision: 19, scale: 4, units: "R" }, term: { kind: "duration", unit: "months" } });
     expect(formatValue(9000, "net_income")).toBe("9000");
-    expect(formatValue(123456, "balance")).toBe("R 1234.56");
+    expect(formatValue(1234.5, "balance")).toBe("R\u00a01234.50");
     expect(formatValue(1, "term")).toBe("1 month");
     expect(fieldOf("balance")?.assumed).toBeUndefined();
   });

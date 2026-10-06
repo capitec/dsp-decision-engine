@@ -8,7 +8,7 @@ from typing import Any, get_origin, is_typeddict
 
 from decider._engine.ir.decls import Input, base_annotation
 from decider._annotations import struct_item
-from decider._engine.types import columnar_item, is_raw, item_schema
+from decider._engine.types import columnar_item, decimal_info, is_raw, item_schema
 from decider._engine.ir.nodes import (BranchNode, CallNode, IRNode, LoopNode, ScatterGatherNode, SequenceNode,
                                      iter_nodes)
 from decider._engine.wiring.plan import (Branch, Call, Carry, Loop, Merge, Plan, Resolved, ScatterGather, Sequence,
@@ -136,6 +136,8 @@ class _Resolver:
         v = scope.names.get(name)
         if v is None:
             v = scope.names[name] = self.unbound(name, scope, reader, own, decl)
+        if v.producer is not None and decl is not None:
+            self.same_scale(name, v, decl, reader)
         if v.producer is None and decl is not None:
             self.same_type(name, decl, reader)
             if base_annotation(self.inputs[name].annotation) in (None, Any):
@@ -144,11 +146,25 @@ class _Resolver:
         self.read.add(v.id)
         return v
 
+    def same_scale(self, name: str, v: NodeVersion, decl: Input, reader: str) -> None:
+        # A Decimal is stored as its int64 at the writer's scale: a reader taking another scale, or
+        # a plain number, would read the wrong digits.
+        if base_annotation(decl.annotation) in (None, Any):
+            return
+        wrote, read = decimal_info(v.annotation), decimal_info(decl.annotation)
+        if (wrote and wrote.scale) != (read and read.scale) or bool(wrote) != bool(read):
+            raise WiringError(
+                f"{reader} reads {name!r} as {_decimal_name(read, decl.annotation)}, but {v.producer} writes it as "
+                f"{_decimal_name(wrote, v.annotation)}. Annotate both the same, and convert in the step that needs the other."
+            )
+
     def same_type(self, name: str, decl: Input, reader: str) -> None:
         # One column arrives as one type, so a reader declaring another would silently get the first's.
         t = base_annotation(decl.annotation)
         if t in (None, Any):
             return
+        if (info := decimal_info(decl.annotation)) is not None:
+            t = (t, info.scale)
         first, ft = self.input_types.setdefault(name, (reader, t))
         if ft != t:
             raise WiringError(
@@ -443,4 +459,10 @@ def _is_typo(name: str, near: str) -> bool:
 
 
 def _type_name(t: Any) -> str:
+    if isinstance(t, tuple):
+        return f"{t[0].__name__} at scale {t[1]}"
     return getattr(t, "__name__", repr(t))
+
+
+def _decimal_name(info: Any, annotation: Any) -> str:
+    return f"{info.cls.__name__} at scale {info.scale}" if info else _type_name(base_annotation(annotation))

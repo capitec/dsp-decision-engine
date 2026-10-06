@@ -18,6 +18,7 @@ class ColumnPlan:
     Args:
         dtype: the frame's own dtype.
         cast: the polars dtype exported instead, or `None` when the kind reads `dtype` as is.
+        scale: for a Decimal input, its scale: the column reads as the int64 mantissa at that scale.
         arrow_type: set by `explain_boundary` only: the Arrow type nanoarrow reported.
         error: set by `explain_boundary` only: why the column can't cross.
     """
@@ -29,6 +30,7 @@ class ColumnPlan:
     note: str = ""
     arrow_type: str | None = None
     error: str | None = None
+    scale: int | None = None
 
 
 # Temporal types cross as their storage integer.
@@ -47,11 +49,13 @@ _CANONICAL: dict[FeatureKind, pl.DataType] = {
 _NO_FLAT_FORM = (pl.Object, pl.Binary, pl.Unknown)
 
 
-def plan_column(name: str, dtype: pl.DataType, kind: FeatureKind) -> ColumnPlan:
+def plan_column(name: str, dtype: pl.DataType, kind: FeatureKind, scale: int | None = None) -> ColumnPlan:
     """Decide from the dtype alone whether `kind` reads it natively, needs one cast, or can't read it.
 
     A pair with no cast (a String declared `float`) is left for the import to
     refuse by Arrow type. Nested and object dtypes raise `NeedsKernelSplit`.
+    A Decimal input (`scale` set) reads a polars Decimal or integer column as
+    its int64 mantissa at that scale.
 
     >>> plan_column("amount", pl.Float64(), FeatureKind.I64).cast
     Int64
@@ -59,13 +63,14 @@ def plan_column(name: str, dtype: pl.DataType, kind: FeatureKind) -> ColumnPlan:
     base = dtype.base_type()
     if dtype.is_nested() or base in _NO_FLAT_FORM:
         raise NeedsKernelSplit(name, dtype, reason="nested/object columns do not enter the kernel")
+    if scale is not None and (base is pl.Decimal or base in _INTEGERS):
+        return ColumnPlan(name, dtype, kind, pl.Int64(), note=f"Decimal: {dtype} -> int64 mantissa at scale {scale}", scale=scale)
+    if scale is not None and base is not pl.Null:
+        return ColumnPlan(name, dtype, kind, None, note=f"{dtype} is not a Decimal column: cast it to pl.Decimal in the frame tier; the import refuses it")
     if base in _NATIVE[kind]:
         return ColumnPlan(name, dtype, kind, None, note="native: nanoarrow reads the frame's own buffers")
     cast = _CANONICAL[kind]
-    if base is pl.Decimal:
-        if kind in (F64, I64):
-            return ColumnPlan(name, dtype, kind, cast, note="Decimal -> scaled int64 cents, then the declared kind")
-    elif base is pl.Null:
+    if base is pl.Null:
         return ColumnPlan(name, dtype, kind, cast, note="all-null column cast to the kind's dtype")
     elif kind in (F64, I64, BOOL) and (dtype.is_numeric() or base is pl.Boolean or base in _TEMPORAL):
         return ColumnPlan(name, dtype, kind, cast, note=f"frame-tier cast {dtype} -> {cast}")
@@ -75,17 +80,12 @@ def plan_column(name: str, dtype: pl.DataType, kind: FeatureKind) -> ColumnPlan:
                       note=f"no frame-tier cast from {dtype} to {kind.name}; the import refuses it")
 
 
-def _decimal_as_cents(series: pl.Series, *, money_scale: int = 2) -> pl.Series:
-    # Money never enters a kernel as Decimal: the unscaled mantissa is rescaled to cents.
-    scale = series.dtype.scale or 0
-    cents = series.to_physical().cast(pl.Int64, strict=True)
-    shift = money_scale - scale
-    if shift > 0:
-        return cents * (10 ** shift)
-    if shift < 0:
-        # Truncate toward zero, so a negative mantissa rescales the same way a positive one does.
-        return cents.sign() * (cents.abs() // (10 ** -shift))
-    return cents
+def decimal_mantissa(series: pl.Series, scale: int) -> pl.Series:
+    """A polars Decimal or integer Series as the int64 mantissa at `scale`, rescaled half-even; overflow raises."""
+    # Polars rescales a Decimal half-even and an integer to whole units; either overflow is an error.
+    if not (isinstance(series.dtype, pl.Decimal) and series.dtype.scale == scale):
+        series = series.cast(pl.Decimal(38, scale), strict=True)
+    return series.to_physical().cast(pl.Int64, strict=True)
 
 
 def cast_series(series: pl.Series, plan: ColumnPlan) -> pl.Series:
@@ -94,17 +94,17 @@ def cast_series(series: pl.Series, plan: ColumnPlan) -> pl.Series:
         return series
     try:
         base = series.dtype.base_type()
-        if base is pl.Decimal:
-            out = _decimal_as_cents(series)
-            return out if plan.cast == pl.Int64() else out.cast(plan.cast, strict=True)
+        if plan.scale is not None:
+            return decimal_mantissa(series, plan.scale)
         if base in _TEMPORAL:
             return series.to_physical().cast(plan.cast, strict=True)
         return series.cast(plan.cast, strict=True)
     # A Rust panic surfaces as pyo3's PanicException, which is not an Exception.
     except BaseException as exc:  # noqa: BLE001
-        raise NeedsKernelSplit(
-            plan.name, series.dtype, reason=f"frame-tier cast to {plan.cast} failed: {exc!r}",
-        ) from exc
+        why = (f"a value does not fit a Decimal at scale {plan.scale} in int64 (at most "
+               f"{(2 ** 63 - 1) / 10 ** plan.scale}): {exc!r}" if plan.scale is not None
+               else f"frame-tier cast to {plan.cast} failed: {exc!r}")
+        raise NeedsKernelSplit(plan.name, series.dtype, reason=why) from exc
 
 
 def cast_frame(frame: pl.DataFrame, casts: Sequence[tuple[int, ColumnPlan]]) -> pl.DataFrame:
@@ -124,7 +124,7 @@ def _natural(dtype: pl.DataType) -> type:
     for kind in (STR, CODE, BOOL, I64):
         if base in _NATIVE[kind]:
             return _NATURAL[kind]
-    return int if base is pl.Decimal else float
+    return float
 
 
 def explain_boundary(frame: pl.DataFrame, inputs: Sequence[Input] | None = None) -> list[ColumnPlan]:

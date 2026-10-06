@@ -5,7 +5,7 @@ from typing import Iterator, Literal
 
 from decider._annotations import Money, metadata_of
 from decider.checks._base import Check, CheckContext
-from decider.checks._builtin.numeric._scope import FLOAT, INT, kind_of, scopes
+from decider.checks._builtin.numeric._scope import DEC, FLOAT, INT, kind_of, scopes
 from decider.checks._report import Finding, Severity
 
 __all__ = ["BareRound", "DivisionByVariable", "FloatMoney", "Int64Overflow", "IntTrueDivision"]
@@ -18,7 +18,7 @@ def _both_const(e: ast.BinOp) -> bool:
 
 
 class Int64Overflow(Check):
-    """Integer `*`, `**`, `<<` and a running `+=` in a loop wrap silently past int64; an error when money in cents is involved."""
+    """Integer `*`, `**`, `<<` and a running `+=` in a loop wrap silently past int64; an error when a Decimal is involved."""
 
     type: Literal["int64_overflow"] = "int64_overflow"
     code = "DCD101"
@@ -32,16 +32,19 @@ class Int64Overflow(Check):
                     op, operands = e.op, ast.BinOp(e.target, e.op, e.value)
                 else:
                     continue
-                if scope.type_of(operands.left) != INT or scope.type_of(operands.right) != INT:
+                kinds = (scope.type_of(operands.left), scope.type_of(operands.right))
+                decimal = DEC in kinds and FLOAT not in kinds
+                if not decimal and kinds != (INT, INT):
                     continue
-                cents = scope.has_cents(e)
                 text = ast.unparse(e)
-                verb = "a running total" if isinstance(e, ast.AugAssign) else "an integer product"
-                yield ctx.finding(node, f"{node.origin.path}: {text} is {verb} in int64, which wraps silently"
-                                  + (" on money in cents" if cents else ""),
-                                  "bound the operands, or compute in float64 (exact to 2**53)", line=src.line(e),
-                                  severity=Severity.ERROR if cents and self.severity is Severity.WARNING else None,
-                                  expression=text, money=cents)
+                verb = "a running total" if isinstance(e, ast.AugAssign) else "a product"
+                yield ctx.finding(node, f"{node.origin.path}: {text} is {verb} in int64, "
+                                  + ("which raises OverflowError in Python and wraps silently in a compiled step, on a Decimal"
+                                     if decimal else "which wraps silently"),
+                                  "bound the operands" + ("" if decimal else ", or compute in float64 (exact to 2**53)"),
+                                  line=src.line(e),
+                                  severity=Severity.ERROR if decimal and self.severity is Severity.WARNING else None,
+                                  expression=text, money=decimal)
 
 
 def _in_loop(scope, e: ast.AST) -> bool:
@@ -53,7 +56,7 @@ def _in_loop(scope, e: ast.AST) -> bool:
 
 
 class FloatMoney(Check):
-    """Money held as a float, float arithmetic returned as cents, and `int(x * 100)` truncation."""
+    """Money held as a float (`Money()` on a float), a float returned into a Decimal output, and `int(x * 100)` truncation."""
 
     type: Literal["float_money"] = "float_money"
     code = "DCD102"
@@ -62,12 +65,11 @@ class FloatMoney(Check):
         for node, src, scope in scopes(ctx):
             path = node.origin.path
             floats = [d.name for d in (*(node.inputs or ()), *(node.outputs or ()))
-                      if isinstance(m := metadata_of(d.annotation), Money) and not m.cents
-                      and kind_of(d.annotation) == FLOAT]
+                      if isinstance(metadata_of(d.annotation), Money) and kind_of(d.annotation) == FLOAT]
             if floats:
                 yield ctx.finding(node, f"{path}: {', '.join(floats)} holds money as a float; cents drift in float",
-                                  "annotate Money(cents=True) and keep an int of cents", names=floats)
-            cents_out = any(isinstance(m := metadata_of(o.annotation), Money) and m.cents for o in node.outputs or ())
+                                  "annotate it Currency, which is exact to four places", names=floats)
+            decimal_out = any(kind_of(o.annotation) == DEC for o in node.outputs or ())
             for e in scope.walk():
                 if isinstance(e, ast.Call) and isinstance(e.func, ast.Name) and e.func.id == "int" and e.args:
                     inner = e.args[0]
@@ -77,10 +79,11 @@ class FloatMoney(Check):
                         yield ctx.finding(node, f"{path}: {text} truncates toward zero, so a cent is lost on .xx9",
                                           "round with decider.ops.decimal.round before the cast", line=src.line(e),
                                           expression=text, kind="truncation")
-                elif cents_out and isinstance(e, ast.Return) and e.value is not None and scope.type_of(e.value) == FLOAT:
+                elif decimal_out and isinstance(e, ast.Return) and e.value is not None and scope.type_of(e.value) == FLOAT:
                     text = ast.unparse(e.value)
-                    yield ctx.finding(node, f"{path}: returns float {text} into a cents output", "round it to an int of cents",
-                                      line=src.line(e), expression=text, kind="float_to_cents")
+                    yield ctx.finding(node, f"{path}: returns float {text} into a Decimal output",
+                                      "return a Decimal: multiply a Decimal by the float, or build one with Currency(major, minor)",
+                                      line=src.line(e), expression=text, kind="float_to_decimal")
 
 
 class BareRound(Check):
@@ -91,7 +94,7 @@ class BareRound(Check):
 
     def run(self, ctx: CheckContext) -> Iterator[Finding]:
         for node, src, scope in scopes(ctx):
-            money = scope.money_output() is not None
+            money = scope.money_output()
             builtin_round = getattr(node.fn, "__globals__", {}).get("round", round) is round
             for e in scope.walk():
                 if not isinstance(e, ast.Call):

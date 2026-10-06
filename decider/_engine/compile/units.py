@@ -10,10 +10,10 @@ from decider._engine.compile.njit import FALLBACK_ERRORS, compile_call, numpy_dt
 from decider._engine.compile.rows import Ragged
 from decider._engine.compile.sink import Sink
 from decider._engine.compile.structs import Schema, struct_dtype, struct_schema
-from decider._engine.ir.decls import Input, NullPolicy, base_annotation, nullable
+from decider._engine.ir.decls import Input, NullPolicy, base_annotation, is_typed, nullable
 from decider._engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, ScatterGather, Sequence, NodeVersion
 from decider._annotations import struct_item
-from decider._engine.types import columnar_item, item_schema
+from decider._engine.types import columnar_item, decimal_boxer, decimal_scale, item_schema, to_raw
 
 Values = dict[int, np.ndarray]
 
@@ -122,7 +122,7 @@ class Fallback:
     Same `run` and `writes` as `Kernel`; it stores every version it writes.
     """
 
-    __slots__ = ("calls", "fn", "reason", "declared", "writes")
+    __slots__ = ("calls", "fn", "reason", "declared", "writes", "_boxes", "_scales")
 
     def __init__(self, call: Call, fn, reason: str, declared: bool = False):
         self.calls = (call,)
@@ -132,9 +132,14 @@ class Fallback:
         # Python values come back as they are: a `str`, `dict`, `list` or `date` output is stored as an object.
         self.writes = tuple(
             (v, output_dtype(o.annotation) if literal_choices(o.annotation) is not None
-             or base_annotation(o.annotation) in (float, int, bool) else np.dtype(object))
+             or is_typed(base_annotation(o.annotation)) else np.dtype(object))
             for v, o in zip(call.writes, call.node.outputs)
         )
+        # A Decimal reaches the Python body as a Decimal, and what it returns is stored as its int64.
+        node = call.node
+        self._boxes = ({i.arg: b for i in node.inputs if (b := decimal_boxer(i.annotation))}
+                       | {d.arg: b for d in node.params if (b := decimal_boxer(d.annotation))})
+        self._scales = tuple(decimal_scale(o.annotation) for o in node.outputs)
 
     def run(self, values: Values, valid: Values, bundles: Mapping[int, tuple], n: int) -> None:
         call = self.calls[0]
@@ -146,17 +151,22 @@ class Fallback:
         masks = [np.ones(n, np.bool_) for _ in outs]
         consts = tuple(v for _, v in node.consts)
         fixed = dict(node.consts) | {d.arg: b for d, b in zip(node.params, bundle)}
+        boxes = self._boxes
+        fixed = {a: boxes[a](x) if a in boxes else x for a, x in fixed.items()}
         for r in range(n):
-            args = [(a, None if m is not None and not m[r] else col[r]) for a, col, m in cols]
+            args = [(a, None if m is not None and not m[r] else boxes[a](col[r]) if a in boxes else col[r])
+                    for a, col, m in cols]
             if node.kind == "row":
                 result = self.fn(tuple(x for _, x in args), bundle, consts)
             else:
                 result = self.fn(**dict(args), **fixed)
             if len(outs) == 1 and node.kind == "scalar":
                 result = (result,)
-            for out, mask, x in zip(outs, masks, result):
+            for out, mask, x, scale in zip(outs, masks, result, self._scales):
                 if x is None:
                     mask[r], x = False, 0
+                elif scale is not None:
+                    x = to_raw(x, scale)
                 out[r] = x
         for v, out, mask, o in zip(call.writes, outs, masks, node.outputs):
             values[v.id] = out
@@ -364,6 +374,11 @@ def _kept(plan: Plan) -> tuple[set[int], dict[int, set[int]]] | None:
     return pinned, readers
 
 
+def _decimal(source: tuple, annotation: Any) -> tuple:
+    scale = decimal_scale(annotation)
+    return source if scale is None else (SrcKind.DEC, scale, source)
+
+
 class Layout:
     """Where each value of one kernel comes from: the columns it reads, the params it takes, the calls' results.
 
@@ -415,6 +430,8 @@ class Layout:
     def spec(self, call: Call, key: str, fn) -> Spec:
         node = call.node
         sources = [self.source(v, inp) for inp, v in zip(node.inputs, call.reads)]
+        if node.kind != "row":
+            sources = [_decimal(src, inp.annotation) for src, inp in zip(sources, node.inputs)]
         consts = tuple(v for _, v in node.consts)
         if node.params or consts or node.kind == "row":
             self.layout.append((call.id, bool(node.params), consts, node.kind == "row"))
@@ -425,7 +442,7 @@ class Layout:
             self._p += 2
         else:
             by_arg = {i.arg: src for i, src in zip(node.inputs, sources)}
-            by_arg |= {d.arg: (SrcKind.PAR, p + k) for k, d in enumerate(node.params)}
+            by_arg |= {d.arg: _decimal((SrcKind.PAR, p + k), d.annotation) for k, d in enumerate(node.params)}
             p += len(node.params)
             by_arg |= {name: (SrcKind.PAR, p + k) for k, (name, _) in enumerate(node.consts)}
             self._p = p + len(node.consts)
@@ -447,10 +464,12 @@ class Layout:
         dtypes = tuple(output_dtype(o.annotation) for o in node.outputs)
         nulls = tuple(nullable(o.annotation) for o in node.outputs)
         structs = tuple(struct_item(base_annotation(o.annotation)) is not None for o in node.outputs)
+        scales = tuple(decimal_scale(o.annotation) for o in node.outputs)
         s, self._specs = self._specs, self._specs + 1
         self.produced.update((v.id, (SrcKind.RES, s, k)) for k, v in enumerate(call.writes))
         return Spec(key, fn, args, dtypes, node.kind == "row" or len(dtypes) > 1,
-                    nulls if any(nulls) else (), structs if any(structs) else ())
+                    nulls if any(nulls) else (), structs if any(structs) else (),
+                    scales if any(sc is not None for sc in scales) else ())
 
 
 def _kernel(compiled: list, keep) -> Kernel:

@@ -8,7 +8,7 @@ from decider._engine.ir.decls import Input, NullPolicy, Output, ParamDecl, nulla
 from decider._engine.params.declare import MissingAs, ParamSpec, is_plain_marker
 from decider._engine.params.tables import table_type
 from decider.exceptions import IRError
-from decider._engine.types import hoist_metadata
+from decider._engine.types import decimal_info, hoist_metadata
 
 _EMPTY = inspect.Parameter.empty
 
@@ -40,7 +40,12 @@ def harvest(
 
         inputs, params, outs = harvest(cap_by_income)
     """
-    sig = inspect.signature(fn, eval_str=True)
+    try:
+        sig = inspect.signature(fn, eval_str=True)
+        for p in (*sig.parameters.values(), sig.return_annotation):
+            decimal_info(getattr(p, "annotation", p))
+    except (TypeError, ValueError) as e:
+        raise IRError(f"{fn.__qualname__}: {e}") from None
     inputs: list[Input] = []
     params: list[ParamDecl] = []
     for name, p in sig.parameters.items():

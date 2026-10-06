@@ -229,7 +229,9 @@ export interface Lineage {
 export interface FieldMeta {
   kind: string;
   symbol?: string;
-  cents?: boolean;
+  precision?: number;
+  scale?: number;
+  units?: string;
   unit?: string;
   /** Not declared: guessed from the value's name. */
   assumed?: boolean;
@@ -394,7 +396,8 @@ export function formatValue(v: unknown, name?: string): string {
   if (typeof v !== "number") return typeof v === "string" ? v : JSON.stringify(v);
   const f = fieldOf(name, v);
   if (f?.kind === "percent") return `${Number((v * 100).toFixed(2))}%`;
-  if (f?.kind === "money") return `${f.symbol ?? "R"}\u00a0${(f.cents ? v / 100 : v).toLocaleString("en-US", { useGrouping: false, minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (f?.kind === "money") return `${f.symbol ?? "R"}\u00a0${v.toLocaleString("en-US", { useGrouping: false, minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (f?.kind === "decimal") return `${f.units ? `${f.units}\u00a0` : ""}${v.toFixed(f.scale ?? 2).replace(/(\.\d\d)0+$/, "$1")}`;
   if (f?.kind === "duration") return `${plain(v, 2)} ${v === 1 ? f.unit?.replace(/s$/, "") : f.unit}`;
   return plain(v, Math.abs(v) >= 100 ? 2 : 4);
 }

@@ -10,7 +10,9 @@ from numba.core import cgutils, types
 from numba.core.typing import signature
 from numba.extending import intrinsic
 
+from decider._engine.compile.decimal_type import DecimalType
 from decider._engine.compile.rows import rows_class
+from decider._engine.compile.semantics.decimals import store_as
 from decider._engine.compile.span import SPAN
 from decider._engine.concurrency import Cache, once
 from decider._engine.trace.envelope import ITER_SHIFT, Kind, pack
@@ -26,6 +28,7 @@ class SrcKind(str, Enum):
     RAG = "rag"    # ragged column: row i's items sliced from flat arrays
     SINK = "sink"  # a growable output buffer, shared by every row (not indexed by i)
     ROW = "row"    # tuple of sub-sources packed into a single argument
+    DEC = "dec"    # an int64 source typed as a decimal of the given scale
 
 
 def _slice(arr, lo, hi):
@@ -40,11 +43,13 @@ class Spec(NamedTuple):
     element, or `None` where validity mask m is false; `("res", s, k)` is
     output k of call s of this kernel; `("var", v)` is variable v (set by a
     `Fork` or `Repeat`); `("par", p)` is `params[p]`;
-    `("row", (source, ...))` is a tuple of sources; `("rag", schema, b)` is
+    `("row", (source, ...))` is a tuple of sources; `("dec", scale, source)` is
+    an int64 source seen as a decimal of that scale; `("rag", schema, b)` is
     row i's items, sliced out of `flats[b:]` (`lo`, `hi`, then one flat array
     per field of `schema`); `("sink", b)` is `sinks[b]`, a growable output
     buffer shared by every row of this call. `dtypes` are the declared dtypes of the outputs;
-    `unpack` means `fn` returns a tuple of them. `nullable[k]` marks an output
+    `unpack` means `fn` returns a tuple of them. `scales[k]` is the scale of an
+    output declared a Decimal, which is stored as its int64 at that scale. `nullable[k]` marks an output
     declared `T | None`: it may be `None`. `structs[k]` marks a `Struct[Item]`
     output, whose `fn` returns a tuple of its fields.
     """
@@ -56,6 +61,7 @@ class Spec(NamedTuple):
     unpack: bool
     nullable: tuple[bool, ...] = ()
     structs: tuple[bool, ...] = ()
+    scales: tuple[int | None, ...] = ()
 
 
 class Fork(NamedTuple):
@@ -151,7 +157,7 @@ def _key(program: tuple) -> tuple:
     out = []
     for x in program:
         if isinstance(x, Spec):
-            out.append((x.key, x.args, x.dtypes, x.unpack, x.nullable, x.structs))
+            out.append((x.key, x.args, x.dtypes, x.unpack, x.nullable, x.structs, x.scales))
         elif isinstance(x, Fork):
             out.append(("fork", x.test, tuple(_key(a) for a in x.arms), x.merges))
         else:
@@ -237,6 +243,15 @@ def _row_body(program: tuple, outputs: tuple[tuple, ...], variables: tuple[np.dt
             if kind == SrcKind.PAR:
                 # Flattened params array element
                 return builder.extract_value(params_v, src[1]), params.types[src[1]]
+            if kind == SrcKind.DEC:
+                # The same int64 bits under the decimal type; an optional stays optional.
+                v, t = load(src[2])
+                dt = DecimalType(src[1])
+                if isinstance(t, types.Optional):
+                    opt = context.make_helper(builder, t, value=v)
+                    some = context.make_optional_value(builder, dt, opt.data)
+                    return builder.select(opt.valid, some, context.make_optional_none(builder, dt)), types.Optional(dt)
+                return v, dt
             if kind == SrcKind.RAG:
                 # Ragged columnar input: slice row i's items out of flat arrays
                 return rag(src[1], src[2])
@@ -286,6 +301,15 @@ def _row_body(program: tuple, outputs: tuple[tuple, ...], variables: tuple[np.dt
                 set_c = context.get_function(operator.setitem, signature(types.none, cursor, ip, i64))
                 set_c(builder, (cursor_v, zero, builder.add(idx, context.get_constant(i64, 1))))
 
+        def stored(part, scale):
+            # A decimal output is stored as its int64 at the declared scale: coarser rounds half-even.
+            v, t = part
+            fn = store_as(t, scale)
+            if fn is None:
+                return part
+            ret = types.Optional(types.int64) if isinstance(t, types.Optional) else types.int64
+            return context.compile_internal(builder, fn, signature(ret, t), [v]), ret
+
         def call(spec, arm, iteration):
             loaded = [load(s) for s in spec.args]
             fnty = typeof(spec.fn)
@@ -298,6 +322,9 @@ def _row_body(program: tuple, outputs: tuple[tuple, ...], variables: tuple[np.dt
             nullable = spec.nullable or (False,) * len(spec.dtypes)
             structs = spec.structs or (False,) * len(spec.dtypes)
             wants = [types.Optional(from_dtype(d)) if o else from_dtype(d) for d, o in zip(spec.dtypes, nullable)]
+            for k, scale in enumerate(spec.scales):
+                if scale is not None:
+                    parts[k] = stored(parts[k], scale)
             # A struct output's step returns a tuple of its fields (pack them into a record), or an
             # already-record value (copy it); a non-tuple, non-record return (a dict) cannot be
             # stored, so the kernel falls back.

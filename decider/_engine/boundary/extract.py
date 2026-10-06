@@ -12,7 +12,8 @@ from decider._engine.boundary._arrow.view import FrameView
 from decider._engine.boundary.dtypes import ColumnPlan, cast_frame, plan_column
 from decider._engine.boundary.nulls import check_required
 from decider._engine.concurrency import checkin, checkout
-from decider._engine.ir.decls import FeatureKind, Input, NullPolicy, feature_kind
+from decider._engine.ir.decls import FeatureKind, Input, NullPolicy, feature_kind, stored_fill
+from decider._engine.types import decimal_scale
 
 
 # A NamedTuple: a frozen dataclass costs a microsecond more a column on a one-row call.
@@ -56,18 +57,21 @@ class _SchemaPlan:
         casts, specs = [], []
         for decl in inputs:
             kind = feature_kind(decl.annotation)
-            plan = plan_column(decl.name, dtypes[position[decl.name]], kind)
+            scale = decimal_scale(decl.annotation)
+            plan = plan_column(decl.name, dtypes[position[decl.name]], kind, scale)
             self.plans[decl.name] = plan
             if plan.cast is not None:
                 casts.append((position[decl.name], plan))
-            specs.append(ColumnSpec(decl.name, kind, _fill_for(decl, kind)))
+            specs.append(ColumnSpec(decl.name, kind, _fill_for(decl, kind, scale)))
         self.casts = tuple(casts)
         self.frame_plan = FramePlan(specs, columns) if specs else None
 
 
-def _fill_for(decl: Input, kind: FeatureKind):
+def _fill_for(decl: Input, kind: FeatureKind, scale: int | None):
     if decl.null_policy is not NullPolicy.MISSING_AS:
         return None
+    if scale is not None:
+        return stored_fill(decl)
     if kind is FeatureKind.CODE and isinstance(decl.fill, str):
         raise ValueError(
             f"input '{decl.name}' is a `str` column with a string fill {decl.fill!r}; a `str` "

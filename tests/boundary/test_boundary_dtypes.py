@@ -79,47 +79,62 @@ def test_a_pair_with_no_cast_is_left_for_the_import_to_refuse(dtype, kind):
     assert plan.cast is None and "refuses it" in plan.note
 
 
-def test_decimal_casts_to_money_scaled_int64_cents():
+def mantissa(series, scale):
+    return cast_series(series, plan_column(series.name, series.dtype, K.I64, scale))
+
+
+def test_a_decimal_reads_as_its_int64_mantissa_at_the_declared_scale():
     s = pl.Series("amount", [Decimal("19.99"), Decimal("5.00"), None], dtype=pl.Decimal(18, 2))
-    out = cast_series(s, plan_column("amount", s.dtype, K.I64))
+    out = mantissa(s, 2)
     assert out.dtype == pl.Int64 and out.to_list() == [1999, 500, None]
+    assert mantissa(s, 4).to_list() == [199900, 50000, None]
 
 
-def test_decimal_rescales_from_any_source_scale_to_cents():
-    s = pl.Series("amount", [Decimal("19.9950")], dtype=pl.Decimal(18, 4))
-    assert cast_series(s, plan_column("amount", s.dtype, K.I64)).to_list() == [1999]
+def test_a_decimal_of_another_scale_is_rescaled_half_even():
+    s = pl.Series("amount", [Decimal("19.9950"), Decimal("19.9850"), Decimal("-19.9950"), Decimal("19.9951")], dtype=pl.Decimal(18, 4))
+    assert mantissa(s, 2).to_list() == [2000, 1998, -2000, 2000]
     s = pl.Series("amount", [Decimal("7")], dtype=pl.Decimal(18, 0))
-    assert cast_series(s, plan_column("amount", s.dtype, K.I64)).to_list() == [700]
+    assert mantissa(s, 2).to_list() == [700]
 
 
-def test_a_negative_decimal_truncates_toward_zero_like_a_positive_one():
-    s = pl.Series("amount", [Decimal("19.9950"), Decimal("-19.9950")], dtype=pl.Decimal(18, 4))
-    assert cast_series(s, plan_column("amount", s.dtype, K.I64)).to_list() == [1999, -1999]
+def test_an_integer_column_declared_a_decimal_is_whole_units():
+    s = pl.Series("amount", [3, -4, None], dtype=pl.Int32)
+    plan = plan_column("amount", s.dtype, K.I64, 2)
+    assert plan.cast == pl.Int64() and plan.scale == 2
+    assert cast_series(s, plan).to_list() == [300, -400, None]
 
 
-def test_decimal_declared_float_arrives_as_cents_too():
+def test_a_float_column_declared_a_decimal_is_left_for_the_import_to_refuse():
+    plan = plan_column("amount", pl.Float64(), K.I64, 2)
+    assert plan.cast is None and "not a Decimal column" in plan.note
+
+
+def test_a_decimal_column_declared_float_casts_to_the_value_in_the_frame_tier():
     s = pl.Series("amount", [Decimal("1.25")], dtype=pl.Decimal(10, 2))
     out = cast_series(s, plan_column("amount", s.dtype, K.F64))
-    assert out.dtype == pl.Float64 and out.to_list() == [125.0]
+    assert out.dtype == pl.Float64 and out.to_list() == [1.25]
 
 
-def test_a_decimal_that_overflows_int64_needs_a_kernel_split_not_a_crash():
+def test_a_decimal_that_does_not_fit_int64_at_the_scale_needs_a_kernel_split_not_a_crash():
     s = pl.Series("m", [Decimal("9" * 30)], dtype=pl.Decimal(38, 0))
-    with pytest.raises(NeedsKernelSplit, match=r"column 'm'.*frame-tier cast to Int64 failed"):
-        cast_series(s, plan_column("m", s.dtype, K.I64))
+    with pytest.raises(NeedsKernelSplit, match=r"column 'm'.*does not fit a Decimal at scale 0"):
+        mantissa(s, 0)
+    s = pl.Series("m", [Decimal("922337203685478")], dtype=pl.Decimal(38, 0))
+    with pytest.raises(NeedsKernelSplit, match=r"column 'm'.*does not fit a Decimal at scale 4"):
+        mantissa(s, 4)
 
 
 def test_a_rust_panic_during_a_cast_is_caught_even_though_it_is_not_an_exception(monkeypatch):
     class FakePanic(BaseException):
         pass
 
-    def _boom(series, **kw):
+    def _boom(series, scale):
         raise FakePanic("pretend Rust panic")
 
-    monkeypatch.setattr(dtypes_mod, "_decimal_as_cents", _boom)
+    monkeypatch.setattr(dtypes_mod, "decimal_mantissa", _boom)
     s = pl.Series("m", [Decimal("1.23")], dtype=pl.Decimal(18, 2))
     with pytest.raises(NeedsKernelSplit, match="FakePanic"):
-        cast_series(s, plan_column("m", s.dtype, K.I64))
+        mantissa(s, 2)
 
 
 def test_temporal_columns_declared_float_cast_through_their_storage_integer():
