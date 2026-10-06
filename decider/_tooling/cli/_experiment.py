@@ -14,8 +14,8 @@ def run(path: str, out: str | None) -> None:
 
     The status is one of completed, partial, non_reproducible or failed.
     """
-    from decider.experiments import RunStatus
-    from decider.experiments import run as run_experiment
+    from decider.lab.experiments import RunStatus
+    from decider.lab.experiments import run as run_experiment
 
     try:
         result = run_experiment(path, out_dir=out)

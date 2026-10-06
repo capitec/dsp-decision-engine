@@ -16,7 +16,7 @@ from decider._engine import Engine
 from decider._engine.boundary._arrow.intrinsics import load_u8
 from decider._engine.compile import Fallback, Kernel
 from decider._engine.run.representations import spans
-from decider.testing import assert_equivalent
+from decider.lab.testing import assert_equivalent
 
 COMPILED = ("stepped", "fused")
 

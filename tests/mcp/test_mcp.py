@@ -5,10 +5,10 @@ import asyncio
 import pytest
 from fastmcp.exceptions import ToolError
 
-from decider.data import read
-from decider.experiments import Experiment
+from decider.lab.data import read
+from decider.lab.experiments import Experiment
 from decider.steps._entry import import_flow
-from decider.experiments.metrics import Divergence
+from decider.lab.experiments.metrics import Divergence
 from decider._tooling.mcp import Policy, build_server
 from decider._tooling.mcp._policy import REDACTED
 

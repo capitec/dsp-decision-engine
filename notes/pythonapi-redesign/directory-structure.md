@@ -4,7 +4,7 @@ This file is the concrete plan: every current file, where it goes, and the order
 
 ## Three rules
 
-1. **A leading underscore anywhere in a path means private.** `decider/_engine/run/state.py` and `decider/checks/_run.py` are private. Everything else is public and defines `__all__`. Inside a private package, files keep their plain names, because the package underscore already says it.
+1. **A leading underscore anywhere in a path means private.** `decider/_engine/run/state.py` and `decider/lab/checks/_run.py` are private. Everything else is public and defines `__all__`. Inside a private package, files keep their plain names, because the package underscore already says it.
 2. **Public packages are thin.** A public package is an `__init__.py` (plus public subpackages such as `experiments.metrics`) over `_`-prefixed implementation files. Users import from the package, never from a file.
 3. **Layers only import downward.** Within a layer, imports are allowed if they form no cycle. Only the core may import `decider._engine`. A library that needs it goes in an allowlist with a reason, and the goal is an empty allowlist.
 
@@ -16,20 +16,19 @@ There are three groups, and they are kept as **siblings** under `decider/`, not 
 
 | Group | What's in it |
 |---|---|
-| **Core** | `decider/__init__.py`, `steps/`, the facades `ir.py`, `trace.py` and `debug.py`, `contract/`, and the private `_engine/` |
-| **Libraries** | `checks/`, `diff/`, `experiments/`, `data/`, `testing/`, `config/` |
+| **Core** | `decider/__init__.py`, `steps/`, the facades `ir.py`, `trace.py` and `debug.py`, and the private `_engine/` |
+| **Libraries** | `lab/` (`data/`, `checks/`, `diff/`, `testing/`, `experiments/`), `config/` |
 | **Tooling** | `serving/` (imported by users) and `_tooling/` (`cli/`, `mcp/`, `bridge/`: launched, never imported) |
 
-Nesting them as `decider/core/` or `decider/lib/checks` would only make import paths longer. The grouping lives in two places instead:
+Nesting whole groups as `decider/core/` or `decider/lib/checks` would only make import paths longer. The one nested group is `lab/`: `data`, `checks`, `diff`, `testing` and `experiments` are what you do to a flow away from serving, they name its parts with the same refs, and they import only one way (`data` ← `checks`/`diff`/`testing` ← `experiments`), so they share a parent that also holds the refs and `describe`. Otherwise the grouping lives in two places:
 - the top-level docstring, which gives one line per package;
 - the layer map, enforced by `tests/test_conventions.py`.
 
 ```
 L4 tooling     serving  _tooling (cli  mcp  bridge)
-L3 libraries   checks  diff  experiments  data  testing
-L2 contract    contract  (refs, describe, manifest, jobs, bridge messages, schemas)
+L3 libraries   lab (refs + describe; data  checks  diff  testing  experiments)
 L1 core        decider/__init__  steps  ir  trace  debug  _engine  config
-L0 foundation  exceptions  registry  ops  _settings  _suggest  _polars_docs
+L0 foundation  exceptions  registry  ops  _settings  _suggest
 ```
 
 ## Target tree
@@ -48,10 +47,6 @@ decider/
 ├── debug.py                    NEW facade: Session + event models (Paused NodeFinished ... WarningEvent ErrorEvent)
 ├── _settings.py                ← settings.py; lazy get_settings(), adds checks_path beside datasets_path
 ├── _suggest.py                 ← registry/resolve.py (did-you-mean)
-├── _polars_docs/               ← serializable/ (DataFrame → FrameDoc)
-│   ├── __init__.py
-│   ├── frame.py                ← serializable/dataframe.py
-│   └── schema.py               ← serializable/schema.py
 │
 ├── ops/                        NEW public: functions users call in a step, Python and kernel alike (kernel-functions.md)
 │   ├── __init__.py             re-exports each domain's type: Text Currency Decimal Columnar Struct Percent
@@ -104,6 +99,7 @@ decider/
 │   ├── debug/                  ← engine/debug/ minus controls.py and lineage.py; commands/wire stay here
 │   ├── ir/                     ← engine/ir/
 │   ├── params/                 ← engine/params/ (Table → ParamTable)
+│   │   └── polars_docs/        ← serializable/: DataFrame → FrameDoc, dtype schema (frame.py, schema.py)
 │   ├── run/                    ← engine/run/
 │   ├── trace/                  ← engine/trace/ (envelope stays; sink is exported via decider.trace)
 │   ├── wiring/                 ← engine/wiring/ (Version → NodeVersion)
@@ -112,70 +108,64 @@ decider/
 ├── config/                     public: ConfigStore JsonFileStore Version VersionPart
 │   ├── __init__.py  _file.py  _store.py  _versions.py              ← config/
 │
-├── contract/                   public, for integrators: refs, FlowDescription, Capabilities, RunManifest, Job,
-│   │                               JobHandle, bridge messages, CONTRACT_VERSION, json_schema, typescript
-│   ├── __init__.py
-│   ├── _refs.py                ← contract/refs.py
-│   ├── _describe.py            ← contract/describe.py (describe capabilities resolve_step source_location)
-│   ├── _manifest.py            ← lifecycle/manifest.py (json_schema → manifest_schema)
-│   ├── _jobs.py                ← lifecycle/job.py
-│   ├── _messages.py            NEW pydantic models for bridge replies (protocol.ts is generated from these)
-│   └── _schema.py              ← contract/schema.py (mcp_schema deleted)
-│
-├── checks/                     public: Check CheckContext Finding Severity Report SkippedCheck run standard
-│   │                               catalogue check (decorator)
-│   ├── __init__.py
-│   ├── _model.py               ← check/models.py, + code fix file line suppressed
-│   ├── _base.py                NEW Check registry root, CheckContext, @check
-│   ├── _run.py                 ← check/run.py
-│   ├── _config.py              NEW checks.yaml / checks.json loading
-│   ├── _report.py              NEW text / SARIF
-│   ├── _ast.py                 ← checks/_common.py (step_ref goes; contract builds refs)
-│   └── _builtin/               one family per file; built-ins registered lazily in _builtin/__init__.py
+├── lab/                        public: everything done to a flow away from serving; `describe` and the refs
+│   │                               StepRef FlowRef EdgeRef ValueSlotRef RecordRef FlowDescription CONTRACT_VERSION
+│   ├── __init__.py             one line per subpackage; exports describe resolve_step source_location + the refs
+│   ├── _refs.py                ← contract/_refs.py
+│   ├── _describe.py            ← contract/_describe.py (describe resolve_step source_location)
+│   ├── data/                       public: read scan datasets dataset DatasetProvider FileProvider FolderProvider
+│   │   │                               LoadedData DatasetError LoadError RecordKeyError (+ the 3 subclasses) InputFingerprint
+│   │   ├── __init__.py
+│   │   ├── _formats.py             ← data/formats.py
+│   │   ├── _load.py                ← data/load.py (load → read; job= dropped), + InputFingerprint ← contract/_manifest.py
+│   │   ├── _keys.py                ← data/identity.py minus resolve_key and record_ref
+│   │   └── _providers/             ← data/providers/ (base.py catalog.py files.py; project_root lives here)
+│   ├── checks/                     public: Check CheckContext Finding Severity Report SkippedCheck run standard
+│   │   │                               catalogue check (decorator)
+│   │   ├── __init__.py
+│   │   ├── _model.py               ← check/models.py, + code fix file line suppressed
+│   │   ├── _base.py                NEW Check registry root, CheckContext, @check
+│   │   ├── _run.py                 ← check/run.py
+│   │   ├── _config.py              NEW checks.yaml / checks.json loading
+│   │   ├── _report.py              NEW text / SARIF
+│   │   ├── _ast.py                 ← checks/_common.py (step_ref goes; contract builds refs)
+│   │   └── _builtin/               one family per file; built-ins registered lazily in _builtin/__init__.py
+│   │       ├── __init__.py
+│   │       ├── determinism.py      ← checks/static.py (wall_clock, impure)
+│   │       ├── numeric.py          ← checks/static.py (numeric), then the DCD1xx catalogue
+│   │       ├── ids.py              ← checks/durable_ids.py
+│   │       ├── structure.py  params.py  data.py  runtime.py           NEW (data.py absorbs data/preflight.py checks;
+│   │                                                                       runtime.py ← checks/equivalence.py probe)
+│   ├── diff/                       public: structure outputs revisions prove StructureDiff OutputDiff Proof
+│   │   ├── __init__.py
+│   │   ├── _structure.py           NEW
+│   │   ├── _outputs.py             NEW, absorbs Divergence._changed from experiments/metrics/compare.py
+│   │   ├── _revisions.py           ← experiments/revision.py
+│   │   ├── _hash.py                NEW IR content hash (tier 1), replaces checks/equivalence.py _signature
+│   │   ├── _prove.py               NEW tiers
+│   │   └── _smt.py                 NEW z3 tier, `decider[prove]` extra
+│   ├── testing/                    public: assert_equivalent corpus no_recompile
+│   │   ├── __init__.py  _corpus.py  _equivalence.py  _recompile.py   ← testing/
+│   └── experiments/                public: Experiment ExperimentDef ExperimentResult Scenario ScenarioResult RunStatus
+│       │                               BASELINE run start validate; Job JobHandle RunManifest Revision …
 │       ├── __init__.py
-│       ├── determinism.py      ← checks/static.py (wall_clock, impure)
-│       ├── numeric.py          ← checks/static.py (numeric), then the DCD1xx catalogue
-│       ├── ids.py              ← checks/durable_ids.py
-│       ├── structure.py  params.py  data.py  runtime.py           NEW (data.py absorbs data/preflight.py checks;
-│                                                                       runtime.py ← checks/equivalence.py probe)
-├── diff/                       public: structure outputs revisions prove StructureDiff OutputDiff Proof
-│   ├── __init__.py
-│   ├── _structure.py           NEW
-│   ├── _outputs.py             NEW, absorbs Divergence._changed from experiments/metrics/compare.py
-│   ├── _revisions.py           ← experiments/revision.py
-│   ├── _hash.py                NEW IR content hash (tier 1), replaces checks/equivalence.py _signature
-│   ├── _prove.py               NEW tiers
-│   └── _smt.py                 NEW z3 tier, `decider[prove]` extra
-│
-├── experiments/                public: Experiment ExperimentDef ExperimentResult Scenario ScenarioResult RunStatus
-│   │                               BASELINE run start validate
-│   ├── __init__.py
-│   ├── _definition.py          ← experiments/experiments.py (models)
-│   ├── _builder.py             ← experiments/experiments.py (Experiment builder)
-│   ├── _runner.py              ← experiments/runner.py (run + run_experiment merged)
-│   ├── _entry.py               ← runner.load_flow, renamed import_flow
-│   ├── _worker.py              ← experiments/_worker.py
-│   ├── _cost.py                ← data/preflight.py CostEstimate
-│   ├── callbacks.py            public: Callback Run Batch NodeBatch Progress WriteOutputs (JobProgress private)
-│   ├── metrics/                public: Metric Summary MetricRef Counts Describe Divergence Divergences Flows
-│   │   │                           BranchFlows Histogram Bins Stats ValueCounts
-│   │   ├── __init__.py  _base.py  _compare.py  _outputs.py  _paths.py   ← metrics/
-│   ├── plots/                  public: Plot PlotRef Figure Bars Changes Distribution Ranges Sankey require_altair
-│   │   ├── __init__.py  _base.py  _bars.py  _distributions.py  _sankey.py  ← plots/
-│   └── report/                 public: Report Block BlockRef Overview Text Table Chart MetricSection Row Section
-│       ├── __init__.py
-│       └── _blocks.py          ← experiments/report.py
-│
-├── data/                       public: read scan datasets dataset DatasetProvider FileProvider FolderProvider
-│   │                               LoadedData DatasetError LoadError RecordKeyError (+ the 3 subclasses)
-│   ├── __init__.py
-│   ├── _formats.py             ← data/formats.py
-│   ├── _load.py                ← data/load.py (load → read; job= dropped)
-│   ├── _keys.py                ← data/identity.py minus resolve_key and record_ref
-│   └── _providers/             ← data/providers/ (base.py catalog.py files.py; project_root lives here)
-│
-├── testing/                    public: assert_equivalent corpus no_recompile
-│   ├── __init__.py  _corpus.py  _equivalence.py  _recompile.py   ← testing/
+│       ├── _definition.py          ← experiments/experiments.py (models)
+│       ├── _builder.py             ← experiments/experiments.py (Experiment builder)
+│       ├── _runner.py              ← experiments/runner.py (run + run_experiment merged)
+│       ├── _entry.py               ← runner.load_flow, renamed import_flow
+│       ├── _worker.py              ← experiments/_worker.py
+│       ├── _cost.py                ← data/preflight.py CostEstimate
+│       ├── _jobs.py                ← contract/_jobs.py (Job JobHandle JobStatus PartialResult)
+│       ├── _manifest.py            ← contract/_manifest.py (RunManifest Revision ResultRef …; manifest_schema)
+│       ├── callbacks.py            public: Callback Run Batch NodeBatch Progress WriteOutputs (JobProgress private)
+│       ├── metrics/                public: Metric Summary MetricRef Counts Describe Divergence Divergences Flows
+│       │   │                           BranchFlows Histogram Bins Stats ValueCounts
+│       │   ├── __init__.py  _base.py  _compare.py  _outputs.py  _paths.py   ← metrics/
+│       ├── plots/                  public: Plot PlotRef Figure Bars Changes Distribution Ranges Sankey require_altair
+│       │   ├── __init__.py  _base.py  _bars.py  _distributions.py  _sankey.py  ← plots/
+│       └── report/                 public: Report Block BlockRef Overview Text Table Chart MetricSection Row Section
+│           ├── __init__.py
+│           └── _blocks.py          ← experiments/report.py
 │
 ├── serving/                    public: RequestHandler
 │   ├── __init__.py
@@ -195,6 +185,8 @@ decider/
         ├── __init__.py  __main__.py  bridge.py  datasets.py  draft.py  experiment.py  forks.py
         ├── loading.py  replay.py  rows.py  run.py  runs.py  timeline.py              ← debug_bridge/
         ├── describing.py           ← contract/describing.py
+        ├── protocol.py             ← contract/_messages.py + Capabilities capabilities (protocol.ts is generated from it)
+        ├── schema.py               ← contract/_schema.py (json_schema typescript for the refs)
         ├── controls.py             ← engine/debug/controls.py
         └── lineage.py              ← engine/debug/lineage.py
 ```
@@ -230,16 +222,16 @@ Step ConfigurableStep Value ParamRef StepRef
 DeciderError FallbackWarning
 ```
 
-`Session` stays in `decider.debug` with the events it emits, so you write `from decider.debug import Session`. `Step.session()` is typed with it. `describe` is the one deliberate second path: it lives in `decider.contract` for integrators and at top level for users.
+`Session` stays in `decider.debug` with the events it emits, so you write `from decider.debug import Session`. `Step.session()` is typed with it. `describe` is the one deliberate second path: it lives in `decider.lab` beside the refs it returns and at top level for users.
 
 ## Outside `decider/`
 
 | Where | Change |
 |---|---|
-| `tools/vscode-decider/src/python.ts:31` | `-m decider.debug_bridge` → `-m decider._bridge` |
-| `tools/vscode-decider/src/debugging.ts:46` | `decider.debug_bridge.run` → `decider._bridge.run` |
-| `tools/vscode-decider/src/locate.ts:5` | `decider.debug_bridge.run` → `decider._bridge.run` |
-| `tools/decider-ui/src/model/protocol.ts` | generated from `contract._messages` (phase 5) |
+| `ui/vscode/src/python.ts:31` | `-m decider.debug_bridge` → `-m decider._bridge` |
+| `ui/vscode/src/debugging.ts:46` | `decider.debug_bridge.run` → `decider._bridge.run` |
+| `ui/vscode/src/locate.ts:5` | `decider.debug_bridge.run` → `decider._bridge.run` |
+| `ui/lib/src/model/protocol.ts` | generated from `_tooling/bridge/protocol.py` (phase 5) |
 | `pyproject.toml` | `fastmcp` → `mcp` extra; new `prove` extra (`z3-solver`); entry-point groups documented |
 | `tests/` | `check/` → `checks/`, `lifecycle/` → `contract/`, `debug_bridge/` → `bridge/`, new `diff/`; others unchanged; tests may import private modules |
 | `CLAUDE.md` | engine rule now names `_engine/`; Layout points at this file; layer rule added |
@@ -267,7 +259,7 @@ Phase 3 is the big diff. It is mechanical, so it can be split across worktrees w
 Add these to `tests/test_conventions.py`, next to the line limit:
 
 1. **Public modules define `__all__`.** A module is public when no path segment starts with `_`.
-2. **No private imports across packages.** `decider.<a>._x` may be imported only from inside `decider/<a>/`. `_engine` may be imported only from core (`decider/__init__.py`, `steps`, `ir.py`, `trace.py`, `debug.py`, `contract`) and from an allowlist with a reason. The likely first entries are `diff` (the fingerprint), `checks` and `experiments`, until `describe()` covers what they read.
+2. **No private imports across packages.** `decider.<a>._x` may be imported only from inside `decider/<a>/`. `_engine` may be imported only from core (`decider/__init__.py`, `steps`, `ir.py`, `trace.py`, `debug.py`) and from an allowlist with a reason. The likely first entries are `diff` (the fingerprint), `checks` and `experiments`, until `describe()` covers what they read.
 3. **Layer map.** Each top-level package gets a layer. An upward import fails, and so does a cycle within a layer. Lazy imports inside functions count too, unless they are allowlisted.
 4. **`__all__` budget.** A public package with more than 25 names needs an allowlist entry.
 5. **No per-call state on shared objects.** Runner classes and `Executable` in `_engine/run/` never assign or mutate `self.<attr>` outside `__init__` and the lock-held compile (`thread-safety.md`).

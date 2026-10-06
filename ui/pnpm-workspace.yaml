@@ -1,0 +1,7 @@
+packages:
+  - lib
+  - vscode
+  - jupyterlab-decider
+allowBuilds:
+  '@fortawesome/fontawesome-free': true
+  '@vscode/vsce-sign': true

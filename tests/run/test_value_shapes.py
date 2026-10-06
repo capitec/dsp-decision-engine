@@ -12,7 +12,7 @@ from decider import Engine, flow, missing_as
 from decider.ops import Columnar, Struct
 from decider.ops import Text
 from decider.exceptions import FallbackWarning
-from decider.testing import assert_equivalent
+from decider.lab.testing import assert_equivalent
 
 COMPILED = ("stepped", "fused")
 

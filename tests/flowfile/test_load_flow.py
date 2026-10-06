@@ -9,7 +9,7 @@ from decider._engine import step_map
 from decider.steps.flowfile import load_flow
 from decider.steps._configurable import ConfigurableStep
 from decider.steps.trees import expr_condition
-from decider.testing import assert_equivalent
+from decider.lab.testing import assert_equivalent
 from tests.flowfile import components as comp
 
 FRAME = pl.DataFrame({

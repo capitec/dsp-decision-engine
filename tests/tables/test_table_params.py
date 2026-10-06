@@ -6,7 +6,7 @@ from decider import flow
 from decider._engine import Engine
 from decider.exceptions import ParamsError
 from decider.steps.tables import DecisionTableConfig
-from decider.testing import no_recompile
+from decider.lab.testing import no_recompile
 
 COLUMNS = {"lo": "Float64", "hi": "Float64", "band": {"type": "Enum", "categories": ["low", "mid", "high"]},
            "pts": "Int64", "keys": {"type": "List", "inner": "String"}}

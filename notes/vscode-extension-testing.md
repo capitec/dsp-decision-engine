@@ -1,6 +1,6 @@
 # Testing the VS Code extension
 
-The prototype in `tools/vscode-decider/` is tested at four levels. Each one
+The prototype in `ui/vscode/` is tested at four levels. Each one
 catches things the others can't.
 
 | Level | Tool | Catches |

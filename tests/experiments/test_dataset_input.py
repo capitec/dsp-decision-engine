@@ -6,10 +6,10 @@ import polars as pl
 import pytest
 from pydantic import ValidationError
 
-from decider.data import DatasetError
+from decider.lab.data import DatasetError
 from decider._tooling.bridge.bridge import Bridge
-from decider.experiments import Experiment, ExperimentDef, run
-from decider.experiments._experiments import InputSpec
+from decider.lab.experiments import Experiment, ExperimentDef, run
+from decider.lab.experiments._experiments import InputSpec
 
 
 @pytest.fixture

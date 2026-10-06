@@ -4,7 +4,7 @@
 Judges vary by about ±0.3 on the same screenshots, so a single score above 8 was confirmed with a second one.
 Round 21 (two judges, mean 7.8) sits inside that noise.
 
-The extension on `tools/vscode-decider/examples/bank` (about 1,000 steps in 40 files, 1,400 params,
+The extension on `ui/vscode/examples/bank` (about 1,000 steps in 40 files, 1,400 params,
 14 lookup tables with shared rows, 3 trees, 40 applications). Each round, `pnpm test:large` screenshots six
 user stories and a fresh judge agent scores them from the screenshots alone (1-10 per story; a story whose
 goal isn't visibly met caps at 5). The loop stops above 8/10 or after 40 rounds.

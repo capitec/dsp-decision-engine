@@ -13,15 +13,15 @@ from pathlib import Path
 
 import polars as pl
 
-from decider import checks
-from decider.contract import StepRef, describe, resolve_step, source_location
+from decider.lab import checks
+from decider.lab import describe, resolve_step, source_location, StepRef
 from decider._tooling.bridge.describing import find_pipelines
-from decider.data import read
+from decider.lab.data import read
 from decider._tooling.bridge.loading import load_module
 from decider import Engine
 from decider.trace import TraceSink
 from decider._tooling.bridge.replay import trace as run_trace
-from decider.experiments import ExperimentDef, ExperimentResult, run
+from decider.lab.experiments import ExperimentDef, ExperimentResult, run
 from decider.steps._entry import import_flow
 from decider._tooling.mcp._policy import REDACTED, Policy
 

@@ -3,9 +3,9 @@ from __future__ import annotations
 
 import polars as pl
 
-from decider.data import FileProvider, FolderProvider, dataset
-from decider.data._providers import dataset_documents, datasets_folder
-from decider.data import _formats as formats
+from decider.lab.data import FileProvider, FolderProvider, dataset
+from decider.lab.data._providers import dataset_documents, datasets_folder
+from decider.lab.data import _formats as formats
 
 
 def datasets(file=None):

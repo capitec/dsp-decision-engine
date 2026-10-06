@@ -3,8 +3,9 @@ import json
 
 import pytest
 
-from decider import checks, flow, step
-from decider.checks import Severity
+from decider import flow, step
+from decider.lab import checks
+from decider.lab.checks import Severity
 from decider.exceptions import DeciderError
 
 
@@ -82,7 +83,7 @@ def test_an_explicit_check_list_still_honours_the_project_disable_and_fail_on(tm
 
 
 def test_two_entries_of_one_type_with_different_options_both_run():
-    from decider.checks._config import ChecksConfig
+    from decider.lab.checks._config import ChecksConfig
 
     cfg = ChecksConfig.model_validate({"extends": None, "checks": [
         {"type": "durable_ids", "severity": "error"}, {"type": "durable_ids", "severity": "info"},

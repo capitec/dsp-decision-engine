@@ -1,12 +1,12 @@
 """The bridge's experiment commands: run headlessly with live progress, build schemas, and validate."""
 from pathlib import Path
 
-from decider.contract import JobHandle
+from decider.lab.experiments import JobHandle
 
 
 def _load_definition(bridge, definition, def_, file, pipeline):
     """An `ExperimentDef` from `definition` (a path or its JSON text) or an inline `def_` over `file`'s pipeline."""
-    from decider.experiments import ExperimentDef
+    from decider.lab.experiments import ExperimentDef
     if definition is not None:
         text = Path(definition).read_text() if not definition.lstrip().startswith("{") else definition
         return ExperimentDef.model_validate_json(text)
@@ -24,9 +24,9 @@ def run_experiment(bridge, req, definition=None, def_=None, file=None, pipeline=
     (running the same experiment on other data). Streams `{"progress": {"done", "total"}}` lines on `req`'s id while it runs; a `{"cmd": "cancel",
     "target": <that id>}` line stops it at the next batch boundary.
     """
-    from decider.experiments._experiments import InputSpec
-    from decider.experiments._runner import _load, _run
-    from decider.experiments.callbacks import Callback
+    from decider.lab.experiments._experiments import InputSpec
+    from decider.lab.experiments._runner import _load, _run
+    from decider.lab.experiments.callbacks import Callback
 
     class _StreamProgress(Callback):
         def on_progress(self, run_, done):
@@ -56,9 +56,9 @@ def experiment_schema(bridge):
     Each metric/plot schema also carries the `Summary` type it gives or needs (`summary`/`requires`, by class
     name), so a UI can offer only the plot types that fit a chosen metric.
     """
-    from decider.experiments.metrics import Metric
-    from decider.experiments.plots import Plot
-    from decider.experiments.report import Block
+    from decider.lab.experiments.metrics import Metric
+    from decider.lab.experiments.plots import Plot
+    from decider.lab.experiments.report import Block
 
     def annotate(root, attr):
         schemas = root.json_schema()
@@ -71,7 +71,7 @@ def experiment_schema(bridge):
 
 def experiment_validate(bridge, definition=None, def_=None, file=None, pipeline=None):
     """Every problem in the definition against its flow (unknown steps, bad overrides, ...), without running it."""
-    from decider.experiments import validate
+    from decider.lab.experiments import validate
     from decider.steps._entry import import_flow
 
     d = _load_definition(bridge, definition, def_, file, pipeline)

@@ -16,7 +16,7 @@ from decider._engine.debug import NodeVisited
 from decider.steps import ConfigurableStep
 from decider.steps.trees import TreeConfig, _walker as walker
 from decider.steps.trees.schema import LeafNode
-from decider.testing import assert_equivalent
+from decider.lab.testing import assert_equivalent
 
 RISK = {
     "nodes": [

@@ -4,8 +4,9 @@ import time
 
 import pytest
 
-from decider import checks, flow, step
-from decider.checks import Severity
+from decider import flow, step
+from decider.lab import checks
+from decider.lab.checks import Severity
 
 
 @step(output="x")
@@ -95,7 +96,7 @@ def test_standard_finds_known_defects_without_arguments():
 
 
 def test_findings_carry_the_contract_step_reference():
-    from decider.contract import describe
+    from decider.lab import describe
 
     pipeline = flow(stamped, name="term")
     nodes = {n.path: n for n in describe(pipeline).nodes}
@@ -130,7 +131,7 @@ def test_mode_divergence_is_quiet_when_modes_agree():
 
 
 def test_mode_divergence_reports_a_disagreement(monkeypatch):
-    import decider.checks._builtin.runtime as runtime
+    import decider.lab.checks._builtin.runtime as runtime
 
     def disagree(*args, **kwargs):
         raise AssertionError("run() in fused mode differs from interpreted")

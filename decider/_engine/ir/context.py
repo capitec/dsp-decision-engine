@@ -190,7 +190,7 @@ class IRContext:
 
             ctx.table(TableRef(table="prices"), {"product": "str", "rate": "float"})
         """
-        from decider._polars_docs.frame import FrameDoc
+        from decider._engine.params.polars_docs.frame import FrameDoc
         from decider.steps._values import TableRef
 
         if not isinstance(value, TableRef):

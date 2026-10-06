@@ -10,7 +10,7 @@ from decider import _engine as engine
 from decider._engine.ir.context import _BUILT, IRContext
 from decider._engine.ir.decls import Input, Output, ParamDecl
 from decider._engine.ir.nodes import CallNode, SequenceNode, iter_nodes
-from decider._polars_docs.frame import FrameDoc
+from decider._engine.params.polars_docs.frame import FrameDoc
 from decider.steps import ConfigurableStep, ParamRef, Step, Value
 from decider.steps._values import TableRef, TableValue
 

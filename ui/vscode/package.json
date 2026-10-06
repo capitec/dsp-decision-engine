@@ -1,0 +1,344 @@
+{
+  "name": "decider-vscode",
+  "displayName": "decider",
+  "description": "See, edit and debug decider flows: Python pipelines and YAML flow files",
+  "version": "0.1.0",
+  "publisher": "capitec",
+  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/capitec/dsp-decision-engine.git",
+    "directory": "ui/vscode"
+  },
+  "engines": {
+    "vscode": "^1.120.0"
+  },
+  "categories": [
+    "Debuggers",
+    "Visualization"
+  ],
+  "extensionDependencies": [
+    "ms-python.debugpy"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onLanguage:python",
+    "onLanguage:yaml",
+    "workspaceContains:**/flow.yaml"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "decider.refreshFlows",
+        "title": "decider: Refresh flows",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "decider.showFlow",
+        "title": "decider: Visualise flow",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "decider.debugFlow",
+        "title": "decider: Debug flow",
+        "icon": "$(debug-alt)"
+      },
+      {
+        "command": "decider.refreshStructure",
+        "title": "decider: Reload flow",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "decider.openCode",
+        "title": "Go to step code",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "decider.toggleBreakpoint",
+        "title": "Toggle breakpoint",
+        "icon": "$(debug-breakpoint-unsupported)"
+      },
+      {
+        "command": "decider.insertBefore",
+        "title": "Insert before…",
+        "icon": "$(insert)"
+      },
+      {
+        "command": "decider.insertAfter",
+        "title": "Insert after…",
+        "icon": "$(add)"
+      },
+      {
+        "command": "decider.insertInside",
+        "title": "Add inside…",
+        "icon": "$(add)"
+      },
+      {
+        "command": "decider.deleteNode",
+        "title": "Delete",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "decider.insertFromToolbox",
+        "title": "Insert into the flow",
+        "icon": "$(add)"
+      },
+      {
+        "command": "decider.refreshDatasets",
+        "title": "decider: Refresh datasets",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "decider.previewDataset",
+        "title": "Preview rows"
+      },
+      {
+        "command": "decider.debugWithDataset",
+        "title": "Debug a flow on this dataset",
+        "icon": "$(debug-alt)"
+      },
+      {
+        "command": "decider.copyDatasetName",
+        "title": "Copy name"
+      },
+      {
+        "command": "decider.revealDataset",
+        "title": "Reveal in Explorer"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "decider",
+          "title": "decider",
+          "icon": "$(type-hierarchy)"
+        }
+      ]
+    },
+    "views": {
+      "decider": [
+        {
+          "id": "decider.flows",
+          "name": "Flows"
+        },
+        {
+          "id": "decider.datasets",
+          "name": "Datasets"
+        },
+        {
+          "id": "decider.structure",
+          "name": "Structure"
+        },
+        {
+          "id": "decider.toolbox",
+          "name": "Toolbox",
+          "when": "decider.yamlFlow"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "decider.flows",
+        "contents": "No decider flows found.\n\nA flow is a `flow.yaml` (a top-level `flow:` and `steps:`), or a Python file that imports decider and defines `def build()` or `pipeline = flow(...)`.\n\n[Refresh](command:decider.refreshFlows)"
+      },
+      {
+        "view": "decider.structure",
+        "contents": "Pick a flow under Flows, or click Visualise flow above a pipeline."
+      },
+      {
+        "view": "decider.datasets",
+        "contents": "No datasets found.\n\nDatasets live in a `datasets/` folder beside `configs/`: `x.parquet`, `x.csv` or `x.jsonl` files, `x/` folders of part files, and `datasets/config.json` entries for client providers such as Redshift.\n\n[Refresh](command:decider.refreshDatasets)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "decider.refreshFlows",
+          "when": "view == decider.flows",
+          "group": "navigation"
+        },
+        {
+          "command": "decider.debugFlow",
+          "when": "view == decider.structure && decider.flowShown",
+          "group": "navigation@1"
+        },
+        {
+          "command": "decider.showFlow",
+          "when": "view == decider.structure && decider.flowShown",
+          "group": "navigation@2"
+        },
+        {
+          "command": "decider.refreshStructure",
+          "when": "view == decider.structure && decider.flowShown",
+          "group": "navigation@3"
+        },
+        {
+          "command": "decider.refreshDatasets",
+          "when": "view == decider.datasets",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "decider.debugFlow",
+          "when": "view == decider.flows && viewItem == flow",
+          "group": "inline"
+        },
+        {
+          "command": "decider.toggleBreakpoint",
+          "when": "view == decider.structure && viewItem =~ /\\bcode\\b/",
+          "group": "inline@1"
+        },
+        {
+          "command": "decider.openCode",
+          "when": "view == decider.structure && viewItem =~ /\\bcode\\b/",
+          "group": "inline@2"
+        },
+        {
+          "command": "decider.insertInside",
+          "when": "view == decider.structure && viewItem =~ /\\binto\\b/",
+          "group": "inline@3"
+        },
+        {
+          "command": "decider.openCode",
+          "when": "view == decider.structure && viewItem =~ /\\bcode\\b/",
+          "group": "1_open@1"
+        },
+        {
+          "command": "decider.toggleBreakpoint",
+          "when": "view == decider.structure && viewItem =~ /\\bcode\\b/",
+          "group": "1_open@2"
+        },
+        {
+          "command": "decider.insertBefore",
+          "when": "view == decider.structure && viewItem =~ /\\bedit\\b/",
+          "group": "2_edit@1"
+        },
+        {
+          "command": "decider.insertAfter",
+          "when": "view == decider.structure && viewItem =~ /\\bedit\\b/",
+          "group": "2_edit@2"
+        },
+        {
+          "command": "decider.insertInside",
+          "when": "view == decider.structure && viewItem =~ /\\binto\\b/",
+          "group": "2_edit@3"
+        },
+        {
+          "command": "decider.deleteNode",
+          "when": "view == decider.structure && viewItem =~ /\\bedit\\b/",
+          "group": "3_delete@1"
+        },
+        {
+          "command": "decider.insertFromToolbox",
+          "when": "view == decider.toolbox",
+          "group": "inline"
+        },
+        {
+          "command": "decider.debugWithDataset",
+          "when": "view == decider.datasets && viewItem =~ /^dataset\\b/",
+          "group": "inline"
+        },
+        {
+          "command": "decider.previewDataset",
+          "when": "view == decider.datasets && viewItem =~ /^dataset\\b/",
+          "group": "1_open@1"
+        },
+        {
+          "command": "decider.revealDataset",
+          "when": "view == decider.datasets && viewItem =~ /dataset-local/",
+          "group": "1_open@2"
+        },
+        {
+          "command": "decider.copyDatasetName",
+          "when": "view == decider.datasets && viewItem =~ /^dataset/",
+          "group": "2_copy"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "decider.openCode",
+          "when": "false"
+        },
+        {
+          "command": "decider.toggleBreakpoint",
+          "when": "false"
+        },
+        {
+          "command": "decider.insertBefore",
+          "when": "false"
+        },
+        {
+          "command": "decider.insertAfter",
+          "when": "false"
+        },
+        {
+          "command": "decider.insertInside",
+          "when": "false"
+        },
+        {
+          "command": "decider.deleteNode",
+          "when": "false"
+        },
+        {
+          "command": "decider.insertFromToolbox",
+          "when": "false"
+        },
+        {
+          "command": "decider.previewDataset",
+          "when": "false"
+        },
+        {
+          "command": "decider.debugWithDataset",
+          "when": "false"
+        },
+        {
+          "command": "decider.copyDatasetName",
+          "when": "false"
+        },
+        {
+          "command": "decider.revealDataset",
+          "when": "false"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "decider",
+      "properties": {
+        "decider.python": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Command that runs Python for decider, e.g. [\"uv\", \"run\", \"python\"]. Empty: the ms-python interpreter, then python3. Debugging also uses it."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "pnpm --filter @decider/ui build && vite build && vite build --config vite.webview.config.ts",
+    "watch": "vite build --watch",
+    "test": "vitest run",
+    "package": "pnpm build && cp ../../LICENSE . && vsce package --no-dependencies",
+    "test:vscode": "pnpm build && \"${VSCODE_EXE:-code}\" --user-data-dir .vscode-test/user --disable-workspace-trust --extensionDevelopmentPath=\"$PWD\" --extensionTestsPath=\"$PWD/test/vscode/smoke.js\" \"$PWD/examples\""
+  },
+  "dependencies": {
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@decider/ui": "workspace:*",
+    "@types/node": "^22.0.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@types/vscode": "~1.120.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "@vscode/vsce": "^4.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.9.0",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1"
+  }
+}

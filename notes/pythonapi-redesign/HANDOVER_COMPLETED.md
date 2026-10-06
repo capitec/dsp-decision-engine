@@ -36,7 +36,7 @@ Memory-heavy runs go through `.scratch/heavy.sh` and `.scratch/light.sh`, which 
 | Branch | `feature/python-api-redesign`, 57 commits from `b8aa6ed` to `0a7e791`, on top of `78021e4` (the notes). `git log 78021e4..feature/python-api-redesign` lists them. Not pushed. |
 | Tests | 3002 passed, 1 xfailed, 0 failed (baseline 2415 passed). The baseline's four macOS-only failures don't occur on this Linux machine. |
 | Concurrency stress test | `tests/serving/test_concurrency.py`, 30 cases, passed 5 runs in a row and is part of every full run |
-| Extension | `tools/decider-ui` 46/46, `tools/vscode-decider` 28/28, `pnpm -r build` clean. The headless in-editor smoke test passes its describe and datasets steps, then hangs at `debugFlow` on the pre-refactor commit too. |
+| Extension | `ui/lib` 46/46, `ui/vscode` 28/28, `pnpm -r build` clean. The headless in-editor smoke test passes its describe and datasets steps, then hangs at `debugFlow` on the pre-refactor commit too. |
 | Latency (warm `score()`, 3-step float flow, µs) | before `78021e4`: interpreted 59.8–60.3, stepped 45.5–46.4, fused 29.8–33.4. Now: 60.7, 47.5, 30.6. Re-measure with `benchmarks/score_modes.py`. |
 | Phase 7 (credit) | not started; the user picks which functions move |
 
@@ -128,7 +128,7 @@ These were decided with the user during the run, or were the smallest correct op
 
 ### Bridge and contract
 - **Bridge replies are pydantic models** in `contract/_messages.py`, with the same wire shape as before. They are not exported from `decider.contract`, because of its name budget.
-- **Only the bridge-reply block of `tools/decider-ui/src/model/protocol.ts` is generated**, between the `// <generated>` markers. Regenerate it with `uv run python -m decider.contract._messages`. A drift test fails when the block is stale.
+- **Only the bridge-reply block of `ui/lib/src/model/protocol.ts` is generated**, between the `// <generated>` markers. Regenerate it with `uv run python -m decider.contract._messages`. A drift test fails when the block is stale.
 - **`{"cmd":"hello"}`** returns the protocol and contract versions and the capabilities. The extension doesn't call it on connect yet.
 
 ## Shortcuts (`# ponytail:` comments added this run)
@@ -171,7 +171,7 @@ Seen during the run and out of scope; none of them blocks anything.
 - `docs/` (including `docs/examples/03_config_and_persistence.ipynb`, which uses `VersionedConfig`) describes an older version, as `CLAUDE.md` says.
 - `example_projects/**/NOTES.md`, `Design.md`, `IR.md` and older notes still name `decider.engine`, `numeric` and other removed names, as history.
 - `projects/loan_scoring` imports a `JsonFileConfigManager` class that no longer exists; that was already stale.
-- The `tools/decider-ui/demo/vscode/datasets.ts` comment still mentions `decider.data.load()`.
+- The `ui/lib/demo/vscode/datasets.ts` comment still mentions `decider.data.load()`.
 
 **Code**
 - `benchmarks/span_operations.py` imports `python_only` from `decider`, which doesn't exist. It was broken before this run. `decider/_engine/compile/units.py:417` still names `python_only` in an error hint.

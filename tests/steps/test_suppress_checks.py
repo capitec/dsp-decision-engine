@@ -4,7 +4,7 @@ from decider import branch, dag, each, flow, frame_step, loop, optimise, step
 from decider._engine import Engine, step_map, to_ir
 from decider._engine.compile import fingerprint
 from decider.steps import ConfigurableStep
-from decider.testing import no_recompile
+from decider.lab.testing import no_recompile
 
 
 

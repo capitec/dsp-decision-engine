@@ -2,8 +2,9 @@
 import sys
 from typing import Literal
 
-from decider import ConfigurableStep, checks, flow, step
-from decider.checks import Check, Severity
+from decider import ConfigurableStep, flow, step
+from decider.lab import checks
+from decider.lab.checks import Check, Severity
 
 
 @step(output="fee")
@@ -58,7 +59,7 @@ def no_wide_flows(ctx):
 
 
 def test_a_decorated_function_is_a_check_with_its_alias_and_code():
-    from decider.checks import catalogue
+    from decider.lab.checks import catalogue
 
     report = checks.run(flow(fee, _second, name="term"), [no_wide_flows])
     (found,) = report.findings
@@ -69,7 +70,7 @@ def test_a_decorated_function_is_a_check_with_its_alias_and_code():
 def test_a_third_party_check_loads_from_an_entry_point(tmp_path, monkeypatch):
     (tmp_path / "ep_checks.py").write_text('''
 from typing import Literal
-from decider.checks import Check
+from decider.lab.checks import Check
 
 class EpCheck(Check):
     type: Literal["ep_check"] = "ep_check"

@@ -13,7 +13,7 @@ from decider.config import JsonFileStore, Version
 from decider.exceptions import MissingInputError
 from decider.serving._handler import RequestHandler
 from decider.serving._servers.starlette import create_app
-from decider.testing import no_recompile
+from decider.lab.testing import no_recompile
 
 
 def _scale(x: float, factor: float) -> float:

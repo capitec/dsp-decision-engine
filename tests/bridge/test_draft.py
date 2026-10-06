@@ -3,7 +3,7 @@ import os
 from decider._tooling.bridge.bridge import Bridge
 
 HERE = os.path.dirname(__file__)
-LOAN = os.path.join(HERE, "..", "..", "tools", "vscode-decider", "examples", "loan.py")
+LOAN = os.path.join(HERE, "..", "..", "ui", "vscode", "examples", "loan.py")
 
 
 def started(**kw):

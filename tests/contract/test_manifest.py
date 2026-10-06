@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from decider.contract import FlowRef, RecordRef
+from decider.lab import FlowRef, RecordRef
 from decider.exceptions import DeciderError
-from decider.contract import InputFingerprint, Override, ResultRef, Revision, RunManifest, manifest_schema
-from decider.contract._manifest import (MANIFEST_VERSION, check_manifest_version, new_manifest_id,
-                                        source_is_stale)
+from decider.lab.data import InputFingerprint
+from decider.lab.experiments import manifest_schema, Override, ResultRef, Revision, RunManifest
+from decider.lab.experiments._manifest import check_manifest_version, MANIFEST_VERSION, new_manifest_id, source_is_stale
 
 
 def make_manifest(**fields) -> RunManifest:

@@ -8,8 +8,8 @@ import numpy as np
 import polars as pl
 
 from decider import flow, param
-from decider.experiments import Experiment
-from decider.experiments.metrics import Divergence, ValueCounts
+from decider.lab.experiments import Experiment
+from decider.lab.experiments.metrics import Divergence, ValueCounts
 
 
 def ratio(income: float, debt: float) -> float:

@@ -55,7 +55,7 @@ HTTP with `decider serve`.
 | structure in a YAML/JSON file, steps in Python | `load_flow`, `DECIDER_API__PIPELINE=flow.yaml` |
 | immutable config versions | `decider.config.JsonFileStore` (`ConfigStore`) |
 | why a record got its answer; what-if | `pipeline.session(df)` |
-| modes, batch and single record agree | `decider.testing.assert_equivalent` |
+| modes, batch and single record agree | `decider.lab.testing.assert_equivalent` |
 
 ## Steps, params, run and score
 
@@ -324,7 +324,7 @@ read-only numpy array per column, the same in every mode, so loop over it:
 ```python
 import polars as pl
 from decider import ParamTable, flow, param_table
-from decider.testing import no_recompile
+from decider.lab.testing import no_recompile
 
 def rate(score: int, ladder: ParamTable = param_table({"floor": int, "rate": float},
                                                   default=[{"floor": 0, "rate": 0.2}])) -> float:
@@ -368,7 +368,7 @@ parameter table must be an `Enum` column, so its values are known up front.
 import polars as pl
 
 from decider import DecisionTableConfig
-from decider.testing import no_recompile
+from decider.lab.testing import no_recompile
 
 price = DecisionTableConfig.load({"type": "decision_table", "name": "price",
     "columns": {"product": "String", "rate": "Float64"}, "rows": {"table": "prices"},
@@ -765,7 +765,7 @@ back yet: recompute them on the winner with
 import polars as pl
 from decider import Engine, describe, flow, param
 from decider.ir import step_map, to_ir
-from decider.testing import assert_equivalent, corpus, no_recompile
+from decider.lab.testing import assert_equivalent, corpus, no_recompile
 
 def ratio(income: float, debt: float) -> float:
     return debt / income if income > 0 else 1.0
@@ -878,7 +878,7 @@ them — that adapter owns retention and privacy policy.
 
 ### Checks
 
-`decider.checks.run(pipeline)` runs `checks.standard` (wall-clock reads,
+`decider.lab.checks.run(pipeline)` runs `checks.standard` (wall-clock reads,
 shared-state writes, numeric risk, missing durable ids, unknown suppressions)
 and returns a `Report` a CI job, notebook or editor can render. Every finding has
 a stable `code` (`DCD401`), the check's `check` alias, the contract `step`
@@ -886,7 +886,8 @@ reference, `file` and `line`, and a one-line `fix`.
 
 ```python
 import polars as pl
-from decider import checks, flow
+from decider import flow
+from decider.lab import checks
 
 def ratio(income: float, debt: float) -> float:
     return debt / income
@@ -907,8 +908,9 @@ need data (`needs_data`) are listed under `report.skipped` until you pass
 ```python
 import polars as pl
 from typing import Literal
-from decider import checks, flow
-from decider.checks import Check
+from decider import flow
+from decider.lab import checks
+from decider.lab.checks import Check
 
 def ratio(income: float, debt: float) -> float:
     return debt / income
@@ -934,10 +936,11 @@ assert checks.run(pipeline, ["invalid_params_doc"], params=bad_doc).findings[0].
 A custom check is a `Check` subclass like `MinRows` (give it a `type` alias and a
 `code` with your own prefix; config names it by alias, or `"module:Class"`),
 or a function decorated for a one-off rule. An installed package can ship
-checks under the `decider.checks` entry-point group.
+checks under the `decider.lab.checks` entry-point group.
 
 ```python
-from decider import checks, flow, step
+from decider import flow, step
+from decider.lab import checks
 
 @checks.check(code="ACME002", severity="info")
 def single_step(ctx):
@@ -959,7 +962,8 @@ inside a suppressing step or any step above it stays in the report, marked
 reported as `DCD403`.
 
 ```python
-from decider import checks, flow, step
+from decider import flow, step
+from decider.lab import checks
 
 @step(output="cents", suppress_checks=["durable_ids"])      # or the code, "DCD401"
 def capped(cents: int) -> int:
@@ -996,7 +1000,7 @@ such step.
 
 ### Comparing versions
 
-`decider.diff` compares two versions of a pipeline. `structure` says what changed
+`decider.lab.diff` compares two versions of a pipeline. `structure` says what changed
 without running anything (steps added, removed, renamed or changed, params,
 wiring), `outputs` says which rows and columns change over a frame and by how
 much, and `prove` returns `identical=True` only when both versions have the
@@ -1010,7 +1014,8 @@ never produce that row.
 
 ```python
 import polars as pl
-from decider import diff, flow, step
+from decider import flow, step
+from decider.lab import diff
 
 def ratio(income: float, debt: float) -> float:
     return debt / income
@@ -1068,21 +1073,21 @@ output, `on_node_end` for what nodes matching its `nodes` glob wrote) and
 `summarise`s into a typed `Summary`, which a `Plot` requiring that type draws
 with altair (`pip install 'decider[experiments]'`). The definition saves as
 `experiment.json` (`Experiment.save` / `Experiment.load`); subclass `Metric`,
-`Plot` (`from decider.experiments.plots import Plot, require_altair`),
+`Plot` (`from decider.lab.experiments.plots import Plot, require_altair`),
 `Callback` or a report `Block` for your own. A metric reads the flow's
 output, or steps by `nodes="<glob>"` or a durable `node_id`. `.report(...)`
 lays out blocks (`Overview`, `Text`, `Table`, `Chart`, `Row`, `Section`) that
 `result.show()` draws in a notebook and `result.save_html(path)` writes as a
 page; without one it shows an overview and a section per metric. Metrics are in
-`decider.experiments.metrics`, plots in `.plots`, report blocks in `.report`
+`decider.lab.experiments.metrics`, plots in `.plots`, report blocks in `.report`
 and callbacks in `.callbacks`.
 
 ```python
 import polars as pl
 from decider import flow, param
-from decider.experiments import Experiment, RunStatus
-from decider.experiments.metrics import Divergence, ValueCounts
-from decider.experiments.plots import Changes
+from decider.lab.experiments import Experiment, RunStatus
+from decider.lab.experiments.metrics import Divergence, ValueCounts
+from decider.lab.experiments.plots import Changes
 
 def ratio(income: float, debt: float) -> float:
     return debt / income
@@ -1110,7 +1115,7 @@ handle with `.status`, `.progress`, `.cancel()` and `.result()`.
 import polars as pl
 from datetime import date
 from pathlib import Path
-from decider.experiments import Experiment, ExperimentDef, RunStatus, run
+from decider.lab.experiments import Experiment, ExperimentDef, RunStatus, run
 
 pl.DataFrame({"income": [1000.0, 500.0], "debt": [350.0, 400.0],
               "applied_on": [date(2026, 1, 15)] * 2}).write_parquet("loans.parquet")
@@ -1136,13 +1141,14 @@ their storage.
 
 ### Data loading
 
-`decider.data` reads Redshift-export JSON/CSV/Parquet (`read` for a frame,
+`decider.lab.data` reads Redshift-export JSON/CSV/Parquet (`read` for a frame,
 `scan` for a lazy one); `checks.run(..., ["missing_required"], data=frame)` flags required
 inputs the data lacks before anything executes.
 
 ```python
-from decider import checks, flow
-from decider.data import read
+from decider import flow
+from decider.lab import checks
+from decider.lab.data import read
 
 def ratio(income: float, debt: float) -> float:
     return debt / income
@@ -1155,7 +1161,7 @@ assert checks.run(pipeline, ["missing_required"], data=df).ok
 
 ### Datasets
 
-`decider.data.datasets()` lists the project's named datasets, read from
+`decider.lab.data.datasets()` lists the project's named datasets, read from
 `datasets/` beside `configs/`. `name.csv|parquet|jsonl|ndjson|json` is a `file`
 dataset; a `name/` folder of part files of one format is a `folder` dataset
 (`region=za/` subfolders become a `region` column; mixed formats are an error).
@@ -1163,7 +1169,7 @@ dataset; a `name/` folder of part files of one format is a `folder` dataset
 ```python
 import polars as pl
 from pathlib import Path
-from decider.data import datasets
+from decider.lab.data import datasets
 
 Path("datasets/loans").mkdir(parents=True)
 pl.DataFrame({"client_id": [1, 2], "income": [1000.0, 500.0]}).write_parquet("datasets/clients.parquet")
@@ -1192,7 +1198,7 @@ import sqlite3
 import typing as t
 import polars as pl
 from pathlib import Path
-from decider.data import DatasetProvider, datasets
+from decider.lab.data import DatasetProvider, datasets
 
 class SqliteTable(DatasetProvider):
     type: t.Literal["sqlite"] = "sqlite"

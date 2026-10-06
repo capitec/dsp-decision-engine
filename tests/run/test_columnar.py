@@ -13,7 +13,7 @@ from decider import Engine, branch, flow, loop, missing_as, step
 from decider.ops import Columnar
 from decider._engine.compile.rows import ARROW_ROWS, build_rows
 from decider._engine.run.state import from_series
-from decider.testing import assert_equivalent
+from decider.lab.testing import assert_equivalent
 
 MODES = ("interpreted", "stepped", "fused")
 

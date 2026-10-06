@@ -3,8 +3,8 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from decider.data import DuplicateRecordKeyError, MissingRecordKeyError
-from decider.data._keys import check_key, suggest_key
+from decider.lab.data import DuplicateRecordKeyError, MissingRecordKeyError
+from decider.lab.data._keys import check_key, suggest_key
 
 
 def test_suggest_key_prefers_id_then_suffix_then_prefix():

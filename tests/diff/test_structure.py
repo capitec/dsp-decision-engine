@@ -1,5 +1,6 @@
 """structure: steps added, removed, renamed and changed; params; wiring."""
-from decider import diff, flow, param, step
+from decider import flow, param, step
+from decider.lab import diff
 
 
 def net(a: float, b: float) -> float:

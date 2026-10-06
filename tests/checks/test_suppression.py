@@ -1,7 +1,8 @@
 """suppress_checks: on the node or an ancestor, by alias or code; unknown names are DCD403."""
 import pytest
 
-from decider import checks, flow, step
+from decider import flow, step
+from decider.lab import checks
 
 
 @step(output="cents", suppress_checks=["int64_overflow"])

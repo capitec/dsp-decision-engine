@@ -3,8 +3,8 @@ from __future__ import annotations
 import polars as pl
 
 from decider import flow
-from decider.experiments import Experiment, ExperimentDef, RunStatus, run, validate
-from decider.experiments._entry import infer_entry
+from decider.lab.experiments import Experiment, ExperimentDef, RunStatus, run, validate
+from decider.lab.experiments._entry import infer_entry
 from decider.steps._entry import import_flow
 
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from decider import flow
-from decider.experiments._cost import estimate_cost
+from decider.lab.experiments._cost import estimate_cost
 
 
 def test_cost_counts_rows_times_calls():

@@ -8,7 +8,7 @@ import pytest
 from decider import ConfigurableStep, Value, branch, flow, step
 from decider._engine.debug import COMMAND, EVENT_LOG, Delete, Edited, Paused, Replace
 from decider.exceptions import WiringError
-from decider.testing import MODES, no_recompile
+from decider.lab.testing import MODES, no_recompile
 
 CALLS: Counter = Counter()
 

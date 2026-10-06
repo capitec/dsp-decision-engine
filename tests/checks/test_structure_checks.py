@@ -4,7 +4,8 @@ import sys
 import polars as pl
 import pytest
 
-from decider import branch, checks, flow, frame_step, loop, param, step
+from decider import branch, flow, frame_step, loop, param, step
+from decider.lab import checks
 from decider.ops.decimal import Currency
 from decider.steps.tables import DecisionTableConfig
 from decider.steps.trees import TreeConfig
@@ -123,7 +124,7 @@ def test_a_tree_whose_branches_all_matter_is_quiet():
 
 
 def test_without_z3_a_tree_is_skipped_not_an_error(monkeypatch):
-    monkeypatch.delitem(sys.modules, "decider.diff._smt", raising=False)
+    monkeypatch.delitem(sys.modules, "decider.lab.diff._smt", raising=False)
     monkeypatch.setitem(sys.modules, "z3", None)
     report = checks.run(flow(_tree((_gt(5), 1, 0)), name="term"), ["unreachable_branch"])
     assert not report.findings

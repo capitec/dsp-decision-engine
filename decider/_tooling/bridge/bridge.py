@@ -25,7 +25,7 @@ from pathlib import Path
 
 import polars as pl
 
-from decider.data import dataset as named_dataset
+from decider.lab.data import dataset as named_dataset
 from decider._tooling.bridge.describing import (assignment_lines, field_metadata, find_pipelines, formula, key_column,
                                          node_json, values_file)
 from decider import Engine
@@ -35,8 +35,11 @@ from decider._engine.debug.edit import swap
 from decider._tooling.bridge.lineage import attribution, latest, lineage
 from decider.ir import step_map, to_ir
 from decider._tooling.bridge.forks import checkpoint_key, sweep
-from decider.contract import CONTRACT_VERSION, JobHandle, capabilities
-from decider.contract._messages import PROTOCOL_VERSION, DescribeResult, Draft, Hello, Lineage, StateResult, Status
+from decider.lab import CONTRACT_VERSION
+from decider.lab.experiments import JobHandle
+from decider._tooling.bridge.protocol import capabilities
+from decider._tooling.bridge.protocol import (DescribeResult, Draft, Hello, Lineage, PROTOCOL_VERSION, StateResult,
+                                              Status)
 from decider._tooling.bridge.replay import trace
 from decider._engine.params import merge
 from decider.steps import Step

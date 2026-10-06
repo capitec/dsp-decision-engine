@@ -108,7 +108,7 @@ The phased plan, with a "done when" for each phase, is in `directory-structure.m
 
 ## Decisions (2026-10-05)
 
-1. **No shims.** This is a fresh version: names move, and callers change in the same commit, including the three bridge paths in `tools/vscode-decider`.
+1. **No shims.** This is a fresh version: names move, and callers change in the same commit, including the three bridge paths in `ui/vscode`.
 2. **`engine` → `_engine` in one `git mv`**, after the `ir` / `trace` / `debug` facades exist. Reasons are in `layout-and-visibility.md`.
 3. **The check policy is `checks.yaml` (or `.json`) at the project root**, beside `configs/` and `datasets/`, and is found the way datasets are (setting `checks_path`). It is not in `configs/`, because that is the served, versioned store. See `checks.md`.
 4. **Suppression lives on the step:** `suppress_checks=[alias or code]` on every constructor, as a `ConfigurableStep` field and as a flow-file key. There are no inline comments and no config suppressions. It is stored on `Origin`, so it never recompiles.

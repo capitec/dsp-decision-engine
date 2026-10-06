@@ -6,8 +6,8 @@ from typing import Any
 
 import polars as pl
 
-from decider.data import LoadedData, read
-from decider.data._keys import suggest_key
+from decider.lab.data import LoadedData, read
+from decider.lab.data._keys import suggest_key
 
 
 def load_rows(data: Any) -> LoadedData:

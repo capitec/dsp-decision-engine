@@ -4,7 +4,7 @@ import polars as pl
 from decider import dag, each, flow, optimise
 from decider.steps import _composites
 from decider.steps.flowfile import _load
-from decider.testing import assert_equivalent
+from decider.lab.testing import assert_equivalent
 from tests.flowfile import components as comp
 from tests.flowfile.test_load_flow import _write
 

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import polars as pl
 
-from decider import checks, flow, step
+from decider import flow, step
+from decider.lab import checks
 
 
 def _run(pipeline, alias, frame):
