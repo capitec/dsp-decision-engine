@@ -20,6 +20,13 @@ class Source:
         return self.start + node.lineno - 1
 
 
+def source_file(fn: Any) -> str | None:
+    try:
+        return inspect.getsourcefile(fn)
+    except TypeError:  # a builtin or other callable with no file
+        return None
+
+
 def parse(fn: Any, inputs: dict[str, Any]) -> Source | None:
     try:
         text, start = inspect.getsourcelines(fn)

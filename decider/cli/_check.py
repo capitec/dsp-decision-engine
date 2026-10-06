@@ -27,7 +27,7 @@ def check(entry: str | None, config: str | None, data: str | None, fmt: str, fai
     """
     from decider import checks
     from decider.exceptions import DeciderError
-    from decider.experiments._entry import import_flow
+    from decider.steps._entry import import_flow
 
     if list_:
         rows = checks.catalogue()

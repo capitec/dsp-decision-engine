@@ -11,7 +11,7 @@ from numba.core.dispatcher import Dispatcher
 _LITERALS = (int, float, complex, bool, str, bytes, type(None))
 
 
-def fingerprint(fn: Callable) -> str:
+def fingerprint(fn: Callable, *, strict: bool = False) -> str:
     """A content hash of a function: what its compiled code depends on, and nothing else.
 
     Covers the bytecode with its constants, the argument layout, closure cell
@@ -33,7 +33,7 @@ def fingerprint(fn: Callable) -> str:
         fingerprint(f) == fingerprint(g)  # True
     """
     h = hashlib.sha256()
-    _function(h, fn, set())
+    _function(h, fn, set(), strict)
     return h.hexdigest()
 
 
@@ -52,7 +52,7 @@ def cpu_target() -> tuple[str, str, str]:
     return target.target_context.codegen().magic_tuple()
 
 
-def _function(h: Any, fn: Any, seen: set[int]) -> None:
+def _function(h: Any, fn: Any, seen: set[int], strict: bool) -> None:
     fn = getattr(fn, "py_func", fn)
     if id(fn) in seen:
         h.update(b"<recursive>")
@@ -62,14 +62,14 @@ def _function(h: Any, fn: Any, seen: set[int]) -> None:
     _code(h, code)
     for cell in fn.__closure__ or ():
         try:
-            _value(h, cell.cell_contents, seen)
+            _value(h, cell.cell_contents, seen, strict)
         except ValueError:  # an empty cell
             h.update(b"<empty>")
     names = _names(code)
     for name in sorted(names):
         if name in fn.__globals__:
             h.update(name.encode())
-            _value(h, fn.__globals__[name], seen, names)
+            _value(h, fn.__globals__[name], seen, strict, names)
 
 
 def _code(h: Any, code: types.CodeType) -> None:
@@ -86,12 +86,18 @@ def _code(h: Any, code: types.CodeType) -> None:
             h.update(f"{type(const).__name__}:{const!r}".encode())
 
 
-def _frame(h: Any, df: pl.DataFrame) -> None:
+def _by_identity(h: Any, value: Any, strict: bool) -> None:
+    if strict:
+        raise ValueError(f"{type(value).__qualname__} can only be keyed by identity")
+    h.update(f"object:{type(value).__qualname__}:{id(value)}".encode())
+
+
+def _frame(h: Any, df: pl.DataFrame, strict: bool) -> None:
     # ponytail: hashed on every call (~0.5 ms small, ~13 ms per million rows); memoize if big data globals show up.
     try:
         rows = df.hash_rows().to_numpy()
     except Exception:  # a dtype polars can't hash
-        h.update(f"object:DataFrame:{id(df)}".encode())
+        _by_identity(h, df, strict)
         return
     h.update(f"frame:{df.schema}:".encode())
     h.update(rows.data)
@@ -105,9 +111,9 @@ def _names(code: types.CodeType) -> set[str]:
     return names
 
 
-def _value(h: Any, value: Any, seen: set, names: frozenset | set = frozenset()) -> None:
+def _value(h: Any, value: Any, seen: set, strict: bool, names: frozenset | set = frozenset()) -> None:
     if isinstance(value, (types.FunctionType, Dispatcher)):
-        _function(h, value, seen)
+        _function(h, value, seen, strict)
     elif isinstance(value, types.ModuleType):
         h.update(f"module:{value.__name__}".encode())
         # `mod.f(x)` reads `f` off the module: follow the attributes the function names, so editing `f` changes the key.
@@ -119,18 +125,18 @@ def _value(h: Any, value: Any, seen: set, names: frozenset | set = frozenset()) 
             attr = value.__dict__.get(name)
             if isinstance(attr, (types.FunctionType, Dispatcher, types.ModuleType)):
                 h.update(name.encode())
-                _value(h, attr, seen, names)
+                _value(h, attr, seen, strict, names)
     elif isinstance(value, _LITERALS):
         h.update(f"{type(value).__name__}:{value!r}".encode())
     elif isinstance(value, tuple):
         for item in value:
-            _value(h, item, seen)
+            _value(h, item, seen, strict)
     elif isinstance(value, np.ndarray) and value.dtype != object:
         # Data by value: a re-imported module's equal constant is the same step, and an in-place edit is not.
         h.update(f"ndarray:{value.dtype.str}:{value.shape}".encode())
         h.update(np.ascontiguousarray(value).data)
     elif isinstance(value, pl.DataFrame):
-        _frame(h, value)
+        _frame(h, value, strict)
     else:
         # Anything else is compiled in as whatever object it is now: key it by identity.
-        h.update(f"object:{type(value).__qualname__}:{id(value)}".encode())
+        _by_identity(h, value, strict)

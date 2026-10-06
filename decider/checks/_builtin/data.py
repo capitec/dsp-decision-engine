@@ -7,7 +7,6 @@ from typing import Any, Iterator, Literal
 
 import polars as pl
 
-from decider import Engine
 from decider.checks._base import Check, CheckContext
 from decider.checks._report import Finding, Severity
 from decider.ir import CallNode, NullPolicy
@@ -44,17 +43,6 @@ class MissingRequired(Check):
                                   fix="fill the nulls, or declare a default with `missing_as`", column=inp.name, nulls=nulls)
 
 
-def _outputs(ctx: CheckContext) -> tuple[pl.DataFrame, dict[str, CallNode]] | None:
-    """The flow's output frame and the node producing each output column; `None` when the run crashes."""
-    if "_run" not in ctx.__dict__:
-        producers = {o.name: n for n in ctx.nodes if isinstance(n, CallNode) for o in n.outputs or ()}
-        try:
-            ctx.__dict__["_run"] = (Engine().bind(ctx.pipeline).run(ctx.frame, ctx.params), producers)
-        except Exception:
-            ctx.__dict__["_run"] = None  # a crash is DCD501's finding
-    return ctx.__dict__["_run"]
-
-
 class NanOutput(Check):
     """NaN or infinity in an output column when the flow runs over the data."""
 
@@ -64,7 +52,7 @@ class NanOutput(Check):
     executes = True
 
     def run(self, ctx: CheckContext) -> Iterator[Finding]:
-        if (run := _outputs(ctx)) is None:
+        if (run := ctx.outputs) is None:
             return
         out, producers = run
         for name, node in producers.items():
@@ -90,7 +78,7 @@ class ConstantOutput(Check):
     severity: Severity = Severity.INFO
 
     def run(self, ctx: CheckContext) -> Iterator[Finding]:
-        if (run := _outputs(ctx)) is None or run[0].height < 2:
+        if (run := ctx.outputs) is None or run[0].height < 2:
             return
         out, producers = run
         for name, node in producers.items():

@@ -45,7 +45,8 @@ from decider.experiments._experiments import (BASELINE, ExperimentDef, Experimen
 from decider.experiments.metrics._base import Metric
 from decider.experiments.plots._base import Figure
 from decider.diff._revisions import compatible, materialise, remove, resolve
-from decider.experiments._entry import import_flow, infer_entry
+from decider.experiments._entry import infer_entry
+from decider.steps._entry import import_flow
 from decider.experiments._cost import estimate_cost
 from decider.experiments._handle import RunHandle
 from decider.contract import Environment, InputFingerprint, JobHandle, ResultRef, Revision, RunManifest

@@ -89,3 +89,5 @@ class Proof(BaseModel):
     identical: bool | None      # None = could not prove either way
     evidence: StructureDiff | OutputDiff | None
 ```
+
+Deferred: tier 2, tier 3 with `domain="thresholds"`, and `first_divergent_step` are not built yet.

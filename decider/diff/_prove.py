@@ -27,9 +27,10 @@ class Proof(BaseModel):
     """Whether two pipelines provably compute the same thing, and by which tier.
 
     `tier="ir_hash"`: equal IR content hashes. `tier="smt"`: the flows differ only in tree and decision-table
-    steps, and z3 found no input on which those steps disagree (`identical=True`) or found one
-    (`identical=False`, `evidence.counterexample`). Otherwise `identical` is None, not False: nothing here
-    proves them the same or different, `evidence` shows what differs and `reason` why z3 wasn't used.
+    steps, and z3 found no input on which those steps disagree (`identical=True`). Otherwise `identical` is None, not False:
+    nothing here proves them the same or different. If z3 found an input on which a step differs, it is
+    `evidence.counterexample` (the step alone, which the flow may never reach); else `evidence` shows what
+    differs and `reason` why z3 wasn't used.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -78,8 +79,10 @@ def _smt(old: Any, new: Any, s: StructureDiff) -> Proof:
             why = why or f"{path}: {e}"
             continue
         if row is not None:
-            return Proof(tier="smt", identical=False,
-                         evidence=SmtEvidence(modelled=smt.MODELLED, steps=(path,), step=path, counterexample=row))
+            return Proof(tier="smt", identical=None,
+                         evidence=SmtEvidence(modelled=smt.MODELLED, steps=(path,), step=path, counterexample=row),
+                         reason=f"{path}: z3 found an input on which the step differs; it judges the step alone, "
+                                "so the flow around it may never produce that input")
         proven.append(path)
     if why:
         return fallback(why)

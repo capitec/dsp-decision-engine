@@ -926,9 +926,11 @@ wiring), `outputs` says which rows and columns change over a frame and by how
 much, and `prove` returns `identical=True` only when both versions have the
 same IR content hash, or, with the `decider[prove]` extra, when the only changed
 steps are trees and decision tables that z3 shows agree on every input
-(`tier="smt"`; a counterexample row comes back as `identical=False`). It never
-claims it from sampled rows: otherwise `identical` is `None`, with the structure
-diff as evidence and a `reason`.
+(`tier="smt"`). It never claims it from sampled rows: otherwise `identical` is
+`None`, with the structure diff as evidence and a `reason`. A step z3 finds
+different comes back as `identical=None` with the input row in
+`evidence.counterexample`: it judges the step alone, so the flow around it may
+never produce that row.
 
 ```python
 import polars as pl
@@ -971,7 +973,7 @@ else:
             "output": {"data": [{"risky": 1}], "default": {"risky": 0}, "dtypes": [["risky", "Int64"]]}}})
 
     proof = diff.prove(bands(300.0), bands(350.0))
-    assert (proof.tier, proof.identical) == ("smt", False)
+    assert (proof.tier, proof.identical) == ("smt", None)
     assert 300.0 < proof.evidence.counterexample["debt"] <= 350.0
 ```
 

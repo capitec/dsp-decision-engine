@@ -62,7 +62,7 @@ def test_trees_with_the_same_decisions_in_a_different_layout_are_proven_identica
 def test_a_moved_threshold_gives_a_counterexample_the_real_steps_disagree_on():
     old, new = tree((cond("x", ">", 5), 1, 0)), tree((cond("x", ">", 6), 1, 0))
     proof = diff.prove(old, new)
-    assert (proof.tier, proof.identical) == ("smt", False)
+    assert (proof.tier, proof.identical) == ("smt", None)
     row = proof.evidence.counterexample
     assert 5 < row["x"] <= 6
     assert old.run(frame_of(row))["o"].to_list() != new.run(frame_of(row))["o"].to_list()
@@ -72,7 +72,7 @@ def test_an_int_feature_compares_exactly_so_greater_than_five_is_at_least_six():
     ints = {"feature_types": {"n": "int"}}
     assert diff.prove(tree((cond("n", ">", 5), 1, 0), **ints), tree((cond("n", ">=", 6), 1, 0), **ints)).identical is True
     proof = diff.prove(tree((cond("n", ">", 5), 1, 0), **ints), tree((cond("n", ">=", 7), 1, 0), **ints))
-    assert proof.identical is False and proof.evidence.counterexample == {"n": 6}
+    assert proof.identical is None and proof.evidence.counterexample == {"n": 6}
 
 
 def test_not_over_the_opposite_comparison_is_identical_even_for_a_null():
@@ -83,7 +83,7 @@ def test_not_over_the_opposite_comparison_is_identical_even_for_a_null():
 def test_a_null_taking_another_branch_is_a_counterexample():
     # A null is unknown, so it takes the otherwise branch: 1 for `x <= 5`, 0 for `x > 5`.
     proof = diff.prove(tree((cond("x", "<=", 5), 0, 1)), tree((cond("x", ">", 5), 1, 0)))
-    assert proof.identical is False and proof.evidence.counterexample["x"] is None
+    assert proof.identical is None and proof.evidence.counterexample["x"] is None
 
 
 def test_the_leaf_id_output_distinguishes_trees_that_answer_from_different_leaves():
@@ -91,7 +91,7 @@ def test_the_leaf_id_output_distinguishes_trees_that_answer_from_different_leave
     other = tree((cond("x", ">", 5), 1, 0), path_output="leaf")
     assert diff.prove(one, other).identical is True
     swapped = tree((cond("x", "<=", 5), 0, 1), path_output="leaf")
-    assert diff.prove(one, swapped).identical is False
+    assert diff.prove(one, swapped).identical is None
 
 
 def test_computed_features_compare_in_float64():
@@ -100,7 +100,7 @@ def test_computed_features_compare_in_float64():
     c = tree((cond({"type": "computed", "expression": "x - y"}, ">", 2.0), 1, 0))
     assert diff.prove(a, b).identical is True
     proof = diff.prove(a, c)
-    assert proof.identical is False and 1.0 < proof.evidence.counterexample["x"] - proof.evidence.counterexample["y"] <= 2.0
+    assert proof.identical is None and 1.0 < proof.evidence.counterexample["x"] - proof.evidence.counterexample["y"] <= 2.0
 
 
 def test_a_division_in_a_computed_feature_falls_back_with_a_reason():
@@ -115,7 +115,7 @@ def test_string_matches_exact_and_contains_differ_on_a_string_around_the_pattern
                                                       "match_type": kind}}, 1, 0))
     assert diff.prove(match("exact"), match("exact")).identical is True
     proof = diff.prove(match("exact"), match("contains"))
-    assert proof.identical is False and "ab" in proof.evidence.counterexample["s"]
+    assert proof.identical is None and "ab" in proof.evidence.counterexample["s"]
 
 
 def test_tables_with_reordered_non_overlapping_rows_are_proven_identical():
@@ -136,7 +136,7 @@ def test_tables_with_overlapping_rows_in_another_order_have_a_real_counterexampl
 
     old, new = banded(rows), banded(rows[::-1])
     proof = diff.prove(old, new)
-    assert proof.identical is False
+    assert proof.identical is None
     row = proof.evidence.counterexample
     assert 5 <= row["score"] < 10
     assert old.run(frame_of(row))["o"].to_list() != new.run(frame_of(row))["o"].to_list()
@@ -199,5 +199,6 @@ def test_the_verdict_matches_running_both_trees_over_every_region_of_the_inputs(
         if proof.tier == "ir_hash":
             assert same
         else:
-            assert proof.tier == "smt" and proof.identical is same, (a, b)
-    assert verdicts >= {True, False}
+            assert proof.tier == "smt" and (proof.identical is True) == same, (a, b)
+            assert (proof.evidence.counterexample is None) == same
+    assert verdicts >= {True, None}

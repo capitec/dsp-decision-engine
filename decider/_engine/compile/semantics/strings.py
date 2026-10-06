@@ -21,7 +21,6 @@ _ADVICE = ("compare a span against a str literal, a module-level str constant or
 
 @intrinsic
 def _pair(typingctx, t):
-    """A span as a plain `(address, byte length)` tuple; the same value under another type."""
     if not isinstance(t, SpanType):
         return None
     return _PAIR(t), (lambda context, builder, sig, args: args[0])
@@ -32,7 +31,6 @@ def _comparable(t: object) -> bool:
 
 
 def _constant(op: str, t: object) -> np.ndarray | None:
-    """The UTF-8 bytes of a compile-time str, or `None` when the other side is a span."""
     if isinstance(t, types.StringLiteral):
         # Closed over by the implementation below, so numba lowers it as one constant array.
         return np.frombuffer(t.literal_value.encode(), np.uint8)
