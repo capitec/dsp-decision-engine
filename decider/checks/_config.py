@@ -38,9 +38,10 @@ class ChecksConfig(BaseModel):
 
     def instances(self) -> list[Check]:
         # An entry replaces the same type from `extends`, so `{type: durable_ids, severity: error}` promotes it.
-        chosen = {c.type: c for c in build(STANDARD if self.extends else ())}
-        chosen.update({c.type: c for c in self.checks})
-        return [c for c in chosen.values() if c.type not in self.disable and c.code not in self.disable]
+        # Entries of one type with different options all run; only identical ones are one.
+        own = {(c.type, c.model_dump_json()): c for c in self.checks}
+        base = [c for c in build(STANDARD if self.extends else ()) if c.type not in {t for t, _ in own}]
+        return [c for c in (*base, *own.values()) if c.type not in self.disable and c.code not in self.disable]
 
 
 def find_config(start: str | Path | None = None) -> Path | None:

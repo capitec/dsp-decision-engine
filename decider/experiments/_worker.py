@@ -16,7 +16,7 @@ from pathlib import Path
 import polars as pl
 
 from decider.experiments._experiments import Scenario
-from decider.experiments._entry import import_flow
+from decider.steps._entry import import_flow
 from decider.experiments._runner import _batches, _Local
 
 

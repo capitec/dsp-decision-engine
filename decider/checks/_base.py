@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import importlib.metadata
-import inspect
 from abc import abstractmethod
 from functools import cached_property
 from typing import Any, Callable, ClassVar, Iterable, Literal
@@ -9,7 +8,7 @@ from typing import Any, Callable, ClassVar, Iterable, Literal
 from pydantic import ConfigDict
 
 from decider._engine.wiring import resolve
-from decider.checks._ast import Source, parse
+from decider.checks._ast import Source, parse, source_file
 from decider.checks._report import Finding, Severity, SkippedCheck, Suppression
 from decider.contract import StepRef, describe
 from decider.ir import CallNode, IRNode, iter_nodes, step_map, to_ir
@@ -98,6 +97,7 @@ class CheckContext:
         self.params = params
         self.frame = frame
         self._current: Check | None = None
+        self.crash: Exception | None = None
         # The node of the `ConfigurableStep` whose `check` hook is running.
         self.node: IRNode | None = None
         self._sources: dict[int, Source | None] = {}
@@ -120,6 +120,22 @@ class CheckContext:
     def steps(self) -> dict[str, Any]:
         """The step object behind each node path."""
         return step_map(self.pipeline)
+
+    @cached_property
+    def outputs(self) -> tuple[Any, dict[str, CallNode]] | None:
+        """The output frame of running the flow over `data`, and the node producing each output column.
+
+        `None` when the run crashes, with the exception in `crash`; the run-error check reports it,
+        so checks that need outputs stay quiet.
+        """
+        from decider import Engine
+
+        producers = {o.name: n for n in self.nodes if isinstance(n, CallNode) for o in n.outputs or ()}
+        try:
+            return Engine().bind(self.pipeline).run(self.frame, self.params), producers
+        except Exception as e:
+            self.crash = e
+            return None
 
     @cached_property
     def nodes(self) -> list[IRNode]:
@@ -163,12 +179,7 @@ class CheckContext:
         code = code or (current.code if current else "")
         check = check or (current.type if current else "")
         severity = severity or (current.severity if current else Severity.WARNING)
-        file = None
-        if isinstance(node, CallNode):
-            try:
-                file = inspect.getsourcefile(node.fn)
-            except TypeError:
-                pass
+        file = source_file(node.fn) if isinstance(node, CallNode) else None
         suppressed = next((Suppression(path=path, name=name) for name, path in self._suppressions[id(node)]
                            if name in (code, check)), None)
         return Finding(code=code, check=check, severity=severity, message=message, step=self._refs[id(node)],

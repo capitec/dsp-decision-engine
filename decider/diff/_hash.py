@@ -114,7 +114,7 @@ def _nonce() -> str:
 
 def _function(fn: Any) -> str:
     try:
-        return fingerprint(fn)
+        return fingerprint(fn, strict=True)
     except Exception:
         return _nonce()
 

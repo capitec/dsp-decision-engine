@@ -72,7 +72,7 @@ def experiment_schema(bridge):
 def experiment_validate(bridge, definition=None, def_=None, file=None, pipeline=None):
     """Every problem in the definition against its flow (unknown steps, bad overrides, ...), without running it."""
     from decider.experiments import validate
-    from decider.experiments._entry import import_flow
+    from decider.steps._entry import import_flow
 
     d = _load_definition(bridge, definition, def_, file, pipeline)
     step = import_flow(d.flow.entry) if definition is not None else bridge.step

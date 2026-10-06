@@ -7,7 +7,7 @@ from fastmcp.exceptions import ToolError
 
 from decider.data import read
 from decider.experiments import Experiment
-from decider.experiments._entry import import_flow
+from decider.steps._entry import import_flow
 from decider.experiments.metrics import Divergence
 from decider.mcp import Policy, build_server
 from decider.mcp._policy import REDACTED

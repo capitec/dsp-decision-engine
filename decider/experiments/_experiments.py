@@ -28,7 +28,8 @@ from decider.experiments.report import _blocks as report
 from decider.experiments.plots._base import Figure, Plot, PlotRef, ipython_display
 from decider.experiments.report import Block, Report
 from decider.contract import Job, ResultRef, Revision, RunManifest
-from decider.experiments._entry import import_flow, infer_entry
+from decider.experiments._entry import infer_entry
+from decider.steps._entry import import_flow
 from decider.experiments._handle import RunHandle
 
 EXPERIMENT_VERSION = "2"

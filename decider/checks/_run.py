@@ -31,10 +31,7 @@ def run(pipeline: Any, checks: Iterable[Any] | None = None, *, config: str | Pat
         report = checks.run(pipeline, config="ci/checks.yaml", data=frame, params=doc)
         report.ok, report.to_text()
     """
-    if config is not None:
-        cfg = load_config(config)
-    else:
-        cfg = _project_config() if checks is None else None
+    cfg = load_config(config) if config is not None else _project_config()
     if checks is None:
         instances = cfg.instances() if cfg else build(STANDARD)
     else:

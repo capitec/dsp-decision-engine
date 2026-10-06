@@ -3,7 +3,7 @@
 These are the read and confirmation-gated actions an agent drives over `decider`
 core. They are plain functions (no FastMCP), so they test without a server; the
 server in `decider.mcp._server` wraps each one as a tool. Flows are named by
-import path (`module:qualname`), the same identity `decider.experiments._entry.import_flow`
+import path (`module:qualname`), the same identity `decider.steps._entry.import_flow`
 resolves, and every returned step carries the contract's stable `flow_id`/`step_id`.
 """
 from __future__ import annotations
@@ -22,7 +22,7 @@ from decider import Engine
 from decider.trace import TraceSink
 from decider._bridge.replay import trace as run_trace
 from decider.experiments import ExperimentDef, ExperimentResult, run
-from decider.experiments._entry import import_flow
+from decider.steps._entry import import_flow
 from decider.mcp._policy import REDACTED, Policy
 
 _EXCLUDED = {".git", "__pycache__", ".venv", "venv", "node_modules",

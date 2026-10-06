@@ -175,7 +175,6 @@ def _function(src: Any) -> ast.FunctionDef | ast.AsyncFunctionDef | None:
 
 
 def _returned_constants(fn: ast.AST) -> tuple[set[Any], bool]:
-    """The constants a function returns, and whether any return is not a constant."""
     values: set[Any] = set()
     dynamic = False
     todo = list(fn.body)
@@ -193,7 +192,6 @@ def _returned_constants(fn: ast.AST) -> tuple[set[Any], bool]:
 
 
 def _used(ctx: CheckContext) -> set[int]:
-    """Ids of the versions something reads, merges, carries, gathers or outputs."""
     used = {v.id for v in ctx.plan.outputs.values()}
     for call in ctx.plan.calls:
         used.update(v.id for v in call.reads or ())
@@ -229,7 +227,6 @@ def _unused_writes(ctx: CheckContext) -> Iterator[tuple[Any, Any]]:
 
 
 def _later(ctx: CheckContext, version: Any) -> Any:
-    """The next write of the same name from the same flow level, if any."""
     chain = ctx.plan.chains[version.name]
     parent = version.producer.rpartition("/")[0]
     return next((v for v in chain[chain.index(version) + 1:] if v.producer.rpartition("/")[0] == parent), None)

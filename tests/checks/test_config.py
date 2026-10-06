@@ -72,3 +72,19 @@ def test_an_invalid_config_is_a_clear_error_naming_the_file(tmp_path, text, mess
     with pytest.raises(DeciderError, match=message) as e:
         checks.run(flow(scale, name="term"), config=path)
     assert str(path) in str(e.value)
+
+
+def test_an_explicit_check_list_still_honours_the_project_disable_and_fail_on(tmp_path, monkeypatch):
+    _write(tmp_path, "disable: [durable_ids]\nfail_on: warning\n")
+    monkeypatch.chdir(tmp_path)
+    report = checks.run(flow(scale, name="term"), ["durable_ids", "int64_overflow"])
+    assert {f.check for f in report.findings} == {"int64_overflow"} and report.gate is Severity.WARNING
+
+
+def test_two_entries_of_one_type_with_different_options_both_run():
+    from decider.checks._config import ChecksConfig
+
+    cfg = ChecksConfig.model_validate({"extends": None, "checks": [
+        {"type": "durable_ids", "severity": "error"}, {"type": "durable_ids", "severity": "info"},
+        {"type": "durable_ids", "severity": "info"}]})
+    assert [c.severity.value for c in cfg.instances()] == ["error", "info"]

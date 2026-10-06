@@ -58,7 +58,6 @@ def _local_imports(tree: ast.AST) -> dict[str, str]:
 
 
 def _qualified(func: ast.expr, fn: Any, imports: dict[str, str]) -> str | None:
-    """The dotted import path a call's callee resolves to (`dt.now` -> `datetime.datetime.now`), or `None`."""
     attrs: list[str] = []
     while isinstance(func, ast.Attribute):
         attrs.append(func.attr)

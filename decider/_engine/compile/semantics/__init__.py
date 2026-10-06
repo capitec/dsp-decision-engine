@@ -9,7 +9,7 @@ _COMPILE = Path(__file__).resolve().parents[1]
 # Numba keys a disk-cached step by its own bytecode only, so a change to an overload or a
 # span type would otherwise keep serving stale machine code. Found by walking, so a new file is covered.
 _FILES = sorted(
-    {*Path(__file__).parent.rglob("*.py"), *(p for p in (_COMPILE / "span.py", _COMPILE / "decimal_type.py") if p.exists()),
+    {*Path(__file__).parent.rglob("*.py"), _COMPILE / "span.py", _COMPILE / "decimal_type.py",  # a rename must fail the import, not drop the file
      *(_DECIDER / "ops").rglob("*.py")},
     key=lambda p: p.relative_to(_DECIDER).as_posix(),
 )

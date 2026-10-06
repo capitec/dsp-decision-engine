@@ -233,6 +233,8 @@ DCD002 and DCD003 messages say why it matters: served steps run concurrently on 
 | DCD207 | `table_overlap` | two live decision table rows that can both match one input (z3; the earlier row wins; tables of more than 40 rows are not compared in pairs) | info |
 | DCD208 | `table_gap` | an input no decision table row matches (z3; null inputs excluded, since a null never matches) | info; warning when the table has no `default` |
 
+DCD207 and DCD208 come from the same z3 pass as `unreachable_branch` (DCD201), so they are reported whenever it runs (it is in `standard`). They are info, and `disable: [table_overlap, table_gap]` hides them. Without the `prove` extra the z3 pass is listed under `skipped`.
+
 ### Params (DCD3xx)
 
 | Code | Alias | Detects | Default severity |

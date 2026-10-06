@@ -37,7 +37,8 @@ _local = threading.local()
 
 def checkout(pool: str, key: Any, make: Callable[[Any], Any]) -> Any:
     # Popped while in use, so a re-entrant call on the same thread gets its own.
-    return _local.__dict__.setdefault(pool, {}).pop(key, None) or make(key)
+    item = _local.__dict__.setdefault(pool, {}).pop(key, None)
+    return make(key) if item is None else item
 
 
 def checkin(pool: str, key: Any, item: Any) -> None:

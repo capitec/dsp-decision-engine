@@ -71,9 +71,10 @@ def test_changed_code_is_not_proven_and_carries_the_structure_as_evidence():
     assert [c.ref.path for c in proof.evidence.changed_steps] == ["term/scaled_changed"] or proof.evidence.removed
 
 
-def test_a_differing_threshold_is_refuted_with_a_counterexample():
+def test_a_differing_threshold_gives_a_step_level_counterexample_not_a_verdict():
     proof = diff.prove(_threshold_tree(5.0), _threshold_tree(6.0))
-    assert (proof.tier, proof.identical) == ("smt", False)
+    assert (proof.tier, proof.identical) == ("smt", None)
+    assert proof.evidence.counterexample is not None and "step alone" in proof.reason
 
 
 def test_equal_constants_are_proven_identical():
@@ -110,3 +111,20 @@ def test_a_constant_that_cannot_be_hashed_by_content_is_never_proven_identical()
 
     one, other = _Holds(name="s", column="x"), _Holds(name="s", column="x")
     assert diff.prove(one, other).identical is None
+
+
+class _Opaque:
+    pass
+
+
+_THING = _Opaque()
+
+
+def _uses_thing(x: float) -> float:
+    return x if _THING else 0.0
+
+
+def test_a_hash_never_reads_an_identity_keyed_global_as_equal():
+    from decider.diff._hash import snapshot
+
+    assert snapshot(flow(_uses_thing, name="g")).hash != snapshot(flow(_uses_thing, name="g")).hash

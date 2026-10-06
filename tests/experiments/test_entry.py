@@ -4,7 +4,8 @@ import polars as pl
 
 from decider import flow
 from decider.experiments import Experiment, ExperimentDef, RunStatus, run, validate
-from decider.experiments._entry import import_flow, infer_entry
+from decider.experiments._entry import infer_entry
+from decider.steps._entry import import_flow
 
 
 def ratio(income: float, debt: float) -> float:
