@@ -4,10 +4,10 @@ from typing import Iterator, Literal
 
 from decider._engine.ir.nodes import BranchNode, CallNode, FiniteStateMachineNode, IRNode, LoopNode, ScatterGatherNode
 from decider.checks._base import Check, CheckContext, registered
-from decider.checks._report import Finding
+from decider.checks._report import Finding, Severity
 from decider._suggest import hint
 
-__all__ = ["DurableIds", "UnknownSuppression"]
+__all__ = ["DuplicateIds", "DurableIds", "UnknownSuppression"]
 
 
 class DurableIds(Check):
@@ -29,6 +29,26 @@ class DurableIds(Check):
             if isinstance(node, CallNode) and id(node) not in helpers and node.origin.id is None:
                 yield ctx.finding(node, f"{node.origin.path} has no committed durable id",
                                   fix="run `decider ids`", kind="step")
+
+
+class DuplicateIds(Check):
+    """Two steps or flows that carry one durable id; a copied definition keeps its id and then collides."""
+
+    type: Literal["duplicate_ids"] = "duplicate_ids"
+    code = "DCD402"
+    severity: Severity = Severity.ERROR
+
+    def run(self, ctx: CheckContext) -> Iterator[Finding]:
+        first: dict[str, IRNode] = {}
+        for node in ctx.nodes:
+            id_ = node.origin.id
+            if id_ is None:
+                continue
+            seen = first.setdefault(id_, node)
+            # Nodes inside one row kernel share a path, and so an id, by design.
+            if seen.origin.path != node.origin.path:
+                yield ctx.finding(node, f"{node.origin.path} has durable id {id_}, which {seen.origin.path} already has",
+                                  fix="give one of them a new id with `decider ids`", id=id_, other=seen.origin.path)
 
 
 class UnknownSuppression(Check):
