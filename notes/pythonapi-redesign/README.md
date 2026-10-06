@@ -12,6 +12,7 @@ records an audit of the whole surface and a target shape.
 | File | What it covers |
 |---|---|
 | `HANDOVER.md` | **Start here to implement it.** A brief for an orchestrator agent: what to read, settled decisions, questions to ask first, work packages by phase with model tiers and gates, traps, suggested skills. |
+| `HANDOVER_COMPLETED.md` | **Read after implementation.** What was built, design choices made during the run, every deliberate shortcut, the smaller items left alone, and the allowlists awaiting sign-off. |
 | `user-stories.md` | What developers actually do with decider, by role. For each story: the code it takes today, a rating, and the code it should take. |
 | `directory-structure.md` | **The plan.** Every current file and where it goes, the layer map, what gets deleted, changes outside `decider/`, migration phases and the convention tests. |
 | `layout-and-visibility.md` | Why the namespace is shaped this way: principles, the table of moves and renames, name clashes, and how internals are hidden. |
