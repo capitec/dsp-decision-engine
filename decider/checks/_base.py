@@ -72,6 +72,8 @@ Check.lazy({
     "unbounded_loop": "decider.checks._builtin.structure", "opaque_frame_step": "decider.checks._builtin.structure",
     "table_overlap": "decider.checks._builtin.structure", "table_gap": "decider.checks._builtin.structure",
     "missing_required": "decider.checks._builtin.data", "invalid_params_doc": "decider.checks._builtin.params",
+    "nan_output": "decider.checks._builtin.data", "int64_range": "decider.checks._builtin.data",
+    "constant_output": "decider.checks._builtin.data",
     "crash_probe": "decider.checks._builtin.runtime", "mode_divergence": "decider.checks._builtin.runtime",
 })
 
