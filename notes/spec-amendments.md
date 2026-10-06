@@ -291,3 +291,18 @@ where they disagree, this file wins.
   `checks.standard` without one. `decider.check.run`, `default_suite` and
   `suites=` no longer exist. Checks are `Check` registry modules with stable
   codes (`decider.checks.catalogue()`); findings carry contract `StepRef`s.
+
+## 2026-10-06
+
+Contract-level changes the VS Code extension sees (Python API redesign):
+
+- **The bridge module is `python -m decider._bridge`** (was `debug_bridge`).
+- **`{"cmd": "hello"}` handshake.** The reply is `Hello`: `protocol`
+  (`PROTOCOL_VERSION`), `contract_version` and `capabilities`. Bridge replies
+  are typed models; the bridge-reply block of `tools/decider-ui/src/model/protocol.ts`
+  is generated from them.
+- **`FieldMeta` drops `cents`** for `precision`, `scale` and `units`; a
+  `Decimal[p, s]` / `Currency` annotation reports `kind: "decimal"`.
+  `Money(cents=True)` no longer exists.
+- **`describe` payloads carry `flow_id`** (the contract's `FlowRef.flow_id`),
+  and contract step references carry `flow_id` / `step_id`, the durable pair.
