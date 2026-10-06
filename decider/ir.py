@@ -8,9 +8,12 @@ Example::
 from decider._engine.ir import (BranchNode, CallNode, Input, IRContext, IRNode, LoopNode, NullPolicy, Origin, Output,
                                 ParamDecl, SequenceNode)
 from decider._engine.ir.context import step_map, to_ir
-from decider._engine.ir.nodes import iter_nodes
+from decider._engine.ir.decls import base_annotation
+from decider._engine.ir.nodes import FiniteStateMachineNode, ScatterGatherNode, iter_nodes
+from decider._engine.ir.origin import check_id, check_name
 
 __all__ = [
-    "BranchNode", "CallNode", "IRContext", "IRNode", "Input", "LoopNode", "NullPolicy", "Origin", "Output",
-    "ParamDecl", "SequenceNode", "iter_nodes", "step_map", "to_ir",
+    "BranchNode", "CallNode", "FiniteStateMachineNode", "IRContext", "IRNode", "Input", "LoopNode", "NullPolicy",
+    "Origin", "Output", "ParamDecl", "ScatterGatherNode", "SequenceNode", "base_annotation", "check_id", "check_name",
+    "iter_nodes", "step_map", "to_ir",
 ]

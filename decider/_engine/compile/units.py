@@ -12,7 +12,8 @@ from decider._engine.compile.sink import Sink
 from decider._engine.compile.structs import Schema, struct_dtype, struct_schema
 from decider._engine.ir.decls import Input, NullPolicy, base_annotation, nullable
 from decider._engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, ScatterGather, Sequence, NodeVersion
-from decider._engine.types import columnar_item, item_schema, struct_item
+from decider._annotations import struct_item
+from decider._engine.types import columnar_item, item_schema
 
 Values = dict[int, np.ndarray]
 

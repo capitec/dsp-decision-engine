@@ -6,8 +6,8 @@ from typing import Any
 import polars as pl
 
 from decider._annotations import Money, metadata_of
-from decider._engine.ir.decls import NullPolicy, base_annotation
 from decider._engine.wiring import resolve
+from decider.ir import NullPolicy, base_annotation
 
 # One past the largest integer float64 holds exactly: where an int -> float cast first loses precision.
 INT_NEAR_2_53 = 2**53 + 1

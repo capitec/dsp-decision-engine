@@ -21,7 +21,8 @@ from decider._engine.run.runners.interpreted import InterpretedRunner, _absent, 
 from decider._engine.run.state import State, fill_missing
 from decider._engine.trace.envelope import Kind
 from decider.exceptions import FallbackWarning
-from decider._engine.types import Representation, is_raw, representation_for, columnar_item, item_schema, struct_item
+from decider._annotations import struct_item
+from decider._engine.types import Representation, is_raw, representation_for, columnar_item, item_schema
 from decider._engine.wiring.plan import Call, Plan, NodeVersion
 
 

@@ -110,6 +110,11 @@ class Struct(Generic[T]):
     """Marker: a struct column of `Item`'s fields, as one record per row, read in a kernel."""
 
 
+def struct_item(annotation: Any) -> Any | None:
+    """`Item` of a `Struct[Item]` annotation, else `None`."""
+    return typing.get_args(annotation)[0] if typing.get_origin(annotation) is Struct else None
+
+
 # One table per process: a constant from `raw_str()` and a value first seen at runtime must
 # never be given the same code, so both draw from here.
 _RAW_STR_CODES: dict[Any, int] = {}

@@ -94,11 +94,6 @@ class TreeConfig(ConfigurableStep):
         """Every node the tree runs, by id: what a `<name>#<id>` locator points at."""
         return self.tree.to_tree().nodes
 
-    def check(self, ctx: t.Any) -> t.Iterable[t.Any]:
-        from decider.checks._builtin.structure import tree_findings
-
-        return tree_findings(self, ctx)
-
     def to_ir(self, ctx: t.Any) -> CallNode:
         tree = self.tree.to_tree()
         p = encode(tree, self.feature_types, ctx.value, self.null_handling, self.path_output, self.trace_output)

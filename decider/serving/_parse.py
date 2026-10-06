@@ -7,9 +7,9 @@ import typing_extensions as te
 from pydantic import ConfigDict, TypeAdapter, ValidationError
 from pydantic_core import from_json
 
-from decider._engine.ir.decls import base_annotation
 from decider.serving._errors import InputParsingError
-from decider._engine.types import struct_item
+from decider._annotations import struct_item
+from decider.ir import base_annotation
 
 
 def parse_application_json(data: bytes) -> t.Union[t.Dict[str, t.Any], pl.DataFrame]:

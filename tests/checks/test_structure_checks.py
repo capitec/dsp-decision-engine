@@ -160,6 +160,15 @@ def test_rows_that_can_both_match_overlap():
     assert (f.code, f.detail["rows"]) == ("DCD207", [0, 1]) and 5.0 <= f.detail["example"]["score"] < 10.0
 
 
+def test_disabling_table_overlap_drops_its_findings_but_not_the_gap(tmp_path):
+    pytest.importorskip("z3")
+    rows = [{"lo": 0.0, "hi": 10.0, "band": "a"}, {"lo": 5.0, "hi": 15.0, "band": "b"}]
+    path = tmp_path / "checks.yaml"
+    path.write_text("checks:\n  - {type: unreachable_branch}\ndisable: [table_overlap]\n")
+    codes = {f.code for f in checks.run(flow(_bands(rows), name="term"), config=path).findings}
+    assert "DCD207" not in codes and "DCD208" in codes
+
+
 def test_an_input_no_row_matches_is_a_gap_and_a_warning_without_default():
     pytest.importorskip("z3")
     rows = [{"lo": 0.0, "hi": 10.0, "band": "a"}, {"lo": 20.0, "hi": 30.0, "band": "b"}]

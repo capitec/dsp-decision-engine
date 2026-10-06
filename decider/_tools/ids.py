@@ -20,8 +20,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable
 
-from decider._engine.ir.origin import check_id, check_name
 from decider.exceptions import WiringError
+from decider.ir import check_id, check_name
 from decider.steps._composites import COMPOSITES, SCALARS
 
 _SCALAR = set(SCALARS)

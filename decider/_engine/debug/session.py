@@ -18,6 +18,7 @@ from decider._engine.ir.nodes import CallNode, IRNode, SequenceNode, iter_nodes
 from decider._engine.ir.origin import Origin
 from decider._engine.run.runners.base import Checkpoint
 from decider._engine.ir.decls import base_annotation
+from decider._engine.types import cast_values
 from decider._engine.run.state import dtype_of
 from decider._engine.wiring.plan import NodeVersion
 
@@ -173,7 +174,7 @@ class Session(Edits):
         """
         targets = self._targets(name)
         dtype = dtype_of(base_annotation(targets[-1].annotation))
-        values, valid = _cast(name, value, dtype, self.state.n)
+        values, valid = cast_values(name, value, dtype, self.state.n)
         previous = summarize(self.value(name))
         # Every version written so far, not only the latest: a loop or branch
         # may still read an earlier one (a carry, a branch's prior value).
@@ -389,19 +390,3 @@ class Session(Edits):
 
 def _under(path: str, prefix: str) -> bool:
     return path == prefix or path.startswith(prefix + "/")
-
-
-def _cast(name: str, value: Any, dtype: np.dtype, n: int) -> tuple[np.ndarray, np.ndarray | None]:
-    raw = np.empty(n, object)
-    try:
-        raw[:] = value
-    except ValueError:
-        raise ValueError(f"can't set {name!r}: give one value or {n} values, not {value!r}") from None
-    valid = np.array([v is not None for v in raw], bool)
-    if dtype != object:
-        try:
-            # same_kind: 1.5 into an int column or "abc" into a float one is an error, not a silent truncation.
-            raw = np.array([v if ok else 0 for v, ok in zip(raw, valid)]).astype(dtype, casting="same_kind")
-        except (TypeError, ValueError):
-            raise ValueError(f"can't set {name!r} to {value!r}: it doesn't cast to {dtype}") from None
-    return raw, None if valid.all() else valid

@@ -52,7 +52,9 @@ def run(pipeline: Any, checks: Iterable[Any] | None = None, *, config: str | Pat
                 raise DeciderError(f"check {c.type!r} yielded {type(finding).__name__}, not a Finding")
             findings.append(finding)
     ctx._current = None
-    findings += _step_findings(ctx, cfg.disable if cfg else ())
+    findings += _step_findings(ctx)
+    if cfg:
+        findings = [f for f in findings if not {f.code, f.check} & set(cfg.disable)]
     ir = ctx.ir
     flow = FlowRef(name=ir.origin.path, source=ir.origin.source, flow_id=ir.origin.id)
     return Report(flow=flow, findings=tuple(findings), skipped=tuple(skipped + ctx.skipped),
@@ -64,7 +66,7 @@ def _project_config() -> ChecksConfig | None:
     return load_config(path) if path else None
 
 
-def _step_findings(ctx: CheckContext, disabled: Iterable[str]) -> list[Finding]:
+def _step_findings(ctx: CheckContext) -> list[Finding]:
     from decider.steps import ConfigurableStep
 
     by_path: dict[str, Any] = {}
@@ -74,7 +76,7 @@ def _step_findings(ctx: CheckContext, disabled: Iterable[str]) -> list[Finding]:
     for path, step in ctx.steps.items():
         if isinstance(step, ConfigurableStep) and path in by_path:
             ctx.node = by_path[path]
-            out += [f for f in step.check(ctx) if not {f.code, f.check} & set(disabled)]
+            out += step.check(ctx)
     ctx.node = None
     return out
 

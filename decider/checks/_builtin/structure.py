@@ -8,6 +8,8 @@ from decider._engine.wiring.plan import Branch, Loop, ScatterGather, Sequence
 from decider.checks._base import Check, CheckContext
 from decider.checks._report import Finding, Severity, SkippedCheck
 from decider.ir import BranchNode, CallNode, LoopNode
+from decider.steps.tables import DecisionTableConfig
+from decider.steps.trees import TreeConfig
 
 __all__ = ["DeadOutput", "OpaqueFrameStep", "ShadowedWrite", "TableGap", "TableOverlap", "UnboundedLoop",
            "UnreachableBranch", "UnusedInput"]
@@ -26,6 +28,7 @@ class UnreachableBranch(Check):
     code = "DCD201"
 
     def run(self, ctx: CheckContext) -> Iterator[Finding]:
+        yield from _solved(ctx)
         for node in ctx.nodes:
             if not isinstance(node, BranchNode):
                 continue
@@ -143,7 +146,7 @@ class OpaqueFrameStep(Check):
 
 
 class TableOverlap(Check):
-    """Two decision table rows that can both match one input; the earlier row wins. Reported by the table's own `check`."""
+    """Two decision table rows that can both match one input; the earlier row wins. Reported by `unreachable_branch`, which solves the table."""
 
     type: Literal["table_overlap"] = "table_overlap"
     code = "DCD207"
@@ -154,7 +157,7 @@ class TableOverlap(Check):
 
 
 class TableGap(Check):
-    """An input no decision table row matches, so it takes `default` (or null). Reported by the table's own `check`."""
+    """An input no decision table row matches, so it takes `default` (or null). Reported by `unreachable_branch`, which solves the table."""
 
     type: Literal["table_gap"] = "table_gap"
     code = "DCD208"
@@ -245,8 +248,19 @@ def _solver(ctx: CheckContext) -> Any:
     return _smt
 
 
+def _solved(ctx: CheckContext) -> Iterator[Finding]:
+    by_path = {}
+    for n in ctx.nodes:
+        by_path.setdefault(n.origin.path, n)
+    for path, step in ctx.steps.items():
+        if path in by_path and isinstance(step, (TreeConfig, DecisionTableConfig)):
+            ctx.node = by_path[path]
+            yield from (tree_findings if isinstance(step, TreeConfig) else table_findings)(step, ctx)
+    ctx.node = None
+
+
 def tree_findings(step: Any, ctx: CheckContext) -> Iterator[Finding]:
-    """DCD201 for a tree: branches no input can take. Called by `TreeConfig.check`."""
+    """DCD201 for a tree: branches no input can take."""
     smt = _solver(ctx)
     if smt is None:
         return
@@ -262,7 +276,7 @@ def tree_findings(step: Any, ctx: CheckContext) -> Iterator[Finding]:
 
 
 def table_findings(step: Any, ctx: CheckContext) -> Iterator[Finding]:
-    """DCD201, DCD207 and DCD208 for a decision table. Called by `DecisionTableConfig.check`."""
+    """DCD201, DCD207 and DCD208 for a decision table."""
     smt = _solver(ctx)
     if smt is None:
         return
