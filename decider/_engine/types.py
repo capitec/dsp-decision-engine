@@ -202,6 +202,16 @@ def is_decimal(annotation: Any) -> bool:
     >>> is_decimal(int), is_decimal(Currency | None)
     (False, True)
     """
+    try:
+        return _is_decimal(annotation)
+    except TypeError as e:
+        if "unhashable" not in str(e):
+            raise
+        return _is_decimal.__wrapped__(annotation)
+
+
+@lru_cache(maxsize=1024)
+def _is_decimal(annotation: Any) -> bool:
     t, _ = _strip(annotation)
     return isinstance(t, type) and issubclass(t, _decimals()[0])
 
