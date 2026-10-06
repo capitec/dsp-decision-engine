@@ -285,12 +285,12 @@ def test_kernel_decorators_live_in_the_kernel_library():
     _stale(KERNEL_DECORATOR, bad, "KERNEL_DECORATOR")
 
 
-def test_cache_salt_covers_every_semantics_span_money_and_ops_file():
+def test_cache_salt_covers_every_semantics_span_decimal_type_and_ops_file():
     compile_dir = DECIDER / ENGINE / "compile"
     files = {*(compile_dir / "semantics").rglob("*.py"), *(DECIDER / "ops").rglob("*.py")}
-    files |= {p for p in (compile_dir / "span.py", compile_dir / "money.py") if p.exists()}
+    files |= {p for p in (compile_dir / "span.py", compile_dir / "decimal_type.py") if p.exists()}
     files = sorted(files, key=lambda p: p.relative_to(DECIDER).as_posix())
     salt = importlib.import_module(f"decider.{ENGINE}.compile.semantics").SALT
     assert salt == hashlib.sha256(b"".join(p.read_bytes() for p in files)).hexdigest(), (
-        "SALT must hash every file under semantics/ and ops/ plus span.py and money.py, found by walking"
+        "SALT must hash every file under semantics/ and ops/ plus span.py and decimal_type.py, found by walking"
     )
