@@ -127,11 +127,11 @@ class InterpretedRunner:
         # Plain Python scalars, not numpy ones: `x / 0.0` must raise here as it does in a kernel.
         cols = [_argument(state, v, i, scope.rows, node.origin.path, node.kind).tolist()
                 for i, v in zip(node.inputs, call.reads)]
-        if node.kind == "scalar":
+        boxes, param_boxes, scales = call.decimals
+        if node.kind == "scalar" and boxes:
             # A Decimal input or param reaches the step as a Decimal, not its int64.
-            cols = [[None if x is None else box(x) for x in col] if (box := decimal_boxer(i.annotation)) else col
-                    for i, col in zip(node.inputs, cols)]
-            bundle = tuple(box(b) if (box := decimal_boxer(d.annotation)) else b for d, b in zip(node.params, bundle))
+            cols = [[None if x is None else box(x) for x in col] if box else col for box, col in zip(boxes, cols)]
+            bundle = tuple(box(b) if box else b for box, b in zip(param_boxes, bundle))
         rows = zip(*cols) if cols else repeat((), m)
         results: list = []
         append = results.append
@@ -159,14 +159,14 @@ class InterpretedRunner:
         if len(columns) != len(node.outputs):
             raise ValueError(f"{node.origin.path}: returned {len(columns)} values per row, "
                              f"but declares {len(node.outputs)} outputs")
-        for v, out, values in zip(call.writes, node.outputs, columns):
+        for v, out, scale, values in zip(call.writes, node.outputs, scales, columns):
             # A `Struct[Item]` step returning a tuple of fields is stored as the dict a reader expects,
             # so interpreted and compiled modes agree on the value a struct step reads back.
             if (item := struct_item(out.annotation)) is not None:
                 fields = [name for name, _ in item_schema(item)]
                 values = tuple(None if x is None else (x if isinstance(x, dict) else dict(zip(fields, x)))
                                for x in values)
-            if (scale := decimal_scale(out.annotation)) is not None:
+            if scale is not None:
                 values = tuple(None if x is None else to_raw(x, scale) for x in values)
             # A `Raw[...]` output is stored as a kernel stores it, or the modes disagree on dtype.
             array, valid = _array(values, numpy_dtype(out.annotation) if is_raw(out.annotation)
@@ -276,7 +276,9 @@ class InterpretedRunner:
                 for v in sg.new_fields:
                     values, valid = gathered[v.name]
                     k = lo + j
-                    enriched[v.name] = None if valid is not None and not valid[k] else record_value(values[k], v.annotation)
+                    box = decimal_boxer(v.annotation)
+                    enriched[v.name] = (None if valid is not None and not valid[k]
+                                        else box(values[k]) if box else record_value(values[k], v.annotation))
                 out.append(enriched)
             out_lists[r] = out
         state.write(sg.out, out_lists, scope.rows)

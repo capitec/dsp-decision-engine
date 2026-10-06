@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Union
 
 from decider._engine.ir.decls import Input
+from decider._engine.types import decimal_boxer, decimal_scale
 from decider._engine.ir.nodes import BranchNode, CallNode, LoopNode, SequenceNode, FiniteStateMachineNode, ScatterGatherNode
 
 
@@ -44,6 +45,16 @@ class Call:
     node: CallNode
     reads: tuple[NodeVersion, ...] | None
     writes: tuple[NodeVersion, ...]
+    # The input boxers, param boxers and output scales; the boxers are empty when none is a Decimal.
+    decimals: tuple[tuple, tuple, tuple] = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        node = self.node
+        boxes = tuple(decimal_boxer(i.annotation) for i in node.inputs or ())
+        param_boxes = tuple(decimal_boxer(d.annotation) for d in node.params or ())
+        if not (any(boxes) or any(param_boxes)):
+            boxes = param_boxes = ()
+        self.decimals = (boxes, param_boxes, tuple(decimal_scale(o.annotation) for o in node.outputs or ()))
 
 
 @dataclass(frozen=True, slots=True, eq=False)

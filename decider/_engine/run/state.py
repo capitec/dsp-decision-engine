@@ -11,7 +11,7 @@ from decider._engine.ir.decls import Input, NullPolicy, base_annotation, is_type
 from decider._engine.run.representations import despan
 from decider._engine.wiring.plan import Plan, NodeVersion
 from decider._annotations import struct_item
-from decider._engine.types import annotation_cache, columnar_item, decimal_boxer, decimal_info, is_decimal, item_schema, to_raw_input
+from decider._engine.types import annotation_cache, columnar_item, decimal_info, is_decimal, item_schema, to_raw_input
 
 
 class State:
@@ -246,11 +246,8 @@ def record_value(value: Any, annotation: Any = None) -> Any:
 
     A compiled struct output is a numpy record, which `tolist()` turns into a
     tuple of fields (or leaves as a `np.void` in an object array); a step
-    returns a dict, so `score` must agree.
+    returns a dict, so `score` must agree. A Decimal value is boxed by the caller.
     """
-    box = decimal_boxer(annotation)
-    if box is not None:
-        return None if value is None else box(value)
     item = struct_item(base_annotation(annotation))
     if item is not None and value is not None and not isinstance(value, dict):
         return dict(zip((name for name, _ in item_schema(item)),
@@ -355,8 +352,11 @@ def _item_dtype(item: Any) -> pl.Struct:
     return pl.Struct(fields)
 
 
+_DTYPES = {t: np.dtype(d) for t, d in {float: np.float64, int: np.int64, bool: np.bool_, object: object}.items()}
+
+
 def dtype_of(annotation: Any) -> np.dtype:
     """The array dtype a value of `annotation` is stored in: float64, int64, bool, else object."""
-    if is_decimal(annotation):
-        return np.dtype(np.int64)
-    return np.dtype({float: np.float64, int: np.int64, bool: np.bool_}.get(annotation, object))
+    if (dtype := _DTYPES.get(annotation)) is not None:
+        return dtype
+    return _DTYPES[int] if is_decimal(annotation) else _DTYPES[object]
