@@ -114,7 +114,7 @@ def test_suppressed_client_is_still_evaluated_when_measurement_relevant(built, p
 def test_decider_build_stages_the_config_version(monkeypatch):
     """The BRIEF's own acceptance test: `decider build` must succeed unchanged."""
     from click.testing import CliRunner
-    from decider.cli import cli
+    from decider._tooling.cli import cli
 
     monkeypatch.setattr(os, "environ", {k: v for k, v in os.environ.items() if not k.upper().startswith("DECIDER_")})
     monkeypatch.setenv("DECIDER_API__MODE", "fused")

@@ -7,8 +7,8 @@ from dataclasses import dataclass, field
 from typing import Any, get_origin, is_typeddict
 
 from decider._engine.ir.decls import Input, base_annotation
-from decider._annotations import struct_item
-from decider._engine.types import columnar_item, decimal_info, is_raw, item_schema
+from decider.ops.nested import struct_item
+from decider._engine.types import columnar_item, decimal_info, item_schema
 from decider._engine.ir.nodes import (BranchNode, CallNode, IRNode, LoopNode, ScatterGatherNode, SequenceNode,
                                      iter_nodes)
 from decider._engine.wiring.plan import (Branch, Call, Carry, Loop, Merge, Plan, Resolved, ScatterGather, Sequence,
@@ -112,7 +112,6 @@ class _Resolver:
 
     def call(self, node: CallNode, scope: _Scope) -> Call:
         path = node.origin.path
-        _one_string_shape(node, path)
         _check_item_fields(node, path)
         own = {o.name for o in node.outputs or ()}
         reads = None
@@ -165,6 +164,9 @@ class _Resolver:
             return
         if (info := decimal_info(decl.annotation)) is not None:
             t = (t, info.scale)
+        # `str`, `Text` and `bytes` are each their own read of one string column.
+        if t is bytes:
+            t = str
         first, ft = self.input_types.setdefault(name, (reader, t))
         if ft != t:
             raise WiringError(
@@ -433,22 +435,6 @@ def _nested(t: Any) -> bool:
     if columnar_item(base) is not None or struct_item(base) is not None:
         return True
     return is_typeddict(base)
-
-
-def _one_string_shape(node: CallNode, path: str) -> None:
-    # A `Raw[str]` is an int32 code and a `str` is the string itself, so a node holding both
-    # compares a code with a string: always False, in every mode, with nothing to warn about.
-    coded, plain = [], []
-    for what, decls in (("input", node.inputs or ()), ("param", node.params or ())):
-        for d in decls:
-            if base_annotation(d.annotation) is str:
-                (coded if is_raw(d.annotation) else plain).append(f"{what} {d.name!r}")
-    if coded and plain:
-        raise WiringError(
-            f"{path}: {coded[0]} is Raw[str], an int32 dictionary code, but {plain[0]} is a plain str, "
-            f"so comparing them is always False. Annotate both Raw[str] to compare codes (a Raw[str] "
-            f"param is still tuned as a string), or neither to compare the strings themselves."
-        )
 
 
 def _is_typo(name: str, near: str) -> bool:

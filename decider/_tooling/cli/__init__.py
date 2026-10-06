@@ -7,13 +7,13 @@ import click
 from dotenv import load_dotenv
 
 from decider import _settings as settings_module
-from decider.cli._check import check
-from decider.cli._diff import diff
+from decider._tooling.cli._check import check
+from decider._tooling.cli._diff import diff
 
 __all__ = ["cli"]
 
 TEMPLATES = Path(__file__).parent / "templates"
-GUIDE = Path(__file__).parent.parent / "GUIDE.md"
+GUIDE = Path(__file__).parents[2] / "GUIDE.md"
 CPU_TARGET_FILE = "decider-cpu-target.json"
 
 
@@ -67,7 +67,7 @@ def ids(path: Path, fix: bool, check: bool) -> None:
     file is git-tracked and the working tree is clean, and only writes after the
     whole tree parses and every id passes a repo-wide uniqueness scan.
     """
-    from decider._tools.ids import IdError, generate
+    from decider._tooling.cli.ids import IdError, generate
 
     try:
         report = generate(path, fix=fix, check=check)
@@ -154,7 +154,7 @@ def _serve_sanic(host: str, port: int, workers: int) -> None:
 
 
 @cli.command()
-@click.option("--raw", is_flag=True, help="Enable the raw record/trace tools (decider.mcp.rawData).")
+@click.option("--raw", is_flag=True, help="Enable the raw record/trace tools (decider._tooling.mcp.rawData).")
 def mcp(raw: bool) -> None:
     """Serve the FastMCP server over stdio for an MCP host (e.g. an agent).
 
@@ -167,12 +167,12 @@ def mcp(raw: bool) -> None:
     editor-bound highlight/reveal/selection tools forward to the VS Code window
     that owns a workspace, over an authenticated per-window socket.
     """
-    from decider.mcp import run_stdio
+    from decider._tooling.mcp import run_stdio
 
     run_stdio(raw=raw)
 
 
-from decider.cli._experiment import experiment  # noqa: E402
+from decider._tooling.cli._experiment import experiment  # noqa: E402
 
 cli.add_command(experiment)
 

@@ -7,7 +7,7 @@ import pytest
 from pydantic import ValidationError
 
 from decider.data import DatasetError
-from decider._bridge.bridge import Bridge
+from decider._tooling.bridge.bridge import Bridge
 from decider.experiments import Experiment, ExperimentDef, run
 from decider.experiments._experiments import InputSpec
 

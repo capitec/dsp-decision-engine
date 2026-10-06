@@ -7,12 +7,13 @@ from typing import TypedDict
 import polars as pl
 import pytest
 
-from decider import Engine, Raw, Columnar, Struct, dag, flow, raw_str, step
+from decider import Engine, dag, flow, step
+from decider.ops import Columnar, Struct
 from decider.exceptions import FallbackWarning, WiringError
+from decider.ops import Text
 from decider.steps.trees import TreeConfig
 from decider.testing import assert_equivalent
 
-PRIVATE = raw_str("private")
 FRAME = pl.DataFrame(
     {"sector": ["private", "public"],
      "accounts": [[{"balance": 1.0}], [{"balance": 2.0}]],
@@ -33,11 +34,7 @@ def semantic(sector: str) -> float:
     return 1.0 if sector == "private" else 0.0
 
 
-def code(sector: Raw[str]) -> float:
-    return 10.0 if sector == PRIVATE else 0.0
-
-
-def span(sector: Raw[bytes]) -> float:
+def span(sector: Text) -> float:
     return 100.0 if sector == "private" else 0.0
 
 
@@ -73,35 +70,35 @@ def _quiet():
 
 # --- the same type, two representations: these compose ------------------------------------------
 
-def test_a_semantic_str_and_a_raw_str_read_the_same_column_in_one_flow():
+def test_a_semantic_str_and_a_text_read_the_same_column_in_one_flow():
     # One runs in Python and one in the kernel, over the same version of the column.
-    out = assert_equivalent(flow(semantic, code, name="p"), FRAME)
-    assert (out["semantic"].to_list(), out["code"].to_list()) == ([1.0, 0.0], [10.0, 0.0])
+    out = assert_equivalent(flow(semantic, span, name="p"), FRAME)
+    assert (out["semantic"].to_list(), out["span"].to_list()) == ([1.0, 0.0], [100.0, 0.0])
 
 
-def test_a_semantic_str_and_a_raw_str_read_the_same_column_in_a_dag():
-    out = assert_equivalent(dag(step(semantic), step(code), name="p"), FRAME)
-    assert (out["semantic"].to_list(), out["code"].to_list()) == ([1.0, 0.0], [10.0, 0.0])
+def test_a_semantic_str_and_a_text_read_the_same_column_in_a_dag():
+    out = assert_equivalent(dag(step(semantic), step(span), name="p"), FRAME)
+    assert (out["semantic"].to_list(), out["span"].to_list()) == ([1.0, 0.0], [100.0, 0.0])
 
 
-def test_a_semantic_bytes_and_a_raw_bytes_read_the_same_column():
+def test_a_semantic_bytes_and_a_text_read_the_same_column():
     out = assert_equivalent(flow(semantic_bytes, span, name="p"), FRAME)
     assert (out["semantic_bytes"].to_list(), out["span"].to_list()) == ([1000.0, 0.0], [100.0, 0.0])
 
 
 def test_each_representation_of_one_column_lands_where_it_belongs():
-    exe = Engine().bind(flow(semantic, code, name="p"), mode="fused")
+    exe = Engine().bind(flow(semantic, span, name="p"), mode="fused")
     exe.run(FRAME)
-    # The semantic reader runs in Python; the code reader stays in the kernel around it.
+    # The semantic reader runs in Python; the `Text` reader stays in the kernel around it.
     assert set(exe.fallbacks()) == {"p/semantic"}
 
 
-def test_a_raw_str_step_reads_a_semantic_str_step_s_output():
+def test_a_text_step_reads_a_semantic_str_step_s_output():
     def label(sector: str) -> str:
         return sector
 
-    def measure(label: Raw[str]) -> float:
-        return 10.0 if label == PRIVATE else 0.0
+    def measure(label: Text) -> float:
+        return 10.0 if label == "private" else 0.0
 
     out = assert_equivalent(flow(label, measure, name="p"), FRAME)
     assert out["measure"].to_list() == [10.0, 0.0]
@@ -110,8 +107,6 @@ def test_a_raw_str_step_reads_a_semantic_str_step_s_output():
 # --- different types on one column: refused, naming both readers --------------------------------
 
 REFUSED = [
-    (semantic, span, "as str", "as bytes"),
-    (code, span, "as str", "as bytes"),
     (listed, rowed, "as list", "as Columnar"),
     (dicted, structed, "as dict", "as Struct"),
 ]
@@ -149,12 +144,17 @@ def test_a_string_gated_tree_runs_on_its_own():
     assert assert_equivalent(flow(GATE, name="p"), FRAME)["hit"].to_list() == [1, 0]
 
 
-def test_a_tree_and_a_raw_bytes_step_share_the_string_column():
+def test_a_tree_and_a_text_step_share_the_string_column():
     out = assert_equivalent(flow(GATE, span, name="p"), FRAME)
     assert (out["hit"].to_list(), out["span"].to_list()) == ([1, 0], [100.0, 0.0])
 
 
-def test_a_tree_and_a_semantic_str_step_on_one_column_are_refused():
-    # A tree matches bytes; a `str` step wants the Python string. The column has one type.
-    with pytest.raises(WiringError, match="as bytes.*as str|as str.*as bytes"):
-        Engine().bind(flow(GATE, semantic, name="p"), mode="fused")
+def test_a_tree_and_a_semantic_str_step_share_the_string_column():
+    out = assert_equivalent(flow(GATE, semantic, name="p"), FRAME)
+    assert (out["hit"].to_list(), out["semantic"].to_list()) == ([1, 0], [1.0, 0.0])
+
+
+def test_every_string_read_of_one_column_composes():
+    out = assert_equivalent(flow(semantic, span, semantic_bytes, GATE, name="p"), FRAME)
+    assert [out[c].to_list() for c in ("semantic", "span", "semantic_bytes", "hit")] == [
+        [1.0, 0.0], [100.0, 0.0], [1000.0, 0.0], [1, 0]]

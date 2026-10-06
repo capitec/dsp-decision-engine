@@ -4,7 +4,7 @@ import json
 
 import click
 
-from decider.cli._diff import _frame
+from decider._tooling.cli._diff import _frame
 
 
 @click.command()

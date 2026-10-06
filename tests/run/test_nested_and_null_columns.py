@@ -177,7 +177,7 @@ def test_list_of_float_output_keeps_floats_whatever_the_first_row():
 def test_a_nested_null_field_is_not_retyped_as_string():
     from typing import TypedDict
 
-    from decider import Columnar
+    from decider.ops import Columnar
 
     class Item(TypedDict):
         price: float

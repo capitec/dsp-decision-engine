@@ -4,7 +4,7 @@ import json
 import polars as pl
 from click.testing import CliRunner
 
-from decider.cli import cli
+from decider._tooling.cli import cli
 
 ENTRY = "shop.pipeline:build"
 

@@ -18,18 +18,18 @@ There are three groups, and they are kept as **siblings** under `decider/`, not 
 |---|---|
 | **Core** | `decider/__init__.py`, `steps/`, the facades `ir.py`, `trace.py` and `debug.py`, `contract/`, and the private `_engine/` |
 | **Libraries** | `checks/`, `diff/`, `experiments/`, `data/`, `testing/`, `config/` |
-| **Tooling** | `serving/`, `mcp/`, `cli/`, `_bridge/`, `_tools/` |
+| **Tooling** | `serving/` (imported by users) and `_tooling/` (`cli/`, `mcp/`, `bridge/`: launched, never imported) |
 
 Nesting them as `decider/core/` or `decider/lib/checks` would only make import paths longer. The grouping lives in two places instead:
 - the top-level docstring, which gives one line per package;
 - the layer map, enforced by `tests/test_conventions.py`.
 
 ```
-L4 tooling     serving  mcp  cli  _bridge  _tools
+L4 tooling     serving  _tooling (cli  mcp  bridge)
 L3 libraries   checks  diff  experiments  data  testing
 L2 contract    contract  (refs, describe, manifest, jobs, bridge messages, schemas)
 L1 core        decider/__init__  steps  ir  trace  debug  _engine  config
-L0 foundation  exceptions  registry  _annotations  _settings  _suggest  _polars_docs
+L0 foundation  exceptions  registry  ops  _settings  _suggest  _polars_docs
 ```
 
 ## Target tree
@@ -46,23 +46,21 @@ decider/
 │                                   LoopNode SequenceNode IRNode Origin IRContext to_ir iter_nodes step_map
 ├── trace.py                    NEW facade: TraceSink Kind Adapter PassThroughAdapter TraceEvent TraceLossError
 ├── debug.py                    NEW facade: Session + event models (Paused NodeFinished ... WarningEvent ErrorEvent)
-├── _annotations.py             ← fields.py + public half of types.py (Money Percent Duration FieldMetadata
-│                                   metadata_of Columnar Struct Raw raw_str); exported only from `decider`
 ├── _settings.py                ← settings.py; lazy get_settings(), adds checks_path beside datasets_path
 ├── _suggest.py                 ← registry/resolve.py (did-you-mean)
 ├── _polars_docs/               ← serializable/ (DataFrame → FrameDoc)
 │   ├── __init__.py
 │   ├── frame.py                ← serializable/dataframe.py
 │   └── schema.py               ← serializable/schema.py
-├── _tools/
-│   ├── __init__.py
-│   └── ids.py                  ← ids.py
 │
 ├── ops/                        NEW public: functions users call in a step, Python and kernel alike (kernel-functions.md)
-│   ├── __init__.py             one line per domain, no re-exports
-│   ├── decimal.py              round(x, digits, mode=Rounding.HALF_UP|HALF_EVEN|DOWN) first; scaled fixed point later
+│   ├── __init__.py             re-exports each domain's type: Text Currency Decimal Columnar Struct Percent
+│   │                               Duration FieldMetadata (Currency/Decimal lazily, they import numba)
+│   ├── text.py                 Text: a string read in place, compiled ==/!=/len/in/startswith/endswith
+│   ├── decimal.py              Decimal Currency; round(x, digits, mode=Rounding.HALF_UP|HALF_EVEN|DOWN)
+│   ├── nested.py               Columnar Struct struct_item
+│   ├── measures.py             FieldMetadata Percent Duration DecimalSpec metadata_of
 │   ├── general.py              shared numeric helpers, grown on demand
-│   ├── strings.py              explicit string functions, when needed
 │   └── credit.py               per-record credit functions (phase 7, credit-functions.md)
 │
 ├── credit/                     NEW public library (phase 7): fitting from data → scorecard / param-table documents
@@ -185,20 +183,20 @@ decider/
 │   ├── _errors.py              ← HTTP errors from exceptions.py
 │   └── _servers/               ← serving/servers/ (core sanic starlette)
 │
-├── mcp/                        public: run_stdio build_server Policy
-│   ├── __init__.py  _server.py  _tools.py  _policy.py  _editor.py  ← mcp/
-│
-├── cli/                        public: cli
-│   ├── __init__.py             ← cli/__init__.py (group + guide/ids/build/serve/mcp/template)
-│   ├── _check.py  _experiment.py  _diff.py  _describe.py           NEW commands
-│   └── templates/              ← cli/templates/
-│
-└── _bridge/                    ← debug_bridge/, launched as `python -m decider._bridge`
-    ├── __init__.py  __main__.py  bridge.py  datasets.py  draft.py  experiment.py  forks.py
-    ├── loading.py  replay.py  rows.py  run.py  runs.py  timeline.py              ← debug_bridge/
-    ├── describing.py           ← contract/describing.py
-    ├── controls.py             ← engine/debug/controls.py
-    └── lineage.py              ← engine/debug/lineage.py
+└── _tooling/                   programs launched, never imported: `decider ...`, `decider mcp`, the editor bridge
+    ├── mcp/                    run_stdio build_server Policy
+    │   ├── __init__.py  _server.py  _tools.py  _policy.py  _editor.py  ← mcp/
+    ├── cli/                    cli (pyproject: decider._tooling.cli:cli)
+    │   ├── __init__.py         ← cli/__init__.py (group + guide/ids/build/serve/mcp/template)
+    │   ├── _check.py  _experiment.py  _diff.py  _describe.py       NEW commands
+    │   ├── ids.py              ← ids.py
+    │   └── templates/          ← cli/templates/
+    └── bridge/                 ← debug_bridge/, launched as `python -m decider._tooling.bridge`
+        ├── __init__.py  __main__.py  bridge.py  datasets.py  draft.py  experiment.py  forks.py
+        ├── loading.py  replay.py  rows.py  run.py  runs.py  timeline.py              ← debug_bridge/
+        ├── describing.py           ← contract/describing.py
+        ├── controls.py             ← engine/debug/controls.py
+        └── lineage.py              ← engine/debug/lineage.py
 ```
 
 ### Deleted
@@ -223,7 +221,6 @@ Before each deletion, a grep for callers is re-run against the tree at the time.
 # build
 step frame_step flow dag branch loop each optimise EachMode allow_fallback helper
 param param_table missing_as ParamTable
-Money Percent Duration FieldMetadata Columnar Struct Raw raw_str
 TreeConfig DecisionTableConfig ScorecardConfig        # module __getattr__: imported on first use
 # run
 Engine Executable load_flow describe

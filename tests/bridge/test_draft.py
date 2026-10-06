@@ -1,6 +1,6 @@
 import os
 
-from decider._bridge.bridge import Bridge
+from decider._tooling.bridge.bridge import Bridge
 
 HERE = os.path.dirname(__file__)
 LOAN = os.path.join(HERE, "..", "..", "tools", "vscode-decider", "examples", "loan.py")

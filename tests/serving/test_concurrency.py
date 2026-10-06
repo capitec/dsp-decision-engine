@@ -17,7 +17,8 @@ import polars as pl
 import pytest
 from numba.core.errors import NumbaError
 
-from decider import ConfigurableStep, Engine, Raw, branch, each, flow, missing_as, param, step
+from decider import ConfigurableStep, Engine, branch, each, flow, missing_as, param, step
+from decider.ops import Text
 from decider.config import JsonFileStore
 from decider._engine.compile.njit import jit
 from decider._engine.compile.rows import rows_class
@@ -130,7 +131,7 @@ def test_concurrent_first_frame_runs_on_a_cold_executable_agree_with_one_thread(
 # --- (b) str params on the span path -------------------------------------------------
 
 
-def is_sector(sector: Raw[bytes], want: str = param("privé")) -> bool:
+def is_sector(sector: Text, want: str = param("privé")) -> bool:
     return sector == want
 
 

@@ -187,7 +187,7 @@ def test_a_result_with_plots_round_trips_through_json(pipeline, frame):
 
 
 def test_core_decider_and_the_metrics_never_import_altair():
-    code = ("import sys, decider, decider.experiments, decider.mcp._tools; "
+    code = ("import sys, decider, decider.experiments, decider._tooling.mcp._tools; "
             "assert 'altair' not in sys.modules and 'IPython' not in sys.modules")
     subprocess.run([sys.executable, "-c", code], check=True)
 

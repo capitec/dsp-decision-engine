@@ -9,10 +9,10 @@ import pytest
 from click.testing import CliRunner
 
 from decider import _engine as engine
-from decider.cli import cli
+from decider._tooling.cli import cli
 from decider.contract import describe
 from decider._engine.ir.nodes import iter_nodes
-from decider._tools.ids import IdError, add_ids, generate
+from decider._tooling.cli.ids import IdError, add_ids, generate
 from decider.steps import flow, step
 
 PIPELINE = '''"""A retail credit pipeline, kept readable."""

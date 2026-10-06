@@ -13,11 +13,12 @@ from decider._engine.compile import numpy_dtype
 from decider._engine.compile.rows import build_rows, rows_needs_no_fill
 from decider._engine.ir.decls import Input, NullPolicy, base_annotation, stored_fill
 from decider._engine.run.params import RunParams
-from decider._engine.run.representations import codes, span_objects
+from decider._engine.run.representations import span_objects
+from decider.ops.text import Text
 from decider._engine.run.runners.base import Checkpoint
 from decider._engine.run.state import State, dtype_of, fill_missing, from_series, record_value
 from decider._engine.trace.envelope import Kind
-from decider._annotations import struct_item
+from decider.ops.nested import struct_item
 from decider._engine.types import (Representation, columnar_item, decimal_boxer, decimal_scale, is_raw, item_schema,
                                    representation_for, to_raw)
 from decider._engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, ScatterGather, Sequence, NodeVersion
@@ -168,7 +169,9 @@ class InterpretedRunner:
                                for x in values)
             if scale is not None:
                 values = tuple(None if x is None else to_raw(x, scale) for x in values)
-            # A `Raw[...]` output is stored as a kernel stores it, or the modes disagree on dtype.
+            if base_annotation(out.annotation) is str:
+                values = tuple(x.text if isinstance(x, Text) else x for x in values)
+            # A `Columnar[...]` output is stored as a kernel stores it, or the modes disagree on dtype.
             array, valid = _array(values, numpy_dtype(out.annotation) if is_raw(out.annotation)
                                   else dtype_of(base_annotation(out.annotation)))
             state.write(v, array, scope.rows, valid)
@@ -361,13 +364,11 @@ def _argument(state: State, version: NodeVersion, decl: Input, rows: np.ndarray 
         elif base_annotation(decl.annotation) in (str, bytes):
             # Never the row-only span/code shape here: interpreted trees keep real str/bytes values.
             kind = representation_for(decl.annotation, row=False)
-            # A `Span` answers what a compiled span answers, so both modes agree.
+            # A `Text` answers what a compiled span answers, so both modes agree.
             span = kind is Representation.RAW_BYTES
             if span:
                 values = state.representation(version, (kind, "objects"),
                                               lambda v, s, a: _spans(decl.name, v))
-            elif kind is Representation.RAW_STRING:
-                values = state.representation(version, kind, lambda v, s, a: codes(v))
             elif kind is Representation.SEMANTIC_BYTES and node_kind == "scalar":
                 # `bytes` declares how a step reads a string column: as its UTF-8 bytes. A tree
                 # matches on the strings themselves, so only a scalar step is given the bytes.

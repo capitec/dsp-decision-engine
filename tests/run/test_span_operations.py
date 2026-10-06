@@ -1,10 +1,11 @@
-"""A `Raw[bytes]` value answers string operations, in every mode, exactly as CPython does."""
+"""A `Text` value answers string operations, in every mode, exactly as CPython does."""
 import polars as pl
 import pytest
 from numba.core import types
 from numba.core.errors import TypingError
 
-from decider import Engine, Raw, flow, missing_as, param
+from decider import Engine, flow, missing_as, param
+from decider.ops import Text
 from decider._engine.compile.semantics.strings import _span_eq
 from decider._engine.compile.span import SPAN
 from decider.testing import assert_equivalent
@@ -17,51 +18,51 @@ FRAME = pl.DataFrame({"sector": VALUES}, schema={"sector": pl.String})
 WANT = "privé"
 
 
-def eq_literal(sector: Raw[bytes] | None) -> bool:
+def eq_literal(sector: Text | None) -> bool:
     return sector == "privé"
 
 
-def ne_literal(sector: Raw[bytes] | None) -> bool:
+def ne_literal(sector: Text | None) -> bool:
     return sector != "privé"
 
 
-def eq_param(sector: Raw[bytes] | None, want: str = param("privé")) -> bool:
+def eq_param(sector: Text | None, want: str = param("privé")) -> bool:
     return sector == want
 
 
-def eq_global(sector: Raw[bytes] | None) -> bool:
+def eq_global(sector: Text | None) -> bool:
     return sector == WANT
 
 
-def code_points(sector: Raw[bytes] | None) -> int:
+def code_points(sector: Text | None) -> int:
     return len(sector)
 
 
-def starts(sector: Raw[bytes] | None) -> bool:
+def starts(sector: Text | None) -> bool:
     return sector.startswith("priv")
 
 
-def starts_param(sector: Raw[bytes] | None, prefix: str = param("priv")) -> bool:
+def starts_param(sector: Text | None, prefix: str = param("priv")) -> bool:
     return sector.startswith(prefix)
 
 
-def ends(sector: Raw[bytes] | None) -> bool:
+def ends(sector: Text | None) -> bool:
     return sector.endswith("énd")
 
 
-def holds(sector: Raw[bytes] | None) -> bool:
+def holds(sector: Text | None) -> bool:
     return "afé" in sector
 
 
-def is_null(sector: Raw[bytes] | None) -> bool:
+def is_null(sector: Text | None) -> bool:
     return sector[1] < 0
 
 
-def byte_length(sector: Raw[bytes] | None) -> int:
+def byte_length(sector: Text | None) -> int:
     return sector[1]
 
 
-def filled(sector: Raw[bytes] = missing_as("unknown")) -> bool:
+def filled(sector: Text = missing_as("unknown")) -> bool:
     return sector == "unknown"
 
 
@@ -127,7 +128,7 @@ def test_score_reads_one_record_through_the_same_operations(mode):
     assert exe.score({"sector": "public"})["eq_literal"] is False
 
 
-def other(sector: Raw[bytes] | None, alias: Raw[bytes] | None) -> bool:
+def other(sector: Text | None, alias: Text | None) -> bool:
     return sector == alias
 
 
@@ -140,7 +141,7 @@ def undeclared_identity(value):
     return value
 
 
-def compares_through_a_helper(sector: Raw[bytes]) -> bool:
+def compares_through_a_helper(sector: Text) -> bool:
     # No @helper, so the step runs in Python: it must still compare whole values.
     return undeclared_identity(sector) == "private"
 

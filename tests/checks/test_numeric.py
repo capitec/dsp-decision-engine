@@ -4,7 +4,7 @@ from typing import Annotated
 import numpy as np
 import pytest
 
-from decider import Money, checks, flow, loop, param, step
+from decider import checks, flow, loop, param, step
 from decider.checks import Severity
 from decider.ops import decimal
 from decider.ops.decimal import Currency, Rounding
@@ -80,20 +80,12 @@ def test_a_running_int_total_in_a_loop_is_flagged():
 
 
 # DCD102
-def held_float(amount: Annotated[float, Money()]) -> Annotated[float, Money()]:
-    return amount
-
-
 def truncated(price: float) -> int:
     return int(price * 100)
 
 
 def float_into_decimal(amount: Currency, rate: float) -> Currency:
     return float(amount) * rate
-
-
-def test_money_as_float_is_flagged_once_per_step():
-    assert fires(held_float, "float_money").detail["names"] == ["amount", "held_float"]
 
 
 def test_int_times_100_truncation_is_flagged():

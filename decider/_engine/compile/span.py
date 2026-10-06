@@ -1,4 +1,4 @@
-# A `Raw[bytes]` value in a kernel is a `(address, byte length)` pair into Arrow
+# A `Text` value in a kernel is a `(address, byte length)` pair into Arrow
 # memory. `SpanType` gives that pair its own numba type, so `==`, `len` and the
 # rest below mean string things on a span and nothing else: overloading them on
 # the bare `UniTuple(int64, 2)` would capture every unrelated pair of ints in a
@@ -21,7 +21,7 @@ _address.argtypes = (ctypes.py_object,)
 
 
 class SpanType(types.Type):
-    """A `Raw[bytes]` value in compiled code: UTF-8 bytes at an address, byte length -1 for a null."""
+    """A `Text` value in compiled code: UTF-8 bytes at an address, byte length -1 for a null."""
 
     # What UniTupleModel reads, so a span is the same `[2 x i64]` value the kernel builds.
     dtype = types.int64
@@ -43,7 +43,7 @@ SPAN_DTYPE = np.dtype([("address", np.int64), ("length", np.int64)])
 
 
 class SpanArray(np.ndarray):
-    """A column of spans: one element is a span in a kernel and a `Span` in Python.
+    """A column of spans: one element is a span in a kernel and a `Text` in Python.
 
     The bytes live wherever they were read from, so `kept` holds whatever owns
     them (an Arrow import, a list of `bytes`) for as long as any view of this
@@ -57,10 +57,10 @@ class SpanArray(np.ndarray):
         # The Python-side counterpart of the kernel's span, so a step that falls back to
         # Python answers `== "x"`, `len` and the rest identically. Imported here because
         # the representations live under `engine/run`, which reads this module.
-        from decider._engine.run.representations import Span
+        from decider.ops.text import Text
 
         length = int(value["length"])
-        return Span(None if length < 0 else ctypes.string_at(int(value["address"]), length).decode())
+        return Text(None if length < 0 else ctypes.string_at(int(value["address"]), length).decode())
 
     def __iter__(self):
         return map(self.__getitem__, range(len(self)))

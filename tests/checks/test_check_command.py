@@ -4,7 +4,7 @@ import json
 import pytest
 from click.testing import CliRunner
 
-from decider.cli import cli
+from decider._tooling.cli import cli
 
 PIPELINE = '''
 from decider import flow, step

@@ -9,7 +9,7 @@ import sys
 import pytest
 
 HERE = os.path.dirname(__file__)
-from decider._bridge.bridge import Bridge
+from decider._tooling.bridge.bridge import Bridge
 
 TABLE_DOC = {
     "type": "decision_table", "name": "bands",

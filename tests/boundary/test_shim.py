@@ -260,7 +260,7 @@ def test_categorical_and_enum_expose_a_dictionary_view_of_the_right_length_and_i
         assert d["e"]["storage_type"] == "uint8" and d["e"]["dictionary_length"] == 3
         assert d["c"]["dictionary_storage_type"] == d["e"]["dictionary_storage_type"] == "string_view"
         rows = fv.materialize()
-        assert rows.i32[:, 0].tolist() == [c if c is not None else -1 for c in df["c"].to_physical().to_list()]
+        assert rows.i32[:, 0].tolist() == [0, 1, -1, 0]   # dictionary indices, not polars' process-wide codes
         assert rows.i32[:, 1].tolist() == [0, 1, 0, -1]
 
 

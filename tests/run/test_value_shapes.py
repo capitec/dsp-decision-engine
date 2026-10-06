@@ -8,12 +8,13 @@ from typing import TypedDict
 import polars as pl
 import pytest
 
-from decider import Engine, Raw, Columnar, Struct, flow, missing_as, raw_str
+from decider import Engine, flow, missing_as
+from decider.ops import Columnar, Struct
+from decider.ops import Text
 from decider.exceptions import FallbackWarning
 from decider.testing import assert_equivalent
 
 COMPILED = ("stepped", "fused")
-PRIVATE = raw_str("private")
 
 
 class Account(TypedDict):
@@ -56,19 +57,15 @@ def semantic_str(sector: str) -> float:
     return 1.0 if sector == "private" else 0.0
 
 
-def raw_str_code(sector: Raw[str]) -> float:
-    return 1.0 if sector == PRIVATE else 0.0
-
-
 def semantic_bytes(blob: bytes) -> float:
     return 1.0 if blob == b"private" else 0.0
 
 
-def raw_bytes_span(sector: Raw[bytes]) -> float:
+def raw_bytes_span(sector: Text) -> float:
     return 1.0 if sector == "private" else 0.0
 
 
-def raw_bytes_prefix(sector: Raw[bytes]) -> float:
+def raw_bytes_prefix(sector: Text) -> float:
     return float(len(sector)) if sector.startswith("priv") else 0.0
 
 
@@ -98,7 +95,6 @@ def list_of_floats(history: list[float]) -> float:
 # (step, its answer over FRAME, its answer for RECORD, whether a kernel holds it)
 SHAPES = [
     (semantic_str, [1.0, 0.0], 1.0, False),
-    (raw_str_code, [1.0, 0.0], 1.0, True),
     (semantic_bytes, [1.0, 0.0], 1.0, False),
     (raw_bytes_span, [1.0, 0.0], 1.0, True),
     (raw_bytes_prefix, [7.0, 0.0], 7.0, True),
@@ -143,12 +139,12 @@ def every_shape_at_once(sector: str, accounts: list[dict], applicant: dict, hist
         + applicant["income"] + sum(history)
 
 
-def every_compiled_shape_at_once(sector: Raw[str], accounts: Columnar[Account],
+def every_compiled_shape_at_once(sector: Text, accounts: Columnar[Account],
                                  applicant: Struct[Applicant]) -> float:
     total = 0.0
     for j in range(len(accounts.balance)):
         total += accounts.balance[j]
-    return (1.0 if sector == PRIVATE else 0.0) + total + applicant["income"]
+    return (1.0 if sector == "private" else 0.0) + total + applicant["income"]
 
 
 def test_the_python_shapes_combine_in_one_step():
@@ -162,8 +158,8 @@ def test_the_opt_in_shapes_combine_in_one_step():
 
 
 def test_a_raw_bytes_input_over_a_bytes_column_is_refused_the_same_way_in_every_mode():
-    # `Raw[bytes]` is a string column read as its UTF-8 bytes; a real bytes column is `bytes`.
-    def over_blob(blob: Raw[bytes]) -> float:
+    # `Text` is a string column read as its UTF-8 bytes; a real bytes column is `bytes`.
+    def over_blob(blob: Text) -> float:
         return float(len(blob))
 
     for mode in ("interpreted", *COMPILED):
@@ -172,8 +168,8 @@ def test_a_raw_bytes_input_over_a_bytes_column_is_refused_the_same_way_in_every_
 
 
 def test_a_step_mixing_an_opt_in_and_a_python_shape_still_agrees():
-    def mixed(sector: Raw[str], accounts: list[dict]) -> float:
-        return (1.0 if sector == PRIVATE else 0.0) + sum(a["balance"] for a in accounts)
+    def mixed(sector: Text, accounts: list[dict]) -> float:
+        return (1.0 if sector == "private" else 0.0) + sum(a["balance"] for a in accounts)
 
     out = assert_equivalent(flow(mixed, name="p"), FRAME)
     assert out["mixed"].to_list() == [16.0, 3.0]
@@ -204,11 +200,7 @@ def optional_str(sector: str | None) -> float:
     return 0.0 if sector is None else 1.0
 
 
-def optional_code(sector: Raw[str] | None) -> float:
-    return 0.0 if sector is None else 1.0
-
-
-def optional_span(sector: Raw[bytes] | None) -> float:
+def optional_span(sector: Text | None) -> float:
     return float(len(sector))
 
 
@@ -240,7 +232,7 @@ def filled_rows(accounts: Columnar[Account] = missing_as([])) -> float:
     return float(len(accounts.balance))
 
 
-NULLS = [(optional_str, [1.0, 0.0]), (optional_code, [1.0, 0.0]), (optional_span, [7.0, 0.0]),
+NULLS = [(optional_str, [1.0, 0.0]), (optional_span, [7.0, 0.0]),
          (optional_list, [1.0, 0.0]), (optional_rows, [1.0, 0.0]), (optional_dict, [5.0, 0.0]),
          (optional_struct, [5.0, 0.0]), (filled_str, [0.0, 1.0]), (filled_list, [1.0, 0.0]),
          (filled_rows, [1.0, 0.0])]
@@ -264,7 +256,7 @@ def out_str(sector: str) -> str:
     return sector.upper()
 
 
-def out_code(sector: Raw[str]) -> Raw[str]:
+def out_text(sector: Text) -> Text:
     return sector
 
 
@@ -276,7 +268,7 @@ def out_dict(sector: str) -> dict:
     return {"n": len(sector)}
 
 
-OUTPUTS = [(out_str, ["PRIVATE", "PUBLIC"]), (out_code, [PRIVATE, raw_str("public")]),
+OUTPUTS = [(out_str, ["PRIVATE", "PUBLIC"]), (out_text, ["private", "public"]),
            (out_list, [[7.0], [6.0]]), (out_dict, [{"n": 7}, {"n": 6}])]
 
 

@@ -1,10 +1,9 @@
-"""Annotations users put on step arguments: what a value measures (`Money`, `Percent`, `Duration`) and how it is stored (`Raw`, `Columnar`, `Struct`).
+"""Annotations users put on step arguments: what a value measures (`Money`, `Percent`, `Duration`) and how it is stored (`Columnar`, `Struct`).
 
 A value's measure is declared with `Annotated`, so tools can show it as R 4000.00, 25% or 36 months."""
 from __future__ import annotations
 
 import dataclasses
-import threading
 import typing
 from dataclasses import dataclass
 from typing import Any, ClassVar, Generic, TypeVar
@@ -80,10 +79,6 @@ def metadata_of(annotation: Any) -> FieldMetadata | None:
     return next((m for m in annotation.__metadata__ if isinstance(m, FieldMetadata)), None)
 
 
-class Raw(Generic[T]):
-    """Marker annotation requesting Decider's internal representation of `T`."""
-
-
 class Columnar(Generic[T]):
     """Read a `list[dict]` column as one flat array per `Item` field, so a compiled step can loop over it.
 
@@ -122,33 +117,3 @@ class Struct(Generic[T]):
 def struct_item(annotation: Any) -> Any | None:
     """`Item` of a `Struct[Item]` annotation, else `None`."""
     return typing.get_args(annotation)[0] if typing.get_origin(annotation) is Struct else None
-
-
-# One table per process: a constant from `raw_str()` and a value first seen at runtime must
-# never be given the same code, so both draw from here.
-_RAW_STR_CODES: dict[Any, int] = {}
-_NEW_CODE = threading.Lock()
-
-
-def string_code(value: Any) -> int:
-    """The `Raw[str]` code of `value`, assigned in first-seen order; `None` gets one of its own."""
-    code = _RAW_STR_CODES.get(value)
-    if code is None:
-        with _NEW_CODE:
-            code = _RAW_STR_CODES.setdefault(value, len(_RAW_STR_CODES))
-    return code
-
-
-def raw_str(value: str) -> int:
-    """Return compiled code for a `Raw[str]` constant.
-
-    Example::
-
-        PRIVATE = raw_str("private")
-
-        def is_private(sector: Raw[str]) -> bool:
-            return sector == PRIVATE
-    """
-    if not isinstance(value, str):
-        raise TypeError("raw_str() requires a str")
-    return string_code(value)

@@ -36,7 +36,7 @@ def _env():
 
 def test_decider_build_succeeds():
     result = subprocess.run(
-        [sys.executable, "-c", "from decider.cli import cli; cli()", "build"],
+        [sys.executable, "-c", "from decider._tooling.cli import cli; cli()", "build"],
         cwd=PROJECT_DIR, env=_env(), capture_output=True, text=True, timeout=180,
     )
     assert result.returncode == 0, result.stdout + result.stderr

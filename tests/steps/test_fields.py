@@ -2,24 +2,25 @@ from typing import Annotated, Optional
 
 import polars as pl
 
-from decider import Duration, Engine, Money, Percent, flow, param
+from decider import Engine, flow, param
+from decider.ops import Duration, Percent
 from decider._engine.ir.decls import NullPolicy, base_annotation
 from decider._engine.params.harvest import harvest
-from decider._annotations import DecimalSpec, metadata_of
+from decider.ops.measures import DecimalSpec, metadata_of
 
 
-def instalment(loan: Annotated[float, Money()], rate: Annotated[float, Percent()] = param(0.12)) -> Annotated[float, Money()]:
+def instalment(loan: Annotated[float, Duration()], rate: Annotated[float, Percent()] = param(0.12)) -> Annotated[float, Duration()]:
     return loan * rate / 12
 
 
 def test_field_metadata_is_read_from_annotated_types():
-    assert metadata_of(Annotated[float, Money("$")]) == Money("$")
+    assert metadata_of(Annotated[float, Duration("years")]) == Duration("years")
     assert metadata_of(Annotated[int, "unrelated", Duration("days")]) == Duration("days")
     assert metadata_of(float) is None and metadata_of(Annotated[float, "unrelated"]) is None
 
 
 def test_field_metadata_is_json_with_its_kind():
-    assert Money().to_json() == {"kind": "money", "symbol": "R"}
+    assert Percent().to_json() == {"kind": "percent"}
     assert DecimalSpec(19, 4, "R").to_json() == {"kind": "decimal", "precision": 19, "scale": 4, "units": "R"}
     assert Duration("days").to_json() == {"kind": "duration", "unit": "days"}
 
@@ -34,7 +35,7 @@ def test_annotated_steps_run_like_plain_ones_in_every_mode():
     assert p.parameters().defaults() == {"f": {"instalment": {"rate": 0.12}}}
 
 
-def doubled(loan: Annotated[float | None, {"unit": "kg"}]) -> Annotated[float, Money()]:
+def doubled(loan: Annotated[float | None, {"unit": "kg"}]) -> Annotated[float, Duration()]:
     return 0.0 if loan is None else loan * 2
 
 
@@ -43,9 +44,9 @@ def test_a_declaration_keeps_its_metadata_and_the_engine_reads_through_it():
     # type logic sees the plain type, and metadata it can't hash never reaches a cache key.
     inputs, _, outputs = harvest(doubled)
     assert inputs[0].annotation == Annotated[float | None, {"unit": "kg"}]
-    assert outputs[0].annotation == Annotated[float, Money()]
-    assert metadata_of(harvest(instalment)[0][0].annotation) == Money()
-    assert metadata_of(harvest(instalment)[2][0].annotation) == Money()
+    assert outputs[0].annotation == Annotated[float, Duration()]
+    assert metadata_of(harvest(instalment)[0][0].annotation) == Duration()
+    assert metadata_of(harvest(instalment)[2][0].annotation) == Duration()
 
     assert (base_annotation(inputs[0].annotation), inputs[0].null_policy) == (float, NullPolicy.OPTIONAL)
     assert base_annotation(outputs[0].annotation) is float
@@ -58,15 +59,15 @@ def test_a_declaration_keeps_its_metadata_and_the_engine_reads_through_it():
         assert exe.fallbacks() == {}
 
 
-def optional_outside(loan: Optional[Annotated[float, Money()]],
+def optional_outside(loan: Optional[Annotated[float, Duration()]],
                      cap: Optional[Annotated[float, {"unit": "kg"}]] = param(9.0)) -> float:
     return 0.0 if loan is None else min(loan, cap)
 
 
 def test_an_optional_around_annotated_is_canonicalised_so_both_readers_look_in_one_place():
     inputs, params, _ = harvest(optional_outside)
-    assert inputs[0].annotation == Annotated[float | None, Money()]
-    assert (metadata_of(inputs[0].annotation), inputs[0].null_policy) == (Money(), NullPolicy.OPTIONAL)
+    assert inputs[0].annotation == Annotated[float | None, Duration()]
+    assert (metadata_of(inputs[0].annotation), inputs[0].null_policy) == (Duration(), NullPolicy.OPTIONAL)
     # A param keeps the spelling it was given: pydantic reads its metadata, and a validator
     # inside `| None` checks something different from one outside it.
     assert params[0].annotation == Optional[Annotated[float, {"unit": "kg"}]]

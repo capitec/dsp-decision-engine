@@ -6,7 +6,8 @@ from typing import TypedDict
 import polars as pl
 import pytest
 
-from decider import Columnar, Engine, Struct, flow, optimise, param, step
+from decider import Engine, flow, optimise, param, step
+from decider.ops import Columnar, Struct
 from decider.exceptions import WiringError
 from decider.testing import assert_equivalent
 

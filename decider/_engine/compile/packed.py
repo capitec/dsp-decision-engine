@@ -4,10 +4,11 @@ from typing import Collection, Iterator
 
 from decider._engine.compile.kernel import Fork, Repeat, SrcKind, fused_kernel
 from decider._engine.compile.njit import compile_call
-from decider._engine.compile.units import Kernel, Layout, output_dtype
+from decider._engine.compile.outputs import output_dtype
+from decider._engine.compile.units import Kernel, Layout
 from decider._engine.ir.decls import NullPolicy, base_annotation, is_typed, nullable
 from decider._engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, Sequence, NodeVersion
-from decider._annotations import struct_item
+from decider.ops.nested import struct_item
 
 
 class Packed(Kernel):

@@ -1,6 +1,6 @@
 """Run a pipeline to the end in plain Python, so the editor's Python debugger stops at breakpoints in its steps.
 
-    python -m decider._bridge.run app/flow.yaml --data rows.json
+    python -m decider._tooling.bridge.run app/flow.yaml --data rows.json
 """
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ def node_path() -> str | None:
 
 
 def main(argv=None):
-    p = argparse.ArgumentParser(prog="python -m decider._bridge.run")
+    p = argparse.ArgumentParser(prog="python -m decider._tooling.bridge.run")
     p.add_argument("file", help="a pipeline .py, or a flow .yaml/.json")
     p.add_argument("--pipeline", help="the pipeline's name in a .py (default: the last one found)")
     source = p.add_mutually_exclusive_group()

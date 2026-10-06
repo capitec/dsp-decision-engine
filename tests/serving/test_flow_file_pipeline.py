@@ -6,7 +6,7 @@ import sys
 
 from click.testing import CliRunner
 
-from decider.cli import cli
+from decider._tooling.cli import cli
 from decider.config import JsonFileStore
 from decider.serving._handler import RequestHandler
 

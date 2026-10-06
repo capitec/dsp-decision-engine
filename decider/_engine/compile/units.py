@@ -1,19 +1,20 @@
 from __future__ import annotations
 
-import typing
 from typing import Any, Iterator, Mapping, Union
 
 import numpy as np
 
 from decider._engine.compile.kernel import Spec, SrcKind, fused_kernel
-from decider._engine.compile.njit import FALLBACK_ERRORS, compile_call, numpy_dtype, parameters
+from decider._engine.compile.njit import FALLBACK_ERRORS, compile_call, parameters
+from decider._engine.compile.outputs import decode_literal, literal_choices, output_dtype
 from decider._engine.compile.rows import Ragged
 from decider._engine.compile.sink import Sink
-from decider._engine.compile.structs import Schema, struct_dtype, struct_schema
+from decider._engine.compile.structs import Schema
 from decider._engine.ir.decls import Input, NullPolicy, base_annotation, is_typed, nullable
 from decider._engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, ScatterGather, Sequence, NodeVersion
-from decider._annotations import struct_item
+from decider.ops.nested import struct_item
 from decider._engine.types import columnar_item, decimal_boxer, decimal_scale, item_schema, to_raw
+from decider.ops.text import Text
 
 Values = dict[int, np.ndarray]
 
@@ -107,7 +108,7 @@ class Kernel:
             self._python = tuple(Fallback(c, getattr(c.node.fn, "py_func", c.node.fn), reason) for c in self.calls)
             return self.run(values, valid, bundles, n)
         for (v, _), out, choices in zip(self.writes, outs, self._choices):
-            values[v.id] = out if choices is None else _decode(out, choices, valid, v.id)
+            values[v.id] = out if choices is None else decode_literal(out, choices, valid, v.id)
         for (v, schema), sink in zip(self.sinks, sinks):
             # `values[v.id]` currently holds the cumulative-length column the wrapper just wrote;
             # turn it into the per-row `[lo, hi)` slices the sink's flat buffer actually holds.
@@ -129,9 +130,9 @@ class Fallback:
         self.fn = fn
         self.reason = reason
         self.declared = declared
-        # Python values come back as they are: a `str`, `dict`, `list` or `date` output is stored as an object.
+        # Python values come back as they are, as objects; only a row node returns a `Literal` as its index.
         self.writes = tuple(
-            (v, output_dtype(o.annotation) if literal_choices(o.annotation) is not None
+            (v, output_dtype(o.annotation) if (call.node.kind == "row" and literal_choices(o.annotation) is not None)
              or is_typed(base_annotation(o.annotation)) else np.dtype(object))
             for v, o in zip(call.writes, call.node.outputs)
         )
@@ -163,6 +164,7 @@ class Fallback:
             if len(outs) == 1 and node.kind == "scalar":
                 result = (result,)
             for out, mask, x, scale in zip(outs, masks, result, self._scales):
+                x = x.text if isinstance(x, Text) else x
                 if x is None:
                     mask[r], x = False, 0
                 elif scale is not None:
@@ -173,8 +175,8 @@ class Fallback:
             if not mask.all():
                 valid[v.id] = mask
             choices = literal_choices(o.annotation)
-            if choices is not None:
-                values[v.id] = _decode(out, choices, valid, v.id)
+            if choices is not None and node.kind == "row":
+                values[v.id] = decode_literal(out, choices, valid, v.id)
 
 
 def _ragged_values(hi: np.ndarray, sink: Sink, schema: Schema) -> np.ndarray:
@@ -296,49 +298,6 @@ def _split_at_nulls(run: list[Call]) -> Iterator[list[Call]]:
                  or columnar_item(base_annotation(o.annotation)) is not None}
     if part:
         yield part
-
-
-def output_dtype(annotation: Any) -> np.dtype:
-    """The dtype a kernel stores an output declared `annotation` in: `numpy_dtype` of `T` for `T | None`.
-
-    A `Literal` of strings is stored as the int64 index of its value; a
-    `Struct[Item]` as one record per row. A `Columnar[Item]` has no
-    fixed-stride column of its own: this is the cumulative item count its
-    wrapper reports, which `Kernel.run` turns back into the actual rows.
-
-    >>> output_dtype(int | None)
-    dtype('int64')
-    """
-    if literal_choices(annotation) is not None:
-        return np.dtype(np.int64)
-    item = struct_item(base_annotation(annotation))
-    if item is not None:
-        return struct_dtype(struct_schema(item))
-    if columnar_item(base_annotation(annotation)) is not None:
-        return np.dtype(np.int64)
-    return numpy_dtype(base_annotation(annotation))
-
-
-def literal_choices(annotation: Any) -> tuple[str, ...] | None:
-    """The values of a `Literal` of strings, else `None`.
-
-    A row node's output declared `Literal["low", "high"]` is returned by its
-    compiled `fn` as the index of the value (-1 for null) and stored as the
-    string; its `reference` returns the string itself.
-
-    >>> literal_choices(typing.Literal["low", "high"]), literal_choices(str)
-    (('low', 'high'), None)
-    """
-    if typing.get_origin(annotation) is typing.Literal and all(isinstance(a, str) for a in typing.get_args(annotation)):
-        return typing.get_args(annotation)
-    return None
-
-
-def _decode(codes: np.ndarray, choices: tuple[str, ...], valid: Values, vid: int) -> np.ndarray:
-    strings = np.array((*choices, None), object)[codes]
-    if (codes < 0).any():
-        valid[vid] = codes >= 0
-    return strings
 
 
 def _kept(plan: Plan) -> tuple[set[int], dict[int, set[int]]] | None:

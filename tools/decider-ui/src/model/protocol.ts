@@ -228,7 +228,6 @@ export interface Lineage {
 
 export interface FieldMeta {
   kind: string;
-  symbol?: string;
   precision?: number;
   scale?: number;
   units?: string;
@@ -368,14 +367,14 @@ export const setFields = (fields: Record<string, FieldMeta> | undefined) => {
 /**
  * What the value `name` measures: its declared metadata, else a guess from the name, marked `assumed`.
  * Rates, loadings, discounts, margins and shares below 1 read as percentages; amounts, costs, income,
- * fees, instalments, expenses, offers and caps of 1000 or more as rands; `_months`, `_days`, `_years` as durations.
+ * fees, instalments, expenses, offers and caps of 1000 or more as rand amounts; `_months`, `_days`, `_years` as durations.
  */
 export function fieldOf(name?: string, v?: unknown): FieldMeta | undefined {
   if (!name) return undefined;
   if (declared[name]) return declared[name];
   const n = typeof v === "number" ? Math.abs(v) : NaN;
   if (/(rate|loading|discount|margin|share)s?$/.test(name) && !(n >= 1)) return { kind: "percent", assumed: true };
-  if (/(amount|cost|income|fee|instalment|expenses|offer)s?$/.test(name) || (/cap$/.test(name) && n >= 1000)) return { kind: "money", symbol: "R", assumed: true };
+  if (/(amount|cost|income|fee|instalment|expenses|offer)s?$/.test(name) || (/cap$/.test(name) && n >= 1000)) return { kind: "decimal", units: "R", scale: 2, assumed: true };
   const unit = /_(months|days|years)$/.exec(name)?.[1];
   return unit ? { kind: "duration", unit, assumed: true } : undefined;
 }
@@ -396,7 +395,6 @@ export function formatValue(v: unknown, name?: string): string {
   if (typeof v !== "number") return typeof v === "string" ? v : JSON.stringify(v);
   const f = fieldOf(name, v);
   if (f?.kind === "percent") return `${Number((v * 100).toFixed(2))}%`;
-  if (f?.kind === "money") return `${f.symbol ?? "R"}\u00a0${v.toLocaleString("en-US", { useGrouping: false, minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   if (f?.kind === "decimal") return `${f.units ? `${f.units}\u00a0` : ""}${v.toFixed(f.scale ?? 2).replace(/(\.\d\d)0+$/, "$1")}`;
   if (f?.kind === "duration") return `${plain(v, 2)} ${v === 1 ? f.unit?.replace(/s$/, "") : f.unit}`;
   return plain(v, Math.abs(v) >= 100 ? 2 : 4);

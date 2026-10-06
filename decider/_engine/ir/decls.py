@@ -7,7 +7,7 @@ import typing
 from typing import Any, Literal
 
 import numpy as np
-from decider._engine.types import annotation_cache, decimal_scale, is_decimal, is_raw, plain_annotation, raw_base, to_raw_input
+from decider._engine.types import annotation_cache, decimal_scale, is_decimal, is_raw, plain_annotation, raw_base, text_as_str, to_raw_input
 
 OnInvalid = Literal["error", "warn", "default"]
 
@@ -142,6 +142,9 @@ class Output:
     name: str
     annotation: Any
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "annotation", text_as_str(self.annotation))
+
 
 @dataclass(frozen=True, slots=True)
 class ParamDecl:
@@ -180,3 +183,4 @@ class ParamDecl:
     def __post_init__(self) -> None:
         if self.arg is None:
             object.__setattr__(self, "arg", self.name)
+        object.__setattr__(self, "annotation", text_as_str(self.annotation))

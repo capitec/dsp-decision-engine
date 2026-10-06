@@ -9,7 +9,7 @@ import pytest
 from click.testing import CliRunner
 
 import decider
-from decider.cli import cli
+from decider._tooling.cli import cli
 
 GUIDE = (Path(decider.__file__).parent / "GUIDE.md").read_text()
 BLOCKS = re.findall(r"```python\n(.*?)```", GUIDE, re.S)

@@ -12,7 +12,8 @@ from typing import TypedDict
 import numpy as np
 import polars as pl
 
-from decider import Engine, Struct, flow
+from decider import Engine, flow
+from decider.ops import Struct
 
 N = 200_000
 CALLS = 3000

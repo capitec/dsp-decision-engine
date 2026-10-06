@@ -1,7 +1,8 @@
 """Param checks: missing bounds, defaults outside them, params the body ignores."""
 from typing import Annotated
 
-from decider import Money, Percent, checks, flow, param
+from decider import checks, flow, param
+from decider.ops import Percent
 from decider.checks import Severity
 
 
@@ -15,13 +16,6 @@ def test_an_unbounded_numeric_param_is_info():
 
     (f,) = _found(rule, "param_unconstrained")
     assert (f.code, f.severity, f.detail["param"]) == ("DCD301", Severity.INFO, "cap")
-
-
-def test_an_unbounded_money_param_is_a_warning():
-    def rule(x: float, fee: Annotated[float, Money()] = param(5.0)) -> float:
-        return x + fee
-
-    assert [f.severity for f in _found(rule, "param_unconstrained")] == [Severity.WARNING]
 
 
 def test_a_percent_param_needs_both_bounds_of_a_fraction():

@@ -24,7 +24,8 @@ import numba
 import numpy as np
 import polars as pl
 
-from decider import Columnar, Engine, ParamTable, flow, loop, optimise, param, param_table, step
+from decider import Engine, ParamTable, flow, loop, optimise, param, param_table, step
+from decider.ops import Columnar
 
 ITEMS = int(sys.argv[1]) if len(sys.argv) > 1 else 6
 ORDERS = int(sys.argv[2]) if len(sys.argv) > 2 else 200

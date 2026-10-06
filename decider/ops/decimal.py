@@ -11,7 +11,7 @@ from typing import Annotated
 import numpy as np
 from numba.extending import register_jitable
 
-from decider._annotations import DecimalSpec
+from decider.ops.measures import DecimalSpec
 
 __all__ = ["Currency", "Decimal", "Rounding", "round", "round_float"]
 

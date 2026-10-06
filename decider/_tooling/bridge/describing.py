@@ -9,7 +9,7 @@ import textwrap
 from pathlib import Path
 
 from decider.ir import BranchNode, CallNode, LoopNode, decimal_info
-from decider._annotations import DecimalSpec, metadata_of
+from decider.ops.measures import DecimalSpec, metadata_of
 from decider.steps import Step
 
 

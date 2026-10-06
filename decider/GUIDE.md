@@ -44,6 +44,7 @@ HTTP with `decider serve`.
 | a grid (bands, rate cards) fixed in its config document | `DecisionTableConfig`, inline `"rows": [...]` |
 | a grid retuned like a param (params document, per call) | `DecisionTableConfig`, `"rows": {"table": "name"}` |
 | rows a plain step loops over, retuned like a param | `param_table({"col": float}, default=[...])` |
+| string tests (`==`, `startswith`, `in`) kept in a kernel | `Text` (`decider.ops`) |
 | a `list[dict]` column, heavy per-item work in a kernel | `Columnar[Item]` (one array per field) |
 | a `struct` column as one record per row, in a kernel | `Struct[Item]` |
 | per-item rules over a list, as ordinary steps | `each(column, child_flow, name=)` |
@@ -541,8 +542,8 @@ like `DECIDER_API__PIPELINE=myapp.pipeline:build`.
 
 **The plain type always works.** Annotate a step `str`, `date`, `list[dict]`,
 `dict` or a TypedDict and it runs in every mode and gives the same answer. A
-numba kernel holds only numbers (`float`, `int`, `bool`, `Decimal`), so a step reading or
-writing anything else runs on its own, row by row, in Python, and says so once
+numba kernel holds only numbers (`float`, `int`, `bool`, `Decimal`) and `Text`, so a step
+reading or writing anything else runs on its own, row by row, in Python, and says so once
 per step with a `FallbackWarning`. Only speed changes: such a step runs at
 under 1M rows/s in a batch instead of a kernel's hundreds of millions, and
 costs under 10 µs more on a single `score()`. Trees and decision tables read
@@ -595,10 +596,34 @@ start-up: `warnings.filterwarnings("ignore", category=FallbackWarning)`.
 loop falls back as a whole, so filter `FallbackWarning` for those instead;
 putting the decorator on one raises `TypeError` rather than doing nothing.
 
-For a batch big enough to care, `Raw[str]` compares strings as integer codes
-inside the kernel (`==` and `!=` only) at 4-5x the throughput — but it is
-*slower* on a single record, because the codes have to be built first. Since
-`score()` is the usual workload, reach for it only when a batch is the point.
+## Strings: `str` and `Text`
+
+A `str` input runs its step in Python. Annotate it `Text` instead and the step
+stays in the kernel, reading the string where the frame holds it: `==`, `!=`,
+`len`, `in`, `startswith` and `endswith` compile and answer as they would on a
+`str`, against a literal, a module-level constant or a `str` `param()`. Anything
+else a `str` can do (`.upper()`, slicing, f-strings) needs a `str` input. A null
+`Text` equals nothing; declare it `Text | None` to accept one.
+
+```python
+import polars as pl
+from decider import flow, param
+from decider.ops import Text
+
+def government(employer: Text, prefix: str = param("GOV")) -> bool:
+    return employer.startswith(prefix) or "DEPT" in employer
+
+def label(employer: str) -> str:                            # str: runs in Python
+    return employer.title()
+
+exe = flow(government, label, name="emp").compile("fused")
+out = exe.run(pl.DataFrame({"employer": ["GOV HEALTH", "acme", "TRANSPORT DEPT"]}))
+assert out["government"].to_list() == [True, False, True]
+assert set(exe.fallbacks()) == {"emp/label"}
+```
+
+One column can be read as `str` by one step and as `Text` by another. A step
+*returning* `Text` writes a `str` column, in Python, as a `str` output does.
 
 ## Nested columns: `Struct[Item]` and `Columnar[Item]`
 
@@ -621,7 +646,8 @@ as its plain type in every mode:
 from typing import TypedDict
 
 import polars as pl
-from decider import Columnar, flow
+from decider import flow
+from decider.ops import Columnar
 
 class Item(TypedDict):
     price: float
@@ -656,7 +682,8 @@ become new fields, which a later `Columnar[Item]` step reads in a kernel.
 from typing import TypedDict
 
 import polars as pl
-from decider import Columnar, each, flow, missing_as, param
+from decider import each, flow, missing_as, param
+from decider.ops import Columnar
 
 def heavy(weight: float = missing_as(0.0), heavy_kg: float = param(20.0)) -> bool:
     return weight > heavy_kg
@@ -696,7 +723,8 @@ fuses into one kernel like any loop.
 from typing import TypedDict
 
 import polars as pl
-from decider import Columnar, flow, optimise, step
+from decider import flow, optimise, step
+from decider.ops import Columnar
 
 class Item(TypedDict):
     price: float
@@ -771,23 +799,24 @@ ir = to_ir(pipeline)                     # the checked IR that Engine().bind run
 assert {n.path for n in describe(pipeline).nodes} >= {"credit/ratio", "credit/approved"}   # nodes, edges, value slots
 ```
 
-Say what a value measures with `Annotated` and the flow debugger shows it that
-way (`R 4000.00`, `25%`, `36 months`); undeclared values are guessed from their
-names. The engine runs the plain type.
+Say what a value measures and the flow debugger shows it that way (`R 4000.00`,
+`25%`, `36 months`); undeclared values are guessed from their names. An amount
+is a `Currency["R"]` (see Money and decimals); `Percent()` and `Duration()` go in
+`Annotated`, and the engine runs the plain type.
 
 ```python
 from typing import Annotated
-import polars as pl
-from decider import Duration, Money, Percent, flow, param
+from decider import flow, param
+from decider.ops import Currency, Duration, Percent
 
-def instalment(loan: Annotated[float, Money()], term_months: Annotated[int, Duration("months")],
-               rate: Annotated[float, Percent()] = param(0.25)) -> Annotated[float, Money()]:
+def instalment(loan: Currency["R"], term_months: Annotated[int, Duration("months")],
+               rate: Annotated[float, Percent()] = param(0.25)) -> Currency["R"]:
     return loan * (1 + rate) / term_months
 
-assert flow(instalment, name="loan").run(pl.DataFrame({"loan": [1200.0], "term_months": [12]}))["instalment"].to_list() == [125.0]
+assert flow(instalment, name="loan").compile("fused").score({"loan": 1200, "term_months": 12})["instalment"] == Currency(125)
 ```
 
-`Money()` only says a float is an amount; money kept exact is a `Currency` (see Money and decimals). Subclass `decider.FieldMetadata` for another kind.
+Subclass `decider.ops.FieldMetadata` for another kind.
 
 Sessions also `step()`, `step_into()` (branches, loops), `rewind(path)` and
 break on a tree node (`"risk#high"`) or table row (`"band#2"`); see
