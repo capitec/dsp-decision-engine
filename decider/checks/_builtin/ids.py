@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from typing import Iterator, Literal
 
-from decider._engine.ir.nodes import BranchNode, CallNode, FiniteStateMachineNode, IRNode, LoopNode, ScatterGatherNode
 from decider.checks._base import Check, CheckContext, registered
 from decider.checks._report import Finding, Severity
 from decider._suggest import hint
+from decider.ir import BranchNode, CallNode, FiniteStateMachineNode, IRNode, LoopNode, ScatterGatherNode
 
 __all__ = ["DuplicateIds", "DurableIds", "UnknownSuppression"]
 

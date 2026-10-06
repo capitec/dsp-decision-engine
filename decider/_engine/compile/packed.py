@@ -7,7 +7,7 @@ from decider._engine.compile.njit import compile_call
 from decider._engine.compile.units import Kernel, Layout, output_dtype
 from decider._engine.ir.decls import TYPED, NullPolicy, base_annotation, nullable
 from decider._engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, Sequence, NodeVersion
-from decider._engine.types import struct_item
+from decider._annotations import struct_item
 
 
 class Packed(Kernel):

@@ -5,7 +5,9 @@ from functools import lru_cache, wraps
 from types import UnionType
 from typing import Annotated, Any, NamedTuple, Union, get_args, get_origin, get_type_hints
 
-from decider._annotations import Columnar, Raw, Struct
+import numpy as np
+
+from decider._annotations import Columnar, Raw
 
 
 class Representation(Enum):
@@ -83,11 +85,6 @@ def columnar_item(annotation: Any) -> Any | None:
     return get_args(annotation)[0] if get_origin(annotation) is Columnar else None
 
 
-def struct_item(annotation: Any) -> Any | None:
-    """`Item` of a `Struct[Item]` annotation, else `None`."""
-    return get_args(annotation)[0] if get_origin(annotation) is Struct else None
-
-
 # Every run of a step reading `Columnar[Item]` or `Struct[Item]` asks for this; `get_type_hints` costs
 # tens of microseconds.
 @lru_cache(maxsize=None)
@@ -127,3 +124,19 @@ def representation_for(annotation: Any, *, row: bool = False) -> Representation:
         return REPRESENTATIONS[key]
     except KeyError:
         raise TypeError(f"no representation for {key}") from None
+
+
+def cast_values(name: str, value: Any, dtype: np.dtype, n: int) -> tuple[np.ndarray, np.ndarray | None]:
+    raw = np.empty(n, object)
+    try:
+        raw[:] = value
+    except ValueError:
+        raise ValueError(f"can't set {name!r}: give one value or {n} values, not {value!r}") from None
+    valid = np.array([v is not None for v in raw], bool)
+    if dtype != object:
+        try:
+            # same_kind: 1.5 into an int column or "abc" into a float one is an error, not a silent truncation.
+            raw = np.array([v if ok else 0 for v, ok in zip(raw, valid)]).astype(dtype, casting="same_kind")
+        except (TypeError, ValueError):
+            raise ValueError(f"can't set {name!r} to {value!r}: it doesn't cast to {dtype}") from None
+    return raw, None if valid.all() else valid

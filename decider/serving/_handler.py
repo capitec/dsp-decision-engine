@@ -21,7 +21,7 @@ from decider.serving._errors import (InputParsingError, OutputFormattingError, U
 from decider.config import ConfigStore, Version
 from decider import Engine, Executable
 from decider.steps import ConfigurableStep, Step
-from decider._engine.types import struct_item
+from decider._annotations import struct_item
 from ._format import DEFAULT_OUTPUT_FORMATTERS, Response
 from ._parse import DEFAULT_INPUT_HANDLERS, coerce_frame, coerce_record, dummy, has_date
 

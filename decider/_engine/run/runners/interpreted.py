@@ -16,7 +16,8 @@ from decider._engine.run.representations import codes, span_objects
 from decider._engine.run.runners.base import Checkpoint
 from decider._engine.run.state import State, dtype_of, fill_missing, from_series, record_value
 from decider._engine.trace.envelope import Kind
-from decider._engine.types import Representation, is_raw, representation_for, columnar_item, item_schema, struct_item
+from decider._annotations import struct_item
+from decider._engine.types import Representation, is_raw, representation_for, columnar_item, item_schema
 from decider._engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, ScatterGather, Sequence, NodeVersion
 
 # Below this many exploded elements the polars explode+gather (about ten lazy collects, each with

@@ -10,7 +10,8 @@ import polars as pl
 from decider._engine.ir.decls import TYPED, Input, NullPolicy, base_annotation
 from decider._engine.run.representations import despan
 from decider._engine.wiring.plan import Plan, NodeVersion
-from decider._engine.types import annotation_cache, columnar_item, item_schema, struct_item
+from decider._annotations import struct_item
+from decider._engine.types import annotation_cache, columnar_item, item_schema
 
 
 class State:
