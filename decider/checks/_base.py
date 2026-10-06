@@ -16,7 +16,9 @@ from decider.ir import CallNode, IRNode, iter_nodes, step_map, to_ir
 from decider.registry import BaseRegistryModule
 
 # What `decider.checks.standard` runs: the static checks, which need no data and no execution.
-STANDARD = ("wall_clock", "impure", "numeric", "durable_ids", "unknown_suppression")
+_NUMERIC = ("int64_overflow", "float_money", "bare_round", "division_by_variable", "int_true_division",
+            "pow_exp_overflow", "float_equality", "nan_propagation", "accumulator_dtype", "unsafe_cast")
+STANDARD = ("wall_clock", "impure", *_NUMERIC, "durable_ids", "unknown_suppression")
 
 
 class Check(BaseRegistryModule, root=True, group="checks"):
@@ -56,7 +58,7 @@ class Check(BaseRegistryModule, root=True, group="checks"):
 
 Check.lazy({
     "wall_clock": "decider.checks._builtin.determinism", "impure": "decider.checks._builtin.determinism",
-    "numeric": "decider.checks._builtin.numeric",
+    **dict.fromkeys(_NUMERIC, "decider.checks._builtin.numeric"),
     "durable_ids": "decider.checks._builtin.ids", "unknown_suppression": "decider.checks._builtin.ids",
     "missing_required": "decider.checks._builtin.data", "invalid_params_doc": "decider.checks._builtin.params",
     "crash_probe": "decider.checks._builtin.runtime", "mode_divergence": "decider.checks._builtin.runtime",
