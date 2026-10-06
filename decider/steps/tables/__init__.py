@@ -131,6 +131,11 @@ class DecisionTableConfig(ConfigurableStep):
     def _types(self) -> dict[str, str]:
         return {c: kind(d, c) for c, d in dtypes(self.columns).items()}
 
+    def check(self, ctx: t.Any) -> t.Iterable[t.Any]:
+        from decider.checks._builtin.structure import table_findings
+
+        return table_findings(self, ctx)
+
     def to_ir(self, ctx: t.Any) -> CallNode:
         dt, types = dtypes(self.columns), self._types()
         kinds = variables(self.expression, types)

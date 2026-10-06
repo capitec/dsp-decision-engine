@@ -226,14 +226,17 @@ def _select(tree: t.Any, tests: _Tests, root: str, leaf: t.Callable[[str], t.Any
     return go(root)
 
 
-def _tree_terms(cfg: TreeConfig, env: Env) -> Terms:
+def _tree_tests(cfg: TreeConfig, env: Env) -> tuple[t.Any, _Tests]:
     if cfg.null_handling != "otherwise" or cfg.trace_output is not None:
         raise Unencodable("null_handling error or trace_output")
     tree = cfg.tree.to_tree()
     if tree.required_params():
         raise Unencodable("the tree has params")
-    kinds = feature_kinds(tree, cfg.feature_types)
-    tests = _Tests(env, kinds)
+    return tree, _Tests(env, feature_kinds(tree, cfg.feature_types))
+
+
+def _tree_terms(cfg: TreeConfig, env: Env) -> Terms:
+    tree, tests = _tree_tests(cfg, env)
     rows = [*tree.output.data, tree.output.default or {}]
     if any(not -1 <= n.data.result_idx < len(tree.output.data) for n in tree.nodes.values()
            if isinstance(n.data, LeafNode)):
@@ -256,7 +259,7 @@ def _tree_terms(cfg: TreeConfig, env: Env) -> Terms:
     return out
 
 
-def _table_terms(cfg: DecisionTableConfig, env: Env) -> Terms:
+def _table_matches(cfg: DecisionTableConfig, env: Env) -> tuple[list[t.Any], dict[str, str], list[dict]]:
     if getattr(cfg.rows, "data", None) is None:
         raise Unencodable("the rows come from params")
     dt = dtypes(cfg.columns)
@@ -292,7 +295,11 @@ def _table_terms(cfg: DecisionTableConfig, env: Env) -> Terms:
             ok = [x]
         return z3.And(z3.Not(null), *ok)
 
-    matched = [holds(cfg.expression, r) for r in range(len(data))]
+    return [holds(cfg.expression, r) for r in range(len(data))], types, data
+
+
+def _table_terms(cfg: DecisionTableConfig, env: Env) -> Terms:
+    matched, types, data = _table_matches(cfg, env)
     out: Terms = {}
     for column, default in zip(cfg.outputs, cfg.default or [None] * len(cfg.outputs)):
         k = types[column]
@@ -355,6 +362,63 @@ def _reproduces(old: t.Any, new: t.Any, env: Env, row: dict[str, t.Any]) -> bool
         return not old.run(frame).equals(new.run(frame))
     except Exception:
         return False
+
+
+def unreachable_arms(cfg: TreeConfig) -> list[tuple[str, int, str]]:
+    """The `(node id, branch index, child id)` of every branch no input can take, not counting those below one.
+
+    Raises `Unencodable` when the tree uses something the encoding doesn't model.
+    """
+    env = Env()
+    tree, tests = _tree_tests(cfg, env)
+    parents: dict[str, list[tuple[str, int]]] = {}
+    for nid, node in tree.nodes.items():
+        for k, child in enumerate(node.children):
+            if child is not None:
+                parents.setdefault(child, []).append((nid, k))
+    conditions: dict[str, list[t.Any]] = {}
+    reach: dict[str, t.Any] = {}
+
+    def taken(nid: str, k: int) -> t.Any:
+        if nid not in conditions:
+            conditions[nid] = tests.branches(tree.nodes[nid].data)
+        conds = conditions[nid]
+        return z3.And(reached(nid), *[z3.Not(c) for c in conds[:k]], *conds[k:k + 1])
+
+    def reached(nid: str) -> t.Any:
+        if nid not in reach:
+            roots = [z3.BoolVal(True)] if any(r.root == nid for r in tree.rules) else []
+            reach[nid] = z3.Or(*roots, *[taken(p, k) for p, k in parents.get(nid, ())])
+        return reach[nid]
+
+    return [(nid, k, child) for nid, node in tree.nodes.items() if solve(env, reached(nid)) is not None
+            for k, child in enumerate(node.children) if child is not None and solve(env, taken(nid, k)) is None]
+
+
+def table_structure(cfg: DecisionTableConfig, max_pairs_rows: int = 40) -> dict[str, t.Any]:
+    """Which rows of a table can never win, which pairs of live rows can both match, and an input no row matches.
+
+    Returns `{"dead": [row, ...], "overlaps": [(i, j, input row), ...] or None, "gap": input row or None}`.
+    `overlaps` is `None` for a table of more than `max_pairs_rows` rows, whose pairs aren't tried.
+    Raises `Unencodable` when the table uses something the encoding doesn't model.
+    """
+    env = Env()
+    matched, _, _ = _table_matches(cfg, env)
+
+    def example(*constraints: t.Any) -> t.Optional[dict[str, t.Any]]:
+        model = solve(env, *constraints)
+        return None if model is None else _row(env, model)
+
+    dead = [r for r, m in enumerate(matched) if solve(env, m, *[z3.Not(x) for x in matched[:r]]) is None]
+    live = [r for r in range(len(matched)) if r not in dead]
+    # ponytail: one solve per pair of rows, so big tables are skipped; a sweep per variable if they matter
+    overlaps = None
+    if len(matched) <= max_pairs_rows:
+        overlaps = [(i, j, row) for i in live for j in live if i < j and (row := example(matched[i], matched[j]))]
+    # A null never matches, so a gap only counts for inputs that are present.
+    present = [z3.Not(null) for _, null, _ in env.vars.values()]
+    gap = example(*present, *[z3.Not(m) for m in matched]) if matched else None
+    return {"dead": dead, "overlaps": overlaps, "gap": gap}
 
 
 def differ(old: t.Any, new: t.Any) -> t.Optional[dict[str, t.Any]]:

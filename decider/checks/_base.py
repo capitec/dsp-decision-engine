@@ -10,7 +10,7 @@ from pydantic import ConfigDict
 
 from decider._engine.wiring import resolve
 from decider.checks._ast import Source, parse
-from decider.checks._report import Finding, Severity, Suppression
+from decider.checks._report import Finding, Severity, SkippedCheck, Suppression
 from decider.contract import StepRef, describe
 from decider.ir import CallNode, IRNode, iter_nodes, step_map, to_ir
 from decider.registry import BaseRegistryModule
@@ -19,7 +19,9 @@ from decider.registry import BaseRegistryModule
 _NUMERIC = ("int64_overflow", "float_money", "bare_round", "division_by_variable", "int_true_division",
             "pow_exp_overflow", "float_equality", "nan_propagation", "accumulator_dtype", "unsafe_cast")
 STANDARD = ("wall_clock", "impure", "mutates_input", *_NUMERIC, "param_unconstrained", "param_default_out_of_bounds",
-            "param_unused", "durable_ids", "duplicate_ids", "unknown_suppression")
+            "param_unused", "durable_ids", "duplicate_ids", "unknown_suppression",
+            "unreachable_branch", "dead_output", "shadowed_write", "unused_input", "unbounded_loop",
+            "opaque_frame_step")
 
 
 class Check(BaseRegistryModule, root=True, group="checks"):
@@ -65,6 +67,10 @@ Check.lazy({
     "duplicate_ids": "decider.checks._builtin.ids",
     "param_unconstrained": "decider.checks._builtin.params", "param_default_out_of_bounds": "decider.checks._builtin.params",
     "param_unused": "decider.checks._builtin.params",
+    "unreachable_branch": "decider.checks._builtin.structure", "dead_output": "decider.checks._builtin.structure",
+    "shadowed_write": "decider.checks._builtin.structure", "unused_input": "decider.checks._builtin.structure",
+    "unbounded_loop": "decider.checks._builtin.structure", "opaque_frame_step": "decider.checks._builtin.structure",
+    "table_overlap": "decider.checks._builtin.structure", "table_gap": "decider.checks._builtin.structure",
     "missing_required": "decider.checks._builtin.data", "invalid_params_doc": "decider.checks._builtin.params",
     "crash_probe": "decider.checks._builtin.runtime", "mode_divergence": "decider.checks._builtin.runtime",
 })
@@ -93,6 +99,8 @@ class CheckContext:
         # The node of the `ConfigurableStep` whose `check` hook is running.
         self.node: IRNode | None = None
         self._sources: dict[int, Source | None] = {}
+        # Checks that couldn't run on a step; `checks.run` adds them to `report.skipped`.
+        self.skipped: list[SkippedCheck] = []
 
     @cached_property
     def ir(self) -> IRNode:

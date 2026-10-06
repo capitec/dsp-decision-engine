@@ -36,6 +36,9 @@ PRIVATE_IMPORT: dict[str, str] = {  # {"importer -> imported": reason}
     "experiments._cost -> _engine.wiring.resolve": "the cost estimate counts the resolved plan's calls, which is internal",
     "checks._base -> _engine.wiring.resolve": "ctx.plan is the resolved plan, which is internal",
     "checks._config -> data._providers": "project_root has no public home; checks.yaml is found like the datasets folder",
+    "checks._builtin.structure -> _engine.wiring.plan": "the version-use check walks the resolved plan, which is internal",
+    "steps.trees -> checks._builtin.structure": "TreeConfig.check hands its findings to the structure family, which has no public home",
+    "steps.tables -> checks._builtin.structure": "DecisionTableConfig.check hands its findings to the structure family, which has no public home",
     "cli._check -> experiments._entry": "import_flow has no public home",
     "cli -> _engine.compile": "cpu_target has no public home",
     "_bridge.bridge -> _engine.debug": "wire constants are internal to the bridge protocol",
@@ -64,6 +67,8 @@ PRIVATE_IMPORT: dict[str, str] = {  # {"importer -> imported": reason}
 
 UPWARD_IMPORT: dict[str, str] = {  # {"importer module -> imported module": reason}
     "__init__ -> contract": "permanent: describe is the one deliberate second path, for users",
+    "steps.trees -> checks._builtin.structure": "the step's own check hook builds findings, which live with the checks",
+    "steps.tables -> checks._builtin.structure": "the step's own check hook builds findings, which live with the checks",
     "_settings -> config": "the settings build a config store from its type tag",
 }
 

@@ -55,7 +55,7 @@ def run(pipeline: Any, checks: Iterable[Any] | None = None, *, config: str | Pat
     findings += _step_findings(ctx, cfg.disable if cfg else ())
     ir = ctx.ir
     flow = FlowRef(name=ir.origin.path, source=ir.origin.source, flow_id=ir.origin.id)
-    return Report(flow=flow, findings=tuple(findings), skipped=tuple(skipped),
+    return Report(flow=flow, findings=tuple(findings), skipped=tuple(skipped + ctx.skipped),
                   gate=cfg.fail_on if cfg else Severity.ERROR)
 
 
