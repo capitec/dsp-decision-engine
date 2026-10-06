@@ -121,6 +121,53 @@ assert flow(instalment).compile("fused").score({"amount": 100.0})["instalment"] 
 assert decimal.round(2.5) == 3.0 and decimal.round(2.5, mode=Rounding.HALF_EVEN) == 2.0
 ```
 
+### Money and decimals
+
+Money does not belong in a float (`0.1 + 0.2` is not `0.3`). Annotate it `Currency`, a
+`Decimal` of four decimal places, or `Decimal[p, s]` for another scale (`p` is at most 19
+digits: a Decimal is an int64 count of `10**-s`, so a `Currency` reaches 922 trillion).
+A step reads and returns plain `Decimal` values, in every mode; a compiled step keeps the
+int64, so a Decimal costs the same as an int. `Currency["R"]` sets display units.
+
+```python
+import polars as pl
+from decimal import Decimal as StdDecimal
+from decider import flow, param
+from decider.ops import decimal
+from decider.ops.decimal import Currency, Decimal, Rounding
+
+def instalment(principal: Currency["R"], rate: float = param(0.1275), months: int = param(12)) -> Currency["R"]:
+    return decimal.round(principal * rate / months, 2, mode=Rounding.HALF_EVEN)
+
+def fee(instalment: Currency["R"], floor: Currency = param(Currency(5, 5000))) -> Currency["R"]:
+    return max(instalment, floor) + Currency(1, 2500)       # Currency(major, minor): 1.25
+
+exe = flow(instalment, fee, name="loan").compile("fused")
+out = exe.score({"principal": "1000.50"})                   # a str, int, float, Decimal or decimal.Decimal
+assert out["fee"] == Currency("11.88") and repr(out["fee"]) == "R 11.8800"
+assert exe.score({"principal": 10}, {"loan": {"fee": {"floor": "20"}}})["fee"] == Currency("21.25")
+
+frame = pl.DataFrame({"principal": [StdDecimal("1000.50"), StdDecimal("2.5")]}, schema={"principal": pl.Decimal(18, 2)})
+result = exe.run(frame)                                      # a Decimal column in, Decimal(38, 4) out
+assert result["fee"].dtype == pl.Decimal(38, 4) and result["fee"].to_list()[0] == StdDecimal("11.8800")
+```
+
+- `+ - * /` between decimals give the larger scale, rounded half-even once per operation
+  (like polars); an int is whole units (`d + 1`), a float may multiply or divide (`d * 0.0175`,
+  a Decimal at `d`'s scale), and `float / d`, `d + 1.5`, `//`, `%`, `**` and `round(d, n)` are
+  errors: write `float(d)` for a ratio, `decimal.round(d, 2, mode=...)` to round (it keeps the
+  scale). Comparisons are exact across scales and against ints; against a float they compare
+  `float(d)`.
+- A float rounds to the scale from its exact value (`Currency(2.675)` is 2.67), a str from its
+  digits (`Currency("2.675")` is 2.68); `Currency(2, 6500)` is exact (`minor` in units of the
+  scale, 0 to 9999). A Decimal output of a coarser scale rounds half-even, and an int return is
+  whole units.
+- A frame column is read at the annotation's scale (rescaled half-even; a value that does not
+  fit int64 names its column); an integer column is whole units, a float column is refused.
+  Two steps naming one value at different scales is a wiring error.
+- A result outside int64 raises `OverflowError` in Python and wraps in a compiled step; the
+  `int64_overflow` check (DCD101) flags the products that can reach it.
+
 ## Branch, loop, frame steps
 
 ```python
@@ -494,7 +541,7 @@ like `DECIDER_API__PIPELINE=myapp.pipeline:build`.
 
 **The plain type always works.** Annotate a step `str`, `date`, `list[dict]`,
 `dict` or a TypedDict and it runs in every mode and gives the same answer. A
-numba kernel holds only numbers (`float`, `int`, `bool`), so a step reading or
+numba kernel holds only numbers (`float`, `int`, `bool`, `Decimal`), so a step reading or
 writing anything else runs on its own, row by row, in Python, and says so once
 per step with a `FallbackWarning`. Only speed changes: such a step runs at
 under 1M rows/s in a batch instead of a kernel's hundreds of millions, and
@@ -740,7 +787,7 @@ def instalment(loan: Annotated[float, Money()], term_months: Annotated[int, Dura
 assert flow(instalment, name="loan").run(pl.DataFrame({"loan": [1200.0], "term_months": [12]}))["instalment"].to_list() == [125.0]
 ```
 
-`Money(cents=True)` is an int of cents; subclass `decider.FieldMetadata` for another kind.
+`Money()` only says a float is an amount; money kept exact is a `Currency` (see Money and decimals). Subclass `decider.FieldMetadata` for another kind.
 
 Sessions also `step()`, `step_into()` (branches, loops), `rewind(path)` and
 break on a tree node (`"risk#high"`) or table row (`"band#2"`); see

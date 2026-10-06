@@ -7,11 +7,11 @@ from typing import Any, Hashable, Mapping
 import numpy as np
 import polars as pl
 
-from decider._engine.ir.decls import TYPED, Input, NullPolicy, base_annotation
+from decider._engine.ir.decls import Input, NullPolicy, base_annotation, is_typed
 from decider._engine.run.representations import despan
 from decider._engine.wiring.plan import Plan, NodeVersion
 from decider._annotations import struct_item
-from decider._engine.types import annotation_cache, columnar_item, item_schema
+from decider._engine.types import annotation_cache, columnar_item, decimal_boxer, decimal_info, is_decimal, item_schema, to_raw_input
 
 
 class State:
@@ -211,7 +211,8 @@ class State:
 @lru_cache(maxsize=64)
 def _typed(plan: Plan) -> tuple[Input, ...]:
     # The inputs the boundary reads into typed arrays, nulls kept as a mask.
-    return tuple(Input(i.name, t, NullPolicy.OPTIONAL) for i in plan.inputs if (t := base_annotation(i.annotation)) in TYPED)
+    return tuple(Input(i.name, i.annotation if decimal_info(i.annotation) else t, NullPolicy.OPTIONAL)
+                 for i in plan.inputs if is_typed(t := base_annotation(i.annotation)))
 
 
 def _series(name: str, values: np.ndarray, valid: np.ndarray | None, annotation: Any = None) -> pl.Series:
@@ -232,7 +233,12 @@ def _series(name: str, values: np.ndarray, valid: np.ndarray | None, annotation:
         dtype = declared_dtype(annotation)
         return pl.Series(name, rows, dtype=dtype if isinstance(dtype, pl.Struct) else None)
     s = pl.Series(name, values)
-    return s if valid is None else s.scatter(np.flatnonzero(~valid), None)
+    if valid is not None:
+        s = s.scatter(np.flatnonzero(~valid), None)
+    if (info := decimal_info(annotation)) is not None:
+        # The int64 mantissa as a Decimal(38, scale): cast scales it up, the division brings it back.
+        s = s.cast(pl.Decimal(38, info.scale)) / 10 ** info.scale
+    return s
 
 
 def record_value(value: Any, annotation: Any = None) -> Any:
@@ -242,6 +248,9 @@ def record_value(value: Any, annotation: Any = None) -> Any:
     tuple of fields (or leaves as a `np.void` in an object array); a step
     returns a dict, so `score` must agree.
     """
+    box = decimal_boxer(annotation)
+    if box is not None:
+        return None if value is None else box(value)
     item = struct_item(base_annotation(annotation))
     if item is not None and value is not None and not isinstance(value, dict):
         return dict(zip((name for name, _ in item_schema(item)),
@@ -260,6 +269,9 @@ def load_record(state: State, record: Mapping[str, Any], versions: list[NodeVers
     if not given:
         return
     xs = [record[v.name] for v in given]
+    if dtype == np.int64:
+        xs = [x if (info := decimal_info(v.annotation)) is None or x is None else to_raw_input(x, info.scale)
+              for x, v in zip(xs, given)]
     nulls = [x is None for x in xs]
     if dtype == object:
         block = np.empty(len(xs), object)
@@ -345,4 +357,6 @@ def _item_dtype(item: Any) -> pl.Struct:
 
 def dtype_of(annotation: Any) -> np.dtype:
     """The array dtype a value of `annotation` is stored in: float64, int64, bool, else object."""
+    if is_decimal(annotation):
+        return np.dtype(np.int64)
     return np.dtype({float: np.float64, int: np.int64, bool: np.bool_}.get(annotation, object))

@@ -7,9 +7,7 @@ import pytest
 from decider import Money, checks, flow, loop, param, step
 from decider.checks import Severity
 from decider.ops import decimal
-from decider.ops.decimal import Rounding
-
-Cents = Annotated[int, Money(cents=True)]
+from decider.ops.decimal import Currency, Rounding
 
 
 def run(*fns, alias):
@@ -27,8 +25,8 @@ def quiet(fn, alias):
 
 
 # The user story: one flow, three defects, no false positive.
-def inst(cents: Cents, rate: float = param(0.1)) -> Cents:
-    return round(cents * rate / 12)
+def inst(amount: Currency, rate: float = param(0.1)) -> Currency:
+    return round(amount * rate / 12, 2)
 
 
 def ratio(a: float, b: float) -> float:
@@ -47,12 +45,12 @@ def test_money_story_reports_round_division_and_overflow_without_a_false_positiv
 
 
 # DCD101
-def times_cents(cents: Cents, months: int) -> int:
-    return cents * months
+def times_months(amount: Currency, months: int) -> Currency:
+    return amount * months
 
 
-def times_float(cents: Cents, rate: float) -> float:
-    return cents * rate
+def times_float(amount: Currency, rate: float) -> Currency:
+    return amount * rate
 
 
 def constants() -> int:
@@ -66,9 +64,9 @@ def running_total(cents: int) -> int:
     return total
 
 
-def test_int_product_on_cents_is_an_error():
-    finding = fires(times_cents, "int64_overflow")
-    assert finding.severity is Severity.ERROR and finding.line and finding.fix
+def test_a_decimal_product_with_an_int_is_an_error():
+    finding = fires(times_months, "int64_overflow")
+    assert finding.severity is Severity.ERROR and finding.line and finding.fix and "OverflowError" in finding.message
 
 
 def test_plain_int_product_is_a_warning_and_float_or_constant_products_are_quiet():
@@ -90,8 +88,8 @@ def truncated(price: float) -> int:
     return int(price * 100)
 
 
-def float_to_cents(cents: Cents, rate: float) -> Cents:
-    return cents * rate
+def float_into_decimal(amount: Currency, rate: float) -> Currency:
+    return float(amount) * rate
 
 
 def test_money_as_float_is_flagged_once_per_step():
@@ -102,9 +100,10 @@ def test_int_times_100_truncation_is_flagged():
     assert fires(truncated, "float_money").detail["kind"] == "truncation"
 
 
-def test_float_arithmetic_returned_into_cents_is_flagged_but_rounded_is_not():
-    assert fires(float_to_cents, "float_money").detail["kind"] == "float_to_cents"
+def test_a_float_returned_into_a_decimal_output_is_flagged_but_a_decimal_times_a_float_is_not():
+    assert fires(float_into_decimal, "float_money").detail["kind"] == "float_to_decimal"
     quiet(inst, "float_money")
+    quiet(times_float, "float_money")
 
 
 # DCD103
@@ -285,22 +284,17 @@ def test_a_float32_carry_fires():
 
 
 # DCD110
-def widen(cents: Cents) -> float:
-    return float(cents)
+def widen(amount: Currency) -> float:
+    return float(amount)
 
 
 def narrowed(x: float) -> float:
     return np.int32(x)
 
 
-def truncating(cents: Cents, rate: float) -> int:
-    return int(cents * rate)
-
-
 def test_casts_that_lose_value_fire_and_plain_int_ops_are_quiet():
     fires(widen, "unsafe_cast")
     fires(narrowed, "unsafe_cast")
-    fires(truncating, "unsafe_cast")
     quiet(sq, "unsafe_cast")
 
 

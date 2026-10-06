@@ -1,63 +1,70 @@
-"""Warm `score()` cost of Decimal arithmetic in a step against the same steps on plain ints.
-
-The Decimal steps wrap their int64 inputs at the top of the step (`W(x)`), the way a
-compiled step types a Decimal at its edge, so columns and params stay plain int64.
+"""Warm `score()` and batch cost of a Decimal money flow against the same flow on plain int cents.
 
     uv run python benchmarks/decimal_steps.py [--reps 5]
 """
 import sys
+import time
 
 import numpy as np
+import polars as pl
 
 from decider import flow, param
-from decider._engine.compile.semantics.decimals import wrapper
 from decider.ops import decimal
-from decider.ops.decimal import Rounding
+from decider.ops.decimal import Decimal, Rounding
 
 sys.path.insert(0, "benchmarks")
 from serving_latency import stats  # noqa: E402
 
-W = wrapper(2)
+
+def instalment_int(principal: int, rate: float = param(0.1275), months: int = param(12)) -> int:
+    return int(decimal.round(principal * rate / months, 0, Rounding.HALF_EVEN))
 
 
-def net_plain(gross: int, tax: int) -> int:
-    return gross - tax
+def fee_int(instalment_int: int, floor: int = param(550)) -> int:
+    return max(instalment_int, floor) + 125
 
 
-def fee_plain(net_plain: int, rate: float = param(0.0175)) -> int:
-    return int(decimal.round(net_plain * rate, 0, Rounding.HALF_EVEN))
+def total_int(fee_int: int, months: int = param(12)) -> int:
+    return fee_int * months
 
 
-def split_plain(net_plain: int, fee_plain: int, parts: int = param(3)) -> int:
-    return int(decimal.round((net_plain - fee_plain) / parts, 0, Rounding.HALF_EVEN))
+def instalment_dec(principal: Decimal[18, 2], rate: float = param(0.1275), months: int = param(12)) -> Decimal[18, 2]:
+    return principal * rate / months
 
 
-def net_dec(gross: int, tax: int) -> int:
-    return (W(gross) - W(tax)).raw
+def fee_dec(instalment_dec: Decimal[18, 2], floor: Decimal[18, 2] = param(Decimal("5.50")),
+            charge: Decimal[18, 2] = param(Decimal("1.25"))) -> Decimal[18, 2]:
+    return max(instalment_dec, floor) + charge
 
 
-def fee_dec(net_dec: int, rate: float = param(0.0175)) -> int:
-    return (W(net_dec) * rate).raw
-
-
-def split_dec(net_dec: int, fee_dec: int, parts: int = param(3)) -> int:
-    return ((W(net_dec) - W(fee_dec)) / parts).raw
-
-
-ROW = {"gross": 1234567, "tax": 123456}
+def total_dec(fee_dec: Decimal[18, 2], months: int = param(12)) -> Decimal[18, 2]:
+    return fee_dec * months
 
 
 def main(reps: int) -> None:
-    plain = flow(net_plain, fee_plain, split_plain).compile("fused")
-    dec = flow(net_dec, fee_dec, split_dec).compile("fused")
-    assert plain.score(ROW)["split_plain"] == dec.score(ROW)["split_dec"], (plain.score(ROW), dec.score(ROW))
-    best = {"plain": [1e9, 1e9], "decimal": [1e9, 1e9]}
+    plain = flow(instalment_int, fee_int, total_int, name="loan").compile("fused")
+    dec = flow(instalment_dec, fee_dec, total_dec, name="loan").compile("fused")
+    row_int, row_dec = {"principal": 100050}, {"principal": Decimal("1000.50")}
+    n = 200_000
+    rng = np.random.default_rng(1)
+    cents = rng.integers(10_000, 10_000_000, n)
+    frame_int = pl.DataFrame({"principal": cents})
+    frame_dec = pl.DataFrame({"principal": pl.Series(cents).cast(pl.Decimal(18, 0)) / 100}).cast({"principal": pl.Decimal(18, 2)})
+    assert plain.fallbacks() == {} and dec.fallbacks() == {}
+    print("score():", plain.score(row_int)["total_int"], dec.score(row_dec)["total_dec"])
+    assert plain.score(row_int)["total_int"] == dec.score(row_dec)["total_dec"].raw
+    best = {"int cents": [1e9, 1e9, 0.0], "decimal": [1e9, 1e9, 0.0]}
     for _ in range(reps):
-        for name, exe, key in (("plain", plain, "split_plain"), ("decimal", dec, "split_dec")):
-            p50, p99 = stats(lambda: exe.score(ROW))
-            best[name] = [min(best[name][0], p50), min(best[name][1], p99)]
-    for name, (p50, p99) in best.items():
-        print(f"{name:8s} score() p50 {p50:6.1f} us  p99 {p99:6.1f} us")
+        for name, exe, row, frame in (("int cents", plain, row_int, frame_int), ("decimal", dec, row_dec, frame_dec)):
+            p50, p99 = stats(lambda: exe.score(row))
+            exe.run(frame)
+            t = time.perf_counter()
+            for _ in range(5):
+                exe.run(frame)
+            rate = 5 * n / (time.perf_counter() - t) / 1e6
+            best[name] = [min(best[name][0], p50), min(best[name][1], p99), max(best[name][2], rate)]
+    for name, (p50, p99, rate) in best.items():
+        print(f"{name:10s} score() p50 {p50:6.1f} us  p99 {p99:6.1f} us   run() {rate:6.1f} M rows/s")
 
 
 if __name__ == "__main__":

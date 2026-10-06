@@ -6,9 +6,12 @@ import operator
 from decimal import Decimal as _Std
 from enum import IntEnum
 from fractions import Fraction
+from typing import Annotated
 
 import numpy as np
 from numba.extending import register_jitable
+
+from decider._annotations import DecimalSpec
 
 __all__ = ["Currency", "Decimal", "Rounding", "round", "round_float"]
 
@@ -202,6 +205,9 @@ def _compare(name: str):
             return test(self.raw * 10 ** (s - self.scale), c[0] * 10 ** (s - c[1]))
         if isinstance(other, float):
             return test(float(self), other)
+        if isinstance(other, _Std):
+            # decimal.Decimal, as a frame column's value arrives: exact, and False for NaN.
+            return other.is_finite() and test(Fraction(self.raw, 10 ** self.scale), Fraction(other)) or name == "ne" and not other.is_finite()
         return NotImplemented
 
     return op
@@ -238,21 +244,35 @@ class Decimal:
                 value = _Std(value)
             except ArithmeticError:
                 raise ValueError(f"not a number: {value!r}") from None
-            if scale is None:
-                scale = max(0, -value.as_tuple().exponent) if value.is_finite() else 0
-        elif not isinstance(value, (int, float)):
-            raise TypeError(f"Decimal takes an int, a float or a str, not {type(value).__name__}")
-        if scale is None:
+        default = 0
+        if isinstance(value, _Std):
+            if not value.is_finite():
+                raise ValueError(f"{value} is not a finite number")
+            default, exact = max(0, -value.as_tuple().exponent), Fraction(value)
+        elif isinstance(value, Decimal):
+            default, exact = value.scale, Fraction(value.raw, 10 ** value.scale)
+            units = value.units if units is None else units
+        elif isinstance(value, (int, float)):
             if isinstance(value, float):
+                if not math.isfinite(value):
+                    raise ValueError(f"{value} is not a finite number")
+                default = None
+            exact = Fraction(value)
+        else:
+            raise TypeError(f"Decimal takes an int, a float, a str or a Decimal, not {type(value).__name__}")
+        if scale is None:
+            if default is None:
                 raise ValueError("a float needs a scale: Decimal(2.65, scale=2)")
-            scale = 0
+            scale = default
         if not isinstance(scale, int) or not 0 <= scale <= 18:
             raise ValueError(f"scale must be an int from 0 to 18, not {scale!r}")
-        if isinstance(value, (float, _Std)) and not math.isfinite(value):
-            raise ValueError(f"{value} is not a finite number")
-        object.__setattr__(self, "raw", _fit(builtins.round(Fraction(value) * 10 ** scale)))
+        object.__setattr__(self, "raw", _fit(builtins.round(exact * 10 ** scale)))
         object.__setattr__(self, "scale", scale)
         object.__setattr__(self, "units", units)
+
+    def __class_getitem__(cls, key):
+        spec = _spec(cls, key)
+        return Annotated[cls, spec]
 
     @classmethod
     def from_raw(cls, raw: int, scale: int, units: str | None = None) -> Decimal:
@@ -291,10 +311,10 @@ class Decimal:
         return hash(Fraction(self.raw, 10 ** self.scale))
 
     def __neg__(self) -> Decimal:
-        return Decimal.from_raw(-self.raw, self.scale, self.units)
+        return type(self).from_raw(-self.raw, self.scale, self.units)
 
     def __abs__(self) -> Decimal:
-        return Decimal.from_raw(abs(self.raw), self.scale, self.units)
+        return type(self).from_raw(abs(self.raw), self.scale, self.units)
 
     def __mul__(self, other):
         if isinstance(other, float):
@@ -324,6 +344,22 @@ for _name in ("eq", "ne", "lt", "le", "gt", "ge"):
     setattr(Decimal, f"__{_name}__", _compare(_name))
 
 
+def _spec(cls: type, key) -> DecimalSpec:
+    if issubclass(cls, Currency):
+        if not isinstance(key, str):
+            raise TypeError('write Currency["R"] to set display units, or plain Currency for none')
+        return DecimalSpec(19, 4, key)
+    p, s = key if isinstance(key, tuple) and len(key) == 2 else (None, None)
+    if not (isinstance(p, int) and isinstance(s, int)):
+        raise TypeError("write Decimal[precision, scale], for example Decimal[18, 2]")
+    if not 1 <= p <= 19:
+        raise ValueError(f"Decimal[{p}, {s}]: a Decimal is an int64, so its precision is at most 19; "
+                         "cast a wider column in the frame tier or keep it as a float")
+    if not 0 <= s <= min(p, 18):
+        raise ValueError(f"Decimal[{p}, {s}]: the scale must be from 0 to {min(p, 18)}")
+    return DecimalSpec(p, s)
+
+
 class Currency(Decimal):
     """A Decimal with four decimal places (up to 922,337,203,685,477.5807).
 
@@ -331,8 +367,9 @@ class Currency(Decimal):
     exact: `minor` counts 0.0001 units, so `Currency(2, 6500)` is 2.65 and
     `Currency(2, 6)` is 2.0006. The sign of `major` applies to the whole value,
     and `minor` stays between 0 and 9999, so write -0.0005 as `-Currency(0, 5)`.
-    `units` is a display string shown before the amount. Arithmetic returns a
-    plain Decimal.
+    `units` is a display string shown before the amount; `Currency["R"]` in an
+    annotation sets it for a step's input or output. Negation and `abs` stay a
+    Currency; the other arithmetic returns a plain Decimal.
 
     Example::
 

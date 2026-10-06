@@ -18,7 +18,7 @@ from decider._engine.ir.nodes import CallNode, IRNode, SequenceNode, iter_nodes
 from decider._engine.ir.origin import Origin
 from decider._engine.run.runners.base import Checkpoint
 from decider._engine.ir.decls import base_annotation
-from decider._engine.types import cast_values
+from decider._engine.types import cast_values, raw_values
 from decider._engine.run.state import dtype_of
 from decider._engine.wiring.plan import NodeVersion
 
@@ -174,7 +174,7 @@ class Session(Edits):
         """
         targets = self._targets(name)
         dtype = dtype_of(base_annotation(targets[-1].annotation))
-        values, valid = cast_values(name, value, dtype, self.state.n)
+        values, valid = cast_values(name, raw_values(targets[-1].annotation, value), dtype, self.state.n)
         previous = summarize(self.value(name))
         # Every version written so far, not only the latest: a loop or branch
         # may still read an earlier one (a carry, a branch's prior value).

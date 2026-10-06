@@ -27,7 +27,8 @@ from decider._engine.ir.nodes import CallNode
 from decider._engine.params import NodeParams
 from decider.steps._helpers import allows_fallback, helper_signatures
 from decider._annotations import struct_item
-from decider._engine.types import is_raw, raw_base, columnar_item, item_schema
+from decider._engine.compile.decimal_type import DecimalType
+from decider._engine.types import decimal_scale, is_raw, raw_base, columnar_item, item_schema
 
 # UnsupportedBytecodeError (e.g. an `import` inside a step) isn't a NumbaError.
 FALLBACK_ERRORS = (NumbaError, UnsupportedBytecodeError)
@@ -141,7 +142,8 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None, bool]:
         return key, dispatcher.py_func, struct_reason, declared
     # numba would type a `date` or `list` input as the float64 it can't be converted to.
     odd = next((i for i in node.inputs if i not in columnar_inputs and i not in struct_inputs
-                and base_annotation(i.annotation) not in (float, int, bool, str, bytes, Any)), None)
+                and base_annotation(i.annotation) not in (float, int, bool, str, bytes, Any)
+                and (node.kind == "row" or decimal_scale(i.annotation) is None)), None)
     if odd is not None:
         return key, dispatcher.py_func, f"reads '{odd.name}' as {odd.annotation}, which no kernel takes", declared
     # numba types a scalar `bytes` argument as an array, so `==` against a literal compares
@@ -312,6 +314,8 @@ def _why(e: BaseException) -> str:
 
 
 def _numba_type(annotation: type) -> Any:
+    if (scale := decimal_scale(annotation)) is not None:
+        return DecimalType(scale)
     if is_raw(annotation):
         annotation = raw_base(annotation)
         if annotation is str:
@@ -324,7 +328,7 @@ def _numba_type(annotation: type) -> Any:
         return types.int64
     if annotation is bool:
         return types.boolean
-    raise TypeError(f"unsupported @helper signature type {annotation!r}; use float, int or bool")
+    raise TypeError(f"unsupported @helper signature type {annotation!r}; use float, int, bool or a Decimal")
 
 
 def parameters(fn: Callable) -> tuple[str, ...]:
@@ -354,6 +358,8 @@ def _input_type(inp: Input) -> Any:
     if item is not None:
         return from_dtype(struct_dtype(struct_schema(item)))
     annotation = base_annotation(inp.annotation)
+    if (scale := decimal_scale(inp.annotation)) is not None:
+        return types.Optional(DecimalType(scale)) if inp.null_policy is NullPolicy.OPTIONAL else DecimalType(scale)
     if annotation is bytes:
         # A null span has length -1, so a `bytes` input is never an Optional.
         return SPAN
@@ -363,6 +369,11 @@ def _input_type(inp: Input) -> Any:
     # An OPTIONAL `T | None` arrives as T's array plus a mask, so it is typed `Optional(T)`.
     t = from_dtype(numpy_dtype(base_annotation(inp.annotation)))
     return types.Optional(t) if inp.null_policy is NullPolicy.OPTIONAL else t
+
+
+def _param_type(decl: Any, value: Any) -> Any:
+    scale = decimal_scale(decl.annotation)
+    return typeof(value) if scale is None else DecimalType(scale)
 
 
 def _has_span(ins: list) -> bool:
@@ -390,7 +401,7 @@ def _probe_signature(node: CallNode) -> tuple | None:
         # A `str` param of a node reading `bytes` (or a `Columnar[...]` item field) reaches the kernel
         # as a span of its UTF-8 bytes; otherwise as the int32 code of its literal.
         par = types.UniTuple(types.int64, 2) if _has_span(ins) else types.int32
-        by_arg |= {d.arg: par if d.annotation is str else typeof(v) for d, v in zip(node.params, bundle)}
+        by_arg |= {d.arg: par if d.annotation is str else _param_type(d, v) for d, v in zip(node.params, bundle)}
         by_arg |= {name: typeof(v) for name, v in node.consts}
         return tuple(by_arg[p] for p in parameters(node.fn))
     except (ValueError, KeyError):

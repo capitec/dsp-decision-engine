@@ -2,13 +2,17 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
+import decimal as stdlib
+from typing import Annotated
+
 import numpy as np
-from pydantic import ConfigDict, Field, TypeAdapter, create_model
+from pydantic import BeforeValidator, ConfigDict, Field, TypeAdapter, create_model
 
 from decider._engine.ir.decls import ParamDecl
 from decider._engine.params.bundles import bundle_class
 from decider.exceptions import IRError
-from decider._engine.types import is_raw, raw_base
+from decider._engine.ir.decls import nullable
+from decider._engine.types import decimal_info, is_raw, raw_base, to_raw_input
 from decider._annotations import string_code
 
 
@@ -18,6 +22,8 @@ def type_name(annotation: Any) -> str:
     >>> type_name(float), type_name(list[int])
     ('float', 'list[int]')
     """
+    if (info := decimal_info(annotation)) is not None:
+        return info.cls.__name__ if info.cls.__name__ == "Currency" and info.units is None else f"Decimal[{info.precision}, {info.scale}]"
     return annotation.__name__ if isinstance(annotation, type) else repr(annotation)
 
 
@@ -37,9 +43,20 @@ def record_shared_type(types: dict[str, tuple[Any, str]], decl: ParamDecl, path:
         )
 
 
-def _tuned_type(annotation: Any) -> Any:
-    # A `Raw[str]` param is tuned, validated and documented as a plain string; only the
-    # bundle a step receives holds the code.
+def _std(value: Any) -> Any:
+    return stdlib.Decimal(value.raw).scaleb(-value.scale) if hasattr(value, "raw") and hasattr(value, "scale") else value
+
+
+def tuned_type(annotation: Any) -> Any:
+    """The type a param's value is validated and documented as.
+
+    A `Raw[str]` param is a plain string, and a Decimal one a number or string
+    pydantic reads as a `decimal.Decimal` (so `ge=` and `le=` work); only the
+    bundle a step receives holds the code or the int64.
+    """
+    if decimal_info(annotation) is not None:
+        checked = Annotated[stdlib.Decimal, BeforeValidator(_std)]
+        return checked | None if nullable(annotation) else checked
     return raw_base(annotation) if is_raw(annotation) else annotation
 
 
@@ -49,7 +66,10 @@ def _as_code(value: str) -> np.int32:
 
 
 def _conversion(annotation: Any) -> Any:
-    # A `Raw[str]` param reaches a step as the same int32 code a `Raw[str]` input does.
+    # A `Raw[str]` param reaches a step as the same int32 code a `Raw[str]` input does, and a
+    # Decimal as its int64, so no object crosses the dispatcher.
+    if (info := decimal_info(annotation)) is not None:
+        return lambda v: None if v is None else to_raw_input(v, info.scale)
     return _as_code if is_raw(annotation) and raw_base(annotation) is str else None
 
 
@@ -57,7 +77,7 @@ def _placeholder(annotation: Any) -> Any:
     # A required param has no default, but the defaults bundle still needs a
     # value of the right type so a compiled kernel sees one signature.
     try:
-        return _tuned_type(annotation)()
+        return tuned_type(annotation)()
     except (TypeError, ValueError):
         return None
 
@@ -86,7 +106,7 @@ class NodeParams:
         self.path = path
         self.decls = tuple(decls)
         self.local_names = frozenset(d.name for d in self.decls if d.shared_key is None)
-        fields = {d.name: (_tuned_type(d.annotation), _field(d)) for d in self.decls}
+        fields = {d.name: (tuned_type(d.annotation), _field(d)) for d in self.decls}
         self.model = create_model(
             path, __config__=ConfigDict(extra="forbid", validate_default=True), **fields
         )
@@ -94,7 +114,7 @@ class NodeParams:
         self.conversions = tuple(_conversion(d.annotation) for d in self.decls)
         self.defaults = self.bundle(
             _placeholder(d.annotation) if d.required
-            else TypeAdapter(_tuned_type(d.annotation)).validate_python(d.default)
+            else TypeAdapter(tuned_type(d.annotation)).validate_python(d.default)
             for d in self.decls
         )
 

@@ -5,6 +5,7 @@
 # hand-rolled in uint64 because LLVM's i128 division calls `__udivti3`, which aborts the process.
 from __future__ import annotations
 
+import functools
 import operator
 from functools import lru_cache
 
@@ -15,7 +16,7 @@ from numba.extending import intrinsic, overload, overload_attribute, register_ji
 
 from decider._engine.compile.decimal_type import DecimalType
 from decider.ops import decimal as ops
-from decider.ops.decimal import Decimal, Rounding, round_float
+from decider.ops.decimal import Currency, Decimal, Rounding, round_float
 
 _U = np.uint64
 _M32, _S32, _ZERO, _ONE = _U(0xFFFFFFFF), _U(32), _U(0), _U(1)
@@ -24,10 +25,13 @@ _POW10 = np.array([10 ** k for k in range(20)], dtype=np.uint64)
 
 @intrinsic
 def raw(typingctx, x):
-    """A decimal or an int as its int64 (an int is whole units, so it is its own raw)."""
-    if isinstance(x, DecimalType) or isinstance(x, types.Integer):
+    """A decimal or an int as its int64 (an int is whole units, so it is its own raw); an optional must not be None."""
+    if isinstance(_strip(x), (DecimalType, types.Integer)):
         def codegen(context, builder, sig, args):
-            return args[0] if isinstance(sig.args[0], DecimalType) else context.cast(builder, args[0], sig.args[0], types.int64)
+            v, t = args[0], sig.args[0]
+            if isinstance(t, types.Optional):
+                v, t = context.cast(builder, v, t, t.type), t.type
+            return v if isinstance(t, DecimalType) else context.cast(builder, v, t, types.int64)
 
         return types.int64(x), codegen
 
@@ -163,6 +167,17 @@ def _div_scaled(x, y, e):
 
 
 @register_jitable
+def _div_pow10(x, k):
+    # x / 10**k, half-even.
+    d = _POW10[k]
+    m = _mag(x)
+    q = m // d
+    if _round_up(q, m - q * d, d):
+        q += _ONE
+    return _signed(q, x < 0)
+
+
+@register_jitable
 def _compare(a, fa, b, fb):
     # -1, 0 or 1 for a * fa against b * fb, exactly.
     na = a < 0
@@ -191,6 +206,19 @@ def _round_raw(x, k, mode):
     if mode != Rounding.DOWN and (r > d - r or r == d - r and (mode == Rounding.HALF_UP or (q & _ONE) == _ONE)):
         q += _ONE
     return _signed(q * d, x < 0)
+
+
+def _strip(t):
+    # The `x + y` of an `x: Currency | None` reads x as a Currency, as numba does an optional float.
+    return t.type if isinstance(t, types.Optional) else t
+
+
+def _unwrapping(f):
+    @functools.wraps(f)
+    def typed(*args):
+        return f(*map(_strip, args))
+
+    return typed
 
 
 def _scale(t) -> int:
@@ -277,14 +305,14 @@ def _comparison(op):
 
 for _op, _symbol in ((operator.add, "+"), (operator.sub, "-")):
     _f = _additive(_symbol, _op)
-    overload(_op, target="cpu")(_f)
-    overload(getattr(operator, f"i{_op.__name__}"), target="cpu")(_f)
+    overload(_op, target="cpu")(_unwrapping(_f))
+    overload(getattr(operator, f"i{_op.__name__}"), target="cpu")(_unwrapping(_f))
 for _op, _symbol, _divide in ((operator.mul, "*", False), (operator.truediv, "/", True)):
     _f = _multiplicative(_symbol, _divide)
-    overload(_op, target="cpu")(_f)
-    overload(getattr(operator, f"i{_op.__name__}"), target="cpu")(_f)
+    overload(_op, target="cpu")(_unwrapping(_f))
+    overload(getattr(operator, f"i{_op.__name__}"), target="cpu")(_unwrapping(_f))
 for _op in (operator.eq, operator.ne, operator.lt, operator.le, operator.gt, operator.ge):
-    overload(_op, target="cpu")(_comparison(_op))
+    overload(_op, target="cpu")(_unwrapping(_comparison(_op)))
 
 
 def _unsupported(symbol):
@@ -301,6 +329,7 @@ for _op, _symbol in ((operator.floordiv, "//"), (operator.mod, "%"), (operator.p
 
 
 @overload(operator.neg, target="cpu")
+@_unwrapping
 def _neg(a):
     if isinstance(a, DecimalType):
         w = wrapper(a.scale)
@@ -308,6 +337,7 @@ def _neg(a):
 
 
 @overload(abs, target="cpu")
+@_unwrapping
 def _abs(a):
     if isinstance(a, DecimalType):
         w = wrapper(a.scale)
@@ -325,11 +355,12 @@ def _extreme(better):
     return overloaded
 
 
-overload(max, target="cpu")(_extreme(operator.gt))
-overload(min, target="cpu")(_extreme(operator.lt))
+overload(max, target="cpu")(_unwrapping(_extreme(operator.gt)))
+overload(min, target="cpu")(_unwrapping(_extreme(operator.lt)))
 
 
 @overload(float, target="cpu")
+@_unwrapping
 def _float(a):
     if isinstance(a, DecimalType):
         f = float(10 ** a.scale)
@@ -337,6 +368,7 @@ def _float(a):
 
 
 @overload(int, target="cpu")
+@_unwrapping
 def _int(a):
     if isinstance(a, DecimalType):
         p = _U(10 ** a.scale)
@@ -344,6 +376,7 @@ def _int(a):
 
 
 @overload(bool, target="cpu")
+@_unwrapping
 def _bool(a):
     if isinstance(a, DecimalType):
         return lambda a: raw(a) != 0
@@ -381,5 +414,49 @@ def _round(x, digits=0, mode=Rounding.HALF_UP):
         if k <= 0:
             return x
         return w(_round_raw(raw(x), k, mode))
+
+    return impl
+
+
+def store_as(t, scale: int):
+    """A function from a step's returned value of type `t` to the int64 stored for a Decimal output at `scale`.
+
+    A decimal of another scale is rescaled (coarser rounds half-even), an int is whole units, and an optional
+    stays optional. `None` for a step that only raises.
+    """
+    if isinstance(t, types.NoneType):
+        return None
+    if isinstance(t, types.Optional):
+        inner = register_jitable(store_as(t.type, scale))
+
+        def optional(x):
+            if x is None:
+                return None
+            return inner(x)
+
+        return optional
+    if isinstance(t, DecimalType) and t.scale > scale:
+        k = t.scale - scale
+        return lambda x: _div_pow10(raw(x), k)
+    if isinstance(t, (DecimalType, types.Integer)):
+        m = 10 ** (scale - _scale(t))
+        return lambda x: raw(x) * m
+    raise TypingError(f"a Decimal output can't be stored from a {t}: return a Decimal or an int")
+
+
+@overload(Currency, target="cpu")
+def _currency(major=0, minor=None):
+    if not isinstance(major, types.Integer):
+        raise TypingError("Currency(...) in a step takes ints, as Currency(major, minor); build one from a float outside the step")
+    w = wrapper(4)
+    if minor is None or isinstance(minor, (types.Omitted, types.NoneType)):
+        return lambda major=0, minor=None: w(raw(major) * 10000)
+    if not isinstance(minor, types.Integer):
+        raise TypingError("Currency(major, minor) in a step takes two ints")
+
+    def impl(major=0, minor=None):
+        if minor < 0 or minor >= 10000:
+            raise ValueError("minor must be from 0 to 9999 (units of 0.0001)")
+        return w(raw(major) * 10000 + (raw(minor) if major >= 0 else -raw(minor)))
 
     return impl

@@ -15,6 +15,8 @@ from decider._engine.boundary.extract import _schema_plan, extract_frame  # noqa
 from decider._engine.concurrency import _local  # noqa: E402
 from decider._engine.boundary.nulls import MissingInputError  # noqa: E402
 from decider._engine.ir.decls import Input, NullPolicy  # noqa: E402
+from decider.ops.decimal import Currency  # noqa: E402
+from decider.ops.decimal import Decimal as Dec  # noqa: E402
 
 
 def _spans(values: np.ndarray) -> list:
@@ -315,18 +317,25 @@ def test_a_pair_the_table_has_no_cast_for_is_refused_by_column_arrow_type_and_ki
         extract_frame(pl.DataFrame({"c": pl.Series(["a"], dtype=pl.Categorical)}), [Input("c", int)])
 
 
-def test_a_decimal_column_crosses_as_scaled_int64_cents_as_before():
+def test_a_decimal_column_crosses_as_its_int64_mantissa_at_the_declared_scale():
     frame = pl.DataFrame({"amount": pl.Series([Decimal("19.99"), Decimal("5.00")], dtype=pl.Decimal(18, 2))})
-    col = extract_frame(frame, [Input("amount", int)]).columns["amount"]
+    col = extract_frame(frame, [Input("amount", Dec[18, 2])]).columns["amount"]
     assert col.values.tolist() == [1999, 500] and col.values.dtype == np.int64 and col.plan.cast == pl.Int64()
+    assert extract_frame(frame, [Input("amount", Currency)]).columns["amount"].values.tolist() == [199900, 50000]
     col = extract_frame(frame, [Input("amount", float)]).columns["amount"]
-    assert col.values.tolist() == [1999.0, 500.0]
+    assert col.values.tolist() == [19.99, 5.0]
 
 
-def test_a_decimal_that_overflows_int64_fails_by_name_not_by_crash():
+def test_a_missing_as_fill_on_a_decimal_input_is_its_int64():
+    frame = pl.DataFrame({"amount": pl.Series([Decimal("1.5"), None], dtype=pl.Decimal(18, 2))})
+    col = extract_frame(frame, [Input("amount", Currency, NullPolicy.MISSING_AS, Currency("2.5"))]).columns["amount"]
+    assert col.values.tolist() == [15000, 25000]
+
+
+def test_a_decimal_that_overflows_int64_at_its_scale_fails_by_name_not_by_crash():
     frame = pl.DataFrame({"m": pl.Series([Decimal("9" * 30)], dtype=pl.Decimal(38, 0))})
-    with pytest.raises(NeedsKernelSplit, match=r"column 'm'.*Decimal.*cast to Int64 failed"):
-        extract_frame(frame, [Input("m", int)])
+    with pytest.raises(NeedsKernelSplit, match=r"column 'm'.*does not fit a Decimal at scale 4"):
+        extract_frame(frame, [Input("m", Currency)])
 
 
 # --- the schema plan is decided once; the FrameView is pooled per thread -------

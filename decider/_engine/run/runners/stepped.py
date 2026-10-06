@@ -13,7 +13,7 @@ from decider._engine.boundary.nulls import MissingInputError
 from decider._engine.compile import Fallback, Kernel, Packed, Unit, compile_plan, numpy_dtype
 from decider._engine.compile.rows import build_ragged, build_rows, rows_needs_no_fill
 from decider._engine.compile.structs import build_struct, struct_schema
-from decider._engine.ir.decls import Input, NullPolicy, base_annotation
+from decider._engine.ir.decls import Input, NullPolicy, base_annotation, is_typed, stored_fill
 from decider._engine.run.params import RunParams
 from decider._engine.run.representations import codes, span_objects, spans
 from decider._engine.run.runners.base import Checkpoint
@@ -167,7 +167,7 @@ class SteppedRunner(InterpretedRunner):
                     # The fill belongs in the strings: a span or a code cannot be filled afterwards,
                     # and the fill is this reader's, not the shared representation's.
                     filled = True
-                    x = build(fill_missing(x, mask, decl.fill), None, alive)
+                    x = build(fill_missing(x, mask, stored_fill(decl)), None, alive)
                 elif not _null_struct(kind, mask):
                     full = state.representation(v, kind, build)
                     x = full if rows is None else full[rows]
@@ -179,7 +179,7 @@ class SteppedRunner(InterpretedRunner):
                     raise MissingInputError(decl.name, path, int((~mask).sum()), len(mask), absent=_absent(state, v))
                 if not filled and _fills(decl, mask, kind):
                     # ponytail: one fill per version per kernel; two readers with different fills share the first.
-                    x = fill_missing(x, mask, decl.fill).astype(x.dtype, copy=False)
+                    x = fill_missing(x, mask, stored_fill(decl)).astype(x.dtype, copy=False)
                 valid[v.id] = mask
             values.setdefault(v.id, x)
         try:
@@ -237,7 +237,7 @@ def _external(unit: Unit) -> tuple[tuple[Input, NodeVersion, str, np.dtype | Non
     # A genuinely interpreted fallback runs a Python body, which compares whole values, so it needs
     # `Span` objects; a compiled body reads the `(address, length)` pairs through span overloads.
     python = isinstance(unit, Fallback) and not isinstance(unit.fn, Dispatcher)
-    return tuple((i, v, path, numpy_dtype(b) if (b := base_annotation(i.annotation)) in (float, int, bool) else None,
+    return tuple((i, v, path, numpy_dtype(b) if is_typed(b := base_annotation(i.annotation)) else None,
                   *_boxed(i, row, path, kernel, python), _declared(i.annotation, row)) for i, v, path in reads)
 
 

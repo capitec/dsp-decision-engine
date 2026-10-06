@@ -11,7 +11,7 @@ _SAMPLES = 5
 class ColumnDiff(BaseModel):
     """How one column differs. Deltas are `new - old` over the changed rows, left out where non-finite or null.
 
-    `max_abs` is an exact int for integer columns (money in cents).
+    `max_abs` is an exact int for integer columns (an amount held as int).
     """
 
     changed: int

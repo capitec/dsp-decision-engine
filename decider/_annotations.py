@@ -37,11 +37,20 @@ class FieldMetadata:
 
 @dataclass(frozen=True)
 class Money(FieldMetadata):
-    """An amount of money: `Money()` for rands, `Money(cents=True)` for an int of cents."""
+    """A float amount of money, shown with `symbol`. Money kept exact is a `Currency`."""
 
     kind: ClassVar[str] = "money"
     symbol: str = "R"
-    cents: bool = False
+
+
+@dataclass(frozen=True)
+class DecimalSpec(FieldMetadata):
+    """The precision and scale of a `Decimal[p, s]`, and the display `units` of a `Currency["R"]`."""
+
+    kind: ClassVar[str] = "decimal"
+    precision: int
+    scale: int
+    units: str | None = None
 
 
 @dataclass(frozen=True)
@@ -64,7 +73,7 @@ def metadata_of(annotation: Any) -> FieldMetadata | None:
 
     Example::
 
-        metadata_of(Annotated[float, Money()])   # Money(symbol='R', cents=False)
+        metadata_of(Annotated[float, Money()])   # Money(symbol='R')
     """
     if typing.get_origin(annotation) is not typing.Annotated:
         return None

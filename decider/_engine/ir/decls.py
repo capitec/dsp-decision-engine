@@ -7,7 +7,7 @@ import typing
 from typing import Any, Literal
 
 import numpy as np
-from decider._engine.types import annotation_cache, is_raw, plain_annotation, raw_base
+from decider._engine.types import annotation_cache, decimal_scale, is_decimal, is_raw, plain_annotation, raw_base, to_raw_input
 
 OnInvalid = Literal["error", "warn", "default"]
 
@@ -49,6 +49,15 @@ KIND_DTYPES: dict[FeatureKind, np.dtype] = {
 # Annotations whose values live in typed arrays; anything else is a Python object.
 TYPED = (float, int, bool)
 
+
+def is_typed(annotation: Any) -> bool:
+    """Whether values of `annotation` live in a typed array: float, int, bool, or a Decimal (an int64).
+
+    >>> is_typed(float), is_typed(str)
+    (True, False)
+    """
+    return annotation in TYPED or is_decimal(annotation)
+
 _KIND_BY_ANNOTATION = {float: FeatureKind.F64, int: FeatureKind.I64, bool: FeatureKind.BOOL,
                        str: FeatureKind.CODE, bytes: FeatureKind.STR}
 
@@ -60,7 +69,11 @@ def feature_kind(annotation: Any) -> FeatureKind:
     <FeatureKind.I64: 1>
     """
     kind_annotation = raw_base(annotation) if is_raw(annotation) else plain_annotation(annotation)
-    return _KIND_BY_ANNOTATION.get(kind_annotation, FeatureKind.F64)
+    kind = _KIND_BY_ANNOTATION.get(kind_annotation)
+    if kind is None:
+        # A Decimal is its int64 mantissa, `Decimal | None` included.
+        kind = FeatureKind.I64 if is_decimal(kind_annotation) else FeatureKind.F64
+    return kind
 
 
 @annotation_cache
@@ -110,6 +123,16 @@ class Input:
     def __post_init__(self) -> None:
         if self.arg is None:
             object.__setattr__(self, "arg", self.name)
+
+
+def stored_fill(decl: Input) -> Any:
+    """`decl.fill` as it is stored: the int64 of a Decimal fill, else the fill itself.
+
+    >>> stored_fill(Input("x", int, NullPolicy.MISSING_AS, 7))
+    7
+    """
+    scale = decimal_scale(decl.annotation)
+    return decl.fill if scale is None or decl.fill is None else to_raw_input(decl.fill, scale)
 
 
 @dataclass(frozen=True, slots=True)

@@ -8,15 +8,17 @@ from typing import Any, Iterator
 
 from decider._annotations import Money, metadata_of
 from decider.checks._base import CheckContext
-from decider.ir import CallNode
+from decider.ir import CallNode, decimal_info
 
-INT, FLOAT = "int", "float"
+INT, FLOAT, DEC = "int", "float", "decimal"
 _FLOAT_FUNCS = {"sqrt", "exp", "log", "log2", "log10", "log1p", "sin", "cos", "tan", "pow", "fabs"}
 _INT_FUNCS = {"floor", "ceil", "trunc"}
 
 
 def kind_of(annotation: Any) -> str | None:
-    """`INT`, `FLOAT` or `None` (unknown) for a declared type; `bool` is unknown."""
+    """`INT`, `FLOAT`, `DEC` (a Decimal or Currency) or `None` (unknown) for a declared type; `bool` is unknown."""
+    if decimal_info(annotation) is not None:
+        return DEC
     if typing.get_origin(annotation) is typing.Annotated:
         annotation = annotation.__origin__
     if not isinstance(annotation, type) or issubclass(annotation, bool):
@@ -27,7 +29,7 @@ def kind_of(annotation: Any) -> str | None:
 
 
 def join(a: str | None, b: str | None) -> str | None:
-    return a if a == b else FLOAT if {a, b} == {INT, FLOAT} else None
+    return a if a == b else FLOAT if {a, b} == {INT, FLOAT} else DEC if {a, b} == {DEC, INT} else None
 
 
 def _positive(items: Any) -> bool:
@@ -50,7 +52,6 @@ class Scope:
     def __init__(self, node: CallNode, fn: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
         self.node, self.fn = node, fn
         self.types: dict[str, str | None] = {}
-        self.cents: set[str] = set()
         self.positive: set[str] = set()
         self.inputs: set[str] = set()
         for i in node.inputs or ():
@@ -74,25 +75,17 @@ class Scope:
             for name, value in assigns:
                 if name not in self.declared:
                     seen.setdefault(name, []).append(self.type_of(value))
-                if self.has_cents(value):
-                    self.cents.add(name)
             for name, ts in seen.items():
                 self.types[name] = reduce(join, ts)
 
     def _declare(self, name: str, annotation: Any, bounds: Any) -> None:
         self.types[name] = kind_of(annotation)
-        meta = metadata_of(annotation)
-        if isinstance(meta, Money) and meta.cents:
-            self.cents.add(name)
         if _positive(bounds):
             self.positive.add(name)
 
     def walk(self) -> Iterator[ast.AST]:
         for stmt in self.fn.body:
             yield from ast.walk(stmt)
-
-    def has_cents(self, expr: ast.AST) -> bool:
-        return any(isinstance(n, ast.Name) and n.id in self.cents for n in ast.walk(expr))
 
     def type_of(self, e: ast.AST) -> str | None:
         if isinstance(e, ast.Constant):
@@ -105,6 +98,9 @@ class Scope:
             return join(self.type_of(e.body), self.type_of(e.orelse))
         if isinstance(e, ast.BinOp):
             left, right = self.type_of(e.left), self.type_of(e.right)
+            if DEC in (left, right):
+                # `Decimal * float` is a Decimal at the decimal's scale; `float / Decimal` is not defined.
+                return DEC if not isinstance(e.op, (ast.FloorDiv, ast.Mod, ast.Pow)) else None
             if isinstance(e.op, ast.Div) or FLOAT in (left, right):
                 return FLOAT
             if isinstance(e.op, ast.Pow) and isinstance(e.right, ast.UnaryOp):
@@ -161,8 +157,10 @@ class Scope:
             cur = parent
         return False
 
-    def money_output(self) -> Money | None:
-        return next((m for o in self.node.outputs or () if isinstance(m := metadata_of(o.annotation), Money)), None)
+    def money_output(self) -> bool:
+        """Whether an output is an amount of money: a Decimal or Currency, or annotated `Money()`."""
+        return any(decimal_info(o.annotation) is not None or isinstance(metadata_of(o.annotation), Money)
+                   for o in self.node.outputs or ())
 
 
 def scopes(ctx: CheckContext) -> Iterator[tuple[CallNode, Any, Scope]]:

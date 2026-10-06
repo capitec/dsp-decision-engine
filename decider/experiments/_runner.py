@@ -33,7 +33,7 @@ from decider import Engine
 from decider._engine.params import merge
 from decider.ir import base_annotation
 from decider._engine.run.state import State, dtype_of
-from decider._engine.types import cast_values
+from decider._engine.types import cast_values, raw_values
 from decider._engine.wiring.plan import Branch, Loop, ScatterGather
 from decider._engine.wiring.plan import Sequence as Sequence_
 from decider.exceptions import DeciderError
@@ -328,7 +328,7 @@ def _set_values(plan, state: State, sc: Scenario, offset: int) -> None:
             current = state.column(name, targets[-1]).to_list()
             current[sc.row - offset] = value
             value = current
-        values, valid = cast_values(name, value, dtype_of(base_annotation(targets[-1].annotation)), state.n)
+        values, valid = cast_values(name, raw_values(targets[-1].annotation, value), dtype_of(base_annotation(targets[-1].annotation)), state.n)
         for v in targets:
             state.write(v, values.copy(), valid=None if valid is None else valid.copy())
 

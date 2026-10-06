@@ -18,6 +18,7 @@ from decider._engine.run.runners.stepped import SteppedRunner
 from decider._engine.ir.decls import ParamDecl, base_annotation
 from decider._engine.run.state import State, declared_dtype, dtype_of, load_record, record_value
 from decider._engine.trace.envelope import StepTable
+from decider._engine.types import decimal_boxer, decimal_info
 from decider._engine.wiring import Plan, resolve
 from decider._engine.wiring.plan import Branch, Call, Loop, ScatterGather, Sequence, NodeVersion
 from decider.exceptions import EngineError
@@ -113,13 +114,15 @@ class Executable:
         # One set test on the hot path covers both checks; nothing else happens unless it hits.
         self._watched = self._produced | self._params_at.keys()
         self._warned = Cache()
-        self._declared = {i.name: declared_dtype(i.annotation) for i in plan.inputs}
+        self._declared = {i.name: _declared(i.annotation) for i in plan.inputs}
         inputs: dict[np.dtype, list[NodeVersion]] = {}
         for v in plan.versions:
             if v.producer is None:
                 inputs.setdefault(dtype_of(base_annotation(v.annotation)), []).append(v)
         self._inputs = list(inputs.items())
         self._results = [(k, v) for k, v in plan.outputs.items() if v.producer is not None]
+        # A Decimal output is stored as its int64 and handed back as a Decimal.
+        self._boxers = {k: box for k, v in self._results if (box := decimal_boxer(v.annotation)) is not None}
         self._hidden = set(plan.drops) | {k for k, _ in self._results}
         self._record_path = not any(c.node.kind == "frame" for c in plan.calls)
         # The trace's per-run constant table: step ref (call index + 1) -> durable origin.
@@ -228,7 +231,12 @@ class Executable:
         out = {k: x for k, x in record.items() if k not in self._hidden}
         for k, v in self._results:
             values, valid = state.read(v)
-            out[k] = None if valid is not None and not valid[0] else record_value(values.tolist()[0], v.annotation)
+            if valid is not None and not valid[0]:
+                out[k] = None
+            elif (box := self._boxers.get(k)) is not None:
+                out[k] = box(values.tolist()[0])
+            else:
+                out[k] = record_value(values.tolist()[0], v.annotation)
         return out
 
     def _iterate(self, state: State, run: RunParams, trace) -> None:
@@ -274,6 +282,11 @@ class Executable:
             # Every frame column passes through: hstack is several times cheaper than a new frame.
             return frame.hstack(results)
         return pl.DataFrame([frame.get_column(c) for c in names if c not in self._hidden] + results)
+
+
+def _declared(annotation: Any) -> pl.DataType | None:
+    info = decimal_info(annotation)
+    return pl.Decimal(38, info.scale) if info is not None else declared_dtype(annotation)
 
 
 def _scatter_gathers(r) -> Any:

@@ -4,7 +4,7 @@ import ast
 from typing import Iterator, Literal
 
 from decider.checks._base import Check, CheckContext
-from decider.checks._builtin.numeric._scope import FLOAT, INT, kind_of, scopes
+from decider.checks._builtin.numeric._scope import DEC, FLOAT, INT, kind_of, scopes
 from decider.checks._report import Finding, Severity
 from decider.ir import CallNode, iter_nodes
 
@@ -165,7 +165,7 @@ def _grows(scope) -> bool:
 
 
 class UnsafeCast(Check):
-    """`int(float)` of a money amount, `float(cents)` and narrowing casts such as `np.int32` can lose value."""
+    """`float(decimal)` past 2**53 of its int64 and narrowing casts such as `np.int32` can lose value."""
 
     type: Literal["unsafe_cast"] = "unsafe_cast"
     code = "DCD110"
@@ -178,12 +178,9 @@ class UnsafeCast(Check):
                 name, arg = _name(e), e.args[0]
                 if name in _NARROW:
                     why, fix = f"{name} is a narrowing cast", "keep int64 / float64"
-                elif name == "float" and scope.has_cents(arg) and scope.type_of(arg) == INT:
-                    why, fix = "float(cents) is inexact above 2**53 cents", "keep money as int cents until the final divide"
-                elif (name == "int" and scope.type_of(arg) == FLOAT and scope.has_cents(arg)
-                      and not (isinstance(arg, ast.BinOp) and any(isinstance(s, ast.Constant) and s.value in (100, 100.0)
-                                                                  for s in (arg.left, arg.right)))):
-                    why, fix = "int(float) truncates, and a float loses cents above 2**53", "round with decider.ops.decimal.round first"
+                elif name == "float" and scope.type_of(arg) == DEC:
+                    why, fix = ("float(decimal) is inexact once its int64 passes 2**53 (about 900 billion at four places)",
+                                "keep the amount a Decimal, and compare or divide it as one")
                 else:
                     continue
                 text = ast.unparse(e)

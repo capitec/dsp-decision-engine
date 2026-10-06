@@ -1,11 +1,11 @@
 """The structure checks DCD201-208: each fires on its defect and stays quiet on clean code."""
 import sys
-from typing import Annotated
 
 import polars as pl
 import pytest
 
-from decider import Money, branch, checks, flow, frame_step, loop, param, step
+from decider import branch, checks, flow, frame_step, loop, param, step
+from decider.ops.decimal import Currency
 from decider.steps.tables import DecisionTableConfig
 from decider.steps.trees import TreeConfig
 
@@ -325,8 +325,8 @@ def test_a_frame_step_declaring_its_columns_is_quiet():
 # -- the whole family --
 
 def test_the_money_example_has_no_structure_findings():
-    def inst(cents: Annotated[int, Money(cents=True)], rate: float = param(0.1)) -> Annotated[int, Money(cents=True)]:
-        return round(cents * rate / 12)
+    def inst(amount: Currency, rate: float = param(0.1)) -> Currency:
+        return round(amount * rate / 12, 2)
 
     def ratio(a: float, b: float) -> float:
         return a / b

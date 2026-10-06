@@ -7,17 +7,19 @@ from typing import Any, Callable, Iterator, Mapping
 import numpy as np
 import polars as pl
 
+from decider._engine.boundary.dtypes import decimal_mantissa
 from decider._engine.boundary.nulls import MissingInputError
 from decider._engine.compile import numpy_dtype
 from decider._engine.compile.rows import build_rows, rows_needs_no_fill
-from decider._engine.ir.decls import Input, NullPolicy, base_annotation
+from decider._engine.ir.decls import Input, NullPolicy, base_annotation, stored_fill
 from decider._engine.run.params import RunParams
 from decider._engine.run.representations import codes, span_objects
 from decider._engine.run.runners.base import Checkpoint
 from decider._engine.run.state import State, dtype_of, fill_missing, from_series, record_value
 from decider._engine.trace.envelope import Kind
 from decider._annotations import struct_item
-from decider._engine.types import Representation, is_raw, representation_for, columnar_item, item_schema
+from decider._engine.types import (Representation, columnar_item, decimal_boxer, decimal_scale, is_raw, item_schema,
+                                   representation_for, to_raw)
 from decider._engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, ScatterGather, Sequence, NodeVersion
 
 # Below this many exploded elements the polars explode+gather (about ten lazy collects, each with
@@ -125,6 +127,11 @@ class InterpretedRunner:
         # Plain Python scalars, not numpy ones: `x / 0.0` must raise here as it does in a kernel.
         cols = [_argument(state, v, i, scope.rows, node.origin.path, node.kind).tolist()
                 for i, v in zip(node.inputs, call.reads)]
+        if node.kind == "scalar":
+            # A Decimal input or param reaches the step as a Decimal, not its int64.
+            cols = [[None if x is None else box(x) for x in col] if (box := decimal_boxer(i.annotation)) else col
+                    for i, col in zip(node.inputs, cols)]
+            bundle = tuple(box(b) if (box := decimal_boxer(d.annotation)) else b for d, b in zip(node.params, bundle))
         rows = zip(*cols) if cols else repeat((), m)
         results: list = []
         append = results.append
@@ -159,6 +166,8 @@ class InterpretedRunner:
                 fields = [name for name, _ in item_schema(item)]
                 values = tuple(None if x is None else (x if isinstance(x, dict) else dict(zip(fields, x)))
                                for x in values)
+            if (scale := decimal_scale(out.annotation)) is not None:
+                values = tuple(None if x is None else to_raw(x, scale) for x in values)
             # A `Raw[...]` output is stored as a kernel stores it, or the modes disagree on dtype.
             array, valid = _array(values, numpy_dtype(out.annotation) if is_raw(out.annotation)
                                   else dtype_of(base_annotation(out.annotation)))
@@ -377,7 +386,7 @@ def _argument(state: State, version: NodeVersion, decl: Input, rows: np.ndarray 
         return values
     if decl.null_policy is NullPolicy.MISSING_AS:
         # A null row of a `Columnar[...]` input already reads as a row with no items.
-        return values if rows_needs_no_fill(decl, item is not None) else fill_missing(values, valid, decl.fill)
+        return values if rows_needs_no_fill(decl, item is not None) else fill_missing(values, valid, stored_fill(decl))
     values = values.astype(object)
     values[missing] = None
     return values
@@ -438,7 +447,8 @@ def _frame(call: Call, state: State, scope: _Scope, bundle: tuple, trace=None) -
                          f"{'it declares' if node.outputs is not None else 'later steps read'}; "
                          f"it returned {out.columns}")
     for v in call.writes:
-        values, valid = from_series(out[v.name])
+        scale = decimal_scale(v.annotation)
+        values, valid = from_series(out[v.name] if scale is None else decimal_mantissa(out[v.name], scale))
         state.write(v, values, scope.rows, valid)
         # A nested column a frame step writes keeps its Series, so a later `Columnar[Item]` read can
         # use its Arrow buffers instead of rebuilding the flat arrays from Python objects.

@@ -5,7 +5,7 @@ import polars as pl
 from decider import Duration, Engine, Money, Percent, flow, param
 from decider._engine.ir.decls import NullPolicy, base_annotation
 from decider._engine.params.harvest import harvest
-from decider._annotations import metadata_of
+from decider._annotations import DecimalSpec, metadata_of
 
 
 def instalment(loan: Annotated[float, Money()], rate: Annotated[float, Percent()] = param(0.12)) -> Annotated[float, Money()]:
@@ -13,13 +13,14 @@ def instalment(loan: Annotated[float, Money()], rate: Annotated[float, Percent()
 
 
 def test_field_metadata_is_read_from_annotated_types():
-    assert metadata_of(Annotated[float, Money(cents=True)]) == Money(cents=True)
+    assert metadata_of(Annotated[float, Money("$")]) == Money("$")
     assert metadata_of(Annotated[int, "unrelated", Duration("days")]) == Duration("days")
     assert metadata_of(float) is None and metadata_of(Annotated[float, "unrelated"]) is None
 
 
 def test_field_metadata_is_json_with_its_kind():
-    assert Money().to_json() == {"kind": "money", "symbol": "R", "cents": False}
+    assert Money().to_json() == {"kind": "money", "symbol": "R"}
+    assert DecimalSpec(19, 4, "R").to_json() == {"kind": "decimal", "precision": 19, "scale": 4, "units": "R"}
     assert Duration("days").to_json() == {"kind": "duration", "unit": "days"}
 
 

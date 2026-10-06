@@ -105,7 +105,9 @@ class ParamInfo(_Open):
 class FieldMeta(_Open):
     kind: str
     symbol: str = None
-    cents: bool = None
+    precision: int = None
+    scale: int = None
+    units: str = None
     unit: str = None
     assumed: bool = Field(None, description="Not declared: guessed from the value's name.")
 
