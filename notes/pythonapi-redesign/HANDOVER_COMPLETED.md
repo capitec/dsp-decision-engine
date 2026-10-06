@@ -8,6 +8,27 @@ Written 2026-10-06, when the orchestration that `HANDOVER.md` describes was fini
 
 `README.md` → "As built" has the short list of deviations; this file has the detail.
 
+## Summary: shortcuts and items left alone
+
+The full tables are under "Shortcuts" and "Smaller items left alone on purpose" below.
+
+**Shortcuts left in the code** (`# ponytail:` comments added this run)
+- `decider/ops/decimal.py:85, 137`: rounding is one ulp off on rare halfway cases past 2⁵³, and approximate beyond 22 digits.
+- `decider/_engine/compile/semantics/numbers.py:34`: a literal `x ** 2` can differ from libm by an ulp.
+- `decider/diff/_smt.py:414`: tables over 40 rows skip the pairwise overlap check.
+- `decider/diff/_hash.py:52`: trusts a tree's arrays and its reference to come from the same document.
+- `decider/checks/_builtin/determinism.py:142`, `numeric/floats.py:157`, `data.py:162`: heuristics that a flow-sensitive analysis would make exact.
+- `decider/_bridge/bridge.py:172`: trace-sink status is not reported yet.
+
+**Smaller items left alone**
+- `notes/jupyterlab-decider.md` describes a tool that doesn't exist.
+- `benchmarks/span_operations.py` imports a `python_only` name that no longer exists, and `units.py` still names it in an error hint.
+- Decimal steps inside trees, tables and `each` fall back to Python.
+- A Decimal `run()` over 200k rows is about 27% slower than plain ints, because of the polars Decimal cast.
+- The `prove` extra (`z3-solver`) is in the dev dependency group, so the z3 tests run in the normal suite.
+
+Memory-heavy runs go through `.scratch/heavy.sh` and `.scratch/light.sh`, which cap memory per run and queue runs (see "How the work was run").
+
 ## State at completion
 
 | | |
@@ -161,6 +182,7 @@ Seen during the run and out of scope; none of them blocks anything.
 - `decider/diff/_worker.py` and `decider/experiments/_worker.py` repeat the same subprocess reply envelope.
 - `RegistryError`'s did-you-mean list doesn't include entry-point names.
 - `optimise(record=...)` can't be written in a flow file, because it takes a `TypedDict` class. `each(execution_mode=...)` was also left out, since both modes now scatter.
+- `z3-solver` is in the dev dependency group as well as the `prove` extra, so the z3 tests (`tests/diff/test_smt.py`, the DCD201/207/208 tests) run in the normal suite instead of being skipped. A plain install without the extra still works: proofs stop at tier 1, and the z3 checks are reported under `skipped`.
 - Hot reload's `_key` (`_engine/debug/hot.py`) includes a composite's whole `Origin`. Changing `suppress_checks` on a composite therefore counts as an edit and swaps the node. It doesn't recompile.
 
 **Decimal and Currency**
