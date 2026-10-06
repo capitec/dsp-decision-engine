@@ -43,9 +43,9 @@ def test_a_wall_clock_read_is_reported_with_its_source():
     assert finding.fix
 
 
-def test_a_clean_step_has_no_wall_clock_or_numeric_findings():
+def test_a_clean_step_has_no_wall_clock_or_overflow_findings():
     report = checks.run(flow(cap, name="term"))
-    assert not _by(report, "wall_clock") and not _by(report, "numeric") and not _by(report, "impure")
+    assert not _by(report, "wall_clock") and not _by(report, "int64_overflow") and not _by(report, "impure")
 
 
 def test_impure_reports_globals_and_mutable_defaults():
@@ -65,9 +65,9 @@ def test_impure_reports_globals_and_mutable_defaults():
     assert found == {"global", "mutable_default"}
 
 
-def test_numeric_flags_integer_scaling_with_the_temporary_code():
-    found = _by(checks.run(flow(scale, name="term")), "numeric")
-    assert [(f.code, f.detail["risk"]) for f in found] == [("DCD100", "int64_overflow")]
+def test_int64_overflow_flags_integer_scaling():
+    found = _by(checks.run(flow(scale, name="term")), "int64_overflow")
+    assert [f.code for f in found] == ["DCD101"]
 
 
 def test_a_flow_without_durable_ids_is_reported_per_flow_and_step():
@@ -91,7 +91,7 @@ def test_missing_ids_can_be_promoted_to_an_error():
 
 def test_standard_finds_known_defects_without_arguments():
     found = {f.check for f in checks.run(flow(stamped, scale, name="term")).findings}
-    assert {"wall_clock", "numeric", "durable_ids"} <= found
+    assert {"wall_clock", "int64_overflow", "durable_ids"} <= found
 
 
 def test_findings_carry_the_contract_step_reference():

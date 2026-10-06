@@ -36,7 +36,7 @@ def _check(*args):
 
 def test_warnings_pass_the_default_gate(project):
     result = _check("shop.pipeline:build")
-    assert result.exit_code == 0 and "DCD100 numeric" in result.output
+    assert result.exit_code == 0 and "DCD101 int64_overflow" in result.output
 
 
 def test_fail_on_warning_exits_1(project):
@@ -45,23 +45,23 @@ def test_fail_on_warning_exits_1(project):
 
 def test_the_gate_comes_from_the_project_config(project):
     (project / "configs").mkdir()
-    (project / "checks.yaml").write_text("checks: [{type: numeric, severity: error}]\n")
+    (project / "checks.yaml").write_text("checks: [{type: int64_overflow, severity: error}]\n")
     assert _check("shop.pipeline:build").exit_code == 1
-    (project / "other.yaml").write_text("disable: [numeric]\n")
+    (project / "other.yaml").write_text("disable: [int64_overflow]\n")
     assert _check("shop.pipeline:build", "--config", "other.yaml").exit_code == 0
 
 
 def test_json_and_sarif_formats(project):
     doc = json.loads(_check("shop.pipeline:build", "--format", "json").output)
-    assert doc["flow"]["name"] == "term" and doc["findings"][0]["code"] == "DCD100"
+    assert doc["flow"]["name"] == "term" and doc["findings"][0]["code"] == "DCD101"
     sarif = json.loads(_check("shop.pipeline:build", "--format", "sarif").output)
-    assert sarif["runs"][0]["results"][0]["partialFingerprints"]["decider/v1"] == "fedcba543210/0123abcdef45/DCD100"
+    assert sarif["runs"][0]["results"][0]["partialFingerprints"]["decider/v1"] == "fedcba543210/0123abcdef45/DCD101"
 
 
 def test_select_keeps_findings_by_code_prefix(project):
     out = _check("shop.pipeline:build", "--select", "DCD4").output
-    assert "DCD100" not in out
-    assert "DCD100" in _check("shop.pipeline:build", "--select", "DCD1").output
+    assert "DCD101" not in out
+    assert "DCD101" in _check("shop.pipeline:build", "--select", "DCD1").output
 
 
 def test_list_shows_every_check_without_an_entry(project):
@@ -69,7 +69,7 @@ def test_list_shows_every_check_without_an_entry(project):
     assert result.exit_code == 0
     assert "DCD001  wall_clock  determinism  warning" in result.output
     assert "DCD501  crash_probe  runtime  error [executes]" in result.output
-    assert any(r["alias"] == "numeric" for r in json.loads(_check("--list", "--format", "json").output))
+    assert any(r["alias"] == "int64_overflow" for r in json.loads(_check("--list", "--format", "json").output))
 
 
 def test_an_entry_is_required_without_list(project):
