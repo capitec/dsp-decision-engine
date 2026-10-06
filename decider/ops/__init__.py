@@ -1,6 +1,6 @@
 """Functions that run in plain Python and inside compiled steps, one module per domain.
 
-- `decimal`: rounding with an explicit mode.
+- `decimal`: `Decimal` and `Currency` fixed-point numbers, and rounding with an explicit mode.
 
 Import the module and call through it: `from decider.ops import decimal`.
 """

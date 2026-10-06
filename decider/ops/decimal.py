@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import builtins
 import math
+import operator
+from decimal import Decimal as _Std
 from enum import IntEnum
+from fractions import Fraction
 
 import numpy as np
 from numba.extending import register_jitable
 
-__all__ = ["Rounding", "round"]
+__all__ = ["Currency", "Decimal", "Rounding", "round", "round_float"]
 
 
 class Rounding(IntEnum):
@@ -90,7 +94,7 @@ def _scaled(y, mode):
 
 
 @register_jitable
-def round(x, digits=0, mode=Rounding.HALF_UP):
+def round_float(x, digits=0, mode=Rounding.HALF_UP):
     """Round a float to `digits` decimal places under an explicit rounding mode.
 
     It rounds the exact value of the double, so `round(2.675, 2)` is `2.67`
@@ -104,9 +108,9 @@ def round(x, digits=0, mode=Rounding.HALF_UP):
         from decider.ops import decimal
         from decider.ops.decimal import Rounding
 
-        decimal.round(2.5)                              # 3.0
-        decimal.round(2.5, mode=Rounding.HALF_EVEN)     # 2.0
-        decimal.round(-2.99, 1, Rounding.DOWN)          # -2.9
+        decimal.round_float(2.5)                            # 3.0
+        decimal.round_float(2.5, mode=Rounding.HALF_EVEN)   # 2.0
+        decimal.round_float(-2.99, 1, Rounding.DOWN)        # -2.9
     """
     if not math.isfinite(x):
         return x
@@ -134,3 +138,247 @@ def round(x, digits=0, mode=Rounding.HALF_UP):
         return x if y >= _WHOLE else math.copysign(_scaled(y, mode) / s, x)
     s = 10.0 ** -digits
     return math.copysign(_scaled(ax / s, mode) * s if s < math.inf else 0.0, x)
+
+
+_INT64 = 1 << 63
+
+
+def _fit(raw: int) -> int:
+    if not -_INT64 <= raw < _INT64:
+        raise OverflowError(f"{raw} does not fit a Decimal's int64; a compiled step wraps instead")
+    return raw
+
+
+def _div(n: int, d: int) -> int:
+    """`n / d` rounded half-even, exactly."""
+    q, r = divmod(n, d)
+    if abs(2 * r) > abs(d) or abs(2 * r) == abs(d) and q % 2:
+        q += 1
+    return q
+
+
+def _co(o):
+    """`o` as `(raw, scale)` when it is a Decimal or an int (whole units), else None."""
+    if isinstance(o, Decimal):
+        return o.raw, o.scale
+    if isinstance(o, int):
+        return o, 0
+
+
+_ARITHMETIC = {
+    "add": lambda a, sa, b, sb, s: a * 10 ** (s - sa) + b * 10 ** (s - sb),
+    "sub": lambda a, sa, b, sb, s: a * 10 ** (s - sa) - b * 10 ** (s - sb),
+    "mul": lambda a, sa, b, sb, s: _div(a * b, 10 ** min(sa, sb)),
+    "truediv": lambda a, sa, b, sb, s: _div(a * 10 ** (s + sb - sa), b),
+}
+
+
+def _arithmetic(name: str, reflected: bool):
+    f = _ARITHMETIC[name]
+
+    def op(self, other):
+        c = _co(other)
+        if c is None:
+            return NotImplemented
+        (a, sa), (b, sb) = ((c, (self.raw, self.scale)) if reflected else ((self.raw, self.scale), c))
+        if name == "truediv" and b == 0:
+            raise ZeroDivisionError("Decimal division by zero")
+        units = self.units if not isinstance(other, Decimal) or other.units == self.units else None
+        return Decimal.from_raw(_fit(f(a, sa, b, sb, max(sa, sb))), max(sa, sb), units)
+
+    return op
+
+
+_mul, _truediv = _arithmetic("mul", False), _arithmetic("truediv", False)
+
+
+def _compare(name: str):
+    test = getattr(operator, name)
+
+    def op(self, other):
+        c = _co(other)
+        if c is not None:
+            s = max(self.scale, c[1])
+            return test(self.raw * 10 ** (s - self.scale), c[0] * 10 ** (s - c[1]))
+        if isinstance(other, float):
+            return test(float(self), other)
+        return NotImplemented
+
+    return op
+
+
+class Decimal:
+    """A fixed-point number: an int64 `raw` count of 10**-`scale` units.
+
+    `Decimal(2.675, 2)`, `Decimal("2.675", 2)` and `Decimal(3)` build one. A
+    float is rounded to the scale from its exact binary value (2.67 here), a str
+    from its digits (2.68 under half-even). `scale` defaults to 0 for an int and
+    to the digits after the point for a str; a float needs it. `units` is a
+    display string and never takes part in a comparison or in a compiled step.
+
+    `+ - * /` between Decimals give the larger scale and round half-even once per
+    operation. An int counts as whole units, so `Decimal(2.5, 1) + 1` is 3.5, and
+    a float multiplier or divisor gives a Decimal at the same scale. A result
+    outside int64 raises `OverflowError` here and wraps in a compiled step (a float
+    product outside int64 has no defined value there).
+
+    Example::
+
+        a = Decimal("2.50"); b = Decimal("0.05")
+        a * b            # Decimal('0.12'), 0.125 rounded half-even
+        a + 1            # Decimal('3.50')
+        a < 2.6          # True
+    """
+
+    __slots__ = ("raw", "scale", "units")
+
+    def __init__(self, value=0, scale: int | None = None, *, units: str | None = None) -> None:
+        if isinstance(value, str):
+            try:
+                value = _Std(value)
+            except ArithmeticError:
+                raise ValueError(f"not a number: {value!r}") from None
+            if scale is None:
+                scale = max(0, -value.as_tuple().exponent) if value.is_finite() else 0
+        elif not isinstance(value, (int, float)):
+            raise TypeError(f"Decimal takes an int, a float or a str, not {type(value).__name__}")
+        if scale is None:
+            if isinstance(value, float):
+                raise ValueError("a float needs a scale: Decimal(2.65, scale=2)")
+            scale = 0
+        if not isinstance(scale, int) or not 0 <= scale <= 18:
+            raise ValueError(f"scale must be an int from 0 to 18, not {scale!r}")
+        if isinstance(value, (float, _Std)) and not math.isfinite(value):
+            raise ValueError(f"{value} is not a finite number")
+        object.__setattr__(self, "raw", _fit(builtins.round(Fraction(value) * 10 ** scale)))
+        object.__setattr__(self, "scale", scale)
+        object.__setattr__(self, "units", units)
+
+    @classmethod
+    def from_raw(cls, raw: int, scale: int, units: str | None = None) -> Decimal:
+        """The Decimal whose int64 is `raw` at `scale`: `Decimal.from_raw(265, 2)` is 2.65."""
+        self = object.__new__(cls)
+        object.__setattr__(self, "raw", _fit(raw))
+        object.__setattr__(self, "scale", scale)
+        object.__setattr__(self, "units", units)
+        return self
+
+    def __setattr__(self, name, value):
+        raise AttributeError("a Decimal is immutable")
+
+    def __reduce__(self):
+        return type(self).from_raw, (self.raw, self.scale, self.units)
+
+    def __str__(self) -> str:
+        q, r = divmod(abs(self.raw), 10 ** self.scale)
+        number = ("-" if self.raw < 0 else "") + (f"{q}.{r:0{self.scale}d}" if self.scale else str(q))
+        return f"{self.units} {number}" if self.units else number
+
+    def __repr__(self) -> str:
+        return str(self) if self.units else f"{type(self).__name__}('{self}')"
+
+    def __float__(self) -> float:
+        return float(self.raw) / float(10 ** self.scale)
+
+    def __int__(self) -> int:
+        q = abs(self.raw) // 10 ** self.scale
+        return q if self.raw >= 0 else -q
+
+    def __bool__(self) -> bool:
+        return self.raw != 0
+
+    def __hash__(self) -> int:
+        return hash(Fraction(self.raw, 10 ** self.scale))
+
+    def __neg__(self) -> Decimal:
+        return Decimal.from_raw(-self.raw, self.scale, self.units)
+
+    def __abs__(self) -> Decimal:
+        return Decimal.from_raw(abs(self.raw), self.scale, self.units)
+
+    def __mul__(self, other):
+        if isinstance(other, float):
+            return Decimal.from_raw(builtins.round(float(self.raw) * other), self.scale, self.units)
+        return _mul(self, other)
+
+    __rmul__ = __mul__
+
+    def __truediv__(self, other):
+        if isinstance(other, float):
+            return Decimal.from_raw(builtins.round(float(self.raw) / other), self.scale, self.units)
+        return _truediv(self, other)
+
+    def __rtruediv__(self, other):
+        if isinstance(other, float):
+            raise TypeError("float / Decimal is not defined: use float(d)")
+        return NotImplemented
+
+    def __round__(self, *_):
+        raise TypeError("use decider.ops.decimal.round(d, digits, mode) to round a Decimal")
+
+
+for _name in ("add", "sub"):
+    setattr(Decimal, f"__{_name}__", _arithmetic(_name, False))
+    setattr(Decimal, f"__r{_name}__", _arithmetic(_name, True))
+for _name in ("eq", "ne", "lt", "le", "gt", "ge"):
+    setattr(Decimal, f"__{_name}__", _compare(_name))
+
+
+class Currency(Decimal):
+    """A Decimal with four decimal places (up to 922,337,203,685,477.5807).
+
+    `Currency(2.65)` rounds a float to the scale. `Currency(major, minor)` is
+    exact: `minor` counts 0.0001 units, so `Currency(2, 6500)` is 2.65 and
+    `Currency(2, 6)` is 2.0006. The sign of `major` applies to the whole value,
+    and `minor` stays between 0 and 9999, so write -0.0005 as `-Currency(0, 5)`.
+    `units` is a display string shown before the amount. Arithmetic returns a
+    plain Decimal.
+
+    Example::
+
+        Currency(2, 6500, units="R")    # R 2.6500
+        Currency(-2, 5)                 # Currency('-2.0005')
+    """
+
+    __slots__ = ()
+
+    def __init__(self, major=0, minor: int | None = None, *, units: str | None = None) -> None:
+        if minor is None:
+            super().__init__(major, 4, units=units)
+            return
+        if not all(isinstance(v, int) for v in (major, minor)):
+            raise TypeError("Currency(major, minor) takes two ints")
+        if not 0 <= minor < 10 ** 4:
+            raise ValueError(f"minor must be from 0 to 9999 (units of 0.0001), not {minor}")
+        super().__init__(0, 4, units=units)
+        object.__setattr__(self, "raw", _fit(major * 10 ** 4 + (minor if major >= 0 else -minor)))
+
+
+def _round_decimal(x: Decimal, digits: int, mode: int) -> Decimal:
+    k = x.scale - digits
+    if k <= 0:
+        return x
+    q, r = divmod(abs(x.raw), p := 10 ** k)
+    if mode != Rounding.DOWN and (2 * r > p or 2 * r == p and (mode == Rounding.HALF_UP or q % 2)):
+        q += 1
+    return Decimal.from_raw(q * p * (1 if x.raw >= 0 else -1), x.scale, x.units)
+
+
+def round(x, digits=0, mode=Rounding.HALF_UP):
+    """Round a float or a Decimal to `digits` decimal places under an explicit rounding mode.
+
+    A Decimal keeps its scale: `digits` below the scale zeroes the lower places,
+    so `round(Decimal("2.675"), 2)` is 2.680. A float is rounded as in
+    `round_float`. A Decimal result outside int64 raises `OverflowError` here and
+    wraps in a compiled step.
+
+    Example::
+
+        from decider.ops import decimal
+        from decider.ops.decimal import Decimal, Rounding
+
+        decimal.round(Decimal("2.675"), 2)                          # Decimal('2.680')
+        decimal.round(Decimal("2.675"), 2, Rounding.HALF_EVEN)      # Decimal('2.680')
+        decimal.round(Decimal("2.5"), 0, Rounding.HALF_EVEN)        # Decimal('2.0')
+    """
+    return _round_decimal(x, digits, Rounding(mode)) if isinstance(x, Decimal) else round_float(x, digits, mode)

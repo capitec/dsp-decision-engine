@@ -294,3 +294,22 @@ Tests (`tests/ops/`, `tests/compile/`, `tests/boundary/`):
   - **From two integers, for exactness:** `Currency(major, minor)`. `minor` is in units of the type's scale, the same at every scale: at scale 4, `Currency(2, 6)` is 2.0006 and `Currency(2, 6500)` is 2.65.
   - **Negatives:** the sign of `major` applies to the whole value, so `Currency(-2, 5)` is −2.0005, and `-Currency(2, 5000)` is −2.5.
   - **`minor` is never negative:** it must satisfy `0 ≤ minor < 10**scale`, or the constructor raises `ValueError` (a negative minor, or more precision than the scale holds). A negative value under one unit is written `-Currency(0, 5)` (−0.0005).
+
+## 11. Built (part A)
+
+`Decimal`, `Currency`, `round(Decimal, ...)` and the kernel type and operators are in; the boundary,
+annotations, `Money(cents=True)` removal, checks and GUIDE are part B. Where the build chose something
+the note left open:
+
+- **`units` lives on `Decimal`**, not only on `Currency`, so a result can keep the units both sides agree on.
+- **Constructor scale:** a str takes its own digits after the point when `scale` is omitted, an int takes 0, a float must give one.
+  A float rounds half-even from its exact binary value; a str from its digits.
+- **`Decimal.from_raw(raw, scale)`** is the public way to build from the int64; the kernel boxes through it.
+  It does not exist inside a step, where the wrap at the kernel edge makes the type (`semantics.decimals.wrapper`). `d.raw` works in both.
+- **`round(Decimal, digits, mode)`** keeps the scale and zeroes the places below `digits`. `rescale` is not built.
+  `round_float` is the float body, public only because the overload for `round` in `semantics/` may not import a private name.
+- **Out of int64:** Python raises `OverflowError`; a kernel returns the low 64 bits of the exact rounded result. A float multiplier or divisor
+  whose result leaves int64 has no defined value in a kernel (the float to int64 conversion). `-INT64_MIN` and `abs(INT64_MIN)` wrap there.
+- **Not defined, in Python and in kernels:** `int / Decimal`, `float / Decimal`, `Decimal ± float`, `//`, `%`, `**`, `round(d, n)`.
+- The 128-bit work is uint64 limb arithmetic (`_mul64`, `_divlu`); the divisions by `10**k` and by the second operand never form an i128.
+  `/` multiplies the numerator by `10**e` in chunks of at most 19 digits, so scale 0 over scale 18 (a 10**36 factor) needs no wider type.
