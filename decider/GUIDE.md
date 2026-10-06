@@ -851,6 +851,8 @@ pipeline = flow(ratio, name="credit")
 assert checks.run(pipeline, [MinRows()]).skipped[0].code == "ACME003"
 frame = pl.DataFrame({"income": [1000.0], "debt": [350.0]})
 assert checks.run(pipeline, [checks.standard, MinRows()], data=frame).findings[-1].code == "ACME003"
+bad_doc = {"credit": {"ratioo": {"k": 2}}}                  # a typo in a params document
+assert checks.run(pipeline, ["invalid_params_doc"], params=bad_doc).findings[0].code == "DCD304"
 ```
 
 A custom check is a `Check` subclass like `MinRows` (give it a `type` alias and a
@@ -948,6 +950,9 @@ assert not s.identical and s.added and s.removed
 o = diff.outputs(old, new, frame, key="id")
 assert o.rows_changed == 2 and o.columns["ratio"].max_abs > 0
 assert o.table().columns == ["id", "column", "old", "new", "delta"]
+renamed = flow(step(output="ratio", id="0123abcdef45", name="debt_to_income")(ratio), name="credit")
+tagged = flow(step(output="ratio", id="0123abcdef45")(ratio), name="credit")
+assert [(m.old.name, m.new.name) for m in diff.structure(tagged, renamed).renamed] == [("ratio", "debt_to_income")]   # steps match by durable id
 assert diff.prove(old, flow(ratio, name="credit")).identical is True
 assert diff.prove(old, new).identical is None
 

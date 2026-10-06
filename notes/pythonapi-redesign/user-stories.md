@@ -422,9 +422,9 @@ It returns `Proof(tier="ir_hash", identical=True)` when the IR hashes match. Oth
 ## Integrator
 
 ### I1. Launch the editor's Python side — awkward
-Today: `python -m decider.debug_bridge --fd 3`. Replies are ad-hoc dicts, there is no version handshake, and `protocol.ts` is written by hand.
+Today: `python -m decider.debug_bridge --fd 3` (after: `python -m decider._bridge --fd 3`). Replies are ad-hoc dicts, there is no version handshake, and `protocol.ts` is written by hand.
 
-After: the module path is frozen. A `{"cmd": "hello"}` request returns `{protocol, contract_version, capabilities}`. Reply models are declared in `decider.contract`, and `protocol.ts` is generated from them, with a test that fails on drift.
+After: the module path is `decider._bridge`. A `{"cmd": "hello"}` request returns `{protocol, contract_version, capabilities}`. Reply models are declared in `decider.contract`, and `protocol.ts` is generated from them, with a test that fails on drift.
 
 ### I2. One flow identity — awkward
 Today there are two identities:
