@@ -7,7 +7,8 @@ import pytest
 
 pytest.importorskip("z3")
 
-from decider import diff, flow  # noqa: E402
+from decider import flow  # noqa: E402
+from decider.lab import diff
 from decider.steps.tables import DecisionTableConfig  # noqa: E402
 from decider.steps.trees import TreeConfig  # noqa: E402
 

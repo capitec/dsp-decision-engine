@@ -1,25 +1,25 @@
 # @decider/ui: the flow debugger's UI, for any host
 
 The React UI of the flow debugger and the model code it shares with its hosts live in
-`tools/decider-ui`, a pnpm workspace package (`tools/pnpm-workspace.yaml`). The VS Code
-extension (`tools/vscode-decider`) is one host; a JupyterLab 4 extension is meant to be the
+`ui/lib`, a pnpm workspace package (`ui/pnpm-workspace.yaml`). The VS Code
+extension (`ui/vscode`) is one host; a JupyterLab 4 extension is meant to be the
 next.
 
 ## Layout
 
 ```
-tools/
-  pnpm-workspace.yaml     decider-ui, vscode-decider, jupyterlab-decider
-  decider-ui/
+ui/
+  pnpm-workspace.yaml     lib, vscode, jupyterlab-decider
+  lib/
     src/model/            protocol.ts, compare.ts, sweep.ts, events.ts: bridge shapes, UI
                           messages, run comparison, scenario sweeps, folding session events.
                           No DOM, no React.
     src/*.tsx, layout.ts  the components (App is the root), the graph layout
     src/style.css         every rule nested under .decider
     src/index.ts          exports the model and App
-    test/                 model and layout tests (they import decider.debug_bridge and use
-                          vscode-decider's examples/)
-  vscode-decider/
+    test/                 model and layout tests (they import decider._tooling.bridge and use
+                          vscode/examples/)
+  vscode/
     src/                  extension host and debug adapter; imports the model from @decider/ui
     webview/main.tsx      the host wiring: acquireVsCodeApi, window messages, capabilities
     webview/theme.css     --decider-* from --vscode-*

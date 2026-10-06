@@ -25,7 +25,7 @@ def check(entry: str | None, config: str | None, data: str | None, fmt: str, fai
     run, their severities and the default gate. Suppressed findings are
     shown but never fail the gate.
     """
-    from decider import checks
+    from decider.lab import checks
     from decider.exceptions import DeciderError
     from decider.steps._entry import import_flow
 

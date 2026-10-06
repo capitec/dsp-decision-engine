@@ -11,7 +11,7 @@ import pytest
 from decider import Engine, branch, flow, frame_step, missing_as, step
 from decider.ops import Struct
 from decider.exceptions import MissingInputError, WiringError
-from decider.testing import assert_equivalent
+from decider.lab.testing import assert_equivalent
 
 MODES = ("interpreted", "stepped", "fused")
 COMPILED = ("stepped", "fused")

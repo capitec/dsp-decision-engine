@@ -47,7 +47,7 @@ Treat **these four failures, and only these**, as the baseline. Any other failur
 
 Details are in `README.md` → Decisions.
 
-1. **No compatibility shims.** Names move, and every caller changes in the same commit, including `tools/vscode-decider/src/{python,debugging,locate}.ts`, `GUIDE.md` and `tests/`.
+1. **No compatibility shims.** Names move, and every caller changes in the same commit, including `ui/vscode/src/{python,debugging,locate}.ts`, `GUIDE.md` and `tests/`.
 2. **`engine/` → `_engine/` in one `git mv`**, once the `ir` / `trace` / `debug` facades exist (and in move order, step 1 of phase 3).
 3. **The check policy file is `checks.yaml` (or `.json`) at the project root**, found the way datasets are (setting `checks_path`). It is never in `configs/`.
 4. **Suppression is `suppress_checks=[alias | code]`** on every step constructor, as a `ConfigurableStep` field and as a flow-file key. It is stored on `Origin`. There are no inline comments and no config suppressions.
@@ -149,7 +149,7 @@ Run this phase **in one worktree, in order**. Each move rewrites imports across 
 | 2 | `lifecycle/` → `contract/_manifest.py` + `_jobs.py`; rename `json_schema` → `manifest_schema` | Haiku | |
 | 3 | `flowfile/` → `steps/flowfile/`; `_parse` / `_components_index` → public `read_flow` / `components`; lazy import of `expr_condition` | Sonnet | `import decider` still doesn't import trees |
 | 4 | `check/` + `checks/` → one `checks/` (**merge only**; the redesign is WP 5.1) | Haiku | |
-| 5 | `debug_bridge/` → `_bridge/`, plus `contract/describing.py`, `engine/debug/controls.py` and `lineage.py`; the three TS paths; fix `mcp/tools.py` reaching into bridge internals | Sonnet | `pnpm test` in `tools/vscode-decider`, plus the in-editor tests per `notes/vscode-extension-testing.md` |
+| 5 | `debug_bridge/` → `_bridge/`, plus `contract/describing.py`, `engine/debug/controls.py` and `lineage.py`; the three TS paths; fix `mcp/tools.py` reaching into bridge internals | Sonnet | `pnpm test` in `ui/vscode`, plus the in-editor tests per `notes/vscode-extension-testing.md` |
 | 6 | `ids.py` → `_tools/ids.py`; `serializable/` → `_polars_docs/` (`DataFrame` → `FrameDoc`); `registry/resolve.py` → `_suggest.py`; `settings.py` → `_settings.py` with lazy `get_settings()` and a `checks_path` setting | Haiku | `decider serve` / CLI tests |
 | 7 | `fields.py` + the public half of `types.py` → `_annotations.py`; the helpers → `_engine/types.py` | Haiku | |
 | 8 | Split `exceptions.py`: HTTP errors → `serving/_errors.py`, Arrow errors → `_engine/boundary/errors.py` | Haiku | `tests/test_exceptions.py` |
@@ -186,7 +186,7 @@ Run this phase **in one worktree, in order**. Each move rewrites imports across 
 | 5.2 | `decider.diff`: `structure`, `outputs` (taking over `Divergence._changed`), `revisions` (from `experiments/revision.py`), `prove` tier 1 (IR content hash on `fingerprint`); removing `checks.compare`; `decider diff` | `diff/`, `experiments/metrics/_compare.py`, `experiments/revision.py`, `cli/_diff.py` | **Opus** (proof correctness) |
 | 5.3 | Experiments: one `run(def_or_path, ...)`, `start()` returning a handle, `entry` inferred, `Experiment.from_def`, `decider experiment run` with exit codes; rename `load_flow` → private `_entry.import_flow` | `experiments/` except metrics and revision; `cli/_experiment.py` | Sonnet |
 | 5.4 | Registry entry-point discovery per root; one lazy-table convention; a `COMPOSITES` list shared by `ids` and flow files (flow files gain `dag`, `each`, `optimise`) | `registry/`, `_tools/ids.py`, `steps/flowfile/` (after 5.1a) | Sonnet |
-| 5.5 | Bridge `hello` handshake, `contract/_messages.py` reply models, generated `protocol.ts` plus a drift test | `contract/_messages.py`, `_bridge/`, `tools/decider-ui/src/model/protocol.ts` | Sonnet |
+| 5.5 | Bridge `hello` handshake, `contract/_messages.py` reply models, generated `protocol.ts` plus a drift test | `contract/_messages.py`, `_bridge/`, `ui/lib/src/model/protocol.ts` | Sonnet |
 | 5.7 | `decider/ops/` skeleton plus `decimal.round` with `Rounding.HALF_UP` / `HALF_EVEN` / `DOWN` (`@register_jitable`, every-mode test over `.xx5` ties and negatives); the `fingerprint` fix so `module.attr` calls are hashed by content, with a cache-miss test | `decider/ops/`, `_engine/compile/fingerprint.py`, `semantics/__init__.py` (salt) | **Opus** (cache correctness) |
 | 5.8 | **Spike:** money overloads (`Cents` / `CentsType`). Measure `score()` cost, fused and packed typing, params bundles, cross-mode ties; write `notes/money-overloads.md` with a go or no-go | spike branch only | **Opus** |
 | 5.6 | `fastmcp` → `mcp` extra; `prove` extra (`z3-solver`) | `pyproject.toml` | Haiku |

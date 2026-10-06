@@ -9,7 +9,7 @@ import pytest
 from decider import Engine, flow, optimise, param, step
 from decider.ops import Columnar, Struct
 from decider.exceptions import WiringError
-from decider.testing import assert_equivalent
+from decider.lab.testing import assert_equivalent
 
 MODES = ("interpreted", "stepped", "fused")
 

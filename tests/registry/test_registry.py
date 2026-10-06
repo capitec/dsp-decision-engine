@@ -297,11 +297,11 @@ class EpScaled(ConfigurableStep):
 
 
 def test_a_metric_type_loads_from_an_entry_point(tmp_path, monkeypatch):
-    from decider.experiments.metrics import Metric
+    from decider.lab.experiments.metrics import Metric
 
     _install_plugin(tmp_path, monkeypatch, "metrics", "ep_metric", "ep_plugin", '''
 from typing import Literal
-from decider.experiments.metrics import Metric
+from decider.lab.experiments.metrics import Metric
 
 class EpMetric(Metric):
     type: Literal["ep_metric"] = "ep_metric"

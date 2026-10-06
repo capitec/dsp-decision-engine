@@ -5,7 +5,7 @@ import typing as t
 
 from pydantic import AfterValidator, BaseModel, ConfigDict
 
-from decider._polars_docs.frame import FrameDoc
+from decider._engine.params.polars_docs.frame import FrameDoc
 
 T = t.TypeVar("T")
 

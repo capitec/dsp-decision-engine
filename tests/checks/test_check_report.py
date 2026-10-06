@@ -1,6 +1,7 @@
 """Report: skipped checks, text, SARIF, counts and the gate."""
-from decider import checks, flow, step
-from decider.checks import Check, Severity
+from decider import flow, step
+from decider.lab import checks
+from decider.lab.checks import Check, Severity
 from typing import Literal
 
 

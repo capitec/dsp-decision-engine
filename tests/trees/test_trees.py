@@ -8,7 +8,7 @@ from decider import _engine as engine
 from decider._engine import Engine
 from decider._engine.compile import kernel
 from decider.steps.trees import TreeConfig, _walker as walker
-from decider.testing import assert_equivalent
+from decider.lab.testing import assert_equivalent
 
 
 def v3(nodes: dict, edges: list, output: dict) -> dict:

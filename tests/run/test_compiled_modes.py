@@ -9,7 +9,7 @@ from decider._engine.compile import Kernel
 from decider._engine.ir.decls import Input, Output
 from decider._engine.ir.nodes import CallNode
 from decider._engine.ir.origin import Origin
-from decider.testing import assert_equivalent, no_recompile
+from decider.lab.testing import assert_equivalent, no_recompile
 
 MODES = ("interpreted", "stepped", "fused")
 

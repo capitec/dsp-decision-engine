@@ -15,7 +15,7 @@ from decider import flow, param
 from decider._engine import Engine
 from decider._engine.params import ParamsError, bundle_class
 from decider._engine.params.bundles import _decode, _encode
-from decider.testing import assert_equivalent
+from decider.lab.testing import assert_equivalent
 
 # --- the class ------------------------------------------------------------------
 

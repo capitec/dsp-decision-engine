@@ -7,7 +7,7 @@ import pytest
 from decider import Engine, FallbackWarning, branch, flow, step
 from decider.exceptions import ExprError
 from decider.steps.trees import expr_condition
-from decider.testing import assert_equivalent
+from decider.lab.testing import assert_equivalent
 
 
 def test_numeric_comparison_against_a_threshold(run):

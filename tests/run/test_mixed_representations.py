@@ -12,7 +12,7 @@ from decider.ops import Columnar, Struct
 from decider.exceptions import FallbackWarning, WiringError
 from decider.ops import Text
 from decider.steps.trees import TreeConfig
-from decider.testing import assert_equivalent
+from decider.lab.testing import assert_equivalent
 
 FRAME = pl.DataFrame(
     {"sector": ["private", "public"],

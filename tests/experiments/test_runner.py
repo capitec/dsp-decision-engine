@@ -6,12 +6,12 @@ import polars as pl
 import pytest
 
 from decider import flow
-from decider.experiments import Experiment, ExperimentDef, RunStatus, run, start
-from decider.experiments._experiments import ScenarioStatus
-from decider.diff._revisions import resolve
-from decider.experiments.callbacks import Callback
-from decider.experiments.metrics import Divergence, ValueCounts
-from decider.contract import JobStatus
+from decider.lab.experiments import Experiment, ExperimentDef, RunStatus, run, start
+from decider.lab.experiments._experiments import ScenarioStatus
+from decider.lab.diff._revisions import resolve
+from decider.lab.experiments.callbacks import Callback
+from decider.lab.experiments.metrics import Divergence, ValueCounts
+from decider.lab.experiments import JobStatus
 
 LIMIT_03 = {"demo": {"approved": {"limit": 0.3}}}
 

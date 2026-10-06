@@ -5,9 +5,11 @@ import warnings
 import pytest
 
 from decider import branch, dag, flow, param, step
-from decider.contract import (CONTRACT_VERSION, EdgeRef, FlowDescription, FlowRef, RecordRef, StepRef, ValueSlotRef,
-                              capabilities, describe, json_schema, resolve_step, typescript)
-from decider.contract._refs import check_version
+from decider.lab import (CONTRACT_VERSION, describe, EdgeRef, FlowDescription, FlowRef, RecordRef, resolve_step,
+                         StepRef, ValueSlotRef)
+from decider._tooling.bridge.protocol import capabilities
+from decider._tooling.bridge.schema import json_schema, typescript
+from decider.lab._refs import check_version
 from decider.exceptions import DeciderError
 
 

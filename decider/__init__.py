@@ -39,18 +39,13 @@ More::
 `decider serve` build and serve it. Companion packages, one per task:
 
 - `decider.ops`: the value types a step declares (`Text`, `Currency`, `Columnar`, `Percent`, ...)
-- `decider.checks`: static checks and the findings report
-- `decider.diff`: compare two versions of a pipeline, by structure, outputs or proof
-- `decider.experiments`: run an experiment definition and read its report
-- `decider.data`: read datasets and the project's dataset catalog
-- `decider.testing`: `assert_equivalent`, `no_recompile`
+- `decider.lab`: work on a flow away from serving: `data`, `checks`, `diff`, `testing`, `experiments`
 - `decider.serving`: `RequestHandler` and the HTTP app
 - `decider.config`: `JsonFileStore`, versioned params documents
 - `decider.debug`: `Session` and the events it emits
 - `decider.trace`: `TraceSink`, per-record decision traces
 - `decider.ir`: the intermediate representation, for step-type authors
 - `decider.registry`: `BaseRegistryModule`, to register your own step types
-- `decider.contract`: the integration contract (refs, run manifest, jobs, message schemas)
 
 Tree, table and scorecard documents are `TreeConfig`, `DecisionTableConfig` and
 `ScorecardConfig`, loaded on first use. Build, wiring, params and missing-input
@@ -61,7 +56,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from decider._engine.params import ParamTable, missing_as, param, param_table
-from decider.contract import describe
+from decider.lab import describe
 from decider.exceptions import DeciderError, FallbackWarning
 from decider.steps import (ConfigurableStep, EachMode, ParamRef, Step, StepRef, Value, allow_fallback, branch, dag,
                            each, flow, frame_step, helper, loop, optimise, step)

@@ -9,10 +9,10 @@ import pytest
 
 from decider import branch, flow, param, step
 from decider.exceptions import DeciderError
-from decider.experiments import Experiment, ExperimentResult
-from decider.experiments.metrics import BranchFlows, Counts, Describe, Divergence, Histogram, Stats, ValueCounts
-from decider.experiments.plots import Bars, Changes, Distribution, Figure, Plot, Ranges, Sankey
-from decider.experiments.plots._sankey import TEMPLATE
+from decider.lab.experiments import Experiment, ExperimentResult
+from decider.lab.experiments.metrics import BranchFlows, Counts, Describe, Divergence, Histogram, Stats, ValueCounts
+from decider.lab.experiments.plots import Bars, Changes, Distribution, Figure, Plot, Ranges, Sankey
+from decider.lab.experiments.plots._sankey import TEMPLATE
 
 LIMIT_03 = {"demo": {"approved": {"limit": 0.3}}}
 
@@ -131,7 +131,7 @@ def test_distribution_overlays_each_scenarios_histogram_with_overflow_at_the_end
 
 
 def _bins_summaries():
-    from decider.experiments.metrics import Bins
+    from decider.lab.experiments.metrics import Bins
     return {name: Bins(column="rate", edges=[0.0, 0.5, 1.0], counts=counts, below=0, above=0, nulls=0)
             for name, counts in (("baseline", [3, 1]), ("faster", [1, 3]))}
 
@@ -187,7 +187,7 @@ def test_a_result_with_plots_round_trips_through_json(pipeline, frame):
 
 
 def test_core_decider_and_the_metrics_never_import_altair():
-    code = ("import sys, decider, decider.experiments, decider._tooling.mcp._tools; "
+    code = ("import sys, decider, decider.lab.experiments, decider._tooling.mcp._tools; "
             "assert 'altair' not in sys.modules and 'IPython' not in sys.modules")
     subprocess.run([sys.executable, "-c", code], check=True)
 

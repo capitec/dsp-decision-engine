@@ -2,7 +2,7 @@
 import polars as pl
 import pytest
 
-from decider import diff
+from decider.lab import diff
 from decider.exceptions import DeciderError
 
 ENTRY = "shop.pipeline:build"
@@ -31,7 +31,7 @@ def test_an_unknown_revision_is_an_error(repo):
 
 
 def test_resolve_gives_none_for_an_unknown_revision_and_a_sha_for_a_known_one(repo):
-    from decider.diff._revisions import resolve
+    from decider.lab.diff._revisions import resolve
 
     assert resolve("nope") is None
     assert len(resolve("HEAD")) == 40

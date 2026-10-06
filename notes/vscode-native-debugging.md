@@ -1,6 +1,6 @@
 # The VS Code extension debugs with debugpy, not a decider debug adapter
 
-**Decision:** `tools/vscode-decider` has no debug adapter of its own. "Debug flow"
+**Decision:** `ui/vscode` has no debug adapter of its own. "Debug flow"
 launches an ordinary `debugpy` session running `python -m decider.debug_bridge.run`,
 which runs the pipeline once in interpreted mode. Breakpoints are plain Python
 breakpoints in the step functions; the extension only *mirrors* them onto the flow.

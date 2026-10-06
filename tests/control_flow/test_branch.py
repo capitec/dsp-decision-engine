@@ -5,7 +5,7 @@ import pytest
 from decider import branch, dag, flow, frame_step, param, step
 from decider._engine import Engine
 from decider.exceptions import WiringError
-from decider.testing import assert_equivalent
+from decider.lab.testing import assert_equivalent
 
 MODES = ("interpreted", "stepped", "fused")
 

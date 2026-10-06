@@ -84,7 +84,7 @@ Each one points at a helper that wants a public home:
 
 ### Wire protocol drift
 
-- The bridge replies with ad-hoc dicts, and `tools/decider-ui/src/model/protocol.ts` (427 lines) is written by hand.
+- The bridge replies with ad-hoc dicts, and `ui/lib/src/model/protocol.ts` (427 lines) is written by hand.
 - `contract.typescript()` exists, but only a test calls it.
 - **Fix:**
   - Declare the reply models in `decider.contract`.

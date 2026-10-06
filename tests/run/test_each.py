@@ -8,7 +8,7 @@ import pytest
 
 from decider import EachMode, Engine, each, flow, missing_as, param
 from decider.ops import Columnar
-from decider.testing import assert_equivalent
+from decider.lab.testing import assert_equivalent
 
 MODES = ("interpreted", "stepped", "fused")
 

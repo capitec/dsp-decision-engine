@@ -1,6 +1,6 @@
 # Usability loop on steering and tracing a run
 
-Five stories in `tools/vscode-decider/test/e2e/features.e2e.ts` (`pnpm test:features`), four on the
+Five stories in `ui/vscode/test/e2e/features.e2e.ts` (`pnpm test:features`), four on the
 1,000-step bank flow and one on `loan.py`'s loop:
 
 - F1: compare two products (branch arms) for one applicant.

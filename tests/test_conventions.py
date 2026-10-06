@@ -48,13 +48,12 @@ def test_no_references_to_docs_or_experiments():
 # --- public surface ---------------------------------------------------------
 
 ENGINE = "_engine"
-CORE = {"__init__", "steps", "ir", "trace", "debug", "contract", ENGINE}
+CORE = {"__init__", "steps", "ir", "trace", "debug", ENGINE}
 ALL_BUDGET = 25
 LAYERS = {
-    0: "exceptions registry ops _annotations _settings _suggest _polars_docs",
+    0: "exceptions registry ops _settings _suggest",
     1: "__init__ steps ir trace debug config _engine",
-    2: "contract",
-    3: "checks diff experiments data testing credit",
+    3: "lab credit",
     4: "serving _tooling __main__",
 }
 LAYER = {name: n for n, names in LAYERS.items() for name in names.split()}

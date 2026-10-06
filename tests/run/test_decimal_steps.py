@@ -15,7 +15,7 @@ from decider.exceptions import IRError, ParamsError, WiringError
 from decider.ir import to_ir
 from decider.ops import decimal
 from decider.ops.decimal import Currency, Decimal, Rounding
-from decider.testing import assert_equivalent, corpus
+from decider.lab.testing import assert_equivalent, corpus
 
 MODES = ("interpreted", "stepped", "fused")
 D = stdlib.Decimal

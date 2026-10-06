@@ -34,3 +34,16 @@ def test_lazy_names_load_on_first_use():
 
     assert decider.TreeConfig is TreeConfig
     assert {"Engine", "Executable", "TreeConfig", "DecisionTableConfig", "ScorecardConfig"} <= set(dir(decider))
+
+
+def test_the_offline_libraries_live_under_lab():
+    from pathlib import Path
+
+    import decider
+    from decider.lab import checks, data, describe, diff, experiments, testing
+
+    assert (checks.run, data.read, describe, diff.structure, experiments.run, testing.assert_equivalent)
+    # Untracked leftovers (`__pycache__`) may keep an old directory on disk, so assert on source.
+    root = Path(decider.__file__).parent
+    for old in ("checks", "diff", "testing", "data", "experiments", "contract", "verify"):
+        assert not list((root / old).rglob("*.py")), old

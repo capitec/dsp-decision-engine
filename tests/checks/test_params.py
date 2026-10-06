@@ -1,9 +1,10 @@
 """Param checks: missing bounds, defaults outside them, params the body ignores."""
 from typing import Annotated
 
-from decider import checks, flow, param
+from decider import flow, param
+from decider.lab import checks
 from decider.ops import Percent
-from decider.checks import Severity
+from decider.lab.checks import Severity
 
 
 def _found(fn, alias):

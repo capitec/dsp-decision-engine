@@ -10,7 +10,7 @@ from decider import flow
 from decider._engine import Engine
 from decider._engine.compile import compile_call
 from decider._engine.ir.context import to_ir
-from decider.testing import no_recompile
+from decider.lab.testing import no_recompile
 from decider.steps.trees import TreeConfig
 
 MATCH_TYPES = ("exact", "starts_with", "ends_with", "contains", "regex")

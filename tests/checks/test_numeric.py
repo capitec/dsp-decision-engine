@@ -4,8 +4,9 @@ from typing import Annotated
 import numpy as np
 import pytest
 
-from decider import checks, flow, loop, param, step
-from decider.checks import Severity
+from decider import flow, loop, param, step
+from decider.lab import checks
+from decider.lab.checks import Severity
 from decider.ops import decimal
 from decider.ops.decimal import Currency, Rounding
 

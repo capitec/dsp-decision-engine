@@ -3,11 +3,11 @@ from __future__ import annotations
 import pytest
 
 from decider.exceptions import DeciderError
-from decider.experiments import Experiment, ExperimentDef, validate
-from decider.experiments._experiments import check_experiment_version
-from decider.diff._revisions import compatible
-from decider.experiments.metrics import Describe, Divergence, ValueCounts
-from decider.experiments.plots import Bars, Changes
+from decider.lab.experiments import Experiment, ExperimentDef, validate
+from decider.lab.experiments._experiments import check_experiment_version
+from decider.lab.diff._revisions import compatible
+from decider.lab.experiments.metrics import Describe, Divergence, ValueCounts
+from decider.lab.experiments.plots import Bars, Changes
 
 LIMIT_03 = {"demo": {"approved": {"limit": 0.3}}}
 

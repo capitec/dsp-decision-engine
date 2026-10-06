@@ -4,7 +4,7 @@ import polars as pl
 from decider import branch, dag, flow, frame_step, missing_as, param, step
 from decider._engine import Engine
 from decider.steps.trees import TreeConfig
-from decider.testing import assert_equivalent
+from decider.lab.testing import assert_equivalent
 
 RISK_TREE = """
 {"type": "tree", "name": "risk_tree", "tree": {

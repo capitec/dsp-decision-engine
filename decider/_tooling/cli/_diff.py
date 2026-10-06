@@ -22,7 +22,7 @@ def diff(base: str, head: str, entry: str, data: str | None, key: str | None, fm
     the data and reports which rows and columns change.
     Exit status is 0 when nothing differs, 1 when something does.
     """
-    from decider import diff as api
+    from decider.lab import diff as api
     from decider.exceptions import DeciderError
 
     revisions = api.revisions(base, head, entry=entry)
@@ -42,7 +42,7 @@ def diff(base: str, head: str, entry: str, data: str | None, key: str | None, fm
 
 
 def _frame(data: str):
-    from decider.data import dataset, read
+    from decider.lab.data import dataset, read
 
     return read(data) if Path(data).exists() else dataset(data).load().frame
 

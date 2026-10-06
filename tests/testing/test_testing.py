@@ -11,7 +11,7 @@ from decider.ops.decimal import Currency
 from decider._engine import Engine
 from decider._engine.debug import Session
 from decider._engine.run import Executable
-from decider.testing import assert_equivalent, corpus, no_recompile
+from decider.lab.testing import assert_equivalent, corpus, no_recompile
 
 
 # Nothing numba and CPython could disagree on (no division, no rounding), so

@@ -5,7 +5,7 @@ import pytest
 from decider import branch, flow, loop, param, step
 from decider._engine import Engine
 from decider.exceptions import WiringError
-from decider.testing import assert_equivalent
+from decider.lab.testing import assert_equivalent
 
 
 def packed(pipeline, frame):

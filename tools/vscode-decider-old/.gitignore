@@ -1,6 +1,0 @@
-node_modules/
-dist/
-*.vsix
-LICENSE
-.vscode-test/
-test/e2e/shots/

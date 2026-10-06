@@ -4,8 +4,8 @@ import typing as t
 import polars as pl
 import pytest
 
-from decider.data import DatasetError, DatasetProvider, FileProvider, FolderProvider, dataset, datasets
-from decider.data._providers import dataset_documents, datasets_folder, project_root
+from decider.lab.data import DatasetError, DatasetProvider, FileProvider, FolderProvider, dataset, datasets
+from decider.lab.data._providers import dataset_documents, datasets_folder, project_root
 
 FRAME = pl.DataFrame({"client_id": [1, 2]})
 

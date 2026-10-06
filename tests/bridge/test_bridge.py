@@ -8,11 +8,11 @@ import sys
 import pytest
 
 HERE = os.path.dirname(__file__)
-EXAMPLES = os.path.join(HERE, "..", "..", "tools", "vscode-decider", "examples")
+EXAMPLES = os.path.join(HERE, "..", "..", "ui", "vscode", "examples")
 LOAN = os.path.join(EXAMPLES, "loan.py")
 from decider._tooling.bridge.bridge import Bridge
-from decider.contract import CONTRACT_VERSION
-from decider.contract._messages import PROTOCOL_VERSION
+from decider.lab import CONTRACT_VERSION
+from decider._tooling.bridge.protocol import PROTOCOL_VERSION
 
 
 def started(**kw):

@@ -1,5 +1,6 @@
 """Id checks: duplicates of one durable id."""
-from decider import checks, flow, step
+from decider import flow, step
+from decider.lab import checks
 
 
 @step(output="a", id="0123abcdef45")

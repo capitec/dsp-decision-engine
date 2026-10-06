@@ -1,6 +1,6 @@
 """The bridge drives a debug session, so the cross-mode parity contract holds for the flows it debugs.
 
-`decider.testing.assert_equivalent` is the parity contract: `run()`, `score()`
+`decider.lab.testing.assert_equivalent` is the parity contract: `run()`, `score()`
 and a resumed session give the same frame in every mode, exactly (NaN equals
 NaN, nothing else is approximate). A bridge session runs in interpreted mode,
 so a flow debugged through the bridge must produce the same numeric results a
@@ -8,7 +8,7 @@ compiled run does.
 """
 import os
 
-from decider.testing import assert_equivalent
+from decider.lab.testing import assert_equivalent
 
 from decider._tooling.bridge.bridge import Bridge
 

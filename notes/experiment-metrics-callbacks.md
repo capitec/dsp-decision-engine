@@ -191,7 +191,7 @@ Ported, against this contract:
   `JobHandle`s. `node_json` (`decider/contract/describing.py`) now carries
   each step's durable `id`. `experiment` also takes `input=`, overriding the
   definition's own `input.path` for that one run.
-- `tools/vscode-decider/src/bridge.ts`'s `Bridge.request` takes an optional
+- `ui/vscode/src/bridge.ts`'s `Bridge.request` takes an optional
   `onProgress`; it only resolves (and drops the message from `pending`) on a
   reply that has an `"ok"` key, forwarding anything else to `onProgress`.
 - The VS Code extension reuses the single `GraphPanel` webview (now openable
@@ -210,7 +210,7 @@ Ported, against this contract:
   or the `Experiment` builder), the webview only browses and runs what's
   already there. `experiment_schema` stays in the bridge regardless: it's a
   small, independently useful capability, just not one this UI calls today.
-- `tools/decider-ui/src/model/experiment.ts` is now `ExperimentDef` and
+- `ui/lib/src/model/experiment.ts` is now `ExperimentDef` and
   `ExperimentResult` as the Python side actually serialises them:
   `summaries` (`{metric: {scenario: summary}}`), `plots`
   (`{plot: {grammar, spec}}`), and a `definition.report` tree. `VegaChart.tsx`

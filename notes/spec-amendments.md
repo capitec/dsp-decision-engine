@@ -299,7 +299,7 @@ Contract-level changes the VS Code extension sees (Python API redesign):
 - **The bridge module is `python -m decider._bridge`** (was `debug_bridge`).
 - **`{"cmd": "hello"}` handshake.** The reply is `Hello`: `protocol`
   (`PROTOCOL_VERSION`), `contract_version` and `capabilities`. Bridge replies
-  are typed models; the bridge-reply block of `tools/decider-ui/src/model/protocol.ts`
+  are typed models; the bridge-reply block of `ui/lib/src/model/protocol.ts`
   is generated from them.
 - **`FieldMeta` drops `cents`** for `precision`, `scale` and `units`; a
   `Decimal[p, s]` / `Currency` annotation reports `kind: "decimal"`.

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import polars as pl
 
-from decider import checks, flow, missing_as, param
+from decider import flow, missing_as, param
+from decider.lab import checks
 
 MISSING = ["missing_required"]
 UNKNOWN = ["invalid_params_doc"]

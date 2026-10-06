@@ -1,7 +1,0 @@
-packages:
-  - decider-ui
-  - vscode-decider
-  - jupyterlab-decider
-allowBuilds:
-  '@fortawesome/fontawesome-free': true
-  '@vscode/vsce-sign': true

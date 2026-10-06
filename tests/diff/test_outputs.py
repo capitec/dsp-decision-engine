@@ -2,8 +2,9 @@
 import polars as pl
 import pytest
 
-from decider import diff, flow
-from decider.diff import _outputs
+from decider import flow
+from decider.lab import diff
+from decider.lab.diff import _outputs
 
 
 def _version(rate: float, label: str = "a", offer_cents: int = 100):

@@ -1,11 +1,11 @@
 # Flow layout at scale
 
-`layout(ir)` in `tools/decider-ui/src/layout.ts` is a dependency-free layout that replaced dagre. This note times it against the flow-scale budgets set in `notes/vscode-redesign/experimentation/02-flow-scale-and-gesture-findings.md`.
+`layout(ir)` in `ui/lib/src/layout.ts` is a dependency-free layout that replaced dagre. This note times it against the flow-scale budgets set in `notes/vscode-redesign/experimentation/02-flow-scale-and-gesture-findings.md`.
 
 ## Rerun
 
 ```
-cd tools/decider-ui && pnpm bench
+cd ui/lib && pnpm bench
 ```
 
 `bench/layout.ts` builds a nested flow per size (groups of 3; every 5th group a branch, every 7th a loop; each call reads the previous two outputs) and prints a markdown table. Times are the median of 7 runs after one warm-up. Machine: Apple M2 Pro, Node 23.
