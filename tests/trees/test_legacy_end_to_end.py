@@ -248,3 +248,17 @@ def test_params_referenced_inside_cases_rules_are_the_steps_params():
     }
     for names, rule in trees.items():
         assert set(flat(rule, output("hit")).parameters()["t"]) == set(names)
+
+
+def test_a_column_an_output_row_leaves_out_is_null(run):
+    out = {"data": [{"r": "lo", "why": "low x"}, {"r": "hi"}], "default": {}, "dtypes": [["r", "String"], ["why", "String"]]}
+    rule = unary(lt("x", 1.0), leaf(0), unary(lt("x", 3.0), leaf(1), leaf(-1)))
+    df = run(flat(rule, out), pl.DataFrame({"x": [0.0, 2.0, 5.0]}))
+    assert df.select("r", "why").rows() == [("lo", "low x"), ("hi", None), (None, None)]
+
+
+def test_a_custom_categorical_output_is_a_string_column(run):
+    out = {"data": [{"r": "lo"}, {"r": "hi"}], "default": {"r": "z"}, "dtypes": [["r", {"type": "Custom", "type_id": "band"}]],
+           "type_defs": {"band": {"name": "band", "type": "categorical", "definition": {"categories": ["lo", "hi", "z"]}}}}
+    assert run(flat(unary(lt("x", 1.0), leaf(0), leaf(1)), out), pl.DataFrame({"x": [0.0, 2.0]}))["r"].to_list() == [
+        "lo", "hi"]

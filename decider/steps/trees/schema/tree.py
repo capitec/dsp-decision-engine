@@ -5,8 +5,8 @@ import typing as t
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
-from decider._engine.params.polars_docs.schema import TStruct
-from decider.steps.trees.schema.conditions import SchemaModel
+from decider._serde import TStruct
+from decider.steps.trees.schema.conditions import SchemaModel, get_field
 from decider.steps.trees.schema.nodes import NodeData, arity
 from decider.steps._values import ParamRef
 
@@ -23,6 +23,8 @@ class TreeOutput(BaseModel):
     """The rows a tree's leaves select: `data[result_idx]`, or `default` for -1.
 
     `dtypes` names each output column and its type, e.g. `[("band", "String")]`.
+    A column a row leaves out is null there; no `default` (or `{}`) is a row of nulls.
+    `{"type": "Custom", "type_id": "bands"}` names a categorical in `type_defs`, a string column.
 
     Example::
 
@@ -38,16 +40,20 @@ class TreeOutput(BaseModel):
     def columns(self) -> tuple[str, ...]:
         return tuple(self.dtypes) if isinstance(self.dtypes, dict) else tuple(name for name, _ in self.dtypes)
 
-    @model_validator(mode="after")
-    def _rows_have_columns(self) -> TreeOutput:
-        declared = set(self.columns)
-        rows = [(f"data[{i}]", row) for i, row in enumerate(self.data)]
-        if self.default is not None:
-            rows.append(("default", self.default))
-        for where, row in rows:
-            if missing := declared - set(row):
-                raise ValueError(f"TreeOutput.{where} is missing declared column(s) {sorted(missing)}")
-        return self
+    def column_types(self) -> list[tuple[str, t.Any]]:
+        """Each column with its type's name, e.g. `[("band", "String")]`."""
+        out = []
+        for column, dtype in self.dtypes.items() if isinstance(self.dtypes, dict) else self.dtypes:
+            name = getattr(dtype, "type", dtype)
+            if isinstance(name, str) and name.lower() == "custom":
+                type_id = dtype.model_extra.get("type_id")
+                kind = get_field(self.type_defs.get(type_id), "type")
+                if kind != "categorical":
+                    raise ValueError(f"output column {column!r}: custom type {type_id!r} is "
+                                     f"{'not in type_defs' if kind is None else repr(kind)}; only a categorical is supported")
+                name = "String"
+            out.append((column, name))
+        return out
 
 
 class ParameterInfo(BaseModel):

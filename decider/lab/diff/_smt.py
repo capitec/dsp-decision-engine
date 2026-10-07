@@ -241,8 +241,7 @@ def _tree_terms(cfg: TreeConfig, env: Env) -> Terms:
     if any(not -1 <= n.data.result_idx < len(tree.output.data) for n in tree.nodes.values()
            if isinstance(n.data, LeafNode)):
         raise Unencodable("a leaf selects a row the output lacks")
-    dt = tree.output.dtypes
-    columns = [(c, kind_of(getattr(d, "type", d), c)) for c, d in (dt.items() if isinstance(dt, dict) else dt)]
+    columns = [(c, kind_of(d, c)) for c, d in tree.output.column_types()]
     slots = ([("", tree.rules)] if tree.mode == "first_match"
              else [(f"{r.name or f'rule_{k}'}.", [r]) for k, r in enumerate(tree.rules)])
     out: Terms = {}

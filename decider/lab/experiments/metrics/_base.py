@@ -5,7 +5,7 @@ import typing as t
 from pydantic import BaseModel, ConfigDict
 
 from decider.lab.experiments.callbacks import Callback
-from decider.registry import BaseRegistryModule, ref
+from decider._registry import BaseRegistryModule, ref
 
 
 class Summary(BaseModel):

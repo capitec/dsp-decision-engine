@@ -9,7 +9,7 @@ import numpy as np
 import polars as pl
 
 from decider._engine.params.tables import rows_like
-from decider._engine.params.polars_docs.schema import PolarsSchema
+from decider._serde import PolarsSchema
 from decider.steps.tables.schema import (
     AndExpression,
     BetweenExpression,

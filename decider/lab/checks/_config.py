@@ -11,7 +11,7 @@ from decider.lab.checks._base import STANDARD, Check
 from decider.lab.checks._report import Severity
 from decider.lab.data._providers import project_root
 from decider.exceptions import DeciderError, wrap_import_errors
-from decider.registry import ref
+from decider._registry import ref
 
 CheckRef = ref(Check)
 _CHECK = TypeAdapter(CheckRef)

@@ -104,6 +104,10 @@ class PolarsSchema(RootModel):
             )
         return self
 
+    @classmethod
+    def from_polars(cls, schema: pl.Schema) -> "PolarsSchema":
+        return cls(convert_schema(schema))
+
     @property
     def schema(self):
         return self._polars_schema
@@ -184,9 +188,73 @@ def handle_explicit_type(t: ExplicitType):
                 f"For nested type {t} expected either an 'inner' or a 'fields' config."
             )
         args = (handle_type(inner_definition),)
+    if isinstance(extra_dict.get("shape"), list):
+        # JSON has no tuples, and polars takes an Array's shape only as an int or a tuple.
+        extra_dict["shape"] = tuple(extra_dict["shape"])
     try:
         return pl_type(*args, **extra_dict)
     except TypeError as e:
         raise ValueError(
             f"Could not construct type {t} from args {t.model_extra}. Got error: {e}."
         )
+
+
+class PrimitiveSchema(RootModel):
+    """One polars type that isn't a struct, written as JSON: `"Float64"` or `{"type": "List", "inner": "String"}`.
+
+    Example::
+
+        PrimitiveSchema.model_validate({"type": "Array", "inner": "Int32", "shape": [4]}).polars_type
+    """
+
+    root: t.Union[str, ExplicitType]
+
+    _polars_type: pl.DataType = PrivateAttr()
+
+    @model_validator(mode="after")
+    def _convert_type(self) -> "t.Self":
+        self._polars_type = handle_type(self.root)
+        return self
+
+    @property
+    def polars_type(self) -> pl.DataType:
+        return self._polars_type
+
+
+# The constructor arguments a dtype needs to come back the same; `inner` is handled for every nested type.
+_ARGS: t.Dict[str, t.Tuple[str, ...]] = {
+    "Datetime": ("time_unit", "time_zone"),
+    "Duration": ("time_unit",),
+    "Decimal": ("precision", "scale"),
+    "Enum": ("categories",),
+}
+
+
+def convert_schema(schema: pl.Schema) -> list:
+    """A polars schema as the JSON `PolarsSchema` reads: `[[column, type], ...]`, in column order.
+
+    Example::
+
+        convert_schema(pl.Schema({"tags": pl.List(pl.String)}))   # [("tags", {"type": "List", "inner": "String"})]
+    """
+    return [(name, convert_dtype(dtype)) for name, dtype in schema.items()]
+
+
+def convert_dtype(dtype: t.Any) -> t.Any:
+    """A polars dtype as JSON: its name, `{"type": name, **arguments}`, or a struct's `[[field, type], ...]`."""
+    if isinstance(dtype, type):
+        return dtype.__name__
+    if isinstance(dtype, polars_dtypes.Struct):
+        return [(f.name, convert_dtype(f.dtype)) for f in dtype.fields]
+    name = type(dtype).__name__
+    args = {}
+    if isinstance(dtype, polars_dtypes.NestedType):
+        args["inner"] = convert_dtype(dtype.inner)
+    if isinstance(dtype, polars_dtypes.Array):
+        # A multi-dimensional array's inner type is itself an array, so only the outer size is this level's.
+        args["shape"] = dtype.size
+    for arg in _ARGS.get(name, ()):
+        value = getattr(dtype, arg)
+        if value is not None:
+            args[arg] = value.to_list() if isinstance(value, pl.Series) else value
+    return {"type": name, **args} if args else name

@@ -13,7 +13,7 @@ from decider import ConfigurableStep, Engine, ParamRef, Value, flow, step
 from decider import _engine as engine
 from decider.config import JsonFileStore
 from decider._engine.ir import ParamDecl
-from decider.registry import import_path
+from decider._registry import import_path
 from decider.steps import StepRef
 
 

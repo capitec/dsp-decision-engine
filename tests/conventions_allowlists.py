@@ -10,7 +10,6 @@ BIG_ALL: dict[str, str] = {  # {package path relative to decider/: reason}
 PRIVATE_IMPORT: dict[str, str] = {  # {"importer -> imported": reason}
     "_engine.debug.edit -> steps._base": "as_step is internal; a session edit converts a function to a step",
     "_engine.ir.context -> steps._base": "as_step is internal; step_map converts a function to a step",
-    "_engine.ir.context -> steps._values": "TableRef is internal; ctx.table tells a reference from inline rows",
     "_tooling.bridge.building -> serving._parse": "request parsing helpers have no public home",
     "_tooling.bridge.datasets -> lab.data._formats": "format_of has no public home",
     "_tooling.bridge.datasets -> lab.data._providers": "dataset_documents and datasets_folder are bridge helpers with no public home",
@@ -63,7 +62,7 @@ UPWARD_IMPORT: dict[str, str] = {  # {"importer module -> imported module": reas
 }
 
 LAYER_CYCLE: dict[str, str] = {  # {"package -> package": reason}
-    "_engine -> steps": "engine reaches steps.base, helpers and values lazily; removed when that goes through the IR",
+    "_engine -> steps": "engine reaches steps.base, helpers and ParamRef lazily; removed when that goes through the IR",
     "steps -> _engine": "steps bind through the engine; goes with the engine -> steps edge",
 }
 

@@ -6,7 +6,7 @@ from abc import abstractmethod
 
 from pydantic import ConfigDict
 
-from decider.registry import BaseRegistryModule
+from decider._registry import BaseRegistryModule
 
 from ._versions import Version, VersionedConfig, VersionPart
 

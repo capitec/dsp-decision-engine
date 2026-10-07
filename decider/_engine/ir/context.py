@@ -10,8 +10,9 @@ from decider._engine.ir.decls import ParamDecl
 from decider._engine.ir.nodes import BranchNode, CallNode, IRNode, LoopNode, SequenceNode, iter_nodes
 from decider._engine.ir.origin import Origin, check_id, check_name
 from decider._engine.params.models import record_shared_type
+from decider._registry import import_path
+from decider._serde import FrameDoc
 from decider.exceptions import IRError, WiringError
-from decider.registry import import_path
 
 if TYPE_CHECKING:
     from decider.steps import Step
@@ -190,10 +191,7 @@ class IRContext:
 
             ctx.table(TableRef(table="prices"), {"product": "str", "rate": "float"})
         """
-        from decider._engine.params.polars_docs.frame import FrameDoc
-        from decider.steps._values import TableRef
-
-        if not isinstance(value, TableRef):
+        if isinstance(value, FrameDoc):
             return value
         return ParamDecl(
             value.table, FrameDoc, required=True, shared_key=value.table if value.shared else None,

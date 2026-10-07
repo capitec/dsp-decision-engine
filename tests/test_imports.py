@@ -47,3 +47,16 @@ def test_the_offline_libraries_live_under_lab():
     root = Path(decider.__file__).parent
     for old in ("checks", "diff", "testing", "data", "experiments", "contract", "verify"):
         assert not list((root / old).rglob("*.py")), old
+
+
+def test_the_registry_and_the_json_forms_are_private_foundations():
+    from pathlib import Path
+
+    import decider
+    from decider._registry import BaseRegistryModule
+    from decider._serde import FrameDoc
+
+    assert (BaseRegistryModule, FrameDoc)
+    root = Path(decider.__file__).parent
+    for old in ("registry", "_engine/params/polars_docs", "steps/_polars_docs"):
+        assert not list((root / old).rglob("*.py")), old

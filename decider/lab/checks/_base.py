@@ -13,7 +13,7 @@ from decider.lab.checks._report import Finding, Severity, SkippedCheck, Suppress
 from decider.lab._refs import StepRef
 from decider.lab._describe import describe
 from decider.ir import CallNode, IRNode, iter_nodes, step_map, to_ir
-from decider.registry import BaseRegistryModule
+from decider._registry import BaseRegistryModule
 
 # What `decider.lab.checks.standard` runs: the static checks, which need no data and no execution.
 _NUMERIC = ("int64_overflow", "float_money", "bare_round", "division_by_variable", "int_true_division",

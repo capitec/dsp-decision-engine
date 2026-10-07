@@ -8,7 +8,7 @@ from pydantic import ConfigDict, PrivateAttr
 from decider.lab.data._keys import check_key, suggest_key
 from decider.lab.data._load import LoadedData, _fingerprint
 from decider.exceptions import DeciderError
-from decider.registry import BaseRegistryModule
+from decider._registry import BaseRegistryModule
 
 
 class DatasetError(DeciderError, ValueError):
