@@ -1,0 +1,42 @@
+# Core web framework
+fastapi
+uvicorn[standard]
+
+# Data validation and settings
+pydantic
+pydantic-settings
+email-validator
+PyYAML
+
+# Database and ORM
+sqlalchemy
+sqlmodel
+asyncpg
+# boto3 sql auth
+boto3
+
+# Migrations ( TODO move to new image )
+alembic
+
+# Authentication and security
+bcrypt
+python-jose
+
+# HTTP client
+httpx
+
+# Caching
+diskcache
+
+# API utilities
+fastapi-pagination
+# For multipart uploads
+python-multipart
+
+# Data processing
+polars
+
+# Decision engine (tree validation)
+
+# Core Python packages
+typing-extensions

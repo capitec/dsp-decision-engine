@@ -7,6 +7,7 @@ on:
 
 env:
   DOCKER_IMAGE: sjnarmstrong/pydecider
+  TREE_EDITOR_IMAGE: sjnarmstrong/decider-tree-editor
 
 jobs:
   # ── 1. Resolve version from git tags (hatch-vcs) ──────────────────────────
@@ -126,6 +127,44 @@ jobs:
           tags: ${{ env.DOCKER_IMAGE }}:latest
           cache-from: type=gha
 
+  # ── 2b'. Build and push the tree-editor image ─────────────────────────────
+  publish-tree-editor:
+    needs: [version, publish-pypi]
+    runs-on: ubuntu-latest
+    environment:
+      name: release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download wheel artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push tree-editor image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ui/tree-editor/Dockerfile
+          push: true
+          tags: |
+            ${{ env.TREE_EDITOR_IMAGE }}:${{ needs.version.outputs.version }}
+            ${{ env.TREE_EDITOR_IMAGE }}:latest
+          cache-from: type=gha,scope=tree-editor
+          cache-to:   type=gha,mode=max,scope=tree-editor
+
   # ── 2c. Build and deploy versioned docs to GitHub Pages ───────────────────
   publish-docs:
     needs: version
@@ -211,7 +250,7 @@ jobs:
 
   # ── 3. Tag and create GitHub Release (after all three deploys succeed) ─────
   github-release:
-    needs: [version, publish-pypi, publish-docker, publish-docs]
+    needs: [version, publish-pypi, publish-docker, publish-tree-editor, publish-docs]
     runs-on: ubuntu-latest
     environment:
       name: release

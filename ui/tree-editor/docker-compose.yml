@@ -1,0 +1,90 @@
+# Local dev with live reload:   docker compose up            (UI on :3000, API on :8000)
+# End-to-end tests:             docker compose --profile e2e run --rm e2e
+#
+# The repo root is mounted, so edits to decider/, backend/ and ui/ reload without a rebuild.
+
+x-repo: &repo
+  volumes:
+    - ../..:/repo
+    - uv-cache:/root/.cache/uv
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 2s
+      retries: 30
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  backend:
+    image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+    <<: *repo
+    working_dir: /repo/ui/tree-editor/backend
+    environment:
+      DSP_DB__HOST: db
+      # browsers only accept Secure cookies over http on localhost, not on the `ui` hostname the e2e container uses
+      DSP_AUTH__COOKIE__SECURE: "false"
+      DSP_AUTH__STATUS_COOKIE__SECURE: "false"
+      # the checkout has no usable git metadata inside the container
+      SETUPTOOLS_SCM_PRETEND_VERSION: "0.0.0"
+      UV_LINK_MODE: copy
+    command: >
+      sh -c "uv run --no-project --with-requirements requirements.txt --with-editable /repo --with greenlet
+      sh -c 'alembic upgrade head && uvicorn dsp_decider.asgi:app --host 0.0.0.0 --port 8000
+      --reload --reload-dir /repo/ui/tree-editor/backend --reload-dir /repo/decider'"
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/api/health')"]
+      interval: 3s
+      retries: 60
+
+  ui:
+    image: node:20
+    volumes:
+      - ../../ui:/repo/ui
+      - ui-node-modules:/repo/ui/node_modules
+      - tree-editor-node-modules:/repo/ui/tree-editor/ui/node_modules
+    working_dir: /repo/ui
+    environment:
+      API_TARGET: http://backend:8000
+    command: >
+      sh -c "npm install -g pnpm@12.9.1 &&
+      pnpm install --frozen-lockfile --filter dsp-re-ui &&
+      cd tree-editor/ui && pnpm dev --host 0.0.0.0"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+  e2e:
+    profiles: [e2e]
+    image: python:3.12-bookworm
+    <<: *repo
+    working_dir: /repo/ui/tree-editor/e2e
+    environment:
+      E2E_BASE_URL: http://ui:3000
+      SETUPTOOLS_SCM_PRETEND_VERSION: "0.0.0"
+      PLAYWRIGHT_BROWSERS_PATH: /root/.cache/ms-playwright
+    command: >
+      sh -c "pip install -q -r requirements.txt -e /repo &&
+      playwright install --with-deps chromium &&
+      pytest"
+    depends_on:
+      backend:
+        condition: service_healthy
+      ui:
+        condition: service_started
+
+volumes:
+  pgdata:
+  uv-cache:
+  ui-node-modules:
+  tree-editor-node-modules:

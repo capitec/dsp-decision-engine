@@ -1,0 +1,58 @@
+# Build from the repo root, after `uv build` has put the decider wheel in dist/:
+#   docker build -f ui/tree-editor/Dockerfile -t decider-tree-editor .
+
+FROM node:20-alpine AS ui-builder
+
+WORKDIR /app/ui
+
+RUN npm install -g pnpm@12.9.1
+
+# Every workspace member's manifest has to be present for a frozen install.
+COPY ui/pnpm-workspace.yaml ui/pnpm-lock.yaml ./
+COPY ui/lib/package.json lib/
+COPY ui/vscode/package.json vscode/
+COPY ui/tree-editor/ui tree-editor/ui
+
+RUN pnpm install --frozen-lockfile --filter dsp-re-ui && \
+    cd tree-editor/ui && \
+    pnpm build:skip-check && \
+    test -d build
+
+FROM python:3.12-slim AS runtime
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN addgroup --gid 1000 appgroup && \
+    adduser --uid 1000 --gid 1000 --disabled-password --gecos "" appuser
+
+COPY dist /tmp/decider/
+COPY ui/tree-editor/backend/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir /tmp/decider/*.whl -r requirements.txt && \
+    rm -rf /tmp/decider
+
+# ponytail: migrations run from this image; split into a job image if it grows
+COPY ui/tree-editor/backend/alembic ./alembic
+COPY ui/tree-editor/backend/alembic.ini ./alembic.ini
+COPY ui/tree-editor/backend/dsp_decider ./dsp_decider
+COPY --from=ui-builder /app/ui/tree-editor/ui/build ./ui/build
+
+RUN mkdir -p /app/logs /var/cache/dsp-decider && \
+    chown -R appuser:appgroup /app /var/cache/dsp-decider && \
+    chmod -R 755 /var/cache/dsp-decider
+
+USER appuser
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/api/health || exit 1
+
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+ENV DSP_UI_BUILD_PATH=/app/ui/build
+
+ENTRYPOINT [ "uvicorn" ]
+CMD ["dsp_decider.asgi:app", "--host", "0.0.0.0", "--port", "8000"]

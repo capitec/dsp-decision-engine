@@ -17,6 +17,7 @@ eggs/
 .eggs/
 lib/
 !ui/lib/
+!ui/tree-editor/ui/src/lib/
 lib64/
 parts/
 sdist/
