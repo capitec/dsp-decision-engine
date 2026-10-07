@@ -27,5 +27,18 @@ Fused mode, one String output unique per leaf (`score` µs / `run` µs at n = 1,
 
 The extra ~11 µs on a one-row `run()` is gather's fixed cost.
 
-Struct and list outputs constant per leaf are meant to reuse this: one table per output,
-gathered by `run`, indexed by `score`.
+## Lists and structs
+
+`lookup(values, dtype)` is the same thing for values a `Literal` can't hold. A row node declares
+it on an output and returns the index; the table holds the values and their polars type. A tree
+uses it for list columns, of values or of struct records, with one table entry per leaf. A single
+struct isn't coded at all: the tree flattens it into one `column.field` column per field, each a
+plain number or `Literal` column. `decode()` deep-copies list and dict values, so a caller editing
+a `score()` result can't edit the table; the interpreted reference copies too.
+
+Fused mode, a `List(Struct)` column of two records plus a flattened two-field struct per leaf:
+
+| leaves | `score` µs | `run` µs at n = 1, 1k, 100k |
+|---|---|---|
+| 64 | 19 | 88, 322, 28 600 |
+| 8192 | 20 | 92, 392, 34 900 |

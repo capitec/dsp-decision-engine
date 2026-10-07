@@ -1,6 +1,7 @@
 """The Python tree walker: the compiled walker's twin, reporting every node it passes."""
 from __future__ import annotations
 
+import copy
 import operator
 import re
 import typing as t
@@ -174,13 +175,14 @@ def _leaf(tree: Tree, root: str, row: _Row, visit: t.Callable[[str], None]) -> t
 
 
 def reference(tree: Tree, inputs: t.Sequence[t.Any], kinds: dict[str, str],
-              columns: t.Sequence[tuple[int, str, t.Any]]) -> t.Callable:
+              columns: t.Sequence[tuple[int, str, t.Any]], shared: bool = False) -> t.Callable:
     """`reference(row, params, consts, visit)`: the tree walked in Python, calling `visit(node_id)` per node.
 
     Returns one value per output column, in the order `columns` lists them;
     a column named `None` is the id of the leaf that answered, one named
     `TRACE` the `>`-joined ids of the nodes walked (in first-match, those of
-    the rule that answered, else of the last rule).
+    the rule that answered, else of the last rule). A list column's value is
+    a copy, unless `shared`: then it is the output table's own object.
 
     Example::
 
@@ -206,7 +208,8 @@ def reference(tree: Tree, inputs: t.Sequence[t.Any], kinds: dict[str, str],
                 out.append(leaf if column is None else SEP.join(walked) or None)
                 continue
             v = rows[-1 if leaf is None else tree.nodes[leaf].data.result_idx].get(column)
-            out.append(str(v) if choices is not None and v is not None else v)
+            out.append(str(v) if isinstance(choices, tuple) and v is not None
+                       else copy.deepcopy(v) if choices is not None and not shared else v)
         return tuple(out)
 
     return walk

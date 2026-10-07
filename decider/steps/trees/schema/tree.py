@@ -3,11 +3,13 @@ from __future__ import annotations
 
 import typing as t
 
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
 
 from decider._serde import TStruct
-from decider.steps.trees.schema.conditions import SchemaModel, get_field
+from decider._serde.schema import ExplicitType, handle_type
+from decider.steps.trees.schema.conditions import SchemaModel
 from decider.steps.trees.schema.nodes import NodeData, arity
+from decider.steps.trees.schema._output_types import LISTS, resolve
 from decider.steps._values import ParamRef
 
 __all__ = [
@@ -24,7 +26,10 @@ class TreeOutput(BaseModel):
 
     `dtypes` names each output column and its type, e.g. `[("band", "String")]`.
     A column a row leaves out is null there; no `default` (or `{}`) is a row of nulls.
-    `{"type": "Custom", "type_id": "bands"}` names a categorical in `type_defs`, a string column.
+    `{"type": "Custom", "type_id": "bands"}` names a type in `type_defs`: a categorical is a
+    string column, a struct one `column.field` column per field (a row's value is the record,
+    `{"$key": key}` or the key). `{"type": "List", "inner": ...}` is a list column, of values or
+    of struct records.
 
     Example::
 
@@ -41,19 +46,18 @@ class TreeOutput(BaseModel):
         return tuple(self.dtypes) if isinstance(self.dtypes, dict) else tuple(name for name, _ in self.dtypes)
 
     def column_types(self) -> list[tuple[str, t.Any]]:
-        """Each column with its type's name, e.g. `[("band", "String")]`."""
-        out = []
-        for column, dtype in self.dtypes.items() if isinstance(self.dtypes, dict) else self.dtypes:
-            name = getattr(dtype, "type", dtype)
-            if isinstance(name, str) and name.lower() == "custom":
-                type_id = dtype.model_extra.get("type_id")
-                kind = get_field(self.type_defs.get(type_id), "type")
-                if kind != "categorical":
-                    raise ValueError(f"output column {column!r}: custom type {type_id!r} is "
-                                     f"{'not in type_defs' if kind is None else repr(kind)}; only a categorical is supported")
-                name = "String"
-            out.append((column, name))
-        return out
+        """Each column the tree returns with its type: a name, or the polars type of a list.
+
+        >>> TreeOutput(dtypes=[("band", "String"), ("tags", {"type": "List", "inner": "String"})]).column_types()
+        [('band', 'String'), ('tags', List(String))]
+        """
+        return [(column, handle_type(dtype) if isinstance(dtype, ExplicitType) and dtype.type.lower() in LISTS
+                 else getattr(dtype, "type", dtype)) for column, dtype in self.resolved().dtypes]
+
+    def resolved(self) -> TreeOutput:
+        """This output with its Custom types resolved: structs flattened to `column.field`, lists of records."""
+        dtypes, data, default = resolve(self.dtypes, self.data, self.default, self.type_defs)
+        return TreeOutput(data=data, default=default, dtypes=dtypes)
 
 
 class ParameterInfo(BaseModel):
@@ -100,6 +104,11 @@ class Tree(SchemaModel):
     rules: t.Tuple[Rule, ...]
     nodes: t.Dict[str, Node]
     output: TreeOutput = Field(default_factory=TreeOutput)
+
+    @field_validator("output")
+    @classmethod
+    def _resolve(cls, output: TreeOutput) -> TreeOutput:
+        return output.resolved()
 
     @model_validator(mode="after")
     def _structure(self) -> Tree:

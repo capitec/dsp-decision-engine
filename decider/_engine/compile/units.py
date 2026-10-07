@@ -6,7 +6,7 @@ import numpy as np
 
 from decider._engine.compile.kernel import Spec, SrcKind, fused_kernel
 from decider._engine.compile.njit import FALLBACK_ERRORS, compile_call, parameters
-from decider._engine.compile.outputs import LiteralTable, coded, literal_choices, output_dtype
+from decider._engine.compile.outputs import CodeTable, coded, coded_values, output_dtype
 from decider._engine.compile.rows import Ragged
 from decider._engine.compile.sink import Sink
 from decider._engine.compile.structs import Schema
@@ -53,7 +53,7 @@ class Kernel:
         self.writes: tuple[tuple[NodeVersion, np.dtype], ...] = writes
         self._masked: tuple[int, ...] = masked
         self._layout = layout
-        self._tables = tuple(None if c is None else LiteralTable(c) for c in choices)
+        self._tables = tuple(None if c is None else CodeTable(*c) for c in choices)
         self._python: tuple[Fallback, ...] = ()
         # `(program, outputs, variables, refs, factor, exact)` for the trace kernel, or None.
         self._trace = trace
@@ -130,9 +130,9 @@ class Fallback:
         self.fn = fn
         self.reason = reason
         self.declared = declared
-        # Python values come back as they are, as objects; only a row node returns a `Literal` as its index.
+        # Python values come back as they are, as objects; only a row node returns a coded output as its index.
         self.writes = tuple(
-            (v, output_dtype(o.annotation) if (call.node.kind == "row" and literal_choices(o.annotation) is not None)
+            (v, output_dtype(o.annotation) if (call.node.kind == "row" and coded_values(o.annotation) is not None)
              or is_typed(base_annotation(o.annotation)) else np.dtype(object))
             for v, o in zip(call.writes, call.node.outputs)
         )
@@ -141,7 +141,7 @@ class Fallback:
         self._boxes = ({i.arg: b for i in node.inputs if (b := decimal_boxer(i.annotation))}
                        | {d.arg: b for d in node.params if (b := decimal_boxer(d.annotation))})
         self._scales = tuple(decimal_scale(o.annotation) for o in node.outputs)
-        self._tables = tuple(LiteralTable(c) if node.kind == "row" and (c := literal_choices(o.annotation)) is not None
+        self._tables = tuple(CodeTable(*c) if node.kind == "row" and (c := coded_values(o.annotation)) is not None
                              else None for o in node.outputs)
 
     def run(self, values: Values, valid: Values, bundles: Mapping[int, tuple], n: int) -> None:
@@ -451,7 +451,7 @@ def _kernel(compiled: list, keep) -> Kernel:
                     masked.append(len(writes))
                 outputs.append(lay.produced[v.id])
                 writes.append((v, spec.dtypes[k]))
-                choices.append(literal_choices(call.node.outputs[k].annotation))
+                choices.append(coded_values(call.node.outputs[k].annotation))
     fn = fused_kernel(tuple(specs), tuple(outputs))
     # A straight-line kernel runs every call once per row, so its trace emits
     # exactly `n * len(calls)` STEP events; refs are the plan-global call refs.
