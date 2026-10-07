@@ -2,6 +2,18 @@ packages:
   - lib
   - vscode
   - jupyterlab-decider
+  - tree-editor/ui
+# lib is on React 18 types, tree-editor on 19. These packages use React types
+# without declaring them, so each importer must resolve its own.
+packageExtensions:
+  lucide-react:
+    peerDependencies:
+      '@types/react': '*'
+  cmdk:
+    peerDependencies:
+      '@types/react': '*'
 allowBuilds:
   '@fortawesome/fontawesome-free': true
   '@vscode/vsce-sign': true
+  esbuild: false
+  rete: false

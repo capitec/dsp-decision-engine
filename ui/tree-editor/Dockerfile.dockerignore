@@ -1,0 +1,14 @@
+*
+
+!/dist
+!/ui/pnpm-workspace.yaml
+!/ui/pnpm-lock.yaml
+!/ui/lib/package.json
+!/ui/vscode/package.json
+!/ui/tree-editor
+
+**/node_modules
+**/build
+**/__pycache__
+**/*.pyc
+**/.DS_Store
