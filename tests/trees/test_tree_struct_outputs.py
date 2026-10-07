@@ -71,6 +71,18 @@ def test_a_list_of_values_is_a_list_column(run):
     assert out.schema["Tags"] == pl.List(pl.Int64)
 
 
+def test_a_list_of_categoricals_is_a_list_of_strings_in_a_column_or_a_struct_field(run):
+    bands = {"type": "List", "inner": {"type": "Custom", "type_id": "band"}}
+    defs = {**TYPE_DEFS, "tagged": {"name": "Tagged", "type": "struct", "definition": {
+        "fields": [["Name", "String"], ["Bands", bands]], "display_field": "Name",
+        "data": [{"Name": "A", "Bands": ["low", "high"]}, {"Name": "B", "Bands": []}]}}}
+    out = run(_tree([["Bands", bands], ["Tag", {"type": "Custom", "type_id": "tagged"}]],
+                    [{"Bands": ["low"], "Tag": "A"}, {"Bands": ["high"], "Tag": "B"}], type_defs=defs), DF)
+    assert out.drop("score").to_dicts() == [{"Bands": ["low"], "Tag.Name": "A", "Tag.Bands": ["low", "high"]},
+                                            {"Bands": ["high"], "Tag.Name": "B", "Tag.Bands": []}]
+    assert out.schema["Tag.Bands"] == pl.List(pl.String)
+
+
 def test_a_tree_reading_strings_returns_lists_too(run):
     tree = _tree([["Actions", {"type": "List", "inner": ACT}]], [{"Actions": ["Approve"]}, {"Actions": ["Decline"]}],
                  condition={"op": "string_match", "feature": "channel", "patterns": ["app"], "match_type": "exact"})
