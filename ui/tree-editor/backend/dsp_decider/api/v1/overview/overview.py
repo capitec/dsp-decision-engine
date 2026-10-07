@@ -2,7 +2,7 @@ import typing as t
 from datetime import datetime, timedelta, timezone
 from fastapi import Depends
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import select, func
+from sqlalchemy import select, func, true
 
 from dsp_decider.db.session import db_session
 from dsp_decider.db.models.projects import Project, ProjectShare, AccessMode
@@ -10,7 +10,11 @@ from dsp_decider.db.models.users import Team
 from dsp_decider.data_sources import DataSourceManager
 from dsp_decider.data_sources.core import DataSourceInfo
 from dsp_decider.settings import settings
-from dsp_decider.auth.authorization import get_current_user_session, is_superadmin
+from dsp_decider.auth.authorization import (
+    get_current_user_session,
+    get_user_teams,
+    is_superadmin,
+)
 from dsp_decider.auth.models import SessionInfo
 from dsp_decider.api.v1.project.project import ProjectResponse
 from .routes import router
@@ -63,26 +67,45 @@ async def get_overview(
         week_start = now - timedelta(days=7)
         month_start = now - timedelta(days=30)
 
+        # Same visibility rule as the project list: owned, shared with the user, or shared with their teams
+        if await is_superadmin(current_user):
+            visible = true()
+        else:
+            user_teams = await get_user_teams(current_user)
+            shared_ids = select(ProjectShare.project_id).where(
+                ProjectShare.user_id == current_user.user_id
+            )
+            team_shared_ids = (
+                select(ProjectShare.project_id)
+                .join(Team, ProjectShare.team_id == Team.id)
+                .where(Team.name.in_(user_teams))
+            )
+            visible = (
+                (Project.created_by == current_user.user_id)
+                | Project.id.in_(shared_ids)
+                | Project.id.in_(team_shared_ids)
+            )
+
         # Get total project count
-        total_count_query = select(func.count(Project.id))
+        total_count_query = select(func.count(Project.id)).where(visible)
         total_result = await session.execute(total_count_query)
         total_projects = total_result.scalar() or 0
 
         # Get activity counts for different time periods
         today_count_query = select(func.count(Project.id)).where(
-            Project.updated_at >= today_start
+            visible, Project.updated_at >= today_start
         )
         today_result = await session.execute(today_count_query)
         today_count = today_result.scalar() or 0
 
         week_count_query = select(func.count(Project.id)).where(
-            Project.updated_at >= week_start
+            visible, Project.updated_at >= week_start
         )
         week_result = await session.execute(week_count_query)
         week_count = week_result.scalar() or 0
 
         month_count_query = select(func.count(Project.id)).where(
-            Project.updated_at >= month_start
+            visible, Project.updated_at >= month_start
         )
         month_result = await session.execute(month_count_query)
         month_count = month_result.scalar() or 0

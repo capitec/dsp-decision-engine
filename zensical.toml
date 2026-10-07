@@ -1,0 +1,96 @@
+[project]
+site_name = "Decider"
+site_description = "Build, serve and inspect decision pipelines"
+site_url = "https://capitec.github.io/dsp-decision-engine/"
+repo_url = "https://github.com/capitec/dsp-decision-engine"
+edit_uri = "edit/main/docs/"
+
+# tutorials/ is generated, and gitignored, from the notebooks in docs/notebooks/.
+# Outputs are not re-run; commit them in the .ipynb. Convert before building:
+#   uv run --group docs jupyter nbconvert --to markdown docs/notebooks/*.ipynb --output-dir docs/tutorials
+nav = [
+  { "Home" = "index.md" },
+  { "Getting started" = "getting-started.md" },
+  { "User guides" = [
+      "guides/steps-and-params.md",
+      "guides/branches-loops-frames.md",
+      "guides/trees-tables-scorecards.md",
+      "guides/projects-and-serving.md",
+      "guides/debugging-and-testing.md",
+      "guides/checks-and-experiments.md",
+    ] },
+  { "Tutorials" = ["tutorials/quickstart.md"] },
+  { "Architecture" = [
+      "architecture/index.md",
+      "architecture/steps-and-ir.md",
+      "architecture/engine.md",
+      "architecture/package-layout.md",
+      "architecture/serving-and-tooling.md",
+    ] },
+  { "API reference" = "reference.md" },
+]
+
+extra_css = ["stylesheets/extra.css"]
+
+# The viewer renders .drawio files; javascripts/drawio.js feeds it.
+extra_javascript = [
+  "https://viewer.diagrams.net/js/viewer-static.min.js",
+  "javascripts/drawio.js",
+  "javascripts/version-switcher.js",
+]
+
+[project.theme]
+logo = "assets/decider-icon.png"
+favicon = "assets/decider-icon.png"
+features = [
+  "content.code.copy",
+  "content.tooltips",
+  "navigation.footer",
+  "navigation.indexes",
+  "navigation.path",
+  "navigation.tabs",
+  "navigation.top",
+  "search.highlight",
+]
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+primary = "orange"
+accent = "deep-orange"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+primary = "orange"
+accent = "orange"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to light mode"
+
+[project.markdown_extensions.admonition]
+[project.markdown_extensions.attr_list]
+[project.markdown_extensions.md_in_html]
+[project.markdown_extensions.tables]
+[project.markdown_extensions.pymdownx.details]
+[project.markdown_extensions.pymdownx.highlight]
+[project.markdown_extensions.pymdownx.inlinehilite]
+
+[project.markdown_extensions.toc]
+permalink = true
+
+[project.markdown_extensions.pymdownx.superfences]
+custom_fences = [
+  { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" },
+]
+
+[project.markdown_extensions.pymdownx.tabbed]
+alternate_style = true
+
+[project.plugins.mkdocstrings.handlers.python.options]
+docstring_style = "google"
+show_root_heading = true
+show_root_full_path = false
+separate_signature = true
+show_source = false

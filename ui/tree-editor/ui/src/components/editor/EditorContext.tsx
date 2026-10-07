@@ -230,7 +230,8 @@ export const EditorProvider: React.FC<EditorProviderProps> = ({
   // Auto-detect and update subtrees
   useEffect(() => {
     const newSubtrees = detectSubtrees(nodes, edges, subtrees);
-    setSubtrees(newSubtrees);
+    // setSubtrees marks the project dirty, so a freshly loaded project would look edited
+    if (JSON.stringify(newSubtrees) !== JSON.stringify(subtrees)) setSubtrees(newSubtrees);
   }, [nodes, edges]);
 
   const contextValue: XYFlowContextState = useMemo(() => ({

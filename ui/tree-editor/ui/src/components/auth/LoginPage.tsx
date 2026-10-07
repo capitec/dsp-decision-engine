@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Github, User, Key, Mail, Building2, Smartphone, Shield } from "lucide-react";
+import { User, Key, Mail, Building2, Smartphone, Shield } from "lucide-react";
 
 interface AuthMethod {
   type: string;
@@ -50,8 +50,6 @@ const getLucideIcon = (iconName: string) => {
   switch (iconName.toLowerCase()) {
     case 'microsoft':
       return <Building2 className="w-4 h-4" />;
-    case 'github':
-      return <Github className="w-4 h-4" />;
     case 'google':
       return <Mail className="w-4 h-4" />;
     case 'apple':

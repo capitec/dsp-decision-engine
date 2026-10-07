@@ -11,6 +11,7 @@ PyYAML
 # Database and ORM
 sqlalchemy
 sqlmodel
+greenlet  # SQLAlchemy async needs it; not pulled in on every platform
 asyncpg
 # boto3 sql auth
 boto3
