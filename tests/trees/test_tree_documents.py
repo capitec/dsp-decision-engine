@@ -1,5 +1,8 @@
+import polars as pl
 import pydantic
 import pytest
+
+from decider.steps.trees import TreeConfig
 
 from decider.steps.trees.schema import (
     CasesRanges,
@@ -234,6 +237,11 @@ def test_the_first_listed_subtree_is_the_root_and_other_subtrees_are_dropped():
     assert set(tree.nodes) == {"b", "b_leaf"}
 
 
+def test_the_tree_editors_ui_tree_type_reads_as_v3():
+    doc = load_document({"type": "ui-tree", "formatVersion": 3, "nodes": [_leaf("a")]})
+    assert isinstance(doc, V3TreeDocument) and doc.type == "ui-tree"
+
+
 def test_without_subtrees_the_first_root_listed_wins():
     doc = load_document({"nodes": [_leaf("a"), _leaf("b")]})
     assert doc.to_tree().rules == (Rule(root="a"),)
@@ -413,3 +421,55 @@ def test_a_tree_checks_its_node_references():
 def test_a_cases_node_has_one_branch_per_condition_plus_otherwise():
     node = CasesRanges(feature="x", conditions=[RangeCondition(max=1.0), RangeCondition(min=1.0)])
     Tree(rules=[Rule(root="c")], nodes={"c": Node(data=node, children=(None, None, None))})
+
+
+# --- input_schema and v3 -> flat rules --------------------------------------------------------
+
+EDITOR_SCHEMA = [["age", "Float64"], ["tags", "List"], ["seen", "Datetime"], ["nested", [["a", "String"]]]]
+
+
+@pytest.mark.parametrize("doc", [
+    {"nodes": [_leaf("a")]},
+    {"type": "prioritized_flat_rule", "rules": [{"rule": {"type": "leaf"}}], "output": {}},
+])
+def test_input_schema_round_trips_on_dump_and_is_optional(doc):
+    assert load_document(doc).input_schema is None
+    kept = load_document({**doc, "input_schema": EDITOR_SCHEMA}).model_dump(by_alias=True, mode="json")
+    assert kept["input_schema"] == EDITOR_SCHEMA
+
+
+def test_a_malformed_input_schema_is_rejected():
+    with pytest.raises(pydantic.ValidationError):
+        load_document({"nodes": [_leaf("a")], "input_schema": [["age"]]})
+
+
+XS = pl.DataFrame({"x": [0.0, 0.5, 1.5, 2.5, 40.0, None], "score": [10.0, 50.0, 90.0, 10.0, 50.0, 90.0],
+                   "age": [20.0, 40.0, 20.0, 40.0, 20.0, 40.0]})
+
+
+def _flat_matches_v3(doc, run):
+    doc = {"output": OUTPUT, **doc}
+    flat = load_document(doc).to_flat_rules().model_dump(by_alias=True, mode="json")
+    expected = run(TreeConfig(name="t", tree=doc), XS)
+    assert run(TreeConfig(name="t", tree=flat), XS).equals(expected)
+
+
+def test_a_v3_tree_converts_to_flat_rules_that_run_the_same(run):
+    _flat_matches_v3(V3_NESTED, run)
+
+
+def test_a_shared_node_is_repeated_under_its_id_and_a_dangling_branch_becomes_a_default_leaf(run):
+    doc = {"nodes": [_unary("root", 1.0), _unary("mid", 2.0), _leaf("shared", 0)],
+           "edges": [_edge("root", "mid", 0), _edge("root", "shared", 1), _edge("mid", "shared", 0)],
+           "input_schema": EDITOR_SCHEMA, "parameters": {"p": {"type": "Float64", "default_value": 1.0}}}
+    flat = load_document(doc).to_flat_rules()
+    assert flat.rule.rule.then.then.id == flat.rule.rule.otherwise.id == "shared"
+    assert flat.rule.rule.then.otherwise is None
+    assert flat.input_schema == load_document(doc).input_schema and flat.parameters.keys() == {"p"}
+    _flat_matches_v3(doc, run)
+
+
+def test_several_roots_convert_from_the_root_the_v3_tree_runs(run):
+    doc = {"nodes": [_leaf("first", 0), _leaf("second", 1)]}
+    assert load_document(doc).to_flat_rules().rule.rule.id == "first"
+    _flat_matches_v3(doc, run)

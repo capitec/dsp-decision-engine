@@ -129,6 +129,9 @@ class Tree(SchemaModel):
 class BaseTreeDocument(BaseModel):
     """What every tree document format shares: its name, output table, legacy `parameters` block and `to_tree()`.
 
+    `input_schema` (`[[column, dtype], ...]`) is what the tree editor saves for its own use. Its structure is
+    checked and it round-trips on dump, but the tree never reads it: its dtype names aren't validated.
+
     Example::
 
         load_document(document).to_tree()
@@ -137,6 +140,7 @@ class BaseTreeDocument(BaseModel):
     name: str = "output"
     output: TreeOutput = Field(default_factory=TreeOutput)
     parameters: t.Dict[str, ParameterInfo] = Field(default_factory=dict)
+    input_schema: t.Optional[TStruct] = None
 
     # Set by each format's after-validator, so a document is normalised once.
     _tree: Tree = PrivateAttr()

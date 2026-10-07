@@ -9,6 +9,7 @@ import polars as pl
 import pytest
 
 from decider import flow
+from decider.steps.trees.schema import load_document
 from decider import _engine as engine
 from decider._engine import Engine
 from decider._engine.compile import kernel
@@ -228,6 +229,9 @@ def test_random_trees_agree_across_walkers_modes_and_formats(seed, run):
         for leaf, trace in traced.select("leaf", "trace").rows():
             assert trace.startswith("n0") and set(trace.split(">")) <= ids
             assert leaf is None or trace.endswith(">" + leaf) or trace == leaf
+    for doc in (v3, dict(zip(("nodes", "edges"), _to_v3(root, share=True)), output=output)):
+        back = load_document(doc).to_flat_rules().model_dump(by_alias=True, mode="json")
+        assert run(_config("t", back, _reads(flat)), df).equals(a)
     refs = json.dumps(flat).split('"param": "')[1:]
     if refs:
         run(_config("t", flat, _reads(flat)), df, {"t": {r.split('"')[0]: 1 for r in refs}})

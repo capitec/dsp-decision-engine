@@ -32,6 +32,7 @@ class StepNode(BaseModel):
     step: str
     as_: str | None = Field(None, alias="as")
     suppress_checks: list[str] = []
+    path_columns: str | None = None
 
 
 class FlowNode(BaseModel):

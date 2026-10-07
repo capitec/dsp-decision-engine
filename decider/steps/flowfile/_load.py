@@ -137,6 +137,14 @@ def _resolve_name(name: str, loc: str, ctx: _Context) -> Step:
 def _build_step(node: StepNode, loc: str, ctx: _Context) -> Step:
     built = _resolve_name(node.step, loc, ctx)
     built = built.named(node.as_) if node.as_ else built
+    if node.path_columns is not None:
+        fn = ctx.components_index.get(node.path_columns)
+        if not inspect.isfunction(fn):
+            raise WiringError(f"{loc}: path_columns {node.path_columns!r} is not a function in components."
+                              f"{hint(node.path_columns, [n for n, f in ctx.components_index.items() if inspect.isfunction(f)])}")
+        if "path_columns" not in getattr(type(built), "model_fields", {}):
+            raise WiringError(f"{loc}: step {node.step!r} takes no path_columns; only a tree does")
+        built = built._replace(path_columns=fn)
     if not node.suppress_checks:
         return built
     merged = tuple(dict.fromkeys((*built.suppress_checks, *node.suppress_checks)))

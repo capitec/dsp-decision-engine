@@ -5,7 +5,28 @@ import typing as t
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from decider.steps.trees.schema.nodes import NodeData, arity
+from decider.steps.trees.schema.flat import (
+    CasesBranch,
+    CasesIsInRule,
+    CasesRangesRule,
+    CasesStringMatchRule,
+    CompositeRule,
+    FlatRuleDocument,
+    LeafRule,
+    RuleRoot,
+    RuleType,
+    UnaryRule,
+)
+from decider.steps.trees.schema.nodes import (
+    CasesIsIn,
+    CasesRanges,
+    CasesStringMatch,
+    CompositeNode,
+    LeafNode,
+    NodeData,
+    UnaryNode,
+    arity,
+)
 from decider.steps.trees.schema.tree import BaseTreeDocument, Node, Rule, Tree, add_node
 
 __all__ = [
@@ -78,7 +99,8 @@ class V3TreeDocument(BaseTreeDocument):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    type: t.Literal["v3-tree"] = "v3-tree"
+    # The tree editor saves its trees as "ui-tree"; the version is `formatVersion`, as decider_old read it.
+    type: t.Literal["v3-tree", "ui-tree"] = "v3-tree"
     metadata: t.Optional[TreeMetadata] = None
     nodes: t.List[PositionedNode]
     edges: t.List[MultiSourceEdge] = Field(default_factory=list)
@@ -126,3 +148,32 @@ class V3TreeDocument(BaseTreeDocument):
             add_node(nodes, nid, data[nid], children, defaults)
             todo += filter(None, children)
         return Tree(name=self.name, rules=(Rule(root=root),), nodes=nodes, output=self.output)
+
+    def to_flat_rules(self) -> FlatRuleDocument:
+        """The same tree as one nested flat rule, from the root this tree runs; node ids are kept.
+
+        A node with several parents is repeated under each, so the nesting can be larger than the graph.
+
+        Example::
+
+            V3TreeDocument(nodes=[{"id": "a", "data": {"type": "leaf"}}]).to_flat_rules()
+        """
+        data = {n.id: n.data for n in self.nodes}
+        tree_nodes = self._tree.nodes
+
+        def rule(nid: str) -> RuleType:
+            node, d = data[nid], tree_nodes[nid]
+            kids = [None if c is None else rule(c) for c in d.children]
+            fields = {k: getattr(node, k) for k in type(node).model_fields if k not in ("id", "conditions")}
+            if isinstance(node, LeafNode):
+                return LeafRule(id=nid, **fields)
+            if isinstance(node, UnaryNode):
+                return UnaryRule(id=nid, then=kids[0], otherwise=kids[1], **fields)
+            if isinstance(node, CompositeNode):
+                return CompositeRule(id=nid, then=kids[0], otherwise=kids[1], conditions=node.conditions, **fields)
+            cls = {CasesRanges: CasesRangesRule, CasesStringMatch: CasesStringMatchRule, CasesIsIn: CasesIsInRule}[type(node)]
+            return cls(id=nid, conditions=[CasesBranch(when=c, then=i) for i, c in enumerate(node.conditions)],
+                       otherwise=len(node.conditions), branches=[k or LeafRule(result_idx=-1) for k in kids], **fields)
+
+        return FlatRuleDocument(name=self.name, output=self.output, parameters=self.parameters,
+                                input_schema=self.input_schema, rule=RuleRoot(rule=rule(self._tree.rules[0].root)))

@@ -52,8 +52,10 @@ errors are `DeciderError`s (`decider.exceptions` has the subclasses).
 """
 from __future__ import annotations
 
+from importlib.metadata import PackageNotFoundError, version as _version
 from typing import TYPE_CHECKING, Any
 
+from decider._serde import PolarsSchema
 from decider._engine.params import ParamTable, missing_as, param, param_table
 from decider.lab import describe
 from decider.exceptions import DeciderError, FallbackWarning
@@ -67,10 +69,16 @@ if TYPE_CHECKING:
     from decider.steps.tables import DecisionTableConfig
     from decider.steps.trees import TreeConfig
 
+try:
+    __version__ = _version("decider")
+except PackageNotFoundError:  # a source checkout that was never installed
+    __version__ = "0+unknown"
+
 __all__ = [
+    "__version__",
     # build
     "step", "frame_step", "flow", "dag", "branch", "loop", "each", "optimise", "EachMode", "allow_fallback",
-    "helper", "param", "param_table", "missing_as", "ParamTable", "TreeConfig", "DecisionTableConfig", "ScorecardConfig",
+    "helper", "param", "param_table", "missing_as", "ParamTable", "PolarsSchema", "TreeConfig", "DecisionTableConfig", "ScorecardConfig",
     # run
     "Engine", "Executable", "load_flow", "describe",
     # extend
