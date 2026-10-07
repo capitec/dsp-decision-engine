@@ -1,17 +1,19 @@
 """Decision trees: `TreeConfig` runs a v3 tree or a flat-rule document as one row node."""
 import typing as t
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
+from pydantic.json_schema import SkipJsonSchema
 
 from decider._engine.ir.nodes import CallNode
 from decider.steps._configurable import ConfigurableStep
 from decider.steps.trees._condition import expr_condition
 from decider.steps.trees._encode import encode, kind_of
 from decider.steps.trees._reference import reference
-from decider.steps.trees.schema import Node, TreeDocument
+from decider.steps.trees._routes import Route, Visit, with_route_columns
+from decider.steps.trees.schema import Node, Tree, TreeDocument
 from decider.steps.trees._walker import walk
 
-__all__ = ["TreeConfig", "expr_condition"]
+__all__ = ["Route", "TreeConfig", "Visit", "expr_condition"]
 
 
 class TreeConfig(ConfigurableStep):
@@ -41,6 +43,17 @@ class TreeConfig(ConfigurableStep):
     through a node shared by two parents. In `mode: "first_match"` over
     several rules it is the path in the rule that answered (else the last
     rule's); in `mode: "all"` one per rule.
+
+    `path_columns` is a function `fn(route, tree) -> dict` that adds the
+    dict's keys as output columns, for a route format of your own. It is
+    called once per route when the step is built, never per row: the tree
+    is unfolded so every route, each branch of a node told apart, ends at a
+    leaf of its own whose row holds the route's columns (so `path_output`
+    names a leaf even where the default row answers). A `Route` has
+    `visits`, a `Visit(node_id, node, branch, child)` per node passed, and
+    `result_idx`. Set it in Python, or with `path_columns: fn` on a flow
+    file's `step:` node naming a function in `components`; a document
+    never holds it. A first-match tree must have one rule.
 
     Params are per call, not per row: `params={"risk_tree": {"hi_thresh": 2.0}}`
     moves the threshold for every row of that run. For a threshold that
@@ -83,6 +96,8 @@ class TreeConfig(ConfigurableStep):
     null_handling: t.Literal["otherwise", "error"] = "otherwise"
     path_output: t.Optional[str] = None
     trace_output: t.Optional[str] = None
+    # Code, set in Python or by a flow file's `path_columns:`; a document never holds it.
+    path_columns: SkipJsonSchema[t.Optional[t.Callable[[Route, Tree], dict]]] = Field(None, exclude=True, repr=False)
 
     @field_validator("feature_types")
     @classmethod
@@ -92,10 +107,14 @@ class TreeConfig(ConfigurableStep):
     @property
     def nodes(self) -> t.Dict[str, Node]:
         """Every node the tree runs, by id: what a `<name>#<id>` locator points at."""
-        return self.tree.to_tree().nodes
+        return self._tree().nodes
+
+    def _tree(self) -> Tree:
+        tree = self.tree.to_tree()
+        return tree if self.path_columns is None else with_route_columns(tree, self.path_columns)
 
     def to_ir(self, ctx: t.Any) -> CallNode:
-        tree = self.tree.to_tree()
+        tree = self._tree()
         p = encode(tree, self.feature_types, ctx.value, self.null_handling, self.path_output, self.trace_output)
         ref = reference(tree, p.inputs, p.kinds, p.columns)
         # The node's consts are addresses into these arrays; the node holds its reference, which holds them.

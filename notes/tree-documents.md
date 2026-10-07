@@ -23,7 +23,8 @@ documents (`flat_rule`, `prioritized_flat_rule`). Each validates into the same
   `format_version`, dict-shaped `nodes` = v0), plus a `"v<n>-tree"` `type`. A
   document with none of these is read as v3, where decider_old guessed v1: a
   real v1 document always carries `formatVersion: 1` or `type: "v1-tree"`.
-  v0, v1 and v2 raise a deprecation error naming the version.
+  v0, v1 and v2 raise a deprecation error naming the version. The tree editor
+  saves v3 trees with `type: "ui-tree"`, accepted alongside `"v3-tree"`.
 - **`{"key": k}` (decider_old's `InputRef`) is read as `ParamRef(param=k)`.**
   A document's `parameters` block (`{k: {type, default_value}}`) fills in the
   default of every local ref to `k` that has none, so decider_old documents keep
@@ -33,6 +34,15 @@ documents (`flat_rule`, `prioritized_flat_rule`). Each validates into the same
 - **An empty composite is rejected**, as decider2 did; decider_old evaluated an
   empty AND as false, which nobody should rely on. Empty `Cases*` nodes are
   accepted and always take `otherwise`.
+- **Output tables are as lenient as decider_old's.** A column a row leaves out
+  is null, and `default: {}` is no default (decider_old tested `if self.default`).
+  A `{"type": "Custom", "type_id": ...}` dtype naming a categorical in
+  `type_defs` is a string column; it compiles like any string output (an index
+  into the column's values), so it needs no `Text`. A custom struct type
+  (`$key` lookups) is still refused.
+- **A v3 edge whose source isn't a node is dropped on load**: the editor leaves
+  them behind when a node is deleted, and decider_old never walked them. An
+  edge to an unknown target is still an error.
 - **Dropped:** `is_null`/`is_not_null` (null handling is per input),
   `null_handling` on string matches (ignored), and `output_fn`,
   `post_process_fn`, `format_prioritized_fn` (Python function references;

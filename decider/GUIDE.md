@@ -256,7 +256,9 @@ assert card.run(pl.DataFrame({"age": [20.0, 40.0]}))["score"].to_list() == [5.0,
 
 `path_output` names the leaf that answered (per rule in `mode: "all"`);
 `trace_output` gives the row's whole path as node ids joined by `>`, root first
-(e.g. `"1>2>4>912"`), so the decision record shows how it got there. `TreeConfig`
+(e.g. `"1>2>4>912"`), so the decision record shows how it got there. For a route
+format of your own, `path_columns=fn` calls `fn(route, tree)` once per route when
+the step is built and adds the dict it returns as output columns. `TreeConfig`
 also takes a v3 node/edge tree:
 
 ```python
@@ -534,6 +536,8 @@ like `DECIDER_API__PIPELINE=myapp.pipeline:build`.
   `max_candidates`, optional `score` and `disqualify`, each a list of nodes) take
   the arguments of the Python constructors; `optimise` has no `record`.
 - a name defined in both `components` and `documents` is an error.
+- `path_columns: fn` on a `step:` node naming a tree sets its `path_columns` to
+  the function `fn` in `components`.
 - an `expr` condition is false wherever an input it reads is null.
 - flow files live with the code (reviewed and deployed with it); params and
   documents stay versioned in `configs/<version>/`.

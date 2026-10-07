@@ -14,6 +14,16 @@ def test_engine_and_config_value_types_are_top_level():
     assert {"Engine", "ParamRef", "Value"} <= set(decider.__all__)
 
 
+def test_polars_schema_and_version_are_top_level():
+    import polars as pl
+
+    import decider
+
+    assert isinstance(decider.__version__, str)
+    assert decider.PolarsSchema.from_polars(pl.Schema({"a": pl.Float64})).schema == pl.Schema({"a": pl.Float64})
+    assert decider.PolarsSchema.model_validate({"a": "Float64"}).schema == pl.Schema({"a": pl.Float64})
+
+
 def test_ir_building_blocks_are_exported_from_engine_ir():
     import decider._engine.ir as ir
 
