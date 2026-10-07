@@ -10,7 +10,7 @@ x-repo: &repo
 
 services:
   db:
-    image: postgres:16
+    image: postgres:17
     environment:
       POSTGRES_PASSWORD: postgres
     healthcheck:
@@ -21,7 +21,7 @@ services:
       - pgdata:/var/lib/postgresql/data
 
   backend:
-    image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+    image: ghcr.io/astral-sh/uv:python3.13-bookworm-slim
     <<: *repo
     working_dir: /repo/ui/tree-editor/backend
     environment:
@@ -33,7 +33,7 @@ services:
       SETUPTOOLS_SCM_PRETEND_VERSION: "0.0.0"
       UV_LINK_MODE: copy
     command: >
-      sh -c "uv run --no-project --with-requirements requirements.txt --with-editable /repo --with greenlet
+      sh -c "uv run --no-project --with-requirements requirements.txt --with-editable /repo
       sh -c 'alembic upgrade head && uvicorn dsp_decider.asgi:app --host 0.0.0.0 --port 8000
       --reload --reload-dir /repo/ui/tree-editor/backend --reload-dir /repo/decider'"
     ports:
@@ -47,7 +47,7 @@ services:
       retries: 60
 
   ui:
-    image: node:20
+    image: node:24
     volumes:
       - ../../ui:/repo/ui
       - ui-node-modules:/repo/ui/node_modules
@@ -66,7 +66,7 @@ services:
 
   e2e:
     profiles: [e2e]
-    image: python:3.12-bookworm
+    image: python:3.13-bookworm
     <<: *repo
     working_dir: /repo/ui/tree-editor/e2e
     environment:

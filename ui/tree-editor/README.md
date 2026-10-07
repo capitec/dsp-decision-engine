@@ -17,7 +17,7 @@ Regenerate the UI's API client against the running backend with `./generate-tsx-
 Unit tests:
 
 ```bash
-cd backend && uv run --with-requirements requirements.txt --with ../../.. --with greenlet --with pytest --with pytest-asyncio pytest
+cd backend && uv run --with-requirements requirements.txt --with ../../.. --with pytest --with pytest-asyncio pytest
 cd ui && pnpm test
 ```
 
@@ -32,8 +32,6 @@ Against a stack you already have running (needs `uv run playwright install chrom
 ```bash
 cd e2e && E2E_BASE_URL=http://localhost:3000 uv run --with-requirements requirements.txt --with ../../.. pytest
 ```
-
-Tests marked `xfail` pin known bugs; fixing one makes its test fail until the marker is removed.
 
 ## Image
 

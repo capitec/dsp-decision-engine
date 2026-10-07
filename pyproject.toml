@@ -28,13 +28,6 @@ dev = [
     "pytest-asyncio",
     "anyio",
 ]
-docs = [
-    "sphinx",
-    "furo",
-    "myst-nb",
-    "sphinx-design",
-    "sphinx-sitemap",
-]
 all = [
     "uvicorn", "starlette",
     "sanic",
@@ -48,11 +41,6 @@ all = [
     "pytest",
     "pytest-asyncio",
     "anyio",
-    "sphinx",
-    "furo",
-    "myst-nb",
-    "sphinx-design",
-    "sphinx-sitemap",
 ]
 
 [project.scripts]
@@ -97,6 +85,11 @@ dev = [
     "altair",
     "fastmcp>=4.0.10",
     "z3-solver",
+]
+docs = [
+    "zensical>=0.0.68; python_version >= '3.11'",
+    "mkdocstrings[python]",
+    "nbconvert",
 ]
 
 # ── pytest ────────────────────────────────────────────────────────────────────

@@ -76,3 +76,16 @@ def test_deleted_project_leaves_the_list(signed_in: Page):
 
     expect(signed_in).to_have_url(re.compile(r"/projects$"))
     expect(signed_in.get_by_text("Doomed tree", exact=True)).to_be_hidden()
+
+
+def test_new_project_starts_without_unsaved_changes(signed_in: Page):
+    create_tree_project(signed_in, "Clean start")
+    signed_in.wait_for_load_state("networkidle")
+    expect(signed_in.get_by_text("Unsaved changes")).to_be_hidden()
+    expect(signed_in.get_by_role("button", name="Save")).to_be_disabled()
+
+
+def test_projects_page_loads_folders_right_after_sign_up(signed_in: Page):
+    signed_in.get_by_role("button", name="Projects").click()
+    signed_in.wait_for_load_state("networkidle")
+    expect(signed_in.get_by_text("Failed to load folders")).to_be_hidden()

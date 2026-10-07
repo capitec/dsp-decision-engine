@@ -1,0 +1,19 @@
+/* draw.io diagrams sit on a white card so their dark text stays readable in dark mode */
+.drawio {
+  background: #fff;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.5rem;
+  margin: 1rem 0;
+  overflow: auto;
+  padding: 0.5rem;
+}
+
+.grid.cards a {
+  text-decoration: none;
+}
+
+.hero-icon {
+  float: right;
+  margin: 0 0 1rem 1rem;
+  width: 7rem;
+}

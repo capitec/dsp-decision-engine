@@ -1,7 +1,7 @@
 # Build from the repo root, after `uv build` has put the decider wheel in dist/:
 #   docker build -f ui/tree-editor/Dockerfile -t decider-tree-editor .
 
-FROM node:20-alpine AS ui-builder
+FROM node:24-alpine AS ui-builder
 
 WORKDIR /app/ui
 
@@ -18,7 +18,7 @@ RUN pnpm install --frozen-lockfile --filter dsp-re-ui && \
     pnpm build:skip-check && \
     test -d build
 
-FROM python:3.12-slim AS runtime
+FROM python:3.13-slim AS runtime
 
 WORKDIR /app
 

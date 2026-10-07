@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
+import { isAuthenticated } from '@/lib/auth';
 import {
   listFoldersApiV1FoldersGet,
   createFolderApiV1FoldersPost,
@@ -359,9 +361,12 @@ export const FolderProvider: React.FC<FolderProviderProps> = ({ children }) => {
   }, []);
 
   // Load folders on mount
+  // Re-render on navigation so a sign-in made after mount is noticed; loading folders before it would 401.
+  useLocation();
+  const authenticated = isAuthenticated();
   useEffect(() => {
-    refreshFolders();
-  }, []);
+    if (authenticated) refreshFolders();
+  }, [authenticated, refreshFolders]);
 
   const value: FolderContextType = {
     currentFolder,

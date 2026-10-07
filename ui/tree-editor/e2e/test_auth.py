@@ -1,7 +1,6 @@
 import re
 import uuid
 
-import pytest
 from playwright.sync_api import Browser, Page, expect
 
 from tree_ui import create_tree_project, register, sign_in, sign_out
@@ -25,7 +24,6 @@ def test_signed_out_visitor_is_sent_to_login(page: Page):
     expect(page).to_have_url(re.compile(r"/login$"))
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="overview counts every user's projects, not just the signed-in user's")
 def test_new_user_overview_counts_only_their_projects(signed_in: Page, browser: Browser, base_url: str):
     other = browser.new_context(base_url=base_url).new_page()
     register(other, f"{uuid.uuid4().hex[:10]}@example.com")
