@@ -7,6 +7,7 @@ from typing import Any, Hashable, Mapping
 import numpy as np
 import polars as pl
 
+from decider._engine.compile.outputs import Coded, literal_choices
 from decider._engine.ir.decls import Input, NullPolicy, base_annotation, is_typed
 from decider._engine.run.representations import despan
 from decider._engine.wiring.plan import Plan, NodeVersion
@@ -18,7 +19,8 @@ class State:
     """Every value of one run: a numpy array per `NodeVersion.id`, a validity mask for nullable ones.
 
     Args:
-        values: `NodeVersion.id` -> array of `n` values.
+        values: `NodeVersion.id` -> array of `n` values, or a `Coded` `Literal`
+            output, decoded when read.
         valid: `NodeVersion.id` -> bool mask of `n` rows; absent means every row is valid.
         frame: the frame unread columns pass through from: the input frame,
             replaced by what an unknown-lineage frame step returns.
@@ -34,7 +36,7 @@ class State:
         self.plan = plan
         self.frame = frame
         self.n = frame.height if n is None else n
-        self.values: dict[int, np.ndarray] = {}
+        self.values: dict[int, np.ndarray | Coded] = {}
         self.valid: dict[int, np.ndarray] = {}
         self.chains: dict[str, list[NodeVersion]] = {k: list(v) for k, v in plan.chains.items()}
         self._extra = 0
@@ -83,7 +85,11 @@ class State:
             else:
                 self.valid.pop(vid, None)
             return
+        if isinstance(values, Coded):
+            values = values.decode()
         target = self.values.get(vid)
+        if isinstance(target, Coded):
+            target = self.values[vid] = target.decode()
         if target is None:
             target = self.values[vid] = np.full(self.n, None, object) if values.dtype == object else np.zeros(self.n, values.dtype)
             self.valid[vid] = np.zeros(self.n, bool)
@@ -105,6 +111,8 @@ class State:
         values, valid = self.values.get(version.id), self.valid.get(version.id)
         if values is None:
             values, valid = np.full(self.n, None, object), np.zeros(self.n, bool)
+        elif isinstance(values, Coded):
+            values = values.decode()
         if rows is None:
             return values, valid
         return values[rows], None if valid is None else valid[rows]
@@ -131,9 +139,7 @@ class State:
         entry = cached.get(kind)
         if entry is None:
             alive: list = []
-            values = self.values.get(version.id)
-            if values is None:
-                values = np.full(self.n, None, object)
+            values = self.read(version)[0]
             entry = cached[kind] = (build(values, self.source(version), alive), alive)
         return entry[0]
 
@@ -193,6 +199,9 @@ class State:
         source = self.source(v)
         if source is not None:
             return source if source.name == spec else source.alias(spec)
+        values = self.values.get(v.id)
+        if isinstance(values, Coded):
+            return values.series(spec)
         return _series(spec, *self.read(v), v.annotation)
 
     def frame_of(self, base: pl.DataFrame, names: dict[str, NodeVersion], rows: np.ndarray | None) -> pl.DataFrame:
@@ -221,9 +230,11 @@ def _series(name: str, values: np.ndarray, valid: np.ndarray | None, annotation:
         # A compiled struct output read back into Python is a numpy record (np.void); polars reads
         # dicts (not tuples) for a Struct with nulls, so spell it as the dict a step returns.
         values = [dict(zip(x.dtype.names, x.tolist())) if isinstance(x, np.void) else despan(x) for x in rows.tolist()]
-        # Polars infers a list's element type from its first row: `[[1, 2], [1.5]]` would become ints.
+        # Polars infers a list's element type from its first row: `[[1, 2], [1.5]]` would become ints,
+        # and an all-null `Literal` column `Null`.
         dtype = declared_dtype(annotation)
-        return pl.Series(name, values, dtype=dtype if isinstance(dtype, (pl.List, pl.Struct, pl.Array)) else None)
+        keep = isinstance(dtype, (pl.List, pl.Struct, pl.Array)) or literal_choices(base_annotation(annotation))
+        return pl.Series(name, values, dtype=dtype if keep else None)
     if values.dtype.names is not None:
         # A struct output is a record per row; polars reads dicts (not tuples) for a Struct
         # with nulls, so spell each row as the dict a step returns.
@@ -326,6 +337,8 @@ def declared_dtype(annotation: Any) -> pl.DataType | None:
     """
     if annotation is None:
         return None
+    if literal_choices(base_annotation(annotation)) is not None:
+        return pl.String
     item = struct_item(base_annotation(annotation))
     if item is not None:
         return _item_dtype(item)
