@@ -7,7 +7,7 @@ from typing import Any, Hashable, Mapping
 import numpy as np
 import polars as pl
 
-from decider._engine.compile.outputs import Coded, literal_choices
+from decider._engine.compile.outputs import Coded, coded_values
 from decider._engine.ir.decls import Input, NullPolicy, base_annotation, is_typed
 from decider._engine.run.representations import despan
 from decider._engine.wiring.plan import Plan, NodeVersion
@@ -233,7 +233,7 @@ def _series(name: str, values: np.ndarray, valid: np.ndarray | None, annotation:
         # Polars infers a list's element type from its first row: `[[1, 2], [1.5]]` would become ints,
         # and an all-null `Literal` column `Null`.
         dtype = declared_dtype(annotation)
-        keep = isinstance(dtype, (pl.List, pl.Struct, pl.Array)) or literal_choices(base_annotation(annotation))
+        keep = isinstance(dtype, (pl.List, pl.Struct, pl.Array)) or coded_values(base_annotation(annotation))
         return pl.Series(name, values, dtype=dtype if keep else None)
     if values.dtype.names is not None:
         # A struct output is a record per row; polars reads dicts (not tuples) for a Struct
@@ -337,8 +337,8 @@ def declared_dtype(annotation: Any) -> pl.DataType | None:
     """
     if annotation is None:
         return None
-    if literal_choices(base_annotation(annotation)) is not None:
-        return pl.String
+    if (values := coded_values(base_annotation(annotation))) is not None:
+        return values[1]
     item = struct_item(base_annotation(annotation))
     if item is not None:
         return _item_dtype(item)

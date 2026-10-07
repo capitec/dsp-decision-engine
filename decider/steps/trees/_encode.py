@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from decider._engine.compile.outputs import lookup
 from decider._engine.ir.decls import Input, NullPolicy, Output, ParamDecl
 from decider.steps.expr._postfix import to_postfix
 from decider.steps.trees._ops import EQ, GE, GT, LE, LT, NE, OPCODE
@@ -145,8 +146,8 @@ class Program:
     consts: tuple[tuple[str, t.Any], ...]
     python: bool
     kinds: dict[str, str]
-    # Per output: (rule slot, column, or None for the leaf and TRACE for the path, string choices or None);
-    # slot -1 is first-match.
+    # Per output: (rule slot, column, or None for the leaf and TRACE for the path, string choices, a list
+    # column's `lookup`, or None); slot -1 is first-match.
     columns: tuple[tuple[int, t.Optional[str], t.Optional[tuple[str, ...]]], ...]
     # The arrays `consts` holds the addresses of: whoever holds the row node must keep these alive.
     arrays: list[np.ndarray]
@@ -357,12 +358,12 @@ def _post_order(tree: Tree) -> list[str]:
     return order
 
 
-def _output_values(tree: Tree, leaves: t.Iterable[str]) -> t.Iterator[tuple[str, str, list]]:
+def _output_values(tree: Tree, leaves: t.Iterable[str]) -> t.Iterator[tuple[str, str, t.Any, list]]:
     # One value per leaf, not per output row, so the leaf index a walk ends at also names the leaf.
     rows = [*(tree.output.data[tree.nodes[nid].data.result_idx] for nid in leaves), tree.output.default or {}]
     for column, dtype in tree.output.column_types():
-        kind = kind_of(dtype, f"output column {column!r}")
-        yield column, kind, [row.get(column) for row in rows]
+        kind = kind_of(dtype, f"output column {column!r}") if isinstance(dtype, str) else "list"
+        yield column, kind, dtype, [row.get(column) for row in rows]
 
 
 def _outputs(tree: Tree, leaves: t.Sequence[str], path: t.Optional[str], trace: t.Optional[str],
@@ -378,8 +379,13 @@ def _outputs(tree: Tree, leaves: t.Sequence[str], path: t.Optional[str], trace: 
     slots = [(-1, "")] if tree.mode == "first_match" else [
         (k, f"{r.name or f'rule_{k}'}.") for k, r in enumerate(tree.rules)]
     for slot, prefix in slots:
-        for column, kind, row_values in _output_values(tree, leaves):
+        for column, kind, dtype, row_values in _output_values(tree, leaves):
             name = prefix + column
+            if kind == "list":
+                outputs.append(Output(name, table := lookup(row_values, dtype)))
+                values.append((slot, "int", [-1 if v is None else k for k, v in enumerate(row_values)], None))
+                columns.append((slot, column, table))
+                continue
             if kind == "str":
                 texts = [None if v is None else str(v) for v in row_values]
                 choices = tuple(dict.fromkeys(v for v in texts if v is not None))

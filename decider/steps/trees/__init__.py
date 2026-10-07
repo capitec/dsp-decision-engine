@@ -119,7 +119,8 @@ class TreeConfig(ConfigurableStep):
         ref = reference(tree, p.inputs, p.kinds, p.columns)
         # The node's consts are addresses into these arrays; the node holds its reference, which holds them.
         ref.arrays = p.arrays
-        return CallNode(ctx.origin(self), "row", _python(ref, p.columns) if p.python else walk, p.inputs,
+        fn = _python(reference(tree, p.inputs, p.kinds, p.columns, shared=True), p.columns) if p.python else walk
+        return CallNode(ctx.origin(self), "row", fn, p.inputs,
                         p.outputs, p.params, reference=ref, consts=p.consts)
 
 
@@ -131,11 +132,13 @@ def _python(ref: t.Callable, columns: t.Sequence[tuple]) -> t.Callable:
     # String features need the raw strings, which a kernel never sees, so this
     # runs in Python in every mode (numba can't type it, so compiled modes fall
     # back to it). Like the kernel, it returns a string output as its index.
-    index = [None if c is None else {v: k for k, v in enumerate(c)} for _, _, c in columns]
+    # A list column's values are unhashable, so they are found by identity: `ref` returns the table's own objects.
+    index = [None if c is None else (False, {v: k for k, v in enumerate(c)}) if isinstance(c, tuple)
+             else (True, {id(v): k for k, v in enumerate(c.values)}) for _, _, c in columns]
 
     def indexed(row: tuple, params: t.Any, consts: tuple) -> tuple:
         out = ref(row, params, consts, _ignore)
-        return tuple(v if m is None else -1 if v is None else m[v] for v, m in zip(out, index))
+        return tuple(v if m is None else -1 if v is None else m[1][id(v) if m[0] else v] for v, m in zip(out, index))
 
     # Kept to one call of a Python object, so numba fails typing it (a NumbaError, which falls back).
     def fn(row: tuple, params: t.Any, consts: tuple) -> tuple:

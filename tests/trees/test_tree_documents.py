@@ -395,14 +395,14 @@ def test_a_parameters_block_leaves_explicit_and_shared_refs_alone():
 # --- the Tree model itself ----------------------------------------------------------------
 
 
-def test_a_custom_output_type_must_be_a_categorical_in_type_defs():
+def test_a_custom_output_type_must_be_a_categorical_or_struct_in_type_defs():
     custom = {"type": "Custom", "type_id": "bands"}
     assert TreeOutput(dtypes=[("b", custom)], type_defs={"bands": {"type": "categorical"}}).column_types() == [
         ("b", "String")]
     with pytest.raises(ValueError, match="not in type_defs"):
         TreeOutput(dtypes=[("b", custom)]).column_types()
-    with pytest.raises(ValueError, match="only a categorical"):
-        TreeOutput(dtypes=[("b", custom)], type_defs={"bands": {"type": "struct"}}).column_types()
+    with pytest.raises(ValueError, match="use a categorical or a struct"):
+        TreeOutput(dtypes=[("b", custom)], type_defs={"bands": {"type": "enum"}}).column_types()
 
 
 def test_a_tree_checks_its_node_references():
