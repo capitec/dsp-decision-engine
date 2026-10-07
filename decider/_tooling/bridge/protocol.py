@@ -9,9 +9,10 @@ from __future__ import annotations
 import importlib.util
 import sys
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, TypeVar, Union
 
 from pydantic import BaseModel, ConfigDict, Field
+from pydantic.json_schema import SkipJsonSchema
 
 from decider._tooling.bridge.schema import interfaces
 from decider.lab import CONTRACT_VERSION
@@ -23,6 +24,10 @@ START, END = "// <generated: uv run python -m decider._tooling.bridge.protocol>"
 PROTOCOL_TS = Path(__file__).parents[3] / "ui/lib/src/model/protocol.ts"
 
 Number = int | float
+
+_T = TypeVar("_T")
+# Absent from the wire when unset, never `null`: None for Python, left out of the generated TypeScript.
+Unset = Union[_T, SkipJsonSchema[None]]
 
 
 # Optional extra (pyproject) -> the module that proves it is installed.
@@ -108,7 +113,7 @@ class CallNodeJson(_Msg):
     params: dict[str, Any]
     python: PythonLocation | None = Field(description="The Python that runs in interpreted mode: `fn`, or a row node's `reference`. `bodyLine` is its first statement past a docstring, `endLine` its last line.")
     code: str = Field(description="Changes when the code or config behind the node changes.")
-    doc: str = Field(None, description="The first line of the step's docstring.")
+    doc: Unset[str] = Field(None, description="The first line of the step's docstring.")
     formula: str | None = Field(None, description="What a one-line step returns, e.g. `min(pl_raw_rate, repo_rate + cap_margin)`.")
     body: str | None = Field(None, description="The step's source, when short.")
     formulaBefore: str | None = Field(None, description="Set once the step's code was edited mid-run: the formula it had before.")
@@ -123,38 +128,38 @@ class GroupNodeJson(_Msg):
     id: str | None = Field(None, description="The step's durable id (12 hex), surviving renames; absent or `null` for a step that never got one.")
     step_id: str | None = Field(None, description="The contract's `StepRef.step_id`: the same durable id as `id`.")
     kind: Literal["sequence", "branch", "loop"]
-    modifies: list[str] = None
-    carries: list[str] = None
-    maxIterations: int = None
+    modifies: Unset[list[str]] = None
+    carries: Unset[list[str]] = None
+    maxIterations: Unset[int] = None
     children: list[CallNodeJson | GroupNodeJson]
-    folded: list[str] = Field(None, description="Set on a group drawn folded: the paths of the steps inside it.")
+    folded: Unset[list[str]] = Field(None, description="Set on a group drawn folded: the paths of the steps inside it.")
 
 
 class PipelineCandidate(_Msg):
     name: str
     line: int | None
     kind: str
-    status: Literal["pipeline", "invalid"] = Field(None, description="`invalid` candidates are shown with their reason instead of being offered.")
-    reason: str = None
+    status: Unset[Literal["pipeline", "invalid"]] = Field(None, description="`invalid` candidates are shown with their reason instead of being offered.")
+    reason: Unset[str] = None
 
 
 class ParamInfo(_Open):
     type: str
     default: Any = None
-    required: bool = None
-    ge: Number = None
-    le: Number = None
-    gt: Number = None
-    lt: Number = None
+    required: Unset[bool] = None
+    ge: Unset[Number] = None
+    le: Unset[Number] = None
+    gt: Unset[Number] = None
+    lt: Unset[Number] = None
 
 
 class FieldMeta(_Open):
     kind: str
-    precision: int = None
-    scale: int = None
-    units: str = None
-    unit: str = None
-    assumed: bool = Field(None, description="Not declared: guessed from the value's name.")
+    precision: Unset[int] = None
+    scale: Unset[int] = None
+    units: Unset[str] = None
+    unit: Unset[str] = None
+    assumed: Unset[bool] = Field(None, description="Not declared: guessed from the value's name.")
 
 
 class FlowSize(_Msg):
@@ -169,16 +174,16 @@ class DescribeResult(_Msg):
     size: FlowSize = Field(description="The assembled entry-point flow: its node and step counts.")
     ir: CallNodeJson | GroupNodeJson
     params: dict[str, dict[str, ParamInfo]] = Field(description="Node path (or \"shared\") -> param name -> its type, default and bounds.")
-    values: dict[str, Any] = Field(None, description="The module's `PARAMS` document: the values the flow runs with (tables' rows included).")
-    outcome: list[str] = Field(None, description="What the flow decides: its emitted values and what its top-level branches set.")
+    values: Unset[dict[str, Any]] = Field(None, description="The module's `PARAMS` document: the values the flow runs with (tables' rows included).")
+    outcome: Unset[list[str]] = Field(None, description="What the flow decides: its emitted values and what its top-level branches set.")
     valuesFile: str | None = Field(None, description="The file `PARAMS` is read from, when the module names one.")
-    fields: dict[str, FieldMeta] = Field(None, description="Each value's declared metadata, by name; the rest are guessed (`fieldOf`).")
+    fields: Unset[dict[str, FieldMeta]] = Field(None, description="Each value's declared metadata, by name; the rest are guessed (`fieldOf`).")
 
 
 class Checkpoint(_Msg):
     path: str
     when: Literal["before", "after"]
-    iteration: int = Field(None, description="Inside a loop: which iteration.")
+    iteration: Unset[int] = Field(None, description="Inside a loop: which iteration.")
 
 
 class Summary(_Msg):
@@ -196,30 +201,30 @@ class SessionOrigin(_Open):
 
 class SessionEvent(_Open):
     kind: str
-    origin: SessionOrigin = None
+    origin: Unset[SessionOrigin] = None
 
 
 class Hit(_Msg):
     watch: int
     text: str
-    path: str = None
-    rows: list[int] = None
-    values: list[Any] = None
+    path: Unset[str] = None
+    rows: Unset[list[int]] = None
+    values: Unset[list[Any]] = None
 
 
 class TraceStatus(_Msg):
     available: bool
-    reason: str = None
+    reason: Unset[str] = None
 
 
 class Status(_Msg):
     finished: bool
     current: Checkpoint | None
     events: list[SessionEvent]
-    error: str = None
+    error: Unset[str] = None
     hit: Hit | None = Field(None, description="Set when a value or iteration breakpoint paused the run.")
-    ran: list[str] = Field(None, description="Every step and group that has run since the start or the last rewind.")
-    trace: TraceStatus = Field(None, description="Whether structured decision trace is captured for this run.")
+    ran: Unset[list[str]] = Field(None, description="Every step and group that has run since the start or the last rewind.")
+    trace: Unset[TraceStatus] = Field(None, description="Whether structured decision trace is captured for this run.")
     dataset: InputFingerprint | None = Field(None, description="Identity of the data the run started on, as `InputFingerprint` dumps it.")
 
 
@@ -228,8 +233,8 @@ class ColumnSummary(Summary):
     value: Any = Field(description="The focused record's value, when a record is focused.")
     producer: str
     versions: int
-    writtenBy: str = Field(None, description='For the focused record: the last step that wrote the value, and the last that changed it ("input" for neither).')
-    changedBy: str = None
+    writtenBy: Unset[str] = Field(None, description='For the focused record: the last step that wrote the value, and the last that changed it ("input" for neither).')
+    changedBy: Unset[str] = None
 
 
 class KeyColumn(_Msg):
@@ -247,14 +252,14 @@ class Lineage(_Msg):
     name: str
     producer: str | None
     value: Any
-    via: Literal["merge", "carry"] = None
+    via: Unset[Literal["merge", "carry"]] = None
     inputs: list[Lineage]
-    forcedRows: list[int] = Field(None, description="Records a comparison forced; the others ran as they are.")
-    setBy: str = Field(None, description='Set when the value came from you: "force@<branch or loop>" or "override@<path>", and what it was before.')
+    forcedRows: Unset[list[int]] = Field(None, description="Records a comparison forced; the others ran as they are.")
+    setBy: Unset[str] = Field(None, description='Set when the value came from you: "force@<branch or loop>" or "override@<path>", and what it was before.')
     was: Any = None
-    unset: bool = Field(None, description="Not set yet for the focused record: there is nothing to break down.")
-    missing: bool = Field(None, description="Nothing has written this value yet.")
-    arms: list[str] = Field(None, description="For a forced branch condition: its arms by name, so a value reads as the arm it picks.")
+    unset: Unset[bool] = Field(None, description="Not set yet for the focused record: there is nothing to break down.")
+    missing: Unset[bool] = Field(None, description="Nothing has written this value yet.")
+    arms: Unset[list[str]] = Field(None, description="For a forced branch condition: its arms by name, so a value reads as the arm it picks.")
 
 
 class DraftOverride(_Msg):
@@ -266,8 +271,8 @@ class DraftOverride(_Msg):
 
 class DraftDrop(_Msg):
     kind: str
-    path: str = None
-    detail: str = None
+    path: Unset[str] = None
+    detail: Unset[str] = None
 
 
 class Draft(_Msg):

@@ -17,32 +17,22 @@ def resolve(dtypes: t.Any, data: list[dict], default: t.Optional[dict],
     field. A list keeps one column; its struct items become records of just
     the struct's fields. A struct value is the record itself, `{"$key": key}`
     or the bare key, matched on the struct's `display_field`. A struct's
-    fields are plain values: one level only.
+    fields are values, categoricals or lists: one level of struct only.
     """
     # (output column, its type, the column it is read from, how its value is read)
     columns: list[tuple[str, t.Any, str, t.Callable]] = []
     for column, dtype in dtypes.items() if isinstance(dtypes, dict) else dtypes:
         where = f"output column {column!r}"
         struct = _struct(dtype, type_defs, where)
-        if struct is not None:
-            fields, records = struct
-            for name, field_type in fields:
-                columns.append((f"{column}.{name}", field_type, column,
-                                lambda v, n=name, r=records, w=where: get_field(_record(v, r, w), n)))
-            continue
-        if isinstance(dtype, ExplicitType) and dtype.type.lower() in LISTS and "inner" in dtype.model_extra:
-            item = _struct(dtype.model_extra["inner"], type_defs, f"{where} item")
-            if item is None:
-                inner, read = _plain(dtype.model_extra["inner"], type_defs, where), (lambda v: v)
-            else:
-                fields, records = item
-                inner = [list(f) for f in fields]
-                read = (lambda v, n=[f for f, _ in fields], r=records, w=where: None if v is None else
-                        [{k: get_field(_record(x, r, w), k) for k in n} for x in v])
-            dtype = ExplicitType.model_validate({**dtype.model_extra, "type": dtype.type, "inner": inner})
+        if struct is None:
+            dtype, read = _column(dtype, type_defs, where)
             columns.append((column, dtype, column, read))
             continue
-        columns.append((column, _plain(dtype, type_defs, where), column, lambda v: v))
+        fields, records = struct
+        for name, field_type in fields:
+            field_type, read = _column(field_type, type_defs, f"{where} field {name!r}")
+            columns.append((f"{column}.{name}", field_type, column,
+                            lambda v, n=name, r=records, w=where, f=read: f(get_field(_record(v, r, w), n))))
     names = [name for name, *_ in columns]
     if clash := sorted({n for n in names if names.count(n) > 1}):
         raise ValueError(f"output columns {clash} appear twice once structs are flattened; rename one")
@@ -52,6 +42,23 @@ def resolve(dtypes: t.Any, data: list[dict], default: t.Optional[dict],
         return None if r is None else {name: read(r[src]) for name, _, src, read in columns if src in r}
 
     return [(name, dtype) for name, dtype, *_ in columns], [row(r) for r in data], row(default)
+
+
+def _column(dtype: t.Any, type_defs: dict, where: str) -> tuple[t.Any, t.Callable]:
+    # A column that isn't a struct: its resolved type, and how a value of it is read.
+    # A struct's field types come from `type_defs` as raw JSON.
+    dtype = ExplicitType.model_validate(dtype) if isinstance(dtype, dict) and "type" in dtype else dtype
+    if not (isinstance(dtype, ExplicitType) and dtype.type.lower() in LISTS and "inner" in dtype.model_extra):
+        return _plain(dtype, type_defs, where), lambda v: v
+    item = _struct(dtype.model_extra["inner"], type_defs, f"{where} item")
+    if item is None:
+        inner, read = _plain(dtype.model_extra["inner"], type_defs, where), (lambda v: v)
+    else:
+        fields, records = item
+        inner = [list(f) for f in fields]
+        read = (lambda v, n=[f for f, _ in fields], r=records, w=where: None if v is None else
+                [{k: get_field(_record(x, r, w), k) for k in n} for x in v])
+    return ExplicitType.model_validate({**dtype.model_extra, "type": dtype.type, "inner": inner}), read
 
 
 def _is_custom(dtype: t.Any) -> bool:

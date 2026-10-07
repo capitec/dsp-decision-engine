@@ -16,6 +16,7 @@ downloads/
 eggs/
 .eggs/
 lib/
+!ui/lib/
 lib64/
 parts/
 sdist/
@@ -27,6 +28,7 @@ share/python-wheels/
 *.egg
 MANIFEST
 
+.impeccable/
 # PyInstaller
 #  Usually these files are written by a python script from a template
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
