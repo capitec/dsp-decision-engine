@@ -9,7 +9,7 @@ import pytest
 from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
 
 from decider.steps import ConfigurableStep
-from decider.registry import BaseRegistryModule, import_path, ref
+from decider._registry import BaseRegistryModule, import_path, ref
 
 
 class Step(ABC):

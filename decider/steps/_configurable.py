@@ -7,7 +7,7 @@ from typing import Any, ClassVar, Iterable, Mapping
 from pydantic import ConfigDict, Field
 from pydantic.json_schema import SkipJsonSchema
 
-from decider.registry import BaseRegistryModule, ref
+from decider._registry import BaseRegistryModule, ref
 from decider.steps._base import Step
 
 

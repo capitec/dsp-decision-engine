@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict
 
 from decider.exceptions import DeciderError
 from decider.lab.experiments.metrics._base import Summary
-from decider.registry import BaseRegistryModule, ref
+from decider._registry import BaseRegistryModule, ref
 
 
 def require_altair():

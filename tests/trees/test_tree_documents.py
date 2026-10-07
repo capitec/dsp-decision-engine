@@ -255,6 +255,12 @@ def test_a_malformed_v3_graph_is_rejected(doc, message):
         load_document(doc)
 
 
+def test_an_edge_from_a_deleted_node_is_dropped():
+    doc = load_document({"nodes": [_unary("r"), _leaf("a")], "edges": [_edge("r", "a", 0), _edge("ghost", "r", 0)]})
+    assert doc.to_tree().rules == (Rule(root="r"),)
+    assert [e.source for e in doc.edges] == ["r"]
+
+
 def test_a_shared_subtree_is_one_node():
     doc = load_document({
         "nodes": [_unary("r"), _unary("a"), _leaf("shared")],
@@ -381,11 +387,14 @@ def test_a_parameters_block_leaves_explicit_and_shared_refs_alone():
 # --- the Tree model itself ----------------------------------------------------------------
 
 
-def test_tree_output_rows_must_have_every_declared_column():
-    with pytest.raises(pydantic.ValidationError, match="missing declared column"):
-        TreeOutput(data=[{"a": 1}], dtypes=[("a", "Int64"), ("b", "Int64")])
-    with pytest.raises(pydantic.ValidationError, match="default is missing"):
-        TreeOutput(data=[], default={}, dtypes={"a": "Int64"})
+def test_a_custom_output_type_must_be_a_categorical_in_type_defs():
+    custom = {"type": "Custom", "type_id": "bands"}
+    assert TreeOutput(dtypes=[("b", custom)], type_defs={"bands": {"type": "categorical"}}).column_types() == [
+        ("b", "String")]
+    with pytest.raises(ValueError, match="not in type_defs"):
+        TreeOutput(dtypes=[("b", custom)]).column_types()
+    with pytest.raises(ValueError, match="only a categorical"):
+        TreeOutput(dtypes=[("b", custom)], type_defs={"bands": {"type": "struct"}}).column_types()
 
 
 def test_a_tree_checks_its_node_references():

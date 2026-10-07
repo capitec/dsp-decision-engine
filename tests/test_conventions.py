@@ -51,7 +51,7 @@ ENGINE = "_engine"
 CORE = {"__init__", "steps", "ir", "trace", "debug", ENGINE}
 ALL_BUDGET = 25
 LAYERS = {
-    0: "exceptions registry ops _settings _suggest",
+    0: "exceptions _registry _serde ops _settings _suggest",
     1: "__init__ steps ir trace debug config _engine",
     3: "lab credit",
     4: "serving _tooling __main__",

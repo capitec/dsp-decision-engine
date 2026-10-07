@@ -936,7 +936,7 @@ assert checks.run(pipeline, ["invalid_params_doc"], params=bad_doc).findings[0].
 A custom check is a `Check` subclass like `MinRows` (give it a `type` alias and a
 `code` with your own prefix; config names it by alias, or `"module:Class"`),
 or a function decorated for a one-off rule. An installed package can ship
-checks under the `decider.lab.checks` entry-point group.
+checks under the `decider.checks` entry-point group.
 
 ```python
 from decider import flow, step

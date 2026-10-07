@@ -36,7 +36,7 @@ class BaseRegistryModule(BaseModel, ABC):
 
     `class Root(BaseRegistryModule, root=True)` opens an independent registry;
     `root=True, group="steps"` also lets installed packages ship types for it
-    (see `decider.registry`).
+    (as an entry point in the `decider.<group>` group, imported on the first miss).
     Every non-abstract subclass below it registers itself on definition under
     its import path `"<module>:<QualName>"`, and under an alias too if it
     declares `type: Literal["alias"]`. Either spelling loads it; dumps write

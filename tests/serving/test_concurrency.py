@@ -450,7 +450,7 @@ def test_concurrent_first_validations_of_one_document_share_one_result():
 
 def test_registry_resolves_a_lazy_module_and_lists_while_classes_register(tmp_path, monkeypatch):
     (tmp_path / "conc_root.py").write_text(
-        "from decider.registry import BaseRegistryModule\n\n"
+        "from decider._registry import BaseRegistryModule\n\n"
         "class Root(BaseRegistryModule, root=True):\n    pass\n")
     (tmp_path / "conc_leaf.py").write_text(
         "import typing as t\nfrom conc_root import Root\n\n"

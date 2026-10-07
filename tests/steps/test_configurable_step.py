@@ -9,7 +9,7 @@ from decider import step
 from decider import _engine as engine
 from decider._engine.ir.decls import Input, Output, ParamDecl
 from decider._engine.ir.nodes import CallNode
-from decider.registry import import_path
+from decider._registry import import_path
 from decider.steps import ConfigurableStep, ParamRef, StepRef, Value
 from decider.steps._sequential import SequentialStep
 

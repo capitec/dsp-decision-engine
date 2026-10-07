@@ -92,10 +92,11 @@ class V3TreeDocument(BaseTreeDocument):
         ids = [n.id for n in self.nodes]
         if dupes := sorted({i for i in ids if ids.count(i) > 1}):
             raise ValueError(f"tree has duplicate node id(s): {dupes}")
+        # Deleting a node in the editor can leave its outgoing edges behind; nothing walks them.
+        self.edges = [e for e in self.edges if e.source in ids]
         for e in self.edges:
-            for end in (e.source, e.target):
-                if end not in ids:
-                    raise ValueError(f"edge {e.id or ''} refers to unknown node {end!r}")
+            if e.target not in ids:
+                raise ValueError(f"edge {e.id or ''} refers to unknown node {e.target!r}")
         self._tree = self._build()
         return self
 

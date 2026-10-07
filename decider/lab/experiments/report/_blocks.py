@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict
 from decider.exceptions import DeciderError
 from decider.lab.experiments.metrics._base import Metric, Summary
 from decider.lab.experiments.plots._base import Figure, Plot
-from decider.registry import BaseRegistryModule, ref
+from decider._registry import BaseRegistryModule, ref
 
 if t.TYPE_CHECKING:
     from decider.lab.experiments._experiments import ExperimentResult

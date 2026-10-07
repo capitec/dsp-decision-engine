@@ -359,10 +359,9 @@ def _post_order(tree: Tree) -> list[str]:
 
 def _output_values(tree: Tree, leaves: t.Iterable[str]) -> t.Iterator[tuple[str, str, list]]:
     # One value per leaf, not per output row, so the leaf index a walk ends at also names the leaf.
-    dtypes = tree.output.dtypes
     rows = [*(tree.output.data[tree.nodes[nid].data.result_idx] for nid in leaves), tree.output.default or {}]
-    for column, dtype in (dtypes.items() if isinstance(dtypes, dict) else dtypes):
-        kind = kind_of(getattr(dtype, "type", dtype), f"output column {column!r}")
+    for column, dtype in tree.output.column_types():
+        kind = kind_of(dtype, f"output column {column!r}")
         yield column, kind, [row.get(column) for row in rows]
 
 

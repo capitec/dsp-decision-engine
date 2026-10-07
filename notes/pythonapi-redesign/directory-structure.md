@@ -28,7 +28,7 @@ Nesting whole groups as `decider/core/` or `decider/lib/checks` would only make 
 L4 tooling     serving  _tooling (cli  mcp  bridge)
 L3 libraries   lab (refs + describe; data  checks  diff  testing  experiments)
 L1 core        decider/__init__  steps  ir  trace  debug  _engine  config
-L0 foundation  exceptions  registry  ops  _settings  _suggest
+L0 foundation  exceptions  _registry  _serde  ops  _settings  _suggest
 ```
 
 ## Target tree
@@ -60,9 +60,11 @@ decider/
 │
 ├── credit/                     NEW public library (phase 7): fitting from data → scorecard / param-table documents
 │
-├── registry/                   public: BaseRegistryModule ref import_path
-│   ├── __init__.py
-│   └── _core.py                ← registry/core.py, + entry-point lookup on a miss
+├── _serde/                     ← serializable/: JSON forms of common values and back, for step documents
+│   ├── frame.py                    FrameDoc (← DataFrame), FrameDoc.from_polars
+│   └── schema.py                   PolarsSchema, PrimitiveSchema, convert_schema / convert_dtype
+├── _registry.py                ← registry/core.py, + entry-point lookup on a miss. Private: it marks which of
+│                                   decider's own types are extendable; users subclass those (Step, Check, ...)
 │
 ├── steps/                      public: step frame_step flow dag branch loop each optimise EachMode Step
 │   │                               ConfigurableStep Value ParamRef StepRef allow_fallback helper load_flow
@@ -99,7 +101,6 @@ decider/
 │   ├── debug/                  ← engine/debug/ minus controls.py and lineage.py; commands/wire stay here
 │   ├── ir/                     ← engine/ir/
 │   ├── params/                 ← engine/params/ (Table → ParamTable)
-│   │   └── polars_docs/        ← serializable/: DataFrame → FrameDoc, dtype schema (frame.py, schema.py)
 │   ├── run/                    ← engine/run/
 │   ├── trace/                  ← engine/trace/ (envelope stays; sink is exported via decider.trace)
 │   ├── wiring/                 ← engine/wiring/ (Version → NodeVersion)

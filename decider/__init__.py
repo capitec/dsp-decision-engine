@@ -45,7 +45,6 @@ More::
 - `decider.debug`: `Session` and the events it emits
 - `decider.trace`: `TraceSink`, per-record decision traces
 - `decider.ir`: the intermediate representation, for step-type authors
-- `decider.registry`: `BaseRegistryModule`, to register your own step types
 
 Tree, table and scorecard documents are `TreeConfig`, `DecisionTableConfig` and
 `ScorecardConfig`, loaded on first use. Build, wiring, params and missing-input
