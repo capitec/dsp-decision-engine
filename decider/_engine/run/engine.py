@@ -22,6 +22,7 @@ from decider._engine.types import decimal_boxer, decimal_info
 from decider._engine.wiring import Plan, resolve
 from decider._engine.wiring.plan import Branch, Call, Loop, ScatterGather, Sequence, NodeVersion
 from decider.exceptions import EngineError
+from decider.ops.nested import struct_item
 
 if TYPE_CHECKING:
     from decider._engine.debug import Session
@@ -123,6 +124,9 @@ class Executable:
         self._results = [(k, v) for k, v in plan.outputs.items() if v.producer is not None]
         # A Decimal output is stored as its int64 and handed back as a Decimal.
         self._boxers = {k: box for k, v in self._results if (box := decimal_boxer(v.annotation)) is not None}
+        # Only a struct output's annotation shapes its record; looking up any other per call hashes it,
+        # and hashing a `Literal` of thousands of choices cost more than the rest of score().
+        self._structs = {k: v.annotation for k, v in self._results if struct_item(base_annotation(v.annotation))}
         self._hidden = set(plan.drops) | {k for k, _ in self._results}
         self._record_path = not any(c.node.kind == "frame" for c in plan.calls)
         # The trace's per-run constant table: step ref (call index + 1) -> durable origin.
@@ -236,7 +240,7 @@ class Executable:
             elif (box := self._boxers.get(k)) is not None:
                 out[k] = box(values.tolist()[0])
             else:
-                out[k] = record_value(values.tolist()[0], v.annotation)
+                out[k] = record_value(values.tolist()[0], self._structs.get(k))
         return out
 
     def _iterate(self, state: State, run: RunParams, trace) -> None:

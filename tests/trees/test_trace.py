@@ -73,6 +73,13 @@ def test_a_tree_without_rules_traces_a_null(run):
     assert run(tree, pl.DataFrame({"x": [1.0]}))["path"].to_list() == [None]
 
 
+def test_a_trace_null_on_every_row_is_still_a_string_column(run):
+    tree = TreeConfig(name="t", trace_output="path", tree={
+        "type": "prioritized_flat_rule", "rules": [],
+        "output": {"data": [], "default": {"y": 0}, "dtypes": [["y", "Int64"]]}})
+    assert run(tree, pl.DataFrame({"x": [1.0, 2.0]})).schema["path"] == pl.String
+
+
 def test_a_tree_with_too_many_paths_to_trace_is_refused():
     # Each node sends both branches to the next one: 2**18 paths through 18 nodes.
     nodes = [_node(f"n{k}", ">", "x", float(k)) for k in range(18)] + [_leaf("end", 0)]

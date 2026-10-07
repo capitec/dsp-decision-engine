@@ -6,7 +6,7 @@ import numpy as np
 
 from decider._engine.compile.kernel import Spec, SrcKind, fused_kernel
 from decider._engine.compile.njit import FALLBACK_ERRORS, compile_call, parameters
-from decider._engine.compile.outputs import decode_literal, literal_choices, output_dtype
+from decider._engine.compile.outputs import LiteralTable, coded, literal_choices, output_dtype
 from decider._engine.compile.rows import Ragged
 from decider._engine.compile.sink import Sink
 from decider._engine.compile.structs import Schema
@@ -38,7 +38,7 @@ class Kernel:
     """
 
     __slots__ = ("calls", "fn", "reads", "optional", "ragged", "sinks", "writes", "_masked", "_layout",
-                 "_choices", "_python", "_trace", "_trace_fn")
+                 "_tables", "_python", "_trace", "_trace_fn")
     # Whether a kernel numba can't build runs its calls one by one instead.
     splits = True
 
@@ -53,7 +53,7 @@ class Kernel:
         self.writes: tuple[tuple[NodeVersion, np.dtype], ...] = writes
         self._masked: tuple[int, ...] = masked
         self._layout = layout
-        self._choices: tuple[tuple | None, ...] = choices
+        self._tables = tuple(None if c is None else LiteralTable(c) for c in choices)
         self._python: tuple[Fallback, ...] = ()
         # `(program, outputs, variables, refs, factor, exact)` for the trace kernel, or None.
         self._trace = trace
@@ -107,8 +107,8 @@ class Kernel:
             reason = f"{type(e).__name__}: {e}"
             self._python = tuple(Fallback(c, getattr(c.node.fn, "py_func", c.node.fn), reason) for c in self.calls)
             return self.run(values, valid, bundles, n)
-        for (v, _), out, choices in zip(self.writes, outs, self._choices):
-            values[v.id] = out if choices is None else decode_literal(out, choices, valid, v.id)
+        for (v, _), out, table in zip(self.writes, outs, self._tables):
+            values[v.id] = out if table is None else coded(out, table, valid, v.id)
         for (v, schema), sink in zip(self.sinks, sinks):
             # `values[v.id]` currently holds the cumulative-length column the wrapper just wrote;
             # turn it into the per-row `[lo, hi)` slices the sink's flat buffer actually holds.
@@ -123,7 +123,7 @@ class Fallback:
     Same `run` and `writes` as `Kernel`; it stores every version it writes.
     """
 
-    __slots__ = ("calls", "fn", "reason", "declared", "writes", "_boxes", "_scales")
+    __slots__ = ("calls", "fn", "reason", "declared", "writes", "_boxes", "_scales", "_tables")
 
     def __init__(self, call: Call, fn, reason: str, declared: bool = False):
         self.calls = (call,)
@@ -141,6 +141,8 @@ class Fallback:
         self._boxes = ({i.arg: b for i in node.inputs if (b := decimal_boxer(i.annotation))}
                        | {d.arg: b for d in node.params if (b := decimal_boxer(d.annotation))})
         self._scales = tuple(decimal_scale(o.annotation) for o in node.outputs)
+        self._tables = tuple(LiteralTable(c) if node.kind == "row" and (c := literal_choices(o.annotation)) is not None
+                             else None for o in node.outputs)
 
     def run(self, values: Values, valid: Values, bundles: Mapping[int, tuple], n: int) -> None:
         call = self.calls[0]
@@ -170,13 +172,13 @@ class Fallback:
                 elif scale is not None:
                     x = to_raw(x, scale)
                 out[r] = x
-        for v, out, mask, o in zip(call.writes, outs, masks, node.outputs):
+        for v, out, mask, table in zip(call.writes, outs, masks, self._tables):
             values[v.id] = out
             if not mask.all():
                 valid[v.id] = mask
-            choices = literal_choices(o.annotation)
-            if choices is not None and node.kind == "row":
-                values[v.id] = decode_literal(out, choices, valid, v.id)
+            if table is not None:
+                out[~mask] = -1
+                values[v.id] = coded(out, table, valid, v.id)
 
 
 def _ragged_values(hi: np.ndarray, sink: Sink, schema: Schema) -> np.ndarray:

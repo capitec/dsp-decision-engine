@@ -5,6 +5,7 @@ import typing
 from typing import Any
 
 import numpy as np
+import polars as pl
 
 from decider.ops.nested import struct_item
 from decider._engine.compile.njit import numpy_dtype
@@ -49,8 +50,38 @@ def literal_choices(annotation: Any) -> tuple[str, ...] | None:
     return None
 
 
-def decode_literal(codes: np.ndarray, choices: tuple[str, ...], valid: dict[int, np.ndarray], vid: int) -> np.ndarray:
-    strings = np.array((*choices, None), object)[codes]
+class LiteralTable:
+    """A `Literal` output's values with null last, as Python objects and as a polars column; built once per kernel."""
+
+    __slots__ = ("objects", "series")
+
+    def __init__(self, choices: tuple[str, ...]):
+        self.objects = np.array((*choices, None), object)
+        self.series = pl.Series((*choices, None), dtype=pl.String)
+
+
+class Coded:
+    """A `Literal` output kept as each row's index into `table` (-1 for null) until it is read.
+
+    `decode()` gives the Python values (what `score` returns) and `series()`
+    the polars column (what `run` returns), so neither path builds an object
+    column only to convert it again.
+    """
+
+    __slots__ = ("codes", "table")
+
+    def __init__(self, codes: np.ndarray, table: LiteralTable):
+        self.codes = codes
+        self.table = table
+
+    def decode(self) -> np.ndarray:
+        return self.table.objects[self.codes]
+
+    def series(self, name: str) -> pl.Series:
+        return self.table.series.gather(self.codes).alias(name)
+
+
+def coded(codes: np.ndarray, table: LiteralTable, valid: dict[int, np.ndarray], vid: int) -> Coded:
     if (codes < 0).any():
         valid[vid] = codes >= 0
-    return strings
+    return Coded(codes, table)
