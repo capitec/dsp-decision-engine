@@ -211,7 +211,7 @@ tests/
   new version under `root` and stages it, so a rate-card refresh, a rule change and a params change are all the same
   kind of thing and attribution does not care which. A params-only run is `Flow.replayer(params=...)`.
 - **What decider's diff covers.** `version_diff` reports decider's step-level `structure` and `prove`, but two builds of
-  these pipelines always come back `proof=None`: the steps read overlay registers and reason registries, which decider
+  these pipelines always come back `proof=None`: the steps read overlay registers, which decider
   cannot hash by content, so it never calls them equal. The config documents are therefore summarised here instead (rate
   cards cell by cell by key through `credit_core.rate_card.diff_cards`, rule sets by rule id), and a reordered rate card
   shows no change.
