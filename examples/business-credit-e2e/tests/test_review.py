@@ -151,13 +151,19 @@ def test_a_review_with_no_evidence_completes_with_the_grade_unchanged_and_flagge
     assert reviewed["next_review_date"] == date(2027, 11, 24)
 
 
-def test_a_cheaper_book_than_the_contract_is_reported_as_a_shortfall_even_when_it_cannot_be_acted_on(run_review):
-    first, reviewed = run_review()  # the overlay lapsed, so today's grade 6 prices at 18.0% against the contract's 19.8%
+def test_a_facility_priced_above_todays_rate_reports_a_negative_shortfall_and_no_action(run_review):
+    _, reviewed = run_review()  # the overlay lapsed, so today's grade 6 prices at 18.0% against the contract's 19.8%
     reprice = reviewed["reprice"]
     assert (reprice["contractual_rate"], reprice["indicated_rate"]) == (0.198, 0.18)
     assert reprice["margin_shortfall_bps"] == -180.0
     assert reprice["margin_shortfall_per_year"] == -18_000.0
-    assert reprice["action"] == vocab.REPRICE_FLAG_RENEGOTIATE  # a fixed-margin term loan
+    assert reprice["action"] == vocab.REPRICE_NONE
+
+
+def test_a_term_loan_underpriced_for_its_risk_is_flagged_for_renegotiation_not_repriced(run_review):
+    _, reviewed = run_review(origination={**STRONG, "entities": owners(780.0)}, changes={**WEAK, "entities": owners(780.0)})
+    assert reviewed["reprice"]["margin_shortfall_bps"] > 0
+    assert reviewed["reprice"]["action"] == vocab.REPRICE_FLAG_RENEGOTIATE  # a fixed margin cannot move mid-term
 
 
 def test_a_revolving_facility_can_be_repriced_on_notice(run_review):
