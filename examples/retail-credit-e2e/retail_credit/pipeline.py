@@ -46,15 +46,15 @@ EMIT = (
     "p09_declined", "p09_decline_reason", "term_cap", "worst_acceptable_grade", "product_10_eligible",
     "product_routing_reasons",
     # affordability, actual then hypothetical
-    "discretionary_income", "residual_floor", "ratio_ceiling", "pre_buffer", "affordability_buffer_unadjusted",
+    "discretionary_income", "residual_floor", "ratio_ceiling", "capacity", "pre_buffer", "affordability_buffer_unadjusted",
     "affordability_buffer_applied", "buffer_adjustments_applied", "max_affordable_instalment", "instalment_cap",
-    "affordability_verdict_code", "consolidation_proposed", "existing_obligations_hypothetical",
+    "affordability_binding_constraint_code", "affordability_verdict_code", "consolidation_proposed", "existing_obligations_hypothetical",
     "max_affordable_instalment_hypothetical", "instalment_cap_hypothetical", "affordability_verdict_code_hypothetical",
     "offer_basis_code", "offer_affordability_verdict_code", "instalment_ceiling",
     # solve and price
-    "rate_addon_bps", "rate_addon_adjustments_applied", "solved_amount", "solve_binding_constraint", "evaluated",
+    "rate_addon_bps", "rate_addon_adjustments_applied", "solved_amount", "solve_binding_constraint", "evaluated", "disqualified",
     "decision_open", "offer_amount", "offer_binding_constraint", "has_offer", "offer_term_months", "rate_cell_id",
-    "nominal_annual_rate_unadjusted", "nominal_annual_rate", "initiation_fee", "initiation_fee_incl_tax",
+    "nominal_annual_rate_unadjusted", "nominal_annual_rate", "credit_life_rate", "initiation_fee", "initiation_fee_incl_tax",
     "amount_financed", "instalment_before_fees", "credit_life_premium", "credit_life_cell_id", "monthly_service_fee", "instalment",
     "total_cost_of_credit", "total_interest", "effective_annual_rate",
     # validation and outcome

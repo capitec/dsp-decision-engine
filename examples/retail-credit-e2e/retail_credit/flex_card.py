@@ -25,8 +25,8 @@ def _band_floors() -> list[float]:
 
 
 def _rate(amount_band: int, term: int, grade: int) -> float:
-    """A synthetic surface that rises with grade and term, falls with amount, and drops 1.55 points at the R60 000
-    edge: a larger advance can cost less per month than a smaller one just below it."""
+    """A synthetic surface that rises with grade and term, falls with amount, and drops about 155 basis points at the
+    R60 000 edge: a larger advance can cost less per month than a smaller one just below it."""
     edge = -1.55 if amount_band >= 36 else 0.0
     return round(min(max(12.45 + (grade - 1) * 1.30 - 0.02 * amount_band + 0.015 * (term - 6) + edge, 12.45), 26.90), 4)
 

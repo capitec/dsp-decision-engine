@@ -1,7 +1,7 @@
 """The solve: the largest amount on the R250 grid whose instalment fits under the instalment ceiling.
 
 The rate is a step function of the amount, so a smaller amount can cost more per month than a larger one just past a
-band edge (the card drops 155 basis points at R60 000). Affordability is therefore not monotone in the amount, and the
+band edge (the card drops about 155 basis points at R60 000). Affordability is therefore not monotone in the amount, and the
 solve tries every candidate rather than halving an interval.
 """
 from __future__ import annotations
