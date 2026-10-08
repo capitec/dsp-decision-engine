@@ -1,4 +1,3 @@
-import asyncio
 import json
 
 import polars as pl
@@ -22,7 +21,7 @@ def handler():
 
 
 def post(handler, request: dict) -> dict:
-    response = asyncio.run(handler.process_fn(json.dumps(request).encode(), "application/json", "application/json"))
+    response = handler.process_fn(json.dumps(request).encode(), "application/json", "application/json")
     return json.loads(response.content)
 
 

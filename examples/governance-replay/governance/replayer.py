@@ -1,9 +1,7 @@
 """A `RequestHandler` that also hands back the typed record it scored, and can score with other params."""
 from __future__ import annotations
 
-import asyncio
 import json
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 from decider.serving import RequestHandler
@@ -27,9 +25,10 @@ class _Tap:
 class Replayer(RequestHandler):
     """Scores raw JSON requests exactly as `decider serve` does, against one staged config version.
 
-    `params` replaces the version's params document, for what-if runs.
+    `params` replaces the version's params document, for what-if runs. `score` gives the typed result;
+    `served` gives it as the client would receive it, which is what evidence records and replay compares.
 
-        replayer.score({"decision_id": "a", ...})   # the response as a dict
+        replayer.served({"decision_id": "a", ...})   # the response as a JSON-safe dict
     """
 
     params: dict | None = None
@@ -40,13 +39,8 @@ class Replayer(RequestHandler):
         params = live.params if self.params is None else self.params
         return live._replace(params=params, executable=_Tap(live.executable, self))
 
-    def score(self, request: dict) -> dict:
-        body = json.dumps(request).encode()
-        # workaround: scoring a raw request is async-only, and a replay step runs inside the server's event
-        # loop, so the coroutine gets a loop of its own on another thread.
-        with ThreadPoolExecutor(1) as pool:
-            response = pool.submit(asyncio.run, self.process_fn(body, "application/json", "application/json"))
-            return json.loads(response.result().content)
+    def served(self, request: dict) -> dict:
+        return json.loads(self.output_fn(self.score(request), "application/json").content)
 
     def untapped(self):
         return RequestHandler.module_fn(self)
