@@ -12,7 +12,8 @@ def test_the_consolidation_loan_lends_the_settlements_their_buffer_and_the_new_m
     for s in product_scenarios(assess(), 11):
         assert s["offered_amount"] == pytest.approx(s["settlement_total"] + s["settlement_buffer"] + s["new_money"], abs=0.01)
         financed = s["offered_amount"] + s["fees"]["initiation_fee"]
-        monthly = instalment_before_fees(financed, s["term_months"], s["nominal_annual_rate"]) + s["fees"]["monthly_service_fee"] + s["fees"]["credit_life_premium"]
+        monthly = (instalment_before_fees(financed, s["term_months"], s["nominal_annual_rate"])
+                   + s["fees"]["monthly_service_fee"] + s["fees"]["credit_life_premium"])
         assert s["instalment"] == pytest.approx(monthly, abs=0.01)
 
 
@@ -75,6 +76,8 @@ def test_an_advance_below_the_product_minimum_is_rejected_by_the_product(assess,
 def test_a_product_team_changes_its_own_limits_without_touching_the_other_products(assess, params):
     base = assess()
     tighter = assess(params_document=with_params(params, "everyday_card_policy", max_limit=20_000.0))
-    assert [s for s in base["scenarios"] if s["product_code"] == 11] == [s for s in tighter["scenarios"] if s["product_code"] == 11]
-    assert any(s.get("unpriced_reason") == "transfer_above_utilisation_cap" for s in tighter["scenarios"] if s["product_code"] == 20)
+    flex = [s for s in base["scenarios"] if s["product_code"] == 11]
+    assert flex == [s for s in tighter["scenarios"] if s["product_code"] == 11]
+    cards = [s for s in tighter["scenarios"] if s["product_code"] == 20]
+    assert any(s.get("unpriced_reason") == "transfer_above_utilisation_cap" for s in cards)
     assert not any("unpriced_reason" in s for s in base["scenarios"] if s["product_code"] == 20)

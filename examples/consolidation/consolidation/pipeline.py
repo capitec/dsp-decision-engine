@@ -18,6 +18,17 @@ from consolidation.everyday_card import CardRates, EverydayCard, everyday_card_p
 from consolidation.flex_loan import FlexLoanConsolidation, flex_loan_policy
 from consolidation.vocab import PRODUCT_EVERYDAY_CARD, PRODUCT_FLEX_LOAN_CONSOLIDATION
 
+INVENTORY = ("classified_accounts", "settleable_account_refs", "mandatory_account_refs", "excluded_account_refs",
+             "nomination_conflicts", "settleable_count", "unknown_count", "settleable_obligation_proportion", "settlements",
+             "settlement_buffer_policy", "eligibility_gate_verdicts", "eligibility_route")
+BASELINE = ("invariants", "baseline", "plain_offer", "short_circuit_verdicts", "short_circuit_applies")
+SEARCH = ("product_policies", "pricing_context", "scenarios", "search_record", "objective_weights", "objective_overlay_ids",
+          "scored_scenarios", "runners_up", "indifference_band_triggered", "winner_vs_runners_up", "shadow_best_scenario")
+DECISION = ("outcome_code", "decline_reason_codes", "primary_reason_code", "reason_registry_version", "chosen_offer",
+            "conditions", "offer_valid_until", "before_and_after", "execution_package")
+EVIDENCE = ("fee_caps_cell_id", "norm_table_version", "statutory_norm_cell_id", "internal_norm_cell_id",
+            "applicant1_tax_table_cell_id", "buffer_grid_cell_id", "residual_floor_cell_id")
+
 
 def assessment_mode_code(mode: int = param(modes.SCENARIO, ge=1, le=4)) -> int:
     return mode
@@ -48,15 +59,4 @@ def build(rate_card_product11, card_promotional_rates, card_reversion_rates, set
         eligibility.eligibility_gates, flex_loan_policy, everyday_card_policy, products.product_policies,
         search.search_step(carriers, capacity, buffers), objective.selection, outcome.outcome,
         name="consolidation",
-    ).emit(
-        "classified_accounts", "settleable_account_refs", "mandatory_account_refs", "excluded_account_refs", "nomination_conflicts",
-        "settleable_count", "unknown_count", "settleable_obligation_proportion", "settlements", "settlement_buffer_policy",
-        "invariants", "baseline", "plain_offer", "short_circuit_verdicts", "short_circuit_applies",
-        "eligibility_gate_verdicts", "eligibility_route", "product_policies", "pricing_context", "scenarios", "search_record",
-        "objective_weights", "objective_overlay_ids", "scored_scenarios", "runners_up", "indifference_band_triggered",
-        "winner_vs_runners_up", "shadow_best_scenario",
-        "outcome_code", "decline_reason_codes", "primary_reason_code", "reason_registry_version", "chosen_offer", "conditions",
-        "offer_valid_until", "before_and_after", "execution_package",
-        "fee_caps_cell_id", "norm_table_version", "statutory_norm_cell_id", "internal_norm_cell_id", "applicant1_tax_table_cell_id",
-        "buffer_grid_cell_id", "residual_floor_cell_id",
-    )
+    ).emit(*INVENTORY, *BASELINE, *SEARCH, *DECISION, *EVIDENCE)

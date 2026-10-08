@@ -123,17 +123,21 @@ class ScenarioEvaluator:
                       for a in settled if a["is_internal"])
         providers_left = len({a.get("provider_code") for a in retained})
         facts = {
-            "accounts": len(refs), "relief_pct": ratio(relief, settled_instalments), "cost_increase_pct": ratio(cost_delta, settled_remaining),
+            "accounts": len(refs), "relief_pct": ratio(relief, settled_instalments),
+            "cost_increase_pct": ratio(cost_delta, settled_remaining),
             "term_extension_months": max(0.0, term_months - longest_settled), "new_rate": quote.nominal_annual_rate,
             "settled_rate": round(weighted_rate(settled), 4), "new_money": new_money, "settlement_total": total,
             "external_proportion": external, "discretionary_after": after["discretionary_income_after"],
-            "dsr": debt_service_ratio(after["existing_obligations"] + quote.tested_payment, self.invariants["net_monthly_income"]),
+            "dsr": debt_service_ratio(after["existing_obligations"] + quote.tested_payment,
+                                      self.invariants["net_monthly_income"]),
         }
         outcome = {
-            "instalment_relief": relief, "total_cost_delta": cost_delta, "settled_longest_remaining_term_months": float(longest_settled),
+            "instalment_relief": relief, "total_cost_delta": cost_delta,
+            "settled_longest_remaining_term_months": float(longest_settled),
             "bank_expected_value": round(margin - forgone, 2),
             "after": {
-                "monthly_instalment": round(base["total_instalment"] - relief, 2), "weighted_average_rate": round(blended_rate, 4),
+                "monthly_instalment": round(base["total_instalment"] - relief, 2),
+                "weighted_average_rate": round(blended_rate, 4),
                 "longest_remaining_term_months": float(max([remaining_term(a, self.horizon) for a in retained] + [term_months])),
                 "total_cost": round(base["total_remaining_cost"] + cost_delta, 2), "accounts": base["account_count"] - len(refs),
                 "providers": providers_left},

@@ -32,7 +32,8 @@ def flex_loan_policy(
     new_money_pct: float = param(0.25, ge=0.0, le=0.50), new_money_cap: float = param(50_000.0, ge=0.0, le=150_000.0),
     dsr_ceiling: float = param(0.45, ge=0.30, le=0.60), min_external: float = param(0.60, ge=0.0, le=1.0),
     min_discretionary: float = param(850.0, ge=500.0, le=2_500.0),
-    margin_per_grade_bps: float = param(2.0, ge=0.0), margin_bands: ParamTable = MARGIN_BANDS, candidate_terms: ParamTable = TERMS,
+    margin_per_grade_bps: float = param(2.0, ge=0.0), margin_bands: ParamTable = MARGIN_BANDS,
+    candidate_terms: ParamTable = TERMS,
 ) -> dict:
     """The limits and intervention thresholds product 11's team owns, as one record for the search."""
     return {
@@ -41,7 +42,8 @@ def flex_loan_policy(
         "anti_harm": anti_harm, "max_term_extension": max_term_extension, "rate_ceiling": rate_ceiling,
         "new_money_pct": new_money_pct, "new_money_cap": new_money_cap, "dsr_ceiling": dsr_ceiling,
         "min_external": min_external, "min_discretionary": min_discretionary, "margin_per_grade_bps": margin_per_grade_bps,
-        "margin_bands": [{"external_from": f, "base_bps": b} for f, b in zip(margin_bands.external_from.tolist(), margin_bands.base_bps.tolist())],
+        "margin_bands": [{"external_from": f, "base_bps": b}
+                         for f, b in zip(margin_bands.external_from.tolist(), margin_bands.base_bps.tolist())],
         "candidate_terms": candidate_terms.term_months.tolist(),
     }
 
@@ -49,7 +51,8 @@ def flex_loan_policy(
 class FlexLoanConsolidation:
     code = CODE
 
-    def __init__(self, rate_card_index: RateCardIndex, credit_life_index: CreditLifeIndex, evaluator: PriceEvaluator | None = None):
+    def __init__(self, rate_card_index: RateCardIndex, credit_life_index: CreditLifeIndex,
+                 evaluator: PriceEvaluator | None = None):
         self.rate_card_index, self.credit_life_index, self.evaluator = rate_card_index, credit_life_index, evaluator
 
     def bind(self, pricing_context: dict) -> FlexLoanConsolidation:

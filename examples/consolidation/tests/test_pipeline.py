@@ -37,7 +37,8 @@ def test_the_decision_records_the_versions_of_every_table_it_read(assess):
 
 
 def test_the_statutory_ceiling_and_fee_caps_are_those_in_force_on_the_decision_date(assess):
-    assert assess()["pricing_context"] == {"statutory_ceiling": 0.28, "initiation_fee_cap": 6_500.0, "monthly_service_fee_cap": 69.0}
+    assert assess()["pricing_context"] == {
+        "statutory_ceiling": 0.28, "initiation_fee_cap": 6_500.0, "monthly_service_fee_cap": 69.0}
     assert assess(decision_date="2025-09-24", bureau_as_of_date="2025-09-20")["pricing_context"]["initiation_fee_cap"] == 6_200.0
 
 

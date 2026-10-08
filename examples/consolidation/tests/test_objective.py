@@ -1,4 +1,4 @@
-"""The objective is configuration: weights per channel, an overlay that re-weights, a ranking that does not depend on the budget."""
+"""The objective is configuration: weights per channel, an overlay that re-weights, a ranking independent of the budget."""
 from datetime import date
 from types import SimpleNamespace
 
@@ -59,7 +59,8 @@ def test_with_the_stack_off_the_branch_gets_the_unblended_objective(assess, para
 
 
 def test_a_weights_table_row_edited_in_the_params_changes_the_objective(assess, params):
-    table = [{"channel_code": 0, "new_money": 0.0, "min_commitment": 0.0, "min_total_cost": 1.0, "bank_value": 0.0, "client_outcome": 0.0}]
+    table = [{"channel_code": 0, "new_money": 0.0, "min_commitment": 0.0, "min_total_cost": 1.0, "bank_value": 0.0,
+              "client_outcome": 0.0}]
     out = assess(channel_code=3, params_document=with_params(params, "selection", objective_weights=table))
     assert out["objective_weights"]["min_total_cost"] == 1.0
 

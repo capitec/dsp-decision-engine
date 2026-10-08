@@ -51,7 +51,8 @@ def test_a_violated_intervention_removes_the_scenario_from_selection(assess):
 
 def test_the_anti_harm_overlay_names_itself_and_the_base_value_it_replaced_on_product_11(assess):
     record = by_number(next(s for s in priced(assess()) if s["product_code"] == 11))[4]
-    assert (record["overlay_id"], record["threshold"], record["base_threshold"]) == ("ADJ-CON-INT-2026-001", pytest.approx(0.12), 0.15)
+    assert (record["overlay_id"], record["base_threshold"]) == ("ADJ-CON-INT-2026-001", 0.15)
+    assert record["threshold"] == pytest.approx(0.12)
 
 
 def test_the_anti_harm_overlay_does_not_touch_the_card(assess):

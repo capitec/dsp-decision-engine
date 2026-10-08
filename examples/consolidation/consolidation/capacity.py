@@ -82,5 +82,6 @@ class Buffers:
     def __call__(self, product_code: int, risk_grade: int) -> float:
         key = (product_code, risk_grade)
         if key not in self._seen:
-            self._seen[key] = self._exe.score({"product_code": product_code, "risk_grade": risk_grade})["affordability_buffer_applied"]
+            row = self._exe.score({"product_code": product_code, "risk_grade": risk_grade})
+            self._seen[key] = row["affordability_buffer_applied"]
         return self._seen[key]

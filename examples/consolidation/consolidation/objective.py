@@ -45,8 +45,9 @@ def weights_in_force(table: ParamTable, channel_code: int, decision_date: date, 
     row = channels.index(channel_code) if channel_code in channels else channels.index(0)
     weights, applied = {}, []
     for name in OBJECTIVES:
-        result = OBJECTIVE_OVERLAYS.apply_stack(f"weight_{name}", float(getattr(table, name)[row]), {"channel_code": channel_code},
-                                                decision_date, ADJUSTMENT_SET_ID, stack_enabled=stack_enabled)
+        result = OBJECTIVE_OVERLAYS.apply_stack(
+            f"weight_{name}", float(getattr(table, name)[row]), {"channel_code": channel_code}, decision_date,
+            ADJUSTMENT_SET_ID, stack_enabled=stack_enabled)
         weights[name] = result.adjusted_value
         applied += result.adjustments_applied
     total = sum(weights.values())
@@ -76,7 +77,8 @@ def rank(scenarios: list[dict], weights: dict, outcome_weights: dict, indifferen
     scored = []
     for s in (s for s in scenarios if s["viable"]):
         parts = components(s["measures"], outcome_weights)
-        scored.append({"scenario_id": s["scenario_id"], "objective_score": round(sum(weights[n] * parts[n] for n in OBJECTIVES), 6),
+        score = round(sum(weights[n] * parts[n] for n in OBJECTIVES), 6)
+        scored.append({"scenario_id": s["scenario_id"], "objective_score": score,
                        "components": {n: round(parts[n], 6) for n in OBJECTIVES}})
     scored.sort(key=lambda r: (-r["objective_score"], by_id[r["scenario_id"]]["total_cost_of_credit"],
                                len(by_id[r["scenario_id"]]["settlement_set"]), r["scenario_id"]))
@@ -95,8 +97,8 @@ def rank(scenarios: list[dict], weights: dict, outcome_weights: dict, indifferen
                        "score_difference": round(top[0]["objective_score"] - r["objective_score"], 6),
                        "weighted_component_differences": gap, "decisive_component": max(gap, key=lambda n: abs(gap[n]))})
     best_for_client = max(scored, key=lambda r: (r["components"][vocab.CLIENT_OUTCOME], -r["scenario_id"]), default=None)
-    shadow = {"scenario_id": best_for_client["scenario_id"], "client_outcome_score": best_for_client["components"][vocab.CLIENT_OUTCOME]} \
-        if best_for_client else {}
+    shadow = {"scenario_id": best_for_client["scenario_id"],
+              "client_outcome_score": best_for_client["components"][vocab.CLIENT_OUTCOME]} if best_for_client else {}
     return {"scored": scored, "top": top, "indifferent": indifferent, "versus": versus, "shadow": shadow}
 
 

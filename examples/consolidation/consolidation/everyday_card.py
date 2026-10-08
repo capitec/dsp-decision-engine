@@ -79,7 +79,8 @@ class CardRates:
         return self._hit(self._reversion, (grade,), limit)
 
 
-def paydown(opening: float, promotional_rate: float, promotional_months: int, reversion_rate: float, policy: dict) -> tuple[float, float]:
+def paydown(opening: float, promotional_rate: float, promotional_months: int, reversion_rate: float,
+            policy: dict) -> tuple[float, float]:
     """`(total paid, first payment)` over the mandatory paydown: the minimum payment or 1/n of the opening balance,
     whichever is larger, at the promotional rate and then at the reversion rate."""
     n = policy["paydown_months"]
@@ -123,20 +124,23 @@ class EverydayCard:
     def variants(self, policy: dict, longest_remaining_term: float) -> list[tuple[int, int]]:
         return [(policy["paydown_months"], m) for m in policy["candidate_promotional_months"]]
 
-    def quote(self, policy: dict, proceeds: float, term_months: int, promotional_months: int, risk_grade: int, **_) -> Quote | str:
+    def quote(self, policy: dict, proceeds: float, term_months: int, promotional_months: int, risk_grade: int,
+              **_) -> Quote | str:
         """A limit big enough that the transfer is at most `max_utilisation` of it, priced for `promotional_months`."""
-        limit = max(policy["min_limit"], min(policy["max_limit"], math.ceil(proceeds / policy["max_utilisation"] / 100.0) * 100.0))
+        wanted = math.ceil(proceeds / policy["max_utilisation"] / 100.0) * 100.0  # up to the next R100, so 80% still holds
+        limit = max(policy["min_limit"], min(policy["max_limit"], wanted))
         if proceeds > policy["max_utilisation"] * limit:
             return REJECT_LIMIT
-        promotional, reversion = self.rates.promotional(limit, promotional_months, risk_grade), self.rates.reversion(limit, risk_grade)
+        promotional = self.rates.promotional(limit, promotional_months, risk_grade)
+        reversion = self.rates.reversion(limit, risk_grade)
         if promotional is None or reversion is None:
             return REJECT_UNPRICED
         fee = round(proceeds * policy["transfer_fee_pct"], 2)
-        total, first = paydown(proceeds + fee, promotional[0], promotional_months, reversion[0], policy)
-        monthly = reversion[0] / 12.0
-        n = policy["stress_months"]
+        (promotional_rate, promotional_cell), (reversion_rate, reversion_cell) = promotional, reversion
+        total, first = paydown(proceeds + fee, promotional_rate, promotional_months, reversion_rate, policy)
+        monthly, n = reversion_rate / 12.0, policy["stress_months"]
         stressed = limit * monthly / (1.0 - (1.0 + monthly) ** -n) if monthly else limit / n
-        return Quote(limit, first, round_instalment(stressed), promotional[0], total, round((1.0 + reversion[0] / 12.0) ** 12 - 1.0, 4),
-                     promotional[1], self.rates.version,
-                     {"transfer_fee": fee, "reversion_rate": reversion[0], "reversion_cell_id": reversion[1],
+        return Quote(limit, first, round_instalment(stressed), promotional_rate, total, round((1.0 + monthly) ** 12 - 1.0, 4),
+                     promotional_cell, self.rates.version,
+                     {"transfer_fee": fee, "reversion_rate": reversion_rate, "reversion_cell_id": reversion_cell,
                       "promotional_months": promotional_months})

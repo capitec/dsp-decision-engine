@@ -1,8 +1,5 @@
-"""The affordability assessment is reused, not forked: one evidence pass, the capacity half per scenario, and the same answers as the whole."""
-import copy
-from datetime import date
+"""The assessment is reused, not forked: one evidence pass, the capacity half per scenario, the same answers as the whole."""
 
-import pytest
 from assessment.pipeline import build as build_assessment
 
 from consolidation.capacity import as_assessment_accounts
@@ -69,6 +66,7 @@ def test_a_scenario_is_affordable_only_if_the_assessment_says_pass(assess):
 
 def test_the_buffer_is_the_only_figure_that_depends_on_the_product(assess):
     out = assess()
-    flex, card = (next(s for s in out["scenarios"] if s["product_code"] == p and s["settlement_set"] == [2, 4, 7]) for p in (11, 20))
+    cards = [s for s in out["scenarios"] if s["settlement_set"] == [2, 4, 7]]
+    flex, card = (next(s for s in cards if s["product_code"] == p) for p in (11, 20))
     assert flex["existing_obligations_after"] == card["existing_obligations_after"]
     assert flex["max_affordable_instalment"] != card["max_affordable_instalment"]

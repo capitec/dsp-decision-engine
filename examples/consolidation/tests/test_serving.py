@@ -11,8 +11,9 @@ from decider.serving import RequestHandler
 from consolidation.pipeline import build
 
 ROOT = Path(__file__).resolve().parents[1]
-FIGURES = ("outcome_code", "decline_reason_codes", "eligibility_route", "short_circuit_applies", "conditions", "offer_valid_until",
-           "objective_weights", "objective_overlay_ids", "search_record", "baseline", "invariants", "before_and_after")
+FIGURES = ("outcome_code", "decline_reason_codes", "eligibility_route", "short_circuit_applies", "conditions",
+           "offer_valid_until", "objective_weights", "objective_overlay_ids", "search_record", "baseline", "invariants",
+           "before_and_after")
 
 
 @pytest.fixture(scope="module")

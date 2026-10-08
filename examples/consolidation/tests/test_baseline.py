@@ -4,8 +4,9 @@ import pytest
 CLEAN = [
     {"account_ref": 1, "account_type_code": 1, "provider_code": 0, "is_internal": True, "balance": 20_000.0, "instalment": 900.0,
      "nominal_annual_rate": 0.14, "remaining_term_months": 24.0, "months_in_arrears": 0, "opened_date": "2022-03-10"},
-    {"account_ref": 2, "account_type_code": 10, "provider_code": 0, "is_internal": True, "balance": 3_000.0, "credit_limit": 8_000.0,
-     "instalment": 250.0, "nominal_annual_rate": 0.16, "months_in_arrears": 0, "opened_date": "2021-06-01"},
+    {"account_ref": 2, "account_type_code": 10, "provider_code": 0, "is_internal": True, "balance": 3_000.0,
+     "credit_limit": 8_000.0, "instalment": 250.0, "nominal_annual_rate": 0.16, "months_in_arrears": 0,
+     "opened_date": "2021-06-01"},
 ]
 
 
@@ -14,7 +15,8 @@ def test_the_baseline_measures_the_client_as_they_stand(assess):
     assert (base["account_count"], base["provider_count"], base["worst_arrears_months"]) == (9, 8, 1)
     assert base["total_instalment"] == 12_123.0
     assert 0.18 < base["weighted_average_rate"] < 0.21
-    assert base["debt_service_ratio"] == pytest.approx(base["existing_obligations"] / assess()["invariants"]["net_monthly_income"], abs=1e-4)
+    net = assess()["invariants"]["net_monthly_income"]
+    assert base["debt_service_ratio"] == pytest.approx(base["existing_obligations"] / net, abs=1e-4)
 
 
 def test_a_revolving_account_has_no_term_so_its_remaining_cost_assumes_the_declared_horizon(assess, params, sample):

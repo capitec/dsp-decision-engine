@@ -17,7 +17,8 @@ def test_the_sample_client_proceeds_to_the_search(assess):
 
 def test_a_client_under_debt_review_is_referred_never_declined(assess):
     out = assess(client_under_debt_review=True)
-    assert (out["eligibility_route"], out["outcome_code"], out["decline_reason_codes"]) == ("debt_review_path", 3, [reasons.DEBT_REVIEW])
+    assert (out["eligibility_route"], out["outcome_code"], out["decline_reason_codes"]) == (
+        "debt_review_path", 3, [reasons.DEBT_REVIEW])
     assert out["scenarios"] == [] and out["search_record"]["termination_cause"] == "not_run"
 
 
@@ -37,7 +38,8 @@ def test_a_terminal_gate_declines_with_its_reason(assess, change, reason):
 
 def test_a_client_with_no_income_evidence_is_declined(assess):
     out = assess(applicant1_payslip_income=None, applicant1_employment_type_code=0)
-    assert out["eligibility_gate_verdicts"]["CON-ELIG-05"] and (out["outcome_code"], reasons.NO_INCOME in out["decline_reason_codes"]) == (4, True)
+    assert out["eligibility_gate_verdicts"]["CON-ELIG-05"]
+    assert (out["outcome_code"], reasons.NO_INCOME in out["decline_reason_codes"]) == (4, True)
 
 
 def test_a_consolidation_in_the_last_six_months_is_referred(assess):
