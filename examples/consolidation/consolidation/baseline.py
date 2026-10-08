@@ -31,16 +31,19 @@ def invariants(
     residual_floor_amount: float, affordability_buffer_applied: float,
 ) -> dict:
     """The income and expense determination, made once. Every scenario reads this record and nothing recomputes it."""
-    return dict(gross_monthly_income=gross_monthly_income, income_source_code=income_source_code,
-                income_haircut_applied=income_haircut_applied, statutory_deductions=statutory_deductions,
-                net_monthly_income=net_monthly_income, living_expenses=living_expenses, expense_basis_code=expense_basis_code,
-                dependants_count=dependants_count, income_verification_tier=income_verification_tier,
-                applicant_income_evidence_gap=applicant_income_evidence_gap, bureau_is_stale=bureau_is_stale,
-                minimum_income_tier=minimum_income_tier, residual_floor_amount=residual_floor_amount,
-                affordability_buffer_applied=affordability_buffer_applied)
+    return {
+        "gross_monthly_income": gross_monthly_income, "income_source_code": income_source_code,
+        "income_haircut_applied": income_haircut_applied, "statutory_deductions": statutory_deductions,
+        "net_monthly_income": net_monthly_income, "living_expenses": living_expenses, "expense_basis_code": expense_basis_code,
+        "dependants_count": dependants_count, "income_verification_tier": income_verification_tier,
+        "applicant_income_evidence_gap": applicant_income_evidence_gap, "bureau_is_stale": bureau_is_stale,
+        "minimum_income_tier": minimum_income_tier, "residual_floor_amount": residual_floor_amount,
+        "affordability_buffer_applied": affordability_buffer_applied}
 
 
 def baseline_step(capacity: Capacity):
+    """The `baseline_measures` step, scoring the client's accounts with the shared `capacity`."""
+
     @allow_fallback
     @step(output="baseline")
     def baseline_measures(
@@ -50,19 +53,18 @@ def baseline_step(capacity: Capacity):
         """Obligations, capacity, average rate, remaining cost, accounts and providers as the client stands today.
 
         `existing_obligations` is what the assessment costs the accounts at (imputed for cards); `total_instalment` is
-        what the client actually pays each month, which is what relief is measured against.
-
-        A revolving account has no natural term, so its remaining cost assumes the balance is amortised over
-        `paydown_horizon_months`.
+        what the client actually pays each month, which is what relief is measured against. A revolving account has no
+        natural term, so its remaining cost assumes the balance is amortised over `paydown_horizon_months`.
         """
-        case = case_record(decision_date, vocab.PRODUCT_FLEX_LOAN_CONSOLIDATION, channel_code, segment_code, court_ordered_deductions,
-                           invariants, invariants["affordability_buffer_applied"])
+        case = case_record(decision_date, vocab.PRODUCT_FLEX_LOAN_CONSOLIDATION, channel_code, segment_code,
+                           court_ordered_deductions, invariants, invariants["affordability_buffer_applied"])
         now = capacity(case, classified_accounts, {})
         live = [a for a in classified_accounts if a.get("account_status_code") != vocab.CLOSED_STATUS]
         return {
             "existing_obligations": now["existing_obligations"], "discretionary_income": now["discretionary_income"],
             "max_affordable_instalment": now["max_affordable_instalment"],
-            "evidence_sufficiency_code": now["evidence_sufficiency_code"], "worst_arrears_months": now["worst_arrears_months"],
+            "evidence_sufficiency_code": now["evidence_sufficiency_code"],
+            "worst_arrears_months": now["worst_arrears_months"],
             "total_instalment": round(sum(num(a, "instalment") for a in live), 2),
             "debt_service_ratio": debt_service_ratio(now["existing_obligations"], invariants["net_monthly_income"]),
             "weighted_average_rate": round(weighted_rate(live), 4),
@@ -75,7 +77,7 @@ def baseline_step(capacity: Capacity):
 
 
 def plain_granting_step(plain_card, consolidation_card):
-    """`plain_card` and `consolidation_card` are `loan_granting.pricing.RateCardIndex`es: the Flex Loan's, and product 11's."""
+    """The `plain_granting` step. The cards are `loan_granting.pricing.RateCardIndex`es: the Flex Loan's, and product 11's."""
     credit_life = CreditLifeIndex()
 
     def evaluator(index, context):
@@ -95,23 +97,26 @@ def plain_granting_step(plain_card, consolidation_card):
 
         The offer is the largest affordable amount (up to the amount asked for) at `reference_term_months`.
         """
-        solved = solve_term(evaluator(plain_card, pricing_context), reference_term_months, int(risk_grade), applicant_age_years,
-                            False, PRODUCT_MAX_AMOUNT, requested_amount or None, baseline["max_affordable_instalment"])
+        grade, age = int(risk_grade), applicant_age_years
+        solved = solve_term(evaluator(plain_card, pricing_context), reference_term_months, grade, age, False,
+                            PRODUCT_MAX_AMOUNT, requested_amount or None, baseline["max_affordable_instalment"])
         offer = {} if solved.amount is None else {
-            "offered_amount": solved.amount, "term_months": reference_term_months, "binding_constraint_code": solved.binding_constraint_code,
-            "instalment": solved.pricing.instalment, "nominal_annual_rate": solved.pricing.nominal_annual_rate,
+            "offered_amount": solved.amount, "term_months": reference_term_months,
+            "binding_constraint_code": solved.binding_constraint_code, "instalment": solved.pricing.instalment,
+            "nominal_annual_rate": solved.pricing.nominal_annual_rate,
             "total_cost_of_credit": solved.pricing.total_cost_of_credit, "rate_cell_id": solved.pricing.rate_cell_id}
-        settleable_total = sum(s["settlement_amount"] for s in settlements)
-        achievable = evaluator(consolidation_card, pricing_context).evaluate(
-            min(max(settleable_total, 10_000.0), 500_000.0), reference_term_months, int(risk_grade), applicant_age_years, False)
-        settleable_refs = {s["account_ref"] for s in settlements}
-        dsr = debt_service_ratio(baseline["existing_obligations"] + offer.get("instalment", 0.0), invariants["net_monthly_income"])
+        settleable = {s["account_ref"] for s in settlements}
+        everything = min(max(sum(s["settlement_amount"] for s in settlements), 10_000.0), 500_000.0)
+        achievable = evaluator(consolidation_card, pricing_context).evaluate(everything, reference_term_months, grade, age, False)
+        after_plain = baseline["existing_obligations"] + offer.get("instalment", 0.0)
         verdicts = dict(zip(CONDITIONS, (
-            bool(offer) and offer["offered_amount"] == requested_amount, dsr <= debt_service_ceiling,
+            bool(offer) and offer["offered_amount"] == requested_amount,
+            debt_service_ratio(after_plain, invariants["net_monthly_income"]) <= debt_service_ceiling,
             baseline["worst_arrears_months"] == 0,
             achievable.priced and baseline["weighted_average_rate"] - achievable.nominal_annual_rate <= rate_gap_threshold,
             baseline["account_count"] < active_account_limit,
-            not any(num(a, "nominal_annual_rate") >= high_rate_threshold for a in classified_accounts if a["account_ref"] in settleable_refs))))
+            not any(num(a, "nominal_annual_rate") >= high_rate_threshold
+                    for a in classified_accounts if a["account_ref"] in settleable))))
         return offer, verdicts, bool(requested_amount) and all(verdicts.values())
 
     return plain_granting
