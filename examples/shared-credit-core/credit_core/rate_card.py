@@ -69,9 +69,9 @@ def generate_flex_loan_card(version: str, base_rate: float = 5.0) -> dict:
     }
 
 
-def rate_cell_id(amt_band: int, term_band: int, risk_grade: int, rate_card_version: str) -> str:
+def rate_cell_id(amt_band: int, term_band: int, risk_grade: float, rate_card_version: str) -> str:
     """The `cell_id` of the row the lookup matched."""
-    return cell_id("rate_card.flex_loan", rate_card_version, amt_band, term_band, risk_grade)
+    return cell_id("rate_card.flex_loan", rate_card_version, amt_band, term_band, int(risk_grade))
 
 
 def rate_card_rate(rate: float) -> float:

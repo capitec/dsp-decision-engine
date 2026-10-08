@@ -31,12 +31,12 @@ def channel_permitted(
     if consent_verdict == ConsentVerdict.SUPPRESSED:
         return False
     if consent_channel_code == ConsentChannel.SMS:
-        return sms_permitted
+        return bool(sms_permitted)
     if consent_channel_code == ConsentChannel.PUSH:
-        return push_permitted
+        return bool(push_permitted)
     if consent_channel_code == ConsentChannel.VOICE:
-        return voice_permitted
-    return consent_channel_code == ConsentChannel.EMAIL and email_permitted
+        return bool(voice_permitted)
+    return consent_channel_code == ConsentChannel.EMAIL and bool(email_permitted)
 
 
 consent_verdict_step = step(consent_verdict)
