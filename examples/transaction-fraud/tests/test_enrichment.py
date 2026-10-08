@@ -8,7 +8,8 @@ from fraud_interdiction.vocab import Mode, VelocityBand
 @pytest.fixture(scope="module")
 def assess():
     steps = flow(enrichment.velocity_completeness_band, enrichment.enrichment_degradation_code,
-                 enrichment.degraded_mode_code, enrichment.late_arrival_flag, name="enrichment")
+                 enrichment.degraded_mode_code, enrichment.late_arrival_flag, name="enrichment").emit(
+        "velocity_completeness_band", "enrichment_degradation_code")
     executable = Engine(strict_compile=True).bind(steps, mode="fused")  # raises if any of it leaves the kernel
     fresh = {"velocity_count_1min_state": 0, "velocity_count_10min_state": 0, "velocity_sum_amount_1h_state": 0}
     return lambda **record: executable.score({**fresh, **record})
