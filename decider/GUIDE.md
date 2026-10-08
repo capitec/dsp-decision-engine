@@ -99,6 +99,11 @@ exe: Executable = pipeline.compile("fused")      # compile once, call many times
 assert exe.score({"income": 1000.0, "debt": 350.0, "applied_on": date(2026, 1, 5)}, params)["approved"] is False
 ```
 
+An input with neither `missing_as(fill)` nor a `T | None` annotation is required:
+a null value or an absent column raises `MissingInputError`. To default it for a
+step you reuse as it is, put a step in front that writes the column
+(`def income(income: float = missing_as(0.0)) -> float: return income`).
+
 For one record, call `score(record)`, never `run(df)` on a one-row frame: `run`
 builds a frame, exports it through Arrow and assembles an output frame, which
 costs about five times what `score` does on the same record.
