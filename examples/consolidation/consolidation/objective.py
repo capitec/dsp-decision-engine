@@ -65,30 +65,19 @@ def components(measures: dict, outcome_weights: dict) -> dict:
     }
 
 
-@allow_fallback
-@step(outputs=("objective_weights", "objective_overlay_ids", "scored_scenarios", "chosen_scenario", "runners_up",
-               "indifference_band_triggered", "winner_vs_runners_up", "shadow_best_scenario"))
-def selection(
-    scenarios: list[dict], channel_code: int, decision_date: date, objective_weights: ParamTable = OBJECTIVE_WEIGHTS,
-    outcome_weight_relief: float = param(0.35, ge=0.0), outcome_weight_cost: float = param(0.25, ge=0.0),
-    outcome_weight_exited: float = param(0.15, ge=0.0), outcome_weight_rate: float = param(0.15, ge=0.0),
-    outcome_weight_providers: float = param(0.10, ge=0.0), indifference_band: float = param(0.02, ge=0.0, le=0.2),
-    overlay_stack_enabled: bool = param(True, shared_key="overlay_stack_enabled"),
-) -> tuple[dict, list[str], list[dict], dict, list[dict], bool, list[dict], dict]:
-    """Score every viable scenario, pick the winner and up to two runners-up, and say why the winner won.
+def rank(scenarios: list[dict], weights: dict, outcome_weights: dict, indifference_band: float) -> dict:
+    """Score every viable scenario and pick the winner and up to two runners-up.
 
     A rejected scenario is never a runner-up, and the three are distinct: at most one per settlement set and product.
     Ties break on the lowest total cost of credit, then the fewest accounts settled, then the lowest scenario id.
+    Returns `scored`, `top` (scenario ids, winner first), `indifferent`, `versus` and `shadow`.
     """
-    weights, overlay_ids = weights_in_force(objective_weights, channel_code, decision_date, overlay_stack_enabled)
-    outcome = {"relief": outcome_weight_relief, "cost": outcome_weight_cost, "exited": outcome_weight_exited,
-               "rate": outcome_weight_rate, "providers": outcome_weight_providers}
+    by_id = {s["scenario_id"]: s for s in scenarios}
     scored = []
     for s in (s for s in scenarios if s["viable"]):
-        parts = components(s["measures"], outcome)
+        parts = components(s["measures"], outcome_weights)
         scored.append({"scenario_id": s["scenario_id"], "objective_score": round(sum(weights[n] * parts[n] for n in OBJECTIVES), 6),
                        "components": {n: round(parts[n], 6) for n in OBJECTIVES}})
-    by_id = {s["scenario_id"]: s for s in scenarios}
     scored.sort(key=lambda r: (-r["objective_score"], by_id[r["scenario_id"]]["total_cost_of_credit"],
                                len(by_id[r["scenario_id"]]["settlement_set"]), r["scenario_id"]))
     top, shown = [], set()
@@ -97,8 +86,6 @@ def selection(
         if key not in shown and len(top) < 3:
             shown.add(key)
             top.append(r)
-    chosen = {**by_id[top[0]["scenario_id"]], "objective_score": top[0]["objective_score"]} if top else {}
-    runners = [{**by_id[r["scenario_id"]], "objective_score": r["objective_score"]} for r in top[1:]]
     indifferent = len(top) > 1 and top[0]["objective_score"] != 0 and (
         abs(top[0]["objective_score"] - top[1]["objective_score"]) / abs(top[0]["objective_score"]) < indifference_band)
     versus = []
@@ -110,4 +97,29 @@ def selection(
     best_for_client = max(scored, key=lambda r: (r["components"][vocab.CLIENT_OUTCOME], -r["scenario_id"]), default=None)
     shadow = {"scenario_id": best_for_client["scenario_id"], "client_outcome_score": best_for_client["components"][vocab.CLIENT_OUTCOME]} \
         if best_for_client else {}
-    return weights, overlay_ids, scored, chosen, runners, indifferent, versus, shadow
+    return {"scored": scored, "top": top, "indifferent": indifferent, "versus": versus, "shadow": shadow}
+
+
+@allow_fallback
+@step(outputs=("objective_weights", "objective_overlay_ids", "scored_scenarios", "chosen_scenario", "runners_up",
+               "indifference_band_triggered", "winner_vs_runners_up", "shadow_best_scenario"))
+def selection(
+    scenarios: list[dict], channel_code: int, decision_date: date, objective_weights: ParamTable = OBJECTIVE_WEIGHTS,
+    outcome_weight_relief: float = param(0.35, ge=0.0), outcome_weight_cost: float = param(0.25, ge=0.0),
+    outcome_weight_exited: float = param(0.15, ge=0.0), outcome_weight_rate: float = param(0.15, ge=0.0),
+    outcome_weight_providers: float = param(0.10, ge=0.0), indifference_band: float = param(0.02, ge=0.0, le=0.2),
+    overlay_stack_enabled: bool = param(True, shared_key="overlay_stack_enabled"),
+) -> tuple[dict, list[str], list[dict], dict, list[dict], bool, list[dict], dict]:
+    """The weights in force, every viable scenario scored, the winner and runners-up, and why the winner won.
+
+    `winner_vs_runners_up` names the component that accounts for each gap, and `shadow_best_scenario` is the best
+    for the client whatever objective is in force: the answer to "what was the best outcome available to me".
+    """
+    weights, overlay_ids = weights_in_force(objective_weights, channel_code, decision_date, overlay_stack_enabled)
+    outcome = {"relief": outcome_weight_relief, "cost": outcome_weight_cost, "exited": outcome_weight_exited,
+               "rate": outcome_weight_rate, "providers": outcome_weight_providers}
+    ranked = rank(scenarios, weights, outcome, indifference_band)
+    by_id = {s["scenario_id"]: s for s in scenarios}
+    top = [{**by_id[r["scenario_id"]], "objective_score": r["objective_score"]} for r in ranked["top"]]
+    return (weights, overlay_ids, ranked["scored"], top[0] if top else {}, top[1:], ranked["indifferent"], ranked["versus"],
+            ranked["shadow"])
