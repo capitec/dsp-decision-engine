@@ -1,8 +1,7 @@
 """The Flex Loan rate card: 72 amount bands by 40 term bands by 12 grades (34 560 cells), finer at small amounts.
 
 The card is a `param_table` in the params document, so Treasury can replace it without a code change or a rebuild.
-It is not a `DecisionTableConfig` because the solve prices hundreds of candidate amounts per request: a decision
-table lookup inside that loop costs about 100 microseconds, a `param_table` and an index about half a microsecond.
+Cells are ordered by amount band, then term band, then grade, and `card_rate` indexes them by position.
 """
 from __future__ import annotations
 
@@ -42,6 +41,8 @@ def card_tables() -> dict[str, list[dict]]:
     }
 
 
+# workaround: this is not a `DecisionTableConfig` because the solve prices hundreds of candidate amounts per request
+# and a decision table lookup inside that loop costs about 100 microseconds, against half a microsecond here.
 def card_rate(
     offered_amount: float, risk_grade: int, offer_term_months: float,
     amount_bands: ParamTable = param_table({"floor": float}, required=True),
