@@ -14,6 +14,7 @@ from pathlib import Path
 
 from decider.exceptions import wrap_import_errors
 from decider._tooling.mcp import _tools as tools
+from decider._tooling.mcp import _trees as trees
 from decider._tooling.mcp._editor import EditorBridge
 from decider._tooling.mcp._policy import REDACTED, Policy
 
@@ -103,6 +104,41 @@ def build_server(policy: Policy, bridge: EditorBridge | None = None) -> FastMCP:
     def generate_ids(path: str = ".", check: bool = True) -> dict:
         """Add durable ids to source under a path; requires client confirmation (writes source)."""
         return tools.generate_ids(path, check)
+
+    @mcp.tool
+    def tree_view(path: str, node: str | None = None) -> dict:
+        """A text outline of a tree document (v3 or flat rules) plus its nodes as data; `node` is a node id or rule name to show one subtree."""
+        return trees.tree_view(path, node)
+
+    @mcp.tool(annotations={"destructiveHint": True})
+    def tree_add_node(path: str, parent: str | None, branch: int, data: dict, id: str | None = None) -> dict:
+        """Add a v3 node (`data` as in nodes[].data) under `parent` at `branch` (the edge's sourceIndex); parent=None adds the root of an empty tree. Validated before saving."""
+        return trees.tree_add_node(path, parent, branch, data, id)
+
+    @mcp.tool(annotations={"destructiveHint": True})
+    def tree_set_node(path: str, node_id: str, data: dict) -> dict:
+        """Replace a v3 node's data, keeping its children; refused if it would strand children on branches the new type lacks."""
+        return trees.tree_set_node(path, node_id, data)
+
+    @mcp.tool(annotations={"destructiveHint": True})
+    def tree_remove_node(path: str, node_id: str) -> dict:
+        """Remove a v3 node, its incoming edges and the descendants nothing else leads to; reports what went."""
+        return trees.tree_remove_node(path, node_id)
+
+    @mcp.tool(annotations={"destructiveHint": True})
+    def tree_set_output(path: str, values: dict, index: int | None = None, dtypes: dict[str, str] | None = None) -> dict:
+        """Append a result row to a tree's output.data (returns result_idx) or replace row `index` (-1 = default row); `dtypes` declares new columns."""
+        return trees.tree_set_output(path, values, index, dtypes)
+
+    @mcp.tool(annotations={"destructiveHint": True})
+    def tree_add_rule(path: str, rule: dict, at: int | None = None) -> dict:
+        """Insert a flat rule `{"meta": {"name": ...}, "rule": {...}}` at position `at` (default the end); first_match order matters."""
+        return trees.tree_add_rule(path, rule, at)
+
+    @mcp.tool(annotations={"destructiveHint": True})
+    def tree_remove_rule(path: str, name: str) -> dict:
+        """Remove the flat rule with this `meta.name`; the others keep their order."""
+        return trees.tree_remove_rule(path, name)
 
     if bridge is not None:
         def abs_path(workspace: str, p: str | None) -> str | None:
