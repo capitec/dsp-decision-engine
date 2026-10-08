@@ -153,7 +153,7 @@ Both limit nodes share one bundle class: `bundle_class` returns the same object 
 The class's qualified name encodes the fields (`Bundle_8_multiple` is one field, eight characters, `multiple`), and
 it is registered on the `decider._engine.params.bundles` module under that name. A module `__getattr__` decodes any
 such name and rebuilds the class on demand. This exists for numba's disk cache, which pickles the argument types
-of each compiled specialisation. The origins note records the failure it fixes: a namedtuple made inside a function
+of each compiled specialisation. It fixes this failure: a namedtuple made inside a function
 pickles by value, comes back as a different class in the next process, and every cache lookup missed; for a
 three-band table, 14 specialisations were saved again on every start.
 
@@ -215,7 +215,7 @@ again. The key is `document_key(doc)`, a sha256 of `json.dumps(doc, sort_keys=Tr
 results. Hashing costs time on every call, so `ParamsCache.key` keeps one slot holding the last document object and
 its key: passing the same object again returns the key without hashing. That is why a params document is treated as
 immutable once passed; editing one in place and passing it again keeps the old key. An empty document's key is a
-module constant, because the note on compiled runners measured its hash at 3.7 µs of a single-record call.
+module constant, because hashing it was measured at 3.7 µs of a single-record call.
 
 The cache is unbounded (a `ponytail:` comment in `validate.py` marks the place to add eviction for a long-lived
 server that sees many distinct documents), and `document_key` only handles JSON values.
@@ -294,8 +294,7 @@ check passes.
 
 ### Lazy validation in compiled modes
 
-IR.md asked for a fused kernel that suspends at the first unvalidated node and resumes after validation. The note
-on lazy validation in fused mode records why it was not built: a fused kernel is one innermost sequence of scalar
+IR.md asked for a fused kernel that suspends at the first unvalidated node and resumes after validation. It was not built: a fused kernel is one innermost sequence of scalar
 steps with no control flow inside, so every node in it runs on every row the kernel runs on. Suspending would
 always stop at row 0 of each node, which is the same set of validations as validating all the kernel's nodes before
 launching it. `SteppedRunner._run` does exactly that.
@@ -303,7 +302,7 @@ launching it. `SteppedRunner._run` does exactly that.
 Packed branches and loops do contain control flow. With lazy validation a branch or loop packs only when no call
 inside it, other than its own condition, has params; otherwise it runs through the Python driver, which validates
 each call as it runs. Eager validation has checked everything before any kernel launches, so it packs regardless.
-The note lists one visible difference: when a kernel holds one node with invalid params and an earlier node of the
+One difference is visible: when a kernel holds one node with invalid params and an earlier node of the
 same kernel would raise a runtime error, fused mode reports the params error first and interpreted mode the runtime
 error.
 
@@ -370,7 +369,7 @@ A compiled call whose inputs are `bytes` spans (or a `Columnar[Item]` with a `st
 `(address, length)` spans, so its `str` params must be spans too. `SteppedRunner._bundle` encodes each such param to
 UTF-8 once per `(document key, call id)` and caches the converted bundle with the buffers its spans point into. Two
 threads converting at once both end up with the first entry, so a buffer is never freed under a running kernel.
-The single-record path note measured why converted bundles are cached at all: at 50 nodes, converting a validated
+Converted bundles are cached because, at 50 nodes, converting a validated
 model to a namedtuple cost 170.6 µs against 78.3 µs for validating it, and a memoised bundle costs about 0.23 µs.
 
 ## Why retuning never recompiles

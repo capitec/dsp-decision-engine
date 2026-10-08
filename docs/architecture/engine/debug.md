@@ -263,7 +263,7 @@ Trees report node ids and decision tables report the index of each row tried. Sc
 
 One step is one node over every row that reaches it. A branch whose rows go both ways is entered arm by arm, in arm order, each arm over its own rows; an arm no row takes yields no checkpoint. A loop is entered once per iteration over the rows still looping. The transcript above shows both: `full_limit` ran with `arm=0` for rows 0 and 2, then `no_limit` with `arm=1` for row 1.
 
-Stepping per row was the other option. It would pause once per record and the checkpoints would differ between modes, so the notes reject it (the debug-session note). `step()` and `step_into()` differ only at a `before`:
+Stepping per row was the other option. It would pause once per record and the checkpoints would differ between modes, so it was rejected. `step()` and `step_into()` differ only at a `before`:
 
 - `step()` from `before X` runs to `after X` when X is a call, branch or loop. A sequence is entered.
 - `step_into()` always moves to the next checkpoint, which enters each taken arm and each iteration.
@@ -373,7 +373,7 @@ shape: (3, 3)
 └─────────┴─────────┴────────┘
 ```
 
-Row 1 took the full-limit arm (3000 = 500 × 6) and every row stopped after one month. Two limits follow from the design. `rewind` replays without breakpoints, so a force set after the branch ran applies only once the run is rewound to the branch. A loop forced past `max_iterations` stops at the maximum. The [editor bridge](../editor-bridge.md) page covers how the VS Code extension uses `Controls`, and the vscode-controls note has the rationale.
+Row 1 took the full-limit arm (3000 = 500 × 6) and every row stopped after one month. Two limits follow from the design. `rewind` replays without breakpoints, so a force set after the branch ran applies only once the run is rewound to the branch. A loop forced past `max_iterations` stops at the maximum. The [editor bridge](../editor-bridge.md) page covers how the VS Code extension uses `Controls`.
 
 ## Editing the pipeline mid-run
 
@@ -452,9 +452,9 @@ Two ways feed `reload`:
 - `watch(source)` registers an IPython `post_run_cell` hook. With a callable (`lambda: flow(income, ratio)`), the lambda looks the names up again after every cell, so a cell that only redefines `ratio` is picked up. A failed reload emits `ReloadFailed(error)`, re-raises, and keeps the pipeline the session had.
 - `ModuleWatcher("pkg.pipeline:pipeline")` watches the files of every imported module under the target's directory (outside `site-packages` and `decider`). On a change it drops all of them from `sys.modules` and imports the target afresh, so `from features import ratio` in another module never keeps the old function. It deletes their `.pyc` files first because a `.pyc` stamps whole seconds, and a same-size edit inside one second would load stale code. A failed import puts the old modules back.
 
-Re-resolving functions by `__qualname__` in `__main__` was considered and rejected in the hot-reload note: `ratio_v1 = ratio` followed by a new `def ratio` would swap the step the user kept on purpose, lambdas and closures have no global to find, and patching `__code__` in place mutates objects the IR cache assumes never change.
+Re-resolving functions by `__qualname__` in `__main__` was considered and rejected: `ratio_v1 = ratio` followed by a new `def ratio` would swap the step the user kept on purpose, lambdas and closures have no global to find, and patching `__code__` in place mutates objects the IR cache assumes never change.
 
-The hot-reload note measured the time from an edit to the updated `output()` on a 28-core box:
+Time from an edit to the updated `output()`, measured on a 28-core box:
 
 | Edit | interpreted | stepped | fused |
 |---|---|---|---|
@@ -462,9 +462,9 @@ The hot-reload note measured the time from an edit to the updated `output()` on 
 | file, back to an earlier version | | 7 ms, 0 compiles | 7 ms, 0 compiles |
 | cell, 3-step flow, `reload` vs per-path `replace` | 1.5 vs 0.9 ms | 182 vs 189 ms | 148 vs 156 ms |
 
-The compiles are the edited step's dispatcher plus the fused glue of the kernel that contains it; unchanged steps compile nothing because the dispatcher cache is keyed by fingerprint. `keys()` for the larger example pipeline in that note took 1.6 ms, paid on every open and every edit. A global that is a DataFrame or array is fingerprinted by identity, so re-importing a module that builds one counts the step as changed and re-runs it: extra work, never stale values.
+The compiles are the edited step's dispatcher plus the fused glue of the kernel that contains it; unchanged steps compile nothing because the dispatcher cache is keyed by fingerprint. `keys()` for the larger example pipeline took 1.6 ms, paid on every open and every edit. A global that is a DataFrame or array is fingerprinted by identity, so re-importing a module that builds one counts the step as changed and re-runs it: extra work, never stale values.
 
-Serving never hot reloads. A code change is a new deploy, because the decision audit must map to one code version, and an in-process reload would compile on the request path (142 to 186 ms per edited step in the note).
+Serving never hot reloads. A code change is a new deploy, because the decision audit must map to one code version, and an in-process reload would compile on the request path (142 to 186 ms per edited step, above).
 
 ## Events
 
@@ -564,6 +564,6 @@ The tests are in `tests/debug/`: `test_session.py` (interpreted stepping, breakp
 
 ## Why it is shaped this way
 
-- The VS Code extension debugs step code with an ordinary debugpy session and has no decider debug adapter. An earlier prototype drove a decider DAP adapter and needed a second debugpy attach to get into a step's Python, so there were two debuggers with two breakpoint models, and users reached for the Python one (the vscode-native-debugging note). Per-node stepping, rewind, value breakpoints and edits stay in `Session` for notebooks and the bridge.
+- The VS Code extension debugs step code with an ordinary debugpy session and has no decider debug adapter. An earlier prototype drove a decider DAP adapter and needed a second debugpy attach to get into a step's Python, so there were two debuggers with two breakpoint models, and users reached for the Python one. Per-node stepping, rewind, value breakpoints and edits stay in `Session` for notebooks and the bridge.
 - Edits rebuild and replay instead of patching a running plan. Version ids are positional, so a patched plan would have to renumber everything after the edit; a fresh resolve plus a carry-over by `(name, producer)` reuses the code paths a normal run takes.
-- One rebuild handles every kind of change. Per-path edits cannot insert a step or replace an anonymous root flow, and N changed paths would cost N re-resolves and N replays. The first-difference rebuild restarts at the same point a sequence of per-path edits would (the hot-reload note).
+- One rebuild handles every kind of change. Per-path edits cannot insert a step or replace an anonymous root flow, and N changed paths would cost N re-resolves and N replays. The first-difference rebuild restarts at the same point a sequence of per-path edits would.

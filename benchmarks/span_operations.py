@@ -1,6 +1,8 @@
 """What the readable span form costs against a semantic str and the numeric ceiling.
 
     uv run python benchmarks/span_operations.py
+
+See docs/design_decisions/experiments/string-representations.md.
 """
 import gc
 import time
@@ -9,7 +11,7 @@ import warnings
 import numpy as np
 import polars as pl
 
-from decider import flow, param, python_only
+from decider import flow, param
 from decider.ops import Text
 from decider._engine import Engine
 
@@ -23,11 +25,6 @@ AMOUNT = {"amount": 4100.0}
 
 
 def semantic_str(sector: str) -> bool:
-    return sector == "private"
-
-
-@python_only
-def semantic_str_python(sector: str) -> bool:
     return sector == "private"
 
 
@@ -67,8 +64,7 @@ def latency(score, row):
 
 
 cases = [("numeric kernel (the ceiling)", numeric, AMOUNT),
-         ("str, njit per row", semantic_str, SECTOR),
-         ("str, Python per row", semantic_str_python, SECTOR),
+         ("str, Python per row", semantic_str, SECTOR),
          ("span, == literal", span_readable, SECTOR),
          ("span, == str param", span_readable_param, SECTOR),
          ("span, sector[1] >= 0", span_index, SECTOR)]

@@ -61,6 +61,6 @@
   <rect x="300" y="536" width="20.2" height="22" rx="3" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
   <text x="328" y="551" font-size="13" fill="#134e4a">6.98</text>
 
-  <text x="100" y="600" font-size="13" fill="#1f2937">Numbers from the serving-latency note: lowest p50 of 3 reps on a contended 28-core box; absolute values move about 30%,</text>
+  <text x="100" y="600" font-size="13" fill="#1f2937">Numbers: lowest p50 of 3 reps on a contended 28-core box; absolute values move about 30%,</text>
   <text x="100" y="620" font-size="13" fill="#1f2937">the ratios hold. A full HTTP JSON request measured 614.5 µs p50 from a raw-socket client in the same session.</text>
 </svg>

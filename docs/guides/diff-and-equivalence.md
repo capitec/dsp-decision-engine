@@ -195,7 +195,7 @@ print(o.rows_changed, o.columns["approved"].changed)
 567 69
 ```
 
-A fresh process is what makes this correct. A pipeline module that is already imported cannot be imported again under the same name from another directory, so loading both revisions into one process would silently run the live code twice; the experiment-revision isolation note records that bug and the measured cost of the fix, about 0.5 s for the checkout plus 0.8 s for the new process per revision. The worker uses the decider installed in your environment, not the one the old revision pinned.
+A fresh process is what makes this correct. A pipeline module that is already imported cannot be imported again under the same name from another directory, so loading both revisions into one process would silently run the live code twice; that bug has happened, and the measured cost of the fix is about 0.5 s for the checkout plus 0.8 s for the new process per revision. The worker uses the decider installed in your environment, not the one the old revision pinned.
 
 The same from the command line:
 

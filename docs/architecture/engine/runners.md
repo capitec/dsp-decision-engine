@@ -53,7 +53,7 @@ first, so the rows a write never touches stay null. `read(version, rows=None)` r
 rows; a version never written reads as all null.
 
 The input columns are loaded once, as nullable, by `State.from_frame` (through the [boundary](boundary.md)) or by
-`load_record` on the `score` path. The interpreted runner note gives the reason for loading raw values plus masks:
+`load_record` on the `score` path. Raw values plus masks are loaded because
 two steps may read one column with different null policies (`x: float` and `x: float | None`), so the policy is
 applied per reader.
 
@@ -391,14 +391,14 @@ The [engine overview](index.md) has the flow and the numbers.
 
 ## Measured
 
-The compiled runners note measured example projects 07 and 08 on 3000 synthetic rows: fused mode ran at about 3.3
+On example projects 07 and 08 (3000 synthetic rows), fused mode ran at about 3.3
 and 4 times interpreted throughput. Most of the remaining time was the object boundary, frame steps and about 40
 Python fallbacks per pipeline, not kernels (under 0.1 s of about 3 s). On the flagship benchmark
-(`benchmarks/modes_vs_decider2.py`, 1M rows), fused ran at 12.5M rows/s, stepped 12.9M and interpreted 0.25M.
+(`benchmarks/modes.py`, 1M rows), fused ran at 12.5M rows/s, stepped 12.9M and interpreted 0.25M.
 
 ## Why one driver
 
-The compiled runners note records the choice: both compiled runners are the interpreted driver with compiled calls.
+Both compiled runners are the interpreted driver with compiled calls.
 `SteppedRunner` replaces only how a call runs, and `FusedRunner` also how a sequence, a branch and a loop run;
 frame steps, branches, loops, row subsets and merges have one implementation, which the debugger and every mode
 share. For checkpoints, a fused kernel takes its first step's origin. The enclosing sequence was the alternative,

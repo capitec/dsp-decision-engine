@@ -243,8 +243,7 @@ WiringError: step id 'ABC' must be 12 lowercase hex characters
 
 The path and source are derived ids, rebuilt from names and import paths on every build; renaming or moving a step
 changes them. The `id` is the committed one. It survives a rename, an extraction or a reorder because it depends on
-neither name nor position, and it is one per definition, so a step reused at two paths keeps one id at both. The
-durable identities note has the model, and `decider ids` writes ids into source. With `id=None` everything else is
+neither name nor position, and it is one per definition, so a step reused at two paths keeps one id at both. `decider ids` writes ids into source. With `id=None` everything else is
 unchanged:
 
 ```text
@@ -256,7 +255,7 @@ Origin(path='afford/ratio', source='__main__:ratio',
 
 Origins stay out of every cache key. Compiled code is keyed by the content of the function (see the
 [cache](cache.md) page), because a rename, a deeper nesting or a second placement changes the origin without
-changing the code. The origins note measured what a path-sensitive key costs: a same-content file renamed or moved
+changing the code. A path-sensitive key costs this much: a same-content file renamed or moved
 misses numba's cache and recompiles in 4.6 to 4.8 s at 200 arguments, against 0.18 s warm.
 
 ## Inputs, outputs and null policies

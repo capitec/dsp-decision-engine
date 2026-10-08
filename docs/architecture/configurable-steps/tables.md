@@ -187,7 +187,7 @@ What each condition and output stores:
 
 `_holds(r, ...)` evaluates one program row against table row `r`. A null input never matches: a NaN float, a `None` bool, or a string span of length -1 makes every condition on it false. A null value in the row (`has_value` 0) also never matches. String equality and `in` over strings compare the record's UTF-8 bytes with the row's bytes through the tree walker's `_matches(..., EXACT)`; nothing becomes a dictionary code.
 
-The scan is linear in the number of rows, and the first matching row wins. `table-rows-as-runtime-arrays.md` measured the cost of a linear scan on the earlier generated-code design: 70 ns a row at 2 bands, 1045 ns at 1000. Compile cost does not depend on the row count at all, since the rows are data.
+The scan is linear in the number of rows, and the first matching row wins. The cost of a linear scan on the earlier generated-code design was 70 ns a row at 2 bands, 1045 ns at 1000. Compile cost does not depend on the row count at all, since the rows are data.
 
 ## Band ladders
 
@@ -299,11 +299,11 @@ A String output is a `Literal` output, decoded after the kernel like a tree's. I
 ValueError pricing: output column 'tier' is a String and its rows come from params, so its values aren't known up front; declare it {"type": "Enum", "categories": [...]}
 ```
 
-Adding a category is then a schema change, which rebuilds the IR as a schema change should. The decision-tables note records the alternative that was turned down: running the table in Python whenever it has a String output would have made the common case slow.
+Adding a category is then a schema change, which rebuilds the IR as a schema change should. The alternative that was turned down, running the table in Python whenever it has a String output, would have made the common case slow.
 
 A numeric output is `T | None` when the default is null or some inline row's value is null. Param rows can hold anything, so their numeric outputs are always `T | None`. An inline edit that introduces the first null therefore changes the output type and compiles once.
 
-There is no matched-row output (the counterpart of a tree's `path_output`). It would need a new output kind in `pick` and in the reference, and the note leaves it until someone asks.
+There is no matched-row output (the counterpart of a tree's `path_output`). It would need a new output kind in `pick` and in the reference, and it is left until someone asks.
 
 ## Null semantics
 
@@ -321,7 +321,7 @@ Row 2 answered after rows 0 and 1 were tried, so a session can stop on `limit_ba
 
 ## Measured
 
-From the decision-tables note (`benchmarks/tables_vs_decider2.py`: 12 bands writing String, Int64 and Float64 outputs; 1M rows through `run(df)`, 20k `score(dict)`; dev box at load average about 4):
+From `benchmarks/table_match.py` (12 bands writing String, Int64 and Float64 outputs; 1M rows through `run(df)`, 20k `score(dict)`; dev box at load average about 4):
 
 | Table | Engine | ns/row | `score` p50 | `score` p99 |
 |---|---|---|---|---|
@@ -332,7 +332,7 @@ From the decision-tables note (`benchmarks/tables_vs_decider2.py`: 12 bands writ
 | bands AND string `in` | decider fused | 413 | 69.6 µs | 111.6 µs |
 | bands AND string `in` | decider fused, rows param | 423 | 137.1 µs | 157.4 µs |
 
-The rows-param rows paid for hashing the whole params document on every call. After `ParamsCache.key` started remembering the last document object and its hash, rows-param `score()` p50/p99 went from 88.6/191.9 µs to 35.8/42.9 µs (same note). Documents are treated as immutable once passed for that reason.
+The rows-param rows paid for hashing the whole params document on every call. After `ParamsCache.key` started remembering the last document object and its hash, rows-param `score()` p50/p99 went from 88.6/191.9 µs to 35.8/42.9 µs. Documents are treated as immutable once passed for that reason.
 
 ## Failure modes
 

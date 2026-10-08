@@ -3,8 +3,13 @@
 Use `uv` for everything: `uv run pytest`, `uv run python`. Python 3.10+.
 
 To learn the API as a user: `uv run decider guide` (`decider/GUIDE.md`) and the
-docstrings. Don't read `docs/`: it describes an older version. Every Python
-example in `GUIDE.md` runs in `tests/test_guide.py`; keep it that way.
+docstrings. Every Python example in `GUIDE.md` runs in `tests/test_guide.py`;
+keep it that way.
+
+`docs/` is the docs site (nav in `zensical.toml`; `uv run --group docs zensical
+build`). `docs/design_decisions/` is not published: the decisions behind each
+area, the experiments behind them, `known-limitations.md` and `spec-amendments.md`.
+Read an area's decision file before changing that area.
 
 ## Comments and docstrings
 
@@ -15,53 +20,53 @@ example in `GUIDE.md` runs in `tests/test_guide.py`; keep it that way.
 - Never reference docs, section numbers, stages, experiments, review findings or
   "the agent" in code. No `doc 03`, `§4.2`, `EXPERIMENTS`.
 - Design rationale ("we chose X over Y because Y failed") goes in
-  `notes/<topic>.md`, not in code.
+  `docs/design_decisions/decisions/<topic>.md` (a measurement as an experiment in
+  `docs/design_decisions/experiments/`), not in code. Key points only; an open
+  gap goes in `docs/design_decisions/known-limitations.md`.
 
 ## Files
 
 - One purpose per file, under 500 lines. When a file grows past that, split it
   into a package (`foo/__init__.py` plus files) instead.
-- An exception goes in `ALLOWLIST` in `tests/test_conventions.py`, with a reason.
+- A file-length exception goes in `ALLOWLIST` in `tests/test_conventions.py`;
+  import, `__all__` and layer exceptions go in `tests/conventions_allowlists.py`.
+  Each needs a reason, and stale entries fail the test.
 - `uv run pytest tests/test_conventions.py -q` enforces the line limit and the
   banned references.
 
-## Porting code
+## Writing code
 
 - Invoke the `ponytail:ponytail` skill in `ultra` mode and apply it throughout:
   the simplest code that passes the tests, no speculative abstractions, stdlib
   first.
 - If a simplification would change behaviour a test pins down, keep the
   behaviour and leave a `# ponytail: <what could be simpler>` comment.
-- Port behaviour, not text. Rewrite comments to the rules above.
-- Port tests alongside the code into `tests/<area>/`. Test names describe
-  behaviour (`test_missing_required_param_is_invalid`, not `test_case_3`).
-- When a source test covers behaviour the new design removes, drop it and list
-  it with the reason in your report.
+- Tests go in `tests/<area>/`. Test names describe behaviour
+  (`test_missing_required_param_is_invalid`, not `test_case_3`).
 
 ## Layout
 
-- `decider/` is the package. Its layout follows `Design.md` §8, with the file
-  split for `steps/` and `_engine/ir/` in `IR.md` §9; the code is the truth
-  where they differ.
-- Target layout and the layer rule: `notes/pythonapi-redesign/directory-structure.md`.
+- `decider/` is the package. Its layout, the layer map and where a new feature
+  goes: `docs/architecture/package-layout.md`. The code is the truth where they
+  differ.
 - `_engine/` imports nothing from `steps/trees|tables|scorecard`, `config/` or
   `serving/`.
-- Packages import only downward per the layer map in `directory-structure.md`;
+- Packages import only downward per the layer map in `package-layout.md`;
   `tests/test_conventions.py` enforces it.
 - `benchmarks/` holds plain scripts (`uv run python benchmarks/<name>.py`),
-  not tests. The last numbers against decider2 are in
-  `notes/benchmarks-vs-decider2.md`.
+  not tests. Each backs an experiment in `docs/design_decisions/experiments/`.
 
 ## Contract
 
-- `IR.md` is the contract, amended by `notes/spec-amendments.md`. Where they
-  disagree, the amendments win.
+- `IR.md` is the contract, amended by `docs/design_decisions/spec-amendments.md`.
+  Where they disagree, the amendments win.
 - If the spec is wrong or ambiguous, stop and report. Don't guess.
 
 ## Numeric and numba traps
 
-- Numba cache: generated code lives in real files (not `exec`) and is
-  byte-identical between runs. Key compiled code by content, never by path or
+- No generated source: fused kernels are built in-process from LLVM IR, and
+  user steps use numba's disk cache with the key extended by content
+  (`fingerprint` plus `SALT`). Key compiled code by content, never by path or
   name.
 - Serving kernels are `nogil=True`. `fastmath` is off by default.
 - Kernels use CPython-equal `round(x, n)` and `x ** n`; int64 still wraps silently. Money

@@ -295,25 +295,24 @@ sequenceDiagram
     end
 ```
 
-`score` takes a dict rather than keyword arguments. In decider2's measurements, recorded in the single-record path
-note, binding 400 keyword arguments cost 1190 µs at p50 against 60 µs for a dict, about 6% of a 20 ms budget. Converted
+`score` takes a dict rather than keyword arguments. In decider2's measurements, binding 400 keyword arguments cost 1190 µs at p50 against 60 µs for a dict, about 6% of a 20 ms budget. Converted
 params bundles are cached per document and node for the same reason: converting a validated model into a namedtuple
-costs more than validating it (170.6 µs against 78.3 µs at 50 modules). The benchmarks-vs-decider2 note records the
-flagship pipeline's `score()` at 27.7 µs p50 in fused mode.
+costs more than validating it (170.6 µs against 78.3 µs at 50 modules). The flagship pipeline's `score()` is
+27.7 µs p50 in fused mode.
 
 ## Design principles and the decisions behind them
 
-The decisions are numbered as in `Design.md`; the agreed changes since are in `notes/spec-amendments.md`, and each
-decision with a measurement has a note in `notes/`.
+The decisions are numbered as in `Design.md`; the agreed changes since are in `docs/design_decisions/spec-amendments.md`, and each
+decision with a measurement is recorded in `docs/design_decisions/decisions/` and `docs/design_decisions/experiments/`.
 
 | # | Decision | What it means in the code | Why |
 |---|---|---|---|
-| D1 | Pipeline structure lives in Python | config holds params documents and `ConfigurableStep` documents only; flow files are YAML that lives with the code | decider 0.3 kept structure in config, and the JSON order drifted from the real one (51 steps in `main.json`, 120 in `flow.json`, 192 in the C# flow); the structure-in-python note |
+| D1 | Pipeline structure lives in Python | config holds params documents and `ConfigurableStep` documents only; flow files are YAML that lives with the code | decider 0.3 kept structure in config, and the JSON order drifted from the real one (51 steps in `main.json`, 120 in `flow.json`, 192 in the C# flow) |
 | D2 | Two layers: steps and the IR | `Step.to_ir(ctx)` is the only thing a step type must implement | one engine for every step type |
 | D3 | The IR is closed | modes, the debugger and the compiler handle each node type once | a new step type never needs engine changes |
 | D4 | Pydantic in three places only | `ConfigurableStep`, the generated params models, the JSON edge of debug events | everything else is a frozen, slotted dataclass |
 | D5 | Functions convert automatically | `as_step(fn)` wherever a step is expected; `dag` sorts by dependencies, `flow` keeps written order | `@step` is needed only to override defaults |
-| D6 | Every node has an origin, never in a cache key | `Origin(path, source, locator, id, suppress_checks)`; kernels keyed by content | renaming or nesting a step changes its path, not its code; the origins-out-of-cache-keys note |
+| D6 | Every node has an origin, never in a cache key | `Origin(path, source, locator, id, suppress_checks)`; kernels keyed by content | renaming or nesting a step changes its path, not its code |
 | D7 | numba first, polars for frames | no polars expression tier; `frame_step` for joins, filters and model calls | compiled kernels for row logic, polars where it is better |
 | D8 | Missing values are an error by default | `NullPolicy.REQUIRED` unless `missing_as()` or an optional annotation | nulls are handled where they matter, per input |
 | D9 | Params nested by path, shared by key | one type table for shared keys; each node validates its own view | two steps may bound one shared value differently |
@@ -322,19 +321,19 @@ decision with a measurement has a note in `notes/`.
 | D12 | Runners are generators | one yield per node, none per row | running and debugging share one path |
 | D13 | Serving imports the pipeline from code | the handler builds steps from code and loads documents from the config store | explicit stage, activate and rollback instead of polling |
 
-Several engine rules carry measured reasons from the notes:
+Several engine rules carry measured reasons:
 
-- Fusion is a fixed rule, never a cost heuristic. The fusion-is-explicit note records fused against split kernels
-  swinging from 1.33 times faster at one branch group to 0.17 times at 16 modules, and a 62 times spread from body
+- Fusion is a fixed rule, never a cost heuristic. Fused against split kernels
+  swung from 1.33 times faster at one branch group to 0.17 times at 16 modules, and a 62 times spread from body
   cost alone, so no size threshold could choose well.
-- Serving kernels compile with `nogil=True`. Without it, the kernel-flags note measured p99 at 254.1 ms with 16
+- Serving kernels compile with `nogil=True`. Without it, p99 measured 254.1 ms with 16
   threads, 12.7 times a 20 ms budget; with it, 883 µs.
 - `fastmath` stays off. With it on, 46 to 73% of rows differed by up to 17 ULP from Python, which breaks the
   cross-mode agreement test.
 - Only compile failures fall back to Python (`NumbaError`, `UnsupportedBytecodeError`, and a `NotImplementedError`
   from numba's bytecode reader). A runtime error always propagates. Per-row `objmode` was 77 times slower than all-njit
-  in the fallback note's measurement, so the fallback runs a whole step in Python instead.
-- Nested configurable steps dispatch by a dictionary lookup on the `type` tag. The registry note measured that at about
+  in measurement, so the fallback runs a whole step in Python instead.
+- Nested configurable steps dispatch by a dictionary lookup on the `type` tag. That measured about
   15 µs more than the fastest union on a 63-node config, paid once because configs are validated once.
 
 The layout has its own three rules, covered on [Package layout](package-layout.md): a leading underscore anywhere in

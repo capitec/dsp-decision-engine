@@ -1,10 +1,8 @@
-"""Fan-out/reduce (gap 4): score every bundle and keep the best, three ways.
+"""Fan-out/reduce: score every bundle and keep the best, three ways.
 
-Reproduces the running example from `notes/tmcfeval/DECIDER_GAPS.md` §4 now that
-gap 3 (`Columnar[Item]`, `each`) has landed: an order carries line items, the
-pipeline tries every bundle (subset) of items, prices a shipping offer from a
-rate card (`param_table`), disqualifies bundles that are too heavy, scores the
-rest, and keeps the best.
+An order carries line items; the pipeline tries every bundle (subset) of items,
+prices a shipping offer from a rate card (`param_table`), disqualifies bundles
+that are too heavy, scores the rest, and keeps the best.
 
 Three methods, one answer:
 

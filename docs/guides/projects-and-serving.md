@@ -232,7 +232,7 @@ print(call(b'income,debt,applied_on\n1000,250,2026-01-15\n', accept="application
 
 ### One record at a time
 
-Send a single decision as a JSON object, not as a one-element array or a CSV. The object takes the single-record path: the record goes straight into one-row arrays and comes back as a dict. In Python the same rule holds: `executable.score(record_dict, params)` takes a dict (never keyword arguments) and costs about a fifth of `run` on a one-row frame, which builds a frame, exports it through Arrow and assembles an output frame (the figure `decider guide` gives). The serving-latency note has the measured breakdown of a served request. Arrow IPC costs more to encode and decode than a typical pipeline takes to run, so keep it for batches.
+Send a single decision as a JSON object, not as a one-element array or a CSV. The object takes the single-record path: the record goes straight into one-row arrays and comes back as a dict. In Python the same rule holds: `executable.score(record_dict, params)` takes a dict (never keyword arguments) and costs about a fifth of `run` on a one-row frame, which builds a frame, exports it through Arrow and assembles an output frame (the figure `decider guide` gives). The measured breakdown of a served request is in `docs/design_decisions/experiments/serving-latency-budget.md`. Arrow IPC costs more to encode and decode than a typical pipeline takes to run, so keep it for batches.
 
 ### Error responses
 

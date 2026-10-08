@@ -118,7 +118,7 @@ What every subclass inherits:
 | `model_config = ConfigDict(frozen=True, extra="forbid")` | A config never changes in place, and a misspelt field is an error instead of being ignored |
 | `kind = "configurable"` | The step kind tools and `describe` report |
 | `name: str` | The node's path segment and the key of its params in the params document |
-| `id` (optional `str`) | A durable opaque id stored next to `name` in the JSON (see `notes/durable-identities.md`) |
+| `id` (optional `str`) | A durable opaque id stored next to `name` in the JSON |
 | `suppress_checks: list[str]` | Check aliases or codes silenced for this step; the [checks package](../lab/checks.md) reads them from the node's origin |
 | `reads`, `writes` | Relabels set from Python with `.relabel()`; excluded from the dump and from the JSON schema, because placement is code |
 | `load(source)` | Reads a file path, JSON text or a dict, looks at `type`, resolves the class, and validates |
@@ -206,7 +206,7 @@ so `import decider` does not pull in numba-heavy modules, and a document with `"
 
 ### Why a lookup and not a union
 
-The registry note (`registry-dispatch-by-lookup.md`) records the measurements behind this. decider_old rebuilt a discriminated union over every registered class each time one registered. Each rebuild moved nested unions forward by only one level, a late registration left a stale union with no error, and registration was superlinear (333 ms for 175 types). The union's error message for a bad tag was 1332 characters long and listed every tag. On a 63-node, three-level config the union validated in 74.1 µs, the plain dict registry in 73.5 µs, and a native-recursion hybrid in 58.5 µs. The roughly 15 µs that the lookup gives up does not matter, because configs are validated once and cached, and the lookup has no ordering rule and gives a short did-you-mean.
+The measurements behind this: decider_old rebuilt a discriminated union over every registered class each time one registered. Each rebuild moved nested unions forward by only one level, a late registration left a stale union with no error, and registration was superlinear (333 ms for 175 types). The union's error message for a bad tag was 1332 characters long and listed every tag. On a 63-node, three-level config the union validated in 74.1 µs, the plain dict registry in 73.5 µs, and a native-recursion hybrid in 58.5 µs. The roughly 15 µs that the lookup gives up does not matter, because configs are validated once and cached, and the lookup has no ordering rule and gives a short did-you-mean.
 
 ## Values, params and tables inside a document
 
@@ -245,7 +245,7 @@ The three built-in types lower like this:
 
 ### Consts that are addresses
 
-A tree's and a table's consts are integers that hold the addresses of numpy arrays, read in the kernel with the Arrow shim's `load_i64`, `load_f64` and `load_u8` intrinsics. The tree-walker note gives the reason: when the arrays themselves crossed the per-row call, numba reference-counted each one in and out (about 60 atomic NRT calls a row), and a one-node tree cost 525 ns a row. Passing addresses made it 30 ns. The arrays must outlive every call, so the node's `reference` holds them (`reference.arrays`), and the node holds its reference. Nothing else keeps them alive, which is an invariant any new array-backed configurable step has to copy. The [boundary page](../engine/boundary.md) describes the intrinsics.
+A tree's and a table's consts are integers that hold the addresses of numpy arrays, read in the kernel with the Arrow shim's `load_i64`, `load_f64` and `load_u8` intrinsics. The reason: when the arrays themselves crossed the per-row call, numba reference-counted each one in and out (about 60 atomic NRT calls a row), and a one-node tree cost 525 ns a row. Passing addresses made it 30 ns. The arrays must outlive every call, so the node's `reference` holds them (`reference.arrays`), and the node holds its reference. Nothing else keeps them alive, which is an invariant any new array-backed configurable step has to copy. The [boundary page](../engine/boundary.md) describes the intrinsics.
 
 ## Nested steps and the `SerializeAsAny` trap
 
@@ -303,7 +303,7 @@ A configurable step carries the interior of one step: a tree's body, a table's r
 *What lives where, and how the two sides refer to each other.*
 </div>
 
-The reasons are in `structure-in-python.md`. decider_old kept structure in config, and the copies drifted: its hand-maintained `main.json` listed 51 steps, the generated `flow.json` 120, and the real C# flow 192. A value such as `"max_term": 84` sat in a config file while `84.0` was also hardcoded in two modules, so editing the JSON might change nothing. When structure is code, it is reviewed, versioned by commit, and its order comes from the graph.
+decider_old kept structure in config, and the copies drifted: its hand-maintained `main.json` listed 51 steps, the generated `flow.json` 120, and the real C# flow 192. A value such as `"max_term": 84` sat in a config file while `84.0` was also hardcoded in two modules, so editing the JSON might change nothing. When structure is code, it is reviewed, versioned by commit, and its order comes from the graph.
 
 decider_old also accepted `output_fn` as a `{module_name, function_name}` pointer in config. It was `null` in every production config, and tree documents now reject it by name (see the [trees page](trees.md)).
 

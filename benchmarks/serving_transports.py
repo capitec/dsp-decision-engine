@@ -5,9 +5,11 @@ nothing, so the transport's own cost is separable from the handler's. The raw
 servers are single-connection blocking loops on purpose: that is the floor a
 specialised server could reach, with no HTTP and no event loop.
 
-    uv run --with uvicorn python benchmarks/serving_transports.py [--calls 5000]
+    uv run --with uvicorn --with pyarrow --with httptools --with uvloop python benchmarks/serving_transports.py [--calls 5000]
 
-Needs uvicorn only for the `http_*` rows.
+Needs uvicorn for the `http_*` rows, httptools and uvloop for the `httptools+uvloop` rows and
+pyarrow for the `*_pyarrow_stream` rows; rows whose dependency is missing are skipped.
+Results: docs/design_decisions/experiments/arrow-codec-and-transports.md.
 """
 import json
 import mmap

@@ -655,7 +655,7 @@ The [checks guide](../../guides/checks.md) has the user-level recipes. The mecha
 
 ## Why it is shaped this way
 
-The checks note describes what this replaced: two packages (`decider.check` and `decider.checks`) that imported
+The redesign replaced two packages (`decider.check` and `decider.checks`) that imported
 each other; checks that were plain callables with no stable code, configuration, suppression or listing; three
 report shapes; an IR rebuilt by every check; findings with a weaker step reference that couldn't join to
 `describe()` nodes; a numeric check that was pure AST with no type knowledge, so it flagged `cents * rate / 12`
@@ -663,7 +663,7 @@ and missed `a / b` and bare `round()`; and no CLI or gate, so CI had to write Py
 
 The redesign made a check a registry module so JSON, VS Code and MCP can name and configure it, built one shared
 context, gave every finding the contract `StepRef`, and made the numeric checks read types and bounds from the
-IR. Two rules from the note shape the API: decider reports and the client decides (`Report.ok` and `--fail-on` are
+IR. Two rules shape the API: decider reports and the client decides (`Report.ok` and `--fail-on` are
 the gate; default severity is advice), and nothing is skipped silently (a check that needs data and didn't get it
 is in `report.skipped`). The suppression lives on the step (there are no inline `# ignore` comments and no suppressions by id in config), so it moves with the step
 and is reviewed in the same diff. Check policy lives in `checks.yaml` beside `configs/` and not inside it, because

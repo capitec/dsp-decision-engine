@@ -338,9 +338,9 @@ WiringError flowproj/flow.yaml: steps[2]: unknown step 'risk_tree'.
 
 ## Why flow files live with the code
 
-`structure-in-python.md` decided that pipeline structure is code, because decider_old's structure in config produced copies that drifted apart (the [configurable steps overview](index.md) has the numbers). A flow file states structure in YAML, which looks like a reversal. `flow-files.md` explains why it is not: a flow file is the only copy of the structure, and it lives in the repository next to the components it names, reviewed and deployed with them. Params and `ConfigurableStep` documents stay in config versions. The `components:` import path is a pointer in reviewed source, not in deployable config.
+Pipeline structure is code, because decider_old's structure in config produced copies that drifted apart (the [configurable steps overview](index.md) has the numbers). A flow file states structure in YAML, which looks like a reversal. It is not: a flow file is the only copy of the structure, and it lives in the repository next to the components it names, reviewed and deployed with them. Params and `ConfigurableStep` documents stay in config versions. The `components:` import path is a pointer in reviewed source, not in deployable config.
 
-The note also records what was deliberately not built: a `FlowConfig(ConfigurableStep)` that could live inside a config version, which would let structure change without a deploy. It is to be added only if that is wanted, and treated as reversing the earlier decision.
+Also deliberately not built: a `FlowConfig(ConfigurableStep)` that could live inside a config version, which would let structure change without a deploy. It is to be added only if that is wanted, and treated as reversing the earlier decision.
 
 The flow file is modelled on the granting-decisioning service's `flow.yaml` (a tree of `step`/`subflow`/`when`/`loop` nodes). Two problems there shaped this one: subflows were copy-pasted between flow variants, so `flow: name` loads a shared file by reference, and `when`/`loop` took free-text expressions, so conditions here are a column, a component, or the closed `expr` grammar.
 

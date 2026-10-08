@@ -100,7 +100,7 @@ There are two ways to call a pipeline. `run(df)` takes a polars frame and return
 - `"stepped"` compiles every step into its own numba kernel and drives them from Python. Sessions still pause at every step.
 - `"fused"` compiles each run of consecutive compilable steps into one kernel, including whole branches and loops made of plain scalar steps. It is the fastest and the default for `decider serve`.
 
-On the benchmark pipeline the compiled-runners note records (1M rows through `run`, 20k `score` calls), interpreted mode ran 0.25M rows/s with a `score` median of 59.1 µs, stepped 12.9M rows/s and 37.1 µs, and fused 12.5M rows/s and 27.7 µs. [Compiled modes and fallback](guides/compile-and-fallback.md) covers what compiles, what falls back and how to measure your own pipeline.
+On the benchmark pipeline (1M rows through `run`, 20k `score` calls), interpreted mode ran 0.25M rows/s with a `score` median of 59.1 µs, stepped 12.9M rows/s and 37.1 µs, and fused 12.5M rows/s and 27.7 µs. [Compiled modes and fallback](guides/compile-and-fallback.md) covers what compiles, what falls back and how to measure your own pipeline.
 
 ## From functions to answers
 

@@ -1,6 +1,8 @@
 """Warm `score()` and batch cost of a Decimal money flow against the same flow on plain int cents.
 
     uv run python benchmarks/decimal_steps.py [--reps 5]
+
+See docs/design_decisions/experiments/money-types-and-rounding.md.
 """
 import sys
 import time

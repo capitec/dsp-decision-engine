@@ -1,9 +1,9 @@
 """Measure the shipped decision-trace overhead: batch throughput and single-record
 latency with and without a `TraceSink`, plus the event payload per record.
 
-Run with `uv run python benchmarks/trace_overhead.py`. One number feeds
-`notes/vscode-redesign/limits-and-responsibilities.md`: tracing is opt-in because
-materialising the trace costs real time on the request path.
+Run with `uv run python benchmarks/trace_overhead.py`. Results and the decision
+are in `docs/design_decisions/experiments/trace-capture-cost.md`: tracing is opt-in
+because materialising the trace costs real time on the request path.
 """
 import time
 

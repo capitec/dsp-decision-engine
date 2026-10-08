@@ -140,3 +140,7 @@ show_root_heading = true
 show_root_full_path = false
 separate_signature = true
 show_source = false
+
+# docs/design_decisions/ is a maintainer reference read in the repo, not part of the site.
+[project.plugins.exclude]
+glob = ["design_decisions/*"]

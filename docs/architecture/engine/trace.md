@@ -116,7 +116,7 @@ flowchart TB
     class K,L,M tooling
 ```
 
-The sink and its table travel in `_Context`, built per call and handed down through every `_Scope`. They used to be stored on the runner, set at the start of `iterate` and cleared at the end; two overlapping calls on one executable then sent events to the wrong sink. That was race number 3 in the thread-safety note, and `tests/serving/test_concurrency.py` now checks that each traced call gets exactly its own events.
+The sink and its table travel in `_Context`, built per call and handed down through every `_Scope`. They used to be stored on the runner, set at the start of `iterate` and cleared at the end; two overlapping calls on one executable then sent events to the wrong sink. That was one of the races found in the thread-safety audit (see [Concurrency](concurrency.md)), and `tests/serving/test_concurrency.py` now checks that each traced call gets exactly its own events.
 
 Driver-side events come from `_emit_rows(kind, origin, scope, m, step=...)`, which calls `trace.emit` once per row in scope and maps the scope's local row index to the record index through `scope.rows`. In-kernel events are written only at a plain top-level scope: no row subset, no arm, no iteration. A packed branch or loop carries its own arm and iteration inside the kernel. A single-call kernel inside an arm has neither, and its buffer's row-major offsets would label the wrong records, so the stepped runner emits its `STEP` events from Python instead.
 
@@ -345,5 +345,5 @@ Emitting one of the reserved kinds from a kernel would mean a new envelope const
 
 - One int64 per event keeps the kernel side to a store and an increment, with no allocation and the GIL released. Names, sources and ids are strings that a kernel cannot hold cheaply, so they live in the step table and are joined once, in the driver.
 - The traced kernel is a separate compile, so an untraced call runs a kernel with no trace branch and no trace arguments.
-- Durable identity rides on `Origin.id`, an optional 12-hex token committed in the source next to a step's declaration. A path changes when a step is renamed or moved; the id does not. A persisted trace keeps the id and the path and source as they were at capture time, so a reference that no longer resolves after a refactor still shows the old name (the durable-identities note).
+- Durable identity rides on `Origin.id`, an optional 12-hex token committed in the source next to a step's declaration. A path changes when a step is renamed or moved; the id does not. A persisted trace keeps the id and the path and source as they were at capture time, so a reference that no longer resolves after a refactor still shows the old name.
 - Tracing is opt-in because a trace is per-record evidence and may carry personal data. Building a `TraceSink` is the explicit act that turns capture on.

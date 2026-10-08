@@ -116,7 +116,7 @@ variables with the prefix `Decider_`, case-insensitively, so `DECIDER_DATASETS_P
 the cwd. Any other relative path is relative to the cwd.
 
 The default goes through the project root because the VS Code extension launches Python with the cwd set to the
-flow file's directory, which may be deep inside the project. The datasets note records one trap: `decider serve`
+flow file's directory, which may be deep inside the project. One trap: `decider serve`
 loads `.env` with python-dotenv, which expands `${...}` even inside single quotes, so writing `${PROJECT_ROOT}`
 in a `.env` turns into an empty string (`/datasets`). Use an absolute or cwd-relative path there.
 
@@ -401,7 +401,7 @@ Who builds them:
 
 ## Why it is shaped this way
 
-The datasets note records the decisions:
+The decisions:
 
 - A provider is one dataset. The catalogue is a dictionary built from the folder.
 - Clients bring their own sources as `DatasetProvider` subclasses named by import path. An earlier design used a
