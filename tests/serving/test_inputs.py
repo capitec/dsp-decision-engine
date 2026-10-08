@@ -279,7 +279,7 @@ def test_a_json_array_converts_dates_nested_in_lists_like_a_single_record(tmp_pa
     handler.activate()
     one = {"accounts": [{"opened_date": "2019-05-01"}], "opened": ["2020-01-01", "2021-02-02"]}
     two = {"accounts": [{"opened_date": "2024-05-01"}], "opened": ["2020-01-01"]}
-    run = lambda body: json.loads(asyncio.run(handler.process_fn(json.dumps(body).encode(), "application/json",
-                                                                 "application/json")).content)
+    run = lambda body: json.loads(handler.process_fn(json.dumps(body).encode(), "application/json",
+                                                     "application/json").content)
     assert run(one)["newest_year"] == 2021
     assert [r["newest_year"] for r in run([one, two])] == [2021, 2024]
