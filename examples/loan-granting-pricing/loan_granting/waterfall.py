@@ -161,7 +161,7 @@ def run_waterfall(
 
     `app` holds the inputs `cap_waterfall` reads; `bands` are `cap_bands` rows (default: the shipped policy).
     The result has the three ceilings, the rule that set each, each ceiling's chain of values, one entry per
-    rule and the reason codes of any outright decline.
+    rule and the reason codes of any outright decline, including a `risk_grade` worse than the ceiling allows.
 
         out = run_waterfall(app)
         out["amount_cap"], out["amount_cap_binding_rule_id"]   # 76000.0, "CAP-0361"
@@ -205,6 +205,8 @@ def run_waterfall(
             declines.append(rule.decline_reason)
         status = next((s for s in (DECLINED, RAISED, BOUND, COINCIDENT) if s in statuses), DID_NOT_BIND)
         entries.append({"rule_id": rule.rule_id, "owner": rule.owner, "status": status, "changes": changes})
+    if app["risk_grade"] > current[GRADE] and reasons.R_BEYOND_APPETITE not in declines:
+        declines.append(reasons.R_BEYOND_APPETITE)  # the client's grade is worse than the register allows
     binder = {c: chain[c][-1]["rule_id"] if len(chain[c]) > 1 else None for c in chain}
     return {
         "amount_cap": current[AMOUNT], "term_cap": current[TERM], "worst_acceptable_grade": current[GRADE],
@@ -219,7 +221,7 @@ def run_waterfall(
 @allow_fallback
 @step(outputs=OUTPUTS)
 def cap_waterfall(
-    channel_code: int, employment_type_code: float, appetite_max_amount: float, appetite_max_term: float,
+    risk_grade: int, channel_code: int, employment_type_code: float, appetite_max_amount: float, appetite_max_term: float,
     group_exposure_limit: float, internal_exposure_total: float,
     internal_tenure_months: float = missing_as(math.nan), months_employed: float = missing_as(math.nan),
     worst_arrears_months: float = missing_as(math.nan), bureau_enquiry_count_60d: float = missing_as(math.nan),

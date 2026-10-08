@@ -1,4 +1,44 @@
 {
+  "shared": {
+    "permitted_terms": [
+      {
+        "term": 6,
+        "new_to_bank": true
+      },
+      {
+        "term": 12,
+        "new_to_bank": true
+      },
+      {
+        "term": 18,
+        "new_to_bank": true
+      },
+      {
+        "term": 24,
+        "new_to_bank": true
+      },
+      {
+        "term": 36,
+        "new_to_bank": true
+      },
+      {
+        "term": 48,
+        "new_to_bank": true
+      },
+      {
+        "term": 60,
+        "new_to_bank": true
+      },
+      {
+        "term": 72,
+        "new_to_bank": true
+      },
+      {
+        "term": 84,
+        "new_to_bank": false
+      }
+    ]
+  },
   "loan_granting": {
     "eligibility": {
       "gate_product_channel": {
@@ -241,45 +281,7 @@
       "recommendation_objective": "largest_amount"
     },
     "solve_terms": {
-      "evaluation_ceiling_per_term": 24,
-      "permitted_terms": [
-        {
-          "term": 6,
-          "new_to_bank": true
-        },
-        {
-          "term": 12,
-          "new_to_bank": true
-        },
-        {
-          "term": 18,
-          "new_to_bank": true
-        },
-        {
-          "term": 24,
-          "new_to_bank": true
-        },
-        {
-          "term": 36,
-          "new_to_bank": true
-        },
-        {
-          "term": 48,
-          "new_to_bank": true
-        },
-        {
-          "term": 60,
-          "new_to_bank": true
-        },
-        {
-          "term": 72,
-          "new_to_bank": true
-        },
-        {
-          "term": 84,
-          "new_to_bank": false
-        }
-      ]
+      "evaluation_ceiling_per_term": 24
     },
     "offer_set": {
       "minimum_offer_amount": 2000.0,
@@ -289,46 +291,6 @@
       "lgd": 0.72,
       "average_ead": 0.55,
       "funding_cost": 0.0875
-    },
-    "final_validation": {
-      "permitted_terms": [
-        {
-          "term": 6,
-          "new_to_bank": true
-        },
-        {
-          "term": 12,
-          "new_to_bank": true
-        },
-        {
-          "term": 18,
-          "new_to_bank": true
-        },
-        {
-          "term": 24,
-          "new_to_bank": true
-        },
-        {
-          "term": 36,
-          "new_to_bank": true
-        },
-        {
-          "term": 48,
-          "new_to_bank": true
-        },
-        {
-          "term": 60,
-          "new_to_bank": true
-        },
-        {
-          "term": 72,
-          "new_to_bank": true
-        },
-        {
-          "term": 84,
-          "new_to_bank": false
-        }
-      ]
     }
   }
 }

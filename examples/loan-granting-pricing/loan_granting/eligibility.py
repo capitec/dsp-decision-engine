@@ -1,7 +1,7 @@
 """The 14 eligibility gates, each a step with its own verdict, and the step that gathers them.
 
 Every gate runs even after one fails, so a client who fails four gates is told about all four. A gate whose input is
-missing is `not_evaluated`, which is neither a pass nor a fail.
+not there yet is `not_evaluated`, which is neither a pass nor a fail.
 """
 from __future__ import annotations
 
@@ -31,17 +31,16 @@ def gate_product_channel(
     return FAIL if too_small or closed else PASS
 
 
-def gate_min_age(applicant_age_years: float = missing_as(math.nan), minimum_age: float = param(18.0, ge=0.0)) -> int:
-    if math.isnan(applicant_age_years):
-        return NOT_EVALUATED
+def gate_min_age(applicant_age_years: float, minimum_age: float = param(18.0, ge=0.0)) -> int:
     return PASS if applicant_age_years >= minimum_age else FAIL
 
 
 def gate_max_age_at_maturity(
-    applicant_age_years: float = missing_as(math.nan), requested_term_months: float = missing_as(math.nan),
+    applicant_age_years: float, requested_term_months: float = missing_as(math.nan),
     maximum_age_at_maturity: float = param(75.0, ge=0.0),
 ) -> int:
-    if math.isnan(applicant_age_years) or math.isnan(requested_term_months):
+    """Not evaluated when no term was asked for (a journey that asks what the client qualifies for)."""
+    if math.isnan(requested_term_months):
         return NOT_EVALUATED
     return PASS if applicant_age_years + requested_term_months / 12.0 <= maximum_age_at_maturity else FAIL
 
