@@ -581,7 +581,7 @@ shape: (3, 3)
 └────────────┴─────────────┴───────────────┘
 ```
 
-`record` is null when nothing won. Two current limits: with `record=`, the score must be named `score` (a `score="margin"` rename fails with a `MissingInputError` for `score`), and the step that writes the nullable record runs in Python, so it raises a `FallbackWarning` naming `pricing/best/finalise/finalise`.
+`record` is null when nothing won. One current limit: with `record=`, the score must be named `score` (a `score="margin"` rename fails with a `MissingInputError` for `score`).
 
 ## Where to go next
 
