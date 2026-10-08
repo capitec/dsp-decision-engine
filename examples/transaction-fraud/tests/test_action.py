@@ -1,3 +1,5 @@
+from datetime import date
+
 import pytest
 
 from fraud_interdiction.vocab import Action
@@ -71,7 +73,7 @@ def test_two_critical_rules_that_agree_are_not(decide, rule, sample):
 def test_an_account_takeover_monitor_becomes_a_step_up_on_the_web_channel_under_the_overlay(
         decide, rule, sample, channel, stack, expected):
     out = decide([rule("AT-0001", action_code=20)], sample, stack_enabled=stack, channel_code=channel,
-                 decision_date=__import__("datetime").date(2026, 3, 1))
+                 decision_date=date(2026, 3, 1))
     assert out["action_code"] == expected
 
 
