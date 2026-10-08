@@ -8,7 +8,7 @@ from __future__ import annotations
 import math
 import statistics
 
-from decider import flow, missing_as, param, step
+from decider import allow_fallback, flow, missing_as, param
 
 EMPLOYER_CONFIRMED = 1
 PAYSLIP = 2
@@ -93,6 +93,7 @@ def gross_monthly_income(
     return round(raw * (1.0 - income_haircut_applied), 2)
 
 
+@allow_fallback
 def income_variability_ratio(variable_pay_history: list[float] = missing_as([])) -> float:
     """Coefficient of variation of the monthly variable pay (0 with fewer than two values)."""
     values = list(variable_pay_history)

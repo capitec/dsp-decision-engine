@@ -82,3 +82,10 @@ class FraudVerdict(NamedTuple):
     fraud_verdict_code: FraudVerdictCode
     fraud_reason_codes: tuple[int, ...]
     fraud_response_ms: float
+
+
+# outcome_code
+OUTCOME_APPROVE = 1
+OUTCOME_APPROVE_WITH_CONDITIONS = 2
+OUTCOME_REFER = 3
+OUTCOME_DECLINE = 4
