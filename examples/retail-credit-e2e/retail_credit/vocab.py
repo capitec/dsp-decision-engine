@@ -10,3 +10,7 @@ BIND_MIN = "BIND-MIN"  # nothing at or above the product minimum fits the ceilin
 BIND_MAX = "BIND-MAX"  # the product maximum
 
 OUTCOME_REJECTED = 0  # a structural rejection of the request, never a credit decision
+
+# offer_basis_code: which obligations the offer was priced against
+BASIS_ACTUAL = 1
+BASIS_HYPOTHETICAL = 2  # the client settles their external debts first
