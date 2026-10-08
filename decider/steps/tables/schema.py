@@ -154,6 +154,11 @@ def check_rows(expression: t.Any, rows: t.Sequence[t.Mapping[str, t.Any]]) -> No
                 if hi is None and i != last:
                     raise ValueError(f"Row {i}: upper bound unresolvable; only the last row{of} (row {last}) "
                                      "may have an open upper edge.")
+                filled = None in (rows[i].get(leaf.lower_bound_column), rows[i].get(leaf.upper_bound_column))
+                if filled and lo is not None and hi is not None and lo >= hi:
+                    raise ValueError(f"Row {i}: band ({lo}, {hi}) is empty because a bound it leaves None comes "
+                                     f"from the neighbouring row{of}. Give it both bounds; a grid of two band "
+                                     "dimensions gives every row both, with -inf and inf at the outer edges.")
                 if not leaf.allow_gaps and i != last:
                     after = ladder[k + 1]
                     following = rows[after].get(leaf.lower_bound_column) if leaf.lower_bound_column else None
