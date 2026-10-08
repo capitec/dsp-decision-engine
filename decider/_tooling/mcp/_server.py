@@ -27,8 +27,16 @@ with wrap_import_errors("mcp"):
     from fastmcp import FastMCP
 
 
+INSTRUCTIONS = (
+    "Tools for decider decision pipelines. The `decider` skill has the workflows; read it first. "
+    "Edit tree, decision table, scorecard and params documents with these tools rather than by hand: "
+    "each edit is validated by building the document and refused, file untouched, if it breaks. "
+    "Check an edit with try_config on a worked example. Editor tools need the decider VS Code extension."
+)
+
+
 def build_server(policy: Policy, bridge: EditorBridge | None = None) -> FastMCP:
-    mcp = FastMCP(name="decider")
+    mcp = FastMCP(name="decider", instructions=INSTRUCTIONS)
 
     @mcp.tool
     def discover_flows(root: str = ".") -> dict:
@@ -277,4 +285,4 @@ def build_server(policy: Policy, bridge: EditorBridge | None = None) -> FastMCP:
 
 def run_stdio(raw: bool = False) -> None:
     """Serve the MCP server over stdio until the host closes it."""
-    build_server(Policy(raw=raw), EditorBridge()).run(transport="stdio")
+    build_server(Policy(raw=raw), EditorBridge()).run(transport="stdio", show_banner=False)
