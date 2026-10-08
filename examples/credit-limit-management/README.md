@@ -282,7 +282,7 @@ and the programme excludes the account for as long as it is true.
   applications, staff and product maximum; the group-exposure cap (C4); the hysteresis that keeps accounts at the funding
   line from flipping between cycles; the separate sub-envelope for the conditional list (conditional increases are not
   ranked); the short-circuit that skips scoring and affordability for an excluded account (it needs a `branch` around
-  every stage); the offer, consent and event-driven paths; cap overlays; a scorecard of 8 characteristics rather
+  every step); the offer, consent and event-driven paths; cap overlays; a scorecard of 8 characteristics rather
   than dozens.
 - **Synthetic data.** Every table, threshold, rate, curve and budget here is invented for illustration.
 
