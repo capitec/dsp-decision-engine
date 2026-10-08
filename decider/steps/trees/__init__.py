@@ -7,7 +7,7 @@ from pydantic.json_schema import SkipJsonSchema
 from decider._engine.ir.nodes import CallNode, IRNode, SequenceNode
 from decider.steps._configurable import ConfigurableStep
 from decider.steps.trees._condition import expr_condition
-from decider.steps.trees._encode import encode, kind_of
+from decider.steps.trees._encode import encode, feature_kinds, kind_of
 from decider.steps.trees._reference import reference
 from decider.steps.trees._routes import Route, Visit, with_route_columns
 from decider.steps.trees._split import split
@@ -121,14 +121,17 @@ class TreeConfig(ConfigurableStep):
         origin = ctx.origin(self)
         if len(parts) > 1:
             inner = ctx.child(self.name)
-            nodes = [self._row(part, inner.origin(self, f"part_{k}"), ctx) for k, part in enumerate(parts)]
+            # A part reads each feature as the whole tree does, not as its own rules alone would infer it.
+            kinds = feature_kinds(tree, self.feature_types)
+            nodes = [self._row(part, inner.origin(self, f"part_{k}"), ctx, {f: kinds[f] for f in feature_kinds(part, {})})
+                     for k, part in enumerate(parts)]
             # A param is numbered within its own node and named after its path, so a tree with params stays whole.
             if not any(n.params for n in nodes):
                 return SequenceNode(origin, tuple(nodes))
-        return self._row(tree, origin, ctx)
+        return self._row(tree, origin, ctx, self.feature_types)
 
-    def _row(self, tree: Tree, origin: t.Any, ctx: t.Any) -> CallNode:
-        p = encode(tree, self.feature_types, ctx.value, self.null_handling, self.path_output, self.trace_output)
+    def _row(self, tree: Tree, origin: t.Any, ctx: t.Any, feature_types: t.Mapping[str, str]) -> CallNode:
+        p = encode(tree, feature_types, ctx.value, self.null_handling, self.path_output, self.trace_output)
         ref = reference(tree, p.inputs, p.kinds, p.columns)
         # The node's consts are addresses into these arrays; the node holds its reference, which holds them.
         ref.arrays = p.arrays

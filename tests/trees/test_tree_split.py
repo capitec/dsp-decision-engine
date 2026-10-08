@@ -47,3 +47,35 @@ def test_a_tree_with_params_stays_one_row_node():
     (node,) = _nodes(cfg)
     assert len(node.outputs) == 2 * MAX_OUTPUTS
     assert [p.name for p in node.params] == ["limit"]
+
+
+def _rules(n: int, condition) -> dict:
+    leaf = {"type": "leaf", "result_idx": 0}
+    rules = [{"meta": {"name": f"R{k}"}, "rule": {"type": "unary", "condition": condition(k), "then": leaf}}
+             for k in range(n)]
+    return {"type": "prioritized_flat_rule", "mode": "all", "rules": rules, "output": OUTPUT}
+
+
+def test_a_part_reads_a_feature_as_the_whole_tree_does(run):
+    n = MAX_OUTPUTS + 4
+    tree = _rules(n, lambda k: {"op": "is_true", "feature": "flag"} if k < MAX_OUTPUTS
+                  else {"op": ">", "feature": "flag", "threshold": 0.5})
+    out = run(TreeConfig(name="t", tree=tree), pl.DataFrame({"flag": [1.0, 0.0]}))
+    assert out["R0.hit"].to_list() == out[f"R{n - 1}.hit"].to_list() == [True, False]
+
+
+def test_a_declared_feature_type_applies_to_the_part_that_reads_it(run):
+    n = MAX_OUTPUTS + 4
+    tree = _rules(n, lambda k: {"op": ">", "feature": "a" if k < MAX_OUTPUTS else "b", "threshold": 0})
+    out = run(TreeConfig(name="t", feature_types={"b": "int"}, tree=tree), pl.DataFrame({"a": [1.0], "b": [1]}))
+    assert out[f"R{n - 1}.hit"].to_list() == [True]
+
+
+def test_a_node_breakpoint_on_the_tree_pauses_after_the_part_that_reached_it():
+    n = MAX_OUTPUTS + 4
+    tree = _rules(n, lambda k: {"op": ">", "feature": "x", "threshold": k})
+    cfg = TreeConfig(name="t", tree=tree)
+    s = engine.Engine().bind(cfg).session(pl.DataFrame({"x": [1000.0]}))
+    s.break_at(f"t#{cfg.tree.to_tree().rules[-1].root}")
+    at = s.resume()
+    assert (at.origin.path, at.when) == ("t/part_1", "after")

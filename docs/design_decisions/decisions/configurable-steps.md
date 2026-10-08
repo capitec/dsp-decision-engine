@@ -24,7 +24,8 @@ Read this before changing how tree or table documents become kernels, or what a 
 
 - A tree with more than 32 outputs (rules times columns) is cut into row nodes `<name>/part_<k>` of at most 32, each with whole rules; a rule keeps its `<rule>.<column>` names. A tree with params stays one node, since a param is numbered within its node and named after its path.
 - Why: the fused kernel's compile time grows with the square of the outputs of one call (521 rules: 196 s cold, 14 s split), and narrow kernels are shared. The walker's own `pick` is not the cause.
-- Cost: a breakpoint on a node needs its part's path (`<name>/part_1#<id>`), and `<name>` alone no longer names the node; `_split.MAX_OUTPUTS` is the width.
+- Each part reads every feature with the kind the whole tree gives it. A node breakpoint `<name>#<id>` matches the parts under `<name>`.
+- Cost: `<name>` alone no longer names one node, so a trace, a diff and `checks` report per part (`<name>/part_1`); `_split.MAX_OUTPUTS` is the width.
 - See: [wide output compile](../experiments/wide-output-compile.md), `decider/steps/trees/_split.py`
 
 ## Every tree format validates into one `Tree` graph
