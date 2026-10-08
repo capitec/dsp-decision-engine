@@ -122,8 +122,9 @@ def inventory_summary(classified_accounts: list[dict]) -> tuple[list[int], list[
     account that cannot be settled is a conflict for the consultant to resolve, never silently dropped."""
     settleable = [a["account_ref"] for a in classified_accounts
                   if a["settleability_code"] in vocab.SETTLEABLE and not a["is_excluded"]]
-    mandatory = [r for r in settleable if any(a["account_ref"] == r and a["is_nominated"] for a in classified_accounts)]
-    conflicts = [a["account_ref"] for a in classified_accounts if a["is_nominated"] and a["account_ref"] not in settleable]
+    nominated = {a["account_ref"] for a in classified_accounts if a["is_nominated"]}
+    mandatory = [r for r in settleable if r in nominated]
+    conflicts = sorted(nominated - set(settleable))
     total = sum(num(a, "instalment") for a in classified_accounts)
     share = sum(num(a, "instalment") for a in classified_accounts if a["account_ref"] in settleable) / total if total else 0.0
     return (settleable, mandatory, [a["account_ref"] for a in classified_accounts if a["is_excluded"]], conflicts,
