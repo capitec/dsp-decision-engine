@@ -215,6 +215,11 @@ assert out["prior_defaults"].to_list() == [2, 0]
 only_eligible = branch(eligible, full_limit, modifies=["limit"], name="only_eligible")
 out2 = only_eligible.run(pl.DataFrame({"age": [30, 16], "income": [1000.0, 800.0], "limit": [0.0, 500.0]}))
 assert out2["limit"].to_list() == [3000.0, 500.0]
+
+# With no earlier `limit` there is nothing to keep, so a skipped row's `limit` is null. A step after
+# the branch reads it with `missing_as`, or it raises `MissingInputError`.
+out3 = only_eligible.run(pl.DataFrame({"age": [30, 16], "income": [1000.0, 800.0]}))
+assert out3["limit"].to_list() == [3000.0, None]
 ```
 
 ## Trees, rule sets, tables, scorecards

@@ -66,7 +66,8 @@ def branch(condition: Any, *arms: Any, modifies: Sequence[str], name: str, id: s
     switching a flag from bool to 0/1 swaps the arms. An arm may be one step
     or a flow of several; the arms of one branch must agree on the type of
     each name they modify. A single arm is allowed for a bool condition: the
-    false rows run nothing and keep their earlier `modifies` values.
+    false rows run nothing and keep their earlier `modifies` values, or null
+    when there is none, so a later step reading it needs `missing_as`.
 
     A bare column name is a condition too: `branch("on_card", ...)` reads the
     existing bool column `on_card`, the same as an identity step
