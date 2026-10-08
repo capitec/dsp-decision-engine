@@ -43,7 +43,8 @@ def notional_instalment(policy_proposed_limit: float, product_code: float) -> fl
     """The commitment if the facility were drawn to the new limit and serviced at the minimum payment (3.5% of the
     limit, at least R100, on the card; 5%, at least R50, on the facility)."""
     floor = 100.0 if product_code == PRODUCT_EVERYDAY_CARD else 50.0
-    return round(max(policy_proposed_limit * _minimum_payment_rate(product_code), floor if policy_proposed_limit > 0 else 0.0), 2)
+    payment = policy_proposed_limit * _minimum_payment_rate(product_code)
+    return round(max(payment, floor if policy_proposed_limit > 0 else 0.0), 2)
 
 
 @allow_fallback
@@ -56,7 +57,8 @@ def evidence_tier_code(
     """A salary credited in each of the last three months is tier A when steady and tier B when not, then declared
     income by age. No deposits and no declared income is tier E."""
     if verified_salary_present_3m:
-        return EvidenceTier.A_VERIFIED_SALARY if salary_deposit_variability_pct <= steady_deposit_variability else EvidenceTier.B_IRREGULAR_DEPOSITS
+        steady = salary_deposit_variability_pct <= steady_deposit_variability
+        return EvidenceTier.A_VERIFIED_SALARY if steady else EvidenceTier.B_IRREGULAR_DEPOSITS
     if declared_income_age_days <= declared_income_fresh_days:
         return EvidenceTier.C_DECLARED_REFRESHED
     return EvidenceTier.D_DECLARED_STALE if declared_income_age_days < _NO_DECLARED_INCOME else EvidenceTier.E_NO_EVIDENCE
@@ -108,7 +110,8 @@ def increase_path_code(
     that have not grown over 25%. Anything else the assessment can still carry is conditional on the client confirming
     income. Not offered when the evidence cannot support an assessment, or when the client cannot carry any of the
     increase the caps allowed."""
-    if evidence_sufficiency_code != verdict.EVIDENCE_OK or (policy_proposed_limit > current_limit and cap_affordability <= current_limit):
+    no_room = policy_proposed_limit > current_limit and cap_affordability <= current_limit
+    if evidence_sufficiency_code != verdict.EVIDENCE_OK or no_room:
         return IncreasePath.FAIL
     bureau_age = _NO_DECLARED_INCOME if bureau_as_of_date is None else (decision_date - bureau_as_of_date).days
     fresh = (evidence_tier_code in (EvidenceTier.A_VERIFIED_SALARY, EvidenceTier.B_IRREGULAR_DEPOSITS)
@@ -141,7 +144,8 @@ def unit():
                 "primary_reason_code": "affordability_primary_reason_code",
                 "reason_registry_version": "affordability_reason_registry_version"})
     return flow(
-        step(assessment_mode_code), step(is_joint_application), step(notional_instalment), step(evidence_tier_code), step(income_staleness_days),
+        step(assessment_mode_code), step(is_joint_application), step(notional_instalment), step(evidence_tier_code),
+        step(income_staleness_days),
         step(programme_income_evidence, outputs=("programme_statement_income", "programme_statement_confidence",
                                                  "programme_declared_income")),
         evidence, buffer_adjustment_step, capacity,
