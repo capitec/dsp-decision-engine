@@ -3,14 +3,12 @@
 from assessment.pipeline import build as build_assessment
 
 from consolidation.capacity import as_assessment_accounts
-from conftest import parse_dates
 
 WHOLE = build_assessment().compile("interpreted")
 
 
-def whole_assessment(request: dict, retained_refs, product_code: int, proposed_instalment: float | None = None) -> dict:
-    """The full assessment of the client holding only `retained_refs`, as a new application at `product_code` would see it."""
-    record = parse_dates(request)
+def whole_assessment(record: dict, retained_refs, product_code: int, proposed_instalment: float | None = None) -> dict:
+    """The full assessment of the client (a parsed request) holding only `retained_refs`, as at `product_code`."""
     bureau, internal = as_assessment_accounts([a for a in record["accounts"] if a["account_ref"] in retained_refs], {})
     keep = ("decision_date", "channel_code", "segment_code", "risk_grade", "bureau_as_of_date", "court_ordered_deductions",
             "is_joint_application")
@@ -27,29 +25,29 @@ FIGURES = ("gross_monthly_income", "net_monthly_income", "living_expenses", "sta
            "expense_basis_code")
 
 
-def test_the_income_and_expense_determination_equals_the_assessments_and_is_made_once(assess, sample):
+def test_the_income_and_expense_determination_equals_the_assessments_and_is_made_once(assess, sample, parse):
     out = assess()
-    whole = whole_assessment(sample, {a["account_ref"] for a in sample["accounts"]}, 11)
+    whole = whole_assessment(parse(sample), {a["account_ref"] for a in sample["accounts"]}, 11)
     assert {name: out["invariants"][name] for name in FIGURES} == {name: whole[name] for name in FIGURES}
     assert out["invariants"]["net_monthly_income"] == 35_620.0 and out["invariants"]["living_expenses"] == 5_450.0
 
 
-def test_the_baseline_capacity_equals_the_whole_assessment_of_the_unreduced_inventory(assess, sample):
+def test_the_baseline_capacity_equals_the_whole_assessment_of_the_unreduced_inventory(assess, sample, parse):
     out = assess()
-    whole = whole_assessment(sample, {a["account_ref"] for a in sample["accounts"]}, 11)
+    whole = whole_assessment(parse(sample), {a["account_ref"] for a in sample["accounts"]}, 11)
     base = out["baseline"]
     assert (base["existing_obligations"], base["discretionary_income"], base["max_affordable_instalment"]) == (
         whole["existing_obligations"], whole["discretionary_income"], whole["max_affordable_instalment"])
 
 
-def test_every_priced_scenario_has_the_capacity_of_the_whole_assessment_run_on_what_remains(assess, sample):
+def test_every_priced_scenario_has_the_capacity_of_the_whole_assessment_run_on_what_remains(assess, sample, parse):
     out = assess()
     checked = {11: 0, 20: 0}
     for s in out["scenarios"]:
         if "offered_amount" not in s or checked[s["product_code"]] >= 4:
             continue
         retained = {a["account_ref"] for a in sample["accounts"]} - set(s["settlement_set"])
-        whole = whole_assessment(sample, retained, s["product_code"], s["tested_payment"])
+        whole = whole_assessment(parse(sample), retained, s["product_code"], s["tested_payment"])
         assert (s["existing_obligations_after"], s["discretionary_income"], s["max_affordable_instalment"],
                 s["affordability_verdict_code"]) == (whole["existing_obligations"], whole["discretionary_income"],
                                                      whole["max_affordable_instalment"], whole["affordability_verdict_code"])

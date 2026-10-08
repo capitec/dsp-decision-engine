@@ -4,7 +4,6 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from conftest import with_params
 
 from consolidation import objective
 
@@ -58,7 +57,7 @@ def test_with_the_stack_off_the_branch_gets_the_unblended_objective(assess, para
     assert out["objective_weights"]["min_commitment"] == 1.0 and out["objective_overlay_ids"] == []
 
 
-def test_a_weights_table_row_edited_in_the_params_changes_the_objective(assess, params):
+def test_a_weights_table_row_edited_in_the_params_changes_the_objective(assess, params, with_params):
     table = [{"channel_code": 0, "new_money": 0.0, "min_commitment": 0.0, "min_total_cost": 1.0, "bank_value": 0.0,
               "client_outcome": 0.0}]
     out = assess(channel_code=3, params_document=with_params(params, "selection", objective_weights=table))
@@ -112,7 +111,7 @@ def test_the_shadow_result_is_the_best_for_the_client_whatever_objective_is_in_f
     assert ranked["top"][0]["scenario_id"] == 1 and ranked["shadow"]["scenario_id"] == 2
 
 
-def test_components_are_ratios_to_the_baseline_so_the_budget_does_not_change_the_winner(assess, params):
+def test_components_are_ratios_to_the_baseline_so_the_budget_does_not_change_the_winner(assess, params, with_params):
     full = assess()
     cut = assess(params_document=with_params(params, "search", max_scenarios=full["chosen_offer"]["scenario_id"]))
     assert cut["chosen_offer"]["scenario_id"] == full["chosen_offer"]["scenario_id"]

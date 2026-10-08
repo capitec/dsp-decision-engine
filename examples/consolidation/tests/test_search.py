@@ -1,10 +1,8 @@
 """The bounded search: a declared budget counted in scenarios, a recorded cause of termination, and the same answer every time."""
 import time
 
-from conftest import with_params
 
-
-def budget(params, n):
+def budget(with_params, params, n):
     return with_params(params, "search", max_scenarios=n)
 
 
@@ -26,8 +24,8 @@ def eighteen_accounts(sample):
     return {**sample, "accounts": accounts, "requested_amount": 20_000.0}
 
 
-def test_the_search_never_exceeds_its_budget_and_says_it_ran_out_of_budget(assess, params):
-    out = assess(params_document=budget(params, 25))
+def test_the_search_never_exceeds_its_budget_and_says_it_ran_out_of_budget(assess, params, with_params):
+    out = assess(params_document=budget(with_params, params, 25))
     record = out["search_record"]
     assert (len(out["scenarios"]), record["budget"], record["consumption"], record["termination_cause"]) == (
         25, 25, 25, "budget_exhausted")
@@ -40,8 +38,9 @@ def test_a_search_that_ran_out_of_candidates_says_so_and_how_many_there_were(ass
     assert record["consumption"] == record["candidate_scenarios"] < record["budget"]
 
 
-def test_a_truncated_search_is_the_first_part_of_the_full_one_and_truncates_identically_on_replay(assess, params):
-    full, cut, again = assess(), assess(params_document=budget(params, 40)), assess(params_document=budget(params, 40))
+def test_a_truncated_search_is_the_first_part_of_the_full_one_and_truncates_identically_on_replay(assess, params, with_params):
+    full = assess()
+    cut, again = (assess(params_document=budget(with_params, params, 40)) for _ in range(2))
     assert ids(cut) == list(range(1, 41)) == ids(again)
     assert cut["scenarios"] == full["scenarios"][:40] == again["scenarios"]
 
@@ -70,5 +69,5 @@ def test_every_scenario_evaluated_is_recorded_viable_or_rejected_with_a_reason(a
         assert s["viable"] or s["rejection_reason_codes"]
 
 
-def test_a_different_budget_in_the_params_needs_no_release(assess, params):
-    assert assess(params_document=budget(params, 7))["search_record"]["consumption"] == 7
+def test_a_different_budget_in_the_params_needs_no_release(assess, params, with_params):
+    assert assess(params_document=budget(with_params, params, 7))["search_record"]["consumption"] == 7

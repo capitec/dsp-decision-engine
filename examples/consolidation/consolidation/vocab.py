@@ -1,7 +1,12 @@
 """Codes this example declares; the shared library does not publish them."""
 from credit_core.vocab import (  # noqa: F401  (re-exported so callers have one place to look)
-    OUTCOME_APPROVE, OUTCOME_DECLINE, OUTCOME_REFER, PRODUCT_EVERYDAY_CARD, PRODUCT_FLEX_LOAN,
-    PRODUCT_FLEX_LOAN_CONSOLIDATION)
+    OUTCOME_APPROVE,
+    OUTCOME_DECLINE,
+    OUTCOME_REFER,
+    PRODUCT_EVERYDAY_CARD,
+    PRODUCT_FLEX_LOAN,
+    PRODUCT_FLEX_LOAN_CONSOLIDATION,
+)
 
 # settleability_code, in the order the rules are tried (first match wins)
 UNKNOWN, BLOCKED_BY_STATUS, BLOCKED_BY_POLICY, BLOCKED_BY_PROVIDER = 7, 6, 5, 4

@@ -25,8 +25,7 @@ def parse_dates(record: dict) -> dict:
     return record
 
 
-def with_params(params: dict, step: str, **changes) -> dict:
-    """A copy of the params document with `changes` on the named step. Never edit one in place after scoring with it."""
+def changed_params(params: dict, step: str, **changes) -> dict:
     changed = copy.deepcopy(params)
     changed["consolidation"][step].update(changes)
     return changed
@@ -40,6 +39,13 @@ def documents():
 @pytest.fixture(scope="session")
 def params():
     return json.loads((ROOT / "configs" / "0.1.0" / "params.json").read_text())
+
+
+@pytest.fixture(scope="session")
+def with_params():
+    """`with_params(params, "step", name=value)`: a copy of the params document with those values on the named step.
+    Never edit a params document in place after scoring with it."""
+    return changed_params
 
 
 @pytest.fixture(scope="session")
@@ -66,6 +72,11 @@ def assess(pipeline, sample, params):
         return pipeline.score(parse_dates(record), params_document or params)
 
     return run
+
+
+@pytest.fixture(scope="session")
+def parse():
+    return parse_dates
 
 
 @pytest.fixture

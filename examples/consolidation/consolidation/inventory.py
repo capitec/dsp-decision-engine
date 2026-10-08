@@ -9,7 +9,17 @@ from __future__ import annotations
 from datetime import date
 from typing import TypedDict
 
-from decider import DecisionTableConfig, ParamTable, allow_fallback, each, flow, missing_as, param, param_table, step
+from decider import (
+    DecisionTableConfig,
+    ParamTable,
+    allow_fallback,
+    each,
+    flow,
+    missing_as,
+    param,
+    param_table,
+    step,
+)
 
 from consolidation import vocab
 

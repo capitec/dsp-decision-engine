@@ -10,7 +10,14 @@ import math
 
 from credit_core.rate_card import rate_card_rate
 from credit_core.rounding import round_instalment
-from decider import DecisionTableConfig, ParamTable, allow_fallback, param, param_table, step
+from decider import (
+    DecisionTableConfig,
+    ParamTable,
+    allow_fallback,
+    param,
+    param_table,
+    step,
+)
 
 from consolidation import vocab
 from consolidation.products import Quote
