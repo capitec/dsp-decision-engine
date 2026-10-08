@@ -26,14 +26,14 @@ from decider.steps.tables.schema import (
 from decider.steps.trees._ops import GE, GT, LE, LT
 
 # Condition kinds, the columns of a program row, and the two ends of a program.
-BETWEEN, EQ_F, EQ_B, EQ_S, IN_F, IN_S, TRUE = range(7)
+BETWEEN, EQ_F, EQ_B, EQ_S, IN_F, IN_S, TRUE, EQ_I, IN_I = range(9)
 KIND, VAR, LEAF, LO_OP, HI_OP, THEN, ELSE = range(7)
 WIDTH = 7
 MATCH, FAIL = -1, -2
 
 
 def kind(dtype: t.Any, column: str) -> str:
-    """`float`, `int`, `bool`, `str`, `list[float]` or `list[str]` for a polars dtype."""
+    """`float`, `int`, `bool`, `str`, `list[float]`, `list[int]` or `list[str]` for a polars dtype."""
     base = dtype.base_type()
     if base is pl.Boolean:
         return "bool"
@@ -44,7 +44,7 @@ def kind(dtype: t.Any, column: str) -> str:
     if base is pl.List:
         inner = kind(dtype.inner, column)
         if inner in ("float", "int", "str"):
-            return "list[str]" if inner == "str" else "list[float]"
+            return f"list[{inner}]"
     raise ValueError(f"column {column!r} is {dtype}; a decision table column is a number, Boolean, String "
                      "or a List of numbers or strings")
 
@@ -69,17 +69,26 @@ def _variable_kind(leaf: t.Any, types: dict[str, str]) -> str:
         return "bool"
     column = leaf.value_column if isinstance(leaf, EqExpression) else leaf.values_column
     k = types[column]
-    return "str" if k in ("str", "list[str]") else "bool" if k == "bool" else "float"
+    if k in ("str", "list[str]"):
+        return "str"
+    return "bool" if k == "bool" else "int" if k in ("int", "list[int]") else "float"
 
 
 def variables(expression: t.Any, types: dict[str, str]) -> dict[str, str]:
-    """Each input the table reads and its kind (`float`, `bool` or `str`), from how the conditions use it."""
+    """Each input the table reads and its kind (`float`, `int`, `bool` or `str`), from how the conditions use it.
+
+    An input is `int` (compared exactly as int64, even above 2**53) only if every condition on it is an `eq` or
+    `in` over an integer column. Also used by a `between`, or over a float column, it is `float`.
+    """
     found: dict[str, str] = {}
     for leaf in leaves(expression):
         k = _variable_kind(leaf, types)
-        if found.setdefault(leaf.variable, k) != k:
-            raise ValueError(f"variable {leaf.variable!r} is compared as {found[leaf.variable]} and as {k}; "
-                             "one variable has one type")
+        prev = found.setdefault(leaf.variable, k)
+        if prev != k:
+            if {prev, k} != {"int", "float"}:
+                raise ValueError(f"variable {leaf.variable!r} is compared as {prev} and as {k}; "
+                                 "one variable has one type")
+            found[leaf.variable] = "float"
     return found
 
 
@@ -102,18 +111,20 @@ def check_columns(expression: t.Any, types: dict[str, str]) -> None:
             raise ValueError(f"Value column '{leaf.value_column}' not found in parameters columns")
 
 
-def _leaf_kind(leaf: t.Any, types: dict[str, str]) -> int:
+def _leaf_kind(leaf: t.Any, types: dict[str, str], kinds: dict[str, str]) -> int:
     if isinstance(leaf, BetweenExpression):
         return BETWEEN
     if isinstance(leaf, IsTrueExpression):
         return TRUE
+    int_lane = kinds[leaf.variable] == "int"
     if isinstance(leaf, InExpression):
-        return IN_S if types[leaf.values_column] == "list[str]" else IN_F
+        return IN_S if types[leaf.values_column] == "list[str]" else IN_I if int_lane else IN_F
     k = types[leaf.value_column]
-    return EQ_S if k == "str" else EQ_B if k == "bool" else EQ_F
+    return EQ_S if k == "str" else EQ_B if k == "bool" else EQ_I if int_lane else EQ_F
 
 
-def program(expression: t.Any, types: dict[str, str], slots: dict[str, int]) -> tuple[np.ndarray, int]:
+def program(expression: t.Any, types: dict[str, str], slots: dict[str, int],
+            kinds: dict[str, str]) -> tuple[np.ndarray, int]:
     """The conditions as jump rows `(kind, variable slot, condition, lower op, upper op, then, else)` and the entry row.
 
     A target of `MATCH` means the row matches, `FAIL` that it doesn't.
@@ -130,7 +141,7 @@ def program(expression: t.Any, types: dict[str, str], slots: dict[str, int]) -> 
                     other = build(sub, then, other)
             return then if isinstance(e, AndExpression) else other
         lo, hi = (GE, LT) if getattr(e, "mode", BoundMode.lower_inclusive) is BoundMode.lower_inclusive else (GT, LE)
-        rows.append([_leaf_kind(e, types), slots[e.variable], numbered[id(e)], lo, hi, then, other])
+        rows.append([_leaf_kind(e, types, kinds), slots[e.variable], numbered[id(e)], lo, hi, then, other])
         return len(rows) - 1
 
     entry = build(expression, MATCH, FAIL)
@@ -139,11 +150,13 @@ def program(expression: t.Any, types: dict[str, str], slots: dict[str, int]) -> 
 
 @dataclass
 class Shape:
-    """What packing rows needs: the conditions, each output's `(column, kind, string choices)`, the column dtypes."""
+    """What packing rows needs: the conditions, each output's `(column, kind, string choices)`, the column dtypes
+    and each input's kind from `variables`."""
 
     expression: t.Any
     outputs: list[tuple[str, str, t.Optional[tuple[str, ...]]]]
     dtypes: dict[str, t.Any]
+    kinds: dict[str, str]
 
     def arrive(self, frame: t.Any) -> Rows:
         """Rows from a params document, checked against the declared columns and packed."""
@@ -223,8 +236,6 @@ def pack(data: list[dict], shape: Shape) -> Rows:
     def head(k: int, i: int, f: int) -> None:
         ints[2 * k], ints[2 * k + 1] = i, f
 
-    # ponytail: numbers compare as float64, exact up to 2**53; add an int64 lane, as trees have, if a table keys on
-    # bigger ints.
     for k, leaf in enumerate(conds):
         if isinstance(leaf, BetweenExpression):
             bands = bounds(leaf, data, ladders)
@@ -236,6 +247,8 @@ def pack(data: list[dict], shape: Shape) -> Rows:
             has = [v is not None for v in col]
             if shape.dtypes[leaf.value_column].base_type() in (pl.String, pl.Categorical, pl.Enum):
                 head(k, put(text("" if v is None else v for v in col) + has, ints), 0)
+            elif shape.kinds[leaf.variable] == "int":
+                head(k, put(has + [0 if v is None else v for v in col], ints), 0)
             else:
                 head(k, put(has, ints), put([0.0 if v is None else float(v) for v in col], floats))
         elif isinstance(leaf, InExpression):
@@ -245,6 +258,9 @@ def pack(data: list[dict], shape: Shape) -> Rows:
             if kind(shape.dtypes[leaf.values_column], leaf.values_column) == "list[str]":
                 start = len(ints) + n + 1
                 head(k, put([start + c for c in counts] + text(items), ints), 0)
+            elif shape.kinds[leaf.variable] == "int":
+                start = len(ints) + n + 1
+                head(k, put([start + c for c in counts] + items, ints), 0)
             else:
                 start = len(floats)
                 head(k, put([start + c for c in counts], ints), put(map(float, items), floats))

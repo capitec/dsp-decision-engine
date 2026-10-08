@@ -119,11 +119,11 @@ outputs: [('rate', float | None), ('tier', typing.Literal['small', 'large', 'car
 entry: 1 outputs: ((2, 0.0, 0), (3, 3))
 ```
 
-Inputs are ordered float, bool, string (the same `split` the tree walker uses). A number variable is `missing_as(NaN)`, which no comparison matches; bool and string variables are `T | None`. `rate` is nullable because the default is null. `tier` is a `Literal` whose choices are the rows' values plus the default.
+Inputs are ordered float, int, bool, string (the same `split` the tree walker uses). A number variable is `missing_as(NaN)`, which no comparison matches; bool and string variables are `T | None`. `rate` is nullable because the default is null. `tier` is a `Literal` whose choices are the rows' values plus the default.
 
 ## The jump program
 
-`program(expression, types, slots)` compiles the conditions into rows of seven int64 columns: `KIND, VAR, LEAF, LO_OP, HI_OP, THEN, ELSE`. `KIND` is one of `BETWEEN, EQ_F, EQ_B, EQ_S, IN_F, IN_S, TRUE`; `VAR` is the variable's slot within its kind; `LEAF` is the condition's number, which says where its row data sits in the packed rows; `LO_OP` and `HI_OP` are the band's comparison opcodes (`GE`/`LT` for `lower_inclusive`, `GT`/`LE` for `upper_inclusive`). A target of `MATCH` (-1) means the table row matches, `FAIL` (-2) that it does not.
+`program(expression, types, slots, kinds)` compiles the conditions into rows of seven int64 columns: `KIND, VAR, LEAF, LO_OP, HI_OP, THEN, ELSE`. `KIND` is one of `BETWEEN, EQ_F, EQ_B, EQ_S, IN_F, IN_S, TRUE, EQ_I, IN_I`; `VAR` is the variable's slot within its kind; `LEAF` is the condition's number, which says where its row data sits in the packed rows; `LO_OP` and `HI_OP` are the band's comparison opcodes (`GE`/`LT` for `lower_inclusive`, `GT`/`LE` for `upper_inclusive`). A target of `MATCH` (-1) means the table row matches, `FAIL` (-2) that it does not.
 
 AND and OR are jumps, exactly as in a tree: `and` chains its sub-conditions through `THEN`, `or` through `ELSE`, built from the last sub-condition backwards. Nothing is expanded to disjunctive normal form, so a table with 400 conditions (`test_a_400_condition_table_builds_and_answers_correctly`) is 400 program rows.
 
@@ -170,11 +170,13 @@ What each condition and output stores:
 | `eq` on a String column | `n + 1` byte offsets into `chars`, then `n` has-value flags | nothing |
 | `eq` on a number or bool column | `n` has-value flags | `n` values as float64 |
 | `in` on a `List[String]` | `n + 1` starts into a list of byte offsets, then the offsets | nothing |
+| `eq` on an integer column, int input | `n` has-value flags, then `n` values | nothing |
+| `in` on a `List` of integers, int input | `n + 1` starts into the int array, then the items | nothing |
 | `in` on a `List` of numbers | `n + 1` starts into the float array | the items as float64 |
 | a float output | `n` validity flags | `n` values |
 | an int, bool or String output | `n` validity flags, then `n` values (a String output's values are indices into its `Literal` choices) | nothing |
 
-`between` bounds are resolved when the rows are packed (the next section), so the kernel reads a finished `(has_lo, lo, has_hi, hi)` per row and never looks at a neighbour. Numbers compare as float64, exact up to 2**53. An int column is therefore compared as a float; the code marks this with a `ponytail` comment, and an int64 lane like the tree walker's is the upgrade if a table ever keys on larger integers.
+`between` bounds are resolved when the rows are packed (the next section), so the kernel reads a finished `(has_lo, lo, has_hi, hi)` per row and never looks at a neighbour. Numbers compare as float64, exact up to 2**53, except an int input: a variable whose every condition is an `eq` or `in` over an integer column compares as int64 (`EQ_I`, `IN_I`), with a null as `NULL_INT` as in the tree walker. A `between` on the variable, or an `eq` over a float column, keeps it float.
 
 ## Matching
 

@@ -1,9 +1,9 @@
 """Decision-table score() latency and batch throughput of a DecisionTableConfig in every mode.
 
-Two tables. "bands": 12 contiguous score bands (between) writing a String,
+Three tables. "bands": 12 contiguous score bands (between) writing a String,
 an Int64 and a Float64 column. "gated": the same bands ANDed with a string
-`in` on a `channel` column (a List[String] per row). Each also runs with its
-rows read from the params document.
+`in` on a `channel` column (a List[String] per row). "code": an `eq`
+on an Int64 column. Each also runs with its rows read from the params document.
 
     uv run python benchmarks/table_match.py
 """
@@ -20,13 +20,15 @@ N = 1_000_000
 rng = np.random.default_rng(0)
 CUTS = np.linspace(0.0, 1.0, 13).tolist()
 ROWS = [{"lo": None if i == 0 else CUTS[i], "hi": None if i == 11 else CUTS[i + 1], "band": f"band_{i % 5}",
-         "pts": i, "rate": i / 10, "keys": ["app", "web"] if i % 2 else ["branch"]} for i in range(12)]
+         "pts": i, "rate": i / 10, "code": 1000 + i, "keys": ["app", "web"] if i % 2 else ["branch"]} for i in range(12)]
 DTYPES = {"lo": "Float64", "hi": "Float64", "band": "String", "pts": "Int64", "rate": "Float64",
-          "keys": {"type": "List", "inner": "String"}}
+          "code": "Int64", "keys": {"type": "List", "inner": "String"}}
 BETWEEN = {"type": "between", "variable": "score", "lower_bound_column": "lo", "upper_bound_column": "hi"}
 GATED = {"type": "and", "expressions": [BETWEEN, {"type": "in", "variable": "channel", "values_column": "keys"}]}
+CODE = {"type": "eq", "variable": "code", "value_column": "code"}
 OUTPUTS = ["band", "pts", "rate"]
-frame = pl.DataFrame({"score": rng.uniform(0, 1, N), "channel": rng.choice(["app", "web", "branch", "call"], N)})
+frame = pl.DataFrame({"score": rng.uniform(0, 1, N), "channel": rng.choice(["app", "web", "branch", "call"], N),
+                      "code": rng.integers(1000, 1015, N)})
 ROW = frame.row(0, named=True)
 
 
@@ -85,3 +87,5 @@ print("12 score bands")
 compare(BETWEEN)
 print("bands AND a string list")
 compare(GATED)
+print("an integer code `eq` per row")
+compare(CODE)
