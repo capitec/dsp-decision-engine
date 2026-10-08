@@ -43,13 +43,7 @@ class Rule(BaseModel):
         return self
 
 
-# workaround: a tree's compile time grows faster than its rule count (100 rules: 7 s, 521 rules: 175 s; the
-# same 521 in chunks of 32: 54 s cold, 12 s with the numba cache), so a long rule list becomes several trees.
-# The answers are the same, and editing one rule recompiles only its chunk.
-CHUNK = 32
-
-
-def _trees(name: str, rules: list[Rule], column: str, *, base: bool = False) -> list[TreeConfig]:
+def _tree(name: str, rules: list[Rule], column: str, *, base: bool = False) -> TreeConfig:
     leaf = {"type": "leaf", "result_idx": 0}
 
     def root(r: Rule) -> dict:
@@ -57,10 +51,9 @@ def _trees(name: str, rules: list[Rule], column: str, *, base: bool = False) -> 
         node = {**c, "then": leaf} if c.get("type") == "composite" else {"type": "unary", "condition": c, "then": leaf}
         return {"meta": {"name": r.rule_id}, "rule": node}
 
-    return [TreeConfig.load({"type": "tree", "name": f"{name}_{i // CHUNK}", "tree": {
-        "type": "prioritized_flat_rule", "mode": "all", "rules": [root(r) for r in rules[i:i + CHUNK]],
+    return TreeConfig.load({"type": "tree", "name": name, "tree": {
+        "type": "prioritized_flat_rule", "mode": "all", "rules": [root(r) for r in rules],
         "output": {"data": [{column: True}], "default": {column: False}, "dtypes": [[column, "Boolean"]]}}})
-        for i in range(0, len(rules), CHUNK)]
 
 
 class RuleSet(ConfigurableStep):
@@ -87,6 +80,7 @@ class RuleSet(ConfigurableStep):
         live = [r for r in self.rules if r.status == "live"]
         shadow = [r for r in self.rules if r.status == "shadow"]
         adjusted = [r for r in live if r.base_condition is not None]
-        trees = [*_trees("live", live, "fired"), *_trees("shadow", shadow, "fired"),
-                 *_trees("overlay_base", adjusted, "fired_base", base=True)]
+        trees = [_tree(name, rules, column, base=base)
+                 for name, rules, column, base in (("live", live, "fired", False), ("shadow", shadow, "fired", False),
+                                                   ("overlay_base", adjusted, "fired_base", True)) if rules]
         return ctx.expand(self, flow(*trees, firing_step(self.rules), name=self.name))
