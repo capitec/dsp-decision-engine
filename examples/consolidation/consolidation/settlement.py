@@ -48,7 +48,7 @@ def derive_settlement(account: dict, decision_date: date, disbursement_lag_days:
         "fees_unpaid": num(account, "fees_unpaid"),
         "early_settlement_charge": round(balance * rate / 12.0 * charge_months, 2) if balance >= large_agreement_threshold else 0.0,
         "security_release_cost": security_release_cost if account["settleability_code"] == vocab.SECURITY_RELEASE else 0.0,
-        "rebate": -num(account, "unearned_rebate"),
+        "rebate": 0.0 - num(account, "unearned_rebate"),
     }
     amount = round(sum(components.values()), 2)
     internal = bool(account["is_internal"])

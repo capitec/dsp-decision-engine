@@ -22,6 +22,11 @@ INVARIANTS = ("net_monthly_income", "living_expenses", "income_verification_tier
               "bureau_is_stale", "minimum_income_tier", "residual_floor_amount")
 
 
+def debt_service_ratio(obligations: float, net_monthly_income: float) -> float:
+    """Obligations as a share of net income; with no income the ratio is 1, so a ceiling always fails."""
+    return round(obligations / net_monthly_income, 4) if net_monthly_income > 0 else 1.0
+
+
 def as_assessment_accounts(accounts: list[dict], settled: dict[int, float]) -> tuple[list[dict], list[dict]]:
     """`(bureau, internal)` account lists in `credit_core`'s shape; a settled account carries its settlement as a quote."""
     bureau, internal = [], []

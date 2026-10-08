@@ -12,7 +12,7 @@ from assessment import verdict
 from credit_core.instalment import instalment_before_fees
 
 from consolidation import interventions, reasons
-from consolidation.capacity import Buffers, Capacity, case_record
+from consolidation.capacity import Buffers, Capacity, case_record, debt_service_ratio
 from consolidation.inventory import num
 from consolidation.settlement import settlement_buffer
 
@@ -98,7 +98,7 @@ class Assessment:
             "term_extension_months": max(0.0, term_months - max(remaining_term(a, self.horizon) for a in settled)),
             "new_rate": quote.nominal_annual_rate, "settled_rate": round(weighted_rate(settled), 4), "new_money": new_money,
             "settlement_total": total, "external_proportion": external,
-            "dsr": round((after["existing_obligations"] + quote.tested_payment) / self.invariants["net_monthly_income"], 4),
+            "dsr": debt_service_ratio(after["existing_obligations"] + quote.tested_payment, self.invariants["net_monthly_income"]),
             "discretionary_after": after["discretionary_income_after"],
         }
         checks = interventions.evaluate(facts, policy, r["decision_date"], r["consolidations_last_24_months"],

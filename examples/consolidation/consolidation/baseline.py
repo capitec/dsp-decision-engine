@@ -14,7 +14,7 @@ from loan_granting.pricing import CreditLifeIndex, PriceEvaluator
 from loan_granting.solve import PRODUCT_MAX_AMOUNT, solve_term
 
 from consolidation import vocab
-from consolidation.capacity import Capacity, case_record
+from consolidation.capacity import Capacity, case_record, debt_service_ratio
 from consolidation.inventory import num
 from consolidation.scenario import remaining_cost, weighted_rate
 
@@ -64,7 +64,7 @@ def baseline_step(capacity: Capacity):
             "max_affordable_instalment": now["max_affordable_instalment"],
             "evidence_sufficiency_code": now["evidence_sufficiency_code"], "worst_arrears_months": now["worst_arrears_months"],
             "total_instalment": round(sum(num(a, "instalment") for a in live), 2),
-            "debt_service_ratio": round(now["existing_obligations"] / invariants["net_monthly_income"], 4),
+            "debt_service_ratio": debt_service_ratio(now["existing_obligations"], invariants["net_monthly_income"]),
             "weighted_average_rate": round(weighted_rate(live), 4),
             "total_remaining_cost": round(sum(remaining_cost(a, paydown_horizon_months) for a in live), 2),
             "account_count": len(live), "provider_count": len({a.get("provider_code") for a in live}),
@@ -105,7 +105,7 @@ def plain_granting_step(plain_card, consolidation_card):
         achievable = evaluator(consolidation_card, pricing_context).evaluate(
             min(max(settleable_total, 10_000.0), 500_000.0), reference_term_months, int(risk_grade), applicant_age_years, False)
         settleable_refs = {s["account_ref"] for s in settlements}
-        dsr = (baseline["existing_obligations"] + offer.get("instalment", 0.0)) / invariants["net_monthly_income"]
+        dsr = debt_service_ratio(baseline["existing_obligations"] + offer.get("instalment", 0.0), invariants["net_monthly_income"])
         verdicts = dict(zip(CONDITIONS, (
             bool(offer) and offer["offered_amount"] == requested_amount, dsr <= debt_service_ceiling,
             baseline["worst_arrears_months"] == 0,
