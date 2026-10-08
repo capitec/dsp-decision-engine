@@ -113,7 +113,8 @@ function vscodeState(h: Host): AgentState {
       await vscode.commands.executeCommand("decider.showFlow", vscode.Uri.file(file), pipeline);
     },
     setBreakpoints(nodes) {
-      const ir = h.ir()!;
+      const ir = h.ir();
+      if (!ir) throw new Error("no flow is shown in VS Code: call show_flow first");
       setBreakpointNodes(ir, new Set(nodes));
       return [...currentBreakpoints(ir)];
     },
