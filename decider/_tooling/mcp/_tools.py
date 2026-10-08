@@ -232,7 +232,7 @@ def _event(e) -> dict:
 def _pipeline_files(root: str):
     base = Path(root).resolve()
     for path in sorted(base.rglob("*.py")):
-        if any(part in _EXCLUDED or part.startswith(".") for part in path.parts):
+        if any(part in _EXCLUDED or part.startswith(".") for part in path.relative_to(base).parts):
             continue
         if _candidate(path):
             yield path

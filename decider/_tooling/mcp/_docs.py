@@ -18,7 +18,8 @@ def problems(doc: dict) -> list[str]:
     try:
         ConfigurableStep.load(doc).parameters()
     except ValidationError as e:
-        return [f"{'.'.join(map(str, err['loc']))}: {err['msg']}" for err in e.errors()]
+        return [f"{where}: {err['msg']}" if (where := '.'.join(map(str, err['loc']))) else err["msg"].removeprefix("Value error, ")
+                for err in e.errors()]
     except Exception as e:  # noqa: BLE001  a document that fails to build is reported, not raised
         return [f"{type(e).__name__}: {e}"]
     return []
