@@ -31,8 +31,8 @@ def test_every_violation_is_recorded_not_only_the_first(assess):
     several = [s for s in assess()["scenarios"] if len(s["rejection_reason_codes"]) > 1]
     assert several
     for s in several:
-        failed = sorted(1000 + n for n, i in by_number(s).items() if i["status"] == "failed")
-        assert failed == [c for c in s["rejection_reason_codes"] if c < 1100]
+        failed = {1000 + n for n, i in by_number(s).items() if i["status"] == "failed"}
+        assert failed == {c for c in s["rejection_reason_codes"] if c < 1100}
 
 
 def test_a_rejection_carries_the_actual_and_threshold_values(assess):
@@ -91,3 +91,17 @@ def test_the_maximum_consolidations_in_24_months_is_enforced(assess):
     assert out["scenarios"] and not any(s["viable"] for s in out["scenarios"])
     assert all(1013 in s["rejection_reason_codes"] for s in priced(out))
     assert out["outcome_code"] == 4 and out["decline_reason_codes"] == [2008]
+
+
+def test_rejection_reasons_come_most_severe_first_with_a_primary(assess):
+    several = next(s for s in assess()["scenarios"] if {1003, 1004} <= set(s["rejection_reason_codes"]))
+    assert several["rejection_reason_codes"].index(1004) < several["rejection_reason_codes"].index(1003)  # anti-harm outranks relief
+    assert several["primary_rejection_reason_code"] == several["rejection_reason_codes"][0]
+    assert all(s["primary_rejection_reason_code"] is None for s in assess()["scenarios"] if s["viable"])
+
+
+def test_the_search_record_counts_why_scenarios_failed_so_a_contact_centre_can_answer_in_seconds(assess):
+    out = assess()
+    counted = out["search_record"]["rejections_by_reason"]
+    for code in (1003, 1004):
+        assert counted[str(code)] == sum(code in s["rejection_reason_codes"] for s in out["scenarios"])
