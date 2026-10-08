@@ -38,6 +38,6 @@ def pricing_context(statutory_ceiling: float, initiation_fee_cap: float, monthly
 @allow_fallback
 @step(output="product_policies")
 def product_policies(flex_loan_policy: dict, everyday_card_policy: dict) -> dict:
-    """Every product's policy, by product code (as text: a record's keys are names). A product team changes its own
-    params and nobody else's."""
+    """Every product's policy, by product code. A product team changes its own params and nobody else's."""
+    # workaround: a dict output cannot have int keys in a batch run, so the product code is text
     return {str(p["product_code"]): p for p in (flex_loan_policy, everyday_card_policy)}

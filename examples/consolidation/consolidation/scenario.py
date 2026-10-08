@@ -135,6 +135,7 @@ class ScenarioEvaluator:
             "dsr": debt_service_ratio(after["existing_obligations"] + quote.tested_payment,
                                       self.invariants["net_monthly_income"]),
         }
+        # workaround: a list[dict] output holds one type per field in a batch run, so a term is always a float here
         outcome = {
             "instalment_relief": relief, "total_cost_delta": cost_delta,
             "settled_longest_remaining_term_months": float(longest_settled),
