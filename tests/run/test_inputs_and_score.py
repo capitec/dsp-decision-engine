@@ -61,6 +61,18 @@ def test_score_raises_naming_a_required_input_absent_from_the_record(bind):
         bind(flow(affordability)).score({})
 
 
+def test_a_missing_required_input_error_names_both_ways_to_default_it(bind):
+    with pytest.raises(MissingInputError, match=r"declare `instalment: T = missing_as\(fill\)` or `instalment: T \| None`"):
+        bind(flow(affordability)).score({})
+
+
+def test_a_step_in_front_defaults_the_input_of_a_step_reused_as_it_is(bind):
+    def instalment(instalment: float = missing_as(0.0)) -> float:
+        return instalment
+
+    assert bind(flow(instalment, affordability)).score({})["affordability"] == 0.0
+
+
 def test_score_fills_a_missing_as_input_absent_from_the_record(bind):
     assert bind(flow(filled)).score({})["filled"] == 0.0
 
