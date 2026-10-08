@@ -3,18 +3,19 @@
 These are the read and confirmation-gated actions an agent drives over `decider`
 core. They are plain functions (no FastMCP), so they test without a server; the
 server in `decider._tooling.mcp._server` wraps each one as a tool. Flows are named by
-import path (`module:qualname`), the same identity `decider.steps._entry.import_flow`
-resolves, and every returned step carries the contract's stable `flow_id`/`step_id`.
+import path (`module:qualname`) and built the way `decider serve` builds them, and every returned step carries the contract's stable `flow_id`/`step_id`.
 """
 from __future__ import annotations
 
 import ast
+import importlib.util
 from pathlib import Path
 
 import polars as pl
 
 from decider.lab import checks
 from decider.lab import describe, resolve_step, source_location, StepRef
+from decider._tooling.bridge.building import build_step
 from decider._tooling.bridge.describing import find_pipelines
 from decider.lab.data import read
 from decider._tooling.bridge.loading import load_module
@@ -22,7 +23,6 @@ from decider import Engine
 from decider.trace import TraceSink
 from decider._tooling.bridge.replay import trace as run_trace
 from decider.lab.experiments import ExperimentDef, ExperimentResult, run
-from decider.steps._entry import import_flow
 from decider._tooling.mcp._policy import REDACTED, Policy
 
 _EXCLUDED = {".git", "__pycache__", ".venv", "venv", "node_modules",
@@ -52,7 +52,7 @@ def discover_flows(root: str = ".") -> dict:
 
 def describe_flow(entry: str, subgraph: str | None = None) -> dict:
     """The static structure of `entry` as a `FlowDescription`, or of the subtree under `subgraph`."""
-    desc = describe(import_flow(entry))
+    desc = describe(_flow(entry)[0])
     if subgraph is None:
         return desc.model_dump(mode="json")
     keep = {n.path for n in desc.nodes if n.path == subgraph or n.path.startswith(subgraph + "/")}
@@ -68,7 +68,7 @@ def describe_flow(entry: str, subgraph: str | None = None) -> dict:
 
 def inspect_step(entry: str, path: str) -> dict:
     """One node of `entry` (stable identity, source location) and the edges touching it."""
-    desc = describe(import_flow(entry))
+    desc = describe(_flow(entry)[0])
     node = resolve_step(desc, StepRef(path=path))
     loc = source_location(node.source) if node.source else None
     return {
@@ -82,7 +82,7 @@ def inspect_step(entry: str, path: str) -> dict:
 
 def lineage(entry: str, name: str) -> dict:
     """Every slot, writer and reader of value `name` across `entry`."""
-    desc = describe(import_flow(entry))
+    desc = describe(_flow(entry)[0])
     slots = [s for s in desc.value_slots if s.name == name]
     return {
         "name": name,
@@ -94,7 +94,7 @@ def lineage(entry: str, name: str) -> dict:
 
 def source_context(entry: str, path: str) -> dict:
     """The file, line and a short window of source around the step `path` in `entry`."""
-    desc = describe(import_flow(entry))
+    desc = describe(_flow(entry)[0])
     node = resolve_step(desc, StepRef(path=path))
     file, line, lines = None, None, []
     if node.source:
@@ -120,7 +120,7 @@ def run_summary(entry: str, data: str) -> dict:
 
 def check_report(entry: str, config: str | None = None, data: str | None = None) -> dict:
     """The checks over `entry` as the structured `Report`: the project's policy, or `config`; data checks need `data`."""
-    return checks.run(import_flow(entry), config=config, data=read(data) if data else None).model_dump(mode="json")
+    return checks.run(_flow(entry)[0], config=config, data=read(data) if data else None).model_dump(mode="json")
 
 
 def checks_list() -> list[dict]:
@@ -142,8 +142,8 @@ def raw_record(policy: Policy, entry: str, data: str, record: int) -> dict:
     """Per-step values for one record of `entry` (raw data, opt-in)."""
     if not policy.raw:
         return {"redacted": REDACTED}
-    step = import_flow(entry)
-    result = run_trace(step, read(data), None)
+    step, params = _flow(entry)
+    result = run_trace(step, read(data), params)
     return {
         "entry": entry, "record": record,
         "values": {path: {name: vals[record] for name, vals in written.items()}
@@ -155,9 +155,9 @@ def raw_trace(policy: Policy, entry: str, data: str, record: int) -> dict:
     """The decision-trace events for one record of `entry` (raw data, opt-in)."""
     if not policy.raw:
         return {"redacted": REDACTED}
-    step = import_flow(entry)
+    step, params = _flow(entry)
     sink = TraceSink()
-    Engine().bind(step).run(read(data), trace=sink)
+    Engine().bind(step).run(read(data), params=params, trace=sink)
     return {"entry": entry, "record": record,
             "events": [_event(e) for e in sink.events() if e.record is None or e.record == record]}
 
@@ -179,9 +179,9 @@ def start_debug(entry: str, data: str) -> dict:
     Stepping is a stateful editor-bound interaction (task 11b); this opens and
     describes the paused session only.
     """
-    step = import_flow(entry)
+    step, params = _flow(entry)
     frame = read(data)
-    session = Engine().bind(step).session(frame)
+    session = Engine().bind(step).session(frame, params)
     return {"entry": entry, "rows": frame.height, "finished": session.finished,
             "structure": session.structure()}
 
@@ -196,10 +196,10 @@ def generate_ids(path: str = ".", check: bool = True) -> dict:
 
 
 def _summarise(entry: str, data: str) -> dict:
-    step = import_flow(entry)
+    step, params = _flow(entry)
     frame = read(data)
     exe = Engine().bind(step)
-    out = exe.run(frame)
+    out = exe.run(frame, params=params)
     produced = [c for c in out.columns if c not in frame.columns]
     return {
         "entry": entry,
@@ -208,6 +208,23 @@ def _summarise(entry: str, data: str) -> dict:
         "params": {"validated": exe.report.validated, "invalid": exe.report.invalid,
                    "warnings": exe.report.warnings},
     }
+
+
+def _flow(entry: str):
+    """The step `entry` names and its params document, as `decider serve` builds them.
+
+    The module is imported fresh, so edits since the last call count; a `build(...)` taking config
+    documents gets its project's latest config version, and the params are that version's.
+    """
+    module, _, qualname = entry.partition(":")
+    spec = importlib.util.find_spec(module)
+    if spec is None or not spec.origin:
+        raise ModuleNotFoundError(f"no module {module!r} for entry {entry!r}; run the server from the project directory")
+    target = load_module(spec.origin)
+    for part in qualname.split("."):
+        target = getattr(target, part)
+    step, params, _ = build_step(target, spec.origin)
+    return step, params
 
 
 def _tally(series: pl.Series) -> list[dict]:

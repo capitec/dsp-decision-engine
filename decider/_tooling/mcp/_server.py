@@ -10,6 +10,7 @@ does not re-approve them.
 """
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -285,4 +286,10 @@ def build_server(policy: Policy, bridge: EditorBridge | None = None) -> FastMCP:
 
 def run_stdio(raw: bool = False) -> None:
     """Serve the MCP server over stdio until the host closes it."""
+    # Entries name modules of the project the host launched us in; a project directory that is
+    # itself a package resolves from above it, as `decider serve` finds it.
+    here = root = Path.cwd()
+    while (root / "__init__.py").exists():
+        root = root.parent
+    sys.path[:0] = list(dict.fromkeys([str(root), str(here)]))
     build_server(Policy(raw=raw), EditorBridge()).run(transport="stdio", show_banner=False)
