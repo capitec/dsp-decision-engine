@@ -16,7 +16,7 @@ from datetime import date
 from decider import allow_fallback, flow, helper, missing_as, param, step
 
 from assessment import modes, pipeline as assessment, verdict
-from limit_mgmt.caps import round_down_500
+from limit_mgmt import caps
 from limit_mgmt.overlays import buffer_adjustment_step
 from limit_mgmt.vocab import PRODUCT_EVERYDAY_CARD, Cap, EvidenceTier, IncreasePath
 
@@ -126,7 +126,7 @@ def affordability_cap(
 ) -> tuple[float, int]:
     """C7: the limit whose notional instalment the client can carry, rounded down to R500. It only holds an increase
     back, never pushes the limit under the current one. Returns the limit and the code of the cap that bound."""
-    implied = round_down_500(max(current_limit, max_affordable_instalment / _minimum_payment_rate(product_code)))
+    implied = caps.round_down_500(max(current_limit, max_affordable_instalment / _minimum_payment_rate(product_code)))
     if implied < policy_proposed_limit:
         return implied, Cap.C7_AFFORDABILITY
     return policy_proposed_limit, policy_binding_cap_code
