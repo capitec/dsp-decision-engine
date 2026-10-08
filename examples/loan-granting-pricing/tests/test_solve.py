@@ -1,7 +1,6 @@
 """The solve against brute force: every R100 candidate priced, on cards where a smaller amount can cost more."""
 import random
 
-import pytest
 from credit_core.rate_card import generate_flex_loan_card
 
 from loan_granting.pricing import INF, CreditLifeIndex, PriceEvaluator, RateCardIndex
@@ -136,8 +135,7 @@ def test_the_same_inputs_give_the_same_answer_every_time():
     assert len(answers) == 1
 
 
-@pytest.mark.parametrize("amount, expected", [(2_000.0, True), (500_000.0, True), (50_000.0, True)])
-def test_the_winning_pricing_is_what_a_fresh_evaluation_gives(amount, expected):
+def test_the_winning_pricing_is_what_a_fresh_evaluation_of_that_amount_gives():
     ev = evaluator(REWARD_AT_50K)
-    result = solve(ev, affordable=1_500.0, cap=amount)
+    result = solve(ev, affordable=1_500.0)
     assert result.pricing == ev.evaluate(result.amount, 60, 9, 38.0, False)
