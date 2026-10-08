@@ -420,8 +420,10 @@ projects on one path never shadow each other):
   settings. Real environment variables win. `decider --help` lists every
   command and option; there are no others.
 
-JSON dates (`"2026-01-15"`) arrive as the declared `date` inputs. Score through
-the handler in-process, raw bytes in, exactly as `decider serve` does:
+JSON dates (`"2026-01-15"`) arrive as the declared `date` inputs, but only through
+the handler: `Executable.score` and `run` take typed values (`date` objects), and a
+string date reaches the step as a string. Score through the handler in-process,
+raw bytes in, exactly as `decider serve` does:
 
 ```python
 import asyncio, json
