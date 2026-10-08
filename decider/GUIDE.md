@@ -278,6 +278,10 @@ number column) as a `float`, whatever the column's type. An input column has one
 a step that reads the same column as `int` raises a `WiringError`: add a step that writes
 a float copy (`def amount_f(amount: int) -> float`) and point the table's `variable` at it.
 
+A table has one band dimension with open (`None`) edges. A grid of two (amount by term)
+gives every row both bounds, `-inf` and `inf` at the outer edges, and sets `allow_gaps`
+on each `between`.
+
 A step type of your own is a `ConfigurableStep` subclass whose `to_ir` calls
 `ctx.call` on a plain function; `Value[float]` fields accept a param. Anything
 past `ctx.call` (row kernels, packed tables) is the `decider.ir` kit
