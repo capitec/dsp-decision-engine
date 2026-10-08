@@ -1,6 +1,7 @@
 """Grouping calls into units, what a unit keeps, and the Python fallback."""
 from __future__ import annotations
 
+import types
 from typing import TypedDict
 
 import numpy as np
@@ -322,3 +323,42 @@ def test_two_item_types_over_one_column_in_one_kernel_is_refused():
     lay.source(v, Input("items", Columnar[ItemA]))
     with pytest.raises(TypeError, match="two different Item types"):
         lay.source(v, Input("items", Columnar[ItemB]))
+
+
+def _module_of_helpers():
+    caps = types.ModuleType("caps")
+
+    @helper(signatures=[((float,), float)])
+    def round_down_500(value: float) -> float:
+        return value - value % 500.0
+
+    def plain(value: float) -> float:
+        return value
+
+    caps.round_down_500, caps.plain = round_down_500, plain
+    return caps
+
+
+caps = _module_of_helpers()
+
+
+def rounds_through_a_module(value: float) -> float:
+    return caps.round_down_500(value)
+
+
+def calls_a_plain_function_through_a_module(value: float) -> float:
+    return caps.plain(value)
+
+
+def test_a_helper_called_as_a_module_attribute_compiles(run):
+    plan = resolve(flow(rounds_through_a_module))
+    (unit,) = _units(compile_plan(plan))
+    assert isinstance(unit, Kernel), unit.reason
+    out, _ = run(plan, {"value": np.array([1499.0, 1500.0])})
+    assert out["rounds_through_a_module"].tolist() == [1000.0, 1500.0]
+
+
+def test_a_plain_function_called_as_a_module_attribute_explains_how_to_classify_it():
+    unit = compile_plan(resolve(flow(calls_a_plain_function_through_a_module)))[0]
+    assert isinstance(unit, Fallback)
+    assert "calls 'plain' without @helper or @allow_fallback" in unit.reason

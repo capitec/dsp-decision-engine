@@ -263,8 +263,10 @@ def _prepare_function(fn: Callable, stack: tuple[int, ...] = ()) -> tuple[Callab
     globals_ = dict(fn.__globals__)
     changed = False
     undeclared: list[str] = []
-    for name in _global_names(fn.__code__):
-        called = globals_.get(name)
+    for name, attr in sorted(_global_refs(fn.__code__), key=repr):
+        owner = globals_.get(name)
+        in_module = isinstance(owner, py_types.ModuleType)
+        called = owner.__dict__.get(attr) if in_module else owner
         if not isinstance(called, py_types.FunctionType):
             continue
         if allows_fallback(called):
@@ -282,7 +284,14 @@ def _prepare_function(fn: Callable, stack: tuple[int, ...] = ()) -> tuple[Callab
         reason = _REASONS.get((key, "helper"))
         if reason is not None:
             return fn, f"helper '{called.__name__}' could not compile: {reason}", ()
-        globals_[name] = dispatcher
+        if not in_module:
+            globals_[name] = dispatcher
+        else:
+            # A copy, so the module itself keeps its plain function.
+            if owner is fn.__globals__[name]:
+                owner = globals_[name] = py_types.ModuleType(owner.__name__)
+                owner.__dict__.update(fn.__globals__[name].__dict__)
+            setattr(owner, attr, dispatcher)
         changed = True
     names = tuple(sorted(undeclared))
     if not changed:
@@ -290,13 +299,19 @@ def _prepare_function(fn: Callable, stack: tuple[int, ...] = ()) -> tuple[Callab
     return py_types.FunctionType(fn.__code__, globals_, fn.__name__, fn.__defaults__, fn.__closure__), None, names
 
 
-def _global_names(code: py_types.CodeType) -> set[str]:
+def _global_refs(code: py_types.CodeType) -> set[tuple[str, str | None]]:
     # LOAD_GLOBAL only: `co_names` also holds attribute names, and `rates.rate` is not a call to `rate`.
-    names = {i.argval for i in dis.get_instructions(code) if i.opname == "LOAD_GLOBAL"}
+    # A global followed by an attribute is `(module, attribute)`: `caps.round_down(x)` reads a function off a module.
+    refs: set[tuple[str, str | None]] = set()
+    ins = list(dis.get_instructions(code))
+    for k, i in enumerate(ins):
+        if i.opname == "LOAD_GLOBAL":
+            nxt = ins[k + 1] if k + 1 < len(ins) else None
+            refs.add((i.argval, nxt.argval if nxt is not None and nxt.opname in ("LOAD_ATTR", "LOAD_METHOD") else None))
     for const in code.co_consts:
         if isinstance(const, py_types.CodeType):
-            names |= _global_names(const)
-    return names
+            refs |= _global_refs(const)
+    return refs
 
 
 def _compile_helper(fn: Callable, signatures: tuple[tuple[tuple[type, ...], type], ...]) -> tuple[str, Dispatcher]:
