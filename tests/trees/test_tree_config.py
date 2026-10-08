@@ -116,6 +116,15 @@ def test_feature_types_accept_polars_spellings_and_refuse_unknown_ones():
         TreeConfig(name="t", tree=RISK, feature_types={"ratio": "decimal"})
 
 
+def test_an_int_feature_written_as_float_by_a_step_is_refused():
+    def ratio(x: float) -> float:
+        return x
+
+    tree = TreeConfig(name="risk_tree", tree=RISK, feature_types={"ratio": "int"})
+    with pytest.raises(ValueError, match="p/risk_tree reads 'ratio' as int, but p/ratio writes it as float"):
+        Engine().bind(flow(ratio, tree, name="p"))
+
+
 # A corpus of random trees: flat rules, the same trees as v3 documents, and
 # prioritized documents in both modes, over every node and condition kind.
 

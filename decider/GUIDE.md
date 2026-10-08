@@ -294,8 +294,10 @@ A decision table reads a variable as an `int` (compared exactly as int64, even a
 can share an `int` column with it. A variable that a `between` also reads, or that an `eq`
 or `in` compares with a float column, is a `float`; an input column has one type, so a step
 that reads that column as `int` raises a `WiringError`: add a step that writes a float copy
-(`def amount_f(amount: int) -> float`) and point the table's `variable` at it. A scorecard
-variable is always a `float`.
+(`def amount_f(amount: int) -> float`) and point the table's `variable` at it. A step that
+writes an `int` variable as a `float` is a `WiringError` too, and a float in the input is
+truncated as for any `int` input (`7.5` matches a row of `7`): declare the column `Float64`
+to compare floats. A scorecard variable is always a `float`.
 
 A table has one band dimension with open (`None`) edges. A grid of two (amount by term)
 gives every row both bounds, `-inf` and `inf` at the outer edges, and sets `allow_gaps`

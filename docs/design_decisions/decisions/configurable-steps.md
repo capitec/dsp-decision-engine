@@ -71,7 +71,7 @@ Read this before changing how tree or table documents become kernels, or what a 
 
 - First match wins, else `default`; a comparison with a null never matches (a null `eq` value is not a wildcard, unlike decider2).
 - Rows with equal `eq` values form one ladder for open edges, neighbour fill and contiguity; `in` lists do not split ladders (that would silently open edges).
-- A table variable is an int input (int64 lane, exact above 2**53) only if every condition on it is an `eq`/`in` over an integer column; a `between`, or an `eq`/`in` over a float column, keeps it float, so existing documents are unchanged. Scorecard variables are still always float.
+- A table variable is an int input (int64 lane, exact above 2**53) only if every condition on it is an `eq`/`in` over an integer column; a `between`, or an `eq`/`in` over a float column, keeps it float. A document whose `eq`/`in` columns are integers therefore reads an int now: a float in the input is truncated like any int input, and a step writing the variable as float is a `WiringError` (a row node's input tuple is typed by its writers, so compiled modes would otherwise read the wrong slot). Scorecard variables are still always float.
 - Not built: a matched-row output (the table's `path_output`); needs a new output kind in `pick` and the reference.
 - See: `docs/architecture/configurable-steps/tables.md`
 

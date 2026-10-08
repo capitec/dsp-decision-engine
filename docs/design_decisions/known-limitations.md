@@ -36,6 +36,9 @@ Workaround: write a variable exponent if bit-equality with CPython matters.
 **Decimal does not mix with floats freely.** `float / Decimal` and `Decimal ± float` are errors in Python and kernels; a float may multiply or divide a decimal.
 Workaround: `float(d)` for ratios; see the [types guide](../guides/types-and-money.md).
 
+**A float read as an `int` is truncated.** An `int` step input, an `int` tree feature or a table variable on the int lane turns `7.5` into `7`, so a table row of `7` matches it; a NaN or inf in a float frame column read as `int` fails the run, and `-2**63` reads as null in a tree or table.
+Workaround: convert in a step, or declare the table column `Float64` (the `feature_types` entry `float`).
+
 ## Steps and flows
 
 **Frame-step `writes` dtypes are not verified or cast.** A declared dtype is kept when the step returns it, but a different dtype is accepted as-is (only missing columns and row-count changes raise).
