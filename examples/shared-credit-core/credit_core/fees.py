@@ -19,7 +19,7 @@ _CAPS = {"fee_caps@2025": (6_200.0, 65.0), "fee_caps@2026": (6_500.0, 69.0)}  # 
 
 def build_fee_caps_table() -> DecisionTableConfig:
     """The caps in force for `fee_caps_version`: `initiation_fee_cap`, `monthly_service_fee_cap`, `fee_caps_cell_id`."""
-    rows = [{"version": v, "initiation": init, "service": service, "cell_id": cell_id("fee_caps", v)}
+    rows = [{"version": v, "initiation": init, "service": service, "cell_id": cell_id("fee_caps", v, "caps")}
             for v, (init, service) in _CAPS.items()]
     return DecisionTableConfig.load({
         "type": "decision_table", "name": "fee_caps_table",

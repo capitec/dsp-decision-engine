@@ -22,11 +22,11 @@ def instalment(
 
 
 def total_cost_of_credit(instalment: float, term_months: float, initiation_fee: float = missing_as(0.0)) -> float:
-    return instalment * term_months + initiation_fee
+    return round(instalment * term_months + initiation_fee, 2)
 
 
 def total_interest(total_cost_of_credit: float, offered_amount: float) -> float:
-    return total_cost_of_credit - offered_amount
+    return round(total_cost_of_credit - offered_amount, 2)
 
 
 def effective_annual_rate(nominal_annual_rate: float) -> float:
