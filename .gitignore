@@ -191,3 +191,5 @@ decider2/
 experimentation/tree-codegen-vs-interpreted/_generated/
 
 notes/recommendations-for-decider-v2.md
+# decider build output
+examples/*/decider-cpu-target.json
