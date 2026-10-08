@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Literal, Mapping, Sequence
 
-from decider import allow_fallback, missing_as, param, step
+from decider import allow_fallback, param, step
 
 Op = Literal["add", "multiply", "set"]
 
@@ -172,11 +172,12 @@ class AdjustmentRegister:
         def apply_adjustments(
             adjustment_base_value: float, decision_date: date,
             adjustment_stack_enabled: bool = param(True),
-            product_code: float = missing_as(-1.0), segment_code: float = missing_as(-1.0),
-            channel_code: int = missing_as(-1), scorecard_id: int = missing_as(-1),
+            product_code: float | None = None, segment_code: float | None = None,
+            channel_code: int | None = None, scorecard_id: int | None = None,
         ) -> tuple[float, float, str, list[str]]:
             provenance = {k: v for k, v in (("product_code", product_code), ("segment_code", segment_code),
-                                            ("channel_code", channel_code), ("scorecard_id", scorecard_id)) if v != -1}  # -1: not on the record
+                                            ("channel_code", channel_code), ("scorecard_id", scorecard_id))
+                          if v is not None}
             result = self.apply_stack(target, adjustment_base_value, provenance, decision_date, adjustment_set_id,
                                       stack_enabled=adjustment_stack_enabled)
             return (result.adjusted_value, result.unadjusted_value, result.adjustment_set_id,
