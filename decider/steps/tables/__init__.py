@@ -170,8 +170,8 @@ class DecisionTableConfig(ConfigurableStep):
         py_defaults = [None if d is None else str(d) if types[c] == "str" else _TYPES[types[c]](d)
                        for c, d in zip(self.outputs, defaults)]
         fn = reference(self.expression, names, self.outputs, py_defaults, ref.table if ref else None, rows)
-        # The node's consts are addresses into the program; the node holds its reference, which holds it.
-        fn.arrays = [code]
+        # The node's consts are addresses into these arrays; the node holds its reference, which holds them.
+        fn.arrays = [code, *(rows.arrays if rows else ())]
         return CallNode(ctx.origin(self), "row", match, inputs, tuple(outputs), params, reference=fn, consts=consts)
 
 
