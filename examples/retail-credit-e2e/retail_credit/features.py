@@ -16,13 +16,13 @@ SEGMENT_JOINT = 12
 _EMPLOYMENT_SEGMENT = {3: 6, 4: 7, 5: 8, 6: 9}
 
 # credit_core's income source (1 employer, 2 payslip, 3 statement, 4 declared, 5 bureau estimate, 0 none) as this
-# product's seven-tier ladder (1 best). Tiers 4 and 5 of the ladder (irregular statements, deposit history) are not
-# separable from the source code, so 3 stands for every statement.
+# product's seven-tier ladder (1 best). The ladder's tiers 4 and 5 (irregular statements, deposit history) cannot be told
+# apart from the source code, so 3 stands for every statement.
 _EVIDENCE_TIER = {1: 1, 2: 2, 3: 3, 5: 6, 4: 7, 0: 7}
 
 
-def income_evidence_tier(income_verification_tier: int) -> int:
-    return _EVIDENCE_TIER.get(income_verification_tier, 7)
+def income_evidence_tier(income_source_code: int) -> int:
+    return _EVIDENCE_TIER.get(income_source_code, 7)
 
 
 def segment_code(

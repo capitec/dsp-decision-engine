@@ -9,8 +9,6 @@ from decider.ops import Struct
 from credit_core import credit_life, fees, instalment, rounding
 from retail_credit import flex_card
 
-STATUTORY_RATE_CEILING = 0.2825  # 28.25% at a 7.25% repo rate (illustrative)
-
 
 class Quote(TypedDict):
     """What the solve keeps of its winning candidate, so the offer is not priced a second time."""
@@ -88,7 +86,8 @@ def amount_independent_unit():
     """
     life = credit_life.build_credit_life_table().relabel(
         reads={"term_months": "offer_term_months"}, writes={"rate": "credit_life_rate", "cell_id": "credit_life_cell_id"})
-    return flow(long_term_loading, initiation_fee_cap, monthly_service_fee, life, name="fixed_terms")
+    return flow(long_term_loading, initiation_fee_cap, monthly_service_fee, life, name="fixed_terms").emit(
+        "long_term_loading", "initiation_fee_cap", "monthly_service_fee", "credit_life_rate", "credit_life_cell_id")
 
 
 def candidate_unit():
@@ -106,8 +105,3 @@ def candidate_unit():
         step(record, output="record"),
         name="candidate",
     )
-
-
-def statutory_ceiling_ok(nominal_annual_rate: float, ceiling: float = param(STATUTORY_RATE_CEILING)) -> bool:
-    """Checked on the rate after the add-on: a card that was compliant plus an add-on can still breach the ceiling."""
-    return nominal_annual_rate <= ceiling

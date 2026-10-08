@@ -58,5 +58,7 @@ def card_rate(
 
 
 @allow_fallback
-def rate_cell_id(amt_band: int, term_band: int, risk_grade: int, card_version: str = param("rc-2026.09")) -> str:
-    return cell_id("rate_card.flex_loan", card_version, amt_band, term_band, risk_grade)
+def rate_cell_id(has_offer: bool, amt_band: int, term_band: int, risk_grade: int,
+                 card_version: str = param("rc-2026.09")) -> str:
+    """The id of the cell that priced the offer ("" when there is no offer)."""
+    return cell_id("rate_card.flex_loan", card_version, amt_band, term_band, risk_grade) if has_offer else ""

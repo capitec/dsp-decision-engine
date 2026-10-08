@@ -17,13 +17,12 @@ MAX_CANDIDATES = 2_000  # (R500 000 - R2 000) / R250 + 1 = 1 993
 
 
 def search_domain(
-    requested_amount: float, amount_cap: float,
-    product_min: float = param(2_000.0, ge=0.0), product_max: float = param(500_000.0, ge=0.0),
+    requested_amount: float, amount_cap: float, product_min_amount: float, product_max_amount: float,
     grid: float = param(250.0, gt=0.0),
 ) -> tuple[float, float, float]:
     """(search_floor, search_grid, search_ceiling): the grid runs from the product minimum to the largest grid point
     under every ceiling."""
-    return product_min, grid, math.floor(min(requested_amount, amount_cap, product_max) / grid) * grid
+    return product_min_amount, grid, math.floor(min(requested_amount, amount_cap, product_max_amount) / grid) * grid
 
 
 @step(output="candidate_count")
