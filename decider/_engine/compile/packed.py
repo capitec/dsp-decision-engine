@@ -40,7 +40,7 @@ def compile_packed(plan: Plan, lazy: bool = False, python: Collection[int] = ())
     """Every branch and loop that runs as one kernel, by path.
 
     One packs when every call in it (condition, arms, body, nested branches
-    and loops) is a scalar call numba compiles, with no nullable output, and
+    and loops) is a scalar or row (tree, table) call numba compiles, with no nullable output, and
     none of them is in `python` (call ids that must run in Python);
     every merged or carried name is a `float`, `int` or `bool` of one dtype
     throughout; and nothing made inside it but what it merges or carries is
@@ -110,7 +110,7 @@ def _pack(top: Branch | Loop, outputs: set[int], lazy: bool, python: Collection[
         raise _Unpackable
     compiled = {}
     for c in calls:
-        if c.node.kind != "scalar" or any(nullable(o.annotation) for o in c.node.outputs):
+        if c.node.kind not in ("scalar", "row") or any(nullable(o.annotation) for o in c.node.outputs):
             raise _Unpackable
         key, fn, reason, _ = compile_call(c.node)
         if reason is not None:
