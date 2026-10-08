@@ -5,14 +5,23 @@ documents and the settleability rules from `configs/<version>/`.
 """
 from __future__ import annotations
 
+from assessment import modes
 from assessment.pipeline import evidence_unit
 from credit_core import fees
 from credit_core.rate_card import generate_flex_loan_card
 from decider import flow, param
 from loan_granting.pricing import CreditLifeIndex, RateCardIndex
 
-from assessment import modes
-from consolidation import baseline, eligibility, inventory, objective, outcome, products, search, settlement
+from consolidation import (
+    baseline,
+    eligibility,
+    inventory,
+    objective,
+    outcome,
+    products,
+    search,
+    settlement,
+)
 from consolidation.capacity import Buffers, Capacity
 from consolidation.everyday_card import CardRates, EverydayCard, everyday_card_policy
 from consolidation.flex_loan import FlexLoanConsolidation, flex_loan_policy

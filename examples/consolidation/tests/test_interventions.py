@@ -1,6 +1,5 @@
 """The fourteen interventions: all evaluated, each recorded with actual and threshold, the anti-harm ceiling overlaid."""
 import pytest
-from conftest import with_params
 
 
 def priced(out):
@@ -61,7 +60,7 @@ def test_the_anti_harm_overlay_does_not_touch_the_card(assess):
             assert by_number(s)[4]["overlay_id"] is None and by_number(s)[4]["threshold"] == 0.15
 
 
-def test_the_overlay_rejects_scenarios_the_base_threshold_would_admit(assess, params):
+def test_the_overlay_rejects_scenarios_the_base_threshold_would_admit(assess, params, with_params):
     strict = with_params(params, "flex_loan_policy", anti_harm=0.11)  # a base ceiling the overlay tightens to 8.8%
     with_overlay, without = assess(params_document=strict), assess(params_document=off(strict))
     newly_rejected = [s for s, base in zip(with_overlay["scenarios"], without["scenarios"])
@@ -80,7 +79,7 @@ def test_with_the_stack_off_the_base_threshold_applies_and_no_overlay_is_named(a
         assert by_number(s)[4]["overlay_id"] is None and by_number(s)[4]["threshold"] == 0.15
 
 
-def test_the_anti_harm_threshold_is_a_product_param(assess, params):
+def test_the_anti_harm_threshold_is_a_product_param(assess, params, with_params):
     strict = assess(params_document=with_params(params, "flex_loan_policy", anti_harm=0.01))
     assert not any(s["viable"] for s in strict["scenarios"] if s["product_code"] == 11)
     assert all(by_number(s)[4]["base_threshold"] == 0.01 for s in priced(strict) if s["product_code"] == 11)
@@ -95,7 +94,8 @@ def test_the_maximum_consolidations_in_24_months_is_enforced(assess):
 
 def test_rejection_reasons_come_most_severe_first_with_a_primary(assess):
     several = next(s for s in assess()["scenarios"] if {1003, 1004} <= set(s["rejection_reason_codes"]))
-    assert several["rejection_reason_codes"].index(1004) < several["rejection_reason_codes"].index(1003)  # anti-harm outranks relief
+    codes = several["rejection_reason_codes"]
+    assert codes.index(1004) < codes.index(1003)  # anti-harm outranks relief
     assert several["primary_rejection_reason_code"] == several["rejection_reason_codes"][0]
     assert all(s["primary_rejection_reason_code"] is None for s in assess()["scenarios"] if s["viable"])
 

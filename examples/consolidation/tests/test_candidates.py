@@ -1,5 +1,4 @@
 """Which settlement sets are generated, in what order, and under which product."""
-from conftest import with_params
 
 CARDS = {2, 4, 5, 7}
 
@@ -12,7 +11,7 @@ def sets(out, rule=None):
     return seen
 
 
-def with_rules(params, rules):
+def with_rules(with_params, params, rules):
     return with_params(params, "search", ordering_rules=[{"rule": r} for r in rules])
 
 
@@ -63,14 +62,14 @@ def test_the_full_settleable_set_is_priced_so_it_can_be_shown_to_have_been(asses
     assert full and full[0]["generating_rule"] in {"full_settleable_set", "H1_highest_rate_first", "H2_most_relief_per_rand"}
 
 
-def test_a_retired_ordering_rule_produces_no_candidates(assess, params):
-    out = assess(params_document=with_rules(params, [1]))
+def test_a_retired_ordering_rule_produces_no_candidates(assess, params, with_params):
+    out = assess(params_document=with_rules(with_params, params, [1]))
     assert {s["generating_rule"] for s in out["scenarios"]} <= {"H1_highest_rate_first", "full_settleable_set"}
     assert out["search_record"]["ordering_rules"] == ["H1_highest_rate_first"]
 
 
-def test_reordering_the_rules_reorders_the_candidates(assess, params):
-    first = assess(params_document=with_rules(params, [8, 1]))["scenarios"][0]
+def test_reordering_the_rules_reorders_the_candidates(assess, params, with_params):
+    first = assess(params_document=with_rules(with_params, params, [8, 1]))["scenarios"][0]
     assert first["generating_rule"] == "H8_highest_reaccumulation_risk_first"
     assert all(a in CARDS for a in first["settlement_set"])
 
@@ -82,13 +81,14 @@ def test_the_nominated_set_is_a_candidate_and_every_set_contains_it(assess):
     assert all(5 in s["settlement_set"] for s in out["scenarios"])
 
 
-def test_a_provider_the_client_is_in_arrears_with_comes_first_under_h5(assess, params):
-    rules = with_rules(params, [5])
+def test_a_provider_the_client_is_in_arrears_with_comes_first_under_h5(assess, params, with_params):
+    rules = with_rules(with_params, params, [5])
     first = assess(params_document=rules)["scenarios"][0]
     assert first["generating_rule"] == "H5_provider_in_arrears_first"
     assert 3 in first["settlement_set"]  # provider 105 is the one the client is in arrears with
 
 
-def test_a_held_quotation_comes_first_under_h6_not_the_highest_rate(assess, params):
-    ordered = [s for s in assess(params_document=with_rules(params, [6]))["scenarios"] if s["generating_rule"].startswith("H6")]
+def test_a_held_quotation_comes_first_under_h6_not_the_highest_rate(assess, params, with_params):
+    out = assess(params_document=with_rules(with_params, params, [6]))
+    ordered = [s for s in out["scenarios"] if s["generating_rule"].startswith("H6")]
     assert 3 in ordered[0]["settlement_set"]  # the only account with a quotation in hand

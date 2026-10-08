@@ -7,7 +7,12 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from credit_core.vocab import OUTCOME_APPROVE, OUTCOME_APPROVE_WITH_CONDITIONS, OUTCOME_DECLINE, OUTCOME_REFER
+from credit_core.vocab import (
+    OUTCOME_APPROVE,
+    OUTCOME_APPROVE_WITH_CONDITIONS,
+    OUTCOME_DECLINE,
+    OUTCOME_REFER,
+)
 from decider import allow_fallback, missing_as, param, step
 
 from consolidation import eligibility, reasons, vocab

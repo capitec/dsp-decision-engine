@@ -9,9 +9,9 @@ import sys
 from pathlib import Path
 
 from credit_core.evidence import cell_id
+from decider import DecisionTableConfig
 
 from consolidation.pipeline import build
-from decider import DecisionTableConfig
 
 INF = float("inf")
 

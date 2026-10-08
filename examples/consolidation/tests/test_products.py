@@ -1,7 +1,6 @@
 """Each product prices from its own card under its own policy; the search does not know which product it is asking."""
 import pytest
 from credit_core.instalment import instalment_before_fees
-from conftest import with_params
 
 
 def product_scenarios(out, code):
@@ -65,7 +64,7 @@ def test_the_card_is_unavailable_within_twelve_months_of_a_balance_transfer(asse
     assert assess(last_balance_transfer_date="2025-06-01")["search_record"]["products_unavailable"] == {}
 
 
-def test_an_advance_below_the_product_minimum_is_rejected_by_the_product(assess, params):
+def test_an_advance_below_the_product_minimum_is_rejected_by_the_product(assess, params, with_params):
     out = assess(params_document=with_params(params, "flex_loan_policy", min_amount=250_000.0))
     too_small = [s for s in out["scenarios"] if s["product_code"] == 11
                  and s["settlement_total"] + s["settlement_buffer"] + s["new_money"] < 250_000.0]
@@ -73,7 +72,7 @@ def test_an_advance_below_the_product_minimum_is_rejected_by_the_product(assess,
                              for s in too_small)
 
 
-def test_a_product_team_changes_its_own_limits_without_touching_the_other_products(assess, params):
+def test_a_product_team_changes_its_own_limits_without_touching_the_other_products(assess, params, with_params):
     base = assess()
     tighter = assess(params_document=with_params(params, "everyday_card_policy", max_limit=20_000.0))
     flex = [s for s in base["scenarios"] if s["product_code"] == 11]

@@ -1,6 +1,4 @@
 """The whole decision on the sample client, pinned, and the params that change it."""
-from conftest import with_params
-
 from consolidation.pipeline import build
 
 
@@ -48,7 +46,7 @@ def test_the_shipped_params_document_is_the_pipelines_defaults_and_valid(pipelin
     unit.parameters().validate(params).check()
 
 
-def test_a_param_out_of_its_declared_range_is_invalid(documents, params):
+def test_a_param_out_of_its_declared_range_is_invalid(documents, params, with_params):
     bad = with_params(params, "flex_loan_policy", anti_harm=0.9)  # the tunable range stops at 60%
     assert build(*documents).parameters().validate(bad).errors
 
