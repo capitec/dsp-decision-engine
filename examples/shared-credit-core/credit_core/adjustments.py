@@ -163,8 +163,9 @@ class AdjustmentRegister:
         """A step that overlays the `base_field` column (default `target`).
 
         It writes the adjusted value (default `target`), `<target>_unadjusted`, `adjustment_set_id` and
-        `adjustments_applied`. Scope is matched on `product_code`, `segment_code`, `channel_code` and
-        `scorecard_id`. The param `adjustment_stack_enabled` switches the whole stack off.
+        `adjustments_applied`; when `base_field` is the target itself, put the step in a `flow`. Scope is matched
+        on `product_code`, `segment_code`, `channel_code` and `scorecard_id`. The param `adjustment_stack_enabled`
+        switches the whole stack off.
         """
 
         @allow_fallback
@@ -184,4 +185,4 @@ class AdjustmentRegister:
         apply_adjustments.__name__ = f"apply_{target}_adjustments"
         s = step(apply_adjustments, outputs=(adjusted_output or target, unadjusted_output or f"{target}_unadjusted",
                                              "adjustment_set_id", "adjustments_applied"))
-        return s.relabel(reads={"adjustment_base_value": base_field}) if base_field else s
+        return s.relabel(reads={"adjustment_base_value": base_field or target})

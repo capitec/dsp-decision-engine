@@ -103,4 +103,4 @@ def income_variability_ratio(variable_pay_history: list[float] = missing_as([]))
 
 
 income_unit = flow(income_source_code, income_verification_tier, income_haircut_applied, gross_monthly_income,
-                   income_variability_ratio, name="income")
+                   income_variability_ratio, name="income").emit("income_source_code", "income_haircut_applied")
