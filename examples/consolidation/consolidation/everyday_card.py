@@ -6,10 +6,10 @@ reversion rate, and a mandatory paydown. Affordability is tested against a stres
 from __future__ import annotations
 
 import bisect
-from datetime import date
+import math
 
 from credit_core.rate_card import rate_card_rate
-from credit_core.rounding import round_advance, round_instalment
+from credit_core.rounding import round_instalment
 from decider import DecisionTableConfig, ParamTable, allow_fallback, param, param_table, step
 
 from consolidation import vocab
@@ -125,7 +125,7 @@ class EverydayCard:
 
     def quote(self, policy: dict, proceeds: float, term_months: int, promotional_months: int, risk_grade: int, **_) -> Quote | str:
         """A limit big enough that the transfer is at most `max_utilisation` of it, priced for `promotional_months`."""
-        limit = round_advance(max(policy["min_limit"], min(policy["max_limit"], proceeds / policy["max_utilisation"])))
+        limit = max(policy["min_limit"], min(policy["max_limit"], math.ceil(proceeds / policy["max_utilisation"] / 100.0) * 100.0))
         if proceeds > policy["max_utilisation"] * limit:
             return REJECT_LIMIT
         promotional, reversion = self.rates.promotional(limit, promotional_months, risk_grade), self.rates.reversion(limit, risk_grade)

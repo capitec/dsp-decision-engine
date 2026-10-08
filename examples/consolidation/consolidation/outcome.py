@@ -49,8 +49,9 @@ def comparison(baseline: dict, longest_term: float, chosen: dict) -> dict:
         "total_cost_change_pct": round(change / baseline["total_remaining_cost"], 4) if baseline["total_remaining_cost"] else 0.0,
     }
     if change > 0:
-        out["total_cost_note"] = (f"you will pay R{change:,.0f} more in total ({out['total_cost_change_pct']:.1%}) because the longest "
-                                  f"term goes from {longest_term:.0f} to {after['longest_remaining_term_months']:.0f} months")
+        out["total_cost_note"] = (f"you will pay R{change:,.0f} more in total ({out['total_cost_change_pct']:.1%}) because the new "
+                                  f"facility runs {chosen['term_months']} months against {chosen['settled_longest_remaining_term_months']:.0f} "
+                                  f"on the accounts it settles")
     return out
 
 

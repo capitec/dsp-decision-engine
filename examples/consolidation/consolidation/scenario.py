@@ -89,7 +89,8 @@ class Assessment:
         relief = round(settled_instalments - quote.instalment, 2)
         commitment_after = base["total_instalment"] - relief
         settled_remaining = sum(remaining_cost(a, self.horizon) for a in settled)
-        cost_delta = round(quote.total_cost_of_credit - settled_remaining, 2)
+        # new money is cash the client receives, not a cost of settling these debts
+        cost_delta = round(quote.total_cost_of_credit - new_money - settled_remaining, 2)
         retained_balance = sum(num(a, "balance") for a in retained)
         new_rate_blend = (quote.amount * quote.nominal_annual_rate + retained_balance * weighted_rate(retained)) / (quote.amount + retained_balance)
         facts = {
@@ -134,6 +135,7 @@ class Assessment:
             "existing_obligations_after": after["existing_obligations"], "discretionary_income": after["discretionary_income"],
             "max_affordable_instalment": after["max_affordable_instalment"],
             "affordability_verdict_code": after["affordability_verdict_code"],
-            "instalment_relief": relief, "total_cost_delta": cost_delta, "bank_expected_value": round(bank_value, 2),
+            "instalment_relief": relief, "total_cost_delta": cost_delta,
+            "settled_longest_remaining_term_months": float(max(remaining_term(a, self.horizon) for a in settled)), "bank_expected_value": round(bank_value, 2),
             "measures": measures, "after": after_position,
         }
