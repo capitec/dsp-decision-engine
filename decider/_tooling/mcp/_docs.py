@@ -29,6 +29,14 @@ def save_doc(path: str, doc: dict) -> dict:
     found = problems(doc)
     if found:
         return {"saved": False, "path": path, "problems": found}
-    # ponytail: always 2-space JSON, so a hand-formatted file is reformatted on its first save.
-    Path(path).write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n")
+    old = Path(path).read_text() if Path(path).exists() else "{\n  \n}\n"
+    Path(path).write_text(json.dumps(doc, indent=_indent(old), ensure_ascii=False) + "\n" * old.endswith("\n"))
     return {"saved": True, "path": path}
+
+
+def _indent(old: str) -> int | None:
+    # Keep the file's own layout (one line or its indent width, final newline or not) so a small edit is a small diff.
+    lines = old.splitlines()
+    if len(lines) < 2:
+        return None
+    return len(lines[1]) - len(lines[1].lstrip(" ")) or 2
