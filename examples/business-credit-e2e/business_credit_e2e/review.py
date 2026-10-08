@@ -89,7 +89,7 @@ def annual_review(
 ) -> dict:
     """Review a facility: score `request` (the refreshed figures, same `facility_id`) and append the decision of record.
 
-    `executable` is the origination pipeline bound to an `Engine`, and `params` its params document, as they are now:
+    `executable` is the compiled origination pipeline and `params` its params document, as they are now:
     a change of policy since the previous decision shows up as the `model` cause. A revolving facility needs
     `limit_account`. The record carries `review_basis_code`, `grade_migration`, `reprice`, `limit_decision`,
     `exit_triggers` and `next_review_date`.
@@ -124,7 +124,7 @@ def annual_review(
     current["comparison_basis_code"] = migration["comparison_basis_code"]
 
     shortfall = result["nominal_annual_rate"] - previous["nominal_annual_rate"]
-    if abs(shortfall) < REPRICE_TOLERANCE:
+    if shortfall < REPRICE_TOLERANCE:  # a facility that earns more than today's price is reported, not acted on
         action = vocab.REPRICE_NONE
     else:
         action = vocab.REPRICE_RESET_ON_NOTICE if revolving else vocab.REPRICE_FLAG_RENEGOTIATE

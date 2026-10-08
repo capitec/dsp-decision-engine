@@ -1,26 +1,14 @@
 import copy
 import json
-from datetime import date
 from pathlib import Path
 
 import pytest
 
-from business_nested.records import parse_dates as parse_entity_dates
 from business_credit_e2e import history, vocab
 from business_credit_e2e.pipeline import build
+from business_credit_e2e.records import parse_dates
 
 ROOT = Path(__file__).resolve().parents[1]
-
-
-def parse_dates(record: dict) -> dict:
-    """What the handler does to a JSON request before the pipeline sees it."""
-    record = parse_entity_dates(record)
-    for field in ("knowledge_date", "decision_date"):
-        if isinstance(record.get(field), str):
-            record[field] = date.fromisoformat(record[field])
-    for account in record.get("existing_accounts", []):
-        account["opened_date"] = date.fromisoformat(account["opened_date"])
-    return record
 
 
 @pytest.fixture(scope="session")
