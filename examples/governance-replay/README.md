@@ -69,10 +69,10 @@ What is the harness's own, because decider has no equivalent:
 - **The overlay register view and ageing**, **rule hit counting** against each flow's rule list, and the
   three-audience **explanation**.
 
-Not used, and why: `decider.lab.diff.outputs` and `decider.lab.experiments` run a *frame* through the flow, and
-decider's frame path only converts top-level date columns. A business request carries its dates inside the
-`entities` list, so a JSON array of them fails (`'str' object has no attribute 'year'`). The harness therefore scores
-one record at a time, which also keeps each result tied to a decision id.
+Not used, and why: `decider.lab.diff.outputs` and `decider.lab.experiments` run a typed *frame* through the flow, and
+only the handler converts a request's JSON date strings. A frame of raw business requests keeps the dates inside the
+`entities` list as strings and fails there (`'str' object has no attribute 'year'`). The harness therefore scores one
+request at a time through the handler, which also keeps each result tied to a decision id.
 
 ## Run it
 
@@ -211,10 +211,10 @@ tests/
   new version under `root` and stages it, so a rate-card refresh, a rule change and a params change are all the same
   kind of thing and attribution does not care which. A params-only run is `Flow.replayer(params=...)`.
 - **What decider's diff covers.** `version_diff` reports decider's step-level `structure` and `prove`, but two builds of
-  these pipelines always come back `proof=None`: the steps read overlay registers, which decider
-  cannot hash by content, so it never calls them equal. The config documents are therefore summarised here instead (rate
-  cards cell by cell by key through `credit_core.rate_card.diff_cards`, rule sets by rule id), and a reordered rate card
-  shows no change.
+  these pipelines always come back `proof=None`: many steps read globals decider can only key by identity (overlay
+  registers, dates, dicts, and the class inside `decider.ops.decimal.round`), so it never calls them equal. The config
+  documents are therefore summarised here instead (rate cards cell by cell by key through
+  `credit_core.rate_card.diff_cards`, rule sets by rule id), and a reordered rate card shows no change.
 - **Workarounds, marked `# workaround:` in the code.** `AdjustmentRegister` and `ReasonCodeRegistry` have no public
   iterator or lookup, so the overlay list and the reason wording read their `_all` and `_by_code`.
 - **Rule lists.** The fraud rule list is the live rules in `rule_set.json`; the loan list is the cap waterfall's
