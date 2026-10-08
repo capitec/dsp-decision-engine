@@ -10,7 +10,7 @@ from datetime import date
 from decider import allow_fallback, flow, missing_as, param, step
 
 from credit_core import affordability, reason_codes
-from credit_core.affordability import FAIL, INDETERMINATE, PASS
+from credit_core.affordability import FAIL, INDETERMINATE, MARGINAL, PASS  # noqa: F401  (the codes are published here for callers)
 
 # evidence_sufficiency_code
 EVIDENCE_OK = 0
