@@ -1,0 +1,145 @@
+{
+  "type": "tree",
+  "name": "campaign_23",
+  "path_output": "leaf",
+  "trace_output": "tree_path",
+  "tree": {
+    "type": "v3-tree",
+    "metadata": {"name": "Campaign 23", "description": "Flex Loan pre-approved top-up"},
+    "nodes": [
+      {
+        "id": "n1",
+        "data": {
+          "type": "composite",
+          "op": "and",
+          "conditions": [{"op": "is_true", "feature": "has_active_flex_loan"}, {"op": ">=", "feature": "months_on_book_flex", "threshold": 6}, {"op": ">=", "feature": "flex_term_remaining_months", "threshold": 4}]
+        }
+      },
+      {
+        "id": "n2",
+        "data": {"type": "composite", "op": "and", "conditions": [{"op": "<=", "feature": "settlement_ratio", "threshold": 0.65}, {"op": "==", "feature": "payments_missed_12m", "threshold": 0}]}
+      },
+      {
+        "id": "n3",
+        "data": {
+          "type": "composite",
+          "op": "and",
+          "conditions": [
+            {"op": ">=", "feature": "behaviour_score", "threshold": {"param": "n3_behaviour_score_floor", "default": 620}},
+            {"op": "==", "feature": "worst_arrears_months_12m", "threshold": 0},
+            {"op": "<=", "feature": "bureau_enquiries_3m", "threshold": 2},
+            {"op": "<=", "feature": "external_unsecured_growth_6m", "threshold": 0.2}
+          ]
+        }
+      },
+      {
+        "id": "n4",
+        "data": {
+          "type": "composite",
+          "op": "and",
+          "conditions": [
+            {"op": ">=", "feature": "behaviour_score", "threshold": 580},
+            {"op": ">=", "feature": "months_since_last_arrears", "threshold": 9},
+            {"op": "<=", "feature": "worst_arrears_months_12m", "threshold": 1}
+          ]
+        }
+      },
+      {
+        "id": "n5",
+        "data": {
+          "type": "composite",
+          "op": "and",
+          "conditions": [
+            {"op": ">=", "feature": "discretionary_income", "threshold": 3500},
+            {"op": "<=", "feature": "estimated_instalment_to_income", "threshold": 0.28},
+            {"op": "isin", "feature": "income_band_code", "values": [5, 6, 7, 8, 9]}
+          ]
+        }
+      },
+      {
+        "id": "n6",
+        "data": {
+          "type": "composite",
+          "op": "and",
+          "conditions": [
+            {"op": ">=", "feature": "discretionary_income", "threshold": {"param": "n6_discretionary_income_floor", "default": 2200}},
+            {"op": "<=", "feature": "estimated_instalment_to_income", "threshold": 0.33},
+            {"op": "isin", "feature": "employment_type_code", "values": [1, 2, 4]}
+          ]
+        }
+      },
+      {
+        "id": "n7",
+        "data": {
+          "type": "composite",
+          "op": "and",
+          "conditions": [
+            {"op": ">=", "feature": "pre_assessed_amount", "threshold": 40000},
+            {"op": ">=", "feature": {"type": "computed", "expression": "pre_assessed_amount - 1.5 * current_flex_balance"}, "threshold": 0}
+          ]
+        }
+      },
+      {"id": "n8", "data": {"type": "unary", "condition": {"op": ">=", "feature": "pre_assessed_amount", "threshold": 15000}}},
+      {
+        "id": "n9",
+        "data": {"type": "composite", "op": "or", "conditions": [{"op": ">=", "feature": "app_logins_90d", "threshold": 3}, {"op": "==", "feature": "channel_preference_code", "threshold": 2}]}
+      },
+      {
+        "id": "n10",
+        "data": {"type": "composite", "op": "and", "conditions": [{"op": ">=", "feature": "sms_response_rate_12m", "threshold": 0.04}, {"op": "<=", "feature": "prior_offer_declines_6m", "threshold": 1}]}
+      },
+      {"id": "leaf_901", "data": {"type": "leaf", "result_idx": 0}},
+      {"id": "leaf_902", "data": {"type": "leaf", "result_idx": 1}},
+      {"id": "leaf_903", "data": {"type": "leaf", "result_idx": 2}},
+      {"id": "leaf_904", "data": {"type": "leaf", "result_idx": 3}},
+      {"id": "leaf_910", "data": {"type": "leaf", "result_idx": 4}},
+      {"id": "leaf_911", "data": {"type": "leaf", "result_idx": 5}},
+      {"id": "leaf_912", "data": {"type": "leaf", "result_idx": 6}},
+      {"id": "leaf_913", "data": {"type": "leaf", "result_idx": 7}}
+    ],
+    "edges": [
+      {"source": "n1", "target": "n2", "data": {"sourceIndex": 0}},
+      {"source": "n1", "target": "leaf_901", "data": {"sourceIndex": 1}},
+      {"source": "n2", "target": "n3", "data": {"sourceIndex": 0}},
+      {"source": "n2", "target": "n4", "data": {"sourceIndex": 1}},
+      {"source": "n3", "target": "n5", "data": {"sourceIndex": 0}},
+      {"source": "n3", "target": "n6", "data": {"sourceIndex": 1}},
+      {"source": "n4", "target": "n6", "data": {"sourceIndex": 0}},
+      {"source": "n4", "target": "leaf_902", "data": {"sourceIndex": 1}},
+      {"source": "n5", "target": "n7", "data": {"sourceIndex": 0}},
+      {"source": "n5", "target": "n8", "data": {"sourceIndex": 1}},
+      {"source": "n6", "target": "n8", "data": {"sourceIndex": 0}},
+      {"source": "n6", "target": "leaf_903", "data": {"sourceIndex": 1}},
+      {"source": "n7", "target": "n9", "data": {"sourceIndex": 0}},
+      {"source": "n7", "target": "n10", "data": {"sourceIndex": 1}},
+      {"source": "n8", "target": "n10", "data": {"sourceIndex": 0}},
+      {"source": "n8", "target": "leaf_904", "data": {"sourceIndex": 1}},
+      {"source": "n9", "target": "leaf_910", "data": {"sourceIndex": 0}},
+      {"source": "n9", "target": "leaf_911", "data": {"sourceIndex": 1}},
+      {"source": "n10", "target": "leaf_912", "data": {"sourceIndex": 0}},
+      {"source": "n10", "target": "leaf_913", "data": {"sourceIndex": 1}}
+    ],
+    "output": {
+      "data": [
+        {"leaf_outcome_code": 0, "offer_tier_code": 0, "tier_ceiling": 0.0, "channel_1": 0, "channel_2": 0, "priority_weight": 0.0, "reason_label": 9201},
+        {"leaf_outcome_code": 0, "offer_tier_code": 0, "tier_ceiling": 0.0, "channel_1": 0, "channel_2": 0, "priority_weight": 0.0, "reason_label": 9202},
+        {"leaf_outcome_code": 0, "offer_tier_code": 0, "tier_ceiling": 0.0, "channel_1": 0, "channel_2": 0, "priority_weight": 0.0, "reason_label": 9203},
+        {"leaf_outcome_code": 0, "offer_tier_code": 0, "tier_ceiling": 0.0, "channel_1": 0, "channel_2": 0, "priority_weight": 0.0, "reason_label": 9204},
+        {"leaf_outcome_code": 1, "offer_tier_code": 1, "tier_ceiling": 250000.0, "channel_1": 1, "channel_2": 4, "priority_weight": 0.86, "reason_label": 9101},
+        {"leaf_outcome_code": 1, "offer_tier_code": 1, "tier_ceiling": 250000.0, "channel_1": 3, "channel_2": 2, "priority_weight": 0.81, "reason_label": 9102},
+        {"leaf_outcome_code": 1, "offer_tier_code": 2, "tier_ceiling": 120000.0, "channel_1": 2, "channel_2": 1, "priority_weight": 0.58, "reason_label": 9103},
+        {"leaf_outcome_code": 1, "offer_tier_code": 3, "tier_ceiling": 60000.0, "channel_1": 1, "channel_2": 0, "priority_weight": 0.34, "reason_label": 9104}
+      ],
+      "default": {"leaf_outcome_code": 0, "offer_tier_code": 0, "tier_ceiling": 0.0, "channel_1": 0, "channel_2": 0, "priority_weight": 0.0, "reason_label": 0},
+      "dtypes": [
+        ["leaf_outcome_code", "Int64"],
+        ["offer_tier_code", "Int64"],
+        ["tier_ceiling", "Float64"],
+        ["channel_1", "Int64"],
+        ["channel_2", "Int64"],
+        ["priority_weight", "Float64"],
+        ["reason_label", "Int64"]
+      ]
+    }
+  }
+}

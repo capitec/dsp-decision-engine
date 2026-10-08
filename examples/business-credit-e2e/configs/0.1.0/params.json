@@ -1,0 +1,138 @@
+{
+  "business_credit_e2e": {
+    "business_credit": {
+      "entities": {
+        "resolved_entities": {
+          "critical_ownership_pct": 25.0,
+          "significant_ownership_pct": 10.0
+        },
+        "entities": {
+          "event_overlays_enabled": true,
+          "recent_months": 12,
+          "minor_count": 3,
+          "aggregate_material_floor": 150000.0,
+          "aggregate_material_pct": 0.15,
+          "aggregate_disqualifying_floor": 500000.0,
+          "aggregate_disqualifying_pct": 0.5,
+          "immaterial_count": 2,
+          "bureau_low": 500.0,
+          "bureau_mid": 650.0,
+          "bureau_high": 750.0,
+          "adjustment_stack_enabled": true
+        }
+      },
+      "decision": {
+        "structure_check": {
+          "max_entities": 40,
+          "ownership_floor_pct": 90.0,
+          "ownership_ceiling_pct": 110.0
+        },
+        "people": {
+          "people_blend": {
+            "inclusion_floor_pct": 5.0,
+            "control_ownership_pct": 50.0,
+            "control_weight_floor": 0.6,
+            "controller_points": 10.0,
+            "controller_cap_points": 30.0,
+            "coverage_requirement": 0.75
+          },
+          "people_grade_caps": {
+            "weak_grade": 11,
+            "weak_ownership_pct": 20.0,
+            "weak_cap_grade": 10,
+            "critical_floor_grade": 5
+          }
+        },
+        "business_grade": {
+          "combined_pd_before_overlay": {
+            "financial_weight": 0.4,
+            "people_weight": 0.6
+          },
+          "apply_probability_of_default_adjustments": {
+            "adjustment_stack_enabled": true
+          }
+        },
+        "pricing": {
+          "term_months": {
+            "default_term_months": 36
+          },
+          "initiation_fee": {
+            "base_fee": 1050.0,
+            "marginal_rate": 0.1,
+            "threshold": 10000.0
+          },
+          "monthly_service_fee": {
+            "flat_fee": 69.0
+          }
+        },
+        "sole_proprietor": {
+          "statutory": {
+            "assess": {
+              "principal_income_evidence": {
+                "assumed_profit_margin": 0.15,
+                "statement_confidence": 0.8
+              },
+              "affordability_assessment": {
+                "evidence": {
+                  "applicant1_income": {
+                    "income_haircut_applied": {
+                      "statement_confidence_threshold": 0.7,
+                      "haircut_payslip": 0.05,
+                      "haircut_statement_high_confidence": 0.1,
+                      "haircut_statement_low_confidence": 0.25,
+                      "haircut_declared": 0.2,
+                      "haircut_bureau_estimated": 0.3
+                    }
+                  },
+                  "applicant2_income": {
+                    "income_haircut_applied": {
+                      "statement_confidence_threshold": 0.7,
+                      "haircut_payslip": 0.05,
+                      "haircut_statement_high_confidence": 0.1,
+                      "haircut_statement_low_confidence": 0.25,
+                      "haircut_declared": 0.2,
+                      "haircut_bureau_estimated": 0.3
+                    }
+                  },
+                  "household_income": {
+                    "minor_contribution_threshold": 0.1
+                  },
+                  "bureau_is_stale": {
+                    "staleness_window_days": 7,
+                    "staleness_window_days_mortgage": 14
+                  },
+                  "minimum_income_tier": {
+                    "minimum_tier_new_application": 3,
+                    "minimum_tier_limit_increase": 4,
+                    "minimum_tier_arrangement": 5,
+                    "minimum_tier_scenario": 3
+                  }
+                },
+                "capacity": {
+                  "overlay": {
+                    "apply_max_affordable_instalment_adjustments": {
+                      "adjustment_stack_enabled": true
+                    }
+                  },
+                  "proposal_verdict": {
+                    "marginal_band": 0.05
+                  }
+                }
+              }
+            }
+          }
+        },
+        "outcome": {
+          "business_outcome": {
+            "decline_cutoff_grade": 11,
+            "refer_cutoff_grade": 9
+          }
+        }
+      }
+    },
+    "new_facility_instalment": {
+      "minimum_payment_pct": 0.05,
+      "minimum_payment": 50.0
+    }
+  }
+}

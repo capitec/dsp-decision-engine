@@ -192,3 +192,6 @@ experimentation/tree-codegen-vs-interpreted/_generated/
 
 # Benchmark output; the numbers that matter are in docs/design_decisions/experiments/.
 benchmarks/*.csv
+
+# decider build output
+examples/*/decider-cpu-target.json

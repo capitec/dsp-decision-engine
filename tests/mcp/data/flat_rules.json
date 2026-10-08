@@ -1,0 +1,136 @@
+{
+ "type": "tree",
+ "name": "live_rules",
+ "tree": {
+  "type": "prioritized_flat_rule",
+  "mode": "all",
+  "rules": [
+   {
+    "meta": {
+     "name": "CF-0001"
+    },
+    "rule": {
+     "type": "composite",
+     "op": "and",
+     "conditions": [
+      {
+       "op": "is_true",
+       "feature": "model_score_available"
+      },
+      {
+       "op": ">",
+       "feature": "model_score",
+       "threshold": 570
+      }
+     ],
+     "then": {
+      "type": "leaf",
+      "result_idx": 0
+     }
+    }
+   },
+   {
+    "meta": {
+     "name": "CF-0002"
+    },
+    "rule": {
+     "type": "composite",
+     "op": "and",
+     "conditions": [
+      {
+       "op": ">=",
+       "feature": "velocity_count_1h",
+       "threshold": 5
+      },
+      {
+       "op": ">",
+       "feature": "velocity_distinct_counterparties_24h",
+       "threshold": 2
+      },
+      {
+       "op": "between",
+       "feature": "device_reputation_band",
+       "min": 3,
+       "max": 5
+      }
+     ],
+     "then": {
+      "type": "leaf",
+      "result_idx": 0
+     }
+    }
+   },
+   {
+    "meta": {
+     "name": "CF-0003"
+    },
+    "rule": {
+     "type": "composite",
+     "op": "and",
+     "conditions": [
+      {
+       "op": "is_true",
+       "feature": "model_score_available"
+      },
+      {
+       "op": ">",
+       "feature": "model_score",
+       "threshold": 650
+      }
+     ],
+     "then": {
+      "type": "leaf",
+      "result_idx": 0
+     }
+    }
+   },
+   {
+    "meta": {
+     "name": "CF-0004"
+    },
+    "rule": {
+     "type": "composite",
+     "op": "and",
+     "conditions": [
+      {
+       "op": ">=",
+       "feature": "velocity_count_1h",
+       "threshold": 3
+      },
+      {
+       "op": ">",
+       "feature": "velocity_distinct_counterparties_24h",
+       "threshold": 2
+      },
+      {
+       "op": "between",
+       "feature": "device_reputation_band",
+       "min": 3,
+       "max": 5
+      }
+     ],
+     "then": {
+      "type": "leaf",
+      "result_idx": 0
+     }
+    }
+   }
+  ],
+  "output": {
+   "data": [
+    {
+     "fired": true
+    }
+   ],
+   "default": {
+    "fired": false
+   },
+   "dtypes": [
+    [
+     "fired",
+     "Boolean"
+    ]
+   ]
+  }
+ }
+}
