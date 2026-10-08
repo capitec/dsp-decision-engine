@@ -19,7 +19,7 @@ EMIT = (
     "pre_prescription_flag",
     # score: adjusted and unadjusted
     "collections_score", "collections_score_unadjusted", "score_shift_adjustments_applied", "adjusted_scale",
-    "scaling_change_adjustments_applied", "calibration_cell_id", "roll_probability", "roll_probability_unadjusted",
+    "scaling_change_adjustments_applied", "calibration_cell_id", "roll_probability_before_overlay", "roll_probability", "roll_probability_unadjusted",
     "odds_multiplier_adjustments_applied", "band_edge_shift", "band_boundary_shift_adjustments_applied",
     "collections_band_code", "collections_band_code_unadjusted", "collections_band_cell_id",
     "recovery_estimate", "cost_to_collect", "recovery_curve_cell_id",
