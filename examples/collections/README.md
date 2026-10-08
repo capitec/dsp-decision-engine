@@ -89,7 +89,7 @@ In the order the pipeline applies them:
 | `param_table`, shared by two steps, for the band edges | `collections_bands` in [scoring.py](collections_treatment/scoring.py) |
 | `frame_step`: a population-level step (ranking and rationing) inside a per-record pipeline, with its own `param` | `allocate_capacity` in [capacity.py](collections_treatment/capacity.py) |
 | `param` for policy, `missing_as` for optional inputs, request data never a `param` | [state.py](collections_treatment/state.py), [arrangements.py](collections_treatment/arrangements.py) |
-| Multi-output steps (`outputs=`) and `TypedDict`-free list outputs for index-aligned records | [suspensions.py](collections_treatment/suspensions.py) |
+| Multi-output steps (`outputs=`) returning index-aligned lists, one entry per suspension | [suspensions.py](collections_treatment/suspensions.py) |
 | `.relabel` and `.named`: one step on other column names, or twice with different settings | `resolve_path_position_as_at_now` in [path.py](collections_treatment/path.py), the two roll probabilities in [scoring.py](collections_treatment/scoring.py) |
 | Overlays from `credit_core.adjustments`, switched off with one param through the same code | [scoring.py](collections_treatment/scoring.py), [matrix.py](collections_treatment/matrix.py), [overlays.py](collections_treatment/overlays.py) |
 | Another example's pipeline halves, reused in arrangement mode | `assessment_unit` in [arrangements.py](collections_treatment/arrangements.py) |
