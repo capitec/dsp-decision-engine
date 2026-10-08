@@ -14,7 +14,7 @@ from __future__ import annotations
 from decider import DecisionTableConfig, dag, missing_as, param, step
 
 from credit_core import affordability
-from credit_core.affordability import FAIL, INDETERMINATE, MARGINAL, PASS  # noqa: F401
+from credit_core.affordability import FAIL, INDETERMINATE, MARGINAL, PASS
 from credit_core.evidence import cell_id
 from retail_credit.overlays import overlay_step
 

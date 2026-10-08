@@ -1,8 +1,6 @@
 """Offer assembly: whether there is an offer at all, and the figures of the one the solve found."""
 from __future__ import annotations
 
-import math
-
 from decider import allow_fallback, step
 
 from credit_core.affordability import MARGINAL, PASS

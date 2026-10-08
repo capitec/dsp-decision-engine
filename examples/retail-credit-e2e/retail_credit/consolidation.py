@@ -1,14 +1,11 @@
 """Consolidation: when the client cannot afford what they asked for, test whether settling their other debts would help.
 
-The affordability steps run a second time on a hypothetical `existing_obligations_hypothetical`; both results are
-kept, and `offer_basis` picks the one the offer is solved and validated against.
-
-# ponytail: one scenario (settle every external debt, keep the internal ones). A search over subsets of debts would
-# propose a new scenario per pass and is where `loop` belongs.
+The affordability steps run a second time on `existing_obligations_hypothetical`; both results are kept, and
+`offer_basis` picks the one the offer is solved and validated against.
 """
 from __future__ import annotations
 
-from decider import missing_as, param, step
+from decider import missing_as, step
 
 from credit_core.affordability import MARGINAL, PASS
 from credit_core.vocab import FraudVerdictCode
@@ -19,6 +16,8 @@ HYPOTHETICAL_OUTPUTS = ("discretionary_income", "capacity", "pre_buffer", "affor
                         "max_affordable_instalment", "instalment_cap", "affordability_verdict_code")
 
 
+# ponytail: one scenario (settle every external debt, keep the internal ones). A search over subsets of debts proposes a
+# new scenario per pass and is where `loop` belongs.
 def consolidation_scenario(
     affordability_verdict_code: int, fraud_verdict_code: int, existing_obligations: float, obligations_internal: float,
     is_consolidation_eligible: bool = missing_as(False),
