@@ -25,7 +25,8 @@ _SEVERITY_WEIGHT = {1: 0.05, 2: 0.15, 3: 0.30, 4: 0.60}
 _CONSORTIUM_FAMILIES = ("F3", "F4", "F5")  # skipped on the low-value bypass: no consortium call is made
 
 
-# ponytail: a rule is a feature and a Python condition; `TreeConfig` in "all" mode would move the conditions into a config document.
+# ponytail: a rule is a feature and a Python condition; `TreeConfig` in "all" mode would move the conditions into a
+# config document.
 @allow_fallback
 def evaluate_fraud(
     device_is_new: bool = missing_as(False), contact_changed_days_ago: float = missing_as(9999.0),

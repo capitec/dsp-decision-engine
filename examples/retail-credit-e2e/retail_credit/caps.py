@@ -16,7 +16,6 @@ from retail_credit.overlays import overlay_step
 
 AMOUNT, TERM, GRADE = "amount", "term", "grade"
 
-# status of one register entry in a chain
 SEED, BOUND, NOT_BOUND, NOT_APPLICABLE, RAISED, DECLINED = (
     "seed", "bound", "evaluated_not_bound", "not_applicable", "raised", "declined")
 

@@ -73,3 +73,11 @@ def test_the_solve_finds_the_true_maximum_for_every_ceiling_on_a_range(solve_onc
 def test_when_nothing_at_the_minimum_fits_under_the_ceiling_there_is_no_winner(solve_once):
     out = solve_once(instalment_ceiling=50.0)
     assert (out["solved_amount"], out["solve_binding_constraint"], out["record"]) == (0.0, "BIND-AFF", None)
+
+
+def test_the_candidate_bound_covers_the_whole_product_range(params):
+    from reference import find
+    from retail_credit.solve import MAX_CANDIDATES
+
+    product = find(params, "product_range")
+    assert (product["max_amount"] - product["min_amount"]) / product["grid"] + 1 <= MAX_CANDIDATES

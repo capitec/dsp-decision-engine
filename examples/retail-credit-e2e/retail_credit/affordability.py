@@ -21,7 +21,6 @@ from retail_credit.overlays import overlay_step
 RATIO_VERSION = "ratio-2026.09"
 BUFFER_VERSION = "buffer-2026.09"
 
-# affordability_binding_constraint_code
 CAPACITY_BOUND = 1
 RATIO_CEILING_BOUND = 2
 
