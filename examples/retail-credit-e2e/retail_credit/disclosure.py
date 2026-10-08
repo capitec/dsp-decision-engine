@@ -14,7 +14,7 @@ from credit_core.vocab import (
     OUTCOME_APPROVE, OUTCOME_APPROVE_WITH_CONDITIONS, OUTCOME_DECLINE, OUTCOME_REFER, FraudVerdictCode,
 )
 from retail_credit import caps, eligibility, routing, validation
-from retail_credit.vocab import BASIS_HYPOTHETICAL, DEGRADED_BUREAU_DOWN, OUTCOME_REJECTED
+from retail_credit.vocab import BASIS_HYPOTHETICAL, OUTCOME_REJECTED
 
 R_AFFORDABILITY_FAIL = 2140
 R_NO_AFFORDABLE_AMOUNT = 2420

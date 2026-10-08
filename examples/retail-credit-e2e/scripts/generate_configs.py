@@ -4,6 +4,7 @@ the Flex Loan rate card.
     uv run python examples/retail-credit-e2e/scripts/generate_configs.py [version]
 """
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -34,7 +35,9 @@ def main(version: str = "0.1.0") -> None:
     out.mkdir(parents=True, exist_ok=True)
     params = build().parameters().defaults()
     fill(params, card_tables())
-    (out / "params.json").write_text(json.dumps(params, separators=(",", ":")) + "\n")
+    text = json.dumps(params, indent=2)
+    text = re.sub(r'\{\s+"(rate|floor)": ([^\s,}]+)\s+\}', r'{"\1": \2}', text)  # one card row per line
+    (out / "params.json").write_text(text + "\n")
     print(f"wrote {out / 'params.json'}")
 
 

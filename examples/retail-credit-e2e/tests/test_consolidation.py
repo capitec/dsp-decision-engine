@@ -1,6 +1,4 @@
 """Consolidation: a client who fails affordability on their actual debts may pass it if they settle the external ones."""
-import pytest
-
 PASS, FAIL = 1, 3
 ACTUAL, HYPOTHETICAL = 1, 2
 

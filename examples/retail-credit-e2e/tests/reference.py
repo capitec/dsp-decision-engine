@@ -1,5 +1,4 @@
 """The price of an offer worked out by hand from the params document, to check the pipeline against."""
-import math
 
 
 def find(node, key):
