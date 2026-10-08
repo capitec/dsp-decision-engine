@@ -254,7 +254,6 @@ Replace `flex_loan/tests/test_pipeline.py` with tests that send raw JSON through
 
 ```python
 """Scores requests through the served handler, raw JSON bytes in, as `decider serve` does."""
-import asyncio
 import json
 from pathlib import Path
 
@@ -269,7 +268,7 @@ HANDLER.activate()
 
 
 def score(body: bytes) -> dict:
-    response = asyncio.run(HANDLER.process_fn(body, "application/json", "application/json"))
+    response = HANDLER.process_fn(body, "application/json", "application/json")
     return json.loads(response.content)
 
 

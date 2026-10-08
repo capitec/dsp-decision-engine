@@ -220,7 +220,7 @@ Two details sit outside the guarantee. A `Fallback` that calls a numba dispatche
 
 ## Inside one serving process
 
-`RequestHandler.process_fn` calls `score()` or `run()` directly on the event loop. With Starlette, one worker process therefore runs requests one at a time, and its `nogil` kernels never overlap. Concurrency today comes from embedders calling one executable from their own threads, and from running several processes. The contract holds either way. Moving scoring to a thread pool (`anyio.to_thread.run_sync`) would trade a thread hop per request for not blocking the loop; that is left to a benchmark.
+`RequestHandler.process_fn` calls `score()` or `run()` directly on the event loop (it is a plain method, not a coroutine). With Starlette, one worker process therefore runs requests one at a time, and its `nogil` kernels never overlap. Concurrency today comes from embedders calling one executable from their own threads, and from running several processes. The contract holds either way. Moving scoring to a thread pool (`anyio.to_thread.run_sync`) would trade a thread hop per request for not blocking the loop; that is left to a benchmark.
 
 `stage`, `activate` and `rollback` take the handler's `_lock` and swap the active `Live` with one assignment. `Live.dates` defaults to an empty `MappingProxyType`, so the shared default cannot be mutated. The registry takes its root's `RLock` on the miss path of `resolve` and `lazy`, and `bundle_class` in `decider/_engine/params/bundles.py` builds each namedtuple class under a module lock.
 

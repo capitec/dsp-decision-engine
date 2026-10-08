@@ -180,7 +180,7 @@ def test_concurrent_requests_during_swaps_each_see_one_version(handler):
         body = json.dumps(RECORD).encode()
         try:
             while not stop.is_set():
-                out = json.loads(asyncio.run(handler.process_fn(body, "application/json", "application/json")).content)
+                out = json.loads(handler.process_fn(body, "application/json", "application/json").content)
                 seen.add(_answer(out))
         except Exception as e:
             errors.append(e)

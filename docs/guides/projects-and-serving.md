@@ -194,7 +194,7 @@ The response holds the request's input columns plus every output of the pipeline
 Through the handler in-process, with raw bytes as the server would see them:
 
 ```python
-import asyncio, sys, warnings
+import sys, warnings
 from pathlib import Path
 from decider import FallbackWarning
 from decider.config import JsonFileStore
@@ -209,7 +209,7 @@ handler.activate()
 
 
 def call(body: bytes, accept="application/json", content_type="application/json"):
-    response = asyncio.run(handler.process_fn(body, accept, content_type))
+    response = handler.process_fn(body, accept, content_type)
     return response.media_type, response.content.decode()
 
 
@@ -316,7 +316,6 @@ stateDiagram-v2
 ```
 
 ```python
-import asyncio
 from decider.config import JsonFileStore
 from decider.exceptions import DeciderError
 from decider.serving import RequestHandler
@@ -327,7 +326,7 @@ body = b'{"income": 1000, "debt": 350, "applied_on": "2026-01-15"}'
 
 
 def call(body):
-    return asyncio.run(handler.process_fn(body, "application/json", "application/json")).content.decode()
+    return handler.process_fn(body, "application/json", "application/json").content.decode()
 
 
 try:
@@ -384,10 +383,10 @@ A missing document is an error naming it (`the config version has no 'risk' docu
 
 ## Changing request handling
 
-Override any `*_fn` method in `inference.py`'s `Handler`. `input_fn(data, content_type)` parses the body, `output_fn(output, accept)` formats the result, `process_fn` does both around scoring, `warm_fn(executable, params)` warms a staged version, `pipeline_fn(config)` builds the pipeline from a version, and `init_fn` / `shutdown_fn` run at server start and stop.
+Override any `*_fn` method in `inference.py`'s `Handler`. `input_fn(data, content_type)` parses the body, `output_fn(output, accept)` formats the result, `process_fn` does both around scoring, `warm_fn(executable, params)` warms a staged version, `pipeline_fn(config)` builds the pipeline from a version, and `init_fn` / `shutdown_fn` run at server start and stop. The hooks are plain methods: one defined with `async def` fails with a `TypeError` when the class is created. In-process, `handler.score(record_or_frame)` runs the scoring step alone, converting date strings as the server does.
 
 ```python
-import asyncio, sys
+import sys
 from pathlib import Path
 from pydantic_core import to_json
 from decider.config import JsonFileStore
@@ -398,8 +397,8 @@ sys.path.insert(0, str(Path("..").resolve()))
 
 
 class Handler(RequestHandler):
-    async def input_fn(self, data, content_type):
-        request = await super().input_fn(data, content_type)
+    def input_fn(self, data, content_type):
+        request = super().input_fn(data, content_type)
         if isinstance(request, dict):                      # one record: accept the channel's field names
             request["income"] = request.pop("gross_monthly_income", request.get("income"))
         return request
@@ -415,7 +414,7 @@ handler = Handler(JsonFileStore(basepath="../credit_risk/configs"), "credit_risk
 handler.stage()
 handler.activate()
 body = b'{"gross_monthly_income": 1000, "debt": 250, "applied_on": "2026-01-15"}'
-print(asyncio.run(handler.process_fn(body, "application/json", "application/json")).content.decode())
+print(handler.process_fn(body, "application/json", "application/json").content.decode())
 ```
 
 ```text
