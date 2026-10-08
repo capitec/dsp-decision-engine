@@ -105,6 +105,14 @@ def test_discover_flows_finds_the_pipeline(workspace):
     assert workspace["entry"] in entries
 
 
+def test_discover_flows_finds_a_project_under_a_hidden_directory(tmp_path):
+    root = tmp_path / ".hidden" / "proj"
+    root.mkdir(parents=True)
+    (root / "pipeline.py").write_text(PIPELINE_SRC)
+    flows = _call(build_server(Policy()), "discover_flows", root=str(root))["flows"]
+    assert "PIPELINE" in [f.get("name") for f in flows]
+
+
 def test_run_summary_returns_tallies_not_per_record_values(workspace):
     mcp = build_server(Policy())
     summary = _call(mcp, "run_summary", entry=workspace["entry"], data=workspace["data"])
