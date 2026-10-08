@@ -9,16 +9,19 @@ from credit_core.affordability import MARGINAL, PASS
 from credit_core.vocab import FraudVerdictCode
 
 
+def decision_open(is_eligible: bool, product_10_eligible: bool, p09_declined: bool, fraud_verdict_code: int) -> bool:
+    """False once something has already declined the request, so no offer is made and no reason about the amount is given.
+    A fraud refer leaves the decision open: the outcome refers, the offer is indicative."""
+    return is_eligible and product_10_eligible and not p09_declined and fraud_verdict_code != FraudVerdictCode.DECLINE
+
+
 @allow_fallback
 def assemble_offer(
-    is_eligible: bool, fraud_verdict_code: int, p09_declined: bool, product_10_eligible: bool,
-    offer_affordability_verdict_code: int, solved_amount: float, solve_binding_constraint: str,
+    decision_open: bool, offer_affordability_verdict_code: int, solved_amount: float, solve_binding_constraint: str,
 ) -> tuple[float, str, bool]:
     """(offer_amount, offer_binding_constraint, has_offer): an offer needs an open decision, an affordable basis and
-    an amount the solve found. A fraud refer still gets an indicative offer: the outcome, not the offer, refers."""
-    open_decision = (is_eligible and product_10_eligible and not p09_declined
-                     and fraud_verdict_code != FraudVerdictCode.DECLINE)
-    if open_decision and offer_affordability_verdict_code in (PASS, MARGINAL) and solved_amount > 0.0:
+    an amount the solve found."""
+    if decision_open and offer_affordability_verdict_code in (PASS, MARGINAL) and solved_amount > 0.0:
         return solved_amount, solve_binding_constraint, True
     return 0.0, "", False
 

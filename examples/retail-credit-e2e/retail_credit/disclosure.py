@@ -56,11 +56,14 @@ REASON_REGISTRY = reason_codes.ReasonCodeRegistry("reasons-2026.09", [
 
 @allow_fallback
 def decline_reason_codes(
-    hard_eligibility_reasons: list[int], product_routing_reasons: list[int], fraud_verdict_code: int,
-    p09_declined: bool, p09_decline_reason: int, offer_affordability_verdict_code: int, has_offer: bool,
-    validation_failed_assertions: list[int],
+    p01_valid: bool, hard_eligibility_reasons: list[int], product_routing_reasons: list[int], fraud_verdict_code: int,
+    p09_declined: bool, p09_decline_reason: int, offer_affordability_verdict_code: int, decision_open: bool,
+    has_offer: bool, validation_failed_assertions: list[int],
 ) -> list[int]:
-    """Every reason any phase raised, before ranking. Written first, then ranked in place by `REASON_REGISTRY`."""
+    """Every reason any phase raised, before ranking, which `REASON_REGISTRY` then does in place. A rejected request
+    has none: a rejection is not a decline."""
+    if not p01_valid:
+        return []
     reasons = [*hard_eligibility_reasons, *product_routing_reasons, *validation_failed_assertions]
     if fraud_verdict_code == FraudVerdictCode.DECLINE:
         reasons.append(R_FRAUD_DECLINE)
@@ -70,7 +73,7 @@ def decline_reason_codes(
         reasons.append(p09_decline_reason)
     if not has_offer and offer_affordability_verdict_code == FAIL:
         reasons.append(R_AFFORDABILITY_FAIL)
-    if not has_offer and offer_affordability_verdict_code in (PASS, MARGINAL):
+    if decision_open and not has_offer and offer_affordability_verdict_code in (PASS, MARGINAL):
         reasons.append(R_NO_AFFORDABLE_AMOUNT)
     if validation_failed_assertions:
         reasons.append(R_VALIDATION_FAILED)
