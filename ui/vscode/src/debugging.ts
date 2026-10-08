@@ -16,9 +16,9 @@ export interface DebugHooks {
 }
 
 /** Run a pipeline to the end under debugpy, in plain Python, so breakpoints in its steps stop. */
-export async function debugFlow(file: string, pipeline?: string, dataset?: string, row?: number): Promise<void> {
+export async function debugFlow(file: string, pipeline?: string, dataset?: string, row?: number, choose = true): Promise<void> {
   let rows: string | undefined;
-  if (!dataset) {
+  if (!dataset && choose) {
     const named = await ask<{ datasets: { name: string; type: string; error?: string }[] }>(path.dirname(file), "datasets", { file })
       .then((r) => r.datasets.filter((d) => !d.error))
       .catch(() => []);

@@ -4,7 +4,7 @@ from __future__ import annotations
 import ast
 import operator
 import typing as t
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from decider.exceptions import ExprError
 
@@ -54,7 +54,8 @@ class Expr:
     """
 
     source: str
-    node: ast.expr
+    # Same source parses to the same tree; ast nodes compare by identity, which would make two parses unequal.
+    node: ast.expr = field(compare=False)
 
     def dependencies(self) -> set[str]:
         """Every free name the expression reads.

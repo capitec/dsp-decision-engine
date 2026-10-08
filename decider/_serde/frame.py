@@ -1,7 +1,7 @@
 import datetime as dt
 import typing as t
 import polars as pl
-from pydantic import BaseModel, TypeAdapter, model_validator, model_serializer, PrivateAttr
+from pydantic import BaseModel, TypeAdapter, model_validator, model_serializer
 from .schema import PolarsSchema
 
 TDataFrameRow = t.Dict[str, t.Any]
@@ -51,8 +51,6 @@ class FrameDoc(BaseModel):
     data: TDataFrameData
     dtypes: t.Optional[PolarsSchema] = None
 
-    _pl_df: pl.DataFrame = PrivateAttr()
-
     @classmethod
     def from_polars(cls, df: pl.DataFrame) -> "FrameDoc":
         return cls(data=df.to_dicts(), dtypes=PolarsSchema.from_polars(df.schema))
@@ -65,8 +63,10 @@ class FrameDoc(BaseModel):
         return data
 
     @model_validator(mode="after")
-    def construct_polars_df(self):
-        self._pl_df = build_polars_df(self.data, self.dtypes)
+    def check_dtypes(self):
+        # Without dtypes the owner declares them; inferring here would reject rows its schema accepts.
+        if self.dtypes is not None:
+            build_polars_df(self.data, self.dtypes)
         return self
 
     @model_serializer
@@ -76,5 +76,5 @@ class FrameDoc(BaseModel):
         return {"data": self.data, "dtypes": self.dtypes.model_dump()}
 
     @property
-    def df(self):
-        return self._pl_df
+    def df(self) -> pl.DataFrame:
+        return build_polars_df(self.data, self.dtypes)

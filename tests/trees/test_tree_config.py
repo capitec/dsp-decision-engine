@@ -44,6 +44,25 @@ def test_a_tree_config_loads_by_alias_and_round_trips_with_node_positions():
     assert json.loads(again.model_dump_json())["tree"]["nodes"][0]["position"] == {"x": 3.0, "y": 4.0}
 
 
+def test_a_tree_with_infinite_numbers_round_trips_through_json():
+    inf = float("inf")
+    cfg = _risk(
+        nodes=[{"id": "root", "data": {"type": "unary", "condition": {
+                    "op": ">", "feature": "ratio", "threshold": {"param": "hi_thresh", "default": -inf}}}},
+               {"id": "bands", "data": {"type": "cases", "op": "ranges", "feature": "ratio", "strict": False,
+                                        "conditions": [{"max": 1.0}, {"min": 1.0, "max": inf}]}},
+               {"id": "low", "data": {"type": "leaf", "result_idx": 0}},
+               {"id": "high", "data": {"type": "leaf", "result_idx": 1}}],
+        edges=[{"source": "root", "target": "bands", "data": {"sourceIndex": 0}},
+               {"source": "bands", "target": "low", "data": {"sourceIndex": 0}},
+               {"source": "bands", "target": "high", "data": {"sourceIndex": 1}}],
+        output={"data": [{"v": inf}, {"v": -inf}], "default": {"v": 0.0}, "dtypes": [["v", "Float64"]]})
+    again = TreeConfig.load(cfg.model_dump_json())
+    assert again == cfg
+    assert TreeConfig.load(json.dumps(cfg.model_dump(mode="json"))) == cfg
+    assert again.run(FRAME)["v"].to_list() == cfg.run(FRAME)["v"].to_list() == [inf, inf, -inf]
+
+
 def test_the_tree_is_one_row_node_whose_params_are_its_param_refs():
     node = engine.to_ir(_risk())
     assert (node.kind, node.origin.path, node.origin.source) == ("row", "risk_tree", "decider.steps.trees:TreeConfig")
