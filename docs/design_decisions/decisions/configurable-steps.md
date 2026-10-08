@@ -17,8 +17,15 @@ Read this before changing how tree or table documents become kernels, or what a 
 ## Inputs are grouped float/int/bool/span; outputs are picked by an intrinsic
 
 - Grouped inputs let an `overload` split the row tuple with static slices (numba cannot index a mixed tuple); `walker.pick` emits one call per output, and `walk` has `no_cpython_wrapper`.
-- Why: type-level or `forceinline` recursion over outputs took 48 s at 8 outputs or hit `RecursionError`; the intrinsic compiles 521 outputs in 25 s.
+- Why: type-level or `forceinline` recursion over outputs took 48 s at 8 outputs or hit `RecursionError`; the intrinsic compiles the walker for 521 outputs in 25 s.
 - See: [tree walker costs](../experiments/tree-walker-costs.md), `docs/architecture/configurable-steps/trees.md`
+
+## A wide `mode: "all"` tree is several row nodes
+
+- A tree with more than 32 outputs (rules times columns) is cut into row nodes `<name>/part_<k>` of at most 32, each with whole rules; a rule keeps its `<rule>.<column>` names. A tree with params stays one node, since a param is numbered within its node and named after its path.
+- Why: the fused kernel's compile time grows with the square of the outputs of one call (521 rules: 196 s cold, 14 s split), and narrow kernels are shared. The walker's own `pick` is not the cause.
+- Cost: a breakpoint on a node needs its part's path (`<name>/part_1#<id>`), and `<name>` alone no longer names the node; `_split.MAX_OUTPUTS` is the width.
+- See: [wide output compile](../experiments/wide-output-compile.md), `decider/steps/trees/_split.py`
 
 ## Every tree format validates into one `Tree` graph
 
