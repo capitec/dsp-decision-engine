@@ -99,6 +99,12 @@ exe: Executable = pipeline.compile("fused")      # compile once, call many times
 assert exe.score({"income": 1000.0, "debt": 350.0, "applied_on": date(2026, 1, 5)}, params)["approved"] is False
 ```
 
+`run` and `score` treat a params document as immutable: the one you pass is
+validated once and remembered by identity, so editing it in place and passing
+it again keeps the old values, silently. Pass a new dict to change a value
+(`copy.deepcopy(params)`, then edit the copy). In the example above the edit
+comes before the first call, so it is seen.
+
 For one record, call `score(record)`, never `run(df)` on a one-row frame: `run`
 builds a frame, exports it through Arrow and assembles an output frame, which
 costs about five times what `score` does on the same record.

@@ -214,7 +214,9 @@ class Executable:
         Uses the same kernels as `run`. A pipeline without frame steps never
         builds a polars frame on this path. As in `run`, `params` is treated
         as immutable: pass the same document object call after call and it is
-        never hashed or validated again. `trace` is an optional `TraceSink`.
+        never hashed or validated again, so a value edited in place is not
+        seen. To change a value, pass a new dict (`copy.deepcopy(doc)`, then
+        edit the copy). `trace` is an optional `TraceSink`.
 
         Example::
 

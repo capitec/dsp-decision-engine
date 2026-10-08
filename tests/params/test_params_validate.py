@@ -258,3 +258,22 @@ def test_params_document_errors_list_every_step_with_params_and_the_defaults_hin
 
 def test_an_empty_entry_for_a_step_without_params_is_accepted():
     check_namespaces({"p": {"a": {}, "b": {"cap": 12.0}}}, {0: node_for("p/b", cap_by_income)})
+
+
+def test_a_params_document_edited_in_place_is_not_seen_by_score_but_a_copy_is():
+    import copy
+
+    from decider import flow, param
+
+    def capped(x: float, cap: float = param(10.0)) -> float:
+        return min(x, cap)
+
+    pipeline = flow(capped, name="t")
+    exe = pipeline.compile("interpreted")
+    params = pipeline.parameters().defaults()
+    assert exe.score({"x": 50.0}, params)["capped"] == 10.0
+    params["t"]["capped"]["cap"] = 20.0
+    assert exe.score({"x": 50.0}, params)["capped"] == 10.0
+    edited = copy.deepcopy(params)
+    edited["t"]["capped"]["cap"] = 30.0
+    assert exe.score({"x": 50.0}, edited)["capped"] == 30.0
