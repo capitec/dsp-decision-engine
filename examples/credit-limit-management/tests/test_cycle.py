@@ -12,7 +12,7 @@ from limit_mgmt.vocab import AllocationOutcome as Outcome
 from population import make_book
 
 N = 2_000
-# About half of the book's R834 500 of proposed increases fits in the offer envelope of R345 000.
+# 269 accounts qualify for R586 500 of increases; the offer envelope of R345 000 funds a little over half of it.
 TIGHT = BudgetInstruction(applied_limit_budget=250_000.0, fairness_reserve_pct=0.0)
 AMPLE = BudgetInstruction(applied_limit_budget=1e12, rwa_envelope=1e15, expected_loss_envelope=1e15)
 
