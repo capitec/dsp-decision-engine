@@ -281,10 +281,11 @@ def test_packing_string_outputs_does_not_compare_every_choice_per_row():
     assert comparisons < 10 * n
 
 
-def _grid(inf=float("inf")) -> DecisionTableConfig:
+def _grid(inf=float("inf"), **row_2) -> DecisionTableConfig:
     rows = [{"a_lo": a0, "a_hi": a1, "t_lo": t0, "t_hi": t1, "pts": 10 * i + j}
             for i, (a0, a1) in enumerate([(-inf, 100.0), (100.0, inf)])
             for j, (t0, t1) in enumerate([(-inf, 12.0), (12.0, inf)])]
+    rows[2].update(row_2)
     return DecisionTableConfig(
         name="grid", columns={"a_lo": "Float64", "a_hi": "Float64", "t_lo": "Float64", "t_hi": "Float64",
                               "pts": "Int64"}, rows=rows,
@@ -300,3 +301,8 @@ def test_two_band_dimensions_with_infinite_outer_edges_pick_the_cell(run):
     frame = pl.DataFrame({"amount": [50.0, 50.0, 500.0, 500.0], "term": [6.0, 24.0, 6.0, 24.0]})
     assert run(_grid(), frame)["pts"].to_list() == [0, 1, 10, 11]
 
+
+def test_an_open_edge_that_borrows_an_empty_band_from_the_row_before_is_rejected():
+    # Row 2 starts the second amount's term bands, but its ladder is the whole table: its lower would be row 1's inf.
+    with pytest.raises(ValueError, match=r"Row 2: band \(inf, 12.0\) is empty"):
+        _grid(t_lo=None)
