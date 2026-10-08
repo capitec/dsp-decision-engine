@@ -241,7 +241,8 @@ class RequestHandler:
         return live.executable.run(coerce_frame(request, live.dates), live.params)
 
     def process_fn(self, data: bytes, accept: str, content_type: str) -> Response:
-        return self.output_fn(self.score(self.input_fn(data, content_type)), accept)
+        # Not `self.score`: `score` is no hook, and a subclass's own `score` must not change what a request does.
+        return self.output_fn(RequestHandler.score(self, self.input_fn(data, content_type)), accept)
 
     def warm_fn(self, executable: Executable, params: t.Any) -> None:
         # One record through both paths compiles every kernel before a request needs it.
