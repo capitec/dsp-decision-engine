@@ -2,10 +2,10 @@
 import copy
 
 import pytest
-from conftest import parse_dates
 
 from business_nested import counterfactual
 from business_nested.pipeline import DECISION_OUTPUTS
+from business_nested.records import parse_dates
 
 
 @pytest.fixture

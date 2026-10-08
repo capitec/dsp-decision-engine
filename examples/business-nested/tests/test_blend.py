@@ -2,9 +2,9 @@
 import math
 
 import pytest
-from conftest import entity, event
 
 from business_nested import blend, vocab
+from business_nested.records import entity, event
 
 WEIGHT_POLICY = dict(inclusion_floor_pct=5.0, control_ownership_pct=50.0, control_weight_floor=0.6,
                      controller_points=10.0, controller_cap_points=30.0)

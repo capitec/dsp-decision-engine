@@ -2,9 +2,9 @@
 from datetime import date
 
 import pytest
-from conftest import entity
 
 from business_nested import vocab
+from business_nested.records import entity
 
 PRINCIPAL = entity(1, vocab.SOLE_PROPRIETOR_PRINCIPAL, 100.0, is_sole_principal=True, is_controlling=True)
 

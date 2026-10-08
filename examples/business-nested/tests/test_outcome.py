@@ -2,9 +2,9 @@
 from datetime import date
 
 import pytest
-from conftest import entity, event
 
 from business_nested import outcome
+from business_nested.records import entity, event
 
 OUTCOME_PARAMS = ("business_credit", "decision", "outcome", "business_outcome")
 

@@ -3,10 +3,10 @@ import random
 from datetime import date
 
 import pytest
-from conftest import entity, event
 from decider import Engine
 
 from business_nested import rollup, vocab
+from business_nested.records import entity, event
 
 CLEAR, MINOR, MATERIAL, DISQUALIFYING = 1, 2, 3, 4
 POLICY = dict(recent_months=12, minor_count=3, material_floor=150_000.0, material_pct=0.15,
