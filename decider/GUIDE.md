@@ -593,6 +593,12 @@ strict = Engine(strict_compile=True).bind(flow(order_total, name="q"), mode="fus
 assert strict.score({"items": [{"price": 2.0}]})["order_total"] == 2.0
 ```
 
+A compiled step that calls another function of yours must say how it compiles:
+`@helper(signatures=[((float,), float)])` compiles the callee with the step,
+whether it is imported by name or called as `module.fn(...)`, and a plain
+function makes the step fall back with `calls 'fn' without @helper or
+@allow_fallback` in `fallbacks()`.
+
 To silence the lot instead of step by step, filter the category once at
 start-up: `warnings.filterwarnings("ignore", category=FallbackWarning)`.
 
