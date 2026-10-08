@@ -22,7 +22,7 @@ async def predict(request: Request) -> Response:
     if not ready(handler):
         return Response(content=_INITIALIZING, status_code=503, media_type="application/json")
     content_type, accept = parse_content_headers(request.headers)
-    result = await handler.process_fn(await request.body(), accept, content_type)
+    result = handler.process_fn(await request.body(), accept, content_type)
     return Response(content=result.content, media_type=result.media_type)
 
 
@@ -36,10 +36,10 @@ async def ping(request: Request) -> Response:
 async def lifespan(app: "Starlette"):
     if app.state.handler is None:
         handler = construct_handler_from_settings()
-        await handler.init_fn()
+        handler.init_fn()
         app.state.handler = handler
     yield
-    await app.state.handler.shutdown_fn()
+    app.state.handler.shutdown_fn()
 
 
 def create_app(handler: t.Optional[RequestHandler] = None) -> "Starlette":

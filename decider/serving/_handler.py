@@ -44,6 +44,9 @@ def _json_fallback(value: t.Any) -> str:
     raise TypeError(f"{type(value).__name__} is not JSON serializable")
 
 
+_HOOKS = ("init_fn", "input_fn", "process_fn", "shutdown_fn", "output_fn", "warm_fn", "pipeline_fn")
+
+
 @dataclass
 class RequestHandler:
     """Serves a pipeline from code with params and `ConfigurableStep` documents from a config store.
@@ -63,7 +66,9 @@ class RequestHandler:
     and decode than the pipeline takes to run.
 
     Override any `*_fn` method in a `Handler` subclass in `inference.py` to
-    change how requests are parsed, scored or formatted. JSON dates arrive as
+    change how requests are parsed, scored or formatted. The hooks are plain
+    methods, not coroutines; one defined with `async def` is rejected when the
+    class is created. `score(record_or_frame)` is the in-process entry. JSON dates arrive as
     ISO strings and are converted to the pipeline's declared `date` and
     `datetime` inputs, including inside `list[date]`, `date | None` and
     TypedDict fields (`accounts: list[Account]`); a bare `dict` is left as sent.
@@ -98,6 +103,13 @@ class RequestHandler:
     _staged: Live | None = field(default=None, init=False, repr=False)
     _history: list[Live] = field(default_factory=list, init=False, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        for name in _HOOKS:
+            if inspect.iscoroutinefunction(getattr(cls, name)):
+                raise TypeError(f"{cls.__name__}.{name} is `async def`, but the handler hooks are synchronous; "
+                                f"remove `async`/`await` from it.")
 
     @property
     def active(self) -> Version | None:
@@ -161,7 +173,7 @@ class RequestHandler:
             self._active = self._history.pop()
             return self._active.version
 
-    async def init_fn(self):
+    def init_fn(self):
         self.stage()
         self.activate()
 
@@ -188,7 +200,7 @@ class RequestHandler:
             raise RuntimeError("no config version is active; call stage() then activate().")
         return live
 
-    async def input_fn(self, data: bytes, content_type: str) -> dict[str, t.Any] | pl.DataFrame:
+    def input_fn(self, data: bytes, content_type: str) -> dict[str, t.Any] | pl.DataFrame:
         handler = DEFAULT_INPUT_HANDLERS.get(content_type)
         if handler is None:
             raise UnsupportedContentTypeError(f"Unsupported content type: {content_type!r}")
@@ -211,14 +223,25 @@ class RequestHandler:
         except Exception as e:
             raise OutputFormattingError(str(e))
 
-    async def process_fn(self, data: bytes, accept: str, content_type: str) -> Response:
+    def score(self, request: dict[str, t.Any] | pl.DataFrame) -> dict[str, t.Any] | pl.DataFrame:
+        """Score a record (a `dict`) or a frame against the active version, as a request would be.
+
+        Date strings in the record or frame are converted to the pipeline's declared
+        `date` and `datetime` inputs, so a parsed JSON body can be passed as it is.
+        The active version is read once, so one call never mixes two versions.
+
+        Example::
+
+            handler.score({"income": 1000, "debt": 250, "applied_on": "2026-01-15"})
+            handler.score(pl.DataFrame({"income": [1000], "debt": [250], "applied_on": ["2026-01-15"]}))
+        """
         live = self.module_fn()
-        request = await self.input_fn(data, content_type)
         if isinstance(request, dict):
-            result = live.executable.score(coerce_record(request, live.dates), live.params)
-        else:
-            result = live.executable.run(coerce_frame(request, live.dates), live.params)
-        return self.output_fn(result, accept)
+            return live.executable.score(coerce_record(request, live.dates), live.params)
+        return live.executable.run(coerce_frame(request, live.dates), live.params)
+
+    def process_fn(self, data: bytes, accept: str, content_type: str) -> Response:
+        return self.output_fn(self.score(self.input_fn(data, content_type)), accept)
 
     def warm_fn(self, executable: Executable, params: t.Any) -> None:
         # One record through both paths compiles every kernel before a request needs it.
@@ -242,7 +265,7 @@ class RequestHandler:
         except Exception as e:
             raise exc.DeciderError(f"warm-up failed with {type(e).__name__}: {e}. {hint}") from e
 
-    async def shutdown_fn(self):
+    def shutdown_fn(self):
         pass
 
 

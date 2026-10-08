@@ -99,6 +99,12 @@ exe: Executable = pipeline.compile("fused")      # compile once, call many times
 assert exe.score({"income": 1000.0, "debt": 350.0, "applied_on": date(2026, 1, 5)}, params)["approved"] is False
 ```
 
+`run` and `score` treat a params document as immutable: the one you pass is
+validated once and remembered by identity, so editing it in place and passing
+it again keeps the old values, silently. Pass a new dict to change a value
+(`copy.deepcopy(params)`, then edit the copy). In the example above the edit
+comes before the first call, so it is seen.
+
 For one record, call `score(record)`, never `run(df)` on a one-row frame: `run`
 builds a frame, exports it through Arrow and assembles an output frame, which
 costs about five times what `score` does on the same record.
@@ -428,19 +434,25 @@ projects on one path never shadow each other):
   settings. Real environment variables win. `decider --help` lists every
   command and option; there are no others.
 
-JSON dates (`"2026-01-15"`) arrive as the declared `date` inputs. Score through
-the handler in-process, raw bytes in, exactly as `decider serve` does:
+JSON dates (`"2026-01-15"`) arrive as the declared `date` inputs, but only through
+the handler: `Executable.score` and `run` take typed values (`date` objects), and a
+string date reaches the step as a string. In-process, `handler.score` takes the
+parsed record (or a frame) and converts dates exactly as `decider serve` does;
+`handler.process_fn` takes raw bytes. Both are plain calls, and the `*_fn` hooks are
+synchronous: an `async def` override is rejected when the class is created.
 
 ```python
-import asyncio, json
+import json
 from decider.config import JsonFileStore
 from decider.serving import RequestHandler
 
 handler = RequestHandler(JsonFileStore(basepath="configs"), "credit_risk.pipeline:build")
 handler.stage()
 handler.activate()
-body = b'{"income": 1000, "debt": 250, "applied_on": "2026-01-15"}'
-response = asyncio.run(handler.process_fn(body, "application/json", "application/json"))
+record = {"income": 1000, "debt": 250, "applied_on": "2026-01-15"}
+assert handler.score(record)["approved"] is True
+body = json.dumps(record).encode()
+response = handler.process_fn(body, "application/json", "application/json")
 assert json.loads(response.content)["approved"] is True
 ```
 

@@ -1,5 +1,4 @@
 """`RequestHandler.pipeline_fn` loads a `.yaml`/`.yml`/`.json` pipeline string as a flow file."""
-import asyncio
 import json
 import os
 import sys
@@ -47,7 +46,7 @@ def _write_project(tmp_path):
 def _score(handler, record=RECORD):
     handler.stage()
     handler.activate()
-    response = asyncio.run(handler.process_fn(record, "application/json", "application/json"))
+    response = handler.process_fn(record, "application/json", "application/json")
     return json.loads(response.content)
 
 
@@ -66,7 +65,7 @@ def test_a_params_change_in_a_new_version_changes_the_answer(tmp_path, monkeypat
     handler = RequestHandler(store, str(tmp_path / "flow.yaml"))
     handler.stage("0.1.0")
     handler.activate()
-    body = json.loads(asyncio.run(handler.process_fn(RECORD, "application/json", "application/json")).content)
+    body = json.loads(handler.process_fn(RECORD, "application/json", "application/json").content)
     assert body["bonus"] == 20.0
 
 

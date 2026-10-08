@@ -6,7 +6,10 @@ from typing import Any, Callable
 
 import numpy as np
 import polars as pl
+from llvmlite import ir
+from numba import types as numba_types
 from numba.core.dispatcher import Dispatcher
+from numba.extending import _Intrinsic
 
 _LITERALS = (int, float, complex, bool, str, bytes, type(None))
 
@@ -126,6 +129,10 @@ def _value(h: Any, value: Any, seen: set, strict: bool, names: frozenset | set =
             if isinstance(attr, (types.FunctionType, Dispatcher, types.ModuleType)):
                 h.update(name.encode())
                 _value(h, attr, seen, strict, names)
+    elif isinstance(value, _Intrinsic):
+        _function(h, value._defn, seen, strict)
+    elif isinstance(value, (ir.Type, numba_types.Type)):
+        h.update(f"{type(value).__name__}:{value}".encode())
     elif isinstance(value, _LITERALS):
         h.update(f"{type(value).__name__}:{value!r}".encode())
     elif isinstance(value, tuple):

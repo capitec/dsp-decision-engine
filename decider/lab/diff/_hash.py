@@ -62,7 +62,13 @@ def _consts(node: CallNode) -> str:
     # reference holds the arrays, so hash their content and name each address by its array's position.
     arrays = getattr(node.reference, "arrays", [])
     where = {a.ctypes.data: i for i, a in enumerate(arrays)}
-    return _digest(([(k, ("array", where[v]) if isinstance(v, int) and v in where else v) for k, v in node.consts], arrays))
+
+    def named(v: Any) -> Any:
+        if isinstance(v, int):
+            return ("array", where[v]) if v in where else v
+        return tuple(map(named, v)) if isinstance(v, tuple) else v  # a packed table is a tuple of addresses
+
+    return _digest(([(k, named(v)) for k, v in node.consts], arrays))
 
 
 def _fields(node: IRNode) -> list[Any]:
