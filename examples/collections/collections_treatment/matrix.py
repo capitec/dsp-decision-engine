@@ -15,7 +15,7 @@ from credit_core.evidence import cell_id
 from collections_treatment import overlays, vocab as v
 
 MATRIX_VERSION = "matrix-2026.09"
-ADJUSTMENT_SET_ID = "AS-08-MATRIX-2026.09"
+ADJUSTMENT_SET_ID = "AS-COLL-MATRIX-2026.09"
 
 _TREATMENT_BY_SEVERITY = [
     v.NO_ACTION, v.AUTOMATED_SMS, v.AUTOMATED_EMAIL, v.IN_APP_MESSAGE, v.AUTOMATED_VOICE_MESSAGE, v.AGENT_CALL_LOW,
@@ -24,13 +24,13 @@ _TREATMENT_BY_SEVERITY = [
 
 ADJUSTMENTS = overlays.register([
     Adjustment(
-        adjustment_id="ADJ-08-MATRIX-001", kind="cap_adjustment", target="matrix_treatment_intensity",
+        adjustment_id="ADJ-COLL-MATRIX-001", kind="cap_adjustment", target="matrix_treatment_intensity",
         effect=AdjustmentEffect("add", 1.0), scope={"arrears_bucket_code": 3}, stack_position=1,
         owner="Collections Strategy", approval_reference="CCF-2026-033",
         rationale="Escalate bucket 3 by one intensity level for six weeks",
         effective_from=date(2026, 8, 1), effective_to=date(2026, 9, 12), review_date=date(2026, 9, 5)),
     Adjustment(
-        adjustment_id="ADJ-08-MATRIX-002", kind="treatment_suppression", target="matrix_treatment_code",
+        adjustment_id="ADJ-COLL-MATRIX-002", kind="treatment_suppression", target="matrix_treatment_code",
         effect=AdjustmentEffect("set", float(v.NO_ACTION)), scope={"matrix_treatment_code": v.FIELD_VISIT},
         stack_position=2, owner="Collections Strategy", approval_reference="CCF-2026-041",
         rationale="Suspend field visits for the quarter",

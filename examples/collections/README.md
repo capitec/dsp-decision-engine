@@ -123,7 +123,24 @@ curl -s -d @sample_request.json -H 'content-type: application/json' localhost:80
        treatment_code, suspension_codes, pool_code, allocated, allocation_rank, non_selection_reason_code}'
 ```
 
-SAMPLE_OUTPUT
+```json
+{
+  "arrears_bucket_code": 3,
+  "collections_score": 640.0,
+  "collections_band_code": 3,
+  "matrix_cell_id": "treatment_matrix@matrix-2026.09#3|3|3|2|1",
+  "matrix_treatment_code": 4,
+  "treatment_code": 4,
+  "suspension_codes": [116],
+  "pool_code": 4,
+  "allocated": true,
+  "allocation_rank": 1,
+  "non_selection_reason_code": null
+}
+```
+
+A voice message, ranked first of one in the voice-message pool. The one suspension is the client's withdrawn email
+consent (116), which blocks email and nothing else.
 
 The response carries every input and intermediate too. Now the same account under debt review. The matrix still
 recommends the voice message, but a client under a debt review application may only receive statutory notices:
@@ -134,7 +151,9 @@ jq '.debt_review_stage_code=1 | .debt_review_case_number="DR-9001"' sample_reque
   jq -c '{overlaid_treatment_code, treatment_code, suspension_blocked, suspension_codes, permitted_treatment_codes, allocated, non_selection_reason_code}'
 ```
 
-SUSPENDED_OUTPUT
+```json
+{"overlaid_treatment_code":4,"treatment_code":0,"suspension_blocked":true,"suspension_codes":[101,116],"permitted_treatment_codes":[0,10,13],"allocated":false,"non_selection_reason_code":210}
+```
 
 An account 150 days past due is recommended a field visit, but the in-force overlay suppresses field visits:
 
@@ -144,7 +163,9 @@ jq '.days_past_due=150' sample_request.json |
   jq -c '{matrix_treatment_code, overlaid_treatment_code, suppression_adjustments_applied, treatment_code, non_selection_reason_code}'
 ```
 
-SUPPRESSED_OUTPUT
+```json
+{"matrix_treatment_code":8,"overlaid_treatment_code":0,"suppression_adjustments_applied":["ADJ-COLL-MATRIX-002"],"treatment_code":0,"non_selection_reason_code":205}
+```
 
 Tests (run from the repository root, with `PYTHONPATH` set as above):
 

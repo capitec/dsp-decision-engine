@@ -26,7 +26,7 @@ def test_the_sample_account_scores_640_in_band_three(decide):
 def test_the_agency_score_shift_lowers_the_score_and_keeps_the_unadjusted_one(decide):
     out = decide(agency_placed_12m=True)
     assert (out["collections_score_unadjusted"], out["collections_score"]) == (640.0, 618.0)
-    assert out["score_shift_adjustments_applied"] == ["ADJ-08-SCORE-001"]
+    assert out["score_shift_adjustments_applied"] == ["ADJ-COLL-SCORE-001"]
     assert decide()["score_shift_adjustments_applied"] == []
 
 
@@ -53,14 +53,14 @@ def test_the_unadjusted_band_ignores_every_overlay(decide, params):
 def test_the_odds_multiplier_applies_to_the_unsecured_book_only(decide):
     unsecured, revolving = decide(product_family_code=1), decide(product_family_code=3)
     assert unsecured["roll_probability"] == pytest.approx(unsecured["roll_probability_before_overlay"] * 1.28)
-    assert unsecured["odds_multiplier_adjustments_applied"] == ["ADJ-08-SCORE-002"]
+    assert unsecured["odds_multiplier_adjustments_applied"] == ["ADJ-COLL-SCORE-002"]
     assert revolving["roll_probability"] == revolving["roll_probability_before_overlay"]
 
 
 def test_the_scaling_change_stretches_the_revolving_scale(decide):
     out = decide(product_family_code=2)
     assert out["adjusted_scale"] == pytest.approx(60.0 * 23 / 20)
-    assert out["scaling_change_adjustments_applied"] == ["ADJ-08-SCORE-003"]
+    assert out["scaling_change_adjustments_applied"] == ["ADJ-COLL-SCORE-003"]
     assert decide(product_family_code=3)["adjusted_scale"] == 65.0
 
 

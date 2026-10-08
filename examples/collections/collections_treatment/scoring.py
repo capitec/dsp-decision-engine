@@ -19,29 +19,29 @@ BAND_VERSION = "collections-band-2026.09"
 CALIBRATION_VERSION = "collections-cal-2026.09"
 CONTACT_BAND_VERSION = "contact-band-2026.09"
 RECOVERY_CURVE_VERSION = "recovery-2026.09"
-ADJUSTMENT_SET_ID = "AS-08-SCORE-2026.09"
+ADJUSTMENT_SET_ID = "AS-COLL-SCORE-2026.09"
 
 ADJUSTMENTS = overlays.register([
     Adjustment(
-        adjustment_id="ADJ-08-SCORE-001", kind="score_shift", target="collections_score",
+        adjustment_id="ADJ-COLL-SCORE-001", kind="score_shift", target="collections_score",
         effect=AdjustmentEffect("add", -22.0), scope={"agency_placed_12m": True}, stack_position=1,
         owner="Collections Strategy", approval_reference="MRV-2026-014", tighten_only=True,
         rationale="Accounts placed with an agency in the last 12 months score optimistic on the base curve",
         effective_from=date(2026, 1, 1), effective_to=date(2026, 12, 31), review_date=date(2026, 10, 1)),
     Adjustment(
-        adjustment_id="ADJ-08-SCORE-002", kind="odds_multiplier", target="roll_probability",
+        adjustment_id="ADJ-COLL-SCORE-002", kind="odds_multiplier", target="roll_probability",
         effect=AdjustmentEffect("multiply", 1.28), scope={"product_family_code": 1}, stack_position=2,
         owner="Model Risk and Validation", approval_reference="MRV-2026-019", tighten_only=True,
         rationale="Deteriorating quarter on the unsecured book",
         effective_from=date(2026, 6, 1), effective_to=date(2027, 3, 1), review_date=date(2026, 12, 1)),
     Adjustment(
-        adjustment_id="ADJ-08-SCORE-003", kind="scaling_change", target="calibration_scale",
+        adjustment_id="ADJ-COLL-SCORE-003", kind="scaling_change", target="calibration_scale",
         effect=AdjustmentEffect("multiply", 23.0 / 20.0), scope={"product_family_code": 2}, stack_position=1,
         owner="Model team", approval_reference="MRV-2026-021",
         rationale="Points-to-double-the-odds moved from 20 to 23 for the revolving segment",
         effective_from=date(2026, 3, 1), effective_to=date(2027, 1, 1), review_date=date(2026, 12, 1)),
     Adjustment(
-        adjustment_id="ADJ-08-SCORE-004", kind="band_boundary_shift", target="collections_band_boundary",
+        adjustment_id="ADJ-COLL-SCORE-004", kind="band_boundary_shift", target="collections_band_boundary",
         effect=AdjustmentEffect("add", 0.03), scope={}, stack_position=1,
         owner="Collections Strategy", approval_reference="CCF-2026-028",
         rationale="Move the band 3/4 edge up by 0.03 of roll probability",
