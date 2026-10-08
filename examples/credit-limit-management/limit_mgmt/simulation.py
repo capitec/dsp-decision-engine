@@ -45,7 +45,10 @@ def run_cycle(
 
 
 def swap_set(baseline: Cycle, candidate: Cycle) -> pl.DataFrame:
-    """Per account, whether the candidate cycle's granted limit is a `gainer`, `loser` or `unaffected` against the baseline's."""
+    """Per account, whether the candidate cycle's granted limit is a `gainer`, `loser` or `unaffected` against the baseline's.
+
+    An account missing from either cycle is compared as if its limit were null (neither class), so run both over one snapshot.
+    """
     def limits(cycle: Cycle, name: str) -> pl.DataFrame:
         return cycle.book.select("account_id", pl.col("granted_limit").alias(f"{name}_limit"),
                                  pl.col("allocation_outcome_code").alias(f"{name}_outcome"))
@@ -53,4 +56,5 @@ def swap_set(baseline: Cycle, candidate: Cycle) -> pl.DataFrame:
     change = pl.col("candidate_limit") - pl.col("baseline_limit")
     return swap.with_columns(
         change.alias("change"),
-        pl.when(change > 0).then(pl.lit("gainer")).when(change < 0).then(pl.lit("loser")).otherwise(pl.lit("unaffected")).alias("swap_class"))
+        pl.when(change > 0).then(pl.lit("gainer")).when(change < 0).then(pl.lit("loser"))
+        .otherwise(pl.lit("unaffected")).alias("swap_class"))
