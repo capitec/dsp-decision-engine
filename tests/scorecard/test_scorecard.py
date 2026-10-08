@@ -6,6 +6,7 @@ import json
 import polars as pl
 import pytest
 
+from decider.steps._values import ParamRef
 from decider.steps.scorecard import ScorecardConfig
 from decider.steps.scorecard._config import (
     AdjustedVariable,
@@ -41,6 +42,18 @@ def test_bound_bins_assign_values_by_range():
     )])
     result = sc.run(pl.DataFrame({"age": [20.0, 40.0, 70.0]}))
     assert result["score"].to_list() == pytest.approx([5.0, 10.0, 15.0])
+
+
+def test_a_scorecard_with_infinite_bounds_round_trips_through_json():
+    inf = float("inf")
+    sc = _sc([ScoredVariable(
+        variable_name="age", strict=False,
+        bins=[BoundBin(value=1.0, lower_bound=-inf, upper_bound=40.0), BoundBin(value=2.0, lower_bound=40.0, upper_bound=inf)],
+        default=DefaultBin(value=ParamRef(param="unknown", default=-inf)))])
+    again = ScorecardConfig.load(sc.model_dump_json())
+    assert again == sc
+    frame = pl.DataFrame({"age": [10.0, 50.0, None]})
+    assert again.run(frame)["score"].to_list() == sc.run(frame)["score"].to_list() == [1.0, 2.0, -inf]
 
 
 def test_multiple_variables_score_is_sum():

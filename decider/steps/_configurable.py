@@ -48,7 +48,8 @@ class ConfigurableStep(Step, BaseRegistryModule, root=True, group="steps"):
         ConfigurableStep.load(cfg.model_dump_json()) == cfg        # True
     """
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    # `null` for an infinite bound would change what it means and fail to reload.
+    model_config = ConfigDict(frozen=True, extra="forbid", ser_json_inf_nan="constants")
     kind: ClassVar[str] = "configurable"
 
     name: str
