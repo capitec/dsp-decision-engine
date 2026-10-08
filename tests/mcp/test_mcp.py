@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 
 import pytest
 from fastmcp.exceptions import ToolError
@@ -111,6 +112,43 @@ def test_discover_flows_finds_a_project_under_a_hidden_directory(tmp_path):
     (root / "pipeline.py").write_text(PIPELINE_SRC)
     flows = _call(build_server(Policy()), "discover_flows", root=str(root))["flows"]
     assert "PIPELINE" in [f.get("name") for f in flows]
+
+
+BUILD_SRC = '''\
+from decider import flow, param
+
+
+def approved(score: float, limit: float = param(0.4)) -> bool:
+    return score <= limit
+
+
+def build(band):
+    return flow(band, approved, name="credit")
+'''
+
+BAND = {"type": "decision_table", "name": "band", "columns": {"lo": "Float64", "hi": "Float64", "band": "String"},
+        "rows": [{"lo": None, "hi": 0.5, "band": "low"}, {"lo": 0.5, "hi": None, "band": "high"}],
+        "expression": {"type": "between", "variable": "score", "lower_bound_column": "lo", "upper_bound_column": "hi"},
+        "outputs": ["band"], "default": ["low"]}
+
+
+def test_an_entry_taking_config_documents_is_built_from_the_latest_version(tmp_path, monkeypatch):
+    version = tmp_path / "credit" / "configs" / "0.0.1"
+    version.mkdir(parents=True)
+    (tmp_path / "credit" / "__init__.py").write_text("")
+    (tmp_path / "credit" / "pipeline.py").write_text(BUILD_SRC)
+    (version / "band.json").write_text(json.dumps(BAND))
+    (version / "params.json").write_text(json.dumps({"credit": {"approved": {"limit": 0.9}}}))
+    data = tmp_path / "data.json"
+    data.write_text('{"score": 0.6}\n')
+    monkeypatch.syspath_prepend(str(tmp_path))
+    mcp = build_server(Policy())
+
+    paths = {n["path"] for n in _call(mcp, "describe_flow", entry="credit.pipeline:build")["nodes"]}
+    assert {"credit/band", "credit/approved"} <= paths
+    summary = _call(mcp, "run_summary", entry="credit.pipeline:build", data=str(data))
+    assert summary["outputs"]["band"] == [{"value": "high", "count": 1}]
+    assert summary["outputs"]["approved"] == [{"value": True, "count": 1}]   # the version's limit, not 0.4
 
 
 def test_run_summary_returns_tallies_not_per_record_values(workspace):
