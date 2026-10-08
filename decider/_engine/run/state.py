@@ -234,7 +234,14 @@ def _series(name: str, values: np.ndarray, valid: np.ndarray | None, annotation:
         # and an all-null `Literal` column `Null`.
         dtype = declared_dtype(annotation)
         keep = isinstance(dtype, (pl.List, pl.Struct, pl.Array)) or coded_values(base_annotation(annotation))
-        return pl.Series(name, values, dtype=dtype if keep else None)
+        if keep:
+            return pl.Series(name, values, dtype=dtype)
+        try:
+            return pl.Series(name, values)
+        except TypeError:
+            # A step may return an int in one row and a float in the next, or a dict with int keys,
+            # which `score` hands back as is; polars then widens the type, or holds the dicts as objects.
+            return pl.Series(name, values, strict=False)
     if values.dtype.names is not None:
         # A struct output is a record per row; polars reads dicts (not tuples) for a Struct
         # with nulls, so spell each row as the dict a step returns.
