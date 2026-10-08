@@ -154,7 +154,8 @@ def _serve_sanic(host: str, port: int, workers: int) -> None:
 
 
 @cli.command()
-@click.option("--raw", is_flag=True, help="Enable the raw record/trace tools (decider._tooling.mcp.rawData).")
+@click.option("--raw", is_flag=True, envvar="DECIDER_MCP_RAW",
+              help="Enable the raw record/trace/evaluate tools (decider._tooling.mcp.rawData). Also set by DECIDER_MCP_RAW=1.")
 def mcp(raw: bool) -> None:
     """Serve the FastMCP server over stdio for an MCP host (e.g. an agent).
 
@@ -164,7 +165,7 @@ def mcp(raw: bool) -> None:
     always available. Raw record/trace tools stay off unless `--raw` is set.
     Running a flow or experiment, starting the debugger and generating ids are
     marked destructive so the client confirms them before they run. The
-    editor-bound highlight/reveal/selection tools forward to the VS Code window
+    editor-bound selection, navigation and debug tools forward to the VS Code window
     that owns a workspace, over an authenticated per-window socket.
     """
     from decider._tooling.mcp import run_stdio

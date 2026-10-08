@@ -2,18 +2,20 @@
 
 `build_server` registers the headless read tools and the confirmation-gated
 (and raw-gated) actions as FastMCP tools; when given an editor bridge it also
-registers the editor-bound highlight/reveal/selection tools, which forward to
-the VS Code window that owns a workspace. `run_stdio` serves one over stdio for
+registers the editor-bound selection, navigation and debug tools, which forward
+to the VS Code window that owns a workspace. `run_stdio` serves one over stdio for
 the agent's MCP host, as the `decider mcp` command does. Confirmation is
 client-side: mutating tools carry a `destructiveHint` annotation; the server
 does not re-approve them.
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 from decider.exceptions import wrap_import_errors
 from decider._tooling.mcp import _tools as tools
 from decider._tooling.mcp._editor import EditorBridge
-from decider._tooling.mcp._policy import Policy
+from decider._tooling.mcp._policy import REDACTED, Policy
 
 with wrap_import_errors("mcp"):
     from fastmcp import FastMCP
@@ -103,20 +105,50 @@ def build_server(policy: Policy, bridge: EditorBridge | None = None) -> FastMCP:
         return tools.generate_ids(path, check)
 
     if bridge is not None:
-        @mcp.tool
-        def highlight(workspace: str, flow: str, nodes: list[str]) -> dict:
-            """Focus these flow entities (node paths) in the VS Code window for `workspace`."""
-            return bridge.send(workspace, {"kind": "highlight", "flow": flow, "nodes": nodes})
+        def abs_path(workspace: str, p: str | None) -> str | None:
+            return None if p is None else str((Path(workspace) / p).resolve())
 
         @mcp.tool
-        def reveal_source(workspace: str, path: str, line: int) -> dict:
-            """Navigate the VS Code window for `workspace` to a flow entity's source."""
-            return bridge.send(workspace, {"kind": "reveal", "path": path, "line": line})
-
-        @mcp.tool
-        def editor_selection(workspace: str) -> dict:
-            """The VS Code window's current editor selection (file, position, text)."""
+        def editor_selection(workspace: str = ".") -> dict:
+            """What the user is looking at in VS Code: active file, selection, the JSON path and tree node under the cursor, the shown flow, nodes selected in the Structure view and graph, the debugger's pause and breakpoints. `workspace` is any folder the window has open, or a parent of it."""
             return bridge.send(workspace, {"kind": "selection"})
+
+        @mcp.tool
+        def highlight(nodes: list[str], flow: str | None = None, workspace: str = ".") -> dict:
+            """Select and reveal a flow node (path like `credit/limit`) in the Structure view and graph. They hold one selection, so only the first node the flow has is selected. `flow` is a flow file to show first when it is not the one shown."""
+            return bridge.send(workspace, {"kind": "highlight", "nodes": nodes, "flow": abs_path(workspace, flow)})
+
+        @mcp.tool
+        def reveal_source(path: str, line: int, workspace: str = ".") -> dict:
+            """Open a file at a 1-based line in the VS Code window."""
+            return bridge.send(workspace, {"kind": "reveal", "path": abs_path(workspace, path), "line": line})
+
+        @mcp.tool
+        def show_flow(file: str, pipeline: str | None = None, workspace: str = ".") -> dict:
+            """Show a flow (a flow YAML, or a Python file with `pipeline`) in the Structure view and graph; returns whether it described cleanly."""
+            return bridge.send(workspace, {"kind": "show_flow", "file": abs_path(workspace, file), "pipeline": pipeline})
+
+        @mcp.tool
+        def set_breakpoints(nodes: list[str], workspace: str = ".") -> dict:
+            """Make the breakpoints exactly these flow nodes (empty clears them); reports the nodes that could not take one (trees, tables and other non-Python steps)."""
+            return bridge.send(workspace, {"kind": "set_breakpoints", "nodes": nodes})
+
+        @mcp.tool(annotations={"destructiveHint": True})
+        def debug_flow(file: str, pipeline: str | None = None, dataset: str | None = None, workspace: str = ".") -> dict:
+            """Run a flow under the debugger in VS Code, on a named dataset or else the sample; waits for the first pause. Requires client confirmation."""
+            return bridge.send(workspace, {"kind": "debug_flow", "file": abs_path(workspace, file), "pipeline": pipeline, "dataset": dataset})
+
+        @mcp.tool(annotations={"destructiveHint": True})
+        def debug_control(action: str, workspace: str = ".") -> dict:
+            """Drive the running debug session: continue, step_over, step_in, step_out or stop; waits for the next pause. Requires client confirmation."""
+            return bridge.send(workspace, {"kind": "debug_control", "action": action})
+
+        @mcp.tool(annotations={"destructiveHint": True})
+        def debug_evaluate(expression: str, workspace: str = ".") -> dict:
+            """Evaluate a Python expression in the paused frame (raw data, off until `decider mcp --raw`); requires client confirmation."""
+            if not policy.raw:
+                return {"redacted": REDACTED}
+            return bridge.send(workspace, {"kind": "debug_evaluate", "expression": expression})
 
     return mcp
 

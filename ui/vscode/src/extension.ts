@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import type { DescribeResult } from "@decider/ui";
+import { startAgentBridge } from "./agentBridge";
 import { currentBreakpoints, debugFlow, setBreakpointNodes, toggleBreakpoint, userCode, watchDebugger } from "./debugging";
 import { copyDatasetName, DatasetsProvider, debugWithDataset, previewDataset, revealDataset } from "./datasets";
 import { FlowCodeLens, FlowsProvider, isFlowPath } from "./flows";
@@ -24,6 +25,7 @@ interface Shown {
 export function activate(ctx: vscode.ExtensionContext) {
   let shown: Shown | undefined;
   let paused: string | undefined;
+  let graphSelected: string | undefined;
   let generation = 0;
   const components = new Map<string, Promise<string[]>>();
 
@@ -108,8 +110,9 @@ export function activate(ctx: vscode.ExtensionContext) {
     else if (m.type === "setControls" && ir()) {
       const plain = m.controls.watches.filter((w) => w.path && w.name === undefined && w.condition === undefined && w.iteration === undefined);
       setBreakpointNodes(ir()!, new Set(plain.map((w) => w.path!)));
-    } else if (m.type === "selected" && m.path && tree.visible) {
-      const item = structure.find(m.path);
+    } else if (m.type === "selected") {
+      graphSelected = m.path;
+      const item = m.path && tree.visible ? structure.find(m.path) : undefined;
       if (item) tree.reveal(item, { select: true, focus: false });
     }
   }
@@ -214,6 +217,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       if (shown && isFlowPath(shown.file) && isFlowPath(e.document.uri.fsPath) && e.document.uri.fsPath.startsWith(projectDir(shown.file))) render();
     }),
     ...debug.disposables,
+    startAgentBridge({ shown: () => shown, paused: () => paused, graphSelection: () => graphSelected, ir, structure, tree, open }),
   );
   // What the smoke test checks.
   return { state: () => ({ file: shown?.file, described: !!shown?.describe, error: shown?.error, paused }), datasets: () => datasets.getChildren() };
