@@ -1,0 +1,49 @@
+{
+  "type": "decision_table",
+  "name": "client_wording",
+  "columns": {
+    "action": "Float64",
+    "client_wording_key": "String",
+    "client_visible": "Boolean"
+  },
+  "rows": [
+    {
+      "action": 70.0,
+      "client_wording_key": "wording.freeze_account.v1",
+      "client_visible": true
+    },
+    {
+      "action": 60.0,
+      "client_wording_key": "wording.block_channel.v1",
+      "client_visible": true
+    },
+    {
+      "action": 50.0,
+      "client_wording_key": "wording.decline.v1",
+      "client_visible": true
+    },
+    {
+      "action": 40.0,
+      "client_wording_key": "wording.hold_for_review.v1",
+      "client_visible": true
+    },
+    {
+      "action": 30.0,
+      "client_wording_key": "wording.step_up.v1",
+      "client_visible": true
+    }
+  ],
+  "expression": {
+    "type": "eq",
+    "variable": "action_code",
+    "value_column": "action"
+  },
+  "outputs": [
+    "client_wording_key",
+    "client_visible"
+  ],
+  "default": [
+    "wording.none.v1",
+    false
+  ]
+}
