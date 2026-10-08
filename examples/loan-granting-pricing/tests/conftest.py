@@ -59,3 +59,8 @@ def decide(pipeline, sample, params):
         return pipeline.score(parse_dates(record), params_document or params)
 
     return run
+
+
+@pytest.fixture
+def parse():
+    return parse_dates

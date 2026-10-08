@@ -7,7 +7,8 @@ the amount and a plain bisection can under-lend.
 What does hold: while the rate never falls as the amount rises, the instalment never falls either (the fee, the
 premium and the annuity are all non-decreasing). So the amount range splits at every place the card's rate *drops*
 into stretches on which affordability is a prefix, and each stretch is bisected on its own, highest first. The first
-stretch with an affordable amount holds the true maximum, which is why the answer always equals `exhaustive_search`.
+stretch with an affordable amount holds the true maximum, so the answer equals `exhaustive_search` whenever the
+evaluation ceiling is not reached.
 """
 from __future__ import annotations
 
