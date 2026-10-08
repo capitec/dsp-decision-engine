@@ -33,6 +33,15 @@ def test_a_table_and_an_int_step_share_an_int_column(run):
     assert out["pts"].to_list() == [1, 2, 0]
 
 
+def test_a_float_step_feeding_an_int_table_is_refused():
+    @step(output="code")
+    def code_f(x: float) -> float:
+        return x
+
+    with pytest.raises(WiringError, match="lookup/by_code reads 'code' as int, but lookup/code_f writes it as float"):
+        Engine().bind(flow(code_f, by_code(EQ_ROWS), name="lookup"))
+
+
 def test_int_eq_tells_apart_ids_above_2_53(run):
     out = run(by_code(EQ_ROWS), pl.DataFrame({"code": [BIG, BIG + 1, BIG - 1]}))
     assert out["pts"].to_list() == [2, 0, 0]

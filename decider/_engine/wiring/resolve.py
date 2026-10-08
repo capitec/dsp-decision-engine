@@ -28,7 +28,8 @@ def resolve(ir: Any) -> Plan:
     node or anything `to_ir` accepts.
 
     Raises `WiringError` (a `ValueError`), naming the node path, for: a likely
-    typo, readers declaring one input column with different types, a node
+    typo, readers declaring one input column with different types, a table
+    or tree reading as `int` a value a step writes as `float`, a node
     reading an input column that a later node overwrites, a read or bare
     emit of a name written only inside a branch arm, branch condition or loop
     body that doesn't pass it on, an emit or drop of a name close to an
@@ -117,9 +118,15 @@ class _Resolver:
         reads = None
         if node.inputs is not None:
             reads = tuple(self.lookup(i.name, scope, path, own, i) for i in node.inputs)
-            for v in reads:
+            for i, v in zip(node.inputs, reads):
                 if v.producer is None:
                     scope.leaf_readers.setdefault(v.name, path)
+                # A row node (a table or tree) takes its inputs as one tuple typed by their writers, so a float
+                # where it reads an int is not converted: compiled modes would read the wrong slot.
+                elif node.kind == "row" and base_annotation(i.annotation) is int and base_annotation(v.annotation) is float:
+                    raise WiringError(
+                        f"{path} reads {v.name!r} as int, but {v.producer} writes it as float. Annotate both the "
+                        f"same, and convert in the step that needs the other.")
         call = Call(len(self.calls), node, reads, ())
         self.calls.append(call)
         if node.outputs is None:
