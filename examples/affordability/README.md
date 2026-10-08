@@ -137,10 +137,13 @@ stays individual, the norm is looked up on the combined income:
 jq '.is_joint_application=true | .applicant2_payslip_income=9000 | .applicant2_employment_type_code=2
     | .applicant2_dependants_count=3' sample_request.json |
   curl -s -d @- -H 'content-type: application/json' localhost:8080/invocations |
-  jq '{gross_monthly_income, statutory_deductions, dependants_count, discretionary_income, max_affordable_instalment}'
+  jq -c '{gross_monthly_income, statutory_deductions, dependants_count, discretionary_income, max_affordable_instalment}'
+# {"gross_monthly_income":26125.0,"statutory_deductions":1561.5,"dependants_count":3.0,"discretionary_income":16763.5,"max_affordable_instalment":12207.02}
 ```
 
-To ask for capacity alone, drop `proposed_instalment`; to assess another way, set `assessment_mode_code`
+To ask for capacity alone, drop `proposed_instalment` (`max_affordable_instalment` is the answer, the verdict is
+1 and `discretionary_income_after` is `null`); a proposal of R9 000 fails (`affordability_verdict_code` 3,
+`decline_reason_codes` `[208]`). To assess another way, set `assessment_mode_code`
 (1 new application, 2 limit increase, 3 arrangement, 4 scenario).
 
 Tests (run from the repository root, with `PYTHONPATH` set as above):
