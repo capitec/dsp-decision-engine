@@ -1,5 +1,4 @@
 """The pipeline as served: raw request bytes through the handler `decider serve` uses, in its compiled default mode."""
-import asyncio
 import json
 
 import pytest
@@ -27,7 +26,7 @@ def handler():
 
 
 def post(handler, request: dict) -> dict:
-    response = asyncio.run(handler.process_fn(json.dumps(request).encode(), "application/json", "application/json"))
+    response = handler.process_fn(json.dumps(request).encode(), "application/json", "application/json")
     return json.loads(response.content)
 
 
