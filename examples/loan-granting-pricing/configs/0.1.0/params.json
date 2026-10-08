@@ -1,0 +1,334 @@
+{
+  "loan_granting": {
+    "eligibility": {
+      "gate_product_channel": {
+        "partner_minimum_amount": 10000.0
+      },
+      "gate_min_age": {
+        "minimum_age": 18.0
+      },
+      "gate_max_age_at_maturity": {
+        "maximum_age_at_maturity": 75.0
+      },
+      "gate_residency": {
+        "first_excluded_class": 5
+      },
+      "gate_employment_type": {
+        "first_excluded_type": 5.0
+      },
+      "gate_insolvency_seasoning": {
+        "seasoning_months": 24.0
+      }
+    },
+    "fraud_handling_code": {
+      "fraud_timeout_ms": 800.0,
+      "bypass_amount_ceiling": 15000.0,
+      "bypass_tenure_floor_months": 24.0
+    },
+    "scoring": {
+      "retail_unsecured": {
+        "bureau_score": {
+          "bureau_low": 500.0,
+          "bureau_mid": 650.0,
+          "bureau_high": 750.0
+        }
+      },
+      "apply_score_adjustments": {
+        "adjustment_stack_enabled": true
+      },
+      "apply_calibration_scale_adjustments": {
+        "adjustment_stack_enabled": true
+      },
+      "apply_probability_of_default_adjustments": {
+        "adjustment_stack_enabled": true
+      },
+      "apply_probability_of_default_for_grading_adjustments": {
+        "adjustment_stack_enabled": true
+      }
+    },
+    "employer_on_watchlist": {
+      "watchlist": [
+        {
+          "employer_id": 90001
+        },
+        {
+          "employer_id": 90002
+        }
+      ]
+    },
+    "cap_waterfall": {
+      "cap_bands": [
+        {
+          "rule": 25,
+          "lo": 6,
+          "hi": 7,
+          "amount": -1,
+          "term": -1,
+          "grade": -1,
+          "decline": true
+        },
+        {
+          "rule": 150,
+          "lo": 4,
+          "hi": 5,
+          "amount": 80000,
+          "term": -1,
+          "grade": -1,
+          "decline": false
+        },
+        {
+          "rule": 140,
+          "lo": 0,
+          "hi": 1,
+          "amount": 60000,
+          "term": -1,
+          "grade": -1,
+          "decline": false
+        },
+        {
+          "rule": 175,
+          "lo": -1000000000.0,
+          "hi": 3,
+          "amount": -1,
+          "term": -1,
+          "grade": -1,
+          "decline": true
+        },
+        {
+          "rule": 175,
+          "lo": 3,
+          "hi": 6,
+          "amount": 25000,
+          "term": -1,
+          "grade": -1,
+          "decline": false
+        },
+        {
+          "rule": 175,
+          "lo": 6,
+          "hi": 24,
+          "amount": 70000,
+          "term": -1,
+          "grade": -1,
+          "decline": false
+        },
+        {
+          "rule": 210,
+          "lo": 3,
+          "hi": 1000000000.0,
+          "amount": 40000,
+          "term": -1,
+          "grade": 8,
+          "decline": false
+        },
+        {
+          "rule": 210,
+          "lo": 2,
+          "hi": 3,
+          "amount": 120000,
+          "term": -1,
+          "grade": 9,
+          "decline": false
+        },
+        {
+          "rule": 240,
+          "lo": 10,
+          "hi": 1000000000.0,
+          "amount": -1,
+          "term": -1,
+          "grade": -1,
+          "decline": true
+        },
+        {
+          "rule": 240,
+          "lo": 6,
+          "hi": 10,
+          "amount": 30000,
+          "term": -1,
+          "grade": -1,
+          "decline": false
+        },
+        {
+          "rule": 305,
+          "lo": 1,
+          "hi": 2,
+          "amount": 50000,
+          "term": -1,
+          "grade": -1,
+          "decline": false
+        },
+        {
+          "rule": 330,
+          "lo": 5,
+          "hi": 6,
+          "amount": 100000,
+          "term": -1,
+          "grade": -1,
+          "decline": false
+        },
+        {
+          "rule": 330,
+          "lo": 6,
+          "hi": 7,
+          "amount": 150000,
+          "term": 60,
+          "grade": -1,
+          "decline": false
+        }
+      ],
+      "uplift_max_pct": 0.25,
+      "uplift_authority_ceiling": 250000.0,
+      "uplift_authority_reference": "CC-2026-14"
+    },
+    "assessment_mode_code": {
+      "mode": 1
+    },
+    "affordability_assessment": {
+      "evidence": {
+        "applicant1_income": {
+          "income_haircut_applied": {
+            "statement_confidence_threshold": 0.7,
+            "haircut_payslip": 0.05,
+            "haircut_statement_high_confidence": 0.1,
+            "haircut_statement_low_confidence": 0.25,
+            "haircut_declared": 0.2,
+            "haircut_bureau_estimated": 0.3
+          }
+        },
+        "applicant2_income": {
+          "income_haircut_applied": {
+            "statement_confidence_threshold": 0.7,
+            "haircut_payslip": 0.05,
+            "haircut_statement_high_confidence": 0.1,
+            "haircut_statement_low_confidence": 0.25,
+            "haircut_declared": 0.2,
+            "haircut_bureau_estimated": 0.3
+          }
+        },
+        "household_income": {
+          "minor_contribution_threshold": 0.1
+        },
+        "bureau_is_stale": {
+          "staleness_window_days": 45,
+          "staleness_window_days_mortgage": 14
+        },
+        "minimum_income_tier": {
+          "minimum_tier_new_application": 3,
+          "minimum_tier_limit_increase": 4,
+          "minimum_tier_arrangement": 5,
+          "minimum_tier_scenario": 3
+        }
+      },
+      "capacity": {
+        "overlay": {
+          "apply_max_affordable_instalment_adjustments": {
+            "adjustment_stack_enabled": true
+          }
+        },
+        "proposal_verdict": {
+          "marginal_band": 0.05
+        }
+      }
+    },
+    "statutory_ceiling": {
+      "repo_rate": 0.07,
+      "margin_over_repo": 0.21
+    },
+    "total_cost_ratio_threshold": {
+      "total_cost_ratio_threshold": 1.85
+    },
+    "recommendation_objective": {
+      "recommendation_objective": "largest_amount"
+    },
+    "solve_terms": {
+      "evaluation_ceiling_per_term": 24,
+      "permitted_terms": [
+        {
+          "term": 6,
+          "new_to_bank": true
+        },
+        {
+          "term": 12,
+          "new_to_bank": true
+        },
+        {
+          "term": 18,
+          "new_to_bank": true
+        },
+        {
+          "term": 24,
+          "new_to_bank": true
+        },
+        {
+          "term": 36,
+          "new_to_bank": true
+        },
+        {
+          "term": 48,
+          "new_to_bank": true
+        },
+        {
+          "term": 60,
+          "new_to_bank": true
+        },
+        {
+          "term": 72,
+          "new_to_bank": true
+        },
+        {
+          "term": 84,
+          "new_to_bank": false
+        }
+      ]
+    },
+    "offer_set": {
+      "minimum_offer_amount": 2000.0,
+      "minimum_instalment": 150.0,
+      "effective_rate_ceiling": 0.6,
+      "dedup_tolerance": 0.02,
+      "lgd": 0.72,
+      "average_ead": 0.55,
+      "funding_cost": 0.0875
+    },
+    "final_validation": {
+      "permitted_terms": [
+        {
+          "term": 6,
+          "new_to_bank": true
+        },
+        {
+          "term": 12,
+          "new_to_bank": true
+        },
+        {
+          "term": 18,
+          "new_to_bank": true
+        },
+        {
+          "term": 24,
+          "new_to_bank": true
+        },
+        {
+          "term": 36,
+          "new_to_bank": true
+        },
+        {
+          "term": 48,
+          "new_to_bank": true
+        },
+        {
+          "term": 60,
+          "new_to_bank": true
+        },
+        {
+          "term": 72,
+          "new_to_bank": true
+        },
+        {
+          "term": 84,
+          "new_to_bank": false
+        }
+      ]
+    }
+  }
+}
