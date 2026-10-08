@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import math
 
-from decider import allow_fallback, flow, optimise, step
+from decider import allow_fallback, flow, helper, optimise, step
 
 from retail_credit import pricing
 from retail_credit.vocab import BIND_AFF, BIND_CAP, BIND_MAX, BIND_MIN, BIND_REQ
@@ -28,8 +28,13 @@ def candidate_count(search_floor: float, amount_grid: float, search_ceiling: flo
     return int((search_ceiling - search_floor) // amount_grid) + 1 if search_ceiling >= search_floor else 0
 
 
-def offered_amount(index: int, search_floor: float, amount_grid: float) -> float:
+@helper(signatures=[((int, float, float), float)])
+def grid_amount(index: int, search_floor: float, amount_grid: float) -> float:
     return search_floor + (index - 1) * amount_grid
+
+
+def offered_amount(index: int, search_floor: float, amount_grid: float) -> float:
+    return grid_amount(index, search_floor, amount_grid)
 
 
 @step(output="score")
@@ -43,7 +48,7 @@ def unaffordable(score: float) -> bool:
 
 
 def solved_amount(best_index: int, search_floor: float, amount_grid: float) -> float:
-    return 0.0 if best_index < 0 else search_floor + (best_index - 1) * amount_grid
+    return 0.0 if best_index < 0 else grid_amount(best_index, search_floor, amount_grid)
 
 
 @allow_fallback

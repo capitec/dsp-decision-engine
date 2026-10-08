@@ -1,10 +1,9 @@
 """The retail credit decision for a new Flex Loan application, from admission to outcome.
 
-`build` is what `decider build` and `decider serve` run. The phases, in the order the dag resolves them:
-
-1 admission (`intake`) · 2 identity · 3 eligibility · 4 bureau state · 5 fraud · 6 income, tax, expenses, obligations
-and segment · 7 scorecard · 8 probability of default and grade · 9 policy caps · 10 affordability · 11 product routing
-· 14 consolidation · 12 pricing and 13 the solve · 16 offer · 17 final validation · 18 reasons and outcome.
+`build` is what `decider build` and `decider serve` run. The dag resolves its steps in this order: admission, identity,
+eligibility, bureau state and fraud; income, tax, expenses, obligations and segment; score, probability of default
+and grade; policy caps; affordability; product routing; the consolidation scenario; pricing and the solve; the
+offer; final validation; reasons and outcome.
 """
 from __future__ import annotations
 
