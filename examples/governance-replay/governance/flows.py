@@ -56,7 +56,7 @@ class Flow:
                  params: dict | None = None) -> Replayer:
         """The flow staged at `version` (default: latest) in `store` (default: its own configs).
 
-            fraud.replayer("0.1.0").score(request)
+            fraud.replayer("0.1.0").served(request)
         """
         store = store or self.store()
         handler = copy.copy(_staged(self.entry, store.basepath, str(version or store.latest_version()), mode,

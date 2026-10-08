@@ -39,7 +39,7 @@ class Certificate:
 
 
 def _moved(e: Evidence, candidate: Replayer) -> bool:
-    now = candidate.score(e.request)
+    now = candidate.served(e.request)
     return any(grade(k, e.response.get(k), now.get(k)) == "diverged" for k in e.response.keys() | now.keys())
 
 

@@ -85,7 +85,7 @@ def replay(evidence: Evidence, mode: str | None = None, store=None) -> Verdict:
     if changed:
         return Verdict(evidence.decision_id, "not_reproducible", changed_documents=changed)
     replayer = flow.replayer(evidence.config_version, mode or evidence.mode, store)
-    replayed = replayer.score(evidence.request)
+    replayed = replayer.served(evidence.request)
     found = {}
     for name in sorted(evidence.response.keys() | replayed.keys()):
         g = grade(name, evidence.response.get(name), replayed.get(name))

@@ -39,7 +39,7 @@ def capture(flow: Flow, request: dict, version: str | None = None, mode: str = "
         capture(LOAN, json.load(open("sample_request.json")))
     """
     replayer = flow.replayer(version, mode)
-    response = replayer.score(request)
+    response = replayer.served(request)
     config = flow.store().read(replayer.active).config
     return Evidence(flow.code, response["decision_id"], response["decision_date"], str(replayer.active), mode,
                     {name: digest(doc) for name, doc in config.items()}, config.get("params", {}), request, response)

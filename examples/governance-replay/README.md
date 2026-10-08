@@ -180,7 +180,7 @@ swap_set(LOAN, requests, LOAN.replayer(), candidate).moved   # (): a cheaper gra
 ```
 governance/
   flows.py        the Flow of each decision flow: entry, outcome and reason fields, registries, rule lists
-  replayer.py     RequestHandler subclass: raw JSON in, response dict out, optional params, the typed record kept
+  replayer.py     RequestHandler subclass: `score` (typed) and `served` (JSON-safe response dict), optional params, the typed record kept
   evidence.py     Evidence, capture, EvidenceStore (write once)
   replay.py       tolerance grading and replay, divergences in execution order
   explain.py      three audiences
@@ -210,14 +210,13 @@ tests/
 - **A candidate is a version.** `Flow.candidate(edit, root)` copies the latest config, applies `edit`, writes it as a
   new version under `root` and stages it, so a rate-card refresh, a rule change and a params change are all the same
   kind of thing and attribution does not care which. A params-only run is `Flow.replayer(params=...)`.
-- **decider's step diff is coarse for table steps.** Two builds of the same pipeline with a `DecisionTableConfig` step
-  report that step as changed and `prove` cannot say `True`, so `version_diff` also summarises each changed
-  document itself (rate cards cell by cell by key through `credit_core.rate_card.diff_cards`, rule sets by rule id)
-  and a reordered rate card shows no change.
-- **Workarounds, marked `# workaround:` in the code.** Scoring a raw request is async-only and the replay service
-  runs inside the server's event loop, so [replayer.py](governance/replayer.py) gives the coroutine a loop on another
-  thread. `AdjustmentRegister` and `ReasonCodeRegistry` have no public iterator or lookup, so the overlay list and the
-  reason wording read their `_all` and `_by_code`.
+- **What decider's diff covers.** `version_diff` reports decider's step-level `structure` and `prove`, but two builds of
+  these pipelines always come back `proof=None`: the steps read overlay registers and reason registries, which decider
+  cannot hash by content, so it never calls them equal. The config documents are therefore summarised here instead (rate
+  cards cell by cell by key through `credit_core.rate_card.diff_cards`, rule sets by rule id), and a reordered rate card
+  shows no change.
+- **Workarounds, marked `# workaround:` in the code.** `AdjustmentRegister` and `ReasonCodeRegistry` have no public
+  iterator or lookup, so the overlay list and the reason wording read their `_all` and `_by_code`.
 - **Rule lists.** The fraud rule list is the live rules in `rule_set.json`; the loan list is the cap waterfall's
   `REGISTER`; the business list is the roll-up rule ids. The business flow also reports a binding rule
   `worst-event` that is in none of them; coverage lists it under `unknown`.
