@@ -113,7 +113,7 @@ def allocate(scored: pl.DataFrame, budget: BudgetInstruction = BudgetInstruction
     adds `allocation_rank` (0 if not ranked), `ranking_value`, `allocation_outcome_code` (`AllocationOutcome`),
     `funded_amount`, `granted_limit` (the limit the account ends the cycle with, before any client confirmation) and
     `allocation_reason_code` (why not, if not funded). The cycle is a dict: `total_ranked`,
-    `funded_count`, `funding_line_ranking_value`, the three envelopes consumed, `which_envelope_bound` (None if none
+    `funded_count`, `funding_line_ranking_value`, the three envelopes consumed (and `reserve_consumed`, the part of the limit envelope the fairness top-up spent), `which_envelope_bound` (None if none
     ran out), `tail_skips` and `starved_segments`.
 
     An immediate-class decrease on any account of a client suppresses every increase for that client.
@@ -148,7 +148,8 @@ def allocate(scored: pl.DataFrame, budget: BudgetInstruction = BudgetInstruction
                                          budget.max_tail_skips)
     segment = list(zip(pool["product_code"].to_list(), pool["behaviour_grade"].to_list(), pool["mob_band"].to_list()))
     # ponytail: the reserve is limit-only and is spent after the ranking walk (so we know who is starved), not before
-    reserve_spent = _top_up(outcome, inc, segment, offer * budget.fairness_reserve_pct, budget.fairness_floor_ratio) if outcome else 0.0
+    top_up = outcome and budget.fairness_reserve_pct > 0
+    reserve_spent = _top_up(outcome, inc, segment, offer * budget.fairness_reserve_pct, budget.fairness_floor_ratio) if top_up else 0.0
     funded = [o == Outcome.FUNDED for o in outcome]
 
     pool = pool.with_columns(
@@ -171,7 +172,7 @@ def allocate(scored: pl.DataFrame, budget: BudgetInstruction = BudgetInstruction
     cycle = {
         "total_ranked": len(outcome), "funded_count": sum(funded),
         "funding_line_ranking_value": min(funded_values) if funded_values else None,
-        "envelope_consumed": spent[0] + reserve_spent, "rwa_consumed": spent[1], "expected_loss_consumed": spent[2],
+        "envelope_consumed": spent[0] + reserve_spent, "reserve_consumed": reserve_spent, "rwa_consumed": spent[1], "expected_loss_consumed": spent[2],
         "offer_envelope": offer, "which_envelope_bound": bound, "tail_skips": skips, "starved_segments": sorted(starved),
     }
     return book, cycle
