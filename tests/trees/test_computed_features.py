@@ -26,6 +26,11 @@ def computed(expression: str) -> dict:
     return {"type": "computed", "expression": expression}
 
 
+def test_a_tree_with_a_computed_feature_round_trips_through_json():
+    tree = two_leaf({"op": ">", "feature": computed("x - y"), "threshold": 10.0})
+    assert TreeConfig.load(tree.model_dump_json()) == tree
+
+
 def test_a_computed_feature_used_as_a_tree_condition(run):
     tree = two_leaf({"op": ">", "feature": computed("x - y"), "threshold": 10.0})
     # 25 - 10 = 15 > 10: hi; 15 - 10 = 5: lo.

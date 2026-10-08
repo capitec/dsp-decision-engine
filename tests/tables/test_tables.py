@@ -180,6 +180,24 @@ def test_a_table_round_trips_through_json(run):
     assert run(again, frame).equals(run(table, frame))
 
 
+def test_a_table_with_infinite_bounds_round_trips_through_json(run):
+    rows = [{"lo": float("-inf"), "hi": 30.0, "pts": 1}, {"lo": 30.0, "hi": float("inf"), "pts": 2}]
+    table = bands(rows)
+    again = DecisionTableConfig.load(table.model_dump_json())
+    assert again == table
+    frame = pl.DataFrame({"score": [-1e30, 10.0, 30.0, 1e30]})
+    assert run(again, frame)["pts"].to_list() == run(table, frame)["pts"].to_list() == [1, 1, 2, 2]
+
+
+def test_rows_load_with_the_declared_dtypes_not_inferred_ones(run):
+    # A column null (or int-looking) for its first 100 rows is still Float64.
+    rows = [{"lo": None if i < 100 else 0.5, "hi": float(i + 1), "pts": i} for i in range(150)]
+    table = DecisionTableConfig(
+        name="long", columns={"lo": "Float64", "hi": "Float64", "pts": "Int64"}, rows=rows,
+        expression={"type": "between", "variable": "score", "upper_bound_column": "hi"}, outputs=["pts"])
+    assert run(table, pl.DataFrame({"score": [0.5, 120.5]}))["pts"].to_list() == [0, 120]
+
+
 def test_a_400_condition_table_builds_and_answers_correctly(run):
     n = 400
     row = {f"lo{i}": float(i) for i in range(n)} | {f"hi{i}": float(i + 10) for i in range(n)} | {"pts": 1}
