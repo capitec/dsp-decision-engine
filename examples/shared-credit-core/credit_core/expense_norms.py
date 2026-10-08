@@ -7,7 +7,7 @@ from __future__ import annotations
 import math
 from datetime import date
 
-from decider import DecisionTableConfig, allow_fallback, missing_as
+from decider import DecisionTableConfig, allow_fallback, helper, missing_as
 
 from credit_core.dates import EffectiveDatedSet, EffectiveVersion
 from credit_core.evidence import cell_id
@@ -111,19 +111,22 @@ def norm_table_version(
         else expense_norms_statutory_version
 
 
-def _claimed(declared: float, statement: float) -> tuple[float, int]:
+@helper(signatures=[((float, float), float)])
+def _claimed(declared: float, statement: float) -> float:
+    """The expenses the applicant evidenced: the statement figure if there is one, else the declared one."""
     if not math.isnan(statement):
-        return statement, STATEMENT_DERIVED
-    return (0.0 if math.isnan(declared) else declared), DECLARED
+        return statement
+    return 0.0 if math.isnan(declared) else declared
 
 
 def expense_basis_code(
     norm_floor: float, declared_living_expenses: float = missing_as(math.nan),
     statement_living_expenses: float = missing_as(math.nan),
 ) -> int:
-    """`STATEMENT_DERIVED` or `DECLARED` for the claimed figure, or `NORM_FLOOR` when the floor is higher."""
-    claimed, basis = _claimed(declared_living_expenses, statement_living_expenses)
-    return NORM_FLOOR if norm_floor > claimed else basis
+    """`NORM_FLOOR` when the floor is above the claimed expenses, else the basis of the claim."""
+    if norm_floor > _claimed(declared_living_expenses, statement_living_expenses):
+        return NORM_FLOOR
+    return DECLARED if math.isnan(statement_living_expenses) else STATEMENT_DERIVED
 
 
 def living_expenses(
@@ -131,5 +134,4 @@ def living_expenses(
     statement_living_expenses: float = missing_as(math.nan),
 ) -> float:
     """The higher of the claimed expenses (statement over declared) and the norm floor."""
-    claimed, _ = _claimed(declared_living_expenses, statement_living_expenses)
-    return round(max(claimed, norm_floor), 2)
+    return round(max(_claimed(declared_living_expenses, statement_living_expenses), norm_floor), 2)

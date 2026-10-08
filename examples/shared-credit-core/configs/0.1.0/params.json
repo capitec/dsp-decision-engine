@@ -1,26 +1,17 @@
 {
-  "credit_core_demo": {
+  "flex_loan_quote": {
     "decline_reason_codes": {
       "minimum_age": 18.0
     },
-    "gross_monthly_income": {
-      "statement_confidence_threshold": 0.7,
-      "haircut_payslip": 0.05,
-      "haircut_statement_high_confidence": 0.1,
-      "haircut_statement_low_confidence": 0.25,
-      "haircut_declared": 0.2,
-      "haircut_bureau_estimated": 0.3
-    },
-    "income_source_code": {
-      "statement_confidence_threshold": 0.7
-    },
-    "income_haircut_applied": {
-      "statement_confidence_threshold": 0.7,
-      "haircut_payslip": 0.05,
-      "haircut_statement_high_confidence": 0.1,
-      "haircut_statement_low_confidence": 0.25,
-      "haircut_declared": 0.2,
-      "haircut_bureau_estimated": 0.3
+    "income": {
+      "income_haircut_applied": {
+        "statement_confidence_threshold": 0.7,
+        "haircut_payslip": 0.05,
+        "haircut_statement_high_confidence": 0.1,
+        "haircut_statement_low_confidence": 0.25,
+        "haircut_declared": 0.2,
+        "haircut_bureau_estimated": 0.3
+      }
     },
     "affordability_buffer_applied": {
       "affordability_buffer": 0.12
@@ -44,15 +35,13 @@
     "initiation_fee": {
       "base_fee": 1050.0,
       "marginal_rate": 0.1,
-      "threshold": 10000.0,
-      "cap": 6500.0
-    },
-    "initiation_fee_capped": {
-      "cap": 6500.0
+      "threshold": 10000.0
     },
     "monthly_service_fee": {
-      "flat_fee": 69.0,
-      "cap": 69.0
+      "flat_fee": 69.0
+    },
+    "affordability_verdict_code": {
+      "marginal_band": 0.05
     }
   }
 }

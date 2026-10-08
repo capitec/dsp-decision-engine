@@ -10,7 +10,8 @@ from credit_core.evidence import cell_id
 
 # employment_type_code: 1 permanent, 2 contract, 3 self-employed, 4 pensioner, 5 social grant, 6 informal.
 # Self-employed and informal earners have no tax withheld at source, so the table does not apply to them.
-NOT_PAYE_WITHHELD = {3, 6}
+SELF_EMPLOYED = 3
+INFORMAL = 6
 
 TAX_TABLES = EffectiveDatedSet("tax_table", [
     EffectiveVersion("tax@2025", date(2025, 3, 1), date(2026, 3, 1)),
@@ -43,9 +44,9 @@ def build_tax_table() -> DecisionTableConfig:
 
 
 def statutory_deductions(
-    gross_monthly_income: float, employment_type_code: int, tax_base: float, tax_rate: float, tax_band_lo: float,
+    gross_monthly_income: float, employment_type_code: float, tax_base: float, tax_rate: float, tax_band_lo: float,
 ) -> float:
-    if employment_type_code in NOT_PAYE_WITHHELD:
+    if employment_type_code == SELF_EMPLOYED or employment_type_code == INFORMAL:
         return 0.0
     return round(tax_base + tax_rate * (gross_monthly_income - tax_band_lo), 2)
 

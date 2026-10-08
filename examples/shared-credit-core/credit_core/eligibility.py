@@ -34,6 +34,7 @@ def decline_reason_codes(
     return [code for hit, code in failed if hit]
 
 
+@allow_fallback
 def is_eligible(decline_reason_codes: list[int]) -> bool:
     return len(decline_reason_codes) == 0
 
