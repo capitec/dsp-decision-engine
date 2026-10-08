@@ -26,13 +26,13 @@ def pre_assessment_step(rate_card_index: RateCardIndex):
     @step(outputs=("pre_assessed_amount", "pre_assessed_term", "binding_constraint_code", "pre_assessment_evaluations",
                    "pre_assessment_valid_from", "pre_assessment_valid_to"))
     def pre_assessment(
-        risk_grade: int, applicant_age_years: float, max_affordable_instalment: float, appetite_max_amount: float,
+        risk_grade: float, applicant_age_years: float, max_affordable_instalment: float, appetite_max_amount: float,
         cycle_date: date, is_daily_delta: bool = missing_as(False), statutory_ceiling: float = param(0.28, gt=0.0),
         monthly_validity_days: int = param(35, ge=1), daily_validity_days: int = param(10, ge=1),
     ) -> tuple[float, int, str, int, date, date]:
         evaluator = PriceEvaluator(rate_card_index, credit_life_index, statutory_ceiling, credit_life_substitution_declared=False)
         # No requested amount: an unsolicited offer is capped by the bank's appetite alone.
-        result = solve_term(evaluator, TERM_MONTHS, risk_grade, applicant_age_years, False, appetite_max_amount, None,
+        result = solve_term(evaluator, TERM_MONTHS, int(risk_grade), applicant_age_years, False, appetite_max_amount, None,
                             max_affordable_instalment)
         days = daily_validity_days if is_daily_delta else monthly_validity_days
         return (result.amount or 0.0, TERM_MONTHS, result.binding_constraint_code, result.evaluation_count,

@@ -27,6 +27,7 @@ EVALUATED = (
 )
 
 
+@allow_fallback
 def overlay_stack_id(overlay_stack_id: str = param("OS-NONE")) -> str:
     """Which overlays set the tree's params; `overlays.resolve` writes it to the params document with them."""
     return overlay_stack_id
@@ -41,6 +42,7 @@ def offer_amount(pre_assessed_amount: float, advertised_tier_ceiling: float) -> 
     return round(min(pre_assessed_amount, advertised_tier_ceiling), 2)
 
 
+@allow_fallback
 def assignment_outcome_code(
     evaluated: bool, suppression_codes: list[str], is_control: bool, is_universal_holdout: bool,
     leaf_outcome_code: int = missing_as(vocab.DO_NOT_TARGET),
