@@ -5,9 +5,10 @@ that version, not whatever is current. `decision_date` picks the version once; `
 """
 from __future__ import annotations
 
+import math
 from datetime import date
 
-from decider import allow_fallback, step
+from decider import allow_fallback, helper, step
 
 from credit_core.dates import EffectiveDatedSet, EffectiveVersion
 from credit_core.obligations import Account, assess
@@ -40,6 +41,7 @@ def bind_covenant(facility_id: int, decision_date: date) -> dict:
             "threshold": threshold, "cure_days": cure_days}
 
 
+@helper(signatures=[((float, float), int)])
 def breach_class(dscr: float, threshold: float) -> int:
     if dscr >= threshold:
         return vocab.BREACH_NONE
@@ -50,8 +52,9 @@ def breach_class(dscr: float, threshold: float) -> int:
     return vocab.BREACH_SEVERE
 
 
+@helper(signatures=[((float, float), float)])
 def dscr(ebitda: float, monthly_debt_service: float) -> float:
-    return round(ebitda / 12.0 / monthly_debt_service, 4) if monthly_debt_service > 0 else float("inf")
+    return round(ebitda / 12.0 / monthly_debt_service, 4) if monthly_debt_service > 0 else math.inf
 
 
 def evaluate(
