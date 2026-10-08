@@ -69,24 +69,26 @@ def build_entity_scorecard() -> ScorecardConfig:
     })
 
 
-def grade_lookup(probability: str, grade: str, segment: str = "segment_code") -> DecisionTableConfig:
-    """Grade 1 (best) to 12 for the probability of default in column `probability` and the segment in column `segment`.
+def grade_lookup(probability: str, grade: str, key: str = "segment_code", cuts: dict | None = None,
+                 version: str = GRADE_VERSION) -> DecisionTableConfig:
+    """Grade 1 (best) to 12 for the probability of default in column `probability`.
 
-    The segment is 4 (people) or 5 (juristic); any other gets grade 12. Writes `grade` and `<grade>_cell_id`.
+    The ladder is picked by the column `key` (a segment: 4 people, 5 juristic); any other value gets grade 12.
+    `cuts` maps each key value to its 11 ascending cut points. Writes `grade` and `<grade>_cell_id`.
 
     Example: `grade_lookup("people_pd", "people_grade", "people_segment_code")`.
     """
     rows = []
-    for seg, cuts in _GRADE_CUTS.items():
-        edges = [None, *cuts, None]
-        rows += [{"segment": seg, "lo": edges[g - 1], "hi": edges[g], "grade": g,
-                  "cell_id": cell_id("business_grade", GRADE_VERSION, seg, g)} for g in range(1, 13)]
+    for value, ladder in (cuts or _GRADE_CUTS).items():
+        edges = [None, *ladder, None]
+        rows += [{"key": value, "lo": edges[g - 1], "hi": edges[g], "grade": g,
+                  "cell_id": cell_id("grade_ladder", version, value, g)} for g in range(1, 13)]
     return DecisionTableConfig.load({
         "type": "decision_table", "name": grade + "_ladder",
-        "columns": {"segment": "Int64", "lo": "Float64", "hi": "Float64", "grade": "Int64", "cell_id": "String"},
+        "columns": {"key": "Int64", "lo": "Float64", "hi": "Float64", "grade": "Int64", "cell_id": "String"},
         "rows": rows,
         "expression": {"type": "and", "expressions": [
-            {"type": "eq", "variable": segment, "value_column": "segment"},
+            {"type": "eq", "variable": key, "value_column": "key"},
             {"type": "between", "variable": probability, "lower_bound_column": "lo",
              "upper_bound_column": "hi", "allow_gaps": True}]},
         "outputs": ["grade", "cell_id"],

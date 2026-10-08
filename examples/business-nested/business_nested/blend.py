@@ -63,7 +63,8 @@ def blend_weights(
     return [w / total for w in weights] if total else weights
 
 
-def _blend(pds: list[float], weights: list[float]) -> float:
+def log_odds_blend(pds: list[float], weights: list[float]) -> float:
+    """The weighted blend of probabilities of default on the log-odds scale; the worst one when all weights are 0."""
     if not any(weights):
         return max(pds, default=1.0)  # nobody in the blend: assume the worst entity
     return 1.0 / (1.0 + math.exp(-sum(w * _logit(p) for w, p in zip(weights, pds))))
@@ -87,8 +88,8 @@ def people_blend(
                             controller_points, controller_cap_points)
     owners = sum(e["effective_ownership_pct"] for e in assessed_entities if e["is_owner"])
     covered = sum(e["effective_ownership_pct"] for e, w in zip(assessed_entities, weights) if e["is_owner"] and w > 0)
-    return (_blend([e["entity_pd"] for e in assessed_entities], weights),
-            _blend([e["entity_pd_unadjusted"] for e in assessed_entities], weights), weights,
+    return (log_odds_blend([e["entity_pd"] for e in assessed_entities], weights),
+            log_odds_blend([e["entity_pd_unadjusted"] for e in assessed_entities], weights), weights,
             owners > 0 and covered / owners < coverage_requirement,
             not any(e["is_natural_person"] and w > 0 for e, w in zip(assessed_entities, weights)))
 
