@@ -111,7 +111,8 @@ def allocate(scored: pl.DataFrame, budget: BudgetInstruction = BudgetInstruction
 
     `scored` is the per-account pipeline's output for the whole book (and needs `client_id` and `account_id`). The result
     adds `allocation_rank` (0 if not ranked), `ranking_value`, `allocation_outcome_code` (`AllocationOutcome`),
-    `funded_amount` and `allocation_reason_code` (why not, if not funded). The cycle is a dict: `total_ranked`,
+    `funded_amount`, `granted_limit` (the limit the account ends the cycle with, before any client confirmation) and
+    `allocation_reason_code` (why not, if not funded). The cycle is a dict: `total_ranked`,
     `funded_count`, `funding_line_ranking_value`, the three envelopes consumed, `which_envelope_bound` (None if none
     ran out), `tail_skips` and `starved_segments`.
 
@@ -161,7 +162,9 @@ def allocate(scored: pl.DataFrame, budget: BudgetInstruction = BudgetInstruction
         pl.when(pl.col("allocation_outcome_code").is_null())
         .then(pl.when(pl.col("_qualifies") & pl.col("_client_has_decrease")).then(int(Outcome.SUPPRESSED)).otherwise(int(Outcome.NOT_RANKED)))
         .otherwise(pl.col("allocation_outcome_code")).alias("allocation_outcome_code"))
-    book = book.with_columns(_reason(increase, min_increase)).drop("_qualifies", "_client_has_decrease", "_ranked")
+    granted = pl.when(pl.col("change_type_code") == ChangeType.DECREASE).then(pl.col("final_proposed_limit")).otherwise(
+        pl.col("current_limit") + pl.col("funded_amount"))
+    book = book.with_columns(granted.alias("granted_limit"), _reason(increase, min_increase)).drop("_qualifies", "_client_has_decrease", "_ranked")
 
     starved = {key for key, ids in _groups(segment).items() if any(outcome[i] == Outcome.FAIRNESS_CAPPED for i in ids)}
     funded_values = [v for v, f in zip(pool["ranking_value"].to_list(), funded) if f]

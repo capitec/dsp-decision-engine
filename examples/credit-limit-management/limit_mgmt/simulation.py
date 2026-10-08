@@ -45,9 +45,9 @@ def run_cycle(
 
 
 def swap_set(baseline: Cycle, candidate: Cycle) -> pl.DataFrame:
-    """Per account, whether the candidate cycle's proposed limit is a `gainer`, `loser` or `unaffected` against the baseline's."""
+    """Per account, whether the candidate cycle's granted limit is a `gainer`, `loser` or `unaffected` against the baseline's."""
     def limits(cycle: Cycle, name: str) -> pl.DataFrame:
-        return cycle.book.select("account_id", pl.col("final_proposed_limit").alias(f"{name}_limit"),
+        return cycle.book.select("account_id", pl.col("granted_limit").alias(f"{name}_limit"),
                                  pl.col("allocation_outcome_code").alias(f"{name}_outcome"))
     swap = limits(baseline, "baseline").join(limits(candidate, "candidate"), on="account_id", how="full", coalesce=True)
     change = pl.col("candidate_limit") - pl.col("baseline_limit")
