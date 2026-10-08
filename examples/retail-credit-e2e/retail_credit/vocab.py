@@ -1,8 +1,7 @@
 """Codes this flow adds to `credit_core.vocab`."""
 DEGRADED_NONE = 0
-DEGRADED_BUREAU_DOWN = 11  # "mode 11" in the degraded-operation table
+DEGRADED_BUREAU_DOWN = 11  # the one degraded mode this flow models
 
-# solve_binding_constraint
 BIND_AFF = "BIND-AFF"  # the instalment ceiling
 BIND_CAP = "BIND-CAP"  # the amount cap
 BIND_REQ = "BIND-REQ"  # the requested amount
@@ -11,6 +10,5 @@ BIND_MAX = "BIND-MAX"  # the product maximum
 
 OUTCOME_REJECTED = 0  # a structural rejection of the request, never a credit decision
 
-# offer_basis_code: which obligations the offer was priced against
 BASIS_ACTUAL = 1
 BASIS_HYPOTHETICAL = 2  # the client settles their external debts first

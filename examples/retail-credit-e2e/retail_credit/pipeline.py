@@ -28,35 +28,28 @@ rate_addon_step = overlay_step(
     unadjusted_output="rate_addon_unadjusted")
 
 EMIT = (
-    # admission, identity, eligibility, fraud
     "p01_valid", "p01_rejection_reasons", "identity_resolution_path", "identity_confidence",
     "identity_is_trustworthy", "hard_eligibility_reasons", "is_eligible", "degraded_mode_code",
     "source_degradation_codes", "bureau_down_envelope_ok", "fraud_verdict_code", "fraud_reason_codes",
     "fraud_weighted_score", "fraud_rules_fired_count",
-    # income, expenses, obligations, segment
     "gross_monthly_income", "income_source_code", "income_evidence_tier", "net_monthly_income", "statutory_deductions",
     "tax_table_cell_id", "living_expenses", "expense_basis_code", "norm_table_version", "existing_obligations",
     "obligations_internal", "obligations_external", "worst_arrears_months", "segment_code",
-    # risk
     "score", "probability_of_default_unadjusted", "probability_of_default", "pd_adjustment_set_id",
     "pd_adjustments_applied", "calibration_cell_id", "risk_grade", "risk_grade_cell_id",
-    # caps and routing
     "amount_cap_unadjusted", "amount_cap", "amount_cap_binding_rule", "amount_cap_chain", "amount_cap_adjustments_applied",
     "p09_declined", "p09_decline_reason", "term_cap", "worst_acceptable_grade", "product_10_eligible",
     "product_routing_reasons",
-    # affordability, actual then hypothetical
     "discretionary_income", "residual_floor", "ratio_ceiling", "capacity", "pre_buffer", "affordability_buffer_unadjusted",
     "affordability_buffer_applied", "buffer_adjustments_applied", "max_affordable_instalment", "instalment_cap",
     "affordability_binding_constraint_code", "affordability_verdict_code", "consolidation_proposed", "existing_obligations_hypothetical",
     "max_affordable_instalment_hypothetical", "instalment_cap_hypothetical", "affordability_verdict_code_hypothetical",
     "offer_basis_code", "offer_affordability_verdict_code", "instalment_ceiling",
-    # solve and price
     "rate_addon_bps", "rate_addon_adjustments_applied", "solved_amount", "solve_binding_constraint", "evaluated", "disqualified",
     "decision_open", "amount_grid", "offer_amount", "offer_binding_constraint", "has_offer", "offer_term_months", "rate_cell_id",
     "nominal_annual_rate_unadjusted", "nominal_annual_rate", "credit_life_rate", "initiation_fee", "initiation_fee_incl_tax",
     "amount_financed", "instalment_before_fees", "credit_life_premium", "credit_life_cell_id", "monthly_service_fee", "instalment",
     "total_cost_of_credit", "total_interest", "effective_annual_rate",
-    # validation and outcome
     "validation_passed", "validation_failed_assertions", "decline_reason_codes", "primary_reason_code",
     "reason_registry_version", "outcome_code",
 )

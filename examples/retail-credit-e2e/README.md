@@ -72,7 +72,7 @@ below is the order a reader follows, not a call sequence anyone maintains.
 | decider feature | Where |
 |---|---|
 | Plain functions as steps; `param` for policy, `missing_as` for optional inputs | every module; the policy numbers are in [`configs/0.1.0/params.json`](configs/0.1.0/params.json) |
-| One `dag` of about fifty steps and units, with `flow` for a value written twice (`amount_cap` overlaid then rounded, the instalment, the reasons fired then ranked) | [pipeline.py](retail_credit/pipeline.py), [caps.py](retail_credit/caps.py), [pricing.py](retail_credit/pricing.py), [disclosure.py](retail_credit/disclosure.py) |
+| One `dag` of a few dozen steps and units, with `flow` for a value written twice (`amount_cap` overlaid then rounded, the instalment, the reasons fired then ranked) | [pipeline.py](retail_credit/pipeline.py), [caps.py](retail_credit/caps.py), [pricing.py](retail_credit/pricing.py), [disclosure.py](retail_credit/disclosure.py) |
 | `optimise` with `record=`: try every candidate, keep the best, and get the winner's whole price back from the same steps that scored it | [solve.py](retail_credit/solve.py), [pricing.py](retail_credit/pricing.py) |
 | `param_table`: a 34 560-cell rate card in the params document, replaceable without a rebuild | [flex_card.py](retail_credit/flex_card.py) |
 | `DecisionTableConfig` with `eq` keys and banded ranges | [grading.py](retail_credit/grading.py), [affordability.py](retail_credit/affordability.py) |
