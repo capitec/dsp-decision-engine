@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, Sequence
 from decider._engine.ir.nodes import SequenceNode
 from decider.exceptions import WiringError
 from decider.steps._base import Step, as_step
+from decider.steps._branch import branch
 from decider.steps._function import step
 from decider.steps._loop import loop
 from decider.steps._sequential import flow
@@ -113,10 +114,13 @@ class OptimiseStep(Step):
         keep_record.__annotations__ = {"best_record": Struct[item], "score": float, "best_score": float,
                                        "reject": bool, "record": Struct[item], "return": Struct[item]}
 
-        def finalise(best_index: int, best_record: Struct[item]) -> Struct[item] | None:
-            return best_record if best_index >= 0 else None
+        def found(best_index: int) -> bool:
+            return best_index >= 0
 
-        finalise.__annotations__ = {"best_index": int, "best_record": Struct[item], "return": Struct[item] | None}
+        def emit(best_record: Struct[item]) -> Struct[item]:
+            return best_record
+
+        emit.__annotations__ = {"best_record": Struct[item], "return": Struct[item]}
 
         def pass_index(best_index: int) -> int:
             return best_index
@@ -129,7 +133,8 @@ class OptimiseStep(Step):
                                                inner.build(_seed),
                                                inner.build(step(seed_record, output="best_record", name="seed_record")),
                                                inner.build(search),
-                                               inner.build(flow(step(finalise, output="record", name="finalise"),
+                                               inner.build(flow(branch(found, step(emit, output="record", name="emit"),
+                                                                  modifies=["record"], name="emit_record"),
                                                                step(pass_index, output="best_index", name="pass_index"),
                                                                name="finalise"))),
                             drops=("index",))
