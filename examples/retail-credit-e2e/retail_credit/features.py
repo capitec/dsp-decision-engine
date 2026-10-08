@@ -12,17 +12,13 @@ SEGMENT_NON_RESIDENT = 10
 SEGMENT_STAFF = 11
 SEGMENT_JOINT = 12
 
-# employment_type_code -> segment: self-employed, pensioner, social grant, informal
-_EMPLOYMENT_SEGMENT = {3: 6, 4: 7, 5: 8, 6: 9}
-
 # credit_core's income source (1 employer, 2 payslip, 3 statement, 4 declared, 5 bureau estimate, 0 none) as this
 # product's seven-tier ladder (1 best). The ladder's tiers 4 and 5 (irregular statements, deposit history) cannot be told
 # apart from the source code, so 3 stands for every statement.
-_EVIDENCE_TIER = {1: 1, 2: 2, 3: 3, 5: 6, 4: 7, 0: 7}
-
-
 def income_evidence_tier(income_source_code: int) -> int:
-    return _EVIDENCE_TIER.get(income_source_code, 7)
+    if income_source_code in (1, 2, 3):
+        return income_source_code
+    return 6 if income_source_code == 5 else 7
 
 
 def segment_code(
@@ -42,8 +38,8 @@ def segment_code(
         return SEGMENT_STAFF
     if is_non_resident:
         return SEGMENT_NON_RESIDENT
-    if employment_type_code in _EMPLOYMENT_SEGMENT:
-        return _EMPLOYMENT_SEGMENT[int(employment_type_code)]
+    if 3 <= employment_type_code <= 6:  # self-employed, pensioner, social grant, informal: segments 6 to 9
+        return employment_type_code + 3
     if internal_credit_holding:
         return SEGMENT_EXISTING_PAST_ARREARS if worst_arrears_months >= 2.0 else SEGMENT_EXISTING_CLEAN
     if internal_tenure_months >= 4.0:

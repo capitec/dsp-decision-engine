@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import math
 
-from decider import flow, optimise, param, step
+from decider import allow_fallback, flow, optimise, param, step
 
 from retail_credit import pricing
 from retail_credit.vocab import BIND_AFF, BIND_CAP, BIND_MAX, BIND_MIN, BIND_REQ
@@ -45,9 +45,10 @@ def unaffordable(score: float) -> bool:
 
 
 def solved_amount(best_index: int, search_floor: float, search_grid: float) -> float:
-    return 0.0 if best_index < 0 else offered_amount(best_index, search_floor, search_grid)
+    return 0.0 if best_index < 0 else search_floor + (best_index - 1) * search_grid
 
 
+@allow_fallback
 def solve_binding_constraint(
     solved_amount: float, search_ceiling: float, requested_amount: float, amount_cap: float, search_floor: float,
     search_grid: float,
