@@ -197,11 +197,12 @@ class _Resolver:
                     f"(produced by {produced[near].producer!r})? Rename it, or "
                     f"relabel(reads={{{name!r}: {near!r}}})."
                 )
-            warnings.warn(
-                f"{reader}: reading {name!r} as an input column. It looks like {near!r} (produced by "
-                f"{produced[near].producer!r}); if it's a typo, rename it or relabel(reads={{{name!r}: {near!r}}}).",
-                stacklevel=2,
-            )
+            elif _same_words(name, near):
+                warnings.warn(
+                    f"{reader}: reading {name!r} as an input column. It looks like {near!r} (produced by "
+                    f"{produced[near].producer!r}); if it's a typo, rename it or relabel(reads={{{name!r}: {near!r}}}).",
+                    stacklevel=2,
+                )
         if name not in self.leaves:
             self.leaves[name] = self.new(name, None, annotation)
             # ponytail: the first typed reader's declaration describes the column; each Call still pairs its own Input.
@@ -450,6 +451,12 @@ def _is_typo(name: str, near: str) -> bool:
     ops = difflib.SequenceMatcher(None, name, near).get_opcodes()
     edits = sum(max(i2 - i1, j2 - j1) for tag, i1, i2, j1, j2 in ops if tag != "equal")
     return edits <= 2 and re.sub(r"\d", "", name) != re.sub(r"\d", "", near)
+
+
+def _same_words(name: str, near: str) -> bool:
+    # A column with a word more or fewer, or a different unrelated word (`gross`/`net`), is another column, not a misspelling.
+    a, b = name.split("_"), near.split("_")
+    return len(a) == len(b) and all(difflib.SequenceMatcher(None, x, y).ratio() >= 0.35 for x, y in zip(a, b) if x != y)
 
 
 def _type_name(t: Any) -> str:

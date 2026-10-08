@@ -105,6 +105,11 @@ it again keeps the old values, silently. Pass a new dict to change a value
 (`copy.deepcopy(params)`, then edit the copy). In the example above the edit
 comes before the first call, so it is seen.
 
+An input with neither `missing_as(fill)` nor a `T | None` annotation is required:
+a null value or an absent column raises `MissingInputError`. To default it for a
+step you reuse as it is, put a step in front that writes the column
+(`def income(income: float = missing_as(0.0)) -> float: return income`).
+
 For one record, call `score(record)`, never `run(df)` on a one-row frame: `run`
 builds a frame, exports it through Arrow and assembles an output frame, which
 costs about five times what `score` does on the same record.
@@ -618,6 +623,12 @@ assert exe.fallbacks() == {
 strict = Engine(strict_compile=True).bind(flow(order_total, name="q"), mode="fused")
 assert strict.score({"items": [{"price": 2.0}]})["order_total"] == 2.0
 ```
+
+A compiled step that calls another function of yours must say how it compiles:
+`@helper(signatures=[((float,), float)])` compiles the callee with the step,
+whether it is imported by name or called as `module.fn(...)`, and a plain
+function makes the step fall back with `calls 'fn' without @helper or
+@allow_fallback` in `fallbacks()`.
 
 To silence the lot instead of step by step, filter the category once at
 start-up: `warnings.filterwarnings("ignore", category=FallbackWarning)`.

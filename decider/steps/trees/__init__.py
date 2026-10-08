@@ -4,12 +4,13 @@ import typing as t
 from pydantic import Field, field_validator
 from pydantic.json_schema import SkipJsonSchema
 
-from decider._engine.ir.nodes import CallNode
+from decider._engine.ir.nodes import CallNode, IRNode, SequenceNode
 from decider.steps._configurable import ConfigurableStep
 from decider.steps.trees._condition import expr_condition
 from decider.steps.trees._encode import encode, kind_of
 from decider.steps.trees._reference import reference
 from decider.steps.trees._routes import Route, Visit, with_route_columns
+from decider.steps.trees._split import split
 from decider.steps.trees.schema import Node, Tree, TreeDocument
 from decider.steps.trees._walker import walk
 
@@ -113,15 +114,26 @@ class TreeConfig(ConfigurableStep):
         tree = self.tree.to_tree()
         return tree if self.path_columns is None else with_route_columns(tree, self.path_columns)
 
-    def to_ir(self, ctx: t.Any) -> CallNode:
+    def to_ir(self, ctx: t.Any) -> IRNode:
         tree = self._tree()
+        extra = (self.path_output is not None) + (self.trace_output is not None)
+        parts = [tree] if self.path_columns is not None else split(tree, extra)
+        origin = ctx.origin(self)
+        if len(parts) > 1:
+            inner = ctx.child(self.name)
+            nodes = [self._row(part, inner.origin(self, f"part_{k}"), ctx) for k, part in enumerate(parts)]
+            # A param is numbered within its own node and named after its path, so a tree with params stays whole.
+            if not any(n.params for n in nodes):
+                return SequenceNode(origin, tuple(nodes))
+        return self._row(tree, origin, ctx)
+
+    def _row(self, tree: Tree, origin: t.Any, ctx: t.Any) -> CallNode:
         p = encode(tree, self.feature_types, ctx.value, self.null_handling, self.path_output, self.trace_output)
         ref = reference(tree, p.inputs, p.kinds, p.columns)
         # The node's consts are addresses into these arrays; the node holds its reference, which holds them.
         ref.arrays = p.arrays
         fn = _python(reference(tree, p.inputs, p.kinds, p.columns, shared=True), p.columns) if p.python else walk
-        return CallNode(ctx.origin(self), "row", fn, p.inputs,
-                        p.outputs, p.params, reference=ref, consts=p.consts)
+        return CallNode(origin, "row", fn, p.inputs, p.outputs, p.params, reference=ref, consts=p.consts)
 
 
 def _ignore(locator: str) -> None:
