@@ -14,15 +14,15 @@ DOMINANT = 0.40
 @dataclass(frozen=True)
 class Coverage:
     """Rule hits over a population. `dead` rules never bound, `dominant` ones bound on more than 40% of
-    decisions, `unknown` ids bound but are not in the flow's rule list. `unreachable` are branches decider's
-    static checks prove can never run, whatever the traffic; `cells` counts distinct table cells read per field."""
+    decisions, `unknown` ids bound but are not in the flow's rule list. `static_findings` are what decider's
+    static checks say about the logic whatever the traffic (unreachable branches, overlapping rows, table gaps); `cells` counts distinct table cells read per field."""
 
     decisions: int
     hits: dict[str, int]
     dead: tuple[str, ...]
     dominant: tuple[str, ...]
     unknown: tuple[str, ...]
-    unreachable: tuple[str, ...]
+    static_findings: tuple[str, ...]
     cells: dict[str, int]
 
 
