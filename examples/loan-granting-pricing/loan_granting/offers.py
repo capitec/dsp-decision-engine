@@ -29,6 +29,7 @@ def total_cost_ratio_threshold(total_cost_ratio_threshold: float = param(1.85, g
     return total_cost_ratio_threshold
 
 
+@allow_fallback
 def recommendation_objective(recommendation_objective: str = param(LARGEST_AMOUNT)) -> str:
     """`largest_amount`, `lowest_total_cost` or `best_expected_value`: product changes it without a release."""
     return recommendation_objective

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from decider import dag, missing_as, step
+from decider import allow_fallback, dag, missing_as, step
 
 from credit_core import calibration, risk_grade
 from credit_core.adjustments import Adjustment, AdjustmentEffect, AdjustmentRegister
@@ -34,6 +34,7 @@ def segment_assignment(is_thin_file: bool, internal_tenure_months: float = missi
     return SCORECARD_NEW_TO_BANK, SEGMENT_NEW_TO_BANK
 
 
+@allow_fallback
 def score_reason_codes(
     bureau_score_score: float, months_employed_score: float, worst_arrears_months_score: float,
     accounts_in_arrears_count_score: float, revolving_utilisation_score: float, applicant_age_years_score: float,
@@ -83,6 +84,7 @@ def _overlay(target: str, base_field: str):
                 "adjustments_applied": f"{target}_adjustments_applied"})
 
 
+@allow_fallback
 def adjustments_applied(
     score_adjustments_applied: list[str], calibration_scale_adjustments_applied: list[str],
     probability_of_default_adjustments_applied: list[str],
@@ -93,6 +95,7 @@ def adjustments_applied(
             *probability_of_default_adjustments_applied, *probability_of_default_for_grading_adjustments_applied]
 
 
+@allow_fallback
 def adjustment_set_id(score_adjustment_set_id: str) -> str:
     return score_adjustment_set_id
 

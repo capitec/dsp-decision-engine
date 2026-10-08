@@ -61,7 +61,7 @@ def build(rate_card_flex_loan):
         offers.total_cost_ratio_threshold, offers.recommendation_objective,
         solve_terms, offer_set, final_validation,
 
-        outcome.reasons_unit, outcome.outcome,
+        outcome.outcome_unit,
         name="loan_granting",
     ).emit(
         "eligibility_gate_verdicts", "is_eligible", "eligibility_decline_reasons", "consent_verdict",
