@@ -1,0 +1,179 @@
+{
+  "shared": {
+    "collections_band_edges": [
+      {
+        "upper": 0.1
+      },
+      {
+        "upper": 0.25
+      },
+      {
+        "upper": 0.45
+      },
+      {
+        "upper": 0.65
+      },
+      {
+        "upper": 0.85
+      }
+    ]
+  },
+  "collections_treatment": {
+    "score_shift": {
+      "adjustment_stack_enabled": true
+    },
+    "scaling_change": {
+      "adjustment_stack_enabled": true
+    },
+    "odds_multiplier": {
+      "adjustment_stack_enabled": true
+    },
+    "band_boundary_shift": {
+      "adjustment_stack_enabled": true
+    },
+    "recovery_and_cost": {
+      "cost_per_treatment": 15.0,
+      "expected_treatments": 3.0
+    },
+    "intensity_dial": {
+      "adjustment_stack_enabled": true
+    },
+    "treatment_suppression": {
+      "adjustment_stack_enabled": true
+    },
+    "interval_and_cap_check": {
+      "daily_cap": 3,
+      "spoken_daily_cap": 2,
+      "rolling_7d_cap": 10,
+      "rolling_30d_cap": 24
+    },
+    "arrangement_assessment": {
+      "arrangement_assessment_mode": {
+        "mode": 3
+      },
+      "evidence": {
+        "applicant1_income": {
+          "income_haircut_applied": {
+            "statement_confidence_threshold": 0.7,
+            "haircut_payslip": 0.05,
+            "haircut_statement_high_confidence": 0.1,
+            "haircut_statement_low_confidence": 0.25,
+            "haircut_declared": 0.2,
+            "haircut_bureau_estimated": 0.3
+          }
+        },
+        "applicant2_income": {
+          "income_haircut_applied": {
+            "statement_confidence_threshold": 0.7,
+            "haircut_payslip": 0.05,
+            "haircut_statement_high_confidence": 0.1,
+            "haircut_statement_low_confidence": 0.25,
+            "haircut_declared": 0.2,
+            "haircut_bureau_estimated": 0.3
+          }
+        },
+        "household_income": {
+          "minor_contribution_threshold": 0.1
+        },
+        "bureau_is_stale": {
+          "staleness_window_days": 7,
+          "staleness_window_days_mortgage": 14
+        },
+        "minimum_income_tier": {
+          "minimum_tier_new_application": 3,
+          "minimum_tier_limit_increase": 4,
+          "minimum_tier_arrangement": 5,
+          "minimum_tier_scenario": 3
+        }
+      },
+      "capacity": {
+        "overlay": {
+          "apply_max_affordable_instalment_adjustments": {
+            "adjustment_stack_enabled": true
+          }
+        },
+        "proposal_verdict": {
+          "marginal_band": 0.05
+        }
+      }
+    },
+    "arrangement_sustainability": {
+      "minimum_residual": 350.0,
+      "minimum_residual_income_pct": 0.05,
+      "max_instalment_to_discretionary_pct": 0.85
+    },
+    "capacity": {
+      "pools": [
+        {
+          "treatment": 1,
+          "pool_code": 1,
+          "pool_supply": 900000,
+          "pool_reserved_share": 0.0
+        },
+        {
+          "treatment": 2,
+          "pool_code": 2,
+          "pool_supply": 2400000,
+          "pool_reserved_share": 0.0
+        },
+        {
+          "treatment": 3,
+          "pool_code": 3,
+          "pool_supply": 414000,
+          "pool_reserved_share": 0.0
+        },
+        {
+          "treatment": 4,
+          "pool_code": 4,
+          "pool_supply": 350000,
+          "pool_reserved_share": 0.0
+        },
+        {
+          "treatment": 5,
+          "pool_code": 5,
+          "pool_supply": 27000,
+          "pool_reserved_share": 0.08
+        },
+        {
+          "treatment": 6,
+          "pool_code": 5,
+          "pool_supply": 27000,
+          "pool_reserved_share": 0.08
+        },
+        {
+          "treatment": 7,
+          "pool_code": 6,
+          "pool_supply": 11000,
+          "pool_reserved_share": 0.08
+        },
+        {
+          "treatment": 8,
+          "pool_code": 7,
+          "pool_supply": 180,
+          "pool_reserved_share": 0.0
+        },
+        {
+          "treatment": 9,
+          "pool_code": 8,
+          "pool_supply": 1300,
+          "pool_reserved_share": 0.0
+        },
+        {
+          "treatment": 10,
+          "pool_code": 9,
+          "pool_supply": 12000,
+          "pool_reserved_share": 0.0
+        },
+        {
+          "treatment": 11,
+          "pool_code": 10,
+          "pool_supply": 80,
+          "pool_reserved_share": 0.0
+        }
+      ]
+    },
+    "allocate_capacity": {
+      "ranking_basis": "value"
+    }
+  }
+}

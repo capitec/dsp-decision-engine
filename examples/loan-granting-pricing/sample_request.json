@@ -1,0 +1,61 @@
+{
+  "decision_id": "d5f5f6b0-3f8a-4f2a-9c4b-2f6e7a1b0003",
+  "decision_date": "2026-09-24",
+  "product_code": 10,
+  "channel_code": 2,
+  "requested_amount": 120000.0,
+  "requested_term_months": 60,
+  "is_joint_application": false,
+  "campaign_id": 4471,
+  "campaign_is_preapproved": true,
+
+  "applicant_age_years": 38.0,
+  "employment_type_code": 1,
+  "months_employed": 41.0,
+  "employer_id": 5001,
+  "residency_code": 1,
+  "has_contractual_capacity": true,
+  "credit_life_substitution_declared": false,
+
+  "internal_tenure_months": 41.0,
+  "internal_exposure_total": 22000.0,
+  "group_exposure_limit": 180000.0,
+  "in_flight_application_count": 0,
+  "debt_review_status_code": 0,
+  "administration_order_flag": false,
+  "insolvency_status_code": 0,
+  "deceased_flag": false,
+  "estate_flag": false,
+  "exclusion_list_hits": [],
+  "is_duplicate_application": false,
+  "has_adverse_internal_history": false,
+
+  "bureau_consent_given": true,
+  "fraud_verdict_code": 1,
+  "fraud_reason_codes": [],
+  "fraud_response_ms": 210.0,
+
+  "bureau_response_status": "ok",
+  "bureau_account_count": 7,
+  "bureau_history_months": 48.0,
+  "bureau_as_of_date": "2026-09-20",
+  "bureau_score": 720.0,
+  "worst_arrears_months": 2.0,
+  "accounts_in_arrears_count": 0,
+  "revolving_utilisation": 0.2,
+  "bureau_enquiry_count_60d": 3,
+
+  "applicant1_dependants_count": 2,
+  "applicant1_payslip_income": 18500.0,
+  "applicant1_variable_pay_history": [1450.0, 1600.0, 1300.0],
+  "applicant1_declared_expenses": {"accommodation": 3500.0, "food": 1800.0, "transport": 900.0},
+  "applicant1_bureau_accounts": [
+    {"account_type_code": 10, "balance": 8500.0, "limit": 15000.0, "instalment": 450.0,
+     "months_in_arrears": 0, "opened_date": "2022-03-01", "closed": false, "is_internal": false}
+  ],
+  "applicant1_internal_accounts": [
+    {"account_type_code": 1, "balance": 22000.0, "instalment": 1150.0,
+     "months_in_arrears": 0, "opened_date": "2021-06-15", "closed": false, "is_internal": true}
+  ],
+  "court_ordered_deductions": 0.0
+}

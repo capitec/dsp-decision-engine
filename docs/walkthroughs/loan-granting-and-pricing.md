@@ -9,7 +9,7 @@ This tutorial builds a small unsecured loan service from an empty folder. An app
 - build and serve the project and call it over HTTP,
 - retune the grade cut-offs and the affordability limit through a new config version, with no code change.
 
-It follows the shape of the larger loan granting example project in the repository (`example_projects/03-loan-granting-pricing`), cut down to one screen of code.
+It follows the shape of the larger loan granting example project in the repository (`examples/loan-granting-pricing`), cut down to one screen of code.
 
 ```mermaid
 flowchart TD
