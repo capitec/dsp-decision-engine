@@ -10,7 +10,13 @@ does not re-approve them.
 """
 from __future__ import annotations
 
+from typing import Any
+
 from decider.exceptions import wrap_import_errors
+from decider._tooling.mcp import _configs as configs
+from decider._tooling.mcp import _params as params
+from decider._tooling.mcp import _scorecards as scorecards
+from decider._tooling.mcp import _tables as tables
 from decider._tooling.mcp import _tools as tools
 from decider._tooling.mcp._editor import EditorBridge
 from decider._tooling.mcp._policy import Policy
@@ -101,6 +107,87 @@ def build_server(policy: Policy, bridge: EditorBridge | None = None) -> FastMCP:
     def generate_ids(path: str = ".", check: bool = True) -> dict:
         """Add durable ids to source under a path; requires client confirmation (writes source)."""
         return tools.generate_ids(path, check)
+
+    # Config documents: every write is validated by building the document, and refused (file untouched) if it breaks.
+    @mcp.tool
+    def list_configs(root: str = ".") -> dict:
+        """Config documents under a directory: path, kind (step type or params), name, version dir and key."""
+        return configs.list_configs(root)
+
+    @mcp.tool
+    def read_config(path: str) -> dict:
+        """A config document and `problems` (why it would not build; empty when it does)."""
+        return configs.read_config(path)
+
+    @mcp.tool
+    def validate_config(path: str | None = None, doc: dict | None = None) -> dict:
+        """`problems` for a config file, or for an unsaved document (give `path` or `doc`)."""
+        return configs.validate_config(path, doc)
+
+    @mcp.tool
+    def write_config(path: str, doc: dict, overwrite: bool = False) -> dict:
+        """Create a config document (validated); an existing file is only replaced with `overwrite`."""
+        return configs.write_config(path, doc, overwrite)
+
+    @mcp.tool
+    def patch_config(path: str, ops: list[dict], dry_run: bool = False) -> dict:
+        """Apply RFC 6902 JSON Patch `ops` (add, remove, replace, move, copy, test) to a config document and save it if it still builds."""
+        return configs.patch_config(path, ops, dry_run)
+
+    @mcp.tool
+    def try_config(path: str, rows: list[dict], params: dict | None = None) -> dict:
+        """Run a config document's step on `rows` (interpreted) and return the output rows; the check after every edit."""
+        return configs.try_config(path, rows, params)
+
+    @mcp.tool
+    def table_view(path: str, offset: int = 0, limit: int = 200) -> dict:
+        """A decision table: columns, outputs, default, how records match, and its rows as a grid with indexes."""
+        return tables.table_view(path, offset, limit)
+
+    @mcp.tool
+    def table_add_rows(path: str, rows: list[dict], at: int | None = None) -> dict:
+        """Insert rows into a decision table at index `at` (default: the end); saved only if the table still builds."""
+        return tables.table_add_rows(path, rows, at)
+
+    @mcp.tool
+    def table_update_rows(path: str, updates: list[dict]) -> dict:
+        """Change table cells: `updates` is `[{"index": 3, "values": {"rate": 0.1}}]`."""
+        return tables.table_update_rows(path, updates)
+
+    @mcp.tool
+    def table_delete_rows(path: str, indexes: list[int]) -> dict:
+        """Delete the table rows at these indexes."""
+        return tables.table_delete_rows(path, indexes)
+
+    @mcp.tool
+    def table_add_column(path: str, name: str, dtype: str | dict, value: Any = None, output: bool = False) -> dict:
+        """Add a column (polars dtype name, e.g. "Float64") holding `value` in every row; `output` also makes it an output."""
+        return tables.table_add_column(path, name, dtype, value, output)
+
+    @mcp.tool
+    def table_drop_column(path: str, name: str) -> dict:
+        """Drop a column from the table and its rows; refused while the match expression uses it."""
+        return tables.table_drop_column(path, name)
+
+    @mcp.tool
+    def scorecard_view(path: str) -> dict:
+        """A scorecard: each variable's bins as a table, the default, and the params the card declares."""
+        return scorecards.scorecard_view(path)
+
+    @mcp.tool
+    def scorecard_set_bins(path: str, variable: str, bins: list[dict]) -> dict:
+        """Replace one variable's bins in a scorecard; saved only if the scorecard still builds."""
+        return scorecards.scorecard_set_bins(path, variable, bins)
+
+    @mcp.tool
+    def params_view(path: str, entry: str | None = None) -> dict:
+        """A params document; with a pipeline `entry` ("pkg.pipeline:build") also its problems and the schema it must meet."""
+        return params.params_view(path, entry)
+
+    @mcp.tool
+    def params_set(path: str, changes: dict[str, Any], entry: str | None = None) -> dict:
+        """Set params by slash path (`{"pricing/rate/limit": 0.3}`); with `entry`, refused if it adds a problem for that pipeline."""
+        return params.params_set(path, changes, entry)
 
     if bridge is not None:
         @mcp.tool
