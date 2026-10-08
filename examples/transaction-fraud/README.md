@@ -97,7 +97,7 @@ export DECIDER_API__CODE_PATH="$PWD" DECIDER_API__PIPELINE="fraud_interdiction.p
 ```
 
 Build (validates `configs/0.1.0`, compiles and warms every kernel with `sample_request.json`). The first build in
-a fresh checkout takes about a minute while numba compiles the rule trees; later builds reuse the cache:
+a fresh checkout takes about a minute and a half while numba compiles the rule trees; later builds reuse the cache:
 
 ```bash
 uv run decider build
@@ -209,10 +209,9 @@ tests/
   about that second part.
 - **Hard blocks floor the counterfactual too.** They are not overlays, so what the authored rules alone would have
   done still includes them.
-- **Many rules, several trees.** A tree's compile time grows faster than its rule count: the 521 live rules in one
-  tree took about three minutes to compile on every start, and in chunks of 32 they take about a minute cold and
-  about ten seconds with the numba cache. `RuleSet` therefore emits one tree per 32 rules ([rules.py](fraud_interdiction/rules.py),
-  marked `# workaround`). The answers are the same.
+- **Many rules, one tree per list.** `RuleSet` writes one `prioritized_flat_rule` tree per list (live, shadow,
+  overlay-adjusted) in `mode: "all"`. `decider` splits a list of more than 32 rules into `<tree>/part_<k>` nodes
+  when it builds the plan; the step report and `diff` name those paths. The answers do not depend on the split.
 - **What runs in Python.** Steps reading dates, lists or strings (`rule_set_version`, `amount_overlays`,
   `resolve_action`, the wording step) are Python on purpose and marked `@allow_fallback`; the enrichment verdict,
   the hard blocks and the rule trees run in the kernel.
