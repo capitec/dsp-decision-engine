@@ -1,1 +1,0 @@
-"""Campaign trees core modules."""

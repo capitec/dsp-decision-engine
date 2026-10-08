@@ -1,1 +1,0 @@
-"""Campaign targeting trees project."""
