@@ -30,7 +30,7 @@ class Rule(BaseModel):
     effective_from: date
     effective_to: date | None = None
     # What to do when the velocity aggregate the rule reads is stale or absent.
-    velocity_feature: str | None = None
+    velocity_feature: Literal["velocity_count_1min", "velocity_count_10min", "velocity_sum_amount_1h"] | None = None
     stale_absent: Literal["evaluate_false", "last_known_good", "suppress"] = "last_known_good"
     overlay_exempt: bool = False
     condition: dict[str, Any]

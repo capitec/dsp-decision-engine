@@ -97,11 +97,11 @@ export DECIDER_API__CODE_PATH="$PWD" DECIDER_API__PIPELINE="fraud_interdiction.p
 ```
 
 Build (validates `configs/0.1.0`, compiles and warms every kernel with `sample_request.json`). The first build in
-a fresh checkout takes several minutes, because numba compiles the 521-rule tree; later builds reuse the cache:
+a fresh checkout takes about a minute while numba compiles the rule trees; later builds reuse the cache:
 
 ```bash
 uv run decider build
-# BUILD_LINE
+# built config version 0.1.0 (pipeline fraud_interdiction.pipeline:build, mode fused)
 ```
 
 Serve, and assess the sample payment. Its date is a plain JSON string:
@@ -109,21 +109,44 @@ Serve, and assess the sample payment. Its date is a plain JSON string:
 ```bash
 uv run decider serve --workers 1 &
 curl -s -d @sample_request.json -H 'content-type: application/json' localhost:8080/invocations |
-  jq '{CURL_FIELDS}'
+  jq '{action_code, action_source_rule_id, primary_reason_code, client_wording_key, mule_scam_amount_multiplier,
+       applied_adjustment_ids, fired_on_overlay_ids, counterfactual_action_code,
+       fired: (.fired_rule_ids | length), shadow: (.shadow_fired_rule_ids | length)}'
 ```
 
 ```json
-CURL_OUTPUT
+{
+  "action_code": 40,
+  "action_source_rule_id": "MS-0021",
+  "primary_reason_code": 3021,
+  "client_wording_key": "wording.hold_for_review.v1",
+  "mule_scam_amount_multiplier": 0.7,
+  "applied_adjustment_ids": ["ADJ-2026-002"],
+  "fired_on_overlay_ids": ["MS-0015"],
+  "counterfactual_action_code": 40,
+  "fired": 20,
+  "shadow": 5
+}
 ```
 
-The response carries every input too. Change a field and ask again. A sanctioned counterparty is blocked, and the
-rules are still all evaluated:
+Twenty mule and scam rules fired on this payment, and `MS-0021` decided. The response carries every input too;
+change one and ask again. A sanctioned counterparty is blocked, and the twenty rules are still all recorded:
 
 ```bash
 jq '.sanctions_list_match=true' sample_request.json |
   curl -s -d @- -H 'content-type: application/json' localhost:8080/invocations |
-  jq '{action_code, action_source_rule_id, primary_reason_code, hard_block_code, fired_rule_ids}'
-SANCTION_OUTPUT
+  jq -c '{action_code, action_source_rule_id, primary_reason_code, hard_block_code, fired: (.fired_rule_ids | length)}'
+# {"action_code":60,"action_source_rule_id":"HARD_BLOCK:sanctions","primary_reason_code":6001,"hard_block_code":1,"fired":20}
+```
+
+At R6 000 the payment is under the authored R8 000 threshold of `MS-0208` but over the festive overlay's R5 600.
+Four rules fire only because of the overlay, and without it the bank would have asked for a step-up (30), not a hold (40):
+
+```bash
+jq '.amount=6000' sample_request.json |
+  curl -s -d @- -H 'content-type: application/json' localhost:8080/invocations |
+  jq -c '{action_code, action_source_rule_id, fired_on_overlay_ids, counterfactual_action_code}'
+# {"action_code":40,"action_source_rule_id":"MS-0021","fired_on_overlay_ids":["MS-0006","MS-0018","MS-0021","MS-0208"],"counterfactual_action_code":30}
 ```
 
 Tests (from the repository root, with `PYTHONPATH` set as above):
@@ -177,7 +200,7 @@ tests/
   object as its condition. A tree node has no field for them, and they do not vary per record, so `RuleSet` keeps
   them and generates the trees. Changing a rule's action is a config change, not a code change.
 - **Overlay-adjusted rules carry two conditions.** `condition` reads the multiplier column; `base_condition` is
-  the same rule at its authored thresholds. The base tree is evaluated only for those rules (18 to 19 of 635).
+  the same rule at its authored thresholds. The base tree is evaluated only for those rules (19 of 635).
   An `overlay_exempt` rule may not have a `base_condition`; the document refuses to load otherwise.
 - **Shadow isolation is structural.** `resolve_action` is not given `shadow_fired_rule_ids`, so a shadow rule has
   no way to reach the action.
@@ -186,6 +209,10 @@ tests/
   about that second part.
 - **Hard blocks floor the counterfactual too.** They are not overlays, so what the authored rules alone would have
   done still includes them.
+- **Many rules, several trees.** A tree's compile time grows faster than its rule count: the 521 live rules in one
+  tree took about three minutes to compile on every start, and in chunks of 32 they take about a minute cold and
+  about ten seconds with the numba cache. `RuleSet` therefore emits one tree per 32 rules ([rules.py](fraud_interdiction/rules.py),
+  marked `# workaround`). The answers are the same.
 - **What runs in Python.** Steps reading dates, lists or strings (`rule_set_version`, `amount_overlays`,
   `resolve_action`, the wording step) are Python on purpose and marked `@allow_fallback`; the enrichment verdict,
   the hard blocks and the rule trees run in the kernel.

@@ -36,6 +36,11 @@ def test_an_unknown_rule_field_is_invalid(rule):
         RuleSet.load({"type": "rule_set", "name": "r", "rules": [rule("MS-0001", colour="red")]})
 
 
+def test_a_rule_can_only_name_a_velocity_aggregate_the_pipeline_tracks(rule):
+    with pytest.raises(ValidationError):
+        RuleSet.load({"type": "rule_set", "name": "r", "rules": [rule("MS-0001", velocity_feature="velocity_count_1h")]})
+
+
 def test_every_applicable_rule_that_fires_is_recorded_not_only_the_winner(decide, rule, sample):
     out = decide([rule("MS-0001"), rule("AT-0001"), rule("CF-0001", event_types=[111])], sample)
     assert out["fired_rule_ids"] == ["MS-0001", "AT-0001"]  # CF-0001 is a card rule: not applicable to a payment
