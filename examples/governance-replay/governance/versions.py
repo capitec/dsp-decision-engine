@@ -12,8 +12,8 @@ from governance.replayer import Replayer
 
 @dataclass(frozen=True)
 class VersionDiff:
-    """`structure` is decider's step-level diff, `proof` its verdict on whether the steps are provably the same
-    (`True`, or `None` when it cannot tell); `params` lists changed leaves; `documents` summarises each changed
+    """`structure` is decider's step-level diff and `proof` its verdict on whether the steps are provably the same
+    (`True`, or `None` when it cannot tell, which is always so while a table step is in the pipeline); `params` lists changed leaves; `documents` summarises each changed
     config document."""
 
     structure: diff.StructureDiff
