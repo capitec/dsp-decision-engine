@@ -66,7 +66,7 @@ def rollup(
                "adverse_verdict_code_unadjusted", "adverse_verdict_overlay_sensitive",
                "adverse_verdict_code_undisputed"))
 def adverse_verdict(
-    adverse_events: list[dict], criticality_class: int, requested_amount: float,
+    adverse_events: list[dict], criticality_class: float, requested_amount: float,
     recent_months: int = param(12, ge=1), minor_count: int = param(3, ge=1),
     aggregate_material_floor: float = param(150_000.0, ge=0.0), aggregate_material_pct: float = param(0.15, ge=0.0),
     aggregate_disqualifying_floor: float = param(500_000.0, ge=0.0),

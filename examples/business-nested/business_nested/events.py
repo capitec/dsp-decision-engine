@@ -75,8 +75,8 @@ def build_threshold_table() -> DecisionTableConfig:
 @allow_fallback
 @step(outputs=("material_threshold", "disqualifying_threshold", "threshold_overlay_ids"))
 def overlaid_thresholds(
-    material_threshold_base: float, disqualifying_threshold_base: float, sector_code: int, criticality_class: int,
-    event_type_code: int, decision_date: date, event_overlays_enabled: bool = param(True),
+    material_threshold_base: float, disqualifying_threshold_base: float, sector_code: int, criticality_class: float,
+    event_type_code: float, decision_date: date, event_overlays_enabled: bool = param(True),
 ) -> tuple[float, float, list[str]]:
     """The thresholds after the overlays in force on the decision date, and the ids of those that applied.
 
@@ -102,7 +102,7 @@ def amount_unknown(amount: float = missing_as(math.nan)) -> bool:
 
 @allow_fallback
 def event_severity(
-    event_type_code: int, amount_unknown: bool, status_is_active: bool, is_disputed: bool, is_satisfied: bool,
+    event_type_code: float, amount_unknown: bool, status_is_active: bool, is_disputed: bool, is_satisfied: bool,
     material_threshold: float, disqualifying_threshold: float, amount: float = missing_as(0.0),
 ) -> int:
     """`credit_core`'s severity against this entity's thresholds. A disputed event is classified one class lower,
@@ -119,10 +119,11 @@ event_severity_unadjusted = step(event_severity, output="event_severity_code_una
 
 
 def event_unit():
-    """The flow for one event. Reads the event's own fields; adds its age, thresholds and severities."""
+    """The flow for one event. Reads the event's own fields; adds its age, thresholds, overlays and severities."""
     return flow(
         step(event_age, output="age_months"), step(amount_unknown),
         build_threshold_table(), overlaid_thresholds,
         step(event_severity, output="event_severity_code"), event_severity_unadjusted,
         name="event",
-    )
+    ).emit("age_months", "amount_unknown", "material_threshold_base", "disqualifying_threshold_base", "threshold_cell_id",
+           "material_threshold", "disqualifying_threshold", "threshold_overlay_ids", "event_severity_code")

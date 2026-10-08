@@ -114,4 +114,5 @@ def entity_scoring_unit():
         grade_lookup("entity_pd", "entity_grade"),
         grade_lookup("entity_pd_unadjusted", "entity_grade_unadjusted"),
         name="scoring",
-    )
+    ).emit("score_before_overlay", "entity_score", "entity_score_unadjusted", "score_adjustments_applied", "entity_pd",
+           "entity_pd_unadjusted", "entity_grade", "entity_grade_unadjusted")
