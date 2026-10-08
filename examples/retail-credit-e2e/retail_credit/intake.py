@@ -21,7 +21,8 @@ IDENTITY_NUMBER_MATCH = 2
 IDENTITY_VERIFICATION = 3
 PROBABILISTIC_MATCH = 4
 
-_CONFIDENCE = {AUTHENTICATED_SESSION: 1.00, IDENTITY_NUMBER_MATCH: 0.97, IDENTITY_VERIFICATION: 0.92}
+# confidence of each path that does not carry its own
+SESSION_CONFIDENCE, NUMBER_MATCH_CONFIDENCE, VERIFICATION_CONFIDENCE = 1.00, 0.97, 0.92
 
 
 @allow_fallback
@@ -48,14 +49,12 @@ def resolve_identity(
     A match below `confidence_floor` is not a resolved client.
     """
     if has_authenticated_session:
-        path = AUTHENTICATED_SESSION
-    elif identity_number_match:
-        path = IDENTITY_NUMBER_MATCH
-    elif identity_verification_confirmed:
-        path = IDENTITY_VERIFICATION
-    else:
-        return PROBABILISTIC_MATCH, probabilistic_match_confidence, probabilistic_match_confidence >= confidence_floor
-    return path, _CONFIDENCE[path], True
+        return AUTHENTICATED_SESSION, SESSION_CONFIDENCE, True
+    if identity_number_match:
+        return IDENTITY_NUMBER_MATCH, NUMBER_MATCH_CONFIDENCE, True
+    if identity_verification_confirmed:
+        return IDENTITY_VERIFICATION, VERIFICATION_CONFIDENCE, True
+    return PROBABILISTIC_MATCH, probabilistic_match_confidence, probabilistic_match_confidence >= confidence_floor
 
 
 @allow_fallback

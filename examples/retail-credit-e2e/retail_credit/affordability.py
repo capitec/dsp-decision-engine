@@ -21,6 +21,10 @@ from retail_credit.overlays import overlay_step
 RATIO_VERSION = "ratio-2026.09"
 BUFFER_VERSION = "buffer-2026.09"
 
+# affordability_binding_constraint_code
+CAPACITY_BOUND = 1
+RATIO_CEILING_BOUND = 2
+
 _CHANNEL_BUFFER = {1: 0.06, 2: 0.10, 3: 0.14, 4: 0.18}  # branch, app, web, broker or partner
 
 
@@ -29,7 +33,7 @@ def build_residual_floor_table() -> DecisionTableConfig:
     floors = [1450.0, 1950.0, 2400.0, 2850.0, 3250.0, 3600.0, 3900.0]
     edges = [None, 0.5, 1.5, 2.5, 3.5, 4.5, 5.5, None]
     return DecisionTableConfig.load({
-        "type": "decision_table", "name": "residual_floor",
+        "type": "decision_table", "name": "residual_floor_grid",
         "columns": {"lo": "Float64", "hi": "Float64", "floor": "Float64"},
         "rows": [{"lo": edges[i], "hi": edges[i + 1], "floor": floor} for i, floor in enumerate(floors)],
         "expression": {"type": "between", "variable": "dependants_count", "lower_bound_column": "lo",
@@ -44,7 +48,7 @@ def build_ratio_ceiling_table() -> DecisionTableConfig:
     rows = [{"grade": grade, "ratio": round(0.32 - (grade - 1) * 0.18 / 10, 4) if grade <= 11 else 0.10,
              "cell_id": cell_id("ratio_ceiling", RATIO_VERSION, grade)} for grade in range(1, 13)]
     return DecisionTableConfig.load({
-        "type": "decision_table", "name": "ratio_ceiling",
+        "type": "decision_table", "name": "ratio_ceiling_grid",
         "columns": {"grade": "Int64", "ratio": "Float64", "cell_id": "String"},
         "rows": rows, "expression": {"type": "eq", "variable": "risk_grade", "value_column": "grade"},
         "outputs": ["ratio", "cell_id"], "default": [None, None],
@@ -57,14 +61,20 @@ def build_buffer_table() -> DecisionTableConfig:
              "cell_id": cell_id("buffer", BUFFER_VERSION, grade, channel)}
             for grade in range(1, 13) for channel, base in _CHANNEL_BUFFER.items()]
     return DecisionTableConfig.load({
-        "type": "decision_table", "name": "buffer",
+        "type": "decision_table", "name": "buffer_grid",
         "columns": {"grade": "Int64", "channel": "Int64", "buffer": "Float64", "cell_id": "String"},
         "rows": rows,
         "expression": {"type": "and", "expressions": [
             {"type": "eq", "variable": "risk_grade", "value_column": "grade"},
             {"type": "eq", "variable": "channel_code", "value_column": "channel"}]},
         "outputs": ["buffer", "cell_id"], "default": [None, None],
-    }).relabel(writes={"cell_id": "buffer_cell_id"})
+    }).relabel(reads={"channel_code": "channel_class"}, writes={"cell_id": "buffer_cell_id"})
+
+
+def channel_class(channel_code: int) -> float:
+    # workaround: a table reads its `eq` variable as float and an input column has one type, while the shared overlay
+    # step reads `channel_code` as int; this converts for the table.
+    return float(channel_code)
 
 
 def ratio_ceiling(ratio: float, net_monthly_income: float) -> float:
@@ -75,9 +85,9 @@ def capacity(discretionary_income: float, residual_floor: float) -> float:
     return round(discretionary_income - residual_floor, 2)
 
 
-def pre_buffer(capacity: float, ratio_ceiling: float) -> tuple[float, str]:
-    """(pre_buffer, affordability_binding_constraint): the lower of the two limits, and which one it was."""
-    return (capacity, "capacity") if capacity <= ratio_ceiling else (ratio_ceiling, "ratio_ceiling")
+def pre_buffer(capacity: float, ratio_ceiling: float) -> tuple[float, int]:
+    """(pre_buffer, affordability_binding_constraint_code): the lower of the two limits, and which one it was."""
+    return (capacity, CAPACITY_BOUND) if capacity <= ratio_ceiling else (ratio_ceiling, RATIO_CEILING_BOUND)
 
 
 def instalment_cap(
@@ -119,7 +129,8 @@ def limits_unit():
     Writes `residual_floor`, `ratio_ceiling`, `affordability_buffer_applied`.
     """
     return dag(
-        build_residual_floor_table(), build_ratio_ceiling_table(), step(ratio_ceiling), build_buffer_table(),
+        build_residual_floor_table(), build_ratio_ceiling_table(), step(ratio_ceiling), step(channel_class),
+        build_buffer_table(),
         overlay_step("affordability_buffer", "buffer", base_field="buffer", adjusted_output="affordability_buffer_applied",
                      unadjusted_output="affordability_buffer_unadjusted"),
         name="limits")
@@ -137,6 +148,6 @@ def capacity_unit(name: str = "capacity"):
     `affordability_verdict_code`.
     """
     return dag(
-        affordability.discretionary_income_step, step(capacity), step(pre_buffer, outputs=("pre_buffer", "affordability_binding_constraint")),
+        affordability.discretionary_income_step, step(capacity), step(pre_buffer, outputs=("pre_buffer", "affordability_binding_constraint_code")),
         max_affordable_instalment_step, step(instalment_cap), step(affordability_verdict_code),
         name=name)

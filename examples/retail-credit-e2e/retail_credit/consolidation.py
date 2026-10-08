@@ -15,7 +15,7 @@ from credit_core.vocab import FraudVerdictCode
 from retail_credit.affordability import FAIL, capacity_unit
 from retail_credit.vocab import BASIS_ACTUAL, BASIS_HYPOTHETICAL
 
-HYPOTHETICAL_OUTPUTS = ("discretionary_income", "capacity", "pre_buffer", "affordability_binding_constraint",
+HYPOTHETICAL_OUTPUTS = ("discretionary_income", "capacity", "pre_buffer", "affordability_binding_constraint_code",
                         "max_affordable_instalment", "instalment_cap", "affordability_verdict_code")
 
 

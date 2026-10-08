@@ -9,6 +9,7 @@ from credit_core.affordability import MARGINAL, PASS
 from credit_core.vocab import FraudVerdictCode
 
 
+@allow_fallback
 def assemble_offer(
     is_eligible: bool, fraud_verdict_code: int, p09_declined: bool, product_10_eligible: bool,
     offer_affordability_verdict_code: int, solved_amount: float, solve_binding_constraint: str,
