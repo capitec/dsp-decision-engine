@@ -143,6 +143,7 @@ def serve(host, port, workers, mode, server) -> None:
 
 def _serve_sanic(host: str, port: int, workers: int) -> None:
     try:
+        from sanic import Sanic
         from sanic.worker.loader import AppLoader
     except ImportError:
         raise click.ClickException("serving with sanic needs sanic: pip install 'decider[serve-sanic]'")
@@ -150,7 +151,12 @@ def _serve_sanic(host: str, port: int, workers: int) -> None:
 
     # The loader calls the factory inside every worker process, so each one registers its own app.
     loader = AppLoader(factory=create_app)
-    loader.load().run(host=host, port=port, workers=workers, single_process=workers == 1, app_loader=loader)
+    app = loader.load()
+    app.prepare(host=host, port=port, workers=workers, single_process=workers == 1)
+    if workers == 1:
+        Sanic.serve_single(primary=app)
+    else:
+        Sanic.serve(primary=app, app_loader=loader)
 
 
 @cli.command()
