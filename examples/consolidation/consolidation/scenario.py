@@ -75,14 +75,16 @@ class ScenarioEvaluator:
         record = {"scenario_id": scenario_id, "settlement_set": list(refs), "generating_rule": rule,
                   "product_code": product_code, "term_months": term_months, "promotional_months": promotional_months,
                   "settlement_total": total, "settlement_buffer": buffer, "new_money": new_money,
-                  "external_proportion": external, "rejection_reason_codes": [], "interventions": []}
+                  "external_proportion": external, "rejection_reason_codes": [], "primary_rejection_reason_code": None,
+                  "interventions": []}
 
         quote = self.products[product_code].quote(
             policy, total + buffer + new_money, term_months, promotional_months, r["risk_grade"],
             applicant_age_years=r["applicant_age_years"], external_proportion=external)
         if isinstance(quote, str):
             code = reasons.NOT_PRICED if quote == "no_rate_cell" else reasons.OUTSIDE_PRODUCT_LIMITS
-            return {**record, "viable": False, "rejection_reason_codes": [code], "unpriced_reason": quote}
+            return {**record, "viable": False, "rejection_reason_codes": [code], "primary_rejection_reason_code": code,
+                    "unpriced_reason": quote}
 
         case = case_record(r["decision_date"], product_code, r["channel_code"], r["segment_code"],
                            r["court_ordered_deductions"], self.invariants, self.buffers(product_code, r["risk_grade"]))
@@ -93,8 +95,10 @@ class ScenarioEvaluator:
         rejections = [1000 + c["intervention"] for c in checks if c["status"] == interventions.FAILED]
         if after["affordability_verdict_code"] != verdict.PASS:
             rejections.append(reasons.AFFORDABILITY_FAIL)
+        ranked, primary = reasons.SCENARIO_REJECTIONS.rank(rejections)
         return {
-            **record, "viable": not rejections, "rejection_reason_codes": sorted(rejections), "interventions": checks,
+            **record, "viable": not rejections, "rejection_reason_codes": ranked, "primary_rejection_reason_code": primary,
+            "interventions": checks,
             "offered_amount": quote.amount, "nominal_annual_rate": quote.nominal_annual_rate, "instalment": quote.instalment,
             "tested_payment": quote.tested_payment, "total_cost_of_credit": quote.total_cost_of_credit,
             "effective_annual_rate": quote.effective_annual_rate, "rate_cell_id": quote.rate_cell_id,

@@ -6,11 +6,12 @@ client.
 """
 from __future__ import annotations
 
+from collections import Counter
 from datetime import date
 
 from decider import ParamTable, allow_fallback, missing_as, param, step
 
-from consolidation import candidates, vocab
+from consolidation import candidates, reasons, vocab
 from consolidation.capacity import Buffers, Capacity
 from consolidation.inventory import num
 from consolidation.scenario import ScenarioEvaluator, remaining_term
@@ -32,12 +33,14 @@ def run_search(evaluator: ScenarioEvaluator, settleable_refs: list[int], mandato
             if code not in unavailable and products[code].carries(members, policies[code]):
                 order += [(refs, rule, code, term, promo) for term, promo in products[code].variants(policies[code], longest)]
     evaluated = [evaluator.evaluate(i, *candidate) for i, candidate in enumerate(order[:budget], start=1)]
+    rejected = Counter(code for s in evaluated for code in s["rejection_reason_codes"])
     return evaluated, {
         "budget": budget, "consumption": len(evaluated), "candidate_sets": len(sets), "candidate_scenarios": len(order),
         "termination_cause": vocab.OUT_OF_BUDGET if len(order) > budget else vocab.EXHAUSTED,
         "ordering_rule_set_version": candidates.ORDERING_RULE_SET_VERSION,
         "ordering_rules": [candidates.RULES[n][0] for n in rules.rule.tolist()],
         "products_unavailable": {str(code): why for code, why in unavailable.items()},
+        "rejections_by_reason": {str(code): rejected[code] for code in reasons.SCENARIO_REJECTIONS.rank(rejected)[0]},
     }
 
 
