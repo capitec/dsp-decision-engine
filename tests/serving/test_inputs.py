@@ -268,3 +268,19 @@ def test_an_arrow_ipc_body_is_scored_and_comes_back_as_arrow(tmp_path):
     status, body = _request(create_app(handler), "POST", "/invocations", buf.getvalue(), ARROW, ARROW)
     assert status == 200
     assert pl.read_ipc_stream(body)["total"].to_list() == [3.0, 5.0]
+
+
+def newest_year(accounts: list[Dated], opened: list[dt.date]) -> int:
+    return max(max(a["opened_date"] for a in accounts), max(opened)).year
+
+
+def test_a_json_array_converts_dates_nested_in_lists_like_a_single_record(tmp_path):
+    handler = _handler(tmp_path, lambda: flow(newest_year, name="n"))
+    handler.stage()
+    handler.activate()
+    one = {"accounts": [{"opened_date": "2019-05-01"}], "opened": ["2020-01-01", "2021-02-02"]}
+    two = {"accounts": [{"opened_date": "2024-05-01"}], "opened": ["2020-01-01"]}
+    run = lambda body: json.loads(asyncio.run(handler.process_fn(json.dumps(body).encode(), "application/json",
+                                                                 "application/json")).content)
+    assert run(one)["newest_year"] == 2021
+    assert [r["newest_year"] for r in run([one, two])] == [2021, 2024]
