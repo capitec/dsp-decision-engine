@@ -18,7 +18,8 @@ def test_an_internal_amount_is_the_balance_plus_interest_to_the_assumed_settleme
     # R45 000 at 29.5% a year for the 2-day disbursement lag
     assert one["components"]["accrued_interest"] == pytest.approx(45_000 * 0.295 / 365 * 2, abs=0.01)
     assert one["settlement_amount"] == pytest.approx(45_000 + one["components"]["accrued_interest"], abs=0.01)
-    assert (one["amount_basis"], one["assumed_settlement_date"], one["estimation_tolerance"]) == ("derived-internal", "2026-09-26", 0.0)
+    assert (one["amount_basis"], one["assumed_settlement_date"], one["estimation_tolerance"]) == (
+        "derived-internal", "2026-09-26", 0.0)
 
 
 def test_a_held_quotation_is_the_providers_firm_figure_and_carries_its_expiry(assess):
@@ -30,7 +31,8 @@ def test_a_held_quotation_is_the_providers_firm_figure_and_carries_its_expiry(as
 
 def test_an_account_without_a_quotation_is_an_estimate_with_a_tolerance(assess):
     six = by_ref(assess())[6]
-    assert six["amount_basis"] == "estimated" and six["estimation_tolerance"] == pytest.approx(six["settlement_amount"] * 0.03, abs=0.01)
+    assert six["amount_basis"] == "estimated"
+    assert six["estimation_tolerance"] == pytest.approx(six["settlement_amount"] * 0.03, abs=0.01)
 
 
 def test_the_assumed_settlement_date_includes_the_providers_quotation_turnaround(assess):

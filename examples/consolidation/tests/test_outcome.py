@@ -13,7 +13,8 @@ def test_a_set_of_accounts_whose_amounts_are_all_exact_is_approved_outright(asse
     accounts = [account(1), account(3), account(6, quotation_reference="Q-102-1", quotation_amount=55_400.0,
                                                  quotation_expiry_date="2026-11-10")]
     out = assess(accounts=accounts, requested_amount=None, client_nominated_settle=[1, 3, 6])
-    assert out["chosen_offer"] and {s["amount_basis"] for s in out["chosen_offer"]["settlement_details"]} <= {"quoted", "derived-internal"}
+    bases = {s["amount_basis"] for s in out["chosen_offer"]["settlement_details"]}
+    assert out["chosen_offer"] and bases <= {"quoted", "derived-internal"}
     assert (out["outcome_code"], out["conditions"]) == (1, [])
 
 

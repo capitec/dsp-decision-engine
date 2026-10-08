@@ -59,7 +59,8 @@ def test_a_secured_account_is_settleable_only_with_its_security_release(assess):
 
 def test_a_held_unexpired_quotation_beats_a_quotable_account_and_an_expired_one_does_not(assess, sample, account):
     assert codes(assess())[3] == vocab.QUOTED
-    expired = assess(accounts=[account(3, quotation_expiry_date="2026-09-01"), *[a for a in sample["accounts"] if a["account_ref"] != 3]])
+    rest = [a for a in sample["accounts"] if a["account_ref"] != 3]
+    expired = assess(accounts=[account(3, quotation_expiry_date="2026-09-01"), *rest])
     assert codes(expired)[3] == vocab.QUOTABLE
 
 

@@ -89,15 +89,16 @@ def outcome(
     by_ref = {s["account_ref"]: s for s in settlements}
     chosen = {**chosen_scenario, "settlement_details": [by_ref[ref] for ref in chosen_scenario.get("settlement_set", [])]}
     estimated = any(s["amount_basis"] == vocab.ESTIMATED_BASIS for s in chosen["settlement_details"])
-    code, fired = decide(eligibility_route, eligibility_gate_verdicts, nomination_conflicts, baseline["evidence_sufficiency_code"],
-                         plain, plain_offer, requested_amount, chosen_scenario, estimated)
+    code, fired = decide(eligibility_route, eligibility_gate_verdicts, nomination_conflicts,
+                         baseline["evidence_sufficiency_code"], plain, plain_offer, requested_amount, chosen_scenario, estimated)
     ranked, primary = reasons.CLIENT_REASONS.rank(fired)
     approved = code in (OUTCOME_APPROVE, OUTCOME_APPROVE_WITH_CONDITIONS)
     if not (approved and chosen_scenario and not plain):
         offer = plain_offer if approved and plain else {}
         return code, ranked, primary, reasons.CLIENT_REASONS.version, offer, [], None, {}, []
     accounts = {a["account_ref"]: a for a in classified_accounts}
-    expiries = [date.fromisoformat(s["quotation_expiry_date"]) for s in chosen["settlement_details"] if s["quotation_expiry_date"]]
+    expiries = [date.fromisoformat(s["quotation_expiry_date"]) for s in chosen["settlement_details"]
+                if s["quotation_expiry_date"]]
     valid_until = min(expiries + [decision_date + timedelta(days=offer_validity_days)])
     longest = max([num(a, "remaining_term_months") for a in classified_accounts] + [0.0])
     return (code, ranked, primary, reasons.CLIENT_REASONS.version, chosen, conditions_of(chosen["settlement_details"], accounts),

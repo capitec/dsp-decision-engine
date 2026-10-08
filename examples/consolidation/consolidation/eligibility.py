@@ -31,7 +31,8 @@ def eligibility_gates(
     """
     months_since = None
     if last_consolidation_date is not None:
-        months_since = (decision_date.year - last_consolidation_date.year) * 12 + decision_date.month - last_consolidation_date.month
+        last = last_consolidation_date
+        months_since = (decision_date.year - last.year) * 12 + decision_date.month - last.month
     fired = dict(zip(GATES, (
         client_under_debt_review, client_under_administration,
         months_since is not None and months_since < serial_consolidation_months,

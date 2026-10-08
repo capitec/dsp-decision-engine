@@ -17,9 +17,10 @@ ADJUSTMENT_SET_ID = "AS-CON-INT-2026.09"
 
 INTERVENTION_OVERLAYS = AdjustmentRegister([
     Adjustment(
-        adjustment_id="ADJ-CON-INT-2026-001", kind="cap_adjustment", target="anti_harm", effect=AdjustmentEffect("multiply", 0.80),
-        scope={"product_code": PRODUCT_FLEX_LOAN_CONSOLIDATION}, stack_position=1, owner="Credit Risk Policy",
-        approval_reference="CRC-2026-044", rationale="Anti-harm ceiling tightened on product 11 pending the ombud review",
+        adjustment_id="ADJ-CON-INT-2026-001", kind="cap_adjustment", target="anti_harm",
+        effect=AdjustmentEffect("multiply", 0.80), scope={"product_code": PRODUCT_FLEX_LOAN_CONSOLIDATION},
+        stack_position=1, owner="Credit Risk Policy", approval_reference="CRC-2026-044",
+        rationale="Anti-harm ceiling tightened on product 11 pending the ombud review",
         effective_from=date(2026, 1, 1), effective_to=None, review_date=date(2026, 12, 31), tighten_only=True),
 ])
 
@@ -40,12 +41,14 @@ def evaluate(facts: dict, policy: dict, decision_date: date, consolidations_24m:
     rows = [  # number, name, actual, threshold, passes, applies
         (1, "max_accounts_settled", facts["accounts"], policy["max_accounts"], facts["accounts"] <= policy["max_accounts"], True),
         (2, "recently_opened_account", None, None, True, False),
-        (3, "min_instalment_reduction", facts["relief_pct"], policy["min_relief"], facts["relief_pct"] >= policy["min_relief"], True),
+        (3, "min_instalment_reduction", facts["relief_pct"], policy["min_relief"],
+         facts["relief_pct"] >= policy["min_relief"], True),
         (4, "anti_harm_ceiling", facts["cost_increase_pct"], anti_harm.adjusted_value,
          facts["cost_increase_pct"] <= anti_harm.adjusted_value, True),
         (5, "max_term_extension", facts["term_extension_months"], policy.get("max_term_extension"),
          facts["term_extension_months"] <= policy.get("max_term_extension", 0), "max_term_extension" in policy),
-        (6, "rate_ceiling", facts["new_rate"], facts["settled_rate"], facts["new_rate"] <= facts["settled_rate"], policy["rate_ceiling"]),
+        (6, "rate_ceiling", facts["new_rate"], facts["settled_rate"], facts["new_rate"] <= facts["settled_rate"],
+         policy["rate_ceiling"]),
         (7, "debt_review", None, None, True, False),
         (8, "new_money_cap", facts["new_money"], new_money_cap, facts["new_money"] <= new_money_cap, True),
         (9, "post_consolidation_dsr", facts["dsr"], policy["dsr_ceiling"], facts["dsr"] <= policy["dsr_ceiling"], True),
@@ -53,7 +56,8 @@ def evaluate(facts: dict, policy: dict, decision_date: date, consolidations_24m:
          facts["external_proportion"] >= policy.get("min_external", 0.0), "min_external" in policy),
         (11, "disputed_account", None, None, True, False),
         (12, "security_release", None, None, True, False),
-        (13, "max_consolidations_24m", consolidations_24m, max_consolidations_24m, consolidations_24m < max_consolidations_24m, True),
+        (13, "max_consolidations_24m", consolidations_24m, max_consolidations_24m,
+         consolidations_24m < max_consolidations_24m, True),
         (14, "min_discretionary_income", facts["discretionary_after"], policy["min_discretionary"],
          facts["discretionary_after"] >= policy["min_discretionary"], True),
     ]
