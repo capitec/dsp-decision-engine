@@ -105,3 +105,12 @@ def test_the_search_record_counts_why_scenarios_failed_so_a_contact_centre_can_a
     counted = out["search_record"]["rejections_by_reason"]
     for code in (1003, 1004):
         assert counted[str(code)] == sum(code in s["rejection_reason_codes"] for s in out["scenarios"])
+
+
+def test_switching_the_stack_off_moves_the_winner_and_the_record_names_the_overlay_that_explains_it(assess, params):
+    with_overlays = assess(requested_amount=None)
+    without = assess(requested_amount=None, params_document=off(params))
+    assert (with_overlays["chosen_offer"]["scenario_id"], with_overlays["chosen_offer"]["term_months"]) == (41, 72)
+    assert (without["chosen_offer"]["scenario_id"], without["chosen_offer"]["term_months"]) == (35, 84)
+    refused = next(s for s in with_overlays["scenarios"] if s["scenario_id"] == 35)
+    assert refused["rejection_reason_codes"] == [1004] and by_number(refused)[4]["overlay_id"] == "ADJ-CON-INT-2026-001"

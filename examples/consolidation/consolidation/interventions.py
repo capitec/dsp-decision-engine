@@ -61,7 +61,7 @@ def evaluate(facts: dict, policy: dict, decision_date: date, consolidations_24m:
         (14, "min_discretionary_income", facts["discretionary_after"], policy["min_discretionary"],
          facts["discretionary_after"] >= policy["min_discretionary"], True),
     ]
-    # numbers are floats throughout: a column of records holds one type per field
+    # workaround: a list[dict] output holds one type per field in a batch run, so every number here is a float
     return [{
         "intervention": number, "name": name, "status": (PASSED if passes else FAILED) if applies else NOT_APPLICABLE,
         "actual": float(actual) if applies else None, "threshold": float(threshold) if applies else None,
