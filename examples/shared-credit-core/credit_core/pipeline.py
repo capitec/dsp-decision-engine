@@ -101,8 +101,7 @@ def build(rate_card_flex_loan):
         risk_grade.build_risk_grade_table(),
 
         rounding.round_advance_step.relabel(reads={"amount": "requested_amount"}),
-        rate_card_flex_loan.relabel(writes={"cell_id": "rate_cell_id"}), rate_card.rate_card_rate_step,
-        rate_card.out_of_range,
+        rate_card.lookup(rate_card_flex_loan), rate_card.out_of_range,
 
         fees.fee_caps_version_step, fees.build_fee_caps_table(),
         fees.initiation_fee_step, fees.initiation_fee_capped_step, fees.monthly_service_fee_step,
