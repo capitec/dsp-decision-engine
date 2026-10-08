@@ -68,19 +68,38 @@ def coerce_record(record: t.Dict[str, t.Any], dates: t.Dict[str, t.Any]) -> t.Di
 
 
 def coerce_frame(df: pl.DataFrame, dates: t.Dict[str, t.Any]) -> pl.DataFrame:
-    # ponytail: only top-level date/datetime string columns; cast nested list/struct fields when a frame needs them.
+    # Plain date columns cast in polars; dates nested in lists or structs go through the same
+    # validation as a single record, once per column.
     casts = []
     for name, annotation in dates.items():
+        if name not in df.columns:
+            continue
         base = base_annotation(annotation)
-        if name in df.columns and df.schema[name] == pl.String and base in (dt.date, dt.datetime):
+        if df.schema[name] == pl.String and base in (dt.date, dt.datetime):
             col = pl.col(name).str
             casts.append(col.to_datetime() if base is dt.datetime else col.to_date())
+        elif isinstance(df.schema[name], (pl.List, pl.Struct)):
+            casts.append(_coerce_nested(df.get_column(name), annotation))
     if not casts:
         return df
     try:
         return df.with_columns(casts)
     except pl.exceptions.PolarsError as e:
         raise InputParsingError(f"a date column isn't ISO formatted like \"2026-01-31\": {e}") from None
+
+
+def _coerce_nested(column: pl.Series, annotation: t.Any) -> pl.Series:
+    rows = column.to_list()
+    present = [i for i, row in enumerate(rows) if row is not None]
+    try:
+        coerced = _adapter(annotation).validate_python([rows[i] for i in present])
+    except ValidationError as e:
+        raise InputParsingError(
+            f"input {column.name!r} is declared {annotation} but got dates that don't validate; "
+            f"send dates as ISO strings like \"2026-01-31\". ({e.errors()[0]['msg']})") from None
+    for i, value in zip(present, coerced):
+        rows[i] = value
+    return pl.Series(column.name, rows)
 
 
 _DUMMY = {bool: False, int: 1, str: "", bytes: "", dt.date: dt.date(2000, 1, 1),

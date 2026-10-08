@@ -307,17 +307,25 @@ class _Resolver:
         # the runner fills from the element, so it is not a pipeline input and never leaves the node.
         reads: dict[str, Any] = {}
         writes: set[str] = set()
-        for n in iter_nodes(node.each):
-            if isinstance(n, CallNode):
-                for i in n.inputs or ():
-                    reads.setdefault(i.name, i.annotation)
-                for o in n.outputs or ():
-                    writes.add(o.name)
+        # A nested `each` reads its list column and writes its output; its own child's names are
+        # that element's fields, not this one's. A name is a field when it is read before any write.
+        pending = [node.each]
+        while pending:
+            n = pending.pop(0)
+            if isinstance(n, ScatterGatherNode):
+                ins, outs = {n.column: list[dict]}, (n.output,)
+            elif isinstance(n, CallNode):
+                ins, outs = {i.name: i.annotation for i in n.inputs or ()}, [o.name for o in n.outputs or ()]
+            else:
+                pending[:0] = n.children()
+                continue
+            for name, annotation in ins.items():
+                if name not in writes:
+                    reads.setdefault(name, annotation)
+            writes.update(outs)
         inner = scope.child()
         fields: list[tuple[str, NodeVersion]] = []
         for name, annotation in reads.items():
-            if name in writes:
-                continue
             v = self.new(name, path, annotation)
             fields.append((name, v))
             inner.names[name] = v
