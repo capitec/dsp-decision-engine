@@ -101,10 +101,11 @@ function vscodeState(h: Host): AgentState {
       const f = await topFrame();
       return f && { file: f.file, line: f.line, name: f.name };
     },
-    highlight(node) {
+    async highlight(node) {
       const item = h.structure.find(node);
       if (!item) return false;
-      if (h.tree.visible) void h.tree.reveal(item, { select: true, focus: false });
+      // Revealing opens the Structure view when it is closed, so the user sees what is pointed at.
+      await h.tree.reveal(item, { select: true, focus: false });
       GraphPanel.post({ type: "select", path: node });
       return true;
     },

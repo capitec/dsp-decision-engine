@@ -11,7 +11,7 @@ function fake(over: Partial<AgentState> = {}) {
     paused: () => undefined,
     breakpoints: () => [],
     frame: async () => undefined,
-    highlight: (n) => (calls.push(["highlight", n]), n.startsWith("credit/")),
+    highlight: async (n) => (calls.push(["highlight", n]), n.startsWith("credit/")),
     reveal: async (...a) => void calls.push(["reveal", ...a]),
     showFlow: async (...a) => void calls.push(["showFlow", ...a]),
     setBreakpoints: (n) => (calls.push(["setBreakpoints", n]), n.filter((x) => x.endsWith("a"))),
