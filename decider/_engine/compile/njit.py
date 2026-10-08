@@ -34,9 +34,10 @@ from decider._engine.types import decimal_scale, is_raw, raw_base, columnar_item
 FALLBACK_ERRORS = (NumbaError, UnsupportedBytecodeError)
 
 # Compiling runs no step code, so any of these is numba's own refusal: a NotImplementedError from its
-# bytecode reader meeting an opcode it lacks, or a bare assert from its lowering (a list of int and
-# float). Runtime failures keep the narrower FALLBACK_ERRORS, which never swallows a step's assert.
-_COMPILE_ERRORS = (*FALLBACK_ERRORS, NotImplementedError, AssertionError)
+# bytecode reader meeting an opcode it lacks, a bare assert from its lowering (a list of int and
+# float), or a TypeError from boxing a literal it can't hash (dicts of mixed value types in a list).
+# Runtime failures keep the narrower FALLBACK_ERRORS, which never swallows a step's own error.
+_COMPILE_ERRORS = (*FALLBACK_ERRORS, NotImplementedError, AssertionError, TypeError)
 
 _DECLARED_CALLEE = "calls the @allow_fallback function"
 

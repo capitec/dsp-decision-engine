@@ -585,6 +585,12 @@ costs under 10 µs more on a single `score()`. Trees and decision tables read
 their strings as byte spans inside their kernels, so a string rule set does not
 pay this at all.
 
+`score` returns each value as the step made it. A frame from `run` holds one
+type per field of a `list[dict]` or `dict` column: an int beside a float comes
+back as a float, a number beside a string as the string, and a `dict` with
+non-string keys as a Python object column, which a JSON, CSV or Arrow response
+can't carry.
+
 `@allow_fallback` says you accept that: the warning stops, and
 `Engine(strict_compile=True)` — which otherwise raises on a step that runs in
 Python — allows it. `fallbacks()` still reports it, marked `@allow_fallback`,

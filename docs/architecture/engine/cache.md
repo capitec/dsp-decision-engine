@@ -179,8 +179,9 @@ it, so the steps before and after it stay compiled (see the grouping rules on
 lowering and unsupported-feature errors. `UnsupportedBytecodeError` is what numba 0.67 raises for
 an `import` inside a step, and it does not subclass `NumbaError`. Around `dispatcher.compile(sig)`
 alone, `compile_call` also catches `NotImplementedError` (numba's bytecode reader meeting an opcode
-it lacks, such as `LOAD_COMMON_CONSTANT` on Python 3.14) and a bare `AssertionError` (numba's own
-lowering asserts). Compiling runs no step code, so neither can come from the step.
+it lacks, such as `LOAD_COMMON_CONSTANT` on Python 3.14), a bare `AssertionError` (numba's own
+lowering asserts) and a `TypeError` (numba boxing a literal it can't hash, such as a list of dicts with
+mixed value types). Compiling runs no step code, so none of them can come from the step.
 
 Anything else raises. A runtime error inside a compiled step propagates, with a note naming the
 step, exactly as in interpreted mode:
@@ -211,7 +212,7 @@ flowchart TD
     helper -->|"no"| types{"an input or output<br/>no kernel holds?<br/>(str, date, list, dict)"}:::engine
     types -->|"yes"| py
     types -->|"no"| probe["probe the signature,<br/>dispatcher.compile(sig)"]:::engine
-    probe --> err{"NumbaError,<br/>UnsupportedBytecodeError,<br/>NotImplementedError,<br/>AssertionError?"}:::engine
+    probe --> err{"NumbaError,<br/>UnsupportedBytecodeError,<br/>NotImplementedError,<br/>AssertionError, TypeError?"}:::engine
     err -->|"yes"| py
     err -->|"no"| shape{"Columnar input outside<br/>a plain scalar call?"}:::engine
     shape -->|"yes"| per["Fallback: compiled,<br/>one call per row"]:::error

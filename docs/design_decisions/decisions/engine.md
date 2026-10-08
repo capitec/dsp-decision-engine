@@ -34,7 +34,7 @@ Why the engine (IR, wiring, runners, kernels, compile cache, fallback, `score`, 
 
 ## Fall back to Python only on compile failure, one step at a time
 
-- `FALLBACK_ERRORS = (NumbaError, UnsupportedBytecodeError)`; around `dispatcher.compile` alone, `NotImplementedError` and `AssertionError` count too. The kernel splits around the step; a kernel that fails whole on launch becomes one `Fallback` per call. A runtime error always propagates. `@allow_fallback` accepts a fallback silently; `Engine(strict_compile=True)` refuses it.
+- `FALLBACK_ERRORS = (NumbaError, UnsupportedBytecodeError)`; around `dispatcher.compile` alone, `NotImplementedError`, `AssertionError` and `TypeError` count too. The kernel splits around the step; a kernel that fails whole on launch becomes one `Fallback` per call. A runtime error always propagates. `@allow_fallback` accepts a fallback silently; `Engine(strict_compile=True)` refuses it.
 - Why: a kernel cannot call Python except through `objmode`, slower than giving up (4 steps, 200k rows: all-njit 7.1 ms, Python 167 ms, per-row `objmode` 548 ms). Bare `Exception` would hide bugs as fallbacks.
 - See: [experiment](../experiments/kernel-compilation-choices.md), [cache](../../architecture/engine/cache.md)
 
