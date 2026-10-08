@@ -34,6 +34,8 @@ def explain(evidence: Evidence, audience: str) -> Explanation:
     codes = r.get(flow.reasons) or []
     primary = _describe(flow, r.get(flow.primary)) if r.get(flow.primary) else None
     if audience == "consultant":
+        if r.get("client_wording_key"):  # a fraud decline must not teach the rule that fired
+            return Explanation(audience, f"The client is shown {r['client_wording_key']} and nothing else.", {})
         return Explanation(audience, primary or f"No reason applies (outcome {r[flow.outcome]}).", {})
     reasons = [{"code": c, "description": _describe(flow, c)} for c in codes]
     if audience == "analyst":

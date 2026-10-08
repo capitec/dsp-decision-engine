@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 from decider.serving import RequestHandler
@@ -41,7 +42,11 @@ class Replayer(RequestHandler):
 
     def score(self, request: dict) -> dict:
         body = json.dumps(request).encode()
-        return json.loads(asyncio.run(self.process_fn(body, "application/json", "application/json")).content)
+        # workaround: scoring a raw request is async-only, and a replay step runs inside the server's event
+        # loop, so the coroutine gets a loop of its own on another thread.
+        with ThreadPoolExecutor(1) as pool:
+            response = pool.submit(asyncio.run, self.process_fn(body, "application/json", "application/json"))
+            return json.loads(response.result().content)
 
     def untapped(self):
         return RequestHandler.module_fn(self)
