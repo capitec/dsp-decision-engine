@@ -36,10 +36,25 @@ def raw_sample():
 def test_the_raw_sample_request_is_held_for_review_with_its_date_as_a_json_string(handler, raw_sample):
     assert isinstance(raw_sample["decision_date"], str)
     out = post(handler, raw_sample)
-    assert (out["action_code"], out["action_source_rule_id"]) == EXPECTED_SAMPLE_ACTION
+    assert (out["action_code"], out["action_source_rule_id"], out["primary_reason_code"]) == (40, "MS-0021", 3021)
+    assert len(out["fired_rule_ids"]) == 20 and "MS-0208" in out["fired_rule_ids"]
+    assert set(out["shadow_fired_rule_ids"]).isdisjoint(out["fired_rule_ids"]) and out["shadow_fired_rule_ids"]
     assert out["rule_set_version"] == "RS-2026.01"
     assert out["applied_adjustment_ids"] == ["ADJ-2026-002"] and out["mule_scam_amount_multiplier"] == 0.7
-    assert out["client_visible"] is True
+    assert (out["client_visible"], out["client_wording_key"]) == (True, "wording.hold_for_review.v1")
+
+
+def test_an_amount_between_the_authored_and_the_overlay_threshold_is_held_only_because_of_the_overlay(handler, raw_sample):
+    out = post(handler, {**raw_sample, "amount": 6000.0})  # MS-0208: R8 000 authored, R5 600 under the festive x0.7
+    assert out["fired_on_overlay_ids"] == ["MS-0006", "MS-0018", "MS-0021", "MS-0208"]
+    assert (out["action_code"], out["action_source_rule_id"]) == (40, "MS-0021")
+    assert out["counterfactual_action_code"] == 30 and "MS-0208" not in out["counterfactual_fired_rule_ids"]
+
+
+def test_a_small_payment_is_allowed_with_nothing_to_say(handler, raw_sample):
+    out = post(handler, {**raw_sample, "amount": 300.0})
+    assert (out["action_code"], out["fired_rule_ids"], out["decline_reason_codes"]) == (10, [], [])
+    assert (out["client_visible"], out["primary_reason_code"]) == (False, None)
 
 
 def test_a_sanctioned_payment_is_blocked_whatever_fires(handler, raw_sample):
@@ -76,8 +91,9 @@ def test_a_batch_gives_the_answers_single_records_give(handler, raw_sample, para
 def test_a_backtest_costs_the_overlays_by_running_the_events_with_the_stack_off(handler, raw_sample, params):
     result = backtest(handler.module_fn().executable, events(raw_sample), params)
     assert result["with_overlays"]["events"] == result["without_overlays"]["events"] == 4
-    assert result["with_overlays"]["blocked"] >= result["without_overlays"]["blocked"]
-    assert result == EXPECTED_BACKTEST
+    assert result == {
+        "with_overlays": {"events": 4, "blocked": 3, "hit_rate": 0.75, "value_blocked": 15250.0},
+        "without_overlays": {"events": 4, "blocked": 2, "hit_rate": 0.5, "value_blocked": 9250.0}}
 
 
 def test_the_summary_counts_holds_and_stops_and_adds_up_their_value():
