@@ -1,6 +1,9 @@
 """Build-time wiring errors: typos, forward references, and the waterfalls that must stay legal."""
 from __future__ import annotations
 
+import inspect
+import warnings
+
 import pytest
 
 from decider import dag, flow, param, step
@@ -166,3 +169,27 @@ def test_names_differing_only_in_digits_are_no_typo():
     with pytest.warns(UserWarning):
         plan = resolve(flow(applicant1_income, total))
     assert "applicant2_income" in [i.name for i in plan.inputs]
+
+
+def _reader(name: str):
+    def read(**_) -> float:
+        return 0.0
+
+    read.__signature__ = inspect.Signature([inspect.Parameter(name, inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=float)],
+                                           return_annotation=float)
+    return read
+
+
+@pytest.mark.parametrize("output, read", [
+    ("applicant_gross_income", "applicant_net_income"),
+    ("declared_income", "declared_income_raw"),
+    ("cap_income_multiple", "income_multiple"),
+])
+def test_names_differing_by_a_whole_word_are_not_flagged_as_a_typo(output, read):
+    def produce() -> float:
+        return 1.0
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        plan = resolve(flow(step(produce, output=output), _reader(read)))
+    assert read in [i.name for i in plan.inputs]
