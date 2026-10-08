@@ -381,7 +381,7 @@ An adapter that raises does not stop the decision: the run returns its answer an
 A `ConfigStore` subclass keeps versions somewhere other than a folder. Implement `versions()`, `read(version)` and `_write(versioned)`; `latest_version()` and `create_version()` come from the base class. Keep versions immutable: `_write` must refuse a version that exists.
 
 ```python
-import asyncio, copy, typing as t
+import copy, typing as t
 from decider import flow, param
 from decider.config import ConfigStore, Version, VersionedConfig
 from decider.serving import RequestHandler
@@ -422,7 +422,7 @@ print(store.versions())
 handler = RequestHandler(store, flow(ratio, approved, name="credit"))
 handler.stage()
 handler.activate()
-print(asyncio.run(handler.process_fn(b'{"income": 1000, "debt": 300}', "application/json", "application/json")).content)
+print(handler.process_fn(b'{"income": 1000, "debt": 300}', "application/json", "application/json").content)
 ```
 
 ```text

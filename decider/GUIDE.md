@@ -422,29 +422,28 @@ projects on one path never shadow each other):
 
 JSON dates (`"2026-01-15"`) arrive as the declared `date` inputs, but only through
 the handler: `Executable.score` and `run` take typed values (`date` objects), and a
-string date reaches the step as a string. Score through the handler in-process,
-raw bytes in, exactly as `decider serve` does:
+string date reaches the step as a string. In-process, `handler.score` takes the
+parsed record (or a frame) and converts dates exactly as `decider serve` does;
+`handler.process_fn` takes raw bytes. Both are plain calls, and the `*_fn` hooks are
+synchronous: an `async def` override is rejected when the class is created.
 
 ```python
-import asyncio, json
+import json
 from decider.config import JsonFileStore
 from decider.serving import RequestHandler
 
 handler = RequestHandler(JsonFileStore(basepath="configs"), "credit_risk.pipeline:build")
 handler.stage()
 handler.activate()
-body = b'{"income": 1000, "debt": 250, "applied_on": "2026-01-15"}'
-response = asyncio.run(handler.process_fn(body, "application/json", "application/json"))
+record = {"income": 1000, "debt": 250, "applied_on": "2026-01-15"}
+assert handler.score(record)["approved"] is True
+body = json.dumps(record).encode()
+response = handler.process_fn(body, "application/json", "application/json")
 assert json.loads(response.content)["approved"] is True
 ```
 
 `store.create_version({...})` writes a new immutable version; replay a stored
 decision against `store.read(version)`, never whatever `configs/` holds now.
-
-`process_fn` is a coroutine: `await` it inside a running event loop, or use
-`asyncio.run` from synchronous code outside one. Code that is itself running on
-the loop thread cannot call it synchronously; score the typed record directly
-with `Executable.score`, converting date strings yourself, instead.
 
 ## Reusing another project
 
