@@ -1,6 +1,7 @@
 """Release certification: does a candidate version change what it says it changes, and nothing else."""
 from __future__ import annotations
 
+import json
 from dataclasses import asdict, dataclass
 
 from governance.coverage import coverage
@@ -34,7 +35,7 @@ class Certificate:
         return not (self.unexpected or self.unmoved)
 
     def to_json(self) -> dict:
-        return {**asdict(self), "passed": self.passed}
+        return json.loads(json.dumps({**asdict(self), "passed": self.passed}))
 
 
 def _moved(e: Evidence, candidate: Replayer) -> bool:
