@@ -363,7 +363,7 @@ SequenceNode 'best' drops=('index',)  source=decider.steps:OptimiseStep
 ```
 
 With `record=Item`, `to_ir` adds a `best_record` carry and defines four more functions at lowering time
-(`seed_record`, `keep_record`, `finalise`, `pass_index`); the first three get `Struct[Item]` annotations built from
+(`seed_record`, `keep_record`, `emit`, `pass_index`); the first three get `Struct[Item]` annotations built from
 the `Item` type.
 
 ### Configurable steps
