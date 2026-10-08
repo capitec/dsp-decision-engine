@@ -227,9 +227,9 @@ def _typed(plan: Plan) -> tuple[Input, ...]:
 def _series(name: str, values: np.ndarray, valid: np.ndarray | None, annotation: Any = None) -> pl.Series:
     if values.dtype == object:
         rows = (values if valid is None else np.where(valid, values, None))
-        # A compiled struct output read back into Python is a numpy record (np.void); polars reads
-        # dicts (not tuples) for a Struct with nulls, so spell it as the dict a step returns.
-        values = [dict(zip(x.dtype.names, x.tolist())) if isinstance(x, np.void) else despan(x) for x in rows.tolist()]
+        # A struct output read back into Python is a numpy record or a tuple; polars reads dicts (not
+        # tuples) for a Struct with nulls, so spell it as the dict a step returns.
+        values = [record_value(x, annotation) for x in rows.tolist()]
         # Polars infers a list's element type from its first row: `[[1, 2], [1.5]]` would become ints,
         # and an all-null `Literal` column `Null`.
         dtype = declared_dtype(annotation)
