@@ -12,10 +12,12 @@ R_REDUCED_BELOW_MINIMUM_BY_OVERLAY = 7006
 R_SUPPRESSED_BY_CLIENT_DECREASE = 7007
 R_FAIRNESS_CAPPED = 7008
 R_TAIL_SKIPPED = 7009
+R_AFFORDABILITY_UNESTABLISHED = 7010
 
 REASON_REGISTRY = ReasonCodeRegistry("limit-mgmt-reasons-2026.09", [
     ReasonCode(R_EXCLUDED, 5, "Account excluded from the automatic programme", True),
-    ReasonCode(R_AFFORDABILITY_FAIL, 10, "Affordability assessment did not pass", True),
+    ReasonCode(R_AFFORDABILITY_FAIL, 10, "The client cannot carry any of the increase", True),
+    ReasonCode(R_AFFORDABILITY_UNESTABLISHED, 12, "Affordability could not be established on the evidence available", True),
     ReasonCode(R_SUPPRESSED_BY_CLIENT_DECREASE, 15, "Suppressed: an immediate decrease fired on another account of this client", True),
     ReasonCode(R_REDUCED_BELOW_MINIMUM_BY_OVERLAY, 25, "Reduced below the minimum meaningful increase by an active overlay", False),
     ReasonCode(R_NO_INCREASE_AFTER_CAPS, 30, "The matrix and the caps leave no increase, or one under the cell's minimum increment", False),

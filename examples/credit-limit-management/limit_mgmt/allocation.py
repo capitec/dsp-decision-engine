@@ -196,7 +196,9 @@ def _reason(increase: pl.Expr, min_increase: pl.Expr) -> pl.Expr:
         .when(outcome == Outcome.SUPPRESSED).then(reasons.R_SUPPRESSED_BY_CLIENT_DECREASE)
         .when(pl.col("is_excluded")).then(reasons.R_EXCLUDED)
         .when(pl.col("change_type_code") == ChangeType.DECREASE).then(None)
-        .when(pl.col("increase_path_code") == IncreasePath.FAIL).then(reasons.R_AFFORDABILITY_FAIL)
+        .when(pl.col("increase_path_code") == IncreasePath.FAIL).then(
+            pl.when(pl.col("evidence_sufficiency_code") != 0).then(reasons.R_AFFORDABILITY_UNESTABLISHED)
+            .otherwise(reasons.R_AFFORDABILITY_FAIL))
         .when(pl.col("increase_path_code") == IncreasePath.CONDITIONAL).then(None)  # awaits the client's confirmation
         .when((increase < min_increase) & (unadjusted_increase >= min_increase)).then(reasons.R_REDUCED_BELOW_MINIMUM_BY_OVERLAY)
         .when(increase > 0).then(reasons.R_BELOW_MINIMUM_MEANINGFUL_INCREASE)
