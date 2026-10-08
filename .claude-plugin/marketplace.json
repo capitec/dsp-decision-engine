@@ -1,0 +1,12 @@
+{
+  "name": "decider",
+  "owner": {"name": "Capitec DSP"},
+  "description": "Claude Code plugin for building decision pipelines with decider.",
+  "plugins": [
+    {
+      "name": "decider",
+      "source": "./plugins/decider",
+      "description": "Skill and MCP server for decider projects: pipelines, flow files, decision trees, decision tables, scorecards and params."
+    }
+  ]
+}

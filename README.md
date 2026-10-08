@@ -54,6 +54,22 @@ decider serve                 # POST /invocations, GET /ping
 
 Settings come from `DECIDER_*` environment variables; see `decider --help`.
 
+## Claude Code plugin
+
+This repository is a Claude Code plugin marketplace. In Claude Code:
+
+```
+/plugin marketplace add capitec/dsp-decision-engine
+/plugin install decider@decider
+```
+
+You get the `decider` skill (a guide to the project layout, best practices,
+pipelines, checks and the config documents) and the `decider mcp` server, which
+reads pipelines, edits trees, tables, scorecards and params with validation, and
+talks to the VS Code extension. The server runs through `uv` in the directory
+Claude Code starts in, so start it from your project root. Setup and
+troubleshooting: [setup-project.md](plugins/decider/skills/decider/references/setup-project.md).
+
 ## Documentation
 
 - Start with `decider guide` (the same text as `decider/GUIDE.md`): concepts,
