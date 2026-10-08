@@ -6,7 +6,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from decider.steps._configurable import ConfigurableStep
+from decider import ConfigurableStep
 
 
 def read_doc(path: str) -> dict:
