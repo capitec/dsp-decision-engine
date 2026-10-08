@@ -90,6 +90,7 @@ A wrong step path gets the same treatment (`no step with params at 'loans/pricee
 - `params.json` is checked as a JSON object only; its values are checked when you pass `entry`.
 - An `entry` that builds needs its imports to work (sibling projects on `PYTHONPATH`, as `decider build` needs). The pipeline source is re-imported on each call, so edits to it are seen.
 - A document edit never recompiles anything; run `decider build` before shipping.
+- JSON has no infinity, so replies spell an open-ended number `"-Infinity"` / `"Infinity"` (and NaN `"NaN"`), and the tools read those strings back as numbers: write `{"lo": "-Infinity"}` for a band with no lower edge. `null` means something else (a missing bound takes its neighbour's).
 
 ## Tools
 
