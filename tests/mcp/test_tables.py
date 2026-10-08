@@ -204,3 +204,10 @@ def test_one_patch_splits_a_band_where_single_row_edits_would_each_leave_a_gap(t
 def test_a_refused_edit_names_the_problem_without_a_pydantic_prefix(tmp_path):
     result = tables.table_add_rows(_write(tmp_path, BAND), [{"lo": 700.0, "hi": 800.0, "band": "A-"}], at=2)
     assert result["problems"][0].startswith("Row 2 upper") and "added_at" not in result
+
+
+def test_scorecard_view_names_the_adjusted_output_that_feeds_the_total(tmp_path):
+    card = {"type": "scorecard", "name": "card", "variables": [{"type": "adjusted", "scale": 2.0, "variable": {
+        "type": "scored", "variable_name": "util", "default": {"value": 0}, "bins": [{"value": 10, "upper_bound": 0.3}]}}]}
+    shown = scorecards.scorecard_view(_write(tmp_path, card))["variables"][0]
+    assert shown["output"] == "util_adjusted_score" and shown["points_output"] == "util_score" and shown["scale"] == "2.0"

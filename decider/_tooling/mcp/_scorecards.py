@@ -47,11 +47,13 @@ def scorecard_view(path: str) -> dict:
             variables.append({"kind": "constant", "output": v.get("output_name", "constant_score"), "points": _num(v["score"])})
             continue
         s = _scored(v)
-        shown = {"variable": s["variable_name"], "kind": v["type"], "strict": s.get("strict", True),
-                 "output": s.get("value_output_name", "{variable_name}_score").format(variable_name=s["variable_name"]),
+        points = s.get("value_output_name", "{variable_name}_score").format(variable_name=s["variable_name"])
+        shown = {"variable": s["variable_name"], "kind": v["type"], "strict": s.get("strict", True), "output": points,
                  "bins_markdown": _bins(s), "bins": s["bins"], "default": s["default"]}
         if v["type"] == "adjusted":
-            shown |= {"scale": _num(v.get("scale", 1.0)), "offset": _num(v.get("offset", 0.0))}
+            adjusted = v.get("variable_output_name", "{variable_name}_adjusted_score")
+            shown |= {"scale": _num(v.get("scale", 1.0)), "offset": _num(v.get("offset", 0.0)), "points_output": points,
+                      "output": adjusted.format(variable_name=s["variable_name"], score_value_output_name=points)}
         variables.append(shown)
     try:
         params = json_safe(dict(ConfigurableStep.load(doc).parameters()))

@@ -138,8 +138,12 @@ def patch_config(path: str, ops: list[dict], dry_run: bool = False) -> dict:
 
 
 def try_config(path: str, rows: list[dict], params: dict | None = None) -> dict:
-    """Run the document's step interpreted on `rows` and return the output rows (inputs and outputs)."""
-    out = ConfigurableStep.load(read(path)).run(pl.DataFrame(rows), params=params)
+    """Run the document's step interpreted on `rows` and return the output rows (inputs and outputs), or `problems`."""
+    doc = read(path)
+    found = check(path, doc)
+    if found:
+        return {"problems": found}
+    out = ConfigurableStep.load(doc).run(pl.DataFrame(rows), params=params)
     return {"columns": out.columns, "rows": json_safe(out.to_dicts())}
 
 
