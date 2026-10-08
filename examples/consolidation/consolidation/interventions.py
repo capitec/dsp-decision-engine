@@ -57,9 +57,10 @@ def evaluate(facts: dict, policy: dict, decision_date: date, consolidations_24m:
         (14, "min_discretionary_income", facts["discretionary_after"], policy["min_discretionary"],
          facts["discretionary_after"] >= policy["min_discretionary"], True),
     ]
+    # numbers are floats throughout: a column of records holds one type per field
     return [{
         "intervention": number, "name": name, "status": (PASSED if passes else FAILED) if applies else NOT_APPLICABLE,
-        "actual": actual if applies else None, "threshold": threshold if applies else None,
-        "base_threshold": policy["anti_harm"] if number == 4 else threshold if applies else None,
+        "actual": float(actual) if applies else None, "threshold": float(threshold) if applies else None,
+        "base_threshold": float(policy["anti_harm"] if number == 4 else threshold) if applies else None,
         "overlay_id": anti_harm.adjustments_applied[0] if number == 4 and anti_harm.adjustments_applied else None,
     } for number, name, actual, threshold, passes, applies in rows]
