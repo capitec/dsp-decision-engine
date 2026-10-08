@@ -48,15 +48,20 @@ def notice_class_code(change_type_code: int, decrease_notice_class_code: int) ->
 
 @allow_fallback
 def decline_reason_codes(
-    is_excluded: bool, increase_path_code: int, current_limit: float, policy_proposed_limit: float,
-    decrease_trigger_fires: bool,
+    is_excluded: bool, increase_path_code: int, evidence_sufficiency_code: int, current_limit: float,
+    policy_proposed_limit: float, decrease_trigger_fires: bool,
 ) -> list[int]:
-    """Why this account has no increase, before the budget: excluded, affordability failed, or the matrix and caps left none."""
+    """Why this account has no increase, before the budget: excluded, affordability could not be established or leaves
+    no room, or the matrix and caps left none."""
     if decrease_trigger_fires:
         return []
     if is_excluded:
         return [reasons.R_EXCLUDED]
-    codes = [reasons.R_AFFORDABILITY_FAIL] if increase_path_code == IncreasePath.FAIL else []
+    codes = []
+    if evidence_sufficiency_code:
+        codes.append(reasons.R_AFFORDABILITY_UNESTABLISHED)
+    elif increase_path_code == IncreasePath.FAIL:
+        codes.append(reasons.R_AFFORDABILITY_FAIL)
     if policy_proposed_limit <= current_limit:
         codes.append(reasons.R_NO_INCREASE_AFTER_CAPS)
     return codes

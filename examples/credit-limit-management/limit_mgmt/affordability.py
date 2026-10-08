@@ -15,8 +15,7 @@ from datetime import date
 
 from decider import allow_fallback, flow, helper, missing_as, param, step
 
-from assessment import modes, pipeline as assessment
-from assessment import verdict
+from assessment import modes, pipeline as assessment, verdict
 from limit_mgmt.caps import round_down_500
 from limit_mgmt.overlays import buffer_adjustment_step
 from limit_mgmt.vocab import PRODUCT_EVERYDAY_CARD, Cap, EvidenceTier, IncreasePath
@@ -100,21 +99,22 @@ def programme_income_evidence(
 @allow_fallback
 def increase_path_code(
     evidence_tier_code: int, income_staleness_days: int, bureau_as_of_date: date | None, decision_date: date,
-    affordability_verdict_code: int, evidence_sufficiency_code: int,
+    evidence_sufficiency_code: int, current_limit: float, policy_proposed_limit: float, cap_affordability: float,
     expenses_refreshed_or_normed: bool = missing_as(True), obligations_growth_pct: float = missing_as(0.0),
     income_staleness_max_days: int = param(45, ge=1), bureau_staleness_max_days: int = param(35, ge=1),
     obligations_growth_threshold: float = param(0.25, ge=0.0),
 ) -> int:
     """Automatic only on tier A or B income within 45 days, a bureau view within 35, refreshed expenses and obligations
-    that have not grown over 25%, with the assessment passing. Anything else the assessment can still carry is
-    conditional on the client confirming income; a failed or unsupported assessment is not offered."""
-    if affordability_verdict_code == verdict.FAIL or evidence_sufficiency_code != verdict.EVIDENCE_OK:
+    that have not grown over 25%. Anything else the assessment can still carry is conditional on the client confirming
+    income. Not offered when the evidence cannot support an assessment, or when the client cannot carry any of the
+    increase the caps allowed."""
+    if evidence_sufficiency_code != verdict.EVIDENCE_OK or (policy_proposed_limit > current_limit and cap_affordability <= current_limit):
         return IncreasePath.FAIL
     bureau_age = _NO_DECLARED_INCOME if bureau_as_of_date is None else (decision_date - bureau_as_of_date).days
     fresh = (evidence_tier_code in (EvidenceTier.A_VERIFIED_SALARY, EvidenceTier.B_IRREGULAR_DEPOSITS)
              and income_staleness_days <= income_staleness_max_days and bureau_age <= bureau_staleness_max_days
              and expenses_refreshed_or_normed and obligations_growth_pct <= obligations_growth_threshold)
-    return IncreasePath.AUTOMATIC if fresh and affordability_verdict_code == verdict.PASS else IncreasePath.CONDITIONAL
+    return IncreasePath.AUTOMATIC if fresh else IncreasePath.CONDITIONAL
 
 
 def affordability_cap(
@@ -144,6 +144,6 @@ def unit():
         step(assessment_mode_code), step(is_joint_application), step(notional_instalment), step(evidence_tier_code), step(income_staleness_days),
         step(programme_income_evidence, outputs=("programme_statement_income", "programme_statement_confidence",
                                                  "programme_declared_income")),
-        evidence, buffer_adjustment_step, capacity, step(increase_path_code),
-        step(affordability_cap, outputs=("cap_affordability", "binding_cap_code")),
+        evidence, buffer_adjustment_step, capacity,
+        step(affordability_cap, outputs=("cap_affordability", "binding_cap_code")), step(increase_path_code),
         name="affordability_bridge")
