@@ -3,6 +3,7 @@ its documents from the latest `configs/<version>/` next to it, instead of a modu
 `pipeline = flow(...)` with its own `PARAMS`/`SAMPLE`.
 """
 import json
+import glob
 import os
 import sys
 
@@ -147,21 +148,17 @@ def test_a_build_with_no_data_at_all_raises_a_clear_error(tmp_path):
         Bridge().trace(str(tmp_path / "pipeline.py"))
 
 
-EXAMPLES = os.path.join(HERE, "..", "..", "example_projects")
+EXAMPLES = os.path.join(HERE, "..", "..", "examples")
 
 
-def test_describe_and_trace_the_affordability_and_credit_limit_example_projects():
-    """A smoke check on two real `def build(...)` projects, `credit_core` (project 00) on the path
-    exactly as their own SERVE.md documents for serving or testing them."""
-    shared = os.path.join(EXAMPLES, "00-shared-credit-core", "sonnet")
-    sys.path.insert(0, shared)
-    try:
-        for project in ("02-affordability", "07-credit-limit-management"):
-            pipeline = os.path.join(EXAMPLES, project, "sonnet", "pipeline.py")
-            assert Bridge().describe(pipeline)["pipeline"] == "build"
-            assert Bridge().trace(pipeline)["error"] is None
-    finally:
-        sys.path.remove(shared)
+def test_describe_and_trace_the_affordability_and_credit_limit_examples(monkeypatch):
+    """A smoke check on two real `def build(...)` projects that import their sibling examples by package name."""
+    for project in sorted(glob.glob(os.path.join(EXAMPLES, "*", ""))):
+        monkeypatch.syspath_prepend(project)
+    for project, package in (("affordability", "assessment"), ("credit-limit-management", "limit_mgmt")):
+        pipeline = os.path.join(EXAMPLES, project, package, "pipeline.py")
+        assert Bridge().describe(pipeline)["pipeline"] == "build"
+        assert Bridge().trace(pipeline)["error"] is None
 
 
 def test_an_edited_step_of_a_build_pipeline_is_swapped_in_mid_run(tmp_path):

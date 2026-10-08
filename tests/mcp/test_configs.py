@@ -11,7 +11,7 @@ from decider._tooling.mcp import Policy, _configs as configs, _params as params,
 from decider._tooling.mcp._patch import PatchError, apply_patch
 
 ROOT = Path(__file__).resolve().parents[2]
-EXAMPLE_07 = ROOT / "example_projects/07-credit-limit-management/sonnet"
+EXAMPLE_07 = ROOT / "examples/credit-limit-management"
 BUREAU_TREE = ROOT / "ui/vscode/examples/bank/trees/bureau_grade.json"
 
 PIPELINE = '''\
@@ -213,9 +213,9 @@ def test_params_set_rejects_a_path_through_a_scalar(project):
 
 
 def test_params_of_the_example_project_validate_against_its_pipeline(monkeypatch):
-    for sibling in ("00-shared-credit-core", "02-affordability"):
-        monkeypatch.syspath_prepend(str(ROOT / "example_projects" / sibling / "sonnet"))
-    out = params.params_view(str(EXAMPLE_07 / "configs/0.1.0/params.json"), entry="pipeline:build")
+    for project in sorted((ROOT / "examples").glob("*/")):
+        monkeypatch.syspath_prepend(str(project))
+    out = params.params_view(str(EXAMPLE_07 / "configs/0.1.0/params.json"), entry="limit_mgmt.pipeline:build")
     assert out["problems"] == [] and "limit_mgmt/caps/cap_income_multiple" in out["schema"]
 
 
