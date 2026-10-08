@@ -31,8 +31,7 @@ same answers as plain Python.
 
 1. Run `uv run decider guide`. Its table "Which construct for which need" picks
    the construct for a task; its examples run. `uv run decider --help` lists
-   every command, and the docstrings (`help(decider)`) document the API. The
-   repo's `docs/` folder describes an older version.
+   every command, and the docstrings (`help(decider)`) document the API.
 2. Find the project: a `.env` with `DECIDER_API__PIPELINE`, a `pipeline.py` with
    `build()`, `configs/`.
 3. Check the MCP tools are loaded by calling `list_configs`. Claude Code names

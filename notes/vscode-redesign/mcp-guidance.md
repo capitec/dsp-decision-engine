@@ -23,6 +23,13 @@ MCP host owns the process; the VS Code extension is a peer, not the parent.
 `experiment_definition`, `experiment_results`. These answer from core and
 return structural identity (flow/step ids, paths, sources) and safe summaries.
 
+**Config editing** (always available, no confirmation): `list_configs`,
+`read_config`, `validate_config`, `write_config`, `patch_config`, `try_config`;
+`table_*`, `scorecard_*`, `params_*` and `tree_*` for structured edits. Every write
+builds the document first and is refused, file untouched, if it would not build;
+the file's JSON layout is kept. Infinite and NaN numbers are spelled
+`"-Infinity"`/`"Infinity"`/`"NaN"` both ways, since MCP carries plain JSON.
+
 **Editor-bound** (forwarded to the VS Code window that owns a workspace, over an
 authenticated per-window socket): `editor_selection`, `highlight`, `reveal_source`,
 `show_flow`, `set_breakpoints`. `editor_selection` is the one read: the active
