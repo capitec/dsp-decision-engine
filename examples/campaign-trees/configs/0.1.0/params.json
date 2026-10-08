@@ -1,0 +1,39 @@
+{
+  "campaign_trees": {
+    "decline_reason_codes": {
+      "minimum_age": 18.0
+    },
+    "overlay_stack_id": {
+      "overlay_stack_id": "OS-ADJ-C23-VOL-001"
+    },
+    "evaluate": {
+      "evaluation": {
+        "max_affordable_instalment": {
+          "serviceability_ratio": 0.3
+        },
+        "pre_assessment": {
+          "statutory_ceiling": 0.28,
+          "monthly_validity_days": 35,
+          "daily_validity_days": 10
+        },
+        "tree_adjusted": {
+          "n6_discretionary_income_floor": 2600.0,
+          "n3_behaviour_score_floor": 620
+        },
+        "tree_unadjusted": {
+          "n6_discretionary_income_floor": 2200,
+          "n3_behaviour_score_floor": 620
+        },
+        "cap_reduction": {
+          "adjustment_stack_enabled": true
+        }
+      }
+    },
+    "is_control": {
+      "control_percentage": 0.05
+    },
+    "is_universal_holdout": {
+      "universal_holdout_percentage": 0.01
+    }
+  }
+}
