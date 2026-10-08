@@ -55,3 +55,16 @@ def test_an_async_hook_override_is_rejected_naming_the_method(hook):
 
 async def _async_hook(self, *args):
     pass
+
+
+def test_a_subclass_score_of_its_own_leaves_process_fn_alone(tmp_path):
+    class Replayer(RequestHandler):
+        def score(self, request):
+            return json.loads(self.process_fn(json.dumps(request).encode(), "application/json", "application/json").content)
+
+    store = JsonFileStore(basepath=str(tmp_path / "configs"))
+    store.create_version({"params": {}})
+    handler = Replayer(store, build)
+    handler.stage()
+    handler.activate()
+    assert handler.score(RECORD)["due_day"] == 4
