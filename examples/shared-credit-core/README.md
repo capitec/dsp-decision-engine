@@ -180,9 +180,6 @@ fraud-verdict enums, and the names reserved for consumers (`account_id`, `event_
   share their `eq` keys ([risk_grade.py](credit_core/risk_grade.py)). A grid with two band dimensions repeats a
   ladder inside one group, so those tables (norms, credit life, the rate card) give every band explicit
   infinite edges and set `allow_gaps`.
-- **Rate card cell ids.** Packing a decision table is quadratic in the number of *distinct values of a string
-  output*, which for 63 360 cell ids is tens of seconds on every build. The card therefore outputs the band numbers and
-  [`rate_cell_id`](credit_core/rate_card.py) rebuilds the id (marked `# workaround`).
 - **What runs in Python.** Steps that read dates, lists of dicts or strings are Python on purpose and marked
   `@allow_fallback`; everything else, including all the tables, runs in the numba kernel.
 - **The demo scores everyone.** An ineligible applicant is still scored; `outcome_code` is what gates the result.
