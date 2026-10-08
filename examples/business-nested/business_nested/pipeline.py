@@ -5,7 +5,7 @@
 """
 from __future__ import annotations
 
-from decider import dag
+from decider import dag, flow
 
 from business_nested import blend, entity, financial, grade, outcome, pricing, sole_proprietor, structure
 
@@ -41,4 +41,6 @@ def decision_unit():
 
 def build():
     """The whole decision, as `decider serve` runs it and as other projects embed it."""
-    return dag(entity.entities_unit(), decision_unit(), name="business_credit").emit("assessed_entities", *DECISION_OUTPUTS)
+    # A flow, not a dag: the field names inside the entity flow are not columns of the application, but a dag
+    # would read them as writes that clash with the decision's.
+    return flow(entity.entities_unit(), decision_unit(), name="business_credit").emit("assessed_entities", *DECISION_OUTPUTS)

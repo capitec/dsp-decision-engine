@@ -24,17 +24,17 @@ def not_assessed() -> tuple[int, float]:
     return 0, 0.0
 
 
-@step(outputs=("applicant1_employment_type_code", "applicant1_statement_income", "applicant1_statement_confidence",
-               "assessment_mode_code"))
+@step(outputs=("principal_employment_type_code", "principal_statement_income", "principal_statement_confidence",
+               "principal_assessment_mode_code", "principal_is_joint_application"))
 def principal_income_evidence(
     declared_annual_turnover: float, assumed_profit_margin: float = param(0.15, ge=0.0, le=1.0),
     statement_confidence: float = param(0.8, ge=0.0, le=1.0),
-) -> tuple[float, float, float, int]:
+) -> tuple[float, float, float, int, bool]:
     """The principal's monthly income as the business's profit on its declared turnover, evidenced by statements.
 
     A stand-in for the net profit after drawings, which the request does not carry.
     """
-    return SELF_EMPLOYED, declared_annual_turnover * assumed_profit_margin / 12.0, statement_confidence, NEW_APPLICATION
+    return SELF_EMPLOYED, declared_annual_turnover * assumed_profit_margin / 12.0, statement_confidence, NEW_APPLICATION, False
 
 
 def sole_proprietor_unit():
@@ -46,6 +46,11 @@ def sole_proprietor_unit():
     """
     assessment = build_assessment().relabel(
         reads={"bureau_as_of_date": "decision_date", "proposed_instalment": "instalment",
+               "applicant1_employment_type_code": "principal_employment_type_code",
+               "applicant1_statement_income": "principal_statement_income",
+               "applicant1_statement_confidence": "principal_statement_confidence",
+               "assessment_mode_code": "principal_assessment_mode_code",
+               "is_joint_application": "principal_is_joint_application",
                "applicant1_bureau_accounts": "principal_bureau_accounts",
                "applicant1_internal_accounts": "principal_internal_accounts",
                "applicant1_declared_expenses": "principal_declared_expenses",
