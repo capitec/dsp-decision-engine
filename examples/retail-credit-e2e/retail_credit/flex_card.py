@@ -41,8 +41,8 @@ def card_tables() -> dict[str, list[dict]]:
     }
 
 
-# workaround: this is not a `DecisionTableConfig` because the solve prices hundreds of candidate amounts per request
-# and a decision table lookup inside that loop costs about 100 microseconds, against half a microsecond here.
+# workaround: this is not a `DecisionTableConfig` because a table of this size still scans its rows linearly (about 200
+# microseconds per lookup) and the solve prices hundreds of candidate amounts per request, against half a microsecond here.
 def card_rate(
     offered_amount: float, risk_grade: int, offer_term_months: float,
     amount_bands: ParamTable = param_table({"floor": float}, required=True),
