@@ -13,8 +13,7 @@ from business_nested import events, rollup, scoring, structure
 def entity_unit():
     """Classify the entity's `adverse_events` (written back in place), roll them up, and score the entity."""
     return dag(
-        # workaround: an `each` inside an `each` loses its result when it writes to another column, so the
-        # classified events replace `adverse_events` instead of landing in a column of their own.
+        # In place, so each event appears once in the audit record, with its classification beside its facts.
         each("adverse_events", events.event_unit(), name="events"),
         rollup.adverse_verdict, scoring.entity_scoring_unit(),
         name="entity")
