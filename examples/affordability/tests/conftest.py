@@ -43,13 +43,18 @@ def sample():
 def assess(pipeline, sample, params):
     """`assess(**changes)` scores the sample request with the changes applied; `None` removes a field."""
 
-    def run(base=None, **changes):
+    def run(base=None, *, params_document=None, **changes):
         record = copy.deepcopy(base or sample)
         for field, value in changes.items():
             if value is None:
                 record.pop(field, None)
             else:
                 record[field] = value
-        return pipeline.score(parse_dates(record), params)
+        return pipeline.score(parse_dates(record), params_document or params)
 
     return run
+
+
+@pytest.fixture
+def parse():
+    return parse_dates
