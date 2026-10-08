@@ -53,9 +53,9 @@ EMIT = (
     "offer_basis_code", "offer_affordability_verdict_code", "instalment_ceiling",
     # solve and price
     "rate_addon_bps", "rate_addon_adjustments_applied", "solved_amount", "solve_binding_constraint", "evaluated",
-    "offer_amount", "offer_binding_constraint", "has_offer", "offer_term_months", "rate_cell_id",
+    "decision_open", "offer_amount", "offer_binding_constraint", "has_offer", "offer_term_months", "rate_cell_id",
     "nominal_annual_rate_unadjusted", "nominal_annual_rate", "initiation_fee", "initiation_fee_incl_tax",
-    "amount_financed", "credit_life_premium", "credit_life_cell_id", "monthly_service_fee", "instalment",
+    "amount_financed", "instalment_before_fees", "credit_life_premium", "credit_life_cell_id", "monthly_service_fee", "instalment",
     "total_cost_of_credit", "total_interest", "effective_annual_rate",
     # validation and outcome
     "validation_passed", "validation_failed_assertions", "decline_reason_codes", "primary_reason_code",
@@ -89,7 +89,7 @@ def build():
 
         step(pricing.offer_term_months), pricing.amount_independent_unit(),
         step(rate_addon_base), rate_addon_step, solve.solve_unit(),
-        offer.assemble_offer_step, offer.priced_offer_step, step(flex_card.rate_cell_id),
+        step(offer.decision_open), offer.assemble_offer_step, offer.priced_offer_step, step(flex_card.rate_cell_id),
         step(offer.total_cost_of_credit), step(offer.total_interest), instalment.effective_annual_rate_step,
 
         validation.revalidate_offer_step, disclosure.reasons_unit(), disclosure.outcome_code_step,
