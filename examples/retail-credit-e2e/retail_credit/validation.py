@@ -13,7 +13,7 @@ A_INSTALMENT_AFFORDABLE = 1705
 @allow_fallback
 def revalidate_offer(
     has_offer: bool, offer_amount: float, offer_term_months: float, term_cap: float, amount_cap: float,
-    nominal_annual_rate: float, instalment: float, instalment_ceiling: float, search_grid: float,
+    nominal_annual_rate: float, instalment: float, instalment_ceiling: float, amount_grid: float,
     rate_ceiling: float = param(0.2825, gt=0.0), tolerance: float = param(0.01, ge=0.0),
 ) -> tuple[bool, list[int]]:
     """(validation_passed, validation_failed_assertions): every assertion is checked, so a failed offer lists all its
@@ -21,7 +21,7 @@ def revalidate_offer(
     if not has_offer:
         return True, []
     failed = [
-        (offer_amount % search_grid != 0, A_AMOUNT_ON_GRID), (offer_amount > amount_cap + tolerance, A_AMOUNT_WITHIN_CAP),
+        (offer_amount % amount_grid != 0, A_AMOUNT_ON_GRID), (offer_amount > amount_cap + tolerance, A_AMOUNT_WITHIN_CAP),
         (offer_term_months > term_cap, A_TERM_WITHIN_CAP), (nominal_annual_rate > rate_ceiling, A_RATE_WITHIN_CEILING),
         (instalment > instalment_ceiling + tolerance, A_INSTALMENT_AFFORDABLE),
     ]

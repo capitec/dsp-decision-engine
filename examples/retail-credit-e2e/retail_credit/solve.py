@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import math
 
-from decider import allow_fallback, flow, optimise, param, step
+from decider import allow_fallback, flow, optimise, step
 
 from retail_credit import pricing
 from retail_credit.vocab import BIND_AFF, BIND_CAP, BIND_MAX, BIND_MIN, BIND_REQ
@@ -17,21 +17,19 @@ MAX_CANDIDATES = 2_000  # (R500 000 - R2 000) / R250 + 1 = 1 993
 
 
 def search_domain(
-    requested_amount: float, amount_cap: float, product_min_amount: float, product_max_amount: float,
-    grid: float = param(250.0, gt=0.0),
-) -> tuple[float, float, float]:
-    """(search_floor, search_grid, search_ceiling): the grid runs from the product minimum to the largest grid point
-    under every ceiling."""
-    return product_min_amount, grid, math.floor(min(requested_amount, amount_cap, product_max_amount) / grid) * grid
+    requested_amount: float, amount_cap: float, product_min_amount: float, product_max_amount: float, amount_grid: float,
+) -> tuple[float, float]:
+    """(search_floor, search_ceiling): the grid runs from the product minimum to the largest grid point under every ceiling."""
+    return product_min_amount, math.floor(min(requested_amount, amount_cap, product_max_amount) / amount_grid) * amount_grid
 
 
 @step(output="candidate_count")
-def candidate_count(search_floor: float, search_grid: float, search_ceiling: float) -> int:
-    return int((search_ceiling - search_floor) // search_grid) + 1 if search_ceiling >= search_floor else 0
+def candidate_count(search_floor: float, amount_grid: float, search_ceiling: float) -> int:
+    return int((search_ceiling - search_floor) // amount_grid) + 1 if search_ceiling >= search_floor else 0
 
 
-def offered_amount(index: int, search_floor: float, search_grid: float) -> float:
-    return search_floor + (index - 1) * search_grid
+def offered_amount(index: int, search_floor: float, amount_grid: float) -> float:
+    return search_floor + (index - 1) * amount_grid
 
 
 @step(output="score")
@@ -44,14 +42,14 @@ def unaffordable(score: float) -> bool:
     return score == -math.inf
 
 
-def solved_amount(best_index: int, search_floor: float, search_grid: float) -> float:
-    return 0.0 if best_index < 0 else search_floor + (best_index - 1) * search_grid
+def solved_amount(best_index: int, search_floor: float, amount_grid: float) -> float:
+    return 0.0 if best_index < 0 else search_floor + (best_index - 1) * amount_grid
 
 
 @allow_fallback
 def solve_binding_constraint(
     solved_amount: float, search_ceiling: float, requested_amount: float, amount_cap: float, search_floor: float,
-    search_grid: float,
+    amount_grid: float,
 ) -> str:
     """Which limit stopped the amount: the instalment ceiling, the request, the amount cap, the product maximum or
     the product minimum (nothing in range)."""
@@ -59,10 +57,10 @@ def solve_binding_constraint(
         return BIND_MIN
     if solved_amount == 0.0 or solved_amount < search_ceiling:
         return BIND_AFF
-    top = math.floor(requested_amount / search_grid) * search_grid
+    top = math.floor(requested_amount / amount_grid) * amount_grid
     if solved_amount >= top:
         return BIND_REQ
-    return BIND_CAP if solved_amount >= math.floor(amount_cap / search_grid) * search_grid else BIND_MAX
+    return BIND_CAP if solved_amount >= math.floor(amount_cap / amount_grid) * amount_grid else BIND_MAX
 
 
 def solve_unit():
@@ -72,6 +70,6 @@ def solve_unit():
         candidate_count,
         flow(step(offered_amount), pricing.candidate_unit(), affordable_amount, name="evaluate"),
         disqualify=unaffordable, max_candidates=MAX_CANDIDATES, name="solve", record=pricing.Quote)
-    return flow(step(search_domain, outputs=("search_floor", "search_grid", "search_ceiling")), best,
+    return flow(step(search_domain, outputs=("search_floor", "search_ceiling")), best,
                 step(solved_amount), step(solve_binding_constraint), name="solve_offer").emit(
         "solved_amount", "solve_binding_constraint", "record")

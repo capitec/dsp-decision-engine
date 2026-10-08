@@ -19,7 +19,7 @@ def test_the_sample_chain_names_the_rule_that_set_the_cap_and_those_that_did_not
 
 def test_the_channel_overlay_comes_off_the_cap_after_the_register_and_is_recorded_beside_it(decide):
     out = decide()
-    assert (out["amount_cap"], out["amount_cap_adjustments_applied"]) == (100_800.0, ["ADJ-0087"])
+    assert (out["amount_cap"], out["amount_cap_adjustments_applied"]) == (100_750.0, ["ADJ-0087"])  # 112 000 x 0.90, down to the grid
     other = decide(channel_code=2)
     assert (other["amount_cap"], other["amount_cap_adjustments_applied"]) == (112_000.0, [])
 
@@ -27,7 +27,7 @@ def test_the_channel_overlay_comes_off_the_cap_after_the_register_and_is_recorde
 def test_a_campaign_raises_the_cap_by_a_fifth_and_it_is_the_only_entry_that_can(decide):
     out = decide(campaign_id="7712")
     assert statuses(out)["CAP-0118"] == "raised"
-    assert (out["amount_cap_unadjusted"], out["amount_cap"]) == (134_400.0, 120_960.0)
+    assert (out["amount_cap_unadjusted"], out["amount_cap"]) == (134_400.0, 120_750.0)
     assert out["amount_cap_binding_rule"] == "CAP-0118"
 
 

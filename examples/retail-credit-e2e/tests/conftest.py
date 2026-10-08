@@ -61,7 +61,7 @@ def solve_once(params):
     unit_params = {"solve_only": {"solve_offer": pipeline_params["solve_offer"], "fixed_terms": pipeline_params["fixed_terms"]}}
     executable = unit.compile("interpreted")
     request = {"requested_amount": 95_000.0, "amount_cap": 95_000.0, "product_min_amount": 2_000.0,
-               "product_max_amount": 500_000.0, "risk_grade": 7, "applicant_age_years": 34.0, "cover_type_code": 1,
+               "product_max_amount": 500_000.0, "amount_grid": 250.0, "risk_grade": 7, "applicant_age_years": 34.0, "cover_type_code": 1,
                "offer_term_months": 60.0, "rate_addon_bps": 0.0, "instalment_ceiling": 2_500.0}
     return lambda **changes: executable.score({**request, **changes}, unit_params)
 
