@@ -119,6 +119,7 @@
       "dsr_ceiling": 0.45,
       "min_external": 0.6,
       "min_discretionary": 850.0,
+      "margin_per_grade_bps": 2.0,
       "margin_bands": [
         {
           "external_from": 0.0,

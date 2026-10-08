@@ -52,7 +52,7 @@ class CardRates:
     each give `(rate as a fraction, cell id)` or None."""
 
     def __init__(self, promotional: DecisionTableConfig, reversion: DecisionTableConfig):
-        self.version = reversion.rows.df["cell_id"][0].split("@")[1].split("#")[0]
+        self.version = "+".join(t.rows.df["cell_id"][0].split("@")[1].split("#")[0] for t in (promotional, reversion))
         self._promotional = self._index(promotional, ("duration", "grade"))
         self._reversion = self._index(reversion, ("grade",))
 
