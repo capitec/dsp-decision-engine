@@ -273,6 +273,11 @@ tree = TreeConfig.load({"type": "tree", "name": "risk", "trace_output": "risk_pa
 assert tree.run(pl.DataFrame({"ratio": [0.9]}))["risk_path"].to_list()[0].split(">")[-1] == "high"
 ```
 
+A decision table reads every numeric variable (a `between` input, or `eq` / `in` on a
+number column) as a `float`, whatever the column's type. An input column has one type, so
+a step that reads the same column as `int` raises a `WiringError`: add a step that writes
+a float copy (`def amount_f(amount: int) -> float`) and point the table's `variable` at it.
+
 A step type of your own is a `ConfigurableStep` subclass whose `to_ir` calls
 `ctx.call` on a plain function; `Value[float]` fields accept a param. Anything
 past `ctx.call` (row kernels, packed tables) is the `decider.ir` kit
