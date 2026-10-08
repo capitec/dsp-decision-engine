@@ -47,6 +47,7 @@ class Capacity:
 
     def __init__(self):
         unit = capacity_unit()
+        # ponytail: interpreted, a fused compile is ten seconds of numba to save 0.15 ms a scenario
         self._exe = unit.compile("interpreted")
         on = unit.parameters().defaults()
         off = copy.deepcopy(on)

@@ -264,6 +264,10 @@ Inputs it reads that the caller owns: `decision_id`, `decision_date`, `channel_c
 - **One truth for affordability.** The search never re-derives income. [`tests/test_assessment.py`](tests/test_assessment.py)
   checks that the baseline and every priced scenario agree, to the cent, with the *whole* assessment run on the accounts
   that remain. The only figure the product changes is the buffer, which is read from the assessment's own grid.
+- **The assessment's own params stay at their defaults for the scenarios.** The evidence half is in the flow, so its
+  params (haircuts, staleness window, minimum tier) sit under `consolidation/evidence/...` and are tuned there. The capacity
+  half is scored inside the search and uses the assessment's defaults, except for the overlay switch, which follows
+  `shared.overlay_stack_enabled`.
 - **Two notions of the monthly cost.** `existing_obligations` is what the assessment costs the accounts at (a card is a
   share of its limit); `total_instalment` is what the client actually pays. Affordability uses the first, instalment
   relief and the comparison use the second.
