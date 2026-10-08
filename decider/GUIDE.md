@@ -441,6 +441,11 @@ assert json.loads(response.content)["approved"] is True
 `store.create_version({...})` writes a new immutable version; replay a stored
 decision against `store.read(version)`, never whatever `configs/` holds now.
 
+`process_fn` is a coroutine: `await` it inside a running event loop, or use
+`asyncio.run` from synchronous code outside one. Code that is itself running on
+the loop thread cannot call it synchronously; score the typed record directly
+with `Executable.score`, converting date strings yourself, instead.
+
 ## Reusing another project
 
 Import its package (`credit_core.pipeline`), never a sibling file through
