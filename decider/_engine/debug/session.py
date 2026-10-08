@@ -344,7 +344,8 @@ class Session(Edits):
             return bool(target(cp))
         path, _, locator = target.partition("#")
         if locator:
-            return cp.when == "after" and cp.origin.path == path and locator in self._visited
+            # Under `path`, not only at it: a wide tree runs as row nodes `<path>/part_<k>`.
+            return cp.when == "after" and _under(cp.origin.path, path) and locator in self._visited
         # Only on entering the subtree, not at every node inside it.
         entering = self._previous is None or not _under(self._previous.origin.path, path)
         return cp.when == "before" and self._covers(cp, path) and entering
