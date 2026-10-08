@@ -5,13 +5,13 @@ from pathlib import Path
 
 import polars as pl
 import pytest
-from conftest import parse_dates
 from decider import Engine
 from decider.config import JsonFileStore
 from decider.lab.testing import assert_equivalent
 from decider.serving import RequestHandler
 
 from business_nested.pipeline import DECISION_OUTPUTS, build
+from business_nested.records import parse_dates
 
 ROOT = Path(__file__).resolve().parents[1]
 

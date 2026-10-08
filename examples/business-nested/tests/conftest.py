@@ -1,41 +1,13 @@
 import copy
 import json
-from datetime import date
 from pathlib import Path
 
 import pytest
 
 from business_nested.pipeline import build
+from business_nested.records import parse_dates
 
 ROOT = Path(__file__).resolve().parents[1]
-DECISION_DATE = date(2026, 9, 24)
-
-
-def parse_dates(record: dict) -> dict:
-    """What the handler does to a JSON request before the pipeline sees it."""
-    record = copy.deepcopy(record)
-    if isinstance(record.get("decision_date"), str):
-        record["decision_date"] = date.fromisoformat(record["decision_date"])
-    for entity in record["entities"]:
-        for event in entity.get("adverse_events", []):
-            if isinstance(event["event_date"], str):
-                event["event_date"] = date.fromisoformat(event["event_date"])
-    return record
-
-
-def event(event_id: int, amount: float | None = 1_000.0, event_type_code: int = 1, event_date: date = date(2026, 8, 1),
-          **flags) -> dict:
-    """An adverse event; an unsatisfied, active, undisputed judgment unless told otherwise."""
-    return {"event_id": event_id, "event_type_code": event_type_code, "amount": amount, "event_date": event_date,
-            "status_is_active": True, "is_disputed": False, "is_satisfied": False, **flags}
-
-
-def entity(entity_id: int, role: int = 5, pct: float = 0.0, events=(), **fields) -> dict:
-    """An entity record: a natural person with a good bureau record, owning `pct` percent as a shareholder by default."""
-    return {"entity_id": entity_id, "entity_key": f"PERSON-{entity_id}", "is_natural_person": True,
-            "relationship_type_code": role, "effective_ownership_pct": pct, "is_controlling": False,
-            "is_required_surety": False, "is_sole_principal": False, "bureau_score": 705.0, "months_on_record": 100.0,
-            "worst_delinquency_months": 0.0, "adverse_events": list(events), **fields}
 
 
 @pytest.fixture(scope="session")

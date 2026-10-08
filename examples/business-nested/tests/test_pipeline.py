@@ -5,9 +5,9 @@ from datetime import date
 
 import polars as pl
 import pytest
-from conftest import entity, event, parse_dates
 
 from business_nested.pipeline import DECISION_OUTPUTS, build
+from business_nested.records import entity, event, parse_dates
 
 
 def test_the_sample_is_declined_and_says_which_entity_and_which_event(assess):

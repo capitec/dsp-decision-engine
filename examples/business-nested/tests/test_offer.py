@@ -2,9 +2,9 @@
 import math
 
 import pytest
-from conftest import entity
 
 from business_nested import pricing
+from business_nested.records import entity
 
 
 def logit(p):

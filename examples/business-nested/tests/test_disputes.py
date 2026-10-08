@@ -1,7 +1,8 @@
 """A disputed event is never the sole cause of a decline."""
 from datetime import date
 
-from conftest import entity, event
+from business_nested.records import entity, event
+
 
 # A significant holder (15%): each R90 000 judgment is material, and six of them add up to R540 000 unsatisfied.
 OWNER = entity(1, 5, 85.0)

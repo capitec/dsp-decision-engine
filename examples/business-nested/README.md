@@ -221,6 +221,7 @@ business_nested/        the package; one module per capability
   outcome.py            outcome, reasons, attribution
   counterfactual.py     one event removed; one entity re-assessed
   vocab.py              roles, criticality and verdict codes
+  records.py            builders for requests: entity(), event(), parse_dates()
 configs/0.1.0/          params.json
 scripts/                generate_configs.py
 sample_request.json
@@ -246,6 +247,7 @@ Later examples import `business_nested` by package name. These names are stable:
 | `outcome.REASON_REGISTRY`, the `R_*` codes, `outcome.outcome_unit` | The reasons and the outcome step |
 | `counterfactual.single_event_counterfactual()`, `without_event()`, `reassess_entity()` | What a decision would have been without one event; a decision with one entity corrected, assessing only that entity |
 | `vocab` | Relationship roles, criticality classes, verdict codes |
+| `records.entity()`, `records.event()`, `records.parse_dates()` | Request builders for tests and callers: an entity, an adverse event, a JSON request with its dates parsed |
 
 Inputs it reads that the caller owns: `decision_date`, `product_code` (50 term, 51 revolving), `requested_amount`,
 `requested_term_months` (default 36), `legal_form_code`, `sector_code`, `declared_annual_turnover`,
