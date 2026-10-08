@@ -1,0 +1,147 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 720" font-family="system-ui, sans-serif">
+  <rect x="0" y="0" width="1000" height="720" fill="#ffffff"/>
+  <rect x="20" y="20" width="470" height="120" rx="10" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="36" y="46" font-size="15" font-weight="600" fill="#7c2d00">determinism</text>
+  <text x="474" y="46" text-anchor="end" font-size="13" fill="#7c2d00">_builtin/determinism.py</text>
+  <text x="36" y="72" font-size="13" font-family="ui-monospace, monospace" fill="#7c2d00">DCD001</text>
+  <text x="106" y="72" font-size="13" font-family="ui-monospace, monospace" fill="#7c2d00">wall_clock</text>
+  <text x="474" y="72" text-anchor="end" font-size="13" font-weight="400" fill="#7c2d00">warning</text>
+  <text x="36" y="96" font-size="13" font-family="ui-monospace, monospace" fill="#7c2d00">DCD002</text>
+  <text x="106" y="96" font-size="13" font-family="ui-monospace, monospace" fill="#7c2d00">impure</text>
+  <text x="474" y="96" text-anchor="end" font-size="13" font-weight="400" fill="#7c2d00">warning</text>
+  <text x="36" y="120" font-size="13" font-family="ui-monospace, monospace" fill="#7c2d00">DCD003</text>
+  <text x="106" y="120" font-size="13" font-family="ui-monospace, monospace" fill="#7c2d00">mutates_input</text>
+  <text x="474" y="120" text-anchor="end" font-size="13" font-weight="400" fill="#7c2d00">warning</text>
+  <rect x="20" y="156" width="470" height="288" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="36" y="182" font-size="15" font-weight="600" fill="#134e4a">numeric</text>
+  <text x="474" y="182" text-anchor="end" font-size="13" fill="#134e4a">_builtin/numeric/</text>
+  <text x="36" y="208" font-size="13" font-family="ui-monospace, monospace" fill="#134e4a">DCD101</text>
+  <text x="106" y="208" font-size="13" font-family="ui-monospace, monospace" fill="#134e4a">int64_overflow</text>
+  <text x="474" y="208" text-anchor="end" font-size="13" font-weight="400" fill="#134e4a">warning</text>
+  <text x="36" y="232" font-size="13" font-family="ui-monospace, monospace" fill="#134e4a">DCD102</text>
+  <text x="106" y="232" font-size="13" font-family="ui-monospace, monospace" fill="#134e4a">float_money</text>
+  <text x="474" y="232" text-anchor="end" font-size="13" font-weight="400" fill="#134e4a">warning</text>
+  <text x="36" y="256" font-size="13" font-family="ui-monospace, monospace" fill="#134e4a">DCD103</text>
+  <text x="106" y="256" font-size="13" font-family="ui-monospace, monospace" fill="#134e4a">bare_round</text>
+  <text x="474" y="256" text-anchor="end" font-size="13" font-weight="400" fill="#134e4a">warning</text>
+  <text x="36" y="280" font-size="13" font-family="ui-monospace, monospace" fill="#134e4a">DCD104</text>
+  <text x="106" y="280" font-size="13" font-family="ui-monospace, monospace" fill="#134e4a">division_by_variable</text>
+  <text x="474" y="280" text-anchor="end" font-size="13" font-weight="400" fill="#134e4a">warning</text>
+  <text x="36" y="304" font-size="13" font-family="ui-monospace, monospace" fill="#134e4a">DCD105</text>
+  <text x="106" y="304" font-size="13" font-family="ui-monospace, monospace" fill="#134e4a">int_true_division</text>
+  <text x="474" y="304" text-anchor="end" font-size="13" font-weight="400" fill="#134e4a">info</text>
+  <text x="36" y="328" font-size="13" font-family="ui-monospace, monospace" fill="#134e4a">DCD106</text>
+  <text x="106" y="328" font-size="13" font-family="ui-monospace, monospace" fill="#134e4a">pow_exp_overflow</text>
+  <text x="474" y="328" text-anchor="end" font-size="13" font-weight="400" fill="#134e4a">warning</text>
+  <text x="36" y="352" font-size="13" font-family="ui-monospace, monospace" fill="#134e4a">DCD107</text>
+  <text x="106" y="352" font-size="13" font-family="ui-monospace, monospace" fill="#134e4a">float_equality</text>
+  <text x="474" y="352" text-anchor="end" font-size="13" font-weight="400" fill="#134e4a">warning</text>
+  <text x="36" y="376" font-size="13" font-family="ui-monospace, monospace" fill="#134e4a">DCD108</text>
+  <text x="106" y="376" font-size="13" font-family="ui-monospace, monospace" fill="#134e4a">nan_propagation</text>
+  <text x="474" y="376" text-anchor="end" font-size="13" font-weight="400" fill="#134e4a">info</text>
+  <text x="36" y="400" font-size="13" font-family="ui-monospace, monospace" fill="#134e4a">DCD109</text>
+  <text x="106" y="400" font-size="13" font-family="ui-monospace, monospace" fill="#134e4a">accumulator_dtype</text>
+  <text x="474" y="400" text-anchor="end" font-size="13" font-weight="400" fill="#134e4a">warning</text>
+  <text x="36" y="424" font-size="13" font-family="ui-monospace, monospace" fill="#134e4a">DCD110</text>
+  <text x="106" y="424" font-size="13" font-family="ui-monospace, monospace" fill="#134e4a">unsafe_cast</text>
+  <text x="474" y="424" text-anchor="end" font-size="13" font-weight="400" fill="#134e4a">warning</text>
+  <rect x="20" y="460" width="470" height="120" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="36" y="486" font-size="15" font-weight="600" fill="#4c1d95">ids</text>
+  <text x="474" y="486" text-anchor="end" font-size="13" fill="#4c1d95">_builtin/ids.py</text>
+  <text x="36" y="512" font-size="13" font-family="ui-monospace, monospace" fill="#4c1d95">DCD401</text>
+  <text x="106" y="512" font-size="13" font-family="ui-monospace, monospace" fill="#4c1d95">durable_ids</text>
+  <text x="474" y="512" text-anchor="end" font-size="13" font-weight="400" fill="#4c1d95">warning</text>
+  <text x="36" y="536" font-size="13" font-family="ui-monospace, monospace" fill="#4c1d95">DCD402</text>
+  <text x="106" y="536" font-size="13" font-family="ui-monospace, monospace" fill="#4c1d95">duplicate_ids</text>
+  <text x="474" y="536" text-anchor="end" font-size="13" font-weight="600" fill="#b91c1c">error</text>
+  <text x="36" y="560" font-size="13" font-family="ui-monospace, monospace" fill="#4c1d95">DCD403</text>
+  <text x="106" y="560" font-size="13" font-family="ui-monospace, monospace" fill="#4c1d95">unknown_suppression</text>
+  <text x="474" y="560" text-anchor="end" font-size="13" font-weight="400" fill="#4c1d95">warning</text>
+  <rect x="510" y="20" width="470" height="240" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="526" y="46" font-size="15" font-weight="600" fill="#1e3a8a">structure</text>
+  <text x="964" y="46" text-anchor="end" font-size="13" fill="#1e3a8a">_builtin/structure.py</text>
+  <text x="526" y="72" font-size="13" font-family="ui-monospace, monospace" fill="#1e3a8a">DCD201</text>
+  <text x="596" y="72" font-size="13" font-family="ui-monospace, monospace" fill="#1e3a8a">unreachable_branch</text>
+  <text x="964" y="72" text-anchor="end" font-size="13" font-weight="400" fill="#1e3a8a">warning</text>
+  <text x="526" y="96" font-size="13" font-family="ui-monospace, monospace" fill="#1e3a8a">DCD202</text>
+  <text x="596" y="96" font-size="13" font-family="ui-monospace, monospace" fill="#1e3a8a">dead_output</text>
+  <text x="964" y="96" text-anchor="end" font-size="13" font-weight="400" fill="#1e3a8a">info</text>
+  <text x="526" y="120" font-size="13" font-family="ui-monospace, monospace" fill="#1e3a8a">DCD203</text>
+  <text x="596" y="120" font-size="13" font-family="ui-monospace, monospace" fill="#1e3a8a">shadowed_write</text>
+  <text x="964" y="120" text-anchor="end" font-size="13" font-weight="400" fill="#1e3a8a">warning</text>
+  <text x="526" y="144" font-size="13" font-family="ui-monospace, monospace" fill="#1e3a8a">DCD204</text>
+  <text x="596" y="144" font-size="13" font-family="ui-monospace, monospace" fill="#1e3a8a">unused_input</text>
+  <text x="964" y="144" text-anchor="end" font-size="13" font-weight="400" fill="#1e3a8a">info</text>
+  <text x="526" y="168" font-size="13" font-family="ui-monospace, monospace" fill="#1e3a8a">DCD205</text>
+  <text x="596" y="168" font-size="13" font-family="ui-monospace, monospace" fill="#1e3a8a">unbounded_loop</text>
+  <text x="964" y="168" text-anchor="end" font-size="13" font-weight="400" fill="#1e3a8a">warning</text>
+  <text x="526" y="192" font-size="13" font-family="ui-monospace, monospace" fill="#1e3a8a">DCD206</text>
+  <text x="596" y="192" font-size="13" font-family="ui-monospace, monospace" fill="#1e3a8a">opaque_frame_step</text>
+  <text x="964" y="192" text-anchor="end" font-size="13" font-weight="400" fill="#1e3a8a">info</text>
+  <text x="526" y="216" font-size="13" font-family="ui-monospace, monospace" fill="#1e3a8a">DCD207</text>
+  <text x="596" y="216" font-size="13" font-family="ui-monospace, monospace" fill="#1e3a8a">table_overlap</text>
+  <rect x="828" y="202" width="56" height="19" rx="9" fill="#ffffff" stroke="#2563eb" stroke-width="1.2" stroke-dasharray="3 2"/>
+  <text x="856" y="216" text-anchor="middle" font-size="12" fill="#1e3a8a">opt-in</text>
+  <text x="964" y="216" text-anchor="end" font-size="13" font-weight="400" fill="#1e3a8a">info</text>
+  <text x="526" y="240" font-size="13" font-family="ui-monospace, monospace" fill="#1e3a8a">DCD208</text>
+  <text x="596" y="240" font-size="13" font-family="ui-monospace, monospace" fill="#1e3a8a">table_gap</text>
+  <rect x="828" y="226" width="56" height="19" rx="9" fill="#ffffff" stroke="#2563eb" stroke-width="1.2" stroke-dasharray="3 2"/>
+  <text x="856" y="240" text-anchor="middle" font-size="12" fill="#1e3a8a">opt-in</text>
+  <text x="964" y="240" text-anchor="end" font-size="13" font-weight="400" fill="#1e3a8a">info</text>
+  <rect x="510" y="276" width="470" height="144" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="526" y="302" font-size="15" font-weight="600" fill="#14532d">params</text>
+  <text x="964" y="302" text-anchor="end" font-size="13" fill="#14532d">_builtin/params.py</text>
+  <text x="526" y="328" font-size="13" font-family="ui-monospace, monospace" fill="#14532d">DCD301</text>
+  <text x="596" y="328" font-size="13" font-family="ui-monospace, monospace" fill="#14532d">param_unconstrained</text>
+  <text x="964" y="328" text-anchor="end" font-size="13" font-weight="400" fill="#14532d">info</text>
+  <text x="526" y="352" font-size="13" font-family="ui-monospace, monospace" fill="#14532d">DCD302</text>
+  <text x="596" y="352" font-size="13" font-family="ui-monospace, monospace" fill="#14532d">param_default_out_of_bounds</text>
+  <text x="964" y="352" text-anchor="end" font-size="13" font-weight="400" fill="#14532d">warning</text>
+  <text x="526" y="376" font-size="13" font-family="ui-monospace, monospace" fill="#14532d">DCD303</text>
+  <text x="596" y="376" font-size="13" font-family="ui-monospace, monospace" fill="#14532d">param_unused</text>
+  <text x="964" y="376" text-anchor="end" font-size="13" font-weight="400" fill="#14532d">warning</text>
+  <text x="526" y="400" font-size="13" font-family="ui-monospace, monospace" fill="#14532d">DCD304</text>
+  <text x="596" y="400" font-size="13" font-family="ui-monospace, monospace" fill="#14532d">invalid_params_doc</text>
+  <rect x="828" y="386" width="56" height="19" rx="9" fill="#ffffff" stroke="#16a34a" stroke-width="1.2" stroke-dasharray="3 2"/>
+  <text x="856" y="400" text-anchor="middle" font-size="12" fill="#14532d">opt-in</text>
+  <text x="964" y="400" text-anchor="end" font-size="13" font-weight="600" fill="#b91c1c">error</text>
+  <rect x="510" y="436" width="470" height="144" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="526" y="462" font-size="15" font-weight="600" fill="#1f2937">data</text>
+  <text x="964" y="462" text-anchor="end" font-size="13" fill="#1f2937">_builtin/data.py</text>
+  <text x="526" y="488" font-size="13" font-family="ui-monospace, monospace" fill="#1f2937">DCD502</text>
+  <text x="596" y="488" font-size="13" font-family="ui-monospace, monospace" fill="#1f2937">nan_output</text>
+  <rect x="828" y="474" width="56" height="19" rx="9" fill="#ffffff" stroke="#6b7280" stroke-width="1.2" stroke-dasharray="3 2"/>
+  <text x="856" y="488" text-anchor="middle" font-size="12" fill="#1f2937">opt-in</text>
+  <text x="964" y="488" text-anchor="end" font-size="13" font-weight="400" fill="#1f2937">warning</text>
+  <text x="526" y="512" font-size="13" font-family="ui-monospace, monospace" fill="#1f2937">DCD503</text>
+  <text x="596" y="512" font-size="13" font-family="ui-monospace, monospace" fill="#1f2937">int64_range</text>
+  <rect x="828" y="498" width="56" height="19" rx="9" fill="#ffffff" stroke="#6b7280" stroke-width="1.2" stroke-dasharray="3 2"/>
+  <text x="856" y="512" text-anchor="middle" font-size="12" fill="#1f2937">opt-in</text>
+  <text x="964" y="512" text-anchor="end" font-size="13" font-weight="400" fill="#1f2937">warning</text>
+  <text x="526" y="536" font-size="13" font-family="ui-monospace, monospace" fill="#1f2937">DCD504</text>
+  <text x="596" y="536" font-size="13" font-family="ui-monospace, monospace" fill="#1f2937">missing_required</text>
+  <rect x="828" y="522" width="56" height="19" rx="9" fill="#ffffff" stroke="#6b7280" stroke-width="1.2" stroke-dasharray="3 2"/>
+  <text x="856" y="536" text-anchor="middle" font-size="12" fill="#1f2937">opt-in</text>
+  <text x="964" y="536" text-anchor="end" font-size="13" font-weight="600" fill="#b91c1c">error</text>
+  <text x="526" y="560" font-size="13" font-family="ui-monospace, monospace" fill="#1f2937">DCD506</text>
+  <text x="596" y="560" font-size="13" font-family="ui-monospace, monospace" fill="#1f2937">constant_output</text>
+  <rect x="828" y="546" width="56" height="19" rx="9" fill="#ffffff" stroke="#6b7280" stroke-width="1.2" stroke-dasharray="3 2"/>
+  <text x="856" y="560" text-anchor="middle" font-size="12" fill="#1f2937">opt-in</text>
+  <text x="964" y="560" text-anchor="end" font-size="13" font-weight="400" fill="#1f2937">info</text>
+  <rect x="510" y="596" width="470" height="96" rx="10" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+  <text x="526" y="622" font-size="15" font-weight="600" fill="#7f1d1d">runtime</text>
+  <text x="964" y="622" text-anchor="end" font-size="13" fill="#7f1d1d">_builtin/runtime.py</text>
+  <text x="526" y="648" font-size="13" font-family="ui-monospace, monospace" fill="#7f1d1d">DCD501</text>
+  <text x="596" y="648" font-size="13" font-family="ui-monospace, monospace" fill="#7f1d1d">crash_probe</text>
+  <rect x="828" y="634" width="56" height="19" rx="9" fill="#ffffff" stroke="#dc2626" stroke-width="1.2" stroke-dasharray="3 2"/>
+  <text x="856" y="648" text-anchor="middle" font-size="12" fill="#7f1d1d">opt-in</text>
+  <text x="964" y="648" text-anchor="end" font-size="13" font-weight="600" fill="#b91c1c">error</text>
+  <text x="526" y="672" font-size="13" font-family="ui-monospace, monospace" fill="#7f1d1d">DCD505</text>
+  <text x="596" y="672" font-size="13" font-family="ui-monospace, monospace" fill="#7f1d1d">mode_divergence</text>
+  <rect x="828" y="658" width="56" height="19" rx="9" fill="#ffffff" stroke="#dc2626" stroke-width="1.2" stroke-dasharray="3 2"/>
+  <text x="856" y="672" text-anchor="middle" font-size="12" fill="#7f1d1d">opt-in</text>
+  <text x="964" y="672" text-anchor="end" font-size="13" font-weight="600" fill="#b91c1c">error</text>
+  <text x="20" y="612" font-size="13" fill="#1f2937">Default severity on the right. Rows marked opt-in are not in checks.standard.</text>
+  <text x="20" y="634" font-size="13" fill="#1f2937">DCD207 and DCD208 are emitted by the z3 pass of unreachable_branch.</text>
+  <text x="20" y="656" font-size="13" fill="#1f2937">checks.catalogue() labels every DCD5xx code "runtime".</text>
+</svg>

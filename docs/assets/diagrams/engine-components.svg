@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 700" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#374151"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="700" fill="#ffffff"/>
+
+  <!-- authoring -->
+  <rect x="40" y="24" width="440" height="72" rx="10" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="60" y="52" font-size="16" font-weight="600" fill="#7c2d00">A step, a plain function, or an IR node</text>
+  <text x="60" y="78" font-size="14" fill="#7c2d00">Engine(...).bind(pipeline, mode="fused")</text>
+
+  <line x1="260" y1="96" x2="260" y2="128" stroke="#374151" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <!-- ir -->
+  <rect x="40" y="130" width="440" height="88" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="60" y="156" font-size="16" font-weight="600" fill="#1e3a8a">ir/   to_ir(step), IRContext, checks</text>
+  <text x="60" y="180" font-size="14" fill="#1e3a8a">IRNode tree: CallNode, SequenceNode, BranchNode,</text>
+  <text x="60" y="200" font-size="14" fill="#1e3a8a">LoopNode, ScatterGatherNode; each with an Origin</text>
+
+  <line x1="260" y1="218" x2="260" y2="250" stroke="#374151" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <!-- wiring -->
+  <rect x="40" y="252" width="440" height="66" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="60" y="278" font-size="16" font-weight="600" fill="#1e3a8a">wiring/   resolve(ir) → Plan</text>
+  <text x="60" y="302" font-size="14" fill="#1e3a8a">calls, versions, inputs, outputs, chains, drops</text>
+
+  <line x1="260" y1="318" x2="260" y2="346" stroke="#374151" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <!-- run -->
+  <rect x="40" y="348" width="440" height="320" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="60" y="376" font-size="16" font-weight="600" fill="#134e4a">run/   Executable</text>
+  <text x="60" y="398" font-size="14" fill="#134e4a">run(df) · score(record) · session(df) · fallbacks()</text>
+
+  <rect x="62" y="414" width="396" height="58" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="78" y="437" font-size="14" font-weight="600" fill="#14532d">State</text>
+  <text x="78" y="459" font-size="13" fill="#14532d">one array and validity mask per NodeVersion</text>
+
+  <rect x="62" y="484" width="396" height="58" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="78" y="507" font-size="14" font-weight="600" fill="#14532d">RunParams</text>
+  <text x="78" y="529" font-size="13" fill="#14532d">a validated params bundle per call, from the ParamsCache</text>
+
+  <rect x="62" y="554" width="396" height="58" rx="8" fill="#ffffff" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="78" y="577" font-size="14" font-weight="600" fill="#134e4a">runner.iterate(plan, state, params)</text>
+  <text x="78" y="599" font-size="13" fill="#134e4a">InterpretedRunner, SteppedRunner, FusedRunner</text>
+
+  <text x="60" y="644" font-size="14" fill="#134e4a">output(state) → polars frame, or a dict from score()</text>
+
+  <!-- right column -->
+  <rect x="560" y="348" width="400" height="48" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="576" y="368" font-size="14" font-weight="600" fill="#14532d">params/</text>
+  <text x="576" y="387" font-size="13" fill="#14532d">NodeParams, ParamsCache, parameters()</text>
+
+  <rect x="560" y="402" width="400" height="48" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="576" y="422" font-size="14" font-weight="600" fill="#134e4a">compile/</text>
+  <text x="576" y="441" font-size="13" fill="#134e4a">compile_plan: Kernel and Fallback units</text>
+
+  <rect x="560" y="456" width="400" height="48" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="576" y="476" font-size="14" font-weight="600" fill="#134e4a">boundary/</text>
+  <text x="576" y="495" font-size="13" fill="#134e4a">extract_frame: polars columns into typed arrays</text>
+
+  <rect x="560" y="510" width="400" height="48" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="576" y="530" font-size="14" font-weight="600" fill="#4c1d95">trace/</text>
+  <text x="576" y="549" font-size="13" fill="#4c1d95">TraceSink receives per-record events</text>
+
+  <rect x="560" y="564" width="400" height="48" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="576" y="584" font-size="14" font-weight="600" fill="#4c1d95">debug/</text>
+  <text x="576" y="603" font-size="13" fill="#4c1d95">Session advances runner.iterate one checkpoint at a time</text>
+
+  <rect x="560" y="618" width="400" height="48" rx="8" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="576" y="638" font-size="14" font-weight="600" fill="#1f2937">concurrency.py</text>
+  <text x="576" y="657" font-size="13" fill="#1f2937">Cache and once(): build-once caches shared by threads</text>
+
+  <line x1="560" y1="372" x2="482" y2="510" stroke="#374151" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="560" y1="426" x2="482" y2="564" stroke="#374151" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="560" y1="480" x2="482" y2="440" stroke="#374151" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="482" y1="582" x2="558" y2="534" stroke="#374151" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="560" y1="590" x2="482" y2="602" stroke="#374151" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <!-- notes on top right -->
+  <rect x="560" y="24" width="400" height="294" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="580" y="54" font-size="15" font-weight="600" fill="#1f2937">Built once per bind</text>
+  <text x="580" y="80" font-size="14" fill="#1f2937">the IR (cached per step object and path)</text>
+  <text x="580" y="104" font-size="14" fill="#1f2937">the Plan</text>
+  <text x="580" y="128" font-size="14" fill="#1f2937">a NodeParams per call with params</text>
+  <text x="580" y="152" font-size="14" fill="#1f2937">the runner (compiles on its first iterate)</text>
+  <text x="580" y="190" font-size="15" font-weight="600" fill="#1f2937">Built per call</text>
+  <text x="580" y="216" font-size="14" fill="#1f2937">a State over the frame or the record</text>
+  <text x="580" y="240" font-size="14" fill="#1f2937">a RunParams and its RunReport</text>
+  <text x="580" y="264" font-size="14" fill="#1f2937">one generator over the checkpoints</text>
+  <text x="580" y="298" font-size="13" fill="#4b5563">Validated bundles are cached per params document.</text>
+</svg>

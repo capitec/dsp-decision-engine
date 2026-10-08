@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 330" font-family="system-ui, sans-serif">
+  <rect x="0" y="0" width="1000" height="330" fill="#ffffff"/>
+  <text x="20" y="26" font-size="15" font-weight="600" fill="#1f2937">The one buffer sm_columns fills: 24 * ncols + n * row_bytes bytes</text>
+
+  <rect x="20" y="46" width="230" height="64" rx="8" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="32" y="68" font-size="13" font-weight="600" fill="#1f2937">header, int64 x 3 x ncols</text>
+  <text x="32" y="88" font-size="12" fill="#1f2937">null count | values offset |</text>
+  <text x="32" y="104" font-size="12" fill="#1f2937">in-place address (0 if copied)</text>
+  <rect x="250" y="46" width="120" height="64" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="310" y="74" font-size="13" text-anchor="middle" fill="#14532d">F64</text>
+  <text x="310" y="94" font-size="12" text-anchor="middle" fill="#14532d">8 B x n each</text>
+  <rect x="370" y="46" width="120" height="64" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="430" y="74" font-size="13" text-anchor="middle" fill="#14532d">I64</text>
+  <text x="430" y="94" font-size="12" text-anchor="middle" fill="#14532d">8 B x n each</text>
+  <rect x="490" y="46" width="130" height="64" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="555" y="74" font-size="13" text-anchor="middle" fill="#14532d">STR spans</text>
+  <text x="555" y="94" font-size="12" text-anchor="middle" fill="#14532d">16 B x n each</text>
+  <rect x="620" y="46" width="110" height="64" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="675" y="74" font-size="13" text-anchor="middle" fill="#14532d">CODE</text>
+  <text x="675" y="94" font-size="12" text-anchor="middle" fill="#14532d">4 B x n each</text>
+  <rect x="730" y="46" width="100" height="64" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="780" y="74" font-size="13" text-anchor="middle" fill="#14532d">BOOL</text>
+  <text x="780" y="94" font-size="12" text-anchor="middle" fill="#14532d">1 B x n each</text>
+  <rect x="830" y="46" width="150" height="64" rx="8" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+  <text x="905" y="74" font-size="13" text-anchor="middle" fill="#7f1d1d">validity rows</text>
+  <text x="905" y="94" font-size="12" text-anchor="middle" fill="#7f1d1d">n B per column</text>
+
+  <text x="20" y="150" font-size="14" font-weight="600" fill="#1f2937">The extract example: n = 3 rows, ncols = 6, row_bytes = 51</text>
+  <text x="20" y="176" font-size="13" fill="#1f2937">header 144 B, then net_income (F64, 24 B), age and principal (I64, 2 x 24 B), employer (STR, 48 B),</text>
+  <text x="20" y="196" font-size="13" fill="#1f2937">channel (CODE, 12 B), employed (BOOL, 3 B), and 6 x 3 B of validity: 297 bytes, one allocation.</text>
+
+  <text x="20" y="236" font-size="14" font-weight="600" fill="#1f2937">What Python does with it</text>
+  <text x="20" y="262" font-size="13" fill="#1f2937">Each column becomes np.frombuffer over its region (an (n, 2) table for STR). A validity row becomes a mask</text>
+  <text x="20" y="282" font-size="13" fill="#1f2937">only when the header's null count is non-zero. The buffer is then made read-only; masks stay writeable.</text>
+  <text x="20" y="302" font-size="13" fill="#1f2937">With n &gt;= 4096, a column with no nulls already in the kernel's dtype is not copied: its header address</text>
+  <text x="20" y="322" font-size="13" fill="#1f2937">points into the exported Arrow buffer, wrapped in a read-only view that keeps the export alive.</text>
+</svg>

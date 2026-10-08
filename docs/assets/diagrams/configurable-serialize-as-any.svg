@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 380" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="380" fill="#ffffff"/>
+
+  <!-- left: plain base type -->
+  <text x="245" y="28" text-anchor="middle" font-size="15" font-weight="600" fill="#1f2937">steps: list[ConfigurableStep]</text>
+  <rect x="20" y="44" width="450" height="80" rx="10" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="245" y="72" text-anchor="middle" font-size="14" font-weight="600" fill="#7c2d00">In memory: Capped(name="offer",</text>
+  <text x="245" y="94" text-anchor="middle" font-size="14" fill="#7c2d00">column="requested", limit=ParamRef("max_offer"))</text>
+  <text x="245" y="114" text-anchor="middle" font-size="13" fill="#7c2d00">a subclass instance in a base-typed field</text>
+  <line x1="245" y1="124" x2="245" y2="158" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="255" y="146" font-size="13" fill="#1f2937">model_dump()</text>
+  <rect x="20" y="160" width="450" height="94" rx="10" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+  <text x="245" y="186" text-anchor="middle" font-size="14" fill="#7f1d1d">{"type": "capped", "name": "offer",</text>
+  <text x="245" y="206" text-anchor="middle" font-size="14" fill="#7f1d1d">"id": None, "suppress_checks": []}</text>
+  <text x="245" y="236" text-anchor="middle" font-size="14" font-weight="600" fill="#7f1d1d">column and limit are gone, with no warning</text>
+  <rect x="20" y="270" width="450" height="90" rx="10" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+  <text x="245" y="296" text-anchor="middle" font-size="14" fill="#7f1d1d">Loading the full dict back fails too:</text>
+  <text x="245" y="318" text-anchor="middle" font-size="14" fill="#7f1d1d">the field validates as the base class,</text>
+  <text x="245" y="340" text-anchor="middle" font-size="14" fill="#7f1d1d">which forbids the subclass's extra fields</text>
+
+  <!-- right: StepRef -->
+  <text x="755" y="28" text-anchor="middle" font-size="15" font-weight="600" fill="#1f2937">steps: list[StepRef]</text>
+  <rect x="530" y="44" width="450" height="80" rx="10" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="755" y="72" text-anchor="middle" font-size="14" font-weight="600" fill="#7c2d00">StepRef = Annotated[ConfigurableStep,</text>
+  <text x="755" y="94" text-anchor="middle" font-size="14" fill="#7c2d00">WrapValidator(dispatch), SerializeAsAny()]</text>
+  <text x="755" y="114" text-anchor="middle" font-size="13" fill="#7c2d00">built by ref(ConfigurableStep) in decider/_registry.py</text>
+  <line x1="755" y1="124" x2="755" y2="158" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="765" y="146" font-size="13" fill="#1f2937">model_dump()</text>
+  <rect x="530" y="160" width="450" height="94" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="755" y="186" text-anchor="middle" font-size="14" fill="#14532d">{"type": "capped", "name": "offer", ...,</text>
+  <text x="755" y="206" text-anchor="middle" font-size="14" fill="#14532d">"column": "requested", "limit": {"param":</text>
+  <text x="755" y="226" text-anchor="middle" font-size="14" fill="#14532d">"max_offer", "default": 40000.0, ...}}</text>
+  <rect x="530" y="270" width="450" height="90" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="755" y="296" text-anchor="middle" font-size="14" fill="#14532d">Loading it back: dispatch reads "type",</text>
+  <text x="755" y="318" text-anchor="middle" font-size="14" fill="#14532d">calls ConfigurableStep.resolve("capped")</text>
+  <text x="755" y="340" text-anchor="middle" font-size="14" fill="#14532d">and validates the dict as Capped</text>
+</svg>

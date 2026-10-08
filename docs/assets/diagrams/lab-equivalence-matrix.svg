@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 440" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="440" fill="#ffffff"/>
+
+  <!-- column headers -->
+  <g font-size="14" font-weight="600" fill="#1f2937" text-anchor="middle">
+    <text x="105" y="36">mode</text>
+    <text x="305" y="30">exe.run(frame)</text>
+    <text x="305" y="48" font-weight="400" font-size="13">vs the first mode</text>
+    <text x="515" y="30">exe.score(record)</text>
+    <text x="515" y="48" font-weight="400" font-size="13">each row vs this mode's run</text>
+    <text x="715" y="30">session resumed to end</text>
+    <text x="715" y="48" font-weight="400" font-size="13">vs this mode's run</text>
+    <text x="900" y="30">script(session)</text>
+    <text x="900" y="48" font-weight="400" font-size="13">vs the first mode</text>
+  </g>
+
+  <!-- rows -->
+  <g font-size="14">
+    <!-- interpreted -->
+    <rect x="30" y="70" width="150" height="70" rx="9" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+    <text x="105" y="102" text-anchor="middle" fill="#134e4a" font-weight="600">interpreted</text>
+    <text x="105" y="122" text-anchor="middle" fill="#134e4a" font-size="13">modes[0]</text>
+    <rect x="210" y="70" width="190" height="70" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+    <text x="305" y="102" text-anchor="middle" fill="#14532d" font-weight="600">expected</text>
+    <text x="305" y="122" text-anchor="middle" fill="#14532d" font-size="13">the reference frame</text>
+    <rect x="420" y="70" width="190" height="70" rx="9" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+    <text x="515" y="110" text-anchor="middle" fill="#1f2937">dict == row</text>
+    <rect x="630" y="70" width="170" height="70" rx="9" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+    <text x="715" y="110" text-anchor="middle" fill="#1f2937">frame == out</text>
+    <rect x="820" y="70" width="160" height="70" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+    <text x="900" y="102" text-anchor="middle" fill="#14532d" font-weight="600">scripted</text>
+    <text x="900" y="122" text-anchor="middle" fill="#14532d" font-size="13">the reference</text>
+
+    <!-- stepped -->
+    <rect x="30" y="170" width="150" height="70" rx="9" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+    <text x="105" y="210" text-anchor="middle" fill="#134e4a" font-weight="600">stepped</text>
+    <rect x="210" y="170" width="190" height="70" rx="9" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+    <text x="305" y="210" text-anchor="middle" fill="#1f2937">out == expected</text>
+    <rect x="420" y="170" width="190" height="70" rx="9" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+    <text x="515" y="210" text-anchor="middle" fill="#1f2937">dict == row</text>
+    <rect x="630" y="170" width="170" height="70" rx="9" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+    <text x="715" y="210" text-anchor="middle" fill="#1f2937">frame == out</text>
+    <rect x="820" y="170" width="160" height="70" rx="9" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+    <text x="900" y="210" text-anchor="middle" fill="#1f2937">== scripted</text>
+
+    <!-- fused -->
+    <rect x="30" y="270" width="150" height="70" rx="9" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+    <text x="105" y="310" text-anchor="middle" fill="#134e4a" font-weight="600">fused</text>
+    <rect x="210" y="270" width="190" height="70" rx="9" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+    <text x="305" y="310" text-anchor="middle" fill="#1f2937">out == expected</text>
+    <rect x="420" y="270" width="190" height="70" rx="9" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+    <text x="515" y="310" text-anchor="middle" fill="#1f2937">dict == row</text>
+    <rect x="630" y="270" width="170" height="70" rx="9" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+    <text x="715" y="310" text-anchor="middle" fill="#1f2937">frame == out</text>
+    <rect x="820" y="270" width="160" height="70" rx="9" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+    <text x="900" y="310" text-anchor="middle" fill="#1f2937">== scripted</text>
+  </g>
+
+  <!-- reference arrows -->
+  <line x1="380" y1="170" x2="380" y2="142" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <polyline points="400,305 410,305 410,128 402,128" fill="none" stroke="#4b5563" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+  <line x1="960" y1="170" x2="960" y2="142" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <polyline points="980,305 990,305 990,128 982,128" fill="none" stroke="#4b5563" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+
+  <!-- notes -->
+  <g font-size="13" fill="#1f2937">
+    <text x="30" y="378">Frames: polars assert_frame_equal(check_exact=True): same columns, dtypes and values; NaN equals NaN.</text>
+    <text x="30" y="400">Records: same keys in the same order, values equal with ==, NaN equals NaN.</text>
+    <text x="30" y="422">A raise in modes[0] propagates as is; a raise only in a later mode is an AssertionError naming the mode.</text>
+  </g>
+</svg>

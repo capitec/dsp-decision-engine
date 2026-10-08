@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="900" height="400" fill="#ffffff"/>
+
+  <!-- 0.0.0 -->
+  <rect x="10" y="16" width="400" height="368" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="26" y="44" font-size="16" font-weight="600" fill="#14532d">configs/0.0.0/</text>
+  <rect x="26" y="58" width="368" height="40" rx="8" fill="#ffffff" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="38" y="84" font-size="15" fill="#14532d">application_card.json  (scorecard)</text>
+  <rect x="26" y="106" width="368" height="40" rx="8" fill="#ffffff" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="38" y="132" font-size="15" fill="#14532d">rate_card.json  (decision table)</text>
+  <rect x="26" y="154" width="368" height="214" rx="8" fill="#ffffff" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="38" y="180" font-size="15" font-weight="600" fill="#14532d">params.json</text>
+  <text x="38" y="206" font-size="14" fill="#14532d">risk_grade.bands (parameter table)</text>
+  <text x="52" y="230" font-size="14" fill="#14532d">min_score 0 / 600 / 650 / 700</text>
+  <text x="52" y="252" font-size="14" fill="#14532d">grade       4 / 3 / 2 / 1</text>
+  <text x="38" y="282" font-size="14" fill="#14532d">affordable.max_share  0.35</text>
+  <text x="38" y="308" font-size="14" fill="#14532d">eligible.min_age 18, min_income 3000</text>
+  <text x="38" y="334" font-size="14" fill="#14532d">approved.worst_grade 4</text>
+
+  <path d="M412,200 L486,200" fill="none" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="420" y="188" font-size="13" fill="#1f2937">copy, edit</text>
+
+  <!-- 0.1.0 -->
+  <rect x="490" y="16" width="400" height="368" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="506" y="44" font-size="16" font-weight="600" fill="#14532d">configs/0.1.0/</text>
+  <rect x="506" y="58" width="368" height="40" rx="8" fill="#ffffff" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="518" y="84" font-size="15" fill="#14532d">application_card.json  (unchanged copy)</text>
+  <rect x="506" y="106" width="368" height="40" rx="8" fill="#ffffff" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="518" y="132" font-size="15" fill="#14532d">rate_card.json  (unchanged copy)</text>
+  <rect x="506" y="154" width="368" height="214" rx="8" fill="#ffffff" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="518" y="180" font-size="15" font-weight="600" fill="#14532d">params.json</text>
+  <rect x="512" y="190" width="356" height="72" rx="6" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="518" y="206" font-size="14" fill="#7c2d00">risk_grade.bands</text>
+  <text x="532" y="230" font-size="14" fill="#7c2d00">min_score 0 / 610 / 680 / 720</text>
+  <text x="532" y="252" font-size="14" fill="#7c2d00">grade       4 / 3 / 2 / 1</text>
+  <rect x="512" y="266" width="356" height="24" rx="6" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="518" y="283" font-size="14" fill="#7c2d00">affordable.max_share  0.30</text>
+  <text x="518" y="308" font-size="14" fill="#14532d">eligible.min_age 18, min_income 3000</text>
+  <text x="518" y="334" font-size="14" fill="#14532d">approved.worst_grade 4</text>
+  <text x="518" y="360" font-size="13" fill="#14532d">no code change, no new kernels</text>
+</svg>

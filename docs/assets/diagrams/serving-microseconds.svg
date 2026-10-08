@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 640" font-family="system-ui, sans-serif">
+  <rect x="0" y="0" width="1000" height="640" fill="#ffffff"/>
+
+  <!-- A: process_fn -->
+  <text x="100" y="34" font-size="15" font-weight="600" fill="#1f2937">await process_fn, flagship pipeline, one JSON record: 39.4 µs</text>
+  <rect x="100" y="48" width="27.6" height="44" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <rect x="127.6" y="48" width="9.7" height="44" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <rect x="137.3" y="48" width="2.4" height="44" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <rect x="139.7" y="48" width="617.1" height="44" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="448" y="75" font-size="14" text-anchor="middle" fill="#134e4a">score() 30.4</text>
+  <rect x="756.8" y="48" width="37.4" height="44" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <rect x="794.2" y="48" width="105.8" height="44" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="847" y="75" font-size="13" text-anchor="middle" fill="#1f2937">rest 5.2</text>
+  <line x1="113" y1="92" x2="113" y2="112" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="100" y="128" font-size="13" fill="#4c1d95">input_fn 1.36 (from_json 0.90)</text>
+  <line x1="134" y1="92" x2="134" y2="138" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="128" y="154" font-size="13" fill="#14532d">coerce_record 0.48 · module_fn 0.12</text>
+  <line x1="775" y1="92" x2="775" y2="112" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="787" y="128" font-size="13" text-anchor="end" fill="#4c1d95">output_fn 1.84</text>
+
+  <!-- zoom lines -->
+  <line x1="139.7" y1="92" x2="100" y2="198" stroke="#0d9488" stroke-width="1.2" stroke-dasharray="5 4"/>
+  <line x1="756.8" y1="92" x2="900" y2="198" stroke="#0d9488" stroke-width="1.2" stroke-dasharray="5 4"/>
+
+  <!-- B: score -->
+  <rect x="100" y="200" width="30.6" height="44" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <rect x="130.6" y="200" width="174.8" height="44" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="218" y="227" font-size="13" text-anchor="middle" fill="#14532d">_load 6.68</text>
+  <rect x="305.4" y="200" width="40.3" height="44" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <rect x="345.7" y="200" width="494.6" height="44" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <rect x="345.7" y="200" width="55.7" height="44" fill="#5eead4" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="620" y="227" font-size="14" text-anchor="middle" fill="#134e4a">runner.iterate 18.9</text>
+  <rect x="840.3" y="200" width="59.7" height="44" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <line x1="115" y1="244" x2="115" y2="262" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="100" y="278" font-size="13" fill="#134e4a">State 1.17</text>
+  <line x1="325" y1="244" x2="325" y2="290" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="250" y="306" font-size="13" fill="#14532d">_params 1.54 (cached bundle)</text>
+  <line x1="373" y1="244" x2="373" y2="262" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="385" y="278" font-size="13" fill="#134e4a">numba kernels alone 2.13; the rest is the Python driver</text>
+  <line x1="870" y1="244" x2="870" y2="290" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="900" y="306" font-size="13" text-anchor="end" fill="#134e4a">output dict 2.28</text>
+
+  <!-- C: transports -->
+  <text x="100" y="356" font-size="15" font-weight="600" fill="#1f2937">Transport alone (echo, nothing scored) against the handler, p50 µs</text>
+  <text x="290" y="391" font-size="13" text-anchor="end" fill="#1f2937">shared memory, spin</text>
+  <rect x="300" y="376" width="9.6" height="22" rx="3" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="318" y="391" font-size="13" fill="#1f2937">3.3</text>
+  <text x="290" y="423" font-size="13" text-anchor="end" fill="#1f2937">unix socket</text>
+  <rect x="300" y="408" width="53" height="22" rx="3" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="361" y="423" font-size="13" fill="#1f2937">18.3</text>
+  <text x="290" y="455" font-size="13" text-anchor="end" fill="#1f2937">loopback TCP</text>
+  <rect x="300" y="440" width="122.4" height="22" rx="3" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="430" y="455" font-size="13" fill="#1f2937">42.3</text>
+  <text x="290" y="487" font-size="13" text-anchor="end" fill="#1f2937">HTTP + ASGI (GET /ping)</text>
+  <rect x="300" y="472" width="600" height="22" rx="3" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="890" y="487" font-size="13" text-anchor="end" fill="#4c1d95">207.3</text>
+  <text x="290" y="519" font-size="13" text-anchor="end" fill="#1f2937">await process_fn (above)</text>
+  <rect x="300" y="504" width="114" height="22" rx="3" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="422" y="519" font-size="13" fill="#134e4a">39.4</text>
+  <text x="290" y="551" font-size="13" text-anchor="end" fill="#1f2937">floor, nothing allocated</text>
+  <rect x="300" y="536" width="20.2" height="22" rx="3" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="328" y="551" font-size="13" fill="#134e4a">6.98</text>
+
+  <text x="100" y="600" font-size="13" fill="#1f2937">Numbers from the serving-latency note: lowest p50 of 3 reps on a contended 28-core box; absolute values move about 30%,</text>
+  <text x="100" y="620" font-size="13" fill="#1f2937">the ratios hold. A full HTTP JSON request measured 614.5 µs p50 from a raw-socket client in the same session.</text>
+</svg>

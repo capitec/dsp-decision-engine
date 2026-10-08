@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 470" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="470" fill="#ffffff"/>
+
+  <!-- annotation -->
+  <text x="20" y="34" font-size="15" font-weight="700" fill="#1f2937">In the signature</text>
+  <rect x="20" y="46" width="960" height="56" rx="9" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="40" y="80" font-size="15" fill="#7c2d00" font-family="ui-monospace, monospace">Currency["R"]</text>
+  <line x1="190" y1="75" x2="250" y2="75" stroke="#4b5563" stroke-width="1.5" marker-end="url(#a)"/>
+  <text x="262" y="80" font-size="15" fill="#7c2d00" font-family="ui-monospace, monospace">Annotated[Currency, DecimalSpec(precision=19, scale=4, units="R")]</text>
+
+  <!-- python value -->
+  <text x="20" y="140" font-size="15" font-weight="700" fill="#1f2937">A Python value: Currency(2, 6500, units="R"), printed R 2.6500</text>
+  <rect x="20" y="152" width="420" height="70" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="40" y="180" font-size="14" font-weight="700" fill="#14532d">raw</text>
+  <text x="40" y="204" font-size="15" fill="#14532d" font-family="ui-monospace, monospace">int64 26500</text>
+  <rect x="452" y="152" width="250" height="70" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="472" y="180" font-size="14" font-weight="700" fill="#14532d">scale</text>
+  <text x="472" y="204" font-size="15" fill="#14532d" font-family="ui-monospace, monospace">4 (10**-4 units)</text>
+  <rect x="714" y="152" width="266" height="70" rx="9" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="734" y="180" font-size="14" font-weight="700" fill="#1f2937">units</text>
+  <text x="734" y="204" font-size="15" fill="#1f2937" font-family="ui-monospace, monospace">"R" (display only)</text>
+
+  <!-- where it lives -->
+  <text x="20" y="270" font-size="15" font-weight="700" fill="#1f2937">The same value through a run</text>
+  <g font-size="14">
+    <rect x="20" y="284" width="280" height="96" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+    <text x="160" y="312" text-anchor="middle" font-weight="700" fill="#14532d">polars column</text>
+    <text x="160" y="336" text-anchor="middle" fill="#14532d" font-family="ui-monospace, monospace">Decimal(38, 4)</text>
+    <text x="160" y="360" text-anchor="middle" fill="#14532d">2.6500</text>
+
+    <rect x="360" y="284" width="280" height="96" rx="9" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+    <text x="500" y="312" text-anchor="middle" font-weight="700" fill="#134e4a">State array</text>
+    <text x="500" y="336" text-anchor="middle" fill="#134e4a" font-family="ui-monospace, monospace">int64[n]</text>
+    <text x="500" y="360" text-anchor="middle" fill="#134e4a">26500</text>
+
+    <rect x="700" y="284" width="280" height="96" rx="9" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+    <text x="840" y="312" text-anchor="middle" font-weight="700" fill="#134e4a">inside a kernel</text>
+    <text x="840" y="336" text-anchor="middle" fill="#134e4a" font-family="ui-monospace, monospace">DecimalType(4)</text>
+    <text x="840" y="360" text-anchor="middle" fill="#134e4a">an int64, scale in the type</text>
+  </g>
+  <line x1="300" y1="332" x2="356" y2="332" stroke="#4b5563" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="640" y1="332" x2="696" y2="332" stroke="#4b5563" stroke-width="1.5" marker-end="url(#a)"/>
+  <text x="328" y="404" font-size="13" text-anchor="middle" fill="#1f2937">boundary</text>
+  <text x="668" y="404" font-size="13" text-anchor="middle" fill="#1f2937">typed argument</text>
+  <text x="500" y="448" font-size="14" text-anchor="middle" fill="#1f2937">+ and - rescale to the larger scale; * and / round half-even once; overflow raises in Python and wraps in a kernel.</text>
+</svg>

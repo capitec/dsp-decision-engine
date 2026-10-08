@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 500" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="bf-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#374151"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="500" fill="#ffffff"/>
+
+  <text x="20" y="26" font-size="13" font-weight="600" fill="#1f2937">Python, once per frame schema</text>
+  <rect x="20" y="36" width="215" height="84" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="32" y="60" font-size="14" font-weight="600" fill="#14532d">polars DataFrame</text>
+  <text x="32" y="82" font-size="13" fill="#14532d">Arrow memory; absent</text>
+  <text x="32" y="100" font-size="13" fill="#14532d">columns become all-null</text>
+  <rect x="265" y="36" width="215" height="84" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="277" y="60" font-size="14" font-weight="600" fill="#134e4a">plan_column per input</text>
+  <text x="277" y="82" font-size="13" fill="#134e4a">native, one cast, or refuse</text>
+  <text x="277" y="100" font-size="13" fill="#134e4a">(lru_cache per schema)</text>
+  <rect x="510" y="36" width="215" height="84" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="522" y="60" font-size="14" font-weight="600" fill="#134e4a">cast_frame</text>
+  <text x="522" y="82" font-size="13" fill="#134e4a">clone + replace_column;</text>
+  <text x="522" y="100" font-size="13" fill="#134e4a">the caller's frame is untouched</text>
+  <rect x="755" y="36" width="225" height="84" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="767" y="60" font-size="14" font-weight="600" fill="#14532d">__arrow_c_stream__()</text>
+  <text x="767" y="82" font-size="13" fill="#14532d">one export of the whole frame;</text>
+  <text x="767" y="100" font-size="13" fill="#14532d">polars rechunks in place</text>
+  <line x1="235" y1="78" x2="263" y2="78" stroke="#374151" stroke-width="1.5" marker-end="url(#bf-arrow)"/>
+  <line x1="480" y1="78" x2="508" y2="78" stroke="#374151" stroke-width="1.5" marker-end="url(#bf-arrow)"/>
+  <line x1="725" y1="78" x2="753" y2="78" stroke="#374151" stroke-width="1.5" marker-end="url(#bf-arrow)"/>
+
+  <text x="20" y="176" font-size="13" font-weight="600" fill="#1f2937">C shim over nanoarrow, three calls per frame (ctypes)</text>
+  <rect x="755" y="186" width="225" height="84" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="767" y="210" font-size="14" font-weight="600" fill="#4c1d95">sm_import_frame</text>
+  <text x="767" y="232" font-size="13" fill="#4c1d95">schema + first chunk into an</text>
+  <text x="767" y="250" font-size="13" fill="#4c1d95">ArrowArrayView; a 2nd chunk fails</text>
+  <rect x="510" y="186" width="215" height="84" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="522" y="210" font-size="14" font-weight="600" fill="#4c1d95">sm_resolve_all</text>
+  <text x="522" y="232" font-size="13" fill="#4c1d95">one ColDesc per input; Arrow</text>
+  <text x="522" y="250" font-size="13" fill="#4c1d95">type checked against the kind</text>
+  <rect x="265" y="186" width="215" height="84" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="277" y="210" font-size="14" font-weight="600" fill="#4c1d95">sm_columns</text>
+  <text x="277" y="232" font-size="13" fill="#4c1d95">every column into one buffer;</text>
+  <text x="277" y="250" font-size="13" fill="#4c1d95">nulls take the fill</text>
+  <rect x="20" y="186" width="215" height="84" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="32" y="210" font-size="14" font-weight="600" fill="#14532d">numpy views</text>
+  <text x="32" y="232" font-size="13" fill="#14532d">read-only; a clean column of</text>
+  <text x="32" y="250" font-size="13" fill="#14532d">4096+ rows borrows Arrow's</text>
+  <line x1="867" y1="120" x2="867" y2="184" stroke="#374151" stroke-width="1.5" marker-end="url(#bf-arrow)"/>
+  <line x1="755" y1="228" x2="727" y2="228" stroke="#374151" stroke-width="1.5" marker-end="url(#bf-arrow)"/>
+  <line x1="510" y1="228" x2="482" y2="228" stroke="#374151" stroke-width="1.5" marker-end="url(#bf-arrow)"/>
+  <line x1="265" y1="228" x2="237" y2="228" stroke="#374151" stroke-width="1.5" marker-end="url(#bf-arrow)"/>
+
+  <text x="20" y="326" font-size="13" font-weight="600" fill="#1f2937">Engine</text>
+  <rect x="20" y="336" width="215" height="84" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="32" y="360" font-size="14" font-weight="600" fill="#14532d">ExtractedColumn</text>
+  <text x="32" y="382" font-size="13" fill="#14532d">values, validity mask,</text>
+  <text x="32" y="400" font-size="13" fill="#14532d">dictionary for a code column</text>
+  <rect x="265" y="336" width="215" height="84" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="277" y="360" font-size="14" font-weight="600" fill="#134e4a">State.from_frame</text>
+  <text x="277" y="382" font-size="13" fill="#134e4a">one array per input version;</text>
+  <text x="277" y="400" font-size="13" fill="#134e4a">other columns as objects</text>
+  <rect x="510" y="336" width="215" height="84" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="522" y="360" font-size="14" font-weight="600" fill="#134e4a">runner, per reader</text>
+  <text x="522" y="382" font-size="13" fill="#134e4a">REQUIRED raises, MISSING_AS</text>
+  <text x="522" y="400" font-size="13" fill="#134e4a">fills, OPTIONAL passes a mask</text>
+  <rect x="755" y="336" width="225" height="84" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="767" y="360" font-size="14" font-weight="600" fill="#134e4a">kernel</text>
+  <text x="767" y="382" font-size="13" fill="#134e4a">cols and valids tuples;</text>
+  <text x="767" y="400" font-size="13" fill="#134e4a">spans for Text inputs</text>
+  <line x1="127" y1="270" x2="127" y2="334" stroke="#374151" stroke-width="1.5" marker-end="url(#bf-arrow)"/>
+  <line x1="235" y1="378" x2="263" y2="378" stroke="#374151" stroke-width="1.5" marker-end="url(#bf-arrow)"/>
+  <line x1="480" y1="378" x2="508" y2="378" stroke="#374151" stroke-width="1.5" marker-end="url(#bf-arrow)"/>
+  <line x1="725" y1="378" x2="753" y2="378" stroke="#374151" stroke-width="1.5" marker-end="url(#bf-arrow)"/>
+
+  <rect x="20" y="440" width="960" height="46" rx="8" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+  <text x="32" y="461" font-size="13" fill="#7f1d1d">Refusals name the column: NeedsKernelSplit (nested, object, an overflowing Decimal) before any export,</text>
+  <text x="32" y="479" font-size="13" fill="#7f1d1d">ArrowKindError (an Arrow type the kind can't read) from sm_resolve_all, MissingInputError for a REQUIRED null.</text>
+</svg>

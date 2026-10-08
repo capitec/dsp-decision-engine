@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 470" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="900" height="470" fill="#ffffff"/>
+
+  <!-- flow file -->
+  <rect x="10" y="16" width="356" height="440" rx="10" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="26" y="42" font-size="16" font-weight="600" fill="#7c2d00">flow.yaml</text>
+  <text x="26" y="72" font-size="14" fill="#7c2d00">flow: credit</text>
+  <text x="26" y="94" font-size="14" fill="#7c2d00">components: components</text>
+  <text x="26" y="116" font-size="14" fill="#7c2d00">steps:</text>
+  <text x="40" y="146" font-size="14" fill="#7c2d00">- flow: screen</text>
+  <text x="56" y="166" font-size="13" fill="#7c2d00">loads flows/screen.yaml</text>
+  <text x="40" y="200" font-size="14" fill="#7c2d00">- branch: offer</text>
+  <text x="56" y="220" font-size="14" fill="#7c2d00">when: eligible</text>
+  <text x="56" y="240" font-size="14" fill="#7c2d00">modifies: [limit]</text>
+  <text x="56" y="260" font-size="14" fill="#7c2d00">then: [{step: limit_band}]</text>
+  <text x="56" y="280" font-size="14" fill="#7c2d00">else: [{step: no_offer}]</text>
+  <text x="40" y="314" font-size="14" fill="#7c2d00">- branch: capped</text>
+  <text x="56" y="334" font-size="14" fill="#7c2d00">when: {expr: "limit &gt; 150000"}</text>
+  <text x="56" y="354" font-size="14" fill="#7c2d00">modifies: [limit]</text>
+  <text x="56" y="374" font-size="14" fill="#7c2d00">then: [{step: cap_limit}]</text>
+  <text x="26" y="412" font-size="13" fill="#7c2d00">a name is a component or a document</text>
+  <text x="26" y="432" font-size="13" fill="#7c2d00">in the config version, never both</text>
+
+  <path d="M368,236 L436,236" fill="none" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="371" y="226" font-size="13" fill="#1f2937">load_flow</text>
+
+  <!-- step tree -->
+  <rect x="440" y="16" width="450" height="440" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="456" y="42" font-size="16" font-weight="600" fill="#1e3a8a">the Step tree (step_map paths)</text>
+  <text x="456" y="72" font-size="14" fill="#1e3a8a">flow credit</text>
+  <text x="470" y="100" font-size="14" fill="#1e3a8a">flow credit/screen</text>
+  <text x="490" y="122" font-size="14" fill="#1e3a8a">credit/screen/debt_ratio   (function)</text>
+  <text x="490" y="144" font-size="14" fill="#1e3a8a">credit/screen/adult   (function)</text>
+  <text x="470" y="176" font-size="14" fill="#1e3a8a">branch credit/offer</text>
+  <text x="490" y="198" font-size="14" fill="#1e3a8a">credit/offer/eligible   (condition)</text>
+  <text x="490" y="220" font-size="14" fill="#1e3a8a">credit/offer/limit_band   (decision_table)</text>
+  <text x="490" y="242" font-size="14" fill="#1e3a8a">credit/offer/no_offer   (function)</text>
+  <text x="470" y="274" font-size="14" fill="#1e3a8a">branch credit/capped</text>
+  <text x="490" y="296" font-size="14" fill="#1e3a8a">credit/capped/capped_when   (expr tree)</text>
+  <text x="490" y="318" font-size="14" fill="#1e3a8a">credit/capped/cap_limit   (function)</text>
+  <text x="490" y="340" font-size="14" fill="#1e3a8a">credit/capped/arm1   (empty else)</text>
+
+  <rect x="456" y="370" width="418" height="70" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="470" y="396" font-size="14" fill="#134e4a">the same objects flow() and branch() build:</text>
+  <text x="470" y="418" font-size="14" fill="#134e4a">same IR, params, kernels, debugger and serving</text>
+</svg>

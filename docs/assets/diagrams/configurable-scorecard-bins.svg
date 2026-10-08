@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 400" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="400" fill="#ffffff"/>
+
+  <!-- number line -->
+  <text x="20" y="26" font-size="15" font-weight="600" fill="#1f2937">age bins: lower bound exclusive, upper inclusive</text>
+  <rect x="80" y="40" width="268" height="48" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="214" y="62" text-anchor="middle" font-size="14" font-weight="600" fill="#7c2d00">bin 0: 5 points</text>
+  <text x="214" y="80" text-anchor="middle" font-size="13" fill="#7c2d00">age &lt;= young (25)</text>
+  <rect x="352" y="40" width="346" height="48" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="525" y="62" text-anchor="middle" font-size="14" font-weight="600" fill="#7c2d00">bin 1: 15 points</text>
+  <text x="525" y="80" text-anchor="middle" font-size="13" fill="#7c2d00">young &lt; age &lt;= 60</text>
+  <rect x="702" y="40" width="220" height="48" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="812" y="62" text-anchor="middle" font-size="14" font-weight="600" fill="#7c2d00">bin 2: 10 points</text>
+  <text x="812" y="80" text-anchor="middle" font-size="13" fill="#7c2d00">age &gt; 60 (lower filled)</text>
+  <line x1="80" y1="108" x2="940" y2="108" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="350" y1="102" x2="350" y2="114" stroke="#4b5563" stroke-width="1.5"/>
+  <text x="350" y="130" text-anchor="middle" font-size="13" fill="#1f2937">25 (param young)</text>
+  <line x1="700" y1="102" x2="700" y2="114" stroke="#4b5563" stroke-width="1.5"/>
+  <text x="700" y="130" text-anchor="middle" font-size="13" fill="#1f2937">60</text>
+  <rect x="80" y="140" width="268" height="30" rx="8" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="214" y="160" text-anchor="middle" font-size="13" fill="#1f2937">null age: default -10 ("unknown")</text>
+
+  <!-- vals array -->
+  <text x="20" y="208" font-size="15" font-weight="600" fill="#1f2937">consts "vals" (float64): nb lows, nb highs, nb bound points, values-bin points, default</text>
+  <g font-size="14" text-anchor="middle">
+    <rect x="20" y="220" width="90" height="44" rx="6" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+    <text x="65" y="247" fill="#1e3a8a">NaN</text>
+    <rect x="116" y="220" width="90" height="44" rx="6" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+    <text x="161" y="247" fill="#7f1d1d">NaN</text>
+    <rect x="212" y="220" width="90" height="44" rx="6" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+    <text x="257" y="247" fill="#1e3a8a">60</text>
+    <rect x="318" y="220" width="90" height="44" rx="6" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+    <text x="363" y="247" fill="#7f1d1d">NaN</text>
+    <rect x="414" y="220" width="90" height="44" rx="6" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+    <text x="459" y="247" fill="#1e3a8a">60</text>
+    <rect x="510" y="220" width="90" height="44" rx="6" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+    <text x="555" y="247" fill="#1e3a8a">NaN</text>
+    <rect x="616" y="220" width="90" height="44" rx="6" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+    <text x="661" y="247" fill="#14532d">5</text>
+    <rect x="712" y="220" width="90" height="44" rx="6" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+    <text x="757" y="247" fill="#14532d">15</text>
+    <rect x="808" y="220" width="80" height="44" rx="6" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+    <text x="848" y="247" fill="#14532d">10</text>
+    <rect x="894" y="220" width="86" height="44" rx="6" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+    <text x="937" y="247" fill="#1f2937">-10</text>
+  </g>
+  <g font-size="13" text-anchor="middle" fill="#1f2937">
+    <text x="65" y="282">lo 0</text>
+    <text x="161" y="282">lo 1</text>
+    <text x="257" y="282">lo 2</text>
+    <text x="363" y="282">hi 0</text>
+    <text x="459" y="282">hi 1</text>
+    <text x="555" y="282">hi 2</text>
+    <text x="661" y="282">points 0</text>
+    <text x="757" y="282">points 1</text>
+    <text x="848" y="282">points 2</text>
+    <text x="937" y="282">default</text>
+  </g>
+
+  <!-- slots -->
+  <text x="20" y="318" font-size="15" font-weight="600" fill="#1f2937">consts "slots": -1, 0, -1, 0, -1, -1, -1, -1, -1, -1</text>
+  <rect x="20" y="330" width="960" height="54" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="500" y="353" text-anchor="middle" font-size="14" fill="#134e4a">score_bins_tuned copies vals and writes params[0] (young) into entries 1 and 3, the red cells,</text>
+  <text x="500" y="373" text-anchor="middle" font-size="14" fill="#134e4a">so retuning young moves the edge between bin 0 and bin 1 without a new node or a recompile</text>
+</svg>
