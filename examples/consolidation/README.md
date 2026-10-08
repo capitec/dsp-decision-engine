@@ -292,9 +292,9 @@ Inputs it reads that the caller owns: `decision_id`, `decision_date`, `channel_c
 - **Left out.** Products 30 and 40 (they need collateral data), the restructure variant and batch identification, the
   consolidation-specific scorecard (the grade comes in with the request), joint applicants, a time budget, rate add-on
   overlays, and the persistence and replay of the record. `hardship_declared` and an assessment mode are not read.
-- **Two workarounds for what decider lacks**, marked `# workaround`: a `list[dict]` output must hold one type per field
-  and a `dict` output must have text keys when the pipeline runs over a frame (`decider build` warms up that way), so the
-  numbers in the scenario records are floats and the product policies are keyed by text.
+- **One workaround for what decider lacks**, marked `# workaround`: the product policies are keyed by text because a `dict`
+  with integer keys becomes a column that cannot leave the pipeline in a batch response, and `product_policies` is one of
+  the pipeline's outputs.
 - **The Flex Loan card is regenerated** in `build` from `credit_core`, not read from a config document, to avoid a third
   13 MB copy of it; the plain offer is the only thing that uses it.
 - **Table sizes.** The product 11 card is 12 amount bands by 12 terms by 12 grades; a production card would be larger and
