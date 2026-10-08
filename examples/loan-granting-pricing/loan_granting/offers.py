@@ -35,11 +35,6 @@ def recommendation_objective(recommendation_objective: str = param(LARGEST_AMOUN
     return recommendation_objective
 
 
-def _evaluator(rate_card_index, credit_life_index, statutory_ceiling, substitution, initiation_fee_cap, service_cap):
-    return PriceEvaluator(rate_card_index, credit_life_index, statutory_ceiling, substitution, initiation_fee_cap,
-                          service_cap)
-
-
 def _offer(solution: dict) -> dict:
     pricing = solution["pricing"]
     return {
@@ -135,7 +130,7 @@ def steps(rate_card_index: RateCardIndex):
         evaluation_ceiling_per_term: int = param(24, ge=1, le=64), permitted_terms: ParamTable = PERMITTED_TERMS,
     ) -> tuple[list[dict], int]:
         """Solve every permitted term not ruled out by the term cap or the segment; the amounts are found, not guessed."""
-        evaluator = _evaluator(rate_card_index, credit_life_index, statutory_ceiling,
+        evaluator = PriceEvaluator(rate_card_index, credit_life_index, statutory_ceiling,
                                credit_life_substitution_declared, initiation_fee_cap, monthly_service_fee_cap)
         requested = None if math.isnan(requested_amount) else requested_amount
         solutions = []
@@ -185,7 +180,7 @@ def steps(rate_card_index: RateCardIndex):
         if not recommended_offer:
             return True, []
         offer = recommended_offer
-        evaluator = _evaluator(rate_card_index, credit_life_index, statutory_ceiling,
+        evaluator = PriceEvaluator(rate_card_index, credit_life_index, statutory_ceiling,
                                credit_life_substitution_declared, initiation_fee_cap, monthly_service_fee_cap)
         amount, term = offer["offered_amount"], offer["term_months"]
         fresh = evaluator.evaluate(amount, term, risk_grade, applicant_age_years, is_joint_application)

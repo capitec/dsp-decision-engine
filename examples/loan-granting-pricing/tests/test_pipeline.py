@@ -9,8 +9,6 @@ from decider import Engine
 from loan_granting import reasons
 from loan_granting.pipeline import build
 
-from conftest import parse_dates
-
 
 def annuity(principal, annual_rate, months):
     monthly = annual_rate / 12
@@ -88,18 +86,17 @@ def test_asking_for_no_amount_and_no_term_offers_what_the_client_can_have(decide
 
 @pytest.mark.parametrize("objective, term, amount", [
     ("largest_amount", 36, 120_000.0), ("lowest_total_cost", 6, 26_500.0), ("best_expected_value", 12, 49_900.0)])
-def test_the_recommendation_objective_is_a_param_not_a_release(pipeline, sample, params, objective, term, amount):
-    changed = with_params(params, "recommendation_objective", recommendation_objective=objective)
-    out = pipeline.score(parse_dates(sample), changed)
+def test_the_recommendation_objective_is_a_param_not_a_release(decide, params, objective, term, amount):
+    out = decide(params_document=with_params(params, "recommendation_objective", recommendation_objective=objective))
     assert (out["recommendation_objective"], recommended(out)["term_months"], recommended(out)["offered_amount"]) == (
         objective, term, amount)
 
 
-def test_a_lower_statutory_ceiling_unprices_the_cells_above_it(pipeline, sample, params):
-    assert pipeline.score(parse_dates(sample), params)["statutory_ceiling"] == 0.28
-    gazetted = pipeline.score(parse_dates(sample), with_params(params, "statutory_ceiling", repo_rate=0.0))
+def test_a_lower_statutory_ceiling_unprices_the_cells_above_it(decide, params):
+    assert decide()["statutory_ceiling"] == 0.28
+    gazetted = decide(params_document=with_params(params, "statutory_ceiling", repo_rate=0.0))
     assert gazetted["statutory_ceiling"] == 0.21 and gazetted["outcome_code"] == 1  # the cells in use are under 21%
-    out = pipeline.score(parse_dates(sample), with_params(params, "statutory_ceiling", repo_rate=0.0, margin_over_repo=0.05))
+    out = decide(params_document=with_params(params, "statutory_ceiling", repo_rate=0.0, margin_over_repo=0.05))
     assert (out["outcome_code"], out["has_any_offer"], out["decline_reason_codes"]) == (4, False, [reasons.R_AFFORDABILITY_FAIL])
     assert {s["term_months"] for s in out["suppressed_terms"]} == {6, 12, 18, 24, 36, 48, 60, 72, 84}
 
@@ -155,11 +152,11 @@ def test_a_grade_worse_than_the_arrears_rule_allows_is_declined_beyond_appetite_
     assert out["risk_grade"] > out["worst_acceptable_grade"]
 
 
-def test_the_overlay_stack_runs_off_through_the_same_code_by_one_switch_per_point(pipeline, sample, params):
+def test_the_overlay_stack_runs_off_through_the_same_code_by_one_switch_per_point(decide, params):
     switched_off = copy.deepcopy(params)
     for point in switched_off["loan_granting"]["scoring"].values():
         point.update({"adjustment_stack_enabled": False} if "adjustment_stack_enabled" in point else {})
-    out = pipeline.score(parse_dates({**sample, "channel_code": 4}), switched_off)
+    out = decide(channel_code=4, params_document=switched_off)
     assert (out["adjustments_applied"], out["risk_grade"], out["outcome_code"]) == ([], 9, 1)
     assert out["probability_of_default"] == out["probability_of_default_unadjusted"]
 
@@ -225,10 +222,10 @@ def test_a_waterfall_decline_declines_with_its_reason(decide):
     assert out["outcome_code"] == 4 and reasons.R_EMPLOYMENT_TENURE_TOO_SHORT in out["decline_reason_codes"]
 
 
-def test_the_batch_run_gives_the_same_answers_as_scoring_one_record_at_a_time(rate_card, sample, params):
+def test_the_batch_run_gives_the_same_answers_as_scoring_one_record_at_a_time(rate_card, sample, params, parse):
     executable = Engine().bind(build(rate_card), mode="interpreted")
-    records = [parse_dates(sample), parse_dates({**sample, "requested_amount": 40_000.0, "channel_code": 4}),
-               parse_dates({**sample, "applicant_age_years": 15.0})]
+    records = [parse(sample), parse({**sample, "requested_amount": 40_000.0, "channel_code": 4}),
+               parse({**sample, "applicant_age_years": 15.0})]
     batch = executable.run(pl.DataFrame(records), params=params)
     for i, record in enumerate(records):
         single = executable.score(record, params)
