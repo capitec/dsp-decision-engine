@@ -32,7 +32,7 @@ def flex_loan_policy(
     new_money_pct: float = param(0.25, ge=0.0, le=0.50), new_money_cap: float = param(50_000.0, ge=0.0, le=150_000.0),
     dsr_ceiling: float = param(0.45, ge=0.30, le=0.60), min_external: float = param(0.60, ge=0.0, le=1.0),
     min_discretionary: float = param(850.0, ge=500.0, le=2_500.0),
-    margin_bands: ParamTable = MARGIN_BANDS, candidate_terms: ParamTable = TERMS,
+    margin_per_grade_bps: float = param(2.0, ge=0.0), margin_bands: ParamTable = MARGIN_BANDS, candidate_terms: ParamTable = TERMS,
 ) -> dict:
     """The limits and intervention thresholds product 11's team owns, as one record for the search."""
     return {
@@ -40,7 +40,7 @@ def flex_loan_policy(
         "max_amount": max_amount, "min_term": min_term, "max_term": max_term, "min_relief": min_relief,
         "anti_harm": anti_harm, "max_term_extension": max_term_extension, "rate_ceiling": rate_ceiling,
         "new_money_pct": new_money_pct, "new_money_cap": new_money_cap, "dsr_ceiling": dsr_ceiling,
-        "min_external": min_external, "min_discretionary": min_discretionary,
+        "min_external": min_external, "min_discretionary": min_discretionary, "margin_per_grade_bps": margin_per_grade_bps,
         "margin_bands": [{"external_from": f, "base_bps": b} for f, b in zip(margin_bands.external_from.tolist(), margin_bands.base_bps.tolist())],
         "candidate_terms": candidate_terms.term_months.tolist(),
     }
@@ -79,7 +79,7 @@ class FlexLoanConsolidation:
         if not policy["min_amount"] <= proceeds <= policy["max_amount"]:
             return REJECT_AMOUNT
         margin = next(b["base_bps"] for b in reversed(policy["margin_bands"]) if external_proportion >= b["external_from"]) \
-            + 2.0 * risk_grade
+            + policy["margin_per_grade_bps"] * risk_grade
         price = self.evaluator.evaluate(proceeds, term_months, risk_grade, applicant_age_years, False, rate_addon_bps=margin)
         if not price.priced:
             return REJECT_UNPRICED
