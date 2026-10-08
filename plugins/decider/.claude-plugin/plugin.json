@@ -1,0 +1,8 @@
+{
+  "name": "decider",
+  "description": "Skill and MCP server for decider projects: pipelines, flow files, decision trees, decision tables, scorecards and params.",
+  "author": {"name": "Capitec DSP"},
+  "repository": "https://github.com/capitec/dsp-decision-engine",
+  "license": "MIT",
+  "keywords": ["decider", "decision-engine", "pipelines", "mcp"]
+}
