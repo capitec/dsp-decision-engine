@@ -35,11 +35,12 @@ def change_type_code(
 
 
 def notice_class_code(change_type_code: int, decrease_notice_class_code: int) -> int:
-    """An accepted increase takes effect at once; a conditional one needs the client's confirmation first."""
+    """A decrease keeps its own class; an automatic increase runs on the client's standing agreement and takes effect
+    after the notice period, during which they may decline; a conditional one waits for their confirmation."""
     if change_type_code == ChangeType.DECREASE:
         return decrease_notice_class_code
     if change_type_code == ChangeType.INCREASE_AUTOMATIC:
-        return NoticeClass.IMMEDIATE
+        return NoticeClass.PRESCRIBED_NOTICE
     if change_type_code == ChangeType.INCREASE_CONDITIONAL:
         return NoticeClass.CONSENT_REQUIRED
     return NoticeClass.NOT_APPLICABLE
