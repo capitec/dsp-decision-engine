@@ -7,8 +7,9 @@
   "client_id": "CL-0083920",
   "channel_code": 4,
   "product_code": 0,
-  "client_segments": ["new_to_bank"],
-
+  "client_segments": [
+    "new_to_bank"
+  ],
   "amount": 9200.0,
   "beneficiary_first_payment": true,
   "beneficiary_age_hours": 1.5,
@@ -18,7 +19,6 @@
   "session_ip_distance_band": 1,
   "device_reputation_band": 2,
   "cop_name_match_band": 1,
-
   "velocity_count_1min": 1.0,
   "velocity_count_10min": 2.0,
   "velocity_count_1h": 3.0,
@@ -27,19 +27,15 @@
   "velocity_count_1min_state": 0,
   "velocity_count_10min_state": 0,
   "velocity_sum_amount_1h_state": 0,
-
   "model_score_available": true,
   "model_score": 640.0,
-
   "client_prior_confirmed_fraud_count": 0.0,
   "client_vulnerability_flag": false,
-
   "client_profile_degraded": false,
   "device_session_degraded": false,
   "counterparty_degraded": false,
   "sanctions_list_stale": false,
   "mule_watchlist_stale": false,
-
   "sanctions_list_match": false,
   "sanctions_list_version": "SANC-2026.01.10-14",
   "account_frozen": false,
@@ -48,8 +44,9 @@
   "device_blocked": false,
   "card_compromised": false,
   "court_order_hold": false,
-
   "marketing_opt_out": false,
   "is_regulated_notice": false,
-  "data_sharing_consent": true
+  "data_sharing_consent": true,
+  "consent_channel_code": 2,
+  "push_permitted": true
 }
