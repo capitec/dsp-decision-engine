@@ -46,7 +46,7 @@ def build_entity_scorecard() -> ScorecardConfig:
     return ScorecardConfig.load({
         "type": "scorecard", "name": "entity_scorecard", "output_name": "score_before_overlay",
         "variables": [
-            {"type": "constant", "score": 600, "output_name": "entity_scorecard_offset"},
+            {"type": "constant", "score": 700, "output_name": "entity_scorecard_offset"},
             {"type": "scored", "variable_name": "bureau_score", "strict": False,
              "default": {"value": -20, "name": "no_bureau"}, "bins": [
                  {"value": -35, "upper_bound": edge("bureau_low", 500.0)},

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from decider import flow, param, step
+from decider import allow_fallback, flow, param, step
 
 from credit_core.adjustments import Adjustment, AdjustmentEffect, AdjustmentRegister
 from credit_core.vocab import PRODUCT_BUSINESS_REVOLVING_FACILITY, PRODUCT_BUSINESS_TERM_FACILITY
@@ -32,6 +32,7 @@ BUSINESS_OVERLAYS = AdjustmentRegister([
 ])
 
 
+@allow_fallback
 def combined_pd_before_overlay(
     financial_pd: float, people_pd: float,
     financial_weight: float = param(0.40, ge=0.0, le=1.0), people_weight: float = param(0.60, ge=0.0, le=1.0),

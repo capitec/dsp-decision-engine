@@ -46,7 +46,7 @@ def build_financial_scorecard() -> ScorecardConfig:
     return ScorecardConfig.load({
         "type": "scorecard", "name": "financial_scorecard", "output_name": "financial_score",
         "variables": [
-            {"type": "constant", "score": 600, "output_name": "financial_scorecard_offset"},
+            {"type": "constant", "score": 700, "output_name": "financial_scorecard_offset"},
             {"type": "scored", "variable_name": "interest_cover", "strict": False, "default": {"value": -20},
              "bins": [{"value": -30, "upper_bound": 1.5}, {"value": 0, "lower_bound": 1.5, "upper_bound": 3.0},
                       {"value": 30, "lower_bound": 3.0}]},
