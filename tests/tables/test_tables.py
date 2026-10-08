@@ -279,3 +279,24 @@ def test_packing_string_outputs_does_not_compare_every_choice_per_row():
     shape = Shape(table.expression, [("cell", "str", tuple(ids))], dtypes(table.columns))
     pack([{"k": float(i), "cell": c} for i, c in enumerate(ids)], shape)
     assert comparisons < 10 * n
+
+
+def _grid(inf=float("inf")) -> DecisionTableConfig:
+    rows = [{"a_lo": a0, "a_hi": a1, "t_lo": t0, "t_hi": t1, "pts": 10 * i + j}
+            for i, (a0, a1) in enumerate([(-inf, 100.0), (100.0, inf)])
+            for j, (t0, t1) in enumerate([(-inf, 12.0), (12.0, inf)])]
+    return DecisionTableConfig(
+        name="grid", columns={"a_lo": "Float64", "a_hi": "Float64", "t_lo": "Float64", "t_hi": "Float64",
+                              "pts": "Int64"}, rows=rows,
+        expression={"type": "and", "expressions": [
+            {"type": "between", "variable": "amount", "lower_bound_column": "a_lo", "upper_bound_column": "a_hi",
+             "allow_gaps": True},
+            {"type": "between", "variable": "term", "lower_bound_column": "t_lo", "upper_bound_column": "t_hi",
+             "allow_gaps": True}]},
+        outputs=["pts"], default=[-1])
+
+
+def test_two_band_dimensions_with_infinite_outer_edges_pick_the_cell(run):
+    frame = pl.DataFrame({"amount": [50.0, 50.0, 500.0, 500.0], "term": [6.0, 24.0, 6.0, 24.0]})
+    assert run(_grid(), frame)["pts"].to_list() == [0, 1, 10, 11]
+

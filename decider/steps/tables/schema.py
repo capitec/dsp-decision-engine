@@ -39,6 +39,11 @@ class BetweenExpression(BaseModel):
     next row's lower; the first row may leave its lower edge open (`None`)
     and the last its upper. Unless `allow_gaps`, each row's upper must equal
     the next row's lower in its ladder.
+
+    Rows are one ladder per `eq` group, so a table can have one band
+    dimension with open (`None`) edges. For two (say amount and term in a
+    grid of cells) give every row both bounds, `-inf` and `inf` at the outer
+    edges, and set `allow_gaps` on each `between`.
     """
 
     type: t.Literal["between"] = "between"
