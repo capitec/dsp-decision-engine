@@ -37,14 +37,17 @@
       "min_amount": 2000.0,
       "max_amount": 500000.0,
       "min_term": 6,
-      "max_term": 84
+      "max_term": 84,
+      "grid": 250.0
     },
     "policy_caps": {
       "uplift_pct": 0.2,
       "uplift_ceiling": 200000.0
     },
-    "apply_amount_cap_adjustments": {
-      "adjustment_stack_enabled": true
+    "amount_cap_overlay": {
+      "apply_amount_cap_adjustments": {
+        "adjustment_stack_enabled": true
+      }
     },
     "limits": {
       "apply_affordability_buffer_adjustments": {
@@ -90,9 +93,6 @@
       "adjustment_stack_enabled": true
     },
     "solve_offer": {
-      "search_domain": {
-        "grid": 250.0
-      },
       "solve": {
         "search": {
           "body": {

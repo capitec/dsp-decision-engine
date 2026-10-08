@@ -53,7 +53,7 @@ EMIT = (
     "offer_basis_code", "offer_affordability_verdict_code", "instalment_ceiling",
     # solve and price
     "rate_addon_bps", "rate_addon_adjustments_applied", "solved_amount", "solve_binding_constraint", "evaluated", "disqualified",
-    "decision_open", "offer_amount", "offer_binding_constraint", "has_offer", "offer_term_months", "rate_cell_id",
+    "decision_open", "amount_grid", "offer_amount", "offer_binding_constraint", "has_offer", "offer_term_months", "rate_cell_id",
     "nominal_annual_rate_unadjusted", "nominal_annual_rate", "credit_life_rate", "initiation_fee", "initiation_fee_incl_tax",
     "amount_financed", "instalment_before_fees", "credit_life_premium", "credit_life_cell_id", "monthly_service_fee", "instalment",
     "total_cost_of_credit", "total_interest", "effective_annual_rate",
@@ -82,7 +82,7 @@ def build():
         grading.build_calibration_table(), grading.probability_of_default_raw_step,
         grading.probability_of_default_overlay_step, grading.build_risk_grade_table(),
 
-        routing.product_range_step, caps.policy_caps_step, caps.amount_cap_overlay_step,
+        routing.product_range_step, caps.policy_caps_step, caps.amount_cap_unit,
         affordability.limits_unit(), affordability.capacity_unit(), routing.product_eligibility_step,
         consolidation.consolidation_scenario_step, consolidation.hypothetical_capacity_unit(),
         consolidation.offer_basis_step,

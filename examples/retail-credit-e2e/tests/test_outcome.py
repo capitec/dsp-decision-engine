@@ -30,7 +30,7 @@ def test_validation_lists_every_assertion_the_offer_fails():
                   name="validation").compile("interpreted")
     offer = {"has_offer": True, "offer_amount": 75_100.0, "offer_term_months": 60.0, "term_cap": 48.0,
              "amount_cap": 75_000.0, "nominal_annual_rate": 0.30, "instalment": 2_600.0, "instalment_ceiling": 2_500.0,
-             "search_grid": 250.0}
+             "amount_grid": 250.0}
     out = checks.score(offer, {})
     assert (out["validation_passed"], out["validation_failed_assertions"]) == (False, [1701, 1702, 1703, 1704, 1705])
     sound = {**offer, "offer_amount": 75_000.0, "term_cap": 60.0, "nominal_annual_rate": 0.2, "instalment": 2_500.0}

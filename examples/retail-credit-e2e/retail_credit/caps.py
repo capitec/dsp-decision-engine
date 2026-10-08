@@ -10,7 +10,7 @@ import math
 from dataclasses import dataclass
 from typing import Callable
 
-from decider import allow_fallback, missing_as, param, step
+from decider import allow_fallback, flow, missing_as, param, step
 
 from retail_credit.overlays import overlay_step
 
@@ -120,7 +120,15 @@ policy_caps_step = step(policy_caps, outputs=(
     "amount_cap_before_overlay", "amount_cap_binding_rule", "amount_cap_chain", "p09_declined", "p09_decline_reason",
     "term_cap", "worst_acceptable_grade"))
 
+def round_down_to_grid(amount_cap: float, amount_grid: float) -> float:
+    return math.floor(amount_cap / amount_grid) * amount_grid
+
+
 # Overlays enter after the register and may only reduce, so they can never do what the campaign uplift does.
-amount_cap_overlay_step = overlay_step(
-    "amount_cap", "amount_cap", base_field="amount_cap_before_overlay", adjusted_output="amount_cap",
-    unadjusted_output="amount_cap_unadjusted")
+# `amount_cap` is written twice, by the overlay and then rounded down to the grid, so the two steps are a flow.
+amount_cap_unit = flow(
+    overlay_step("amount_cap", "amount_cap", base_field="amount_cap_before_overlay", adjusted_output="amount_cap",
+                 unadjusted_output="amount_cap_unadjusted"),
+    step(round_down_to_grid, output="amount_cap"),
+    name="amount_cap_overlay",
+).emit("amount_cap", "amount_cap_unadjusted", "amount_cap_adjustment_set_id", "amount_cap_adjustments_applied")

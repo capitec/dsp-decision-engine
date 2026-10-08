@@ -13,7 +13,7 @@ def reference_best(params, ceiling, term, grade, upper, credit_life_rate=5.6, lo
 
 def test_the_offer_is_the_largest_amount_that_fits_found_by_trying_every_candidate(decide, params):
     out = decide()
-    assert out["offer_amount"] == reference_best(params, out["instalment_cap"], 60, 7, 100_800.0, 5.6, 0.006, 0.006)
+    assert out["offer_amount"] == reference_best(params, out["instalment_cap"], 60, 7, 100_750.0, 5.6, 0.006, 0.006)
     assert out["evaluated"] + out["disqualified"] == 373  # every R250 step from R2 000 to the requested R95 000
 
 
@@ -24,7 +24,7 @@ def test_the_offer_is_the_largest_amount_that_fits_found_by_trying_every_candida
 def test_other_requests_also_get_the_true_maximum(decide, params, change):
     out = decide(**change)
     loading = 0.0 if out["offer_term_months"] <= 45 else 0.006
-    ceiling_amount = min(out["requested_amount"], out["amount_cap"]) if "requested_amount" in out else 100_800.0
+    ceiling_amount = min(out["requested_amount"], out["amount_cap"])
     assert out["offer_amount"] == reference_best(
         params, out["instalment_cap"], out["offer_term_months"], out["risk_grade"], ceiling_amount,
         out["credit_life_rate"], loading, 0.006)
