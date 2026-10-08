@@ -1,0 +1,34 @@
+"""Config documents on disk (trees, tables, scorecards): read, check and save them for the editing tools."""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from pydantic import ValidationError
+
+from decider.steps._configurable import ConfigurableStep
+
+
+def read_doc(path: str) -> dict:
+    return json.loads(Path(path).read_text())
+
+
+def problems(doc: dict) -> list[str]:
+    """Why `doc` would not build as a step, one line per problem; empty when it builds."""
+    try:
+        ConfigurableStep.load(doc).parameters()
+    except ValidationError as e:
+        return [f"{'.'.join(map(str, err['loc']))}: {err['msg']}" for err in e.errors()]
+    except Exception as e:  # noqa: BLE001  a document that fails to build is reported, not raised
+        return [f"{type(e).__name__}: {e}"]
+    return []
+
+
+def save_doc(path: str, doc: dict) -> dict:
+    """Write `doc` to `path` only if it builds; otherwise leave the file untouched and return why."""
+    found = problems(doc)
+    if found:
+        return {"saved": False, "path": path, "problems": found}
+    # ponytail: always 2-space JSON, so a hand-formatted file is reformatted on its first save.
+    Path(path).write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n")
+    return {"saved": True, "path": path}
