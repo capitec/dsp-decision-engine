@@ -1237,7 +1237,10 @@ VS Code extension's Datasets view lists, previews and debugs a flow on one.
 `decider mcp` (needs `pip install 'decider[mcp]'`) serves a FastMCP server over stdio for an agent: structural and
 summarised reads are always available; per-record values and trace events are
 opt-in (`decider mcp --raw`); running code and persisting are confirmation-gated.
-See `notes/vscode-redesign/mcp-guidance.md`.
+See `notes/vscode-redesign/mcp-guidance.md`. For Claude Code, the repository's
+plugin (`/plugin marketplace add capitec/dsp-decision-engine`, then
+`/plugin install decider@decider`) installs this server together with a `decider`
+skill that teaches an agent the project layout and best practices.
 
 ## Common mistakes
 
