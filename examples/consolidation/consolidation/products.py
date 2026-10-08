@@ -39,6 +39,6 @@ def pricing_context(statutory_ceiling: float, initiation_fee_cap: float, monthly
 @step(output="product_policies")
 def product_policies(flex_loan_policy: dict, everyday_card_policy: dict) -> dict:
     """Every product's policy, by product code. A product team changes its own params and nobody else's."""
-    # workaround: int keys make an Object column that a batch JSON/CSV/Arrow response cannot carry, and this
-    # output is emitted, so the product code is text
+    # workaround: a dict with int keys is an Object column in a batch run, which a JSON or CSV batch response cannot
+    # write, and this output is emitted, so the product code is text
     return {str(p["product_code"]): p for p in (flex_loan_policy, everyday_card_policy)}

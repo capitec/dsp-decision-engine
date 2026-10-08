@@ -293,7 +293,7 @@ Inputs it reads that the caller owns: `decision_id`, `decision_date`, `channel_c
   consolidation-specific scorecard (the grade comes in with the request), joint applicants, a time budget, rate add-on
   overlays, and the persistence and replay of the record. `hardship_declared` and an assessment mode are not read.
 - **One workaround for what decider lacks**, marked `# workaround`: the product policies are keyed by text because a `dict`
-  with integer keys becomes a column that cannot leave the pipeline in a batch response, and `product_policies` is one of
+  with integer keys becomes a column that a JSON or CSV batch response cannot write, and `product_policies` is one of
   the pipeline's outputs.
 - **The Flex Loan card is regenerated** in `build` from `credit_core`, not read from a config document, to avoid a third
   13 MB copy of it; the plain offer is the only thing that uses it.
