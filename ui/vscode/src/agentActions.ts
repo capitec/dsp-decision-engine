@@ -31,7 +31,7 @@ export interface AgentState {
   /** The innermost frame of the paused thread, if the debugger is stopped. */
   frame(): Promise<{ file: string; line: number; name: string } | undefined>;
   /** Select and reveal a node in the Structure view and graph; false when the shown flow has no such node. */
-  highlight(node: string): boolean;
+  highlight(node: string): Promise<boolean>;
   reveal(file: string, line: number): Promise<void>;
   showFlow(file: string, pipeline?: string): Promise<void>;
   /** Make the breakpoints match `nodes`; returns the nodes that now have one. */
@@ -69,7 +69,8 @@ export function makeHandler(state: AgentState, root: string): (a: Action) => Pro
         if (!state.shown()) throw new Error("no flow is shown: call show_flow first");
         const nodes = Array.isArray(a.nodes) ? a.nodes.map(String) : [];
         // The Structure view and the graph each hold one selection.
-        const found = nodes.find((n) => state.highlight(n));
+        let found: string | undefined;
+        for (const n of nodes) if (await state.highlight(n)) { found = n; break; }
         if (!found) throw new Error(`none of ${JSON.stringify(nodes)} is a node of the shown flow`);
         return { highlighted: found, skipped: nodes.filter((n) => n !== found) };
       }
