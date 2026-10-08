@@ -58,7 +58,7 @@ def dial(on, bucket=3, intensity=2, enabled=True):
 
 def test_the_intensity_dial_escalates_bucket_three_by_one_level_inside_its_window():
     out = dial(date(2026, 8, 15))
-    assert out["treatment_intensity"] == 3 and out["intensity_dial_adjustments_applied"] == ["ADJ-08-MATRIX-001"]
+    assert out["treatment_intensity"] == 3 and out["intensity_dial_adjustments_applied"] == ["ADJ-COLL-MATRIX-001"]
 
 
 def test_the_intensity_dial_leaves_other_buckets_and_other_dates_alone():
@@ -74,7 +74,7 @@ def test_the_intensity_dial_never_exceeds_the_top_level():
 def test_field_visits_are_suppressed_to_no_action_and_say_so(decide):
     out = decide(days_past_due=150)
     assert out["matrix_treatment_code"] == v.FIELD_VISIT and out["overlaid_treatment_code"] == v.NO_ACTION
-    assert out["suppression_adjustments_applied"] == ["ADJ-08-MATRIX-002"]
+    assert out["suppression_adjustments_applied"] == ["ADJ-COLL-MATRIX-002"]
     assert out["non_selection_reason_code"] == v.NS_OVERLAY_SUPPRESSED
 
 
