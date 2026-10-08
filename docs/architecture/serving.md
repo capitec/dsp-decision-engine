@@ -332,7 +332,7 @@ coerce_record            0.5 us
 module_fn                0.2 us
 score()                 57.8 us
 output_fn                1.4 us
-process_fn        99.7 us
+process_fn              99.7 us
 ```
 
 Outside the process, an echo route that scores nothing measured 3.3 µs over shared memory, 18.3 µs over a unix socket, 42.3 µs over loopback TCP and 207.3 µs for HTTP plus ASGI framing. A full HTTP JSON request was 614.5 µs p50. HTTP framing is the largest single term a remote client sees; the JSON codec is 2 to 6% of the in-process time.
