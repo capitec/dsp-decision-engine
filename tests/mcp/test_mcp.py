@@ -133,10 +133,10 @@ BAND = {"type": "decision_table", "name": "band", "columns": {"lo": "Float64", "
 
 
 def test_an_entry_taking_config_documents_is_built_from_the_latest_version(tmp_path, monkeypatch):
-    version = tmp_path / "credit" / "configs" / "0.0.1"
+    version = tmp_path / "lending_entry" / "configs" / "0.0.1"
     version.mkdir(parents=True)
-    (tmp_path / "credit" / "__init__.py").write_text("")
-    (tmp_path / "credit" / "pipeline.py").write_text(BUILD_SRC)
+    (tmp_path / "lending_entry" / "__init__.py").write_text("")
+    (tmp_path / "lending_entry" / "pipeline.py").write_text(BUILD_SRC)
     (version / "band.json").write_text(json.dumps(BAND))
     (version / "params.json").write_text(json.dumps({"credit": {"approved": {"limit": 0.9}}}))
     data = tmp_path / "data.json"
@@ -144,9 +144,9 @@ def test_an_entry_taking_config_documents_is_built_from_the_latest_version(tmp_p
     monkeypatch.syspath_prepend(str(tmp_path))
     mcp = build_server(Policy())
 
-    paths = {n["path"] for n in _call(mcp, "describe_flow", entry="credit.pipeline:build")["nodes"]}
+    paths = {n["path"] for n in _call(mcp, "describe_flow", entry="lending_entry.pipeline:build")["nodes"]}
     assert {"credit/band", "credit/approved"} <= paths
-    summary = _call(mcp, "run_summary", entry="credit.pipeline:build", data=str(data))
+    summary = _call(mcp, "run_summary", entry="lending_entry.pipeline:build", data=str(data))
     assert summary["outputs"]["band"] == [{"value": "high", "count": 1}]
     assert summary["outputs"]["approved"] == [{"value": True, "count": 1}]   # the version's limit, not 0.4
 
