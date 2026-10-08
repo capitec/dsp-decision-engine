@@ -41,6 +41,6 @@ def decision_unit():
 
 def build():
     """The whole decision, as `decider serve` runs it and as other projects embed it."""
-    # A flow, not a dag: the field names inside the entity flow are not columns of the application, but a dag
-    # would read them as writes that clash with the decision's.
+    # workaround: a dag counts the field names inside an `each` as names the `each` writes, and they clash with
+    # the decision's (`segment_code`, `anchor`, ...), so the two halves are a flow, in written order.
     return flow(entity.entities_unit(), decision_unit(), name="business_credit").emit("assessed_entities", *DECISION_OUTPUTS)

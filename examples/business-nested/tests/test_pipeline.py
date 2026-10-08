@@ -7,7 +7,7 @@ import polars as pl
 import pytest
 from conftest import entity, event, parse_dates
 
-from business_nested.pipeline import DECISION_OUTPUTS
+from business_nested.pipeline import DECISION_OUTPUTS, build
 
 
 def test_the_sample_is_declined_and_says_which_entity_and_which_event(assess):
@@ -106,3 +106,7 @@ def test_the_decision_date_governs_which_overlays_apply(assess):
     assert in_force["assessed_entities"][0]["adverse_events"][1]["threshold_overlay_ids"] == ["ADJ-05-014"]
     assert lapsed["assessed_entities"][0]["adverse_events"][1]["threshold_overlay_ids"] == []
     assert lapsed["adjustments_applied"] == []
+
+
+def test_the_shipped_params_document_is_the_pipelines_defaults(params):
+    assert params == build().parameters().defaults()
