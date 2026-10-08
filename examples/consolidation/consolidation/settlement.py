@@ -32,6 +32,7 @@ def settlement_buffer(settlement_total: float, buffer_pct: float, buffer_cap: fl
 def derive_settlement(account: dict, decision_date: date, disbursement_lag_days: int, large_agreement_threshold: float,
                       security_release_cost: float, estimate_tolerance_pct: float, months_of_interest: dict[int, float]) -> dict:
     """One account's settlement amount with every component, its basis and the date the figure is for."""
+    # the rules table has one turnaround per provider, used as both the quotation and the payment turnaround
     assumed = decision_date + timedelta(days=int(num(account, "quotation_turnaround_days")) + disbursement_lag_days)
     balance, rate = num(account, "balance"), num(account, "nominal_annual_rate")
     days = int(num(account, "days_since_statement")) + (assumed - decision_date).days
