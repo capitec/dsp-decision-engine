@@ -5,7 +5,7 @@ without a code change. `generate_flex_loan_card` builds a synthetic one; `diff_c
 """
 from __future__ import annotations
 
-from decider import DecisionTableConfig, allow_fallback, flow, param, step
+from decider import DecisionTableConfig, flow, param, step
 
 from credit_core.evidence import cell_id
 
@@ -62,16 +62,9 @@ def generate_flex_loan_card(version: str, base_rate: float = 5.0) -> dict:
              "upper_bound_column": "term_hi", "allow_gaps": True},
             {"type": "eq", "variable": "risk_grade", "value_column": "grade"},
         ]},
-        # workaround: packing a table is quadratic in the distinct values of a String output, so the
-        # 63 360 cell ids are rebuilt by `rate_cell_id` from the band numbers instead of read from the table.
-        "outputs": ["rate", "amt_band", "term_band", "rate_card_version"],
-        "default": [None, None, None, None],
+        "outputs": ["rate", "cell_id", "rate_card_version"],
+        "default": [None, None, None],
     }
-
-
-def rate_cell_id(amt_band: int, term_band: int, risk_grade: float, rate_card_version: str) -> str:
-    """The `cell_id` of the row the lookup matched."""
-    return cell_id("rate_card.flex_loan", rate_card_version, amt_band, term_band, int(risk_grade))
 
 
 def rate_card_rate(rate: float) -> float:
@@ -80,7 +73,6 @@ def rate_card_rate(rate: float) -> float:
 
 
 rate_card_rate_step = step(rate_card_rate, output="nominal_annual_rate")
-rate_cell_id_step = step(allow_fallback(rate_cell_id))
 
 
 def lookup(card: DecisionTableConfig):
@@ -88,7 +80,7 @@ def lookup(card: DecisionTableConfig):
 
     Reads `offered_amount`, `term_months` and `risk_grade`.
     """
-    return flow(card, rate_card_rate_step, rate_cell_id_step, name="rate_card").emit(
+    return flow(card.relabel(writes={"cell_id": "rate_cell_id"}), rate_card_rate_step, name="rate_card").emit(
         "nominal_annual_rate", "rate_cell_id", "rate_card_version")
 
 
