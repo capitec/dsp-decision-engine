@@ -42,6 +42,7 @@ def evidence_unit():
         household.dependants_count, household.declared_living_expenses, household.statement_living_expenses,
         household.applicant_income("applicant1"), household.applicant_income("applicant2"),
         household.household_income,
+        household.applicant1_tax_class, household.applicant2_tax_class,
         household.applicant_tax("applicant1"), household.applicant_tax("applicant2"),
         household.statutory_deductions, household.net_monthly_income,
         expense_norms_unit,

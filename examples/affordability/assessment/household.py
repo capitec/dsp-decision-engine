@@ -29,13 +29,22 @@ def applicant_income(prefix: str):
         writes={name: f"{prefix}_{name}" for name in _INCOME_WRITES})
 
 
+def applicant1_tax_class(applicant1_employment_type_code: float) -> float:
+    return applicant1_employment_type_code
+
+
+def applicant2_tax_class(applicant2_employment_type_code: float = missing_as(0.0)) -> float:
+    """Defaulted, because a solo application has no applicant 2."""
+    return applicant2_employment_type_code
+
+
 def applicant_tax(prefix: str):
     """Tax and statutory deductions on one applicant's own income. Tax is individual, so a household is never taxed on its sum."""
     unit = flow(deductions.tax_table_version_step, deductions.build_tax_table(), deductions.statutory_deductions,
                 deductions.net_monthly_income, name=f"{prefix}_tax")
     return unit.relabel(
         reads={"gross_monthly_income": f"{prefix}_gross_monthly_income",
-               "employment_type_code": f"{prefix}_employment_type_code"},
+               "employment_type_code": f"{prefix}_tax_class"},
         writes={name: f"{prefix}_{name}" for name in _TAX_WRITES})
 
 
