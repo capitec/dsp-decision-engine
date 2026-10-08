@@ -254,7 +254,8 @@ def pack(data: list[dict], shape: Shape) -> Rows:
         if out == "float":
             head(k, put(valid, ints), put([0.0 if v is None else float(v) for v in col], floats))
         else:
-            codes = ([-1 if v is None else choices.index(v) for v in col] if choices is not None
+            index = None if choices is None else {c: i for i, c in enumerate(choices)}
+            codes = ([-1 if v is None else index[v] for v in col] if index is not None
                      else [0 if v is None else int(v) for v in col])
             head(k, put(valid + codes, ints), 0)
     arrays = [np.array(ints or [0], np.int64), np.array(floats or [0.0], np.float64),

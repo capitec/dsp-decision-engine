@@ -256,3 +256,26 @@ def test_each_group_of_equal_keys_is_its_own_band_ladder_with_open_edges(run):
 def test_a_gap_or_open_edge_inside_one_group_is_rejected(rows, message):
     with pytest.raises(ValueError, match=message):
         _graded(rows)
+
+
+def test_packing_string_outputs_does_not_compare_every_choice_per_row():
+    from decider.steps.tables._encode import Shape, dtypes, pack
+
+    comparisons = 0
+
+    class Counted(str):
+        __hash__ = str.__hash__
+
+        def __eq__(self, other):
+            nonlocal comparisons
+            comparisons += 1
+            return str.__eq__(self, other)
+
+    n = 2000
+    ids = [Counted(f"cell{i}") for i in range(n)]
+    table = DecisionTableConfig(
+        name="t", columns={"k": "Float64", "cell": "String"}, rows=[{"k": 0.0, "cell": "x"}],
+        expression={"type": "eq", "variable": "v", "value_column": "k"}, outputs=["cell"])
+    shape = Shape(table.expression, [("cell", "str", tuple(ids))], dtypes(table.columns))
+    pack([{"k": float(i), "cell": c} for i, c in enumerate(ids)], shape)
+    assert comparisons < 10 * n
