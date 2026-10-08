@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 450" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="450" fill="#ffffff"/>
+
+  <!-- stage boxes -->
+  <rect x="17" y="20" width="180" height="160" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="107" y="46" text-anchor="middle" font-size="15" font-weight="600" fill="#14532d">Document</text>
+  <text x="107" y="72" text-anchor="middle" font-size="13" fill="#14532d">JSON text, file or dict</text>
+  <text x="107" y="96" text-anchor="middle" font-size="13" fill="#14532d">"type": "tree"</text>
+  <text x="107" y="116" text-anchor="middle" font-size="13" fill="#14532d">"name": "loan_tree"</text>
+  <text x="107" y="136" text-anchor="middle" font-size="13" fill="#14532d">"tree": {nodes, edges,</text>
+  <text x="107" y="154" text-anchor="middle" font-size="13" fill="#14532d">output}</text>
+
+  <rect x="212" y="20" width="180" height="160" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="302" y="46" text-anchor="middle" font-size="15" font-weight="600" fill="#1f2937">Registry lookup</text>
+  <text x="302" y="72" text-anchor="middle" font-size="13" fill="#1f2937">ConfigurableStep</text>
+  <text x="302" y="90" text-anchor="middle" font-size="13" fill="#1f2937">.resolve("tree")</text>
+  <text x="302" y="116" text-anchor="middle" font-size="13" fill="#1f2937">first use imports</text>
+  <text x="302" y="134" text-anchor="middle" font-size="13" fill="#1f2937">decider.steps.trees</text>
+
+  <rect x="407" y="20" width="180" height="160" rx="10" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="497" y="46" text-anchor="middle" font-size="15" font-weight="600" fill="#7c2d00">Validated model</text>
+  <text x="497" y="72" text-anchor="middle" font-size="13" fill="#7c2d00">TreeConfig (frozen,</text>
+  <text x="497" y="90" text-anchor="middle" font-size="13" fill="#7c2d00">extra="forbid")</text>
+  <text x="497" y="116" text-anchor="middle" font-size="13" fill="#7c2d00">tree.to_tree() gives</text>
+  <text x="497" y="134" text-anchor="middle" font-size="13" fill="#7c2d00">the normalised Tree</text>
+
+  <rect x="602" y="20" width="180" height="160" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="692" y="46" text-anchor="middle" font-size="15" font-weight="600" fill="#1e3a8a">IR node</text>
+  <text x="692" y="72" text-anchor="middle" font-size="13" fill="#1e3a8a">CallNode kind="row"</text>
+  <text x="692" y="92" text-anchor="middle" font-size="13" fill="#1e3a8a">fn=walk</text>
+  <text x="692" y="112" text-anchor="middle" font-size="13" fill="#1e3a8a">params=(max_dti,)</text>
+  <text x="692" y="132" text-anchor="middle" font-size="13" fill="#1e3a8a">consts: 3 addresses,</text>
+  <text x="692" y="150" text-anchor="middle" font-size="13" fill="#1e3a8a">layout, output specs</text>
+
+  <rect x="797" y="20" width="180" height="160" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="887" y="46" text-anchor="middle" font-size="15" font-weight="600" fill="#134e4a">Kernel</text>
+  <text x="887" y="72" text-anchor="middle" font-size="13" fill="#134e4a">walk(row, params,</text>
+  <text x="887" y="90" text-anchor="middle" font-size="13" fill="#134e4a">consts)</text>
+  <text x="887" y="116" text-anchor="middle" font-size="13" fill="#134e4a">one @njit for every</text>
+  <text x="887" y="134" text-anchor="middle" font-size="13" fill="#134e4a">tree, cache=True</text>
+
+  <line x1="197" y1="100" x2="210" y2="100" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="392" y1="100" x2="405" y2="100" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="587" y1="100" x2="600" y2="100" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="782" y1="100" x2="795" y2="100" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- lane A -->
+  <text x="17" y="222" font-size="14" font-weight="600" fill="#1f2937">Retune max_dti in the params document</text>
+  <rect x="17" y="232" width="180" height="36" rx="8" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="107" y="255" text-anchor="middle" font-size="13" fill="#1f2937">unchanged</text>
+  <rect x="212" y="232" width="180" height="36" rx="8" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="302" y="255" text-anchor="middle" font-size="13" fill="#1f2937">not consulted</text>
+  <rect x="407" y="232" width="180" height="36" rx="8" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="497" y="255" text-anchor="middle" font-size="13" fill="#1f2937">unchanged</text>
+  <rect x="602" y="232" width="180" height="36" rx="8" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="692" y="255" text-anchor="middle" font-size="13" fill="#1f2937">unchanged</text>
+  <rect x="797" y="232" width="180" height="36" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="887" y="255" text-anchor="middle" font-size="13" fill="#134e4a">new params tuple</text>
+
+  <!-- lane B -->
+  <text x="17" y="304" font-size="14" font-weight="600" fill="#1f2937">Edit a literal threshold, add a node or a leaf</text>
+  <rect x="17" y="314" width="180" height="36" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="107" y="337" text-anchor="middle" font-size="13" fill="#14532d">edited</text>
+  <rect x="212" y="314" width="180" height="36" rx="8" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="302" y="337" text-anchor="middle" font-size="13" fill="#1f2937">same class</text>
+  <rect x="407" y="314" width="180" height="36" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="497" y="337" text-anchor="middle" font-size="13" fill="#7c2d00">new frozen model</text>
+  <rect x="602" y="314" width="180" height="36" rx="8" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="692" y="337" text-anchor="middle" font-size="13" fill="#1e3a8a">new arrays, same types</text>
+  <rect x="797" y="314" width="180" height="36" rx="8" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="887" y="337" text-anchor="middle" font-size="13" fill="#1f2937">no recompile</text>
+
+  <!-- lane C -->
+  <text x="17" y="386" font-size="14" font-weight="600" fill="#1f2937">Read a new feature, add an output column, rename a param</text>
+  <rect x="17" y="396" width="180" height="36" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="107" y="419" text-anchor="middle" font-size="13" fill="#14532d">edited</text>
+  <rect x="212" y="396" width="180" height="36" rx="8" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="302" y="419" text-anchor="middle" font-size="13" fill="#1f2937">same class</text>
+  <rect x="407" y="396" width="180" height="36" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="497" y="419" text-anchor="middle" font-size="13" fill="#7c2d00">new frozen model</text>
+  <rect x="602" y="396" width="180" height="36" rx="8" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="692" y="419" text-anchor="middle" font-size="13" fill="#1e3a8a">new row or output types</text>
+  <rect x="797" y="396" width="180" height="36" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="887" y="419" text-anchor="middle" font-size="13" fill="#134e4a">one compile, then cache</text>
+</svg>

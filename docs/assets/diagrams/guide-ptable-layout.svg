@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 380" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="900" height="380" fill="#ffffff"/>
+
+  <!-- params document -->
+  <rect x="10" y="16" width="300" height="230" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="26" y="42" font-size="16" font-weight="600" fill="#14532d">params document (rows)</text>
+  <text x="26" y="72" font-size="14" fill="#14532d">{"pricing": {"initiation_fee": {</text>
+  <text x="40" y="94" font-size="14" fill="#14532d">"bands": [</text>
+  <text x="54" y="118" font-size="14" fill="#14532d">{"floor": 0, "rate": 0.15, "cap": 165},</text>
+  <text x="54" y="142" font-size="14" fill="#14532d">{"floor": 1000, "rate": 0.10,</text>
+  <text x="74" y="162" font-size="14" fill="#14532d">"cap": 1050},</text>
+  <text x="54" y="186" font-size="14" fill="#14532d">{"floor": 10000, ...}</text>
+  <text x="40" y="210" font-size="14" fill="#14532d">]}}}</text>
+  <text x="26" y="236" font-size="13" fill="#14532d">one dict per row, every column</text>
+
+  <!-- validate -->
+  <path d="M310,130 L352,130" fill="none" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <rect x="356" y="76" width="180" height="108" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="370" y="102" font-size="16" font-weight="600" fill="#134e4a">validate once</text>
+  <text x="370" y="126" font-size="14" fill="#134e4a">types per column,</text>
+  <text x="370" y="148" font-size="14" fill="#134e4a">no missing or extra</text>
+  <text x="370" y="170" font-size="14" fill="#134e4a">columns; then cached</text>
+  <path d="M446,184 L446,262" fill="none" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#arr)"/>
+  <rect x="356" y="266" width="180" height="90" rx="10" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+  <text x="370" y="292" font-size="15" font-weight="600" fill="#7f1d1d">ParamsError</text>
+  <text x="370" y="316" font-size="14" fill="#7f1d1d">names step, param,</text>
+  <text x="370" y="338" font-size="14" fill="#7f1d1d">row and column</text>
+
+  <!-- columns -->
+  <path d="M536,130 L578,130" fill="none" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <rect x="582" y="16" width="308" height="230" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="598" y="42" font-size="16" font-weight="600" fill="#1e3a8a">what the step receives</text>
+  <text x="598" y="66" font-size="14" fill="#1e3a8a">a namedtuple, one read-only</text>
+  <text x="598" y="86" font-size="14" fill="#1e3a8a">numpy array per column</text>
+  <text x="598" y="118" font-size="14" font-weight="600" fill="#1e3a8a">bands.floor</text>
+  <rect x="700" y="102" width="56" height="24" fill="#ffffff" stroke="#2563eb"/>
+  <rect x="756" y="102" width="56" height="24" fill="#ffffff" stroke="#2563eb"/>
+  <rect x="812" y="102" width="62" height="24" fill="#ffffff" stroke="#2563eb"/>
+  <text x="708" y="119" font-size="14" fill="#1e3a8a">0</text>
+  <text x="762" y="119" font-size="14" fill="#1e3a8a">1000</text>
+  <text x="818" y="119" font-size="14" fill="#1e3a8a">10000</text>
+  <text x="598" y="154" font-size="14" font-weight="600" fill="#1e3a8a">bands.rate</text>
+  <rect x="700" y="138" width="56" height="24" fill="#ffffff" stroke="#2563eb"/>
+  <rect x="756" y="138" width="56" height="24" fill="#ffffff" stroke="#2563eb"/>
+  <rect x="812" y="138" width="62" height="24" fill="#ffffff" stroke="#2563eb"/>
+  <text x="708" y="155" font-size="14" fill="#1e3a8a">0.15</text>
+  <text x="762" y="155" font-size="14" fill="#1e3a8a">0.10</text>
+  <text x="818" y="155" font-size="14" fill="#1e3a8a">0.05</text>
+  <text x="598" y="190" font-size="14" font-weight="600" fill="#1e3a8a">bands.cap</text>
+  <rect x="700" y="174" width="56" height="24" fill="#ffffff" stroke="#2563eb"/>
+  <rect x="756" y="174" width="56" height="24" fill="#ffffff" stroke="#2563eb"/>
+  <rect x="812" y="174" width="62" height="24" fill="#ffffff" stroke="#2563eb"/>
+  <text x="708" y="191" font-size="14" fill="#1e3a8a">165</text>
+  <text x="762" y="191" font-size="14" fill="#1e3a8a">1050</text>
+  <text x="818" y="191" font-size="14" fill="#1e3a8a">1200</text>
+  <text x="598" y="230" font-size="14" fill="#1e3a8a">for i in range(len(bands.floor))</text>
+
+  <rect x="582" y="266" width="308" height="90" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="598" y="292" font-size="15" font-weight="600" fill="#134e4a">same in every mode</text>
+  <text x="598" y="316" font-size="14" fill="#134e4a">the kernel reads the arrays; a new</text>
+  <text x="598" y="338" font-size="14" fill="#134e4a">row count never changes a type</text>
+</svg>

@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 400" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="400" fill="#ffffff"/>
+
+  <!-- root flow -->
+  <rect x="30" y="30" width="560" height="340" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="50" y="58" font-size="16" font-weight="600" fill="#1e3a8a">flow "loan"</text>
+  <text x="50" y="80" font-size="13" fill="#1e3a8a">suppress_checks=[] : findings on its own node count</text>
+
+  <!-- branch with suppression -->
+  <rect x="60" y="100" width="300" height="250" rx="10" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+  <text x="80" y="128" font-size="15" font-weight="600" fill="#7f1d1d">flow "legacy"</text>
+  <text x="80" y="150" font-size="13" fill="#7f1d1d">suppress_checks=["int64_overflow"]</text>
+
+  <rect x="85" y="170" width="250" height="70" rx="8" fill="#ffffff" stroke="#dc2626" stroke-width="1.5"/>
+  <text x="100" y="196" font-size="14" fill="#7f1d1d">step "cents"</text>
+  <text x="100" y="218" font-size="13" fill="#7f1d1d">DCD101 found here: suppressed</text>
+
+  <rect x="85" y="258" width="250" height="70" rx="8" fill="#ffffff" stroke="#dc2626" stroke-width="1.5"/>
+  <text x="100" y="284" font-size="14" fill="#7f1d1d">step "scaled"</text>
+  <text x="100" y="306" font-size="13" fill="#7f1d1d">DCD101 found here: suppressed</text>
+
+  <!-- step outside -->
+  <rect x="385" y="170" width="180" height="70" rx="8" fill="#ffffff" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="400" y="196" font-size="14" fill="#1e3a8a">step "total"</text>
+  <text x="400" y="218" font-size="13" fill="#1e3a8a">DCD101: counts</text>
+
+  <rect x="385" y="258" width="180" height="70" rx="8" fill="#ffffff" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="400" y="284" font-size="14" fill="#1e3a8a">step "fee"</text>
+  <text x="400" y="306" font-size="13" fill="#1e3a8a">["DCD102"] by code</text>
+
+  <!-- report -->
+  <rect x="640" y="60" width="330" height="290" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="660" y="90" font-size="16" font-weight="600" fill="#4c1d95">Report.findings</text>
+  <text x="660" y="122" font-size="13" fill="#4c1d95">DCD101 legacy/cents</text>
+  <text x="680" y="142" font-size="13" fill="#4c1d95">suppressed: Suppression(path="loan/legacy",</text>
+  <text x="680" y="160" font-size="13" fill="#4c1d95">name="int64_overflow")</text>
+  <text x="660" y="190" font-size="13" fill="#4c1d95">DCD101 legacy/scaled  (suppressed)</text>
+  <text x="660" y="220" font-size="13" fill="#4c1d95">DCD101 total          suppressed: None</text>
+  <text x="660" y="250" font-size="13" fill="#4c1d95">DCD102 fee            (suppressed)</text>
+  <line x1="660" y1="268" x2="950" y2="268" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="660" y="292" font-size="13" fill="#4c1d95">ok, counts and fail_on() see only</text>
+  <text x="660" y="312" font-size="13" fill="#4c1d95">findings whose suppressed is None;</text>
+  <text x="660" y="332" font-size="13" fill="#4c1d95">to_text() and SARIF still list all</text>
+
+  <path d="M590,205 L636,205" stroke="#4b5563" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+</svg>

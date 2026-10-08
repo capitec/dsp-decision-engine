@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 600" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="600" fill="#ffffff"/>
+
+  <!-- client -->
+  <rect x="40" y="20" width="600" height="60" rx="9" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="60" y="45" font-size="15" font-weight="600" fill="#1f2937">HTTP client</text>
+  <text x="60" y="67" font-size="13" fill="#1f2937">POST /invocations (record or batch)  ·  GET /ping (200 once a version is active)</text>
+
+  <!-- server -->
+  <rect x="40" y="100" width="600" height="60" rx="9" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="60" y="125" font-size="15" font-weight="600" fill="#4c1d95">uvicorn + starlette, or sanic: one process per worker</text>
+  <text x="60" y="147" font-size="13" fill="#4c1d95">decider serve --workers N  ·  ServeSettings (host, port, workers, server)</text>
+
+  <!-- app -->
+  <rect x="40" y="180" width="600" height="60" rx="9" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="60" y="205" font-size="15" font-weight="600" fill="#4c1d95">create_app(handler)  ·  decider/serving/_servers/</text>
+  <text x="60" y="227" font-size="13" fill="#4c1d95">predict, ping, DeciderError handler (core.error_response)</text>
+
+  <!-- handler -->
+  <rect x="40" y="260" width="600" height="120" rx="9" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="60" y="285" font-size="15" font-weight="600" fill="#4c1d95">RequestHandler.process_fn  ·  decider/serving/_handler.py</text>
+  <rect x="58" y="302" width="128" height="60" rx="8" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="122" y="327" font-size="14" text-anchor="middle" fill="#4c1d95">input_fn</text>
+  <text x="122" y="347" font-size="12" text-anchor="middle" fill="#4c1d95">_parse.py</text>
+  <rect x="204" y="302" width="128" height="60" rx="8" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="268" y="327" font-size="14" text-anchor="middle" fill="#4c1d95">module_fn</text>
+  <text x="268" y="347" font-size="12" text-anchor="middle" fill="#4c1d95">reads _active</text>
+  <rect x="350" y="302" width="128" height="60" rx="8" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="414" y="327" font-size="14" text-anchor="middle" fill="#4c1d95">score / run</text>
+  <text x="414" y="347" font-size="12" text-anchor="middle" fill="#4c1d95">coerce dates first</text>
+  <rect x="496" y="302" width="128" height="60" rx="8" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="560" y="327" font-size="14" text-anchor="middle" fill="#4c1d95">output_fn</text>
+  <text x="560" y="347" font-size="12" text-anchor="middle" fill="#4c1d95">_format.py</text>
+  <line x1="186" y1="332" x2="202" y2="332" stroke="#4b5563" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="332" y1="332" x2="348" y2="332" stroke="#4b5563" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="478" y1="332" x2="494" y2="332" stroke="#4b5563" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <!-- live -->
+  <rect x="40" y="400" width="600" height="60" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="60" y="425" font-size="15" font-weight="600" fill="#14532d">Live(version, executable, params, dates)</text>
+  <text x="60" y="447" font-size="13" fill="#14532d">one tuple per version, read once</text>
+
+  <!-- engine -->
+  <rect x="40" y="480" width="600" height="60" rx="9" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="60" y="505" font-size="15" font-weight="600" fill="#134e4a">Executable.score(record, params)  ·  Executable.run(frame, params)</text>
+  <text x="60" y="527" font-size="13" fill="#134e4a">decider/_engine/run/engine.py, mode from DECIDER_API__MODE (fused)</text>
+
+  <!-- stack arrows -->
+  <line x1="340" y1="80" x2="340" y2="98" stroke="#4b5563" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="340" y1="160" x2="340" y2="178" stroke="#4b5563" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="340" y1="240" x2="340" y2="258" stroke="#4b5563" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="268" y1="362" x2="268" y2="398" stroke="#4b5563" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="414" y1="362" x2="414" y2="478" stroke="#4b5563" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <!-- stage path -->
+  <rect x="680" y="180" width="290" height="360" rx="10" fill="#ffffff" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="700" y="206" font-size="14" font-weight="600" fill="#1f2937">stage(version): off the request path</text>
+  <rect x="700" y="222" width="250" height="48" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="825" y="251" font-size="13" text-anchor="middle" fill="#14532d">ConfigStore.read(version)</text>
+  <rect x="700" y="290" width="250" height="48" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="825" y="319" font-size="13" text-anchor="middle" fill="#7c2d00">pipeline_fn(config): build(docs)</text>
+  <rect x="700" y="358" width="250" height="48" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="825" y="387" font-size="13" text-anchor="middle" fill="#134e4a">Engine().bind(step, mode)</text>
+  <rect x="700" y="426" width="250" height="48" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="825" y="455" font-size="13" text-anchor="middle" fill="#134e4a">warm_fn: score + run one record</text>
+  <line x1="825" y1="270" x2="825" y2="288" stroke="#4b5563" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="825" y1="338" x2="825" y2="356" stroke="#4b5563" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="825" y1="406" x2="825" y2="424" stroke="#4b5563" stroke-width="1.5" marker-end="url(#a)"/>
+  <path d="M700 450 L670 450 L670 430 L642 430" fill="none" stroke="#4b5563" stroke-width="1.5" marker-end="url(#a)"/>
+  <text x="700" y="500" font-size="13" fill="#1f2937">activate() swaps the new Live</text>
+  <text x="700" y="520" font-size="13" fill="#1f2937">into _active under the lock</text>
+
+  <text x="40" y="575" font-size="13" fill="#1f2937">Purple: serving code. Green: data. Orange: your pipeline code. Teal: the engine.</text>
+</svg>

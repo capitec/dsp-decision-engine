@@ -6,19 +6,27 @@ Build decision pipelines from plain Python functions, run them over a polars fra
 
 <div class="grid cards" markdown>
 
-- **[Getting started](getting-started.md)**
+- [Getting started](getting-started.md)
 
-    Install decider and run your first pipeline.
+    Install decider, run a pipeline over a frame, score one record and retune a param.
 
-- **[User guides](guides/steps-and-params.md)**
+- [Core concepts](concepts.md)
 
-    Task-by-task guides: steps and params, branches and loops, trees and scorecards, serving, debugging, checks.
+    Steps, params, the three run modes and the words the rest of the docs use.
 
-- **[Architecture](architecture/index.md)**
+- [User guides](guides/steps-and-params.md)
 
-    How the pieces fit together, from the high-level picture down to the engine.
+    Steps and params, branches and loops, money and nested types, trees, tables, scorecards, projects, serving, debugging, checks and experiments.
 
-- **[API reference](reference.md)**
+- [Tutorials](tutorials/quickstart.md)
+
+    Worked projects: loan granting and pricing, and comparing two policy versions.
+
+- [Architecture](architecture/index.md)
+
+    The design from the high-level picture down to every component of the engine, the lab and the tooling.
+
+- [API reference](reference.md)
 
     The public API, generated from the docstrings.
 

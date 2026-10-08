@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 430" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#374151"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="430" fill="#ffffff"/>
+
+  <rect x="20" y="30" width="420" height="300" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="40" y="58" font-size="15" font-weight="600" fill="#14532d">params document</text>
+  <text x="40" y="92" font-size="14" fill="#14532d">{</text>
+  <text x="60" y="118" font-size="14" fill="#14532d">"shared": {"min_ratio": 1.5},</text>
+  <text x="60" y="144" font-size="14" fill="#14532d">"credit": {</text>
+  <text x="80" y="170" font-size="14" fill="#14532d">"by_employment": {</text>
+  <text x="100" y="196" font-size="14" fill="#14532d">"salaried_limit": {"multiple": 4.0}</text>
+  <text x="80" y="222" font-size="14" fill="#14532d">}</text>
+  <text x="60" y="248" font-size="14" fill="#14532d">}</text>
+  <text x="40" y="274" font-size="14" fill="#14532d">}</text>
+  <text x="40" y="310" font-size="13" fill="#14532d">key = sha256(json.dumps(doc, sort_keys=True))</text>
+
+  <rect x="560" y="20" width="420" height="104" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="576" y="44" font-size="14" font-weight="600" fill="#134e4a">credit/by_employment/salaried_limit</text>
+  <text x="576" y="68" font-size="13" fill="#134e4a">view: {"multiple": 4.0}</text>
+  <text x="576" y="90" font-size="13" fill="#134e4a">model: multiple: float, ge=1, le=6</text>
+  <text x="576" y="112" font-size="13" fill="#134e4a">bundle: Params(multiple=4.0)</text>
+
+  <rect x="560" y="146" width="420" height="104" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="576" y="170" font-size="14" font-weight="600" fill="#134e4a">credit/by_employment/other_limit</text>
+  <text x="576" y="194" font-size="13" fill="#134e4a">view: {} (nothing set for this path)</text>
+  <text x="576" y="216" font-size="13" fill="#134e4a">model: multiple: float = 1.5</text>
+  <text x="576" y="238" font-size="13" fill="#134e4a">bundle: Params(multiple=1.5), its own default</text>
+
+  <rect x="560" y="272" width="420" height="104" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="576" y="296" font-size="14" font-weight="600" fill="#134e4a">credit/affordable</text>
+  <text x="576" y="320" font-size="13" fill="#134e4a">view: shared["min_ratio"] under its own name</text>
+  <text x="576" y="342" font-size="13" fill="#134e4a">model: min_ratio: float = 1.2</text>
+  <text x="576" y="364" font-size="13" fill="#134e4a">bundle: Params(min_ratio=1.5)</text>
+
+  <path d="M370 192 C 470 170, 480 90, 558 76" stroke="#374151" stroke-width="1.5" fill="none" marker-end="url(#a)"/>
+  <path d="M240 166 C 420 170, 480 200, 558 198" stroke="#374151" stroke-width="1.5" fill="none" stroke-dasharray="6 4" marker-end="url(#a)"/>
+  <path d="M300 114 C 500 130, 470 310, 558 318" stroke="#374151" stroke-width="1.5" fill="none" marker-end="url(#a)"/>
+
+  <text x="20" y="408" font-size="13" fill="#4b5563">Each node validates only its view: its local entry, found by walking the path, plus the shared keys it declares.</text>
+</svg>

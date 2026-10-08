@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1060 425" font-family="system-ui, sans-serif">
+  <rect x="0" y="0" width="1060" height="425" fill="#ffffff"/>
+
+  <!-- column headers -->
+  <text x="190" y="30" font-size="13" fill="#1f2937" text-anchor="middle">disposable_income</text>
+  <text x="320" y="30" font-size="13" fill="#1f2937" text-anchor="middle">affordability_ratio</text>
+  <text x="440" y="30" font-size="13" fill="#1f2937" text-anchor="middle">term_cap</text>
+  <text x="560" y="30" font-size="13" fill="#1f2937" text-anchor="middle">is_private</text>
+  <text x="680" y="30" font-size="13" fill="#1f2937" text-anchor="middle">cap_private</text>
+  <text x="800" y="30" font-size="13" fill="#1f2937" text-anchor="middle">cap_public</text>
+  <text x="935" y="30" font-size="13" fill="#1f2937" text-anchor="middle">affordable</text>
+
+  <!-- lane labels -->
+  <text x="20" y="100" font-size="15" font-weight="600" fill="#134e4a">interpreted</text>
+  <text x="20" y="120" font-size="15" font-weight="600" fill="#134e4a">and stepped</text>
+  <text x="20" y="142" font-size="13" fill="#134e4a">18 checkpoints</text>
+
+  <text x="20" y="290" font-size="15" font-weight="600" fill="#134e4a">fused</text>
+  <text x="20" y="312" font-size="13" fill="#134e4a">8 checkpoints</text>
+
+  <!-- interpreted lane: root sequence -->
+  <rect x="130" y="50" width="910" height="140" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="142" y="68" font-size="13" fill="#1f2937">afford (sequence): before ... after</text>
+
+  <!-- calls -->
+  <rect x="140" y="85" width="100" height="56" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <rect x="270" y="85" width="100" height="56" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <rect x="390" y="85" width="100" height="56" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <!-- branch bracket -->
+  <rect x="500" y="76" width="360" height="104" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="510" y="174" font-size="13" fill="#1e3a8a">by_sector (branch): before ... after</text>
+  <rect x="510" y="85" width="100" height="56" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <rect x="630" y="85" width="100" height="56" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <rect x="750" y="85" width="100" height="56" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="680" y="135" font-size="13" fill="#134e4a" text-anchor="middle">arm 0</text>
+  <text x="800" y="135" font-size="13" fill="#134e4a" text-anchor="middle">arm 1</text>
+  <rect x="885" y="85" width="100" height="56" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+
+  <!-- before/after dots -->
+  <g fill="#0d9488">
+    <circle cx="152" cy="105" r="6"/><circle cx="228" cy="105" r="6"/>
+    <circle cx="282" cy="105" r="6"/><circle cx="358" cy="105" r="6"/>
+    <circle cx="402" cy="105" r="6"/><circle cx="478" cy="105" r="6"/>
+    <circle cx="522" cy="105" r="6"/><circle cx="598" cy="105" r="6"/>
+    <circle cx="642" cy="105" r="6"/><circle cx="718" cy="105" r="6"/>
+    <circle cx="762" cy="105" r="6"/><circle cx="838" cy="105" r="6"/>
+    <circle cx="897" cy="105" r="6"/><circle cx="973" cy="105" r="6"/>
+  </g>
+  <text x="190" y="128" font-size="13" fill="#134e4a" text-anchor="middle">before | after</text>
+  <text x="320" y="128" font-size="13" fill="#134e4a" text-anchor="middle">before | after</text>
+  <text x="440" y="128" font-size="13" fill="#134e4a" text-anchor="middle">before | after</text>
+  <text x="560" y="128" font-size="13" fill="#134e4a" text-anchor="middle">before | after</text>
+  <text x="935" y="128" font-size="13" fill="#134e4a" text-anchor="middle">before | after</text>
+
+  <!-- fused lane -->
+  <rect x="130" y="230" width="910" height="140" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="142" y="248" font-size="13" fill="#1f2937">afford (sequence): before ... after</text>
+
+  <rect x="140" y="262" width="350" height="78" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="315" y="290" font-size="14" font-weight="600" fill="#134e4a" text-anchor="middle">one kernel: 3 steps</text>
+  <text x="315" y="312" font-size="13" fill="#134e4a" text-anchor="middle">checkpoint path: disposable_income</text>
+  <text x="315" y="330" font-size="13" fill="#134e4a" text-anchor="middle">Paused.kernel lists all three</text>
+
+  <rect x="500" y="262" width="360" height="78" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="680" y="290" font-size="14" font-weight="600" fill="#134e4a" text-anchor="middle">packed branch kernel</text>
+  <text x="680" y="312" font-size="13" fill="#134e4a" text-anchor="middle">checkpoint path: by_sector</text>
+  <text x="680" y="330" font-size="13" fill="#134e4a" text-anchor="middle">values inside it are never stored</text>
+
+  <rect x="885" y="262" width="100" height="78" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="935" y="306" font-size="13" fill="#134e4a" text-anchor="middle">affordable</text>
+
+  <g fill="#0d9488">
+    <circle cx="152" cy="352" r="6"/><circle cx="478" cy="352" r="6"/>
+    <circle cx="512" cy="352" r="6"/><circle cx="848" cy="352" r="6"/>
+    <circle cx="897" cy="352" r="6"/><circle cx="973" cy="352" r="6"/>
+  </g>
+
+  <text x="585" y="392" font-size="13" fill="#1f2937" text-anchor="middle">In fused mode a breakpoint on affordability_ratio or term_cap pauses before the whole first kernel,</text>
+  <text x="585" y="410" font-size="13" fill="#1f2937" text-anchor="middle">and value() of anything used only inside a kernel raises KeyError.</text>
+</svg>

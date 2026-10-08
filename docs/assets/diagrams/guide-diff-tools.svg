@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 360" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="360" fill="#ffffff"/>
+  <text x="20" y="22" font-size="14" font-weight="600" fill="#1f2937">what you have</text>
+  <text x="330" y="22" font-size="14" font-weight="600" fill="#1f2937">call</text>
+  <text x="700" y="22" font-size="14" font-weight="600" fill="#1f2937">what comes back</text>
+
+  <rect x="20" y="100" width="200" height="70" rx="10" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="120" y="128" font-size="15" font-weight="600" fill="#7c2d00" text-anchor="middle">old, new</text>
+  <text x="120" y="150" font-size="13" fill="#7c2d00" text-anchor="middle">two pipeline objects</text>
+  <rect x="20" y="275" width="200" height="70" rx="10" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="120" y="303" font-size="15" font-weight="600" fill="#7c2d00" text-anchor="middle">base, head</text>
+  <text x="120" y="325" font-size="13" fill="#7c2d00" text-anchor="middle">git revisions and an entry</text>
+
+  <rect x="330" y="35" width="250" height="64" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="455" y="61" font-size="15" font-weight="600" fill="#1e3a8a" text-anchor="middle">diff.structure</text>
+  <text x="455" y="83" font-size="13" fill="#1e3a8a" text-anchor="middle">nothing runs; IR compared</text>
+  <rect x="330" y="115" width="250" height="64" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="455" y="141" font-size="15" font-weight="600" fill="#14532d" text-anchor="middle">diff.outputs</text>
+  <text x="455" y="163" font-size="13" fill="#14532d" text-anchor="middle">both run over one frame</text>
+  <rect x="330" y="195" width="250" height="64" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="455" y="221" font-size="15" font-weight="600" fill="#1e3a8a" text-anchor="middle">diff.prove</text>
+  <text x="455" y="243" font-size="13" fill="#1e3a8a" text-anchor="middle">IR hash, then z3</text>
+  <rect x="330" y="278" width="250" height="64" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="455" y="304" font-size="15" font-weight="600" fill="#4c1d95" text-anchor="middle">diff.revisions / decider diff</text>
+  <text x="455" y="326" font-size="13" fill="#4c1d95" text-anchor="middle">one process per revision</text>
+
+  <rect x="700" y="35" width="280" height="64" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="840" y="61" font-size="15" font-weight="600" fill="#1f2937" text-anchor="middle">StructureDiff</text>
+  <text x="840" y="83" font-size="13" fill="#1f2937" text-anchor="middle">steps, params, edges that changed</text>
+  <rect x="700" y="115" width="280" height="64" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="840" y="141" font-size="15" font-weight="600" fill="#1f2937" text-anchor="middle">OutputDiff</text>
+  <text x="840" y="163" font-size="13" fill="#1f2937" text-anchor="middle">which rows and columns, by how much</text>
+  <rect x="700" y="195" width="280" height="64" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="840" y="221" font-size="15" font-weight="600" fill="#1f2937" text-anchor="middle">Proof</text>
+  <text x="840" y="243" font-size="13" fill="#1f2937" text-anchor="middle">identical True, or None and why</text>
+  <rect x="700" y="278" width="280" height="64" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="840" y="304" font-size="15" font-weight="600" fill="#1f2937" text-anchor="middle">StructureDiff, OutputDiff</text>
+  <text x="840" y="326" font-size="13" fill="#1f2937" text-anchor="middle">the same models, per revision</text>
+
+  <path d="M220,125 L326,70" stroke="#4b5563" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <path d="M220,140 L326,147" stroke="#4b5563" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <path d="M220,155 L326,222" stroke="#4b5563" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <path d="M220,310 L326,310" stroke="#4b5563" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <path d="M580,67 L696,67" stroke="#4b5563" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <path d="M580,147 L696,147" stroke="#4b5563" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <path d="M580,227 L696,227" stroke="#4b5563" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <path d="M580,310 L696,310" stroke="#4b5563" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+</svg>

@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 520" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#374151"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="520" fill="#ffffff"/>
+
+  <text x="52" y="30" font-size="14" font-weight="600" fill="#1f2937">One int64 event, as the kernel writes it (bit 63 on the left)</text>
+
+  <!-- bit field bar: 14px per bit, x from 52 -->
+  <rect x="52" y="44" width="280" height="60" rx="8" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="192" y="70" font-size="14" font-weight="600" fill="#1e3a8a" text-anchor="middle">iteration</text>
+  <text x="192" y="92" font-size="13" fill="#1e3a8a" text-anchor="middle">20 bits, 44 to 63</text>
+  <rect x="332" y="44" width="224" height="60" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="444" y="70" font-size="14" font-weight="600" fill="#7c2d00" text-anchor="middle">arm + 1</text>
+  <text x="444" y="92" font-size="13" fill="#7c2d00" text-anchor="middle">16 bits, 28 to 43</text>
+  <rect x="556" y="44" width="280" height="60" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="696" y="70" font-size="14" font-weight="600" fill="#134e4a" text-anchor="middle">step ref</text>
+  <text x="696" y="92" font-size="13" fill="#134e4a" text-anchor="middle">20 bits, 8 to 27</text>
+  <rect x="836" y="44" width="112" height="60" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="892" y="70" font-size="14" font-weight="600" fill="#4c1d95" text-anchor="middle">kind</text>
+  <text x="892" y="92" font-size="13" fill="#4c1d95" text-anchor="middle">8 bits, 0 to 7</text>
+
+  <text x="192" y="128" font-size="13" fill="#1e3a8a" text-anchor="middle">0 = not in a loop</text>
+  <text x="444" y="128" font-size="13" fill="#7c2d00" text-anchor="middle">0 = not in an arm</text>
+  <text x="696" y="128" font-size="13" fill="#134e4a" text-anchor="middle">1-based, 0 = no step</text>
+  <text x="892" y="128" font-size="13" fill="#4c1d95" text-anchor="middle">Kind, 0 = STEP</text>
+
+  <!-- example -->
+  <text x="52" y="172" font-size="14" font-weight="600" fill="#1f2937">pack(Kind.STEP, 3, 2, 4) == 70369281049344</text>
+  <rect x="52" y="186" width="280" height="40" rx="8" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="192" y="211" font-size="14" fill="#1e3a8a" text-anchor="middle">4</text>
+  <rect x="332" y="186" width="224" height="40" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="444" y="211" font-size="14" fill="#7c2d00" text-anchor="middle">2</text>
+  <rect x="556" y="186" width="280" height="40" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="696" y="211" font-size="14" fill="#134e4a" text-anchor="middle">3</text>
+  <rect x="836" y="186" width="112" height="40" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="892" y="211" font-size="14" fill="#4c1d95" text-anchor="middle">0</text>
+
+  <line x1="500" y1="232" x2="500" y2="270" stroke="#374151" stroke-width="1.5" marker-end="url(#a)"/>
+  <text x="512" y="256" font-size="13" fill="#374151">decode(): vectorised shift and mask, then one TraceEvent each</text>
+
+  <!-- decoded event -->
+  <rect x="52" y="274" width="896" height="128" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="70" y="300" font-size="14" font-weight="600" fill="#1f2937">TraceEvent</text>
+  <text x="70" y="324" font-size="13" fill="#1f2937">schema_version = 1 (from the StepTable)      kind = Kind.STEP      step = 3</text>
+  <text x="70" y="346" font-size="13" fill="#1f2937">origin = table.steps[2], the third call's Origin: path, source, durable id</text>
+  <text x="70" y="368" font-size="13" fill="#1f2937">arm = 2 - 1 = 1 (None when the field is 0)      iteration = 4 (None when 0)</text>
+  <text x="70" y="390" font-size="13" fill="#1f2937">record = the row whose offsets slice holds this event      value = None (no kernel writes one)</text>
+
+  <!-- step table -->
+  <rect x="52" y="420" width="896" height="84" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="70" y="446" font-size="14" font-weight="600" fill="#134e4a">StepTable, one per Executable</text>
+  <text x="70" y="470" font-size="13" fill="#134e4a">steps = tuple(c.node.origin for c in plan.calls): ref k is call id k - 1</text>
+  <text x="70" y="490" font-size="13" fill="#134e4a">The kernel only carries the integer; names, sources and ids are joined here, in the driver.</text>
+</svg>

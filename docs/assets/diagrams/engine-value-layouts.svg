@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 560" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="vl-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#374151"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="560" fill="#ffffff"/>
+
+  <!-- Text span -->
+  <text x="20" y="28" font-size="15" font-weight="600" fill="#1f2937">Text: a span, 16 bytes per value (SPAN_DTYPE)</text>
+  <rect x="20" y="44" width="150" height="40" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="95" y="69" font-size="14" text-anchor="middle" fill="#134e4a">address: int64</text>
+  <rect x="170" y="44" width="150" height="40" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="245" y="69" font-size="14" text-anchor="middle" fill="#134e4a">length: 10</text>
+  <text x="20" y="110" font-size="13" fill="#1f2937">byte length; -1 marks a null, (0, -1)</text>
+  <text x="20" y="128" font-size="13" fill="#1f2937">len() counts code points, not bytes</text>
+  <text x="637" y="134" font-size="13" text-anchor="middle" fill="#14532d">Arrow string data, owned by the frame or a kept bytes object</text>
+  <g font-size="14" fill="#14532d" text-anchor="middle">
+    <rect x="430" y="48" width="540" height="34" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+    <text x="457" y="70">G</text><text x="497" y="70">O</text><text x="537" y="70">V</text><text x="577" y="70">·</text>
+    <text x="617" y="70">H</text><text x="657" y="70">E</text><text x="697" y="70">A</text><text x="737" y="70">L</text>
+    <text x="777" y="70">T</text><text x="817" y="70">H</text><text x="857" y="70">a</text><text x="897" y="70">c</text><text x="937" y="70">m</text>
+  </g>
+  <path d="M95,44 V34 H440 V46" fill="none" stroke="#374151" stroke-width="1.5" marker-end="url(#vl-arrow)"/>
+  <line x1="437" y1="92" x2="837" y2="92" stroke="#0d9488" stroke-width="1.5"/>
+  <line x1="437" y1="86" x2="437" y2="98" stroke="#0d9488" stroke-width="1.5"/>
+  <line x1="837" y1="86" x2="837" y2="98" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="637" y="114" font-size="13" text-anchor="middle" fill="#134e4a">10 bytes the span covers; nothing is copied</text>
+
+  <!-- Struct record -->
+  <text x="20" y="178" font-size="15" font-weight="600" fill="#1f2937">Struct[Applicant]: one aligned numpy record per row</text>
+  <text x="20" y="200" font-size="13" fill="#1f2937">dtype names ['income', 'age'], formats ['&lt;f8', '&lt;i8'], offsets [0, 8], itemsize 16</text>
+  <text x="20" y="236" font-size="13" fill="#1f2937">row 0</text>
+  <rect x="70" y="214" width="200" height="36" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="170" y="237" font-size="14" text-anchor="middle" fill="#7c2d00">income 9200.0 (@0)</text>
+  <rect x="270" y="214" width="160" height="36" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="350" y="237" font-size="14" text-anchor="middle" fill="#7c2d00">age 34 (@8)</text>
+  <text x="20" y="282" font-size="13" fill="#1f2937">row 1</text>
+  <rect x="70" y="260" width="200" height="36" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="170" y="283" font-size="14" text-anchor="middle" fill="#7c2d00">income 4100.0 (@16)</text>
+  <rect x="270" y="260" width="160" height="36" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="350" y="283" font-size="14" text-anchor="middle" fill="#7c2d00">age 22 (@24)</text>
+  <text x="470" y="234" font-size="13" fill="#1f2937">A step reads applicant["income"] the same way</text>
+  <text x="470" y="252" font-size="13" fill="#1f2937">in Python and in a kernel. Fields: float, int, bool.</text>
+  <text x="470" y="270" font-size="13" fill="#1f2937">No per-field validity, so the input must be REQUIRED.</text>
+  <text x="470" y="288" font-size="13" fill="#1f2937">An output is a tuple of fields packed into a record.</text>
+
+  <!-- Columnar ragged -->
+  <text x="20" y="338" font-size="15" font-weight="600" fill="#1f2937">Columnar[Account]: Ragged, flat field arrays plus per-row bounds</text>
+  <text x="20" y="378" font-size="14" fill="#1f2937">lo</text>
+  <rect x="120" y="356" width="70" height="34" rx="8" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="155" y="378" font-size="14" text-anchor="middle" fill="#1e3a8a">0</text>
+  <rect x="190" y="356" width="70" height="34" rx="8" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="225" y="378" font-size="14" text-anchor="middle" fill="#1e3a8a">2</text>
+  <text x="20" y="420" font-size="14" fill="#1f2937">hi</text>
+  <rect x="120" y="398" width="70" height="34" rx="8" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="155" y="420" font-size="14" text-anchor="middle" fill="#1e3a8a">2</text>
+  <rect x="190" y="398" width="70" height="34" rx="8" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="225" y="420" font-size="14" text-anchor="middle" fill="#1e3a8a">2</text>
+  <text x="120" y="452" font-size="13" fill="#1e3a8a">row 0    row 1</text>
+
+  <text x="330" y="378" font-size="14" fill="#1f2937">balance</text>
+  <rect x="440" y="356" width="100" height="34" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="490" y="378" font-size="14" text-anchor="middle" fill="#14532d">500.0</text>
+  <rect x="540" y="356" width="100" height="34" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="590" y="378" font-size="14" text-anchor="middle" fill="#14532d">200.0</text>
+  <text x="330" y="420" font-size="14" fill="#1f2937">months_late</text>
+  <rect x="440" y="398" width="100" height="34" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="490" y="420" font-size="14" text-anchor="middle" fill="#14532d">3</text>
+  <rect x="540" y="398" width="100" height="34" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="590" y="420" font-size="14" text-anchor="middle" fill="#14532d">0</text>
+  <line x1="440" y1="446" x2="640" y2="446" stroke="#0d9488" stroke-width="1.5"/>
+  <line x1="440" y1="440" x2="440" y2="452" stroke="#0d9488" stroke-width="1.5"/>
+  <line x1="640" y1="440" x2="640" y2="452" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="540" y="470" font-size="13" text-anchor="middle" fill="#134e4a">row 0 owns items [0, 2); row 1 owns [2, 2), none</text>
+
+  <text x="680" y="378" font-size="13" fill="#1f2937">The kernel gets lo, hi and the field</text>
+  <text x="680" y="396" font-size="13" fill="#1f2937">arrays in flats; the RAG source slices</text>
+  <text x="680" y="414" font-size="13" fill="#1f2937">row i into a namedtuple of views:</text>
+  <text x="680" y="432" font-size="13" fill="#1f2937">accounts.balance[j]. A row subset</text>
+  <text x="680" y="450" font-size="13" fill="#1f2937">indexes lo and hi only.</text>
+  <text x="20" y="510" font-size="13" fill="#1f2937">Item fields: float, int, bool, str (a span), float | None (NaN) or str | None (a null span).</text>
+  <text x="20" y="530" font-size="13" fill="#1f2937">A null or absent list is a row with no items; a null in any other field raises, naming the item.</text>
+</svg>

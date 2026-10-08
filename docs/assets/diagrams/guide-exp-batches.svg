@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 400" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="400" fill="#ffffff"/>
+  <text x="20" y="28" font-size="14" font-weight="600" fill="#1f2937">batch_size records at a time; within a batch, the baseline first</text>
+
+  <!-- column headers: batches -->
+  <text x="290" y="62" font-size="14" font-weight="600" fill="#14532d" text-anchor="middle">batch 0 (rows 0..499)</text>
+  <text x="520" y="62" font-size="14" font-weight="600" fill="#14532d" text-anchor="middle">batch 1 (rows 500..999)</text>
+  <text x="750" y="62" font-size="14" font-weight="600" fill="#14532d" text-anchor="middle">batch 2 ...</text>
+
+  <!-- row labels -->
+  <rect x="20" y="80" width="150" height="56" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="95" y="104" font-size="14" font-weight="600" fill="#7c2d00" text-anchor="middle">baseline</text>
+  <text x="95" y="124" font-size="13" fill="#7c2d00" text-anchor="middle">the unchanged flow</text>
+  <rect x="20" y="150" width="150" height="56" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="95" y="174" font-size="14" font-weight="600" fill="#7c2d00" text-anchor="middle">ratio_0.45</text>
+  <text x="95" y="194" font-size="13" fill="#7c2d00" text-anchor="middle">params merged</text>
+  <rect x="20" y="220" width="150" height="56" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="95" y="244" font-size="14" font-weight="600" fill="#4c1d95" text-anchor="middle">v1</text>
+  <text x="95" y="264" font-size="13" fill="#4c1d95" text-anchor="middle">revision: subprocess</text>
+
+  <!-- cells -->
+  <g font-size="13" text-anchor="middle">
+    <rect x="200" y="80" width="180" height="56" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+    <text x="290" y="104" fill="#134e4a">run, rerun if determinism</text>
+    <text x="290" y="124" fill="#134e4a">output = baseline</text>
+    <rect x="200" y="150" width="180" height="56" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+    <text x="290" y="174" fill="#134e4a">run with its params</text>
+    <text x="290" y="194" fill="#134e4a">Batch(output, baseline)</text>
+    <rect x="200" y="220" width="180" height="56" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+    <text x="290" y="244" fill="#134e4a">read batch 0 back</text>
+    <text x="290" y="264" fill="#134e4a">from the worker's pickle</text>
+
+    <rect x="430" y="80" width="180" height="56" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+    <text x="520" y="112" fill="#134e4a">same, rows 500..999</text>
+    <rect x="430" y="150" width="180" height="56" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+    <text x="520" y="182" fill="#134e4a">same records</text>
+    <rect x="430" y="220" width="180" height="56" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+    <text x="520" y="252" fill="#134e4a">same records</text>
+
+    <rect x="660" y="80" width="180" height="56" rx="8" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+    <rect x="660" y="150" width="180" height="56" rx="8" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+    <rect x="660" y="220" width="180" height="56" rx="8" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  </g>
+
+  <!-- hooks -->
+  <rect x="200" y="305" width="640" height="80" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="520" y="330" font-size="14" font-weight="600" fill="#4c1d95" text-anchor="middle">after each cell: on_node_end (selected nodes), then on_batch_end</text>
+  <text x="520" y="352" font-size="13" fill="#4c1d95" text-anchor="middle">shared callbacks see every scenario; each scenario has its own copy of every metric</text>
+  <text x="520" y="372" font-size="13" fill="#4c1d95" text-anchor="middle">after each column: on_progress(run, done); a callback sets run.stop to end early</text>
+  <path d="M290,276 L290,301" stroke="#4b5563" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <path d="M520,276 L520,301" stroke="#4b5563" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+
+  <rect x="870" y="80" width="115" height="196" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="927" y="150" font-size="14" font-weight="600" fill="#14532d" text-anchor="middle">at the end</text>
+  <text x="927" y="174" font-size="13" fill="#14532d" text-anchor="middle">summarise()</text>
+  <text x="927" y="194" font-size="13" fill="#14532d" text-anchor="middle">per metric,</text>
+  <text x="927" y="214" font-size="13" fill="#14532d" text-anchor="middle">per scenario</text>
+</svg>
