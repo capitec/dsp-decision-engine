@@ -5,6 +5,9 @@ from decider import missing_as, step
 
 from fraud_interdiction.vocab import Action
 
+# Plain ints: a kernel cannot take the max of an int and an enum member.
+BLOCK, DECLINE, HOLD = int(Action.BLOCK_CHANNEL), int(Action.DECLINE), int(Action.HOLD_FOR_REVIEW)
+
 
 def hard_block_code(
     sanctions_list_match: bool = missing_as(False), account_frozen: bool = missing_as(False),
@@ -15,22 +18,22 @@ def hard_block_code(
     code, forced = 0, 0
     if sanctions_list_match:
         code |= 1
-        forced = max(forced, Action.BLOCK_CHANNEL)
+        forced = max(forced, BLOCK)
     if account_frozen:
         code |= 2
-        forced = max(forced, Action.DECLINE)
+        forced = max(forced, DECLINE)
     if mule_watchlist_confirmed:
         code |= 4
-        forced = max(forced, Action.DECLINE)
+        forced = max(forced, DECLINE)
     if device_blocked:
         code |= 8
-        forced = max(forced, Action.BLOCK_CHANNEL)
+        forced = max(forced, BLOCK)
     if card_compromised:
         code |= 16
-        forced = max(forced, Action.DECLINE)
+        forced = max(forced, DECLINE)
     if court_order_hold:
         code |= 32
-        forced = max(forced, Action.HOLD_FOR_REVIEW)
+        forced = max(forced, HOLD)
     return code, forced
 
 
