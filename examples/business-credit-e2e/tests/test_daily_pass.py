@@ -9,7 +9,7 @@ def test_assessing_only_the_changed_entity_gives_the_full_runs_decision(executab
     original = executable.score(record, params)
 
     corrected = copy.deepcopy(record)
-    corrected["entities"][2]["adverse_events"][0]["is_satisfied"] = True  # Van Wyk's default listing, now paid
+    corrected["entities"][3]["bureau_score"] = 700.0  # Van Wyk, who was 540
     partial = counterfactual.reassess_entity(corrected, original, entity_id=3)
     full = executable.score(corrected, params)
 

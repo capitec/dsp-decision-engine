@@ -39,6 +39,7 @@ def run_review(executable, params, request_for, originate):
         first = originate(store, request_for(**(origination or {})))
         base = {**(origination or {}), "decision_date": NEXT_YEAR, "knowledge_date": NEXT_YEAR, **(changes or {})}
         kwargs.setdefault("statement_age_months", 6.0)
+        kwargs.setdefault("limit_account", LIMIT_ACCOUNT)
         return first, review.annual_review(executable, run_params or params, store, request_for(**base), **kwargs)
 
     return run
@@ -67,16 +68,15 @@ def test_a_year_with_nothing_changed_moves_only_where_an_overlay_lapsed(run_revi
 
 
 def test_better_financials_are_a_business_data_cause_and_nothing_else(run_review):
-    _, reviewed = run_review(origination={"product_code": 51}, changes={"product_code": 51, **STRONG})
+    _, reviewed = run_review(origination={"product_code": 51, **WEAK, "entities": owners(780.0)}, changes=STRONG)
     moved = {name: value for name, value in causes(reviewed).items() if value}
     assert list(moved) == ["business_data"] and moved["business_data"] < 0
 
 
-def test_a_settled_judgment_is_an_entity_data_cause(request_for, run_review):
-    sample = request_for()
-    settled = copy.deepcopy(sample["entities"])
-    settled[2]["adverse_events"][0]["is_satisfied"] = True  # Van Wyk's default listing, paid
-    _, reviewed = run_review(origination={"product_code": 51}, changes={"product_code": 51, "entities": settled})
+def test_a_better_bureau_record_is_an_entity_data_cause(request_for, run_review):
+    improved = copy.deepcopy(request_for()["entities"])
+    improved[3]["bureau_score"] = 700.0  # Van Wyk, who was 540
+    _, reviewed = run_review(origination={"product_code": 51}, changes={"product_code": 51, "entities": improved})
     moved = {name: value for name, value in causes(reviewed).items() if value}
     assert list(moved) == ["entity_data"] and moved["entity_data"] < 0
 
@@ -131,11 +131,11 @@ def test_a_stale_review_holds_a_strong_client_to_the_grade_floor(run_review):
 
 
 def test_a_stale_review_never_flatters_a_client_who_is_already_worse_than_the_floor(run_review):
-    weak = {"product_code": 51, **WEAK, "entities": owners(780.0)}
+    weak = {**WEAK, "entities": owners(620.0, 40.0, 3.0)}
     _, complete = run_review(weak, statement_age_months=6.0)
     _, stale = run_review(weak, statement_age_months=18.0, management_accounts_present=True)
-    assert complete["risk_grade"] >= 8
-    assert stale["risk_grade"] == complete["risk_grade"]
+    assert complete["risk_grade"] == 10
+    assert stale["risk_grade"] == 10  # a floor of 7 must not lift a grade 10 to 7
 
 
 def test_a_turnover_only_review_floors_the_grade_at_6(run_review):
@@ -162,13 +162,13 @@ def test_a_cheaper_book_than_the_contract_is_reported_as_a_shortfall_even_when_i
 
 def test_a_revolving_facility_can_be_repriced_on_notice(run_review):
     _, reviewed = run_review(origination={"product_code": 51, **STRONG, "entities": owners(780.0)},
-                             changes={"product_code": 51, **WEAK, "entities": owners(780.0)}, limit_account=LIMIT_ACCOUNT)
+                             changes={"product_code": 51, **WEAK, "entities": owners(780.0)})
     assert reviewed["reprice"]["margin_shortfall_bps"] > 0
     assert reviewed["reprice"]["action"] == vocab.REPRICE_RESET_ON_NOTICE
 
 
 def test_an_unchanged_price_needs_no_action(run_review):
-    _, reviewed = run_review(origination={"product_code": 51}, changes={"product_code": 51}, limit_account=LIMIT_ACCOUNT)
+    _, reviewed = run_review(origination={"product_code": 51}, changes={"product_code": 51})
     assert (reviewed["reprice"]["margin_shortfall_bps"], reviewed["reprice"]["action"]) == (0.0, vocab.REPRICE_NONE)
 
 
@@ -183,7 +183,7 @@ def test_the_contract_terms_carry_forward_so_a_second_review_compares_with_the_c
 
 def test_a_revolving_facility_gets_a_limit_decision_from_the_limit_programme(run_review):
     small = {"product_code": 51, "requested_amount": 15_000.0}
-    first, reviewed = run_review(small, limit_account=LIMIT_ACCOUNT)
+    first, reviewed = run_review(small)
     assert first["offered_amount"] == 15_000.0
     decision = reviewed["limit_decision"]
     assert (decision["current_limit"], decision["proposed_limit"]) == (15_000.0, 22_000.0)
@@ -192,7 +192,7 @@ def test_a_revolving_facility_gets_a_limit_decision_from_the_limit_programme(run
 
 def test_a_revolving_review_without_the_limit_programmes_inputs_is_refused(run_review):
     with pytest.raises(ValueError, match="limit_account"):
-        run_review({"product_code": 51})
+        run_review({"product_code": 51}, limit_account=None)
 
 
 def test_a_term_facility_has_no_limit_decision(run_review):
