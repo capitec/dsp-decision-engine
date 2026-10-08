@@ -77,7 +77,7 @@ def repeat_card_use(rng):
 
 
 def model_score(rng):
-    cutoff = rng.choice([540, 570, 600, 620, 650, 700])
+    cutoff = rng.choice([620, 660, 700, 740, 780, 820])
     return lambda adj: all_of(is_true("model_score_available"), gt("model_score", cutoff)), None
 
 
@@ -93,8 +93,10 @@ def large_unmatched_payment(rng):
                               gte("velocity_distinct_counterparties_24h", counterparties)), None
 
 
-TEMPLATES = {"MS": (new_beneficiary_payment, rapid_payments, share_of_day), "AT": (sim_or_device_change, model_score),
-             "CF": (repeat_card_use, model_score), "FP": (prior_fraud_victim,), "AA": (large_unmatched_payment,)}
+# About one rule in nine reads the model score.
+TEMPLATES = {"MS": (new_beneficiary_payment, rapid_payments, share_of_day),
+             "AT": (sim_or_device_change,) * 8 + (model_score,), "CF": (repeat_card_use,) * 8 + (model_score,),
+             "FP": (prior_fraud_victim,), "AA": (large_unmatched_payment,)}
 EVENT_TYPES = {"MS": [210], "AT": [210], "AA": [210], "CF": [110, 111], "FP": [220]}
 
 
