@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from decider import allow_fallback, param, step
 
-from credit_core.adverse_events import ADMINISTRATION_ORDER, FRAUD_CONVICTION, SEQUESTRATION
+from credit_core.adverse_events import ADMINISTRATION_ORDER, FRAUD_CONVICTION, IMMATERIAL, SEQUESTRATION
 
 from business_nested import vocab
 
@@ -37,7 +37,10 @@ def rollup(
         return vocab.CLEAR, AE_R_11, []
     # Rules are listed in rule order, so a tie in severity goes to the lower-numbered rule.
     fired: list[tuple[int, str, list[int]]] = []
-    ids = lambda chosen: [e["event_id"] for e in chosen]  # noqa: E731
+
+    def ids(chosen):
+        return [e["event_id"] for e in chosen]
+
     if disqualifying := [e for e in events if e[severity_key] == vocab.DISQUALIFYING]:
         fired.append((vocab.DISQUALIFYING, AE_R_01, ids(disqualifying)))
     recent_minor = [e for e in events if e[severity_key] == vocab.MINOR and e["age_months"] <= recent_months]
@@ -49,7 +52,7 @@ def rollup(
         fired.append((vocab.DISQUALIFYING, AE_R_07, ids(unsatisfied)))
     elif total > max(material_floor, material_pct * requested_amount):
         fired.append((vocab.MATERIAL, AE_R_06, ids(unsatisfied)))
-    if all(e[severity_key] == 1 for e in events) and len(events) <= immaterial_count:
+    if all(e[severity_key] == IMMATERIAL for e in events) and len(events) <= immaterial_count:
         fired.append((vocab.CLEAR, AE_R_11, ids(events)))
     if not fired:
         worst = max(events, key=lambda e: e[severity_key])
