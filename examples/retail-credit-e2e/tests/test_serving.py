@@ -9,6 +9,8 @@ from decider.serving import RequestHandler
 
 from retail_credit.pipeline import build
 
+from conftest import parse_dates
+
 ROOT = Path(__file__).resolve().parents[1]
 FIGURES = ("outcome_code", "risk_grade", "segment_code", "amount_cap", "max_affordable_instalment", "instalment_cap",
            "offer_amount", "offer_binding_constraint", "nominal_annual_rate", "instalment", "amount_financed",
@@ -53,7 +55,9 @@ def test_a_consolidation_offer_is_served(handler, sample):
     assert (out["outcome_code"], out["offer_basis_code"], out["offer_amount"]) == (2, 2, 30_000.0)
 
 
-def test_every_step_that_runs_in_python_says_so_on_purpose():
-    fallbacks = Engine(strict_compile=True).bind(build(), mode="fused").fallbacks()
-    undeclared = {step for step, reason in fallbacks.items() if not reason.startswith("@allow_fallback")}
-    assert fallbacks and not undeclared
+def test_every_step_that_runs_in_python_says_so_on_purpose(sample, params):
+    strict = Engine(strict_compile=True).bind(build(), mode="fused")
+    undeclared = {step for step, reason in strict.fallbacks().items() if not reason.startswith("@allow_fallback")}
+    assert strict.fallbacks() and not undeclared
+    # A node that compiles on first use only meets strict mode when it is scored.
+    assert strict.score(parse_dates(sample), params)["offer_amount"] == 76250.0
