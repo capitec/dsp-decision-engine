@@ -1,0 +1,277 @@
+{
+  "shared": {
+    "overlay_stack_enabled": true
+  },
+  "consolidation": {
+    "inventory": {
+      "classify": {
+        "recently_opened_months": 3,
+        "non_consolidatable": [
+          {
+            "account_type_code": 50
+          },
+          {
+            "account_type_code": 51
+          },
+          {
+            "account_type_code": 52
+          },
+          {
+            "account_type_code": 53
+          }
+        ]
+      }
+    },
+    "settlements": {
+      "disbursement_lag_days": 2,
+      "large_agreement_threshold": 250000.0,
+      "security_release_cost": 500.0,
+      "estimate_tolerance_pct": 0.03,
+      "buffer_pct": 0.015,
+      "buffer_cap": 2500.0,
+      "early_settlement_rules": [
+        {
+          "early_settlement_rule_code": 0,
+          "months_of_interest": 0.0
+        },
+        {
+          "early_settlement_rule_code": 1,
+          "months_of_interest": 1.0
+        },
+        {
+          "early_settlement_rule_code": 2,
+          "months_of_interest": 3.0
+        }
+      ]
+    },
+    "assessment_mode_code": {
+      "mode": 4
+    },
+    "product_code": {
+      "evidence_product": 11
+    },
+    "evidence": {
+      "applicant1_income": {
+        "income_haircut_applied": {
+          "statement_confidence_threshold": 0.7,
+          "haircut_payslip": 0.05,
+          "haircut_statement_high_confidence": 0.1,
+          "haircut_statement_low_confidence": 0.25,
+          "haircut_declared": 0.2,
+          "haircut_bureau_estimated": 0.3
+        }
+      },
+      "applicant2_income": {
+        "income_haircut_applied": {
+          "statement_confidence_threshold": 0.7,
+          "haircut_payslip": 0.05,
+          "haircut_statement_high_confidence": 0.1,
+          "haircut_statement_low_confidence": 0.25,
+          "haircut_declared": 0.2,
+          "haircut_bureau_estimated": 0.3
+        }
+      },
+      "household_income": {
+        "minor_contribution_threshold": 0.1
+      },
+      "bureau_is_stale": {
+        "staleness_window_days": 7,
+        "staleness_window_days_mortgage": 14
+      },
+      "minimum_income_tier": {
+        "minimum_tier_new_application": 3,
+        "minimum_tier_limit_increase": 4,
+        "minimum_tier_arrangement": 5,
+        "minimum_tier_scenario": 3
+      }
+    },
+    "statutory_ceiling": {
+      "repo_rate": 0.07,
+      "margin_over_repo": 0.21
+    },
+    "baseline_measures": {
+      "paydown_horizon_months": 36
+    },
+    "plain_granting": {
+      "reference_term_months": 36,
+      "debt_service_ceiling": 0.4,
+      "rate_gap_threshold": 0.03,
+      "active_account_limit": 6,
+      "high_rate_threshold": 0.28
+    },
+    "eligibility_gates": {
+      "serial_consolidation_months": 6,
+      "minimum_settleable_accounts": 2
+    },
+    "flex_loan_policy": {
+      "min_accounts": 2,
+      "max_accounts": 8,
+      "min_amount": 10000.0,
+      "max_amount": 500000.0,
+      "min_term": 12,
+      "max_term": 84,
+      "min_relief": 0.1,
+      "anti_harm": 0.15,
+      "max_term_extension": 24,
+      "rate_ceiling": true,
+      "new_money_pct": 0.25,
+      "new_money_cap": 50000.0,
+      "dsr_ceiling": 0.45,
+      "min_external": 0.6,
+      "min_discretionary": 850.0,
+      "margin_bands": [
+        {
+          "external_from": 0.0,
+          "base_bps": 45.0
+        },
+        {
+          "external_from": 0.6,
+          "base_bps": 30.0
+        },
+        {
+          "external_from": 0.8,
+          "base_bps": 15.0
+        },
+        {
+          "external_from": 0.95,
+          "base_bps": 0.0
+        }
+      ],
+      "candidate_terms": [
+        {
+          "term_months": 12
+        },
+        {
+          "term_months": 24
+        },
+        {
+          "term_months": 36
+        },
+        {
+          "term_months": 48
+        },
+        {
+          "term_months": 60
+        },
+        {
+          "term_months": 72
+        },
+        {
+          "term_months": 84
+        }
+      ]
+    },
+    "everyday_card_policy": {
+      "max_accounts": 8,
+      "min_limit": 1000.0,
+      "max_limit": 300000.0,
+      "max_utilisation": 0.8,
+      "transfer_fee_pct": 0.025,
+      "minimum_payment_floor": 50.0,
+      "minimum_payment_pct": 0.03,
+      "paydown_months": 36,
+      "stress_months": 36,
+      "min_relief": 0.1,
+      "anti_harm": 0.15,
+      "rate_ceiling": true,
+      "dsr_ceiling": 0.45,
+      "min_discretionary": 850.0,
+      "max_revolving_in_arrears": 1,
+      "transfer_cooldown_months": 12,
+      "candidate_promotional_months": [
+        {
+          "promotional_months": 0
+        },
+        {
+          "promotional_months": 6
+        },
+        {
+          "promotional_months": 12
+        },
+        {
+          "promotional_months": 18
+        },
+        {
+          "promotional_months": 24
+        }
+      ]
+    },
+    "search": {
+      "max_scenarios": 400,
+      "max_consolidations_24m": 2,
+      "cost_of_funds": 0.08,
+      "expected_loss_rate": 0.02,
+      "ordering_rules": [
+        {
+          "rule": 1
+        },
+        {
+          "rule": 2
+        },
+        {
+          "rule": 3
+        },
+        {
+          "rule": 4
+        },
+        {
+          "rule": 5
+        },
+        {
+          "rule": 6
+        },
+        {
+          "rule": 7
+        },
+        {
+          "rule": 8
+        }
+      ]
+    },
+    "selection": {
+      "objective_weights": [
+        {
+          "channel_code": 0,
+          "new_money": 0.0,
+          "min_commitment": 1.0,
+          "min_total_cost": 0.0,
+          "bank_value": 0.0,
+          "client_outcome": 0.0
+        },
+        {
+          "channel_code": 1,
+          "new_money": 0.0,
+          "min_commitment": 1.0,
+          "min_total_cost": 0.0,
+          "bank_value": 0.0,
+          "client_outcome": 0.0
+        },
+        {
+          "channel_code": 2,
+          "new_money": 0.0,
+          "min_commitment": 0.0,
+          "min_total_cost": 0.0,
+          "bank_value": 0.0,
+          "client_outcome": 1.0
+        },
+        {
+          "channel_code": 4,
+          "new_money": 1.0,
+          "min_commitment": 0.0,
+          "min_total_cost": 0.0,
+          "bank_value": 0.0,
+          "client_outcome": 0.0
+        }
+      ],
+      "outcome_weight_relief": 0.35,
+      "outcome_weight_cost": 0.25,
+      "outcome_weight_exited": 0.15,
+      "outcome_weight_rate": 0.15,
+      "outcome_weight_providers": 0.1,
+      "indifference_band": 0.02
+    },
+    "outcome": {
+      "offer_validity_days": 21
+    }
+  }
+}
