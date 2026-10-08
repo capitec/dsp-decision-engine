@@ -4,7 +4,6 @@ Races are probabilistic: a failure here is a real bug, a pass is only evidence. 
 switches threads every microsecond so the interleavings are forced, and every answer is compared
 with the one a single thread gets.
 """
-import asyncio
 import importlib
 import sys
 import threading
@@ -297,7 +296,7 @@ def test_process_fn_under_load_while_a_version_is_activated(tmp_path):
     body = b'{"net_income": 9000.0, "expenses": 3000.0}'
 
     def request(_):
-        return asyncio.run(handler.process_fn(body, "application/json", "application/json")).content
+        return handler.process_fn(body, "application/json", "application/json").content
 
     with ThreadPoolExecutor(THREADS) as pool:
         futures = [pool.submit(request, i) for i in range(THREADS * 8)]

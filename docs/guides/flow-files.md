@@ -435,7 +435,7 @@ built config version 0.0.0 (pipeline flow.yaml, mode fused)
 In-process, pass the path to `RequestHandler`:
 
 ```python
-import asyncio, sys
+import sys
 from decider.config import JsonFileStore
 from decider.serving import RequestHandler
 
@@ -444,7 +444,7 @@ handler = RequestHandler(JsonFileStore(basepath="configs"), "flow.yaml")
 handler.stage()
 handler.activate()
 body = b'{"age": 52, "income": 90000, "debt": 10000}'
-print(asyncio.run(handler.process_fn(body, "application/json", "application/json")).content.decode())
+print(handler.process_fn(body, "application/json", "application/json").content.decode())
 ```
 
 ```text

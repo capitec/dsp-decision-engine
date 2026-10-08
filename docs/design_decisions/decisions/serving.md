@@ -8,6 +8,13 @@ Read this before changing how a request is parsed, scored or transported, or how
 - Why: `run(one-row frame)` took 150 us against `score()`'s 30.4 us (flagship).
 - See: [serving latency budget](../experiments/serving-latency-budget.md), `decider/serving/_handler.py`
 
+## The handler hooks are synchronous, and `score` is the in-process entry
+
+- `init_fn`, `input_fn`, `process_fn` and `shutdown_fn` are plain methods; a subclass that defines one with `async def` gets a `TypeError` when the class is created. `score(record_or_frame)` is `process_fn` without the bytes.
+- Why: nothing in the default path awaits, a coroutine cost a frame and an event loop per in-process call, and in-process code should not go through the HTTP layer's bytes machinery.
+- The Starlette and Sanic endpoints stay `async def` and call the hooks directly, with no thread hop: single-record latency comes first.
+- See: `decider/serving/_handler.py`
+
 ## JSON is decoded with `pydantic_core.from_json`
 
 - It answers the same values as `json.loads` about 4x faster (0.90 us against 4.08 us on flagship; `process_fn` 49.9 -> 39.4 us).

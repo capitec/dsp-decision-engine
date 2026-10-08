@@ -15,7 +15,7 @@ async def predict(request: Request) -> HTTPResponse:
     if not ready(handler):
         return raw(_INITIALIZING, status=503, content_type="application/json")
     content_type, accept = parse_content_headers(request.headers)
-    result = await handler.process_fn(request.body, accept, content_type)
+    result = handler.process_fn(request.body, accept, content_type)
     return raw(result.content, status=200, content_type=result.media_type)
 
 
@@ -44,12 +44,12 @@ def create_app(name: str = "decider", handler: t.Optional[RequestHandler] = None
     async def startup(app_) -> None:
         if app_.ctx.handler is None:
             handler_ = construct_handler_from_settings()
-            await handler_.init_fn()
+            handler_.init_fn()
             app_.ctx.handler = handler_
 
     @app.after_server_stop
     async def shutdown(app_) -> None:
         if app_.ctx.handler is not None:
-            await app_.ctx.handler.shutdown_fn()
+            app_.ctx.handler.shutdown_fn()
 
     return app

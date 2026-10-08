@@ -26,7 +26,7 @@ This page covers the internals: how a config version becomes a live executable, 
 *A request goes straight down the stack. Building a version happens on the side, never inside a request.*
 </div>
 
-The split is deliberate. The server and app layers know about HTTP and nothing about pipelines. `RequestHandler` knows about bytes, content types and config versions and nothing about HTTP: its methods take `bytes` and header strings and return a `Response(content, media_type)`. The engine below knows about records and frames. A test can therefore drive the whole serving path with `await handler.process_fn(body, accept, content_type)`, which is exactly what the generated project's tests do.
+The split is deliberate. The server and app layers know about HTTP and nothing about pipelines. `RequestHandler` knows about bytes, content types and config versions and nothing about HTTP: its methods take `bytes` and header strings and return a `Response(content, media_type)`. The engine below knows about records and frames. A test can therefore drive the whole serving path with `handler.process_fn(body, accept, content_type)` (or `handler.score(record)` for a parsed record), which is exactly what the generated project's tests do.
 
 ## A version becomes a `Live`
 
@@ -150,8 +150,9 @@ sequenceDiagram
     C->>A: POST /invocations
     A->>A: ready? else 503
     A->>H: process_fn(body, accept, type)
-    H->>H: live = module_fn()
     H->>H: input_fn: parse body
+    H->>H: score(request)
+    H->>H: live = module_fn()
     alt one JSON object
         H->>H: coerce_record
         H->>E: score(record, params)
@@ -166,12 +167,11 @@ sequenceDiagram
     A-->>C: 200, body
 ```
 
-`process_fn` is ten lines. The steps:
+`process_fn` is `output_fn(score(input_fn(data, content_type)), accept)`, and all of its hooks are plain synchronous methods; a subclass that overrides one with `async def` fails with a `TypeError` when the class is created. The steps:
 
-1. `module_fn()` returns `self._active` or raises `RuntimeError("no config version is active; call stage() then activate().")`. The HTTP routes never get that far without an active version because `ready()` answers 503 first.
-2. `input_fn` looks the `Content-Type` header up in `DEFAULT_INPUT_HANDLERS` by exact string. A missing parser is `UnsupportedContentTypeError` (415). Any exception the parser raises becomes `InputParsingError` (400) with the parser's message.
-3. A `dict` takes the single-record path, `Executable.score`. A `pl.DataFrame` takes the batch path, `Executable.run`.
-4. `output_fn` writes the result for the `Accept` header (default `*/*` when the header is absent).
+1. `input_fn` looks the `Content-Type` header up in `DEFAULT_INPUT_HANDLERS` by exact string. A missing parser is `UnsupportedContentTypeError` (415). Any exception the parser raises becomes `InputParsingError` (400) with the parser's message.
+2. `score(request)` starts with `module_fn()`, which returns `self._active` or raises `RuntimeError("no config version is active; call stage() then activate().")`. The HTTP routes never get that far without an active version because `ready()` answers 503 first. A `dict` then takes the single-record path, `Executable.score`; a `pl.DataFrame` takes the batch path, `Executable.run`. Code in the same process calls `score` directly with a parsed record or frame.
+3. `output_fn` writes the result for the `Accept` header (default `*/*` when the header is absent).
 
 ### Input formats
 
@@ -315,12 +315,12 @@ The in-process budget, fused mode, one record, no HTTP (µs, lowest p50 of three
 | Term | flagship | tree | gated |
 |---|---|---|---|
 | `pydantic_core.from_json(body)` | 0.90 | 2.59 | 2.69 |
-| `await input_fn` | 1.36 | 3.08 | 3.21 |
+| `input_fn` | 1.36 | 3.08 | 3.21 |
 | `coerce_record` (no date inputs) | 0.48 | 0.57 | 0.59 |
 | `module_fn` | 0.12 | 0.12 | 0.12 |
 | `score()` | 30.4 | 62.7 | 136.3 |
 | `output_fn` | 1.84 | 3.49 | 3.56 |
-| `await process_fn`, whole | 39.4 | 77.2 | 151.8 |
+| `process_fn`, whole | 39.4 | 77.2 | 151.8 |
 
 Inside `score()`, flagship spends 6.68 µs turning the dict into one numpy block per dtype (`_load`), 1.54 µs finding the cached params bundle and 18.9 µs in `runner.iterate`, of which the numba kernels themselves take 2.13 µs. The gated tree's 104 µs `iterate` is almost all the string span builder, which costs 71.7 µs to describe one 3-byte string. The floor, the same kernels with nothing allocated per call, is 6.98 µs for a whole flagship request including `from_json` and `to_json`, so about 5.6x is available inside the process without touching the protocol. That work belongs to the engine; see [Runners](engine/runners.md) and [Boundary](engine/boundary.md).
 
@@ -332,7 +332,7 @@ coerce_record            0.5 us
 module_fn                0.2 us
 score()                 57.8 us
 output_fn                1.4 us
-await process_fn        99.7 us
+process_fn        99.7 us
 ```
 
 Outside the process, an echo route that scores nothing measured 3.3 µs over shared memory, 18.3 µs over a unix socket, 42.3 µs over loopback TCP and 207.3 µs for HTTP plus ASGI framing. A full HTTP JSON request was 614.5 µs p50. HTTP framing is the largest single term a remote client sees; the JSON codec is 2 to 6% of the in-process time.
@@ -370,7 +370,7 @@ flowchart LR
 
 `decider serve` starts uvicorn with `create_app` as a factory and `workers` processes (default `2 * os.cpu_count() + 1`, computed at serve time on the target host). Each worker builds its own handler in the lifespan hook and stages and activates the store's latest version before `/ping` turns 200. Workers share nothing in memory; they share numba's disk cache, which `decider build` fills ahead of time.
 
-Inside one worker, `process_fn` is a coroutine, but nothing in it awaits I/O after the body has been read: `score()` runs on the event loop's thread. One worker therefore scores one request at a time, and throughput scales with worker processes, not with concurrent requests per worker.
+Inside one worker, `process_fn` is a plain method: `score()` runs on the event loop's thread, and nothing in it awaits. One worker therefore scores one request at a time, and throughput scales with worker processes, not with concurrent requests per worker.
 
 `RequestHandler` is still safe to call from many threads at once, which matters when you host it yourself (a thread pool, a notebook, a test). The rules:
 
@@ -427,4 +427,4 @@ Keep overrides cheap. `output_fn` and `input_fn` run on every request, and the i
 - `decider build` runs the same staging path without a server and turns any failure into `config version latest failed to build: <Type>: <message>`. Run it first.
 - A `FallbackWarning` at startup names a step that runs in Python instead of a kernel. The template's own `month_end(applied_on: date)` prints one, because no kernel takes a `date`.
 - `--server sanic` without sanic installed is a clean CLI error: `serving with sanic needs sanic: pip install 'decider[serve-sanic]'`.
-- To see what the handler does without HTTP, score through it in-process with `asyncio.run(handler.process_fn(body, "application/json", "application/json"))`, the same call the generated tests make.
+- To see what the handler does without HTTP, score through it in-process with `handler.process_fn(body, "application/json", "application/json")`, the same call the generated tests make, or `handler.score(record)` for a parsed record.

@@ -2,7 +2,7 @@
   <rect x="0" y="0" width="1000" height="640" fill="#ffffff"/>
 
   <!-- A: process_fn -->
-  <text x="100" y="34" font-size="15" font-weight="600" fill="#1f2937">await process_fn, flagship pipeline, one JSON record: 39.4 µs</text>
+  <text x="100" y="34" font-size="15" font-weight="600" fill="#1f2937">process_fn, flagship pipeline, one JSON record: 39.4 µs</text>
   <rect x="100" y="48" width="27.6" height="44" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
   <rect x="127.6" y="48" width="9.7" height="44" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
   <rect x="137.3" y="48" width="2.4" height="44" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
@@ -54,7 +54,7 @@
   <text x="290" y="487" font-size="13" text-anchor="end" fill="#1f2937">HTTP + ASGI (GET /ping)</text>
   <rect x="300" y="472" width="600" height="22" rx="3" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
   <text x="890" y="487" font-size="13" text-anchor="end" fill="#4c1d95">207.3</text>
-  <text x="290" y="519" font-size="13" text-anchor="end" fill="#1f2937">await process_fn (above)</text>
+  <text x="290" y="519" font-size="13" text-anchor="end" fill="#1f2937">process_fn (above)</text>
   <rect x="300" y="504" width="114" height="22" rx="3" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
   <text x="422" y="519" font-size="13" fill="#134e4a">39.4</text>
   <text x="290" y="551" font-size="13" text-anchor="end" fill="#1f2937">floor, nothing allocated</text>

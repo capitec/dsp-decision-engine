@@ -1,5 +1,4 @@
 """Serving real-world inputs: warm-up with dates and lists, JSON date coercion, code_path precedence, entry points."""
-import asyncio
 import datetime as dt
 import io
 import json
@@ -54,7 +53,7 @@ def test_raw_json_with_date_strings_is_scored_and_dates_come_back_iso(tmp_path):
     handler.stage()
     handler.activate()
     body = json.dumps(RECORD).encode()
-    out = json.loads(asyncio.run(handler.process_fn(body, "application/json", "application/json")).content)
+    out = json.loads(handler.process_fn(body, "application/json", "application/json").content)
     assert (out["due_day"], out["decision_date"]) == (4, "2026-01-31")
     status, body = _request(create_app(handler), "POST", "/invocations", body)
     assert status == 200 and json.loads(body)["due_day"] == 4
@@ -132,7 +131,7 @@ def test_a_frame_step_reading_typed_dicts_gets_their_dates_from_json(tmp_path):
     handler.stage()
     handler.activate()
     body = b'{"accounts": [{"opened_date": "2019-05-01", "balance": 1.0}, {"opened_date": "2021-01-01"}]}'
-    assert json.loads(asyncio.run(handler.process_fn(body, "application/json", "application/json")).content)[
+    assert json.loads(handler.process_fn(body, "application/json", "application/json").content)[
         "oldest_year"] == 2019
 
 
@@ -146,7 +145,7 @@ def test_a_date_is_coerced_when_an_untyped_frame_step_reads_it_before_a_typed_st
     handler.stage()
     handler.activate()
     body = b'{"decision_date": "2026-01-31", "tenure": 1}'
-    assert json.loads(asyncio.run(handler.process_fn(body, "application/json", "application/json")).content)[
+    assert json.loads(handler.process_fn(body, "application/json", "application/json").content)[
         "due_day"] == 1
 
 
@@ -262,7 +261,7 @@ ARROW = "application/vnd.apache.arrow.stream"
 
 def test_an_arrow_ipc_body_is_scored_and_comes_back_as_arrow(tmp_path):
     handler = _handler(tmp_path, flow(total, name="s"))
-    asyncio.run(handler.init_fn())
+    handler.init_fn()
     buf = io.BytesIO()
     pl.DataFrame({"a": [1.0, 2.0], "b": [2.0, 3.0]}).write_ipc_stream(buf)
     status, body = _request(create_app(handler), "POST", "/invocations", buf.getvalue(), ARROW, ARROW)
