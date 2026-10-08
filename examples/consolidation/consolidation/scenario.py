@@ -113,7 +113,7 @@ class Assessment:
         providers_left = {a.get("provider_code") for a in retained}
         after_position = {
             "monthly_instalment": round(commitment_after, 2), "weighted_average_rate": round(new_rate_blend, 4),
-            "longest_remaining_term_months": max([remaining_term(a, self.horizon) for a in retained] + [float(term_months)]),
+            "longest_remaining_term_months": float(max([remaining_term(a, self.horizon) for a in retained] + [term_months])),
             "total_cost": round(base["total_remaining_cost"] + cost_delta, 2), "accounts": base["account_count"] - len(refs),
             "providers": len(providers_left)}
         measures = {
