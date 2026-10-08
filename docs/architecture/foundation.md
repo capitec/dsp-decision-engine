@@ -32,7 +32,7 @@ decimal.round(x, 2, decimal.Rounding.HALF_EVEN)
 ### Two layers of kernel functions
 
 Kernels must give the same answer as Python, so the functions they run come in two layers, described in
-`notes/pythonapi-redesign/kernel-functions.md`:
+`docs/design_decisions/decisions/api-layout.md`:
 
 ```mermaid
 flowchart LR
@@ -150,8 +150,8 @@ fused [Decimal('933.3300'), Decimal('233.3800')] Decimal(precision=38, scale=4)
 ```
 
 One difference between modes is deliberate: a result outside int64 raises `OverflowError` in Python and wraps in a
-kernel. The `int64_overflow` check in `decider.lab.checks` looks for the risk statically. The decimal-and-currency
-note records why `Decimal` replaced the earlier integer-cents money type.
+kernel. The `int64_overflow` check in `decider.lab.checks` looks for the risk statically. `Decimal` replaced the earlier integer-cents
+money type; the reasons are in `docs/design_decisions/decisions/money.md`.
 
 ### text: strings a kernel reads in place
 
@@ -363,7 +363,7 @@ validator looks the tag up at validation time, and `SerializeAsAny` keeps the su
 pydantic dumps a nested subclass as its declared base and drops its fields silently. `decider.StepRef` is
 `ref(ConfigurableStep)`. `json_schema()` imports every lazy module and returns `{tag: schema}` for UI forms.
 
-The registry note records why tags dispatch by lookup rather than a pydantic union rebuilt on each registration.
+Tags dispatch by lookup rather than through a pydantic union rebuilt on each registration.
 decider 0.3's rebuilt union went stale when a plugin registered late, registered superlinearly (333 ms for 175 types)
 and produced 1332-character errors listing every tag. On a 63-node, three-level config the lookup costs about 15 µs
 more than the fastest option, paid once because configs are validated once and cached.

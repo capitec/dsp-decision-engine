@@ -190,4 +190,5 @@ decider2/
 .numba_cache_persist/
 experimentation/tree-codegen-vs-interpreted/_generated/
 
-notes/recommendations-for-decider-v2.md
+# Benchmark output; the numbers that matter are in docs/design_decisions/experiments/.
+benchmarks/*.csv

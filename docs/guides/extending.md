@@ -39,7 +39,7 @@ Only a class registered under that root is ever returned, so a config document c
 'os:system' is not a registered ConfigurableStep type. Import the module that defines it first, or name it by import path, '<module>:<Class>'.
 ```
 
-Two classes claiming one alias is an error at class definition. Redefining a class at the same import path (a notebook re-run) replaces it. The registry design is in the note on registry dispatch by lookup: tags resolve by dictionary lookup at validation time, so a late registration is never lost, and nested steps keep their own fields when dumped.
+Two classes claiming one alias is an error at class definition. Redefining a class at the same import path (a notebook re-run) replaces it. Tags resolve by dictionary lookup at validation time, so a late registration is never lost, and nested steps keep their own fields when dumped.
 
 ## A step type of your own
 

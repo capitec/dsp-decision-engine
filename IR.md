@@ -442,7 +442,7 @@ cached, and the per-row cost is one status check per node that runs.
   `lazy` in fused mode falls back to validating every node when the params
   document arrives. The behaviour is the same (only nodes that run can fail);
   just the up-front cost differs. The implementer records which approach was
-  taken in `notes/`.
+  taken in `docs/design_decisions/decisions/engine.md`.
 
 **Per-param policy for invalid values:**
 `param(..., on_invalid="error" | "warn" | "default")`.

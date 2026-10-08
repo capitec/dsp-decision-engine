@@ -150,7 +150,7 @@ print(exe.score({"debt_ratio": 0.3, "bureau_score": 650.0}))
 {'debt_ratio': 0.3, 'bureau_score': 650.0, 'risk_band': 'medium', 'max_term': 48, 'risk_leaf': 'medium', 'risk_path': 'root>bureau>medium'}
 ```
 
-The thresholds reach the kernel as arguments, never as literals in generated code, so the retuned run reuses the compiled kernel (`no_recompile` would raise otherwise). The note on table rows as runtime arrays records why: eight retunes written as literals meant eight full recompiles of 343 ms each at five rules, against zero compiles as arguments, for 1 to 4.5 ns more per row.
+The thresholds reach the kernel as arguments, never as literals in generated code, so the retuned run reuses the compiled kernel (`no_recompile` would raise otherwise). Eight retunes written as literals meant eight full recompiles of 343 ms each at five rules, against zero compiles as arguments, for 1 to 4.5 ns more per row.
 
 Params are per call, not per row. For a threshold that differs per record, compare a computed feature against a column, for example `{"op": ">", "feature": {"type": "computed", "expression": "ratio - customer_limit"}, "threshold": 0.0}`.
 
@@ -530,7 +530,7 @@ The rows are checked against `columns` when the params document arrives, so a ba
 
 A `String` output of a params table must be declared as an `Enum` with its categories. The kernel returns a string output as the index of its value, so the values must be known before the rows arrive. Without it, building the step fails with `output column 'tier' is a String and its rows come from params, so its values aren't known up front; declare it {"type": "Enum", "categories": [...]}`. Adding a category is a schema change and rebuilds the step.
 
-`{"table": "card", "shared": true}` reads the rows from the document's top-level `shared.card` instead, so several tables can use one. The decision-tables note measured the cost of param rows: 12 bands through `run(df)` took 164 ns per row inline and 178 ns per row from params, on a development machine.
+`{"table": "card", "shared": true}` reads the rows from the document's top-level `shared.card` instead, so several tables can use one. The cost of param rows, measured: 12 bands through `run(df)` took 164 ns per row inline and 178 ns per row from params, on a development machine.
 
 Tables written for decider 0.3, with columns and rows together in `"parameters": {"data": [...], "dtypes": {...}}`, load unchanged.
 

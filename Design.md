@@ -2,7 +2,7 @@
 
 Status: **agreed**. Companion documents:
 - `IR.md`: the step and IR contract, signed off;
-- `notes/`: decision records, the migration log (`progress.md`) and agreed amendments to both documents (`spec-amendments.md`).
+- `docs/design_decisions/`: decision records, experiments and the agreed amendments to `IR.md` (`spec-amendments.md`).
 
 Edit inline; mark feedback with `>>> ... <<<`.
 
@@ -38,7 +38,7 @@ Success criteria:
 
 ## 3. Decisions
 
-Each line is settled. Rationale worth keeping long-term goes in `notes/`.
+Each line is settled. Rationale worth keeping long-term goes in `docs/design_decisions/`.
 
 | # | Decision |
 |---|---|
@@ -325,7 +325,7 @@ decider/
   config/                     # versioned config store
   serving/                    # handler protocol, servers
   cli/  testing/
-notes/                        # decision records
+docs/design_decisions/        # decision records
 ```
 
 **Dependency rules:**
@@ -357,7 +357,7 @@ notes/                        # decision records
 ## 9. Measured facts to carry over
 
 These are the findings from decider2's experiments that shape the
-implementation. The details go into `notes/` (task T0.4).
+implementation. The details are in `docs/design_decisions/experiments/`.
 
 - **The numba cache needs real source files** (not `exec`) and deterministic
   codegen, or every start recompiles. Record the CPU target and compare it at

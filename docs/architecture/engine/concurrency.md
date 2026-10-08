@@ -29,7 +29,7 @@ The docstrings say it in one line each: `Executable` is "Safe to call from many 
 ![Three columns: state shared by every thread (the Executable, the runner's Compiled snapshot, module-global build caches, other locks), state per thread (the FrameView pool and exe.report), state per call (State, RunParams, the call context, kernel output arrays, trace buffers and the caller's sink), and a red box for what is not thread-safe by contract](../../assets/diagrams/engine-concurrency-sharing.svg)
 </div>
 
-The rules the code follows, from the thread-safety note:
+The rules the code follows:
 
 1. An `Executable` and its runner are immutable once compiled. Everything that varies per call travels in the call: the `State`, the `RunParams`, the trace sink and its table. Nothing per call is stored on `self`.
 2. Compile once, publish once. A runner builds its compiled form into locals under its own lock, double-checked on the plan, and publishes one immutable snapshot with a single assignment. A call reads that snapshot once and uses it throughout.
@@ -163,7 +163,7 @@ another thread gets its own: True made: 3
 
 The one user today is input extraction. `decider/_engine/boundary/extract.py` checks out a `FrameView` per `FramePlan` from the `"views"` pool, binds it to the incoming frame, reads the columns, then calls `view.release()` and checks it back in. A `FrameView` hands raw buffer addresses to kernels and `release()` invalidates them, so two threads sharing one view would free each other's spans mid-kernel. See [The boundary](boundary.md) for the view itself.
 
-The serving-latency note plans a per-(plan, thread) reusable `State` for `score()` on the same pattern; it has not landed.
+A per-(plan, thread) reusable `State` for `score()` on the same pattern is planned; it has not landed.
 
 ## The runner's compiled snapshot
 
@@ -201,7 +201,7 @@ A convention test enforces rule 1 mechanically. `test_runners_and_executable_kee
 
 Every compiled kernel is built with `njit(nogil=True)` in `decider/_engine/compile/kernel.py`, unconditionally. Stepped mode wraps each call in a one-call kernel built the same way, so it releases the GIL too. A compiled kernel touches no Python objects, so releasing the GIL is safe for any of them.
 
-The kernel-flags note has the measurement that decided it: 1 to 16 threads calling the same compiled kernel, against a 20 ms budget.
+The measurement that decided it: 1 to 16 threads calling the same compiled kernel, against a 20 ms budget.
 
 | Threads | `nogil=True` p99 | `nogil=False` p99 | `nogil=False` max |
 |---|---|---|---|
@@ -212,21 +212,21 @@ The kernel-flags note has the measurement that decided it: 1 to 16 threads calli
 
 Throughput was bound by the GIL at about 1,020 to 1,190 calls per second either way. The tail was the problem: with `nogil=False` each call holds the GIL for its whole run and the calls queue behind each other, a convoy that put the 16-thread p99 at 12.7 times the budget. With `nogil=True` the p99 stayed flat.
 
-The note records the alternatives. decider2 made `nogil` opt-in per step, and a fused group got it only if every step had it. An earlier finding had `nogil=True` losing to `nogil=False` (26% against 55% of throughput retained) when serving competed with a background compile thread. The note sets that aside because compilation had moved to a subprocess, which retained 97.9%. In decider, `RequestHandler.stage` binds and warms the new version in the serving process, under the handler's lock, so a stage under load is the case that earlier finding measured. GC tuning was ruled out as a tail fix: disabling or freezing the collector left p50 to p99 unchanged.
+The alternatives were these. decider2 made `nogil` opt-in per step, and a fused group got it only if every step had it. An earlier finding had `nogil=True` losing to `nogil=False` (26% against 55% of throughput retained) when serving competed with a background compile thread. That finding is set aside because compilation had moved to a subprocess, which retained 97.9%. In decider, `RequestHandler.stage` binds and warms the new version in the serving process, under the handler's lock, so a stage under load is the case that earlier finding measured. GC tuning was ruled out as a tail fix: disabling or freezing the collector left p50 to p99 unchanged.
 
-Releasing the GIL is also why the lifetime rules matter. Once a kernel runs without the GIL, another thread can run Python at the same moment, including Python that frees a buffer the kernel is reading. The serving-latency note puts it as a rule: anything that hands a raw address to a kernel must stay reachable from a live Python object for the whole call. With a thread pool, a shared buffer is a use-after-free, and that ends in a segfault.
+Releasing the GIL is also why the lifetime rules matter. Once a kernel runs without the GIL, another thread can run Python at the same moment, including Python that frees a buffer the kernel is reading. As a rule: anything that hands a raw address to a kernel must stay reachable from a live Python object for the whole call. With a thread pool, a shared buffer is a use-after-free, and that ends in a segfault.
 
 Two details sit outside the guarantee. A `Fallback` that calls a numba dispatcher once per row from Python goes through the dispatcher's normal entry, which holds the GIL while it runs. And `step(nogil=...)` sets `CallNode.nogil`, which is part of a step's content (it changes the hot-reload key and the diff hash) but is not read by the compiler: every kernel releases the GIL whatever the flag says.
 
 ## Inside one serving process
 
-`RequestHandler.process_fn` calls `score()` or `run()` directly on the event loop. With Starlette, one worker process therefore runs requests one at a time, and its `nogil` kernels never overlap. Concurrency today comes from embedders calling one executable from their own threads, and from running several processes. The contract holds either way. Moving scoring to a thread pool (`anyio.to_thread.run_sync`) would trade a thread hop per request for not blocking the loop; the thread-safety note leaves that to a benchmark.
+`RequestHandler.process_fn` calls `score()` or `run()` directly on the event loop. With Starlette, one worker process therefore runs requests one at a time, and its `nogil` kernels never overlap. Concurrency today comes from embedders calling one executable from their own threads, and from running several processes. The contract holds either way. Moving scoring to a thread pool (`anyio.to_thread.run_sync`) would trade a thread hop per request for not blocking the loop; that is left to a benchmark.
 
 `stage`, `activate` and `rollback` take the handler's `_lock` and swap the active `Live` with one assignment. `Live.dates` defaults to an empty `MappingProxyType`, so the shared default cannot be mutated. The registry takes its root's `RLock` on the miss path of `resolve` and `lazy`, and `bundle_class` in `decider/_engine/params/bundles.py` builds each namedtuple class under a module lock.
 
 ## The races that were found and fixed
 
-The first audit (the racecondition-investigation-results note) read the code for shared state; the thread-safety note re-checked every finding, added three, and turned them into the contract above. Every fix kept the API and single-threaded behaviour unchanged.
+The first audit read the code for shared state; a second pass re-checked every finding, added three, and turned them into the contract above. Every fix kept the API and single-threaded behaviour unchanged.
 
 | # | Race | Fix |
 |---|---|---|

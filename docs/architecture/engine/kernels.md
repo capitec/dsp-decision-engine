@@ -138,8 +138,7 @@ OverflowError: Python int too large to convert to C long
 
 The true product is 40,000,000,000,000,000,000; int64 keeps its low 64 bits. The modes disagree
 only where the answer was already out of range, and the `int64_overflow` check (DCD101, see
-[checks](../../guides/checks.md)) flags the products that can reach it. The note on money and
-overflow found a sum-of-squares accumulator over loan amounts in cents wrapping at 2,667 rows,
+[checks](../../guides/checks.md)) flags the products that can reach it. A sum-of-squares accumulator over loan amounts in cents wrapped at 2,667 rows,
 which is why running totals that can grow accumulate in float64, exact to 2**53.
 
 ## Decimal and Currency
@@ -155,7 +154,7 @@ scale for the tools: `Decimal[18, 2]`, `Currency["R"]`.
 `DecimalType(scale)` is a numba type with an int64 data model. It is keyed by scale alone, so a
 `Currency` and a `Decimal[19, 4]` share one compiled signature, and `units` never reaches a kernel
 or a cache key. Columns, params bundles and stored outputs stay plain int64; the `DEC` source tag
-types an int64 as `decimal[scale]` at the kernel's edge. The note on decimals measured why: a
+types an int64 as `decimal[scale]` at the kernel's edge. The reason is measured: a
 Python `Decimal` crossing the dispatcher costs 3.5 µs against 0.3 µs for an int, and 14 to 21 µs
 inside a 2-tuple (the shape of a params bundle) against 0.4 to 0.6 µs.
 
@@ -193,7 +192,7 @@ Typing rules:
 The 128-bit work is hand-rolled in uint64 (`_mul64`, `_divlu`, a two-digit Knuth division):
 LLVM's i128 division calls `__udivti3`, which aborts the process with a missing-symbol error that
 nothing can catch. `tests/compile/test_decimal_kernel_typing.py` pins that no division helper ever
-emits it. The note on decimals measured the cost at 6.0 ns for a 128-bit multiply and divide whose
+emits it. The cost was measured at 6.0 ns for a 128-bit multiply and divide whose
 product fits 64 bits and 21 ns for wide operands, against 2.3 ns for a plain int64 multiply and
 floor divide (which rounds wrongly).
 
@@ -276,8 +275,7 @@ fused       [True, False, False, True] [10, 4, 0, 14]
 reaches the kernel as a span of the param's UTF-8 bytes too; the stepped runner converts those once
 per params document and node and keeps the buffers alive beside the converted bundle. A semantic
 `str` input never enters a kernel and runs in Python (see [the compile
-cache](cache.md) for how that is reported). The note comparing codes and spans recorded why the
-earlier int32 code representation for strings was removed: spans were 3x faster in a batch at 4
+cache](cache.md) for how that is reported). The earlier int32 code representation for strings was removed because spans were 3x faster in a batch at 4
 distinct values and 6 to 7x at 100,000, while codes needed a process-wide table that never forgot
 a string and numbered values differently per worker.
 
@@ -306,7 +304,7 @@ a kernel in shapes numba reads without Python objects.
 - A `Columnar[Item]` output drains into a `Sink`: a float64 buffer of `(rows, fields)` that every
   item schema shares, with bool and int fields narrowed back in Python.
 
-The note on item records tested whether a record could also carry a span field. It can, with a
+A record can also carry a span field, with a
 `types.Record` subclass that numba 0.67 tolerates, but the shared-array kernel path made ragged
 flat arrays the cheaper shape, so struct fields remain numeric.
 
@@ -385,8 +383,8 @@ copies has no validity, so a null in it sends that launch down the unpacked path
   `FallbackWarning`, or raises under `Engine(strict_compile=True)`. [The compile cache](cache.md)
   covers the decision.
 - Overflow is silent in a kernel. Checks flag the risky products; tests should include large
-  principals and `.xx5` ties, which random sampling rarely reaches (the note on money and overflow
-  found the wrap point by binary search).
+  principals and `.xx5` ties, which random sampling rarely reaches (the wrap point was found by
+  binary search).
 - An edit to an overload changes `SALT`, so every user step misses the disk cache once and is
   recompiled against the new code.
 

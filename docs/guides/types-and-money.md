@@ -98,7 +98,7 @@ Floats cannot hold most decimal amounts exactly (`0.1 + 0.2` is `0.3000000000000
 <div class="diagram" markdown>
 ![A Currency value is a decider Decimal object in a step, an int64 count with the scale in its type inside a kernel, and shown with its units; a frame column is rescaled into that int64 and written back out as Decimal(38, 4); the exact range per scale is listed](../assets/diagrams/guide-types-decimal.svg)
 
-*Ranges from the decimal-and-currency note: a precision up to 18 always fits; 19 digits is limited by int64.*
+*A precision up to 18 always fits; 19 digits is limited by int64.*
 </div>
 
 ### Building values
@@ -472,7 +472,7 @@ flowchart LR
 
 The child's params move up to the `each` step's path (`order/items/heavy_kg`), so two child steps may not share a param name. A null list reads as a row with no items and comes back as an empty list. `output="enriched"` writes the enriched list to a new column and leaves the original untouched.
 
-`each` takes `execution_mode=EachMode.PER_ROW` or `EachMode.BATCH`. Both values are accepted for compatibility and run the same scatter and gather, so the choice does not change the result or the speed. The each-modes-benchmark note measured the unified scatter and gather at 219 µs for one record with five items and a one-step child, against 382 µs for the old per-row mode and 4.2 ms for the old batch mode.
+`each` takes `execution_mode=EachMode.PER_ROW` or `EachMode.BATCH`. Both values are accepted for compatibility and run the same scatter and gather, so the choice does not change the result or the speed. The unified scatter and gather measured 219 µs for one record with five items and a one-step child, against 382 µs for the old per-row mode and 4.2 ms for the old batch mode.
 
 ## Best of N with optimise
 

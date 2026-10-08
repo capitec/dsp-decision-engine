@@ -1,7 +1,7 @@
-"""The unified `each` (scatter/gather primitive) across records, items and child complexity.
+"""`each` (the scatter/gather primitive) across records, items and child complexity.
 
-Writes `benchmarks/results_each_unified.csv`; compare against
-`results_each_modes.csv` (the old per_row/batch baseline).
+Writes `benchmarks/results_each_vectorized.csv`. Results:
+`docs/design_decisions/experiments/each-scatter-gather.md`.
 
     uv run python benchmarks/each_unified.py [items...] [records...]
 """

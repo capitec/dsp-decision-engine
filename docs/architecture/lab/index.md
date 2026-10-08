@@ -22,7 +22,7 @@ paths: it lives beside the refs it returns, and users reach for it often enough 
 ## Why the five packages share a parent
 
 The package layout keeps the core, the libraries and the tooling as siblings under `decider/`. The lab is the
-one nested group. The reasoning in the directory-structure note is that `data`, `checks`, `diff`, `testing` and
+one nested group. The reasoning is that `data`, `checks`, `diff`, `testing` and
 `experiments` are all things you do to a flow outside serving, they name its parts with the same refs, and their
 imports run one way, so they share a parent that also owns the refs and `describe`.
 
@@ -123,7 +123,7 @@ never part of identity, because row order is not stable across loads. How a key 
 
 ### Derived and committed identity
 
-The durable-identities note separates two kinds of identity and never lets one stand in for the other. Derived
+There are two kinds of identity, and neither stands in for the other. Derived
 identity is `path` and `source`, built from names and import paths: good for display, but a rename, an extraction
 or a reorder changes it. Committed identity is an opaque 12-hex `id` written into source next to the declaration
 (`@step(id="a1b2c3d4e5f6")`, `flow(..., id="0123abcdef45")`), and `decider ids` inserts missing ones. A step reused

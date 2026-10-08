@@ -82,7 +82,7 @@ per million rows).
 
 ### Why origins stay out of keys
 
-The note on origins records why a path or a name never goes into a compiled-code key. Renaming a
+A path or a name never goes into a compiled-code key. Renaming a
 step, nesting it one level deeper or reusing it under a second path changes its origin but not its
 code. numba's disk cache is sensitive to identity: a same-content file renamed or moved to another
 directory missed and recompiled in 4.6 to 4.8 s at 200 arguments, against 0.18 s warm. The previous
@@ -115,8 +115,8 @@ instalment  cache hits {(float64, float64): 1} misses {}
 
 The two additions close gaps in numba's own key:
 
-- numba hashes `co_code`, which excludes `co_consts`. The note on the numba cache reproduced an
-  edit that replaced a constant used once, kept the file size, restored the mtime, and got a cache
+- numba hashes `co_code`, which excludes `co_consts`. In a
+  reproduction, an edit that replaced a constant used once, kept the file size, restored the mtime, and got a cache
   HIT returning the pre-edit answer (49.39775 instead of 49.29765). `fingerprint` hashes the
   constants.
 - numba's key covers the step's own bytecode and none of the overloads its code calls. `SALT` covers
@@ -135,7 +135,7 @@ copy seen had no file and a later copy does, `jit` attaches the cache then.
 
 ### No generated source
 
-The note on the numba cache records the decision not to generate any source. `exec`'d code cannot
+No source is generated. `exec`'d code cannot
 be cached at all (`RuntimeError: cannot cache function 'f': no locator available for file
 '<string>'`), and a generated file rewritten on every start changes its mtime, so every entry
 misses. Cold against warm in a fresh process was 4.93 s against 0.177 s at 200 arguments and
@@ -163,8 +163,8 @@ x86_64-unknown-linux-gnu  raptorlake  +64bit,+adx,+aes,-amx-avx512,-amx-bf16,...
 that is set, else in the project's code path). `decider serve` compares it
 with the host and, when they differ, warns that `decider build` ran for another CPU, that numba's
 disk cache won't hit, and that every worker will compile at startup. It is a warning, since warm-up
-still compiles everything before the worker answers. The note on the numba cache rejected
-`NUMBA_CPU_NAME=generic` as the fix: it makes entries portable but gives up the instruction
+still compiles everything before the worker answers. `NUMBA_CPU_NAME=generic` was rejected
+as the fix: it makes entries portable but gives up the instruction
 selection small kernels depend on.
 
 ## Python fallback
@@ -193,7 +193,7 @@ ZeroDivisionError: division by zero
   run in mode='stepped' to see which
 ```
 
-The note on Python fallback measured why the scope is this narrow. Catching every `Exception`
+The scope is this narrow for measured reasons. Catching every `Exception`
 would turn a real bug, such as a `ZeroDivisionError`, into a silent fallback. And a per-node
 fallback inside a fused kernel can only be numba's `objmode`, which is slower than giving up: over
 200k rows and 4 steps, the whole driver in plain Python took 167.3 ms (23.5x all-njit), one node
@@ -316,4 +316,4 @@ sequenceDiagram
 
 `dispatcher.stats.cache_hits` and `cache_misses` (the dispatcher from `jit(fn)`) show whether a
 step came from disk. Old shim builds and old cache index entries are never evicted; both are small
-(the note on the numba cache puts an index entry at a few KB).
+(an index entry is a few KB).

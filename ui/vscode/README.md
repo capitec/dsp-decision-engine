@@ -80,4 +80,4 @@ pnpm test:vscode                       # inside VS Code: show, breakpoint, debug
 - Writing a stub function for a new step name into `components`.
 - JSON flow files load and edit, but are not discovered or given CodeLenses.
 - Per-node stepping, rewind and what-if from a paused session (see
-  `notes/vscode-native-debugging.md`).
+  `docs/design_decisions/decisions/debugger-and-editors.md`).

@@ -543,7 +543,7 @@ result: RunStatus.CANCELLED [30] JobStatus.CANCELLED 20 100
 | `on_progress(run, done)` | after every scenario has run a batch | the record count done so far |
 | `on_run_end(run)` | once, after the status is known | `Run` with `status` set |
 
-`overrides(callback, hook)` checks whether a class overrides a hook, so the runner can skip work nobody listens to. Node values are only read, and the flow only runs stepped, when some metric or callback overrides `on_node_end` and has a `nodes` or `node_id` attribute. `selects(callback, path, id)` decides per node: an `fnmatch` glob on the node path, or an exact durable id (12 hex characters, from `decider ids`; the note on durable identities covers them).
+`overrides(callback, hook)` checks whether a class overrides a hook, so the runner can skip work nobody listens to. Node values are only read, and the flow only runs stepped, when some metric or callback overrides `on_node_end` and has a `nodes` or `node_id` attribute. `selects(callback, path, id)` decides per node: an `fnmatch` glob on the node path, or an exact durable id (12 hex characters, from `decider ids`).
 
 There are three built-in callbacks. `Progress` prints records done, the total and elapsed time after each batch. `JobProgress` connects a run to a `JobHandle`, as above. `WriteOutputs` writes each batch's output to parquet.
 
@@ -677,11 +677,11 @@ Each scenario counts only the records that took the unsecured arm (8,014 in the 
            {"source": "loans/pricing#1", "target": "out:True", "value": 6130}]}
 ```
 
-The note on metrics and callbacks records one approximation: a branch inside a loop whose arm order differs per iteration is ordered by pre-order position and iteration, which can misorder arms.
+One approximation: a branch inside a loop whose arm order differs per iteration is ordered by pre-order position and iteration, which can misorder arms.
 
 ### Writing a metric
 
-A metric subclass declares a `type` literal, a `summary` class, `reset`, the hooks it needs and `summarise`. It is registered when its class is defined, so a JSON definition can name it as soon as its module is imported. The note on metrics and callbacks calls the shape torchmetrics-like (state reset per scenario, accumulate per batch, reduce at the end). Metric state lives in one process; nothing merges metric state across workers, which is why revision workers send outputs back instead of running metrics.
+A metric subclass declares a `type` literal, a `summary` class, `reset`, the hooks it needs and `summarise`. It is registered when its class is defined, so a JSON definition can name it as soon as its module is imported. The shape is torchmetrics-like (state reset per scenario, accumulate per batch, reduce at the end). Metric state lives in one process; nothing merges metric state across workers, which is why revision workers send outputs back instead of running metrics.
 
 ## Plots
 
@@ -703,7 +703,7 @@ A `Plot` (`plots/_base.py`) is a registry model with a `metric` to draw, an opti
 *`Sankey(metric="branch_flows", scenario="premium_0.08")`.*
 </div>
 
-`Figure.html()` returns a `<div>` and a script that embeds the spec with vega-embed. Every figure on a page shares one loader promise, `window.deciderVega`, that loads vega, vega-lite and vega-embed once, in order, from jsDelivr at the versions altair pins, and through `requirejs` when the page has it. The note on metrics and callbacks explains why: figures that each loaded their own scripts raced each other, and in VS Code a report of several charts failed with vega-embed's "compile is not a function". A script that fails to load shows the URL in the chart's place. Specs are JSON-escaped so `</` cannot close the script tag.
+`Figure.html()` returns a `<div>` and a script that embeds the spec with vega-embed. Every figure on a page shares one loader promise, `window.deciderVega`, that loads vega, vega-lite and vega-embed once, in order, from jsDelivr at the versions altair pins, and through `requirejs` when the page has it. The reason: figures that each loaded their own scripts raced each other, and in VS Code a report of several charts failed with vega-embed's "compile is not a function". A script that fails to load shows the URL in the chart's place. Specs are JSON-escaped so `</` cannot close the script tag.
 
 ## Reports
 
@@ -750,7 +750,7 @@ Without a report, the default is an `Overview` and one `MetricSection` per metri
 
 ## What is measured
 
-The note on metrics and callbacks measured stepped mode with a per-node callback reading every call's columns, against fused mode reading nothing, on the `ratio, approved, tier` flow of `benchmarks/trace_overhead.py`:
+Stepped mode with a per-node callback reading every call's columns, measured against fused mode reading nothing, on the `ratio, approved, tier` flow of `benchmarks/trace_overhead.py`:
 
 | Records | Fused | Stepped with a per-node callback |
 |---|---|---|
@@ -766,16 +766,16 @@ and a whole experiment (baseline, determinism rerun and one scenario) with `benc
 | 1,000,000 | 104 ms | 168 ms |
 | 10,000,000 | 382 ms | 897 ms |
 
-The note on revision subprocess isolation measured about 0.5 s for a worktree checkout and about 0.8 s to start a worker and import decider. The run above saw about 1.7 s for a revision scenario on three records, including its whole run.
+Measured, a worktree checkout takes about 0.5 s and starting a worker and importing decider about 0.8 s. The run above saw about 1.7 s for a revision scenario on three records, including its whole run.
 
 ## Why it is shaped this way
 
-The first experiment module routed execution, compared outputs with a per-element Python loop, produced a fixed summary shape and a hard-wired Sankey, all inside one `run_experiment`. Adding a measurement meant editing the runner. The note on metrics and callbacks records the redesign: a runner that only feeds batches to hooks, in the style of a training loop's callbacks, and metrics that each own one measurement. Three alternatives were rejected there:
+The first experiment module routed execution, compared outputs with a per-element Python loop, produced a fixed summary shape and a hard-wired Sankey, all inside one `run_experiment`. Adding a measurement meant editing the runner. The redesign is a runner that only feeds batches to hooks, in the style of a training loop's callbacks, and metrics that each own one measurement. Three alternatives were rejected:
 
 - Comparing only summaries, with each scenario run on its own. It is simpler, but loses the row-level "which records changed", which is the comparison people ask for most.
-- Live per-row hooks before each call. They force interpreted mode. A column per node gives the same information, and the note measured node-level hooks over whole columns at about 25% overhead in stepped mode.
+- Live per-row hooks before each call. They force interpreted mode. A column per node gives the same information, and node-level hooks over whole columns measured about 25% overhead in stepped mode.
 - Session replay (a debug-session fork) for overrides. The runner writes an override into the state at the `at` checkpoint directly, with the same cast a debug session uses.
 
 Revision scenarios run whole in a worker and are read back batch by batch. A streaming worker (Arrow batches over stdin) would give live progress for revisions too, at the price of a protocol to maintain; the run-whole worker module is about 40 lines.
 
-The earlier note on the experiment module set the larger rule that still holds: one flat definition, with scenarios as the only axis of change. A "git commit experiment" and a "param sweep experiment" are both scenarios in one `ExperimentDef`, not separate experiment types. The handover note on plot types argued for registry-based plot types, on the precedent of configurable steps, and against Python callbacks fired from inside compiled kernels; per-node hooks now fire at checkpoints between kernels.
+The larger rule that still holds from the first design: one flat definition, with scenarios as the only axis of change. A "git commit experiment" and a "param sweep experiment" are both scenarios in one `ExperimentDef`, not separate experiment types. An early design argued for registry-based plot types, on the precedent of configurable steps, and against Python callbacks fired from inside compiled kernels; per-node hooks now fire at checkpoints between kernels.

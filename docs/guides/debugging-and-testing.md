@@ -449,7 +449,7 @@ credit/ratio
 None
 ```
 
-`poll()` drops every watched module from `sys.modules` and imports the target afresh, so a `from features import ratio` in another module never keeps the old function. Only the edited step recompiles in a compiled mode: kernels are cached by the content of the function, so unchanged steps from a re-imported module hit the cache. The hot-reload investigation note measured an edit to one step of a three-step flow, from save to updated output, at 5 to 6 ms interpreted and about 150 to 190 ms in stepped or fused (one or two numba compilations), and a no-op reload of a larger pipeline at 1.6 ms.
+`poll()` drops every watched module from `sys.modules` and imports the target afresh, so a `from features import ratio` in another module never keeps the old function. Only the edited step recompiles in a compiled mode: kernels are cached by the content of the function, so unchanged steps from a re-imported module hit the cache. An edit to one step of a three-step flow, measured from save to updated output, took 5 to 6 ms interpreted and about 150 to 190 ms in stepped or fused (one or two numba compilations); a no-op reload of a larger pipeline took 1.6 ms.
 
 ## Events
 

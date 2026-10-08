@@ -98,7 +98,7 @@ print(exe.fallbacks())
 {}
 ```
 
-`no_recompile()` raises if anything compiles inside it, so the third band reached the kernel as data. `fallbacks()` is empty: the loop compiled. The note on table rows as runtime arrays records the trade, measured on decision tables: compile cost stops depending on the number of rows, and the cost moves to answer time instead (a linear scan, 70 ns per row with 2 bands and 1045 ns per row with 1000).
+`no_recompile()` raises if anything compiles inside it, so the third band reached the kernel as data. `fallbacks()` is empty: the loop compiled. The trade, measured on decision tables: compile cost stops depending on the number of rows, and the cost moves to answer time instead (a linear scan, 70 ns per row with 2 bands and 1045 ns per row with 1000).
 
 ```mermaid
 flowchart LR

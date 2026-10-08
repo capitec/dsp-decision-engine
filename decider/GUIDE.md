@@ -759,9 +759,9 @@ maximise (negate it to minimise); a tie keeps the earlier candidate. Pass a bool
 post-pricing rule — and their count lands in `disqualified`. `max_candidates` is
 the loop's bound; `count` per row may be less, and the loop stops there.
 
-The winner's other evaluate outputs (the product, the rate) aren't carried
-back yet: recompute them on the winner with
-`evaluate.relabel(reads={"index": "best_index"})`, or wait for a struct output.
+To get the winner's other fields back (the product, the rate), pass `record=Item`
+and have `evaluate` also write `record` as a `Struct[Item]`; or recompute them
+on the winner with `evaluate.relabel(reads={"index": "best_index"})`.
 
 ## Debugging, testing and introspection
 
@@ -1237,8 +1237,8 @@ VS Code extension's Datasets view lists, previews and debugs a flow on one.
 `decider mcp` (needs `pip install 'decider[mcp]'`) serves a FastMCP server over stdio for an agent: structural and
 summarised reads are always available; per-record values and trace events are
 opt-in (`decider mcp --raw`); running code and persisting are confirmation-gated.
-See `notes/vscode-redesign/mcp-guidance.md`. For Claude Code, the repository's
-plugin (`/plugin marketplace add capitec/dsp-decision-engine`, then
+For Claude Code, the repository's plugin
+(`/plugin marketplace add capitec/dsp-decision-engine`, then
 `/plugin install decider@decider`) installs this server together with a `decider`
 skill that teaches an agent the project layout and best practices.
 

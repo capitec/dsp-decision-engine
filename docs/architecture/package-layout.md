@@ -7,8 +7,8 @@ layers fit together is on the [architecture overview](index.md).
 
 ## The three layout rules
 
-The rules come from the Python API redesign (`notes/pythonapi-redesign/directory-structure.md` and
-`layout-and-visibility.md`), which was implemented on 2026-10-06.
+The rules come from the Python API redesign, which was implemented on 2026-10-06; the reasons are in
+`docs/design_decisions/decisions/api-layout.md`.
 
 1. A leading underscore anywhere in a path means private. `decider/_engine/run/state.py` and
    `decider/lab/checks/_run.py` are private; so is everything under `decider/_engine/`. Inside a private package, files
@@ -44,9 +44,6 @@ Each top-level unit (a package or a top-level module) has a layer, written as `L
 | L2 | none | the numbering skips it |
 | L1 core | `__init__`, `steps`, `ir`, `trace`, `debug`, `config`, `_engine` | write, run and debug a pipeline; the versioned config store |
 | L0 foundation | `exceptions`, `_registry`, `_serde`, `ops`, `_settings`, `_suggest` | what every layer above may use |
-
-`directory-structure.md` groups `config` with the libraries in one table, while its own layer map and the test both put
-it at L1; the test is what holds.
 
 The real import graph, counted from the source with the test's own AST walker, looks like this. Each number is the
 count of import statements from one unit into another, lazy imports inside functions included:

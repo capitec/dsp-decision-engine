@@ -2,7 +2,7 @@
 
 A flow file states a pipeline's structure in YAML or JSON: which steps run, in what order, inside which branches and loops. The steps themselves stay plain Python functions in a components package, and tree, table and scorecard documents stay in the config version. `load_flow` turns the file into the same `flow`, `branch` and `loop` objects you would write by hand, so the engine, the compiler, serving, the debugger and experiments see an ordinary `Step`.
 
-Use a flow file when people who review policy want to read the shape of the decision without reading Python, or when a structure change should show up as a small diff in one reviewed file. The file is code: it lives in the repository next to the components it names and is deployed with them. It never lives in a config version, so structure cannot change without a deploy (the notes on flow files and on structure in Python record why).
+Use a flow file when people who review policy want to read the shape of the decision without reading Python, or when a structure change should show up as a small diff in one reviewed file. The file is code: it lives in the repository next to the components it names and is deployed with them. It never lives in a config version, so structure cannot change without a deploy.
 
 ```mermaid
 flowchart LR

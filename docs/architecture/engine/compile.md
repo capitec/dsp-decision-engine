@@ -192,9 +192,9 @@ Grouping follows fixed rules, with no cost model:
 - A call that cannot compile becomes a `Fallback` unit and splits its run: the calls before it and
   after it stay compiled.
 
-The note on fusion explains why there is no heuristic. Fusion is non-monotone: at a fixed 1M rows
+There is no heuristic because fusion is non-monotone: at a fixed 1M rows
 the split/fused time ratio was 3.26 at 3 modules and 13.00 at 20 for a cheap straight-line body,
-but 0.76 and 0.22 for a heavy body. The mechanism measured there is register pressure (a fused
+but 0.76 and 0.22 for a heavy body. The mechanism is register pressure (a fused
 kernel of 20 modules spilled 47 times per iteration), and no static signal predicts it. One
 grouping serves both a batch and `score()`, so there is one code path and one cache surface.
 
@@ -334,7 +334,7 @@ Every fused, packed and single-call kernel is built with `nogil=True` and withou
 targetoptions {'nogil': True, 'nopython': True, 'boundscheck': None}
 ```
 
-`tests/compile/test_compile_kernel.py` pins both. The note on kernel flags has the measurements.
+`tests/compile/test_compile_kernel.py` pins both.
 With 16 threads calling one kernel under a 20 ms budget, `nogil=True` kept p99 at 883 µs, while
 `nogil=False` reached 254.1 ms because each call held the GIL for its whole run. With `fastmath`
 off, Python and njit agreed bit for bit over a 16-term log/exp/sqrt/div chain on 20,000 rows; with
@@ -413,7 +413,7 @@ Python-driven path of stepped mode, which gives the same answers:
   the arms or the carry's versions;
 - nothing made inside, other than what the branch merges or the loop carries, is a pipeline output;
 - with `params_validation="lazy"`, no call except the construct's own condition has params,
-  because launching the kernel validates every call in it (see the note on lazy validation).
+  because launching the kernel validates every call in it.
 
 At run time the [fused runner](runners.md) checks `Packed.guarded` before each launch. If a value
 the kernel only copies (a merge's earlier value, a carry's initial value) or a REQUIRED input of a
@@ -422,7 +422,7 @@ launch. `ArmOutOfRange` also sends the branch down the unpacked path, which rais
 naming the branch, the arm and the row count. A packed kernel numba cannot build as a whole is
 dropped for the life of the runner.
 
-The note on packed control flow measured the gain against the previous engine on the same box:
+Measured against the previous engine on the same box:
 41.6 to 44.3M rows/s for a branch over 1M rows (14.8M rows/s Python-driven in stepped mode) and
 6.33M rows/s for a loop of up to 360 iterations over 200k rows (0.81M stepped). `score()` through
 that branch was 23 µs p50 fused against 66 µs stepped.

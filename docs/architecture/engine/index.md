@@ -261,9 +261,9 @@ becomes the dict a step returns.
  'instalment': 1500.0, 'limit': 18000.0, 'affordable': True}
 ```
 
-The note on compiled runners records the cost: building one array per input took about 8 µs of a 36 µs call,
-and hashing an empty params document took 3.7 µs, so the empty document's key is now a constant. Its benchmark
-(`benchmarks/modes_vs_decider2.py`, flagship pipeline, 20k calls, CPython 3.14) measured:
+Building one array per input took about 8 µs of a 36 µs call,
+and hashing an empty params document took 3.7 µs, so the empty document's key is now a constant. The benchmark
+(`benchmarks/modes.py`, flagship pipeline, 20k calls, CPython 3.14) measured:
 
 | Engine | Batch rows/s | `score` p50 | `score` p99 |
 |---|---|---|---|
@@ -272,9 +272,8 @@ and hashing an empty params document took 3.7 µs, so the empty document's key i
 | decider interpreted | 0.25M | 59.1 µs | 84.5 µs |
 
 Running the credit pipeline above in fused mode on a loaded development machine while writing this page gave a
-`score` p50 of 80.7 µs against 192.4 µs for `run` on the same record as a one-row frame. The single-record path
-note explains the dict calling convention: matching keyword names against a 400-argument signature cost
-1190 µs per call, against 60 µs for a dict.
+`score` p50 of 80.7 µs against 192.4 µs for `run` on the same record as a one-row frame. `score` takes a dict
+because matching keyword names against a 400-argument signature cost 1190 µs per call, against 60 µs for a dict.
 
 ## session and fallbacks
 
@@ -375,4 +374,4 @@ with compiled calls, so branches, loops, row subsets and frame steps have one im
 gets the same checkpoints from every mode ([runners](runners.md)). Params are always runtime arguments: retuning
 validates a new document and builds new bundles, and never rebuilds the IR or recompiles a kernel
 ([params](params.md)). `score` takes a dict because keyword arguments cost more than the whole optimised call on
-wide records (the single-record path note).
+wide records.

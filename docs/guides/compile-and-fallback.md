@@ -42,7 +42,7 @@ fused {'income': 1000.0, 'expenses': 300.0, 'debt': 200.0, 'affordable': True}
 
 `pipeline.run(df)` is interpreted. `Engine(...).bind(pipeline, mode)` does what `compile` does and takes the engine options (`strict_compile=`, `params_validation=`). An unknown mode is refused: `EngineError: unknown mode 'jit'; expected one of ['fused', 'interpreted', 'stepped']`.
 
-The compiled-runners note measured a flagship pipeline at 1M rows through `run` and 20k `score` calls (CPython 3.14, dev box):
+Measured on a flagship pipeline at 1M rows through `run` and 20k `score` calls (CPython 3.14, dev box):
 
 | Mode | Batch rows/s | `score` p50 | `score` p99 |
 |---|---|---|---|
@@ -50,11 +50,11 @@ The compiled-runners note measured a flagship pipeline at 1M rows through `run` 
 | stepped | 12.9M | 37.1 µs | 47.6 µs |
 | fused | 12.5M | 27.7 µs | 34.7 µs |
 
-On branches and loops the gap is wider, because fused mode packs the whole control flow into one kernel. The packed-control-flow note measured a branch at 41.6 to 44.3M rows/s fused against 14.8M stepped (1M rows), and a loop of up to 360 iterations at 6.33M rows/s fused against 0.81M stepped (200k rows); `score()` through the branch had a p50 of 23 µs fused and 66 µs stepped.
+On branches and loops the gap is wider, because fused mode packs the whole control flow into one kernel. A branch measured 41.6 to 44.3M rows/s fused against 14.8M stepped (1M rows), and a loop of up to 360 iterations at 6.33M rows/s fused against 0.81M stepped (200k rows); `score()` through the branch had a p50 of 23 µs fused and 66 µs stepped.
 
 ## Kernel boundaries in fused mode
 
-Fused mode groups steps by a fixed rule, never by a cost estimate: consecutive scalar steps that compile share one kernel, and anything that cannot join a kernel (a frame step, a step that falls back to Python) ends the kernel before it and starts a new one after it. The fusion-is-explicit note records why: whether fusing helps depends on how much work each step does, the measured ratio swung from 0.11x to 1071x across experiments, and no static signal predicts it.
+Fused mode groups steps by a fixed rule, never by a cost estimate: consecutive scalar steps that compile share one kernel, and anything that cannot join a kernel (a frame step, a step that falls back to Python) ends the kernel before it and starts a new one after it. The reason: whether fusing helps depends on how much work each step does, the measured ratio swung from 0.11x to 1071x across experiments, and no static signal predicts it.
 
 ```python
 from datetime import date
@@ -193,7 +193,7 @@ Reading the report:
 
 Interpreted mode never falls back, so its `fallbacks()` is always empty. The warning text is `FallbackWarning: <path> runs in Python, row by row: <reason>`. Python-row speed is below 1M rows/s in a batch against a kernel's hundreds of millions, and under 10 µs extra on a single `score()` (the figures the guide gives).
 
-Only compile-time failures fall back. The python-fallback-numbaerror-only note explains why: catching every exception would turn a real bug, such as a `ZeroDivisionError`, into a silent "needed a fallback". A runtime error always propagates, with a note naming the step:
+Only compile-time failures fall back, because catching every exception would turn a real bug, such as a `ZeroDivisionError`, into a silent "needed a fallback". A runtime error always propagates, with a note naming the step:
 
 ```python
 def per_income(debt: float, income: float) -> float:
@@ -293,16 +293,16 @@ What is cached where:
 
 - Each compiled step function is cached on disk by numba, in `__pycache__` next to the file that defines it (`*.nbi` index and `*.nbc` data files). The cache key includes the function's content and a hash of decider's compile semantics, so an edited step or a decider upgrade recompiles once. A step defined in a notebook cell, an `exec` string or a closure has no file to cache against and compiles in every process.
 - The fused and stepped kernels assembled from those steps are built once per process and never written to disk. A new process pays for that part again.
-- The disk cache records the CPU it was built on. A cache built on one machine type misses silently on another and recompiles at start-up (the numba-compile-cache note).
+- The disk cache records the CPU it was built on. A cache built on one machine type misses silently on another and recompiles at start-up.
 - Each git worktree has its own `__pycache__`, so the first run in a fresh worktree is slow.
 
 To keep compiling off the request path, `decider build` scores `sample_request.json` through every kernel, and a server worker stages its config version (which warms it the same way) before it answers `/ping`. In your own service, call `score` once with a representative record at start-up.
 
 ## Threads and nogil
 
-Every compiled kernel is built with `nogil=True`, so it releases the GIL while it runs, and an `Executable` is safe to call from many threads at once. The kernel-flags note measured why this matters for serving: with 16 threads calling one kernel, p99 stayed at 883 µs with `nogil=True` and reached 254.1 ms without it, because each call held the GIL for its whole run.
+Every compiled kernel is built with `nogil=True`, so it releases the GIL while it runs, and an `Executable` is safe to call from many threads at once. This matters for serving: with 16 threads calling one kernel, p99 stayed at 883 µs with `nogil=True` and reached 254.1 ms without it, because each call held the GIL for its whole run.
 
-`fastmath` is off. With it off, Python and compiled code agreed bit for bit over a 16-step `log`/`exp`/`sqrt`/division chain in the same note; with it on, 46 to 73% of rows differed by up to 17 ULP for a 1.09x speed-up. Kernels also use CPython's semantics for `round(x, n)` and `x ** n`, so the modes agree there too. int64 arithmetic still wraps silently in a kernel where Python would raise ([Types, text, money and nested data](types-and-money.md) shows it).
+`fastmath` is off. With it off, Python and compiled code agreed bit for bit over a 16-step `log`/`exp`/`sqrt`/division chain; with it on, 46 to 73% of rows differed by up to 17 ULP for a 1.09x speed-up. Kernels also use CPython's semantics for `round(x, n)` and `x ** n`, so the modes agree there too. int64 arithmetic still wraps silently in a kernel where Python would raise ([Types, text, money and nested data](types-and-money.md) shows it).
 
 `step(nogil=...)` is accepted and recorded in the IR, but the compiled modes release the GIL for every kernel regardless of it.
 
@@ -340,7 +340,7 @@ Things that skew a measurement:
 
 - Timing the first call measures numba, not your pipeline.
 - Scoring one record through `run(one_row_frame)` adds the frame round trip; the guide puts that at about five times the cost of `score`.
-- A new params dict per call is hashed and validated every time. The single-record-path note measured converting a 50-module params document at 170.6 µs against 0.22 µs for a cached bundle.
+- A new params dict per call is hashed and validated every time. Converting a 50-module params document measured 170.6 µs against 0.22 µs for a cached bundle.
 - A frame step anywhere in the pipeline makes `score` build a one-row polars frame.
 - Fallback steps run at Python speed; check `fallbacks()` first.
 

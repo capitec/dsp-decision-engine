@@ -375,7 +375,7 @@ class Layout:
             elif source[1] != schema:
                 # One `flats` block per column, so a second Item would silently get the first's fields.
                 raise TypeError(f"'{v.name}' is read as Columnar[...] with two different Item types in one "
-                                "kernel; give the second reader its own python_only step")
+                                "kernel; read it with one Item type")
             return source
         if v.id not in self._cols:
             self._cols[v.id] = len(self.reads)

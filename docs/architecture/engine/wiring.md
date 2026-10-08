@@ -190,8 +190,7 @@ UserWarning: risk/total: reading 'entity_bureau_score' as an input column.
 `applicant2_income` next to `applicant1_income` differs only in a digit, so it gets the warning, not the error. A
 flow can declare such names as input columns on purpose with `flow(..., inputs=["entity_bureau_score"])`; a
 declared name is never a typo candidate and never warns. Only earlier names are candidates, so in a `dag` written
-in reverse dependency order, a typo of a later sibling silently becomes an input column (the wiring scopes note
-records this limit).
+in reverse dependency order, a typo of a later sibling silently becomes an input column (a known limit).
 
 ### Forward references
 
@@ -379,7 +378,7 @@ users meet these errors.
 
 ## Why wiring is shaped this way
 
-The wiring scopes note records the choices. Unknown names become input columns, decider2's rule, with the typo
+The choices are these. Unknown names become input columns, decider2's rule, with the typo
 check on top for names close to an earlier output. Forward references are errors, a finding of decider2's review;
 the rule also rejects reading an input and narrowing it later, as decider2 did. Scopes hide arm-internal names because a branch's
 contract is its `modifies` list; reading past it used to turn the arm's write into an input-column read without a

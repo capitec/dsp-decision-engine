@@ -302,7 +302,7 @@ Runtime errors from steps always propagate; serving does not catch them. With `i
 
 ## Where the microseconds go
 
-The serving-latency note measured one request at every layer for three pipelines: flagship (5 float inputs, 3 scalar steps), tree (18 inputs, a 127-node tree document) and gated (the same tree behind one `starts_with` string match).
+One request was measured at every layer for three pipelines: flagship (5 float inputs, 3 scalar steps), tree (18 inputs, a 127-node tree document) and gated (the same tree behind one `starts_with` string match).
 
 <div class="diagram" markdown>
 ![Stacked bars: process_fn 39.4 microseconds of which score is 30.4; score split into State, load, params, iterate and output dict; transport floors from shared memory 3.3 to HTTP 207.3](../assets/diagrams/serving-microseconds.svg)
@@ -322,7 +322,7 @@ The in-process budget, fused mode, one record, no HTTP (µs, lowest p50 of three
 | `output_fn` | 1.84 | 3.49 | 3.56 |
 | `await process_fn`, whole | 39.4 | 77.2 | 151.8 |
 
-Inside `score()`, flagship spends 6.68 µs turning the dict into one numpy block per dtype (`_load`), 1.54 µs finding the cached params bundle and 18.9 µs in `runner.iterate`, of which the numba kernels themselves take 2.13 µs. The gated tree's 104 µs `iterate` is almost all the string span builder, which costs 71.7 µs to describe one 3-byte string. The note's floor, the same kernels with nothing allocated per call, is 6.98 µs for a whole flagship request including `from_json` and `to_json`, so about 5.6x is available inside the process without touching the protocol. That work belongs to the engine; see [Runners](engine/runners.md) and [Boundary](engine/boundary.md).
+Inside `score()`, flagship spends 6.68 µs turning the dict into one numpy block per dtype (`_load`), 1.54 µs finding the cached params bundle and 18.9 µs in `runner.iterate`, of which the numba kernels themselves take 2.13 µs. The gated tree's 104 µs `iterate` is almost all the string span builder, which costs 71.7 µs to describe one 3-byte string. The floor, the same kernels with nothing allocated per call, is 6.98 µs for a whole flagship request including `from_json` and `to_json`, so about 5.6x is available inside the process without touching the protocol. That work belongs to the engine; see [Runners](engine/runners.md) and [Boundary](engine/boundary.md).
 
 The same measurement on a shared, loaded development box, with the credit-limit example (a decision table and two scalar steps), gave (p50 of 5000 calls, µs):
 
@@ -335,18 +335,18 @@ output_fn                1.4 us
 await process_fn        99.7 us
 ```
 
-Outside the process, the serving-latency note's transport table measured an echo route that scores nothing: 3.3 µs over shared memory, 18.3 µs over a unix socket, 42.3 µs over loopback TCP and 207.3 µs for HTTP plus ASGI framing. A full HTTP JSON request was 614.5 µs p50. HTTP framing is the largest single term a remote client sees; the JSON codec is 2 to 6% of the in-process time.
+Outside the process, an echo route that scores nothing measured 3.3 µs over shared memory, 18.3 µs over a unix socket, 42.3 µs over loopback TCP and 207.3 µs for HTTP plus ASGI framing. A full HTTP JSON request was 614.5 µs p50. HTTP framing is the largest single term a remote client sees; the JSON codec is 2 to 6% of the in-process time.
 
 ## Why JSON, and why no special server
 
-The serving-latency note asked whether an Arrow payload or a dedicated socket server would make single requests faster. The measured answer was no:
+The question was whether an Arrow payload or a dedicated socket server would make single requests faster. The measured answer was no:
 
 - Arrow IPC is a slower codec than JSON for one record. `pl.read_ipc_stream` took 17.1 µs against `from_json`'s 0.90, and writing the reply 40.6 µs against `to_json`'s 1.16. Arrow wins from about 4096 rows, which is where the engine's boundary already borrows buffers.
 - `exe.run(one-row frame)` cost 150 µs against `score()`'s 30.4, so a single record must not be routed through a frame. That is why `process_fn` branches on `dict` versus frame.
 - A long-lived pyarrow record-batch stream measured slower than every transport except HTTP.
 - Swapping `json.loads` for `pydantic_core.from_json` cut `process_fn` from 49.9 to 39.4 µs (flagship). That swap is in the code; its one visible change is that a lone surrogate (`"\ud800"`) is now rejected with a 400.
 
-So the batch content types (Arrow, Parquet, CSV, JSONL) exist for batch callers, and JSON stays the single-record format. The single-record path note adds why `score()` takes a dict rather than keyword arguments: at 400 inputs, CPython matching keyword names cost 1190 µs against 60 µs for a dict.
+So the batch content types (Arrow, Parquet, CSV, JSONL) exist for batch callers, and JSON stays the single-record format. `score()` takes a dict rather than keyword arguments because, at 400 inputs, CPython matching keyword names cost 1190 µs against 60 µs for a dict.
 
 ## Processes and threads
 

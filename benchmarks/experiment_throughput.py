@@ -1,6 +1,8 @@
 """Experiment runner throughput: a baseline plus one param scenario, global vs per-node metrics.
 
 uv run python benchmarks/experiment_throughput.py
+
+Results: `docs/design_decisions/experiments/experiment-runner-scale.md`.
 """
 import time
 

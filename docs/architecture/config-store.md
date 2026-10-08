@@ -220,9 +220,9 @@ To replay a stored decision, read the version it ran with, never whatever `confi
 
 ## Why structure is not in config
 
-A config version holds params documents and `ConfigurableStep` documents. It never holds the list of steps, their order or their wiring. Two notes give the reasons.
+A config version holds params documents and `ConfigurableStep` documents. It never holds the list of steps, their order or their wiring. Two decisions give the reasons.
 
-The structure-in-Python note records what happened in the previous engine, where structure lived in config:
+The first is what happened in the previous engine, where structure lived in config:
 
 - Execution order was kept by hand in JSON with typed UUIDs and was known to be wrong: `main.json` had 51 steps, the generated `flow.json` had 120, and the real C# flow had 192.
 - Values were duplicated between config and code (`"max_term": 84` in a config file and `84.0` hardcoded in two modules), so editing the JSON might not change behaviour.
@@ -230,7 +230,7 @@ The structure-in-Python note records what happened in the previous engine, where
 
 When structure is code, it is reviewed, versioned by commit and its order comes from the graph. Config references code only by registered `type` tag (`"decision_table"`, `"tree"`, `"mypkg.steps:Scaled"`), and the registry refuses a tag that names an unregistered class, so a config file cannot point at arbitrary code (`"os:system"` is rejected).
 
-The flow-files note amends this without reversing it. A flow file (`flow.yaml`) states structure in YAML, but it lives with the code, is the only copy of that structure and is deployed with the components it names. It is still never inside a config version. A configurable flow that could change structure without a deploy was considered and not built, and the note says adding it would reverse the earlier decision. See [Flow files](../guides/flow-files.md) and [Expressions and flow files](configurable-steps/expr-and-flowfile.md).
+The second amends this without reversing it. A flow file (`flow.yaml`) states structure in YAML, but it lives with the code, is the only copy of that structure and is deployed with the components it names. It is still never inside a config version. A configurable flow that could change structure without a deploy was considered and not built, and adding it would reverse the earlier decision. See [Flow files](../guides/flow-files.md) and [Expressions and flow files](configurable-steps/expr-and-flowfile.md).
 
 The practical split for a project:
 

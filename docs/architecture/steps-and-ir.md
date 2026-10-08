@@ -505,7 +505,7 @@ Origin(path='loan/base_limit', source='__main__:base_limit', locator=None, id='0
 `Origin` holds plain strings, so events and traces carry it as is. `source` is `import_path(fn)` for a function step
 and the class import path for a configurable step or a step built by a constructor. `id` and `suppress_checks` come
 from the step. Origins are metadata: compiled code is keyed by content and never by path, so renaming or nesting a
-step keeps its compiled kernel (the origins-out-of-cache-keys note).
+step keeps its compiled kernel (see [Cache](engine/cache.md)).
 
 A step can be placed more than once, in different flows or under different names, and each placement gets its own
 path and node. Inside one flow, `named` gives the second placement its own name:

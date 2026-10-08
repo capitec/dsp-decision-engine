@@ -208,7 +208,7 @@ a copy is cheaper than wrapping:
 5000 rows: borrowed   (values.base is a _Borrowed view)
 ```
 
-The serving latency note states the lifetime rule this depends on: anything that hands a raw
+The lifetime rule this depends on: anything that hands a raw
 address to a kernel must stay reachable from a live Python object for the whole kernel call, and
 nothing may rechunk, cast, slice or mutate the owning frame in between. `_Export` owns borrowed
 columns; `ExtractedFrame.kernel_frame` keeps the frame string spans point into; a state keeps an
@@ -302,7 +302,7 @@ CC to choose one) so the shim is built on first import.` Nothing is re-exported 
 `explain_boundary`, `view` and `kernels` need it, while `plan`, `nulls`, `intrinsics` and
 `diagnose()` do not.
 
-The note on the shim build explains the choice. The package builds with hatchling, which has no
+The build explains the choice. The package builds with hatchling, which has no
 C-extension support, and a build on first import needs only a compiler, not the CPython headers
 (the system Python on the development machine has none). A deployment image with a read-only home
 or no compiler has to import the boundary once at image build time, or ship a prebuilt wheel;
@@ -347,8 +347,8 @@ does not type (a `Text`, a list) go into one object array, element by element. T
 starts from the record's own keys, minus dropped ones, and adds each output: `None` where its
 validity is false, a boxed `Decimal`, or a dict for a struct record.
 
-The compiled runners note measured the per-dtype array: one `np.array` per input cost about 8 µs of
-a 36 µs call. On the flagship pipeline, the serving latency note split a 30.4 µs `score()` into
+Building one `np.array` per input cost about 8 µs of a 36 µs call, hence the per-dtype
+array. On the flagship pipeline, a 30.4 µs `score()` splits into
 1.17 µs to make the state, 6.68 µs to load the record, 1.54 µs to look up the params bundle,
 18.9 µs in the runner around a 2.1 µs kernel, and 2.28 µs for the output dict.
 
@@ -361,7 +361,7 @@ score p50 33.3 us; run(one-row frame) p50 125.5 us
 
 ## Measured
 
-The note on the single-record path recorded the change from a per-row gather (one C call per row
+The table records the change from a per-row gather (one C call per row
 through a numba loop, then a copy of every column) to the column-at-a-time read described here,
 fused mode, on a loaded machine where p99 and 1M times moved by up to 50% between runs:
 
@@ -375,8 +375,8 @@ fused mode, on a loaded machine where p99 and 1M times moved by up to 50% betwee
 | string-gated tree | column at a time | 292 µs | 32.4 ms | 360 ms |
 
 Before the change, a one-row flagship run spent 105 µs in `State.from_frame`; afterwards about
-60 µs, of which the polars export itself (`get_schema` and `get_next`) was about 10 µs. The serving
-latency note also asked whether an Arrow request body could reach a kernel with no copy: polars
+60 µs, of which the polars export itself (`get_schema` and `get_next`) was about 10 µs. Whether an Arrow request body could reach a kernel with no copy was
+measured too: polars
 copies on `read_ipc_stream` before decider sees anything, and at one row the copy that remains is a
 few dozen bytes. The codec was worth about 2 µs of a 39.4 µs request, so requests stay JSON and go
 through `score()`.

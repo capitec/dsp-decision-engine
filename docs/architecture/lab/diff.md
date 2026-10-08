@@ -97,7 +97,7 @@ This is the safe direction for a proof. A false "different" costs a reviewer a l
 
 ### Matching steps across versions
 
-Steps are matched before anything is compared. `_match` pairs nodes in two passes. The first pass matches by the durable global reference `(flow_id, step_id)` for every node that has a `step_id`. The second pass matches the rest by path, skipping new nodes already taken. An unmatched old node is `removed`, an unmatched new node is `added`. Durable ids come from `id=` on a step or flow, written into source by `decider ids`; the note on durable identities describes the identity model.
+Steps are matched before anything is compared. `_match` pairs nodes in two passes. The first pass matches by the durable global reference `(flow_id, step_id)` for every node that has a `step_id`. The second pass matches the rest by path, skipping new nodes already taken. An unmatched old node is `removed`, an unmatched new node is `added`. Durable ids come from `id=` on a step or flow, written into source by `decider ids`.
 
 ```mermaid
 flowchart TD
@@ -222,7 +222,7 @@ A-2 was declined in both versions, so its offer is 0 on both sides and the row i
 
 ### Why each revision loads in its own process
 
-Both revisions share module names. The caller has almost always imported the live pipeline already, and Python caches modules by name, so importing `lending.pipeline` from a checked-out tree inside the same process returns the cached live module. The note on revision subprocess isolation records that this happened in an earlier version of the experiment runner: comparing two real commits of a credit pipeline that added a $50 fee came back with zero differences. Removing the entry module from `sys.modules` fixed the one module and missed every module it imports. A process that never imported the live code loads the checked-out version at every import depth.
+Both revisions share module names. The caller has almost always imported the live pipeline already, and Python caches modules by name, so importing `lending.pipeline` from a checked-out tree inside the same process returns the cached live module. This happened in an earlier version of the experiment runner: comparing two real commits of a credit pipeline that added a $50 fee came back with zero differences. Removing the entry module from `sys.modules` fixed the one module and missed every module it imports. A process that never imported the live code loads the checked-out version at every import depth.
 
 <div class="diagram" markdown>
 ![The parent process resolves the revision, checks it out into a worktree, and runs a worker subprocess that imports the flow from the checkout and writes its snapshot and output to files](../../assets/diagrams/lab-diff-revision-load.svg)
@@ -262,7 +262,7 @@ With a bad qualname it answers `{"ok": false, "error": "AttributeError: module '
 
 `Revisions` keeps the two snapshots. `structure()` loads a side only if it has no snapshot yet. `outputs()` always loads both sides again, because it needs fresh outputs, and stores the new snapshots. Calling `outputs` first and `structure` second costs two loads instead of four; the CLI does it in that order.
 
-Each load costs a checkout plus a fresh interpreter. The note on revision subprocess isolation measured about 0.5 s for the worktree checkout and about 0.8 s for the subprocess spawn and `import decider`.
+Each load costs a checkout plus a fresh interpreter. Measured, a load takes about 0.5 s for the worktree checkout and about 0.8 s for the subprocess spawn and `import decider`.
 
 ### A worked example
 
@@ -529,8 +529,8 @@ The parts of the encoding:
 
 ## Why it is shaped this way
 
-The note on the diff redesign lists the tiers that were considered. Tier 0 was the old `checks.compare` signature: path, kind, origin and function source text. It ignored constants and param defaults, so two configurable steps differing only in `factor=2.0` and `3.0` came back "structurally equivalent". The content hash replaced it, and it reuses the compile fingerprint that already had to be exact for the numba cache.
+Several tiers were considered. Tier 0 was the old `checks.compare` signature: path, kind, origin and function source text. It ignored constants and param defaults, so two configurable steps differing only in `factor=2.0` and `3.0` came back "structurally equivalent". The content hash replaced it, and it reuses the compile fingerprint that already had to be exact for the numba cache.
 
-Tier 2 (normalised config documents) and tier 3 (exhaustive enumeration over threshold-partitioned inputs, `domain="thresholds"`) are not built. The note expected tier 4 (z3) to cover most of tier 2 for trees and tables, and the same encoding pays for itself twice, since checks use it for unreachable arms and table overlaps. The `Proof.tier` values in the note (`enumeration`, `corpus`) do not exist in the code, and `OutputDiff.first_divergent_step` is deferred.
+Tier 2 (normalised config documents) and tier 3 (exhaustive enumeration over threshold-partitioned inputs, `domain="thresholds"`) are not built. Tier 4 (z3) is expected to cover most of tier 2 for trees and tables, and the same encoding pays for itself twice, since checks use it for unreachable arms and table overlaps. The design's `Proof.tier` values `enumeration` and `corpus` do not exist in the code, and `OutputDiff.first_divergent_step` is deferred.
 
-For revisions, the note on subprocess isolation rejected two alternatives. Evicting the entry module from `sys.modules` fixed only that one module name. Running each revision under its own pinned `decider` with `uv run --project <tree>` would compare old code under its own engine, but a cold `uv sync` in a fresh worktree took 23 seconds per revision, and the project had already decided to reject incompatible revisions through the `flow.decider` window instead.
+For revisions, two alternatives were rejected. Evicting the entry module from `sys.modules` fixed only that one module name. Running each revision under its own pinned `decider` with `uv run --project <tree>` would compare old code under its own engine, but a cold `uv sync` in a fresh worktree took 23 seconds per revision, and the project had already decided to reject incompatible revisions through the `flow.decider` window instead.
