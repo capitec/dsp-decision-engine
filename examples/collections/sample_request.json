@@ -31,7 +31,7 @@
 
   "contacts_rolling_7d": 2,
   "contacts_rolling_30d": 6,
-  "days_since_last_treatment": 5,
+  "days_since_last_treatment": 12,
   "is_new_bucket3_entrant": true,
 
   "proposed_instalment": 900.0,

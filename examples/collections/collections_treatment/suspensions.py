@@ -178,6 +178,7 @@ def treatment_after_suspensions(overlaid_treatment_code: int, permitted_treatmen
 treatment_after_suspensions_step = step(treatment_after_suspensions, outputs=("treatment_code", "suspension_blocked"))
 
 
+@allow_fallback
 def pre_prescription_flag(decision_date: date, prescription_date: date | None = None) -> bool:
     """True within 60 days before the debt prescribes."""
     return prescription_date is not None and 0 <= (prescription_date - decision_date).days <= 60
