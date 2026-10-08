@@ -1,6 +1,7 @@
 import math
 
 import pytest
+from decider.exceptions import EngineError
 
 from collections_treatment import arrangements
 
@@ -19,7 +20,7 @@ def test_an_instalment_that_leaves_under_the_minimum_residual_fails():
 
 def test_an_instalment_above_85_percent_of_discretionary_income_fails():
     _, _, detail = arrangements.arrangement_sustainability(
-        net_monthly_income=20_000.0, discretionary_income=4_000.0, proposed_instalment=3_600.0)
+        net_monthly_income=4_500.0, discretionary_income=4_000.0, proposed_instalment=3_600.0)
     assert detail == "instalment_exceeds_discretionary_income_pct"
 
 
@@ -49,7 +50,7 @@ def test_the_sample_arrangement_is_assessed_in_arrangement_mode_and_is_sustainab
 
 
 def test_a_large_instalment_fails_sustainability_on_the_same_assessment(decide):
-    out = decide(proposed_instalment=2_400.0)
+    out = decide(proposed_instalment=3_800.0)
     assert out["arrangement_sustainable"] is False
     assert "instalment_exceeds_discretionary_income_pct" in out["arrangement_failure_detail"]
 
@@ -64,4 +65,5 @@ def test_arrangement_mode_accepts_a_declared_income_that_a_new_application_would
 def test_the_assessment_mode_is_a_param_not_a_request_field(decide, params):
     mode = params["collections_treatment"]["arrangement_assessment"]["arrangement_assessment_mode"]
     assert mode == {"mode": 3}
-    assert decide(assessment_mode_code=1)["assessment_mode_code"] == 3  # a request cannot change the mode
+    with pytest.raises(EngineError, match="assessment_mode_code"):  # a request cannot change the mode
+        decide(assessment_mode_code=1)
