@@ -11,7 +11,6 @@ from credit_core import calibration
 from credit_core.evidence import cell_id
 from limit_mgmt.overlays import BEHAVIOUR_ADJUSTMENTS, SET_ID
 
-SCORECARD_VERSION = "behaviour-sc-2026.09"
 CALIBRATION_VERSION = "behaviour-cal-2026.09"
 GRADE_VERSION = "behaviour-grade-2026.09"
 

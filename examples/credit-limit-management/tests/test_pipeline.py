@@ -1,6 +1,5 @@
 import pytest
 from decider import DeciderError
-from decider.exceptions import ParamsError
 
 from conftest import switch_off_every_overlay
 from limit_mgmt import pipeline
