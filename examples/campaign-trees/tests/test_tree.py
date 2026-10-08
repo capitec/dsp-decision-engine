@@ -88,3 +88,20 @@ def test_raising_node_6_s_floor_in_the_document_changes_only_node_6(tree, tree_d
     edited = TreeConfig.load(document)
     assert changed_nodes(tree, edited) == {"added": [], "removed": [], "changed": ["n6"]}
     assert walk(edited, {**SAMPLE, "discretionary_income": 2400.0})[0] == "n1>n2>n4>n6>leaf_903"
+
+
+def test_adding_a_branch_adds_nodes_and_changes_only_the_node_it_hangs_from(tree, tree_document):
+    document = json.loads(json.dumps(tree_document))
+    output = document["tree"]["output"]
+    output["data"].append({**output["data"][5], "reason_label": 9105})  # leaf_914 repeats leaf_911's answer, labelled 9105
+    document["tree"]["nodes"] += [
+        {"id": "n11", "data": {"type": "unary", "condition": {"op": ">=", "feature": "behaviour_score", "threshold": 680}}},
+        {"id": "leaf_914", "data": {"type": "leaf", "result_idx": 8}}]
+    edges = document["tree"]["edges"]
+    next(e for e in edges if e["source"] == "n9" and e["target"] == "leaf_911")["target"] = "n11"
+    edges += [{"source": "n11", "target": "leaf_914", "data": {"sourceIndex": 0}},
+              {"source": "n11", "target": "leaf_911", "data": {"sourceIndex": 1}}]
+    edited = TreeConfig.load(document)
+    assert problems(edited) == []
+    assert changed_nodes(tree, edited) == {"added": ["leaf_914", "n11"], "removed": [], "changed": ["n9"]}
+    assert walk(edited, {**STRONG, "app_logins_90d": 0}) == ("n1>n2>n3>n5>n7>n9>n11>leaf_914", 9105)
