@@ -102,8 +102,6 @@ uv run decider build
 # built config version 0.1.0 (pipeline retail_credit.pipeline:build, mode fused)
 ```
 
-The build prints one `FallbackWarning` about `solve/finalise`: see "Things worth knowing".
-
 Serve, and decide the sample application. Its dates are plain JSON strings. A decision takes a few milliseconds:
 
 ```bash
@@ -200,12 +198,10 @@ tests/                  behaviour tests; reference.py prices an offer by hand to
 - **One pricing path.** The winner of `optimise` brings back its own price (`record=`), so the offer is never priced
   a second time and cannot disagree with the search. Everything that does not depend on the amount (credit life rate,
   fee terms, long-term loading) is looked up once before the search.
-- **The rate card is a `param_table`** and not a `DecisionTableConfig` (marked `# workaround`): in this version a decision
-  table lookup inside the solve's loop costs about 100 microseconds, a `param_table` and an index about half a
-  microsecond. The cost is that the card lives in the params document and its cells are found by position.
-- **`optimise(record=...)` warns once at build.** Its internal `finalise` step runs in Python and does not declare it, so the
-  build prints a `FallbackWarning` and `Engine(strict_compile=True)` cannot be used. The test says so
-  ([tests/test_serving.py](tests/test_serving.py)).
+- **The rate card is a `param_table`** and not a `DecisionTableConfig` (marked `# workaround`): a table of 34 560 rows
+  with two `between` columns is scanned linearly, about 200 microseconds per lookup, and the solve prices hundreds of
+  candidates per request (373 for the sample). A `param_table` and an index cost about half a microsecond. The cost is
+  that the card lives in the params document and its cells are found by position.
 - **Consolidation is one scenario.** Settle every external debt, keep the internal ones. A search over subsets of debts
   proposes a new scenario each pass and is where `loop` would belong; with one scenario there is nothing to iterate.
 - **Judgement calls, all in code and tests.** The segment order when a client fits several is this flow's choice. Income
