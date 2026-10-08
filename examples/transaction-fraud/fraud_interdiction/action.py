@@ -50,7 +50,8 @@ def resolve_action_step(rules: tuple[Rule, ...]):
         action, source = (win[1], win[0].rule_id) if win else (Action.ALLOW, "")
         primary = win[0].reason_code if win else None
         if hard_block_forced_action > action:
-            action, source, primary = hard_block_forced_action, "HARD_BLOCK:" + ",".join(g[0] for g in gates), gates[0][2]
+            action, primary = hard_block_forced_action, gates[0][2]
+            source = "HARD_BLOCK:" + ",".join(g[0] for g in gates)
         reasons, _ = REGISTRY.rank([r.reason_code for r, _ in fired] + [g[2] for g in gates])
         # The base rule set alone: the overlays' thresholds and escalations are left out, the hard blocks are not.
         base, _ = _winner([(by_id[i], by_id[i].action_code) for i in counterfactual_fired_rule_ids])
