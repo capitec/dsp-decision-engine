@@ -42,8 +42,10 @@ pipeline from a flow file", has the rest.
 
 ## Read the structure first
 
-An `entry` is `module:factory` (`flowapp.pipeline:build`). The tools import the
-module and call the factory with no arguments.
+An `entry` is `module:factory` (`flowapp.pipeline:build`). The tools build it
+the way `decider serve` does: a `build(limit_band)` that takes config documents
+gets the latest `configs/<version>/` documents, and runs use that version's
+`params.json`. The module is imported fresh on every call, so your edits count.
 
 1. `discover_flows(root=".")` lists the pipelines under `root`: `entry`, `file`,
    `line`, `kind`. It imports every candidate file, so top-level code in a
@@ -94,29 +96,9 @@ to 3000.0 for one row and 0.0 for two.
 
 ## Pitfalls
 
-- **A running server holds the Python it imported.** After you edit a `.py`
-  file, `describe_flow`, `run_summary` and the other tools still see the old
-  code until the server restarts: reconnect it in `/mcp`. Flow files and config
-  documents are re-read on every call.
-- **An entry must build with no arguments.** `build(limit_band)` (a pipeline
-  whose `build` takes config documents) fails with `TypeError: build() missing
-  1 required positional argument`. Point the tools at a wrapper that loads the
-  documents and returns the pipeline:
-
-```python
-import json
-from pathlib import Path
-from decider import ConfigurableStep
-from lending.pipeline import build
-
-def build_for_tools():
-    doc = json.loads((Path(__file__).parent / "configs/0.1.0/limit_band.json").read_text())
-    return build(ConfigurableStep.load(doc))
-```
-
-- Tools run a pipeline with the params defaults written in code, not
-  `configs/<version>/params.json`. To try other values, score through
-  `Engine().bind(build()).score(record, params)` in a test.
+- Tools run a pipeline with the latest version's `params.json` (the defaults in
+  code when there is none). To try other values, change them with `params_set`
+  or score through `pipeline.compile().score(record, params)` in a test.
 - `discover_flows` reads `.py` files only and skips `.venv`, `node_modules` and
   directories starting with `.`. A flow file appears as the `build()` that
   loads it.

@@ -94,8 +94,8 @@ run_summary(entry="credit_risk.pipeline:build", data="loans.parquet")
   array). JSON gives dates as strings, so a `date` input fails with
   `'str' object has no attribute 'day'`; write dates as typed columns in a
   parquet file (`pl.DataFrame(...).write_parquet("loans.parquet")`).
-- These tools run the params defaults from the code, not
-  `configs/<version>/params.json`. Compare policies with an experiment.
+- These tools run with the latest version's `configs/<version>/params.json`
+  (the defaults in code when there is none). Compare policies with an experiment.
 - Ask the user before pointing them at real data.
 
 ## Experiments
