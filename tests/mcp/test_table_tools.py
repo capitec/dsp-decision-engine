@@ -9,7 +9,7 @@ import pytest
 from decider._tooling.mcp import _configs as configs, _scorecards as scorecards, _tables as tables
 
 ROOT = Path(__file__).resolve().parents[2]
-MATRIX = ROOT / "example_projects/07-credit-limit-management/sonnet/configs/0.1.0/matrix.json"
+MATRIX = ROOT / "examples/credit-limit-management/configs/0.1.0/matrix.json"
 
 BAND = {"type": "decision_table", "name": "band", "columns": {"lo": "Float64", "hi": "Float64", "band": "String"},
         "rows": [{"lo": None, "hi": 600.0, "band": "C"}, {"lo": 600.0, "hi": 700.0, "band": "B"},
