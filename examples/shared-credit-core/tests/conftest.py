@@ -12,6 +12,11 @@ CONFIGS = ROOT / "configs" / "0.1.0"
 
 
 @pytest.fixture(scope="session")
+def configs():
+    return CONFIGS
+
+
+@pytest.fixture(scope="session")
 def params():
     return json.loads((CONFIGS / "params.json").read_text())
 
@@ -27,8 +32,13 @@ def reason_codes():
 
 
 @pytest.fixture(scope="session")
-def quote_pipeline(score_adjustments, reason_codes):
-    return build(DecisionTableConfig.load(str(CONFIGS / "rate_card_flex_loan.json")), score_adjustments, reason_codes)
+def rate_card():
+    return DecisionTableConfig.load(str(CONFIGS / "rate_card_flex_loan.json"))
+
+
+@pytest.fixture(scope="session")
+def quote_pipeline(rate_card, score_adjustments, reason_codes):
+    return build(rate_card, score_adjustments, reason_codes)
 
 
 @pytest.fixture(scope="session")

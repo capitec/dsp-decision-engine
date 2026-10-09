@@ -22,19 +22,19 @@ EXCLUDE_INTERNAL_BEING_CONSOLIDATED = 9
 AMORTISE_BALANCE_OVER_STANDARD_TERM = 10
 
 # account_type_code -> how its monthly cost is established; a type not listed uses its stated instalment.
-TREATMENT_MATRIX = {
-    1: USE_STATED_INSTALMENT,                 # Flex Loan
-    2: USE_STATED_INSTALMENT,                 # vehicle finance
-    3: USE_STATED_INSTALMENT,                 # home loan
-    10: IMPUTE_PCT_OF_LIMIT,                  # credit card
-    11: IMPUTE_MINIMUM_PAYMENT_PCT,           # store card
-    12: IMPUTE_PCT_OF_BALANCE,                # overdraft
-    20: USE_STATED_INSTALMENT,                # personal loan at another bank
-    21: AMORTISE_BALANCE_OVER_STANDARD_TERM,  # facility with no clear term
-    30: EXCLUDE_IF_SETTLEMENT_IN_FLIGHT,      # account under settlement negotiation
-    31: EXCLUDE,                              # paid up
-    40: EXCLUDE_INTERNAL_BEING_CONSOLIDATED,  # internal account being consolidated
-}
+TREATMENT_MATRIX = (
+    (1, USE_STATED_INSTALMENT),                  # Flex Loan
+    (2, USE_STATED_INSTALMENT),                  # vehicle finance
+    (3, USE_STATED_INSTALMENT),                  # home loan
+    (10, IMPUTE_PCT_OF_LIMIT),                   # credit card
+    (11, IMPUTE_MINIMUM_PAYMENT_PCT),            # store card
+    (12, IMPUTE_PCT_OF_BALANCE),                 # overdraft
+    (20, USE_STATED_INSTALMENT),                 # personal loan at another bank
+    (21, AMORTISE_BALANCE_OVER_STANDARD_TERM),   # facility with no clear term
+    (30, EXCLUDE_IF_SETTLEMENT_IN_FLIGHT),       # account under settlement negotiation
+    (31, EXCLUDE),                               # paid up
+    (40, EXCLUDE_INTERNAL_BEING_CONSOLIDATED),   # internal account being consolidated
+)
 
 _LIMIT_PCT = 0.03
 _BALANCE_PCT = 0.05
@@ -68,11 +68,11 @@ class Obligations(NamedTuple):
     obligation_is_internal: list[bool]
 
 
-def _treat(account: Account) -> tuple[float, int]:
+def _treat(account: Account, matrix: dict[int, int]) -> tuple[float, int]:
     """(monthly cost, treatment actually used) for one account."""
     if account.get("closed"):
         return 0.0, EXCLUDE_IF_CLOSED
-    behaviour = TREATMENT_MATRIX.get(account.get("account_type_code"), USE_STATED_INSTALMENT)
+    behaviour = matrix.get(account.get("account_type_code"), USE_STATED_INSTALMENT)
     quote = account.get("settlement_quote")
     if behaviour == EXCLUDE:
         return 0.0, EXCLUDE
@@ -106,12 +106,13 @@ def assess(bureau_accounts: list[Account], internal_accounts: list[Account]) -> 
     """
     internal_keys = {_key(a) for a in internal_accounts}
     accounts = [*internal_accounts, *(a for a in bureau_accounts if _key(a) not in internal_keys)]
-    treated = [_treat(a) for a in accounts]
+    matrix = dict(TREATMENT_MATRIX)
+    treated = [_treat(a, matrix) for a in accounts]
     internal_total = sum(cost for a, (cost, _) in zip(accounts, treated) if a.get("is_internal"))
     external_total = sum(cost for a, (cost, _) in zip(accounts, treated) if not a.get("is_internal"))
     arrears = [a.get("months_in_arrears") or 0 for a in accounts]
     revolving = [a for a in accounts
-                 if TREATMENT_MATRIX.get(a.get("account_type_code")) in (IMPUTE_PCT_OF_LIMIT, IMPUTE_MINIMUM_PAYMENT_PCT)]
+                 if matrix.get(a.get("account_type_code")) in (IMPUTE_PCT_OF_LIMIT, IMPUTE_MINIMUM_PAYMENT_PCT)]
     revolving_limit = sum(a.get("limit") or 0.0 for a in revolving)
     revolving_balance = sum(a.get("balance") or 0.0 for a in revolving)
     return Obligations(
