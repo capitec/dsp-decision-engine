@@ -9,6 +9,7 @@ import polars as pl
 
 from decider._engine.boundary.whole import int64_array
 from decider._engine.compile.outputs import Coded, coded_values
+from decider._engine.ir.absent import has_optional_key, without_absent
 from decider._engine.ir.decls import Input, NullPolicy, base_annotation, is_typed
 from decider._engine.run.representations import despan
 from decider._engine.wiring.plan import Plan, NodeVersion
@@ -66,6 +67,9 @@ class State:
                 # (as spans, from `source`); convert on first Python read if big string batches matter.
                 series = frame.get_column(v.name)
                 values, valid = from_series(series)
+                if has_optional_key(v.annotation):
+                    for i, x in enumerate(values):
+                        values[i] = without_absent(x, v.annotation)
                 state.write(v, values, valid=valid)
                 state._sources[v.id] = (values, series)
         return state
