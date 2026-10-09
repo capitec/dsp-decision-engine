@@ -2,15 +2,17 @@
 
 A step returning tuples that a kernel stores is checked once, at compile time,
 against the type numba inferred for its body. Every other step runs in Python
-(no kernel stores a dict) and is checked by pydantic on every call.
+(no kernel stores a dict) and is checked on every call: directly for the usual shapes, by pydantic otherwise.
 """
 from __future__ import annotations
 
 import typing
 from functools import lru_cache
-from typing import Any, Sequence
+from types import UnionType
+from typing import Any, Callable, Sequence
 
 import numpy as np
+import typing_extensions as te
 from numba.core import types
 from pydantic import PydanticSchemaGenerationError, PydanticUserError, TypeAdapter, ValidationError
 
@@ -52,10 +54,85 @@ def is_untyped_container(annotation: Any) -> bool:
     return (typing.get_origin(t) or t) in (dict, list) and _bare(t)
 
 
+_EXACT = {float: frozenset({float, int}), int: frozenset({int}), bool: frozenset({bool}), str: frozenset({str})}
+
+
+def _fast(t: Any) -> Callable[[Any], bool] | None:
+    # A test that is true only for values strict validation accepts as `t`, for the common shapes
+    # (numbers, text, optional, list, TypedDict of those). Anything else, and anything it rejects,
+    # goes to pydantic, which also words the error.
+    if isinstance(t, type) and t in _EXACT:
+        ok = _EXACT[t]
+        return lambda x: type(x) in ok
+    origin, args = typing.get_origin(t), typing.get_args(t)
+    if origin in (typing.Union, UnionType) and len(args) == 2 and type(None) in args:
+        inner = _fast(next(a for a in args if a is not type(None)))
+        return None if inner is None else lambda x: x is None or inner(x)
+    if origin is list and len(args) == 1:
+        if isinstance(args[0], type) and args[0] in _EXACT:
+            ok = _EXACT[args[0]]
+            return lambda x: type(x) is list and ok.issuperset(map(type, x))
+        inner = _fast(args[0])
+        return None if inner is None else lambda x: type(x) is list and all(map(inner, x))
+    if typing.is_typeddict(t):
+        fields = {k: _fast(_required(h)) for k, h in te.get_type_hints(t, include_extras=True).items()}
+        if None in fields.values():
+            return None
+        required = tuple(t.__required_keys__)
+
+        def record(x):
+            return (type(x) is dict and all(k in x for k in required)
+                    and all(k not in x or f(x[k]) for k, f in fields.items()))
+        return record
+    return None
+
+
+def _required(h: Any) -> Any:
+    return typing.get_args(h)[0] if typing.get_origin(h) in (te.Required, te.NotRequired) else h
+
+
+class Check:
+    """What a step's output must be, prepared once per annotation; calling it raises `ValueError` if a value is not."""
+
+    __slots__ = ("_adapter", "_names", "_many", "_fast")
+
+    def __init__(self, adapter: TypeAdapter, names: list[str] | None, many: bool, fast: Any):
+        self._adapter, self._names, self._many, self._fast = adapter, names, many, fast
+
+    def __call__(self, step: str, output: Output, values: Sequence, rows: np.ndarray | None = None) -> None:
+        # The usual outputs are lists of numbers or text; telling they are right costs less than asking pydantic.
+        fast = self._fast
+        if fast is not None and all(map(fast, values)):
+            return
+        adapter, names = self._adapter, self._names
+        if names is not None:
+            def record(x):
+                return dict(zip(names, x)) if isinstance(x, (tuple, list)) and len(x) == len(names) else x
+
+            many = self._many
+            values = [None if x is None else [record(i) for i in x] if many else record(x) for x in values]
+        values = values if type(values) is list else list(values)
+        try:
+            adapter.validate_python(values, strict=True)
+            return
+        except ValidationError:
+            pass
+        values = [_plain(x) for x in values]
+        try:
+            adapter.validate_python(values, strict=True)
+        except ValidationError as e:
+            err = e.errors(include_url=False)[0]
+            row, *field = err["loc"]
+            at = f" row {int(rows[row]) if rows is not None else row}"
+            at += f", field {'.'.join(map(str, field))}" if field else ""
+            raise ValueError(f"step {step}: output '{output.name}'{at}: {err['msg']} (got {err['input']!r}), "
+                             f"declared {_name(output.annotation)}") from None
+
+
 # Raw `lru_cache`, not `annotation_cache`: a step asks this on every call, and its key is hashed
 # straight, a fifth of the cost; an annotation carrying unhashable metadata is built uncached.
 @lru_cache(maxsize=256)
-def _prepared(annotation: Any) -> tuple[TypeAdapter, list[str] | None, bool] | None:
+def _prepared(annotation: Any) -> Check | None:
     t = schema_of(annotation)
     if t is None:
         return None
@@ -66,11 +143,25 @@ def _prepared(annotation: Any) -> tuple[TypeAdapter, list[str] | None, bool] | N
     # A `Struct` or `Columnar` step may return its records as tuples of the fields.
     t = base_annotation(annotation)
     item = struct_item(t) or columnar_item(t)
-    return adapter, None if item is None else [name for name, _ in item_schema(item)], columnar_item(t) is not None
+    # ponytail: a Struct or Columnar output always goes through pydantic, its records are tuples.
+    fast = _fast(typing.Optional[schema_of(annotation)]) if item is None else None
+    return Check(adapter, None if item is None else [name for name, _ in item_schema(item)],
+                 columnar_item(t) is not None, fast)
 
 
 def _name(annotation: Any) -> str:
     return annotation.__qualname__ if isinstance(annotation, type) and typing.get_origin(annotation) is None else str(annotation)
+
+
+def output_check(output: Output) -> Check | None:
+    """The `Check` for `output`, or `None` when it declares no shape beyond `dict` / `list`.
+
+    Fetch it once, at bind, so a step does not look the annotation up on every call.
+    """
+    try:
+        return _prepared(output.annotation)
+    except TypeError:
+        return _prepared.__wrapped__(output.annotation)
 
 
 def check_output(step: str, output: Output, values: Sequence, rows: np.ndarray | None = None) -> None:
@@ -80,34 +171,8 @@ def check_output(step: str, output: Output, values: Sequence, rows: np.ndarray |
     null, left to the output's null policy. `rows` maps positions in `values`
     to the frame rows a step ran on.
     """
-    try:
-        prepared = _prepared(output.annotation)
-    except TypeError:
-        prepared = _prepared.__wrapped__(output.annotation)
-    if prepared is None:
-        return
-    adapter, names, many = prepared
-    if names is not None:
-        def record(x):
-            return dict(zip(names, x)) if isinstance(x, (tuple, list)) and len(x) == len(names) else x
-
-        values = [None if x is None else [record(i) for i in x] if many else record(x) for x in values]
-    values = values if type(values) is list else list(values)
-    try:
-        adapter.validate_python(values, strict=True)
-        return
-    except ValidationError:
-        pass
-    values = [_plain(x) for x in values]
-    try:
-        adapter.validate_python(values, strict=True)
-    except ValidationError as e:
-        err = e.errors(include_url=False)[0]
-        row, *field = err["loc"]
-        at = f" row {int(rows[row]) if rows is not None else row}"
-        at += f", field {'.'.join(map(str, field))}" if field else ""
-        raise ValueError(f"step {step}: output '{output.name}'{at}: {err['msg']} (got {err['input']!r}), "
-                         f"declared {_name(output.annotation)}") from None
+    if (check := output_check(output)) is not None:
+        check(step, output, values, rows)
 
 
 def _plain(x: Any) -> Any:
