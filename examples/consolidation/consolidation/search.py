@@ -13,7 +13,7 @@ from credit_core.reason_codes import rank_codes
 from decider import ParamTable, allow_fallback, missing_as, param, step
 
 from consolidation import candidates, vocab
-from consolidation.capacity import Buffers, Capacity
+from consolidation.capacity import Capacity
 from consolidation.everyday_card import CardRates, EverydayCard
 from consolidation.flex_loan import FlexLoanConsolidation
 from consolidation.inventory import num
@@ -55,14 +55,15 @@ def run_search(evaluator: ScenarioEvaluator, settleable_refs: list[int], mandato
     }
 
 
-def search_step(product11_params: tuple, card_params: tuple, capacity: Capacity, buffers: Buffers,
+def search_step(product11_params: tuple, card_params: tuple, capacity_documents: tuple[str, str],
                 intervention_overlays: tuple, rejection_severity: tuple, rejection_version: str):
     """The `search` step, pricing product 11 from its card and the Everyday Card from its two rate documents.
 
     `product11_params` is `rate_tables.product11_params(card)` and `card_params` is `rate_tables.card_params(...)`: the
     documents are the defaults of table params, and a params document that sets them prices from its own rows.
-    `intervention_overlays` is `OverlaySet.packed()` of the overlays on the intervention thresholds, and
-    `rejection_severity` is `(code, severity rank)` for each scenario rejection code, in the `rejection_version` set.
+    `capacity_documents` is `capacity.capacity_documents()`, `intervention_overlays` is `OverlaySet.packed()` of the
+    overlays on the intervention thresholds, and `rejection_severity` is `(code, severity rank)` for each scenario
+    rejection code, in the `rejection_version` set.
     """
 
     flex_param, flex_version_param = product11_params
@@ -72,9 +73,10 @@ def search_step(product11_params: tuple, card_params: tuple, capacity: Capacity,
     @step(outputs=("scenarios", "search_record"))
     def search(
         eligibility_route: str, short_circuit_applies: bool, classified_accounts: list[dict], settlements: list[dict],
-        settlement_buffer_policy: dict, invariants: dict, baseline: dict, product_policies: dict, pricing_context: dict,
-        settleable_account_refs: list[int], mandatory_account_refs: list[int], decision_date: date, channel_code: int,
-        segment_code: float, risk_grade: float, applicant_age_years: float, requested_amount: float = missing_as(0.0),
+        settlement_buffer_policy: dict, scenario_buffers: list[dict], invariants: dict, baseline: dict,
+        product_policies: dict, pricing_context: dict, settleable_account_refs: list[int], mandatory_account_refs: list[int],
+        decision_date: date, channel_code: int, segment_code: float, risk_grade: float, applicant_age_years: float,
+        requested_amount: float = missing_as(0.0),
         court_ordered_deductions: float = missing_as(0.0), consolidations_last_24_months: int = missing_as(0),
         last_balance_transfer_date: date | None = None, max_scenarios: int = param(400, ge=1, le=2_000),
         max_consolidations_24m: int = param(2, ge=1, le=3), cost_of_funds: float = param(0.08, ge=0.0),
@@ -109,7 +111,8 @@ def search_step(product11_params: tuple, card_params: tuple, capacity: Capacity,
         evaluator = ScenarioEvaluator(
             request, [{**a, **settled_facts.get(a["account_ref"], {})} for a in classified_accounts], invariants, baseline,
             {int(code): policy for code, policy in product_policies.items()},
-            {code: product.bind(pricing_context) for code, product in products.items()}, capacity, buffers,
+            {code: product.bind(pricing_context) for code, product in products.items()}, Capacity(*capacity_documents),
+            {row["product_code"]: row["affordability_buffer_applied"] for row in scenario_buffers},
             settlement_buffer_policy, {"cost_of_funds": cost_of_funds, "expected_loss_rate": expected_loss_rate},
             max_consolidations_24m, overlay_stack_enabled, intervention_overlays, rejection_severity, rejection_version)
         scenarios, record = run_search(evaluator, settleable_account_refs, mandatory_account_refs, ordering_rules, max_scenarios)
