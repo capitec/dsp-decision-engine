@@ -199,7 +199,7 @@ that returns a step writing the looked-up values and a `*_cell_id`.
 | `dates` | `EffectiveVersions`, `Version`: the step that writes the version id in force on `date_field` (default `decision_date`) to `<family>_version`; `.resolve(on)` for code outside a flow (`.versions` keeps the order given, not sorted) |
 | `evidence` | `new_decision_id()`, `cell_id(table, version, *keys)` |
 | `reason_codes` | `ReasonCodes`, `Code`: the step that ranks fired codes in place and picks the primary; an unregistered code raises; `.rank(fired)` and `in` for code outside a flow |
-| `adjustments` | `AdjustmentStack`, `Overlay`, `Effect`: the step that applies scoped, dated, stack-ordered overlays to `target`; tighten-only is enforced when the document loads; it records `<target>_unadjusted`, `adjustment_set_id`, `adjustments_applied`; `.apply(...)` and `.due_for_review(on)` for code outside a flow |
+| `adjustments` | `AdjustmentStack`, `Overlay`, `Effect`: the step that applies scoped, dated, stack-ordered overlays to `target`; scope is any record fields (the step reads one column per field the overlays name, a missing or null one is out of scope); tighten-only is enforced when the document loads; it records `<target>_unadjusted`, `adjustment_set_id`, `adjustments_applied`; `.apply(...)` and `.due_for_review(on)` for code outside a flow |
 | `rounding` | `round_advance` (R100, half up), `round_instalment` (cent, half up), `round_rate` |
 | `instalment` | annuity instalment, total cost, total interest, effective rate, and `solve_advance_for_instalment`, the inverse |
 | `fees` | initiation and service fee, capped by the caps in force on the decision date |
@@ -257,7 +257,7 @@ below and leaves the data alone.
 |---|---|
 | `AdjustmentRegister([Adjustment(...), ...])` | one `AdjustmentStack(target=..., set_id=..., adjustments=[Adjustment(...), ...])` per target (a register for several targets becomes one stack each), or a `configs/<version>/*.json` document loaded with `ConfigurableStep.load` and passed to `build(...)` |
 | `register.apply_stack_step(target, set_id, base_field=, adjusted_output=, unadjusted_output=)` | the stack is the step: `AdjustmentStack(target=..., set_id=..., base_field=, adjusted_output=, unadjusted_output=, ...)`; same name (`apply_<target>_adjustments`), outputs and `adjustment_stack_enabled` param; `.relabel(...)` still works |
-| `register.apply_stack(target, base, provenance, on, set_id, stack_enabled=)` | `stack.apply(base, provenance, on, stack_enabled=)`, an `AdjustmentResult` as before; it matches any provenance field, while the step matches `product_code`, `segment_code`, `channel_code` and `scorecard_id` only |
+| `register.apply_stack(target, base, provenance, on, set_id, stack_enabled=)` | `stack.apply(base, provenance, on, stack_enabled=)`, an `AdjustmentResult` as before; it matches any provenance field, as the step does |
 | `register.for_target(t)`, `register._all` | `stack.adjustments` |
 | `register.due_for_review(on)` | `stack.due_for_review(on)` |
 | `ReasonCodeRegistry(version, [ReasonCode(...), ...])` | `ReasonCodes(version=..., codes=[ReasonCode(...), ...])`, or a `reason_codes` document |
