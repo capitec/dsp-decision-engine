@@ -4,8 +4,8 @@ from contextlib import contextmanager
 
 
 __all__ = [
-    "DeciderError", "DeciderMissingDependencyError", "EngineError", "ExprError", "FallbackWarning", "IRError",
-    "MissingInputError", "NotIntegralError", "ParamsError", "RegistryError", "WiringError",
+    "DeciderError", "DeciderMissingDependencyError", "EngineError", "ExprError", "FallbackWarning", "HiddenStateWarning",
+    "IRError", "MissingInputError", "NotIntegralError", "ParamsError", "RegistryError", "WiringError",
 ]
 
 
@@ -36,6 +36,18 @@ class FallbackWarning(UserWarning):
     Example::
 
         warnings.filterwarnings("ignore", category=FallbackWarning)   # or @allow_fallback per step
+    """
+
+
+class HiddenStateWarning(UserWarning):
+    """A step reads a Python object that no config document, diff or kernel can see; the message names it and where.
+
+    `@allow_fallback` does not silence it: the check is about what a release
+    check can compare, not about speed.
+
+    Example::
+
+        warnings.filterwarnings("ignore", category=HiddenStateWarning)
     """
 
 

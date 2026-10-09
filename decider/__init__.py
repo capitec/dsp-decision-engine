@@ -58,7 +58,7 @@ from typing import TYPE_CHECKING, Any
 from decider._serde import PolarsSchema
 from decider._engine.params import ParamTable, missing_as, param, param_table
 from decider.lab import describe
-from decider.exceptions import DeciderError, FallbackWarning
+from decider.exceptions import DeciderError, FallbackWarning, HiddenStateWarning
 from decider.steps import (ConfigurableStep, CustomFunction, EachMode, ParamRef, Step, StepRef, Value, allow_fallback, branch, dag,
                            each, flow, frame_step, helper, loop, optimise, step)
 from decider.steps.flowfile import load_flow
@@ -84,7 +84,7 @@ __all__ = [
     # extend
     "Step", "ConfigurableStep", "CustomFunction", "Value", "ParamRef", "StepRef",
     # errors
-    "DeciderError", "FallbackWarning",
+    "DeciderError", "FallbackWarning", "HiddenStateWarning",
 ]
 
 # Names whose modules import numba load on first use, so `import decider` stays light.
