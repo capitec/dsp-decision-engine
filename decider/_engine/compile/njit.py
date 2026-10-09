@@ -137,6 +137,11 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None, bool]:
     key, dispatcher = jit(node.fn if helper_reason is not None else prepared)
     if helper_reason is not None:
         return key, dispatcher.py_func, helper_reason, declared
+    star = next((p for p in inspect.signature(getattr(node.fn, "py_func", node.fn)).parameters.values()
+                 if node.kind == "scalar" and p.kind in (p.VAR_POSITIONAL, p.VAR_KEYWORD)), None)
+    if star is not None:
+        return key, dispatcher.py_func, (f"declares '{'**' if star.kind is star.VAR_KEYWORD else '*'}{star.name}', "
+                                                    "which no kernel can bind columns to"), declared
     columnar_inputs = [i for i in node.inputs if columnar_item(i.annotation) is not None]
     struct_inputs = [i for i in node.inputs if struct_item(i.annotation) is not None]
     struct_reason = _struct_reason(node, struct_inputs)
