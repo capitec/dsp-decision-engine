@@ -89,3 +89,14 @@ def test_the_step_returns_both_shapes_and_defaults_missing_lists_to_empty(score)
     assert out["existing_obligations"] == 1500.0
     assert out["obligation_monthly_amounts"] == [900.0, 600.0]
     assert score(obligations, {})["existing_obligations"] == 0.0
+
+
+def test_the_treatment_matrix_is_an_immutable_table_of_unique_account_types():
+    codes = [code for code, _ in ob.TREATMENT_MATRIX]
+    assert isinstance(ob.TREATMENT_MATRIX, tuple) and len(set(codes)) == len(codes)
+    assert {treatment for _, treatment in ob.TREATMENT_MATRIX} <= set(range(1, 11))
+
+
+def test_an_account_type_missing_from_the_matrix_uses_its_stated_instalment():
+    assert 99 not in dict(ob.TREATMENT_MATRIX)
+    assert assess([account(account_type_code=99, instalment=450.0)], []).obligation_treatment_codes == [ob.USE_STATED_INSTALMENT]
