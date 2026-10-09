@@ -71,3 +71,7 @@ def test_every_reason_the_pipeline_can_raise_is_in_the_reason_codes_document():
               if name.startswith(("R_", "A_")) and isinstance(value, int)}
     documented = {code.code for code in shipped("reason_codes").codes}
     assert raised <= documented
+
+
+def test_the_cap_fold_columns_are_not_in_the_response(decide):
+    assert not set(caps.AMOUNT) & set(decide())

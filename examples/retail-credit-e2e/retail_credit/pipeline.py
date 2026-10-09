@@ -91,4 +91,4 @@ def build(pd_overlays=None, amount_cap_overlays=None, buffer_overlays=None, rate
 
         validation.revalidate_offer_step, disclosure.reasons_unit(reason_codes), disclosure.outcome_code_step,
         name="retail_credit",
-    ).emit(*EMIT)
+    ).emit(*EMIT).drop(*caps.AMOUNT)  # the amount rules' fold is internal; `amount_cap_chain` is the output
