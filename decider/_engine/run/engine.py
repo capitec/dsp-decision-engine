@@ -254,7 +254,10 @@ class Executable:
 
     def _iterate(self, state: State, run: RunParams, trace) -> None:
         table = self._trace_table if trace is not None else None
-        for _ in self.runner.iterate(self.plan, state, run, trace, table):
+        # Nobody steps through this run, so the built-in runners skip building the checkpoints.
+        quiet = isinstance(self.runner, InterpretedRunner)
+        for _ in (self.runner.iterate(self.plan, state, run, trace, table, quiet=True) if quiet
+                  else self.runner.iterate(self.plan, state, run, trace, table)):
             pass
 
     def fallbacks(self) -> dict[str, str]:

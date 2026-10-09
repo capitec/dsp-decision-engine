@@ -84,11 +84,12 @@ class SteppedRunner(InterpretedRunner):
     def packed(self) -> dict[str, Packed]:
         return self._compiled.packed
 
-    def iterate(self, plan: Plan, state: State, params: RunParams, trace=None, table=None) -> Iterator[Checkpoint]:
+    def iterate(self, plan: Plan, state: State, params: RunParams, trace=None, table=None,
+                quiet: bool = False) -> Iterator[Checkpoint]:
         compiled = self._compiled
         if compiled.plan is not plan:
             compiled = self._compile(plan, params.lazy)
-        return self._drive(state, params, _Context(trace, table, compiled), plan)
+        return self._drive(state, params, _Context(trace, table, compiled, quiet), plan)
 
     def _compile(self, plan: Plan, lazy: bool) -> Compiled:
         with self._lock:
