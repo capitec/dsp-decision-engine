@@ -5,6 +5,7 @@ every overlay considered is recorded, whether it applied or not.
 """
 from __future__ import annotations
 
+import inspect
 from dataclasses import dataclass
 from datetime import date
 from typing import Any, Literal, Mapping, Sequence
@@ -239,9 +240,6 @@ class Overlay(BaseModel):
         return on >= self.review_date and not self.lapsed(on)
 
 
-SCOPE_COLUMNS = ("product_code", "segment_code", "channel_code", "scorecard_id")
-
-
 def _pack(a: Overlay) -> tuple:
     # Plain str/int/float/bool tuples with dates as ordinals: the diff hashes those by content and cannot hash a date.
     return (a.adjustment_id, a.effect.op, a.effect.value, tuple(sorted(a.scope.items())), a.effective_from.toordinal(),
@@ -268,17 +266,28 @@ def evaluate(overlays: tuple, base_value: float, provenance: Mapping[str, object
     return value, applied, evaluations
 
 
-@allow_fallback
-def apply_adjustments(
-    adjustment_base_value: float, decision_date: date, overlays: tuple, set_id: str, adjustment_stack_enabled: bool,
-    product_code: float | None = None, segment_code: float | None = None,
-    channel_code: int | None = None, scorecard_id: int | None = None,
-) -> tuple[float, float, str, list[str]]:
-    provenance = {k: v for k, v in (("product_code", product_code), ("segment_code", segment_code),
-                                    ("channel_code", channel_code), ("scorecard_id", scorecard_id)) if v is not None}
-    value, applied, _ = evaluate(overlays, adjustment_base_value, provenance, decision_date.toordinal(),
-                                 adjustment_stack_enabled)
-    return value, adjustment_base_value, set_id, applied
+# The columns the step has always typed as whole numbers; any other numeric scope column is read as a float.
+_INT_COLUMNS = frozenset({"channel_code", "scorecard_id"})
+
+
+def _scope_function(columns: dict[str, type]):
+    """`apply_adjustments` with one optional argument per scope column, so the step reads exactly those columns."""
+
+    @allow_fallback
+    def apply_adjustments(adjustment_base_value, decision_date, overlays, set_id, adjustment_stack_enabled, **scope):
+        provenance = {k: v for k, v in scope.items() if v is not None}
+        value, applied, _ = evaluate(overlays, adjustment_base_value, provenance, decision_date.toordinal(),
+                                     adjustment_stack_enabled)
+        return value, adjustment_base_value, set_id, applied
+
+    kind = inspect.Parameter.POSITIONAL_OR_KEYWORD
+    required = [inspect.Parameter(n, kind, annotation=t) for n, t in
+                (("adjustment_base_value", float), ("decision_date", date), ("overlays", tuple), ("set_id", str),
+                 ("adjustment_stack_enabled", bool))]
+    scoped = [inspect.Parameter(n, kind, default=None, annotation=t | None) for n, t in columns.items()]
+    apply_adjustments.__signature__ = inspect.Signature(
+        required + scoped, return_annotation=tuple[float, float, str, list[str]])
+    return apply_adjustments
 
 
 class AdjustmentStack(ConfigurableStep):
@@ -286,7 +295,8 @@ class AdjustmentStack(ConfigurableStep):
 
     The step overlays the `base_field` column (default `target`) and writes the adjusted value (default `target`),
     `<target>_unadjusted`, `adjustment_set_id` and `adjustments_applied`; when `base_field` is the target itself, put the
-    step in a `flow`. Scope is matched on `product_code`, `segment_code`, `channel_code` and `scorecard_id`. The param
+    step in a `flow`. The step reads one column per scope field the overlays name (`segment_code`, `sector_code`, ...); a
+    record whose column is missing or null is out of scope of the overlays that name it. The param
     `adjustment_stack_enabled` switches the whole stack off.
 
     Example::
@@ -339,13 +349,18 @@ class AdjustmentStack(ConfigurableStep):
         return AdjustmentResult(base_value, value, self.set_id, tuple(applied),
                                 tuple(AdjustmentEvaluation(*e) for e in evaluations))
 
+    def scope_columns(self) -> dict[str, type]:
+        """The columns the overlays are scoped on, which the step reads, with the type each is read as."""
+        values: dict[str, list] = {}
+        for a in self.adjustments:
+            for k, v in a.scope.items():
+                values.setdefault(k, []).append(v)
+        return {k: int if k in _INT_COLUMNS else str if all(isinstance(v, str) for v in vs) else float
+                for k, vs in sorted(values.items())}
+
     def to_ir(self, ctx: Any) -> Any:
-        unmatched = sorted({k for a in self.adjustments for k in a.scope} - set(SCOPE_COLUMNS))
-        if unmatched:
-            raise ValueError(f"{self.name}: scope fields {unmatched} are not columns the step matches on: "
-                             f"{list(SCOPE_COLUMNS)}. `apply` matches any provenance field.")
         return ctx.call(
-            self, apply_adjustments, inputs={"adjustment_base_value": self.base_field or self.target},
+            self, _scope_function(self.scope_columns()), inputs={"adjustment_base_value": self.base_field or self.target},
             values={"overlays": self._ordered(), "set_id": self.set_id, "adjustment_stack_enabled": self.stack_enabled},
             outputs=(self.adjusted_output or self.target, self.unadjusted_output or f"{self.target}_unadjusted",
                      "adjustment_set_id", "adjustments_applied"))

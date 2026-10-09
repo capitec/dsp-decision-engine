@@ -146,10 +146,18 @@ def test_duplicate_overlay_ids_are_rejected_when_the_document_loads():
         stack(overlay(adjustment_id="A"), overlay(adjustment_id="A"))
 
 
-def test_a_scope_field_the_step_does_not_match_on_is_rejected_when_the_step_is_built():
-    sectoral = stack(overlay(scope={"sector_code": 412}))
-    with pytest.raises(ValueError, match="sector_code"):
-        flow(sectoral, name="t").compile("interpreted")
+def test_the_step_reads_whatever_scope_columns_the_overlays_name(score):
+    sectoral = stack(overlay(scope={"sector_code": 412}), overlay(adjustment_id="K", stack_position=2, scope={"kind": "retail"}))
+    record = {"score_raw": 600.0, "decision_date": JUNE, "sector_code": 412, "kind": "retail"}
+    assert score(sectoral, record)["adjustments_applied"] == ["ADJ-1", "K"]
+    assert score(sectoral, {**record, "sector_code": 413})["adjustments_applied"] == ["K"]
+    assert score(sectoral, {k: v for k, v in record.items() if k != "kind"})["adjustments_applied"] == ["ADJ-1"]
+    assert {i.name for i in flow(sectoral, name="t").compile("interpreted").plan.inputs} == {"score_raw", "decision_date", "sector_code", "kind"}
+
+
+def test_a_stack_without_scope_reads_no_scope_column(score):
+    everyone = stack(overlay(scope={}))
+    assert score(everyone, {"score_raw": 600.0, "decision_date": JUNE})["score"] == 590.0
 
 
 def test_apply_matches_any_provenance_field():
@@ -222,3 +230,25 @@ def test_the_set_id_and_the_suppress_switch_show_in_the_diff():
 def test_the_step_compiles_with_its_python_boundary_declared():
     fused = flow(stack(overlay()), name="t").compile("fused")
     assert all(reason.startswith("@allow_fallback") for reason in fused.fallbacks().values())
+
+
+RECORDS = [{"score_raw": 600.0 + i, "decision_date": date(2026, 1 + i % 6, 1 + i), "sector_code": 410 + i % 5,
+            "kind": "retail" if i % 2 else "sme", **({"segment_code": 3} if i % 3 else {})} for i in range(24)]
+SCOPED = stack(overlay(scope={"sector_code": 412}), overlay(adjustment_id="K", stack_position=2, scope={"kind": "retail"},
+                                                          effect=Effect(op="multiply", value=0.5), kind="cap_adjustment"),
+               overlay(adjustment_id="S", stack_position=3, scope={"segment_code": 3}, effective_to=date(2026, 4, 1)))
+
+
+@pytest.mark.parametrize("mode", ["interpreted", "fused"])
+def test_any_scope_column_gives_the_values_evaluate_gives_in_every_mode(mode):
+    scorer = flow(SCOPED, name="t").compile(mode)
+    for record in RECORDS:
+        expected = SCOPED.apply(record["score_raw"], record, record["decision_date"])
+        got = scorer.score(record)
+        assert (got["score"], got["adjustments_applied"]) == (expected.adjusted_value, list(expected.adjustments_applied))
+
+
+def test_changing_the_scope_column_shows_in_the_diff():
+    assert same(stack(overlay(scope={"sector_code": 412})), ConfigurableStep.load(stack(overlay(scope={"sector_code": 412})).model_dump_json()))
+    assert not same(stack(overlay(scope={"sector_code": 412})), stack(overlay(scope={"segment_code": 412})))
+    assert not same(stack(overlay(scope={"sector_code": 412})), stack(overlay(scope={"sector_code": 413})))
