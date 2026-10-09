@@ -4,7 +4,7 @@ from datetime import date
 
 import pytest
 
-from credit_core.pipeline import ADJUSTMENT_SET_ID, REASON_REGISTRY, R_AFFORDABILITY_FAIL
+from credit_core.pipeline import R_AFFORDABILITY_FAIL
 from credit_core.vocab import OUTCOME_APPROVE, OUTCOME_DECLINE, OUTCOME_REFER
 
 
@@ -53,9 +53,9 @@ def test_every_table_read_names_its_version_and_cell(quote, params, sample):
     assert out["fee_caps_cell_id"] == "fee_caps@fee_caps@2026#caps"
 
 
-def test_both_score_overlays_apply_in_stack_order_and_the_unadjusted_score_survives(quote, params, sample):
+def test_both_score_overlays_apply_in_stack_order_and_the_unadjusted_score_survives(quote, params, sample, score_adjustments):
     out = quote.score(sample, params)
-    assert out["adjustment_set_id"] == ADJUSTMENT_SET_ID
+    assert out["adjustment_set_id"] == score_adjustments.set_id
     assert out["adjustments_applied"] == ["ADJ-2026-001", "ADJ-2026-002"]
     assert out["score"] == out["score_unadjusted"] - 18.0 - 5.0
 
@@ -88,12 +88,12 @@ def test_replaying_a_decision_gives_the_same_answer(quote, params, sample):
     assert quote.score(sample, params) == quote.score(sample, params)
 
 
-def test_an_instalment_over_capacity_is_declined_with_the_affordability_reason(quote, params, sample):
+def test_an_instalment_over_capacity_is_declined_with_the_affordability_reason(quote, params, sample, reason_codes):
     out = quote.score({**sample, "requested_amount": 500000.0, "term_months": 6}, params)
     assert out["instalment"] > out["max_affordable_instalment"]
     assert out["outcome_code"] == OUTCOME_DECLINE
     assert out["decline_reason_codes"] == [R_AFFORDABILITY_FAIL] == [out["primary_reason_code"]]
-    assert out["reason_registry_version"] == REASON_REGISTRY.version
+    assert out["reason_registry_version"] == reason_codes.version
 
 
 def test_an_instalment_just_over_capacity_is_referred(quote, params, sample):
