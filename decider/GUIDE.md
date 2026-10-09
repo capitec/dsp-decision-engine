@@ -289,15 +289,10 @@ tree = TreeConfig.load({"type": "tree", "name": "risk", "trace_output": "risk_pa
 assert tree.run(pl.DataFrame({"ratio": [0.9]}))["risk_path"].to_list()[0].split(">")[-1] == "high"
 ```
 
-A decision table reads a variable as an `int` (compared exactly as int64, even above
-2**53) when every condition on it is an `eq` or `in` over an integer column, so a step
-can share an `int` column with it. A variable that a `between` also reads, or that an `eq`
-or `in` compares with a float column, is a `float`; an input column has one type, so a step
-that reads that column as `int` raises a `WiringError`: add a step that writes a float copy
-(`def amount_f(amount: int) -> float`) and point the table's `variable` at it. A step that
-writes an `int` variable as a `float` is a `WiringError` too, and a float in the input is
-truncated as for any `int` input (`7.5` matches a row of `7`): declare the column `Float64`
-to compare floats. A scorecard variable is always a `float`.
+A decision table reads every numeric variable (a `between` input, or `eq` / `in` on a
+number column) as a `float`, whatever the column's type. An input column has one type, so
+a step that reads the same column as `int` raises a `WiringError`: add a step that writes
+a float copy (`def amount_f(amount: int) -> float`) and point the table's `variable` at it.
 
 A table has one band dimension with open (`None`) edges. A grid of two (amount by term)
 gives every row both bounds, `-inf` and `inf` at the outer edges, and sets `allow_gaps`

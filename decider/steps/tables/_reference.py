@@ -12,7 +12,6 @@ from decider.steps.tables.schema import (
     InExpression,
     OrExpression,
 )
-from decider.steps.trees._walker import NULL_INT
 
 
 def _keys(e: t.Any) -> list[str]:
@@ -47,8 +46,8 @@ def _holds(e: t.Any, rows: list[dict], r: int, values: dict[str, t.Any], keys: l
     if isinstance(e, OrExpression):
         return any(_holds(sub, rows, r, values, keys) for sub in e.expressions)
     x = values[e.variable]
-    # A null float reaches the matcher as NaN and a null int as NULL_INT.
-    if x is None or x != x or type(x) is int and x == NULL_INT:
+    # A null number reaches the matcher as NaN.
+    if x is None or x != x:
         return False
     if isinstance(e, BetweenExpression):
         lo, hi = _band(e, rows, r, keys)
