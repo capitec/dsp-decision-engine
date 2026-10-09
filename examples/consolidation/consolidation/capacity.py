@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import copy
 import functools
+import json
 from datetime import date
 
 from assessment import modes
@@ -65,7 +66,7 @@ class Capacity:
 
     Example::
 
-        capacity = Capacity(shipped("capacity_adjustments").model_dump_json(), shipped("reason_codes").model_dump_json())
+        capacity = Capacity(*capacity_documents())
         capacity(case, accounts, {})["max_affordable_instalment"]
     """
 
@@ -82,9 +83,21 @@ class Capacity:
         return self._exe.score(record, self._params[stack_enabled])
 
 
+def _behaviour(document) -> str:
+    # Governance fields (owner, approval, rationale, review date, descriptions) change no decision, so they stay out of
+    # what the steps hold and editing them is not a change to the step.
+    data = json.loads(document.model_dump_json())
+    for overlay in data.get("adjustments", ()):
+        overlay.update(owner="", approval_reference="", rationale="", review_date=overlay["effective_from"])
+    for code in data.get("codes", ()):
+        code.update(description="", is_regulatory=False)
+    return json.dumps(data, sort_keys=True)
+
+
 def capacity_documents(capacity_adjustments=None, reason_codes=None) -> tuple[str, str]:
-    """The JSON of the documents `Capacity` is built from; each defaults to the one the affordability example ships."""
-    return tuple((shipped(name) if document is None else document).model_dump_json()
+    """The JSON of the documents `Capacity` is built from, without their governance fields; each defaults to the one the
+    affordability example ships."""
+    return tuple(_behaviour(shipped(name) if document is None else document)
                  for name, document in (("capacity_adjustments", capacity_adjustments), ("reason_codes", reason_codes)))
 
 

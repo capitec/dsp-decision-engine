@@ -5,11 +5,14 @@ documents and the settleability rules from `configs/<version>/`.
 """
 from __future__ import annotations
 
+import functools
+
 from assessment import modes
 from assessment.pipeline import evidence_unit
 from credit_core import fees
 from credit_core.rate_card import generate_flex_loan_card
 from decider import DecisionTableConfig, flow, param
+from loan_granting.rate_tables import rate_card_rows
 
 from consolidation import (
     baseline,
@@ -54,6 +57,13 @@ def statutory_ceiling(repo_rate: float = param(0.07, ge=0.0, le=0.30), margin_ov
     return round(repo_rate + margin_over_repo, 4)
 
 
+@functools.cache
+def flex_loan_card() -> tuple[list[dict], str]:
+    """The Flex Loan card's rows and version, for the plain offer; made once, as it takes a second."""
+    # ponytail: the Flex Loan card is regenerated, not read from a config document; load it from one when Treasury refreshes it
+    return rate_card_rows(DecisionTableConfig.load(generate_flex_loan_card("rc-2026.09")))
+
+
 def build(rate_card_product11, card_promotional_rates, card_reversion_rates, settleability_rules, client_reason_codes=None,
           scenario_rejection_codes=None, intervention_adjustments=None, objective_adjustments=None, capacity_adjustments=None,
           affordability_reason_codes=None):
@@ -66,14 +76,12 @@ def build(rate_card_product11, card_promotional_rates, card_reversion_rates, set
     thresholds = shipped("intervention_adjustments") if intervention_adjustments is None else intervention_adjustments
     weights = shipped("objective_adjustments") if objective_adjustments is None else objective_adjustments
     capacity = capacity_documents(capacity_adjustments, affordability_reason_codes)
-    # ponytail: the Flex Loan card is regenerated, not read from a config document; load it from one when Treasury refreshes it
-    plain_card = DecisionTableConfig.load(generate_flex_loan_card("rc-2026.09"))
     product11 = product11_params(rate_card_product11)
     return flow(
         inventory.classify_unit(settleability_rules), settlement.settlements,
         assessment_mode_code, product_code, evidence_unit(), baseline.invariants,
         statutory_ceiling, fees.fee_caps_version_step, fees.build_fee_caps_table(), products.pricing_context,
-        baseline.baseline_step(capacity), baseline.plain_granting_step(plain_card, product11),
+        baseline.baseline_step(capacity), baseline.plain_granting_step(flex_loan_card(), product11),
         eligibility.eligibility_gates, flex_loan_policy, everyday_card_policy, products.product_policies,
         buffer_unit(),
         search.search_step(product11, card_params(card_promotional_rates, card_reversion_rates), capacity,
