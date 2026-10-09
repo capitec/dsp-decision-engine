@@ -9,6 +9,8 @@ from governance.evidence import EvidenceStore
 from governance.replay import replay
 
 
+# The flows are a Python registry the service looks up by code, so decider reports it as hidden state; the harness
+# is a Python boundary by design and has no document that could hold it.
 @allow_fallback
 def replay_decision(flow_code: str, decision_id: str, evidence_dir: str = param("evidence")) -> tuple[str, int, list[str], str]:
     verdict = replay(EvidenceStore(Path(__file__).parents[1] / evidence_dir).load(flow_code, decision_id))
