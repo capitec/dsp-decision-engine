@@ -290,9 +290,23 @@ assert tree.run(pl.DataFrame({"ratio": [0.9]}))["risk_path"].to_list()[0].split(
 ```
 
 A decision table reads every numeric variable (a `between` input, or `eq` / `in` on a
-number column) as a `float`, whatever the column's type. An input column has one type, so
-a step that reads the same column as `int` raises a `WiringError`: add a step that writes
+number column) as a `float`, exact up to 2**53. An input column has one type, so a step
+that reads the same column as `int` raises a `WiringError`. Declare the variable `int` in
+`variable_types` and the table compares it as int64, exactly, and shares the `int` column:
+its conditions must then use integer columns, and a step that writes it must write an
+`int`. A null int is `-2**63`, so that value never matches. Otherwise add a step that writes
 a float copy (`def amount_f(amount: int) -> float`) and point the table's `variable` at it.
+
+```python
+import polars as pl
+from decider import DecisionTableConfig
+
+by_channel = DecisionTableConfig.load({
+    "type": "decision_table", "name": "by_channel", "variable_types": {"channel": "int"},
+    "columns": {"code": "Int64", "pts": "Int64"}, "rows": [{"code": 2**60, "pts": 5}],
+    "expression": {"type": "eq", "variable": "channel", "value_column": "code"}, "outputs": ["pts"], "default": [0]})
+assert by_channel.run(pl.DataFrame({"channel": [2**60, 2**60 + 1]}))["pts"].to_list() == [5, 0]
+```
 
 A table has one band dimension with open (`None`) edges. A grid of two (amount by term)
 gives every row both bounds, `-inf` and `inf` at the outer edges, and sets `allow_gaps`

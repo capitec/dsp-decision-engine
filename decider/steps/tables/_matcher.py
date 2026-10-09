@@ -7,12 +7,15 @@ from numba.extending import overload
 from decider._engine.boundary._arrow.intrinsics import load_f64, load_i64
 from decider.steps.tables._encode import (
     BETWEEN,
+    BETWEEN_I,
     ELSE,
     EQ_B,
     EQ_F,
+    EQ_I,
     EQ_S,
     HI_OP,
     IN_F,
+    IN_I,
     IN_S,
     KIND,
     LEAF,
@@ -22,7 +25,7 @@ from decider.steps.tables._encode import (
     VAR,
     WIDTH,
 )
-from decider.steps.trees._walker import EXACT, _compare, _matches, split
+from decider.steps.trees._walker import EXACT, NULL_INT, _compare, _matches, split
 
 
 @njit(inline="always")
@@ -36,7 +39,7 @@ def _f(base, k):
 
 
 @njit
-def _holds(r, f, b, s, rows, code, n):
+def _holds(r, f, i, b, s, rows, code, n):
     # Program row `code` tested against table row `r`; a null input never matches.
     ints, floats, chars = rows[0], rows[1], rows[2]
     kind, v, leaf = _i(code, KIND), _i(code, VAR), _i(code, LEAF)
@@ -58,6 +61,20 @@ def _holds(r, f, b, s, rows, code, n):
             if y == _f(floats, j):
                 return True
         return False
+    if kind == EQ_I or kind == IN_I or kind == BETWEEN_I:
+        xi = i[v]
+        if xi == NULL_INT:
+            return False
+        if kind == EQ_I:
+            return _i(ints, i0 + r) != 0 and xi == _i(ints, i0 + n + r)
+        if kind == IN_I:
+            for j in range(_i(ints, i0 + r), _i(ints, i0 + r + 1)):
+                if xi == _i(ints, j):
+                    return True
+            return False
+        if _i(ints, i0 + r) and not _compare(_i(code, LO_OP), xi, _i(ints, i0 + 2 * n + r)):
+            return False
+        return not _i(ints, i0 + n + r) or _compare(_i(code, HI_OP), xi, _i(ints, i0 + 3 * n + r))
     if kind == EQ_B:
         z = b[v]
         if z is None or not _i(ints, i0 + r):
@@ -82,13 +99,13 @@ def _holds(r, f, b, s, rows, code, n):
 
 
 @njit
-def _scan(f, b, s, rows, prog, entry):
+def _scan(f, i, b, s, rows, prog, entry):
     n = rows[3]
     for r in range(n):
         pc = entry
         while pc >= 0:
             code = prog + 8 * WIDTH * pc
-            pc = _i(code, THEN) if _holds(r, f, b, s, rows, code, n) else _i(code, ELSE)
+            pc = _i(code, THEN) if _holds(r, f, i, b, s, rows, code, n) else _i(code, ELSE)
         if pc == MATCH:
             return r
     return -1
@@ -153,10 +170,10 @@ def _read_b(rows, slot, r):
 
 @njit(cache=True)
 def match(row, params, consts):
-    """The outputs of the first table row `row` matches: `row` laid out floats, bools, spans; `consts` from `encode`.
+    """The outputs of the first table row `row` matches: `row` laid out floats, ints, bools, spans; `consts` from `encode`.
 
     `consts` is `(program address, entry, outputs[, Rows])`; the rows come
     from `params` when they are a table param. Only numbers cross this call.
     """
-    f, _, b, s = split(row)
-    return pick(consts[2], table(params, consts), _scan(f, b, s, table(params, consts), consts[0], consts[1]))
+    f, i, b, s = split(row)
+    return pick(consts[2], table(params, consts), _scan(f, i, b, s, table(params, consts), consts[0], consts[1]))

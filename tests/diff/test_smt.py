@@ -76,6 +76,27 @@ def test_an_int_feature_compares_exactly_so_greater_than_five_is_at_least_six():
     assert proof.identical is None and proof.evidence.counterexample == {"n": 6}
 
 
+def test_int_trees_with_thresholds_differing_by_one_near_2_60_have_a_counterexample():
+    ints = {"feature_types": {"n": "int"}}
+    big = lambda v: tree((cond("n", ">=", v), 1, 0), **ints)  # noqa: E731
+    proof = diff.prove(big(2**60), big(2**60 + 1))
+    assert proof.identical is None and proof.evidence.counterexample == {"n": 2**60}
+    assert diff.prove(big(2**60 + 1), big(2**60 + 1)).identical is True
+
+
+def test_declared_int_tables_differing_by_one_near_2_60_have_a_counterexample():
+    def by_id(code):
+        return DecisionTableConfig.load({
+            "type": "decision_table", "name": "t", "columns": {"id": "Int64", "o": "Float64"},
+            "rows": [{"id": code, "o": 1.0}], "variable_types": {"x": "int"},
+            "expression": {"type": "eq", "variable": "x", "value_column": "id"}, "outputs": ["o"], "default": [0.0]})
+
+    proof = diff.prove(by_id(2**60), by_id(2**60 + 1))
+    assert proof.identical is None
+    assert proof.evidence.counterexample["x"] in (2**60, 2**60 + 1)
+    assert diff.prove(by_id(2**60), by_id(2**60)).identical is True
+
+
 def test_not_over_the_opposite_comparison_is_identical_even_for_a_null():
     negated = {"type": "composite", "op": "not", "conditions": [cond("x", "<=", 5)["condition"]]}
     assert diff.prove(tree((cond("x", ">", 5), 1, 0)), tree((negated, 1, 0))).identical is True

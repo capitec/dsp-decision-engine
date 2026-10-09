@@ -6,21 +6,23 @@ import typing as t
 from dataclasses import replace
 
 import polars as pl
-from pydantic import AfterValidator, BeforeValidator, Field, model_validator
+from pydantic import AfterValidator, BeforeValidator, Field, field_validator, model_validator
 
 from decider._engine.ir.decls import Input, NullPolicy, Output
 from decider._engine.ir.nodes import CallNode
 from decider.steps._configurable import ConfigurableStep
 from decider.steps._values import TableRef, TableValue
-from decider.steps.tables._encode import Shape, check_columns, dtypes, kind, pack, program, typed, variables
+from decider.steps.tables._encode import Shape, check_columns, check_int_rows, dtypes, kind, pack, program, typed, variables
 from decider.steps.tables._matcher import match
 from decider.steps.tables._reference import reference
 from decider.steps.tables.schema import Expression, check_rows, leaves
+from decider.steps.trees._encode import kind_of
+from decider.steps.trees._walker import NULL_INT
 
 __all__ = ["DecisionTableConfig"]
 
 _TYPES = {"float": float, "int": int, "bool": bool}
-_ORDER = {"float": 0, "bool": 1, "str": 2}
+_ORDER = {"float": 0, "int": 1, "bool": 2, "str": 3}
 
 
 class DecisionTableConfig(ConfigurableStep):
@@ -29,7 +31,12 @@ class DecisionTableConfig(ConfigurableStep):
     `columns` declares every column of the table (polars dtype names, or
     `{"type": "List", "inner": "String"}`); `expression` says how a record
     matches a row; `outputs` are the columns written, one output column each.
-    A null input never matches. `rows` are the rows inline, or
+    A null input never matches. A number is compared as float64, exact up to
+    2**53. Declare a variable in `variable_types` (`{"channel": "int"}`) to
+    compare it as int64, exactly: its `eq` / `in` / `between` conditions then
+    use integer columns only, and a step that writes it must write an `int`.
+    An int variable's null is `-2**63`, so that value never matches.
+    `rows` are the rows inline, or
     `{"table": "bands"}` to read them from the params document, where they
     are checked against `columns` when the document arrives. Editing rows,
     or how many there are, never recompiles. decider 0.3's
@@ -97,6 +104,15 @@ class DecisionTableConfig(ConfigurableStep):
     expression: Expression
     outputs: t.List[str]
     default: t.Optional[t.List[t.Any]] = None
+    variable_types: t.Dict[str, str] = {}
+
+    @field_validator("variable_types")
+    @classmethod
+    def _declared(cls, value: t.Dict[str, str]) -> t.Dict[str, str]:
+        kinds = {k: kind_of(v, f"variable_types[{k!r}]") for k, v in value.items()}
+        if bad := {k: v for k, v in kinds.items() if v != "int"}:
+            raise ValueError(f"variable_types declares int only, got {bad}; any other variable's type follows its columns")
+        return kinds
 
     @model_validator(mode="before")
     @classmethod
@@ -123,9 +139,11 @@ class DecisionTableConfig(ConfigurableStep):
             raise ValueError(f"Default values length ({len(self.default)}) must match outputs "
                              f"length ({len(self.outputs)})")
         check_columns(self.expression, types)
-        variables(self.expression, types)
+        kinds = variables(self.expression, types, self.variable_types)
         if not isinstance(self.rows, TableRef):
-            check_rows(self.expression, typed(self.rows.data, dtypes(self.columns)))
+            data = typed(self.rows.data, dtypes(self.columns))
+            check_rows(self.expression, data)
+            check_int_rows(self.expression, kinds, data)
         return self
 
     def _types(self) -> dict[str, str]:
@@ -133,7 +151,7 @@ class DecisionTableConfig(ConfigurableStep):
 
     def to_ir(self, ctx: t.Any) -> CallNode:
         dt, types = dtypes(self.columns), self._types()
-        kinds = variables(self.expression, types)
+        kinds = variables(self.expression, types, self.variable_types)
         names = sorted(kinds, key=lambda v: (_ORDER[kinds[v]], v))
         slots = {v: [n for n in names if kinds[n] == kinds[v]].index(v) for v in names}
         inputs = tuple(_input(v, kinds[v]) for v in names)
@@ -154,8 +172,8 @@ class DecisionTableConfig(ConfigurableStep):
             outputs.append(Output(column, py | None if nullable else py))
             specs.append((k, py() if d is None else py(d), *((int(d is not None),) if nullable else ())))
             columns.append((column, out, None))
-        shape = Shape(self.expression, columns, dt)
-        code, entry = program(self.expression, types, slots)
+        shape = Shape(self.expression, columns, dt, kinds)
+        code, entry = program(self.expression, types, slots, kinds)
         consts = (("program", code.ctypes.data), ("entry", entry), ("outputs", tuple(specs)))
         params = ()
         rows = None
@@ -179,6 +197,8 @@ def _input(name: str, kind: str) -> Input:
     # A null number is NaN, which no comparison matches: a fill costs a launch less than an Optional's mask.
     if kind == "float":
         return Input(name, float, NullPolicy.MISSING_AS, math.nan)
+    if kind == "int":
+        return Input(name, int, NullPolicy.MISSING_AS, NULL_INT)
     return Input(name, (bytes if kind == "str" else bool) | None, NullPolicy.OPTIONAL)
 
 

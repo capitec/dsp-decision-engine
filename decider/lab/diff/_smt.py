@@ -264,7 +264,7 @@ def _table_matches(cfg: DecisionTableConfig, env: Env) -> tuple[list[t.Any], dic
     dt = dtypes(cfg.columns)
     types = {c: kind(d, c) for c, d in dt.items()}
     data = typed(cfg.rows.data, dt)
-    kinds = variables(cfg.expression, types)
+    kinds = variables(cfg.expression, types, cfg.variable_types)
     ladders = groups(cfg.expression, data)
     bands = {id(leaf): bounds(leaf, data, ladders) for leaf in leaves(cfg.expression)
              if isinstance(leaf, BetweenExpression)}
