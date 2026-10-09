@@ -1,0 +1,31 @@
+{
+  "type": "adjustment_stack",
+  "name": "apply_probability_of_default_adjustments",
+  "target": "probability_of_default",
+  "set_id": "AS-2026.09",
+  "base_field": "probability_of_default_raw",
+  "adjusted_output": null,
+  "unadjusted_output": "probability_of_default_unadjusted",
+  "adjustments": [
+    {
+      "adjustment_id": "ADJ-0061",
+      "kind": "odds_multiplier",
+      "target": "probability_of_default",
+      "effect": {
+        "op": "multiply",
+        "value": 1.18
+      },
+      "scope": {
+        "channel_code": 3
+      },
+      "stack_position": 1,
+      "owner": "Credit Risk Policy",
+      "approval_reference": "CC-2027-04",
+      "rationale": "Channel 3 defaults above model prediction for two quarters",
+      "effective_from": "2026-01-01",
+      "effective_to": "2027-09-30",
+      "review_date": "2027-06-30",
+      "tighten_only": true
+    }
+  ]
+}

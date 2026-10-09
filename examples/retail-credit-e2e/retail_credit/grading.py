@@ -6,7 +6,7 @@ import math
 from decider import DecisionTableConfig, step
 
 from credit_core.evidence import cell_id
-from retail_credit.overlays import overlay_step
+from retail_credit.documents import recorded
 
 CALIBRATION_VERSION = "cal-2026.09"
 RISK_GRADE_VERSION = "rg-2026.09"
@@ -62,8 +62,9 @@ def probability_of_default_raw(score: float, anchor: float, scale: float) -> flo
     return 1.0 / (1.0 + math.exp((score - anchor) / scale))
 
 
-# The overlay runs between calibration and grading, so a tightening moves the grade.
-probability_of_default_overlay_step = overlay_step(
-    "probability_of_default", "pd", base_field="probability_of_default_raw",
-    unadjusted_output="probability_of_default_unadjusted")
+def probability_of_default_overlay_step(pd_overlays):
+    """The overlay runs between calibration and grading, so a tightening moves the grade."""
+    return recorded(pd_overlays, "pd")
+
+
 probability_of_default_raw_step = step(probability_of_default_raw)
