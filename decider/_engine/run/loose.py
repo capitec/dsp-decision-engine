@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from typing import Any, Sequence
 
+import numpy as np
+
 
 def loosen(name: str, values: Sequence) -> list:
     """`values` with every dict key turned into text, so JSON, CSV and Arrow can carry them.
@@ -23,8 +25,8 @@ def loosen(name: str, values: Sequence) -> list:
         if isinstance(x, list):
             kinds.setdefault(path, set()).add("list")
             return [walk(v, (*path, "[]")) for v in x]
-        kinds.setdefault(path, set()).add("number" if isinstance(x, (int, float)) and not isinstance(x, bool)
-                                          else type(x).__name__)
+        kinds.setdefault(path, set()).add("number" if isinstance(x, (int, float, np.integer, np.floating))
+                                          and not isinstance(x, bool) else type(x).__name__)
         return x
 
     out = [walk(x, ()) for x in values]

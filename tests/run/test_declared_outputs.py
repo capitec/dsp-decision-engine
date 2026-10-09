@@ -232,3 +232,13 @@ def counted(x: float) -> list[Count]:
 def test_a_float_in_an_int_field_of_a_declared_list_is_refused_naming_the_field(mode, x):
     with pytest.raises(ValueError, match=r"output 'counted' row 0, field 1\.n: .*valid integer"):
         bound(counted, mode).score({"x": x})
+
+
+def numpy_in_one_row(x: float) -> dict:
+    return {"n": np.int64(3) if x > 1 else 4}
+
+
+@pytest.mark.parametrize("mode", MODES)
+def test_an_undeclared_dict_counts_a_numpy_number_as_a_number(mode):
+    assert bound(numpy_in_one_row, mode).run(pl.DataFrame({"x": [0.5, 2.0]}))["numpy_in_one_row"].to_list() == [
+        {"n": 4}, {"n": 3}]
