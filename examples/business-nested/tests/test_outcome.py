@@ -3,7 +3,7 @@ from datetime import date
 
 import pytest
 
-from business_nested import outcome
+from business_nested.documents import shipped
 from business_nested.records import entity, event
 
 OUTCOME_PARAMS = ("business_credit", "decision", "outcome", "business_outcome")
@@ -26,7 +26,7 @@ def test_the_sample_is_declined_for_the_judgment_on_the_first_entity(assess):
     out = assess()
     assert (out["outcome_code"], out["decline_reason_codes"], out["primary_reason_code"]) == (4, [5402], 5402)
     assert (out["attributing_entity_id"], out["attributing_event_ids"], out["attributing_rule_id"]) == (1, [41], "AE-R-01")
-    assert out["reason_registry_version"] == outcome.REASON_REGISTRY.version
+    assert out["reason_registry_version"] == shipped("reason_codes").version
 
 
 def test_a_decline_names_every_event_that_satisfied_the_binding_rule(assess):

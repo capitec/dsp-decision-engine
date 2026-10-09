@@ -1,11 +1,15 @@
 """The outcome: approve, refer or decline, every reason that applies, and which entity and events a decline rests on."""
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from decider import allow_fallback, flow, param, step
 
 from assessment.verdict import FAIL, INDETERMINATE, MARGINAL
-from credit_core.reason_codes import ReasonCode, ReasonCodeRegistry
+from credit_core.reason_codes import ReasonCodes
 from credit_core.vocab import OUTCOME_APPROVE, OUTCOME_DECLINE, OUTCOME_REFER
+
+from business_nested.documents import shipped
 
 R_STRUCTURE_UNRESOLVED = 5001
 R_INSUFFICIENT_PEOPLE_COVERAGE = 5401
@@ -16,19 +20,6 @@ R_SOLE_PROPRIETOR_STATUTORY_FAIL = 5601
 R_BUSINESS_GRADE_BELOW_CUTOFF = 5602
 R_BUSINESS_GRADE_IN_REFERRAL_BAND = 5603
 R_SOLE_PROPRIETOR_NOT_ESTABLISHED = 5604
-
-REASON_REGISTRY = ReasonCodeRegistry("business-nested-reasons-2026.09", [
-    ReasonCode(R_ENTITY_DISQUALIFYING, 1, "An entity behind the business carries a disqualifying adverse record", True),
-    ReasonCode(R_SOLE_PROPRIETOR_STATUTORY_FAIL, 2, "Statutory affordability assessment failed", True),
-    ReasonCode(R_DISPUTED_EVENT, 3, "The decline rests on an adverse event that is disputed", True),
-    ReasonCode(R_STRUCTURE_UNRESOLVED, 5, "Disclosed ownership structure could not be resolved", True),
-    ReasonCode(R_INSUFFICIENT_PEOPLE_COVERAGE, 20, "Scoreable ownership below the coverage requirement", True),
-    ReasonCode(R_SOLE_PROPRIETOR_NOT_ESTABLISHED, 22, "Statutory affordability could not be established", True),
-    ReasonCode(R_NO_SCOREABLE_NATURAL_PERSON, 25, "No scoreable natural person behind the business", True),
-    ReasonCode(R_BUSINESS_GRADE_BELOW_CUTOFF, 30, "Business grade below the minimum acceptable grade", False),
-    ReasonCode(R_BUSINESS_GRADE_IN_REFERRAL_BAND, 35, "Business grade in the referral band", False),
-])
-
 
 @allow_fallback
 @step(outputs=("outcome_code", "decline_reason_codes", "attributing_entity_id", "attributing_event_ids",
@@ -67,5 +58,14 @@ def business_outcome(
             entity["adverse_event_ids"] if rests_on_entity else [], entity["adverse_binding_rule"] if rests_on_entity else "")
 
 
-# `decline_reason_codes` is written as fired, then ranked, so the two steps form a flow.
-outcome_unit = flow(business_outcome, REASON_REGISTRY.resolve_step(), name="outcome")
+def outcome_unit(reason_codes: ReasonCodes | None = None):
+    """The outcome and its reasons, ranked in place. `reason_codes` is the `reason_codes` document; by default the one
+    in `configs/0.2.0`.
+
+    `decline_reason_codes` is written as fired, then ranked, so the two steps form a flow.
+    """
+    return flow(business_outcome, reason_codes or shipped("reason_codes"), name="outcome")
+
+
+# governance-replay looks reason codes up through this name; no step reads it.
+REASON_REGISTRY = SimpleNamespace(_by_code={c.code: c for c in shipped("reason_codes").codes})

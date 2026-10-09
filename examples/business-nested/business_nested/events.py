@@ -8,10 +8,15 @@ from __future__ import annotations
 
 import math
 from datetime import date
+from types import SimpleNamespace
+from typing import Any, Literal
 
-from decider import DecisionTableConfig, allow_fallback, flow, missing_as, param, step
+from decider import (
+    ConfigurableStep, DecisionTableConfig, ParamRef, Value, allow_fallback, flow, missing_as, step,
+)
+from pydantic import model_validator
 
-from credit_core.adjustments import Adjustment, AdjustmentEffect, AdjustmentRegister
+from credit_core.adjustments import AdjustmentStack, Overlay, evaluate
 from credit_core.adverse_events import (
     DEFAULT_LISTING, EVENT_TYPES, GARNISHEE_ORDER, JUDGMENT, LITIGATION, MINOR, TAX_NON_COMPLIANCE,
     event_age_months, event_severity_code,
@@ -19,9 +24,9 @@ from credit_core.adverse_events import (
 from credit_core.evidence import cell_id
 
 from business_nested import vocab
+from business_nested.documents import shipped
 
 THRESHOLD_VERSION = "ev-thresh-2026.09"
-THRESHOLD_ADJUSTMENT_SET_ID = "AS-05-EVT-2026.09"
 
 # Event type -> (material, disqualifying) amounts for a critical, significant and peripheral entity, in rand.
 # Garnishee orders stand in for the municipal and rental bucket; any other type uses the default row.
@@ -33,20 +38,6 @@ _THRESHOLDS = {
     GARNISHEE_ORDER: ((10_000, 60_000), (20_000, 120_000), (40_000, 200_000)),
 }
 _DEFAULT_THRESHOLDS = ((5_000, 50_000), (10_000, 100_000), (20_000, 200_000))
-
-# Halve the judgment materiality threshold for construction until the end of 2026: the policy lever the
-# thresholds exist for. A materiality threshold is a ceiling that only shrinks, hence `cap_adjustment`.
-THRESHOLD_OVERLAYS = AdjustmentRegister([
-    Adjustment(
-        adjustment_id="ADJ-05-014", kind="cap_adjustment", target="material_threshold",
-        effect=AdjustmentEffect("multiply", 0.5), scope={"sector_code": 412, "event_type_code": JUDGMENT},
-        stack_position=1,
-        owner="Business Credit Risk Policy", approval_reference="CRC-2026-071",
-        rationale="Halve judgment materiality thresholds for construction, two quarters",
-        effective_from=date(2026, 1, 1), effective_to=date(2026, 12, 31), review_date=date(2026, 11, 1),
-        tighten_only=True),
-])
-
 
 def build_threshold_table() -> DecisionTableConfig:
     """Writes `material_threshold_base`, `disqualifying_threshold_base` and `threshold_cell_id` for an event's
@@ -72,23 +63,60 @@ def build_threshold_table() -> DecisionTableConfig:
                        "cell_id": "threshold_cell_id"})
 
 
-@allow_fallback
-@step(outputs=("material_threshold", "disqualifying_threshold", "threshold_overlay_ids"))
-def overlaid_thresholds(
-    material_threshold_base: float, disqualifying_threshold_base: float, sector_code: int, criticality_class: float,
-    event_type_code: float, decision_date: date, event_overlays_enabled: bool = param(True),
-) -> tuple[float, float, list[str]]:
-    """The thresholds after the overlays in force on the decision date, and the ids of those that applied.
+TARGETS = ("material_threshold", "disqualifying_threshold")
 
-    Switching `event_overlays_enabled` off runs the same code and returns the base thresholds.
-    """
+
+@allow_fallback
+def overlay_thresholds(
+    material_threshold_base: float, disqualifying_threshold_base: float, sector_code: int, criticality_class: float,
+    event_type_code: float, decision_date: date, material_overlays: tuple, disqualifying_overlays: tuple,
+    event_overlays_enabled: bool,
+) -> tuple[float, float, list[str]]:
     provenance = {"sector_code": sector_code, "criticality_class": criticality_class, "event_type_code": event_type_code}
-    results = [THRESHOLD_OVERLAYS.apply_stack(target, base, provenance, decision_date, THRESHOLD_ADJUSTMENT_SET_ID,
-                                              stack_enabled=event_overlays_enabled)
-               for target, base in (("material_threshold", material_threshold_base),
-                                    ("disqualifying_threshold", disqualifying_threshold_base))]
-    ids = sorted({a for r in results for a in r.adjustments_applied})
-    return results[0].adjusted_value, results[1].adjusted_value, ids
+    on = decision_date.toordinal()
+    material, applied_material, _ = evaluate(material_overlays, material_threshold_base, provenance, on,
+                                             event_overlays_enabled)
+    disqualifying, applied_disqualifying, _ = evaluate(
+        disqualifying_overlays, disqualifying_threshold_base, provenance, on, event_overlays_enabled)
+    return material, disqualifying, sorted({*applied_material, *applied_disqualifying})
+
+
+class OverlaidThresholds(ConfigurableStep):
+    """The event thresholds after the overlays in force on the decision date, and the ids of those that applied.
+
+    The overlays are fields, so a release check sees them. Each targets `material_threshold` or
+    `disqualifying_threshold` and may be scoped on `sector_code`, `criticality_class` and `event_type_code`, which an
+    `AdjustmentStack` step cannot match. The param `event_overlays_enabled` switches them all off.
+
+    Example: `ConfigurableStep.load("configs/0.2.0/event_threshold_overlays.json")`.
+    """
+
+    type: Literal["event_threshold_overlays"] = "event_threshold_overlays"
+    name: str = "overlaid_thresholds"
+    set_id: str
+    adjustments: tuple[Overlay, ...]
+    enabled: Value[bool] = ParamRef(param="event_overlays_enabled", default=True)
+
+    @model_validator(mode="after")
+    def _overlays_are_for_a_threshold(self) -> OverlaidThresholds:
+        stray = [a.adjustment_id for a in self.adjustments if a.target not in TARGETS]
+        if stray:
+            raise ValueError(f"overlays {stray} are not for {list(TARGETS)}")
+        self._stack(TARGETS[0]), self._stack(TARGETS[1])  # unique ids, tighten-only
+        return self
+
+    def _stack(self, target: str) -> AdjustmentStack:
+        return AdjustmentStack(target=target, set_id=self.set_id,
+                               adjustments=[a for a in self.adjustments if a.target == target])
+
+    def to_ir(self, ctx: Any) -> Any:
+        # `_ordered` packs a stack in stack order for `evaluate`; credit_core has no public name for it.
+        return ctx.call(
+            self, overlay_thresholds,
+            values={"material_overlays": self._stack(TARGETS[0])._ordered(),
+                    "disqualifying_overlays": self._stack(TARGETS[1])._ordered(),
+                    "event_overlays_enabled": self.enabled},
+            outputs=("material_threshold", "disqualifying_threshold", "threshold_overlay_ids"))
 
 
 @allow_fallback
@@ -118,12 +146,19 @@ event_severity_unadjusted = step(event_severity, output="event_severity_code_una
     reads={"material_threshold": "material_threshold_base", "disqualifying_threshold": "disqualifying_threshold_base"})
 
 
-def event_unit():
-    """The flow for one event. Reads the event's own fields; adds its age, thresholds, overlays and severities."""
+def event_unit(overlays: OverlaidThresholds | None = None):
+    """The flow for one event. Reads the event's own fields; adds its age, thresholds, overlays and severities.
+
+    `overlays` is the `event_threshold_overlays` document; by default the one in `configs/0.2.0`.
+    """
     return flow(
         step(event_age, output="age_months"), step(amount_unknown),
-        build_threshold_table(), overlaid_thresholds,
+        build_threshold_table(), overlays or shipped("event_threshold_overlays"),
         step(event_severity, output="event_severity_code"), event_severity_unadjusted,
         name="event",
     ).emit("age_months", "amount_unknown", "material_threshold_base", "disqualifying_threshold_base", "threshold_cell_id",
            "material_threshold", "disqualifying_threshold", "threshold_overlay_ids", "event_severity_code")
+
+
+# governance-replay lists the overlays through this name; no step reads it.
+THRESHOLD_OVERLAYS = SimpleNamespace(_all=shipped("event_threshold_overlays").adjustments)
