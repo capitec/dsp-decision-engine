@@ -47,9 +47,12 @@ however many threads ask (see [concurrency](concurrency.md)).
   its own methods (by bytecode) and constants (an enum also by its members), an enum member by class
   and name, a date, Decimal, regex or `lru_cache` wrapper (by the function it wraps) by value, a tuple,
   list, dict or set by its contents, and anything else by identity;
-- a function of the standard library or an installed package is keyed by module, qualname and the
-  package version, not walked: its helpers and constants are not the step's data. A wrapper such
-  as a decorator still keys the function it closes over. decider's own functions are walked.
+- a function of the standard library or an installed package is keyed by module, qualname, the
+  package version, its own bytecode and its closure values, not walked: its helpers and constants
+  are not the step's data. Two lambdas of one module, or two closures from one factory, share a
+  qualname, so the code and closure keep them apart. A wrapper such as a decorator still keys the
+  function it closes over. decider's own functions are walked, and so is the step function itself,
+  wherever it is installed.
 
 It leaves out the function's name, file and line, and the node's origin path. Real output:
 
