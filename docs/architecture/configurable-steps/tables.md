@@ -171,10 +171,11 @@ What each condition and output stores:
 | `eq` on a number or bool column | `n` has-value flags | `n` values as float64 |
 | `in` on a `List[String]` | `n + 1` starts into a list of byte offsets, then the offsets | nothing |
 | `in` on a `List` of numbers | `n + 1` starts into the float array | the items as float64 |
+| `between`, `eq` or `in` on a variable declared `int` | has-flags as above; `between` then `n` lower and `n` upper bounds, `eq` `n` values, `in` the items | nothing |
 | a float output | `n` validity flags | `n` values |
 | an int, bool or String output | `n` validity flags, then `n` values (a String output's values are indices into its `Literal` choices) | nothing |
 
-`between` bounds are resolved when the rows are packed (the next section), so the kernel reads a finished `(has_lo, lo, has_hi, hi)` per row and never looks at a neighbour. Numbers compare as float64, exact up to 2**53. An int column is therefore compared as a float; the code marks this with a `ponytail` comment, and an int64 lane like the tree walker's is the upgrade if a table ever keys on larger integers.
+`between` bounds are resolved when the rows are packed (the next section), so the kernel reads a finished `(has_lo, lo, has_hi, hi)` per row and never looks at a neighbour. Numbers compare as float64, exact up to 2**53, unless the document declares the variable `int` in `variable_types`: the table then reads it as an int64 input (null is `-2**63`) and compares exactly, using integer columns only. Nothing is inferred from a column's dtype, so a document without `variable_types` compiles to the same program as before.
 
 ## Matching
 
