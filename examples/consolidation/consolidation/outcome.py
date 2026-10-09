@@ -18,9 +18,9 @@ from decider import allow_fallback, missing_as, param, step
 from consolidation import eligibility, reasons, vocab
 from consolidation.inventory import num
 
-_GATE_REASONS = {"CON-ELIG-02": reasons.ADMINISTRATION, "CON-ELIG-03": reasons.SERIAL_CONSOLIDATION,
-                 "CON-ELIG-05": reasons.NO_INCOME, "CON-ELIG-06": reasons.NO_BUREAU_VIEW,
-                 "CON-ELIG-07": reasons.RECKLESS_ALLEGATION}
+_GATE_REASONS = (("CON-ELIG-02", reasons.ADMINISTRATION), ("CON-ELIG-03", reasons.SERIAL_CONSOLIDATION),
+                 ("CON-ELIG-05", reasons.NO_INCOME), ("CON-ELIG-06", reasons.NO_BUREAU_VIEW),
+                 ("CON-ELIG-07", reasons.RECKLESS_ALLEGATION))
 
 
 def decide(route: str, fired: dict, nomination_conflicts: list[int], evidence_sufficiency_code: int, plain: bool,
@@ -30,7 +30,7 @@ def decide(route: str, fired: dict, nomination_conflicts: list[int], evidence_su
     if route == eligibility.DEBT_REVIEW_PATH:
         return OUTCOME_REFER, [reasons.DEBT_REVIEW]
     if route in (eligibility.DECLINE, eligibility.REFER):
-        codes = [code for gate, code in _GATE_REASONS.items() if fired[gate]]
+        codes = [code for gate, code in _GATE_REASONS if fired[gate]]
         codes += [reasons.NOMINATION_CONFLICT] * bool(nomination_conflicts)
         return (OUTCOME_DECLINE if route == eligibility.DECLINE else OUTCOME_REFER), codes
     if evidence_sufficiency_code:
