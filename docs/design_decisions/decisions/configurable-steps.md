@@ -37,7 +37,6 @@ Measured by the part-size sweep, median over ten rule shapes (`score()` against 
 | 64 (default) | 1.02-1.03x | 1.08x | 16-17 s | 1.1x |
 | 128 | 0.98-1.03x | not split | 26-34 s | 1.4-1.5x |
 
-
 ## Every tree format validates into one `Tree` graph
 
 - v3, `flat_rule` and `prioritized_flat_rule` all become `Tree` (a DAG; unreachable nodes dropped); `TreeConfig` stores the document so the editor keeps node positions.

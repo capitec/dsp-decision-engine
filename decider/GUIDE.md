@@ -395,7 +395,7 @@ roots use `decider.config_stores`, `decider.metrics`, `decider.plots`,
 
 Keep a step type's data in its fields. A step function that reads a registry
 object, a module-level `dict` or a closure variable is invisible in config and
-in `decider.lab.diff`; binding it raises `HiddenStateWarning` (see "What
+in `decider.lab.diff`; binding it warns with `HiddenStateWarning` (see "What
 compiles, and what falls back"). The fields are the data and `to_ir` passes
 them to a plain function.
 

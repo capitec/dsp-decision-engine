@@ -246,7 +246,8 @@ event flags (`qualifying_payment`, `promise_captured`, `cured`, `dispute_raised`
   `treatment_suppression`), handed to `build` by name like the matrix. Owner, approval reference, rationale and review
   date sit beside the effect and scope, and editing them is not a change of behaviour. The step names and params paths are
   unchanged, so `collections_treatment/score_shift/adjustment_stack_enabled` still switches a stack off. A stack
-  reads the columns its overlays scope on (any names); the few steps that need the overlaid value as an integer or a probability
+  reads the columns its overlays scope on (any names; `scope_types` keeps the agency flag a bool), and writes only the
+  overlaid value and the ids that applied into the response; the few steps that need the overlaid value as an integer or a probability
   are small post-steps (`matrix.treatment_intensity`, `scoring.clamp_probability`).
 
 ```json
@@ -255,7 +256,8 @@ event flags (`qualifying_payment`, `promise_captured`, `cured`, `dispute_raised`
  "adjustments": [{"adjustment_id": "ADJ-COLL-SCORE-001", "kind": "score_shift", "target": "collections_score",
    "effect": {"op": "add", "value": -22.0}, "scope": {"agency_placed_12m": true}, "stack_position": 1,
    "owner": "Collections Strategy", "approval_reference": "MRV-2026-014", "rationale": "...",
-   "effective_from": "2026-01-01", "effective_to": "2026-12-31", "review_date": "2026-10-01", "tighten_only": true}]}
+   "effective_from": "2026-01-01", "effective_to": "2026-12-31", "review_date": "2026-10-01", "tighten_only": true}],
+ "scope_types": {"agency_placed_12m": "bool"}}
 ```
 
 - **Each suspension blocks a stated set of treatments.** [`suspensions.RULES`](collections_treatment/suspensions.py)
