@@ -79,6 +79,10 @@ def test_a_stack_adds_its_applied_ids_to_the_response_and_nothing_else(decide):
     assert not {f"{name}_{part}" for name in stacks for part in ("set_id", "unadjusted")} & set(out)
 
 
+def test_the_agency_flag_is_read_as_a_flag(pipeline):
+    assert next(v.annotation for v in pipeline.plan.inputs if v.name == "agency_placed_12m") == bool | None
+
+
 def band_of(roll_probability, shift=0.0, unadjusted=None):
     out = Engine().bind(scoring.collections_bands_step).score({
         "roll_probability": roll_probability, "roll_probability_unadjusted": roll_probability if unadjusted is None else unadjusted,

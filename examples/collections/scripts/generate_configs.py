@@ -21,9 +21,10 @@ def overlay(adjustment_id, kind, target, op, value, scope, stack_position, owner
             "review_date": review_date, "tighten_only": tighten_only}
 
 
-def stack(name, target, set_id, base_field, adjusted_output, adjustments):
+def stack(name, target, set_id, base_field, adjusted_output, adjustments, scope_types=None):
     return {"type": "adjustment_stack", "name": name, "target": target, "set_id": set_id,
-            "base_field": base_field, "adjusted_output": adjusted_output, "adjustments": adjustments}
+            "base_field": base_field, "adjusted_output": adjusted_output, "adjustments": adjustments,
+            **({"scope_types": scope_types} if scope_types else {})}
 
 
 STACKS = [
@@ -32,7 +33,7 @@ STACKS = [
         overlay("ADJ-COLL-SCORE-001", "score_shift", "collections_score", "add", -22.0, {"agency_placed_12m": True}, 1,
                 "Collections Strategy", "MRV-2026-014",
                 "Accounts placed with an agency in the last 12 months score optimistic on the base curve",
-                "2026-01-01", "2026-12-31", "2026-10-01", tighten_only=True)]),
+                "2026-01-01", "2026-12-31", "2026-10-01", tighten_only=True)], {"agency_placed_12m": "bool"}),
     stack("scaling_change", "calibration_scale", "AS-COLL-SCORE-2026.09", "scale", "adjusted_scale", [
         overlay("ADJ-COLL-SCORE-003", "scaling_change", "calibration_scale", "multiply", 23.0 / 20.0,
                 {"product_family_code": 2}, 1, "Model team", "MRV-2026-021",
