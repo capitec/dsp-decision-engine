@@ -87,3 +87,10 @@ def test_the_new_to_bank_segment_has_wider_bands(score):
 
 def test_a_product_and_segment_without_boundaries_gets_the_worst_grade(score):
     assert grade(score, 0.001, product=30)["risk_grade"] == 12
+
+
+def test_every_characteristic_has_its_own_reason_code_in_an_immutable_table():
+    from credit_core import scorecard
+
+    codes = [code for _, code in scorecard._REASON_CODE_BY_VARIABLE]
+    assert isinstance(scorecard._REASON_CODE_BY_VARIABLE, tuple) and len(set(codes)) == len(VARIABLES) == len(codes)
