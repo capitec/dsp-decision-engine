@@ -1,5 +1,5 @@
-"""Write `configs/<version>/`: the four overlay documents, the reason codes, and `params.json` with every policy number at its default,
-this product's fee and premium terms and the Flex Loan rate card.
+"""Write `configs/<version>/`: the four overlay documents, the reason codes, the appetite by grade, and `params.json`
+with every policy number at its default, this product's fee and premium terms and the Flex Loan rate card.
 
     uv run python examples/retail-credit-e2e/scripts/generate_configs.py [version]
 """
@@ -45,6 +45,17 @@ OVERLAYS = {
     "rate_addon_overlays": stack("nominal_annual_rate", "rate_addon_base", "rate_addon_bps", "rate_addon_unadjusted", [
         overlay("ADJ-0132", "rate_addon", "nominal_annual_rate", "add", 0.006, {"segment_code": 4}, "CC-2027-13",
                 "60 basis point add-on for segment 4 pending the next card refresh", "2027-12-31")]),
+}
+
+# CAP-0104: the largest amount the Bank will lend by risk grade. A grade with no cap declines.
+APPETITE_BY_GRADE = {
+    "type": "decision_table", "name": "appetite_by_grade",
+    "columns": {"grade": "Int64", "appetite_amount_cap": "Float64"},
+    "rows": [{"grade": grade, "appetite_amount_cap": cap} for grade, cap in enumerate(
+        [500_000.0, 460_000.0, 420_000.0, 360_000.0, 300_000.0, 220_000.0, 180_000.0, 140_000.0, 70_000.0, 50_000.0,
+         28_000.0, 0.0], start=1)],
+    "expression": {"type": "eq", "variable": "risk_grade", "value_column": "grade"},
+    "outputs": ["appetite_amount_cap"], "default": [0.0],
 }
 
 # code, severity rank (1 is the most severe), description, whether the reason is regulatory
@@ -106,7 +117,7 @@ def fill(node: dict, tables: dict) -> None:
 def main(version: str = "0.1.0") -> None:
     out = Path(__file__).resolve().parents[1] / "configs" / version
     out.mkdir(parents=True, exist_ok=True)
-    documents = {**OVERLAYS, "reason_codes": REASON_CODES}
+    documents = {**OVERLAYS, "reason_codes": REASON_CODES, "appetite_by_grade": APPETITE_BY_GRADE}
     for name, document in documents.items():
         (out / f"{name}.json").write_text(json.dumps(document, indent=2) + "\n")
     params = build(**{name: ConfigurableStep.load(document) for name, document in documents.items()}).parameters().defaults()
