@@ -373,9 +373,10 @@ assert out["capped"].to_list() == [50.0, 60.0]
 ```
 
 A mistake in the class (no `impl`, an `impl` argument without a field) raises
-when the class is defined. A field other than `str` or `Value[T]` is rejected:
-rows belong in a `param_table`, and anything else in a `ConfigurableStep` with
-its own `to_ir`. `impl` cannot call other steps or read the other fields.
+when the class is defined, and so does an `impl` argument whose field is not
+`str` or `Value[T]`: rows belong in a `param_table`, and anything else in a
+`ConfigurableStep` with its own `to_ir`. `impl` cannot call other steps or read
+the fields it has no argument for.
 
 ### Shipping a step type in a package
 
@@ -642,7 +643,9 @@ pay this at all.
 A `dict`, TypedDict, `list[...]`, `Struct` or `Columnar` output is held to the type you declare. No
 kernel stores a dict, so a step returning one runs in Python and is checked on every call with strict
 pydantic validation (`@allow_fallback` steps too): `{"v": "high"}` for `v: float` raises a `ValueError`
-naming the step, row, field and value. An int is a valid float, a str or bool is not. A `Struct` or
+naming the step, row, field and value. An int is a valid float; a str or bool is not, and a float is not a
+valid `int` field, not even `7.0` (unlike an `-> int` output). A numpy number counts as the Python number it
+is. A `Struct` or
 `Columnar` step returning tuples that can't be the declared record (wrong arity, a float for an `int`
 field) is caught when it compiles and falls back with that reason.
 

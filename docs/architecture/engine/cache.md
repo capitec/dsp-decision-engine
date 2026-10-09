@@ -42,8 +42,11 @@ however many threads ask (see [concurrency](concurrency.md)).
 - the value of every closure cell;
 - every global the function reads: a function by its own content (recursively), a module by name
   plus the functions and submodules the code reaches through it (so editing `rates.rate` changes a
-  caller of `rates.rate(x)`), a literal by value, a numpy array or polars frame by its data, and
-  anything else by identity.
+  caller of `rates.rate(x)`), a literal by value, a numpy array or polars frame by its data, a class
+  by `module:qualname` plus its own methods (by bytecode) and constants (an enum also by its
+  members), an enum member by class and name, a date, Decimal, regex or `lru_cache` wrapper (by the
+  function it wraps) by value, a tuple, list, dict or set by its contents, and anything else by
+  identity.
 
 It leaves out the function's name, file and line, and the node's origin path. Real output:
 
