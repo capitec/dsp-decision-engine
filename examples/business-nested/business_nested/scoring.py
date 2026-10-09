@@ -6,34 +6,24 @@ and financial components, which grade a blended probability the same way.
 """
 from __future__ import annotations
 
-from datetime import date
+from types import SimpleNamespace
 
 from decider import DecisionTableConfig, ScorecardConfig, flow, step
 
 from credit_core import calibration
-from credit_core.adjustments import Adjustment, AdjustmentEffect, AdjustmentRegister
+from credit_core.adjustments import AdjustmentStack
 from credit_core.evidence import cell_id
 from credit_core.vocab import SEGMENT_SME_ENTITY, SEGMENT_SME_PEOPLE
 
+from business_nested.documents import shipped
+
 GRADE_VERSION = "bus-rg-2026.09"
-ENTITY_ADJUSTMENT_SET_ID = "AS-05-ENT-2026.09"
 
 # segment -> the 11 ascending probability-of-default cut points between grades 1 (best) and 12.
 _GRADE_CUTS = {
     SEGMENT_SME_PEOPLE: [0.01, 0.02, 0.04, 0.06, 0.09, 0.13, 0.18, 0.25, 0.34, 0.45, 0.60],
     SEGMENT_SME_ENTITY: [0.008, 0.018, 0.032, 0.05, 0.075, 0.11, 0.155, 0.21, 0.29, 0.39, 0.52],
 }
-
-# A natural person behind a new-to-bank business scores 12 points lower: defaults above the model's prediction.
-ENTITY_OVERLAYS = AdjustmentRegister([
-    Adjustment(
-        adjustment_id="ADJ-05-ENT-001", kind="score_shift", target="entity_score", effect=AdjustmentEffect("add", -12.0),
-        scope={"segment_code": SEGMENT_SME_PEOPLE}, stack_position=2, owner="Business Credit Risk Policy",
-        approval_reference="CRC-2026-041",
-        rationale="Natural-person entities behind new-to-bank businesses defaulting above prediction",
-        effective_from=date(2026, 1, 1), effective_to=None, review_date=date(2026, 12, 31), tighten_only=True),
-])
-
 
 def build_entity_scorecard() -> ScorecardConfig:
     """Four characteristics: bureau score, months on record, worst delinquency and ownership stake.
@@ -100,10 +90,12 @@ def segment_code(is_natural_person: bool) -> float:
     return float(SEGMENT_SME_PEOPLE if is_natural_person else SEGMENT_SME_ENTITY)
 
 
-def entity_scoring_unit():
-    """Score, overlay, calibration and grade for one entity; reads the entity's own fields."""
-    overlay = ENTITY_OVERLAYS.apply_stack_step(
-        "entity_score", ENTITY_ADJUSTMENT_SET_ID, base_field="score_before_overlay").relabel(
+def entity_scoring_unit(score_adjustments: AdjustmentStack | None = None):
+    """Score, overlay, calibration and grade for one entity; reads the entity's own fields.
+
+    `score_adjustments` is the `entity_score_adjustments` document; by default the one in `configs/0.1.0`.
+    """
+    overlay = (score_adjustments or shipped("entity_score_adjustments")).relabel(
         writes={"adjustment_set_id": "score_adjustment_set_id", "adjustments_applied": "score_adjustments_applied"})
     pd = calibration.probability_of_default_step
     return flow(
@@ -116,3 +108,7 @@ def entity_scoring_unit():
         name="scoring",
     ).emit("score_before_overlay", "entity_score", "entity_score_unadjusted", "score_adjustments_applied", "entity_pd",
            "entity_pd_unadjusted", "entity_grade", "entity_grade_unadjusted")
+
+
+# governance-replay lists the overlays through this name; no step reads it.
+ENTITY_OVERLAYS = SimpleNamespace(_all=shipped("entity_score_adjustments").adjustments)

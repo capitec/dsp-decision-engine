@@ -30,15 +30,28 @@ DECISION_OUTPUTS = (
 )
 
 
-def decision_unit():
-    """Everything after the entities: reads `assessed_entities` and the business's own fields."""
+def decision_unit(pd_adjustments=None, reason_codes=None):
+    """Everything after the entities: reads `assessed_entities` and the business's own fields.
+
+    `pd_adjustments` and `reason_codes` are the `business_pd_adjustments` and `reason_codes` documents.
+    """
     return dag(
-        structure.structure_check, blend.people_unit(), financial.financial_unit(), grade.business_grade_unit(),
-        pricing.pricing_unit(), sole_proprietor.sole_proprietor_unit(), outcome.outcome_unit,
+        structure.structure_check, blend.people_unit(), financial.financial_unit(),
+        grade.business_grade_unit(pd_adjustments), pricing.pricing_unit(), sole_proprietor.sole_proprietor_unit(),
+        outcome.outcome_unit(reason_codes),
         name="decision",
     ).emit(*DECISION_OUTPUTS)
 
 
-def build():
-    """The whole decision, as `decider serve` runs it and as other projects embed it."""
-    return dag(entity.entities_unit(), decision_unit(), name="business_credit").emit("assessed_entities", *DECISION_OUTPUTS)
+def build(entity_score_adjustments=None, business_pd_adjustments=None, event_threshold_overlays=None,
+          reason_codes=None):
+    """The whole decision, as `decider serve` runs it and as other projects embed it.
+
+    Each argument is a document from `configs/<version>/` (`decider build` passes them by name); left out, the one
+    this package ships in `configs/0.1.0` is used, so `build()` works for callers that embed the decision.
+
+    Example: `build(reason_codes=ConfigurableStep.load("configs/0.1.0/reason_codes.json"))`.
+    """
+    return dag(entity.entities_unit(event_threshold_overlays, entity_score_adjustments),
+               decision_unit(business_pd_adjustments, reason_codes),
+               name="business_credit").emit("assessed_entities", *DECISION_OUTPUTS)
