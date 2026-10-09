@@ -1,7 +1,7 @@
 """A Flex Loan quote: eligibility, income, affordability, score, grade, price and outcome in one pipeline.
 
-`decider build` and `decider serve` use `build`, which receives the rate card document
-`configs/<version>/rate_card_flex_loan.json`.
+`decider build` and `decider serve` use `build`, which receives three documents from `configs/<version>/`: the rate card
+(`rate_card_flex_loan.json`), the score overlays (`score_adjustments.json`) and the reason codes (`reason_codes.json`).
 """
 from __future__ import annotations
 
@@ -11,40 +11,11 @@ from decider import allow_fallback, dag, flow, step
 
 from credit_core import (
     affordability, calibration, deductions, eligibility, expense_norms, fees, income, instalment, obligations,
-    rate_card, reason_codes, risk_grade, rounding, scorecard,
+    rate_card, risk_grade, rounding, scorecard,
 )
-from credit_core.adjustments import Adjustment, AdjustmentEffect, AdjustmentRegister
 from credit_core.vocab import OUTCOME_APPROVE, OUTCOME_DECLINE, OUTCOME_REFER
 
 R_AFFORDABILITY_FAIL = 4001
-
-REASON_REGISTRY = reason_codes.ReasonCodeRegistry("reasons-2026.09", [
-    reason_codes.ReasonCode(eligibility.R_UNDERAGE, 10, "Applicant below minimum age", True),
-    reason_codes.ReasonCode(eligibility.R_NOT_RESIDENT, 15, "Applicant not resident", True),
-    reason_codes.ReasonCode(eligibility.R_NO_CAPACITY, 5, "No contractual capacity", True),
-    reason_codes.ReasonCode(eligibility.R_PRODUCT_UNAVAILABLE, 40, "Product not available to applicant", False),
-    reason_codes.ReasonCode(eligibility.R_EXCLUSION_LIST, 8, "On an internal exclusion list", True),
-    reason_codes.ReasonCode(eligibility.R_SANCTIONED, 1, "Sanctioned party", True),
-    reason_codes.ReasonCode(eligibility.R_DECEASED, 2, "Deceased on record", True),
-    reason_codes.ReasonCode(eligibility.R_DEBT_REVIEW, 12, "Under debt review", True),
-    reason_codes.ReasonCode(eligibility.R_ADMINISTRATION, 12, "Under administration", True),
-    reason_codes.ReasonCode(R_AFFORDABILITY_FAIL, 20, "Proposed instalment exceeds affordable capacity", True),
-])
-
-# Two tighten-only score overlays. An applicant in segment 3 who came through channel 4 gets both, in stack order.
-ADJUSTMENT_SET_ID = "AS-2026.09"
-SCORE_ADJUSTMENTS = AdjustmentRegister([
-    Adjustment(
-        adjustment_id="ADJ-2026-001", kind="score_shift", target="score", effect=AdjustmentEffect("add", -18.0),
-        scope={"segment_code": 3}, stack_position=1, owner="Credit Risk Policy", approval_reference="CRC-2026-014",
-        rationale="New-to-bank segment defaulting above model prediction for two quarters",
-        effective_from=date(2026, 1, 1), effective_to=None, review_date=date(2026, 12, 31), tighten_only=True),
-    Adjustment(
-        adjustment_id="ADJ-2026-002", kind="score_shift", target="score", effect=AdjustmentEffect("add", -5.0),
-        scope={"channel_code": 4}, stack_position=2, owner="Credit Risk Policy", approval_reference="CRC-2026-019",
-        rationale="Broker channel 4 showing early-life deterioration",
-        effective_from=date(2026, 6, 1), effective_to=date(2027, 6, 1), review_date=date(2027, 1, 1), tighten_only=True),
-])
 
 
 @allow_fallback
@@ -63,7 +34,7 @@ def outcome_code(is_eligible: bool, affordability_verdict_code: int) -> int:
     return OUTCOME_APPROVE
 
 
-def build(rate_card_flex_loan):
+def build(rate_card_flex_loan, score_adjustments, reason_codes):
     # The instalment is computed in a flow, because `instalment` is written twice: fees added, then rounded.
     instalment_unit = flow(
         instalment.instalment_before_fees_step, instalment.instalment_step,
@@ -73,7 +44,7 @@ def build(rate_card_flex_loan):
     ).emit("instalment_before_fees", "instalment")
 
     # `decline_reason_codes` is written twice, as fired and then ranked, so these two also form a flow.
-    reasons_unit = flow(step(decline_reasons, output="decline_reason_codes"), REASON_REGISTRY.resolve_step(),
+    reasons_unit = flow(step(decline_reasons, output="decline_reason_codes"), reason_codes,
                         name="reasons").emit("decline_reason_codes")
 
     return dag(
@@ -96,7 +67,7 @@ def build(rate_card_flex_loan):
         affordability.affordability_verdict_code_step.relabel(reads={"proposed_instalment": "instalment"}),
 
         scorecard.build_scorecard().relabel(writes={"score": "score_raw"}),
-        SCORE_ADJUSTMENTS.apply_stack_step("score", ADJUSTMENT_SET_ID, base_field="score_raw"),
+        score_adjustments,
         calibration.build_calibration_table(), calibration.probability_of_default_step,
         risk_grade.build_risk_grade_table(),
 

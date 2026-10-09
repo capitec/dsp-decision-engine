@@ -7,17 +7,17 @@ SCORECARD_ID = 1
 SCORECARD_VERSION = "sc-2026.09"
 
 # characteristic -> the reason code raised when its points are negative.
-_REASON_CODE_BY_VARIABLE = {
-    "bureau_score": 4101,
-    "months_employed": 4102,
-    "worst_arrears_months": 4103,
-    "accounts_in_arrears_count": 4104,
-    "revolving_utilisation": 4105,
-    "applicant_age_years": 4106,
-    "dependants_count": 4107,
-    "employment_type_code": 4108,
-}
-VARIABLES = tuple(_REASON_CODE_BY_VARIABLE)
+_REASON_CODE_BY_VARIABLE = (
+    ("bureau_score", 4101),
+    ("months_employed", 4102),
+    ("worst_arrears_months", 4103),
+    ("accounts_in_arrears_count", 4104),
+    ("revolving_utilisation", 4105),
+    ("applicant_age_years", 4106),
+    ("dependants_count", 4107),
+    ("employment_type_code", 4108),
+)
+VARIABLES = tuple(name for name, _ in _REASON_CODE_BY_VARIABLE)
 
 
 def _edge(name: str, default: float) -> dict:
@@ -65,4 +65,5 @@ def adverse_action_codes(scores: dict[str, float], n: int = 4) -> list[int]:
     `scores` maps characteristic to points, e.g. `{"bureau_score": -40.0, "months_employed": 20.0}`.
     """
     negative = sorted(((points, name) for name, points in scores.items() if points < 0))
-    return [_REASON_CODE_BY_VARIABLE[name] for _, name in negative[:n]]
+    codes = dict(_REASON_CODE_BY_VARIABLE)
+    return [codes[name] for _, name in negative[:n]]

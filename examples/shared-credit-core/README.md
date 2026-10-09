@@ -21,7 +21,8 @@ records which version of which table, and which cell, it read.
 
 ## What the quote pipeline decides
 
-[`credit_core.pipeline:build`](credit_core/pipeline.py) takes a Flex Loan application (applicant facts,
+[`credit_core.pipeline:build`](credit_core/pipeline.py) takes three config documents (the rate card, the score overlays and the reason codes;
+see "The documents" below) and returns a pipeline. It takes a Flex Loan application (applicant facts,
 income evidence, expenses, the bureau and internal account lists, a requested amount and term) and returns:
 
 | Result | Fields |
@@ -58,14 +59,16 @@ The rules, in the order the pipeline applies them:
 | `dag` (dependency order) beside `flow` (written order, for a value written twice) | [pipeline.py](credit_core/pipeline.py): the instalment waterfall and the reason-code ranking are flows inside the dag |
 | `DecisionTableConfig` with inline rows, banded ranges and `eq` keys | [deductions.py](credit_core/deductions.py), [expense_norms.py](credit_core/expense_norms.py), [calibration.py](credit_core/calibration.py), [risk_grade.py](credit_core/risk_grade.py), [appetite.py](credit_core/appetite.py), [credit_life.py](credit_core/credit_life.py) |
 | A 63 360-row table kept as a config document, handed to `build` by name | [rate_card.py](credit_core/rate_card.py), [`configs/0.1.0/rate_card_flex_loan.json`](configs/0.1.0/rate_card_flex_loan.json), `build(rate_card_flex_loan)` in [pipeline.py](credit_core/pipeline.py) |
-| Effective dating: a version id resolved from the record's date, then ANDed into the table match | [dates.py](credit_core/dates.py), used by deductions, expense norms and fees |
+| Effective dating: an `EffectiveVersions` step resolves a version id from the record's date, then it is ANDed into the table match | [dates.py](credit_core/dates.py), used by deductions, expense norms and fees |
+| `ConfigurableStep` types whose fields are the data, loaded from a config document and compared by `decider.lab.diff` | [`AdjustmentStack`](credit_core/adjustments.py), [`ReasonCodes`](credit_core/reason_codes.py), [`EffectiveVersions`](credit_core/dates.py) |
 | `ScorecardConfig` with bin edges that are params | [scorecard.py](credit_core/scorecard.py) |
 | Multi-output steps (`outputs=`) | [adjustments.py](credit_core/adjustments.py), [reason_codes.py](credit_core/reason_codes.py), [bureau.py](credit_core/bureau.py), [obligations.py](credit_core/obligations.py) |
 | `TypedDict` inputs: JSON date strings arrive as `date`s | [obligations.py](credit_core/obligations.py), [bureau.py](credit_core/bureau.py), [exposure.py](credit_core/exposure.py) |
-| `@allow_fallback` for steps that are Python on purpose (dates, lists of dicts, registries), checked by `Engine(strict_compile=True)` | [tests/test_serving.py](tests/test_serving.py) |
+| `@allow_fallback` for steps that are Python on purpose (dates, lists of dicts, strings), checked by `Engine(strict_compile=True)` | [tests/test_serving.py](tests/test_serving.py) |
 | `.relabel` and `.named`: one step reused on other column names or twice with different settings | [pipeline.py](credit_core/pipeline.py), [tests/test_affordability.py](tests/test_affordability.py) |
 | `decider.ops.decimal.round` for half-up money rounding that runs the same in Python and in a kernel | [rounding.py](credit_core/rounding.py) |
 | The params document and a switch that turns a whole overlay stack off | [`configs/0.1.0/params.json`](configs/0.1.0/params.json), [tests/test_quote_pipeline.py](tests/test_quote_pipeline.py) |
+| A release check that sees the overlays, reason codes and cut-overs, and no `HiddenStateWarning` | [tests/test_release_checks.py](tests/test_release_checks.py) |
 | Warm-up from `sample_request.json`, and serving the raw request bytes | [sample_request.json](sample_request.json), [tests/test_serving.py](tests/test_serving.py) |
 
 ## Run it
@@ -123,8 +126,51 @@ Tests (run from the repository root, with `PYTHONPATH` set as above):
 uv run pytest examples/shared-credit-core -q
 ```
 
-To regenerate `configs/0.1.0` (the synthetic rate card and the params document):
+To regenerate `configs/0.1.0` (the synthetic rate card, the score overlays, the reason codes and the params document):
 `uv run python scripts/generate_configs.py`.
+
+## The documents
+
+`build(rate_card_flex_loan, score_adjustments, reason_codes)` receives one document per argument, each a file in
+`configs/<version>/`. The two below are what a risk or policy owner edits; `rate_card_flex_loan.json` is the 63 360-row table.
+A change to any of them is a new config version, and `decider.lab.diff.structure` reports it: the overlays and the codes are fields
+of a step, not objects a step closes over.
+
+[`score_adjustments.json`](configs/0.1.0/score_adjustments.json) is an `adjustment_stack`: the overlays on `score`, in stack order.
+The governance fields (`owner`, `approval_reference`, `rationale`, `review_date`) are for people and the ageing report; the diff
+ignores them. Everything else is behaviour. Loading rejects a duplicate id, an overlay for another target, and a `tighten_only`
+overlay whose effect loosens.
+
+```json
+{
+  "type": "adjustment_stack", "name": "apply_score_adjustments", "target": "score", "set_id": "AS-2026.09",
+  "base_field": "score_raw",
+  "adjustments": [
+    {"adjustment_id": "ADJ-2026-001", "kind": "score_shift", "target": "score",
+     "effect": {"op": "add", "value": -18.0}, "scope": {"segment_code": 3}, "stack_position": 1,
+     "owner": "Credit Risk Policy", "approval_reference": "CRC-2026-014",
+     "rationale": "New-to-bank segment defaulting above model prediction for two quarters",
+     "effective_from": "2026-01-01", "effective_to": null, "review_date": "2026-12-31", "tighten_only": true}
+  ]
+}
+```
+
+[`reason_codes.json`](configs/0.1.0/reason_codes.json) is a `reason_codes` set: `version` and the `codes` with their severity rank
+(1 is the most severe). A code outside the set raises; a duplicate code is rejected when the document loads. A description is for
+people and is not behaviour.
+
+```json
+{"type": "reason_codes", "name": "rank_reasons", "version": "reasons-2026.09",
+ "codes": [{"code": 1006, "severity_rank": 1, "description": "Sanctioned party", "is_regulatory": true}]}
+```
+
+The effective-dated versions (tax tables, expense norms, fee caps) are `EffectiveVersions` steps declared in
+[deductions.py](credit_core/deductions.py), [expense_norms.py](credit_core/expense_norms.py) and [fees.py](credit_core/fees.py), because
+every product that uses a table shares its history. Each has the same fields as a document would (`family`, `date_field`, `versions`);
+a gap or an overlap between versions is rejected when it loads. Moving a cut-over date shows in the diff.
+
+The step names and the params paths did not change when these stopped being objects, so a params document and stored evidence from
+before still apply: `flex_loan_quote/apply_score_adjustments/adjustment_stack_enabled` is still the switch.
 
 ## Layout
 
@@ -137,7 +183,7 @@ credit_core/            the library; one module per capability
   scorecard.py calibration.py risk_grade.py                              risk
   income.py deductions.py expense_norms.py obligations.py affordability.py   capacity
   bureau.py eligibility.py appetite.py exposure.py consent.py adverse_events.py
-configs/0.1.0/          params.json and the rate card
+configs/0.1.0/          params.json, the rate card, the score overlays and the reason codes
 scripts/                generate_configs.py
 sample_request.json
 tests/
@@ -150,10 +196,10 @@ that returns a step writing the looked-up values and a `*_cell_id`.
 
 | Module | Publishes |
 |---|---|
-| `dates` | `EffectiveDatedSet`, `EffectiveVersion`: the version in force on a date; `resolver_step()` writes `<family>_version` from `decision_date` (or another date field) |
+| `dates` | `EffectiveVersions`, `Version`: the step that writes the version id in force on `date_field` (default `decision_date`) to `<family>_version`; `.resolve(on)` for code outside a flow (`.versions` keeps the order given, not sorted) |
 | `evidence` | `new_decision_id()`, `cell_id(table, version, *keys)` |
-| `reason_codes` | `ReasonCodeRegistry`: rank fired codes, pick the primary; an unregistered code raises |
-| `adjustments` | `Adjustment`, `AdjustmentRegister`: scoped, dated, stack-ordered overlays; tighten-only is enforced when an overlay is defined; `apply_stack_step` records `<target>_unadjusted`, `adjustment_set_id`, `adjustments_applied` |
+| `reason_codes` | `ReasonCodes`, `Code`: the step that ranks fired codes in place and picks the primary; an unregistered code raises; `.rank(fired)` and `in` for code outside a flow |
+| `adjustments` | `AdjustmentStack`, `Overlay`, `Effect`: the step that applies scoped, dated, stack-ordered overlays to `target`; tighten-only is enforced when the document loads; it records `<target>_unadjusted`, `adjustment_set_id`, `adjustments_applied`; `.apply(...)` and `.due_for_review(on)` for code outside a flow |
 | `rounding` | `round_advance` (R100, half up), `round_instalment` (cent, half up), `round_rate` |
 | `instalment` | annuity instalment, total cost, total interest, effective rate, and `solve_advance_for_instalment`, the inverse |
 | `fees` | initiation and service fee, capped by the caps in force on the decision date |
@@ -182,6 +228,11 @@ fraud-verdict enums, and the names reserved for consumers (`account_id`, `event_
   infinite edges and set `allow_gaps`.
 - **What runs in Python.** Steps that read dates, lists of dicts or strings are Python on purpose and marked
   `@allow_fallback`; everything else, including all the tables, runs in the numba kernel.
+- **Data in fields, not objects.** A step never closes over a register or a module-level `dict`. The overlays, reason codes and version
+  histories are fields of their step; the account-type treatments and the scorecard's reason codes are tuples of pairs. A step that
+  read an object would raise `HiddenStateWarning` when it binds, could not be compared by `decider.lab.diff` and could not compile.
+  Dates inside a step's constants (overlay windows, version cut-overs) are ordinals (`date.toordinal()`), because the diff hashes
+  numbers and strings by content but not a `date`.
 - **The demo scores everyone.** An ineligible applicant is still scored; `outcome_code` is what gates the result.
 - **Rates in the card are percentages**, as Treasury would author them. `rate_card_rate` converts to the fraction
   `nominal_annual_rate` that the instalment maths uses.
@@ -191,6 +242,30 @@ fraud-verdict enums, and the names reserved for consumers (`account_id`, `event_
 
 This example reuses no other example. Later examples import it by package name (`from credit_core import ...`):
 the quote pipeline's capabilities are meant to be assembled into other flows, not copied. They rely on the names in
-the tables above staying stable, in particular `AdjustmentRegister`, `ReasonCodeRegistry`,
-`EffectiveDatedSet`, `generate_flex_loan_card`, `obligations.assess`, the `build_*_table()` functions and the
-`credit_core.vocab` codes.
+the tables above staying stable, in particular `AdjustmentStack`, `ReasonCodes`,
+`EffectiveVersions`, `generate_flex_loan_card`, `obligations.assess`, the `build_*_table()` functions, the
+`*_version_step` objects and the `credit_core.vocab` codes.
+
+### Migrating from the registers
+
+`AdjustmentRegister`, `ReasonCodeRegistry` and `EffectiveDatedSet` are being replaced and still work, unchanged, until the examples
+that import them move. A step built from one closes over an object: it warns, and a release check cannot compare it. The new classes
+accept the old row types (`Adjustment`, `ReasonCode`, `EffectiveVersion`), so a migration changes the constructor and the call sites
+below and leaves the data alone.
+
+| Old | New |
+|---|---|
+| `AdjustmentRegister([Adjustment(...), ...])` | one `AdjustmentStack(target=..., set_id=..., adjustments=[Adjustment(...), ...])` per target (a register for several targets becomes one stack each), or a `configs/<version>/*.json` document loaded with `ConfigurableStep.load` and passed to `build(...)` |
+| `register.apply_stack_step(target, set_id, base_field=, adjusted_output=, unadjusted_output=)` | the stack is the step: `AdjustmentStack(target=..., set_id=..., base_field=, adjusted_output=, unadjusted_output=, ...)`; same name (`apply_<target>_adjustments`), outputs and `adjustment_stack_enabled` param; `.relabel(...)` still works |
+| `register.apply_stack(target, base, provenance, on, set_id, stack_enabled=)` | `stack.apply(base, provenance, on, stack_enabled=)`, an `AdjustmentResult` as before; it matches any provenance field, while the step matches `product_code`, `segment_code`, `channel_code` and `scorecard_id` only |
+| `register.for_target(t)`, `register._all` | `stack.adjustments` |
+| `register.due_for_review(on)` | `stack.due_for_review(on)` |
+| `ReasonCodeRegistry(version, [ReasonCode(...), ...])` | `ReasonCodes(version=..., codes=[ReasonCode(...), ...])`, or a `reason_codes` document |
+| `registry.resolve_step()` | the `ReasonCodes` object is the step (name `rank_reasons`) |
+| `registry.rank(fired)`, `code in registry`, `registry.version` | unchanged on `ReasonCodes`; `registry._by_code[c]` becomes `{x.code: x for x in codes.codes}[c]` |
+| `EffectiveDatedSet(family, [EffectiveVersion(...), ...])` | `EffectiveVersions(family=..., versions=[EffectiveVersion(...), ...])` |
+| `dated.resolver_step(date_field=, output=)` | the `EffectiveVersions` object is the step; `date_field=` and `output=` are fields; name `resolve_<family>_version` and output `<family>_version` as before |
+| `dated.resolve(on)` | unchanged on `EffectiveVersions`; the result has `version_id`, `effective_from` and `effective_to` |
+
+One difference: the stack and the reason codes are frozen objects, so a test that builds a register and then edits it builds a new
+stack with `model_copy(update=...)` instead.
