@@ -373,9 +373,10 @@ def accepted_mixed_records(x: float) -> list[dict]:
 @pytest.mark.parametrize("mode", COMPILED)
 def test_an_accepted_step_numba_cannot_box_runs_under_strict_compile(mode):
     strict = Engine(strict_compile=True).bind(flow(accepted_mixed_records, name="p"), mode=mode)
-    # One column holds one type per field, so in a frame the number comes back as text.
-    out = strict.run(pl.DataFrame({"x": [1.5]}))["accepted_mixed_records"].to_list()
-    assert out == [[{"n": 1, "v": "x"}, {"n": 2, "v": "1.5"}]]
+    assert strict.score({"x": 1.5})["accepted_mixed_records"] == [{"n": 1, "v": "x"}, {"n": 2, "v": 1.5}]
+    # One column holds one type per field, so a frame refuses a number beside text rather than turning it into text.
+    with pytest.raises(ValueError, match="field \\[\\].v: holds number and str"):
+        strict.run(pl.DataFrame({"x": [1.5]}))
 
 
 def asserts_positive(x: float) -> float:
