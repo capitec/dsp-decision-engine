@@ -2,7 +2,6 @@ import json
 from collections import Counter
 from pathlib import Path
 
-from fraud_interdiction.reasons import REGISTRY
 from fraud_interdiction.rules import RuleSet
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,10 +20,10 @@ def test_the_estate_has_the_live_and_shadow_rules_of_each_family():
     assert shadow == {"CF": 31, "AT": 22, "MS": 40, "FP": 9, "AA": 12}
 
 
-def test_every_rule_id_is_unique_and_its_reason_code_is_in_the_registry():
+def test_every_rule_id_is_unique_and_its_reason_code_is_in_the_registry(documents):
     rules = load().rules
     assert len({r.rule_id for r in rules}) == len(rules) == 635
-    assert all(r.reason_code in REGISTRY for r in rules)
+    assert all(r.reason_code in documents["reason_codes"] for r in rules)
 
 
 def test_ms_0208_is_the_r8000_first_payment_rule_and_reads_the_overlay_multiplier():

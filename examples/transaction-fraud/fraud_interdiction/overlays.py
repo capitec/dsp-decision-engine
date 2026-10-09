@@ -2,48 +2,27 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import Any, Literal
 
-from decider import allow_fallback, param, step
+from decider import ConfigurableStep, allow_fallback, param
 
-from credit_core.adjustments import Adjustment, AdjustmentEffect, AdjustmentRegister
+from credit_core.adjustments import AdjustmentStack, evaluate
 
-from fraud_interdiction.vocab import CHANNEL_WEB, Action
+from fraud_interdiction.vocab import Action
 
-ADJUSTMENT_SET_ID = "ADJS-2026.01"
 AMOUNT_MULTIPLIER = "mule_scam_amount_multiplier"
 AT_WEB_ACTION = "at_web_action"
 
-REGISTER = AdjustmentRegister([
-    Adjustment(
-        adjustment_id="ADJ-2026-001", kind="cap_adjustment", target=AMOUNT_MULTIPLIER,
-        effect=AdjustmentEffect("multiply", round(1 / 1.4, 4)), scope={"family": "MS"}, stack_position=1,
-        owner="24/7 duty officer", approval_reference="DUTY-2026-0311",
-        rationale="Mule and scam family at 1.4x sensitivity for 72 hours during a live scam wave",
-        effective_from=date(2026, 3, 11), effective_to=date(2026, 3, 14), review_date=date(2026, 3, 14),
-        tighten_only=True),
-    Adjustment(
-        adjustment_id="ADJ-2026-002", kind="cap_adjustment", target=AMOUNT_MULTIPLIER,
-        effect=AdjustmentEffect("multiply", 0.7), scope={"family": "MS"}, stack_position=2,
-        owner="Head of Fraud", approval_reference="HOF-2025-1122",
-        rationale="Mule and scam amount thresholds x0.7 for the festive period",
-        effective_from=date(2025, 12, 1), effective_to=date(2026, 1, 15), review_date=date(2026, 1, 8),
-        tighten_only=True),
-    Adjustment(
-        adjustment_id="ADJ-2026-003", kind="action_escalation", target=AT_WEB_ACTION,
-        effect=AdjustmentEffect("set", float(Action.STEP_UP)), scope={"family": "AT", "channel_code": CHANNEL_WEB},
-        stack_position=1, owner="Head of Fraud", approval_reference="HOF-2026-0044",
-        rationale="Account-takeover rules that only monitor ask for a step-up on the web channel",
-        effective_from=date(2026, 1, 1), effective_to=date(2027, 1, 1), review_date=date(2026, 10, 1)),
-])
 
+def escalated_action(action: int, overlays: tuple, family: str, channel_code: int, on: int, stack_enabled: bool) -> int:
+    """The action a rule asks for once the escalation overlays (monitor to step-up) are applied.
 
-def escalated_action(action: int, family: str, channel_code: int, decision_date: date, stack_enabled: bool) -> int:
-    """The action a rule asks for once the escalation overlay (monitor to step-up) is applied."""
+    `overlays` is the escalation stack as `AdjustmentStack` packs it; `on` is the decision date's ordinal.
+    """
     if action != Action.MONITOR:
         return action
-    result = REGISTER.apply_stack(AT_WEB_ACTION, float(action), {"family": family, "channel_code": channel_code},
-                                  decision_date, ADJUSTMENT_SET_ID, stack_enabled=stack_enabled)
-    return int(result.adjusted_value)
+    value, _, _ = evaluate(overlays, float(action), {"family": family, "channel_code": channel_code}, on, stack_enabled)
+    return int(value)
 
 
 def adjustment_stack_enabled(adjustment_stack_enabled: bool = param(True)) -> bool:
@@ -52,12 +31,33 @@ def adjustment_stack_enabled(adjustment_stack_enabled: bool = param(True)) -> bo
 
 
 @allow_fallback
-def amount_overlays(decision_date: date, adjustment_stack_enabled: bool) -> tuple[float, float, str, list[str]]:
-    result = REGISTER.apply_stack(AMOUNT_MULTIPLIER, 1.0, {"family": "MS"}, decision_date, ADJUSTMENT_SET_ID,
-                                  stack_enabled=adjustment_stack_enabled)
-    return (result.adjusted_value, result.unadjusted_value, result.adjustment_set_id,
-            list(result.adjustments_applied))
+def apply_amount_overlays(
+    decision_date: date, adjustment_stack_enabled: bool, overlays: tuple, set_id: str, family: str,
+) -> tuple[float, float, str, list[str]]:
+    value, applied, _ = evaluate(overlays, 1.0, {"family": family}, decision_date.toordinal(), adjustment_stack_enabled)
+    return value, 1.0, set_id, applied
 
 
-multiplier_step = step(amount_overlays, outputs=(AMOUNT_MULTIPLIER, f"{AMOUNT_MULTIPLIER}_unadjusted",
-                                             "adjustment_set_id", "applied_adjustment_ids"))
+class AmountOverlays(ConfigurableStep):
+    """The overlays on the mule and scam amount thresholds, as a multiplier starting at 1.
+
+    The `stack` is an `adjustment_stack` document whose overlays are scoped to `family`. The step reads the
+    `adjustment_stack_enabled` column rather than a param of its own, so one switch turns every overlay off.
+    It writes `mule_scam_amount_multiplier`, `mule_scam_amount_multiplier_unadjusted`, `adjustment_set_id` and
+    `applied_adjustment_ids`.
+
+    Example::
+
+        overlays = ConfigurableStep.load("configs/0.1.0/amount_overlays.json")
+        flow(adjustment_stack_enabled, overlays).score({"decision_date": date(2025, 12, 15)})
+    """
+
+    type: Literal["amount_overlays"] = "amount_overlays"
+    family: str = "MS"
+    stack: AdjustmentStack
+
+    def to_ir(self, ctx: Any) -> Any:
+        return ctx.call(
+            self, apply_amount_overlays,
+            values={"overlays": self.stack._ordered(), "set_id": self.stack.set_id, "family": self.family},
+            outputs=(AMOUNT_MULTIPLIER, f"{AMOUNT_MULTIPLIER}_unadjusted", "adjustment_set_id", "applied_adjustment_ids"))
