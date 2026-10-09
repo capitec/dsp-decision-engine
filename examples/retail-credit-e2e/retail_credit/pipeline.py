@@ -51,12 +51,14 @@ EMIT = (
 )
 
 
-def build(pd_overlays=None, amount_cap_overlays=None, buffer_overlays=None, rate_addon_overlays=None):
-    """Each argument is the overlay document of that name from `configs/<version>/`; without one, the shipped document."""
+def build(pd_overlays=None, amount_cap_overlays=None, buffer_overlays=None, rate_addon_overlays=None,
+          reason_codes=None):
+    """Each argument is the document of that name from `configs/<version>/`; without one, the shipped document."""
     pd_overlays = pd_overlays or shipped("pd_overlays")
     amount_cap_overlays = amount_cap_overlays or shipped("amount_cap_overlays")
     buffer_overlays = buffer_overlays or shipped("buffer_overlays")
     rate_addon_overlays = rate_addon_overlays or shipped("rate_addon_overlays")
+    reason_codes = reason_codes or shipped("reason_codes")
     return dag(
         intake.validate_request_step, intake.resolve_identity_step,
         eligibility.eligibility_gates_step, eligibility.hard_eligibility_reasons_step, eligibility.is_eligible_step,
@@ -85,6 +87,6 @@ def build(pd_overlays=None, amount_cap_overlays=None, buffer_overlays=None, rate
         step(offer.decision_open), offer.assemble_offer_step, offer.priced_offer_step, step(flex_card.rate_cell_id),
         step(offer.total_cost_of_credit), step(offer.total_interest), instalment.effective_annual_rate_step,
 
-        validation.revalidate_offer_step, disclosure.reasons_unit(), disclosure.outcome_code_step,
+        validation.revalidate_offer_step, disclosure.reasons_unit(reason_codes), disclosure.outcome_code_step,
         name="retail_credit",
     ).emit(*EMIT)
