@@ -246,26 +246,3 @@ the tables above staying stable, in particular `AdjustmentStack`, `ReasonCodes`,
 `EffectiveVersions`, `generate_flex_loan_card`, `obligations.assess`, the `build_*_table()` functions, the
 `*_version_step` objects and the `credit_core.vocab` codes.
 
-### Migrating from the registers
-
-`AdjustmentRegister`, `ReasonCodeRegistry` and `EffectiveDatedSet` are being replaced and still work, unchanged, until the examples
-that import them move. A step built from one closes over an object: it warns, and a release check cannot compare it. The new classes
-accept the old row types (`Adjustment`, `ReasonCode`, `EffectiveVersion`), so a migration changes the constructor and the call sites
-below and leaves the data alone.
-
-| Old | New |
-|---|---|
-| `AdjustmentRegister([Adjustment(...), ...])` | one `AdjustmentStack(target=..., set_id=..., adjustments=[Adjustment(...), ...])` per target (a register for several targets becomes one stack each), or a `configs/<version>/*.json` document loaded with `ConfigurableStep.load` and passed to `build(...)` |
-| `register.apply_stack_step(target, set_id, base_field=, adjusted_output=, unadjusted_output=)` | the stack is the step: `AdjustmentStack(target=..., set_id=..., base_field=, adjusted_output=, unadjusted_output=, ...)`; same name (`apply_<target>_adjustments`), outputs and `adjustment_stack_enabled` param; `.relabel(...)` still works |
-| `register.apply_stack(target, base, provenance, on, set_id, stack_enabled=)` | `stack.apply(base, provenance, on, stack_enabled=)`, an `AdjustmentResult` as before; it matches any provenance field, as the step does |
-| `register.for_target(t)`, `register._all` | `stack.adjustments` |
-| `register.due_for_review(on)` | `stack.due_for_review(on)` |
-| `ReasonCodeRegistry(version, [ReasonCode(...), ...])` | `ReasonCodes(version=..., codes=[ReasonCode(...), ...])`, or a `reason_codes` document |
-| `registry.resolve_step()` | the `ReasonCodes` object is the step (name `rank_reasons`) |
-| `registry.rank(fired)`, `code in registry`, `registry.version` | unchanged on `ReasonCodes`; `registry._by_code[c]` becomes `{x.code: x for x in codes.codes}[c]` |
-| `EffectiveDatedSet(family, [EffectiveVersion(...), ...])` | `EffectiveVersions(family=..., versions=[EffectiveVersion(...), ...])` |
-| `dated.resolver_step(date_field=, output=)` | the `EffectiveVersions` object is the step; `date_field=` and `output=` are fields; name `resolve_<family>_version` and output `<family>_version` as before |
-| `dated.resolve(on)` | `versions.version_on(on)` (`resolve` is the step-type lookup on every step class); the result has `version_id`, `effective_from` and `effective_to` |
-
-One difference: the stack and the reason codes are frozen objects, so a test that builds a register and then edits it builds a new
-stack with `model_copy(update=...)` instead.
