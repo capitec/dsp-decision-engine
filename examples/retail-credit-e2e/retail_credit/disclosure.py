@@ -3,17 +3,10 @@ from __future__ import annotations
 
 from decider import allow_fallback, flow, missing_as, step
 
-from credit_core import reason_codes
 from credit_core.affordability import FAIL, INDETERMINATE, MARGINAL, PASS
-from credit_core.eligibility import (
-    R_ADMINISTRATION, R_DEBT_REVIEW, R_DECEASED, R_EXCLUSION_LIST, R_NO_CAPACITY, R_NOT_RESIDENT, R_PRODUCT_UNAVAILABLE,
-    R_SANCTIONED, R_UNDERAGE,
-)
-from credit_core.reason_codes import ReasonCode
 from credit_core.vocab import (
     OUTCOME_APPROVE, OUTCOME_APPROVE_WITH_CONDITIONS, OUTCOME_DECLINE, OUTCOME_REFER, FraudVerdictCode,
 )
-from retail_credit import caps, eligibility, routing, validation
 from retail_credit.vocab import BASIS_HYPOTHETICAL, OUTCOME_REJECTED
 
 R_AFFORDABILITY_FAIL = 2140
@@ -22,37 +15,6 @@ R_FRAUD_DECLINE = 2001
 R_FRAUD_REFER = 2002
 R_VALIDATION_FAILED = 2701
 
-REASON_REGISTRY = reason_codes.ReasonCodeRegistry("reasons-2026.09", [
-    ReasonCode(R_UNDERAGE, 10, "Applicant below minimum age", True),
-    ReasonCode(R_NOT_RESIDENT, 15, "Applicant not resident", True),
-    ReasonCode(R_NO_CAPACITY, 5, "No contractual capacity", True),
-    ReasonCode(R_PRODUCT_UNAVAILABLE, 40, "Product not available to applicant", False),
-    ReasonCode(R_EXCLUSION_LIST, 8, "On an internal exclusion list", True),
-    ReasonCode(R_SANCTIONED, 1, "Sanctioned party", True),
-    ReasonCode(R_DECEASED, 2, "Deceased on record", True),
-    ReasonCode(R_DEBT_REVIEW, 12, "Under debt review", True),
-    ReasonCode(R_ADMINISTRATION, 12, "Under administration", True),
-    ReasonCode(eligibility.R_AGE_AT_MATURITY, 11, "Age at maturity exceeds the product maximum", True),
-    ReasonCode(eligibility.R_IN_FLIGHT_DUPLICATE, 30, "A duplicate application is already in flight", False),
-    ReasonCode(eligibility.R_BUREAU_CONSENT_MISSING, 3, "Bureau enquiry consent not given", True),
-    ReasonCode(routing.R_AMOUNT_OUT_OF_RANGE, 41, "Requested amount outside the product's range", False),
-    ReasonCode(routing.R_TERM_OUT_OF_RANGE, 42, "Requested term outside the product's range", False),
-    ReasonCode(routing.R_GRADE_WORSE_THAN_ACCEPTABLE, 20, "Risk grade worse than the policy caps allow", False),
-    ReasonCode(caps.R_CHANNEL_CLOSED, 44, "Channel not open for this product", False),
-    ReasonCode(caps.R_APPETITE_DECLINE, 21, "Risk grade outside the Bank's appetite", False),
-    ReasonCode(caps.R_ENQUIRY_VELOCITY_DECLINE, 22, "Bureau enquiry velocity too high", False),
-    ReasonCode(R_AFFORDABILITY_FAIL, 20, "Proposed instalment exceeds affordable capacity", True),
-    ReasonCode(R_NO_AFFORDABLE_AMOUNT, 26, "No amount at or above the product minimum fits the instalment ceiling", False),
-    ReasonCode(R_FRAUD_DECLINE, 1, "Application fraud verdict: decline", True),
-    ReasonCode(R_FRAUD_REFER, 6, "Application fraud verdict: refer", True),
-    ReasonCode(R_VALIDATION_FAILED, 27, "Offer failed final validation", False),
-    ReasonCode(validation.A_AMOUNT_ON_GRID, 50, "Offer amount not on the R250 grid", False),
-    ReasonCode(validation.A_AMOUNT_WITHIN_CAP, 23, "Offer amount exceeds the cap in force", False),
-    ReasonCode(validation.A_TERM_WITHIN_CAP, 24, "Offer term exceeds the cap in force", False),
-    ReasonCode(validation.A_RATE_WITHIN_CEILING, 4, "Rate exceeds the statutory ceiling", True),
-    ReasonCode(validation.A_INSTALMENT_AFFORDABLE, 20, "Offer instalment exceeds affordable capacity", True),
-])
-
 
 @allow_fallback
 def decline_reason_codes(
@@ -60,8 +22,8 @@ def decline_reason_codes(
     p09_declined: bool, p09_decline_reason: int, offer_affordability_verdict_code: int, decision_open: bool,
     has_offer: bool, validation_failed_assertions: list[int],
 ) -> list[int]:
-    """Every reason any phase raised, before ranking, which `REASON_REGISTRY` then does in place. A rejected request
-    has none: a rejection is not a decline."""
+    """Every reason any phase raised, before ranking, which the `reason_codes` document then ranks in place.
+    A rejected request has none: a rejection is not a decline."""
     if not p01_valid:
         return []
     reasons = [*hard_eligibility_reasons, *product_routing_reasons, *validation_failed_assertions]
@@ -104,9 +66,9 @@ def outcome_code(
     return OUTCOME_APPROVE
 
 
-def reasons_unit():
+def reasons_unit(reason_codes):
     """`decline_reason_codes` fired, then ranked in place; writes the ranked list, `primary_reason_code` and the version."""
-    return flow(step(decline_reason_codes), REASON_REGISTRY.resolve_step(), name="reasons").emit(
+    return flow(step(decline_reason_codes), reason_codes, name="reasons").emit(
         "decline_reason_codes", "primary_reason_code", "reason_registry_version")
 
 

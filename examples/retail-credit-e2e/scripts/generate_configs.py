@@ -1,4 +1,4 @@
-"""Write `configs/<version>/`: the four overlay documents, and `params.json` with every policy number at its default,
+"""Write `configs/<version>/`: the four overlay documents, the reason codes, and `params.json` with every policy number at its default,
 this product's fee and premium terms and the Flex Loan rate card.
 
     uv run python examples/retail-credit-e2e/scripts/generate_configs.py [version]
@@ -8,8 +8,10 @@ import re
 import sys
 from pathlib import Path
 
+from credit_core import eligibility as core_eligibility
 from decider import ConfigurableStep
 
+from retail_credit import caps, disclosure, eligibility, routing, validation
 from retail_credit.flex_card import card_tables
 from retail_credit.pipeline import build
 
@@ -45,6 +47,45 @@ OVERLAYS = {
                 "60 basis point add-on for segment 4 pending the next card refresh", "2027-12-31")]),
 }
 
+# code, severity rank (1 is the most severe), description, whether the reason is regulatory
+REASON_CODES = {
+    "type": "reason_codes", "name": "rank_reasons", "version": "reasons-2026.09",
+    "codes": [
+        {"code": code, "severity_rank": rank, "description": description, "is_regulatory": regulatory}
+        for code, rank, description, regulatory in [
+            (core_eligibility.R_UNDERAGE, 10, "Applicant below minimum age", True),
+            (core_eligibility.R_NOT_RESIDENT, 15, "Applicant not resident", True),
+            (core_eligibility.R_NO_CAPACITY, 5, "No contractual capacity", True),
+            (core_eligibility.R_PRODUCT_UNAVAILABLE, 40, "Product not available to applicant", False),
+            (core_eligibility.R_EXCLUSION_LIST, 8, "On an internal exclusion list", True),
+            (core_eligibility.R_SANCTIONED, 1, "Sanctioned party", True),
+            (core_eligibility.R_DECEASED, 2, "Deceased on record", True),
+            (core_eligibility.R_DEBT_REVIEW, 12, "Under debt review", True),
+            (core_eligibility.R_ADMINISTRATION, 12, "Under administration", True),
+            (eligibility.R_AGE_AT_MATURITY, 11, "Age at maturity exceeds the product maximum", True),
+            (eligibility.R_IN_FLIGHT_DUPLICATE, 30, "A duplicate application is already in flight", False),
+            (eligibility.R_BUREAU_CONSENT_MISSING, 3, "Bureau enquiry consent not given", True),
+            (routing.R_AMOUNT_OUT_OF_RANGE, 41, "Requested amount outside the product's range", False),
+            (routing.R_TERM_OUT_OF_RANGE, 42, "Requested term outside the product's range", False),
+            (routing.R_GRADE_WORSE_THAN_ACCEPTABLE, 20, "Risk grade worse than the policy caps allow", False),
+            (caps.R_CHANNEL_CLOSED, 44, "Channel not open for this product", False),
+            (caps.R_APPETITE_DECLINE, 21, "Risk grade outside the Bank's appetite", False),
+            (caps.R_ENQUIRY_VELOCITY_DECLINE, 22, "Bureau enquiry velocity too high", False),
+            (disclosure.R_AFFORDABILITY_FAIL, 20, "Proposed instalment exceeds affordable capacity", True),
+            (disclosure.R_NO_AFFORDABLE_AMOUNT, 26,
+             "No amount at or above the product minimum fits the instalment ceiling", False),
+            (disclosure.R_FRAUD_DECLINE, 1, "Application fraud verdict: decline", True),
+            (disclosure.R_FRAUD_REFER, 6, "Application fraud verdict: refer", True),
+            (disclosure.R_VALIDATION_FAILED, 27, "Offer failed final validation", False),
+            (validation.A_AMOUNT_ON_GRID, 50, "Offer amount not on the R250 grid", False),
+            (validation.A_AMOUNT_WITHIN_CAP, 23, "Offer amount exceeds the cap in force", False),
+            (validation.A_TERM_WITHIN_CAP, 24, "Offer term exceeds the cap in force", False),
+            (validation.A_RATE_WITHIN_CEILING, 4, "Rate exceeds the statutory ceiling", True),
+            (validation.A_INSTALMENT_AFFORDABLE, 20, "Offer instalment exceeds affordable capacity", True),
+        ]
+    ],
+}
+
 STEP_OVERRIDES = {
     "initiation_fee": {"base_fee": 210.0, "marginal_rate": 0.095, "threshold": 1200.0},
     "credit_life_premium": {"cap": 1000.0},
@@ -65,9 +106,10 @@ def fill(node: dict, tables: dict) -> None:
 def main(version: str = "0.1.0") -> None:
     out = Path(__file__).resolve().parents[1] / "configs" / version
     out.mkdir(parents=True, exist_ok=True)
-    for name, document in OVERLAYS.items():
+    documents = {**OVERLAYS, "reason_codes": REASON_CODES}
+    for name, document in documents.items():
         (out / f"{name}.json").write_text(json.dumps(document, indent=2) + "\n")
-    params = build(**{name: ConfigurableStep.load(document) for name, document in OVERLAYS.items()}).parameters().defaults()
+    params = build(**{name: ConfigurableStep.load(document) for name, document in documents.items()}).parameters().defaults()
     fill(params, card_tables())
     text = json.dumps(params, indent=2)
     text = re.sub(r'\{\s+"(rate|floor)": ([^\s,}]+)\s+\}', r'{"\1": \2}', text)  # one card row per line
