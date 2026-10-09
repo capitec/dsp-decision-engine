@@ -30,6 +30,6 @@ def test_a_list_of_dicts_mixing_int_and_float_in_one_field_runs_over_a_frame():
 
 
 @pytest.mark.parametrize("mode", MODES)
-def test_a_dict_with_int_keys_runs_over_a_frame(mode):
+def test_a_dict_with_int_keys_runs_over_a_frame_with_its_keys_as_text(mode):
     out = Engine().bind(flow(int_keyed, name="p"), mode=mode).run(FRAME)
-    assert out["by_code"].to_list() == [{1: "x", 2: "y"}] * 2
+    assert out["by_code"].to_list() == [{"1": "x", "2": "y"}] * 2

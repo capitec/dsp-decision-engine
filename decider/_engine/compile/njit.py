@@ -17,6 +17,7 @@ from numba.core.errors import NumbaError, UnsupportedBytecodeError
 # as CPython does; its SALT keys numba's disk cache.
 from decider._engine.compile.semantics import SALT
 from decider._engine.concurrency import Cache, once
+from decider._engine.compile.declared import tuple_mismatch
 from decider._engine.compile.fingerprint import fingerprint
 from decider._engine.compile.rows import rows_probe
 from decider._engine.compile.span import SPAN
@@ -180,11 +181,14 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None, bool]:
                   "return a plain Struct[...] instead")
     # A `Struct[Item]` output compiles when the step returns a tuple of its fields; a dict return
     # has no record a kernel stores, so the step stays on the Python path it has today.
-    if reason is None and struct_item(base_annotation(node.outputs[0].annotation) if len(node.outputs) == 1 else "") is not None:
+    struct = struct_item(base_annotation(node.outputs[0].annotation)) if len(node.outputs) == 1 else None
+    if reason is None and struct is not None:
         ret = dispatcher.overloads[sig].signature.return_type
         if isinstance(ret, types.DictType):
             reason = (f"writes '{node.outputs[0].name}' as Struct[...] by returning a dict, which no "
                       "kernel stores; return a tuple of the fields to compile it")
+        elif isinstance(ret, types.BaseTuple):
+            reason = tuple_mismatch(node.outputs[0], struct, ret.types)
     # Scalar only: the wrapper calls the dispatcher with the step's own positional args, which is
     # not how a row node's `fn(row, params, consts)` is called.
     ragged_item = (columnar_item(base_annotation(node.outputs[0].annotation))
@@ -219,10 +223,12 @@ def _ragged_reason(output: Output, item: Any, dispatcher: Dispatcher, sig: tuple
                 "a Columnar[...] output item must be float, int or bool")
     ret = dispatcher.overloads[sig].signature.return_type
     fields = ret.dtype.types if isinstance(ret, types.List) and isinstance(ret.dtype, types.BaseTuple) else None
-    if fields is None or len(fields) != len(schema):
+    if fields is not None and len(fields) != len(schema):
+        return tuple_mismatch(output, item, fields)
+    if fields is None:
         return (f"writes '{output.name}' as Columnar[...] by returning a list of dicts, which no "
                 "kernel stores; return a list of tuples to compile it")
-    return None
+    return tuple_mismatch(output, item, fields)
 
 
 def _ragged_wrapper(dispatcher: Dispatcher) -> Callable:
