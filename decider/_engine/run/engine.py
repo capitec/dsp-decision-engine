@@ -79,8 +79,7 @@ class Engine:
             raise EngineError(f"unknown mode {mode!r}; expected one of {sorted(RUNNERS)}")
         runner = runner() if runner is InterpretedRunner else runner(strict=self.strict_compile)
         exe = Executable(resolve(step_or_ir), runner, self.params_validation == "lazy", step_or_ir)
-        # ponytail: pass `strict=self.strict_compile` to raise instead of warning once the examples are clean.
-        warn_hidden_state(exe.plan)
+        warn_hidden_state(exe.plan, strict=self.strict_compile)
         return exe
 
 
