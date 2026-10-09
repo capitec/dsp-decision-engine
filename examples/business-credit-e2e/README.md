@@ -95,7 +95,7 @@ The scale is not a cause of probability movement. It decides whether two grades 
 |---|---|
 | Another example's `build()` embedded whole as the first step of a `flow`, its params nested under the outer flow's name | [pipeline.py](business_credit_e2e/pipeline.py), [`configs/0.1.0/params.json`](configs/0.1.0/params.json) |
 | `param` for the policy a facility adds (the minimum payment), next to the params of the embedded assessment | [pipeline.py](business_credit_e2e/pipeline.py) |
-| An effective-dated library (`EffectiveDatedSet.resolver_step`) that picks a version by `decision_date` once, and a pinned instance that never resolves again | [covenant.py](business_credit_e2e/covenant.py), [tests/test_covenant.py](tests/test_covenant.py) |
+| An effective-dated library (`EffectiveVersions`, a document) that picks a version by `decision_date` once, a second document (`CovenantTerms`) that gives each version its threshold and cure period, and a pinned instance that never resolves again | [covenant.py](business_credit_e2e/covenant.py), [`configs/0.1.0/dscr_versions.json`](configs/0.1.0/dscr_versions.json), [`dscr_terms.json`](configs/0.1.0/dscr_terms.json), [tests/test_covenant.py](tests/test_covenant.py) |
 | `@helper` functions called from compiled steps, and `@allow_fallback` where a step is Python on purpose (dates, strings, lists of dicts) | [covenant.py](business_credit_e2e/covenant.py), [pipeline.py](business_credit_e2e/pipeline.py), [tests/test_serving.py](tests/test_serving.py) |
 | A typed list input (`list[Account]`), so the `opened_date`s in the request arrive as dates from raw JSON | [covenant.py](business_credit_e2e/covenant.py), [tests/test_serving.py](tests/test_serving.py) |
 | One compiled pipeline scored many times with changed records and params: the counterfactual runs behind a cause | [review.py](business_credit_e2e/review.py), [tests/test_review.py](tests/test_review.py) |
@@ -216,19 +216,33 @@ Tests (run from the repository root, with `PYTHONPATH` set as above):
 uv run pytest examples/business-credit-e2e -q
 ```
 
-To regenerate `configs/0.1.0/params.json`: `uv run python scripts/generate_configs.py`.
+To regenerate `configs/0.1.0/` (`params.json` and the two covenant documents): `uv run python scripts/generate_configs.py`.
+
+### The covenant documents
+
+The DSCR definition history and its terms are config documents, so a business user reads and edits them and a release
+check sees a changed threshold. `build` receives them by name from `configs/<version>/`.
+
+```json
+// dscr_versions.json (an EffectiveVersions step; gaps and overlaps are rejected when it loads)
+{"type": "effective_versions", "family": "COV-DSCR", "output": "covenant_definition_version",
+ "versions": [{"version_id": "dscr-2026.03", "effective_from": "2026-03-01", "effective_to": "2028-09-01"}, ...]}
+// dscr_terms.json (a CovenantTerms step)
+{"type": "covenant_terms", "name": "covenant_terms",
+ "terms": [{"version_id": "dscr-2026.03", "threshold": 1.25, "cure_days": 30}, ...]}
+```
 
 ## Layout
 
 ```
 business_credit_e2e/
   pipeline.py           build(): the assessment, the facility's instalment, the master scale, the DSCR covenant
-  covenant.py           the DSCR library and its steps; bind_covenant, evaluate, certificate_not_received
+  covenant.py           the DSCR terms step, the shipped documents and the library's functions; bind_covenant, evaluate, certificate_not_received
   review.py             annual_review, review_basis_code, next_review_date, limit_decision
   history.py            DecisionStore, decision_of_record, grade_migration, entity facts and their two queries
   records.py            parse_dates: what the handler does to a JSON request, for in-process callers
   vocab.py              the codes this example declares
-configs/0.1.0/params.json
+configs/0.1.0/params.json, dscr_versions.json, dscr_terms.json
 scripts/generate_configs.py
 sample_request.json
 tests/
@@ -242,7 +256,7 @@ sample and lists what was loaded:
 | Example | What this one takes | Where |
 |---|---|---|
 | [`business-nested`](../business-nested/README.md) (`business_nested`) | The whole decision: `pipeline.build()` embedded as the first step, so structure, entities, events, people, financials, grade, price and outcome are its own. `counterfactual.reassess_entity` is tested against the full run | [pipeline.py](business_credit_e2e/pipeline.py), [tests/test_daily_pass.py](tests/test_daily_pass.py) |
-| [`shared-credit-core`](../shared-credit-core/README.md) (`credit_core`) | 15 of its 25 modules are imported by a decision, almost all through `business_nested` and `assessment`: adjustments, adverse_events, affordability, calibration, dates, deductions, evidence, expense_norms, fees, income, instalment, obligations, reason_codes, rounding, vocab. Directly, this example calls `dates.EffectiveDatedSet` (the covenant versions) and `obligations.assess` (the DSCR's existing debt service) | [covenant.py](business_credit_e2e/covenant.py) |
+| [`shared-credit-core`](../shared-credit-core/README.md) (`credit_core`) | 15 of its 25 modules are imported by a decision, almost all through `business_nested` and `assessment`: adjustments, adverse_events, affordability, calibration, dates, deductions, evidence, expense_norms, fees, income, instalment, obligations, reason_codes, rounding, vocab. Directly, this example uses `dates.EffectiveVersions` (the covenant versions) and `obligations.assess` (the DSCR's existing debt service) | [covenant.py](business_credit_e2e/covenant.py) |
 | [`affordability`](../affordability/README.md) (`assessment`) | Imported and built inside `business_nested`, but it *runs* only for sole proprietors (`legal_form_code` 1). The sample is a company, so no test here runs it | via `business_nested.sole_proprietor` |
 | [`credit-limit-management`](../credit-limit-management/README.md) (`limit_mgmt`) | The per-account decision, for the limit decision in a revolving facility's review. Not imported by a new application | [review.py](business_credit_e2e/review.py) (`limit_decision`), [tests/test_review.py](tests/test_review.py) |
 | [`consolidation`](../consolidation/README.md) | Nothing. A consolidation or restructure of a business facility would use its inventory and settlement, and this example has no such decision | |
@@ -256,8 +270,8 @@ Nothing is built on this one yet. These are stable if it is:
 
 | Name | Use |
 |---|---|
-| `pipeline.build()`, `pipeline.OUTPUTS` | The new application as one step; its params appear under `business_credit_e2e/...` |
-| `covenant.DSCR_HISTORY`, `bind_covenant`, `evaluate`, `certificate_not_received` | A covenant library resolved once and a test of a bound instance |
+| `pipeline.build()`, `pipeline.OUTPUTS` | The new application as one step; its params appear under `business_credit_e2e/...`. `build(dscr_versions, dscr_terms)` takes the two covenant documents from `configs/<version>/` and defaults to the shipped ones |
+| `covenant.load_covenant_documents`, `CovenantTerms`, `bind_covenant`, `evaluate`, `certificate_not_received` | A covenant library resolved once and a test of a bound instance |
 | `history.DecisionStore`, `decision_of_record`, `grade_migration`, `entity_fact`, `query_effective`, `query_knowledge` | The decision chain and the two views of what the Bank knew |
 | `review.annual_review`, `review_basis_code`, `next_review_date`, `limit_decision` | The review and its parts |
 | `records.parse_dates` | A JSON request with its dates parsed |
