@@ -18,40 +18,41 @@ _ACTIONS = frozenset(range(v.AUTOMATED_SMS, v.SETTLEMENT_OFFER + 1))
 _CONTACT = frozenset(range(v.AUTOMATED_SMS, v.FIELD_VISIT + 1)) | {v.SETTLEMENT_OFFER}
 _VOICE_AND_FIELD = frozenset({v.AUTOMATED_VOICE_MESSAGE, v.AGENT_CALL_LOW, v.AGENT_CALL_STANDARD,
                               v.AGENT_CALL_HIGH, v.FIELD_VISIT})
-_CONSENT_CHANNEL_TREATMENTS = {
-    ConsentChannel.SMS: {v.AUTOMATED_SMS}, ConsentChannel.PUSH: {v.IN_APP_MESSAGE},
-    ConsentChannel.VOICE: {v.AUTOMATED_VOICE_MESSAGE, v.AGENT_CALL_LOW, v.AGENT_CALL_STANDARD, v.AGENT_CALL_HIGH},
-    ConsentChannel.EMAIL: {v.AUTOMATED_EMAIL},
-}
+_CONSENT_CHANNEL_TREATMENTS = (
+    (ConsentChannel.SMS, frozenset({v.AUTOMATED_SMS})), (ConsentChannel.PUSH, frozenset({v.IN_APP_MESSAGE})),
+    (ConsentChannel.VOICE, frozenset({v.AUTOMATED_VOICE_MESSAGE, v.AGENT_CALL_LOW, v.AGENT_CALL_STANDARD,
+                                      v.AGENT_CALL_HIGH})),
+    (ConsentChannel.EMAIL, frozenset({v.AUTOMATED_EMAIL})),
+)
 
-# code -> (scope, source, how it lifts, treatments it blocks). Cells computed per account override source and expiry.
-RULES: dict[int, tuple[str, str, str, frozenset[int]]] = {
-    101: ("contact_except_statutory_notices", "debt_review_registry", "event:stage_change",
-          _ACTIONS - {v.PRE_LEGAL_NOTICE}),
-    102: ("all_except_arrangement_servicing", "debt_review_registry", "event:stage_change", _ACTIONS),
-    103: ("all_except_rearrangement_servicing", "debt_review_registry", "event:order_set_aside_or_clearance",
-          _ACTIONS),
-    104: ("partial_releases_103", "debt_review_registry", "event:prescribed_process_complete", _ACTIONS),
-    105: ("all_normal_collections", "administration_registry", "event:discharge", _ACTIONS),
-    106: ("all", "insolvency_registry", "event:rehabilitation", _ACTIONS | {v.WRITE_OFF_RECOMMENDATION}),
-    107: ("all_client_contact", "status_feed", "event:estate_finalised", _ACTIONS),
-    108: ("contact_and_legal", "complaints_register", "event:complaint_resolved", _ACTIONS),
-    109: ("contact_and_legal", "ombud_register", "event:case_closed", _ACTIONS),
-    110: ("legal_and_agency_handover_written_contact_only", "dispute_log", "event:dispute_resolved",
-          _VOICE_AND_FIELD | {v.AGENCY_HANDOVER, v.PRE_LEGAL_NOTICE, v.LEGAL_HANDOVER}),
-    111: ("all_while_performing", "hardship_declarations", "event:first_missed_instalment", _ACTIONS),
-    112: ("legal_handover_only", "notice_proof", "date", frozenset({v.LEGAL_HANDOVER})),
-    113: ("all_non_legal", "attorney_panel_feed", "event:judgment_or_withdrawal", _ACTIONS - {v.LEGAL_HANDOVER}),
-    114: ("all_collection_activity", "prescription_derivation", "permanent_unless_interrupted", _ACTIONS),
-    115: ("sms_voice_and_field", "contact_hours_calendar", "event:window_boundary",
-          _VOICE_AND_FIELD | {v.AUTOMATED_SMS}),
-    116: ("channel", "core.consent", "event:consent_re_obtained", frozenset()),
-    117: ("contact_channels", "contact_history_window", "date", frozenset(range(v.AUTOMATED_SMS, v.FIELD_VISIT + 1))),
-    118: ("voice_and_field", "client_preference", "event:withdrawn_by_client", _VOICE_AND_FIELD),
-    119: ("all_except_promise_reminder", "promise", "date", _ACTIONS - {v.AUTOMATED_SMS}),
-    120: ("contact_channels", "core.consent", "event:contact_point_validated",
-          frozenset(range(v.AUTOMATED_SMS, v.AGENT_CALL_HIGH + 1)) | {v.SETTLEMENT_OFFER}),
-}
+# (code, scope, source, how it lifts, treatments it blocks). Values computed per account override source and expiry.
+RULES: tuple[tuple[int, str, str, str, frozenset[int]], ...] = (
+    (101, "contact_except_statutory_notices", "debt_review_registry", "event:stage_change",
+        _ACTIONS - {v.PRE_LEGAL_NOTICE}),
+    (102, "all_except_arrangement_servicing", "debt_review_registry", "event:stage_change", _ACTIONS),
+    (103, "all_except_rearrangement_servicing", "debt_review_registry", "event:order_set_aside_or_clearance",
+        _ACTIONS),
+    (104, "partial_releases_103", "debt_review_registry", "event:prescribed_process_complete", _ACTIONS),
+    (105, "all_normal_collections", "administration_registry", "event:discharge", _ACTIONS),
+    (106, "all", "insolvency_registry", "event:rehabilitation", _ACTIONS | {v.WRITE_OFF_RECOMMENDATION}),
+    (107, "all_client_contact", "status_feed", "event:estate_finalised", _ACTIONS),
+    (108, "contact_and_legal", "complaints_register", "event:complaint_resolved", _ACTIONS),
+    (109, "contact_and_legal", "ombud_register", "event:case_closed", _ACTIONS),
+    (110, "legal_and_agency_handover_written_contact_only", "dispute_log", "event:dispute_resolved",
+        _VOICE_AND_FIELD | {v.AGENCY_HANDOVER, v.PRE_LEGAL_NOTICE, v.LEGAL_HANDOVER}),
+    (111, "all_while_performing", "hardship_declarations", "event:first_missed_instalment", _ACTIONS),
+    (112, "legal_handover_only", "notice_proof", "date", frozenset({v.LEGAL_HANDOVER})),
+    (113, "all_non_legal", "attorney_panel_feed", "event:judgment_or_withdrawal", _ACTIONS - {v.LEGAL_HANDOVER}),
+    (114, "all_collection_activity", "prescription_derivation", "permanent_unless_interrupted", _ACTIONS),
+    (115, "sms_voice_and_field", "contact_hours_calendar", "event:window_boundary",
+        _VOICE_AND_FIELD | {v.AUTOMATED_SMS}),
+    (116, "channel", "core.consent", "event:consent_re_obtained", frozenset()),
+    (117, "contact_channels", "contact_history_window", "date", frozenset(range(v.AUTOMATED_SMS, v.FIELD_VISIT + 1))),
+    (118, "voice_and_field", "client_preference", "event:withdrawn_by_client", _VOICE_AND_FIELD),
+    (119, "all_except_promise_reminder", "promise", "date", _ACTIONS - {v.AUTOMATED_SMS}),
+    (120, "contact_channels", "core.consent", "event:contact_point_validated",
+        frozenset(range(v.AUTOMATED_SMS, v.AGENT_CALL_HIGH + 1)) | {v.SETTLEMENT_OFFER}),
+)
 
 
 def add_business_days(start: date, days: int) -> date:
@@ -100,7 +101,7 @@ def evaluate_suspensions(
     fired: list[tuple[int, str, str, str, frozenset[int]]] = []  # code, scope, source, expiry, blocked
 
     def fire(code: int, source: str | None = None, expiry: str | None = None, scope=None, blocked=None) -> None:
-        default_scope, default_source, default_expiry, default_blocked = RULES[code]
+        _, default_scope, default_source, default_expiry, default_blocked = next(r for r in RULES if r[0] == code)
         fired.append((code, scope or default_scope, source or default_source, expiry or default_expiry,
                       default_blocked if blocked is None else frozenset(blocked)))
 
@@ -138,7 +139,8 @@ def evaluate_suspensions(
     if outside_permitted_hours:
         fire(115)
     for channel in consent_withdrawn_channels or []:
-        fire(116, scope=f"channel:{channel}", blocked=_CONSENT_CHANNEL_TREATMENTS.get(channel, ()))
+        blocked_by_channel = next((b for c, b in _CONSENT_CHANNEL_TREATMENTS if c == channel), ())
+        fire(116, scope=f"channel:{channel}", blocked=blocked_by_channel)
     if frequency_cap_reached:
         fire(117, expiry="unknown" if frequency_cap_window_reset_date is None
              else frequency_cap_window_reset_date.isoformat())
@@ -154,7 +156,7 @@ def evaluate_suspensions(
     blocked = set().union(*(b for *_, b in fired))
     return (
         [f[0] for f in fired], [f[1] for f in fired], [f[2] for f in fired], [f[3] for f in fired],
-        sorted(set(v.TREATMENT_NAMES) - blocked),
+        sorted(set(v.ALL_TREATMENTS) - blocked),
     )
 
 
