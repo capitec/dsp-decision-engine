@@ -8,9 +8,10 @@ from datetime import date
 import pytest
 from decider import flow
 
-from credit_core.adjustments import Adjustment, AdjustmentEffect, AdjustmentRegister
-from credit_core.dates import EffectiveDatedSet, EffectiveVersion
-from credit_core.reason_codes import ReasonCode, ReasonCodeRegistry
+from credit_core.adjustments import Adjustment, AdjustmentEffect, AdjustmentRegister, AdjustmentStack
+from credit_core.dates import EffectiveDatedSet, EffectiveVersion, EffectiveVersions
+from credit_core.deductions import tax_table_version_step
+from credit_core.reason_codes import ReasonCode, ReasonCodeRegistry, ReasonCodes
 
 MODES = ("interpreted", "fused")
 DATES = [date(2025, 12, 1), date(2026, 1, 1), date(2026, 6, 1), date(2027, 6, 1), date(2027, 7, 1)]
@@ -62,7 +63,7 @@ def test_the_reason_codes_step_matches_the_registry_step(mode, reason_codes):
 
 @pytest.mark.parametrize("mode", MODES)
 def test_the_effective_versions_step_matches_the_dated_set_step(mode):
-    from credit_core.deductions import tax_table_version_step as new_step
+    new_step = tax_table_version_step
 
     dated = EffectiveDatedSet("tax_table", [EffectiveVersion(v.version_id, v.effective_from, v.effective_to)
                                             for v in new_step.versions])
@@ -70,3 +71,13 @@ def test_the_effective_versions_step_matches_the_dated_set_step(mode):
     for on in [date(2024, 1, 1), date(2025, 3, 1), date(2026, 2, 28), date(2026, 3, 1), date(2031, 1, 1)]:
         record = {"decision_date": on}
         assert outcome(new, mode, record, None) == outcome(old, mode, record, None), on
+
+
+def test_the_old_row_types_are_accepted_by_the_new_steps():
+    adjustment = Adjustment("ADJ-1", "score_shift", "score", AdjustmentEffect("add", -10.0), {"segment_code": 3}, 1, "Owner",
+                            "CRC-1", "why", date(2026, 1, 1), None, date(2026, 12, 31), tighten_only=True)
+    assert AdjustmentStack(target="score", set_id="AS-1", adjustments=[adjustment]).apply(
+        600.0, {"segment_code": 3}, date(2026, 6, 1)).adjusted_value == 590.0
+    assert ReasonCodes(version="v1", codes=[ReasonCode(7, 1, "Sanctioned", True)]).rank([7]) == ([7], 7)
+    assert EffectiveVersions(family="x", versions=[EffectiveVersion("v1", date(2025, 1, 1))]).resolve(
+        date(2026, 1, 1)).version_id == "v1"
