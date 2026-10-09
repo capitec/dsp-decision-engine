@@ -1,0 +1,61 @@
+{
+  "type": "reason_codes",
+  "name": "rank_reasons",
+  "version": "business-nested-reasons-2026.09",
+  "codes": [
+    {
+      "code": 5402,
+      "severity_rank": 1,
+      "description": "An entity behind the business carries a disqualifying adverse record",
+      "is_regulatory": true
+    },
+    {
+      "code": 5601,
+      "severity_rank": 2,
+      "description": "Statutory affordability assessment failed",
+      "is_regulatory": true
+    },
+    {
+      "code": 5404,
+      "severity_rank": 3,
+      "description": "The decline rests on an adverse event that is disputed",
+      "is_regulatory": true
+    },
+    {
+      "code": 5001,
+      "severity_rank": 5,
+      "description": "Disclosed ownership structure could not be resolved",
+      "is_regulatory": true
+    },
+    {
+      "code": 5401,
+      "severity_rank": 20,
+      "description": "Scoreable ownership below the coverage requirement",
+      "is_regulatory": true
+    },
+    {
+      "code": 5604,
+      "severity_rank": 22,
+      "description": "Statutory affordability could not be established",
+      "is_regulatory": true
+    },
+    {
+      "code": 5403,
+      "severity_rank": 25,
+      "description": "No scoreable natural person behind the business",
+      "is_regulatory": true
+    },
+    {
+      "code": 5602,
+      "severity_rank": 30,
+      "description": "Business grade below the minimum acceptable grade",
+      "is_regulatory": false
+    },
+    {
+      "code": 5603,
+      "severity_rank": 35,
+      "description": "Business grade in the referral band",
+      "is_regulatory": false
+    }
+  ]
+}

@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 @pytest.fixture(scope="session")
 def params():
-    return json.loads((ROOT / "configs" / "0.1.0" / "params.json").read_text())
+    return json.loads((ROOT / "configs" / "0.2.0" / "params.json").read_text())
 
 
 @pytest.fixture(scope="session")
