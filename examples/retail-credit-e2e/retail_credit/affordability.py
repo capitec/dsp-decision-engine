@@ -62,18 +62,12 @@ def build_buffer_table() -> DecisionTableConfig:
     return DecisionTableConfig.load({
         "type": "decision_table", "name": "buffer_grid",
         "columns": {"grade": "Int64", "channel": "Int64", "buffer": "Float64", "cell_id": "String"},
-        "rows": rows,
+        "rows": rows, "variable_types": {"channel_code": "int"},
         "expression": {"type": "and", "expressions": [
             {"type": "eq", "variable": "risk_grade", "value_column": "grade"},
             {"type": "eq", "variable": "channel_code", "value_column": "channel"}]},
         "outputs": ["buffer", "cell_id"], "default": [None, None],
-    }).relabel(reads={"channel_code": "channel_class"}, writes={"cell_id": "buffer_cell_id"})
-
-
-def channel_class(channel_code: int) -> float:
-    # workaround: a table reads its `eq` variable as float and an input column has one type, while the shared overlay
-    # step reads `channel_code` as int; this converts for the table.
-    return float(channel_code)
+    }).relabel(writes={"cell_id": "buffer_cell_id"})
 
 
 def ratio_ceiling(ratio: float, net_monthly_income: float) -> float:
@@ -128,8 +122,7 @@ def limits_unit():
     Writes `residual_floor`, `ratio_ceiling`, `affordability_buffer_applied`.
     """
     return dag(
-        build_residual_floor_table(), build_ratio_ceiling_table(), step(ratio_ceiling), step(channel_class),
-        build_buffer_table(),
+        build_residual_floor_table(), build_ratio_ceiling_table(), step(ratio_ceiling), build_buffer_table(),
         overlay_step("affordability_buffer", "buffer", base_field="buffer", adjusted_output="affordability_buffer_applied",
                      unadjusted_output="affordability_buffer_unadjusted"),
         name="limits")
