@@ -9,9 +9,10 @@ from __future__ import annotations
 from collections import Counter
 from datetime import date
 
+from credit_core.reason_codes import rank_codes
 from decider import ParamTable, allow_fallback, missing_as, param, step
 
-from consolidation import candidates, reasons, vocab
+from consolidation import candidates, vocab
 from consolidation.capacity import Buffers, Capacity
 from consolidation.inventory import num
 from consolidation.scenario import ScenarioEvaluator, remaining_term
@@ -34,18 +35,22 @@ def run_search(evaluator: ScenarioEvaluator, settleable_refs: list[int], mandato
                 order += [(refs, rule, code, term, promo) for term, promo in products[code].variants(policies[code], longest)]
     evaluated = [evaluator.evaluate(i, *candidate) for i, candidate in enumerate(order[:budget], start=1)]
     rejected = Counter(code for s in evaluated for code in s["rejection_reason_codes"])
+    by_severity = rank_codes(rejected, evaluator.rejection_severity, evaluator.rejection_version)[0]
     return evaluated, {
         "budget": budget, "consumption": len(evaluated), "candidate_sets": len(sets), "candidate_scenarios": len(order),
         "termination_cause": vocab.OUT_OF_BUDGET if len(order) > budget else vocab.EXHAUSTED,
         "ordering_rule_set_version": candidates.ORDERING_RULE_SET_VERSION,
         "ordering_rules": [candidates.rule(n)[0] for n in rules.rule.tolist()],
         "products_unavailable": {str(code): why for code, why in unavailable.items()},
-        "rejections_by_reason": {str(code): rejected[code] for code in reasons.SCENARIO_REJECTIONS.rank(rejected)[0]},
+        "rejections_by_reason": {str(code): rejected[code] for code in by_severity},
     }
 
 
-def search_step(products: dict, capacity: Capacity, buffers: Buffers):
-    """The `search` step, pricing with `products` (product code to a product object)."""
+def search_step(products: dict, capacity: Capacity, buffers: Buffers, rejection_severity: tuple, rejection_version: str):
+    """The `search` step, pricing with `products` (product code to a product object).
+
+    `rejection_severity` is `(code, severity rank)` for each scenario rejection code, in the `rejection_version` set.
+    """
 
     @allow_fallback
     @step(outputs=("scenarios", "search_record"))
@@ -80,7 +85,7 @@ def search_step(products: dict, capacity: Capacity, buffers: Buffers):
             {int(code): policy for code, policy in product_policies.items()},
             {code: product.bind(pricing_context) for code, product in products.items()}, capacity, buffers,
             settlement_buffer_policy, {"cost_of_funds": cost_of_funds, "expected_loss_rate": expected_loss_rate},
-            max_consolidations_24m, overlay_stack_enabled)
+            max_consolidations_24m, overlay_stack_enabled, rejection_severity, rejection_version)
         scenarios, record = run_search(evaluator, settleable_account_refs, mandatory_account_refs, ordering_rules, max_scenarios)
         return scenarios, {**record, "overlay_stack_enabled": overlay_stack_enabled}
 
