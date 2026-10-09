@@ -4,7 +4,7 @@ from datetime import date
 
 import pytest
 
-from decider import Engine, HiddenStateWarning
+from decider import Engine, HiddenStateWarning, flow
 from decider.lab import diff
 
 from business_credit_e2e import covenant, vocab
@@ -68,8 +68,9 @@ def test_a_changed_threshold_in_the_terms_document_is_a_different_pipeline():
     versions, terms = covenant.load_covenant_documents()
     stricter = terms.model_copy(update={"terms": tuple(
         t.model_copy(update={"threshold": 1.5}) if t.version_id == "dscr-2026.03" else t for t in terms.terms)})
-    assert diff.structure(build(versions, terms), build(versions, terms)).identical
-    assert not diff.structure(build(versions, terms), build(versions, stricter)).identical
+    covenant_flow = lambda v, t: flow(v, t, name="covenant")  # noqa: E731
+    assert diff.structure(covenant_flow(versions, terms), covenant_flow(*covenant.load_covenant_documents())).identical
+    assert not diff.structure(covenant_flow(versions, terms), covenant_flow(versions, stricter)).identical
     assert stricter.for_version("dscr-2026.03") == (1.5, 30)
 
 
