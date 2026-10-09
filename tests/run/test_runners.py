@@ -80,6 +80,17 @@ def test_a_checkpoint_carries_the_node_origin(bind):
     assert isinstance(first, Checkpoint) and first.origin is exe.plan.root.node.origin
 
 
+@pytest.mark.parametrize("mode", ["interpreted", "stepped", "fused"])
+def test_a_quiet_run_yields_a_none_per_node_and_computes_the_same_output(mode):
+    exe = Engine().bind(by_sector, mode=mode)
+    loud, params = exe.prepare(_frame(2))
+    quiet, _ = exe.prepare(_frame(2))
+    stops = list(exe.runner.iterate(exe.plan, loud, params))
+    nones = list(exe.runner.iterate(exe.plan, quiet, params, quiet=True))
+    assert len(nones) == len(stops) and set(nones) == {None}
+    assert exe.output(loud).equals(exe.output(quiet))
+
+
 def test_a_session_can_stop_before_a_node_and_inspect_after_it(bind):
     exe = bind(by_sector)
     state, params = exe.prepare(_frame(2))

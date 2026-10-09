@@ -35,12 +35,13 @@ class _Context:
     # What one call needs besides the plan: its trace sink, the sink's step table, and the runner's
     # compiled snapshot (none for the interpreted runner). Nothing per call lives on the runner.
     # A slotted class, not a NamedTuple: it is built on every call, and this is twice as fast.
-    __slots__ = ("trace", "table", "compiled")
+    __slots__ = ("trace", "table", "compiled", "quiet")
 
-    def __init__(self, trace: Any, table: Any, compiled: Any):
+    def __init__(self, trace: Any, table: Any, compiled: Any, quiet: bool = False):
         self.trace = trace
         self.table = table
         self.compiled = compiled
+        self.quiet = quiet
 
 
 class _Scope:
@@ -67,8 +68,9 @@ class _Scope:
         base = self.base.filter(pl.Series(keep)) if self.base.width else self.base
         return _Scope(rows, base, dict(self.names), self.ctx, self.arm, self.iteration)
 
-    def checkpoint(self, origin, when: str) -> Checkpoint:
-        return Checkpoint(origin, when, self.arm, self.iteration, self.rows)
+    def checkpoint(self, origin, when: str) -> Checkpoint | None:
+        # A run nobody steps through yields `None`: building the object is a tenth of a one-record run.
+        return None if self.ctx.quiet else Checkpoint(origin, when, self.arm, self.iteration, self.rows)
 
 
 class InterpretedRunner:
@@ -90,9 +92,10 @@ class InterpretedRunner:
     def __init__(self) -> None:
         self.visit: Callable[[str], None] = _ignore
 
-    def iterate(self, plan: Plan, state: State, params: RunParams, trace=None, table=None) -> Iterator[Checkpoint]:
+    def iterate(self, plan: Plan, state: State, params: RunParams, trace=None, table=None,
+                quiet: bool = False) -> Iterator[Checkpoint]:
         # Not a generator itself: one generator frame less per checkpoint on the single-record path.
-        return self._drive(state, params, _Context(trace, table, None), plan)
+        return self._drive(state, params, _Context(trace, table, None, quiet), plan)
 
     def _drive(self, state: State, params: RunParams, ctx: _Context, plan: Plan) -> Iterator[Checkpoint]:
         root = _Scope(None, state.frame, {}, ctx)
