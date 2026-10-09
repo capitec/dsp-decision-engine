@@ -9,7 +9,7 @@ from datetime import date
 
 from decider import DecisionTableConfig, allow_fallback, helper, missing_as
 
-from credit_core.dates import EffectiveDatedSet, EffectiveVersion
+from credit_core.dates import EffectiveVersions, Version
 from credit_core.evidence import cell_id
 
 # expense_basis_code
@@ -17,16 +17,14 @@ DECLARED = 1
 NORM_FLOOR = 2
 STATEMENT_DERIVED = 3
 
-STATUTORY_NORMS = EffectiveDatedSet("expense_norms.statutory", [
-    EffectiveVersion("norms.statutory@2025", date(2025, 1, 1), date(2026, 10, 1)),
-    EffectiveVersion("norms.statutory@2026", date(2026, 10, 1)),  # gazetted change
+statutory_version_step = EffectiveVersions(family="expense_norms.statutory", versions=[
+    Version(version_id="norms.statutory@2025", effective_from=date(2025, 1, 1), effective_to=date(2026, 10, 1)),
+    Version(version_id="norms.statutory@2026", effective_from=date(2026, 10, 1)),  # gazetted change
 ])
-INTERNAL_NORMS = EffectiveDatedSet("expense_norms.internal", [
-    EffectiveVersion("norms.internal@2025", date(2025, 1, 1), date(2026, 4, 1)),
-    EffectiveVersion("norms.internal@2026", date(2026, 4, 1)),
+internal_version_step = EffectiveVersions(family="expense_norms.internal", versions=[
+    Version(version_id="norms.internal@2025", effective_from=date(2025, 1, 1), effective_to=date(2026, 4, 1)),
+    Version(version_id="norms.internal@2026", effective_from=date(2026, 4, 1)),
 ])
-statutory_version_step = STATUTORY_NORMS.resolver_step(output="expense_norms_statutory_version")
-internal_version_step = INTERNAL_NORMS.resolver_step(output="expense_norms_internal_version")
 
 # The grid has two dimensions, so each dimension's bands repeat once per group of rows. A band ladder with
 # an open edge (None) is only allowed once per group, so these bands carry explicit infinite edges instead.
