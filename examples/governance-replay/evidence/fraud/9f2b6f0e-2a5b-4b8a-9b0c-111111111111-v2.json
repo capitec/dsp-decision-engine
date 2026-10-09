@@ -3,9 +3,13 @@
  "decision_date": "2026-01-10",
  "decision_id": "9f2b6f0e-2a5b-4b8a-9b0c-111111111111-v2",
  "documents": {
+  "action_escalation": "eaf37212a305503c",
+  "amount_overlays": "89feee9554e616f0",
   "client_wording": "464ce28ab3ac50fd",
   "params": "635de0738d5b2154",
-  "rule_set": "cbbd09c5e31048a9"
+  "reason_codes": "09ef2b3d97d95a29",
+  "rule_set": "cbbd09c5e31048a9",
+  "rule_set_versions": "3da79f792962b663"
  },
  "flow": "fraud",
  "mode": "fused",
