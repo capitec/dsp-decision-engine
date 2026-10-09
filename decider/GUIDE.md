@@ -114,6 +114,10 @@ For one record, call `score(record)`, never `run(df)` on a one-row frame: `run`
 builds a frame, exports it through Arrow and assembles an output frame, which
 costs about five times what `score` does on the same record.
 
+An `int` input or `-> int` output takes a whole float (`7.0`) but never truncates one: `7.5`, NaN
+and infinity raise `NotIntegralError` naming the input or step, in `score` and `run`, interpreted
+or compiled. Where you mean to drop the fraction, say so in the step (`int(x)`, `round(x)`).
+
 ### Rounding
 
 `round(x, 2)` rounds the exact value of the double, half to even, like CPython.

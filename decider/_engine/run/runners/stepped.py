@@ -11,6 +11,7 @@ from numba.core.dispatcher import Dispatcher
 
 from decider._engine.boundary.nulls import MissingInputError
 from decider._engine.compile import Fallback, Kernel, Packed, Unit, compile_plan, numpy_dtype
+from decider._engine.compile.kernel import NOT_WHOLE
 from decider._engine.compile.rows import build_ragged, build_rows, rows_needs_no_fill
 from decider._engine.compile.structs import build_struct, struct_schema
 from decider._engine.ir.decls import Input, NullPolicy, base_annotation, is_typed, stored_fill
@@ -20,7 +21,7 @@ from decider._engine.run.runners.base import Checkpoint
 from decider._engine.run.runners.interpreted import InterpretedRunner, _absent, _Context, _encoded, _note, _Scope
 from decider._engine.run.state import State, fill_missing
 from decider._engine.trace.envelope import Kind
-from decider.exceptions import FallbackWarning
+from decider.exceptions import FallbackWarning, NotIntegralError
 from decider.ops.nested import struct_item
 from decider._engine.types import Representation, is_raw, representation_for, columnar_item, item_schema
 from decider._engine.wiring.plan import Call, Plan, NodeVersion
@@ -198,8 +199,12 @@ class SteppedRunner(InterpretedRunner):
                         self._emit_rows(Kind.STEP, c.node.origin, scope, n, step=c.id + 1)
         except Exception as e:
             paths = [c.node.origin.path for c in unit.calls]
-            _note(e, f"in step {paths[0]}" if len(paths) == 1 else
-                  f"in one of the steps {paths}, fused into one kernel; run in mode='stepped' to see which")
+            where = (f"step {paths[0]}" if len(paths) == 1 else
+                     f"one of the steps {paths}, fused into one kernel; run in mode='stepped' to see which")
+            if isinstance(e, NotIntegralError) and e.message == NOT_WHOLE:
+                # The kernel is shared by content, so its message can't name the step.
+                raise NotIntegralError(f"in {where}: {e.message}") from None
+            _note(e, f"in {where}")
             raise
         for v, _ in unit.writes:
             state.write(v, values[v.id], rows, valid.get(v.id))
