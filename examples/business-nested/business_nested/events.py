@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import math
 from datetime import date
-from types import SimpleNamespace
 from typing import Any, Literal
 
 from decider import (
@@ -158,7 +157,3 @@ def event_unit(overlays: OverlaidThresholds | None = None):
         name="event",
     ).emit("age_months", "amount_unknown", "material_threshold_base", "disqualifying_threshold_base", "threshold_cell_id",
            "material_threshold", "disqualifying_threshold", "threshold_overlay_ids", "event_severity_code")
-
-
-# governance-replay lists the overlays through this name; no step reads it.
-THRESHOLD_OVERLAYS = SimpleNamespace(_all=shipped("event_threshold_overlays").adjustments)

@@ -1,8 +1,6 @@
 """The outcome: approve, refer or decline, every reason that applies, and which entity and events a decline rests on."""
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 from decider import allow_fallback, flow, param, step
 
 from assessment.verdict import FAIL, INDETERMINATE, MARGINAL
@@ -65,7 +63,3 @@ def outcome_unit(reason_codes: ReasonCodes | None = None):
     `decline_reason_codes` is written as fired, then ranked, so the two steps form a flow.
     """
     return flow(business_outcome, reason_codes or shipped("reason_codes"), name="outcome")
-
-
-# governance-replay looks reason codes up through this name; no step reads it.
-REASON_REGISTRY = SimpleNamespace(_by_code={c.code: c for c in shipped("reason_codes").codes})
