@@ -22,12 +22,21 @@ Read this before changing how tree or table documents become kernels, or what a 
 
 ## A wide `mode: "all"` tree is several row nodes
 
-- A tree with more than `part_outputs` outputs (rules times columns; 128 by default, none for never) is cut into row nodes `<name>/part_<k>` of at most that many, each with whole rules; a rule keeps its `<rule>.<column>` names. A tree with params stays one node, since a param is numbered within its node and named after its path.
+- A tree with more than `part_outputs` outputs (rules times columns; 64 by default, none for never) is cut into row nodes `<name>/part_<k>` of at most that many, each with whole rules; a rule keeps its `<rule>.<column>` names. A tree with params stays one node, since a param is numbered within its node and named after its path.
 - Why: the fused kernel's compile time grows with the square of the outputs of one call (521 rules: 196 s cold, 14 s split in 32s), and narrow kernels are shared. The walker's own `pick` is not the cause.
-- Why 128: every part costs a single record 15-20 us, so parts of 32 made `score()` 11-14% slower than an unsplit tree; at 128 it is within 3-6% and a 521-rule tree binds cold in under 40 s. Parts of 32 are 1.4-1.5x faster for a big frame, so `part_outputs` is a setting. See [part size](../experiments/tree-split-part-size.md).
+- Why 64: a single record, start-up and a big frame pull the width in different directions, and 64 is the best compromise over ten rule shapes (table below; [part size](../experiments/tree-split-part-size.md)). A tree of up to 64 rules is never split. From 250 rules up a single record is within 2-3% of an unsplit tree, as with 128; only a tree of 65 to 128 rules pays (up to 8%), and its author can set `part_outputs: 128`. Parts of 128 stage twice as slowly per process and make a big frame 1.4-1.5x slower than parts of 32 (64: 1.1x). A user who runs large frames sets 32; one who needs the last few percent and has a cold start to spare sets more or none.
 - Each part reads every feature with the kind the whole tree gives it. A node breakpoint `<name>#<id>` matches the parts under `<name>`.
-- Cost: `<name>` alone no longer names one node, so a trace, a diff and `checks` report per part (`<name>/part_1`); `_split.MAX_OUTPUTS` is the default width. Every process compiles its fused parts again: at 128 `examples/transaction-fraud` stages in 61 s against 21 s at 32, for no measurable change in its `score()`.
+- Cost: `<name>` alone no longer names one node, so a trace, a diff and `checks` report per part (`<name>/part_1`); `_split.DEFAULT_PART_OUTPUTS` is the default width. Every process compiles its fused parts again: `examples/transaction-fraud` stages in 61 s at parts of 128, 31 s at 64 and 21 s at 32, for no measurable change in its `score()`.
 - See: [wide output compile](../experiments/wide-output-compile.md), `decider/steps/trees/_split.py`
+
+Measured by the part-size sweep, median over ten rule shapes (`score()` against an unsplit tree; cold bind; `run()` over 200k rows against parts of 32):
+
+| Width | `score()` at 250-521 rules | `score()` at 100 rules | cold bind, 250-521 rules | `run()` over a frame |
+|---|---|---|---|---|
+| 32 | 1.11-1.13x | 1.18x | 22-34 s | 1.0x |
+| 64 (default) | 1.02-1.03x | 1.08x | 16-17 s | 1.1x |
+| 128 | 0.98-1.03x | not split | 26-34 s | 1.4-1.5x |
+
 
 ## Every tree format validates into one `Tree` graph
 
