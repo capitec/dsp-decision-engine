@@ -89,6 +89,15 @@ def test_a_dict_of_objects_is_one_finding_not_one_per_object():
     assert [h[:3] for h in hidden_state(step_)] == [("holder", "container", "dict")]
 
 
+def test_an_object_after_a_function_in_the_same_container_keeps_the_containers_name():
+    pair = (reads_data, Register())
+
+    def step_(x: float) -> float:
+        return x + len(pair)
+
+    assert [h[:3] for h in hidden_state(step_)] == [("pair", "object", "Register")]
+
+
 def test_values_functions_modules_enums_arrays_and_frames_are_not_hidden_state():
     assert hidden_state(reads_data) == []
     assert hidden_state(reads_a_library) == []
