@@ -1,10 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 430" font-family="system-ui, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 510" font-family="system-ui, sans-serif">
   <defs>
     <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
       <path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/>
     </marker>
   </defs>
-  <rect x="0" y="0" width="1000" height="430" fill="#ffffff"/>
+  <rect x="0" y="0" width="1000" height="510" fill="#ffffff"/>
 
   <rect x="20" y="150" width="170" height="120" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
   <text x="105" y="185" font-size="15" font-weight="600" fill="#1f2937" text-anchor="middle">agent's MCP host</text>
@@ -29,8 +29,13 @@
   <text x="260" y="312" font-size="15" font-weight="600" fill="#7c2d00">confirmation-gated (destructiveHint)</text>
   <text x="260" y="336" font-size="13" fill="#7c2d00">run_flow, run_experiment, start_debug, generate_ids</text>
 
-  <rect x="240" y="368" width="420" height="52" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
-  <text x="260" y="400" font-size="13" fill="#4c1d95">editor-bound: highlight, reveal_source, editor_selection</text>
+  <rect x="240" y="368" width="420" height="72" rx="10" fill="#fef9c3" stroke="#ca8a04" stroke-width="1.5"/>
+  <text x="260" y="394" font-size="15" font-weight="600" fill="#713f12">config editing (validated writes)</text>
+  <text x="260" y="418" font-size="13" fill="#713f12">tree_*, table_*, scorecard_*, params_*, *_config</text>
+
+  <rect x="240" y="450" width="420" height="52" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="260" y="472" font-size="13" fill="#4c1d95">editor-bound: editor_selection, highlight, reveal_source,</text>
+  <text x="260" y="490" font-size="13" fill="#4c1d95">show_flow, set_breakpoints, debug_flow, debug_control, ...</text>
 
   <rect x="720" y="100" width="260" height="110" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
   <text x="850" y="130" font-size="15" font-weight="600" fill="#134e4a" text-anchor="middle">decider core</text>
@@ -38,15 +43,16 @@
   <text x="850" y="174" font-size="13" fill="#134e4a" text-anchor="middle">Engine, TraceSink,</text>
   <text x="850" y="194" font-size="13" fill="#134e4a" text-anchor="middle">experiments.run, ids</text>
 
-  <rect x="720" y="320" width="260" height="100" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
-  <text x="850" y="350" font-size="15" font-weight="600" fill="#4c1d95" text-anchor="middle">VS Code window</text>
-  <text x="850" y="374" font-size="13" fill="#4c1d95" text-anchor="middle">per-window socket and token</text>
-  <text x="850" y="394" font-size="13" fill="#4c1d95" text-anchor="middle">in ~/.decider/editor/ (0700)</text>
+  <rect x="720" y="410" width="260" height="100" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="850" y="440" font-size="15" font-weight="600" fill="#4c1d95" text-anchor="middle">VS Code window</text>
+  <text x="850" y="464" font-size="13" fill="#4c1d95" text-anchor="middle">per-window socket and token</text>
+  <text x="850" y="484" font-size="13" fill="#4c1d95" text-anchor="middle">in ~/.decider/editor/ (0700)</text>
 
   <path d="M190,210 L236,210" stroke="#4b5563" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
   <path d="M660,66 L716,130" stroke="#4b5563" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
   <path d="M660,158 L716,158" stroke="#4b5563" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
   <path d="M660,240 L716,190" stroke="#4b5563" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
   <path d="M660,322 L716,205" stroke="#4b5563" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
-  <path d="M660,394 L716,380" stroke="#4b5563" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <path d="M660,404 L716,210" stroke="#4b5563" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <path d="M660,476 L716,460" stroke="#4b5563" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
 </svg>

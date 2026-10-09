@@ -302,8 +302,7 @@ costs more than validating it (170.6 µs against 78.3 µs at 50 modules). The fl
 
 ## Design principles and the decisions behind them
 
-The decisions are numbered as in `Design.md`; the agreed changes since are in `docs/design_decisions/spec-amendments.md`, and each
-decision with a measurement is recorded in `docs/design_decisions/decisions/` and `docs/design_decisions/experiments/`.
+Each decision with a measurement is recorded in `docs/design_decisions/decisions/` and `docs/design_decisions/experiments/`.
 
 | # | Decision | What it means in the code | Why |
 |---|---|---|---|

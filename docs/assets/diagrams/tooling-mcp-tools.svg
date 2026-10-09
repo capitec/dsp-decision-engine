@@ -1,10 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 690" font-family="system-ui, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1020" font-family="system-ui, sans-serif">
   <defs>
     <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/>
     </marker>
   </defs>
-  <rect x="0" y="0" width="1000" height="690" fill="#ffffff"/>
+  <rect x="0" y="0" width="1000" height="1020" fill="#ffffff"/>
 
   <rect x="250" y="16" width="500" height="64" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
   <text x="500" y="42" font-size="15" font-weight="600" text-anchor="middle" fill="#4c1d95">decider mcp [--raw]  ·  FastMCP over stdio</text>
@@ -12,6 +12,7 @@
   <line x1="350" y1="80" x2="250" y2="118" stroke="#4b5563" stroke-width="1.5" marker-end="url(#a)"/>
   <line x1="650" y1="80" x2="745" y2="118" stroke="#4b5563" stroke-width="1.5" marker-end="url(#a)"/>
   <line x1="500" y1="80" x2="500" y2="458" stroke="#4b5563" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#a)"/>
+  <path d="M750,48 L992,48 L992,700 L982,700" fill="none" stroke="#4b5563" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#a)"/>
 
   <!-- A: headless reads -->
   <rect x="20" y="120" width="470" height="320" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
@@ -71,25 +72,47 @@
     <text x="526" y="420">the server does not re-approve; the host asks the user</text>
   </g>
 
+  <!-- E: config editing -->
+  <rect x="20" y="460" width="960" height="176" rx="10" fill="#fef9c3" stroke="#ca8a04" stroke-width="1.5"/>
+  <text x="36" y="484" font-size="14" font-weight="600" fill="#713f12">Config editing: always registered; every write builds the document first</text>
+  <g font-size="13" fill="#713f12">
+    <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace">
+      <text x="36" y="512">list_configs  read_config  validate_config  write_config  patch_config  try_config</text>
+      <text x="36" y="538">tree_view  tree_add_node  tree_set_node  tree_remove_node  tree_set_output  tree_add_rule  tree_remove_rule</text>
+      <text x="36" y="564">table_view  table_add_rows  table_update_rows  table_delete_rows  table_add_column  table_drop_column</text>
+      <text x="36" y="590">scorecard_view  scorecard_set_bins  params_view  params_set</text>
+    </g>
+    <text x="36" y="618">A write that would not build is refused and the file is left untouched; try_config runs the step on rows to check an edit.</text>
+  </g>
+
   <!-- D: editor -->
-  <rect x="20" y="460" width="960" height="210" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
-  <text x="36" y="484" font-size="14" font-weight="600" fill="#4c1d95">Editor-bound: registered only when build_server gets an EditorBridge</text>
+  <rect x="20" y="656" width="960" height="344" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="36" y="680" font-size="14" font-weight="600" fill="#4c1d95">Editor and debug: registered only when build_server gets an EditorBridge</text>
   <g font-size="13" fill="#4c1d95">
     <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace">
-      <text x="36" y="514">highlight(workspace, flow, nodes)</text>
-      <text x="36" y="540">reveal_source(workspace, path, line)</text>
-      <text x="36" y="566">editor_selection(workspace)</text>
+      <text x="36" y="710">editor_selection(workspace)</text>
+      <text x="36" y="736">highlight(nodes, flow)</text>
+      <text x="36" y="762">reveal_source(path, line)</text>
+      <text x="36" y="788">show_flow(file, pipeline)</text>
+      <text x="36" y="814">set_breakpoints(nodes)</text>
+      <text x="36" y="840">debug_flow(file, pipeline, dataset)</text>
+      <text x="36" y="866">debug_control(action)</text>
+      <text x="36" y="892">debug_evaluate(expression)</text>
     </g>
-    <text x="360" y="514">{"kind": "highlight", "flow", "nodes"}</text>
-    <text x="360" y="540">{"kind": "reveal", "path", "line"}</text>
-    <text x="360" y="566">{"kind": "selection"}</text>
+    <text x="330" y="710">{"kind": "selection"}</text>
+    <text x="330" y="736">{"kind": "highlight", "flow", "nodes"}</text>
+    <text x="330" y="762">{"kind": "reveal", "path", "line"}</text>
+    <text x="330" y="788">{"kind": "show_flow", "file", "pipeline"}</text>
+    <text x="330" y="814">{"kind": "set_breakpoints", "nodes"}</text>
+    <text x="330" y="840">{"kind": "debug_flow", ...}  destructiveHint</text>
+    <text x="330" y="866">{"kind": "debug_control", "action"}  destructiveHint</text>
+    <text x="330" y="892">{"kind": "debug_evaluate", ...}  destructiveHint, raw-gated</text>
   </g>
-  <rect x="640" y="500" width="320" height="76" rx="8" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5"/>
-  <text x="800" y="524" font-size="13" text-anchor="middle" fill="#4c1d95">EditorBridge.send(workspace, action)</text>
-  <text x="800" y="546" font-size="13" text-anchor="middle" fill="#4c1d95">~/.decider/editor/&lt;hash&gt;.sock + .token</text>
-  <text x="800" y="566" font-size="13" text-anchor="middle" fill="#4c1d95">one JSON line {token, action} each way</text>
-  <line x1="610" y1="540" x2="638" y2="540" stroke="#4b5563" stroke-width="1.5" marker-end="url(#a)"/>
-  <text x="36" y="606" font-size="13" fill="#4c1d95">&lt;hash&gt; = sha256 of the workspace's resolved path, first 16 hex characters; the directory is mode 0700.</text>
-  <text x="36" y="630" font-size="13" fill="#4c1d95">A missing window, wrong token or dead socket comes back as {"ok": false, "error": ...}, never raised.</text>
-  <text x="36" y="654" font-size="13" fill="#4c1d95">The VS Code extension in ui/vscode does not listen on this socket yet, so these tools answer "no editor window".</text>
+  <rect x="640" y="700" width="320" height="76" rx="8" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="800" y="724" font-size="13" text-anchor="middle" fill="#4c1d95">EditorBridge.send(workspace, action)</text>
+  <text x="800" y="746" font-size="13" text-anchor="middle" fill="#4c1d95">~/.decider/editor/&lt;hash&gt;.sock + .token</text>
+  <text x="800" y="766" font-size="13" text-anchor="middle" fill="#4c1d95">one JSON line {token, action} each way</text>
+  <text x="36" y="930" font-size="13" fill="#4c1d95">&lt;hash&gt; = sha256 of the workspace's resolved path, first 16 hex characters; the directory is mode 0700.</text>
+  <text x="36" y="954" font-size="13" fill="#4c1d95">A missing window, wrong token or dead socket comes back as {"ok": false, "error": ...}, never raised.</text>
+  <text x="36" y="978" font-size="13" fill="#4c1d95">The VS Code extension (ui/vscode, agentSocket.ts) binds the socket and writes the token and .folder files.</text>
 </svg>

@@ -11,7 +11,7 @@ Why the engine (IR, wiring, runners, kernels, compile cache, fallback, `score`, 
 ## Compiled code is keyed by content, never by origin
 
 - Dispatchers and fused kernels are shared in-process by `fingerprint(fn)`: bytecode with constants, closure cells and read globals; not name, file, line or `Origin` path. Params bundle classes get a qualname built from their fields so they pickle by reference.
-- Why: renaming or nesting a step changes its path, not its code, and a moved file misses numba's cache (4.6 s against 0.18 s warm at 200 args). A name-only key collided two same-named NamedTuples, a correctness bug. Not: `co_code` alone (omits `co_consts`).
+- Why: renaming or nesting a step changes its path, not its code, and a moved file misses numba's cache (4.6 s against 0.18 s warm at 200 args). A name-only key collided two same-named NamedTuples, a correctness bug (the slower dispatch once blamed on it measured 1.03x, see [params bundles](../experiments/params-bundle-dispatch-cost.md)). Not: `co_code` alone (omits `co_consts`); not clearing one cache, since CPython's `.pyc` and numba's index each served a stale constant alone.
 - See: `decider/_engine/compile/fingerprint.py`, [cache](../../architecture/engine/cache.md)
 
 ## No source is generated; only user steps are disk-cached
@@ -29,13 +29,19 @@ Why the engine (IR, wiring, runners, kernels, compile cache, fallback, `score`, 
 ## Kernels are `nogil=True` and never `fastmath`
 
 - Every kernel is `njit(nogil=True)`; `step(nogil=...)` is recorded on the node but the compiler ignores it. `fastmath` is off.
-- Why: 16 threads on one kernel give p99 883 us with `nogil` and 254 ms without (convoy on the GIL); with `fastmath` 46 to 73% of rows differed from Python, so modes could not agree bit for bit. Not: GC tuning as a tail fix.
+- Why: 16 threads on one kernel give p99 883 us with `nogil` and 254 ms without (convoy on the GIL); with `fastmath` 46 to 73% of rows differed from Python, so modes could not agree bit for bit. Not: GC tuning (`gc.disable()` or `freeze()` left p99.9 at 1.15-1.17 ms) or `sched_setaffinity` pinning (max +65%) as a tail fix; the tail is OS preemption ([experiment](../experiments/single-record-tail-latency.md)).
 - See: [experiment](../experiments/kernel-compilation-choices.md), [concurrency](../../architecture/engine/concurrency.md)
+
+## Kernels run serial; there is no `prange`
+
+- Every kernel is a plain `range` loop over rows; nothing in `decider/` compiles with `parallel=True`.
+- Why: the crossover is about 90 µs of serial time against a 65-70 µs fork/join floor, which a warmup probe cannot predict (52.8% right) and a row count cannot either (66.7%); `parallel=True` compiles 1.9-7.9x slower; a `ZeroDivisionError` in a serial loop is `inf` under `prange`, so the choice would change answers.
+- See: [experiment](../experiments/kernel-compilation-choices.md)
 
 ## Fall back to Python only on compile failure, one step at a time
 
 - `FALLBACK_ERRORS = (NumbaError, UnsupportedBytecodeError)`; around `dispatcher.compile` alone, `NotImplementedError` and `AssertionError` count too. The kernel splits around the step; a kernel that fails whole on launch becomes one `Fallback` per call. A runtime error always propagates. `@allow_fallback` accepts a fallback silently; `Engine(strict_compile=True)` refuses it.
-- Why: a kernel cannot call Python except through `objmode`, slower than giving up (4 steps, 200k rows: all-njit 7.1 ms, Python 167 ms, per-row `objmode` 548 ms). Bare `Exception` would hide bugs as fallbacks.
+- Why: a kernel cannot call Python except through `objmode`, slower than giving up (4 steps, 200k rows: all-njit 7.1 ms, Python 167 ms, per-row `objmode` 548 ms). Bare `Exception` would hide bugs as fallbacks. Not: `objmode` escapes, which cost about 2.7 µs a row (77x all-njit, 615x inside `prange`).
 - See: [experiment](../experiments/kernel-compilation-choices.md), [cache](../../architecture/engine/cache.md)
 
 ## Only numbers and `Text` spans enter a kernel

@@ -209,7 +209,7 @@ None of these has a `reference`. They are ordinary Python, so the interpreted ru
 
 ## String bins
 
-A `ValuesBin` with string items makes the variable's input `str | None` and its `items` an object array. No kernel holds a Python `str`, so compiled modes run that one node in Python, with the `FallbackWarning` shown above, and give the interpreted answers. Before this rule, a scorecard's string bins silently never matched in compiled modes; `test_value_bins_match_strings_in_compiled_modes` and `test_string_values_bins_fall_back_to_python_when_compiled` pin the current behaviour. `Engine(strict_compile=True)` turns the fallback into an error. `@allow_fallback` cannot be used to declare it, because a scorecard is not one function; it raises `TypeError` for a tree, table or scorecard (see `docs/design_decisions/spec-amendments.md`).
+A `ValuesBin` with string items makes the variable's input `str | None` and its `items` an object array. No kernel holds a Python `str`, so compiled modes run that one node in Python, with the `FallbackWarning` shown above, and give the interpreted answers. Before this rule, a scorecard's string bins silently never matched in compiled modes; `test_value_bins_match_strings_in_compiled_modes` and `test_string_values_bins_fall_back_to_python_when_compiled` pin the current behaviour. `Engine(strict_compile=True)` turns the fallback into an error. `@allow_fallback` cannot be used to declare it, because a scorecard is not one function; it raises `TypeError` for a tree, table or scorecard.
 
 A numeric scorecard compiles completely: `test_compiled_kernels_give_the_interpreted_answers` compiles a numeric card's plan, checks that every unit is a kernel, and compares the outputs with interpreted mode before and after a retune.
 
