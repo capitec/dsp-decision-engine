@@ -26,7 +26,7 @@ Three things follow, and the example is built around them:
   within the month with overlays (an intensity dial, a treatment suppression, score and probability overlays).
   Each overlay is scoped, dated and has a review date, and the unadjusted answer is kept beside the adjusted one. An
   overlay may make the bank do less than the matrix says, never more than the law allows: one that names a statutory
-  parameter is refused when it is defined.
+  parameter is refused when its document loads.
 - **Supply is finite.** There are far more recommended calls than agent hours. Ranking and rationing are
   population-level facts, and each unselected account still needs a reason ("you were 91 412th of 186 000 and we
   stopped at 27 000").
@@ -91,7 +91,7 @@ In the order the pipeline applies them:
 | `param` for policy, `missing_as` for optional inputs, request data never a `param` | [state.py](collections_treatment/state.py), [arrangements.py](collections_treatment/arrangements.py) |
 | Multi-output steps (`outputs=`) returning index-aligned lists, one entry per suspension | [suspensions.py](collections_treatment/suspensions.py) |
 | `.relabel` and `.named`: one step on other column names, or twice with different settings | `resolve_path_position_as_at_now` in [path.py](collections_treatment/path.py), the two roll probabilities in [scoring.py](collections_treatment/scoring.py) |
-| Overlays from `credit_core.adjustments`, switched off with one param through the same code | [scoring.py](collections_treatment/scoring.py), [matrix.py](collections_treatment/matrix.py), [overlays.py](collections_treatment/overlays.py) |
+| Overlays as config documents, one `AdjustmentStack` subclass per target, switched off with one param through the same code | [overlays.py](collections_treatment/overlays.py), [`configs/0.1.0/score_shift.json`](configs/0.1.0/score_shift.json) and its five siblings |
 | Another example's pipeline halves, reused in arrangement mode | `assessment_unit` in [arrangements.py](collections_treatment/arrangements.py) |
 | `@allow_fallback` for steps that are Python on purpose (dates, lists, strings), checked by `Engine(strict_compile=True)` | [tests/test_serving.py](tests/test_serving.py) |
 | Warm-up from `sample_request.json`, and serving the raw request bytes | [sample_request.json](sample_request.json), [tests/test_serving.py](tests/test_serving.py) |
@@ -173,7 +173,7 @@ Tests (run from the repository root, with `PYTHONPATH` set as above):
 uv run pytest examples/collections -q
 ```
 
-To regenerate `configs/0.1.0` (the synthetic matrix and the params document):
+To regenerate `configs/0.1.0` (the synthetic matrix, the overlay stacks and the params document):
 `uv run python scripts/generate_configs.py`.
 
 ## Capacity is a population fact
@@ -197,17 +197,17 @@ Two things change the allocation without a release. The day's supply is in the p
 
 ```
 collections_treatment/    the package
-  pipeline.py             build(treatment_matrix)
+  pipeline.py             build(treatment_matrix, and the six overlay stacks)
   vocab.py                treatment, pool, non-selection and reset codes
   state.py                arrears bucket, balance band
   suspensions.py          the twenty suspensions and what each blocks
-  scoring.py              scorecard, calibration, bands, contact band, recovery, the score overlays
-  matrix.py               the matrix document, its lookup, intensity dial and suppression
-  overlays.py             an overlay register that refuses statutory targets
+  scoring.py              scorecard, calibration, bands, contact band, recovery, the score's tiny post-steps
+  matrix.py               the matrix document, its lookup, the intensity and treatment post-steps
+  overlays.py             the overlay stack: scopes on one column, refuses statutory targets
   path.py                 the escalation path, as known and as at now; intervals and caps
   arrangements.py         the affordability assessment in arrangement mode, sustainability
   capacity.py             pools, blockers before ranking, ranking and rationing
-configs/0.1.0/            params.json and treatment_matrix.json
+configs/0.1.0/            params.json, treatment_matrix.json and the six overlay stacks
 scripts/                  generate_configs.py
 sample_request.json
 tests/
@@ -219,11 +219,11 @@ Later examples import `collections_treatment` by package name. These names are s
 
 | Name | Use |
 |---|---|
-| `collections_treatment.pipeline.build(treatment_matrix)` | The whole daily decision as one step. Embed it in another `dag`/`flow` (its params appear under `collections_treatment/...`) and rename its inputs with `.relabel(reads=...)` |
+| `collections_treatment.pipeline.build(treatment_matrix, score_shift, scaling_change, odds_multiplier, band_boundary_shift, intensity_dial, treatment_suppression)` | The whole daily decision as one step. Embed it in another `dag`/`flow` (its params appear under `collections_treatment/...`) and rename its inputs with `.relabel(reads=...)` |
 | `collections_treatment.pipeline.EMIT` | The columns it emits |
-| `collections_treatment.vocab` | `NO_ACTION` to `WRITE_OFF_RECOMMENDATION`, `TREATMENT_NAMES`, `TREATMENT_POOL`, the pool codes, the `NS_*` non-selection reasons, the `RESET_*` events |
-| `collections_treatment.suspensions` | `RULES` (code to scope, source, how it lifts, treatments blocked), `evaluate_suspensions`, `treatment_after_suspensions`, `pre_prescription_flag`, `add_business_days` |
-| `collections_treatment.overlays` | `register(adjustments)`: an `AdjustmentRegister` that refuses statutory targets; `STATUTORY_TARGETS` |
+| `collections_treatment.vocab` | `NO_ACTION` to `WRITE_OFF_RECOMMENDATION`, `TREATMENT_NAMES`, `ALL_TREATMENTS`, `TREATMENT_POOL`, the pool codes, the `NS_*` non-selection reasons, the `RESET_*` events |
+| `collections_treatment.suspensions` | `RULES` (a tuple of code, scope, source, how it lifts, treatments blocked), `evaluate_suspensions`, `treatment_after_suspensions`, `pre_prescription_flag`, `add_business_days` |
+| `collections_treatment.overlays` | `OverlayStack`: an `AdjustmentStack` that scopes on one column of any name and refuses statutory targets when it loads; `in_dag(stack, applied)`; `STATUTORY_TARGETS` |
 | `collections_treatment.matrix` | `generate_matrix()`, `lookup(document)`, `matrix_cell_id`, `MATRIX_VERSION` |
 | `collections_treatment.capacity` | `allocate_capacity` (the `frame_step`), `build_pool_table()`, `default_pool_rows()`, `BASIS_VALUE`, `BASIS_PRIORITY` |
 | `collections_treatment.path` | `resolve_path_position_step`, `PATH_FLAGS`, `PATH_OUTPUTS`, `interval_and_cap_check_step` |
@@ -240,6 +240,23 @@ event flags (`qualifying_payment`, `promise_captured`, `cured`, `dispute_raised`
 [affordability example](../affordability/README.md).
 
 ## Things worth knowing
+
+- **Overlays are documents.** Each of the six overlay targets is a `collections_overlay_stack` document in
+  `configs/0.1.0/` (`score_shift`, `scaling_change`, `odds_multiplier`, `band_boundary_shift`, `intensity_dial`,
+  `treatment_suppression`), handed to `build` by name like the matrix. Owner, approval reference, rationale and review
+  date sit beside the effect and scope, and editing them is not a change of behaviour. The step names and params paths are
+  unchanged, so `collections_treatment/score_shift/adjustment_stack_enabled` still switches a stack off. A stack
+  reads the one column its overlays scope on; the few steps that need the overlaid value as an integer or a probability
+  are small post-steps (`matrix.treatment_intensity`, `scoring.clamp_probability`).
+
+```json
+{"type": "collections_overlay_stack", "name": "score_shift", "target": "collections_score", "set_id": "AS-COLL-SCORE-2026.09",
+ "base_field": "collections_score_unadjusted", "adjusted_output": "collections_score",
+ "adjustments": [{"adjustment_id": "ADJ-COLL-SCORE-001", "kind": "score_shift", "target": "collections_score",
+   "effect": {"op": "add", "value": -22.0}, "scope": {"agency_placed_12m": true}, "stack_position": 1,
+   "owner": "Collections Strategy", "approval_reference": "MRV-2026-014", "rationale": "...",
+   "effective_from": "2026-01-01", "effective_to": "2026-12-31", "review_date": "2026-10-01", "tighten_only": true}]}
+```
 
 - **Each suspension blocks a stated set of treatments.** [`suspensions.RULES`](collections_treatment/suspensions.py)
   is the table. A debt review application (101) leaves only the statutory notice; a hardship arrangement in good
