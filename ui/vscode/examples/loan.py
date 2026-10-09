@@ -1,4 +1,4 @@
-"""The IR.md worked example on the real decider API, plus a loop and a stand-in tree."""
+"""A worked loan example on the real decider API, plus a loop and a stand-in tree."""
 import polars as pl
 
 from decider import ConfigurableStep, branch, dag, flow, frame_step, loop, missing_as, param, step

@@ -141,6 +141,6 @@ show_root_full_path = false
 separate_signature = true
 show_source = false
 
-# docs/design_decisions/ is a maintainer reference read in the repo, not part of the site.
+# docs/design_decisions/ and docs/design_specs/ are maintainer references read in the repo, not part of the site.
 [project.plugins.exclude]
-glob = ["design_decisions/*"]
+glob = ["design_decisions/*", "design_specs/*"]

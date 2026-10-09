@@ -97,12 +97,12 @@ def build_server(policy: Policy, bridge: EditorBridge | None = None) -> FastMCP:
 
     @tool
     def raw_record(entry: str, data: str, record: int) -> dict:
-        """Per-step values for one record (raw data, off until decider._tooling.mcp.rawData)."""
+        """Per-step values for one record (raw data, off until `decider mcp --raw`)."""
         return tools.raw_record(policy, entry, data, record)
 
     @tool
     def raw_trace(entry: str, data: str, record: int) -> dict:
-        """The decision-trace events for one record (raw data, off until decider._tooling.mcp.rawData)."""
+        """The decision-trace events for one record (raw data, off until `decider mcp --raw`)."""
         return tools.raw_trace(policy, entry, data, record)
 
     @tool(annotations={"destructiveHint": True})

@@ -63,8 +63,7 @@ class ModuleWatcher:
     function. A failed import puts the old modules back.
 
     In a notebook, `session.watch("credit.pipeline:pipeline")` polls one
-    after every cell; the debug websocket takes `watch=` and polls one for
-    its client. In a script, poll it yourself.
+    after every cell. In a script, poll it yourself.
 
     Example::
 
