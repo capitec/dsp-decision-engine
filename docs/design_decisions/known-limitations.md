@@ -4,7 +4,7 @@ Gaps in the current code that users and maintainers should know about before rel
 
 ## Compilation and caching
 
-**Object globals are keyed by identity.** A step reading a dict or other non-array global is fingerprinted with `id()` (`_engine/compile/fingerprint.py`).
+**Arbitrary object globals are keyed by identity.** A step reading an instance of a user class, or a container holding one, is fingerprinted with `id()` (`_engine/compile/fingerprint.py`); numbers, strings, dates, Decimals, regexes, enums, classes and plain containers of those are keyed by value. A class is keyed by its own methods' bytecode and constants, not by what its methods call, and a jitclass by its numba type, which differs per process.
 Impact: the numba disk cache from `decider build` misses on another process; put constants in literals, `param()`s or `param_table`s.
 
 **The disk cache is tied to the CPU.** Cached kernels miss silently on a host with a different CPU.
