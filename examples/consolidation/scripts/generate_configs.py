@@ -1,4 +1,4 @@
-"""Write `configs/<version>/`: the product rate cards, the settleability rules, the reason codes and the params document.
+"""Write `configs/<version>/`: the product rate cards, the settleability rules, the reason codes, the overlays and the params document.
 
     uv run python examples/consolidation/scripts/generate_configs.py [version]
 
@@ -133,6 +133,27 @@ CLIENT_REASONS = [
 ]
 
 
+def overlay(adjustment_id: str, kind: str, target: str, op: str, value: float, scope: dict, owner: str, approval: str,
+            rationale: str, **fields) -> dict:
+    return {"adjustment_id": adjustment_id, "kind": kind, "target": target, "effect": {"op": op, "value": value},
+            "scope": scope, "stack_position": 1, "owner": owner, "approval_reference": approval, "rationale": rationale,
+            "effective_from": "2026-01-01", "effective_to": None, "review_date": "2026-12-31", **fields}
+
+
+# Overlays read inside the search and the selection, which is why they are `overlay_set` documents, not stacks in a flow.
+OVERLAYS = {
+    "intervention_adjustments": {"type": "overlay_set", "name": "intervention_adjustments", "set_id": "AS-CON-INT-2026.09",
+                                 "adjustments": [overlay(
+        "ADJ-CON-INT-2026-001", "cap_adjustment", "anti_harm", "multiply", 0.80, {"product_code": 11}, "Credit Risk Policy",
+        "CRC-2026-044", "Anti-harm ceiling tightened on product 11 pending the ombud review", tighten_only=True)]},
+    "objective_adjustments": {"type": "overlay_set", "name": "objective_adjustments", "set_id": "AS-CON-OBJ-2026.09",
+                              "adjustments": [overlay(
+        f"ADJ-CON-OBJ-2026-00{n}", "objective_reweight", f"weight_{objective}", "set", value, {"channel_code": 1},
+        "Credit Committee", "CC-2026-014", "Branch channel weighted towards instalment relief this quarter")
+        for n, (objective, value) in enumerate((("min_commitment", 0.6), ("new_money", 0.4)), start=1)]},
+}
+
+
 def reason_codes(name: str, version: str, rows: list[tuple]) -> dict:
     return {"type": "reason_codes", "name": name, "version": version,
             "codes": [{"code": c, "severity_rank": r, "description": d, "is_regulatory": reg} for c, r, d, reg in rows]}
@@ -148,6 +169,7 @@ def main(version: str = "0.1.0") -> None:
     codes = {"client_reason_codes": reason_codes("client_reason_codes", "consolidation-client-2026.09", CLIENT_REASONS),
              "scenario_rejection_codes": reason_codes("scenario_rejection_codes", "consolidation-rejections-2026.09",
                                                       SCENARIO_REJECTIONS)}
+    codes |= OVERLAYS
     for name, document in codes.items():
         (out / f"{name}.json").write_text(json.dumps(document, indent=2) + "\n")
     params = build(*(DecisionTableConfig.load(d) for d in documents.values()),

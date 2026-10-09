@@ -55,11 +55,13 @@ def statutory_ceiling(repo_rate: float = param(0.07, ge=0.0, le=0.30), margin_ov
 
 
 def build(rate_card_product11, card_promotional_rates, card_reversion_rates, settleability_rules, client_reason_codes=None,
-          scenario_rejection_codes=None):
-    """Each argument is the config document of that name, loaded by `decider`. The two reason code sets default to the
-    documents shipped in `configs/0.1.0/`."""
+          scenario_rejection_codes=None, intervention_adjustments=None, objective_adjustments=None):
+    """Each argument is the config document of that name, loaded by `decider`. The reason code sets and the two overlay
+    sets default to the documents shipped in `configs/0.1.0/`."""
     client_reasons = shipped("client_reason_codes") if client_reason_codes is None else client_reason_codes
     rejections = shipped("scenario_rejection_codes") if scenario_rejection_codes is None else scenario_rejection_codes
+    thresholds = shipped("intervention_adjustments") if intervention_adjustments is None else intervention_adjustments
+    weights = shipped("objective_adjustments") if objective_adjustments is None else objective_adjustments
     capacity, buffers = Capacity(), Buffers()
     consolidation_card = RateCardIndex.from_card(rate_card_product11)
     # ponytail: the Flex Loan card is regenerated, not read from a config document; load it from one when Treasury refreshes it
@@ -72,7 +74,8 @@ def build(rate_card_product11, card_promotional_rates, card_reversion_rates, set
         statutory_ceiling, fees.fee_caps_version_step, fees.build_fee_caps_table(), products.pricing_context,
         baseline.baseline_step(capacity), baseline.plain_granting_step(plain_card, consolidation_card),
         eligibility.eligibility_gates, flex_loan_policy, everyday_card_policy, products.product_policies,
-        search.search_step(carriers, capacity, buffers, tuple((c.code, c.severity_rank) for c in rejections.codes), rejections.version),
-        objective.selection, outcome.outcome, client_reasons,
+        search.search_step(carriers, capacity, buffers, thresholds.packed(),
+                           tuple((c.code, c.severity_rank) for c in rejections.codes), rejections.version),
+        objective.selection_step(weights.packed()), outcome.outcome, client_reasons,
         name="consolidation",
     ).emit(*INVENTORY, *BASELINE, *SEARCH, *DECISION, *EVIDENCE)

@@ -58,6 +58,7 @@ class ScenarioEvaluator:
     economics: dict  # cost_of_funds, expected_loss_rate
     max_consolidations_24m: int
     stack_enabled: bool
+    intervention_overlays: tuple  # `OverlaySet.packed()` of the overlays on the intervention thresholds
     rejection_severity: tuple[tuple[int, int], ...]  # (code, severity rank) of each rejection code
     rejection_version: str
 
@@ -94,7 +95,7 @@ class ScenarioEvaluator:
         after = self.capacity(case, self.accounts, amounts, quote.tested_payment, self.stack_enabled)
         facts, position = self._position(settled, refs, term_months, quote, new_money, total, external, after)
         checks = interventions.evaluate(facts, policy, r["decision_date"], r["consolidations_last_24_months"],
-                                        self.max_consolidations_24m, self.stack_enabled)
+                                        self.max_consolidations_24m, self.intervention_overlays, self.stack_enabled)
         rejections = [1000 + c["intervention"] for c in checks if c["status"] == interventions.FAILED]
         if after["affordability_verdict_code"] != verdict.PASS:
             rejections.append(reasons.AFFORDABILITY_FAIL)

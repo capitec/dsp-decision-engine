@@ -45,3 +45,21 @@ def test_a_scenario_rejection_severity_edit_changes_which_rejection_is_primary(s
 
     shipped, edited = primaries(rebuilt()), primaries(rebuilt(scenario_rejection_codes=severity(1003, 1)))
     assert shipped and set(shipped.values()) == {1004} and set(edited.values()) == {1003}
+
+
+def test_an_intervention_overlay_edit_moves_the_anti_harm_threshold_of_product_11(sample, params, parse):
+    def ceiling(pipeline):
+        scenarios = pipeline.score(parse(sample), params)["scenarios"]
+        flex = next(s for s in scenarios if s["product_code"] == 11 and s["interventions"])
+        return next(i for i in flex["interventions"] if i["intervention"] == 4)
+
+    halved = ceiling(rebuilt(intervention_adjustments=lambda doc: doc["adjustments"][0]["effect"].update(value=0.5)))
+    assert (halved["overlay_id"], halved["base_threshold"], halved["threshold"]) == ("ADJ-CON-INT-2026-001", 0.15, 0.075)
+
+
+def test_an_objective_overlay_edit_changes_the_weights_the_branch_channel_is_scored_with(sample, params, parse):
+    def reweigh(doc):
+        doc["adjustments"][0]["effect"]["value"] = 0.2
+
+    out = rebuilt(objective_adjustments=reweigh).score(parse(sample | {"channel_code": 1}), params)
+    assert out["objective_weights"]["min_commitment"] == 0.333333 and out["objective_weights"]["new_money"] == 0.666667
