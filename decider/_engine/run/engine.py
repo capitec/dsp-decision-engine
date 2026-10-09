@@ -10,6 +10,7 @@ import polars as pl
 
 from decider._engine.concurrency import Cache, once
 from decider._engine.params import NodeParams, ParamsCache
+from decider._engine.params.shadow import warn_shadowed_tables
 from decider._engine.run.hidden import warn_hidden_state
 from decider._engine.run.params import RunParams, RunReport, check_namespaces
 from decider._engine.run.runners.base import CompiledRunner, Runner
@@ -268,6 +269,17 @@ class Executable:
         if self.runner._plan is not self.plan:
             self.runner._compile(self.plan, self.lazy)
         return self.runner.fallbacks()
+
+    def warn_shadowed_tables(self, params: Mapping[str, Any] | None) -> None:
+        """Warn with `ShadowedTableWarning` for each `seeded_from` table that the params document `params` sets.
+
+        `RequestHandler.stage()` calls this for the version it stages.
+
+        Example::
+
+            exe.warn_shadowed_tables({"pricing": {"priced": {"ladder": [{"floor": 0, "rate": 0.3}]}}})
+        """
+        warn_shadowed_tables(self.nodes.values(), params)
 
     def session(self, df: pl.DataFrame, params: Mapping[str, Any] | None = None) -> Session:
         """A debug `Session` over `df`, paused before anything runs.
