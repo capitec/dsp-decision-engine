@@ -98,8 +98,7 @@ def check_output(step: str, output: Output, values: Sequence, rows: np.ndarray |
         return
     except ValidationError:
         pass
-    # A list of `Text` read from a `Columnar` input is the `str`s it declares once it reaches the caller.
-    values = [[v.text if isinstance(v, Text) else v for v in x] if isinstance(x, list) else x for x in values]
+    values = [_plain(x) for x in values]
     try:
         adapter.validate_python(values, strict=True)
     except ValidationError as e:
@@ -109,6 +108,17 @@ def check_output(step: str, output: Output, values: Sequence, rows: np.ndarray |
         at += f", field {'.'.join(map(str, field))}" if field else ""
         raise ValueError(f"step {step}: output '{output.name}'{at}: {err['msg']} (got {err['input']!r}), "
                          f"declared {_name(output.annotation)}") from None
+
+
+def _plain(x: Any) -> Any:
+    # What the caller reads: a `Text` (from a `Columnar` input) is its `str`, a numpy scalar its Python number.
+    if isinstance(x, Text):
+        return x.text
+    if isinstance(x, np.generic):
+        return x.item()
+    if isinstance(x, dict):
+        return {k: _plain(v) for k, v in x.items()}
+    return type(x)(map(_plain, x)) if type(x) in (list, tuple) else x
 
 
 def tuple_mismatch(output: Output, item: Any, parts: Sequence) -> str | None:
