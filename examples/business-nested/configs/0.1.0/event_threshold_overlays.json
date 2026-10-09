@@ -1,0 +1,27 @@
+{
+  "type": "event_threshold_overlays",
+  "set_id": "AS-05-EVT-2026.09",
+  "adjustments": [
+    {
+      "adjustment_id": "ADJ-05-014",
+      "kind": "cap_adjustment",
+      "target": "material_threshold",
+      "effect": {
+        "op": "multiply",
+        "value": 0.5
+      },
+      "scope": {
+        "sector_code": 412,
+        "event_type_code": 1
+      },
+      "stack_position": 1,
+      "owner": "Business Credit Risk Policy",
+      "approval_reference": "CRC-2026-071",
+      "rationale": "Halve judgment materiality thresholds for construction, two quarters",
+      "effective_from": "2026-01-01",
+      "effective_to": "2026-12-31",
+      "review_date": "2026-11-01",
+      "tighten_only": true
+    }
+  ]
+}
