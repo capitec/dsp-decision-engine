@@ -1,9 +1,11 @@
 import copy
 
 import pytest
-from decider import ConfigurableStep, Engine
+from decider import ConfigurableStep, DecisionTableConfig, Engine
 
 from collections_treatment import scoring
+from collections_treatment.overlays import in_dag
+from collections_treatment.pipeline import build
 
 STACKS = ("score_shift", "scaling_change", "odds_multiplier", "band_boundary_shift")
 
@@ -103,17 +105,17 @@ def test_an_overlay_cannot_name_a_statutory_parameter(stacks):
     document = stacks["score_shift"].model_dump(mode="json")
     document["target"] = document["adjustments"][0]["target"] = "contact_frequency_cap"
     with pytest.raises(ValueError, match="statutory"):
-        ConfigurableStep.load(document)
+        in_dag(ConfigurableStep.load(document), "applied")
     document["target"] = document["adjustments"][0]["target"] = "collections_score"
-    assert len(ConfigurableStep.load(document).adjustments) == 1
-    assert ConfigurableStep.load(document | {"adjustments": []}).adjustments == ()
+    assert len(in_dag(ConfigurableStep.load(document), "applied").adjustments) == 1
+    assert in_dag(ConfigurableStep.load(document | {"adjustments": []}), "applied").adjustments == ()
 
 
-def test_a_stack_reads_one_scope_column(stacks):
+def test_the_pipeline_refuses_a_stack_that_overlays_a_statutory_parameter(stacks, matrix_document):
     document = stacks["score_shift"].model_dump(mode="json")
-    document["adjustments"][0]["scope"] = {"agency_placed_12m": True, "product_family_code": 1}
-    with pytest.raises(ValueError, match="one scope column"):
-        ConfigurableStep.load(document)
+    document["target"] = document["adjustments"][0]["target"] = "notice_period_days"
+    with pytest.raises(ValueError, match="statutory"):
+        build(DecisionTableConfig.load(matrix_document), **{**stacks, "score_shift": ConfigurableStep.load(document)})
 
 
 def test_a_missing_characteristic_scores_its_default_bin_not_zero(decide):

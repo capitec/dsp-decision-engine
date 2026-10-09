@@ -22,7 +22,7 @@ def overlay(adjustment_id, kind, target, op, value, scope, stack_position, owner
 
 
 def stack(name, target, set_id, base_field, adjusted_output, adjustments):
-    return {"type": "collections_overlay_stack", "name": name, "target": target, "set_id": set_id,
+    return {"type": "adjustment_stack", "name": name, "target": target, "set_id": set_id,
             "base_field": base_field, "adjusted_output": adjusted_output, "adjustments": adjustments}
 
 

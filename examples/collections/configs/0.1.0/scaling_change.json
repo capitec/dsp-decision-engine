@@ -1,5 +1,5 @@
 {
-  "type": "collections_overlay_stack",
+  "type": "adjustment_stack",
   "name": "scaling_change",
   "target": "calibration_scale",
   "set_id": "AS-COLL-SCORE-2026.09",
