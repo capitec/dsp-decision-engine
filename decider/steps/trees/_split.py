@@ -6,10 +6,8 @@ import typing as t
 from decider.steps.trees.schema import Rule, Tree
 
 # The default width of one part, in output columns (rules times columns). Compile time grows with the square of
-# the outputs one call returns, so a wide tree is cut into parts. Each extra part costs a single record about
-# 15-20 us, and every serving process compiles its parts again at start-up. At 64 a tree of up to 64 rules stays
-# whole, one of 250 to 521 rules is within about 3% of an unsplit tree for a single record (65 to 128 rules pay up
-# to 8%), and start-up takes half as long as with parts of 128. `TreeConfig.part_outputs` sets it per tree.
+# the outputs one call returns, so a wide tree is cut into parts; each extra part costs a single record about
+# 15-20 us, and every serving process compiles its parts again at start-up. `TreeConfig.part_outputs` sets it per tree.
 DEFAULT_PART_OUTPUTS = 64
 
 
