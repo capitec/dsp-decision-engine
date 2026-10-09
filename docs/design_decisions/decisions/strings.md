@@ -19,6 +19,8 @@ Read this before changing how a compiled step holds, compares or returns a strin
 - Why: spans were 3x faster in batch at 4 distinct values, 6-7x at 100,000; codes cost a dict lookup per row.
 - Codes also need a process-wide table that never forgets, number strings in first-seen order per worker, and make outputs undecodable.
 - Not: content-hashed codes (31-bit collisions: 12 over 200k strings, and slower).
+- Not: a per-category mask for `starts_with`/`contains` (run the pattern over the distinct values, look up by code). It is 0.8-1.8 ns/row only if the column already arrives encoded; encoding it costs 47 ns/row against 34 for polars `str.contains`. A span node on polars' string view is 56-75 ns/row against 178-185 for the cast, and 17-33 against 62-198 when 1% of rows reach it.
+- Not: `Series._get_buffers()` to reach the bytes; it copies 17-28 ns/row, where `__arrow_c_stream__` is 1.2 µs at any size. See [string matching beyond equality](../experiments/string-matching-beyond-equality.md).
 
 ## `SpanType` is its own numba type, not a tuple
 

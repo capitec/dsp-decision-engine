@@ -8,8 +8,9 @@ keep it that way.
 
 `docs/` is the docs site (nav in `zensical.toml`; `uv run --group docs zensical
 build`). `docs/design_decisions/` is not published: the decisions behind each
-area, the experiments behind them, `known-limitations.md` and `spec-amendments.md`.
-Read an area's decision file before changing that area.
+area, the experiments behind them and `known-limitations.md`.
+Read an area's decision file before changing that area. `docs/design_specs/`
+(also unpublished) holds proposals for work not yet built, one folder per rework.
 
 ## Comments and docstrings
 
@@ -58,9 +59,10 @@ Read an area's decision file before changing that area.
 
 ## Contract
 
-- `IR.md` is the contract, amended by `docs/design_decisions/spec-amendments.md`.
-  Where they disagree, the amendments win.
-- If the spec is wrong or ambiguous, stop and report. Don't guess.
+- `docs/architecture/` plus the code describe the system (steps and IR: `steps-and-ir.md`,
+  `engine/ir.md`); `docs/design_decisions/` holds the why.
+- If the docs and the code disagree, or the intended behaviour is ambiguous, stop
+  and report. Don't guess.
 
 ## Numeric and numba traps
 

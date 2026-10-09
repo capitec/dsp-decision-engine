@@ -32,6 +32,13 @@ Read this before changing how a request is parsed, scored or transported, or how
 - Any faster transport keeps HTTP and the `RequestHandler` hooks; nothing in the CLI serves a unix socket yet (untested idea: `uvicorn --uds`).
 - See: [Arrow codec and transports](../experiments/arrow-codec-and-transports.md), `docs/architecture/serving.md`
 
+## A version is staged off the request path, swapped by pointer, read once per request
+
+- `stage()` builds and warms a version, `activate()` swaps under a lock, `rollback()` pops the previous one; `module_fn` reads the active version once per request, so a request never mixes two versions.
+- Why: 0 of 1,564 batches straddled over 11.6k swaps (a control re-reading per chunk straddled 1,576 of 1,578); a swap costs 0.18 µs, the first call after it 7.3 µs against 3.5.
+- Not: a background compile thread. numba compiles one function at a time (two threads: 1.04x) and a `nogil` kernel then loses 5.2 ms per call to the GIL hand-off, 26% of throughput. Run `decider build` in its own process first so `stage()` loads cached user steps.
+- See: [experiment](../experiments/stage-a-version-while-serving.md), `decider/serving/_handler.py`
+
 ## Not landed: the in-process engine floor for `score()`
 
 - `score()` still builds a `State`, per-dtype arrays and output buffers each call: 39.4 us for a whole flagship request against about 7 us with everything pre-bound (tree: 77.2 against about 18).
@@ -48,7 +55,9 @@ Read this before changing how a request is parsed, scored or transported, or how
 
 - `sm_columns` reads every declared column of the batch into one buffer via a small C shim over vendored nanoarrow 0.9.0; polars rechunks on export, so addresses taken before binding are stale.
 - Why: the per-row gather it replaced was O(rows x columns): fused `run()` on flagship took 97.6 ms at 1M rows against 3.1 ms from `to_numpy()` columns.
-- See: `decider/_engine/boundary/_arrow/c/shim.c`, `docs/architecture/engine/boundary.md`
+- Not: one nanoarrow call per element (59-90 µs for 17 columns at one row against 43 µs with descriptors resolved once), nor the hand-decoded numba reader; nanoarrow is adopted for the layout code, not for safety.
+- Open: `sm_get_string` uses `ArrowArrayViewGetStringUnsafe` and nanoarrow 0.9.0 does not validate string-view elements, so a corrupt buffer index or offset is a segfault, not an error. Every frame is trusted to come from polars.
+- See: [reading a polars frame in a kernel](../experiments/reading-a-polars-frame-in-a-kernel.md), `decider/_engine/boundary/_arrow/c/shim.c`, `docs/architecture/engine/boundary.md`
 
 ## Columns of 4096 rows or more with no nulls are borrowed, not copied
 
@@ -69,7 +78,14 @@ Read this before changing how a request is parsed, scored or transported, or how
 - A plain shared library loaded with `ctypes`, compiled into `$XDG_CACHE_HOME/decider/arrow-shim/shim-<hash>.so`, where the hash covers sources, flags, compiler and machine; the write is atomic, and nanoarrow is namespaced (`DeciderArrow`) so pyarrow or adbc cannot interpose.
 - Why: hatchling has no C-extension support; building on import needs only a compiler, not CPython headers.
 - A machine with no compiler gets one `ImportError` naming platform and cause (`_arrow.diagnose()` reports it without raising). Open: a read-only home or no compiler needs the `.so` built at image build time or a prebuilt wheel; Windows is unsupported.
+- Not yet: the shipped alternative, a `cp310-abi3` extension wheel (one per platform) built in a manylinux container with `optional` off. A wheel built on a current dev box links glibc 2.38 and cannot be tagged `manylinux_2_28`; `optional = true` hides a missing binary; compile on install also needs `Python.h`. See [shipping the Arrow shim](../experiments/shipping-the-arrow-shim.md).
 - See: `decider/_engine/boundary/_arrow/_build.py`, `docs/architecture/engine/boundary.md`
+
+## Outputs are one column array per name
+
+- `State` holds a numpy array per produced name and each becomes a polars series; there is no record array and no row-major output block.
+- Why: for 633 outputs at 100k rows, record-out write-back was 776 ms of 1,212 ms against 5.7 ms column-major, and compiling a record type took 11.3 s against 0.27 s. A wide batch is bounded by memory (11.7 KB/row at 400 in / 633 out), so callers slice at about 100k rows; the engine does not chunk.
+- See: [output write-back and batch size](../experiments/output-writeback-and-batch-size.md), `decider/_engine/run/state.py`
 
 ## Kernels take shim addresses as arguments, never captured constants
 

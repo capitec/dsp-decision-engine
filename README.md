@@ -74,10 +74,10 @@ troubleshooting: [setup-project.md](plugins/decider/skills/decider/references/se
 
 - Start with `decider guide` (the same text as `decider/GUIDE.md`): concepts,
   runnable examples, project layout and common mistakes. `docs/` is the docs site.
-- `IR.md`: the contract, what a pipeline compiles to and how each mode runs it.
-- `Design.md`: the design and package layout.
-- `docs/design_decisions/`: design decisions, experiments with their measurements and
-  known limitations; `spec-amendments.md` there amends `IR.md`.
+- `docs/architecture/`: how it works (steps and IR, engine, configurable steps, serving,
+  lab); published on the docs site.
+- `docs/design_decisions/`: why it is built this way: decisions, experiments and known
+  limitations.
 - The package docstrings (`help(decider)`) are the user documentation.
 
 ## Contributing

@@ -162,8 +162,7 @@ sequenceDiagram
 ```
 
 `IRContext` (`decider/_engine/ir/context.py`) is a frozen dataclass with two fields: `path`, the parent's path, and
-`steps`, the `path -> Step` map being collected. It carries no shared-param table; the spec amendments moved that
-check to one pass over the finished IR. Its methods are the whole toolkit a `to_ir` needs:
+`steps`, the `path -> Step` map being collected. It carries no shared-param table; shared types are checked in one pass over the finished IR. Its methods are the whole toolkit a `to_ir` needs:
 
 | Method | Does |
 |---|---|
@@ -227,7 +226,8 @@ Functions defined in a script have the source `__main__:<name>`; in a project th
 
 `FunctionStep.to_ir` harvests the signature again (cheap), applies any `bind` defaults, and returns one
 `CallNode(kind="scalar")` with the function itself as `fn`. A scalar node is called per row as
-`fn(**{i.arg: value}, **consts, **params)`.
+`fn(**{i.arg: value}, **consts, **params)`. The output column is `fn.__name__`; a lambda has no usable name, so
+`name=` is its output (`step(lambda x: x * 2, name="dbl")` writes `dbl`).
 
 ```text
 CallNode[scalar] 'affordable'  (dti) -> (affordable)  params=[max_dti (shared max_dti)]  source=__main__:affordable
