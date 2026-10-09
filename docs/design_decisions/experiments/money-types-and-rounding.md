@@ -1,6 +1,6 @@
 # What does a fixed-point money type cost, and where do rounding and int64 disagree?
 
-Date: 2026-10-05 (rounding and overflow probe 2026-09-23) · Script: `benchmarks/decimal_steps.py` (the cents-type and rounding probes were spikes, not kept)
+Date: 2026-10-05 (rounding and overflow probe 2026-09-23) · Script: `benchmarks/decimal_steps.py` (the cents-type probe was a spike, not kept; the rounding, overflow and float-versus-integer probes are the spike `numeric-divergence`, in decider-experimentation)
 
 ## Purpose
 
@@ -25,6 +25,8 @@ A three-step loan flow, `score()` over 20,000 calls and a 200k-row batch, agains
 
 - Polars: results are `Decimal(38, max(s1, s2))`, `*` and `/` round half-even, `Decimal op float` is Float64, overflow raises.
 - i128 division in numba aborts the process (`__udivti3`); a software 128-by-64 divide matched Python ints on 40,007 cases.
+- Float64 against a 60-digit `Decimal` to the cent: an annuity instalment over 20,000 loans (R5k-R500k, 5-31.5%, 6-84 months) differed in 0 cases, worst error 1.7e-8 cents, nearest tie 5.6e-5 cents; with `fastmath` on, 0 of 20,000 instalments differed by a cent although 46% of the scorecard probabilities moved (up to 8 ULP), and no row flipped at seven realistic cutoffs over 500,000 rows (only a cutoff built to sit on one row's value did). `log` differed in 0 of 2,000,000 values across njit, numpy and CPython.
+- A rate stored as scaled int (`round(rate * 1e9)`) was wrong by +5 cents of total interest on R250,000 over 60 months and -2 on R1,000,000 over 84; the exact rational `apr_bp / 120000` and float64 were exact. A cents-times-rate product overflows int64 above R92 million at 1e9 scale. Splitting R1,207.99 into 11 float64 parts summed to R1,208.02; largest-remainder integer parts summed exactly.
 - Random-sample tests missed the overflow; only the binary search found it.
 
 ## Decision
