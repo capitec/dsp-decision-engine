@@ -4,8 +4,11 @@ Gaps in the current code that users and maintainers should know about before rel
 
 ## Compilation and caching
 
-**Object globals are keyed by identity.** A step reading a dict or other non-array global is fingerprinted with `id()` (`_engine/compile/fingerprint.py`).
-Impact: the numba disk cache from `decider build` misses on another process; put constants in literals, `param()`s or `param_table`s.
+**Object globals are keyed by identity.** A step reading an instance of a class of its own is fingerprinted with `id()` (`_engine/compile/fingerprint.py`); a `dict`, `list` or `set` is keyed by value.
+Impact: the numba disk cache from `decider build` misses on another process, and `decider.lab.diff` reads the step as always changed. Binding warns with `HiddenStateWarning`; put the data in literals, a config document, `param()`s or `param_table`s.
+
+**Frame steps are not checked for hidden state.** `Engine.bind` lints scalar and row steps only, so a frame step reading a registry (the fraud rule set) is not warned about.
+Impact: such a step also reads as always changed in a diff. Checking frame nodes needs `_renamed_frame` (relabelled frame steps) exempted first.
 
 **The disk cache is tied to the CPU.** Cached kernels miss silently on a host with a different CPU.
 Workaround: build on the serving host type, or compare `cpu_target()` recorded at build time.

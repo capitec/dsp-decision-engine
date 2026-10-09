@@ -70,6 +70,8 @@ The public API, generated from the docstrings and grouped by what you use each n
 
 ::: decider.FallbackWarning
 
+::: decider.HiddenStateWarning
+
 ## Value types
 
 ::: decider.ops.Text

@@ -392,6 +392,12 @@ first lookup. Only a registered `ConfigurableStep` is ever returned. Other
 roots use `decider.config_stores`, `decider.metrics`, `decider.plots`,
 `decider.blocks` and `decider.datasets`.
 
+Keep a step type's data in its fields. A step function that reads a registry
+object, a module-level `dict` or a closure variable is invisible in config and
+in `decider.lab.diff`; binding it raises `HiddenStateWarning` (see "What
+compiles, and what falls back"). The fields are the data and `to_ir` passes
+them to a plain function.
+
 ## Parameter tables
 
 A table-valued param holds rows in the params document (rate ladders, fee
@@ -689,6 +695,38 @@ assert exe.fallbacks() == {
 
 strict = Engine(strict_compile=True).bind(flow(order_total, name="q"), mode="fused")
 assert strict.score({"items": [{"price": 2.0}]})["order_total"] == 2.0
+```
+
+**A step must not read a Python object it did not receive.** Binding a pipeline
+(in every mode) warns with `HiddenStateWarning` once for each instance, `dict`,
+`list` or `set` that a scalar or row step reads from a closure or a module
+global, or as `module.NAME`. Such a step cannot compile, and
+`decider.lab.diff` cannot compare the object, so a release check cannot tell
+"unchanged" from "the limit doubled". Numbers, strings, dates, enum members,
+tuples and frozensets of those, arrays and frames are data and are fine, as
+are functions and classes. `@allow_fallback` does not silence this warning.
+Put the data in a config document, a `ConfigurableStep` or `CustomFunction`
+field, a `param()` or a `param_table()`, and call a plain function.
+
+```python
+import warnings
+
+from decider import HiddenStateWarning, allow_fallback, flow
+
+class Limits:
+    cap = 100.0
+
+LIMITS = Limits()
+
+@allow_fallback
+def capped(x: float) -> float:
+    return min(x, LIMITS.cap)
+
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter("always")
+    flow(capped, name="q").compile()
+assert [w.category for w in caught] == [HiddenStateWarning]
+assert "q/capped reads Limits `LIMITS` (module global in " in str(caught[0].message)
 ```
 
 A compiled step that calls another function of yours must say how it compiles:
