@@ -2,17 +2,12 @@
 
 Two kinds. A threshold shift (a volume dial, a cut-off shift) moves a named param of the tree, so the tree document and
 its node ids stay as published; `resolve` turns the overlays in force on a cycle date into the params document. A cap
-reduction scales the tier ceiling the tree answered with: a `CapReduction` document, built on `credit_core.adjustments`.
+reduction scales the tier ceiling the tree answered with: an `adjustment_stack` document of `credit_core.adjustments`.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
-from typing import Literal
-
-from decider import allow_fallback
-
-from credit_core.adjustments import AdjustmentStack, evaluate
 
 CAMPAIGN_ID = 23
 
@@ -76,29 +71,3 @@ def resolve(overlays: tuple[TreeOverlay, ...], campaign_id: int, cycle_date: dat
             raise ValueError(f"{o.overlay_id} shifts {o.tree_param!r}, which campaign {campaign_id}'s tree does not have")
     return ({o.tree_param: o.new_value for o in applied},
             "OS-" + "+".join(o.overlay_id for o in applied) if applied else "OS-NONE")
-
-
-@allow_fallback
-def cap_reduction(
-    tier_ceiling: float, campaign_id: int, offer_tier_code: int, cycle_date: date, overlays: tuple, set_id: str,
-    adjustment_stack_enabled: bool,
-) -> tuple[float, float, str, list[str]]:
-    scope = {"campaign_id": campaign_id, "offer_tier_code": offer_tier_code}
-    value, applied, _ = evaluate(overlays, tier_ceiling, scope, cycle_date.toordinal(), adjustment_stack_enabled)
-    return value, tier_ceiling, set_id, applied
-
-
-class CapReduction(AdjustmentStack):
-    """The cap-reduction document: overlays on the tier ceiling, scoped by `campaign_id` and `offer_tier_code`.
-
-    The param `adjustment_stack_enabled` switches them all off for the shadow run.
-    """
-
-    type: Literal["cap_reduction"] = "cap_reduction"
-
-    def to_ir(self, ctx):
-        return ctx.call(
-            self, cap_reduction, inputs={"tier_ceiling": self.target},
-            values={"overlays": self.packed(), "set_id": self.set_id, "adjustment_stack_enabled": self.stack_enabled},
-            outputs=("advertised_tier_ceiling", "tier_ceiling_before_cap_overlay", "cap_adjustment_set_id",
-                     "cap_adjustments_applied"))
