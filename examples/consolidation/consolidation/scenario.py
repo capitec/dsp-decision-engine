@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 from assessment import verdict
 from credit_core.instalment import instalment_before_fees
+from credit_core.reason_codes import rank_codes
 
 from consolidation import interventions, reasons
 from consolidation.capacity import Buffers, Capacity, case_record, debt_service_ratio
@@ -57,6 +58,8 @@ class ScenarioEvaluator:
     economics: dict  # cost_of_funds, expected_loss_rate
     max_consolidations_24m: int
     stack_enabled: bool
+    rejection_severity: tuple[tuple[int, int], ...]  # (code, severity rank) of each rejection code
+    rejection_version: str
 
     def __post_init__(self):
         self.by_ref = {a["account_ref"]: a for a in self.accounts}
@@ -95,7 +98,7 @@ class ScenarioEvaluator:
         rejections = [1000 + c["intervention"] for c in checks if c["status"] == interventions.FAILED]
         if after["affordability_verdict_code"] != verdict.PASS:
             rejections.append(reasons.AFFORDABILITY_FAIL)
-        ranked, primary = reasons.SCENARIO_REJECTIONS.rank(rejections)
+        ranked, primary = rank_codes(rejections, self.rejection_severity, self.rejection_version)
         return {
             **record, "viable": not rejections, "rejection_reason_codes": ranked, "primary_rejection_reason_code": primary,
             "interventions": checks,

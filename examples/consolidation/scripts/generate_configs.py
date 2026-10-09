@@ -1,4 +1,4 @@
-"""Write `configs/<version>/`: the product rate cards, the settleability rules and the params document.
+"""Write `configs/<version>/`: the product rate cards, the settleability rules, the reason codes and the params document.
 
     uv run python examples/consolidation/scripts/generate_configs.py [version]
 
@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 from credit_core.evidence import cell_id
-from decider import DecisionTableConfig
+from decider import ConfigurableStep, DecisionTableConfig
 
 from consolidation.pipeline import build
 
@@ -103,6 +103,41 @@ def settleability_rules(version: str = "settleability-2026.09") -> dict:
             "default": [0, 0, 0, 0, None]}
 
 
+# (code, severity rank with 1 the most severe, description, regulatory). A policy intervention CON-INT-n is 1000 + n.
+SCENARIO_REJECTIONS = [
+    (1001, 21, "More accounts settled than the product permits", True),
+    (1003, 23, "Instalment reduction below the product's minimum", True),
+    (1004, 14, "Total cost of credit rises more than the anti-harm ceiling allows", True),
+    (1005, 25, "Term extends too far beyond the settled accounts' longest remaining term", True),
+    (1006, 26, "New rate is above the settled accounts' weighted average rate", True),
+    (1008, 28, "New money above the permitted share of the settlement total or the absolute cap", True),
+    (1009, 29, "Post-consolidation debt service ratio above the ceiling", True),
+    (1010, 30, "Too little of the advance goes to external creditors", True),
+    (1013, 33, "The client has reached the maximum consolidations in 24 months", True),
+    (1014, 34, "Discretionary income after the new instalment is below the floor", True),
+    (1101, 90, "The product's rate card has no cell for this amount, term and grade", False),
+    (1102, 5, "The new instalment exceeds what the client can afford", True),
+    (1103, 80, "The amount or limit is outside the product's limits", False),
+]
+CLIENT_REASONS = [
+    (2001, 1, "The client is under debt review", True),
+    (2002, 2, "The client is under administration or sequestration", True),
+    (2003, 5, "No verified income at the decision date", True),
+    (2004, 6, "No bureau view could be obtained", True),
+    (2006, 15, "An active reckless lending allegation is on file", True),
+    (2005, 20, "A consolidation concluded in the last 6 months", True),
+    (2007, 25, "An account the client asked to settle cannot be settled", False),
+    (2008, 40, "No scenario passed every intervention", True),
+    (2010, 7, "Affordability could not be established on the evidence", True),
+    (2009, 45, "The request is not affordable as made and consolidation does not apply", True),
+]
+
+
+def reason_codes(name: str, version: str, rows: list[tuple]) -> dict:
+    return {"type": "reason_codes", "name": name, "version": version,
+            "codes": [{"code": c, "severity_rank": r, "description": d, "is_regulatory": reg} for c, r, d, reg in rows]}
+
+
 def main(version: str = "0.1.0") -> None:
     out = Path(__file__).resolve().parents[1] / "configs" / version
     out.mkdir(parents=True, exist_ok=True)
@@ -110,9 +145,15 @@ def main(version: str = "0.1.0") -> None:
                  "card_reversion_rates": card_reversion_card(), "settleability_rules": settleability_rules()}
     for name, document in documents.items():
         (out / f"{name}.json").write_text(json.dumps(document, separators=(",", ":")))
-    params = build(*(DecisionTableConfig.load(d) for d in documents.values())).parameters().defaults()
+    codes = {"client_reason_codes": reason_codes("client_reason_codes", "consolidation-client-2026.09", CLIENT_REASONS),
+             "scenario_rejection_codes": reason_codes("scenario_rejection_codes", "consolidation-rejections-2026.09",
+                                                      SCENARIO_REJECTIONS)}
+    for name, document in codes.items():
+        (out / f"{name}.json").write_text(json.dumps(document, indent=2) + "\n")
+    params = build(*(DecisionTableConfig.load(d) for d in documents.values()),
+                   **{name: ConfigurableStep.load(d) for name, d in codes.items()}).parameters().defaults()
     (out / "params.json").write_text(json.dumps(params, indent=2) + "\n")
-    print(f"wrote {len(documents)} documents and {out / 'params.json'}")
+    print(f"wrote {len(documents) + len(codes)} documents and {out / 'params.json'}")
 
 
 if __name__ == "__main__":
