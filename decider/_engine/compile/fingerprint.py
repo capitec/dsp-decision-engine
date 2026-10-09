@@ -21,6 +21,17 @@ _LITERALS = (int, float, complex, bool, str, bytes, type(None))
 _BY_VALUE = (datetime.date, datetime.time, datetime.timedelta, Decimal, fractions.Fraction)
 
 
+class _Walk:
+    """The state of one traversal: the hash being fed and the ids already visited."""
+
+    __slots__ = ("h", "seen", "strict")
+
+    def __init__(self, strict: bool = False):
+        self.h = hashlib.sha256()
+        self.seen: set = set()
+        self.strict = strict
+
+
 def fingerprint(fn: Callable, *, strict: bool = False) -> str:
     """A content hash of a function: what its compiled code depends on, and nothing else.
 
@@ -47,9 +58,9 @@ def fingerprint(fn: Callable, *, strict: bool = False) -> str:
 
         fingerprint(f) == fingerprint(g)  # True
     """
-    h = hashlib.sha256()
-    _function(h, fn, set(), strict)
-    return h.hexdigest()
+    w = _Walk(strict)
+    _function(w, fn)
+    return w.h.hexdigest()
 
 
 def cpu_target() -> tuple[str, str, str]:
@@ -67,26 +78,26 @@ def cpu_target() -> tuple[str, str, str]:
     return target.target_context.codegen().magic_tuple()
 
 
-def _function(h: Any, fn: Any, seen: set[int], strict: bool) -> None:
+def _function(w: _Walk, fn: Any) -> None:
     fn = getattr(fn, "py_func", fn)
-    if id(fn) in seen:
-        h.update(b"<recursive>")
+    if id(fn) in w.seen:
+        w.h.update(b"<recursive>")
         return
-    seen.add(id(fn))
+    w.seen.add(id(fn))
     code = fn.__code__
-    _code(h, code)
+    _code(w.h, code)
     for cell in fn.__closure__ or ():
         try:
             contents = cell.cell_contents
         except ValueError:  # an empty cell
-            h.update(b"<empty>")
+            w.h.update(b"<empty>")
             continue
-        _value(h, contents, seen, strict)
+        _value(w, contents)
     names = _names(code)
     for name in sorted(names):
         if name in fn.__globals__:
-            h.update(name.encode())
-            _value(h, fn.__globals__[name], seen, strict, names)
+            w.h.update(name.encode())
+            _value(w, fn.__globals__[name], names)
 
 
 def _code(h: Any, code: types.CodeType) -> None:
@@ -103,49 +114,49 @@ def _code(h: Any, code: types.CodeType) -> None:
             h.update(f"{type(const).__name__}:{const!r}".encode())
 
 
-def _by_identity(h: Any, value: Any, strict: bool) -> None:
-    if strict:
+def _by_identity(w: _Walk, value: Any) -> None:
+    if w.strict:
         t = type(value)
         raise ValueError(f"a {t.__module__}.{t.__qualname__} object has no content key: "
                          "it is mutable or arbitrary, so it can only be keyed by identity")
-    h.update(f"object:{type(value).__qualname__}:{id(value)}".encode())
+    w.h.update(f"object:{type(value).__qualname__}:{id(value)}".encode())
 
 
 def _qualified(cls: type) -> str:
     return f"{cls.__module__}:{cls.__qualname__}"
 
 
-def _container(h: Any, kind: str, items: Any, seen: set, strict: bool) -> None:
+def _container(w: _Walk, kind: str, items: Any) -> None:
     # Delimited, so (1, (2,)) and ((1,), 2) differ; a container reaching itself is hashed once.
-    seen.add(id(items))
-    h.update(f"{kind}[{len(items)}](".encode())
+    w.seen.add(id(items))
+    w.h.update(f"{kind}[{len(items)}](".encode())
     if isinstance(items, dict):
         flat = [x for pair in items.items() for x in pair]
     elif isinstance(items, (set, frozenset)):
-        flat = sorted(_digest(item, strict) for item in items)  # sets iterate in hash-seed order
+        flat = sorted(_digest(item, w.strict) for item in items)  # sets iterate in hash-seed order
     else:
         flat = items
     for item in flat:
-        _value(h, item, seen, strict)
-    h.update(b")")
-    seen.discard(id(items))
+        _value(w, item)
+    w.h.update(b")")
+    w.seen.discard(id(items))
 
 
 def _digest(value: Any, strict: bool) -> str:
-    h = hashlib.sha256()
-    _value(h, value, set(), strict)
-    return h.hexdigest()
+    w = _Walk(strict)
+    _value(w, value)
+    return w.h.hexdigest()
 
 
-def _frame(h: Any, df: pl.DataFrame, strict: bool) -> None:
+def _frame(w: _Walk, df: pl.DataFrame) -> None:
     # ponytail: hashed on every call (~0.5 ms small, ~13 ms per million rows); memoize if big data globals show up.
     try:
         rows = df.hash_rows().to_numpy()
     except Exception:  # a dtype polars can't hash
-        _by_identity(h, df, strict)
+        _by_identity(w, df)
         return
-    h.update(f"frame:{df.schema}:".encode())
-    h.update(rows.data)
+    w.h.update(f"frame:{df.schema}:".encode())
+    w.h.update(rows.data)
 
 
 def _names(code: types.CodeType) -> set[str]:
@@ -156,27 +167,28 @@ def _names(code: types.CodeType) -> set[str]:
     return names
 
 
-def _value(h: Any, value: Any, seen: set, strict: bool, names: frozenset | set = frozenset()) -> None:
+def _value(w: _Walk, value: Any, names: frozenset | set = frozenset()) -> None:
+    h = w.h
     if isinstance(value, (types.FunctionType, Dispatcher)):
-        _function(h, value, seen, strict)
+        _function(w, value)
     elif isinstance(value, types.ModuleType):
         h.update(f"module:{value.__name__}".encode())
         # `mod.f(x)` reads `f` off the module: follow the attributes the function names, so editing `f` changes the key.
         key = (id(value), frozenset(names))
-        if key in seen:
+        if key in w.seen:
             return
-        seen.add(key)
+        w.seen.add(key)
         for name in sorted(names):
             attr = value.__dict__.get(name)
             if isinstance(attr, (types.FunctionType, Dispatcher, types.ModuleType)):
                 h.update(name.encode())
-                _value(h, attr, seen, strict, names)
+                _value(w, attr, names)
     elif isinstance(value, _Intrinsic):
-        _function(h, value._defn, seen, strict)
+        _function(w, value._defn)
     elif isinstance(value, (ir.Type, numba_types.Type)):
         h.update(f"{type(value).__name__}:{value}".encode())
     elif isinstance(value, functools._lru_cache_wrapper):
-        _function(h, value.__wrapped__, seen, strict)  # the cache is not part of the code
+        _function(w, value.__wrapped__)  # the cache is not part of the code
     elif isinstance(value, types.BuiltinFunctionType) and isinstance(value.__self__, (types.ModuleType, type(None))):
         h.update(f"builtin:{value.__module__}.{value.__qualname__}".encode())
     elif isinstance(value, re.Pattern):
@@ -186,18 +198,18 @@ def _value(h: Any, value: Any, seen: set, strict: bool, names: frozenset | set =
     elif isinstance(value, type):
         h.update(f"class:{_qualified(value)}".encode())
         if issubclass(value, enum.Enum):  # a member's value is compiled in as a constant
-            _container(h, "members", [(m.name, m.value) for m in value], seen, strict)
+            _container(w, "members", [(m.name, m.value) for m in value])
     elif isinstance(value, _LITERALS + _BY_VALUE):
         h.update(f"{type(value).__name__}:{value!r}".encode())
-    elif (isinstance(value, tuple) or type(value) in (list, dict, set, frozenset)) and id(value) not in seen:
+    elif (isinstance(value, tuple) or type(value) in (list, dict, set, frozenset)) and id(value) not in w.seen:
         # Exact types: a Counter or defaultdict is a mutable store, and a key that moves as it fills never hits.
-        _container(h, type(value).__name__, value, seen, strict)
+        _container(w, type(value).__name__, value)
     elif isinstance(value, np.ndarray) and value.dtype != object:
         # Data by value: a re-imported module's equal constant is the same step, and an in-place edit is not.
         h.update(f"ndarray:{value.dtype.str}:{value.shape}".encode())
         h.update(np.ascontiguousarray(value).data)
     elif isinstance(value, pl.DataFrame):
-        _frame(h, value, strict)
+        _frame(w, value)
     else:
         # Anything else is compiled in as whatever object it is now: key it by identity.
-        _by_identity(h, value, strict)
+        _by_identity(w, value)
