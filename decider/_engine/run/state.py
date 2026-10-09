@@ -7,6 +7,7 @@ from typing import Any, Hashable, Mapping
 import numpy as np
 import polars as pl
 
+from decider._engine.boundary.whole import int64_array
 from decider._engine.compile.outputs import Coded, coded_values
 from decider._engine.ir.decls import Input, NullPolicy, base_annotation, is_typed
 from decider._engine.run.representations import despan
@@ -294,7 +295,13 @@ def load_record(state: State, record: Mapping[str, Any], versions: list[NodeVers
         for k, x in enumerate(xs):
             block[k] = x
     else:
-        block = np.array([0 if null else x for x, null in zip(xs, nulls)] if any(nulls) else xs, dtype)
+        xs = [0 if null else x for x, null in zip(xs, nulls)] if any(nulls) else xs
+        # Ints are the common case and numpy already types them int64; anything else (a float, a bool,
+        # a string) goes through the check, which refuses a float that is not whole.
+        ints = dtype.kind == "i"
+        block = np.array(xs) if ints else np.array(xs, dtype)
+        if ints and block.dtype != dtype:
+            block = int64_array(xs, lambda k: f"input '{given[k].name}'")
         # Read-only like a column read from a frame, so one kernel specialisation serves both.
         block.flags.writeable = False
     for k, (v, null) in enumerate(zip(given, nulls)):

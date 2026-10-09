@@ -4,6 +4,7 @@ from typing import Any, Iterator, Mapping, Union
 
 import numpy as np
 
+from decider._engine.boundary.whole import refuse
 from decider._engine.compile.kernel import Spec, SrcKind, fused_kernel
 from decider._engine.compile.njit import FALLBACK_ERRORS, compile_call, parameters
 from decider._engine.compile.outputs import CodeTable, coded, coded_values, output_dtype
@@ -165,12 +166,14 @@ class Fallback:
                 result = self.fn(**dict(args), **fixed)
             if len(outs) == 1 and node.kind == "scalar":
                 result = (result,)
-            for out, mask, x, scale in zip(outs, masks, result, self._scales):
+            for out, mask, x, scale, v in zip(outs, masks, result, self._scales, call.writes):
                 x = x.text if isinstance(x, Text) else x
                 if x is None:
                     mask[r], x = False, 0
                 elif scale is not None:
                     x = to_raw(x, scale)
+                elif out.dtype == np.int64 and isinstance(x, (float, np.floating)) and not x.is_integer():
+                    raise refuse(f"step '{node.origin.path}' output '{v.name}'" + (f" (row {r})" if n > 1 else ""), x)
                 out[r] = x
         for v, out, mask, table in zip(call.writes, outs, masks, self._tables):
             values[v.id] = out
