@@ -11,7 +11,6 @@ from decider import allow_fallback, branch, flow, missing_as, param, step
 from credit_core import eligibility
 from credit_core.appetite import build_appetite_table
 from credit_core.consent import channel_permitted_step, consent_verdict_step
-from loan_granting.pricing import RateCardIndex
 
 from campaign_trees import holdout, overlays, preassessment, suppressions, vocab
 
@@ -71,8 +70,7 @@ def build(campaign_23, rate_card_flex_loan, cap_reductions):
 
     # The tree reads pre_assessed_amount, so the amount is settled first.
     evaluation = flow(
-        appetite, step(preassessment.max_affordable_instalment), preassessment.pre_assessment_step(
-            RateCardIndex.from_card(rate_card_flex_loan)),
+        appetite, step(preassessment.max_affordable_instalment), preassessment.pre_assessment_step(rate_card_flex_loan),
         adjusted, unadjusted, cap_reductions, step(offer_amount),
         name="evaluation")
 
