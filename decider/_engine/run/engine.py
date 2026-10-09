@@ -10,6 +10,7 @@ import polars as pl
 
 from decider._engine.concurrency import Cache, once
 from decider._engine.params import NodeParams, ParamsCache
+from decider._engine.run.hidden import warn_hidden_state
 from decider._engine.run.params import RunParams, RunReport, check_namespaces
 from decider._engine.run.runners.base import CompiledRunner, Runner
 from decider._engine.run.runners.fused import FusedRunner
@@ -77,7 +78,10 @@ class Engine:
         if runner is None:
             raise EngineError(f"unknown mode {mode!r}; expected one of {sorted(RUNNERS)}")
         runner = runner() if runner is InterpretedRunner else runner(strict=self.strict_compile)
-        return Executable(resolve(step_or_ir), runner, self.params_validation == "lazy", step_or_ir)
+        exe = Executable(resolve(step_or_ir), runner, self.params_validation == "lazy", step_or_ir)
+        # ponytail: pass `strict=self.strict_compile` to raise instead of warning once the examples are clean.
+        warn_hidden_state(exe.plan)
+        return exe
 
 
 class Executable:

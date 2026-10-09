@@ -28,14 +28,20 @@ _BY_VALUE = (datetime.date, datetime.time, datetime.timedelta, datetime.tzinfo, 
 
 
 class _Walk:
-    """The state of one traversal: the hash being fed and the ids already visited."""
+    """The state of one traversal: the hash being fed, the ids already visited and what hidden state it met.
 
-    __slots__ = ("h", "seen", "strict")
+    `where` is the (name, site) of the closure variable or global being read; `found` is collected only
+    when a caller asks, so the cache key and `hidden_state` are one walk and cannot disagree.
+    """
 
-    def __init__(self, strict: bool = False):
+    __slots__ = ("h", "seen", "strict", "found", "where")
+
+    def __init__(self, strict: bool = False, found: list | None = None):
         self.h = hashlib.sha256()
         self.seen: set = set()
         self.strict = strict
+        self.found = found
+        self.where: tuple[str, str] = ("", "")
 
 
 def fingerprint(fn: Callable, *, strict: bool = False) -> str:
@@ -67,6 +73,29 @@ def fingerprint(fn: Callable, *, strict: bool = False) -> str:
     w = _Walk(strict)
     _function(w, fn)
     return w.h.hexdigest()
+
+
+def hidden_state(fn: Callable) -> list[tuple[str, str, str, str]]:
+    """The objects `fn` reads that a config document, a diff or a kernel cannot see.
+
+    One `(name, kind, type_name, site)` per closure variable or module global
+    that holds an instance of a class of your own, or a `dict`, `list` or
+    `set` that can be edited in place. `kind` is `"object"` or `"container"`.
+    Modules, functions, classes, enum members, numbers, strings, dates,
+    tuples and frozensets of those, arrays and frames are data, not hidden state.
+
+    Example::
+
+        registry = Register()
+
+        def step(x: float) -> float:
+            return registry.cap(x)
+
+        hidden_state(step)  # [('registry', 'object', 'Register', 'module global in step.py:3')]
+    """
+    w = _Walk(found=[])
+    _function(w, fn)
+    return w.found
 
 
 def cpu_target() -> tuple[str, str, str]:
@@ -101,16 +130,19 @@ def _function(w: _Walk, fn: Any) -> None:
         return
     _code(w.h, code)
     names = _names(code)
-    for cell in fn.__closure__ or ():
+    where = f"{code.co_filename}:{code.co_firstlineno}"
+    for name, cell in zip(code.co_freevars, fn.__closure__ or ()):
         try:
             contents = cell.cell_contents
         except ValueError:  # an empty cell
             w.h.update(b"<empty>")
             continue
+        w.where = (name, f"closure variable of {fn.__qualname__}, {where}")
         _value(w, contents, names)
     for name in sorted(names):
         if name in fn.__globals__:
             w.h.update(name.encode())
+            w.where = (name, f"module global in {where}")
             _value(w, fn.__globals__[name], names)
 
 
@@ -145,7 +177,19 @@ def _code(h: Any, code: types.CodeType) -> None:
             h.update(f"{type(const).__name__}:{const!r}".encode())
 
 
+def _hidden(w: _Walk, kind: str, value: Any) -> None:
+    from decider.steps import Step
+
+    if w.found is None or isinstance(value, Step):
+        return
+    entry = (w.where[0], kind, type(value).__name__, w.where[1])
+    # A variable holding a dict of objects is one finding, not one per object.
+    if not any(e[0] == entry[0] and e[3] == entry[3] for e in w.found):
+        w.found.append(entry)
+
+
 def _by_identity(w: _Walk, value: Any) -> None:
+    _hidden(w, "object", value)
     if w.strict:
         t = type(value)
         raise ValueError(f"a {t.__module__}.{t.__qualname__} object has no content key: "
@@ -211,13 +255,16 @@ def _value(w: _Walk, value: Any, names: frozenset | set = frozenset()) -> None:
             return
         w.seen.add(key)
         contents = getattr(value, "__dict__", {})
+        outer = w.where
         for name in sorted(names):
             # A callable other than a function (a ufunc, a bound method) is not data the step's code depends on.
             if name in contents and not name.startswith("__") and (
                     isinstance(contents[name], (types.FunctionType, Dispatcher, types.ModuleType, type))
                     or not callable(contents[name])):
                 h.update(name.encode())
+                w.where = (f"{outer[0]}.{name}", outer[1])
                 _value(w, contents[name], names)
+        w.where = outer
     elif isinstance(value, _Intrinsic):
         _function(w, value._defn)
     elif isinstance(value, (ir.Type, numba_types.Type)):
@@ -238,6 +285,9 @@ def _value(w: _Walk, value: Any, names: frozenset | set = frozenset()) -> None:
         h.update(f"{type(value).__name__}:{value!r}".encode())
     elif (isinstance(value, tuple) or type(value) in (list, dict, set, frozenset)) and id(value) not in w.seen:
         # Exact types: a Counter or defaultdict is a mutable store, and a key that moves as it fills never hits.
+        # A dict, list or set read by a step can be edited in place after the build, so it is hidden state too.
+        if type(value) in (list, dict, set):
+            _hidden(w, "container", value)
         _container(w, type(value).__name__, value)
     elif isinstance(value, np.ndarray) and value.dtype != object:
         # Data by value: a re-imported module's equal constant is the same step, and an in-place edit is not.
