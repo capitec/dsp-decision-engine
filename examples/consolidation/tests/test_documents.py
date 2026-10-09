@@ -20,7 +20,7 @@ def rebuilt(**edits):
     for name, edit in edits.items():
         document = raw(name)
         edit(document)
-        documents[name] = ConfigurableStep.load(document)
+        documents[name] = (DecisionTableConfig if name in TABLES else ConfigurableStep).load(document)
     return build(**documents).compile("interpreted")
 
 
@@ -63,3 +63,15 @@ def test_an_objective_overlay_edit_changes_the_weights_the_branch_channel_is_sco
 
     out = rebuilt(objective_adjustments=reweigh).score(parse(sample | {"channel_code": 1}), params)
     assert out["objective_weights"]["min_commitment"] == 0.333333 and out["objective_weights"]["new_money"] == 0.666667
+
+
+def test_a_rate_card_document_edit_reprices_the_consolidation_loan(sample, params, parse):
+    def dearer(document):
+        for row in document["rows"]:
+            row["rate"] += 1.0
+
+    base = rebuilt().score(parse(sample), params)["scenarios"]
+    edited = rebuilt(rate_card_product11=dearer).score(parse(sample), params)["scenarios"]
+    flex = [(a, b) for a, b in zip(base, edited) if a["product_code"] == 11 and "nominal_annual_rate" in a]
+    assert flex and all(round(b["nominal_annual_rate"] - a["nominal_annual_rate"], 4) == 0.01 for a, b in flex)
+    assert all(a["nominal_annual_rate"] == b["nominal_annual_rate"] for a, b in zip(base, edited) if a["product_code"] == 20)

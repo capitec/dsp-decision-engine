@@ -10,7 +10,6 @@ from assessment.pipeline import evidence_unit
 from credit_core import fees
 from credit_core.rate_card import generate_flex_loan_card
 from decider import DecisionTableConfig, flow, param
-from loan_granting.pricing import CreditLifeIndex, RateCardIndex
 
 from consolidation import (
     baseline,
@@ -24,10 +23,10 @@ from consolidation import (
 )
 from consolidation.capacity import Buffers, Capacity
 from consolidation.documents import shipped
-from consolidation.everyday_card import CardRates, EverydayCard, everyday_card_policy
-from consolidation.flex_loan import FlexLoanConsolidation, flex_loan_policy
-from consolidation.rate_tables import product11_params
-from consolidation.vocab import PRODUCT_EVERYDAY_CARD, PRODUCT_FLEX_LOAN_CONSOLIDATION
+from consolidation.everyday_card import everyday_card_policy
+from consolidation.flex_loan import flex_loan_policy
+from consolidation.rate_tables import card_params, product11_params
+from consolidation.vocab import PRODUCT_FLEX_LOAN_CONSOLIDATION
 
 INVENTORY = ("classified_accounts", "settleable_account_refs", "mandatory_account_refs", "excluded_account_refs",
              "nomination_conflicts", "settleable_count", "unknown_count", "settleable_obligation_proportion", "settlements",
@@ -64,18 +63,17 @@ def build(rate_card_product11, card_promotional_rates, card_reversion_rates, set
     thresholds = shipped("intervention_adjustments") if intervention_adjustments is None else intervention_adjustments
     weights = shipped("objective_adjustments") if objective_adjustments is None else objective_adjustments
     capacity, buffers = Capacity(), Buffers()
-    consolidation_card = RateCardIndex.from_card(rate_card_product11)
     # ponytail: the Flex Loan card is regenerated, not read from a config document; load it from one when Treasury refreshes it
     plain_card = DecisionTableConfig.load(generate_flex_loan_card("rc-2026.09"))
-    carriers = {PRODUCT_FLEX_LOAN_CONSOLIDATION: FlexLoanConsolidation(consolidation_card, CreditLifeIndex()),
-                PRODUCT_EVERYDAY_CARD: EverydayCard(CardRates(card_promotional_rates, card_reversion_rates))}
+    product11 = product11_params(rate_card_product11)
     return flow(
         inventory.classify_unit(settleability_rules), settlement.settlements,
         assessment_mode_code, product_code, evidence_unit(), baseline.invariants,
         statutory_ceiling, fees.fee_caps_version_step, fees.build_fee_caps_table(), products.pricing_context,
-        baseline.baseline_step(capacity), baseline.plain_granting_step(plain_card, product11_params(rate_card_product11)),
+        baseline.baseline_step(capacity), baseline.plain_granting_step(plain_card, product11),
         eligibility.eligibility_gates, flex_loan_policy, everyday_card_policy, products.product_policies,
-        search.search_step(carriers, capacity, buffers, thresholds.packed(),
+        search.search_step(product11, card_params(card_promotional_rates, card_reversion_rates), capacity, buffers,
+                           thresholds.packed(),
                            tuple((c.code, c.severity_rank) for c in rejections.codes), rejections.version),
         objective.selection_step(weights.packed()), outcome.outcome, client_reasons,
         name="consolidation",

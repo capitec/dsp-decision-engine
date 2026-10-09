@@ -21,6 +21,7 @@ from loan_granting.rate_tables import (
 )
 
 PRODUCT11_CARD = "rate_card.product11"
+PROMOTIONAL_CARD, REVERSION_CARD = "rate_card.card_promotional", "rate_card.card_reversion"
 
 # One table for every step that prices, so the rates are edited in one place.
 CREDIT_LIFE = param_table(CREDIT_LIFE_COLUMNS, shared_key="credit_life", default=credit_life_rows())
@@ -57,6 +58,32 @@ class CardTable(RateCardTable):
         return hit and (hit[0], hit[1].replace(RATE_CARD_TABLE, self._table, 1))
 
 
+def limit_band_rows(card: DecisionTableConfig, table: str, keys: tuple[str, ...]) -> tuple[list[dict], str]:
+    """The Everyday Card rates sorted by `keys` and limit band, and the version in the cell ids.
+
+    The limit bands are numbered by the order of their lower edges, and each cell id must be
+    `<table>@<version>#<limit band>|<key values>`: a document whose ids are anything else is refused.
+    """
+    frame = card.rows.df
+    version = frame["cell_id"][0].split("@")[1].split("#")[0]
+    frame = frame.sort(*keys, "lim_lo").with_columns(band=pl.col("lim_lo").rank("dense").cast(pl.Int64) - 1)
+    expected = [cell_id(table, version, band, *key) for band, *key in zip(frame["band"], *(frame[k] for k in keys))]
+    if frame["cell_id"].to_list() != expected:
+        raise ValueError(f"{table} cell ids must be {table}@<version>#<limit band>|{'|'.join(keys)}")
+    return frame.select(*keys, "lim_lo", "band", "rate").with_columns(frame["lim_lo"].clip(-OPEN, OPEN)).to_dicts(), version
+
+
+def card_params(promotional: DecisionTableConfig, reversion: DecisionTableConfig) -> tuple:
+    """`(rows param, version param)` for each of the Everyday Card's two rate documents, promotional first."""
+    out = []
+    for name, card, table, keys in (("card_promotional_rates", promotional, PROMOTIONAL_CARD, ("duration", "grade")),
+                                    ("card_reversion_rates", reversion, REVERSION_CARD, ("grade",))):
+        rows, version = limit_band_rows(card, table, keys)
+        columns = {**dict.fromkeys(keys, int), "lim_lo": float, "band": int, "rate": float}
+        out.append((param_table(columns, default=rows), param(version)))
+    return tuple(out)
+
+
 def product11_params(card: DecisionTableConfig):
     """`(rows param, version param)` for product 11's card: the card document is their default, shared by the steps that price."""
     rows, version = card_rows(card, PRODUCT11_CARD)
@@ -64,4 +91,5 @@ def product11_params(card: DecisionTableConfig):
             param(version, shared_key="rate_card_product11_version"))
 
 
-__all__ = ["CREDIT_LIFE", "CREDIT_LIFE_VERSION_PARAM", "PRODUCT11_CARD", "CardTable", "CreditLifeTable", "card_rows", "product11_params"]
+__all__ = ["CREDIT_LIFE", "CREDIT_LIFE_VERSION_PARAM", "PRODUCT11_CARD", "PROMOTIONAL_CARD", "REVERSION_CARD", "CardTable", "CreditLifeTable", "card_params", "card_rows",
+           "limit_band_rows", "product11_params"]

@@ -179,6 +179,8 @@ def main(version: str = "0.1.0") -> None:
         del params["shared"][key]
     for key in ("plain_rate_card", "plain_rate_card_version"):
         del params["consolidation"]["plain_granting"][key]
+    for key in ("card_promotional_rates", "card_promotional_rates_version", "card_reversion_rates", "card_reversion_rates_version"):
+        del params["consolidation"]["search"][key]
     (out / "params.json").write_text(json.dumps(params, indent=2) + "\n")
     print(f"wrote {len(documents) + len(codes)} documents and {out / 'params.json'}")
 

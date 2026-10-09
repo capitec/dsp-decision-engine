@@ -14,7 +14,16 @@ from decider import ParamTable, allow_fallback, missing_as, param, step
 
 from consolidation import candidates, vocab
 from consolidation.capacity import Buffers, Capacity
+from consolidation.everyday_card import CardRates, EverydayCard
+from consolidation.flex_loan import FlexLoanConsolidation
 from consolidation.inventory import num
+from consolidation.rate_tables import (
+    CREDIT_LIFE,
+    CREDIT_LIFE_VERSION_PARAM,
+    PRODUCT11_CARD,
+    CardTable,
+    CreditLifeTable,
+)
 from consolidation.scenario import ScenarioEvaluator, remaining_term
 
 
@@ -46,13 +55,18 @@ def run_search(evaluator: ScenarioEvaluator, settleable_refs: list[int], mandato
     }
 
 
-def search_step(products: dict, capacity: Capacity, buffers: Buffers, intervention_overlays: tuple, rejection_severity: tuple,
-                rejection_version: str):
-    """The `search` step, pricing with `products` (product code to a product object).
+def search_step(product11_params: tuple, card_params: tuple, capacity: Capacity, buffers: Buffers,
+                intervention_overlays: tuple, rejection_severity: tuple, rejection_version: str):
+    """The `search` step, pricing product 11 from its card and the Everyday Card from its two rate documents.
 
+    `product11_params` is `rate_tables.product11_params(card)` and `card_params` is `rate_tables.card_params(...)`: the
+    documents are the defaults of table params, and a params document that sets them prices from its own rows.
     `intervention_overlays` is `OverlaySet.packed()` of the overlays on the intervention thresholds, and
     `rejection_severity` is `(code, severity rank)` for each scenario rejection code, in the `rejection_version` set.
     """
+
+    flex_param, flex_version_param = product11_params
+    (promotional_param, promotional_version_param), (reversion_param, reversion_version_param) = card_params
 
     @allow_fallback
     @step(outputs=("scenarios", "search_record"))
@@ -66,6 +80,10 @@ def search_step(products: dict, capacity: Capacity, buffers: Buffers, interventi
         max_consolidations_24m: int = param(2, ge=1, le=3), cost_of_funds: float = param(0.08, ge=0.0),
         expected_loss_rate: float = param(0.02, ge=0.0), ordering_rules: ParamTable = candidates.ORDERING_RULES,
         overlay_stack_enabled: bool = param(True, shared_key="overlay_stack_enabled"),
+        rate_card_product11: ParamTable = flex_param, rate_card_product11_version: str = flex_version_param,
+        credit_life: ParamTable = CREDIT_LIFE, credit_life_version: str = CREDIT_LIFE_VERSION_PARAM,
+        card_promotional_rates: ParamTable = promotional_param, card_promotional_rates_version: str = promotional_version_param,
+        card_reversion_rates: ParamTable = reversion_param, card_reversion_rates_version: str = reversion_version_param,
     ) -> tuple[list[dict], dict]:
         """Generate and evaluate scenarios, at most `max_scenarios` of them.
 
@@ -82,6 +100,12 @@ def search_step(products: dict, capacity: Capacity, buffers: Buffers, interventi
             "revolving_in_arrears": sum(1 for a in classified_accounts
                                         if a["account_type_code"] in vocab.REVOLVING_TYPES and num(a, "months_in_arrears") > 0),
             "last_balance_transfer_date": last_balance_transfer_date}
+        products = {
+            vocab.PRODUCT_FLEX_LOAN_CONSOLIDATION: FlexLoanConsolidation(
+                CardTable(rate_card_product11, rate_card_product11_version, PRODUCT11_CARD),
+                CreditLifeTable(credit_life, credit_life_version)),
+            vocab.PRODUCT_EVERYDAY_CARD: EverydayCard(CardRates(
+                card_promotional_rates, card_promotional_rates_version, card_reversion_rates, card_reversion_rates_version))}
         evaluator = ScenarioEvaluator(
             request, [{**a, **settled_facts.get(a["account_ref"], {})} for a in classified_accounts], invariants, baseline,
             {int(code): policy for code, policy in product_policies.items()},
