@@ -83,7 +83,7 @@ Then [`allocation.allocate`](limit_mgmt/allocation.py) takes the whole book:
 | A 1 152-cell `DecisionTableConfig` kept as a config document and handed to `build(matrix)` by name, so policy can replace it without a deployment | [matrix.py](limit_mgmt/matrix.py), [`configs/0.1.0/matrix.json`](configs/0.1.0/matrix.json), [pipeline.py](limit_mgmt/pipeline.py) |
 | `ScorecardConfig`, a `DecisionTableConfig` with open-ended band ladders per product, and `credit_core`'s PD step reused with `.relabel` | [scoring.py](limit_mgmt/scoring.py) |
 | Another example's whole pipeline embedded in a `flow`: `assessment.pipeline.evidence_unit()` and `capacity_unit()` with `.relabel(reads=, writes=)`, a programme overlay slotted between them | [affordability.py](limit_mgmt/affordability.py) |
-| Overlays from `credit_core.adjustments` with the unadjusted value kept beside the adjusted one, switched off by one param through the same code; a ceiling that the overlay vocabulary cannot express as a plain param-switched step | [overlays.py](limit_mgmt/overlays.py), [tests/test_pipeline.py](tests/test_pipeline.py) |
+| Overlays as `adjustment_stack` documents (`credit_core.adjustments.AdjustmentStack`) with the unadjusted value kept beside the adjusted one, switched off by one param through the same code; the reason codes as a `reason_codes` document; a ceiling that the overlay vocabulary cannot express as a plain param-switched step | [`configs/0.1.0/*_adjustments.json`](configs/0.1.0), [`reason_codes.json`](configs/0.1.0/reason_codes.json), [overlays.py](limit_mgmt/overlays.py), [tests/test_pipeline.py](tests/test_pipeline.py) |
 | `flow`s composed into one `dag` with `.emit`, and step paths that become the params document | [pipeline.py](limit_mgmt/pipeline.py), [`configs/0.1.0/params.json`](configs/0.1.0/params.json) |
 | Multi-output steps, `param` with bounds, `missing_as`, `@helper` for a function a compiled step calls | [caps.py](limit_mgmt/caps.py), [exclusions.py](limit_mgmt/exclusions.py) |
 | Steps whose only input is a param, so a constant (the assessment mode) shows in the params document and the evidence record | [affordability.py](limit_mgmt/affordability.py) |
@@ -199,7 +199,8 @@ limit_mgmt/               the package
   exclusions.py           the hard exclusions
   scoring.py              behaviour scorecard, score to PD, PD to grade
   matrix.py               the 1 152-cell matrix and its lookup
-  overlays.py             the dial, the cycle cap, the score and PD overlays, the programme buffer
+  overlays.py             the dial's arithmetic, the cycle cap, `due_for_review`
+  documents.py            loads the documents in configs/0.1.0/ for callers of build() that pass none
   caps.py                 the caps and the rounding
   affordability.py        the bridge to the shared assessment, the evidence tiers, the automatic/conditional rule
   decrease.py             the decrease path
@@ -207,7 +208,7 @@ limit_mgmt/               the package
   allocation.py           allocate(): the budget over the whole book
   simulation.py           run_cycle(), swap_set()
   reasons.py vocab.py     reason codes; product, exclusion, cap, outcome codes
-configs/0.1.0/            params.json and matrix.json
+configs/0.1.0/            params.json, matrix.json, the four overlay documents and reason_codes.json
 scripts/                  generate_configs.py
 sample_request.json
 tests/
@@ -219,13 +220,14 @@ Later examples import `limit_mgmt` by package name. These names are stable:
 
 | Name | Use |
 |---|---|
-| `limit_mgmt.pipeline.build(matrix)` | The per-account decision as one `dag` named `limit_mgmt`. Embed it, or run it over a frame. Its params appear under `limit_mgmt/...` |
+| `limit_mgmt.pipeline.build(matrix, ...)` | The per-account decision as one `dag` named `limit_mgmt`. Embed it, or run it over a frame. Its params appear under `limit_mgmt/...`. Each argument is the config document of that name; all but `matrix` default to the documents shipped in `configs/0.1.0/`, so `build(matrix)` still works |
 | `limit_mgmt.pipeline.OUTPUTS` | The columns it emits |
 | `limit_mgmt.matrix` | `build_matrix_table(rows=None)` (a candidate matrix in code), `matrix_document()`, `lookup(matrix)`, `MATRIX_VERSION` |
 | `limit_mgmt.allocation` | `allocate(scored, BudgetInstruction())` and `BudgetInstruction` |
 | `limit_mgmt.simulation` | `run_cycle(snapshot, matrix=, params=, budget=)`, `swap_set(baseline, candidate)`, `Cycle` |
-| `limit_mgmt.overlays` | `BEHAVIOUR_ADJUSTMENTS`, `MATRIX_ADJUSTMENTS`, `BUFFER_ADJUSTMENTS`, `SET_ID`, `due_for_review(on)` |
-| `limit_mgmt.reasons` | `REASON_REGISTRY` and the `R_*` codes, including the non-selection reasons |
+| `limit_mgmt.overlays` | `due_for_review(on, stacks=None)`, the ids of the shipped overlays (or of `stacks`) past their review date |
+| `limit_mgmt.documents` | `shipped(name)`, a document of `configs/0.1.0/` loaded as the step it describes |
+| `limit_mgmt.reasons` | The `R_*` codes, including the non-selection reasons; their severity ranking is `reason_codes.json` |
 | `limit_mgmt.vocab` | `Exclusion`, `Cap`, `EvidenceTier`, `IncreasePath`, `ChangeType`, `NoticeClass`, `AllocationOutcome`, the product codes |
 | `limit_mgmt.exclusions`, `limit_mgmt.decrease` | `exclusion_codes`, `decrease_trigger_fires`, ... for a caller that adds triggers or exclusions of its own |
 | `limit_mgmt.affordability.unit()` | The programme's affordability bridge alone, for an event-driven request that has a requested amount |
@@ -245,6 +247,23 @@ and the programme excludes the account for as long as it is true.
 
 ## Things worth knowing
 
+- **The overlays and the reason codes are documents.** Credit Risk Policy edits `configs/0.1.0/matrix_dial_adjustments.json`
+  (the 80% dial), `behaviour_score_adjustments.json` and `behaviour_pd_adjustments.json` (the partner-channel score shift,
+  the Access Facility PD multiplier), `buffer_adjustments.json` (the programme's wider affordability buffer) and
+  `reason_codes.json` (the severity order); `decider build` hands each to `pipeline.build` by its name.
+  Owner, approval reference, rationale and review date are in the same file but are not behaviour: editing them does not
+  show in a `decider.lab.diff`, changing an effect or a window does. Step names and params paths are unchanged.
+
+  ```json
+  {"type": "adjustment_stack", "name": "apply_matrix_multiplier_excess_adjustments", "target": "matrix_multiplier_excess",
+   "set_id": "AS-07-2026.09", "adjusted_output": "matrix_multiplier_excess_adjusted", "adjustments": [
+     {"adjustment_id": "ADJ-07-DIAL-2026-03", "kind": "cap_adjustment", "effect": {"op": "multiply", "value": 0.8},
+      "scope": {}, "effective_from": "2026-09-01", "effective_to": "2026-11-01", "review_date": "2026-10-15", "...": "..."}]}
+  ```
+
+  `scripts/generate_configs.py` writes them. The affordability bridge still embeds `assessment`'s capacity unit, whose
+  own overlay and reason codes are not yet documents, so a whole-pipeline `structure(a, a')` is not yet identical; that
+  is the affordability example's to change.
 - **Why the allocation is not a `decider` step.** A rank and a funding line mean nothing for one row: they depend on
   where an account sits among 700 000 others and where the money runs out. An implementation that decides one account
   at a time ends up with a hard-coded score threshold standing in for the budget, wrong every month and silently. So
