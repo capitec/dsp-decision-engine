@@ -132,6 +132,9 @@ def _function(w: _Walk, fn: Any) -> None:
     names = _names(code)
     where = f"{code.co_filename}:{code.co_firstlineno}"
     outer = w.where  # a function reached through a container must not rename what the container holds next
+    found = w.found
+    if code.co_filename.startswith(_OWN_CODE):
+        w.found = None  # the key still covers decider's helpers; what they read is not the step author's to fix
     for name, cell in zip(code.co_freevars, fn.__closure__ or ()):
         try:
             contents = cell.cell_contents
@@ -145,7 +148,7 @@ def _function(w: _Walk, fn: Any) -> None:
             w.h.update(name.encode())
             w.where = (name, f"module global in {where}")
             _value(w, fn.__globals__[name], names)
-    w.where = outer
+    w.where, w.found = outer, found
 
 
 @functools.lru_cache(maxsize=None)
