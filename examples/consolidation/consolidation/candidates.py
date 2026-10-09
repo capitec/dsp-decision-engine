@@ -9,6 +9,8 @@ the same order.
 """
 from __future__ import annotations
 
+from typing import Callable
+
 from decider import ParamTable, param_table
 
 from consolidation import vocab
@@ -32,19 +34,24 @@ def _longest_first(a: dict) -> float:
     return -(num(a, "remaining_term_months") or float("inf"))  # a revolving account has no term to run out
 
 
-# rule number -> (name, sort key). Every key ends in the account reference, so a tie resolves the same way every time.
-RULES = {
-    1: ("H1_highest_rate_first", lambda a: (_rate(a), a["account_ref"])),
-    2: ("H2_most_relief_per_rand", lambda a: (_relief_per_rand(a), a["account_ref"])),
-    3: ("H3_shortest_remaining_term_last", lambda a: (_longest_first(a), a["account_ref"])),
-    4: ("H4_secured_last", lambda a: (a["settleability_code"] == vocab.SECURITY_RELEASE, _rate(a), a["account_ref"])),
-    5: ("H5_provider_in_arrears_first", lambda a: (not a["provider_in_arrears"], _rate(a), a["account_ref"])),
-    6: ("H6_quotation_held_first", lambda a: (not a["quotation_held"], _rate(a), a["account_ref"])),
-    7: ("H7_whole_provider_relationship_first",
-        lambda a: (not a["provider_fully_settleable"], a.get("provider_code"), _rate(a), a["account_ref"])),
-    8: ("H8_highest_reaccumulation_risk_first",
-        lambda a: (a["account_type_code"] not in vocab.REVOLVING_TYPES, _rate(a), a["account_ref"])),
-}
+# (rule number, name, sort key). Every key ends in the account reference, so a tie resolves the same way every time.
+RULES = (
+    (1, "H1_highest_rate_first", lambda a: (_rate(a), a["account_ref"])),
+    (2, "H2_most_relief_per_rand", lambda a: (_relief_per_rand(a), a["account_ref"])),
+    (3, "H3_shortest_remaining_term_last", lambda a: (_longest_first(a), a["account_ref"])),
+    (4, "H4_secured_last", lambda a: (a["settleability_code"] == vocab.SECURITY_RELEASE, _rate(a), a["account_ref"])),
+    (5, "H5_provider_in_arrears_first", lambda a: (not a["provider_in_arrears"], _rate(a), a["account_ref"])),
+    (6, "H6_quotation_held_first", lambda a: (not a["quotation_held"], _rate(a), a["account_ref"])),
+    (7, "H7_whole_provider_relationship_first",
+     lambda a: (not a["provider_fully_settleable"], a.get("provider_code"), _rate(a), a["account_ref"])),
+    (8, "H8_highest_reaccumulation_risk_first",
+     lambda a: (a["account_type_code"] not in vocab.REVOLVING_TYPES, _rate(a), a["account_ref"])),
+)
+
+
+def rule(number: int) -> tuple[str, Callable[[dict], tuple]]:
+    """`(name, sort key)` of the ordering rule with this number."""
+    return next((name, key) for n, name, key in RULES if n == number)
 
 
 def with_provider_facts(settleable: list[dict], all_accounts: list[dict]) -> list[dict]:
@@ -76,7 +83,7 @@ def candidate_sets(settleable: list[dict], mandatory: list[int], rules: ParamTab
     if must:
         add(must, "client_nominated")
     for number in rules.rule.tolist():
-        name, key = RULES[number]
+        name, key = rule(number)
         ordered = [a["account_ref"] for a in sorted(settleable, key=key)]
         for k in range(1, min(len(ordered), max_prefix) + 1):
             add(ordered[:k], name)
