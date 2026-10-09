@@ -2,7 +2,8 @@ import json
 from datetime import date
 
 import pytest
-from decider import ConfigurableStep, flow
+from decider import ConfigurableStep, flow, step
+from decider.exceptions import WiringError
 from decider.lab import diff
 
 from credit_core.adjustments import AdjustmentStack, Effect, Overlay, evaluate
@@ -262,8 +263,21 @@ def test_the_packed_overlays_are_in_stack_order_and_give_the_values_apply_gives(
     assert evaluate(packed, 600.0, {"segment_code": 3}, JUNE.toordinal())[0] == both.apply(600.0, {"segment_code": 3}, JUNE).adjusted_value
 
 
-def test_a_scope_column_is_read_as_the_type_of_its_values_so_it_agrees_with_the_steps_that_share_it():
-    mixed = stack(overlay(scope={"campaign_id": 23, "kind": "retail", "ratio": 0.5, "segment_code": 3,
-                                 "channel_code": 4}))
-    assert mixed.scope_columns() == {"campaign_id": int, "channel_code": int, "kind": str, "ratio": float,
-                                     "segment_code": float}
+def test_a_scope_column_is_read_as_a_float_unless_the_stack_declares_its_type():
+    scope = {"campaign_id": 23, "kind": "retail", "ratio": 0.5, "segment_code": 3, "channel_code": 4}
+    assert stack(overlay(scope=scope)).scope_columns() == {"campaign_id": float, "channel_code": int, "kind": str,
+                                                           "ratio": float, "segment_code": float}
+    declared = stack(overlay(scope=scope), scope_types={"campaign_id": "int", "segment_code": "int"})
+    assert (declared.scope_columns()["campaign_id"], declared.scope_columns()["segment_code"]) == (int, int)
+
+
+def test_a_declared_column_type_is_the_one_the_step_reads_a_shared_column_as():
+    campaigns = stack(overlay(scope={"campaign_id": 23}), scope_types={"campaign_id": "int"})
+
+    def next_campaign(campaign_id: int) -> int:
+        return campaign_id + 1
+
+    both = flow(campaigns, step(next_campaign), name="t")
+    assert both.compile("interpreted").score({"score_raw": 600.0, "decision_date": JUNE, "campaign_id": 23})["score"] == 590.0
+    with pytest.raises(WiringError, match="campaign_id"):
+        flow(stack(overlay(scope={"campaign_id": 23})), step(next_campaign), name="t").compile("interpreted")
