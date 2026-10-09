@@ -1,36 +1,39 @@
-# Targets:
-#   runtime   (default)  decider + sanic only. Mount your project at /opt/ml/model; nothing is baked.
-#   project              runtime + a project baked in at /opt/ml/model/code and `decider build` run at
-#                        image build time, so a bad config or a missing document fails the build.
+# Targets (podman commands tested; docker needs BuildKit for --build-context and --mount, not tested):
+#   runtime   (default)  decider + sanic only. Mount your project at /opt/ml/model/code; nothing is baked.
+#   project              runtime + a project baked in at /opt/ml/model/code, with `decider build` run at
+#                        image build time so a bad config or a missing document fails the build.
 #
-# Run every command from the repository root. Examples use podman; docker takes the same arguments.
+# Run every command from the repository root.
 #
-# 1. runtime image, project mounted (rootless podman needs :Z for SELinux; add --userns=keep-id when
-#    the project files are only readable by you):
+# 1. runtime image, project mounted:
 #      podman build -t decider:latest -f docker/Dockerfile .
-#      podman run --rm -p 8080:8080 -v $PWD/my-project:/opt/ml/model/code:ro,Z decider:latest
-#    The project is a folder holding pipeline.py, configs/, sample_request.json (decider template).
-#    Without `decider build` the first start compiles everything.
+#      podman run --rm -p 8080:8080 -v $PWD/my-project:/opt/ml/model/code:ro,Z \
+#          -e DECIDER_API__PIPELINE=my_pkg.pipeline:build decider:latest
+#    The project is a folder holding the pipeline package, configs/ and sample_request.json (decider template).
+#    :Z relabels the folder for SELinux. The container user (uid 1000) must be able to read it: a folder
+#    only you can read needs --userns=keep-id as well. Nothing is built, so the first start compiles everything.
 #
-# 2. runtime image as a base for your own tiny Dockerfile:
+# 2. the runtime image as a base for your own tiny Dockerfile (a requirements.txt in the project is pip-installed):
 #      FROM decider:latest
 #      COPY . /opt/ml/model/code
 #      ENV DECIDER_API__PIPELINE=my_pkg.pipeline:build
-#      RUN bake            # requirements.txt if present, then `decider build`; plain `RUN decider build` also works
-#    The entrypoint, port and the other variables below are already right.
+#      RUN bake
+#    `bake` is requirements.txt, then `decider build`; plain `RUN decider build` also works. The entrypoint,
+#    port and the variables below are already right; override any with ENV.
 #
-# 3. a project directory outside this repository, through a named build context:
+# 3. a project directory outside this repository, as a named build context:
 #      podman build --target project --build-context app=/path/to/my-project \
 #          --build-arg PIPELINE=my_pkg.pipeline:build -t my-app -f docker/Dockerfile .
-#    A requirements.txt in that directory is pip-installed first.
+#    Everything the pipeline imports and every config document it reads must be inside that directory.
 #
-# 4. an example from this repository (siblings such as credit_core come along; the pipeline is the
-#    <package>.pipeline:build named in the example's README):
+# 4. an example of this repository (the other examples come along as importable packages; the pipeline is
+#    the <package>.pipeline:build named in the example's README; docker/smoke.sh does this for all of them):
 #      podman build --target project --build-arg PROJECT=examples/loan-granting-pricing \
 #          --build-arg PIPELINE=loan_granting.pipeline:build -t loan-granting -f docker/Dockerfile .
 #
-#    podman run --rm -p 8080:8080 my-app
-#    curl -s -d @sample_request.json -H 'content-type: application/json' localhost:8080/invocations
+# Run a baked image, wait for /ping, and ask:
+#      podman run --rm -p 8080:8080 -e DECIDER_SERVE__WORKERS=2 my-app
+#      curl -s -d @sample_request.json -H 'content-type: application/json' localhost:8080/invocations
 #
 # Build arguments:
 #   PIP_CONF      pip.conf text for an internal index, for example "$(cat $HOME/.config/pip/pip.conf)"
@@ -38,33 +41,31 @@
 #   PY            Python minor version of the base images, default 3.14
 #   PROJECT       examples/<name> to bake in (target project)
 #   PIPELINE      pipeline entry string of the baked project, default pipeline:build
-#   CPU_TARGET    host (default) or generic. See the CPU caveat below.
+#   CPU_TARGET    host (default) or generic: see the CPU caveat
 #
-# Environment variables (all optional, all overridable with -e or in your own Dockerfile):
+# Environment variables (all optional; override with -e, or ENV in your own Dockerfile):
 #   DECIDER_SERVE__HOST        bind address      (default 0.0.0.0)
 #   DECIDER_SERVE__PORT        bind port         (default 8080)
-#   DECIDER_SERVE__WORKERS     worker processes  (default 2 * CPUs + 1: every worker compiles its
-#                                                 kernels at start, so set it explicitly)
+#   DECIDER_SERVE__WORKERS     worker processes  (default 2 * CPUs + 1; every worker compiles its kernels
+#                                                 at start, so set it)
 #   DECIDER_API__CODE_PATH     project root      (default /opt/ml/model/code)
 #   DECIDER_API__PIPELINE      pipeline          (default pipeline:build)
 #   DECIDER_CONFIG__BASEPATH   config store      (default /opt/ml/model/code/configs)
-#   NUMBA_CACHE_DIR            compiled-step cache, also holds decider-cpu-target.json (/opt/ml/numba-cache)
+#   NUMBA_CACHE_DIR            numba's disk cache and decider-cpu-target.json (default /opt/ml/numba-cache)
 #
-# What is baked and what is not: the project, its sibling example packages, its configs and numba's disk
-# cache for its step functions. Numba keys that cache on the source file path, so it only hits because the
-# project sits at the same fixed path when built and when served. The fused kernels are built from LLVM IR
-# in every worker process at start and are never cached on disk: /ping answers 503 until the workers have
-# done that, so wait for /ping (below) before sending traffic.
+# What is baked: the project, its sibling example packages, its configs, and numba's disk cache for its step
+# functions. That cache is keyed by source file path, so it hits because the project is at the same fixed path
+# when built and when served. What is not: the fused kernels are built from LLVM IR in every worker at start and
+# never cached on disk, so /ping answers 503 until each worker has done that (measured: about 15 s and 40 s
+# for two examples with the cache, 35 s and 120 s without). Wait for /ping before sending traffic.
 #
-# CPU caveat: the baked cache is valid on the CPU the image was built on. On a different CPU numba misses
-# the cache, `decider serve` warns "CPU target differs" and every worker compiles at start (slower, still
-# correct). To build once and run anywhere, use --build-arg CPU_TARGET=generic (NUMBA_CPU_NAME=generic):
-# the cache then hits on any x86-64 CPU, at the price of slower generated code (no AVX).
+# CPU caveat: the baked cache is valid on the CPU that built the image. On another CPU numba misses it,
+# `decider serve` warns "ran for CPU ... but this host is ...", and every worker compiles at start (slower,
+# still correct). --build-arg CPU_TARGET=generic builds and serves with NUMBA_CPU_NAME=generic, so the cache
+# hits anywhere on x86-64, with generic code (no AVX); no slowdown showed on the two pipelines measured.
 #
-# Readiness: HEALTHCHECK only exists in the docker image format, so build with `podman build --format docker`
-# for `podman healthcheck run` and orchestrators to see it. Otherwise poll GET /ping yourself.
-#
-# Not tested here: the docker daemon.
+# Readiness: HEALTHCHECK exists only in the docker image format, so build with `podman build --format docker`
+# for `podman healthcheck run` to see it; otherwise poll GET /ping.
 
 ARG PY=3.14
 ARG CPU_TARGET=host
