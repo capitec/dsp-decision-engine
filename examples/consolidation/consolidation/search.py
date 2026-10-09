@@ -38,7 +38,7 @@ def run_search(evaluator: ScenarioEvaluator, settleable_refs: list[int], mandato
         "budget": budget, "consumption": len(evaluated), "candidate_sets": len(sets), "candidate_scenarios": len(order),
         "termination_cause": vocab.OUT_OF_BUDGET if len(order) > budget else vocab.EXHAUSTED,
         "ordering_rule_set_version": candidates.ORDERING_RULE_SET_VERSION,
-        "ordering_rules": [candidates.RULES[n][0] for n in rules.rule.tolist()],
+        "ordering_rules": [candidates.rule(n)[0] for n in rules.rule.tolist()],
         "products_unavailable": {str(code): why for code, why in unavailable.items()},
         "rejections_by_reason": {str(code): rejected[code] for code in reasons.SCENARIO_REJECTIONS.rank(rejected)[0]},
     }
