@@ -1,0 +1,67 @@
+{
+  "type": "reason_codes",
+  "name": "rank_reasons",
+  "version": "reasons-2026.09",
+  "codes": [
+    {
+      "code": 1001,
+      "severity_rank": 10,
+      "description": "Applicant below minimum age",
+      "is_regulatory": true
+    },
+    {
+      "code": 1002,
+      "severity_rank": 15,
+      "description": "Applicant not resident",
+      "is_regulatory": true
+    },
+    {
+      "code": 1003,
+      "severity_rank": 5,
+      "description": "No contractual capacity",
+      "is_regulatory": true
+    },
+    {
+      "code": 1004,
+      "severity_rank": 40,
+      "description": "Product not available to applicant",
+      "is_regulatory": false
+    },
+    {
+      "code": 1005,
+      "severity_rank": 8,
+      "description": "On an internal exclusion list",
+      "is_regulatory": true
+    },
+    {
+      "code": 1006,
+      "severity_rank": 1,
+      "description": "Sanctioned party",
+      "is_regulatory": true
+    },
+    {
+      "code": 1007,
+      "severity_rank": 2,
+      "description": "Deceased on record",
+      "is_regulatory": true
+    },
+    {
+      "code": 1008,
+      "severity_rank": 12,
+      "description": "Under debt review",
+      "is_regulatory": true
+    },
+    {
+      "code": 1009,
+      "severity_rank": 12,
+      "description": "Under administration",
+      "is_regulatory": true
+    },
+    {
+      "code": 4001,
+      "severity_rank": 20,
+      "description": "Proposed instalment exceeds affordable capacity",
+      "is_regulatory": true
+    }
+  ]
+}

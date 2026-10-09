@@ -5,7 +5,7 @@ from datetime import date
 
 from decider import DecisionTableConfig
 
-from credit_core.dates import EffectiveDatedSet, EffectiveVersion
+from credit_core.dates import EffectiveVersions, Version
 from credit_core.evidence import cell_id
 
 # employment_type_code: 1 permanent, 2 contract, 3 self-employed, 4 pensioner, 5 social grant, 6 informal.
@@ -13,11 +13,10 @@ from credit_core.evidence import cell_id
 SELF_EMPLOYED = 3
 INFORMAL = 6
 
-TAX_TABLES = EffectiveDatedSet("tax_table", [
-    EffectiveVersion("tax@2025", date(2025, 3, 1), date(2026, 3, 1)),
-    EffectiveVersion("tax@2026", date(2026, 3, 1)),
+tax_table_version_step = EffectiveVersions(family="tax_table", versions=[
+    Version(version_id="tax@2025", effective_from=date(2025, 3, 1), effective_to=date(2026, 3, 1)),
+    Version(version_id="tax@2026", effective_from=date(2026, 3, 1)),
 ])
-tax_table_version_step = TAX_TABLES.resolver_step(output="tax_table_version")
 
 # (bracket floor, tax on the floor, marginal rate) per version.
 _BRACKETS = {

@@ -3,7 +3,7 @@ from datetime import date
 from pathlib import Path
 
 import pytest
-from decider import DecisionTableConfig
+from decider import ConfigurableStep, DecisionTableConfig
 
 from credit_core.pipeline import build
 
@@ -12,13 +12,33 @@ CONFIGS = ROOT / "configs" / "0.1.0"
 
 
 @pytest.fixture(scope="session")
+def configs():
+    return CONFIGS
+
+
+@pytest.fixture(scope="session")
 def params():
     return json.loads((CONFIGS / "params.json").read_text())
 
 
 @pytest.fixture(scope="session")
-def quote_pipeline():
-    return build(DecisionTableConfig.load(str(CONFIGS / "rate_card_flex_loan.json")))
+def score_adjustments():
+    return ConfigurableStep.load(str(CONFIGS / "score_adjustments.json"))
+
+
+@pytest.fixture(scope="session")
+def reason_codes():
+    return ConfigurableStep.load(str(CONFIGS / "reason_codes.json"))
+
+
+@pytest.fixture(scope="session")
+def rate_card():
+    return DecisionTableConfig.load(str(CONFIGS / "rate_card_flex_loan.json"))
+
+
+@pytest.fixture(scope="session")
+def quote_pipeline(rate_card, score_adjustments, reason_codes):
+    return build(rate_card, score_adjustments, reason_codes)
 
 
 @pytest.fixture(scope="session")
