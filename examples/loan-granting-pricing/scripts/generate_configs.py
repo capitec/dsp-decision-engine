@@ -112,8 +112,10 @@ def main(version: str = "0.1.0") -> None:
     stacks = {name: ConfigurableStep.load(document) for name, document in documents.items()}
     params = build(DecisionTableConfig.load(card), **stacks, reason_codes=ConfigurableStep.load(REASON_CODES)
                    ).parameters().defaults()
-    for key in ("rate_card", "rate_card_version"):
-        del params["shared"][key]  # the rate card document is the one place the card is edited
+    # The rate card is edited in its document, and the credit life rates are code; a params document that sets
+    # these overrides them, so the shipped one leaves them to their defaults.
+    for key in ("rate_card", "rate_card_version", "credit_life", "credit_life_version"):
+        del params["shared"][key]
     params["loan_granting"]["affordability_assessment"]["evidence"]["bureau_is_stale"]["staleness_window_days"] = (
         BUREAU_STALENESS_DAYS)
     (out / "params.json").write_text(json.dumps(params, indent=2) + "\n")
