@@ -25,6 +25,8 @@ TREATMENT_NAMES = {
     WRITE_OFF_RECOMMENDATION: "Write-off recommendation",
 }
 
+ALL_TREATMENTS = tuple(TREATMENT_NAMES)
+
 # The capacity pool a treatment draws on (`pool_code`). Settlement offers and write-off recommendations draw on none.
 POOL_SMS, POOL_EMAIL, POOL_IN_APP, POOL_VOICE_MESSAGE, POOL_EARLY_AGENTS, POOL_LATE_AGENTS = 1, 2, 3, 4, 5, 6
 POOL_FIELD, POOL_AGENCY, POOL_NOTICES, POOL_LEGAL = 7, 8, 9, 10
