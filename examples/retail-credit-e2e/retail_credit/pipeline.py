@@ -52,13 +52,14 @@ EMIT = (
 
 
 def build(pd_overlays=None, amount_cap_overlays=None, buffer_overlays=None, rate_addon_overlays=None,
-          reason_codes=None):
+          reason_codes=None, appetite_by_grade=None):
     """Each argument is the document of that name from `configs/<version>/`; without one, the shipped document."""
     pd_overlays = pd_overlays or shipped("pd_overlays")
     amount_cap_overlays = amount_cap_overlays or shipped("amount_cap_overlays")
     buffer_overlays = buffer_overlays or shipped("buffer_overlays")
     rate_addon_overlays = rate_addon_overlays or shipped("rate_addon_overlays")
     reason_codes = reason_codes or shipped("reason_codes")
+    appetite_by_grade = appetite_by_grade or shipped("appetite_by_grade")
     return dag(
         intake.validate_request_step, intake.resolve_identity_step,
         eligibility.eligibility_gates_step, eligibility.hard_eligibility_reasons_step, eligibility.is_eligible_step,
@@ -77,7 +78,8 @@ def build(pd_overlays=None, amount_cap_overlays=None, buffer_overlays=None, rate
         grading.build_calibration_table(), grading.probability_of_default_raw_step,
         grading.probability_of_default_overlay_step(pd_overlays), grading.build_risk_grade_table(),
 
-        routing.product_range_step, caps.policy_caps_step, caps.amount_cap_unit(amount_cap_overlays),
+        routing.product_range_step, caps.amount_rules_unit(appetite_by_grade), caps.policy_caps_step,
+        caps.term_cap_step, caps.worst_acceptable_grade_step, caps.amount_cap_unit(amount_cap_overlays),
         affordability.limits_unit(buffer_overlays), affordability.capacity_unit(), routing.product_eligibility_step,
         consolidation.consolidation_scenario_step, consolidation.hypothetical_capacity_unit(),
         consolidation.offer_basis_step,
