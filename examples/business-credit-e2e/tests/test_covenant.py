@@ -25,7 +25,7 @@ def test_a_new_covenant_is_bound_to_the_version_in_force_at_approval():
 def test_a_covenant_bound_in_2026_is_still_tested_on_that_version_in_2029():
     result = run_test(covenant.bind_covenant(3, date(2026, 6, 1)))
     assert result["covenant_definition_version"] == "dscr-2026.03"  # not dscr-2028.09, in force by the 2029 test
-    assert covenant.load_covenant_documents()[0].resolve(result["test_date"]).version_id == "dscr-2028.09"
+    assert covenant.load_covenant_documents()[0].version_on(result["test_date"]).version_id == "dscr-2028.09"
 
 
 def test_three_dates_are_recorded_as_given():
