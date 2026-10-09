@@ -9,8 +9,9 @@ from __future__ import annotations
 from decider import dag, flow
 
 from limit_mgmt import affordability, caps, decrease, exclusions, matrix as mx, outcome, population, scoring
+from limit_mgmt.documents import shipped
 from limit_mgmt.overlays import (
-    apply_cycle_cap_step, matrix_dial_step, matrix_multiplier_excess_step, matrix_multiplier_step,
+    DOCUMENTS, apply_cycle_cap_step, matrix_multiplier_excess_step, matrix_multiplier_step,
 )
 
 OUTPUTS = (
@@ -39,13 +40,22 @@ OUTPUTS = (
 )
 
 
-def build(matrix):
-    """`matrix` is `configs/<version>/matrix.json`, loaded by `decider`; `matrix.build_matrix_table()` makes one in code."""
+def build(matrix, behaviour_score_adjustments=None, behaviour_pd_adjustments=None, matrix_dial_adjustments=None,
+          buffer_adjustments=None, reason_codes=None):
+    """Each argument is the config document of that name, loaded by `decider`: `matrix` is `configs/<version>/matrix.json`,
+    `matrix.build_matrix_table()` makes one in code. The overlays and `reason_codes` default to the documents shipped
+    in `configs/0.1.0/`.
+    """
+    score, pd, dial, buffer = (doc or shipped(name) for doc, name in zip(
+        (behaviour_score_adjustments, behaviour_pd_adjustments, matrix_dial_adjustments, buffer_adjustments), DOCUMENTS))
+    dial = dial.relabel(writes={"adjustment_set_id": "matrix_adjustment_set_id",
+                                "adjustments_applied": "matrix_adjustments_applied"})
     matrix_unit = flow(
-        mx.matrix_version_step, mx.lookup(matrix), matrix_multiplier_excess_step, matrix_dial_step,
+        mx.matrix_version_step, mx.lookup(matrix), matrix_multiplier_excess_step, dial,
         matrix_multiplier_step, apply_cycle_cap_step, mx.uncapped_target_limit_step,
         mx.uncapped_target_limit_unadjusted_step, name="matrix")
     return dag(
-        population.unit, exclusions.unit, scoring.unit(), matrix_unit, caps.unit, affordability.unit(), decrease.unit,
-        outcome.unit, name="limit_mgmt",
+        population.unit, exclusions.unit, scoring.unit(score, pd), matrix_unit, caps.unit,
+        affordability.unit(buffer), decrease.unit, outcome.unit(reason_codes or shipped("reason_codes")),
+        name="limit_mgmt",
     ).emit(*OUTPUTS)

@@ -67,5 +67,7 @@ def decline_reason_codes(
     return codes
 
 
-unit = flow(step(final_proposed_limit), step(change_type_code), step(notice_class_code), step(decline_reason_codes),
-            reasons.REASON_REGISTRY.resolve_step(), name="outcome")
+def unit(reason_codes):
+    """`reason_codes` is the `reason_codes` document that ranks `decline_reason_codes`."""
+    return flow(step(final_proposed_limit), step(change_type_code), step(notice_class_code), step(decline_reason_codes),
+                reason_codes, name="outcome")
