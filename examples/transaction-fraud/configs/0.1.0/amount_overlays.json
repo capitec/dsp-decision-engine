@@ -1,0 +1,53 @@
+{
+  "type": "amount_overlays",
+  "name": "amount_overlays",
+  "family": "MS",
+  "stack": {
+    "type": "adjustment_stack",
+    "name": "amount_overlays",
+    "target": "mule_scam_amount_multiplier",
+    "set_id": "ADJS-2026.01",
+    "adjustments": [
+      {
+        "adjustment_id": "ADJ-2026-001",
+        "kind": "cap_adjustment",
+        "target": "mule_scam_amount_multiplier",
+        "effect": {
+          "op": "multiply",
+          "value": 0.7143
+        },
+        "scope": {
+          "family": "MS"
+        },
+        "stack_position": 1,
+        "owner": "24/7 duty officer",
+        "approval_reference": "DUTY-2026-0311",
+        "rationale": "Mule and scam family at 1.4x sensitivity for 72 hours during a live scam wave",
+        "effective_from": "2026-03-11",
+        "effective_to": "2026-03-14",
+        "review_date": "2026-03-14",
+        "tighten_only": true
+      },
+      {
+        "adjustment_id": "ADJ-2026-002",
+        "kind": "cap_adjustment",
+        "target": "mule_scam_amount_multiplier",
+        "effect": {
+          "op": "multiply",
+          "value": 0.7
+        },
+        "scope": {
+          "family": "MS"
+        },
+        "stack_position": 2,
+        "owner": "Head of Fraud",
+        "approval_reference": "HOF-2025-1122",
+        "rationale": "Mule and scam amount thresholds x0.7 for the festive period",
+        "effective_from": "2025-12-01",
+        "effective_to": "2026-01-15",
+        "review_date": "2026-01-08",
+        "tighten_only": true
+      }
+    ]
+  }
+}

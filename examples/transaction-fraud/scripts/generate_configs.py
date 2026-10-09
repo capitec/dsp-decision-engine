@@ -1,4 +1,5 @@
-"""Write `configs/<version>/`: the synthetic rule set, the client wording table and the params document.
+"""Write `configs/<version>/`: the synthetic rule set, the client wording table, the overlays, the reason codes, the
+rule-set versions and the params document.
 
     uv run python examples/transaction-fraud/scripts/generate_configs.py [version]
 
@@ -10,10 +11,10 @@ import random
 import sys
 from pathlib import Path
 
-from decider import DecisionTableConfig
+from decider import ConfigurableStep, DecisionTableConfig
 
+from fraud_interdiction import vocab
 from fraud_interdiction.pipeline import build
-from fraud_interdiction.rules import RuleSet
 from fraud_interdiction.vocab import Action
 
 SEED = 20260115
@@ -23,6 +24,7 @@ COUNTS = {"CF": (214, 31), "AT": (112, 22), "MS": (96, 40), "FP": (41, 9), "AA":
 OVERLAY_ADJUSTED_MS_RULES = 18
 SEGMENTS = ("new_to_bank", "high_value", "vulnerable", "offshore_traveller", "prior_fraud_victim")
 REASON_BASE = {"CF": 1000, "AT": 2000, "MS": 3000, "FP": 4000, "AA": 5000}
+WORDINGS_PER_FAMILY = 40
 
 
 def gt(feature, threshold): return {"op": ">", "feature": feature, "threshold": threshold}
@@ -166,6 +168,54 @@ def wording_table():
     }
 
 
+def reason_codes():
+    """Most severe first: AML-adjacent codes rank above mule and scam, and so on down the family order; a hard block is 1."""
+    codes = [{"code": REASON_BASE[f] + i, "severity_rank": 10 * vocab.FAMILIES.index(f) + i % 10 + 1,
+              "description": f"{vocab.FAMILY_NAMES[f]} indicator {i}", "is_regulatory": f == "AA"}
+             for f in vocab.FAMILIES for i in range(WORDINGS_PER_FAMILY)]
+    codes += [{"code": code, "severity_rank": 1, "description": f"hard block: {name}", "is_regulatory": True}
+              for name, _, code in vocab.GATES.values()]
+    return {"type": "reason_codes", "name": "rank_reasons", "version": "fraud-reasons-2026.01", "codes": codes}
+
+
+def overlay(adjustment_id, kind, target, op, value, scope, position, owner, approval, rationale, start, end, review,
+            tighten_only=False):
+    return {"adjustment_id": adjustment_id, "kind": kind, "target": target, "effect": {"op": op, "value": value},
+            "scope": scope, "stack_position": position, "owner": owner, "approval_reference": approval,
+            "rationale": rationale, "effective_from": start, "effective_to": end, "review_date": review,
+            "tighten_only": tighten_only}
+
+
+def amount_overlays():
+    """The mule and scam amount multipliers: a sensitivity dial in a scam wave, and a festive loosening of thresholds."""
+    target = "mule_scam_amount_multiplier"
+    return {"type": "amount_overlays", "name": "amount_overlays", "family": "MS", "stack": {
+        "type": "adjustment_stack", "name": "amount_overlays", "target": target, "set_id": "ADJS-2026.01",
+        "adjustments": [
+            overlay("ADJ-2026-001", "cap_adjustment", target, "multiply", round(1 / 1.4, 4), {"family": "MS"}, 1,
+                    "24/7 duty officer", "DUTY-2026-0311",
+                    "Mule and scam family at 1.4x sensitivity for 72 hours during a live scam wave",
+                    "2026-03-11", "2026-03-14", "2026-03-14", tighten_only=True),
+            overlay("ADJ-2026-002", "cap_adjustment", target, "multiply", 0.7, {"family": "MS"}, 2,
+                    "Head of Fraud", "HOF-2025-1122", "Mule and scam amount thresholds x0.7 for the festive period",
+                    "2025-12-01", "2026-01-15", "2026-01-08", tighten_only=True)]}}
+
+
+def action_escalation():
+    return {"type": "adjustment_stack", "name": "action_escalation", "target": "at_web_action",
+            "set_id": "ADJS-2026.01", "adjustments": [
+                overlay("ADJ-2026-003", "action_escalation", "at_web_action", "set", float(Action.STEP_UP),
+                        {"family": "AT", "channel_code": vocab.CHANNEL_WEB}, 1, "Head of Fraud", "HOF-2026-0044",
+                        "Account-takeover rules that only monitor ask for a step-up on the web channel",
+                        "2026-01-01", "2027-01-01", "2026-10-01")]}
+
+
+def rule_set_versions():
+    return {"type": "effective_versions", "family": "fraud.rule_set", "output": "rule_set_version", "versions": [
+        {"version_id": "RS-2025.11", "effective_from": "2025-11-01", "effective_to": "2026-01-01"},
+        {"version_id": "RS-2026.01", "effective_from": "2026-01-01"}]}
+
+
 def main(version="0.1.0"):
     out = Path(__file__).resolve().parents[1] / "configs" / version
     out.mkdir(parents=True, exist_ok=True)
@@ -175,7 +225,13 @@ def main(version="0.1.0"):
     rule_set = {"type": "rule_set", "name": "rules", "rules": rules}
     (out / "rule_set.json").write_text(json.dumps(rule_set, separators=(",", ":")))
     (out / "client_wording.json").write_text(json.dumps(wording_table(), indent=2) + "\n")
-    pipeline = build(RuleSet.load(rule_set), DecisionTableConfig.load(wording_table()))
+    documents = {"reason_codes": reason_codes(), "amount_overlays": amount_overlays(),
+                 "action_escalation": action_escalation(), "rule_set_versions": rule_set_versions()}
+    for name, document in documents.items():
+        (out / f"{name}.json").write_text(json.dumps(document, indent=2) + "\n")
+    loaded = {name: ConfigurableStep.load(document) for name, document in documents.items()}
+    pipeline = build(rule_set=ConfigurableStep.load(rule_set), client_wording=DecisionTableConfig.load(wording_table()),
+                     **loaded)
     (out / "params.json").write_text(json.dumps(pipeline.parameters().defaults(), indent=2) + "\n")
     print(f"wrote {len(rules)} rules to {out}")
 
