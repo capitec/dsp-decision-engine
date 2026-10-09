@@ -9,7 +9,7 @@ from pydantic_core import from_json
 
 from decider.serving._errors import InputParsingError
 from decider.ops.nested import struct_item
-from decider.ir import base_annotation
+from decider.ir import base_annotation, has_optional_key, without_absent
 
 
 def parse_application_json(data: bytes) -> t.Union[t.Dict[str, t.Any], pl.DataFrame]:
@@ -62,8 +62,8 @@ def coerce_record(record: t.Dict[str, t.Any], dates: t.Dict[str, t.Any]) -> t.Di
                 out[name] = _adapter(annotation).validate_python([out[name]])[0]
             except ValidationError as e:
                 raise InputParsingError(
-                    f"input {name!r} is declared {annotation} but got {out[name]!r}; "
-                    f"send dates as ISO strings like \"2026-01-31\". ({e.errors()[0]['msg']})") from None
+                    f"input {name!r} is declared {annotation} but got {out[name]!r}{_date_hint(e)} "
+                    f"({e.errors()[0]['msg']})") from None
     return out
 
 
@@ -88,18 +88,26 @@ def coerce_frame(df: pl.DataFrame, dates: t.Dict[str, t.Any]) -> pl.DataFrame:
         raise InputParsingError(f"a date column isn't ISO formatted like \"2026-01-31\": {e}") from None
 
 
+def _date_hint(e: ValidationError) -> str:
+    return '; send dates as ISO strings like "2026-01-31".' if "date" in e.errors()[0]["type"] else "."
+
+
 def _coerce_nested(column: pl.Series, annotation: t.Any) -> pl.Series:
     rows = column.to_list()
     present = [i for i, row in enumerate(rows) if row is not None]
     try:
-        coerced = _adapter(annotation).validate_python([rows[i] for i in present])
+        coerced = _adapter(annotation).validate_python([without_absent(rows[i], annotation) for i in present])
     except ValidationError as e:
+        err = e.errors()[0]
+        row, *path = err["loc"]
         raise InputParsingError(
-            f"input {column.name!r} is declared {annotation} but got dates that don't validate; "
-            f"send dates as ISO strings like \"2026-01-31\". ({e.errors()[0]['msg']})") from None
+            f"input {column.name!r} is declared {annotation} but row {present[row]} "
+            f"{'field ' + '.'.join(map(str, path)) + ' ' if path else ''}got {err['input']!r:.80}"
+            f"{_date_hint(e)} ({err['msg']})") from None
     for i, value in zip(present, coerced):
         rows[i] = value
-    return pl.Series(column.name, rows)
+    # Not `pl.Series`, which takes the struct's keys and types from the first row alone.
+    return pl.from_dicts([{column.name: row} for row in rows], infer_schema_length=None).get_column(column.name)
 
 
 _DUMMY = {bool: False, int: 1, str: "", bytes: "", dt.date: dt.date(2000, 1, 1),
