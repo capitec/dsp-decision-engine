@@ -271,6 +271,15 @@ def test_a_scope_column_is_read_as_a_float_unless_the_stack_declares_its_type():
     assert (declared.scope_columns()["campaign_id"], declared.scope_columns()["segment_code"]) == (int, int)
 
 
+def test_a_flag_scope_column_can_be_declared_a_bool():
+    flagged = stack(overlay(scope={"agency_placed": True}), scope_types={"agency_placed": "bool"})
+    assert flagged.scope_columns() == {"agency_placed": bool}
+    exe = flow(flagged, name="t").compile("interpreted")
+    assert next(v.annotation for v in exe.plan.inputs if v.name == "agency_placed") == bool | None
+    record = {"score_raw": 600.0, "decision_date": JUNE}
+    assert [exe.score({**record, "agency_placed": flag})["score"] for flag in (True, False)] == [590.0, 600.0]
+
+
 def test_a_declared_column_type_is_the_one_the_step_reads_a_shared_column_as():
     campaigns = stack(overlay(scope={"campaign_id": 23}), scope_types={"campaign_id": "int"})
 

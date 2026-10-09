@@ -26,5 +26,8 @@
       "review_date": "2026-10-01",
       "tighten_only": true
     }
-  ]
+  ],
+  "scope_types": {
+    "agency_placed_12m": "bool"
+  }
 }
