@@ -1,0 +1,31 @@
+{
+  "type": "adjustment_stack",
+  "name": "apply_affordability_buffer_adjustments",
+  "target": "affordability_buffer",
+  "set_id": "AS-2026.09",
+  "base_field": "buffer",
+  "adjusted_output": "affordability_buffer_applied",
+  "unadjusted_output": "affordability_buffer_unadjusted",
+  "adjustments": [
+    {
+      "adjustment_id": "ADJ-0114",
+      "kind": "buffer_adjustment",
+      "target": "affordability_buffer",
+      "effect": {
+        "op": "add",
+        "value": 0.04
+      },
+      "scope": {
+        "channel_code": 3
+      },
+      "stack_position": 1,
+      "owner": "Credit Risk Policy",
+      "approval_reference": "CC-2027-07",
+      "rationale": "Channel 3 buffer raised pending an affordability review",
+      "effective_from": "2026-01-01",
+      "effective_to": "2027-12-31",
+      "review_date": "2027-06-30",
+      "tighten_only": true
+    }
+  ]
+}

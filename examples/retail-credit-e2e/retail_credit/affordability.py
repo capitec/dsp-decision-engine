@@ -16,7 +16,7 @@ from decider import DecisionTableConfig, dag, missing_as, param, step
 from credit_core import affordability
 from credit_core.affordability import FAIL, INDETERMINATE, MARGINAL, PASS
 from credit_core.evidence import cell_id
-from retail_credit.overlays import overlay_step
+from retail_credit.documents import recorded
 
 RATIO_VERSION = "ratio-2026.09"
 BUFFER_VERSION = "buffer-2026.09"
@@ -116,15 +116,14 @@ def affordability_verdict_code(
     return MARGINAL if income_evidence_tier >= weak_evidence_tier else verdict
 
 
-def limits_unit():
+def limits_unit(buffer_overlays):
     """Grade- and channel-based limits: residual floor, ratio ceiling, buffer with its overlay.
 
     Writes `residual_floor`, `ratio_ceiling`, `affordability_buffer_applied`.
     """
     return dag(
         build_residual_floor_table(), build_ratio_ceiling_table(), step(ratio_ceiling), build_buffer_table(),
-        overlay_step("affordability_buffer", "buffer", base_field="buffer", adjusted_output="affordability_buffer_applied",
-                     unadjusted_output="affordability_buffer_unadjusted"),
+        recorded(buffer_overlays, "buffer"),
         name="limits")
 
 

@@ -14,18 +14,14 @@ from retail_credit import (
     affordability, caps, consolidation, disclosure, eligibility, features, flex_card, fraud, grading, intake, offer,
     pricing, routing, scoring, solve, validation,
 )
-from retail_credit.overlays import overlay_step
+from retail_credit.documents import recorded, shipped
 
 
 def rate_addon_base() -> float:
+    """An add-on is the overlay stack applied to zero: the overlay's own amount, resolved once and then read by the solve
+    and by the offer's price alike."""
     return 0.0
 
-
-# An add-on is the register applied to zero: the overlay's own amount, resolved once and then read by the solve and
-# by the offer's price alike.
-rate_addon_step = overlay_step(
-    "nominal_annual_rate", "rate_addon", base_field="rate_addon_base", adjusted_output="rate_addon_bps",
-    unadjusted_output="rate_addon_unadjusted")
 
 EMIT = (
     "p01_valid", "p01_rejection_reasons", "identity_resolution_path", "identity_confidence",
@@ -55,7 +51,15 @@ EMIT = (
 )
 
 
-def build():
+def build(pd_overlays=None, amount_cap_overlays=None, buffer_overlays=None, rate_addon_overlays=None,
+          reason_codes=None, appetite_by_grade=None):
+    """Each argument is the document of that name from `configs/<version>/`; without one, the shipped document."""
+    pd_overlays = pd_overlays or shipped("pd_overlays")
+    amount_cap_overlays = amount_cap_overlays or shipped("amount_cap_overlays")
+    buffer_overlays = buffer_overlays or shipped("buffer_overlays")
+    rate_addon_overlays = rate_addon_overlays or shipped("rate_addon_overlays")
+    reason_codes = reason_codes or shipped("reason_codes")
+    appetite_by_grade = appetite_by_grade or shipped("appetite_by_grade")
     return dag(
         intake.validate_request_step, intake.resolve_identity_step,
         eligibility.eligibility_gates_step, eligibility.hard_eligibility_reasons_step, eligibility.is_eligible_step,
@@ -72,18 +76,19 @@ def build():
 
         scoring.build_scorecard(),
         grading.build_calibration_table(), grading.probability_of_default_raw_step,
-        grading.probability_of_default_overlay_step, grading.build_risk_grade_table(),
+        grading.probability_of_default_overlay_step(pd_overlays), grading.build_risk_grade_table(),
 
-        routing.product_range_step, caps.policy_caps_step, caps.amount_cap_unit,
-        affordability.limits_unit(), affordability.capacity_unit(), routing.product_eligibility_step,
+        routing.product_range_step, caps.amount_rules_unit(appetite_by_grade), caps.policy_caps_step,
+        caps.term_cap_step, caps.worst_acceptable_grade_step, caps.amount_cap_unit(amount_cap_overlays),
+        affordability.limits_unit(buffer_overlays), affordability.capacity_unit(), routing.product_eligibility_step,
         consolidation.consolidation_scenario_step, consolidation.hypothetical_capacity_unit(),
         consolidation.offer_basis_step,
 
         step(pricing.offer_term_months), pricing.amount_independent_unit(),
-        step(rate_addon_base), rate_addon_step, solve.solve_unit(),
+        step(rate_addon_base), recorded(rate_addon_overlays, "rate_addon"), solve.solve_unit(),
         step(offer.decision_open), offer.assemble_offer_step, offer.priced_offer_step, step(flex_card.rate_cell_id),
         step(offer.total_cost_of_credit), step(offer.total_interest), instalment.effective_annual_rate_step,
 
-        validation.revalidate_offer_step, disclosure.reasons_unit(), disclosure.outcome_code_step,
+        validation.revalidate_offer_step, disclosure.reasons_unit(reason_codes), disclosure.outcome_code_step,
         name="retail_credit",
-    ).emit(*EMIT)
+    ).emit(*EMIT).drop(*caps.AMOUNT)  # the amount rules' fold is internal; `amount_cap_chain` is the output
