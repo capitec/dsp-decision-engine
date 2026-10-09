@@ -2,7 +2,7 @@ import math
 
 import pytest
 
-from assessment import verdict
+from assessment import documents, verdict
 
 def test_a_proposal_is_compared_with_the_maximum_and_a_five_percent_margin(assess):
     maximum = assess()["max_affordable_instalment"]
@@ -55,11 +55,11 @@ def test_a_failed_proposal_reports_that_it_exceeds_capacity(assess):
     out = assess(proposed_instalment=9000.0)
     assert out["affordability_verdict_code"] == verdict.FAIL
     assert out["decline_reason_codes"] == [verdict.R_INSTALMENT_EXCEEDS_CAPACITY]
-    assert out["reason_registry_version"] == verdict.REASON_REGISTRY.version
+    assert out["reason_registry_version"] == documents.shipped("reason_codes").version
 
 
 def test_every_evidence_code_has_a_registered_reason():
-    assert all(200 + code in verdict.REASON_REGISTRY for code in range(1, 8))
+    assert all(200 + code in documents.shipped("reason_codes") for code in range(1, 8))
 
 
 SCENARIOS = [
