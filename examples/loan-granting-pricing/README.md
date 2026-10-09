@@ -80,7 +80,7 @@ The stages, in the order the decision takes them:
 | decider feature | Where |
 |---|---|
 | A search in plain Python, called from a step, with a correctness argument and a test against brute force | [solve.py](loan_granting/solve.py), [tests/test_solve.py](tests/test_solve.py) |
-| A 63 360-row rate card kept as a config document, handed to `build` by name and becoming the default rows of a `param_table` that the search reads with `bisect` | [pipeline.py](loan_granting/pipeline.py), [offers.py](loan_granting/offers.py), [rate_tables.py](loan_granting/rate_tables.py) |
+| A 63 360-row rate card kept as a config document, handed to `build` by name and becoming the default rows of a `param_table` that the search reads with `bisect`, indexing each table once per params bundle | [pipeline.py](loan_granting/pipeline.py), [offers.py](loan_granting/offers.py), [rate_tables.py](loan_granting/rate_tables.py) |
 | Reusing another example's whole pipeline as one step: `.relabel(reads=, writes=)` on `assessment.pipeline.build()` | [pipeline.py](loan_granting/pipeline.py) |
 | `param_table`: policy numbers a step loops over, retuned like a param; one table `shared_key`-shared by two steps | [waterfall.py](loan_granting/waterfall.py) (`cap_bands`, the watchlist), [offers.py](loan_granting/offers.py) (permitted terms) |
 | Small steps with `param` thresholds, one per gate, gathered by a final step | [eligibility.py](loan_granting/eligibility.py) |

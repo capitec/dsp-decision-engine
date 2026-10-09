@@ -76,7 +76,7 @@ a client's qualifying campaigns become a contact, given the channels' capacity a
 | Reusing other examples: the search (`loan_granting`), eligibility, consent, appetite and overlays (`credit_core`) | [preassessment.py](campaign_trees/preassessment.py), [overlays.py](campaign_trees/overlays.py) |
 | Policy numbers as params, per cycle: `resolve` writes the overlays in force on the cycle date into the params document | [overlays.py](campaign_trees/overlays.py), [scripts/generate_configs.py](scripts/generate_configs.py) |
 | The cap reduction is an `adjustment_stack` document (an `AdjustmentStack` scoped by campaign and tier), so a release diff sees its effect, scope and window | [`cap_reductions.json`](configs/0.1.0/cap_reductions.json), [overlays.py](campaign_trees/overlays.py), [tests/test_hidden_state.py](tests/test_hidden_state.py) |
-| The rate card and the credit life rates are `param_table`s read with `np.searchsorted`, so no step closes over an object | [preassessment.py](campaign_trees/preassessment.py), [tests/test_hidden_state.py](tests/test_hidden_state.py) |
+| The rate card and the credit life rates are `param_table`s read through `loan_granting.rate_tables`, so no step closes over an object | [preassessment.py](campaign_trees/preassessment.py), [tests/test_hidden_state.py](tests/test_hidden_state.py) |
 | `@allow_fallback` for steps that are Python on purpose, checked by `Engine(strict_compile=True)` | [tests/test_serving.py](tests/test_serving.py) |
 | Warm-up from `sample_request.json`; the JSON date string arrives as a `date` | [tests/test_serving.py](tests/test_serving.py) |
 
@@ -166,9 +166,11 @@ and the ageing report and do not count as behaviour in a diff; everything else d
 ```
 
 The pre-assessment prices candidate loans from two tables that are table params of its step: `flex_loan_rate_card` (the rows of
-`rate_card_flex_loan.json`) and `credit_life_rates` (the rows of `credit_core`'s credit life table). Their defaults are those
-rows, so `params.json` does not repeat them; a params document may replace either. The step name and every params path that
-existed before are unchanged. A diff of two builds compares the 63 360 rate card rows, which takes about two seconds.
+`rate_card_flex_loan.json`, in the columns of `loan_granting.rate_tables.RATE_CARD_COLUMNS`) and `credit_life_rates` (the rows of
+`credit_core`'s credit life table), each with a version param beside it. Their defaults are those rows, so `params.json` does not
+repeat them; a params document may replace either. The lookups are `loan_granting`'s `RateCardTable` and `CreditLifeTable`, which
+index a table once per params bundle. The step name and every params path that existed before are unchanged. A diff of two builds
+compares the 63 360 rate card rows, which takes about two seconds.
 
 ## Edit a tree
 
