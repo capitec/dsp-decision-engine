@@ -1,4 +1,4 @@
-"""Policy caps: the register's chain, the overlay, and the campaign uplift."""
+"""Policy caps: the rule chain, the overlay, and the campaign uplift."""
 import pytest
 
 
@@ -80,6 +80,6 @@ def test_income_evidence_that_is_only_declared_caps_the_amount_at_eighty_thousan
 
 
 @pytest.mark.parametrize("grade, cap", [(1, 84), (4, 72), (7, 60), (9, 48), (11, 24)])
-def test_the_term_cap_follows_the_grade(decide, grade, cap):
-    from retail_credit.caps import fold
-    assert fold("term", 84, {"risk_grade": grade})[0] == cap
+def test_the_term_cap_follows_the_grade(grade, cap):
+    from retail_credit.caps import term_cap
+    assert term_cap(grade, 84) == cap

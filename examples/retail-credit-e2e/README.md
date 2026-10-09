@@ -58,7 +58,7 @@ below is the order a reader follows, not a call sequence anyone maintains.
 | 6 | Income, tax, expenses, obligations, segment | The determinations everything later reads, made once. Income takes the best evidence tier and its haircut; tax comes from the bracket table in force on the decision date; living expenses are the higher of the claim and the norm floor; obligations merge the bureau and internal lists. Then this product's own two: the evidence tier on its seven-step ladder, and the client's segment (the first that fits: joint, staff, non-resident, employment type, existing client, new). | `credit_core`, [features.py](retail_credit/features.py) |
 | 7 | Score | Points for eight characteristics on a base of 600. | [scoring.py](retail_credit/scoring.py) |
 | 8 | Probability of default and grade | The score becomes a probability on the segment's logistic curve. The channel overlay (a tighten-only odds multiplier) moves the probability before grading, so a tightening changes the grade. The probability becomes a grade 1 to 12 on the segment's cut points. | [grading.py](retail_credit/grading.py) |
-| 9 | Policy caps | Three ceilings from an ordered register: the amount, the term, and the worst acceptable grade. Order is part of the policy, so each ceiling keeps its chain: every rule, its before and after, and whether it *bound*, was *evaluated and did not bind*, or was *not applicable*. A campaign may raise the amount by a fifth up to R200 000, the only rule that can raise. A channel overlay then reduces the amount, and the result rounds down to the R250 grid. | [caps.py](retail_credit/caps.py) |
+| 9 | Policy caps | Three ceilings: the amount, the term, and the worst acceptable grade. The amount is narrowed by one small step per rule, in the order the policy lists them (order is part of the policy), and keeps its chain: every rule, its before and after, and whether it *bound*, was *evaluated and did not bind*, or was *not applicable*. Each rule's thresholds are literals in its own function; the appetite by grade is a document. A campaign may raise the amount by a fifth up to R200 000, the only rule that can raise. A channel overlay then reduces the amount, and the result rounds down to the R250 grid. | [caps.py](retail_credit/caps.py) |
 | 10 | Affordability | What the client can commit each month: discretionary income, less a residual floor for dependants, the lower of that and the grade's share of net income, less a buffer by grade and channel (which an overlay can raise). The verdict: pass from R185 of capacity, marginal within 8% below, otherwise fail; weak income evidence (bureau estimate or declaration) turns a pass into a marginal and never helps a fail; no income established at all is indeterminate. | [affordability.py](retail_credit/affordability.py) |
 | 11 | Product routing | Whether this product may carry the request: amount and term in range, and a grade no worse than the caps allow. | [routing.py](retail_credit/routing.py) |
 | 12 | Consolidation | If an eligible client fails affordability (and fraud has not stopped them), the affordability steps run again on a hypothetical figure, the external debts settled. Both results are kept. The offer is solved on the hypothetical basis only if it passes. | [consolidation.py](retail_credit/consolidation.py) |
@@ -75,11 +75,12 @@ below is the order a reader follows, not a call sequence anyone maintains.
 | One `dag` of a few dozen steps and units, with `flow` for a value written twice (`amount_cap` overlaid then rounded, the instalment, the reasons fired then ranked) | [pipeline.py](retail_credit/pipeline.py), [caps.py](retail_credit/caps.py), [pricing.py](retail_credit/pricing.py), [disclosure.py](retail_credit/disclosure.py) |
 | `optimise` with `record=`: try every candidate, keep the best, and get the winner's whole price back from the same steps that scored it | [solve.py](retail_credit/solve.py), [pricing.py](retail_credit/pricing.py) |
 | `param_table`: a 34 560-cell rate card in the params document, replaceable without a rebuild | [flex_card.py](retail_credit/flex_card.py) |
-| `DecisionTableConfig` with `eq` keys and banded ranges | [grading.py](retail_credit/grading.py), [affordability.py](retail_credit/affordability.py) |
+| `DecisionTableConfig` with `eq` keys and banded ranges | [grading.py](retail_credit/grading.py), [affordability.py](retail_credit/affordability.py), [appetite_by_grade.json](configs/0.1.0/appetite_by_grade.json) |
 | `ScorecardConfig` | [scoring.py](retail_credit/scoring.py) |
 | Reusing a unit twice with `.relabel` and `.named`: the affordability steps run on actual and on hypothetical obligations, one `capacity_unit` with its reads and writes renamed | [affordability.py](retail_credit/affordability.py), [consolidation.py](retail_credit/consolidation.py) |
 | `credit_core`'s steps and tables reused on this flow's columns | [pipeline.py](retail_credit/pipeline.py), [pricing.py](retail_credit/pricing.py) |
-| One overlay register applied to four values, each resolved once per decision, recorded beside the value, switchable with a param | [overlays.py](retail_credit/overlays.py), [tests/test_affordability.py](tests/test_affordability.py) |
+| Four overlay stacks (`AdjustmentStack` documents), one per overlaid value, each resolved once per decision, recorded beside the value, switchable with a param | [documents.py](retail_credit/documents.py), [configs/0.1.0/](configs/0.1.0), [tests/test_affordability.py](tests/test_affordability.py) |
+| Config documents passed to `build` (`pd_overlays`, `amount_cap_overlays`, `buffer_overlays`, `rate_addon_overlays`, `reason_codes`, `appetite_by_grade`), and a flow of one step per rule so a diff names the rule that changed | [pipeline.py](retail_credit/pipeline.py), [caps.py](retail_credit/caps.py), [tests/test_hidden_state.py](tests/test_hidden_state.py) |
 | `Struct[...]` and `list[dict]` outputs: the winning quote and the cap chain | [pricing.py](retail_credit/pricing.py), [caps.py](retail_credit/caps.py) |
 | Steps that are Python on purpose, marked `@allow_fallback` | [intake.py](retail_credit/intake.py), [caps.py](retail_credit/caps.py), [tests/test_serving.py](tests/test_serving.py) |
 | Warm-up from `sample_request.json`, and serving the raw request bytes with JSON date strings | [sample_request.json](sample_request.json), [tests/test_serving.py](tests/test_serving.py) |
@@ -166,8 +167,25 @@ Tests (run from the repository root, with `PYTHONPATH` set as above):
 uv run pytest examples/retail-credit-e2e -q
 ```
 
-To regenerate `configs/0.1.0/params.json` (every policy number at its default, this product's fee and premium terms,
-and the synthetic rate card): `uv run python scripts/generate_configs.py`.
+To regenerate `configs/0.1.0/` (the documents below, and `params.json` with every policy number at its default, this
+product's fee and premium terms, and the synthetic rate card): `uv run python scripts/generate_configs.py`.
+
+## The documents
+
+`build` takes the data a business owner edits as config documents, one file per argument in `configs/<version>/`, so a
+change is a new version of a file and a release check can diff it. Called without arguments (as the tests do) it loads the
+shipped files.
+
+| Document | What it holds | Who edits it |
+|---|---|---|
+| `pd_overlays.json`, `amount_cap_overlays.json`, `buffer_overlays.json`, `rate_addon_overlays.json` | An `adjustment_stack` per overlaid value: each overlay's scope, window, stack position and effect, with owner, approval reference, rationale and review date. Tighten-only is checked when the file loads. The governance fields are not behaviour: editing a rationale does not diff as a change. | Credit risk policy |
+| `reason_codes.json` | The reason taxonomy: each code's severity rank, description and whether it is regulatory. A code a stage raises that is missing here fails the decision. | Credit risk policy, compliance |
+| `appetite_by_grade.json` | CAP-0104: the largest amount by risk grade. Grade 12 has none, which declines. | Credit risk policy |
+| `params.json` | Every policy number and the rate card, by step path. | Pricing, credit risk |
+
+The other cap rules keep their thresholds as literals in `caps.py`, one function each (`cap_0131` and so on), in policy
+order in the `amount_rules` flow. That is deliberate: an edit to a threshold is an edit to that function, and the diff names
+it. Moving a rule's position changes the diff too.
 
 ## Layout
 
@@ -175,11 +193,12 @@ and the synthetic rate card): `uv run python scripts/generate_configs.py`.
 retail_credit/          one module per capability
   pipeline.py           build(): the whole decision
   intake.py eligibility.py fraud.py features.py                      admission to segment
-  scoring.py grading.py caps.py overlays.py                          risk and policy
+  scoring.py grading.py caps.py                                      risk and policy
   affordability.py routing.py consolidation.py                       capacity and routing
   pricing.py flex_card.py solve.py offer.py                          the offer
-  validation.py disclosure.py vocab.py                               checks, reasons, codes
+  validation.py disclosure.py vocab.py documents.py                  checks, reasons, codes, the document loader
 configs/0.1.0/params.json   policy numbers and the rate card
+configs/0.1.0/*.json        the overlay, reason code and appetite documents
 scripts/generate_configs.py
 sample_request.json
 tests/                  behaviour tests; reference.py prices an offer by hand to check the pipeline
@@ -219,7 +238,7 @@ tests/                  behaviour tests; reference.py prices an offer by hand to
 
 This example takes only `credit_core`, by package name: the income, deductions, expense-norm and obligation steps,
 `affordability`'s discretionary income and capacity arithmetic, `eligibility`, `instalment`, `credit_life`, `fees`,
-`rounding`, `adjustments.AdjustmentRegister`, `reason_codes.ReasonCodeRegistry`, `evidence` and the codes in `vocab`.
+`rounding`, `adjustments.AdjustmentStack`, `reason_codes.ReasonCodes`, `evidence` and the codes in `vocab`.
 It does not import the affordability example's `assessment` package, although it covers the same ground: this flow
 carries its own thresholds (a R185 minimum viable instalment, an 8% marginal band, its own buffer and ratio grids) and
 restates the verdict rather than inheriting another product's policy.

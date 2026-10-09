@@ -21,7 +21,7 @@ _RULES = (
     ("F5-0091", "F5", 4, 4241, "consortium_watchlist_hit", bool),
     ("F5-0092", "F5", 4, 4242, "internal_fraud_register_hit", bool),
 )
-_SEVERITY_WEIGHT = {1: 0.05, 2: 0.15, 3: 0.30, 4: 0.60}
+_SEVERITY_WEIGHT = (0.05, 0.15, 0.30, 0.60)  # by severity 1 to 4
 _CONSORTIUM_FAMILIES = ("F3", "F4", "F5")  # skipped on the low-value bypass: no consortium call is made
 
 
@@ -51,7 +51,7 @@ def evaluate_fraud(
               and not has_adverse_internal_history)
     fired = [(family, severity, reason) for _, family, severity, reason, feature, condition in _RULES
              if not (bypass and family in _CONSORTIUM_FAMILIES) and condition(features[feature])]
-    score = round(sum(_SEVERITY_WEIGHT[severity] for _, severity, _ in fired), 4)
+    score = round(sum(_SEVERITY_WEIGHT[severity - 1] for _, severity, _ in fired), 4)
     if any(family == "F5" and severity == 4 for family, severity, _ in fired):
         verdict = FraudVerdictCode.DECLINE
     elif sum(family == "F1" and severity >= 3 for family, severity, _ in fired) >= 2:

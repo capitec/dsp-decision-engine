@@ -55,7 +55,7 @@ def nominal_annual_rate_unadjusted(card_rate: float, long_term_loading: float) -
 
 
 def nominal_annual_rate(nominal_annual_rate_unadjusted: float, rate_addon_bps: float) -> float:
-    """`rate_addon_bps` is the overlay register resolved once per decision, before the solve."""
+    """`rate_addon_bps` is the overlay stack resolved once per decision, before the solve."""
     return round(nominal_annual_rate_unadjusted + rate_addon_bps, 6)
 
 

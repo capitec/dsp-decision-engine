@@ -1,0 +1,31 @@
+{
+  "type": "adjustment_stack",
+  "name": "apply_nominal_annual_rate_adjustments",
+  "target": "nominal_annual_rate",
+  "set_id": "AS-2026.09",
+  "base_field": "rate_addon_base",
+  "adjusted_output": "rate_addon_bps",
+  "unadjusted_output": "rate_addon_unadjusted",
+  "adjustments": [
+    {
+      "adjustment_id": "ADJ-0132",
+      "kind": "rate_addon",
+      "target": "nominal_annual_rate",
+      "effect": {
+        "op": "add",
+        "value": 0.006
+      },
+      "scope": {
+        "segment_code": 4
+      },
+      "stack_position": 1,
+      "owner": "Credit Risk Policy",
+      "approval_reference": "CC-2027-13",
+      "rationale": "60 basis point add-on for segment 4 pending the next card refresh",
+      "effective_from": "2026-01-01",
+      "effective_to": "2027-12-31",
+      "review_date": "2027-06-30",
+      "tighten_only": true
+    }
+  ]
+}
