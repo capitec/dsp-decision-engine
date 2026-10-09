@@ -5,7 +5,7 @@ from typing import Any, Iterator, Mapping, Union
 import numpy as np
 
 from decider._engine.boundary.whole import refuse
-from decider._engine.compile.declared import check_output
+from decider._engine.compile.declared import output_check
 from decider._engine.compile.kernel import Spec, SrcKind, fused_kernel
 from decider._engine.compile.njit import FALLBACK_ERRORS, compile_call, parameters
 from decider._engine.compile.outputs import CodeTable, coded, coded_values, output_dtype
@@ -125,7 +125,7 @@ class Fallback:
     Same `run` and `writes` as `Kernel`; it stores every version it writes.
     """
 
-    __slots__ = ("calls", "fn", "reason", "declared", "writes", "_boxes", "_scales", "_tables")
+    __slots__ = ("calls", "fn", "reason", "declared", "writes", "_boxes", "_scales", "_tables", "_whole", "_checks", "_ks")
 
     def __init__(self, call: Call, fn, reason: str, declared: bool = False):
         self.calls = (call,)
@@ -145,6 +145,11 @@ class Fallback:
         self._scales = tuple(decimal_scale(o.annotation) for o in node.outputs)
         self._tables = tuple(CodeTable(*c) if node.kind == "row" and (c := coded_values(o.annotation)) is not None
                              else None for o in node.outputs)
+        self._ks = range(len(self.writes))
+        self._whole = tuple(dtype == np.int64 for _, dtype in self.writes)
+        # A number, Decimal or bool has its declared type already; only an object output can be a wrong shape.
+        self._checks = tuple(output_check(o) if node.kind == "scalar" and dtype == object else None
+                             for o, (_, dtype) in zip(node.outputs, self.writes))
 
     def run(self, values: Values, valid: Values, bundles: Mapping[int, tuple], n: int) -> None:
         call = self.calls[0]
@@ -153,12 +158,13 @@ class Fallback:
         cols = [(i.arg, _per_row(values[v.id]), valid.get(v.id) if i.null_policy is NullPolicy.OPTIONAL else None)
                 for i, v in zip(node.inputs, call.reads)]
         outs = [np.empty(n, dtype) for _, dtype in self.writes]
-        masks = [np.ones(n, np.bool_) for _ in outs]
+        masks: list = [None] * len(outs)  # made when a null turns up
         consts = tuple(v for _, v in node.consts)
         fixed = dict(node.consts) | {d.arg: b for d, b in zip(node.params, bundle)}
         boxes = self._boxes
         fixed = {a: boxes[a](x) if a in boxes else x for a, x in fixed.items()}
-        per_output = list(zip(outs, masks, self._scales, [out.dtype == np.int64 for out in outs], call.writes))
+        scales, whole, ks = self._scales, self._whole, self._ks
+        single = len(outs) == 1 and node.kind == "scalar"
         for r in range(n):
             args = [(a, None if m is not None and not m[r] else boxes[a](col[r]) if a in boxes else col[r])
                     for a, col, m in cols]
@@ -166,27 +172,32 @@ class Fallback:
                 result = self.fn(tuple(x for _, x in args), bundle, consts)
             else:
                 result = self.fn(**dict(args), **fixed)
-            if len(outs) == 1 and node.kind == "scalar":
+            if single:
                 result = (result,)
-            for (out, mask, scale, whole, v), x in zip(per_output, result):
+            for k, x in zip(ks, result):
                 x = x.text if isinstance(x, Text) else x
                 if x is None:
-                    mask[r], x = False, 0
-                elif scale is not None:
-                    x = to_raw(x, scale)
-                elif whole and isinstance(x, (float, np.floating)) and not x.is_integer():
-                    raise refuse(f"step '{node.origin.path}' output '{v.name}'" + (f" (row {r})" if n > 1 else ""), x)
-                out[r] = x
-        if node.kind == "scalar":
-            for o, out, mask in zip(node.outputs, outs, masks):
-                if out.dtype == object:  # a number, Decimal or bool has its declared type already
-                    check_output(node.origin.path, o, [x if m else None for x, m in zip(out, mask)])
+                    if masks[k] is None:
+                        masks[k] = np.ones(n, np.bool_)
+                    masks[k][r], x = False, 0
+                elif scales[k] is not None:
+                    x = to_raw(x, scales[k])
+                elif whole[k] and isinstance(x, (float, np.floating)) and not x.is_integer():
+                    raise refuse(f"step '{node.origin.path}' output '{call.writes[k].name}'"
+                                 + (f" (row {r})" if n > 1 else ""), x)
+                outs[k][r] = x
+        for k, check in enumerate(self._checks):
+            if check is not None:
+                mask = masks[k]
+                check(node.origin.path, node.outputs[k],
+                      outs[k].tolist() if mask is None else [x if m else None for x, m in zip(outs[k], mask)])
         for v, out, mask, table in zip(call.writes, outs, masks, self._tables):
             values[v.id] = out
-            if not mask.all():
+            if mask is not None:
                 valid[v.id] = mask
             if table is not None:
-                out[~mask] = -1
+                if mask is not None:
+                    out[~mask] = -1
                 values[v.id] = coded(out, table, valid, v.id)
 
 
