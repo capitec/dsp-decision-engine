@@ -18,7 +18,7 @@ from numba.core.dispatcher import Dispatcher
 from numba.extending import _Intrinsic
 
 _LITERALS = (int, float, complex, bool, str, bytes, type(None))
-_BY_VALUE = (datetime.date, datetime.time, datetime.timedelta, Decimal, fractions.Fraction)
+_BY_VALUE = (datetime.date, datetime.time, datetime.timedelta, datetime.tzinfo, Decimal, fractions.Fraction, np.generic)
 
 
 class _Walk:
@@ -38,11 +38,11 @@ def fingerprint(fn: Callable, *, strict: bool = False) -> str:
     Covers the bytecode with its constants, the argument layout, closure cell
     values and the globals it reads: functions by their own content (an
     `lru_cache` wrapper by the function it wraps), modules by name plus the
-    functions and submodules the function reaches through them, classes by
-    `module:qualname` (an enum class also by its members), enum members by
-    class and name, numbers, strings, dates, Decimals, regexes and tuples,
-    lists, dicts and sets of those by value, numpy arrays and polars
-    DataFrames by value. Any other object is keyed by identity, which changes
+    functions, submodules and data (`mod.LIMIT`) the function reaches through
+    them, classes by `module:qualname` (an enum class also by its members),
+    enum members by class and name, numbers, strings, dates, Decimals, regexes
+    and tuples, lists, dicts and sets of those by value, numpy arrays and
+    polars DataFrames by value. Any other object is keyed by identity, which changes
     every process; `strict=True` raises instead. Leaves out the function's
     name, file and line numbers, so renaming or moving a step keeps its
     compiled code, while editing a constant, a closure value or a global it
@@ -86,14 +86,14 @@ def _function(w: _Walk, fn: Any) -> None:
     w.seen.add(id(fn))
     code = fn.__code__
     _code(w.h, code)
+    names = _names(code)
     for cell in fn.__closure__ or ():
         try:
             contents = cell.cell_contents
         except ValueError:  # an empty cell
             w.h.update(b"<empty>")
             continue
-        _value(w, contents)
-    names = _names(code)
+        _value(w, contents, names)
     for name in sorted(names):
         if name in fn.__globals__:
             w.h.update(name.encode())
@@ -173,16 +173,20 @@ def _value(w: _Walk, value: Any, names: frozenset | set = frozenset()) -> None:
         _function(w, value)
     elif isinstance(value, types.ModuleType):
         h.update(f"module:{value.__name__}".encode())
-        # `mod.f(x)` reads `f` off the module: follow the attributes the function names, so editing `f` changes the key.
+        # `mod.f(x)` and `mod.K` read off the module: follow the attributes the function names, so editing one
+        # changes the key. `__dict__`, not getattr: a module's `__getattr__` can run code or raise.
         key = (id(value), frozenset(names))
         if key in w.seen:
             return
         w.seen.add(key)
+        contents = getattr(value, "__dict__", {})
         for name in sorted(names):
-            attr = value.__dict__.get(name)
-            if isinstance(attr, (types.FunctionType, Dispatcher, types.ModuleType)):
+            # A callable other than a function (a ufunc, a bound method) is not data the step's code depends on.
+            if name in contents and not name.startswith("__") and (
+                    isinstance(contents[name], (types.FunctionType, Dispatcher, types.ModuleType, type))
+                    or not callable(contents[name])):
                 h.update(name.encode())
-                _value(w, attr, names)
+                _value(w, contents[name], names)
     elif isinstance(value, _Intrinsic):
         _function(w, value._defn)
     elif isinstance(value, (ir.Type, numba_types.Type)):
