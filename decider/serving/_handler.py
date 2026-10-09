@@ -12,6 +12,7 @@ import typing as t
 from dataclasses import dataclass, field
 from types import MappingProxyType
 
+import numpy as np
 import polars as pl
 from pydantic_core import to_json
 
@@ -44,6 +45,8 @@ def _json_fallback(value: t.Any) -> str:
 
     if isinstance(value, Decimal):
         return str(Decimal.from_raw(value.raw, value.scale))
+    if isinstance(value, np.generic):  # a numpy number a Python step put in a dict
+        return value.item()
     raise TypeError(f"{type(value).__name__} is not JSON serializable")
 
 
