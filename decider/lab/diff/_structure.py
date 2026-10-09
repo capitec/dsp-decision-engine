@@ -116,12 +116,12 @@ def _parent(ref: StepRef) -> str:
 
 
 def _match(old: tuple[StepRef, ...], new: tuple[StepRef, ...]) -> list[tuple[int, int]]:
-    by_id = {(n.flow_id, n.step_id): j for j, n in enumerate(new) if n.step_id is not None}
+    by_id = _by_id(new)
     by_path = {n.path: j for j, n in enumerate(new)}
     pairs: dict[int, int] = {}
     taken: set[int] = set()
-    for i, o in enumerate(old):
-        j = by_id.get((o.flow_id, o.step_id)) if o.step_id is not None else None
+    for key, i in _by_id(old).items():
+        j = by_id.get(key)
         if j is not None:
             pairs[i] = j
             taken.add(j)
@@ -131,6 +131,17 @@ def _match(old: tuple[StepRef, ...], new: tuple[StepRef, ...]) -> list[tuple[int
             pairs[i] = j
             taken.add(j)
     return sorted(pairs.items())
+
+
+def _by_id(refs: tuple[StepRef, ...]) -> dict[tuple, int]:
+    # One step can be several nodes under its id (a split tree and its parts): the k-th node of an id matches the k-th.
+    out: dict[tuple, int] = {}
+    count: dict[tuple, int] = {}
+    for j, n in enumerate(refs):
+        if n.step_id is not None:
+            k = count[n.flow_id, n.step_id] = count.get((n.flow_id, n.step_id), -1) + 1
+            out[n.flow_id, n.step_id, k] = j
+    return out
 
 
 def _param_changes(ref: StepRef, old: dict, new: dict) -> list[ParamChange]:
