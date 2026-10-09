@@ -1,10 +1,11 @@
 import copy
+import inspect
 import json
 from datetime import date
 from pathlib import Path
 
 import pytest
-from decider import DecisionTableConfig
+from decider import ConfigurableStep, DecisionTableConfig
 
 from loan_granting.pipeline import build
 
@@ -25,9 +26,21 @@ def parse_dates(record: dict) -> dict:
     return record
 
 
+def load_document(name: str):
+    document = json.loads((ROOT / "configs" / "0.1.0" / f"{name}.json").read_text())
+    return DecisionTableConfig.load(document) if document["type"] == "decision_table" else ConfigurableStep.load(document)
+
+
 @pytest.fixture(scope="session")
 def rate_card():
-    return DecisionTableConfig.load(json.loads((ROOT / "configs" / "0.1.0" / "rate_card_flex_loan.json").read_text()))
+    return load_document("rate_card_flex_loan")
+
+
+@pytest.fixture(scope="session")
+def documents(rate_card):
+    """What `build` receives from `configs/0.1.0`, by parameter name."""
+    return {name: rate_card if name == "rate_card_flex_loan" else load_document(name)
+            for name in inspect.signature(build).parameters}
 
 
 @pytest.fixture(scope="session")
@@ -36,8 +49,8 @@ def params():
 
 
 @pytest.fixture(scope="session")
-def pipeline(rate_card):
-    return build(rate_card).compile("interpreted")
+def pipeline(documents):
+    return build(**documents).compile("interpreted")
 
 
 @pytest.fixture
