@@ -1,0 +1,45 @@
+{
+  "type": "overlay_set",
+  "name": "objective_adjustments",
+  "set_id": "AS-CON-OBJ-2026.09",
+  "adjustments": [
+    {
+      "adjustment_id": "ADJ-CON-OBJ-2026-001",
+      "kind": "objective_reweight",
+      "target": "weight_min_commitment",
+      "effect": {
+        "op": "set",
+        "value": 0.6
+      },
+      "scope": {
+        "channel_code": 1
+      },
+      "stack_position": 1,
+      "owner": "Credit Committee",
+      "approval_reference": "CC-2026-014",
+      "rationale": "Branch channel weighted towards instalment relief this quarter",
+      "effective_from": "2026-01-01",
+      "effective_to": null,
+      "review_date": "2026-12-31"
+    },
+    {
+      "adjustment_id": "ADJ-CON-OBJ-2026-002",
+      "kind": "objective_reweight",
+      "target": "weight_new_money",
+      "effect": {
+        "op": "set",
+        "value": 0.4
+      },
+      "scope": {
+        "channel_code": 1
+      },
+      "stack_position": 1,
+      "owner": "Credit Committee",
+      "approval_reference": "CC-2026-014",
+      "rationale": "Branch channel weighted towards instalment relief this quarter",
+      "effective_from": "2026-01-01",
+      "effective_to": null,
+      "review_date": "2026-12-31"
+    }
+  ]
+}
