@@ -5,9 +5,9 @@ import typing as t
 
 from decider.steps.trees.schema import Rule, Tree
 
-# Compile time grows with the square of the outputs one call returns (numba and LLVM both), and a
-# tree of 32 outputs compiles once for every other tree of the same output types.
-MAX_OUTPUTS = 32
+# Compile time grows with the square of the outputs one call returns (numba and LLVM both), while every
+# extra part costs about 15-20 us a request: 128 keeps a request within a few percent of an unsplit tree.
+MAX_OUTPUTS = 128
 
 
 def split(tree: Tree, extra: int, limit: int | None = MAX_OUTPUTS) -> list[Tree]:
