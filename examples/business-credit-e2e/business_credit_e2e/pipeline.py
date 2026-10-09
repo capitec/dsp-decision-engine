@@ -37,10 +37,12 @@ def master_scale_version(risk_grade_cell_id: str) -> str:
     return risk_grade_cell_id.split("@", 1)[1].split("#", 1)[0]
 
 
-def build():
+def build(dscr_versions=None, dscr_terms=None):
+    """The documents are `configs/<version>/dscr_versions.json` and `dscr_terms.json`; they default to the shipped ones."""
+    shipped_versions, shipped_terms = covenant.load_covenant_documents()
     return flow(
         build_assessment(), master_scale_version, new_facility_instalment,
-        covenant.covenant_definition_version, covenant.covenant_terms, covenant.covenant_instance_id,
+        dscr_versions or shipped_versions, dscr_terms or shipped_terms, covenant.covenant_instance_id,
         covenant.dscr_existing_debt_service, covenant.dscr_total_debt_service, covenant.measured_dscr,
         covenant.dscr_headroom_ratio, covenant.dscr_breach_class_code,
         name="business_credit_e2e",
