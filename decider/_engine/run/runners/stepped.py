@@ -19,7 +19,7 @@ from decider._engine.run.params import RunParams
 from decider._engine.run.representations import span_objects, spans
 from decider._engine.run.runners.base import Checkpoint
 from decider._engine.run.runners.interpreted import InterpretedRunner, _absent, _Context, _encoded, _note, _Scope
-from decider._engine.run.state import State, fill_missing
+from decider._engine.run.state import State, all_set, fill_missing
 from decider._engine.trace.envelope import Kind
 from decider.exceptions import FallbackWarning, NotIntegralError
 from decider.ops.nested import struct_item
@@ -174,7 +174,7 @@ class SteppedRunner(InterpretedRunner):
             elif not python and want is not None and x.dtype != want and np.can_cast(x.dtype, want):
                 # An int column read as `float` (another step reads it as `int`): a kernel types what it gets.
                 x = x.astype(want)
-            if mask is not None and not mask.all():
+            if mask is not None and not all_set(mask):
                 if decl.null_policy is NullPolicy.REQUIRED:
                     raise MissingInputError(decl.name, path, int((~mask).sum()), len(mask), absent=_absent(state, v))
                 if not filled and _fills(decl, mask, kind):
@@ -300,11 +300,11 @@ def _records(kind: Any, python: bool) -> bool:
 def _null_struct(kind: Any, mask: np.ndarray | None) -> bool:
     # A null struct belongs to the null policy, which knows whether the column is absent entirely;
     # the record builder would only report it as a null field.
-    return type(kind) is tuple and kind[0] == "struct" and mask is not None and not mask.all()
+    return type(kind) is tuple and kind[0] == "struct" and mask is not None and not all_set(mask)
 
 
 def _fills(decl: Input, mask: np.ndarray | None, kind: Any) -> bool:
-    if decl.null_policy is not NullPolicy.MISSING_AS or mask is None or mask.all():
+    if decl.null_policy is not NullPolicy.MISSING_AS or mask is None or all_set(mask):
         return False
     # A null `Columnar[...]` row already reads as a row with no items, which is what an empty fill asks for.
     return not rows_needs_no_fill(decl, type(kind) is tuple and kind[0] in ("rows", "ragged"))
