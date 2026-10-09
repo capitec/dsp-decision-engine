@@ -6,7 +6,7 @@ import pytest
 
 from decider import flow, step
 from decider._engine import Engine
-from decider.exceptions import WiringError
+from decider.exceptions import NotIntegralError, WiringError
 from decider.steps.tables import DecisionTableConfig
 
 BIG = 2**60
@@ -180,3 +180,25 @@ def test_a_float_variable_beside_an_int_variable_keeps_both_lanes(run):
         outputs=["pts"], default=[0])
     frame = pl.DataFrame({"code": [BIG, BIG, BIG + 1], "x": [1.0, 2.0, 1.0]})
     assert run(table, frame)["pts"].to_list() == [1, 2, 0]
+
+
+@pytest.mark.parametrize("mode", ["interpreted", "stepped", "fused"])
+def test_a_fractional_float_into_an_int_variable_is_refused_and_a_whole_one_matches(mode):
+    exe = Engine().bind(by_code(EQ_ROWS), mode=mode)
+    with pytest.raises(NotIntegralError, match="input 'code'"):
+        exe.score({"code": 7.5})
+    with pytest.raises(NotIntegralError, match=r"input 'code' \(row 1\)"):
+        exe.run(pl.DataFrame({"code": [7.0, 7.5]}))
+    assert exe.score({"code": 7.0})["pts"] == 1
+
+
+@pytest.mark.parametrize("mode", ["interpreted", "stepped", "fused"])
+def test_an_int_step_writing_a_fraction_into_an_int_variable_is_refused_naming_the_step(mode):
+    @step(output="code")
+    def halved(raw: float) -> int:
+        return raw / 2
+
+    exe = Engine().bind(flow(halved, by_code(EQ_ROWS), name="p"), mode=mode)
+    assert exe.score({"raw": 14.0})["pts"] == 1
+    with pytest.raises(NotIntegralError, match="p/halved"):
+        exe.score({"raw": 15.0})

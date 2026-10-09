@@ -9,10 +9,11 @@ import pytest
 from pydantic import TypeAdapter
 
 from decider import ConfigurableStep, CustomFunction, FallbackWarning, Value, allow_fallback, flow, missing_as, step
-from decider.exceptions import MissingInputError
+from decider.exceptions import MissingInputError, NotIntegralError
 from decider.lab import diff
 from decider.lab.testing import assert_equivalent
 from decider.steps import StepRef
+from decider.steps.tables import DecisionTableConfig
 
 
 class Cap(CustomFunction):
@@ -200,3 +201,25 @@ def test_a_field_that_is_neither_a_column_nor_a_value_is_rejected_with_the_alter
             @staticmethod
             def impl(rows: float) -> float:
                 return rows
+
+
+class Channel(CustomFunction):
+    type: t.Literal["custom_channel"] = "custom_channel"
+    raw: str
+    offset: Value[int] = 0
+
+    @staticmethod
+    def impl(raw: int, offset: int) -> int:
+        return raw + offset
+
+
+def test_a_custom_function_writing_an_int_feeds_a_declared_int_table_exactly():
+    table = DecisionTableConfig(
+        name="by_channel", columns={"code": "Int64", "pts": "Int64"}, variable_types={"channel": "int"},
+        rows=[{"code": 2**60, "pts": 5}], expression={"type": "eq", "variable": "channel", "value_column": "code"},
+        outputs=["pts"], default=[0])
+    pipeline = flow(Channel(name="channel", raw="raw", offset=2**60), table, name="p")
+    out = assert_equivalent(pipeline, pl.DataFrame({"raw": [0, 1]}))
+    assert out["pts"].to_list() == [5, 0]
+    with pytest.raises(NotIntegralError, match="input 'raw'"):
+        pipeline.compile("fused").score({"raw": 0.5})
