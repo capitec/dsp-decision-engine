@@ -131,6 +131,7 @@ def _function(w: _Walk, fn: Any) -> None:
     _code(w.h, code)
     names = _names(code)
     where = f"{code.co_filename}:{code.co_firstlineno}"
+    outer = w.where  # a function reached through a container must not rename what the container holds next
     for name, cell in zip(code.co_freevars, fn.__closure__ or ()):
         try:
             contents = cell.cell_contents
@@ -144,6 +145,7 @@ def _function(w: _Walk, fn: Any) -> None:
             w.h.update(name.encode())
             w.where = (name, f"module global in {where}")
             _value(w, fn.__globals__[name], names)
+    w.where = outer
 
 
 @functools.lru_cache(maxsize=None)
@@ -155,11 +157,10 @@ def _is_library(filename: str) -> bool:
 
 
 @functools.lru_cache(maxsize=None)
-def _version(module: str) -> str:
-    top = module.partition(".")[0]
+def _version(module: str | None) -> str:
     try:
-        return importlib.metadata.version(top)
-    except importlib.metadata.PackageNotFoundError:  # the standard library has no distribution
+        return importlib.metadata.version(str(module).partition(".")[0])
+    except Exception:  # the standard library has no distribution, and a broken one is no reason to fail a build
         return sys.version.partition(" ")[0]
 
 
