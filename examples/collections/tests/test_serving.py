@@ -3,12 +3,11 @@ import json
 from pathlib import Path
 
 import pytest
-from decider import DecisionTableConfig, Engine
+from decider import Engine
 from decider.config import JsonFileStore
 from decider.serving import RequestHandler
 
 from collections_treatment import vocab as v
-from collections_treatment.pipeline import build
 
 ROOT = Path(__file__).resolve().parents[1]
 FIGURES = ("arrears_bucket_code", "collections_score", "collections_band_code", "roll_probability",
@@ -53,7 +52,7 @@ def test_a_request_without_a_proposed_instalment_is_served_with_no_arrangement_v
     assert (out["arrangement_sustainable"], out["arrangement_failure_detail"]) == (False, "no_proposal")
 
 
-def test_every_step_that_runs_in_python_says_so_on_purpose(matrix_document):
-    executable = Engine(strict_compile=True).bind(build(DecisionTableConfig.load(matrix_document)), mode="fused")
+def test_every_step_that_runs_in_python_says_so_on_purpose(matrix_document, build_pipeline):
+    executable = Engine(strict_compile=True).bind(build_pipeline(matrix_document), mode="fused")
     assert executable.fallbacks()
     assert all(reason.startswith("@allow_fallback") for reason in executable.fallbacks().values())

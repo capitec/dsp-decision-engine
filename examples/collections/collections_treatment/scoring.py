@@ -5,48 +5,15 @@ probability and one band edge, and the unadjusted score, probability and band st
 """
 from __future__ import annotations
 
-from datetime import date
-
-from decider import DecisionTableConfig, ParamTable, ScorecardConfig, allow_fallback, missing_as, param, param_table, step
+from decider import DecisionTableConfig, ParamTable, ScorecardConfig, allow_fallback, param, param_table, step
 
 from credit_core import calibration
-from credit_core.adjustments import Adjustment, AdjustmentEffect
 from credit_core.evidence import cell_id
-
-from collections_treatment import overlays
 
 BAND_VERSION = "collections-band-2026.09"
 CALIBRATION_VERSION = "collections-cal-2026.09"
 CONTACT_BAND_VERSION = "contact-band-2026.09"
 RECOVERY_CURVE_VERSION = "recovery-2026.09"
-ADJUSTMENT_SET_ID = "AS-COLL-SCORE-2026.09"
-
-ADJUSTMENTS = overlays.register([
-    Adjustment(
-        adjustment_id="ADJ-COLL-SCORE-001", kind="score_shift", target="collections_score",
-        effect=AdjustmentEffect("add", -22.0), scope={"agency_placed_12m": True}, stack_position=1,
-        owner="Collections Strategy", approval_reference="MRV-2026-014", tighten_only=True,
-        rationale="Accounts placed with an agency in the last 12 months score optimistic on the base curve",
-        effective_from=date(2026, 1, 1), effective_to=date(2026, 12, 31), review_date=date(2026, 10, 1)),
-    Adjustment(
-        adjustment_id="ADJ-COLL-SCORE-002", kind="odds_multiplier", target="roll_probability",
-        effect=AdjustmentEffect("multiply", 1.28), scope={"product_family_code": 1}, stack_position=2,
-        owner="Model Risk and Validation", approval_reference="MRV-2026-019", tighten_only=True,
-        rationale="Deteriorating quarter on the unsecured book",
-        effective_from=date(2026, 6, 1), effective_to=date(2027, 3, 1), review_date=date(2026, 12, 1)),
-    Adjustment(
-        adjustment_id="ADJ-COLL-SCORE-003", kind="scaling_change", target="calibration_scale",
-        effect=AdjustmentEffect("multiply", 23.0 / 20.0), scope={"product_family_code": 2}, stack_position=1,
-        owner="Model team", approval_reference="MRV-2026-021",
-        rationale="Points-to-double-the-odds moved from 20 to 23 for the revolving segment",
-        effective_from=date(2026, 3, 1), effective_to=date(2027, 1, 1), review_date=date(2026, 12, 1)),
-    Adjustment(
-        adjustment_id="ADJ-COLL-SCORE-004", kind="band_boundary_shift", target="collections_band_boundary",
-        effect=AdjustmentEffect("add", 0.03), scope={}, stack_position=1,
-        owner="Collections Strategy", approval_reference="CCF-2026-028",
-        rationale="Move the band 3/4 edge up by 0.03 of roll probability",
-        effective_from=date(2026, 5, 1), effective_to=date(2026, 11, 1), review_date=date(2026, 10, 1)),
-])
 
 _BUCKET_POINTS = [40, 20, 0, -20, -35, -50, -60, -65]
 
@@ -130,43 +97,14 @@ def build_recovery_curve_table() -> DecisionTableConfig:
     }).relabel(writes={"cell_id": "recovery_curve_cell_id"})
 
 
-def _stack(target: str, base: float, provenance: dict, decision_date: date, enabled: bool) -> tuple[float, list[str]]:
-    result = ADJUSTMENTS.apply_stack(target, base, provenance, decision_date, ADJUSTMENT_SET_ID, stack_enabled=enabled)
-    return result.adjusted_value, list(result.adjustments_applied)
+def band_edge_origin() -> float:
+    """The band 3/4 edge moves from zero, so the stack has a base to add to."""
+    return 0.0
 
 
-@allow_fallback
-def score_shift(
-    collections_score_unadjusted: float, decision_date: date, agency_placed_12m: bool = missing_as(False),
-    adjustment_stack_enabled: bool = param(True),
-) -> tuple[float, list[str]]:
-    return _stack("collections_score", collections_score_unadjusted, {"agency_placed_12m": bool(agency_placed_12m)},
-                  decision_date, adjustment_stack_enabled)
-
-
-@allow_fallback
-def scaling_change(
-    scale: float, decision_date: date, product_family_code: float = missing_as(-1.0),
-    adjustment_stack_enabled: bool = param(True),
-) -> tuple[float, list[str]]:
-    return _stack("calibration_scale", scale, {"product_family_code": product_family_code}, decision_date,
-                  adjustment_stack_enabled)
-
-
-@allow_fallback
-def odds_multiplier(
-    roll_probability_before_overlay: float, decision_date: date, product_family_code: float = missing_as(-1.0),
-    adjustment_stack_enabled: bool = param(True),
-) -> tuple[float, list[str]]:
-    value, applied = _stack("roll_probability", roll_probability_before_overlay,
-                            {"product_family_code": product_family_code}, decision_date, adjustment_stack_enabled)
-    return min(max(value, 0.0), 1.0), applied
-
-
-@allow_fallback
-def band_boundary_shift(decision_date: date, adjustment_stack_enabled: bool = param(True)) -> tuple[float, list[str]]:
-    """How far the band 3/4 edge has moved, as a probability."""
-    return _stack("collections_band_boundary", 0.0, {}, decision_date, adjustment_stack_enabled)
+def clamp_probability(roll_probability_overlaid: float) -> float:
+    """`roll_probability`: the overlaid probability held between 0 and 1."""
+    return min(max(roll_probability_overlaid, 0.0), 1.0)
 
 
 BAND_EDGES = param_table({"upper": float}, default=[{"upper": e} for e in (0.10, 0.25, 0.45, 0.65, 0.85)],
@@ -202,10 +140,8 @@ def recovery_and_cost(
     return round(outstanding_balance * recovery_rate, 2), round(cost_per_treatment * expected_treatments, 2)
 
 
-score_shift_step = step(score_shift, outputs=("collections_score", "score_shift_adjustments_applied"))
-scaling_change_step = step(scaling_change, outputs=("adjusted_scale", "scaling_change_adjustments_applied"))
-odds_multiplier_step = step(odds_multiplier, outputs=("roll_probability", "odds_multiplier_adjustments_applied"))
-band_boundary_shift_step = step(band_boundary_shift, outputs=("band_edge_shift", "band_boundary_shift_adjustments_applied"))
+band_edge_origin_step = step(band_edge_origin)
+clamp_probability_step = step(clamp_probability, output="roll_probability")
 collections_bands_step = step(collections_bands, outputs=("collections_band_code", "collections_band_code_unadjusted"))
 recovery_and_cost_step = step(recovery_and_cost, outputs=("recovery_estimate", "cost_to_collect"))
 
