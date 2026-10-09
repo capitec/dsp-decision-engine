@@ -202,7 +202,7 @@ class _Encoder:
             same = [n for n, d in self.params.items() if d.annotation is TYPES[kind]]
             return -1 - same.index(value.param)
         if kind == "int":
-            if isinstance(value, bool) or float(value) != int(value):
+            if isinstance(value, bool) or int(value) != value:
                 raise ValueError(f"{where}: threshold {value!r} is not a whole number, but the feature is an int")
             value = int(value)
         consts = self.thr[kind]

@@ -209,8 +209,8 @@ tests/                  behaviour tests; reference.py prices an offer by hand to
   A campaign's uplift ceiling is an absolute R200 000. A fraud refer suppresses consolidation and refers the
   outcome, with an indicative offer attached. A grade worse than the caps allow is declined by routing.
 - **One type per input column.** `employment_type_code`, `product_code` and `segment_code` are `float` wherever they are
-  read, as `credit_core` requires. `channel_code` is read as `int` by the overlay step and as a number by a table, so
-  [affordability.py](retail_credit/affordability.py) converts it for the table (marked `# workaround`).
+  read, as `credit_core` requires. `channel_code` is an `int` everywhere: the buffer table declares it so with
+  `variable_types` ([affordability.py](retail_credit/affordability.py)).
 - **What runs in Python.** Steps that read dates, lists of dicts or strings, or build lists and strings, are Python on
   purpose and marked `@allow_fallback`; the tables, the scorecard, the capacity arithmetic and the whole search compile.
 - **Synthetic data.** Every table, threshold, rate and cap here is invented for illustration.
