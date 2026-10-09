@@ -1,7 +1,6 @@
 """One decision explained three ways, from its evidence alone."""
 from __future__ import annotations
 
-import pkgutil
 from dataclasses import dataclass
 
 from governance.evidence import Evidence
@@ -15,9 +14,8 @@ class Explanation:
     detail: dict
 
 
-def _describe(flow, code) -> str:
-    # workaround: ReasonCodeRegistry has no public lookup from a code to its wording.
-    entry = pkgutil.resolve_name(flow.registry)._by_code.get(code)
+def _describe(flow, version, code) -> str:
+    entry = flow.reason_codes(version).get(code)
     return entry.description if entry else str(code)
 
 
@@ -32,12 +30,12 @@ def explain(evidence: Evidence, audience: str) -> Explanation:
     """
     flow, r = FLOWS[evidence.flow], evidence.response
     codes = r.get(flow.reasons) or []
-    primary = _describe(flow, r.get(flow.primary)) if r.get(flow.primary) else None
+    primary = _describe(flow, evidence.config_version, r.get(flow.primary)) if r.get(flow.primary) else None
     if audience == "consultant":
         if r.get("client_wording_key"):  # a fraud decline must not teach the rule that fired
             return Explanation(audience, f"The client is shown {r['client_wording_key']} and nothing else.", {})
         return Explanation(audience, primary or f"No reason applies (outcome {r[flow.outcome]}).", {})
-    reasons = [{"code": c, "description": _describe(flow, c)} for c in codes]
+    reasons = [{"code": c, "description": _describe(flow, evidence.config_version, c)} for c in codes]
     if audience == "analyst":
         pairs = {k[:-11]: {"adjusted": r[k[:-11]], "unadjusted": r[k]} for k in r
                  if k.endswith("_unadjusted") and k[:-11] in r}

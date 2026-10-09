@@ -11,6 +11,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from credit_core.adjustments import Overlay
+from credit_core.reason_codes import Code
+from decider import ConfigurableStep
 from decider.config import JsonFileStore
 
 from governance.replayer import Replayer
@@ -40,8 +43,7 @@ class Flow:
     outcome: str                      # the response field that is "the decision"
     reasons: str                      # the field holding every reason code, most severe first
     primary: str
-    registry: str                     # the flow's ReasonCodeRegistry
-    registers: tuple[str, ...]        # its overlay registers
+    overlay_documents: tuple[str, ...]  # the config documents that hold its overlays, in the order they are listed
     detail: tuple[str, ...]           # the fields an analyst reads to see how it was decided
     rules: Callable[[dict], set[str]]  # every rule id, from the config documents
     fired: Callable[[dict], set[str]]  # the rule ids one response says bound
@@ -52,11 +54,35 @@ class Flow:
     def store(self) -> JsonFileStore:
         return JsonFileStore(basepath=str(self.project() / "configs"))
 
+    def documents(self, version: str | None = None) -> dict:
+        """The config documents of `version` (default: latest) as stored; treat them as read-only.
+
+            LOAN.documents()["reason_codes"]["version"]
+        """
+        store = self.store()
+        return _documents(store.basepath, str(version or store.latest_version()))
+
+    def overlays(self, version: str | None = None) -> list[Overlay]:
+        """Every overlay in the overlay documents of `version`, in document order.
+
+            [o.adjustment_id for o in FRAUD.overlays()]
+        """
+        loaded = (ConfigurableStep.load(self.documents(version)[name]) for name in self.overlay_documents)
+        return [o for doc in loaded for o in getattr(doc, "stack", doc).adjustments]
+
+    def reason_codes(self, version: str | None = None) -> dict[int, Code]:
+        """The reason codes of `version` (default: latest) by code.
+
+            LOAN.reason_codes()[5402].description
+        """
+        store = self.store()
+        return _reason_codes(store.basepath, str(version or store.latest_version()))
+
     def replayer(self, version: str | None = None, mode: str = "fused", store: JsonFileStore | None = None,
                  params: dict | None = None) -> Replayer:
         """The flow staged at `version` (default: latest) in `store` (default: its own configs).
 
-            fraud.replayer("0.1.0").served(request)
+            fraud.replayer().served(request)
         """
         store = store or self.store()
         handler = copy.copy(_staged(self.entry, store.basepath, str(version or store.latest_version()), mode,
@@ -77,8 +103,17 @@ class Flow:
         return self.replayer(store=scratch, mode=mode)
 
     def pipeline(self, version: str | None = None):
-        store = self.store()
-        return self.replayer(version).pipeline_fn(store.read(version or store.latest_version()).config)
+        return self.replayer(version).pipeline_fn(self.documents(version))
+
+
+@functools.cache
+def _documents(basepath: str, version: str) -> dict:
+    return JsonFileStore(basepath=basepath).read(version).config
+
+
+@functools.cache
+def _reason_codes(basepath: str, version: str) -> dict[int, Code]:
+    return {c.code: c for c in ConfigurableStep.load(_documents(basepath, version)["reason_codes"]).codes}
 
 
 @functools.cache
@@ -91,23 +126,22 @@ def _staged(entry: str, basepath: str, version: str, mode: str, sample: str) -> 
 
 FRAUD = Flow(
     "fraud", "fraud_interdiction.pipeline:build", "action_code", "decline_reason_codes", "primary_reason_code",
-    "fraud_interdiction.reasons:REGISTRY", ("fraud_interdiction.overlays:REGISTER",),
+    ("amount_overlays", "action_escalation"),
     ("fired_rule_ids", "unevaluable_rule_ids", "fired_on_overlay_ids", "counterfactual_fired_rule_ids",
      "counterfactual_action_code", "action_source_rule_id", "hard_block_code", "degraded_mode_code"),
     _fraud_rules, lambda r: set(r["fired_rule_ids"]))
 
 LOAN = Flow(
     "loan", "loan_granting.pipeline:build", "outcome_code", "decline_reason_codes", "primary_reason_code",
-    "loan_granting.reasons:REGISTRY", ("loan_granting.scoring:SCORE_ADJUSTMENTS",),
+    ("score_adjustments", "calibration_scale_adjustments", "probability_of_default_adjustments",
+     "probability_of_default_for_grading_adjustments"),
     ("eligibility_gate_verdicts", "amount_cap", "amount_cap_binding_rule_id", "amount_cap_chain", "score",
      "risk_grade", "max_affordable_instalment", "suppressed_terms"),
     _loan_rules, _loan_fired)
 
 BUSINESS = Flow(
     "business", "business_nested.pipeline:build", "outcome_code", "decline_reason_codes", "primary_reason_code",
-    "business_nested.outcome:REASON_REGISTRY",
-    ("business_nested.events:THRESHOLD_OVERLAYS", "business_nested.scoring:ENTITY_OVERLAYS",
-     "business_nested.grade:BUSINESS_OVERLAYS"),
+    ("event_threshold_overlays", "entity_score_adjustments", "business_pd_adjustments"),
     ("attributing_entity_id", "attributing_event_ids", "attributing_rule_id", "risk_grade", "resolved_entity_count"),
     _business_rules, lambda r: {e["adverse_binding_rule"] for e in r["assessed_entities"]})
 

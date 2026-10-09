@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import copy
-import pkgutil
 from datetime import date
 
 from governance.evidence import Evidence
@@ -11,17 +10,11 @@ from governance.flows import FLOWS, Flow
 SWITCHES = ("adjustment_stack_enabled", "event_overlays_enabled")
 
 
-def _adjustments(flow: Flow):
-    for path in flow.registers:
-        # workaround: AdjustmentRegister has no public iterator; `_all` is its list.
-        yield from pkgutil.resolve_name(path)._all
-
-
 def _rows(flows, keep=lambda a: True) -> list[dict]:
     return [{"flow": code, "adjustment_id": a.adjustment_id, "kind": a.kind, "target": a.target, "owner": a.owner,
              "approval_reference": a.approval_reference, "effective_from": a.effective_from,
              "effective_to": a.effective_to, "review_date": a.review_date, "tighten_only": a.tighten_only}
-            for code in flows for a in _adjustments(FLOWS[code]) if keep(a)]
+            for code in flows for a in FLOWS[code].overlays() if keep(a)]
 
 
 def register(flows=FLOWS) -> list[dict]:
