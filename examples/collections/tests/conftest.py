@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from decider import DecisionTableConfig
+from decider import ConfigurableStep, DecisionTableConfig
 
 from collections_treatment.pipeline import build
 
@@ -31,9 +31,25 @@ def matrix_document():
     return json.loads((ROOT / "configs" / "0.1.0" / "treatment_matrix.json").read_text())
 
 
+STACKS = ("score_shift", "scaling_change", "odds_multiplier", "band_boundary_shift", "intensity_dial",
+          "treatment_suppression")
+
+
 @pytest.fixture(scope="session")
-def pipeline(matrix_document):
-    return build(DecisionTableConfig.load(matrix_document)).compile("interpreted")
+def stacks():
+    """The shipped overlay stacks, loaded as `decider build` loads them."""
+    return {name: ConfigurableStep.load(str(ROOT / "configs" / "0.1.0" / f"{name}.json")) for name in STACKS}
+
+
+@pytest.fixture(scope="session")
+def build_pipeline(stacks):
+    """`build_pipeline(matrix_document)`: the pipeline with the shipped overlay stacks."""
+    return lambda document: build(DecisionTableConfig.load(document), **stacks)
+
+
+@pytest.fixture(scope="session")
+def pipeline(matrix_document, build_pipeline):
+    return build_pipeline(matrix_document).compile("interpreted")
 
 
 @pytest.fixture(scope="session")

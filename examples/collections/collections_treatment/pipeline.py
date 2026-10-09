@@ -2,13 +2,14 @@
 
 Stages, in dependency order: account state, suspensions, score and bands, the matrix and its overlays, the
 suspension check on the overlaid recommendation, the escalation path, the arrangement test and capacity.
-`build` receives the matrix document `configs/<version>/treatment_matrix.json`.
+`build` receives the matrix document and the six overlay stacks, one document each in `configs/<version>/`.
 """
 from __future__ import annotations
 
 from decider import DecisionTableConfig, dag
 
 from collections_treatment import arrangements, capacity, matrix, path, scoring, state, suspensions
+from collections_treatment.overlays import OverlayStack, in_dag
 
 EMIT = (
     "account_id", "decision_date",
@@ -39,17 +40,26 @@ EMIT = (
 )
 
 
-def build(treatment_matrix: DecisionTableConfig):
+def build(
+    treatment_matrix: DecisionTableConfig, score_shift: OverlayStack, scaling_change: OverlayStack,
+    odds_multiplier: OverlayStack, band_boundary_shift: OverlayStack, intensity_dial: OverlayStack,
+    treatment_suppression: OverlayStack,
+):
     return dag(
         state.arrears_bucket_code, state.arrears_to_balance_ratio, state.build_balance_band_table(),
         scoring.build_contact_band_table(),
         suspensions.evaluate_suspensions_step, suspensions.pre_prescription_flag,
-        scoring.build_scorecard(), scoring.score_shift_step, scoring.build_calibration_table(),
-        scoring.scaling_change_step, scoring.roll_probability_unadjusted, scoring.roll_probability_before_overlay,
-        scoring.odds_multiplier_step, scoring.band_boundary_shift_step, scoring.collections_bands_step,
+        scoring.build_scorecard(), in_dag(score_shift, "score_shift_adjustments_applied"),
+        scoring.build_calibration_table(),
+        in_dag(scaling_change, "scaling_change_adjustments_applied"), scoring.roll_probability_unadjusted,
+        scoring.roll_probability_before_overlay, in_dag(odds_multiplier, "odds_multiplier_adjustments_applied"),
+        scoring.clamp_probability_step, scoring.band_edge_origin_step,
+        in_dag(band_boundary_shift, "band_boundary_shift_adjustments_applied"), scoring.collections_bands_step,
         scoring.collections_band_cell_id, scoring.build_recovery_curve_table(), scoring.recovery_and_cost_step,
-        matrix.lookup(treatment_matrix), matrix.matrix_cell_id, matrix.intensity_dial_step,
-        matrix.treatment_suppression_step, suspensions.treatment_after_suspensions_step,
+        matrix.lookup(treatment_matrix), matrix.matrix_cell_id,
+        in_dag(intensity_dial, "intensity_dial_adjustments_applied"), matrix.treatment_intensity_step,
+        in_dag(treatment_suppression, "suppression_adjustments_applied"), matrix.overlaid_treatment_code_step,
+        suspensions.treatment_after_suspensions_step,
         path.resolve_path_position_step, path.resolve_path_position_as_at_now, path.path_floored_intensity,
         path.interval_and_cap_check_step,
         arrangements.assessment_unit(), arrangements.arrangement_sustainability_step,

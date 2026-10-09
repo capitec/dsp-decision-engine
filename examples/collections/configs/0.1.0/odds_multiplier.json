@@ -1,0 +1,30 @@
+{
+  "type": "collections_overlay_stack",
+  "name": "odds_multiplier",
+  "target": "roll_probability",
+  "set_id": "AS-COLL-SCORE-2026.09",
+  "base_field": "roll_probability_before_overlay",
+  "adjusted_output": "roll_probability_overlaid",
+  "adjustments": [
+    {
+      "adjustment_id": "ADJ-COLL-SCORE-002",
+      "kind": "odds_multiplier",
+      "target": "roll_probability",
+      "effect": {
+        "op": "multiply",
+        "value": 1.28
+      },
+      "scope": {
+        "product_family_code": 1
+      },
+      "stack_position": 2,
+      "owner": "Model Risk and Validation",
+      "approval_reference": "MRV-2026-019",
+      "rationale": "Deteriorating quarter on the unsecured book",
+      "effective_from": "2026-06-01",
+      "effective_to": "2027-03-01",
+      "review_date": "2026-12-01",
+      "tighten_only": true
+    }
+  ]
+}

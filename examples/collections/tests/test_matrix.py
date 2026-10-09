@@ -2,10 +2,10 @@ import copy
 from datetime import date
 
 import pytest
-from decider import DecisionTableConfig, Engine, flow
+from decider import Engine, dag
 
 from collections_treatment import matrix, vocab as v
-from collections_treatment.pipeline import build
+from collections_treatment.overlays import in_dag
 
 KEYS = ("bucket", "band", "balance_band", "contact_band", "product_family")
 
@@ -37,11 +37,11 @@ def test_every_cell_holds_a_known_treatment_and_in_range_modifiers(matrix_docume
         assert 0 <= row["cooling_off_days"] <= 21
 
 
-def test_a_new_matrix_document_changes_the_decision_with_no_code_change(matrix_document, sample, parse, params):
+def test_a_new_matrix_document_changes_the_decision_with_no_code_change(matrix_document, build_pipeline, sample, parse, params):
     emails = copy.deepcopy(matrix_document)
     for row in emails["rows"]:
         row["treatment_code"] = v.AUTOMATED_EMAIL
-    pipeline = build(DecisionTableConfig.load(emails)).compile("interpreted")
+    pipeline = build_pipeline(emails).compile("interpreted")
     out = pipeline.score(parse(sample | {"consent_withdrawn_channels": []}), params)
     assert out["matrix_treatment_code"] == out["treatment_code"] == v.AUTOMATED_EMAIL
 
@@ -50,24 +50,27 @@ def test_the_cell_not_in_the_matrix_falls_back_to_no_action(decide):
     assert decide(product_family_code=9)["matrix_treatment_code"] == v.NO_ACTION
 
 
-def dial(on, bucket=3, intensity=2, enabled=True):
-    return Engine().bind(matrix.intensity_dial_step).score(
+@pytest.fixture
+def dial(stacks):
+    unit = dag(in_dag(stacks["intensity_dial"], "intensity_dial_adjustments_applied"), matrix.treatment_intensity_step,
+               name="dial")
+    return lambda on, bucket=3, intensity=2, enabled=True: Engine().bind(unit).score(
         {"matrix_treatment_intensity": intensity, "decision_date": on, "arrears_bucket_code": bucket},
-        {"intensity_dial": {"adjustment_stack_enabled": enabled}})
+        {"dial": {"intensity_dial": {"adjustment_stack_enabled": enabled}}})
 
 
-def test_the_intensity_dial_escalates_bucket_three_by_one_level_inside_its_window():
+def test_the_intensity_dial_escalates_bucket_three_by_one_level_inside_its_window(dial):
     out = dial(date(2026, 8, 15))
     assert out["treatment_intensity"] == 3 and out["intensity_dial_adjustments_applied"] == ["ADJ-COLL-MATRIX-001"]
 
 
-def test_the_intensity_dial_leaves_other_buckets_and_other_dates_alone():
+def test_the_intensity_dial_leaves_other_buckets_and_other_dates_alone(dial):
     assert dial(date(2026, 8, 15), bucket=4)["treatment_intensity"] == 2
     assert dial(date(2026, 9, 24))["treatment_intensity"] == 2  # window ended 12 September
     assert dial(date(2026, 8, 15), enabled=False)["treatment_intensity"] == 2
 
 
-def test_the_intensity_dial_never_exceeds_the_top_level():
+def test_the_intensity_dial_never_exceeds_the_top_level(dial):
     assert dial(date(2026, 8, 15), intensity=5)["treatment_intensity"] == 5
 
 
