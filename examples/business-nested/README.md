@@ -86,7 +86,8 @@ The rules, in the order the pipeline applies them:
 | The same child flow run on one item alone or on every item, so a partial re-assessment cannot drift from the full run | [counterfactual.py](business_nested/counterfactual.py) |
 | `DecisionTableConfig` keyed on two columns (event type by criticality), and a banded ladder with open edges and a default | [events.py](business_nested/events.py), [scoring.py](business_nested/scoring.py) (`grade_lookup`), [pricing.py](business_nested/pricing.py) |
 | `ScorecardConfig` with bin edges that are params | [scoring.py](business_nested/scoring.py), [financial.py](business_nested/financial.py) |
-| Tighten-only overlays from `credit_core` at three levels: on thresholds before classification, on an entity's score, on the business probability | [events.py](business_nested/events.py), [scoring.py](business_nested/scoring.py), [grade.py](business_nested/grade.py) |
+| Tighten-only overlays at three levels, each a config document: `AdjustmentStack` steps from `credit_core` on an entity's score and on the business probability, and an `OverlaidThresholds` step type of this package on the event thresholds (its scope fields are beyond the four a stack matches) | [events.py](business_nested/events.py), [scoring.py](business_nested/scoring.py), [grade.py](business_nested/grade.py), [`configs/0.1.0`](configs/0.1.0) |
+| A `ConfigurableStep` type of this package whose fields are the data, and a release check that sees every overlay and reason code change | [events.py](business_nested/events.py) (`OverlaidThresholds`), [tests/test_release_checks.py](tests/test_release_checks.py) |
 | One step run twice on other columns (`.relabel`, `.named`): the severity against base and overlaid thresholds, the grade of each probability | [events.py](business_nested/events.py), [scoring.py](business_nested/scoring.py), [blend.py](business_nested/blend.py) |
 | An example embedded whole and run for some rows only: `branch` around the affordability example, its columns relabelled | [sole_proprietor.py](business_nested/sole_proprietor.py) |
 | `param` for every policy number, nested under the `each` that runs the step; a generated params document | [rollup.py](business_nested/rollup.py), [blend.py](business_nested/blend.py), [`configs/0.1.0/params.json`](configs/0.1.0/params.json) |
@@ -201,7 +202,39 @@ Tests (run from the repository root, with `PYTHONPATH` set as above):
 uv run pytest examples/business-nested -q
 ```
 
-To regenerate `configs/0.1.0/params.json`: `uv run python scripts/generate_configs.py`.
+To regenerate `configs/0.1.0` (the four documents below and the params document): `uv run python scripts/generate_configs.py`.
+
+## The documents
+
+`build(entity_score_adjustments, business_pd_adjustments, event_threshold_overlays, reason_codes)` receives one document per argument, each a file in
+`configs/<version>/` that `decider build` and `decider serve` pass by name. Left out, `build()` loads the ones in `configs/0.1.0`, so the projects that embed this
+decision (`business-credit-e2e`) call it without arguments. A change to a document is a new config version and `decider.lab.diff.structure` reports it:
+the overlays and the reason codes are fields of a step, not objects a step closes over. The governance fields (`owner`, `approval_reference`,
+`rationale`, `review_date`) are for people and the ageing report; the diff ignores them. Everything else is behaviour.
+
+| Document | Type | What it holds |
+|---|---|---|
+| [`event_threshold_overlays.json`](configs/0.1.0/event_threshold_overlays.json) | `event_threshold_overlays` | overlays on the event `material_threshold` and `disqualifying_threshold`, scoped on `sector_code`, `criticality_class` and `event_type_code` |
+| [`entity_score_adjustments.json`](configs/0.1.0/entity_score_adjustments.json) | `adjustment_stack` | overlays on `entity_score` |
+| [`business_pd_adjustments.json`](configs/0.1.0/business_pd_adjustments.json) | `adjustment_stack` | overlays on the business `probability_of_default` |
+| [`reason_codes.json`](configs/0.1.0/reason_codes.json) | `reason_codes` | the outcome reasons and their severity |
+
+The construction overlay, which halves the judgment materiality threshold for sector 412 until the end of 2026:
+
+```json
+{"type": "event_threshold_overlays", "set_id": "AS-05-EVT-2026.09", "adjustments": [
+  {"adjustment_id": "ADJ-05-014", "kind": "cap_adjustment", "target": "material_threshold",
+   "effect": {"op": "multiply", "value": 0.5}, "scope": {"sector_code": 412, "event_type_code": 1}, "stack_position": 1,
+   "owner": "Business Credit Risk Policy", "approval_reference": "CRC-2026-071",
+   "rationale": "Halve judgment materiality thresholds for construction, two quarters",
+   "effective_from": "2026-01-01", "effective_to": "2026-12-31", "review_date": "2026-11-01", "tighten_only": true}]}
+```
+
+Loading rejects a duplicate id, an overlay for another target, and a `tighten_only` overlay whose effect loosens. The step names and the params
+paths did not change when these stopped being objects, so a params document and stored evidence from before still apply:
+`business_credit/entities/entities/entity/events/event/overlaid_thresholds/event_overlays_enabled` is still the switch for the event overlays.
+
+The tables (the event thresholds by criticality, the grade ladders) are still built in code from tuples in the modules; they are not documents.
 
 ## Layout
 
@@ -210,19 +243,20 @@ business_nested/        the package; one module per capability
   pipeline.py           build(), decision_unit(), DECISION_OUTPUTS
   entity.py             entity_unit() (events, verdict, score for one entity) and entities_unit() (all of them)
   structure.py          merge paths into entities, criticality, the structure bounds
-  events.py             event thresholds, the construction overlay, severities
+  events.py             event thresholds, the `OverlaidThresholds` step type, severities
   rollup.py             an entity's verdict from its events, with attribution
   scoring.py            entity scorecard, overlay, calibration; the grade ladder
   blend.py              the people component: weights, log-odds blend, caps, the disqualifying entity
   financial.py          three ratios, scorecard, grade
-  grade.py              the business grade and its overlay
+  grade.py              the business grade and its overlay document
   pricing.py            appetite, rate card, fees, instalment
   sole_proprietor.py    the affordability example, embedded
-  outcome.py            outcome, reasons, attribution
+  outcome.py            outcome, reasons document, attribution
+  documents.py          shipped(name): the documents in configs/0.1.0, used when a caller passes none
   counterfactual.py     one event removed; one entity re-assessed
   vocab.py              roles, criticality and verdict codes
   records.py            builders for requests: entity(), event(), parse_dates()
-configs/0.1.0/          params.json
+configs/0.1.0/          params.json, the three overlay documents and the reason codes
 scripts/                generate_configs.py
 sample_request.json
 tests/
@@ -234,17 +268,17 @@ Later examples import `business_nested` by package name. These names are stable:
 
 | Name | Use |
 |---|---|
-| `pipeline.build()` | The whole decision as one step. Embed it in another `flow`, and rename its inputs with `.relabel(reads=...)` |
-| `pipeline.decision_unit()`, `DECISION_OUTPUTS` | Everything after the entities: reads `assessed_entities` and the business's fields. Run it again over changed entities |
-| `entity.entity_unit()`, `entity.entities_unit()` | The flow for one resolved entity (a child of `each`, or run alone), and the structure step plus that `each` over all of them |
+| `pipeline.build()` | The whole decision as one step. Embed it in another `flow`, and rename its inputs with `.relabel(reads=...)`. Optional arguments are the four documents; omitted, the shipped ones |
+| `pipeline.decision_unit(pd_adjustments=None, reason_codes=None)`, `DECISION_OUTPUTS` | Everything after the entities: reads `assessed_entities` and the business's fields. Run it again over changed entities |
+| `entity.entity_unit(event_overlays=None, score_adjustments=None)`, `entity.entities_unit(...)` | The flow for one resolved entity (a child of `each`, or run alone), and the structure step plus that `each` over all of them |
 | `structure.resolved_entities`, `structure.structure_check`, `structure.criticality_class`, `Entity`, `AdverseEvent` | The nested request schema, the merge of paths, and the structure bounds |
-| `events.event_unit()`, `events.build_threshold_table()`, `events.THRESHOLD_OVERLAYS` | Classify one event; the threshold table; the overlay register |
+| `events.event_unit(overlays=None)`, `events.build_threshold_table()`, `events.OverlaidThresholds` | Classify one event; the threshold table; the overlay step type (`THRESHOLD_OVERLAYS` is only a list of the shipped overlays for governance-replay) |
 | `rollup.rollup()`, `rollup.adverse_verdict`, `rollup.AE_R_01` ... | A verdict from classified events, the step that writes it, and the rule ids |
-| `scoring.entity_scoring_unit()`, `scoring.grade_lookup()`, `scoring.ENTITY_OVERLAYS` | Score one entity; a grade ladder on any probability column and key column |
+| `scoring.entity_scoring_unit(score_adjustments=None)`, `scoring.grade_lookup()` | Score one entity; a grade ladder on any probability column and key column |
 | `blend.people_unit()`, `blend.blend_weights()`, `blend.log_odds_blend()` | The people component and its parts |
-| `financial.financial_unit()`, `grade.business_grade_unit()`, `grade.BUSINESS_OVERLAYS`, `pricing.pricing_unit()` | The business-level units |
+| `financial.financial_unit()`, `grade.business_grade_unit(pd_adjustments=None)`, `pricing.pricing_unit()` | The business-level units |
 | `sole_proprietor.sole_proprietor_unit()` | The statutory affordability on a sole proprietor, gated on `legal_form_code` |
-| `outcome.REASON_REGISTRY`, the `R_*` codes, `outcome.outcome_unit` | The reasons and the outcome step |
+| the `R_*` codes, `outcome.outcome_unit(reason_codes=None)`, `documents.shipped(name)` | The reason codes, the outcome flow, and the shipped documents |
 | `counterfactual.single_event_counterfactual()`, `without_event()`, `reassess_entity()` | What a decision would have been without one event; a decision with one entity corrected, assessing only that entity |
 | `vocab` | Relationship roles, criticality classes, verdict codes |
 | `records.entity()`, `records.event()`, `records.parse_dates()` | Request builders for tests and callers: an entity, an adverse event, a JSON request with its dates parsed |
@@ -279,12 +313,15 @@ Inputs it reads that the caller owns: `decision_date`, `product_code` (50 term, 
   override, conditions precedent, the committee pack, and the communicable (client-facing) reason set.
 - **The sole proprietor's income is a stand-in:** the business's profit on its declared turnover at an assumed margin
   (a param), evidenced as bank statements.
+- **Data in documents, not objects.** No step closes over a register or a module-level object, so a release check sees every
+  overlay and reason code. The two steps inside the embedded affordability assessment (its capacity overlay and its reason ranking)
+  still do, and `HiddenStateWarning` names them when the decision builds; they clear when that example moves to documents.
 - **Synthetic data.** Every table, threshold and rate here is invented for illustration.
 
 ## Reuse
 
 Built on [`shared-credit-core`](../shared-credit-core/README.md) (`credit_core`): `adverse_events` (the severity of one
-event), `adjustments` (the overlays), `calibration`, `fees`, `instalment`, `rounding`, `reason_codes`, `evidence.cell_id`
+event), `adjustments` (`AdjustmentStack`), `reason_codes` (`ReasonCodes`), `calibration`, `fees`, `instalment`, `rounding`, `evidence.cell_id`
 and the vocabulary; and on [`affordability`](../affordability/README.md) (`assessment`), whose whole `build()` is
 embedded for sole proprietors. It adds the nesting: merging paths, per-entity and per-event rules, the roll-up and the
 people blend.
