@@ -589,11 +589,18 @@ costs under 10 µs more on a single `score()`. Trees and decision tables read
 their strings as byte spans inside their kernels, so a string rule set does not
 pay this at all.
 
-`score` returns each value as the step made it. A frame from `run` holds one
-type per field of a `list[dict]` or `dict` column: an int beside a float comes
-back as a float, a number beside a string as the string, and a `dict` with
-non-string keys as a Python object column, which a JSON, CSV or Arrow response
-can't carry.
+A `dict`, TypedDict, `list[...]`, `Struct` or `Columnar` output is held to the type you declare. No
+kernel stores a dict, so a step returning one runs in Python and is checked on every call with strict
+pydantic validation (`@allow_fallback` steps too): `{"v": "high"}` for `v: float` raises a `ValueError`
+naming the step, row, field and value. An int is a valid float, a str or bool is not. A `Struct` or
+`Columnar` step returning tuples that can't be the declared record (wrong arity, a float for an `int`
+field) is caught when it compiles and falls back with that reason.
+
+`score` returns each value as the step made it. A plain `dict` or `list[dict]` output declares no
+shape, so a frame from `run` takes one type per field: an int beside a float comes back as a
+float, a number beside a string raises, and non-string keys of a `dict` become strings, so a
+JSON, CSV or Arrow response can carry it. Declare a TypedDict to have the fields checked at the
+step instead.
 
 `@allow_fallback` says you accept that: the warning stops, and
 `Engine(strict_compile=True)` — which otherwise raises on a step that runs in

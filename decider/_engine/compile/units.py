@@ -5,6 +5,7 @@ from typing import Any, Iterator, Mapping, Union
 import numpy as np
 
 from decider._engine.boundary.whole import refuse
+from decider._engine.compile.declared import check_output
 from decider._engine.compile.kernel import Spec, SrcKind, fused_kernel
 from decider._engine.compile.njit import FALLBACK_ERRORS, compile_call, parameters
 from decider._engine.compile.outputs import CodeTable, coded, coded_values, output_dtype
@@ -175,6 +176,9 @@ class Fallback:
                 elif out.dtype == np.int64 and isinstance(x, (float, np.floating)) and not x.is_integer():
                     raise refuse(f"step '{node.origin.path}' output '{v.name}'" + (f" (row {r})" if n > 1 else ""), x)
                 out[r] = x
+        if node.kind == "scalar":
+            for o, out, mask in zip(node.outputs, outs, masks):
+                check_output(node.origin.path, o, [x if m else None for x, m in zip(out, mask)])
         for v, out, mask, table in zip(call.writes, outs, masks, self._tables):
             values[v.id] = out
             if not mask.all():
