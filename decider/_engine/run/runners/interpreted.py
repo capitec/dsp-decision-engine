@@ -11,6 +11,7 @@ from decider._engine.boundary.dtypes import decimal_mantissa
 from decider._engine.boundary.whole import check_series, int64_array
 from decider._engine.boundary.nulls import MissingInputError
 from decider._engine.compile import numpy_dtype
+from decider._engine.compile.declared import check_output
 from decider._engine.compile.rows import build_rows, rows_needs_no_fill
 from decider._engine.ir.decls import Input, NullPolicy, base_annotation, stored_fill
 from decider._engine.run.params import RunParams
@@ -162,6 +163,8 @@ class InterpretedRunner:
             raise ValueError(f"{node.origin.path}: returned {len(columns)} values per row, "
                              f"but declares {len(node.outputs)} outputs")
         for v, out, scale, values in zip(call.writes, node.outputs, scales, columns):
+            if node.kind == "scalar":
+                check_output(node.origin.path, out, values, scope.rows)
             # A `Struct[Item]` step returning a tuple of fields is stored as the dict a reader expects,
             # so interpreted and compiled modes agree on the value a struct step reads back.
             if (item := struct_item(out.annotation)) is not None:

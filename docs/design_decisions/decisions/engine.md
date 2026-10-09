@@ -38,6 +38,13 @@ Why the engine (IR, wiring, runners, kernels, compile cache, fallback, `score`, 
 - Why: a kernel cannot call Python except through `objmode`, slower than giving up (4 steps, 200k rows: all-njit 7.1 ms, Python 167 ms, per-row `objmode` 548 ms). Bare `Exception` would hide bugs as fallbacks.
 - See: [experiment](../experiments/kernel-compilation-choices.md), [cache](../../architecture/engine/cache.md)
 
+## A declared dict, list, `Struct` or `Columnar` output is checked where the step runs
+
+- No kernel stores a dict, so a step returning a dict or `list[dict]` runs in Python (as a `Fallback`, or as a kernel that fails at its first launch and splits into per-call Python runs). It is validated with strict pydantic on every call, cached per annotation; strict, so an int is a float but a str or bool is not. A `Struct` or `Columnar` step returning tuples does run in a kernel: its tuple type, as numba infers it, is compared with the `Item` once at compile time (`compile/declared.py`); a mismatch is a fallback, which the Python check then refuses.
+- Why: scalar outputs were refused by the numpy store, but a dict or list went through unchecked and `run()` then turned `{'v': 1.5}` beside `{'v': 'high'}` into text. Comparing numba's inferred dict type with the TypedDict would be free but pointless: the dict never reaches a kernel. Validation costs about 1.4 us for 2 dicts of 1 field and 3 us for 6 of 5 fields (microbenchmark), 3.6 and 6.2 us on a whole `score()`.
+- A plain `dict` or `list[dict]` declares no shape, so `run()` keeps the loose building there (int beside float widens, non-string keys become text) but refuses a number beside text. A declared shape gets a polars dtype: polars' strict inference truncates `1.5` to `1` in a later row of a nested list.
+- See: `tests/run/test_declared_outputs.py`
+
 ## Only numbers and `Text` spans enter a kernel
 
 - A step reading or writing a plain `str`, or reading a `date`, `list` or `dict`, runs in Python without asking numba. `Text` and `bytes` are `(address, length)` spans.

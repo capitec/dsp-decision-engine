@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import typing
 from functools import lru_cache
 from typing import Any, Hashable, Mapping
 
@@ -8,9 +9,11 @@ import numpy as np
 import polars as pl
 
 from decider._engine.boundary.whole import int64_array
+from decider._engine.compile.declared import is_untyped_container, schema_of
 from decider._engine.compile.outputs import Coded, coded_values
 from decider._engine.ir.absent import has_optional_key, without_absent
 from decider._engine.ir.decls import Input, NullPolicy, base_annotation, is_typed
+from decider._engine.run.loose import loosen
 from decider._engine.run.representations import despan
 from decider._engine.wiring.plan import Plan, NodeVersion
 from decider.ops.nested import struct_item
@@ -241,11 +244,15 @@ def _series(name: str, values: np.ndarray, valid: np.ndarray | None, annotation:
         keep = isinstance(dtype, (pl.List, pl.Struct, pl.Array)) or coded_values(base_annotation(annotation))
         if keep:
             return pl.Series(name, values, dtype=dtype)
+        if is_untyped_container(annotation):
+            return pl.Series(name, loosen(name, values), strict=False)
+        if schema_of(annotation) is not None:
+            # The step's values were checked against the declaration, so what polars widens (an int
+            # beside a float) is the same number; its strict inference would truncate a later float.
+            return pl.Series(name, values, dtype=_typed_dtype(annotation), strict=False)
         try:
             return pl.Series(name, values)
         except TypeError:
-            # A step may return an int in one row and a float in the next, or a dict with int keys,
-            # which `score` hands back as is; polars then widens the type, or holds the dicts as objects.
             return pl.Series(name, values, strict=False)
     if values.dtype.names is not None:
         # A struct output is a record per row; polars reads dicts (not tuples) for a Struct
@@ -375,6 +382,20 @@ def declared_dtype(annotation: Any) -> pl.DataType | None:
 
 
 _POLARS_FIELD = {float: pl.Float64, int: pl.Int64, bool: pl.Boolean, str: pl.String}
+
+
+def _typed_dtype(annotation: Any) -> pl.DataType | None:
+    # The polars type of a declared dict/list shape made of numbers, text, bools and nested records; None
+    # when any part has none (a date, a `dict[str, float]`), and polars then infers it.
+    t = base_annotation(annotation)
+    if t in _POLARS_FIELD:
+        return _POLARS_FIELD[t]
+    if typing.is_typeddict(t):
+        fields = {name: _typed_dtype(ft) for name, ft in item_schema(t)}
+        return None if None in fields.values() else pl.Struct(fields)
+    if typing.get_origin(t) is list and (item := _typed_dtype(typing.get_args(t)[0])) is not None:
+        return pl.List(item)
+    return None
 
 
 def _item_dtype(item: Any) -> pl.Struct:
