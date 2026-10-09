@@ -14,6 +14,15 @@ Why the engine (IR, wiring, runners, kernels, compile cache, fallback, `score`, 
 - Why: renaming or nesting a step changes its path, not its code, and a moved file misses numba's cache (4.6 s against 0.18 s warm at 200 args). A name-only key collided two same-named NamedTuples, a correctness bug. Not: `co_code` alone (omits `co_consts`).
 - See: `decider/_engine/compile/fingerprint.py`, [cache](../../architecture/engine/cache.md)
 
+## A step that reads a hidden object is warned about when it is bound
+
+- `Engine.bind` calls `hidden_state(fn)` for each scalar and row step, in every mode, and warns with `HiddenStateWarning` once per closure variable or global that holds an instance of a class, or a `dict`, `list` or `set`. `@allow_fallback` does not silence it, and the opt-out is a warnings filter on the category. `hidden_state` is the cache key's own walk with a collector (`_Walk.found`), so the two cannot disagree. A module attribute read as `mod.NAME` is walked and keyed by value like a global.
+- Why: an object is invisible to `decider.lab.diff` (strict fingerprint refuses it, so the step always reads as changed) and to numba, and 113 of 903 steps in the 12 examples read one. Every Python step there is `@allow_fallback`, so a check on the fallback path would flag nothing. The earlier key walk also ignored `mod.K`: a new value was served from numba's disk cache in the next process, and it descended into the standard library (`statistics.mean`, `dataclasses.asdict`) and flagged steps for no reason.
+- Mutable containers count although the key sees an exact literal `dict` or `list` by value: a step reads them at call time, so they can be edited after the bind, and numba compiles neither. A tuple, frozenset, enum member or date is data. A frame step is not checked (the fraud rule set and `_renamed_frame` would need an exemption first).
+- Cost: 0.5 to 10.5 ms once per bind for the 12 example pipelines (53 to 128 steps each); nothing per call.
+- Not: a digest of arbitrary objects (a changed method would read as unchanged), raising always (every example would fail to build), warning only under `strict_compile` (shipped as a warning; `warn_hidden_state(plan, strict=True)` is the switch).
+- See: `tests/compile/test_hidden_state.py`, `tests/wiring/test_hidden_state_warning.py`
+
 ## No source is generated; only user steps are disk-cached
 
 - Fused kernels are built from LLVM IR by a numba `intrinsic` once per process. User steps use `cache=True` with the index key extended by `SALT` (hash of `compile/semantics/`, `span.py`, `decimal_type.py`, `ops/`) and `fingerprint(fn)`; `decider build` records the CPU target and `decider serve` warns on a mismatch.
@@ -34,7 +43,7 @@ Why the engine (IR, wiring, runners, kernels, compile cache, fallback, `score`, 
 
 ## Fall back to Python only on compile failure, one step at a time
 
-- `FALLBACK_ERRORS = (NumbaError, UnsupportedBytecodeError)`; around `dispatcher.compile` alone, `NotImplementedError`, `AssertionError` and `TypeError` count too. The kernel splits around the step; a kernel that fails whole on launch becomes one `Fallback` per call. A runtime error always propagates. `@allow_fallback` accepts a fallback silently; `Engine(strict_compile=True)` refuses it.
+- `FALLBACK_ERRORS = (NumbaError, UnsupportedBytecodeError)`; around `dispatcher.compile` alone, `NotImplementedError`, `AssertionError` and `TypeError` count too. The kernel splits around the step; a kernel that fails whole on launch becomes one `Fallback` per call. A runtime error always propagates. A scalar step declaring `*args` or `**kwargs` (a hand-built `CallNode`) falls back too: no kernel can bind a column to it. `@allow_fallback` accepts a fallback silently; `Engine(strict_compile=True)` refuses it.
 - Why: a kernel cannot call Python except through `objmode`, slower than giving up (4 steps, 200k rows: all-njit 7.1 ms, Python 167 ms, per-row `objmode` 548 ms). Bare `Exception` would hide bugs as fallbacks.
 - See: [experiment](../experiments/kernel-compilation-choices.md), [cache](../../architecture/engine/cache.md)
 

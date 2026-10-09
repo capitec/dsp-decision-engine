@@ -41,9 +41,12 @@ however many threads ask (see [concurrency](concurrency.md)).
   the process's hash seed), and the argument layout;
 - the value of every closure cell;
 - every global the function reads: a function by its own content (recursively), a module by name
-  plus the functions and submodules the code reaches through it (so editing `rates.rate` changes a
-  caller of `rates.rate(x)`), a literal by value, a numpy array or polars frame by its data, and
-  anything else by identity.
+  plus the functions, submodules and data the code reaches through it (so editing `rates.rate`
+  changes a caller of `rates.rate(x)`, and editing `rates.LIMIT` changes a caller of `rates.LIMIT`),
+  a literal by value, a numpy array or polars frame by its data, and anything else by identity;
+- a function of the standard library or an installed package is keyed by module, qualname and the
+  package version, not walked: its helpers and constants are not the step's data. A wrapper such
+  as a decorator still keys the function it closes over. decider's own functions are walked.
 
 It leaves out the function's name, file and line, and the node's origin path. Real output:
 
@@ -76,7 +79,9 @@ get different keys: keying on the bytecode alone would compile `make_rule(2.0)` 
 answer with its threshold for `make_rule(3.0)` too.
 
 `fingerprint(fn, strict=True)` raises `ValueError` instead of keying an object by identity, for
-callers that need a key stable across processes. A captured polars frame is hashed row by row on
+callers that need a key stable across processes. `hidden_state(fn)` runs the same walk and lists
+those objects (and the `dict`, `list` and `set` globals the key does see by value but a step can
+edit in place), so `Engine.bind` can warn about them and the key cannot disagree with the warning. A captured polars frame is hashed row by row on
 every call (a `ponytail:` comment in the source puts it at about 0.5 ms for a small frame and 13 ms
 per million rows).
 
