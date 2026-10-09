@@ -57,7 +57,7 @@ class OverlayStack(AdjustmentStack):
         return ctx.call(
             self, apply_scoped,
             inputs={"adjustment_base_value": self.base_field or self.target, **({"scope_value": column} if column else {})},
-            values={"overlays": self._ordered(), "set_id": self.set_id, "scope_column": column,
+            values={"overlays": self.packed(), "set_id": self.set_id, "scope_column": column,
                     "adjustment_stack_enabled": self.stack_enabled, **({} if column else {"scope_value": None})},
             outputs=(self.adjusted_output or self.target, self.unadjusted_output or f"{self.target}_unadjusted",
                      "adjustment_set_id", "adjustments_applied"))

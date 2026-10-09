@@ -93,6 +93,6 @@ class ActionResolver(ConfigurableStep):
         gates = tuple((bit, name, int(action), code) for bit, (name, action, code) in vocab.GATES.items())
         return ctx.call(
             self, resolve_action, outputs=OUTPUTS,
-            values={"rules": rows, "escalation": self.escalation._ordered(),
+            values={"rules": rows, "escalation": self.escalation.packed(),
                     "severity": tuple((c.code, c.severity_rank) for c in self.reason_codes.codes),
                     "version": self.reason_codes.version, "gates": gates})

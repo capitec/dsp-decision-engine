@@ -59,5 +59,5 @@ class AmountOverlays(ConfigurableStep):
     def to_ir(self, ctx: Any) -> Any:
         return ctx.call(
             self, apply_amount_overlays,
-            values={"overlays": self.stack._ordered(), "set_id": self.stack.set_id, "family": self.family},
+            values={"overlays": self.stack.packed(), "set_id": self.stack.set_id, "family": self.family},
             outputs=(AMOUNT_MULTIPLIER, f"{AMOUNT_MULTIPLIER}_unadjusted", "adjustment_set_id", "applied_adjustment_ids"))

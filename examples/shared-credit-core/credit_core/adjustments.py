@@ -335,7 +335,13 @@ class AdjustmentStack(ConfigurableStep):
             raise ValueError(f"overlays {stray} are not for target {self.target!r}")
         return self
 
-    def _ordered(self) -> tuple[tuple, ...]:
+    def packed(self) -> tuple[tuple, ...]:
+        """The overlays in stack order as plain tuples, the form `evaluate` takes, for a step that applies a stack itself.
+
+        Example::
+
+            evaluate(stack.packed(), 600.0, {"segment_code": 3}, date(2026, 6, 1).toordinal())[0]  # 590.0
+        """
         return tuple(_pack(a) for a in sorted(self.adjustments, key=lambda a: a.stack_position))
 
     def due_for_review(self, on: date) -> tuple[Overlay, ...]:
@@ -345,7 +351,7 @@ class AdjustmentStack(ConfigurableStep):
     def apply(self, base_value: float, provenance: Mapping[str, object], on: date, stack_enabled: bool = True,
               ) -> AdjustmentResult:
         """Apply the stack outside a flow, to a value whose provenance fields are in `provenance`."""
-        value, applied, evaluations = evaluate(self._ordered(), base_value, provenance, on.toordinal(), stack_enabled)
+        value, applied, evaluations = evaluate(self.packed(), base_value, provenance, on.toordinal(), stack_enabled)
         return AdjustmentResult(base_value, value, self.set_id, tuple(applied),
                                 tuple(AdjustmentEvaluation(*e) for e in evaluations))
 
@@ -361,6 +367,6 @@ class AdjustmentStack(ConfigurableStep):
     def to_ir(self, ctx: Any) -> Any:
         return ctx.call(
             self, _scope_function(self.scope_columns()), inputs={"adjustment_base_value": self.base_field or self.target},
-            values={"overlays": self._ordered(), "set_id": self.set_id, "adjustment_stack_enabled": self.stack_enabled},
+            values={"overlays": self.packed(), "set_id": self.set_id, "adjustment_stack_enabled": self.stack_enabled},
             outputs=(self.adjusted_output or self.target, self.unadjusted_output or f"{self.target}_unadjusted",
                      "adjustment_set_id", "adjustments_applied"))

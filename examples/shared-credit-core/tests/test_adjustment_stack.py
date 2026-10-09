@@ -5,7 +5,7 @@ import pytest
 from decider import ConfigurableStep, flow
 from decider.lab import diff
 
-from credit_core.adjustments import AdjustmentStack, Effect, Overlay
+from credit_core.adjustments import AdjustmentStack, Effect, Overlay, evaluate
 
 JUNE = date(2026, 6, 1)
 
@@ -252,3 +252,11 @@ def test_changing_the_scope_column_shows_in_the_diff():
     assert same(stack(overlay(scope={"sector_code": 412})), ConfigurableStep.load(stack(overlay(scope={"sector_code": 412})).model_dump_json()))
     assert not same(stack(overlay(scope={"sector_code": 412})), stack(overlay(scope={"segment_code": 412})))
     assert not same(stack(overlay(scope={"sector_code": 412})), stack(overlay(scope={"sector_code": 413})))
+
+
+def test_the_packed_overlays_are_in_stack_order_and_give_the_values_apply_gives():
+    a, b = overlay(adjustment_id="A", stack_position=2), overlay(adjustment_id="B", effect=Effect(op="add", value=-5.0))
+    both = stack(a, b)
+    packed = both.packed()
+    assert [row[0] for row in packed] == ["B", "A"]
+    assert evaluate(packed, 600.0, {"segment_code": 3}, JUNE.toordinal())[0] == both.apply(600.0, {"segment_code": 3}, JUNE).adjusted_value
