@@ -99,6 +99,6 @@ class CapReduction(AdjustmentStack):
     def to_ir(self, ctx):
         return ctx.call(
             self, cap_reduction, inputs={"tier_ceiling": self.target},
-            values={"overlays": self._ordered(), "set_id": self.set_id, "adjustment_stack_enabled": self.stack_enabled},
+            values={"overlays": self.packed(), "set_id": self.set_id, "adjustment_stack_enabled": self.stack_enabled},
             outputs=("advertised_tier_ceiling", "tier_ceiling_before_cap_overlay", "cap_adjustment_set_id",
                      "cap_adjustments_applied"))

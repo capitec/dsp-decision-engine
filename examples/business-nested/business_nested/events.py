@@ -110,11 +110,10 @@ class OverlaidThresholds(ConfigurableStep):
                                adjustments=[a for a in self.adjustments if a.target == target])
 
     def to_ir(self, ctx: Any) -> Any:
-        # `_ordered` packs a stack in stack order for `evaluate`; credit_core has no public name for it.
         return ctx.call(
             self, overlay_thresholds,
-            values={"material_overlays": self._stack(TARGETS[0])._ordered(),
-                    "disqualifying_overlays": self._stack(TARGETS[1])._ordered(),
+            values={"material_overlays": self._stack(TARGETS[0]).packed(),
+                    "disqualifying_overlays": self._stack(TARGETS[1]).packed(),
                     "event_overlays_enabled": self.enabled},
             outputs=("material_threshold", "disqualifying_threshold", "threshold_overlay_ids"))
 
