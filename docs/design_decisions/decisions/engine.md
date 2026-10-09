@@ -10,7 +10,7 @@ Why the engine (IR, wiring, runners, kernels, compile cache, fallback, `score`, 
 
 ## Compiled code is keyed by content, never by origin
 
-- Dispatchers and fused kernels are shared in-process by `fingerprint(fn)`: bytecode with constants, closure cells and read globals; not name, file, line or `Origin` path. Params bundle classes get a qualname built from their fields so they pickle by reference.
+- Dispatchers and fused kernels are shared in-process by `fingerprint(fn)`: bytecode with constants, closure cells and read globals (a class by name plus its own methods and constants, so it holds across processes); not name, file, line or `Origin` path. Params bundle classes get a qualname built from their fields so they pickle by reference.
 - Why: renaming or nesting a step changes its path, not its code, and a moved file misses numba's cache (4.6 s against 0.18 s warm at 200 args). A name-only key collided two same-named NamedTuples, a correctness bug. Not: `co_code` alone (omits `co_consts`).
 - See: `decider/_engine/compile/fingerprint.py`, [cache](../../architecture/engine/cache.md)
 
@@ -52,6 +52,7 @@ Why the engine (IR, wiring, runners, kernels, compile cache, fallback, `score`, 
 - No kernel stores a dict, so a step returning a dict or `list[dict]` runs in Python (as a `Fallback`, or as a kernel that fails at its first launch and splits into per-call Python runs). It is validated with strict pydantic on every call, cached per annotation; strict, so an int is a float but a str or bool is not. A `Struct` or `Columnar` step returning tuples does run in a kernel: its tuple type, as numba infers it, is compared with the `Item` once at compile time (`compile/declared.py`); a mismatch is a fallback, which the Python check then refuses.
 - Why: scalar outputs were refused by the numpy store, but a dict or list went through unchecked and `run()` then turned `{'v': 1.5}` beside `{'v': 'high'}` into text. Comparing numba's inferred dict type with the TypedDict would be free but pointless: the dict never reaches a kernel. Validation costs about 1.4 us for 2 dicts of 1 field and 3 us for 6 of 5 fields (microbenchmark), 3.6 and 6.2 us on a whole `score()`.
 - A plain `dict` or `list[dict]` declares no shape, so `run()` keeps the loose building there (int beside float widens, non-string keys become text) but refuses a number beside text. A declared shape gets a polars dtype: polars' strict inference truncates `1.5` to `1` in a later row of a nested list.
+- A `typing.TypedDict` is rebuilt from `typing_extensions` before pydantic sees it (`pydantic_ready`), for output checks and request validation: pydantic refuses `typing`'s before Python 3.12, which left outputs unchecked and failed JSON arrays there. A numpy number is checked, and served, as the Python number it is; only the retry after a failed validation converts, so a valid output pays nothing.
 - See: `tests/run/test_declared_outputs.py`
 
 ## Only numbers and `Text` spans enter a kernel

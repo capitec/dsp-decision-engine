@@ -15,7 +15,7 @@ from numba.core import types
 from pydantic import PydanticSchemaGenerationError, PydanticUserError, TypeAdapter, ValidationError
 
 from decider._engine.ir.decls import Output, base_annotation
-from decider._engine.types import columnar_item, item_schema
+from decider._engine.types import columnar_item, item_schema, pydantic_ready
 from decider.ops.nested import struct_item
 from decider.ops.text import Text
 
@@ -60,10 +60,9 @@ def _prepared(annotation: Any) -> tuple[TypeAdapter, list[str] | None, bool] | N
     if t is None:
         return None
     try:
-        adapter = TypeAdapter(list[typing.Optional[t]])
+        adapter = TypeAdapter(list[typing.Optional[pydantic_ready(t)]])
     except (PydanticUserError, PydanticSchemaGenerationError):
-        # A type pydantic has no schema for (`typing.TypedDict` before Python 3.12) is left unchecked.
-        return None
+        return None  # a type pydantic has no schema for is left unchecked
     # A `Struct` or `Columnar` step may return its records as tuples of the fields.
     t = base_annotation(annotation)
     item = struct_item(t) or columnar_item(t)
@@ -99,8 +98,7 @@ def check_output(step: str, output: Output, values: Sequence, rows: np.ndarray |
         return
     except ValidationError:
         pass
-    # A list of `Text` read from a `Columnar` input is the `str`s it declares once it reaches the caller.
-    values = [[v.text if isinstance(v, Text) else v for v in x] if isinstance(x, list) else x for x in values]
+    values = [_plain(x) for x in values]
     try:
         adapter.validate_python(values, strict=True)
     except ValidationError as e:
@@ -110,6 +108,17 @@ def check_output(step: str, output: Output, values: Sequence, rows: np.ndarray |
         at += f", field {'.'.join(map(str, field))}" if field else ""
         raise ValueError(f"step {step}: output '{output.name}'{at}: {err['msg']} (got {err['input']!r}), "
                          f"declared {_name(output.annotation)}") from None
+
+
+def _plain(x: Any) -> Any:
+    # What the caller reads: a `Text` (from a `Columnar` input) is its `str`, a numpy scalar its Python number.
+    if isinstance(x, Text):
+        return x.text
+    if isinstance(x, np.generic):
+        return x.item()
+    if isinstance(x, dict):
+        return {k: _plain(v) for k, v in x.items()}
+    return type(x)(map(_plain, x)) if type(x) in (list, tuple) else x
 
 
 def tuple_mismatch(output: Output, item: Any, parts: Sequence) -> str | None:

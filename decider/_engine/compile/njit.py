@@ -228,8 +228,6 @@ def _ragged_reason(output: Output, item: Any, dispatcher: Dispatcher, sig: tuple
                 "a Columnar[...] output item must be float, int or bool")
     ret = dispatcher.overloads[sig].signature.return_type
     fields = ret.dtype.types if isinstance(ret, types.List) and isinstance(ret.dtype, types.BaseTuple) else None
-    if fields is not None and len(fields) != len(schema):
-        return tuple_mismatch(output, item, fields)
     if fields is None:
         return (f"writes '{output.name}' as Columnar[...] by returning a list of dicts, which no "
                 "kernel stores; return a list of tuples to compile it")

@@ -1,15 +1,20 @@
 """A step's dict, TypedDict and list outputs are held to the type it declares, in every mode."""
 from __future__ import annotations
 
+import json
+import math
 import warnings
 from typing import NotRequired, TypedDict
 
+import numpy as np
 import polars as pl
 import pytest
 
 from decider import Engine, allow_fallback, flow
+from decider.config import JsonFileStore
 from decider.exceptions import FallbackWarning
 from decider.ops import Columnar, Struct
+from decider.serving import RequestHandler
 
 MODES = ("interpreted", "stepped", "fused")
 
@@ -188,3 +193,52 @@ def test_run_turns_non_string_dict_keys_into_text_and_score_keeps_them(mode, fn,
     out = exe.run(pl.DataFrame({"x": [0.5]}))[key].to_list()[0]
     assert out in ({"1": 0.5}, [{"1": 0.5}])
     assert exe.score({"x": 0.5})[key] in ({1: 0.5}, [{1: 0.5}])
+
+
+class Count(TypedDict):
+    n: int
+    share: float
+    flag: bool
+
+
+def numpy_numbers(x: float) -> list[Count]:
+    return [{"n": np.int64(3), "share": np.float32(0.5), "flag": np.bool_(x > 1)}]
+
+
+@pytest.mark.parametrize("mode", MODES)
+def test_a_numpy_number_in_a_declared_dict_is_the_number_it_is(mode):
+    exe = bound(numpy_numbers, mode)
+    assert exe.score({"x": 2.0})["numpy_numbers"] == [{"n": 3, "share": 0.5, "flag": True}]
+    assert exe.run(pl.DataFrame({"x": [0.5, 2.0]}))["numpy_numbers"].to_list() == [
+        [{"n": 3, "share": 0.5, "flag": False}], [{"n": 3, "share": 0.5, "flag": True}]]
+
+
+def test_a_numpy_number_in_a_dict_output_is_served_as_json(tmp_path):
+    store = JsonFileStore(basepath=str(tmp_path / "configs"))
+    store.create_version({"params": {}})
+    handler = RequestHandler(store, lambda: flow(numpy_numbers, name="p"))
+    handler.stage()
+    handler.activate()
+    body = handler.process_fn(b'{"x": 2.0}', "application/json", "application/json").content
+    assert json.loads(body)["numpy_numbers"] == [{"n": 3, "share": 0.5, "flag": True}]
+
+
+def counted(x: float) -> list[Count]:
+    return [{"n": 1, "share": 0.5, "flag": True}, {"n": x, "share": 0.5, "flag": True}]
+
+
+@pytest.mark.parametrize("mode", MODES)
+@pytest.mark.parametrize("x", [7.5, 7.0, math.nan])
+def test_a_float_in_an_int_field_of_a_declared_list_is_refused_naming_the_field(mode, x):
+    with pytest.raises(ValueError, match=r"output 'counted' row 0, field 1\.n: .*valid integer"):
+        bound(counted, mode).score({"x": x})
+
+
+def numpy_in_one_row(x: float) -> dict:
+    return {"n": np.int64(3) if x > 1 else 4}
+
+
+@pytest.mark.parametrize("mode", MODES)
+def test_an_undeclared_dict_counts_a_numpy_number_as_a_number(mode):
+    assert bound(numpy_in_one_row, mode).run(pl.DataFrame({"x": [0.5, 2.0]}))["numpy_in_one_row"].to_list() == [
+        {"n": 4}, {"n": 3}]

@@ -26,7 +26,7 @@ Read this before changing how tree or table documents become kernels, or what a 
 - Why: the fused kernel's compile time grows with the square of the outputs of one call (521 rules: 196 s cold, 14 s split in 32s), and narrow kernels are shared. The walker's own `pick` is not the cause.
 - Why 128: every part costs a single record 15-20 us, so parts of 32 made `score()` 11-14% slower than an unsplit tree; at 128 it is within 3-6% and a 521-rule tree binds cold in under 40 s. Parts of 32 are 1.4-1.5x faster for a big frame, so `part_outputs` is a setting. See [part size](../experiments/tree-split-part-size.md).
 - Each part reads every feature with the kind the whole tree gives it. A node breakpoint `<name>#<id>` matches the parts under `<name>`.
-- Cost: `<name>` alone no longer names one node, so a trace, a diff and `checks` report per part (`<name>/part_1`); `_split.MAX_OUTPUTS` is the default width.
+- Cost: `<name>` alone no longer names one node, so a trace, a diff and `checks` report per part (`<name>/part_1`); `_split.MAX_OUTPUTS` is the default width. Every process compiles its fused parts again: at 128 `examples/transaction-fraud` stages in 61 s against 21 s at 32, for no measurable change in its `score()`.
 - See: [wide output compile](../experiments/wide-output-compile.md), `decider/steps/trees/_split.py`
 
 ## Every tree format validates into one `Tree` graph
