@@ -82,6 +82,7 @@ dispatch to queues, outcome feedback, languages, the runners-up record, and the 
 | `@allow_fallback` for steps that are Python on purpose (dates, lists, strings), checked with `Engine(strict_compile=True)` | [action.py](fraud_interdiction/action.py), [overlays.py](fraud_interdiction/overlays.py), [tests/test_serving.py](tests/test_serving.py) |
 | `DecisionTableConfig` in a config document, then `flow` so a later step may overwrite what the table wrote | [`client_wording.json`](configs/0.1.0/client_wording.json), [pipeline.py](fraud_interdiction/pipeline.py), [wording.py](fraud_interdiction/wording.py) |
 | `dag` (dependency order) for the pipeline, `flow` (written order) for one value written twice | [pipeline.py](fraud_interdiction/pipeline.py) |
+| `ConfigurableStep` types whose fields are the data, compared by `decider.lab.diff`: overlays, reason codes and rule-set versions from `credit_core`, and this package's `AmountOverlays` and `ActionResolver`, which hold an `AdjustmentStack` as a field | [overlays.py](fraud_interdiction/overlays.py), [action.py](fraud_interdiction/action.py), [tests/test_release_checks.py](tests/test_release_checks.py) |
 | A params document, including a switch that turns the whole overlay stack off | [`params.json`](configs/0.1.0/params.json), [backtest.py](fraud_interdiction/backtest.py) |
 | One executable for a batch (`run`) and a record (`score`) with the same answers; a backtest is the batch run | [backtest.py](fraud_interdiction/backtest.py), [tests/test_serving.py](tests/test_serving.py) |
 | JSON dates arriving as strings, warm-up from `sample_request.json`, serving the raw request bytes | [sample_request.json](sample_request.json), [tests/test_serving.py](tests/test_serving.py) |
@@ -155,8 +156,47 @@ Tests (from the repository root, with `PYTHONPATH` set as above):
 uv run pytest examples/transaction-fraud -q
 ```
 
-To regenerate `configs/0.1.0` (the synthetic rules, the wording table and the params document):
+To regenerate `configs/0.1.0` (the synthetic rules, the wording table, the overlays, the reason codes, the rule-set versions and the params document):
 `uv run python scripts/generate_configs.py`.
+
+## The documents
+
+`build` receives one document per argument, each a file in `configs/<version>/`. A change to any of them is a new config
+version, and `decider.lab.diff.structure` reports it.
+
+- [`rule_set.json`](configs/0.1.0/rule_set.json) and [`client_wording.json`](configs/0.1.0/client_wording.json): the rules and the
+  wording table, as before.
+- [`amount_overlays.json`](configs/0.1.0/amount_overlays.json) is an `amount_overlays` step holding an `adjustment_stack`: the
+  multipliers on the mule and scam amount thresholds, in stack order. `family` is the provenance the overlays are scoped to.
+  The stack's own `stack_enabled` is not used here: the step reads the `adjustment_stack_enabled` column, so one param
+  (`fraud_interdiction/adjustment_stack_enabled/adjustment_stack_enabled`) still turns every overlay off.
+- [`action_escalation.json`](configs/0.1.0/action_escalation.json) is an `adjustment_stack` on `at_web_action`: the overlay that
+  raises an account-takeover `monitor` to a `step_up` on the web channel. `ActionResolver` applies it to each firing, with the
+  firing rule's family and the record's channel as the provenance.
+- [`reason_codes.json`](configs/0.1.0/reason_codes.json) is a `reason_codes` set: 200 rule reasons and the six hard-block codes,
+  with their severity rank.
+- [`rule_set_versions.json`](configs/0.1.0/rule_set_versions.json) is an `effective_versions` step: which rule set version a
+  decision date falls in.
+
+```json
+{"type": "amount_overlays", "name": "amount_overlays", "family": "MS", "stack": {
+  "type": "adjustment_stack", "name": "amount_overlays", "target": "mule_scam_amount_multiplier", "set_id": "ADJS-2026.01",
+  "adjustments": [
+    {"adjustment_id": "ADJ-2026-002", "kind": "cap_adjustment", "target": "mule_scam_amount_multiplier",
+     "effect": {"op": "multiply", "value": 0.7}, "scope": {"family": "MS"}, "stack_position": 2,
+     "owner": "Head of Fraud", "approval_reference": "HOF-2025-1122",
+     "rationale": "Mule and scam amount thresholds x0.7 for the festive period",
+     "effective_from": "2025-12-01", "effective_to": "2026-01-15", "review_date": "2026-01-08", "tighten_only": true}]}}
+```
+
+```json
+{"type": "effective_versions", "family": "fraud.rule_set", "output": "rule_set_version", "versions": [
+  {"version_id": "RS-2025.11", "effective_from": "2025-11-01", "effective_to": "2026-01-01"},
+  {"version_id": "RS-2026.01", "effective_from": "2026-01-01"}]}
+```
+
+The step names and the params paths did not change when these stopped being objects, so a params document and stored evidence
+from before still apply.
 
 ## Backtest
 
@@ -176,18 +216,18 @@ backtest(executable, events, params)
 
 ```
 fraud_interdiction/
-  pipeline.py        build(rule_set, client_wording): the whole decision
+  pipeline.py        build(rule_set, client_wording, rule_set_versions, amount_overlays, action_escalation, reason_codes)
   rules.py           Rule and RuleSet: the config document, expanded into trees plus the firing step
-  firing.py          applicability, stale velocity and the overlay effect on each firing (a frame step)
-  action.py          action resolution: precedence, critical rules, hard-block floor, reasons, counterfactual
+  firing.py          applicability, stale velocity and the overlay effect on each firing (a frame step over plain tuples)
+  action.py          ActionResolver: precedence, critical rules, hard-block floor, reasons, counterfactual
   enrichment.py      velocity band, degradation bitset, degraded mode, late arrival
   hard_blocks.py     the six gates
-  overlays.py        the overlay register (built on credit_core.adjustments) and its steps
-  reasons.py         the fraud reason registry (credit_core.reason_codes)
+  overlays.py        AmountOverlays (an AdjustmentStack for the mule and scam amounts) and the on/off switch column
   wording.py         consent-aware client wording
   backtest.py        batch costing with the overlays on and off
   vocab.py           actions, modes, gate and family codes
-configs/0.1.0/       rule_set.json, client_wording.json, params.json
+configs/0.1.0/       rule_set.json, client_wording.json, amount_overlays.json, action_escalation.json,
+                     reason_codes.json, rule_set_versions.json, params.json
 scripts/             generate_configs.py
 sample_request.json
 tests/
@@ -212,6 +252,12 @@ tests/
 - **Many rules, one tree per list.** `RuleSet` writes one `prioritized_flat_rule` tree per list (live, shadow,
   overlay-adjusted) in `mode: "all"`. `decider` splits a list of more than 32 rules into `<tree>/part_<k>` nodes
   when it builds the plan; the step report and `diff` name those paths. The answers do not depend on the split.
+- **Data in documents, not objects.** No step reads a register or a module-level `dict`: the overlays, the reason codes and the
+  rule-set versions are config documents, and a step's constants hold the rest. A release check (`decider.lab.diff.structure`)
+  therefore sees an overlay change from x0.7 to x0.35, a moved cut-over, a reordered severity and a rule asking for a different
+  action, and none of the steps raises `HiddenStateWarning` (see [tests/test_release_checks.py](tests/test_release_checks.py)).
+  Owner, approval reference, rationale and review date stay in the overlay documents for people and the ageing report; the
+  diff ignores them. The firing step closes over tuples of plain values for the same reason.
 - **What runs in Python.** Steps reading dates, lists or strings (`rule_set_version`, `amount_overlays`,
   `resolve_action`, the wording step) are Python on purpose and marked `@allow_fallback`; the enrichment verdict,
   the hard blocks and the rule trees run in the kernel.
@@ -224,9 +270,9 @@ Uses [`shared-credit-core`](../shared-credit-core/README.md) by package name:
 
 | From `credit_core` | Used for |
 |---|---|
-| `adjustments.AdjustmentRegister`, `Adjustment` | the overlay stack: scope, stack order, expiry and tighten-only checked when an overlay is defined; a switch that turns the stack off |
-| `reason_codes.ReasonCodeRegistry` | ranking every fired reason; an unregistered code raises |
-| `dates.EffectiveDatedSet` | the `rule_set_version` in force on the decision date |
+| `adjustments.AdjustmentStack`, `evaluate` | the overlay stacks: scope, stack order, expiry and tighten-only checked when the document loads; a switch that turns them off. `AmountOverlays` and `ActionResolver` each hold one as a field, because the overlays here are scoped by rule family, which the stack's own step does not match |
+| `reason_codes.ReasonCodes`, `rank_codes` | ranking every fired reason; an unregistered code raises |
+| `dates.EffectiveVersions` | the `rule_set_version` in force on the decision date |
 | `consent.consent_verdict_step`, `channel_permitted_step` | whether the client may be told on the chosen channel |
 
 It publishes nothing for other examples to import.
