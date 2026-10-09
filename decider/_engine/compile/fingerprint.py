@@ -51,10 +51,10 @@ def fingerprint(fn: Callable, *, strict: bool = False) -> str:
     values and the globals it reads: functions by their own content (an
     `lru_cache` wrapper by the function it wraps), modules by name plus the
     functions, submodules and data (`mod.LIMIT`) the function reaches through
-    them, classes by `module:qualname` (an enum class also by its members),
-    enum members by class and name, numbers, strings, dates, Decimals, regexes
-    and tuples, lists, dicts and sets of those by value, numpy arrays and
-    polars DataFrames by value. Any other object is keyed by identity, which changes
+    them, classes by `module:qualname` and their own methods and constants (an
+    enum class also by its members), enum members by class and name, numbers,
+    strings, dates, Decimals, regexes and tuples, lists, dicts and sets of those
+    by value, numpy arrays and polars DataFrames by value. Any other object is keyed by identity, which changes
     every process; `strict=True` raises instead. Leaves out the function's
     name, file and line numbers, so renaming or moving a step keeps its
     compiled code, while editing a constant, a closure value or a global it
@@ -205,6 +205,31 @@ def _qualified(cls: type) -> str:
     return f"{cls.__module__}:{cls.__qualname__}"
 
 
+def _class(w: _Walk, cls: type) -> None:
+    w.h.update(f"class:{_qualified(cls)}".encode())
+    if id(cls) in w.seen:
+        return
+    w.seen.add(id(cls))
+    if issubclass(cls, enum.Enum):  # a member's value is compiled in as a constant
+        _container(w, "members", [(m.name, m.value) for m in cls])
+    # Its body too, or a step keeps the code it compiled against an edited method, constant or namedtuple
+    # field. Methods by their own code, not what they reach; an attribute with no content key (a
+    # descriptor, a registry) is left out, as keying it by identity would miss every other process.
+    for name, attr in sorted(vars(cls).items()):
+        attr = getattr(attr, "__func__", attr)  # a staticmethod or classmethod
+        if isinstance(attr, types.FunctionType):
+            w.h.update(name.encode())
+            _code(w.h, attr.__code__)
+            continue
+        part = _Walk(True)
+        part.seen = set(w.seen)  # a copy: a failed attempt must not mark what it reached as hashed
+        try:
+            _value(part, attr)
+        except ValueError:
+            continue
+        w.h.update(f"{name}:{part.h.hexdigest()}".encode())
+
+
 def _container(w: _Walk, kind: str, items: Any) -> None:
     # Delimited, so (1, (2,)) and ((1,), 2) differ; a container reaching itself is hashed once.
     w.seen.add(id(items))
@@ -282,9 +307,7 @@ def _value(w: _Walk, value: Any, names: frozenset | set = frozenset()) -> None:
     elif isinstance(value, enum.Enum):
         h.update(f"member:{_qualified(type(value))}.{value.name}".encode())
     elif isinstance(value, type):
-        h.update(f"class:{_qualified(value)}".encode())
-        if issubclass(value, enum.Enum):  # a member's value is compiled in as a constant
-            _container(w, "members", [(m.name, m.value) for m in value])
+        _class(w, value)
     elif isinstance(value, _LITERALS + _BY_VALUE):
         h.update(f"{type(value).__name__}:{value!r}".encode())
     elif (isinstance(value, tuple) or type(value) in (list, dict, set, frozenset)) and id(value) not in w.seen:

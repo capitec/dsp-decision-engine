@@ -9,7 +9,7 @@ from pydantic_core import from_json
 
 from decider.serving._errors import InputParsingError
 from decider.ops.nested import struct_item
-from decider.ir import base_annotation, has_optional_key, without_absent
+from decider.ir import base_annotation, pydantic_ready, without_absent
 
 
 def parse_application_json(data: bytes) -> t.Union[t.Dict[str, t.Any], pl.DataFrame]:
@@ -48,7 +48,7 @@ def has_date(annotation: t.Any) -> bool:
 def _adapter(annotation: t.Any) -> TypeAdapter:
     # Keeps the keys a TypedDict doesn't declare: one declaring only the date fields must not drop the rest.
     # pydantic takes a config only for a container, hence the one-element list.
-    return TypeAdapter(list[annotation], config=ConfigDict(extra="allow"))
+    return TypeAdapter(list[pydantic_ready(annotation)], config=ConfigDict(extra="allow"))
 
 
 def coerce_record(record: t.Dict[str, t.Any], dates: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:

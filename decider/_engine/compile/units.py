@@ -158,6 +158,7 @@ class Fallback:
         fixed = dict(node.consts) | {d.arg: b for d, b in zip(node.params, bundle)}
         boxes = self._boxes
         fixed = {a: boxes[a](x) if a in boxes else x for a, x in fixed.items()}
+        per_output = list(zip(outs, masks, self._scales, [out.dtype == np.int64 for out in outs], call.writes))
         for r in range(n):
             args = [(a, None if m is not None and not m[r] else boxes[a](col[r]) if a in boxes else col[r])
                     for a, col, m in cols]
@@ -167,18 +168,19 @@ class Fallback:
                 result = self.fn(**dict(args), **fixed)
             if len(outs) == 1 and node.kind == "scalar":
                 result = (result,)
-            for out, mask, x, scale, v in zip(outs, masks, result, self._scales, call.writes):
+            for (out, mask, scale, whole, v), x in zip(per_output, result):
                 x = x.text if isinstance(x, Text) else x
                 if x is None:
                     mask[r], x = False, 0
                 elif scale is not None:
                     x = to_raw(x, scale)
-                elif out.dtype == np.int64 and isinstance(x, (float, np.floating)) and not x.is_integer():
+                elif whole and isinstance(x, (float, np.floating)) and not x.is_integer():
                     raise refuse(f"step '{node.origin.path}' output '{v.name}'" + (f" (row {r})" if n > 1 else ""), x)
                 out[r] = x
         if node.kind == "scalar":
             for o, out, mask in zip(node.outputs, outs, masks):
-                check_output(node.origin.path, o, [x if m else None for x, m in zip(out, mask)])
+                if out.dtype == object:  # a number, Decimal or bool has its declared type already
+                    check_output(node.origin.path, o, [x if m else None for x, m in zip(out, mask)])
         for v, out, mask, table in zip(call.writes, outs, masks, self._tables):
             values[v.id] = out
             if not mask.all():

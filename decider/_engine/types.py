@@ -7,6 +7,7 @@ from types import UnionType
 from typing import Annotated, Any, NamedTuple, Union, get_args, get_origin, get_type_hints
 
 import numpy as np
+import typing_extensions as te
 
 from decider.ops.measures import DecimalSpec
 from decider.ops.nested import Columnar
@@ -92,6 +93,34 @@ def columnar_item(annotation: Any) -> Any | None:
 def item_schema(item: Any) -> tuple[tuple[str, Any], ...]:
     """`Item`'s fields in declaration order, as `(name, type)` pairs."""
     return tuple(get_type_hints(item).items())
+
+
+def pydantic_ready(annotation: Any, _seen: tuple = ()) -> Any:
+    """`annotation` with each `typing.TypedDict` in it rebuilt from `typing_extensions`, which pydantic takes on
+    every Python; it refuses `typing`'s before 3.12.
+
+    Example::
+
+        TypeAdapter(list[pydantic_ready(Offer)]).validate_python([{"v": 1.0}])
+    """
+    if te.is_typeddict(annotation):
+        if annotation in _seen:  # a TypedDict that holds itself stays as declared
+            return annotation
+        hints = te.get_type_hints(annotation, include_extras=True)
+        ready = {k: pydantic_ready(v, (*_seen, annotation)) for k, v in hints.items()}
+        if type(annotation).__module__ != "typing" and ready == hints:
+            return annotation
+        return te.TypedDict(annotation.__name__, {
+            k: v if get_origin(v) in (te.Required, te.NotRequired) or k in annotation.__required_keys__
+            else te.NotRequired[v] for k, v in ready.items()})
+    args = get_args(annotation)
+    ready = tuple(pydantic_ready(a, _seen) for a in args)
+    if ready == args:
+        return annotation
+    origin = get_origin(annotation)
+    if origin is Annotated:
+        return Annotated[(ready[0], *annotation.__metadata__)]
+    return Union[ready] if origin in (Union, UnionType) else origin[ready if len(ready) > 1 else ready[0]]
 
 
 @annotation_cache

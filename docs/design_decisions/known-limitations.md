@@ -4,7 +4,7 @@ Gaps in the current code that users and maintainers should know about before rel
 
 ## Compilation and caching
 
-**Object globals are keyed by identity.** A step reading an instance of a class of its own is fingerprinted with `id()` (`_engine/compile/fingerprint.py`); a `dict`, `list` or `set` is keyed by value.
+**Object globals are keyed by identity.** A step reading an instance of a class of its own is fingerprinted with `id()` (`_engine/compile/fingerprint.py`); numbers, strings, dates, Decimals, regexes, enums, classes and plain containers of those are keyed by value. A class is keyed by its own methods' bytecode and constants, not by what its methods call, and a jitclass by its numba type, which differs per process.
 Impact: the numba disk cache from `decider build` misses on another process, and `decider.lab.diff` reads the step as always changed. Binding warns with `HiddenStateWarning`; put the data in literals, a config document, `param()`s or `param_table`s.
 
 **Frame steps are not checked for hidden state.** `Engine.bind` lints scalar and row steps only, so a frame step reading a registry (the fraud rule set) is not warned about.

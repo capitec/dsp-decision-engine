@@ -12,6 +12,7 @@ import typing as t
 from dataclasses import dataclass, field
 from types import MappingProxyType
 
+import numpy as np
 import polars as pl
 from pydantic_core import to_json
 
@@ -20,9 +21,9 @@ from decider.serving._errors import (InputParsingError, OutputFormattingError, U
                                      UnsupportedContentTypeError)
 from decider.config import ConfigStore, Version
 from decider import Engine, Executable
-from decider.ir import has_optional_key
+from decider.ir import base_annotation, has_optional_key
 from decider.steps import ConfigurableStep, Step
-from decider.ops.nested import struct_item
+from decider.ops.nested import Columnar, struct_item
 from ._format import DEFAULT_OUTPUT_FORMATTERS, Response
 from ._parse import DEFAULT_INPUT_HANDLERS, coerce_frame, coerce_record, dummy, has_date
 
@@ -44,6 +45,8 @@ def _json_fallback(value: t.Any) -> str:
 
     if isinstance(value, Decimal):
         return str(Decimal.from_raw(value.raw, value.scale))
+    if isinstance(value, np.generic):  # a numpy number a Python step put in a dict
+        return value.item()
     raise TypeError(f"{type(value).__name__} is not JSON serializable")
 
 
@@ -278,9 +281,15 @@ def _inputs(exe: Executable) -> list:
 
 
 def _dates(exe: Executable, also: t.Callable[[t.Any], bool] = lambda _: False) -> dict[str, t.Any]:
-    # A `Struct[Item]` input arrives as Item's dict, which is what pydantic can validate.
-    return {v.name: struct_item(v.annotation) or v.annotation for v in _inputs(exe)
-            if has_date(v.annotation) or also(v.annotation)}
+    return {v.name: _as_sent(v.annotation) for v in _inputs(exe) if has_date(v.annotation) or also(v.annotation)}
+
+
+def _as_sent(annotation: t.Any) -> t.Any:
+    # What pydantic can validate: a `Struct[Item]` input arrives as Item's dict, a `Columnar[Item]` as a list of them.
+    base = base_annotation(annotation)
+    if t.get_origin(base) is Columnar:
+        return list[t.get_args(base)[0]]
+    return struct_item(base) or annotation
 
 
 def _is_flow_file(pipeline: t.Any) -> bool:
