@@ -146,9 +146,16 @@ def test_duplicate_overlay_ids_are_rejected_when_the_document_loads():
         stack(overlay(adjustment_id="A"), overlay(adjustment_id="A"))
 
 
-def test_a_scope_field_the_step_does_not_match_on_is_rejected_when_the_document_loads():
+def test_a_scope_field_the_step_does_not_match_on_is_rejected_when_the_step_is_built():
+    sectoral = stack(overlay(scope={"sector_code": 412}))
     with pytest.raises(ValueError, match="sector_code"):
-        stack(overlay(scope={"sector_code": 412}))
+        flow(sectoral, name="t").compile("interpreted")
+
+
+def test_apply_matches_any_provenance_field():
+    sectoral = stack(overlay(scope={"sector_code": 412}))
+    assert apply(sectoral, {"sector_code": 412}).adjusted_value == 590.0
+    assert apply(sectoral, {"sector_code": 413}).adjusted_value == 600.0
 
 
 def test_the_step_overlays_the_base_column_and_the_stack_flag_switches_it_off(score):

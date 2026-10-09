@@ -323,9 +323,6 @@ class AdjustmentStack(ConfigurableStep):
         stray = [a.adjustment_id for a in self.adjustments if a.target != self.target]
         if stray:
             raise ValueError(f"overlays {stray} are not for target {self.target!r}")
-        unmatched = sorted({k for a in self.adjustments for k in a.scope} - set(SCOPE_COLUMNS))
-        if unmatched:
-            raise ValueError(f"scope fields {unmatched} are not columns this step matches on: {list(SCOPE_COLUMNS)}")
         return self
 
     def _ordered(self) -> tuple[tuple, ...]:
@@ -343,6 +340,10 @@ class AdjustmentStack(ConfigurableStep):
                                 tuple(AdjustmentEvaluation(*e) for e in evaluations))
 
     def to_ir(self, ctx: Any) -> Any:
+        unmatched = sorted({k for a in self.adjustments for k in a.scope} - set(SCOPE_COLUMNS))
+        if unmatched:
+            raise ValueError(f"{self.name}: scope fields {unmatched} are not columns the step matches on: "
+                             f"{list(SCOPE_COLUMNS)}. `apply` matches any provenance field.")
         return ctx.call(
             self, apply_adjustments, inputs={"adjustment_base_value": self.base_field or self.target},
             values={"overlays": self._ordered(), "set_id": self.set_id, "adjustment_stack_enabled": self.stack_enabled},
