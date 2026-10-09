@@ -1,9 +1,13 @@
 {
- "config_version": "0.1.0",
+ "config_version": "0.2.0",
  "decision_date": "2026-09-24",
  "decision_id": "biz-2026-0900123",
  "documents": {
-  "params": "2e131d29f5467fe7"
+  "business_pd_adjustments": "f3b76e2fbfecd46a",
+  "entity_score_adjustments": "003d50b45c29baef",
+  "event_threshold_overlays": "37cbe36c8bdc8bb1",
+  "params": "2e131d29f5467fe7",
+  "reason_codes": "e5f9563cf6a828e7"
  },
  "flow": "business",
  "mode": "fused",

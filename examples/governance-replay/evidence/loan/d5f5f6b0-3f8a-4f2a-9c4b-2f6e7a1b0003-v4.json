@@ -3,8 +3,13 @@
  "decision_date": "2026-09-24",
  "decision_id": "d5f5f6b0-3f8a-4f2a-9c4b-2f6e7a1b0003-v4",
  "documents": {
+  "calibration_scale_adjustments": "b02e0c4e054bc6cf",
   "params": "0d6be6a81b6b1cb2",
-  "rate_card_flex_loan": "8436d2139a7e3a24"
+  "probability_of_default_adjustments": "17fb9cb1e3185841",
+  "probability_of_default_for_grading_adjustments": "fab72bc110a09428",
+  "rate_card_flex_loan": "8436d2139a7e3a24",
+  "reason_codes": "671b4db1e20e2783",
+  "score_adjustments": "59b9d24553b41641"
  },
  "flow": "loan",
  "mode": "fused",
