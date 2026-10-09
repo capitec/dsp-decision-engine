@@ -7,36 +7,78 @@ from __future__ import annotations
 
 import math
 from datetime import date
+from pathlib import Path
+from typing import Any, Literal
 
-from decider import allow_fallback, helper, step
+from pydantic import BaseModel, ConfigDict
 
-from credit_core.dates import EffectiveDatedSet, EffectiveVersion
+from decider import ConfigurableStep, allow_fallback, helper
+
+from credit_core.dates import EffectiveVersions
 from credit_core.obligations import Account, assess
 
 from business_credit_e2e import vocab
 
-# version -> (threshold, days to cure a breach). The 2028 version changes the denominator (lease liabilities) and
-# keeps the threshold.
-DSCR_VERSIONS = {
-    "dscr-2024.01": (1.20, 30),
-    "dscr-2026.03": (1.25, 30),
-    "dscr-2028.09": (1.25, 30),
-}
-
-DSCR_HISTORY = EffectiveDatedSet("COV-DSCR", [
-    EffectiveVersion("dscr-2024.01", date(2024, 1, 1), date(2026, 3, 1)),
-    EffectiveVersion("dscr-2026.03", date(2026, 3, 1), date(2028, 9, 1)),
-    EffectiveVersion("dscr-2028.09", date(2028, 9, 1), None),
-])
+CONFIGS = Path(__file__).resolve().parents[1] / "configs" / "0.1.0"
 
 
-def bind_covenant(facility_id: int, decision_date: date) -> dict:
+class Terms(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    version_id: str
+    threshold: float
+    cure_days: int
+
+
+class CovenantTerms(ConfigurableStep):
+    """The threshold and cure period of each DSCR definition version, written for the version in `covenant_definition_version`.
+
+    Example::
+
+        terms = CovenantTerms(terms=[Terms(version_id="dscr-2026.03", threshold=1.25, cure_days=30)])
+        terms.for_version("dscr-2026.03")   # (1.25, 30)
+    """
+
+    type: Literal["covenant_terms"] = "covenant_terms"
+    name: str = "covenant_terms"
+    terms: tuple[Terms, ...]
+
+    def _packed(self) -> tuple[tuple[str, float, int], ...]:
+        return tuple((t.version_id, t.threshold, t.cure_days) for t in self.terms)
+
+    def for_version(self, version_id: str) -> tuple[float, int]:
+        return terms_for_version(version_id, self._packed())
+
+    def to_ir(self, ctx: Any) -> Any:
+        return ctx.call(self, terms_for_version, inputs={"version_id": "covenant_definition_version"},
+                        values={"terms": self._packed()}, outputs=("covenant_threshold", "covenant_cure_days"))
+
+
+@allow_fallback
+def terms_for_version(version_id: str, terms: tuple[tuple[str, float, int], ...]) -> tuple[float, int]:
+    for known, threshold, cure_days in terms:
+        if known == version_id:
+            return threshold, cure_days
+    raise LookupError(f"no covenant terms for DSCR version {version_id!r}")
+
+
+def load_covenant_documents() -> tuple[EffectiveVersions, CovenantTerms]:
+    """The shipped DSCR version history and terms (`configs/0.1.0/dscr_versions.json` and `dscr_terms.json`)."""
+    # `EffectiveVersions.load` would call its own `resolve(as_of)` instead of the type lookup.
+    return ConfigurableStep.load(CONFIGS / "dscr_versions.json"), ConfigurableStep.load(CONFIGS / "dscr_terms.json")
+
+
+def bind_covenant(facility_id: int, decision_date: date, dscr_versions: EffectiveVersions | None = None,
+                  dscr_terms: CovenantTerms | None = None) -> dict:
     """The covenant instance of a new facility, pinned to the DSCR version in force on `decision_date`.
 
+    The version history and terms default to the shipped documents.
     Example: `bind_covenant(500001, date(2026, 9, 24))["covenant_definition_version"]` is `"dscr-2026.03"`.
     """
-    version = DSCR_HISTORY.resolve(decision_date).version_id
-    threshold, cure_days = DSCR_VERSIONS[version]
+    shipped = load_covenant_documents()
+    versions, terms = dscr_versions or shipped[0], dscr_terms or shipped[1]
+    version = versions.resolve(decision_date).version_id
+    threshold, cure_days = terms.for_version(version)
     return {"covenant_instance_id": f"COV-DSCR-{facility_id}", "covenant_definition_version": version,
             "threshold": threshold, "cure_days": cure_days}
 
@@ -96,15 +138,8 @@ def certificate_not_received(instance: dict, test_date: date, determination_date
     }
 
 
-# The steps below bind the covenant inside the origination flow, from the same functions.
-
-covenant_definition_version = DSCR_HISTORY.resolver_step(output="covenant_definition_version")
-
-
-@allow_fallback
-@step(outputs=("covenant_threshold", "covenant_cure_days"))
-def covenant_terms(covenant_definition_version: str) -> tuple[float, int]:
-    return DSCR_VERSIONS[covenant_definition_version]
+# The steps below bind the covenant inside the origination flow. The version history and the terms are documents
+# (`dscr_versions.json`, `dscr_terms.json`) that `pipeline.build` receives.
 
 
 @allow_fallback

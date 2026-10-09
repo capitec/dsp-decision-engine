@@ -1,9 +1,14 @@
 """The DSCR covenant: the version binds once, and a test keeps its three dates apart."""
+import warnings
 from datetime import date
 
 import pytest
 
+from decider import Engine, HiddenStateWarning
+from decider.lab import diff
+
 from business_credit_e2e import covenant, vocab
+from business_credit_e2e.pipeline import build
 
 
 def run_test(instance, ebitda=1_200_000.0, debt_service=80_000.0, test=date(2029, 6, 30), delivery=date(2029, 8, 29),
@@ -20,7 +25,7 @@ def test_a_new_covenant_is_bound_to_the_version_in_force_at_approval():
 def test_a_covenant_bound_in_2026_is_still_tested_on_that_version_in_2029():
     result = run_test(covenant.bind_covenant(3, date(2026, 6, 1)))
     assert result["covenant_definition_version"] == "dscr-2026.03"  # not dscr-2028.09, in force by the 2029 test
-    assert covenant.DSCR_HISTORY.resolve(result["test_date"]).version_id == "dscr-2028.09"
+    assert covenant.load_covenant_documents()[0].resolve(result["test_date"]).version_id == "dscr-2028.09"
 
 
 def test_three_dates_are_recorded_as_given():
@@ -57,3 +62,20 @@ def test_a_missing_certificate_is_not_tested_and_not_a_financial_result():
 
 def test_no_debt_service_is_an_infinite_ratio_and_no_breach():
     assert run_test(covenant.bind_covenant(8, date(2026, 6, 1)), debt_service=0.0)["breach_class_code"] == vocab.BREACH_NONE
+
+
+def test_a_changed_threshold_in_the_terms_document_is_a_different_pipeline():
+    versions, terms = covenant.load_covenant_documents()
+    stricter = terms.model_copy(update={"terms": tuple(
+        t.model_copy(update={"threshold": 1.5}) if t.version_id == "dscr-2026.03" else t for t in terms.terms)})
+    assert diff.structure(build(versions, terms), build(versions, terms)).identical
+    assert not diff.structure(build(versions, terms), build(versions, stricter)).identical
+    assert stricter.for_version("dscr-2026.03") == (1.5, 30)
+
+
+def test_the_covenant_steps_read_no_hidden_state():
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        Engine().bind(build(), mode="interpreted")
+    assert [str(w.message) for w in caught if issubclass(w.category, HiddenStateWarning)
+            and ("covenant" in str(w.message) or "COV-DSCR" in str(w.message))] == []
