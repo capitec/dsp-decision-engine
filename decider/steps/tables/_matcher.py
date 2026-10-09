@@ -25,7 +25,7 @@ from decider.steps.tables._encode import (
     VAR,
     WIDTH,
 )
-from decider.steps.trees._walker import EXACT, NULL_INT, _compare, _matches, split
+from decider.steps.trees._walker import EXACT, NULL_INT, _compare, _kind, _matches, split
 
 
 @njit(inline="always")
@@ -39,7 +39,7 @@ def _f(base, k):
 
 
 @njit
-def _holds(r, f, i, b, s, rows, code, n):
+def _holds(r, f, b, s, rows, code, n):
     # Program row `code` tested against table row `r`; a null input never matches.
     ints, floats, chars = rows[0], rows[1], rows[2]
     kind, v, leaf = _i(code, KIND), _i(code, VAR), _i(code, LEAF)
@@ -61,20 +61,6 @@ def _holds(r, f, i, b, s, rows, code, n):
             if y == _f(floats, j):
                 return True
         return False
-    if kind == EQ_I or kind == IN_I or kind == BETWEEN_I:
-        xi = i[v]
-        if xi == NULL_INT:
-            return False
-        if kind == EQ_I:
-            return _i(ints, i0 + r) != 0 and xi == _i(ints, i0 + n + r)
-        if kind == IN_I:
-            for j in range(_i(ints, i0 + r), _i(ints, i0 + r + 1)):
-                if xi == _i(ints, j):
-                    return True
-            return False
-        if _i(ints, i0 + r) and not _compare(_i(code, LO_OP), xi, _i(ints, i0 + 2 * n + r)):
-            return False
-        return not _i(ints, i0 + n + r) or _compare(_i(code, HI_OP), xi, _i(ints, i0 + 3 * n + r))
     if kind == EQ_B:
         z = b[v]
         if z is None or not _i(ints, i0 + r):
@@ -99,16 +85,79 @@ def _holds(r, f, i, b, s, rows, code, n):
 
 
 @njit
-def _scan(f, i, b, s, rows, prog, entry):
+def _scan(f, b, s, rows, prog, entry):
     n = rows[3]
     for r in range(n):
         pc = entry
         while pc >= 0:
             code = prog + 8 * WIDTH * pc
-            pc = _i(code, THEN) if _holds(r, f, i, b, s, rows, code, n) else _i(code, ELSE)
+            pc = _i(code, THEN) if _holds(r, f, b, s, rows, code, n) else _i(code, ELSE)
         if pc == MATCH:
             return r
     return -1
+
+
+def groups(row):
+    """`(floats, ints, bools, spans)` of `row`, with `None` for the ints when it has none."""
+
+
+@overload(groups, inline="always")
+def _groups(row):
+    if any(_kind(t) == 1 for t in row.types):
+        return lambda row: split(row)
+
+    def impl(row):
+        f, _, b, s = split(row)
+        return f, None, b, s
+
+    return impl
+
+
+@njit
+def _holds_i(r, f, i, b, s, rows, code, n):
+    # Only a table with int variables pays for this: the others scan with `_holds` alone.
+    kind = _i(code, KIND)
+    if kind != EQ_I and kind != IN_I and kind != BETWEEN_I:
+        return _holds(r, f, b, s, rows, code, n)
+    ints = rows[0]
+    i0 = _i(ints, 2 * _i(code, LEAF))
+    xi = i[_i(code, VAR)]
+    if xi == NULL_INT:
+        return False
+    if kind == EQ_I:
+        return _i(ints, i0 + r) != 0 and xi == _i(ints, i0 + n + r)
+    if kind == IN_I:
+        for j in range(_i(ints, i0 + r), _i(ints, i0 + r + 1)):
+            if xi == _i(ints, j):
+                return True
+        return False
+    if _i(ints, i0 + r) and not _compare(_i(code, LO_OP), xi, _i(ints, i0 + 2 * n + r)):
+        return False
+    return not _i(ints, i0 + n + r) or _compare(_i(code, HI_OP), xi, _i(ints, i0 + 3 * n + r))
+
+
+@njit
+def _scan_i(f, i, b, s, rows, prog, entry):
+    n = rows[3]
+    for r in range(n):
+        pc = entry
+        while pc >= 0:
+            code = prog + 8 * WIDTH * pc
+            pc = _i(code, THEN) if _holds_i(r, f, i, b, s, rows, code, n) else _i(code, ELSE)
+        if pc == MATCH:
+            return r
+    return -1
+
+
+def scan(f, i, b, s, rows, prog, entry):
+    """The first table row the inputs match, or -1: `_scan`, or `_scan_i` when there are int inputs."""
+
+
+@overload(scan, inline="always")
+def _scan_for(f, i, b, s, rows, prog, entry):
+    if isinstance(i, types.NoneType):
+        return lambda f, i, b, s, rows, prog, entry: _scan(f, b, s, rows, prog, entry)
+    return lambda f, i, b, s, rows, prog, entry: _scan_i(f, i, b, s, rows, prog, entry)
 
 
 def table(params, consts):
@@ -175,5 +224,5 @@ def match(row, params, consts):
     `consts` is `(program address, entry, outputs[, Rows])`; the rows come
     from `params` when they are a table param. Only numbers cross this call.
     """
-    f, i, b, s = split(row)
-    return pick(consts[2], table(params, consts), _scan(f, i, b, s, table(params, consts), consts[0], consts[1]))
+    f, i, b, s = groups(row)
+    return pick(consts[2], table(params, consts), scan(f, i, b, s, table(params, consts), consts[0], consts[1]))
