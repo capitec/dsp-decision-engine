@@ -10,9 +10,10 @@ from dataclasses import dataclass
 
 from assessment import verdict
 from credit_core.instalment import instalment_before_fees
+from credit_core.reason_codes import rank_codes
 
 from consolidation import interventions, reasons
-from consolidation.capacity import Buffers, Capacity, case_record, debt_service_ratio
+from consolidation.capacity import Capacity, case_record, debt_service_ratio
 from consolidation.inventory import num
 from consolidation.products import Quote
 from consolidation.settlement import settlement_buffer
@@ -52,11 +53,14 @@ class ScenarioEvaluator:
     policies: dict[int, dict]
     products: dict
     capacity: Capacity
-    buffers: Buffers
+    buffers: dict[int, float]  # the affordability buffer of each product
     buffer_policy: dict
     economics: dict  # cost_of_funds, expected_loss_rate
     max_consolidations_24m: int
     stack_enabled: bool
+    intervention_overlays: tuple  # `OverlaySet.packed()` of the overlays on the intervention thresholds
+    rejection_severity: tuple[tuple[int, int], ...]  # (code, severity rank) of each rejection code
+    rejection_version: str
 
     def __post_init__(self):
         self.by_ref = {a["account_ref"]: a for a in self.accounts}
@@ -87,15 +91,15 @@ class ScenarioEvaluator:
                     "unpriced_reason": quote}
 
         case = case_record(r["decision_date"], product_code, r["channel_code"], r["segment_code"],
-                           r["court_ordered_deductions"], self.invariants, self.buffers(product_code, r["risk_grade"]))
+                           r["court_ordered_deductions"], self.invariants, self.buffers[product_code])
         after = self.capacity(case, self.accounts, amounts, quote.tested_payment, self.stack_enabled)
         facts, position = self._position(settled, refs, term_months, quote, new_money, total, external, after)
         checks = interventions.evaluate(facts, policy, r["decision_date"], r["consolidations_last_24_months"],
-                                        self.max_consolidations_24m, self.stack_enabled)
+                                        self.max_consolidations_24m, self.intervention_overlays, self.stack_enabled)
         rejections = [1000 + c["intervention"] for c in checks if c["status"] == interventions.FAILED]
         if after["affordability_verdict_code"] != verdict.PASS:
             rejections.append(reasons.AFFORDABILITY_FAIL)
-        ranked, primary = reasons.SCENARIO_REJECTIONS.rank(rejections)
+        ranked, primary = rank_codes(rejections, self.rejection_severity, self.rejection_version)
         return {
             **record, "viable": not rejections, "rejection_reason_codes": ranked, "primary_rejection_reason_code": primary,
             "interventions": checks,

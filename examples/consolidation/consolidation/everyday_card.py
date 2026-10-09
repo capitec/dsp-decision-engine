@@ -8,19 +8,14 @@ from __future__ import annotations
 import bisect
 import math
 
+from credit_core.evidence import cell_id
 from credit_core.rate_card import rate_card_rate
 from credit_core.rounding import round_instalment
-from decider import (
-    DecisionTableConfig,
-    ParamTable,
-    allow_fallback,
-    param,
-    param_table,
-    step,
-)
+from decider import ParamTable, allow_fallback, param, param_table, step
 
 from consolidation import vocab
 from consolidation.products import Quote
+from consolidation.rate_tables import PROMOTIONAL_CARD, REVERSION_CARD
 from consolidation.vocab import PRODUCT_EVERYDAY_CARD
 
 CODE = PRODUCT_EVERYDAY_CARD
@@ -55,35 +50,41 @@ def everyday_card_policy(
 
 
 class CardRates:
-    """The two small rate documents as sorted limit bands: `promotional(limit, months, grade)` and `reversion(limit, grade)`
-    each give `(rate as a fraction, cell id)` or None."""
+    """The two rate tables as sorted limit bands: `promotional(limit, months, grade)` and `reversion(limit, grade)`
+    each give `(rate as a fraction, cell id)` or None.
 
-    def __init__(self, promotional: DecisionTableConfig, reversion: DecisionTableConfig):
-        self.version = "+".join(t.rows.df["cell_id"][0].split("@")[1].split("#")[0] for t in (promotional, reversion))
-        self._promotional = self._index(promotional, ("duration", "grade"))
-        self._reversion = self._index(reversion, ("grade",))
+    The tables are the arrays of `rate_tables.card_params`; each has its version, and `version` joins the two.
+    """
+
+    def __init__(self, promotional: ParamTable, promotional_version: str, reversion: ParamTable, reversion_version: str):
+        self.version = f"{promotional_version}+{reversion_version}"
+        self._versions = (promotional_version, reversion_version)
+        self._promotional = self._index(zip(promotional.duration.tolist(), promotional.grade.tolist()), promotional)
+        self._reversion = self._index(((g,) for g in reversion.grade.tolist()), reversion)
 
     @staticmethod
-    def _index(table: DecisionTableConfig, keys: tuple[str, ...]) -> dict:
-        groups: dict[tuple, list[dict]] = {}
-        for row in table.rows.df.to_dicts():
-            groups.setdefault(tuple(row[k] for k in keys), []).append(row)
-        return {key: ([r["lim_lo"] for r in sorted(rows, key=lambda r: r["lim_lo"])], sorted(rows, key=lambda r: r["lim_lo"]))
-                for key, rows in groups.items()}
+    def _index(keys, table) -> dict:
+        index: dict[tuple, tuple[list, list, list]] = {}
+        for key, start, band, rate in zip(keys, table.lim_lo.tolist(), table.band.tolist(), table.rate.tolist()):
+            starts, bands, rates = index.setdefault(tuple(key), ([], [], []))
+            starts.append(start), bands.append(band), rates.append(rate)
+        return index
 
     @staticmethod
     def _hit(index: dict, key: tuple, limit: float):
         if key not in index:
             return None
-        starts, rows = index[key]
-        row = rows[bisect.bisect_right(starts, limit) - 1]
-        return rate_card_rate(row["rate"]), row["cell_id"]
+        starts, bands, rates = index[key]
+        i = bisect.bisect_right(starts, limit) - 1
+        return rate_card_rate(rates[i]), bands[i]
 
     def promotional(self, limit: float, months: int, grade: int):
-        return self._hit(self._promotional, (months, grade), limit)
+        hit = self._hit(self._promotional, (months, grade), limit)
+        return hit and (hit[0], cell_id(PROMOTIONAL_CARD, self._versions[0], hit[1], months, grade))
 
     def reversion(self, limit: float, grade: int):
-        return self._hit(self._reversion, (grade,), limit)
+        hit = self._hit(self._reversion, (grade,), limit)
+        return hit and (hit[0], cell_id(REVERSION_CARD, self._versions[1], hit[1], grade))
 
 
 def paydown(opening: float, promotional_rate: float, promotional_months: int, reversion_rate: float,

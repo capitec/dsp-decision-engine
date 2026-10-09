@@ -18,9 +18,9 @@ from decider import allow_fallback, missing_as, param, step
 from consolidation import eligibility, reasons, vocab
 from consolidation.inventory import num
 
-_GATE_REASONS = {"CON-ELIG-02": reasons.ADMINISTRATION, "CON-ELIG-03": reasons.SERIAL_CONSOLIDATION,
-                 "CON-ELIG-05": reasons.NO_INCOME, "CON-ELIG-06": reasons.NO_BUREAU_VIEW,
-                 "CON-ELIG-07": reasons.RECKLESS_ALLEGATION}
+_GATE_REASONS = (("CON-ELIG-02", reasons.ADMINISTRATION), ("CON-ELIG-03", reasons.SERIAL_CONSOLIDATION),
+                 ("CON-ELIG-05", reasons.NO_INCOME), ("CON-ELIG-06", reasons.NO_BUREAU_VIEW),
+                 ("CON-ELIG-07", reasons.RECKLESS_ALLEGATION))
 
 
 def decide(route: str, fired: dict, nomination_conflicts: list[int], evidence_sufficiency_code: int, plain: bool,
@@ -30,7 +30,7 @@ def decide(route: str, fired: dict, nomination_conflicts: list[int], evidence_su
     if route == eligibility.DEBT_REVIEW_PATH:
         return OUTCOME_REFER, [reasons.DEBT_REVIEW]
     if route in (eligibility.DECLINE, eligibility.REFER):
-        codes = [code for gate, code in _GATE_REASONS.items() if fired[gate]]
+        codes = [code for gate, code in _GATE_REASONS if fired[gate]]
         codes += [reasons.NOMINATION_CONFLICT] * bool(nomination_conflicts)
         return (OUTCOME_DECLINE if route == eligibility.DECLINE else OUTCOME_REFER), codes
     if evidence_sufficiency_code:
@@ -76,15 +76,17 @@ def conditions_of(settled: list[dict], accounts: dict[int, dict]) -> list[str]:
 
 
 @allow_fallback
-@step(outputs=("outcome_code", "decline_reason_codes", "primary_reason_code", "reason_registry_version", "chosen_offer",
-               "conditions", "offer_valid_until", "before_and_after", "execution_package"))
+@step(outputs=("outcome_code", "decline_reason_codes", "chosen_offer", "conditions", "offer_valid_until", "before_and_after",
+               "execution_package"))
 def outcome(
     eligibility_route: str, eligibility_gate_verdicts: dict, nomination_conflicts: list[int], baseline: dict,
     short_circuit_applies: bool, plain_offer: dict, chosen_scenario: dict, classified_accounts: list[dict],
     settlements: list[dict], decision_date: date, requested_amount: float = missing_as(0.0),
     offer_validity_days: int = param(21, ge=1, le=90),
-) -> tuple[int, list[int], int | None, str, dict, list[str], str | None, dict, list[dict]]:
-    """The outcome code, its reasons ranked most severe first, and for an approval the offer in full.
+) -> tuple[int, list[int], dict, list[str], str | None, dict, list[dict]]:
+    """The outcome code, the reasons that fired, and for an approval the offer in full.
+
+    The reasons are ranked, and the primary one chosen, by the `client_reason_codes` step that follows.
 
     `chosen_offer` is the winning scenario with the cost of each account it settles. `offer_valid_until` is the
     earlier of the offer validity and the first quotation to expire. `before_and_after` is the comparison the client is
@@ -96,15 +98,14 @@ def outcome(
     estimated = any(s["amount_basis"] == vocab.ESTIMATED_BASIS for s in chosen["settlement_details"])
     code, fired = decide(eligibility_route, eligibility_gate_verdicts, nomination_conflicts,
                          baseline["evidence_sufficiency_code"], plain, plain_offer, requested_amount, chosen_scenario, estimated)
-    ranked, primary = reasons.CLIENT_REASONS.rank(fired)
     approved = code in (OUTCOME_APPROVE, OUTCOME_APPROVE_WITH_CONDITIONS)
     if not (approved and chosen_scenario and not plain):
         offer = plain_offer if approved and plain else {}
-        return code, ranked, primary, reasons.CLIENT_REASONS.version, offer, [], None, {}, []
+        return code, fired, offer, [], None, {}, []
     accounts = {a["account_ref"]: a for a in classified_accounts}
     expiries = [date.fromisoformat(s["quotation_expiry_date"]) for s in chosen["settlement_details"]
                 if s["quotation_expiry_date"]]
     valid_until = min(expiries + [decision_date + timedelta(days=offer_validity_days)])
     longest = max([num(a, "remaining_term_months") for a in classified_accounts] + [0.0])
-    return (code, ranked, primary, reasons.CLIENT_REASONS.version, chosen, conditions_of(chosen["settlement_details"], accounts),
-            valid_until.isoformat(), comparison(baseline, longest, chosen), chosen["settlement_details"])
+    return (code, fired, chosen, conditions_of(chosen["settlement_details"], accounts), valid_until.isoformat(),
+            comparison(baseline, longest, chosen), chosen["settlement_details"])

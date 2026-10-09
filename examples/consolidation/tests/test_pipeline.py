@@ -42,7 +42,15 @@ def test_the_statutory_ceiling_and_fee_caps_are_those_in_force_on_the_decision_d
 
 def test_the_shipped_params_document_is_the_pipelines_defaults_and_valid(pipeline, documents, params):
     unit = build(*documents)
-    assert unit.parameters().defaults() == params
+    defaults = unit.parameters().defaults()
+    # the rate cards are documents of their own: the table params only default to their rows
+    for key in ("rate_card_product11", "rate_card_product11_version"):
+        del defaults["shared"][key]
+    for key in ("plain_rate_card", "plain_rate_card_version"):
+        del defaults["consolidation"]["plain_granting"][key]
+    for key in ("card_promotional_rates", "card_promotional_rates_version", "card_reversion_rates", "card_reversion_rates_version"):
+        del defaults["consolidation"]["search"][key]
+    assert defaults == params
     unit.parameters().validate(params).check()
 
 
@@ -54,7 +62,8 @@ def test_a_param_out_of_its_declared_range_is_invalid(documents, params, with_pa
 def test_every_params_section_is_named_for_the_team_that_owns_it(params):
     assert {"flex_loan_policy", "everyday_card_policy", "selection", "search", "settlements", "inventory",
             "eligibility_gates", "plain_granting", "outcome"} <= set(params["consolidation"])
-    assert params["shared"] == {"overlay_stack_enabled": True}
+    assert set(params["shared"]) == {"overlay_stack_enabled", "credit_life", "credit_life_version"}
+    assert params["shared"]["overlay_stack_enabled"] is True
 
 
 def test_the_sample_request_is_the_documented_shape(sample):

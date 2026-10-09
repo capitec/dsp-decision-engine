@@ -84,12 +84,13 @@ The stages, in the order the decision takes them:
 | Reusing another example's halves: `assessment.evidence_unit()` once in the flow, `capacity_unit()` compiled and scored per candidate debt set, equal to the whole assessment | [pipeline.py](consolidation/pipeline.py), [capacity.py](consolidation/capacity.py), [tests/test_assessment.py](tests/test_assessment.py) |
 | `each`: per-account rules as ordinary steps, with a `DecisionTableConfig` lookup inside the child | [inventory.py](consolidation/inventory.py) |
 | A search in plain Python called from a step, bounded by a count, with a recorded cause of termination and a test that a truncated run is a prefix of the full one | [search.py](consolidation/search.py), [candidates.py](consolidation/candidates.py), [tests/test_search.py](tests/test_search.py) |
-| `param_table`: the ordering rules in force and their sequence, the objective weights per channel, and each product's candidate terms and rate margins, retuned like params | [candidates.py](consolidation/candidates.py), [objective.py](consolidation/objective.py), [flex_loan.py](consolidation/flex_loan.py) |
+| `param_table`: the ordering rules in force and their sequence, the objective weights per channel, each product's candidate terms and rate margins, and the rate cards and credit life rates the search prices from, retuned like params | [candidates.py](consolidation/candidates.py), [objective.py](consolidation/objective.py), [flex_loan.py](consolidation/flex_loan.py), [rate_tables.py](consolidation/rate_tables.py) |
 | One steps-and-params section per product team (`flex_loan_policy`, `everyday_card_policy`), gathered into one record, so a team changes its own limits and thresholds without touching another's | [products.py](consolidation/products.py), [flex_loan.py](consolidation/flex_loan.py), [everyday_card.py](consolidation/everyday_card.py), [tests/test_products.py](tests/test_products.py) |
-| Rate cards kept as config documents and handed to `build` by name: an absolute-rate grid, and a promotional card and a reversion card read together | [pipeline.py](consolidation/pipeline.py), [`configs/0.1.0/`](configs/0.1.0), [scripts/generate_configs.py](scripts/generate_configs.py) |
-| Pricing through `loan_granting`'s `PriceEvaluator` over a card it was never written for, and its `solve_term` for the plain offer | [flex_loan.py](consolidation/flex_loan.py), [baseline.py](consolidation/baseline.py) |
-| Overlays from `credit_core`: the anti-harm ceiling tightened on one product and the objective re-weighted on one channel, both switched off by one shared param through the same code, with the base value kept beside the overlaid one | [interventions.py](consolidation/interventions.py), [objective.py](consolidation/objective.py), [tests/test_interventions.py](tests/test_interventions.py) |
-| `ReasonCodeRegistry` twice: why a scenario was rejected, and why a client was declined or referred | [reasons.py](consolidation/reasons.py) |
+| Rate cards kept as config documents and handed to `build` by name: an absolute-rate grid, and a promotional card and a reversion card read together. Each becomes the default rows of a table param, so a params document that sets the rows prices from its own | [pipeline.py](consolidation/pipeline.py), [rate_tables.py](consolidation/rate_tables.py), [`configs/0.1.0/`](configs/0.1.0), [scripts/generate_configs.py](scripts/generate_configs.py) |
+| Pricing through `loan_granting`'s `PriceEvaluator` over a card it was never written for, reading its `RateCardTable` and `CreditLifeTable` over table params, and its `solve_term` for the plain offer | [flex_loan.py](consolidation/flex_loan.py), [baseline.py](consolidation/baseline.py), [rate_tables.py](consolidation/rate_tables.py) |
+| Overlays as documents (`overlay_set`, built on `credit_core`'s `Overlay` and `evaluate`): the anti-harm ceiling tightened on one product and the objective re-weighted on one channel, both switched off by one shared param through the same code, with the base value kept beside the overlaid one. The search and the selection close over the overlays as tuples, so a release check sees an edit and not a reworded rationale | [overlays.py](consolidation/overlays.py), [interventions.py](consolidation/interventions.py), [objective.py](consolidation/objective.py), [tests/test_interventions.py](tests/test_interventions.py), [tests/test_documents.py](tests/test_documents.py) |
+| `reason_codes` documents twice: why a scenario was rejected (read by the search) and why a client was declined or referred (a step in the flow) | [reasons.py](consolidation/reasons.py), [`configs/0.1.0/`](configs/0.1.0) |
+| `each` over the products the search can price, reading the assessment's own buffer grid | [capacity.py](consolidation/capacity.py) |
 | `TypedDict` account lists: JSON date strings arrive as `date`s | [inventory.py](consolidation/inventory.py) |
 | `@allow_fallback` for steps that are Python on purpose, checked by `Engine(strict_compile=True)` | [tests/test_serving.py](tests/test_serving.py) |
 | Warm-up from `sample_request.json`, and serving the raw request bytes | [sample_request.json](sample_request.json), [tests/test_serving.py](tests/test_serving.py) |
@@ -208,7 +209,7 @@ Tests (run from the repository root, with `PYTHONPATH` set as above):
 uv run pytest examples/consolidation -q
 ```
 
-To regenerate `configs/0.1.0` (the synthetic rate cards, the settleability rules and the params document):
+To regenerate `configs/0.1.0` (the synthetic rate cards, the settleability rules, the reason codes, the overlays and the params document):
 `uv run python scripts/generate_configs.py`.
 
 ## Layout
@@ -219,7 +220,10 @@ consolidation/          the package
   inventory.py          the accounts, classified by the first matching rule (an `each` over the accounts)
   settlement.py         what it costs to close each settleable account, and the buffer
   eligibility.py        the seven gates and the route
-  capacity.py           the assessment's capacity half, scored once per candidate debt set
+  capacity.py           the assessment's capacity half, scored once per candidate debt set, and the buffer of each product
+  rate_tables.py        product 11's card, the Everyday Card's two rate tables and the credit life rates as table params
+  overlays.py           the `overlay_set` document: overlays on the values the search and the selection read
+  documents.py          the documents in `configs/0.1.0/`, for a caller of `build` that passes none
   baseline.py           the do-nothing position, the invariants, the plain offer and the short-circuit
   candidates.py         the eight ordering rules and the sets they generate
   search.py             the bounded search and its record
@@ -230,8 +234,9 @@ consolidation/          the package
   products.py           the Quote every product returns, and the gathered product policies
   flex_loan.py          product 11: a consolidation loan priced from its own card
   everyday_card.py      product 20: a balance transfer with a promotional rate that reverts
-  reasons.py vocab.py   the two reason registries; the codes this example declares
-configs/0.1.0/          params.json, the product 11 card, the two card rate documents, the settleability rules
+  reasons.py vocab.py   the codes this example declares
+configs/0.1.0/          params.json, the product 11 card, the two card rate documents, the settleability rules, the two
+                        reason code sets and the two overlay sets
 scripts/                generate_configs.py
 sample_request.json
 tests/
@@ -246,10 +251,10 @@ Later examples import `consolidation` by package name. These names are stable:
 | `consolidation.inventory.classify_unit(settleability_rules)` | The classification of a client's accounts as one step to embed in another flow: reads `accounts`, `decision_date` and optional nominations and exclusions, writes `classified_accounts` and the settleable, mandatory and excluded refs. Collections and limit management want exactly this |
 | `consolidation.inventory.Account` | The `TypedDict` of an account in the inventory |
 | `consolidation.settlement.settlements`, `derive_settlement(...)`, `settlement_buffer(total, pct, cap)` | What it costs to close each settleable account, with components, and the cushion added to an advance |
-| `consolidation.candidates.candidate_sets(...)`, `RULES` | The ordered, deduplicated candidate sets for any list of settleable accounts |
+| `consolidation.candidates.candidate_sets(...)`, `RULES`, `rule(number)` | The ordered, deduplicated candidate sets for any list of settleable accounts; `RULES` is a tuple of `(number, name, sort key)` |
 | `consolidation.scenario.ScenarioEvaluator` | Evaluates one scenario for one assessment: `evaluate(scenario_id, refs, rule, product_code, term_months, promotional_months)` |
-| `consolidation.capacity.Capacity`, `case_record(...)` | The assessment's capacity half, scored per candidate debt set against fixed invariants |
-| `consolidation.objective.rank(...)`, `weights_in_force(...)` | Ranking viable scenarios by a weight vector: ties, distinct top three, indifference band, gaps, shadow result |
+| `consolidation.capacity.Capacity(*capacity_documents())`, `case_record(...)` | The assessment's capacity half, scored per candidate debt set against fixed invariants; built from the capacity overlay and reason code documents the first time they are used |
+| `consolidation.objective.rank(...)`, `weights_in_force(table, channel, date, enabled, overlays)` | Ranking viable scenarios by a weight vector: ties, distinct top three, indifference band, gaps, shadow result |
 | `consolidation.products.Quote` and the product classes | What a product returns; a fifth product is a class with `unavailable`, `carries`, `variants`, `quote` and `bind`, a policy step, and a line in `product_policies` |
 
 Inputs it reads that the caller owns: `decision_id`, `decision_date`, `channel_code`, `segment_code`, `risk_grade`,
@@ -281,8 +286,9 @@ Inputs it reads that the caller owns: `decision_id`, `decision_date`, `channel_c
   and R50 000 (the product's own thresholds, in `params.json`). A card carries none.
 - **Params, per owner.** `flex_loan_policy` and `everyday_card_policy` hold each product team's limits, thresholds and
   term ladders (every one with the range the policy allows); `selection` holds the weights per channel; `search` the
-  budget and the rules in force; `settlements` the buffer and the early settlement rules. The overlays are code, with
-  their approval, window and review date, and one shared param, `shared.overlay_stack_enabled`, switches them all off.
+  budget and the rules in force; `settlements` the buffer and the early settlement rules. The overlays are
+  `overlay_set` documents (`intervention_adjustments.json`, `objective_adjustments.json`) with their approval, window and
+  review date, and one shared param, `shared.overlay_stack_enabled`, switches them all off.
   A params document is read once: pass a new dict for each change.
 - **Overlays.** The anti-harm ceiling is tightened to 80% of its value on product 11, and the branch channel's weights
   become 0.6 instalment and 0.4 new money. Ask for no new money and switch the stack off in `params.json`: the winner
@@ -296,7 +302,21 @@ Inputs it reads that the caller owns: `decision_id`, `decision_date`, `channel_c
   with integer keys becomes a column that a JSON or CSV batch response cannot write, and `product_policies` is one of
   the pipeline's outputs.
 - **The Flex Loan card is regenerated** in `build` from `credit_core`, not read from a config document, to avoid a third
-  13 MB copy of it; the plain offer is the only thing that uses it.
+  13 MB copy of it; the plain offer is the only thing that uses it. It is made once per process, and its rows are the
+  default of the table param `plain_granting/plain_rate_card`, which `params.json` leaves out.
+- **What a release check sees.** No step closes over an object, so `decider.lab.diff` compares everything the
+  decision reads: editing a reason code's severity, an overlay's effect, scope or window, a rate card or the capacity
+  overlay shows as the step that reads it, and a reworded rationale or description does not
+  ([`tests/test_documents.py`](tests/test_documents.py), [`tests/test_hidden_state.py`](tests/test_hidden_state.py)).
+  `baseline_measures`, `search` and `selection` stay Python steps on purpose (`@allow_fallback`): the search builds an
+  evaluator, the products and the compiled capacity unit for each request, from what it is handed as inputs, params and
+  tuples. The capacity unit is the one thing that cannot be data: it is `assessment.capacity_unit()` compiled, an
+  executable. It is built the first time its two documents (`capacity_adjustments` and `affordability_reason_codes`,
+  the assessment's own, passed to `build` or defaulting to the ones `assessment` ships, without their governance fields)
+  are used, and kept for the life of the process under their text, so the build and serve warm-up from
+  `sample_request.json` pay for it and an edited document is a different unit. Rewriting the search as an `each` over
+  the scenarios with the capacity unit as a child flow was not done: the budget, the generation order and the prefix
+  guarantee are properties of one loop, and the unit takes a list of accounts per scenario.
 - **Table sizes.** The product 11 card is 12 amount bands by 12 terms by 12 grades; a production card would be larger and
   would be handed in the same way.
 - **Synthetic data.** Every table, threshold and rate here is invented for illustration.
@@ -306,6 +326,6 @@ Inputs it reads that the caller owns: `decision_id`, `decision_date`, `channel_c
 Built on [`shared-credit-core`](../shared-credit-core/README.md) (`credit_core`): `adjustments`, `fees`, `instalment`,
 `rate_card`, `reason_codes`, `rounding`, `evidence`, `vocab`; on [`affordability`](../affordability/README.md)
 (`assessment`): `evidence_unit()` embedded, `capacity_unit()` scored per candidate, `build_buffer_grid()`; and on
-[`loan-granting-pricing`](../loan-granting-pricing/README.md) (`loan_granting`): `PriceEvaluator`, `RateCardIndex`,
-`CreditLifeIndex` for the consolidation loan, and `solve_term` for the plain offer. Nothing in them is forked or
+[`loan-granting-pricing`](../loan-granting-pricing/README.md) (`loan_granting`): `PriceEvaluator`, `RateCardTable`,
+`CreditLifeTable` and `rate_card_rows` for the consolidation loan, and `solve_term` for the plain offer. Nothing in them is forked or
 patched; the consolidation loan's card, the card product, the settleability rules and the search are this example's own.

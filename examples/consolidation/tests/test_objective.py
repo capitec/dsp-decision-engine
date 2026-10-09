@@ -6,7 +6,9 @@ import numpy as np
 import pytest
 
 from consolidation import objective
+from consolidation.documents import shipped
 
+OVERLAYS = shipped("objective_adjustments").packed()
 OUTCOME = {"relief": 0.35, "cost": 0.25, "exited": 0.15, "rate": 0.15, "providers": 0.10}
 TABLE = SimpleNamespace(channel_code=np.array([0, 1]), new_money=np.array([0.0, 0.0]), min_commitment=np.array([1.0, 1.0]),
                         min_total_cost=np.array([0.0, 0.0]), bank_value=np.array([0.0, 0.0]), client_outcome=np.array([0.0, 0.0]))
@@ -47,9 +49,9 @@ def test_the_branch_reweight_overlay_blends_relief_and_new_money_and_names_itsel
 
 
 def test_the_overlay_does_not_apply_outside_its_channel_or_before_it_takes_effect():
-    assert objective.weights_in_force(TABLE, 3, date(2026, 9, 24), True)[1] == []
-    assert objective.weights_in_force(TABLE, 1, date(2025, 6, 1), True)[1] == []
-    assert objective.weights_in_force(TABLE, 1, date(2026, 9, 24), True)[1] == ["ADJ-CON-OBJ-2026-001", "ADJ-CON-OBJ-2026-002"]
+    assert objective.weights_in_force(TABLE, 3, date(2026, 9, 24), True, OVERLAYS)[1] == []
+    assert objective.weights_in_force(TABLE, 1, date(2025, 6, 1), True, OVERLAYS)[1] == []
+    assert objective.weights_in_force(TABLE, 1, date(2026, 9, 24), True, OVERLAYS)[1] == ["ADJ-CON-OBJ-2026-001", "ADJ-CON-OBJ-2026-002"]
 
 
 def test_with_the_stack_off_the_branch_gets_the_unblended_objective(assess, params):
