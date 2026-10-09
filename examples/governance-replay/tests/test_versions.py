@@ -1,4 +1,4 @@
-from governance.flows import FRAUD, LOAN
+from governance.flows import FLOWS, FRAUD, LOAN
 from governance.versions import version_diff
 
 CARD = "rate_card_flex_loan"
@@ -51,3 +51,9 @@ def test_the_same_version_adds_removes_and_changes_nothing():
     d = version_diff(LOAN, LOAN.replayer(), LOAN.replayer())
     s = d.structure
     assert (s.added, s.removed, s.renamed, s.moved, s.edges, d.params, d.documents) == ((), (), (), (), (), (), {})
+
+
+def test_pipelines_built_from_the_same_documents_are_provably_the_same(flow_code):
+    flow = FLOWS[flow_code]
+    d = version_diff(flow, flow.replayer(), flow.replayer())
+    assert d.proof is True and d.structure.identical

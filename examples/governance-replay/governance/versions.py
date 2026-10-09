@@ -13,8 +13,7 @@ from governance.replayer import Replayer
 @dataclass(frozen=True)
 class VersionDiff:
     """`structure` is decider's step-level diff and `proof` its verdict on whether the steps are provably the same
-    (`True`, or `None` when it cannot tell, which is always so here: many steps read globals it can only key by
-    identity, such as overlay registers, dates and dicts); `params` lists changed leaves; `documents` summarises each
+    (`True`, `False`, or `None` when it cannot tell); `params` lists changed leaves; `documents` summarises each
     changed config document."""
 
     structure: diff.StructureDiff
