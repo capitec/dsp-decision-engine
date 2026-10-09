@@ -72,6 +72,8 @@ The public API, generated from the docstrings and grouped by what you use each n
 
 ::: decider.HiddenStateWarning
 
+::: decider.ShadowedTableWarning
+
 ## Value types
 
 ::: decider.ops.Text

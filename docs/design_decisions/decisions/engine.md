@@ -21,8 +21,22 @@ Why the engine (IR, wiring, runners, kernels, compile cache, fallback, `score`, 
 - A function of the standard library or an installed package is keyed by name, version, its own code and its closure, not walked. The name and version alone collided: two closures from one installed factory shared one compiled dispatcher, so `stepped` and `fused` answered with the first closure's value. The step function itself is always walked, so a step type shipped as a wheel is checked like one in the project.
 - Mutable containers count although the key sees an exact literal `dict` or `list` by value: a step reads them at call time, so they can be edited after the bind, and numba compiles neither. A tuple, frozenset, enum member or date is data. A frame step is not checked (the fraud rule set and `_renamed_frame` would need an exemption first).
 - Cost: 0.5 to 10.5 ms once per bind for the 12 example pipelines (53 to 128 steps each); nothing per call.
-- Not: a digest of arbitrary objects (a changed method would read as unchanged), raising always (every example would fail to build), warning only under `strict_compile` (shipped as a warning; `warn_hidden_state(plan, strict=True)` is the switch).
+- `Engine(strict_compile=True)` raises `EngineError` for the same findings (`warn_hidden_state(plan, strict=self.strict_compile)`). A test builds every example from its latest config version and asserts no `HiddenStateWarning`; the one entry in its allow-list is governance-replay's `FLOWS`, the registry of the flows the replayer replays.
+- Not: a digest of arbitrary objects (a changed method would read as unchanged), raising always (a project would fail to build before it could migrate; the default stays a warning).
 - See: `tests/compile/test_hidden_state.py`, `tests/wiring/test_hidden_state_warning.py`
+
+## A table seeded from a config document warns when a params document shadows it
+
+- `param_table(..., seeded_from="<document>")` records that the default rows were read from a config document. Staging a config version (`RequestHandler.stage()`, so `decider build` too) emits `ShadowedTableWarning` per table whose param the version's params document sets, naming the table, the document and the params key (`decider/_engine/params/shadow.py`). Per-call overrides at run time (experiments) are never checked.
+- Why: the params rows replace the document's without a trace, so editing the document appears to do nothing. Loan granting's `shared.rate_card` and consolidation's card tables are seeded this way.
+- Three ways off, all deliberate: filter the category; `DECIDER_BUILD__WARN_SHADOWED_TABLES=false` (`settings.build.warn_shadowed_tables`); `allow_override=True` on the table, for a table the params document is meant to replace.
+- Not: an error (replacing the rows is legitimate), or a check on every run (the document is fixed per version).
+
+## A table default is hashed by column, not by cell
+
+- `decider.lab.diff` hashes a `param_table` default as one buffer per column (dtype, name and bytes), once per snapshot, and shows a long default cut at 80 characters without building its whole `repr`. `diff.structure` on a 63,360-row default took 6.3 s, 5.3 s and 2.6 s (loan granting, consolidation, campaign trees) and takes about 0.27, 0.20 and 0.09 s.
+- Why: the generic walk made a Python call per cell, six million for loan granting, and `_show` rendered the whole table to keep 80 characters. Columns are typed (`int`, `float`, `bool`), so dtype and bytes fix the value; a changed cell, row order, row count or column type changes the digest, and it does not depend on the process's hash seed.
+- Not: memoising across snapshots (a default edited between two diffs must hash again).
 
 ## No source is generated; only user steps are disk-cached
 

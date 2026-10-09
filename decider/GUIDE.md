@@ -443,6 +443,42 @@ Rows are checked when the document arrives: a missing or undeclared column or
 a value of the wrong type is a `ParamsError` naming the step, the param, the
 row and the column. `defaults()` shows a required table as `[]`.
 
+When the default rows are read from a config document, say so with
+`param_table(..., seeded_from="rate_card")`. A params document that then sets
+the table replaces the document's rows without a trace, so staging that
+version (`decider build`, `RequestHandler.stage()`) warns with
+`ShadowedTableWarning`, naming the table, the document and the params key.
+Overriding the table per call (`exe.run(df, params=...)`, experiments) stays
+silent.
+
+```python
+import warnings
+
+from decider import ParamTable, ShadowedTableWarning, flow, param_table
+from decider.config import JsonFileStore
+from decider.serving import RequestHandler
+
+CARD = [{"floor": 0, "rate": 0.2}]       # read from the config document "rate_card"
+
+def priced(score: int, ladder: ParamTable = param_table({"floor": int, "rate": float}, default=CARD,
+                                                    seeded_from="rate_card")) -> float:
+    return float(ladder.rate[0])
+
+store = JsonFileStore(basepath="shadow_configs")
+store.create_version({"params": {"pricing": {"priced": {"ladder": [{"floor": 0, "rate": 0.3}]}}}})
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter("always")
+    RequestHandler(store, flow(priced, name="pricing"), mode="interpreted").stage()
+[shadowed] = [w for w in caught if issubclass(w.category, ShadowedTableWarning)]
+assert "table `ladder` of pricing/priced" in str(shadowed.message) and "`rate_card`" in str(shadowed.message)
+```
+
+Switch it off one of three ways: for the process, with
+`warnings.filterwarnings("ignore", category=ShadowedTableWarning)`; for the
+build, with `DECIDER_BUILD__WARN_SHADOWED_TABLES=false` (environment, or
+`.env` for `decider build`); or for one table that is meant to be replaced, with
+`param_table(..., seeded_from="rate_card", allow_override=True)`.
+
 For a grid whose rows *match* records (bands, keys, string columns), use a
 `DecisionTableConfig` instead: no loop to write, and it reads string columns.
 Inline `"rows"` fix a table in its config document: changing them is a new
@@ -709,7 +745,9 @@ global, or as `module.NAME`. Such a step cannot compile, and
 tuples and frozensets of those, arrays and frames are data and are fine, as
 are functions and classes. `@allow_fallback` does not silence this warning.
 Put the data in a config document, a `ConfigurableStep` or `CustomFunction`
-field, a `param()` or a `param_table()`, and call a plain function.
+field, a `param()` or a `param_table()`, and call a plain function. With
+`Engine(strict_compile=True)` (use it in CI) the warning is an `EngineError`
+instead, so a build with hidden state fails.
 
 ```python
 import warnings
@@ -730,6 +768,16 @@ with warnings.catch_warnings(record=True) as caught:
     flow(capped, name="q").compile()
 assert [w.category for w in caught] == [HiddenStateWarning]
 assert "q/capped reads Limits `LIMITS` (module global in " in str(caught[0].message)
+
+from decider import Engine
+from decider.exceptions import EngineError
+
+try:
+    Engine(strict_compile=True).bind(flow(capped, name="q"))
+except EngineError as e:
+    assert "q/capped reads Limits `LIMITS`" in str(e)
+else:
+    raise AssertionError("strict_compile accepted a hidden object")
 ```
 
 A compiled step that calls another function of yours must say how it compiles:
