@@ -72,6 +72,13 @@ def test_switching_every_stack_off_reproduces_the_base_run_through_the_same_code
     assert [off[f"{name}_adjustments_applied"] for name in STACKS] == [[], [], [], []]
 
 
+def test_a_stack_adds_its_applied_ids_to_the_response_and_nothing_else(decide):
+    out = decide(agency_placed_12m=True)
+    assert out["score_shift_adjustments_applied"] == ["ADJ-COLL-SCORE-001"]
+    stacks = (*STACKS, "intensity_dial", "treatment_suppression")
+    assert not {f"{name}_{part}" for name in stacks for part in ("set_id", "unadjusted")} & set(out)
+
+
 def band_of(roll_probability, shift=0.0, unadjusted=None):
     out = Engine().bind(scoring.collections_bands_step).score({
         "roll_probability": roll_probability, "roll_probability_unadjusted": roll_probability if unadjusted is None else unadjusted,

@@ -47,6 +47,10 @@ def build(
     odds_multiplier: AdjustmentStack, band_boundary_shift: AdjustmentStack, intensity_dial: AdjustmentStack,
     treatment_suppression: AdjustmentStack,
 ):
+    # The response records each overlaid value and the ids that applied; a stack's set id and its copy of the
+    # unadjusted value are not part of it.
+    internal = [f"{stack.name}_{part}" for part in ("set_id", "unadjusted") for stack in (
+        score_shift, scaling_change, odds_multiplier, band_boundary_shift, intensity_dial, treatment_suppression)]
     return dag(
         state.arrears_bucket_code, state.arrears_to_balance_ratio, state.build_balance_band_table(),
         scoring.build_contact_band_table(),
@@ -68,4 +72,4 @@ def build(
         capacity.build_pool_table(), capacity.selection_blocker_code, capacity.allocation_priority,
         capacity.allocate_capacity,
         name="collections_treatment",
-    ).emit(*EMIT)
+    ).emit(*EMIT).drop(*internal)
