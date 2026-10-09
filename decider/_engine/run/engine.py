@@ -12,6 +12,7 @@ from decider._engine.concurrency import Cache, once
 from decider._engine.params import NodeParams, ParamsCache
 from decider._engine.run.hidden import warn_hidden_state
 from decider._engine.run.params import RunParams, RunReport, check_namespaces
+from decider._engine.run.representations import despan
 from decider._engine.run.runners.base import CompiledRunner, Runner
 from decider._engine.run.runners.fused import FusedRunner
 from decider._engine.run.runners.interpreted import InterpretedRunner
@@ -245,8 +246,10 @@ class Executable:
                 out[k] = None
             elif (box := self._boxers.get(k)) is not None:
                 out[k] = box(values.tolist()[0])
+            elif (annotation := self._structs.get(k)) is not None:
+                out[k] = record_value(values.tolist()[0], annotation)
             else:
-                out[k] = record_value(values.tolist()[0], self._structs.get(k))
+                out[k] = despan(values.tolist()[0])
         return out
 
     def _iterate(self, state: State, run: RunParams, trace) -> None:
