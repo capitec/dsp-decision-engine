@@ -54,6 +54,15 @@ def test_other_decisions_are_served_the_same_as_interpreted(handler, assess, sam
     assert {name: served[name] for name in FIGURES} == {name: interpreted[name] for name in FIGURES}
 
 
+def test_a_json_array_of_requests_is_decided_like_the_same_requests_one_by_one(handler, sample):
+    requests = [sample, sample | {"decision_id": "con-2026-0000555002", "channel_code": 2}]
+    batch = post(handler, requests)
+    assert len(batch) == 2
+    for served, request in zip(batch, requests):
+        alone = post(handler, request)
+        assert {name: served[name] for name in FIGURES} == {name: alone[name] for name in FIGURES}
+
+
 def test_every_step_that_runs_in_python_says_so_on_purpose(documents):
     executable = Engine(strict_compile=True).bind(build(*documents), mode="fused")  # raises on an unannounced fallback
     assert executable.fallbacks()

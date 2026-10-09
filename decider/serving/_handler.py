@@ -20,6 +20,7 @@ from decider.serving._errors import (InputParsingError, OutputFormattingError, U
                                      UnsupportedContentTypeError)
 from decider.config import ConfigStore, Version
 from decider import Engine, Executable
+from decider.ir import has_optional_key
 from decider.steps import ConfigurableStep, Step
 from decider.ops.nested import struct_item
 from ._format import DEFAULT_OUTPUT_FORMATTERS, Response
@@ -33,6 +34,8 @@ class Live(t.NamedTuple):
     executable: Executable
     params: dict[str, t.Any] | None
     dates: t.Mapping[str, t.Any] = MappingProxyType({})
+    # Also the inputs with `NotRequired` keys, which a frame needs validated and a record does not.
+    frame_inputs: t.Mapping[str, t.Any] = MappingProxyType({})
 
 
 def _json_fallback(value: t.Any) -> str:
@@ -140,7 +143,7 @@ class RequestHandler:
             exe = Engine().bind(self.pipeline_fn(versioned.config), mode=self.mode)
             params = versioned.config.get("params")
             self.warm_fn(exe, params)
-            self._staged = Live(versioned.version, exe, params, _dates(exe))
+            self._staged = Live(versioned.version, exe, params, _dates(exe), _dates(exe, has_optional_key))
             return versioned.version
 
     def activate(self) -> Version:
@@ -238,7 +241,7 @@ class RequestHandler:
         live = self.module_fn()
         if isinstance(request, dict):
             return live.executable.score(coerce_record(request, live.dates), live.params)
-        return live.executable.run(coerce_frame(request, live.dates), live.params)
+        return live.executable.run(coerce_frame(request, live.frame_inputs), live.params)
 
     def process_fn(self, data: bytes, accept: str, content_type: str) -> Response:
         # Not `self.score`: `score` is no hook, and a subclass's own `score` must not change what a request does.
@@ -274,9 +277,10 @@ def _inputs(exe: Executable) -> list:
     return list(exe.plan.inputs)
 
 
-def _dates(exe: Executable) -> dict[str, t.Any]:
+def _dates(exe: Executable, also: t.Callable[[t.Any], bool] = lambda _: False) -> dict[str, t.Any]:
     # A `Struct[Item]` input arrives as Item's dict, which is what pydantic can validate.
-    return {v.name: struct_item(v.annotation) or v.annotation for v in _inputs(exe) if has_date(v.annotation)}
+    return {v.name: struct_item(v.annotation) or v.annotation for v in _inputs(exe)
+            if has_date(v.annotation) or also(v.annotation)}
 
 
 def _is_flow_file(pipeline: t.Any) -> bool:
