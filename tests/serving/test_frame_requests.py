@@ -9,6 +9,7 @@ from decider import flow
 from decider.ops import Columnar, Struct
 from decider.config import JsonFileStore
 from decider.serving import RequestHandler
+from decider.steps.trees import TreeConfig
 
 
 class Account(TypedDict):
@@ -128,3 +129,31 @@ def test_an_optional_input_and_a_nullable_key_keep_their_null_in_an_array_as_in_
     body = {"accounts": [{"balance": 1.0, "note": None}, {"balance": 2.0, "note": "n"}], "bonus": None, "kind": "k"}
     assert _send(handler, [body, {**body, "bonus": 2.0}]) and [r["maybe"] for r in _send(handler, [body, {**body, "bonus": 2.0}])] == [
         _send(handler, body)["maybe"], _send(handler, {**body, "bonus": 2.0})["maybe"]]
+
+
+class Signals(TypedDict):
+    score: float
+    velocity: NotRequired[float]
+
+
+def f0(signals: Signals) -> float:
+    return signals["score"]
+
+
+def f1(signals: Signals) -> float:
+    return signals.get("velocity", -1.0)
+
+
+def test_an_array_feeding_a_split_tree_from_not_required_keys_matches_records(tmp_path):
+    leaf = {"type": "leaf", "result_idx": 0}
+    rules = [{"meta": {"name": f"R{k}"}, "rule": {"type": "unary", "then": leaf,
+                                                   "condition": {"op": ">", "feature": f"f{k % 2}", "threshold": k - 2}}}
+             for k in range(5)]
+    tree = TreeConfig(name="rules", part_outputs=2, tree={
+        "type": "prioritized_flat_rule", "mode": "all", "rules": rules,
+        "output": {"data": [{"hit": True}], "default": {"hit": False}, "dtypes": [["hit", "Boolean"]]}})
+    rows = [{"signals": {"score": 3.0}}, {"signals": {"score": 0.0, "velocity": 5.0}}, {"signals": {"score": 1.5}}]
+    handler = _handler(tmp_path, f0, f1, tree, sample=rows[0])
+    hits = [f"R{k}.hit" for k in range(5)]
+    assert len([c for c in handler.module_fn().executable.plan.calls if "part_" in c.node.origin.path]) == 3
+    assert [[r[h] for h in hits] for r in _send(handler, rows)] == [[_send(handler, r)[h] for h in hits] for r in rows]
