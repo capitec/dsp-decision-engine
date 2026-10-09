@@ -49,7 +49,9 @@ def fingerprint(fn: Callable, *, strict: bool = False) -> str:
 
     Covers the bytecode with its constants, the argument layout, closure cell
     values and the globals it reads: functions by their own content (an
-    `lru_cache` wrapper by the function it wraps), modules by name plus the
+    `lru_cache` wrapper by the function it wraps; one of the standard library or
+    an installed package by its name, version, code and closure, not what it
+    reaches), modules by name plus the
     functions, submodules and data (`mod.LIMIT`) the function reaches through
     them, classes by `module:qualname` and their own methods and constants (an
     enum class also by its members), enum members by class and name, numbers,
@@ -71,7 +73,7 @@ def fingerprint(fn: Callable, *, strict: bool = False) -> str:
         fingerprint(f) == fingerprint(g)  # True
     """
     w = _Walk(strict)
-    _function(w, fn)
+    _function(w, fn, root=True)
     return w.h.hexdigest()
 
 
@@ -94,7 +96,7 @@ def hidden_state(fn: Callable) -> list[tuple[str, str, str, str]]:
         hidden_state(step)  # [('registry', 'object', 'Register', 'module global in step.py:3')]
     """
     w = _Walk(found=[])
-    _function(w, fn)
+    _function(w, fn, root=True)
     return w.found
 
 
@@ -113,22 +115,31 @@ def cpu_target() -> tuple[str, str, str]:
     return target.target_context.codegen().magic_tuple()
 
 
-def _function(w: _Walk, fn: Any) -> None:
+def _function(w: _Walk, fn: Any, root: bool = False) -> None:
     fn = getattr(fn, "py_func", fn)
     if id(fn) in w.seen:
         w.h.update(b"<recursive>")
         return
     w.seen.add(id(fn))
     code = fn.__code__
-    if _is_library(code.co_filename):
-        # A callable of the standard library or an installed package is keyed by who and which version it is, not
-        # walked: its helpers and constants are not the step's data. A wrapper it made may close over the step.
-        w.h.update(f"library:{fn.__module__}.{fn.__qualname__}:{_version(fn.__module__)}".encode())
-        for cell in fn.__closure__ or ():
-            if isinstance(getattr(cell, "cell_contents", None), (types.FunctionType, Dispatcher)):
-                _function(w, cell.cell_contents)
-        return
     _code(w.h, code)
+    if not root and _is_library(code.co_filename):
+        # A callable of the standard library or an installed package is keyed by who and which version it is, not
+        # walked: its helpers and constants are not the step's data. Its code and closure still count, as two
+        # lambdas, or two closures from one factory, share a qualname; only a function it closes over (a wrapper it
+        # made around the step) is the step author's to answer for. The step itself is walked wherever it is installed.
+        w.h.update(f"library:{fn.__module__}.{fn.__qualname__}:{_version(fn.__module__)}".encode())
+        found = w.found
+        for cell in fn.__closure__ or ():
+            try:
+                contents = cell.cell_contents
+            except ValueError:  # an empty cell
+                w.h.update(b"<empty>")
+                continue
+            w.found = found if isinstance(contents, (types.FunctionType, Dispatcher)) else None
+            _value(w, contents)
+        w.found = found
+        return
     names = _names(code)
     where = f"{code.co_filename}:{code.co_firstlineno}"
     outer = w.where  # a function reached through a container must not rename what the container holds next
