@@ -228,13 +228,13 @@ and account fields.
 - **The fraud verdict arrives with the request.** The fraud service is a separate example: this flow takes its three fields
   (`fraud_verdict_code`, `fraud_reason_codes`, `fraud_response_ms`) as plain inputs and decides what they mean.
 - **The steps read no Python objects.** The rate card is the default rows of the table param `shared.rate_card` (with
-  `shared.rate_card_version`), the credit life rates are `shared.credit_life` in
-  [`params.json`](configs/0.1.0/params.json), and the overlays and reason codes are documents, so the release diff sees
-  each of them. `params.json` leaves the rate card out on purpose: the document `rate_card_flex_loan.json` is the one place
-  Treasury edits it. A params document that does set `shared.rate_card` and `shared.rate_card_version` prices from those
-  rows instead, sorted by grade, amount band and term band, with `cell_id`s of the form
-  `rate_card.flex_loan@<version>#<amt_band>|<term_band>|<grade>` (`rate_card_rows` refuses a card whose ids are not).
-  The credit life rows carry a `cell` number, so the cell ids of the premium come from the table too.
+  `shared.rate_card_version`) and the credit life rates are the default of `shared.credit_life` (from `credit_core`), and
+  the overlays and reason codes are documents, so the release diff sees each of them. [`params.json`](configs/0.1.0/params.json)
+  leaves all four out on purpose: the document `rate_card_flex_loan.json` is the one place Treasury edits the card, and a
+  params document that does set them prices from its own rows instead. The card's rows must be sorted by grade, amount band
+  and term band, with `cell_id`s of the form `rate_card.flex_loan@<version>#<amt_band>|<term_band>|<grade>`
+  (`rate_card_rows` returns them so and refuses a card whose ids are not). The credit life rows carry a `cell` number, so
+  the cell ids of the premium come from the table too.
 - **Policy lives in params, mechanism in code.** The cap bands, the permitted terms, the exposure watchlist, the offer
   thresholds, the statutory margin over repo and the recommendation objective are all in
   [`params.json`](configs/0.1.0/params.json), so their owners change them without a release. Which rules exist, and in
