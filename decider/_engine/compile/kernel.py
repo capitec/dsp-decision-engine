@@ -16,6 +16,7 @@ from decider._engine.compile.semantics.decimals import store_as
 from decider._engine.compile.span import SPAN
 from decider._engine.concurrency import Cache, once
 from decider._engine.trace.envelope import ITER_SHIFT, Kind, pack
+from decider.exceptions import NotIntegralError
 
 
 class SrcKind(str, Enum):
@@ -29,6 +30,14 @@ class SrcKind(str, Enum):
     SINK = "sink"  # a growable output buffer, shared by every row (not indexed by i)
     ROW = "row"    # tuple of sub-sources packed into a single argument
     DEC = "dec"    # an int64 source typed as a decimal of the given scale
+
+
+def _is_whole(x):
+    return np.floor(x) == x and -9223372036854775808.0 <= x < 9223372036854775808.0
+
+
+NOT_WHOLE = ("a step declared `int` returned a float that is not a whole number "
+             "(a fraction, NaN, infinity or beyond int64); it is never truncated")
 
 
 def _slice(arr, lo, hi):
@@ -310,6 +319,20 @@ def _row_body(program: tuple, outputs: tuple[tuple, ...], variables: tuple[np.dt
             ret = types.Optional(types.int64) if isinstance(t, types.Optional) else types.int64
             return context.compile_internal(builder, fn, signature(ret, t), [v]), ret
 
+        def whole(v, t):
+            # A float stored as an int64 is cast by the hardware: NaN and a fraction would pass silently.
+            valid, base = (None, t)
+            if isinstance(t, types.Optional):
+                opt = context.make_helper(builder, t, value=v)
+                v, valid, base = opt.data, opt.valid, t.type
+            if not isinstance(base, types.Float):
+                return
+            ok = context.compile_internal(builder, _is_whole, signature(types.boolean, base), [v])
+            if valid is not None:
+                ok = builder.or_(ok, builder.not_(valid))
+            with cgutils.if_unlikely(builder, builder.not_(ok)):
+                context.call_conv.return_user_exc(builder, NotIntegralError, (NOT_WHOLE,))
+
         def call(spec, arm, iteration):
             loaded = [load(s) for s in spec.args]
             fnty = typeof(spec.fn)
@@ -325,6 +348,9 @@ def _row_body(program: tuple, outputs: tuple[tuple, ...], variables: tuple[np.dt
             for k, scale in enumerate(spec.scales):
                 if scale is not None:
                     parts[k] = stored(parts[k], scale)
+            for (v, t), d in zip(parts, spec.dtypes):
+                if d == np.int64:
+                    whole(v, t)
             # A struct output's step returns a tuple of its fields (pack them into a record), or an
             # already-record value (copy it); a non-tuple, non-record return (a dict) cannot be
             # stored, so the kernel falls back.

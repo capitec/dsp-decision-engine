@@ -8,6 +8,7 @@ import numpy as np
 import polars as pl
 
 from decider._engine.boundary.dtypes import decimal_mantissa
+from decider._engine.boundary.whole import check_series, int64_array
 from decider._engine.boundary.nulls import MissingInputError
 from decider._engine.compile import numpy_dtype
 from decider._engine.compile.rows import build_rows, rows_needs_no_fill
@@ -172,8 +173,11 @@ class InterpretedRunner:
             if base_annotation(out.annotation) is str:
                 values = tuple(x.text if isinstance(x, Text) else x for x in values)
             # A `Columnar[...]` output is stored as a kernel stores it, or the modes disagree on dtype.
+            row = scope.rows
             array, valid = _array(values, numpy_dtype(out.annotation) if is_raw(out.annotation)
-                                  else dtype_of(base_annotation(out.annotation)))
+                                  else dtype_of(base_annotation(out.annotation)),
+                                  lambda k: f"step '{node.origin.path}' output '{v.name}'"
+                                  + (f" (row {k if row is None else int(row[k])})" if m > 1 else ""))
             state.write(v, array, scope.rows, valid)
             scope.names[v.name] = v
         self._emit_rows(Kind.STEP, node.origin, scope, m, step=call.id + 1)
@@ -261,7 +265,8 @@ class InterpretedRunner:
             offsets.append(offsets[-1] + len(items))
         elem_state = State(state.plan, pl.DataFrame(), offsets[-1])
         for (name, v) in sg.fields:
-            values, valid = _array(tuple(flat[name]), dtype_of(base_annotation(v.annotation)))
+            values, valid = _array(tuple(flat[name]), dtype_of(base_annotation(v.annotation)),
+                                   lambda k: f"item field '{name}' of {node.origin.path}")
             elem_state.write(v, values, valid=valid)
         elem_scope = _Scope(None, elem_state.frame, {name: v for name, v in sg.fields}, scope.ctx)
         # A child doc forwards the hoisted params from this node's path into the body's nested paths.
@@ -299,6 +304,8 @@ class InterpretedRunner:
             values, valid = from_series(exploded.get_column(name))
             dtype = dtype_of(base_annotation(v.annotation))
             if values.dtype != dtype:
+                if dtype == np.int64 and values.dtype.kind == "f":
+                    check_series(exploded.get_column(name))
                 values = values.astype(dtype)
             elem_state.write(v, values, valid=valid)
         elem_scope = _Scope(None, elem_state.frame, {name: v for name, v in sg.fields}, scope.ctx)
@@ -414,13 +421,15 @@ def _absent(state: State, version: NodeVersion) -> bool:
     return version.producer is None and version.id not in state.values
 
 
-def _array(values: tuple, dtype: np.dtype) -> tuple[np.ndarray, np.ndarray | None]:
+def _array(values: tuple, dtype: np.dtype, subject: Callable[[int], str]) -> tuple[np.ndarray, np.ndarray | None]:
     # A step returning None writes a null, which later readers see through their null policy.
     valid = np.array([x is not None for x in values], bool)
     if valid.all():
         valid = None
     elif dtype != object:
         values = tuple(0 if x is None else x for x in values)
+    if dtype == np.int64:
+        return int64_array(list(values), subject), valid
     if dtype != object:
         return np.array(values, dtype), valid
     # Filled one by one so a tuple or list value stays one element.
