@@ -5,7 +5,7 @@ from typing import Any, Iterator, Mapping, Union
 import numpy as np
 
 from decider._engine.boundary.whole import refuse
-from decider._engine.compile.declared import output_check
+from decider._engine.compile.declared import check_output
 from decider._engine.compile.kernel import Spec, SrcKind, fused_kernel
 from decider._engine.compile.njit import FALLBACK_ERRORS, compile_call, parameters
 from decider._engine.compile.outputs import CodeTable, coded, coded_values, output_dtype
@@ -148,8 +148,7 @@ class Fallback:
         self._ks = range(len(self.writes))
         self._whole = tuple(dtype == np.int64 for _, dtype in self.writes)
         # A number, Decimal or bool has its declared type already; only an object output can be a wrong shape.
-        self._checks = tuple(output_check(o) if node.kind == "scalar" and dtype == object else None
-                             for o, (_, dtype) in zip(node.outputs, self.writes))
+        self._checks = tuple(node.kind == "scalar" and dtype == object for _, dtype in self.writes)
 
     def run(self, values: Values, valid: Values, bundles: Mapping[int, tuple], n: int) -> None:
         call = self.calls[0]
@@ -186,11 +185,11 @@ class Fallback:
                     raise refuse(f"step '{node.origin.path}' output '{call.writes[k].name}'"
                                  + (f" (row {r})" if n > 1 else ""), x)
                 outs[k][r] = x
-        for k, check in enumerate(self._checks):
-            if check is not None:
+        for k, checked in enumerate(self._checks):
+            if checked:
                 mask = masks[k]
-                check(node.origin.path, node.outputs[k],
-                      outs[k].tolist() if mask is None else [x if m else None for x, m in zip(outs[k], mask)])
+                check_output(node.origin.path, node.outputs[k],
+                             outs[k].tolist() if mask is None else [x if m else None for x, m in zip(outs[k], mask)])
         for v, out, mask, table in zip(call.writes, outs, masks, self._tables):
             values[v.id] = out
             if mask is not None:
