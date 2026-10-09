@@ -1,5 +1,5 @@
 {
-  "type": "collections_overlay_stack",
+  "type": "adjustment_stack",
   "name": "band_boundary_shift",
   "target": "collections_band_boundary",
   "set_id": "AS-COLL-SCORE-2026.09",

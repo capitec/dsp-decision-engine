@@ -8,8 +8,10 @@ from __future__ import annotations
 
 from decider import DecisionTableConfig, dag
 
+from credit_core.adjustments import AdjustmentStack
+
 from collections_treatment import arrangements, capacity, matrix, path, scoring, state, suspensions
-from collections_treatment.overlays import OverlayStack, in_dag
+from collections_treatment.overlays import in_dag
 
 EMIT = (
     "account_id", "decision_date",
@@ -41,9 +43,9 @@ EMIT = (
 
 
 def build(
-    treatment_matrix: DecisionTableConfig, score_shift: OverlayStack, scaling_change: OverlayStack,
-    odds_multiplier: OverlayStack, band_boundary_shift: OverlayStack, intensity_dial: OverlayStack,
-    treatment_suppression: OverlayStack,
+    treatment_matrix: DecisionTableConfig, score_shift: AdjustmentStack, scaling_change: AdjustmentStack,
+    odds_multiplier: AdjustmentStack, band_boundary_shift: AdjustmentStack, intensity_dial: AdjustmentStack,
+    treatment_suppression: AdjustmentStack,
 ):
     return dag(
         state.arrears_bucket_code, state.arrears_to_balance_ratio, state.build_balance_band_table(),

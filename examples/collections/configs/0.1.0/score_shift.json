@@ -1,5 +1,5 @@
 {
-  "type": "collections_overlay_stack",
+  "type": "adjustment_stack",
   "name": "score_shift",
   "target": "collections_score",
   "set_id": "AS-COLL-SCORE-2026.09",

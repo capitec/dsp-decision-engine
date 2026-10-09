@@ -1,5 +1,5 @@
 {
-  "type": "collections_overlay_stack",
+  "type": "adjustment_stack",
   "name": "intensity_dial",
   "target": "matrix_treatment_intensity",
   "set_id": "AS-COLL-MATRIX-2026.09",
