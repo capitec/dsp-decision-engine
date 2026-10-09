@@ -7,7 +7,7 @@ from decider._engine.run.params import RunParams
 from decider._engine.run.runners.base import Checkpoint
 from decider._engine.run.runners.interpreted import _Scope
 from decider._engine.run.runners.stepped import Compiled, SteppedRunner, _external
-from decider._engine.run.state import State
+from decider._engine.run.state import State, all_set
 from decider._engine.wiring.plan import Branch, Call, Loop, Plan, Sequence
 
 
@@ -66,7 +66,7 @@ class FusedRunner(SteppedRunner):
         for v in kernel.guarded:
             mask = state.valid.get(v.id)
             absent = v.id not in state.values
-            if absent or mask is not None and not (mask if scope.rows is None else mask[scope.rows]).all():
+            if absent or mask is not None and not all_set(mask if scope.rows is None else mask[scope.rows]):
                 return False
         try:
             self._run(kernel, state, params, scope)

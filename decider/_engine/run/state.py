@@ -88,7 +88,7 @@ class State:
         self._representations.pop(vid, None)   # built from the values this write replaces
         if rows is None:
             self.values[vid] = values
-            if valid is not None and not valid.all():
+            if valid is not None and not all_set(valid):
                 self.valid[vid] = valid
             else:
                 self.valid.pop(vid, None)
@@ -109,7 +109,7 @@ class State:
         target[rows] = values
         mask = self.valid.get(vid)
         if mask is None:
-            if valid is None or valid.all():
+            if valid is None or all_set(valid):
                 return
             mask = self.valid[vid] = np.ones(self.n, bool)
         mask[rows] = True if valid is None else valid
@@ -269,6 +269,11 @@ def _series(name: str, values: np.ndarray, valid: np.ndarray | None, annotation:
         # The int64 mantissa as a Decimal(38, scale): cast scales it up, the division brings it back.
         s = s.cast(pl.Decimal(38, info.scale)) / 10 ** info.scale
     return s
+
+
+def all_set(mask: np.ndarray) -> bool:
+    # A third of the cost of `mask.all()`, which a one-record run asks several times per step.
+    return np.count_nonzero(mask) == mask.size
 
 
 def record_value(value: Any, annotation: Any = None) -> Any:

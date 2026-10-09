@@ -18,7 +18,7 @@ from decider._engine.run.params import RunParams
 from decider._engine.run.representations import span_objects
 from decider.ops.text import Text
 from decider._engine.run.runners.base import Checkpoint
-from decider._engine.run.state import State, dtype_of, fill_missing, from_series, record_value
+from decider._engine.run.state import State, all_set, dtype_of, fill_missing, from_series, record_value
 from decider._engine.trace.envelope import Kind
 from decider.ops.nested import struct_item
 from decider._engine.types import (Representation, columnar_item, decimal_boxer, decimal_scale, is_raw, item_schema,
@@ -387,7 +387,7 @@ def _argument(state: State, version: NodeVersion, decl: Input, rows: np.ndarray 
     if rows is not None:
         values = values[rows]
         valid = None if valid is None else valid[rows]
-    if valid is None or valid.all():
+    if valid is None or all_set(valid):
         return values
     missing = ~valid
     if decl.null_policy is NullPolicy.REQUIRED:
@@ -427,7 +427,7 @@ def _absent(state: State, version: NodeVersion) -> bool:
 def _array(values: tuple, dtype: np.dtype, subject: Callable[[int], str]) -> tuple[np.ndarray, np.ndarray | None]:
     # A step returning None writes a null, which later readers see through their null policy.
     valid = np.array([x is not None for x in values], bool)
-    if valid.all():
+    if all_set(valid):
         valid = None
     elif dtype != object:
         values = tuple(0 if x is None else x for x in values)
