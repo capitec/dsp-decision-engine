@@ -83,7 +83,7 @@ class EffectiveVersions(ConfigurableStep):
         norms = EffectiveVersions(family="norms", versions=[Version(version_id="v1", effective_from=date(2025, 1, 1),
                                                                     effective_to=date(2026, 1, 1)),
                                                             Version(version_id="v2", effective_from=date(2026, 1, 1))])
-        norms.resolve(date(2025, 6, 1)).version_id   # "v1"
+        norms.version_on(date(2025, 6, 1)).version_id   # "v1"
         flow(norms, lookup_table)                    # writes `norms_version` from `decision_date`
     """
 
@@ -114,7 +114,7 @@ class EffectiveVersions(ConfigurableStep):
         return tuple((v.version_id, v.effective_from.toordinal(), v.effective_to.toordinal() if v.effective_to else 0)
                      for v in sorted(self.versions, key=lambda v: v.effective_from))
 
-    def resolve(self, as_of: date) -> Version:
+    def version_on(self, as_of: date) -> Version:
         """The version in force on `as_of`; `LookupError` if none is."""
         version_id = resolve_version(as_of, self._packed(), self.family)
         return next(v for v in self.versions if v.version_id == version_id)

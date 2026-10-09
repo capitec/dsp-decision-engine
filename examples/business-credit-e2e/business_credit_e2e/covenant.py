@@ -64,8 +64,7 @@ def terms_for_version(version_id: str, terms: tuple[tuple[str, float, int], ...]
 
 def load_covenant_documents() -> tuple[EffectiveVersions, CovenantTerms]:
     """The shipped DSCR version history and terms (`configs/0.1.0/dscr_versions.json` and `dscr_terms.json`)."""
-    # `EffectiveVersions.load` would call its own `resolve(as_of)` instead of the type lookup.
-    return ConfigurableStep.load(CONFIGS / "dscr_versions.json"), ConfigurableStep.load(CONFIGS / "dscr_terms.json")
+    return EffectiveVersions.load(CONFIGS / "dscr_versions.json"), CovenantTerms.load(CONFIGS / "dscr_terms.json")
 
 
 def bind_covenant(facility_id: int, decision_date: date, dscr_versions: EffectiveVersions | None = None,
@@ -77,7 +76,7 @@ def bind_covenant(facility_id: int, decision_date: date, dscr_versions: Effectiv
     """
     shipped = load_covenant_documents()
     versions, terms = dscr_versions or shipped[0], dscr_terms or shipped[1]
-    version = versions.resolve(decision_date).version_id
+    version = versions.version_on(decision_date).version_id
     threshold, cure_days = terms.for_version(version)
     return {"covenant_instance_id": f"COV-DSCR-{facility_id}", "covenant_definition_version": version,
             "threshold": threshold, "cure_days": cure_days}

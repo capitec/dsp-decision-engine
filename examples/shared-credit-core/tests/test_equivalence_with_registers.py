@@ -79,5 +79,5 @@ def test_the_old_row_types_are_accepted_by_the_new_steps():
     assert AdjustmentStack(target="score", set_id="AS-1", adjustments=[adjustment]).apply(
         600.0, {"segment_code": 3}, date(2026, 6, 1)).adjusted_value == 590.0
     assert ReasonCodes(version="v1", codes=[ReasonCode(7, 1, "Sanctioned", True)]).rank([7]) == ([7], 7)
-    assert EffectiveVersions(family="x", versions=[EffectiveVersion("v1", date(2025, 1, 1))]).resolve(
+    assert EffectiveVersions(family="x", versions=[EffectiveVersion("v1", date(2025, 1, 1))]).version_on(
         date(2026, 1, 1)).version_id == "v1"
