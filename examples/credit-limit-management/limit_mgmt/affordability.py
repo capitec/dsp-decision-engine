@@ -17,7 +17,6 @@ from decider import allow_fallback, flow, helper, missing_as, param, step
 
 from assessment import modes, pipeline as assessment, verdict
 from limit_mgmt import caps
-from limit_mgmt.overlays import buffer_adjustment_step
 from limit_mgmt.vocab import PRODUCT_EVERYDAY_CARD, Cap, EvidenceTier, IncreasePath
 
 _NO_DECLARED_INCOME = 9_999
@@ -132,7 +131,8 @@ def affordability_cap(
     return policy_proposed_limit, policy_binding_cap_code
 
 
-def unit():
+def unit(buffer_adjustments):
+    """`buffer_adjustments` is the `adjustment_stack` document that widens the buffer."""
     # The assessment's inputs are named for origination; this renames the ones that mean something else here.
     evidence = assessment.evidence_unit().relabel(reads={
         "risk_grade": "behaviour_grade", "applicant1_statement_income": "programme_statement_income",
@@ -148,6 +148,8 @@ def unit():
         step(income_staleness_days),
         step(programme_income_evidence, outputs=("programme_statement_income", "programme_statement_confidence",
                                                  "programme_declared_income")),
-        evidence, buffer_adjustment_step, capacity,
+        evidence, buffer_adjustments.relabel(writes={
+            "adjustment_set_id": "buffer_adjustment_set_id", "adjustments_applied": "buffer_adjustments_applied"}),
+        capacity,
         step(affordability_cap, outputs=("cap_affordability", "binding_cap_code")), step(increase_path_code),
         name="affordability_bridge")
