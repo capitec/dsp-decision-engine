@@ -1,7 +1,7 @@
 """A Flex Loan application: gates, fraud, bureau, score, caps, affordability, the offers and the outcome.
 
-`decider build` and `decider serve` use `build`, which receives the rate card document
-`configs/<version>/rate_card_flex_loan.json`.
+`decider build` and `decider serve` use `build`, which receives the rate card, the four overlay stacks and the
+reason codes as the documents in `configs/<version>/`.
 """
 from __future__ import annotations
 
@@ -30,7 +30,8 @@ def assessment_mode_code(mode: int = param(modes.NEW_APPLICATION, ge=1, le=4)) -
     return mode
 
 
-def build(rate_card_flex_loan):
+def build(rate_card_flex_loan, score_adjustments, calibration_scale_adjustments, probability_of_default_adjustments,
+          probability_of_default_for_grading_adjustments, reason_codes):
     solve_terms, offer_set, final_validation = offers.steps(RateCardIndex.from_card(rate_card_flex_loan))
 
     # The assessment is one step. Its employment code is this flow's own, and the names it would write over this
@@ -47,7 +48,8 @@ def build(rate_card_flex_loan):
         bureau.bureau_availability_code, bureau.data_quality_verdict, bureau.is_thin_file, bureau.bureau_referral_required,
         fraud.fraud_handling_code_step, fraud.fraud_bypass_applied,
 
-        scoring.unit(),
+        scoring.unit(score_adjustments, calibration_scale_adjustments, probability_of_default_adjustments,
+                     probability_of_default_for_grading_adjustments),
         appetite_segment_code,
         appetite.build_appetite_table().relabel(
             reads={"segment_code": "appetite_segment_code"},
@@ -61,7 +63,7 @@ def build(rate_card_flex_loan):
         offers.total_cost_ratio_threshold, offers.recommendation_objective,
         solve_terms, offer_set, final_validation,
 
-        outcome.outcome_unit,
+        outcome.unit(reason_codes),
         name="loan_granting",
     ).emit(
         "eligibility_gate_verdicts", "is_eligible", "eligibility_decline_reasons", "consent_verdict",

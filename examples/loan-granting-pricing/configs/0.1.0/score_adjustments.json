@@ -1,0 +1,29 @@
+{
+  "type": "adjustment_stack",
+  "name": "apply_score_adjustments",
+  "target": "score",
+  "set_id": "AS-03-2026.09",
+  "base_field": "score_raw",
+  "adjustments": [
+    {
+      "adjustment_id": "ADJ-03-001",
+      "kind": "score_shift",
+      "target": "score",
+      "effect": {
+        "op": "add",
+        "value": -18.0
+      },
+      "scope": {
+        "scorecard_id": 1012
+      },
+      "stack_position": 1,
+      "owner": "Model Risk",
+      "approval_reference": "MRC-2026-014",
+      "rationale": "Thin-file defaults running above prediction for two quarters",
+      "effective_from": "2026-01-01",
+      "effective_to": "2027-03-31",
+      "review_date": "2027-01-31",
+      "tighten_only": true
+    }
+  ]
+}
