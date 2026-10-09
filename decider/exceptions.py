@@ -5,7 +5,7 @@ from contextlib import contextmanager
 
 __all__ = [
     "DeciderError", "DeciderMissingDependencyError", "EngineError", "ExprError", "FallbackWarning", "HiddenStateWarning",
-    "IRError", "MissingInputError", "NotIntegralError", "ParamsError", "RegistryError", "WiringError",
+    "IRError", "MissingInputError", "NotIntegralError", "ParamsError", "RegistryError", "ShadowedTableWarning", "WiringError",
 ]
 
 
@@ -48,6 +48,20 @@ class HiddenStateWarning(UserWarning):
     Example::
 
         warnings.filterwarnings("ignore", category=HiddenStateWarning)
+    """
+
+
+class ShadowedTableWarning(UserWarning):
+    """A params document sets a table whose default rows come from a config document, so the document's rows are ignored.
+
+    Emitted when a config version is staged (`decider build`, `RequestHandler.stage()`) for a
+    `param_table(..., seeded_from="<document>")`. Run-time overrides (experiments) stay silent.
+    Three ways to switch it off: filter the category, set `DECIDER_BUILD__WARN_SHADOWED_TABLES=false`,
+    or declare the table with `allow_override=True`.
+
+    Example::
+
+        warnings.filterwarnings("ignore", category=ShadowedTableWarning)
     """
 
 
