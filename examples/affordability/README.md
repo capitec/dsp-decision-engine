@@ -28,7 +28,7 @@ Three rules shape it:
 
 ## What it decides
 
-[`assessment.pipeline:build`](assessment/pipeline.py) takes one or two applicants (a joint application is
+[`assessment.pipeline:build`](assessment/pipeline.py) takes two config documents (the capacity overlays and the reason codes; see "The documents" below), then assesses one or two applicants (a joint application is
 assessed as one household), their income evidence, declared and statement expenses, bureau and internal account
 lists, and optionally a proposed instalment, and returns:
 
@@ -70,7 +70,7 @@ The arithmetic, in the order a regulator reads it:
 | `dag` of `dag`s with `.emit`: the same step objects wired as one pipeline and as two halves | [pipeline.py](assessment/pipeline.py) |
 | `flow` for a value written twice (reason codes fired, then ranked; the capacity rounded after the overlay) | [verdict.py](assessment/verdict.py), [capacity.py](assessment/capacity.py) |
 | `DecisionTableConfig` with `eq` keys (grade by product) and an open-ended band ladder (dependants) | [capacity.py](assessment/capacity.py) |
-| Tighten-only overlays from `credit_core`, switched off with a param through the same code | [capacity.py](assessment/capacity.py), [tests/test_capacity.py](tests/test_capacity.py) |
+| An `AdjustmentStack` and a `ReasonCodes` set from `credit_core`, loaded from config documents and compared by `decider.lab.diff`; the stack is tighten-only and switched off with a param through the same code | [capacity.py](assessment/capacity.py), [verdict.py](assessment/verdict.py), [tests/test_release_checks.py](tests/test_release_checks.py) |
 | `param` for policy (staleness windows, minimum tier per mode, marginal band), a generated params document | [modes.py](assessment/modes.py), [verdict.py](assessment/verdict.py), [`configs/0.1.0/params.json`](configs/0.1.0/params.json) |
 | `missing_as` for an absent second applicant, `NaN` for "not supplied" which is not a zero | [household.py](assessment/household.py), [verdict.py](assessment/verdict.py) |
 | `TypedDict` account lists: JSON date strings arrive as `date`s | [debts.py](assessment/debts.py) |
@@ -152,7 +152,39 @@ Tests (run from the repository root, with `PYTHONPATH` set as above):
 uv run pytest examples/affordability -q
 ```
 
-To regenerate `configs/0.1.0/params.json`: `uv run python scripts/generate_configs.py`.
+To regenerate `configs/0.1.0` (the capacity overlays, the reason codes and the params document): `uv run python scripts/generate_configs.py`.
+
+## The documents
+
+`build(capacity_adjustments, reason_codes)` receives one document per argument, each a file in `configs/<version>/`. A change to either is a
+new config version, and `decider.lab.diff.structure` reports it: the overlays and the codes are fields of a step, not objects a step closes over.
+Called without arguments (as the examples that embed the assessment do), `build()` loads the shipped documents through
+[documents.py](assessment/documents.py).
+
+[`capacity_adjustments.json`](configs/0.1.0/capacity_adjustments.json) is an `adjustment_stack` on `max_affordable_instalment`. The governance
+fields (`owner`, `approval_reference`, `rationale`, `review_date`) are for people and the ageing report; the diff ignores them. An overlay that
+would raise capacity is rejected when the document loads.
+
+```json
+{"type": "adjustment_stack", "name": "apply_max_affordable_instalment_adjustments", "target": "max_affordable_instalment",
+ "set_id": "AS-02-2026.09", "base_field": "max_affordable_instalment_before_overlay",
+ "adjustments": [{"adjustment_id": "ADJ-02-2026-001", "kind": "cap_adjustment", "target": "max_affordable_instalment",
+                  "effect": {"op": "multiply", "value": 0.9}, "scope": {"product_code": 10}, "stack_position": 1,
+                  "owner": "Credit Risk Policy", "approval_reference": "CRC-2026-031",
+                  "rationale": "Product 10 early-life delinquency above appetite for two quarters",
+                  "effective_from": "2026-01-01", "effective_to": null, "review_date": "2026-12-31", "tighten_only": true}]}
+```
+
+[`reason_codes.json`](configs/0.1.0/reason_codes.json) is a `reason_codes` set: a `version` and the `codes` (201 to 207 are 200 plus the
+`evidence_sufficiency_code`, 208 a proposal over the maximum) with their severity rank, 1 the most severe. A code outside the set raises.
+
+```json
+{"type": "reason_codes", "name": "rank_reasons", "version": "affordability-reasons-2026.09",
+ "codes": [{"code": 204, "severity_rank": 30, "description": "Bureau view older than the permitted window", "is_regulatory": true}]}
+```
+
+The step names and the params paths did not change when these stopped being objects, so a params document and stored evidence from before still
+apply: `affordability_assessment/capacity/overlay/apply_max_affordable_instalment_adjustments/adjustment_stack_enabled` is still the switch.
 
 ## Layout
 
@@ -164,7 +196,8 @@ assessment/             the package
   debts.py              the household's account lists, costed by credit_core.obligations
   capacity.py           buffer grid, residual floor, the overlay stack
   verdict.py            evidence sufficiency, the verdict, reason codes
-configs/0.1.0/          params.json
+  documents.py          loads the documents in configs/ for callers that pass none
+configs/0.1.0/          params.json, capacity_adjustments.json, reason_codes.json
 scripts/                generate_configs.py
 sample_request.json
 tests/
@@ -176,12 +209,12 @@ Later examples import `assessment` by package name. These names are stable:
 
 | Name | Use |
 |---|---|
-| `assessment.pipeline.build()` | The whole assessment as one step. Embed it in another `dag`/`flow` (its params appear under `affordability_assessment/...`), and rename its inputs with `.relabel(reads=...)` |
-| `assessment.pipeline.evidence_unit()`, `capacity_unit()` | The two halves. A search that varies only the debts scores `evidence_unit()` once, then `capacity_unit()` per candidate, feeding it the record plus the evidence half's outputs. `build()` is exactly the two wired together, so they cannot drift |
+| `assessment.pipeline.build(capacity_adjustments=None, reason_codes=None)` | The whole assessment as one step; without arguments it loads the two documents in `configs/0.1.0/`. Embed it in another `dag`/`flow` (its params appear under `affordability_assessment/...`), and rename its inputs with `.relabel(reads=...)` |
+| `assessment.pipeline.evidence_unit()`, `capacity_unit(capacity_adjustments=None, reason_codes=None)` | The two halves. A search that varies only the debts scores `evidence_unit()` once, then `capacity_unit()` per candidate, feeding it the record plus the evidence half's outputs. `build()` is exactly the two wired together, so they cannot drift |
 | `assessment.pipeline.EVIDENCE_OUTPUTS`, `CAPACITY_OUTPUTS` | The columns each half emits |
 | `assessment.modes` | `NEW_APPLICATION`, `LIMIT_INCREASE`, `ARRANGEMENT`, `SCENARIO`; `minimum_income_tier` |
-| `assessment.verdict` | `PASS`, `MARGINAL`, `FAIL`, `INDETERMINATE`; the `evidence_sufficiency_code` constants; `REASON_REGISTRY` |
-| `assessment.capacity` | `CAPACITY_ADJUSTMENTS`, `ADJUSTMENT_SET_ID`, `build_buffer_grid()`, `build_residual_floor_table()`, `BUFFER_BOUND`, `RESIDUAL_FLOOR_BOUND` |
+| `assessment.verdict` | `PASS`, `MARGINAL`, `FAIL`, `INDETERMINATE`; the `evidence_sufficiency_code` constants, the `R_*` reason codes; `reasons_unit(reason_codes=None)` |
+| `assessment.capacity` | `ADJUSTMENT_SET_ID`, `overlay_unit(capacity_adjustments=None)`, `build_buffer_grid()`, `build_residual_floor_table()`, `BUFFER_BOUND`, `RESIDUAL_FLOOR_BOUND` |
 | `assessment.household`, `assessment.debts` | `applicant_income(prefix)`, `applicant_tax(prefix)` and `household_obligations` for a caller that frames its own household |
 
 Inputs it reads that the caller owns: `decision_date`, `product_code`, `risk_grade`, `assessment_mode_code`,
