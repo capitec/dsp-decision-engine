@@ -1,0 +1,67 @@
+{
+  "type": "reason_codes",
+  "name": "rank_reasons",
+  "version": "limit-mgmt-reasons-2026.09",
+  "codes": [
+    {
+      "code": 7001,
+      "severity_rank": 5,
+      "description": "Account excluded from the automatic programme",
+      "is_regulatory": true
+    },
+    {
+      "code": 7003,
+      "severity_rank": 10,
+      "description": "The client cannot carry any of the increase",
+      "is_regulatory": true
+    },
+    {
+      "code": 7010,
+      "severity_rank": 12,
+      "description": "Affordability could not be established on the evidence available",
+      "is_regulatory": true
+    },
+    {
+      "code": 7007,
+      "severity_rank": 15,
+      "description": "Suppressed: an immediate decrease fired on another account of this client",
+      "is_regulatory": true
+    },
+    {
+      "code": 7006,
+      "severity_rank": 25,
+      "description": "Reduced below the minimum meaningful increase by an active overlay",
+      "is_regulatory": false
+    },
+    {
+      "code": 7002,
+      "severity_rank": 30,
+      "description": "The matrix and the caps leave no increase, or one under the cell's minimum increment",
+      "is_regulatory": false
+    },
+    {
+      "code": 7004,
+      "severity_rank": 35,
+      "description": "Increase below the minimum meaningful amount",
+      "is_regulatory": false
+    },
+    {
+      "code": 7005,
+      "severity_rank": 40,
+      "description": "Ranked below the funding line this cycle",
+      "is_regulatory": false
+    },
+    {
+      "code": 7009,
+      "severity_rank": 42,
+      "description": "Did not fit the remaining budget; skipped",
+      "is_regulatory": false
+    },
+    {
+      "code": 7008,
+      "severity_rank": 45,
+      "description": "Segment fairness floor reached",
+      "is_regulatory": false
+    }
+  ]
+}

@@ -9,7 +9,6 @@ from decider import DecisionTableConfig, ScorecardConfig, flow
 
 from credit_core import calibration
 from credit_core.evidence import cell_id
-from limit_mgmt.overlays import BEHAVIOUR_ADJUSTMENTS, SET_ID
 
 CALIBRATION_VERSION = "behaviour-cal-2026.09"
 GRADE_VERSION = "behaviour-grade-2026.09"
@@ -94,14 +93,12 @@ def build_behaviour_grade_table() -> DecisionTableConfig:
     }).relabel(writes={"grade": "behaviour_grade", "cell_id": "behaviour_grade_cell_id"})
 
 
-def unit():
-    score_adjustment = BEHAVIOUR_ADJUSTMENTS.apply_stack_step(
-        "behaviour_score", SET_ID, base_field="behaviour_score_raw", unadjusted_output="behaviour_score_unadjusted",
-    ).relabel(writes={"adjustment_set_id": "score_adjustment_set_id", "adjustments_applied": "score_adjustments_applied"})
-    pd_adjustment = BEHAVIOUR_ADJUSTMENTS.apply_stack_step(
-        "probability_of_default", SET_ID, base_field="probability_of_default_raw",
-        unadjusted_output="probability_of_default_unadjusted",
-    ).relabel(writes={"adjustment_set_id": "pd_adjustment_set_id", "adjustments_applied": "pd_adjustments_applied"})
+def unit(score_adjustments, pd_adjustments):
+    """The two behaviour overlays are `adjustment_stack` documents: one on the score, one on the PD."""
+    score_adjustment = score_adjustments.relabel(
+        writes={"adjustment_set_id": "score_adjustment_set_id", "adjustments_applied": "score_adjustments_applied"})
+    pd_adjustment = pd_adjustments.relabel(
+        writes={"adjustment_set_id": "pd_adjustment_set_id", "adjustments_applied": "pd_adjustments_applied"})
     pd_raw = calibration.probability_of_default_step.relabel(
         reads={"score": "behaviour_score"}, writes={"probability_of_default": "probability_of_default_raw"})
     return flow(build_behaviour_scorecard(), score_adjustment, build_pd_calibration_table(), pd_raw, pd_adjustment,
