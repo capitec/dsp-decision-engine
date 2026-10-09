@@ -10,13 +10,11 @@ from __future__ import annotations
 
 from datetime import date
 
-from credit_core.adjustments import Adjustment, AdjustmentEffect, AdjustmentRegister
 from decider import ParamTable, allow_fallback, param, param_table, step
 
-from consolidation import vocab
+from consolidation import overlays, vocab
 
 OBJECTIVES = vocab.OBJECTIVES
-ADJUSTMENT_SET_ID = "AS-CON-OBJ-2026.09"
 
 # channel 0 is the row used by any channel without its own
 OBJECTIVE_WEIGHTS = param_table({"channel_code": int, **dict.fromkeys(OBJECTIVES, float)}, default=[
@@ -27,29 +25,18 @@ OBJECTIVE_WEIGHTS = param_table({"channel_code": int, **dict.fromkeys(OBJECTIVES
 ])
 
 
-def _reweight(objective: str, value: float) -> Adjustment:
-    return Adjustment(
-        adjustment_id=f"ADJ-CON-OBJ-2026-{'001' if objective == 'min_commitment' else '002'}", kind="objective_reweight",
-        target=f"weight_{objective}", effect=AdjustmentEffect("set", value), scope={"channel_code": 1}, stack_position=1,
-        owner="Credit Committee", approval_reference="CC-2026-014",
-        rationale="Branch channel weighted towards instalment relief this quarter",
-        effective_from=date(2026, 1, 1), effective_to=None, review_date=date(2026, 12, 31))
+def weights_in_force(table: ParamTable, channel_code: int, decision_date: date, stack_enabled: bool,
+                     overlay_set: tuple) -> tuple[dict, list[str]]:
+    """The normalised weight vector for a channel, after any re-weight overlay, and the ids of the overlays that applied.
 
-
-OBJECTIVE_OVERLAYS = AdjustmentRegister([_reweight("min_commitment", 0.6), _reweight("new_money", 0.4)])
-
-
-def weights_in_force(table: ParamTable, channel_code: int, decision_date: date, stack_enabled: bool) -> tuple[dict, list[str]]:
-    """The normalised weight vector for a channel, after any re-weight overlay, and the ids of the overlays that applied."""
+    `overlay_set` is `OverlaySet.packed()`: its overlays name their target `weight_<objective>`."""
     channels = table.channel_code.tolist()
     row = channels.index(channel_code) if channel_code in channels else channels.index(0)
     weights, applied = {}, []
     for name in OBJECTIVES:
-        result = OBJECTIVE_OVERLAYS.apply_stack(
-            f"weight_{name}", float(getattr(table, name)[row]), {"channel_code": channel_code}, decision_date,
-            ADJUSTMENT_SET_ID, stack_enabled=stack_enabled)
-        weights[name] = result.adjusted_value
-        applied += result.adjustments_applied
+        weights[name], ids = overlays.apply(overlay_set, f"weight_{name}", float(getattr(table, name)[row]),
+                                            {"channel_code": channel_code}, decision_date, stack_enabled)
+        applied += ids
     total = sum(weights.values())
     return {name: round(w / total, 6) for name, w in weights.items()}, sorted(set(applied))
 
@@ -102,26 +89,31 @@ def rank(scenarios: list[dict], weights: dict, outcome_weights: dict, indifferen
     return {"scored": scored, "top": top, "indifferent": indifferent, "versus": versus, "shadow": shadow}
 
 
-@allow_fallback
-@step(outputs=("objective_weights", "objective_overlay_ids", "scored_scenarios", "chosen_scenario", "runners_up",
-               "indifference_band_triggered", "winner_vs_runners_up", "shadow_best_scenario"))
-def selection(
-    scenarios: list[dict], channel_code: int, decision_date: date, objective_weights: ParamTable = OBJECTIVE_WEIGHTS,
-    outcome_weight_relief: float = param(0.35, ge=0.0), outcome_weight_cost: float = param(0.25, ge=0.0),
-    outcome_weight_exited: float = param(0.15, ge=0.0), outcome_weight_rate: float = param(0.15, ge=0.0),
-    outcome_weight_providers: float = param(0.10, ge=0.0), indifference_band: float = param(0.02, ge=0.0, le=0.2),
-    overlay_stack_enabled: bool = param(True, shared_key="overlay_stack_enabled"),
-) -> tuple[dict, list[str], list[dict], dict, list[dict], bool, list[dict], dict]:
-    """The weights in force, every viable scenario scored, the winner and runners-up, and why the winner won.
+def selection_step(overlay_set: tuple):
+    """The `selection` step, re-weighting by `overlay_set` (`OverlaySet.packed()` of the objective overlays)."""
 
-    `winner_vs_runners_up` names the component that accounts for each gap, and `shadow_best_scenario` is the best
-    for the client whatever objective is in force: the answer to "what was the best outcome available to me".
-    """
-    weights, overlay_ids = weights_in_force(objective_weights, channel_code, decision_date, overlay_stack_enabled)
-    outcome = {"relief": outcome_weight_relief, "cost": outcome_weight_cost, "exited": outcome_weight_exited,
-               "rate": outcome_weight_rate, "providers": outcome_weight_providers}
-    ranked = rank(scenarios, weights, outcome, indifference_band)
-    by_id = {s["scenario_id"]: s for s in scenarios}
-    top = [{**by_id[r["scenario_id"]], "objective_score": r["objective_score"]} for r in ranked["top"]]
-    return (weights, overlay_ids, ranked["scored"], top[0] if top else {}, top[1:], ranked["indifferent"], ranked["versus"],
-            ranked["shadow"])
+    @allow_fallback
+    @step(outputs=("objective_weights", "objective_overlay_ids", "scored_scenarios", "chosen_scenario", "runners_up",
+                   "indifference_band_triggered", "winner_vs_runners_up", "shadow_best_scenario"))
+    def selection(
+        scenarios: list[dict], channel_code: int, decision_date: date, objective_weights: ParamTable = OBJECTIVE_WEIGHTS,
+        outcome_weight_relief: float = param(0.35, ge=0.0), outcome_weight_cost: float = param(0.25, ge=0.0),
+        outcome_weight_exited: float = param(0.15, ge=0.0), outcome_weight_rate: float = param(0.15, ge=0.0),
+        outcome_weight_providers: float = param(0.10, ge=0.0), indifference_band: float = param(0.02, ge=0.0, le=0.2),
+        overlay_stack_enabled: bool = param(True, shared_key="overlay_stack_enabled"),
+    ) -> tuple[dict, list[str], list[dict], dict, list[dict], bool, list[dict], dict]:
+        """The weights in force, every viable scenario scored, the winner and runners-up, and why the winner won.
+
+        `winner_vs_runners_up` names the component that accounts for each gap, and `shadow_best_scenario` is the best
+        for the client whatever objective is in force: the answer to "what was the best outcome available to me".
+        """
+        weights, overlay_ids = weights_in_force(objective_weights, channel_code, decision_date, overlay_stack_enabled, overlay_set)
+        outcome = {"relief": outcome_weight_relief, "cost": outcome_weight_cost, "exited": outcome_weight_exited,
+                   "rate": outcome_weight_rate, "providers": outcome_weight_providers}
+        ranked = rank(scenarios, weights, outcome, indifference_band)
+        by_id = {s["scenario_id"]: s for s in scenarios}
+        top = [{**by_id[r["scenario_id"]], "objective_score": r["objective_score"]} for r in ranked["top"]]
+        return (weights, overlay_ids, ranked["scored"], top[0] if top else {}, top[1:], ranked["indifferent"], ranked["versus"],
+                ranked["shadow"])
+
+    return selection

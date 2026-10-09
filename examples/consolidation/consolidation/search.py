@@ -46,9 +46,11 @@ def run_search(evaluator: ScenarioEvaluator, settleable_refs: list[int], mandato
     }
 
 
-def search_step(products: dict, capacity: Capacity, buffers: Buffers, rejection_severity: tuple, rejection_version: str):
+def search_step(products: dict, capacity: Capacity, buffers: Buffers, intervention_overlays: tuple, rejection_severity: tuple,
+                rejection_version: str):
     """The `search` step, pricing with `products` (product code to a product object).
 
+    `intervention_overlays` is `OverlaySet.packed()` of the overlays on the intervention thresholds, and
     `rejection_severity` is `(code, severity rank)` for each scenario rejection code, in the `rejection_version` set.
     """
 
@@ -85,7 +87,7 @@ def search_step(products: dict, capacity: Capacity, buffers: Buffers, rejection_
             {int(code): policy for code, policy in product_policies.items()},
             {code: product.bind(pricing_context) for code, product in products.items()}, capacity, buffers,
             settlement_buffer_policy, {"cost_of_funds": cost_of_funds, "expected_loss_rate": expected_loss_rate},
-            max_consolidations_24m, overlay_stack_enabled, rejection_severity, rejection_version)
+            max_consolidations_24m, overlay_stack_enabled, intervention_overlays, rejection_severity, rejection_version)
         scenarios, record = run_search(evaluator, settleable_account_refs, mandatory_account_refs, ordering_rules, max_scenarios)
         return scenarios, {**record, "overlay_stack_enabled": overlay_stack_enabled}
 
