@@ -93,7 +93,7 @@ def segment_code(is_natural_person: bool) -> float:
 def entity_scoring_unit(score_adjustments: AdjustmentStack | None = None):
     """Score, overlay, calibration and grade for one entity; reads the entity's own fields.
 
-    `score_adjustments` is the `entity_score_adjustments` document; by default the one in `configs/0.1.0`.
+    `score_adjustments` is the `entity_score_adjustments` document; by default the one in `configs/0.2.0`.
     """
     overlay = (score_adjustments or shipped("entity_score_adjustments")).relabel(
         writes={"adjustment_set_id": "score_adjustment_set_id", "adjustments_applied": "score_adjustments_applied"})

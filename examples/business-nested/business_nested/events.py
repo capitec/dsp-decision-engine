@@ -88,7 +88,7 @@ class OverlaidThresholds(ConfigurableStep):
     `disqualifying_threshold` and may be scoped on `sector_code`, `criticality_class` and `event_type_code`, which an
     `AdjustmentStack` step cannot match. The param `event_overlays_enabled` switches them all off.
 
-    Example: `ConfigurableStep.load("configs/0.1.0/event_threshold_overlays.json")`.
+    Example: `ConfigurableStep.load("configs/0.2.0/event_threshold_overlays.json")`.
     """
 
     type: Literal["event_threshold_overlays"] = "event_threshold_overlays"
@@ -149,7 +149,7 @@ event_severity_unadjusted = step(event_severity, output="event_severity_code_una
 def event_unit(overlays: OverlaidThresholds | None = None):
     """The flow for one event. Reads the event's own fields; adds its age, thresholds, overlays and severities.
 
-    `overlays` is the `event_threshold_overlays` document; by default the one in `configs/0.1.0`.
+    `overlays` is the `event_threshold_overlays` document; by default the one in `configs/0.2.0`.
     """
     return flow(
         step(event_age, output="age_months"), step(amount_unknown),
