@@ -47,13 +47,13 @@ and a CI job wants a Python object, not an HTTP call.
 |---|---|
 | `RequestHandler` and `JsonFileStore`: stage one immutable config version and score raw JSON request bytes exactly as `decider serve` does, so dates, defaults and output formatting match production | [replayer.py](governance/replayer.py), [flows.py](governance/flows.py) |
 | The handler's `module_fn` hook, to score the same version with other params (a what-if, the overlays off) | [replayer.py](governance/replayer.py), [overlays.py](governance/overlays.py) |
-| Config versions as the identity of the logic, plus a digest of each document so an in-place edit is detected | [evidence.py](governance/evidence.py), [replay.py](governance/replay.py) |
+| Config versions as the identity of the logic (`store.latest_version()`, whatever it is for each flow), plus a digest of every document so an in-place edit is detected | [evidence.py](governance/evidence.py), [replay.py](governance/replay.py) |
 | Debug `Session` (`executable.session(...)`) to order the divergences by the step that first wrote each | [replay.py](governance/replay.py) |
 | `decider.lab.diff.structure` and `prove` for the change record of a release | [versions.py](governance/versions.py) |
 | `decider.lab.checks.run` with `unreachable_branch` for logic that cannot run whatever the traffic | [coverage.py](governance/coverage.py) |
 | `assert_equivalent`: the replay service gives the same verdicts in every mode and for a single record | [tests/test_pipeline.py](tests/test_pipeline.py) |
 | `step(outputs=)`, `param`, `@allow_fallback`, warm-up from `sample_request.json` for the replay service | [pipeline.py](governance/pipeline.py) |
-| From `credit_core`: `AdjustmentRegister` and `Adjustment.due_for_review`; `rate_card.diff_cards` for a rate-card refresh | [overlays.py](governance/overlays.py), [versions.py](governance/versions.py) |
+| From `credit_core`: the `Overlay` rows of the `adjustment_stack` documents (`due_for_review`) and the `reason_codes` document (`ReasonCodes`); `rate_card.diff_cards` for a rate-card refresh | [overlays.py](governance/overlays.py), [versions.py](governance/versions.py) |
 
 What is the harness's own, because decider has no equivalent:
 
@@ -66,7 +66,7 @@ What is the harness's own, because decider has no equivalent:
   ([swapset.py](governance/swapset.py)).
 - **Certification**: the golden-set comparison against the declared expected movement, the three failure modes, the
   no-effect rule and the sign-off record ([certify.py](governance/certify.py)).
-- **The overlay register view and ageing**, **rule hit counting** against each flow's rule list, and the
+- **The overlay register view and ageing** (read from the flows' config documents), **rule hit counting** against each flow's rule list, and the
   three-audience **explanation**.
 
 Not used, and why: `decider.lab.diff.outputs` and `decider.lab.experiments` run a typed *frame* through the flow, and
@@ -84,7 +84,7 @@ cd examples/governance-replay
 export DECIDER_API__CODE_PATH="$PWD" DECIDER_API__PIPELINE="governance.pipeline:build" DECIDER_CONFIG__BASEPATH="$PWD/configs"
 ```
 
-Build (validates `configs/0.1.0` and warms the replay service with `sample_request.json`, which replays a loan
+Build (validates this example's own `configs/0.1.0` and warms the replay service with `sample_request.json`, which replays a loan
 decision, so the first build in a fresh checkout compiles the loan flow too):
 
 ```bash
@@ -110,6 +110,13 @@ The same for the fraud flow:
 curl -s -d '{"flow_code":"fraud","decision_id":"9f2b6f0e-2a5b-4b8a-9b0c-111111111111"}' \
   -H 'content-type: application/json' localhost:8080/invocations
 # {"flow_code":"fraud","decision_id":"9f2b6f0e-...-111111111111","replay_verdict":"reproduced","divergence_count":0,"diverged_fields":[],"first_divergence":""}
+```
+
+and the business flow, whose documents are config version 0.2.0 of its own store:
+
+```bash
+curl -s -d '{"flow_code":"business","decision_id":"biz-2026-0900123"}' -H 'content-type: application/json' localhost:8080/invocations
+# {"flow_code":"business","decision_id":"biz-2026-0900123","replay_verdict":"reproduced","divergence_count":0,"diverged_fields":[],"first_divergence":""}
 ```
 
 A decision with no evidence is an error, not a verdict: the service answers with the missing file, never a guess.
@@ -179,7 +186,7 @@ swap_set(LOAN, requests, LOAN.replayer(), candidate).moved   # (): a cheaper gra
 
 ```
 governance/
-  flows.py        the Flow of each decision flow: entry, outcome and reason fields, registries, rule lists
+  flows.py        the Flow of each decision flow: entry, outcome and reason fields, its overlay documents, rule lists; reads a version's documents
   replayer.py     RequestHandler subclass: `score` (typed) and `served` (JSON-safe response dict), optional params, the typed record kept
   evidence.py     Evidence, capture, EvidenceStore (write once)
   replay.py       tolerance grading and replay, divergences in execution order
@@ -210,13 +217,28 @@ tests/
 - **A candidate is a version.** `Flow.candidate(edit, root)` copies the latest config, applies `edit`, writes it as a
   new version under `root` and stages it, so a rate-card refresh, a rule change and a params change are all the same
   kind of thing and attribution does not care which. A params-only run is `Flow.replayer(params=...)`.
-- **What decider's diff covers.** `version_diff` reports decider's step-level `structure` and `prove`, but two builds of
-  these pipelines always come back `proof=None`: many steps read globals decider can only key by identity (overlay
-  registers, dates, dicts, and the class inside `decider.ops.decimal.round`), so it never calls them equal. The config
-  documents are therefore summarised here instead (rate cards cell by cell by key through
+- **What decider's diff covers.** `version_diff` reports decider's step-level `structure` and `prove`. The flows keep
+  their overlays, reason codes and rule-set versions in config documents, so two pipelines built from the same
+  documents are identical to decider: `diff.structure(a, a)` reports `identical` with nothing added, removed, renamed
+  or moved and no changed edges for each of the fraud, loan and business flows, and `prove` says `True`. A change in
+  a document is a change decider sees as well; the documents are also summarised here, because a 63,360-row rate card
+  is better read as cells than as a step diff (rate cards cell by cell by key through
   `credit_core.rate_card.diff_cards`, rule sets by rule id), and a reordered rate card shows no change.
-- **Workarounds, marked `# workaround:` in the code.** `AdjustmentRegister` and `ReasonCodeRegistry` have no public
-  iterator or lookup, so the overlay list and the reason wording read their `_all` and `_by_code`.
+- **Where the overlays and reasons come from.** Nothing is imported from the flows' modules by object. `Flow.documents`
+  reads the documents of a config version from the flow's own store (`configs/<version>/*.json`, the same files the
+  flow is built from); `Flow.overlays` lists the `Overlay` rows of its overlay documents (`amount_overlays` and
+  `action_escalation` for fraud; the four `*_adjustments` for loan; `event_threshold_overlays`,
+  `entity_score_adjustments` and `business_pd_adjustments` for business), and `Flow.reason_codes` the codes of its
+  `reason_codes` document, which is what `explain` reads the wording from. A new overlay document in a flow needs one
+  name added to its `Flow`.
+- **The evidence and the version rule.** Evidence is captured against a flow's latest config version, whatever that is
+  (`business-nested` ships its documents as `0.2.0` while the others are at `0.1.0`), and keeps the digest of every
+  document in that version. Replay reads `evidence.config_version` back, so a version bump needs no change here; but
+  adding or editing any document of a version after capture makes its decisions `not_reproducible`. Write a new
+  version instead and capture new evidence, or keep the old version directory untouched.
+- **One declared Python boundary.** The replay service looks the flows up by code in `governance.flows.FLOWS`, a Python
+  registry, so decider reports it as hidden state when the service is built. The service is a harness, not a decision;
+  there is no document to hold the flows.
 - **Rule lists.** The fraud rule list is the live rules in `rule_set.json`; the loan list is the cap waterfall's
   `REGISTER`; the business list is the roll-up rule ids. The business flow also reports a binding rule
   `worst-event` that is in none of them; coverage lists it under `unknown`.
@@ -231,5 +253,5 @@ tests/
 Runs against [`transaction-fraud`](../transaction-fraud/README.md) (`fraud_interdiction`),
 [`loan-granting-pricing`](../loan-granting-pricing/README.md) (`loan_granting`) and
 [`business-nested`](../business-nested/README.md) (`business_nested`) by package name, and through them uses
-[`shared-credit-core`](../shared-credit-core/README.md) (`credit_core`: `adjustments`, `rate_card`). It publishes
+[`shared-credit-core`](../shared-credit-core/README.md) (`credit_core`: `adjustments`, `reason_codes`, `rate_card`). It publishes
 nothing for other examples to import.
