@@ -52,22 +52,27 @@ def evidence_unit():
     ).emit(*EVIDENCE_OUTPUTS)
 
 
-def capacity_unit():
+def capacity_unit(capacity_adjustments=None, reason_codes=None):
     """Obligations, discretionary income, capacity (buffer against floor, then overlays) and the verdict.
 
-    Reads the outputs of `evidence_unit()` by name, so pass them in beside the request.
+    Reads the outputs of `evidence_unit()` by name, so pass them in beside the request. `capacity_adjustments` and
+    `reason_codes` are config documents; the default is each one in this example's `configs/`.
     """
     return dag(
         debts.household_obligations,
         affordability.discretionary_income,
-        capacity.buffer_capacity, capacity.floor_capacity, capacity.binding_capacity, capacity.overlay_unit(),
+        capacity.buffer_capacity, capacity.floor_capacity, capacity.binding_capacity, capacity.overlay_unit(capacity_adjustments),
         verdict.evidence_sufficiency_code, verdict.proposal_verdict, verdict.affordability_verdict_code,
-        verdict.discretionary_income_after, verdict.reasons_unit,
+        verdict.discretionary_income_after, verdict.reasons_unit(reason_codes),
         name="capacity",
     ).emit(*CAPACITY_OUTPUTS)
 
 
-def build():
-    """The whole assessment: what `decider serve` runs and what other projects embed."""
-    return dag(evidence_unit(), capacity_unit(), name="affordability_assessment").emit(
+def build(capacity_adjustments=None, reason_codes=None):
+    """The whole assessment: what `decider serve` runs and what other projects embed.
+
+    `capacity_adjustments` (overlays on the maximum instalment) and `reason_codes` are config documents; called
+    without them, `build()` uses the ones in this example's `configs/`.
+    """
+    return dag(evidence_unit(), capacity_unit(capacity_adjustments, reason_codes), name="affordability_assessment").emit(
         *EVIDENCE_OUTPUTS, *CAPACITY_OUTPUTS, "court_ordered_deductions")

@@ -1,13 +1,12 @@
 """How much of the discretionary income may be committed: a proportional buffer and an absolute floor race, then overlays tighten."""
 from __future__ import annotations
 
-from datetime import date
-
 from decider import DecisionTableConfig, flow, step
 
 from credit_core import affordability, rounding
-from credit_core.adjustments import Adjustment, AdjustmentEffect, AdjustmentRegister
 from credit_core.evidence import cell_id
+
+from assessment import documents
 
 BUFFER_GRID_VERSION = "buffer-grid-2026.09"
 RESIDUAL_FLOOR_VERSION = "residual-floor-2026.09"
@@ -18,17 +17,6 @@ BUFFER_BOUND = 1
 RESIDUAL_FLOOR_BOUND = 2
 
 _PRODUCTS = {10: 0.0, 11: 0.01, 20: 0.0, 21: 0.0, 30: 0.02, 40: 0.05}  # product -> extra buffer for longer terms
-
-# Tighten-only: an overlay that would raise capacity is rejected when it is defined.
-CAPACITY_ADJUSTMENTS = AdjustmentRegister([
-    Adjustment(
-        adjustment_id="ADJ-02-2026-001", kind="cap_adjustment", target="max_affordable_instalment",
-        effect=AdjustmentEffect("multiply", 0.90), scope={"product_code": 10}, stack_position=1,
-        owner="Credit Risk Policy", approval_reference="CRC-2026-031",
-        rationale="Product 10 early-life delinquency above appetite for two quarters",
-        effective_from=date(2026, 1, 1), effective_to=None, review_date=date(2026, 12, 31), tighten_only=True),
-])
-
 
 def build_buffer_grid() -> DecisionTableConfig:
     """The share of discretionary income held back per risk grade and product: 10% at grade 1 rising to 35% at grade 12.
@@ -90,11 +78,14 @@ def binding_capacity(buffer_capacity: float, floor_capacity: float) -> tuple[flo
     return floor_capacity, RESIDUAL_FLOOR_BOUND
 
 
-def overlay_unit():
-    """Applies `CAPACITY_ADJUSTMENTS`; writes `max_affordable_instalment`, its `_unadjusted` twin and the overlays applied."""
+def overlay_unit(capacity_adjustments=None):
+    """Applies the `capacity_adjustments` stack; writes `max_affordable_instalment`, its `_unadjusted` twin and the overlays applied.
+
+    The default is the stack in this example's `configs/`. Overlays are tighten-only: one that would raise capacity is
+    rejected when the document loads.
+    """
     return flow(
-        CAPACITY_ADJUSTMENTS.apply_stack_step("max_affordable_instalment", ADJUSTMENT_SET_ID,
-                                              base_field="max_affordable_instalment_before_overlay"),
+        documents.shipped("capacity_adjustments") if capacity_adjustments is None else capacity_adjustments,
         rounding.round_instalment_step.relabel(
             reads={"amount": "max_affordable_instalment"}, writes={"instalment": "max_affordable_instalment"}),
         name="overlay")

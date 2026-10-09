@@ -1,0 +1,55 @@
+{
+  "type": "reason_codes",
+  "name": "rank_reasons",
+  "version": "affordability-reasons-2026.09",
+  "codes": [
+    {
+      "code": 201,
+      "severity_rank": 10,
+      "description": "Applicant 1 income could not be established",
+      "is_regulatory": true
+    },
+    {
+      "code": 202,
+      "severity_rank": 10,
+      "description": "Applicant 2 income could not be established",
+      "is_regulatory": true
+    },
+    {
+      "code": 203,
+      "severity_rank": 5,
+      "description": "Neither applicant's income could be established",
+      "is_regulatory": true
+    },
+    {
+      "code": 204,
+      "severity_rank": 30,
+      "description": "Bureau view older than the permitted window",
+      "is_regulatory": true
+    },
+    {
+      "code": 205,
+      "severity_rank": 25,
+      "description": "An account type requires manual review",
+      "is_regulatory": true
+    },
+    {
+      "code": 206,
+      "severity_rank": 20,
+      "description": "Income evidence below the minimum for this assessment",
+      "is_regulatory": true
+    },
+    {
+      "code": 207,
+      "severity_rank": 15,
+      "description": "No net income established",
+      "is_regulatory": true
+    },
+    {
+      "code": 208,
+      "severity_rank": 40,
+      "description": "Proposed instalment exceeds the affordable maximum",
+      "is_regulatory": false
+    }
+  ]
+}

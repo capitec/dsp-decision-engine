@@ -2,9 +2,9 @@ import copy
 from datetime import date
 
 import pytest
-from credit_core.adjustments import Adjustment, AdjustmentEffect
+from credit_core.adjustments import Effect, Overlay
 
-from assessment import capacity, verdict
+from assessment import capacity, documents, verdict
 
 # A vehicle loan whose R7 813.50 instalment leaves exactly R2 000 of the sample's discretionary income.
 HEAVY_DEBT = {"applicant1_bureau_accounts": [
@@ -69,11 +69,12 @@ def test_the_overlay_stack_can_be_switched_off_through_the_same_pipeline(assess,
 
 def test_an_overlay_that_would_raise_capacity_is_rejected_when_it_is_defined():
     with pytest.raises(ValueError, match="loosens"):
-        Adjustment("ADJ-X", "cap_adjustment", "max_affordable_instalment", AdjustmentEffect("multiply", 1.1), {}, 1,
-                   "Credit Risk Policy", "CRC-X", "more lending", date(2026, 1, 1), None, date(2026, 12, 31),
-                   tighten_only=True)
+        Overlay(adjustment_id="ADJ-X", kind="cap_adjustment", target="max_affordable_instalment",
+                effect=Effect(op="multiply", value=1.1), scope={}, stack_position=1, owner="Credit Risk Policy",
+                approval_reference="CRC-X", rationale="more lending", effective_from=date(2026, 1, 1),
+                review_date=date(2026, 12, 31), tighten_only=True)
 
 
 def test_the_shipped_overlays_only_tighten():
-    assert all(a.tighten_only and a.effect.value <= 1.0 for a in capacity.CAPACITY_ADJUSTMENTS.for_target(
-        "max_affordable_instalment"))
+    stack = documents.shipped("capacity_adjustments")
+    assert stack.adjustments and all(a.tighten_only and a.effect.value <= 1.0 for a in stack.adjustments)

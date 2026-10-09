@@ -9,8 +9,10 @@ from datetime import date
 
 from decider import allow_fallback, flow, missing_as, param, step
 
-from credit_core import affordability, reason_codes
+from credit_core import affordability
 from credit_core.affordability import FAIL, INDETERMINATE, MARGINAL, PASS  # noqa: F401  (the codes are published here for callers)
+
+from assessment import documents
 
 # evidence_sufficiency_code
 EVIDENCE_OK = 0
@@ -24,17 +26,6 @@ NO_NET_INCOME = 7
 
 # Reason codes reported with an indeterminate or failed verdict: 200 + the evidence code, and one for a failed proposal.
 R_INSTALMENT_EXCEEDS_CAPACITY = 208
-
-REASON_REGISTRY = reason_codes.ReasonCodeRegistry("affordability-reasons-2026.09", [
-    reason_codes.ReasonCode(201, 10, "Applicant 1 income could not be established", True),
-    reason_codes.ReasonCode(202, 10, "Applicant 2 income could not be established", True),
-    reason_codes.ReasonCode(203, 5, "Neither applicant's income could be established", True),
-    reason_codes.ReasonCode(204, 30, "Bureau view older than the permitted window", True),
-    reason_codes.ReasonCode(205, 25, "An account type requires manual review", True),
-    reason_codes.ReasonCode(206, 20, "Income evidence below the minimum for this assessment", True),
-    reason_codes.ReasonCode(207, 15, "No net income established", True),
-    reason_codes.ReasonCode(R_INSTALMENT_EXCEEDS_CAPACITY, 40, "Proposed instalment exceeds the affordable maximum", False),
-])
 
 
 @allow_fallback
@@ -94,5 +85,7 @@ def reasons_fired(evidence_sufficiency_code: int, affordability_verdict_code: in
     return [*reasons, R_INSTALMENT_EXCEEDS_CAPACITY] if affordability_verdict_code == FAIL else reasons
 
 
-# `decline_reason_codes` is written as fired, then ranked, so the two steps form a flow.
-reasons_unit = flow(step(reasons_fired, output="decline_reason_codes"), REASON_REGISTRY.resolve_step(), name="reasons")
+def reasons_unit(reason_codes=None):
+    """`decline_reason_codes` as fired, then ranked by the `reason_codes` set (default: the one in this example's `configs/`)."""
+    return flow(step(reasons_fired, output="decline_reason_codes"), documents.shipped("reason_codes") if reason_codes is None else reason_codes,
+                name="reasons")
