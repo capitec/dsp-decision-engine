@@ -5,7 +5,11 @@ import enum
 import fractions
 import functools
 import hashlib
+import importlib.metadata
+import os
 import re
+import sys
+import sysconfig
 import types
 from decimal import Decimal
 from typing import Any, Callable
@@ -18,6 +22,8 @@ from numba.core.dispatcher import Dispatcher
 from numba.extending import _Intrinsic
 
 _LITERALS = (int, float, complex, bool, str, bytes, type(None))
+_OWN_CODE = os.path.dirname(os.path.dirname(os.path.dirname(__file__))) + os.sep
+_LIBRARY_ROOTS = tuple({os.path.join(p, "") for p in map(sysconfig.get_paths().get, ("stdlib", "purelib", "platlib"))})
 _BY_VALUE = (datetime.date, datetime.time, datetime.timedelta, datetime.tzinfo, Decimal, fractions.Fraction, np.generic)
 
 
@@ -85,6 +91,14 @@ def _function(w: _Walk, fn: Any) -> None:
         return
     w.seen.add(id(fn))
     code = fn.__code__
+    if _is_library(code.co_filename):
+        # A callable of the standard library or an installed package is keyed by who and which version it is, not
+        # walked: its helpers and constants are not the step's data. A wrapper it made may close over the step.
+        w.h.update(f"library:{fn.__module__}.{fn.__qualname__}:{_version(fn.__module__)}".encode())
+        for cell in fn.__closure__ or ():
+            if isinstance(getattr(cell, "cell_contents", None), (types.FunctionType, Dispatcher)):
+                _function(w, cell.cell_contents)
+        return
     _code(w.h, code)
     names = _names(code)
     for cell in fn.__closure__ or ():
@@ -98,6 +112,23 @@ def _function(w: _Walk, fn: Any) -> None:
         if name in fn.__globals__:
             w.h.update(name.encode())
             _value(w, fn.__globals__[name], names)
+
+
+@functools.lru_cache(maxsize=None)
+def _is_library(filename: str) -> bool:
+    if filename.startswith("<frozen"):
+        return True
+    # decider's own functions are walked: a step may call `decimal.round`, and a release changes them.
+    return filename.startswith(_LIBRARY_ROOTS) and not filename.startswith(_OWN_CODE)
+
+
+@functools.lru_cache(maxsize=None)
+def _version(module: str) -> str:
+    top = module.partition(".")[0]
+    try:
+        return importlib.metadata.version(top)
+    except importlib.metadata.PackageNotFoundError:  # the standard library has no distribution
+        return sys.version.partition(" ")[0]
 
 
 def _code(h: Any, code: types.CodeType) -> None:
