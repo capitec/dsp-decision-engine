@@ -5,14 +5,13 @@ from datetime import date
 
 from decider import DecisionTableConfig, missing_as, param, step
 
-from credit_core.dates import EffectiveDatedSet, EffectiveVersion
+from credit_core.dates import EffectiveVersions, Version
 from credit_core.evidence import cell_id
 
-FEE_CAPS = EffectiveDatedSet("fee_caps", [
-    EffectiveVersion("fee_caps@2025", date(2025, 1, 1), date(2026, 1, 1)),
-    EffectiveVersion("fee_caps@2026", date(2026, 1, 1)),
+fee_caps_version_step = EffectiveVersions(family="fee_caps", versions=[
+    Version(version_id="fee_caps@2025", effective_from=date(2025, 1, 1), effective_to=date(2026, 1, 1)),
+    Version(version_id="fee_caps@2026", effective_from=date(2026, 1, 1)),
 ])
-fee_caps_version_step = FEE_CAPS.resolver_step()
 
 _CAPS = {"fee_caps@2025": (6_200.0, 65.0), "fee_caps@2026": (6_500.0, 69.0)}  # (initiation, monthly service)
 
