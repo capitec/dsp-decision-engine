@@ -6,6 +6,7 @@ import pytest
 from typing_extensions import NotRequired, TypedDict
 
 from decider import flow
+from decider.ops import Columnar, Struct
 from decider.config import JsonFileStore
 from decider.serving import RequestHandler
 
@@ -35,10 +36,13 @@ def maybe(accounts: list[Account], bonus: float | None, kind: str) -> str:
     return f"{kind}:{bonus}:{len(accounts)}"
 
 
-def _handler(tmp_path, *steps):
+def _handler(tmp_path, *steps, sample=None):
     store = JsonFileStore(basepath=str(tmp_path / "configs"))
     store.create_version({"params": {}})
-    handler = RequestHandler(store, lambda: flow(*steps, name="f"))
+    if sample is not None:
+        (tmp_path / "sample.json").write_text(json.dumps(sample))
+    handler = RequestHandler(store, lambda: flow(*steps, name="f"),
+                             sample_request=None if sample is None else str(tmp_path / "sample.json"))
     handler.stage()
     handler.activate()
     return handler
@@ -86,6 +90,37 @@ def test_a_bad_date_in_an_array_still_says_to_send_iso_strings(tmp_path):
     handler = _handler(tmp_path, shape)
     with pytest.raises(Exception, match="ISO strings"):
         _send(handler, [{"accounts": [{"balance": 1.0, "opened": "31/01/2026"}]}] * 2)
+
+
+class Priced(TypedDict):
+    price: float
+    qty: NotRequired[float]
+
+
+def priced_total(items: Columnar[Priced]) -> float:
+    t = 0.0
+    for j in range(len(items.price)):
+        t += items.price[j] * items.qty[j]
+    return t
+
+
+class Applicant(TypedDict):
+    income: float
+    bonus: NotRequired[float]
+
+
+def income(applicant: Struct[Applicant] | None) -> float:
+    return -1.0 if applicant is None else applicant["income"]
+
+
+@pytest.mark.parametrize("step, rows", [
+    (priced_total, [{"items": [{"price": 2.0, "qty": 3.0}]}, {"items": [{"price": 5.0, "qty": 1.0}]}]),
+    (income, [{"applicant": {"income": 1.0, "bonus": 2.0}}, {"applicant": None}, {"applicant": {"income": 3.0}}]),
+])
+def test_an_array_for_a_columnar_or_optional_struct_input_with_a_not_required_key_matches_records(tmp_path, step, rows):
+    handler = _handler(tmp_path, step, sample=rows[0])
+    out = step.__name__
+    assert [r[out] for r in _send(handler, rows)] == [_send(handler, r)[out] for r in rows]
 
 
 def test_an_optional_input_and_a_nullable_key_keep_their_null_in_an_array_as_in_a_record(tmp_path):
