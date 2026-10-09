@@ -1,5 +1,6 @@
 """A tree with many rule outputs is several walker calls, with the same columns and answers as one."""
 import polars as pl
+import pytest
 
 from decider import _engine as engine
 from decider.steps.trees import TreeConfig
@@ -79,3 +80,21 @@ def test_a_node_breakpoint_on_the_tree_pauses_after_the_part_that_reached_it():
     s.break_at(f"t#{cfg.tree.to_tree().rules[-1].root}")
     at = s.resume()
     assert (at.origin.path, at.when) == ("t/part_1", "after")
+
+
+def test_part_outputs_sets_the_width_of_each_part():
+    nodes = _nodes(_wide(100, part_outputs=64))
+    assert [len(n.outputs) for n in nodes] == [64, 36]
+
+
+def test_part_outputs_none_keeps_a_wide_tree_whole(run):
+    n = 3 * MAX_OUTPUTS
+    (node,) = _nodes(_wide(n, part_outputs=None))
+    assert len(node.outputs) == n
+    df = pl.DataFrame({"f0": [0.0, 50.0], "f1": [10.0, 50.0], "f2": [100.0, 0.0]})
+    assert run(_wide(n, part_outputs=None), df).equals(run(_wide(n), df))
+
+
+def test_part_outputs_below_one_is_invalid():
+    with pytest.raises(ValueError, match="part_outputs"):
+        _wide(10, part_outputs=0)

@@ -10,7 +10,7 @@ from decider.steps.trees._condition import expr_condition
 from decider.steps.trees._encode import encode, feature_kinds, kind_of
 from decider.steps.trees._reference import reference
 from decider.steps.trees._routes import Route, Visit, with_route_columns
-from decider.steps.trees._split import split
+from decider.steps.trees._split import MAX_OUTPUTS, split
 from decider.steps.trees.schema import Node, Tree, TreeDocument
 from decider.steps.trees._walker import walk
 
@@ -94,6 +94,7 @@ class TreeConfig(ConfigurableStep):
     type: t.Literal["tree"] = "tree"
     tree: TreeDocument
     feature_types: t.Dict[str, str] = {}
+    part_outputs: t.Optional[int] = Field(MAX_OUTPUTS, ge=1)
     null_handling: t.Literal["otherwise", "error"] = "otherwise"
     path_output: t.Optional[str] = None
     trace_output: t.Optional[str] = None
@@ -117,7 +118,7 @@ class TreeConfig(ConfigurableStep):
     def to_ir(self, ctx: t.Any) -> IRNode:
         tree = self._tree()
         extra = (self.path_output is not None) + (self.trace_output is not None)
-        parts = [tree] if self.path_columns is not None else split(tree, extra)
+        parts = [tree] if self.path_columns is not None else split(tree, extra, self.part_outputs)
         origin = ctx.origin(self)
         if len(parts) > 1:
             inner = ctx.child(self.name)

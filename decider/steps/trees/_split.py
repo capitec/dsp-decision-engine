@@ -10,10 +10,12 @@ from decider.steps.trees.schema import Rule, Tree
 MAX_OUTPUTS = 32
 
 
-def split(tree: Tree, extra: int) -> list[Tree]:
-    """`tree` cut into trees of at most `MAX_OUTPUTS` outputs; `extra` is the output columns a rule adds besides the tree's own."""
+def split(tree: Tree, extra: int, limit: int | None = MAX_OUTPUTS) -> list[Tree]:
+    """`tree` cut into trees of at most `limit` outputs (none: whole); `extra` is the output columns a rule adds besides the tree's own."""
+    if limit is None:
+        return [tree]
     per_rule = len(tree.output.columns) + extra
-    size = max(1, MAX_OUTPUTS // max(per_rule, 1))
+    size = max(1, limit // max(per_rule, 1))
     if tree.mode != "all" or len(tree.rules) <= size:
         return [tree]
     # A rule keeps the name its columns had in the whole tree.
