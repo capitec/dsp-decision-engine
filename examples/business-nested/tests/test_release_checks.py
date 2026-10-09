@@ -11,7 +11,7 @@ from decider.lab import diff
 from business_nested import events, vocab
 from business_nested.pipeline import build
 
-CONFIGS = Path(__file__).resolve().parents[1] / "configs" / "0.1.0"
+CONFIGS = Path(__file__).resolve().parents[1] / "configs" / "0.2.0"
 EVENT_OVERLAY = "business_credit/entities/entities/entity/events/event/overlaid_thresholds"
 SCORE_OVERLAY = "business_credit/entities/entities/entity/scoring/apply_entity_score_adjustments"
 PD_OVERLAY = "business_credit/decision/business_grade/apply_probability_of_default_adjustments"

@@ -5,11 +5,11 @@ from pathlib import Path
 
 from decider import ConfigurableStep
 
-CONFIGS = Path(__file__).resolve().parents[1] / "configs" / "0.1.0"
+CONFIGS = Path(__file__).resolve().parents[1] / "configs" / "0.2.0"
 
 
 def shipped(name: str) -> ConfigurableStep:
-    """The step in `configs/0.1.0/<name>.json`.
+    """The step in `configs/0.2.0/<name>.json`.
 
     Example: `shipped("reason_codes").version`.
     """

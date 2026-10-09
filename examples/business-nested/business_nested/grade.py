@@ -34,7 +34,7 @@ def business_grade_unit(pd_adjustments: AdjustmentStack | None = None):
     """Writes `probability_of_default_before_overlay`, `probability_of_default`, its unadjusted twin, the overlays
     applied, and `risk_grade` with and without the overlay.
 
-    `pd_adjustments` is the `business_pd_adjustments` document; by default the one in `configs/0.1.0`.
+    `pd_adjustments` is the `business_pd_adjustments` document; by default the one in `configs/0.2.0`.
     """
     return flow(
         step(combined_pd_before_overlay, output="probability_of_default_before_overlay"),

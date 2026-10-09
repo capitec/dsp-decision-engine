@@ -48,9 +48,9 @@ def build(entity_score_adjustments=None, business_pd_adjustments=None, event_thr
     """The whole decision, as `decider serve` runs it and as other projects embed it.
 
     Each argument is a document from `configs/<version>/` (`decider build` passes them by name); left out, the one
-    this package ships in `configs/0.1.0` is used, so `build()` works for callers that embed the decision.
+    this package ships in `configs/0.2.0` is used, so `build()` works for callers that embed the decision.
 
-    Example: `build(reason_codes=ConfigurableStep.load("configs/0.1.0/reason_codes.json"))`.
+    Example: `build(reason_codes=ConfigurableStep.load("configs/0.2.0/reason_codes.json"))`.
     """
     return dag(entity.entities_unit(event_threshold_overlays, entity_score_adjustments),
                decision_unit(business_pd_adjustments, reason_codes),

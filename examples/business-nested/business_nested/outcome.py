@@ -60,7 +60,7 @@ def business_outcome(
 
 def outcome_unit(reason_codes: ReasonCodes | None = None):
     """The outcome and its reasons, ranked in place. `reason_codes` is the `reason_codes` document; by default the one
-    in `configs/0.1.0`.
+    in `configs/0.2.0`.
 
     `decline_reason_codes` is written as fired, then ranked, so the two steps form a flow.
     """

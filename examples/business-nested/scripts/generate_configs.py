@@ -81,7 +81,7 @@ DOCUMENTS = {
 }
 
 
-def main(version: str = "0.1.0") -> None:
+def main(version: str = "0.2.0") -> None:
     out = Path(__file__).resolve().parents[1] / "configs" / version
     out.mkdir(parents=True, exist_ok=True)
     for name, document in DOCUMENTS.items():
