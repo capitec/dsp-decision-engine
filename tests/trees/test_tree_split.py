@@ -4,7 +4,7 @@ import pytest
 
 from decider import _engine as engine
 from decider.steps.trees import TreeConfig
-from decider.steps.trees._split import MAX_OUTPUTS
+from decider.steps.trees._split import DEFAULT_PART_OUTPUTS
 
 W = 8  # part width the tests ask for, so a wide tree stays a few dozen rules
 
@@ -104,4 +104,4 @@ def test_part_outputs_below_one_is_invalid():
 
 
 def test_a_tree_splits_into_parts_of_the_default_width_unless_told_otherwise():
-    assert TreeConfig(name="t", tree=_rules(1, lambda k: {"op": ">", "feature": "x", "threshold": 0})).part_outputs == MAX_OUTPUTS
+    assert TreeConfig(name="t", tree=_rules(1, lambda k: {"op": ">", "feature": "x", "threshold": 0})).part_outputs == DEFAULT_PART_OUTPUTS == 64

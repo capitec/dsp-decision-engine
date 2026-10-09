@@ -10,7 +10,7 @@ from decider.steps.trees._condition import expr_condition
 from decider.steps.trees._encode import encode, feature_kinds, kind_of
 from decider.steps.trees._reference import reference
 from decider.steps.trees._routes import Route, Visit, with_route_columns
-from decider.steps.trees._split import MAX_OUTPUTS, split
+from decider.steps.trees._split import DEFAULT_PART_OUTPUTS, split
 from decider.steps.trees.schema import Node, Tree, TreeDocument
 from decider.steps.trees._walker import walk
 
@@ -29,12 +29,12 @@ class TreeConfig(ConfigurableStep):
     in `feature_types` to compare an int64 column exactly.
 
     A `mode: "all"` tree writes one output per rule and column, and a tree of
-    more than `part_outputs` outputs (128 by default) is run as several parts
+    more than `part_outputs` outputs (64 by default) is run as several parts
     of whole rules, each its own node `<name>/part_<k>`, because compile time
     grows with the square of the outputs one call returns. A part costs about
     15-20 us per request, so a bigger `part_outputs` (or `None`, no parts) makes
-    `score()` faster and the first build slower (a 521-rule tree: 30 s at 128,
-    about 4 minutes unsplit); a smaller one (32) makes `run()` over a big frame
+    `score()` faster and the first build slower (a 521-rule tree takes about
+    4 minutes to bind unsplit); a smaller one (32) makes `run()` over a big frame
     up to twice as fast. A tree with params is never split.
 
     `null_handling` says what a null numeric or boolean feature does.
@@ -103,7 +103,7 @@ class TreeConfig(ConfigurableStep):
     type: t.Literal["tree"] = "tree"
     tree: TreeDocument
     feature_types: t.Dict[str, str] = {}
-    part_outputs: t.Optional[int] = Field(MAX_OUTPUTS, ge=1)
+    part_outputs: t.Optional[int] = Field(DEFAULT_PART_OUTPUTS, ge=1)
     null_handling: t.Literal["otherwise", "error"] = "otherwise"
     path_output: t.Optional[str] = None
     trace_output: t.Optional[str] = None
