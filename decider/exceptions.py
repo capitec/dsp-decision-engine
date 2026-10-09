@@ -5,7 +5,7 @@ from contextlib import contextmanager
 
 __all__ = [
     "DeciderError", "DeciderMissingDependencyError", "EngineError", "ExprError", "FallbackWarning", "IRError",
-    "MissingInputError", "ParamsError", "RegistryError", "WiringError",
+    "MissingInputError", "NotIntegralError", "ParamsError", "RegistryError", "WiringError",
 ]
 
 
@@ -96,6 +96,19 @@ class MissingInputError(DeciderError, ValueError):
             f"input '{input}' of {where} is required but column '{input}' {found}. "
             + (fix or f"Fix the data, or declare `{input}: T = missing_as(fill)` or `{input}: T | None`.")
         )
+
+
+class NotIntegralError(DeciderError, ValueError):
+    """A float that is not a whole number (7.5, NaN, infinity) reached a value declared `int`.
+
+    A whole float (`7.0`) is accepted; nothing is truncated. The message names the step or input.
+
+    Example::
+
+        exe.score({"count": 7.5})   # NotIntegralError: input 'count' is declared int but got 7.5 ...
+    """
+
+    _STATUS_CODE = 400
 
 
 class EngineError(DeciderError, ValueError):

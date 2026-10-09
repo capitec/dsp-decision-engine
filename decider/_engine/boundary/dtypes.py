@@ -9,6 +9,7 @@ import polars as pl
 from decider._engine.boundary._arrow.plan import BOOL, CODE, F64, I64, STR
 from decider._engine.ir.decls import FeatureKind, Input, NullPolicy, feature_kind
 from decider._engine.boundary.errors import ArrowKindError, NeedsKernelSplit
+from decider._engine.boundary.whole import check_series
 
 
 @dataclass(frozen=True)
@@ -92,6 +93,8 @@ def cast_series(series: pl.Series, plan: ColumnPlan) -> pl.Series:
     """Apply `plan.cast` to one column; a failed cast raises `NeedsKernelSplit` naming it."""
     if plan.cast is None:
         return series
+    if plan.cast == pl.Int64 and series.dtype.is_float():
+        check_series(series)
     try:
         base = series.dtype.base_type()
         if plan.scale is not None:
