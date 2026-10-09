@@ -33,7 +33,7 @@ OPEN = 1e9  # an open band edge: a params document cannot hold infinity
 UNCHANGED = -1  # a band that leaves this ceiling alone
 BAND_COLUMNS = ("rule", "lo", "hi", AMOUNT, TERM, GRADE, "decline")
 # (rule number, measure from, measure to, amount, term, worst grade, decline)
-_BANDS = [
+_BANDS = (
     (25, 6, 7, UNCHANGED, UNCHANGED, UNCHANGED, True),  # channel 6 is closed to the product
     (150, 4, 5, 80_000, UNCHANGED, UNCHANGED, False),  # pensioners
     (140, 0, 1, 60_000, UNCHANGED, UNCHANGED, False),  # a first loan for a new-to-bank client
@@ -47,8 +47,14 @@ _BANDS = [
     (305, 1, 2, 50_000, UNCHANGED, UNCHANGED, False),  # employer on the exposure watchlist
     (330, 5, 6, 100_000, UNCHANGED, UNCHANGED, False),  # partner channel
     (330, 6, 7, 150_000, 60, UNCHANGED, False),  # broker channel
-]
-DEFAULT_BANDS = [dict(zip(BAND_COLUMNS, row)) for row in _BANDS]
+)
+
+
+def _band_rows() -> list[dict]:
+    return [dict(zip(BAND_COLUMNS, row)) for row in _BANDS]
+
+
+DEFAULT_BANDS = _band_rows()
 CAP_BANDS = param_table({"rule": int, "lo": float, "hi": float, AMOUNT: float, TERM: float, GRADE: float,
                          "decline": bool}, default=DEFAULT_BANDS)
 
@@ -168,7 +174,7 @@ def run_waterfall(
     """
     current = {AMOUNT: float(FLEX_LOAN_MAX_AMOUNT), TERM: float(FLEX_LOAN_MAX_TERM), GRADE: WORST_GRADE}
     chain = {ceiling: [{"rule_id": "seed", "value": value}] for ceiling, value in current.items()}
-    ctx = Context(DEFAULT_BANDS if bands is None else bands, current, uplift_max_pct, uplift_authority_ceiling)
+    ctx = Context(_band_rows() if bands is None else bands, current, uplift_max_pct, uplift_authority_ceiling)
     entries, declines = [], []
     regulatory_floor, regulatory_rule = math.inf, None  # the lowest amount a regulatory rule has set
     uplift_reference = restrained_by = None

@@ -50,8 +50,8 @@ R_FINAL_VALIDATION_FAILED = 1700
 SCORECARD_REASONS = {4101: "Bureau score", 4102: "Months employed", 4103: "Months in arrears", 4104: "Accounts in arrears",
                      4105: "Revolving utilisation", 4106: "Age", 4107: "Dependants", 4108: "Employment type"}
 
-EXCLUSION_REASONS = {1: R_EXCLUSION_SANCTIONS, 2: R_EXCLUSION_INTERNAL_FRAUD, 3: R_EXCLUSION_STAFF,
-                     4: R_EXCLUSION_LITIGATION, 5: R_EXCLUSION_OTHER}
+EXCLUSION_REASONS = ((1, R_EXCLUSION_SANCTIONS), (2, R_EXCLUSION_INTERNAL_FRAUD), (3, R_EXCLUSION_STAFF),
+                     (4, R_EXCLUSION_LITIGATION), (5, R_EXCLUSION_OTHER))  # exclusion list hit -> reason code
 
 # (code, severity rank with 1 the most severe, description, regulatory)
 REGISTRY = ReasonCodeRegistry("loan-granting-reasons-2026.09", [ReasonCode(*row) for row in [
