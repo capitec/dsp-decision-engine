@@ -1,0 +1,30 @@
+{
+  "type": "collections_overlay_stack",
+  "name": "intensity_dial",
+  "target": "matrix_treatment_intensity",
+  "set_id": "AS-COLL-MATRIX-2026.09",
+  "base_field": "matrix_treatment_intensity",
+  "adjusted_output": "dialled_intensity",
+  "adjustments": [
+    {
+      "adjustment_id": "ADJ-COLL-MATRIX-001",
+      "kind": "cap_adjustment",
+      "target": "matrix_treatment_intensity",
+      "effect": {
+        "op": "add",
+        "value": 1.0
+      },
+      "scope": {
+        "arrears_bucket_code": 3
+      },
+      "stack_position": 1,
+      "owner": "Collections Strategy",
+      "approval_reference": "CCF-2026-033",
+      "rationale": "Escalate bucket 3 by one intensity level for six weeks",
+      "effective_from": "2026-08-01",
+      "effective_to": "2026-09-12",
+      "review_date": "2026-09-05",
+      "tighten_only": false
+    }
+  ]
+}

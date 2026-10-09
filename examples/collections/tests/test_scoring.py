@@ -1,11 +1,9 @@
 import copy
 
 import pytest
-from decider import Engine
+from decider import ConfigurableStep, Engine
 
-from collections_treatment import overlays, scoring
-from credit_core.adjustments import Adjustment, AdjustmentEffect
-from datetime import date
+from collections_treatment import scoring
 
 STACKS = ("score_shift", "scaling_change", "odds_multiplier", "band_boundary_shift")
 
@@ -101,12 +99,21 @@ def test_the_band_edges_are_a_shared_param_table(decide, params):
     assert decide(params_document=moved)["collections_band_code"] == 4
 
 
-def test_an_overlay_cannot_name_a_statutory_parameter():
-    bad = Adjustment("ADJ-BAD", "cap_adjustment", "contact_frequency_cap", AdjustmentEffect("multiply", 2.0), {}, 1,
-                     "nobody", "x", "x", date(2026, 1, 1), None, date(2026, 12, 31))
+def test_an_overlay_cannot_name_a_statutory_parameter(stacks):
+    document = stacks["score_shift"].model_dump(mode="json")
+    document["target"] = document["adjustments"][0]["target"] = "contact_frequency_cap"
     with pytest.raises(ValueError, match="statutory"):
-        overlays.register([bad])
-    assert len(overlays.register([])) == 0
+        ConfigurableStep.load(document)
+    document["target"] = document["adjustments"][0]["target"] = "collections_score"
+    assert len(ConfigurableStep.load(document).adjustments) == 1
+    assert ConfigurableStep.load(document | {"adjustments": []}).adjustments == ()
+
+
+def test_a_stack_reads_one_scope_column(stacks):
+    document = stacks["score_shift"].model_dump(mode="json")
+    document["adjustments"][0]["scope"] = {"agency_placed_12m": True, "product_family_code": 1}
+    with pytest.raises(ValueError, match="one scope column"):
+        ConfigurableStep.load(document)
 
 
 def test_a_missing_characteristic_scores_its_default_bin_not_zero(decide):

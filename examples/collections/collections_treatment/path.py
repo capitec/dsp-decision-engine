@@ -14,9 +14,9 @@ PATH_FLAGS = ("qualifying_payment", "promise_captured", "cured", "dispute_raised
 PATH_OUTPUTS = ("path_position", "episode_open", "intensity_ceiling", "channel_attempt_count", "reset_event",
                 "escalation_or_hold")
 
-# The position a fresh episode enters at, by cure history: never cured and chronic re-agers start at 1, an account
-# cured once or twice re-defaults at 3 (automated-only positions skipped).
-_ENTRY_POSITION = {0: 1, 1: 3, 2: 3}
+# An account cured once or twice re-defaults at position 3, skipping the automated-only positions; one never
+# cured, or a chronic re-ager, starts at 1.
+_RE_DEFAULT_CURES = (1, 2)
 
 
 def _reset_event(qualifying_payment, promise_captured, cured, dispute_raised, arrangement_activated) -> str:
@@ -47,7 +47,7 @@ def resolve_path_position(
     """
     reset = _reset_event(qualifying_payment, promise_captured, cured, dispute_raised, arrangement_activated)
     if not previous_episode_open:
-        return _ENTRY_POSITION.get(int(times_cured_12m), 1), True, matrix_treatment_intensity, 0, "", "entry"
+        return (3 if int(times_cured_12m) in _RE_DEFAULT_CURES else 1), True, matrix_treatment_intensity, 0, "", "entry"
     if reset == v.RESET_CURE:
         return 0, False, 0, 0, reset, "reset"
     if reset in (v.RESET_DISPUTE, v.RESET_ARRANGEMENT_ACTIVATED, v.RESET_PROMISE_CAPTURED):
