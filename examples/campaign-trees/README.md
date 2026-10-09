@@ -73,8 +73,10 @@ a client's qualifying campaigns become a contact, given the channels' capacity a
 | `branch` with one arm: absolute suppression skips the whole evaluation, the tree and the solve included | [pipeline.py](campaign_trees/pipeline.py), [tests/test_pipeline.py](tests/test_pipeline.py) |
 | Checking a tree document before it is published, and diffing two versions by node id | [trees.py](campaign_trees/trees.py), [tests/test_tree.py](tests/test_tree.py) |
 | A 300-node tree loads, compiles and gives the same paths compiled and interpreted | [tests/test_scale.py](tests/test_scale.py) |
-| Reusing other examples: the search and the rate card (`loan_granting`), eligibility, consent, appetite and overlays (`credit_core`) | [preassessment.py](campaign_trees/preassessment.py), [overlays.py](campaign_trees/overlays.py) |
+| Reusing other examples: the search (`loan_granting`), eligibility, consent, appetite and overlays (`credit_core`) | [preassessment.py](campaign_trees/preassessment.py), [overlays.py](campaign_trees/overlays.py) |
 | Policy numbers as params, per cycle: `resolve` writes the overlays in force on the cycle date into the params document | [overlays.py](campaign_trees/overlays.py), [scripts/generate_configs.py](scripts/generate_configs.py) |
+| The cap reduction is a document of a step type, `CapReduction` (an `AdjustmentStack` scoped by campaign and tier), so a release diff sees its effect, scope and window | [`cap_reductions.json`](configs/0.1.0/cap_reductions.json), [overlays.py](campaign_trees/overlays.py), [tests/test_hidden_state.py](tests/test_hidden_state.py) |
+| The rate card and the credit life rates are `param_table`s read with `np.searchsorted`, so no step closes over an object | [preassessment.py](campaign_trees/preassessment.py), [tests/test_hidden_state.py](tests/test_hidden_state.py) |
 | `@allow_fallback` for steps that are Python on purpose, checked by `Engine(strict_compile=True)` | [tests/test_serving.py](tests/test_serving.py) |
 | Warm-up from `sample_request.json`; the JSON date string arrives as a `date` | [tests/test_serving.py](tests/test_serving.py) |
 
@@ -143,6 +145,29 @@ Tests (run from the repository root, with `PYTHONPATH` set as above):
 uv run pytest examples/campaign-trees -q
 ```
 
+## The documents
+
+`build(campaign_23, rate_card_flex_loan, cap_reductions)` receives one document per argument, each a file in `configs/<version>/`.
+[`cap_reductions.json`](configs/0.1.0/cap_reductions.json) is what the credit policy owner edits: the overlays on the tier
+ceiling, in stack order. The governance fields (`owner`, `approval_reference`, `rationale`, `review_date`) are for people
+and the ageing report and do not count as behaviour in a diff; everything else does. Loading rejects a duplicate id and a
+`tighten_only` overlay whose effect loosens.
+
+```json
+{"type": "cap_reduction", "name": "cap_reduction", "target": "tier_ceiling", "set_id": "AS-CAMPAIGN23",
+ "adjustments": [
+   {"adjustment_id": "ADJ-C23-CAP-001", "kind": "cap_adjustment", "target": "tier_ceiling",
+    "effect": {"op": "multiply", "value": 0.8}, "scope": {"campaign_id": 23, "offer_tier_code": 1}, "stack_position": 1,
+    "owner": "Credit Risk Policy", "approval_reference": "CRC-2026-041",
+    "rationale": "Tier A funding constrained for the October cycle; 20% off while reviewed",
+    "effective_from": "2026-10-01", "effective_to": "2026-11-01", "review_date": "2026-10-25", "tighten_only": true}]}
+```
+
+The pre-assessment prices candidate loans from two tables that are table params of its step: `flex_loan_rate_card` (the rows of
+`rate_card_flex_loan.json`) and `credit_life_rates` (the rows of `credit_core`'s credit life table). Their defaults are those
+rows, so `params.json` does not repeat them; a params document may replace either. The step name and every params path that
+existed before are unchanged. A diff of two builds compares the 63 360 rate card rows, which takes about two seconds.
+
 ## Edit a tree
 
 The tree is [`configs/0.1.0/campaign_23.json`](configs/0.1.0/campaign_23.json). It has three parts, all plain JSON:
@@ -197,15 +222,15 @@ floor beside the volume dial: `OS-ADJ-C23-VOL-001+ADJ-C23-CUT-001`.
 
 ```
 campaign_trees/         the package
-  pipeline.py           build(campaign_23, rate_card_flex_loan): eligibility, suppressions, the evaluation, the groups, the outcome
+  pipeline.py           build(campaign_23, rate_card_flex_loan, cap_reductions): eligibility, suppressions, the evaluation, the groups, the outcome
   suppressions.py       the suppression rules, and which of them are absolute
-  preassessment.py      the pre-assessed amount: affordable instalment and the granting example's search
-  overlays.py           tree overlays resolved by cycle date; the cap reduction on the tier ceiling
+  preassessment.py      the pre-assessed amount: affordable instalment, the rate card and credit life rates as table params, and the granting example's search
+  overlays.py           tree overlays resolved by cycle date; the `CapReduction` step type for the tier ceiling
   trees.py              problems(tree) and changed_nodes(old, new)
   holdout.py            control and holdout groups from a stable hash
   arbitration.py        which qualifying campaigns become a contact, over a batch
   vocab.py              the assignment outcome codes
-configs/0.1.0/         campaign_23.json (hand-maintained), params.json and the rate card (scripts/generate_configs.py)
+configs/0.1.0/         campaign_23.json (hand-maintained); params.json, the rate card and cap_reductions.json (scripts/generate_configs.py)
 scripts/                generate_configs.py
 sample_request.json
 tests/
@@ -224,7 +249,7 @@ any `TreeConfig`), `campaign_trees.overlays.resolve` and `campaign_trees.arbitra
 - **"Not evaluated" is null.** A client kept out of the evaluation has null `tree_path`, `pre_assessed_amount` and the other
   evaluation fields, rather than made-up zeros. The outcome is still `0` and the amount `0.0`.
 - **Overlays have two clocks.** Threshold overlays are resolved once per cycle into the params document (a params document is
-  per run, not per client). The cap reduction is resolved per client from `cycle_date` by `credit_core`'s register.
+  per run, not per client). The cap reduction is resolved per client from `cycle_date`, from the overlays in [`cap_reductions.json`](configs/0.1.0/cap_reductions.json).
 - **The params dict is read once.** Pass a new dict after editing one; changing it in place after scoring with it is
   not noticed.
 - **Tree params are named in one place.** The thresholds an overlay may move are the `{"param": ...}` names in the tree
@@ -245,4 +270,4 @@ any `TreeConfig`), `campaign_trees.overlays.resolve` and `campaign_trees.arbitra
 Built on [`shared-credit-core`](../shared-credit-core/README.md) (`credit_core`): `adjustments`, `appetite`, `consent`,
 `eligibility`, `rate_card` (the script writes its synthetic card) and `vocab`; and on
 [`loan-granting-pricing`](../loan-granting-pricing/README.md) (`loan_granting`): `solve.solve_term` and
-`pricing.PriceEvaluator`, `RateCardIndex` for the pre-assessed amount. It does not reuse `affordability` (see above).
+`pricing.PriceEvaluator` for the pre-assessed amount. It does not reuse `affordability` (see above).
