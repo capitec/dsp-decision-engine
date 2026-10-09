@@ -21,6 +21,7 @@ from decider import ConfigurableStep, DecisionTableConfig, TreeConfig
 CAP_REDUCTIONS = {
     "type": "adjustment_stack", "name": "cap_reduction", "target": "tier_ceiling", "set_id": "AS-CAMPAIGN23",
     "adjusted_output": "advertised_tier_ceiling", "unadjusted_output": "tier_ceiling_before_cap_overlay",
+    "scope_types": {"campaign_id": "int", "offer_tier_code": "int"},
     "adjustments": [
         {"adjustment_id": "ADJ-C23-CAP-001", "kind": "cap_adjustment", "target": "tier_ceiling",
          "effect": {"op": "multiply", "value": 0.8}, "scope": {"campaign_id": overlays.CAMPAIGN_ID, "offer_tier_code": 1},

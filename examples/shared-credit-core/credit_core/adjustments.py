@@ -266,14 +266,10 @@ def evaluate(overlays: tuple, base_value: float, provenance: Mapping[str, object
     return value, applied, evaluations
 
 
-# These four columns keep the type the step has always read them as; any other column is read as the type of its scope values.
-_FIXED_TYPES = {"product_code": float, "segment_code": float, "channel_code": int, "scorecard_id": int}
-
-
-def _column_type(column: str, values: list) -> type:
-    if column in _FIXED_TYPES:
-        return _FIXED_TYPES[column]
-    return next((t for t in (str, int) if all(type(v) is t for v in values)), float)
+# These two columns have always been read as whole numbers; any other numeric scope column is a float unless the
+# stack's `scope_types` says otherwise, because a column has one type across the steps that read it.
+_INT_COLUMNS = frozenset({"channel_code", "scorecard_id"})
+_TYPES = {"int": int, "float": float, "str": str}
 
 
 def _scope_function(columns: dict[str, type]):
@@ -302,7 +298,9 @@ class AdjustmentStack(ConfigurableStep):
     The step overlays the `base_field` column (default `target`) and writes the adjusted value (default `target`),
     `<target>_unadjusted`, `adjustment_set_id` and `adjustments_applied`; when `base_field` is the target itself, put the
     step in a `flow`. The step reads one column per scope field the overlays name (`segment_code`, `sector_code`, ...); a
-    record whose column is missing or null is out of scope of the overlays that name it. The param
+    record whose column is missing or null is out of scope of the overlays that name it. A scope column is read as a
+    float (a string if its values are strings); `scope_types` sets `int`, `float` or `str` where another step reads the same
+    column as another type. The param
     `adjustment_stack_enabled` switches the whole stack off.
 
     Example::
@@ -322,6 +320,7 @@ class AdjustmentStack(ConfigurableStep):
     adjusted_output: str | None = None
     unadjusted_output: str | None = None
     adjustments: tuple[Overlay, ...]
+    scope_types: dict[str, Literal["int", "float", "str"]] = {}
     stack_enabled: Value[bool] = ParamRef(param="adjustment_stack_enabled", default=True)
 
     @model_validator(mode="before")
@@ -367,7 +366,8 @@ class AdjustmentStack(ConfigurableStep):
         for a in self.adjustments:
             for k, v in a.scope.items():
                 values.setdefault(k, []).append(v)
-        return {k: _column_type(k, vs) for k, vs in sorted(values.items())}
+        return {k: _TYPES[self.scope_types[k]] if k in self.scope_types else int if k in _INT_COLUMNS
+                else str if all(isinstance(v, str) for v in vs) else float for k, vs in sorted(values.items())}
 
     def to_ir(self, ctx: Any) -> Any:
         return ctx.call(
