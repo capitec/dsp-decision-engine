@@ -49,7 +49,7 @@ def version_diff(flow: Flow, old: Replayer, new: Replayer) -> VersionDiff:
 
     A reordered rule set or rate card gives an empty document diff: rows are matched by key, never by position.
 
-        version_diff(LOAN, flow.replayer("0.1.0"), candidate).documents["rate_card_flex_loan"]["changed"]
+        version_diff(LOAN, LOAN.replayer(), candidate).documents["rate_card_flex_loan"]["changed"]
     """
     configs = [r.store.read(r.active).config for r in (old, new)]
     steps = [r.pipeline_fn(c) for r, c in zip((old, new), configs)]

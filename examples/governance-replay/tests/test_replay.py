@@ -46,8 +46,9 @@ def test_the_first_divergence_is_in_execution_order_not_alphabetical(evidence):
 
 def test_a_config_document_edited_after_capture_cannot_be_replayed(evidence, tmp_path):
     e = evidence.load("business", BASE_IDS["business"])
-    shutil.copytree(BUSINESS.project() / "configs" / "0.1.0", tmp_path / "0.1.0")
-    params = tmp_path / "0.1.0" / "params.json"
+    version = e.config_version
+    shutil.copytree(BUSINESS.project() / "configs" / version, tmp_path / version)
+    params = tmp_path / version / "params.json"
     document = json.loads(params.read_text())
     document["business_credit"]["decision"]["outcome"]["business_outcome"]["refer_cutoff_grade"] = 7
     params.write_text(json.dumps(document))
