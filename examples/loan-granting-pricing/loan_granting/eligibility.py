@@ -13,7 +13,7 @@ from decider import allow_fallback, dag, missing_as, param, step
 from loan_granting import reasons
 
 PASS, FAIL, NOT_EVALUATED = 1, 2, 3
-VERDICT_NAMES = {PASS: "pass", FAIL: "fail", NOT_EVALUATED: "not_evaluated"}
+VERDICT_NAMES = ((PASS, "pass"), (FAIL, "fail"), (NOT_EVALUATED, "not_evaluated"))
 
 CHANNEL_PARTNER, CHANNEL_BROKER = 5, 6
 BROKER_CLOSED_FROM = date(2026, 3, 1)  # ponytail: a constant; make it a param when the product moves it
@@ -100,15 +100,15 @@ def gate_insolvency_seasoning(
     return PASS if insolvency_rehabilitated_months >= seasoning_months else FAIL
 
 
-GATE_REASONS = {
-    "gate_product_channel": reasons.R_PRODUCT_CHANNEL, "gate_min_age": reasons.R_MIN_AGE,
-    "gate_max_age_at_maturity": reasons.R_MAX_AGE_AT_MATURITY, "gate_capacity": reasons.R_NO_CAPACITY,
-    "gate_residency": reasons.R_RESIDENCY, "gate_employment_type": reasons.R_EMPLOYMENT_EXCLUDED,
-    "gate_debt_review": reasons.R_DEBT_REVIEW, "gate_administration_order": reasons.R_ADMIN_ORDER,
-    "gate_insolvency": reasons.R_INSOLVENCY, "gate_deceased_estate": reasons.R_DECEASED_ESTATE,
-    "gate_duplicate_application": reasons.R_DUPLICATE_APPLICATION,
-    "gate_in_flight_application": reasons.R_IN_FLIGHT_APPLICATION, "gate_insolvency_seasoning": reasons.R_INSOLVENCY,
-}
+GATE_REASONS = (
+    ("gate_product_channel", reasons.R_PRODUCT_CHANNEL), ("gate_min_age", reasons.R_MIN_AGE),
+    ("gate_max_age_at_maturity", reasons.R_MAX_AGE_AT_MATURITY), ("gate_capacity", reasons.R_NO_CAPACITY),
+    ("gate_residency", reasons.R_RESIDENCY), ("gate_employment_type", reasons.R_EMPLOYMENT_EXCLUDED),
+    ("gate_debt_review", reasons.R_DEBT_REVIEW), ("gate_administration_order", reasons.R_ADMIN_ORDER),
+    ("gate_insolvency", reasons.R_INSOLVENCY), ("gate_deceased_estate", reasons.R_DECEASED_ESTATE),
+    ("gate_duplicate_application", reasons.R_DUPLICATE_APPLICATION),
+    ("gate_in_flight_application", reasons.R_IN_FLIGHT_APPLICATION), ("gate_insolvency_seasoning", reasons.R_INSOLVENCY),
+)
 
 
 @allow_fallback
@@ -121,10 +121,12 @@ def eligibility_gates(
 ) -> tuple[dict, bool, list[int]]:
     """The verdict of every gate by name, whether all passed, and the reason of each that failed."""
     gates = {name: verdict for name, verdict in dict(locals()).items() if name.startswith("gate_")}
-    fired = [code for name, code in GATE_REASONS.items() if gates[name] == FAIL]
+    fired = [code for name, code in GATE_REASONS if gates[name] == FAIL]
     if gate_exclusion_lists == FAIL:
-        fired += [reasons.EXCLUSION_REASONS.get(hit, reasons.R_EXCLUSION_OTHER) for hit in exclusion_list_hits if hit]
-    return ({name.removeprefix("gate_"): VERDICT_NAMES[verdict] for name, verdict in gates.items()},
+        by_hit = dict(reasons.EXCLUSION_REASONS)
+        fired += [by_hit.get(hit, reasons.R_EXCLUSION_OTHER) for hit in exclusion_list_hits if hit]
+    names = dict(VERDICT_NAMES)
+    return ({name.removeprefix("gate_"): names[verdict] for name, verdict in gates.items()},
             FAIL not in gates.values(), sorted(set(fired)))
 
 

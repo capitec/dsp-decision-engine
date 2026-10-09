@@ -52,7 +52,7 @@ def test_other_decisions_are_served_the_same_as_interpreted(handler, decide, sam
     assert {name: served[name] for name in FIGURES} == {name: interpreted[name] for name in FIGURES}
 
 
-def test_every_step_that_runs_in_python_says_so_on_purpose(rate_card):
-    executable = Engine(strict_compile=True).bind(build(rate_card), mode="fused")  # raises on an unannounced fallback
+def test_every_step_that_runs_in_python_says_so_on_purpose(documents):
+    executable = Engine(strict_compile=True).bind(build(**documents), mode="fused")  # raises on an unannounced fallback
     assert executable.fallbacks()
     assert all(reason.startswith("@allow_fallback") for reason in executable.fallbacks().values())

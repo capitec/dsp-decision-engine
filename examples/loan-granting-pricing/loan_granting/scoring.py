@@ -7,17 +7,22 @@ unadjusted value beside the adjusted one, and `adjustment_stack_enabled` switche
 """
 from __future__ import annotations
 
-from datetime import date
+from types import SimpleNamespace
 
 from decider import allow_fallback, dag, missing_as, step
 
 from credit_core import calibration, risk_grade
-from credit_core.adjustments import Adjustment, AdjustmentEffect, AdjustmentRegister
 from credit_core.scorecard import VARIABLES, adverse_action_codes, build_scorecard
 from credit_core.vocab import SEGMENT_NEW_TO_BANK, SEGMENT_RETAIL_MASS
 
+from loan_granting import shipped
+
 SCORECARD_THIN_FILE, SCORECARD_NEW_TO_BANK, SCORECARD_EXISTING_CLIENT = 1012, 1010, 1011
-ADJUSTMENT_SET_ID = "AS-03-2026.09"
+
+STACK_DOCUMENTS = ("score_adjustments", "calibration_scale_adjustments", "probability_of_default_adjustments",
+                   "probability_of_default_for_grading_adjustments")
+# ponytail: the governance harness lists overlays from `SCORE_ADJUSTMENTS._all`; delete this when it reads the documents.
+SCORE_ADJUSTMENTS = SimpleNamespace(_all=tuple(a for name in STACK_DOCUMENTS for a in shipped.load(name).adjustments))
 
 
 @step(outputs=("scorecard_id", "segment_code"))
@@ -47,41 +52,10 @@ def score_reason_codes(
     return adverse_action_codes(points, n=4)
 
 
-SCORE_ADJUSTMENTS = AdjustmentRegister([
-    Adjustment(
-        adjustment_id="ADJ-03-001", kind="score_shift", target="score", effect=AdjustmentEffect("add", -18.0),
-        scope={"scorecard_id": SCORECARD_THIN_FILE}, stack_position=1, owner="Model Risk",
-        approval_reference="MRC-2026-014", rationale="Thin-file defaults running above prediction for two quarters",
-        effective_from=date(2026, 1, 1), effective_to=date(2027, 3, 31), review_date=date(2027, 1, 31),
-        tighten_only=True),
-    Adjustment(
-        adjustment_id="ADJ-03-002", kind="scaling_change", target="calibration_scale",
-        effect=AdjustmentEffect("multiply", 1.10), scope={"scorecard_id": SCORECARD_EXISTING_CLIENT},
-        stack_position=2, owner="Model Risk", approval_reference="MRC-2026-015",
-        rationale="Points to double the odds widened on the existing-client segment, flattening the tails",
-        effective_from=date(2026, 1, 1), effective_to=None, review_date=date(2026, 12, 31)),
-    Adjustment(
-        adjustment_id="ADJ-03-003", kind="odds_multiplier", target="probability_of_default",
-        effect=AdjustmentEffect("multiply", 1.35), scope={"channel_code": 4}, stack_position=3,
-        owner="Credit Risk Policy", approval_reference="CRC-2026-041",
-        rationale="Channel 4 realised defaults running above the model's prediction",
-        effective_from=date(2026, 1, 1), effective_to=None, review_date=date(2026, 12, 31), tighten_only=True),
-    # workaround: credit_core has no boundary-shift overlay, so moving the grade 6/7 boundary down is expressed as
-    # an odds multiplier on the PD that is graded; the risk grade table itself is never edited.
-    Adjustment(
-        adjustment_id="ADJ-03-004", kind="odds_multiplier", target="probability_of_default_for_grading",
-        effect=AdjustmentEffect("multiply", 1.12), scope={"product_code": 10}, stack_position=4,
-        owner="Credit Risk Policy", approval_reference="CRC-2026-042",
-        rationale="The top of the acceptable risk range tightened",
-        effective_from=date(2026, 1, 1), effective_to=None, review_date=date(2026, 12, 31), tighten_only=True),
-])
-
-
-def _overlay(target: str, base_field: str):
+def _overlay(stack):
     """One overlay point. Each writes its own `<target>_adjustment_set_id` and `<target>_adjustments_applied`."""
-    return SCORE_ADJUSTMENTS.apply_stack_step(target, ADJUSTMENT_SET_ID, base_field=base_field).relabel(
-        writes={"adjustment_set_id": f"{target}_adjustment_set_id",
-                "adjustments_applied": f"{target}_adjustments_applied"})
+    return stack.relabel(writes={"adjustment_set_id": f"{stack.target}_adjustment_set_id",
+                                 "adjustments_applied": f"{stack.target}_adjustments_applied"})
 
 
 @allow_fallback
@@ -100,19 +74,23 @@ def adjustment_set_id(score_adjustment_set_id: str) -> str:
     return score_adjustment_set_id
 
 
-def unit():
-    """Segment, score, overlays 1 to 4 and the grade. Reads the bureau characteristics and writes `risk_grade`."""
+def unit(score_adjustments, calibration_scale_adjustments, probability_of_default_adjustments,
+         probability_of_default_for_grading_adjustments):
+    """Segment, score, overlays 1 to 4 and the grade. Reads the bureau characteristics and writes `risk_grade`.
+
+    The overlays are `AdjustmentStack` documents (`configs/<version>/*_adjustments.json`).
+    """
     return dag(
         segment_assignment,
         build_scorecard().relabel(writes={"score": "score_raw"}, reads={"dependants_count": "applicant1_dependants_count"}),
         score_reason_codes,
-        _overlay("score", "score_raw"),
+        _overlay(score_adjustments),
         calibration.build_calibration_table(),
-        _overlay("calibration_scale", "scale"),
+        _overlay(calibration_scale_adjustments),
         step(calibration.probability_of_default, output="probability_of_default_raw").relabel(
             reads={"scale": "calibration_scale"}),
-        _overlay("probability_of_default", "probability_of_default_raw"),
-        _overlay("probability_of_default_for_grading", "probability_of_default"),
+        _overlay(probability_of_default_adjustments),
+        _overlay(probability_of_default_for_grading_adjustments),
         risk_grade.build_risk_grade_table().relabel(reads={"probability_of_default": "probability_of_default_for_grading"}),
         step(adjustments_applied), step(adjustment_set_id),
         name="scoring",

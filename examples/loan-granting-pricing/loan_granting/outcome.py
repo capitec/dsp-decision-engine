@@ -59,6 +59,7 @@ def outcome(
     return OUTCOME_APPROVE, QUEUE_NONE, []
 
 
-# `decline_reason_codes` is written as fired, then ranked, so the two steps form a flow.
-outcome_unit = flow(outcome, reasons.REGISTRY.resolve_step(), name="decision").emit(
-    "outcome_code", "referral_queue_code", "decline_reason_codes", "primary_reason_code", "reason_registry_version")
+def unit(reason_codes):
+    """The outcome, then `reason_codes` (a `ReasonCodes` document) ranks `decline_reason_codes` in place."""
+    return flow(outcome, reason_codes, name="decision").emit(
+        "outcome_code", "referral_queue_code", "decline_reason_codes", "primary_reason_code", "reason_registry_version")
