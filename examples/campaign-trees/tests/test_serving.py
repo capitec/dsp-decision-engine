@@ -45,7 +45,7 @@ def test_other_clients_are_served_the_same_as_interpreted(handler, decide, sampl
     assert {name: served[name] for name in FIGURES} == {name: interpreted[name] for name in FIGURES}
 
 
-def test_every_step_that_runs_in_python_says_so_on_purpose(tree, rate_card):
-    executable = Engine(strict_compile=True).bind(build(tree, rate_card), mode="fused")  # raises on an unannounced fallback
+def test_every_step_that_runs_in_python_says_so_on_purpose(tree, rate_card, cap_reductions):
+    executable = Engine(strict_compile=True).bind(build(tree, rate_card, cap_reductions), mode="fused")  # raises on an unannounced fallback
     assert executable.fallbacks()
     assert all(reason.startswith("@allow_fallback") for reason in executable.fallbacks().values())

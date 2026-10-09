@@ -4,7 +4,7 @@ from datetime import date
 from pathlib import Path
 
 import pytest
-from decider import DecisionTableConfig, TreeConfig
+from decider import ConfigurableStep, DecisionTableConfig, TreeConfig
 
 from campaign_trees.pipeline import build
 
@@ -28,13 +28,18 @@ def rate_card():
 
 
 @pytest.fixture(scope="session")
+def cap_reductions():
+    return ConfigurableStep.load(json.loads((CONFIGS / "cap_reductions.json").read_text()))
+
+
+@pytest.fixture(scope="session")
 def params():
     return json.loads((CONFIGS / "params.json").read_text())
 
 
 @pytest.fixture(scope="session")
-def pipeline(tree, rate_card):
-    return build(tree, rate_card).compile("interpreted")
+def pipeline(tree, rate_card, cap_reductions):
+    return build(tree, rate_card, cap_reductions).compile("interpreted")
 
 
 @pytest.fixture

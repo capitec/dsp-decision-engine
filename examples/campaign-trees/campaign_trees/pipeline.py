@@ -1,7 +1,8 @@
 """One client's evaluation for campaign 23 (the Flex Loan pre-approved top-up): the assignment record.
 
-`decider build` and `decider serve` use `build`, which receives the tree document `configs/<version>/campaign_23.json`
-and the rate card document `configs/<version>/rate_card_flex_loan.json`.
+`decider build` and `decider serve` use `build`, which receives the tree document `configs/<version>/campaign_23.json`,
+the rate card document `configs/<version>/rate_card_flex_loan.json` and the cap reductions
+`configs/<version>/cap_reductions.json`.
 """
 from __future__ import annotations
 
@@ -58,7 +59,7 @@ def advertised_amount(assignment_outcome_code: int, offer_amount: float = missin
     return offer_amount if assignment_outcome_code == vocab.TARGET else 0.0
 
 
-def build(campaign_23, rate_card_flex_loan):
+def build(campaign_23, rate_card_flex_loan, cap_reductions):
     # The tree runs twice from one document: with the params document (overlays applied) and with the published
     # thresholds, so the unadjusted answer is recorded beside the adjusted one.
     adjusted = campaign_23.named("tree_adjusted")
@@ -72,7 +73,7 @@ def build(campaign_23, rate_card_flex_loan):
     evaluation = flow(
         appetite, step(preassessment.max_affordable_instalment), preassessment.pre_assessment_step(
             RateCardIndex.from_card(rate_card_flex_loan)),
-        adjusted, unadjusted, overlays.cap_reduction, step(offer_amount),
+        adjusted, unadjusted, cap_reductions, step(offer_amount),
         name="evaluation")
 
     return flow(
