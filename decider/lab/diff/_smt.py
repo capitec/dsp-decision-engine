@@ -92,7 +92,7 @@ def _const(v: t.Any, k: str) -> t.Any:
         raise Unencodable("a threshold, value or pattern is a param")
     if k == "float":
         return z3.FPVal(float(v), _F64)
-    if isinstance(v, bool) or int(v) != v or abs(int(v)) >= 2**63:
+    if isinstance(v, bool) or float(v) != int(v) or abs(int(v)) >= 2**63:
         raise Unencodable(f"threshold {v!r} is not an int64 for an int feature")
     return z3.IntVal(int(v))
 

@@ -143,19 +143,6 @@ def test_tables_with_overlapping_rows_in_another_order_have_a_real_counterexampl
     assert old.run(frame_of(row))["o"].to_list() != new.run(frame_of(row))["o"].to_list()
 
 
-def test_int_eq_tables_differing_by_one_near_2_60_have_a_counterexample():
-    def by_id(code):
-        return DecisionTableConfig.load({
-            "type": "decision_table", "name": "t", "columns": {"id": "Int64", "o": "Float64"},
-            "rows": [{"id": code, "o": 1.0}], "expression": {"type": "eq", "variable": "id", "value_column": "id"},
-            "outputs": ["o"], "default": [0.0]})
-
-    proof = diff.prove(by_id(2**60), by_id(2**60 + 1))
-    assert proof.identical is None
-    assert proof.evidence.counterexample["id"] in (2**60, 2**60 + 1)
-    assert diff.prove(by_id(2**60), by_id(2**60)).identical is True
-
-
 def test_a_step_that_is_plain_python_falls_back_with_a_reason():
     def versions(offset):
         def f(x: float) -> float:

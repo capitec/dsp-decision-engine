@@ -276,7 +276,7 @@ def test_packing_string_outputs_does_not_compare_every_choice_per_row():
     table = DecisionTableConfig(
         name="t", columns={"k": "Float64", "cell": "String"}, rows=[{"k": 0.0, "cell": "x"}],
         expression={"type": "eq", "variable": "v", "value_column": "k"}, outputs=["cell"])
-    shape = Shape(table.expression, [("cell", "str", tuple(ids))], dtypes(table.columns), {"v": "float"})
+    shape = Shape(table.expression, [("cell", "str", tuple(ids))], dtypes(table.columns))
     pack([{"k": float(i), "cell": c} for i, c in enumerate(ids)], shape)
     assert comparisons < 10 * n
 
