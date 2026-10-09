@@ -75,7 +75,7 @@ a client's qualifying campaigns become a contact, given the channels' capacity a
 | A 300-node tree loads, compiles and gives the same paths compiled and interpreted | [tests/test_scale.py](tests/test_scale.py) |
 | Reusing other examples: the search (`loan_granting`), eligibility, consent, appetite and overlays (`credit_core`) | [preassessment.py](campaign_trees/preassessment.py), [overlays.py](campaign_trees/overlays.py) |
 | Policy numbers as params, per cycle: `resolve` writes the overlays in force on the cycle date into the params document | [overlays.py](campaign_trees/overlays.py), [scripts/generate_configs.py](scripts/generate_configs.py) |
-| The cap reduction is a document of a step type, `CapReduction` (an `AdjustmentStack` scoped by campaign and tier), so a release diff sees its effect, scope and window | [`cap_reductions.json`](configs/0.1.0/cap_reductions.json), [overlays.py](campaign_trees/overlays.py), [tests/test_hidden_state.py](tests/test_hidden_state.py) |
+| The cap reduction is an `adjustment_stack` document (an `AdjustmentStack` scoped by campaign and tier), so a release diff sees its effect, scope and window | [`cap_reductions.json`](configs/0.1.0/cap_reductions.json), [overlays.py](campaign_trees/overlays.py), [tests/test_hidden_state.py](tests/test_hidden_state.py) |
 | The rate card and the credit life rates are `param_table`s read with `np.searchsorted`, so no step closes over an object | [preassessment.py](campaign_trees/preassessment.py), [tests/test_hidden_state.py](tests/test_hidden_state.py) |
 | `@allow_fallback` for steps that are Python on purpose, checked by `Engine(strict_compile=True)` | [tests/test_serving.py](tests/test_serving.py) |
 | Warm-up from `sample_request.json`; the JSON date string arrives as a `date` | [tests/test_serving.py](tests/test_serving.py) |
@@ -154,7 +154,9 @@ and the ageing report and do not count as behaviour in a diff; everything else d
 `tighten_only` overlay whose effect loosens.
 
 ```json
-{"type": "cap_reduction", "name": "cap_reduction", "target": "tier_ceiling", "set_id": "AS-CAMPAIGN23",
+{"type": "adjustment_stack", "name": "cap_reduction", "target": "tier_ceiling", "set_id": "AS-CAMPAIGN23",
+ "adjusted_output": "advertised_tier_ceiling", "unadjusted_output": "tier_ceiling_before_cap_overlay",
+ "scope_types": {"campaign_id": "int", "offer_tier_code": "int"},
  "adjustments": [
    {"adjustment_id": "ADJ-C23-CAP-001", "kind": "cap_adjustment", "target": "tier_ceiling",
     "effect": {"op": "multiply", "value": 0.8}, "scope": {"campaign_id": 23, "offer_tier_code": 1}, "stack_position": 1,
@@ -225,7 +227,7 @@ campaign_trees/         the package
   pipeline.py           build(campaign_23, rate_card_flex_loan, cap_reductions): eligibility, suppressions, the evaluation, the groups, the outcome
   suppressions.py       the suppression rules, and which of them are absolute
   preassessment.py      the pre-assessed amount: affordable instalment, the rate card and credit life rates as table params, and the granting example's search
-  overlays.py           tree overlays resolved by cycle date; the `CapReduction` step type for the tier ceiling
+  overlays.py           tree overlays resolved by cycle date
   trees.py              problems(tree) and changed_nodes(old, new)
   holdout.py            control and holdout groups from a stable hash
   arbitration.py        which qualifying campaigns become a contact, over a batch
