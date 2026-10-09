@@ -4,10 +4,6 @@ Their descriptions and severity ranking are the document `configs/<version>/reas
 """
 from __future__ import annotations
 
-from types import SimpleNamespace
-
-from loan_granting import shipped
-
 # Eligibility gates
 R_PRODUCT_CHANNEL = 1102
 R_MIN_AGE = 1110
@@ -53,6 +49,3 @@ R_FINAL_VALIDATION_FAILED = 1700
 
 EXCLUSION_REASONS = ((1, R_EXCLUSION_SANCTIONS), (2, R_EXCLUSION_INTERNAL_FRAUD), (3, R_EXCLUSION_STAFF),
                      (4, R_EXCLUSION_LITIGATION), (5, R_EXCLUSION_OTHER))  # exclusion list hit -> reason code
-
-# ponytail: the governance harness looks codes up in `REGISTRY._by_code`; delete this when it reads the document.
-REGISTRY = SimpleNamespace(_by_code={c.code: c for c in shipped.load("reason_codes").codes})

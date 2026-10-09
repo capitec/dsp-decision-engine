@@ -1,8 +1,6 @@
 """The business grade: the financial and people components blended on log-odds, an overlay, then the product's ladder."""
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 from decider import allow_fallback, flow, param, step
 
 from credit_core.adjustments import AdjustmentStack
@@ -45,7 +43,3 @@ def business_grade_unit(pd_adjustments: AdjustmentStack | None = None):
         name="business_grade",
     ).emit("probability_of_default_before_overlay", "probability_of_default", "probability_of_default_unadjusted",
            "adjustment_set_id", "adjustments_applied", "risk_grade", "risk_grade_cell_id", "risk_grade_unadjusted")
-
-
-# governance-replay lists the overlays through this name; no step reads it.
-BUSINESS_OVERLAYS = SimpleNamespace(_all=shipped("business_pd_adjustments").adjustments)

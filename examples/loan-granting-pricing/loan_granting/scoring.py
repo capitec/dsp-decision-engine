@@ -7,22 +7,13 @@ unadjusted value beside the adjusted one, and `adjustment_stack_enabled` switche
 """
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 from decider import allow_fallback, dag, missing_as, step
 
 from credit_core import calibration, risk_grade
 from credit_core.scorecard import VARIABLES, adverse_action_codes, build_scorecard
 from credit_core.vocab import SEGMENT_NEW_TO_BANK, SEGMENT_RETAIL_MASS
 
-from loan_granting import shipped
-
 SCORECARD_THIN_FILE, SCORECARD_NEW_TO_BANK, SCORECARD_EXISTING_CLIENT = 1012, 1010, 1011
-
-STACK_DOCUMENTS = ("score_adjustments", "calibration_scale_adjustments", "probability_of_default_adjustments",
-                   "probability_of_default_for_grading_adjustments")
-# ponytail: the governance harness lists overlays from `SCORE_ADJUSTMENTS._all`; delete this when it reads the documents.
-SCORE_ADJUSTMENTS = SimpleNamespace(_all=tuple(a for name in STACK_DOCUMENTS for a in shipped.load(name).adjustments))
 
 
 @step(outputs=("scorecard_id", "segment_code"))

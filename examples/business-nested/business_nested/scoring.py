@@ -6,8 +6,6 @@ and financial components, which grade a blended probability the same way.
 """
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 from decider import DecisionTableConfig, ScorecardConfig, flow, step
 
 from credit_core import calibration
@@ -108,7 +106,3 @@ def entity_scoring_unit(score_adjustments: AdjustmentStack | None = None):
         name="scoring",
     ).emit("score_before_overlay", "entity_score", "entity_score_unadjusted", "score_adjustments_applied", "entity_pd",
            "entity_pd_unadjusted", "entity_grade", "entity_grade_unadjusted")
-
-
-# governance-replay lists the overlays through this name; no step reads it.
-ENTITY_OVERLAYS = SimpleNamespace(_all=shipped("entity_score_adjustments").adjustments)
