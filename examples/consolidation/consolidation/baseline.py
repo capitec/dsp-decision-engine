@@ -49,8 +49,8 @@ def invariants(
         "affordability_buffer_applied": affordability_buffer_applied}
 
 
-def baseline_step(capacity: Capacity):
-    """The `baseline_measures` step, scoring the client's accounts with the shared `capacity`."""
+def baseline_step(capacity_documents: tuple[str, str]):
+    """The `baseline_measures` step, scoring the client's accounts with the capacity unit built from `capacity_documents`."""
 
     @allow_fallback
     @step(output="baseline")
@@ -66,7 +66,7 @@ def baseline_step(capacity: Capacity):
         """
         case = case_record(decision_date, vocab.PRODUCT_FLEX_LOAN_CONSOLIDATION, channel_code, segment_code,
                            court_ordered_deductions, invariants, invariants["affordability_buffer_applied"])
-        now = capacity(case, classified_accounts, {})
+        now = Capacity(*capacity_documents)(case, classified_accounts, {})
         live = [a for a in classified_accounts if a.get("account_status_code") != vocab.CLOSED_STATUS]
         return {
             "existing_obligations": now["existing_obligations"], "discretionary_income": now["discretionary_income"],

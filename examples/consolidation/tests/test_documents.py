@@ -2,11 +2,13 @@
 import json
 from pathlib import Path
 
+from assessment.documents import shipped as assessment_document
 from decider import ConfigurableStep, DecisionTableConfig
 
 from consolidation.pipeline import build
 
 ROOT = Path(__file__).resolve().parents[1]
+ASSESSMENT = {"capacity_adjustments": "capacity_adjustments", "affordability_reason_codes": "reason_codes"}  # shipped by `assessment`
 TABLES = ("rate_card_product11", "card_promotional_rates", "card_reversion_rates", "settleability_rules")
 
 
@@ -18,7 +20,7 @@ def rebuilt(**edits):
     """The pipeline built from the shipped documents, with `edit(document)` applied to each document named."""
     documents = {name: DecisionTableConfig.load(raw(name)) for name in TABLES}
     for name, edit in edits.items():
-        document = raw(name)
+        document = json.loads(assessment_document(ASSESSMENT[name]).model_dump_json()) if name in ASSESSMENT else raw(name)
         edit(document)
         documents[name] = (DecisionTableConfig if name in TABLES else ConfigurableStep).load(document)
     return build(**documents).compile("interpreted")
@@ -75,3 +77,15 @@ def test_a_rate_card_document_edit_reprices_the_consolidation_loan(sample, param
     flex = [(a, b) for a, b in zip(base, edited) if a["product_code"] == 11 and "nominal_annual_rate" in a]
     assert flex and all(round(b["nominal_annual_rate"] - a["nominal_annual_rate"], 4) == 0.01 for a, b in flex)
     assert all(a["nominal_annual_rate"] == b["nominal_annual_rate"] for a, b in zip(base, edited) if a["product_code"] == 20)
+
+
+def test_a_capacity_overlay_edit_moves_the_capacity_every_scenario_is_tested_against(sample, params, parse):
+    def tighten(document):
+        document["adjustments"][0].update(scope={"product_code": 11})
+        document["adjustments"][0]["effect"]["value"] = 0.5
+
+    record = parse(sample)
+    shipped = rebuilt().score(record, params)
+    tightened = rebuilt(capacity_adjustments=tighten).score(record, params)
+    assert tightened["baseline"]["max_affordable_instalment"] < shipped["baseline"]["max_affordable_instalment"]
+    assert tightened["scenarios"][0]["max_affordable_instalment"] < shipped["scenarios"][0]["max_affordable_instalment"]

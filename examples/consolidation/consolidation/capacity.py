@@ -8,11 +8,14 @@ settlement quote has been paid off and leaves the list.
 from __future__ import annotations
 
 import copy
+import functools
 from datetime import date
 
 from assessment import modes
 from assessment.capacity import build_buffer_grid
+from assessment.documents import shipped
 from assessment.pipeline import capacity_unit
+from decider import ConfigurableStep, allow_fallback, each, flow, step
 
 from consolidation import vocab
 from consolidation.inventory import num
@@ -42,17 +45,32 @@ def as_assessment_accounts(accounts: list[dict], settled: dict[int, float]) -> t
     return bureau, internal
 
 
-class Capacity:
-    """`capacity_unit()` compiled once. Call it with a debt set and, optionally, the instalment being proposed."""
+@functools.cache
+def _compiled(adjustments: str, reason_codes: str) -> tuple:
+    unit = capacity_unit(ConfigurableStep.load(adjustments), ConfigurableStep.load(reason_codes))
+    # ponytail: interpreted, a fused compile is ten seconds of numba to save 0.15 ms a scenario
+    exe = unit.compile("interpreted")
+    on = unit.parameters().defaults()
+    off = copy.deepcopy(on)
+    off["capacity"]["overlay"]["apply_max_affordable_instalment_adjustments"]["adjustment_stack_enabled"] = False
+    return exe, {True: on, False: off}  # a params dict is read once per identity, so these are built once
 
-    def __init__(self):
-        unit = capacity_unit()
-        # ponytail: interpreted, a fused compile is ten seconds of numba to save 0.15 ms a scenario
-        self._exe = unit.compile("interpreted")
-        on = unit.parameters().defaults()
-        off = copy.deepcopy(on)
-        off["capacity"]["overlay"]["apply_max_affordable_instalment_adjustments"]["adjustment_stack_enabled"] = False
-        self._params = {True: on, False: off}  # a params dict is read once per identity, so these are built once
+
+class Capacity:
+    """`capacity_unit()` compiled, scored with a debt set and, optionally, the instalment being proposed.
+
+    The compiled unit is an executable, not data a step could be handed, so it is built from the two documents the
+    first time they are used and kept for the life of the process, whichever step asks. `adjustments` and
+    `reason_codes` are the JSON of the `capacity_unit` documents; a changed document is a different unit.
+
+    Example::
+
+        capacity = Capacity(shipped("capacity_adjustments").model_dump_json(), shipped("reason_codes").model_dump_json())
+        capacity(case, accounts, {})["max_affordable_instalment"]
+    """
+
+    def __init__(self, adjustments: str, reason_codes: str):
+        self._exe, self._params = _compiled(adjustments, reason_codes)
 
     def __call__(self, case: dict, accounts: list[dict], settled: dict[int, float], proposed_instalment: float | None = None,
                  stack_enabled: bool = True) -> dict:
@@ -64,6 +82,12 @@ class Capacity:
         return self._exe.score(record, self._params[stack_enabled])
 
 
+def capacity_documents(capacity_adjustments=None, reason_codes=None) -> tuple[str, str]:
+    """The JSON of the documents `Capacity` is built from; each defaults to the one the affordability example ships."""
+    return tuple((shipped(name) if document is None else document).model_dump_json()
+                 for name, document in (("capacity_adjustments", capacity_adjustments), ("reason_codes", reason_codes)))
+
+
 def case_record(decision_date: date, product_code: int, channel_code: int, segment_code: float, court_ordered_deductions: float,
                 invariants: dict, affordability_buffer_applied: float) -> dict:
     """What `capacity_unit()` reads besides the debts: the invariants, and the one figure that depends on the product,
@@ -73,16 +97,17 @@ def case_record(decision_date: date, product_code: int, channel_code: int, segme
             "affordability_buffer_applied": affordability_buffer_applied, **{k: invariants[k] for k in INVARIANTS}}
 
 
-class Buffers:
-    """The assessment's buffer grid, read for each product a scenario is priced under."""
+@allow_fallback
+@step(output="buffer_probes")
+def buffer_probes(product_policies: dict, risk_grade: float) -> list[dict]:
+    """One probe per product the search can price: the keys the buffer grid is read with."""
+    return [{"product_code": int(code), "risk_grade": int(risk_grade)} for code in product_policies]
 
-    def __init__(self):
-        self._exe = build_buffer_grid().compile("interpreted")
-        self._seen: dict[tuple[int, int], float] = {}
 
-    def __call__(self, product_code: int, risk_grade: int) -> float:
-        key = (product_code, risk_grade)
-        if key not in self._seen:
-            row = self._exe.score({"product_code": product_code, "risk_grade": risk_grade})
-            self._seen[key] = row["affordability_buffer_applied"]
-        return self._seen[key]
+def buffer_unit():
+    """The affordability buffer for each product's scenarios: the assessment's own grid, read once per product.
+
+    Writes `scenario_buffers`, a probe per product with its `affordability_buffer_applied`.
+    """
+    return flow(buffer_probes, each("buffer_probes", flow(build_buffer_grid(), name="grid"), name="scenario_buffers",
+                                    output="scenario_buffers"), name="buffers")

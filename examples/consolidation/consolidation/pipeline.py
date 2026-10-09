@@ -21,7 +21,7 @@ from consolidation import (
     search,
     settlement,
 )
-from consolidation.capacity import Buffers, Capacity
+from consolidation.capacity import buffer_unit, capacity_documents
 from consolidation.documents import shipped
 from consolidation.everyday_card import everyday_card_policy
 from consolidation.flex_loan import flex_loan_policy
@@ -55,14 +55,17 @@ def statutory_ceiling(repo_rate: float = param(0.07, ge=0.0, le=0.30), margin_ov
 
 
 def build(rate_card_product11, card_promotional_rates, card_reversion_rates, settleability_rules, client_reason_codes=None,
-          scenario_rejection_codes=None, intervention_adjustments=None, objective_adjustments=None):
+          scenario_rejection_codes=None, intervention_adjustments=None, objective_adjustments=None, capacity_adjustments=None,
+          affordability_reason_codes=None):
     """Each argument is the config document of that name, loaded by `decider`. The reason code sets and the two overlay
-    sets default to the documents shipped in `configs/0.1.0/`."""
+    sets default to the documents shipped in `configs/0.1.0/`. `capacity_adjustments` and `affordability_reason_codes`
+    are the affordability assessment's own documents, which the capacity unit scored per scenario is built from; they
+    default to the ones `assessment` ships."""
     client_reasons = shipped("client_reason_codes") if client_reason_codes is None else client_reason_codes
     rejections = shipped("scenario_rejection_codes") if scenario_rejection_codes is None else scenario_rejection_codes
     thresholds = shipped("intervention_adjustments") if intervention_adjustments is None else intervention_adjustments
     weights = shipped("objective_adjustments") if objective_adjustments is None else objective_adjustments
-    capacity, buffers = Capacity(), Buffers()
+    capacity = capacity_documents(capacity_adjustments, affordability_reason_codes)
     # ponytail: the Flex Loan card is regenerated, not read from a config document; load it from one when Treasury refreshes it
     plain_card = DecisionTableConfig.load(generate_flex_loan_card("rc-2026.09"))
     product11 = product11_params(rate_card_product11)
@@ -72,7 +75,8 @@ def build(rate_card_product11, card_promotional_rates, card_reversion_rates, set
         statutory_ceiling, fees.fee_caps_version_step, fees.build_fee_caps_table(), products.pricing_context,
         baseline.baseline_step(capacity), baseline.plain_granting_step(plain_card, product11),
         eligibility.eligibility_gates, flex_loan_policy, everyday_card_policy, products.product_policies,
-        search.search_step(product11, card_params(card_promotional_rates, card_reversion_rates), capacity, buffers,
+        buffer_unit(),
+        search.search_step(product11, card_params(card_promotional_rates, card_reversion_rates), capacity,
                            thresholds.packed(),
                            tuple((c.code, c.severity_rank) for c in rejections.codes), rejections.version),
         objective.selection_step(weights.packed()), outcome.outcome, client_reasons,
