@@ -1,0 +1,30 @@
+{
+  "type": "collections_overlay_stack",
+  "name": "treatment_suppression",
+  "target": "matrix_treatment_code",
+  "set_id": "AS-COLL-MATRIX-2026.09",
+  "base_field": "matrix_treatment_code",
+  "adjusted_output": "suppressed_treatment_code",
+  "adjustments": [
+    {
+      "adjustment_id": "ADJ-COLL-MATRIX-002",
+      "kind": "treatment_suppression",
+      "target": "matrix_treatment_code",
+      "effect": {
+        "op": "set",
+        "value": 0.0
+      },
+      "scope": {
+        "matrix_treatment_code": 8
+      },
+      "stack_position": 2,
+      "owner": "Collections Strategy",
+      "approval_reference": "CCF-2026-041",
+      "rationale": "Suspend field visits for the quarter",
+      "effective_from": "2026-07-01",
+      "effective_to": "2026-10-01",
+      "review_date": "2026-09-15",
+      "tighten_only": false
+    }
+  ]
+}

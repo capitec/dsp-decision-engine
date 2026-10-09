@@ -5,38 +5,18 @@ one without a release. Two overlays work in the month: an intensity dial and a t
 """
 from __future__ import annotations
 
-from datetime import date
+from decider import DecisionTableConfig, allow_fallback, step
 
-from decider import DecisionTableConfig, allow_fallback, param, step
-
-from credit_core.adjustments import Adjustment, AdjustmentEffect
 from credit_core.evidence import cell_id
 
-from collections_treatment import overlays, vocab as v
+from collections_treatment import vocab as v
 
 MATRIX_VERSION = "matrix-2026.09"
-ADJUSTMENT_SET_ID = "AS-COLL-MATRIX-2026.09"
 
 _TREATMENT_BY_SEVERITY = [
     v.NO_ACTION, v.AUTOMATED_SMS, v.AUTOMATED_EMAIL, v.IN_APP_MESSAGE, v.AUTOMATED_VOICE_MESSAGE, v.AGENT_CALL_LOW,
     v.AGENT_CALL_STANDARD, v.AGENT_CALL_HIGH, v.FIELD_VISIT, v.AGENCY_HANDOVER, v.PRE_LEGAL_NOTICE, v.LEGAL_HANDOVER,
 ]
-
-ADJUSTMENTS = overlays.register([
-    Adjustment(
-        adjustment_id="ADJ-COLL-MATRIX-001", kind="cap_adjustment", target="matrix_treatment_intensity",
-        effect=AdjustmentEffect("add", 1.0), scope={"arrears_bucket_code": 3}, stack_position=1,
-        owner="Collections Strategy", approval_reference="CCF-2026-033",
-        rationale="Escalate bucket 3 by one intensity level for six weeks",
-        effective_from=date(2026, 8, 1), effective_to=date(2026, 9, 12), review_date=date(2026, 9, 5)),
-    Adjustment(
-        adjustment_id="ADJ-COLL-MATRIX-002", kind="treatment_suppression", target="matrix_treatment_code",
-        effect=AdjustmentEffect("set", float(v.NO_ACTION)), scope={"matrix_treatment_code": v.FIELD_VISIT},
-        stack_position=2, owner="Collections Strategy", approval_reference="CCF-2026-041",
-        rationale="Suspend field visits for the quarter",
-        effective_from=date(2026, 7, 1), effective_to=date(2026, 10, 1), review_date=date(2026, 9, 15)),
-])
-
 
 def generate_matrix() -> dict:
     """A synthetic matrix document: intensity rises with bucket, band and contact band; small early balances stay
@@ -91,28 +71,15 @@ def matrix_cell_id(arrears_bucket_code: int, collections_band_code: int, balance
                    contact_band_code, int(product_family_code))
 
 
-@allow_fallback
-def intensity_dial(
-    matrix_treatment_intensity: int, decision_date: date, arrears_bucket_code: int,
-    adjustment_stack_enabled: bool = param(True),
-) -> tuple[int, list[str]]:
-    result = ADJUSTMENTS.apply_stack(
-        "matrix_treatment_intensity", float(matrix_treatment_intensity), {"arrears_bucket_code": arrears_bucket_code},
-        decision_date, ADJUSTMENT_SET_ID, stack_enabled=adjustment_stack_enabled)
-    return int(min(5, max(1, round(result.adjusted_value)))), list(result.adjustments_applied)
+def treatment_intensity(dialled_intensity: float) -> int:
+    """`treatment_intensity`: the dialled intensity rounded and held between 1 and 5."""
+    return int(min(5, max(1, round(dialled_intensity))))
 
 
-@allow_fallback
-def treatment_suppression(
-    matrix_treatment_code: int, decision_date: date, adjustment_stack_enabled: bool = param(True),
-) -> tuple[int, list[str]]:
-    """A suppressed treatment falls back to no action."""
-    result = ADJUSTMENTS.apply_stack(
-        "matrix_treatment_code", float(matrix_treatment_code), {"matrix_treatment_code": matrix_treatment_code},
-        decision_date, ADJUSTMENT_SET_ID, stack_enabled=adjustment_stack_enabled)
-    return int(result.adjusted_value), list(result.adjustments_applied)
+def overlaid_treatment_code(suppressed_treatment_code: float) -> int:
+    """`overlaid_treatment_code`: the treatment after the suppression overlay; a suppressed one is no action."""
+    return int(suppressed_treatment_code)
 
 
-intensity_dial_step = step(intensity_dial, outputs=("treatment_intensity", "intensity_dial_adjustments_applied"))
-treatment_suppression_step = step(
-    treatment_suppression, outputs=("overlaid_treatment_code", "suppression_adjustments_applied"))
+treatment_intensity_step = step(treatment_intensity)
+overlaid_treatment_code_step = step(overlaid_treatment_code)

@@ -1,0 +1,30 @@
+{
+  "type": "collections_overlay_stack",
+  "name": "score_shift",
+  "target": "collections_score",
+  "set_id": "AS-COLL-SCORE-2026.09",
+  "base_field": "collections_score_unadjusted",
+  "adjusted_output": "collections_score",
+  "adjustments": [
+    {
+      "adjustment_id": "ADJ-COLL-SCORE-001",
+      "kind": "score_shift",
+      "target": "collections_score",
+      "effect": {
+        "op": "add",
+        "value": -22.0
+      },
+      "scope": {
+        "agency_placed_12m": true
+      },
+      "stack_position": 1,
+      "owner": "Collections Strategy",
+      "approval_reference": "MRV-2026-014",
+      "rationale": "Accounts placed with an agency in the last 12 months score optimistic on the base curve",
+      "effective_from": "2026-01-01",
+      "effective_to": "2026-12-31",
+      "review_date": "2026-10-01",
+      "tighten_only": true
+    }
+  ]
+}

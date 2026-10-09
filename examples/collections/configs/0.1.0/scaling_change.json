@@ -1,0 +1,30 @@
+{
+  "type": "collections_overlay_stack",
+  "name": "scaling_change",
+  "target": "calibration_scale",
+  "set_id": "AS-COLL-SCORE-2026.09",
+  "base_field": "scale",
+  "adjusted_output": "adjusted_scale",
+  "adjustments": [
+    {
+      "adjustment_id": "ADJ-COLL-SCORE-003",
+      "kind": "scaling_change",
+      "target": "calibration_scale",
+      "effect": {
+        "op": "multiply",
+        "value": 1.15
+      },
+      "scope": {
+        "product_family_code": 2
+      },
+      "stack_position": 1,
+      "owner": "Model team",
+      "approval_reference": "MRV-2026-021",
+      "rationale": "Points-to-double-the-odds moved from 20 to 23 for the revolving segment",
+      "effective_from": "2026-03-01",
+      "effective_to": "2027-01-01",
+      "review_date": "2026-12-01",
+      "tighten_only": false
+    }
+  ]
+}
