@@ -85,8 +85,9 @@ class OverlaidThresholds(ConfigurableStep):
     """The event thresholds after the overlays in force on the decision date, and the ids of those that applied.
 
     The overlays are fields, so a release check sees them. Each targets `material_threshold` or
-    `disqualifying_threshold` and may be scoped on `sector_code`, `criticality_class` and `event_type_code`, which an
-    `AdjustmentStack` step cannot match. The param `event_overlays_enabled` switches them all off.
+    `disqualifying_threshold` and may be scoped on `sector_code`, `criticality_class` and `event_type_code`. One step
+    applies both targets and writes the ids that applied to either, under one param, `event_overlays_enabled`, which
+    switches them all off; an `AdjustmentStack` overlays one target.
 
     Example: `ConfigurableStep.load("configs/0.2.0/event_threshold_overlays.json")`.
     """
