@@ -104,6 +104,32 @@ def rounded(x: float) -> float:
     return decimal.round(x, 2, Rounding.HALF_UP)
 
 
+_PICK = "from shapes import P\n\n\ndef pick(x: float) -> float:\n    return P(x, 1.0).b\n"
+_PICK_CHILD = """
+import json
+import step
+import decider._engine.compile.njit as njit
+_, kernel = njit.jit(step.pick)
+print(json.dumps(kernel(7.0)))
+"""
+
+
+def test_a_namedtuple_edited_in_another_module_is_not_served_from_the_disk_cache(tmp_path):
+    (tmp_path / "step.py").write_text(_PICK)
+    (tmp_path / "child.py").write_text(_PICK_CHILD)
+    env = dict(os.environ, NUMBA_CACHE_DIR=str(tmp_path / "numba_cache"))
+
+    def run(fields):
+        (tmp_path / "shapes.py").write_text(f"from collections import namedtuple\nP = namedtuple('P', '{fields}')\n")
+        proc = subprocess.run([sys.executable, "child.py"], cwd=tmp_path, env=env, capture_output=True, text=True,
+                              timeout=600, check=False)
+        assert proc.returncode == 0, proc.stderr
+        return json.loads(proc.stdout.splitlines()[-1])
+
+    assert run("a b") == 1.0
+    assert run("b a") == 7.0
+
+
 def test_a_pipeline_calling_decimal_round_has_no_diff_against_itself():
     assert diff.structure(flow(rounded, name="t"), flow(rounded, name="t")).identical
 
@@ -132,6 +158,18 @@ def test_a_class_is_keyed_by_module_and_qualname():
 
     assert key(named("a", "K")) == key(named("a", "K")) != key(named("b", "K"))
     assert key(named("a", "K")) != key(named("a", "Outer.K"))
+
+
+def test_an_edited_class_body_changes_the_key():
+    import collections
+
+    def body(**attrs):
+        return type("K", (), {"__module__": "a", **attrs})
+
+    assert key(body(CAP=5.0)) == key(body(CAP=5.0)) != key(body(CAP=10.0))
+    assert key(body(f=lambda self: 1)) != key(body(f=lambda self: 2))
+    assert key(body(f=staticmethod(lambda: 1))) != key(body(f=staticmethod(lambda: 2)))
+    assert key(collections.namedtuple("P", "a b")) != key(collections.namedtuple("P", "b a"))
 
 
 def test_an_enum_member_is_keyed_by_class_and_name_and_its_class_by_its_members():

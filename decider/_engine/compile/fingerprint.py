@@ -28,7 +28,8 @@ def fingerprint(fn: Callable, *, strict: bool = False) -> str:
     values and the globals it reads: functions by their own content (an
     `lru_cache` wrapper by the function it wraps), modules by name plus the
     functions and submodules the function reaches through them, classes by
-    `module:qualname` (an enum class also by its members), enum members by
+    `module:qualname` and their own methods and constants (an enum class
+    also by its members), enum members by
     class and name, numbers, strings, dates, Decimals, regexes and tuples,
     lists, dicts and sets of those by value, numpy arrays and polars
     DataFrames by value. Any other object is keyed by identity, which changes
@@ -115,6 +116,30 @@ def _qualified(cls: type) -> str:
     return f"{cls.__module__}:{cls.__qualname__}"
 
 
+def _class(h: Any, cls: type, seen: set, strict: bool) -> None:
+    h.update(f"class:{_qualified(cls)}".encode())
+    if id(cls) in seen:
+        return
+    seen.add(id(cls))
+    if issubclass(cls, enum.Enum):  # a member's value is compiled in as a constant
+        _container(h, "members", [(m.name, m.value) for m in cls], seen, strict)
+    # Its body too, or a step keeps the code it compiled against an edited method, constant or namedtuple
+    # field. Methods by their own code, not what they reach; an attribute with no content key (a
+    # descriptor, a registry) is left out, as keying it by identity would miss every other process.
+    for name, attr in sorted(vars(cls).items()):
+        attr = getattr(attr, "__func__", attr)  # a staticmethod or classmethod
+        if isinstance(attr, types.FunctionType):
+            h.update(name.encode())
+            _code(h, attr.__code__)
+            continue
+        part = hashlib.sha256()
+        try:
+            _value(part, attr, seen, True)
+        except ValueError:
+            continue
+        h.update(f"{name}:{part.hexdigest()}".encode())
+
+
 def _container(h: Any, kind: str, items: Any, seen: set, strict: bool) -> None:
     # Delimited, so (1, (2,)) and ((1,), 2) differ; a container reaching itself is hashed once.
     seen.add(id(items))
@@ -184,9 +209,7 @@ def _value(h: Any, value: Any, seen: set, strict: bool, names: frozenset | set =
     elif isinstance(value, enum.Enum):
         h.update(f"member:{_qualified(type(value))}.{value.name}".encode())
     elif isinstance(value, type):
-        h.update(f"class:{_qualified(value)}".encode())
-        if issubclass(value, enum.Enum):  # a member's value is compiled in as a constant
-            _container(h, "members", [(m.name, m.value) for m in value], seen, strict)
+        _class(h, value, seen, strict)
     elif isinstance(value, _LITERALS + _BY_VALUE):
         h.update(f"{type(value).__name__}:{value!r}".encode())
     elif (isinstance(value, tuple) or type(value) in (list, dict, set, frozenset)) and id(value) not in seen:
