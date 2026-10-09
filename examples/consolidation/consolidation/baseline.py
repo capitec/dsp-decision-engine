@@ -9,13 +9,21 @@ from __future__ import annotations
 
 from datetime import date
 
-from decider import allow_fallback, missing_as, param, step
-from loan_granting.pricing import CreditLifeIndex, PriceEvaluator
+from decider import DecisionTableConfig, ParamTable, allow_fallback, missing_as, param, param_table, step
+from loan_granting.pricing import PriceEvaluator
+from loan_granting.rate_tables import RATE_CARD_COLUMNS, RateCardTable, rate_card_rows
 from loan_granting.solve import PRODUCT_MAX_AMOUNT, solve_term
 
 from consolidation import vocab
 from consolidation.capacity import Capacity, case_record, debt_service_ratio
 from consolidation.inventory import num
+from consolidation.rate_tables import (
+    CREDIT_LIFE,
+    CREDIT_LIFE_VERSION_PARAM,
+    PRODUCT11_CARD,
+    CardTable,
+    CreditLifeTable,
+)
 from consolidation.scenario import remaining_cost, weighted_rate
 
 CONDITIONS = ("request_affordable_as_made", "debt_service_ratio_within_ceiling", "no_account_in_arrears",
@@ -76,11 +84,18 @@ def baseline_step(capacity: Capacity):
     return baseline_measures
 
 
-def plain_granting_step(plain_card, consolidation_card):
-    """The `plain_granting` step. The cards are `loan_granting.pricing.RateCardIndex`es: the Flex Loan's, and product 11's."""
-    credit_life = CreditLifeIndex()
+def plain_granting_step(plain_card: DecisionTableConfig, product11_params: tuple):
+    """The `plain_granting` step, pricing from `plain_card` (the Flex Loan's, a `DecisionTableConfig`) and product 11's card.
 
-    def evaluator(index, context):
+    The cards are the defaults of table params: `product11_params` is `rate_tables.product11_params(card)`, and the
+    Flex Loan's rows are `plain_rate_card`, with its version in `plain_rate_card_version`.
+    """
+    plain_rows, plain_version = rate_card_rows(plain_card)
+    plain_param = param_table(RATE_CARD_COLUMNS, default=plain_rows)
+    plain_version_param = param(plain_version)
+    consolidation_param, consolidation_version_param = product11_params
+
+    def evaluator(index, context, credit_life):
         return PriceEvaluator(index, credit_life, context["statutory_ceiling"], False, context["initiation_fee_cap"],
                               context["monthly_service_fee_cap"])
 
@@ -91,14 +106,19 @@ def plain_granting_step(plain_card, consolidation_card):
         risk_grade: float, applicant_age_years: float, requested_amount: float = missing_as(0.0),
         reference_term_months: int = param(36, ge=6, le=84), debt_service_ceiling: float = param(0.40, gt=0.0, le=1.0),
         rate_gap_threshold: float = param(0.03, ge=0.0), active_account_limit: int = param(6, ge=1),
-        high_rate_threshold: float = param(0.28, gt=0.0),
+        high_rate_threshold: float = param(0.28, gt=0.0), plain_rate_card: ParamTable = plain_param,
+        plain_rate_card_version: str = plain_version_param, consolidation_rate_card: ParamTable = consolidation_param,
+        consolidation_rate_card_version: str = consolidation_version_param, credit_life: ParamTable = CREDIT_LIFE,
+        credit_life_version: str = CREDIT_LIFE_VERSION_PARAM,
     ) -> tuple[dict, dict, bool]:
         """The plain Flex Loan the client could have, and the six conditions that say whether it is enough.
 
         The offer is the largest affordable amount (up to the amount asked for) at `reference_term_months`.
         """
         grade, age = int(risk_grade), applicant_age_years
-        solved = solve_term(evaluator(plain_card, pricing_context), reference_term_months, grade, age, False,
+        life = CreditLifeTable(credit_life, credit_life_version)
+        solved = solve_term(evaluator(RateCardTable(plain_rate_card, plain_rate_card_version), pricing_context, life),
+                            reference_term_months, grade, age, False,
                             PRODUCT_MAX_AMOUNT, requested_amount or None, baseline["max_affordable_instalment"])
         offer = {} if solved.amount is None else {
             "offered_amount": solved.amount, "term_months": reference_term_months,
@@ -107,7 +127,8 @@ def plain_granting_step(plain_card, consolidation_card):
             "total_cost_of_credit": solved.pricing.total_cost_of_credit, "rate_cell_id": solved.pricing.rate_cell_id}
         settleable = {s["account_ref"] for s in settlements}
         everything = min(max(sum(s["settlement_amount"] for s in settlements), 10_000.0), 500_000.0)
-        achievable = evaluator(consolidation_card, pricing_context).evaluate(everything, reference_term_months, grade, age, False)
+        achievable = evaluator(CardTable(consolidation_rate_card, consolidation_rate_card_version, PRODUCT11_CARD),
+                               pricing_context, life).evaluate(everything, reference_term_months, grade, age, False)
         after_plain = baseline["existing_obligations"] + offer.get("instalment", 0.0)
         verdicts = dict(zip(CONDITIONS, (
             bool(offer) and offer["offered_amount"] == requested_amount,
