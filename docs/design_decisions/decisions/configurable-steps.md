@@ -86,3 +86,12 @@ Read this before changing how tree or table documents become kernels, or what a 
 - A flow file is the only copy of the structure, deployed with the components it names; params and step documents stay versioned in `configs/`.
 - Not: a `FlowConfig(ConfigurableStep)` inside a config version. It would reverse "structure is Python", which exists because decider_old's structure-in-config drifted into copies.
 - See: `docs/architecture/configurable-steps/expr-and-flowfile.md`, `docs/architecture/config-store.md`
+
+## A custom step's data is its fields; its logic is a staticmethod
+
+- `CustomFunction` writes `to_ir` for a `ConfigurableStep` whose fields feed one pure function, `impl`. Each `impl` argument has a field of the same name: a `str` field is the column to read, a `Value[T]` field is a value.
+- Why fields: a step that reads a module-level object or a closure hides its data from numba, from the structure diff and from the config. Fields dump, load, diff and compile like any other config.
+- Why a `staticmethod`: with no `self` numba compiles `impl` as a plain function, and the diff fingerprints its body.
+- Why checks at class creation: a missing `impl`, an argument without a field, or a field that is neither a column nor a `Value` would otherwise surface as a wiring error far from the class. Rows, objects and lists are `param_table` or a hand-written `to_ir`, not a field type this base accepts.
+- No `type` tag is derived from the class name: without a `Literal` tag the class already loads by import path, and a derived alias could collide across packages.
+- See: `decider/steps/_custom.py`, `tests/steps/test_custom_function.py`

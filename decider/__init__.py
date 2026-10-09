@@ -59,7 +59,7 @@ from decider._serde import PolarsSchema
 from decider._engine.params import ParamTable, missing_as, param, param_table
 from decider.lab import describe
 from decider.exceptions import DeciderError, FallbackWarning
-from decider.steps import (ConfigurableStep, EachMode, ParamRef, Step, StepRef, Value, allow_fallback, branch, dag,
+from decider.steps import (ConfigurableStep, CustomFunction, EachMode, ParamRef, Step, StepRef, Value, allow_fallback, branch, dag,
                            each, flow, frame_step, helper, loop, optimise, step)
 from decider.steps.flowfile import load_flow
 
@@ -82,7 +82,7 @@ __all__ = [
     # run
     "Engine", "Executable", "load_flow", "describe",
     # extend
-    "Step", "ConfigurableStep", "Value", "ParamRef", "StepRef",
+    "Step", "ConfigurableStep", "CustomFunction", "Value", "ParamRef", "StepRef",
     # errors
     "DeciderError", "FallbackWarning",
 ]

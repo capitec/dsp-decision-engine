@@ -327,6 +327,42 @@ step = ConfigurableStep.load({"type": "markup", "name": "doubled", "column": "in
 assert flow(step, name="p").run(pl.DataFrame({"income": [10.0]}))["doubled"].to_list() == [20.0]
 ```
 
+### A step type that is data plus one function: `CustomFunction`
+
+When a step's data is a few fields and its logic is a pure function, subclass
+`CustomFunction` instead of writing `to_ir`. Use it instead of a function that
+reads a module-level object or a closure: those are invisible in the config,
+can't be compiled and can't be diffed, while fields are all three. `impl` is a
+`staticmethod` (no `self`, so numba compiles it as a plain function), and each
+of its arguments has a field of the same name. A `str` field is the column to
+read; a `Value[T]` field is a value that a param can also set. The step's
+`name` is the column it writes. For several outputs, annotate `impl` with a
+`tuple[...]` return and set `outputs=["a", "b"]`.
+
+```python
+from typing import Literal
+import polars as pl
+from decider import ConfigurableStep, CustomFunction, Value, flow
+
+class Cap(CustomFunction):
+    type: Literal["cap"] = "cap"
+    x: str
+    limit: Value[float] = 100.0
+
+    @staticmethod
+    def impl(x: float, limit: float) -> float:
+        return min(x, limit)
+
+cap = ConfigurableStep.load({"type": "cap", "name": "capped", "x": "amount", "limit": 60.0})
+out = flow(cap, name="p").run(pl.DataFrame({"amount": [50.0, 150.0]}))
+assert out["capped"].to_list() == [50.0, 60.0]
+```
+
+A mistake in the class (no `impl`, an `impl` argument without a field) raises
+when the class is defined. A field other than `str` or `Value[T]` is rejected:
+rows belong in a `param_table`, and anything else in a `ConfigurableStep` with
+its own `to_ir`. `impl` cannot call other steps or read the other fields.
+
 ### Shipping a step type in a package
 
 To make `"markup"` load without the user importing your package, declare it
