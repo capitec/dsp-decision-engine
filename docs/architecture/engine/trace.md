@@ -293,7 +293,7 @@ print([(e.kind.name, e.origin.path, e.iteration) for e in s.events()])
 
 ## Trees, tables and scorecards
 
-A tree, a decision table and a scorecard are each one row node, one call (a `mode: "all"` tree of more than 32 outputs is one node per `part_<k>`). In a trace each appears as one `STEP` event per record, with its path, in every mode. With the one-split tree `p` and frame `df` from the locator example in [Debug sessions](debug.md):
+A tree, a decision table and a scorecard are each one row node, one call (a `mode: "all"` tree of more than `part_outputs` (128) outputs is one node per `part_<k>`). In a trace each appears as one `STEP` event per record, with its path, in every mode. With the one-split tree `p` and frame `df` from the locator example in [Debug sessions](debug.md):
 
 ```python
 for mode in ("interpreted", "fused"):

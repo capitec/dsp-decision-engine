@@ -43,6 +43,7 @@ New rationale goes into the decision file for its area; a new measurement become
 | [Tree and table data: generated literals or runtime arrays?](experiments/runtime-arrays-vs-generated-code.md) | spike |
 | [What does the shared tree walker cost to call and compile?](experiments/tree-walker-costs.md) | `tree_walk.py` |
 | [Why does a tree of hundreds of rules take minutes to compile?](experiments/wide-output-compile.md) | `tree_wide_outputs.py` |
+| [How wide should the parts of a split tree be?](experiments/tree-split-part-size.md) | `tree_split_sweep.py` |
 | [Do the shared walker and matcher keep up with generated kernels?](experiments/trees-tables-vs-decider2.md) | `tree_walk.py`, `table_match.py` |
 | **Serving** | |
 | [Where do one request's microseconds go?](experiments/serving-latency-budget.md) | `serving_latency.py` |

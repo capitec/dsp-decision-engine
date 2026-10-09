@@ -5,15 +5,17 @@ import typing as t
 
 from decider.steps.trees.schema import Rule, Tree
 
-# Compile time grows with the square of the outputs one call returns (numba and LLVM both), and a
-# tree of 32 outputs compiles once for every other tree of the same output types.
-MAX_OUTPUTS = 32
+# Compile time grows with the square of the outputs one call returns (numba and LLVM both), while every
+# extra part costs about 15-20 us a request: 128 keeps a request within a few percent of an unsplit tree.
+MAX_OUTPUTS = 128
 
 
-def split(tree: Tree, extra: int) -> list[Tree]:
-    """`tree` cut into trees of at most `MAX_OUTPUTS` outputs; `extra` is the output columns a rule adds besides the tree's own."""
+def split(tree: Tree, extra: int, limit: int | None = MAX_OUTPUTS) -> list[Tree]:
+    """`tree` cut into trees of at most `limit` outputs (none: whole); `extra` is the output columns a rule adds besides the tree's own."""
+    if limit is None:
+        return [tree]
     per_rule = len(tree.output.columns) + extra
-    size = max(1, MAX_OUTPUTS // max(per_rule, 1))
+    size = max(1, limit // max(per_rule, 1))
     if tree.mode != "all" or len(tree.rules) <= size:
         return [tree]
     # A rule keeps the name its columns had in the whole tree.
