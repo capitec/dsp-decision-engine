@@ -266,8 +266,14 @@ def evaluate(overlays: tuple, base_value: float, provenance: Mapping[str, object
     return value, applied, evaluations
 
 
-# The columns the step has always typed as whole numbers; any other numeric scope column is read as a float.
-_INT_COLUMNS = frozenset({"channel_code", "scorecard_id"})
+# These four columns keep the type the step has always read them as; any other column is read as the type of its scope values.
+_FIXED_TYPES = {"product_code": float, "segment_code": float, "channel_code": int, "scorecard_id": int}
+
+
+def _column_type(column: str, values: list) -> type:
+    if column in _FIXED_TYPES:
+        return _FIXED_TYPES[column]
+    return next((t for t in (str, int) if all(type(v) is t for v in values)), float)
 
 
 def _scope_function(columns: dict[str, type]):
@@ -361,8 +367,7 @@ class AdjustmentStack(ConfigurableStep):
         for a in self.adjustments:
             for k, v in a.scope.items():
                 values.setdefault(k, []).append(v)
-        return {k: int if k in _INT_COLUMNS else str if all(isinstance(v, str) for v in vs) else float
-                for k, vs in sorted(values.items())}
+        return {k: _column_type(k, vs) for k, vs in sorted(values.items())}
 
     def to_ir(self, ctx: Any) -> Any:
         return ctx.call(

@@ -68,10 +68,14 @@ def build(campaign_23, rate_card_flex_loan, cap_reductions):
         "max_amount": "appetite_max_amount", "max_term": "appetite_max_term", "max_ratio": "appetite_max_ratio",
         "min_price": "appetite_min_price", "cell_id": "appetite_cell_id"})
 
+    cap_reduction = cap_reductions.relabel(
+        reads={"decision_date": "cycle_date"},
+        writes={"adjustment_set_id": "cap_adjustment_set_id", "adjustments_applied": "cap_adjustments_applied"})
+
     # The tree reads pre_assessed_amount, so the amount is settled first.
     evaluation = flow(
         appetite, step(preassessment.max_affordable_instalment), preassessment.pre_assessment_step(rate_card_flex_loan),
-        adjusted, unadjusted, cap_reductions, step(offer_amount),
+        adjusted, unadjusted, cap_reduction, step(offer_amount),
         name="evaluation")
 
     return flow(

@@ -260,3 +260,10 @@ def test_the_packed_overlays_are_in_stack_order_and_give_the_values_apply_gives(
     packed = both.packed()
     assert [row[0] for row in packed] == ["B", "A"]
     assert evaluate(packed, 600.0, {"segment_code": 3}, JUNE.toordinal())[0] == both.apply(600.0, {"segment_code": 3}, JUNE).adjusted_value
+
+
+def test_a_scope_column_is_read_as_the_type_of_its_values_so_it_agrees_with_the_steps_that_share_it():
+    mixed = stack(overlay(scope={"campaign_id": 23, "kind": "retail", "ratio": 0.5, "segment_code": 3,
+                                 "channel_code": 4}))
+    assert mixed.scope_columns() == {"campaign_id": int, "channel_code": int, "kind": str, "ratio": float,
+                                     "segment_code": float}
