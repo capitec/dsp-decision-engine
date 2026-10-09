@@ -86,11 +86,11 @@ The rules, in the order the pipeline applies them:
 | The same child flow run on one item alone or on every item, so a partial re-assessment cannot drift from the full run | [counterfactual.py](business_nested/counterfactual.py) |
 | `DecisionTableConfig` keyed on two columns (event type by criticality), and a banded ladder with open edges and a default | [events.py](business_nested/events.py), [scoring.py](business_nested/scoring.py) (`grade_lookup`), [pricing.py](business_nested/pricing.py) |
 | `ScorecardConfig` with bin edges that are params | [scoring.py](business_nested/scoring.py), [financial.py](business_nested/financial.py) |
-| Tighten-only overlays at three levels, each a config document: `AdjustmentStack` steps from `credit_core` on an entity's score and on the business probability, and an `OverlaidThresholds` step type of this package on the event thresholds (its scope fields are beyond the four a stack matches) | [events.py](business_nested/events.py), [scoring.py](business_nested/scoring.py), [grade.py](business_nested/grade.py), [`configs/0.1.0`](configs/0.1.0) |
+| Tighten-only overlays at three levels, each a config document: `AdjustmentStack` steps from `credit_core` on an entity's score and on the business probability, and an `OverlaidThresholds` step type of this package on the event thresholds (its scope fields are beyond the four a stack matches) | [events.py](business_nested/events.py), [scoring.py](business_nested/scoring.py), [grade.py](business_nested/grade.py), [`configs/0.2.0`](configs/0.2.0) |
 | A `ConfigurableStep` type of this package whose fields are the data, and a release check that sees every overlay and reason code change | [events.py](business_nested/events.py) (`OverlaidThresholds`), [tests/test_release_checks.py](tests/test_release_checks.py) |
 | One step run twice on other columns (`.relabel`, `.named`): the severity against base and overlaid thresholds, the grade of each probability | [events.py](business_nested/events.py), [scoring.py](business_nested/scoring.py), [blend.py](business_nested/blend.py) |
 | An example embedded whole and run for some rows only: `branch` around the affordability example, its columns relabelled | [sole_proprietor.py](business_nested/sole_proprietor.py) |
-| `param` for every policy number, nested under the `each` that runs the step; a generated params document | [rollup.py](business_nested/rollup.py), [blend.py](business_nested/blend.py), [`configs/0.1.0/params.json`](configs/0.1.0/params.json) |
+| `param` for every policy number, nested under the `each` that runs the step; a generated params document | [rollup.py](business_nested/rollup.py), [blend.py](business_nested/blend.py), [`configs/0.2.0/params.json`](configs/0.2.0/params.json) |
 | `flow` for a value written twice (reasons fired, then ranked; the instalment, then rounded) | [outcome.py](business_nested/outcome.py), [pricing.py](business_nested/pricing.py) |
 | `@allow_fallback` for steps that are Python on purpose (lists of dicts, dates, library calls), checked by `Engine(strict_compile=True)` | [tests/test_serving.py](tests/test_serving.py) |
 | `assert_equivalent`: every mode and a single record agree; warm-up from `sample_request.json` and raw request bytes | [tests/test_serving.py](tests/test_serving.py) |
@@ -105,12 +105,12 @@ cd examples/business-nested
 export DECIDER_API__CODE_PATH="$PWD" DECIDER_API__PIPELINE="business_nested.pipeline:build" DECIDER_CONFIG__BASEPATH="$PWD/configs"
 ```
 
-Build (validates `configs/0.1.0`, compiles and warms every kernel with `sample_request.json`; the first build in a
+Build (validates `configs/0.2.0`, compiles and warms every kernel with `sample_request.json`; the first build in a
 fresh checkout takes a minute while numba compiles):
 
 ```bash
 uv run decider build
-# built config version 0.1.0 (pipeline business_nested.pipeline:build, mode fused)
+# built config version 0.2.0 (pipeline business_nested.pipeline:build, mode fused)
 ```
 
 Serve, and decide the sample application. Its dates are plain JSON strings, inside the nested lists too:
@@ -202,22 +202,22 @@ Tests (run from the repository root, with `PYTHONPATH` set as above):
 uv run pytest examples/business-nested -q
 ```
 
-To regenerate `configs/0.1.0` (the four documents below and the params document): `uv run python scripts/generate_configs.py`.
+To regenerate `configs/0.2.0` (the four documents below and the params document): `uv run python scripts/generate_configs.py`.
 
 ## The documents
 
 `build(entity_score_adjustments, business_pd_adjustments, event_threshold_overlays, reason_codes)` receives one document per argument, each a file in
-`configs/<version>/` that `decider build` and `decider serve` pass by name. Left out, `build()` loads the ones in `configs/0.1.0`, so the projects that embed this
+`configs/<version>/` that `decider build` and `decider serve` pass by name. Left out, `build()` loads the ones in `configs/0.2.0`, so the projects that embed this
 decision (`business-credit-e2e`) call it without arguments. A change to a document is a new config version and `decider.lab.diff.structure` reports it:
 the overlays and the reason codes are fields of a step, not objects a step closes over. The governance fields (`owner`, `approval_reference`,
 `rationale`, `review_date`) are for people and the ageing report; the diff ignores them. Everything else is behaviour.
 
 | Document | Type | What it holds |
 |---|---|---|
-| [`event_threshold_overlays.json`](configs/0.1.0/event_threshold_overlays.json) | `event_threshold_overlays` | overlays on the event `material_threshold` and `disqualifying_threshold`, scoped on `sector_code`, `criticality_class` and `event_type_code` |
-| [`entity_score_adjustments.json`](configs/0.1.0/entity_score_adjustments.json) | `adjustment_stack` | overlays on `entity_score` |
-| [`business_pd_adjustments.json`](configs/0.1.0/business_pd_adjustments.json) | `adjustment_stack` | overlays on the business `probability_of_default` |
-| [`reason_codes.json`](configs/0.1.0/reason_codes.json) | `reason_codes` | the outcome reasons and their severity |
+| [`event_threshold_overlays.json`](configs/0.2.0/event_threshold_overlays.json) | `event_threshold_overlays` | overlays on the event `material_threshold` and `disqualifying_threshold`, scoped on `sector_code`, `criticality_class` and `event_type_code` |
+| [`entity_score_adjustments.json`](configs/0.2.0/entity_score_adjustments.json) | `adjustment_stack` | overlays on `entity_score` |
+| [`business_pd_adjustments.json`](configs/0.2.0/business_pd_adjustments.json) | `adjustment_stack` | overlays on the business `probability_of_default` |
+| [`reason_codes.json`](configs/0.2.0/reason_codes.json) | `reason_codes` | the outcome reasons and their severity |
 
 The construction overlay, which halves the judgment materiality threshold for sector 412 until the end of 2026:
 
@@ -233,6 +233,10 @@ The construction overlay, which halves the judgment materiality threshold for se
 Loading rejects a duplicate id, an overlay for another target, and a `tighten_only` overlay whose effect loosens. The step names and the params
 paths did not change when these stopped being objects, so a params document and stored evidence from before still apply:
 `business_credit/entities/entities/entity/events/event/overlaid_thresholds/event_overlays_enabled` is still the switch for the event overlays.
+
+Version `0.1.0` holds only `params.json`: the overlays and reason codes it decided with were in code then, and decisions recorded against it
+(see [`governance-replay`](../governance-replay/README.md)) still replay, because the shipped documents are what `build()` falls back to. `0.2.0` is the
+same decision with those documents in the version, so its `params.json` is identical.
 
 The tables (the event thresholds by criticality, the grade ladders) are still built in code from tuples in the modules; they are not documents.
 
@@ -252,11 +256,11 @@ business_nested/        the package; one module per capability
   pricing.py            appetite, rate card, fees, instalment
   sole_proprietor.py    the affordability example, embedded
   outcome.py            outcome, reasons document, attribution
-  documents.py          shipped(name): the documents in configs/0.1.0, used when a caller passes none
+  documents.py          shipped(name): the documents in configs/0.2.0, used when a caller passes none
   counterfactual.py     one event removed; one entity re-assessed
   vocab.py              roles, criticality and verdict codes
   records.py            builders for requests: entity(), event(), parse_dates()
-configs/0.1.0/          params.json, the three overlay documents and the reason codes
+configs/0.2.0/          params.json, the three overlay documents and the reason codes
 scripts/                generate_configs.py
 sample_request.json
 tests/
