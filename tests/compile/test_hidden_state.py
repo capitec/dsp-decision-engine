@@ -1,6 +1,7 @@
 """`hidden_state` lists the objects a step reads that a config document, a diff or a kernel cannot see."""
 import datetime
 import enum
+import importlib
 import statistics
 import types
 from decimal import Decimal
@@ -11,6 +12,8 @@ import pytest
 
 from decider import step
 from decider._engine.compile import fingerprint, hidden_state
+
+fp = importlib.import_module("decider._engine.compile.fingerprint")
 
 
 class Register:
@@ -96,6 +99,19 @@ def test_an_object_after_a_function_in_the_same_container_keeps_the_containers_n
         return x + len(pair)
 
     assert [h[:3] for h in hidden_state(step_)] == [("pair", "object", "Register")]
+
+
+def test_what_a_decider_helper_reads_is_not_reported_against_the_step_calling_it():
+    namespace = {"REGISTRY": Register()}
+    exec(compile("def helper(x):\n    return REGISTRY.limit + x\n", fp.__file__, "exec"), namespace)
+    helper = namespace["helper"]
+
+    def step_(x: float) -> float:
+        return helper(x)
+
+    assert hidden_state(helper) == [] and hidden_state(step_) == []
+    with pytest.raises(ValueError, match="Register"):
+        fingerprint(step_, strict=True)  # the key still sees it
 
 
 def test_values_functions_modules_enums_arrays_and_frames_are_not_hidden_state():
