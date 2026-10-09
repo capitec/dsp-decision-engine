@@ -1,0 +1,29 @@
+{
+  "type": "adjustment_stack",
+  "name": "action_escalation",
+  "target": "at_web_action",
+  "set_id": "ADJS-2026.01",
+  "adjustments": [
+    {
+      "adjustment_id": "ADJ-2026-003",
+      "kind": "action_escalation",
+      "target": "at_web_action",
+      "effect": {
+        "op": "set",
+        "value": 30.0
+      },
+      "scope": {
+        "family": "AT",
+        "channel_code": 4
+      },
+      "stack_position": 1,
+      "owner": "Head of Fraud",
+      "approval_reference": "HOF-2026-0044",
+      "rationale": "Account-takeover rules that only monitor ask for a step-up on the web channel",
+      "effective_from": "2026-01-01",
+      "effective_to": "2027-01-01",
+      "review_date": "2026-10-01",
+      "tighten_only": false
+    }
+  ]
+}

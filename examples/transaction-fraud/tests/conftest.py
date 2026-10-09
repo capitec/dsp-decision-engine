@@ -3,7 +3,7 @@ from datetime import date
 from pathlib import Path
 
 import pytest
-from decider import DecisionTableConfig
+from decider import ConfigurableStep, DecisionTableConfig
 
 from fraud_interdiction.pipeline import build
 from fraud_interdiction.rules import RuleSet
@@ -22,6 +22,13 @@ def params():
 @pytest.fixture(scope="session")
 def wording():
     return DecisionTableConfig.load(str(CONFIGS / "client_wording.json"))
+
+
+@pytest.fixture(scope="session")
+def documents():
+    """The shipped documents `build` takes besides the rule set and the wording, by argument name."""
+    names = ("rule_set_versions", "amount_overlays", "action_escalation", "reason_codes")
+    return {name: ConfigurableStep.load(str(CONFIGS / f"{name}.json")) for name in names}
 
 
 @pytest.fixture
@@ -46,12 +53,12 @@ def rule():
 
 
 @pytest.fixture(scope="session")
-def decide(wording, params):
+def decide(wording, params, documents):
     """`decide(rules, record, **overrides)`: one record through a pipeline of just these rules, interpreted."""
 
     def run(rules, record, stack_enabled=True, **overrides):
         rule_set = RuleSet.load({"type": "rule_set", "name": "rules", "rules": rules})
         settings = {"fraud_interdiction": {"adjustment_stack_enabled": {"adjustment_stack_enabled": stack_enabled}}}
-        return build(rule_set, wording).compile("interpreted").score({**record, **overrides}, settings)
+        return build(rule_set, wording, **documents).compile("interpreted").score({**record, **overrides}, settings)
 
     return run

@@ -3,13 +3,12 @@ from datetime import date
 import pytest
 from decider import Engine, flow
 
-from fraud_interdiction import overlays
 from fraud_interdiction.vocab import Action
 
 
 @pytest.fixture(scope="module")
-def multiplier():
-    executable = Engine().bind(flow(overlays.multiplier_step, name="overlays"))
+def multiplier(documents):
+    executable = Engine().bind(flow(documents["amount_overlays"], name="overlays"))
 
     def run(on, enabled=True):
         out = executable.score({"decision_date": on, "adjustment_stack_enabled": enabled})
@@ -46,13 +45,18 @@ def test_the_stack_off_switch_returns_the_unadjusted_value_through_the_same_code
     ("MS", 4, True, Action.MONITOR),      # another family
     ("AT", 4, False, Action.MONITOR),     # stack off
 ])
-def test_account_takeover_monitor_escalates_to_step_up_only_on_the_web_channel(family, channel, stack, expected):
-    assert overlays.escalated_action(Action.MONITOR, family, channel, date(2026, 3, 1), stack) == expected
+def test_account_takeover_monitor_escalates_to_step_up_only_on_the_web_channel(
+        decide, rule, sample, family, channel, stack, expected):
+    out = decide([rule(f"{family}-0001", action_code=Action.MONITOR)], sample, stack_enabled=stack,
+                 channel_code=channel, decision_date=date(2026, 3, 1))
+    assert out["action_code"] == expected
 
 
-def test_escalation_never_touches_a_more_severe_action():
-    assert overlays.escalated_action(Action.DECLINE, "AT", 4, date(2026, 3, 1), True) == Action.DECLINE
+def test_escalation_never_touches_a_more_severe_action(decide, rule, sample):
+    out = decide([rule("AT-0001", action_code=Action.DECLINE)], sample, channel_code=4, decision_date=date(2026, 3, 1))
+    assert out["action_code"] == Action.DECLINE
 
 
-def test_escalation_lapses_with_its_window():
-    assert overlays.escalated_action(Action.MONITOR, "AT", 4, date(2027, 1, 1), True) == Action.MONITOR
+def test_escalation_lapses_with_its_window(decide, rule, sample):
+    out = decide([rule("AT-0001", action_code=Action.MONITOR)], sample, channel_code=4, decision_date=date(2027, 1, 1))
+    assert out["action_code"] == Action.MONITOR

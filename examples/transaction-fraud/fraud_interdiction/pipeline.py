@@ -1,30 +1,30 @@
-"""The instant-payment fraud decision: `build` receives `rule_set.json` and `client_wording.json`."""
+"""The instant-payment fraud decision: `build` receives one document per argument, each a file in `configs/<version>/`."""
 from __future__ import annotations
-
-from datetime import date
 
 from decider import DecisionTableConfig, dag, flow
 from credit_core import consent
-from credit_core.dates import EffectiveDatedSet, EffectiveVersion
+from credit_core.adjustments import AdjustmentStack
+from credit_core.dates import EffectiveVersions
+from credit_core.reason_codes import ReasonCodes
 
-from fraud_interdiction import action, enrichment, hard_blocks, overlays, wording
+from fraud_interdiction import enrichment, hard_blocks, overlays, wording
+from fraud_interdiction.action import ActionResolver
+from fraud_interdiction.overlays import AmountOverlays
 from fraud_interdiction.rules import RuleSet
 
-RULE_SET_VERSIONS = EffectiveDatedSet("fraud.rule_set", [
-    EffectiveVersion("RS-2025.11", date(2025, 11, 1), date(2026, 1, 1)),
-    EffectiveVersion("RS-2026.01", date(2026, 1, 1)),
-])
 
-
-def build(rule_set: RuleSet, client_wording: DecisionTableConfig):
+def build(
+    rule_set: RuleSet, client_wording: DecisionTableConfig, rule_set_versions: EffectiveVersions,
+    amount_overlays: AmountOverlays, action_escalation: AdjustmentStack, reason_codes: ReasonCodes,
+):
     return dag(
-        RULE_SET_VERSIONS.resolver_step(output="rule_set_version"),
+        rule_set_versions,
         enrichment.velocity_completeness_band, enrichment.enrichment_degradation_code,
         enrichment.degraded_mode_code, enrichment.late_arrival_flag,
         hard_blocks.hard_block_step,
-        overlays.adjustment_stack_enabled, overlays.multiplier_step,
+        overlays.adjustment_stack_enabled, amount_overlays,
         rule_set,
-        action.resolve_action_step(rule_set.rules),
+        ActionResolver(rules=rule_set.rules, escalation=action_escalation, reason_codes=reason_codes),
         consent.consent_verdict_step, consent.channel_permitted_step,
         # The table writes the wording key and consent may replace it: a later write wins, so a flow.
         flow(client_wording, wording.client_wording_key, name="wording").emit("client_wording_key", "client_visible"),
