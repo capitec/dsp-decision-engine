@@ -1,6 +1,7 @@
 from decider.steps._base import Step
 from decider.steps._branch import branch
 from decider.steps._configurable import ConfigurableStep, StepRef
+from decider.steps._custom import CustomFunction
 from decider.steps._dag import dag
 from decider.steps._each import EachMode, each
 from decider.steps._frame import frame_step
@@ -14,5 +15,5 @@ from decider.steps.flowfile import load_flow
 
 __all__ = [
     "step", "frame_step", "flow", "dag", "branch", "loop", "each", "optimise", "EachMode", "Step",
-    "ConfigurableStep", "Value", "ParamRef", "StepRef", "allow_fallback", "helper", "load_flow",
+    "ConfigurableStep", "CustomFunction", "Value", "ParamRef", "StepRef", "allow_fallback", "helper", "load_flow",
 ]
