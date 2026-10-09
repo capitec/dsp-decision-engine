@@ -48,6 +48,8 @@ def test_the_shipped_params_document_is_the_pipelines_defaults_and_valid(pipelin
         del defaults["shared"][key]
     for key in ("plain_rate_card", "plain_rate_card_version"):
         del defaults["consolidation"]["plain_granting"][key]
+    for key in ("card_promotional_rates", "card_promotional_rates_version", "card_reversion_rates", "card_reversion_rates_version"):
+        del defaults["consolidation"]["search"][key]
     assert defaults == params
     unit.parameters().validate(params).check()
 
