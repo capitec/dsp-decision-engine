@@ -9,12 +9,17 @@ from __future__ import annotations
 import math
 from dataclasses import asdict
 
-from decider import ParamTable, allow_fallback, missing_as, param, param_table, step
+from decider import DecisionTableConfig, ParamTable, allow_fallback, missing_as, param, param_table, step
 
+from credit_core.credit_life import CREDIT_LIFE_VERSION
 from credit_core.vocab import SEGMENT_NEW_TO_BANK
 
 from loan_granting import reasons
-from loan_granting.pricing import CreditLifeIndex, PriceEvaluator, RateCardIndex
+from loan_granting.pricing import PriceEvaluator
+from loan_granting.rate_tables import (
+    CREDIT_LIFE_COLUMNS, RATE_CARD_COLUMNS, CreditLifeTable, RateCardTable, credit_life_rows,
+    rate_card_rows,
+)
 from loan_granting.solve import BIND_EXH, GRID, PRODUCT_MAX_AMOUNT, PRODUCT_MIN_AMOUNT, solve_term
 
 LARGEST_AMOUNT, LOWEST_TOTAL_COST, BEST_EXPECTED_VALUE = "largest_amount", "lowest_total_cost", "best_expected_value"
@@ -22,6 +27,10 @@ LARGEST_AMOUNT, LOWEST_TOTAL_COST, BEST_EXPECTED_VALUE = "largest_amount", "lowe
 # One table, shared by the solve and the final validation, so a weekly change to the term list cannot reach only one.
 PERMITTED_TERMS = param_table({"term": int, "new_to_bank": bool}, shared_key="permitted_terms", default=[
     {"term": term, "new_to_bank": term != 84} for term in (6, 12, 18, 24, 36, 48, 60, 72, 84)])
+
+# The credit life rates are a table of the params document; the rate card is the default of another (see `steps`).
+CREDIT_LIFE = param_table(CREDIT_LIFE_COLUMNS, shared_key="credit_life", default=credit_life_rows())
+CREDIT_LIFE_VERSION_PARAM = param(CREDIT_LIFE_VERSION, shared_key="credit_life_version")
 
 
 def total_cost_ratio_threshold(total_cost_ratio_threshold: float = param(1.85, gt=0.0)) -> float:
@@ -116,9 +125,16 @@ def build_offer_set(
     return survivors, suppressed
 
 
-def steps(rate_card_index: RateCardIndex):
-    """`(solve_terms, offer_set, final_validation)`, pricing from `rate_card_index` (build it once, from the card)."""
-    credit_life_index = CreditLifeIndex()
+def steps(rate_card: DecisionTableConfig):
+    """`(solve_terms, offer_set, final_validation)`, pricing from the `rate_card` document and the credit life table.
+
+    The card becomes the default rows of the table param `shared.rate_card`, with its version in
+    `shared.rate_card_version`; a params document that sets them prices from its own rows. The rows must be sorted by
+    grade, amount band and term band, as `rate_card_rows` returns them.
+    """
+    rows, version = rate_card_rows(rate_card)
+    card_param = param_table(RATE_CARD_COLUMNS, shared_key="rate_card", default=rows)
+    card_version_param = param(version, shared_key="rate_card_version")
 
     @allow_fallback
     @step(outputs=("term_solutions", "solve_total_evaluations"))
@@ -128,10 +144,13 @@ def steps(rate_card_index: RateCardIndex):
         monthly_service_fee_cap: float, requested_amount: float = missing_as(math.nan),
         credit_life_substitution_declared: bool = missing_as(False),
         evaluation_ceiling_per_term: int = param(24, ge=1, le=64), permitted_terms: ParamTable = PERMITTED_TERMS,
+        rate_card: ParamTable = card_param, rate_card_version: str = card_version_param,
+        credit_life: ParamTable = CREDIT_LIFE, credit_life_version: str = CREDIT_LIFE_VERSION_PARAM,
     ) -> tuple[list[dict], int]:
         """Solve every permitted term not ruled out by the term cap or the segment; the amounts are found, not guessed."""
-        evaluator = PriceEvaluator(rate_card_index, credit_life_index, statutory_ceiling,
-                               credit_life_substitution_declared, initiation_fee_cap, monthly_service_fee_cap)
+        evaluator = PriceEvaluator(
+            RateCardTable(rate_card, rate_card_version), CreditLifeTable(credit_life, credit_life_version),
+            statutory_ceiling, credit_life_substitution_declared, initiation_fee_cap, monthly_service_fee_cap)
         requested = None if math.isnan(requested_amount) else requested_amount
         solutions = []
         for term, new_to_bank in zip(permitted_terms.term, permitted_terms.new_to_bank):
@@ -175,13 +194,16 @@ def steps(rate_card_index: RateCardIndex):
         statutory_ceiling: float, initiation_fee_cap: float, monthly_service_fee_cap: float,
         total_cost_ratio_threshold: float, credit_life_substitution_declared: bool = missing_as(False),
         permitted_terms: ParamTable = PERMITTED_TERMS,
+        rate_card: ParamTable = card_param, rate_card_version: str = card_version_param,
+        credit_life: ParamTable = CREDIT_LIFE, credit_life_version: str = CREDIT_LIFE_VERSION_PARAM,
     ) -> tuple[bool, list[str]]:
         """Re-derive the recommended offer from its amount and term alone and list every check that fails."""
         if not recommended_offer:
             return True, []
         offer = recommended_offer
-        evaluator = PriceEvaluator(rate_card_index, credit_life_index, statutory_ceiling,
-                               credit_life_substitution_declared, initiation_fee_cap, monthly_service_fee_cap)
+        evaluator = PriceEvaluator(
+            RateCardTable(rate_card, rate_card_version), CreditLifeTable(credit_life, credit_life_version),
+            statutory_ceiling, credit_life_substitution_declared, initiation_fee_cap, monthly_service_fee_cap)
         amount, term = offer["offered_amount"], offer["term_months"]
         fresh = evaluator.evaluate(amount, term, risk_grade, applicant_age_years, is_joint_application)
         checks = {

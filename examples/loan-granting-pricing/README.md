@@ -61,8 +61,9 @@ The stages, in the order the decision takes them:
    unusable. Material and unusable **refer**: a record that could not be parsed has not shown the client to be a bad risk.
    A no-hit with no internal history goes to manual underwriting. Staleness uses the assessment's window, set to 45 days.
 4. **Score, probability of default, grade.** `credit_core`'s scorecard, calibration and grade table, with four approved
-   overlays applied in a declared order (score shift, scaling change, odds multiplier, boundary shift). The unadjusted
-   value survives beside each adjusted one, and each overlay point has a switch that runs the same code with the stack off.
+   overlays applied in a declared order (score shift, scaling change, odds multiplier, boundary shift). The overlays are
+   four `AdjustmentStack` documents in `configs/0.1.0`. The unadjusted value survives beside each adjusted one, and each
+   overlay point has a switch that runs the same code with the stack off.
 5. **Cap waterfall.** Twelve policy rules, each with an owner, narrow three ceilings (amount, term, worst acceptable grade)
    in register order, or decline outright. One rule, a pre-approved campaign's uplift, may *raise* the amount, within an
    authority ceiling. A grade worse than the worst acceptable grade declines.
@@ -79,11 +80,11 @@ The stages, in the order the decision takes them:
 | decider feature | Where |
 |---|---|
 | A search in plain Python, called from a step, with a correctness argument and a test against brute force | [solve.py](loan_granting/solve.py), [tests/test_solve.py](tests/test_solve.py) |
-| A 63 360-row table kept as a config document, handed to `build` by name and indexed once for the search | [pipeline.py](loan_granting/pipeline.py), [`RateCardIndex`](loan_granting/pricing.py) |
+| A 63 360-row rate card kept as a config document, handed to `build` by name and becoming the default rows of a `param_table` that the search reads with `bisect` | [pipeline.py](loan_granting/pipeline.py), [offers.py](loan_granting/offers.py), [rate_tables.py](loan_granting/rate_tables.py) |
 | Reusing another example's whole pipeline as one step: `.relabel(reads=, writes=)` on `assessment.pipeline.build()` | [pipeline.py](loan_granting/pipeline.py) |
 | `param_table`: policy numbers a step loops over, retuned like a param; one table `shared_key`-shared by two steps | [waterfall.py](loan_granting/waterfall.py) (`cap_bands`, the watchlist), [offers.py](loan_granting/offers.py) (permitted terms) |
 | Small steps with `param` thresholds, one per gate, gathered by a final step | [eligibility.py](loan_granting/eligibility.py) |
-| Overlays from `credit_core`, each point switched off through the same code, and the unadjusted value kept | [scoring.py](loan_granting/scoring.py) |
+| `AdjustmentStack` and `ReasonCodes` from `credit_core`, loaded from documents: the overlays and the reason ranking are in the diff, each overlay point switched off through the same code, and the unadjusted value kept | [scoring.py](loan_granting/scoring.py), [outcome.py](loan_granting/outcome.py), [`configs/0.1.0`](configs/0.1.0) |
 | `DecisionTableConfig` tables from `credit_core` (appetite, grade boundaries, calibration, fee caps) renamed with `.relabel` | [pipeline.py](loan_granting/pipeline.py), [scoring.py](loan_granting/scoring.py) |
 | `dag` of units with `.emit`, and `flow` for a value written twice (reasons fired, then ranked) | [pipeline.py](loan_granting/pipeline.py), [outcome.py](loan_granting/outcome.py) |
 | `Text` inputs that stay in the kernel; `list[dict]` outputs (the offers) from steps that are Python on purpose | [bureau.py](loan_granting/bureau.py), [offers.py](loan_granting/offers.py) |
@@ -163,23 +164,25 @@ Tests (run from the repository root, with `PYTHONPATH` set as above):
 uv run pytest examples/loan-granting-pricing -q
 ```
 
-To regenerate `configs/0.1.0` (the synthetic rate card and the params document):
+To regenerate `configs/0.1.0` (the synthetic rate card, the overlay stacks, the reason codes and the params document):
 `uv run python scripts/generate_configs.py`.
 
 ## Layout
 
 ```
 loan_granting/          the package
-  pipeline.py           build(rate_card_flex_loan): every stage wired into one dag
+  pipeline.py           build(rate_card_flex_loan, the four *_adjustments, reason_codes): every stage wired into one dag
   pricing.py            RateCardIndex, CreditLifeIndex, PriceEvaluator: one candidate's price
+  rate_tables.py        the rate card and credit life as param tables, and the lookups over them (what the steps use)
   solve.py              solve_term: the largest affordable amount at one term; exhaustive_search to check it
   waterfall.py          the cap register, run_waterfall, the cap_waterfall step, the cap_bands params table
   offers.py             solve every term, build the offer set, recommend, final validation
   scoring.py            segment, scorecard, calibration, grade, and the four overlays
   eligibility.py        the 14 gates and the step that gathers them
   fraud.py bureau.py    what the fraud verdict means here; consent and bureau data quality
-  outcome.py reasons.py the outcome and queue; the reason registry
-configs/0.1.0/          params.json and the rate card
+  outcome.py reasons.py the outcome and queue; the reason codes' numbers (their ranking is a document)
+  shipped.py            loads a shipped document by name
+configs/0.1.0/          params.json, the rate card, the four overlay stacks and the reason codes
 scripts/                generate_configs.py
 sample_request.json
 tests/
@@ -198,8 +201,9 @@ Later examples import `loan_granting` by package name. These names are stable:
 | `loan_granting.pricing.RateCardIndex.from_card(card)`, `RateCardIndex(rows)`, `CreditLifeIndex()` | The card as sorted bands: `.lookup(amount, term, grade)`, `.amount_bands(term, grade)` |
 | `loan_granting.waterfall.cap_waterfall` | The waterfall as a step to embed in another `dag`. Its policy numbers are the `cap_bands` params table |
 | `loan_granting.waterfall.run_waterfall(app, bands=None, ..., register=REGISTER)` | The same, as a function of a dict. `REGISTER` is the rules, `Rule` and `Effect` define one; `DEFAULT_BANDS` are the shipped numbers |
-| `loan_granting.offers.build_offer_set(term_solutions, objective, probability_of_default, rules)` | The minimum viable offer rules, de-duplication and recommendation as a function; `steps(rate_card_index)` returns the three steps `solve_terms`, `offer_set`, `final_validation` |
-| `loan_granting.scoring.unit()`, `loan_granting.reasons.REGISTRY` | The segment-to-grade unit with its overlays; the reason registry |
+| `loan_granting.offers.build_offer_set(term_solutions, objective, probability_of_default, rules)` | The minimum viable offer rules, de-duplication and recommendation as a function; `steps(rate_card)` takes the rate card document and returns the three steps `solve_terms`, `offer_set`, `final_validation` |
+| `loan_granting.scoring.unit(score_adjustments, calibration_scale_adjustments, probability_of_default_adjustments, probability_of_default_for_grading_adjustments)` | The segment-to-grade unit with its four overlay stacks (`AdjustmentStack` documents) |
+| `loan_granting.outcome.unit(reason_codes)` | The outcome, then the `ReasonCodes` document ranking the reasons |
 
 Inputs it reads that the caller owns, beyond the bureau and internal facts in `sample_request.json`: `decision_date`,
 `product_code`, `channel_code`, `requested_amount` and `requested_term_months` (both may be absent), `is_joint_application`,
@@ -223,6 +227,14 @@ and account fields.
   and is declined with reason 1310.
 - **The fraud verdict arrives with the request.** The fraud service is a separate example: this flow takes its three fields
   (`fraud_verdict_code`, `fraud_reason_codes`, `fraud_response_ms`) as plain inputs and decides what they mean.
+- **The steps read no Python objects.** The rate card is the default rows of the table param `shared.rate_card` (with
+  `shared.rate_card_version`) and the credit life rates are the default of `shared.credit_life` (from `credit_core`), and
+  the overlays and reason codes are documents, so the release diff sees each of them. [`params.json`](configs/0.1.0/params.json)
+  leaves all four out on purpose: the document `rate_card_flex_loan.json` is the one place Treasury edits the card, and a
+  params document that does set them prices from its own rows instead. The card's rows must be sorted by grade, amount band
+  and term band, with `cell_id`s of the form `rate_card.flex_loan@<version>#<amt_band>|<term_band>|<grade>`
+  (`rate_card_rows` returns them so and refuses a card whose ids are not). The credit life rows carry a `cell` number, so
+  the cell ids of the premium come from the table too.
 - **Policy lives in params, mechanism in code.** The cap bands, the permitted terms, the exposure watchlist, the offer
   thresholds, the statutory margin over repo and the recommendation objective are all in
   [`params.json`](configs/0.1.0/params.json), so their owners change them without a release. Which rules exist, and in
@@ -232,9 +244,9 @@ and account fields.
 - **Names the embedded assessment would overwrite are moved aside** (`affordability_decline_reason_codes`,
   `affordability_adjustments_applied`, ...), and the scorecard reads `applicant1_dependants_count` because the
   assessment's own `dependants_count` is downstream of the risk grade.
-- **Two workarounds for what `credit_core` lacks**, marked `# workaround`: it has no boundary-shift overlay (so the grade
-  boundary tightening is an odds multiplier on the probability of default that is graded; the grade table is never
-  edited), and its appetite grid has no new-to-bank rows (so they use the mass segment's).
+- **Two workarounds for what `credit_core` lacks**: it has no boundary-shift overlay (so the grade boundary tightening,
+  `ADJ-03-004`, is an odds multiplier on the probability of default that is graded; the grade table is never edited),
+  and its appetite grid has no new-to-bank rows (so they use the mass segment's, `# workaround` in `pipeline.py`).
 - **Left out.** The challenger scorecard and the 45-characteristic scorecards (it uses `credit_core`'s eight), the long-term
   loading table (the shipped card prices all 6 to 84 months directly), the rate add-on and cap overlays (`PriceEvaluator`
   takes a rate add-on, nothing sets one), a fees-inclusive effective rate (the library's is the nominal rate compounded
@@ -243,8 +255,9 @@ and account fields.
 
 ## Reuse
 
-Built on [`shared-credit-core`](../shared-credit-core/README.md) (`credit_core`): `adjustments`, `appetite`,
-`calibration`, `credit_life`, `fees`, `instalment`, `rate_card`, `reason_codes`, `risk_grade`, `rounding`, `scorecard`,
+Built on [`shared-credit-core`](../shared-credit-core/README.md) (`credit_core`): `adjustments` and `reason_codes` (the
+`AdjustmentStack` and `ReasonCodes` step types), `appetite`,
+`calibration`, `credit_life`, `fees`, `instalment`, `rate_card`, `risk_grade`, `rounding`, `scorecard`,
 `vocab`; and on [`affordability`](../affordability/README.md) (`assessment`), embedded whole. It does not reuse
 `credit_core.consent` (that decides whether a message may go out; here consent gates the enquiry) or
 `credit_core.eligibility` (it has no per-gate verdicts).

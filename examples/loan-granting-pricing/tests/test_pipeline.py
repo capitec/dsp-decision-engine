@@ -222,8 +222,8 @@ def test_a_waterfall_decline_declines_with_its_reason(decide):
     assert out["outcome_code"] == 4 and reasons.R_EMPLOYMENT_TENURE_TOO_SHORT in out["decline_reason_codes"]
 
 
-def test_the_batch_run_gives_the_same_answers_as_scoring_one_record_at_a_time(rate_card, sample, params, parse):
-    executable = Engine().bind(build(rate_card), mode="interpreted")
+def test_the_batch_run_gives_the_same_answers_as_scoring_one_record_at_a_time(documents, sample, params, parse):
+    executable = Engine().bind(build(**documents), mode="interpreted")
     records = [parse(sample), parse({**sample, "requested_amount": 40_000.0, "channel_code": 4}),
                parse({**sample, "applicant_age_years": 15.0})]
     batch = executable.run(pl.DataFrame(records), params=params)
@@ -235,5 +235,5 @@ def test_the_batch_run_gives_the_same_answers_as_scoring_one_record_at_a_time(ra
             not single["recommended_offer"] and not batch["recommended_offer"][i])
 
 
-def test_the_params_document_validates_against_the_pipeline(rate_card, params):
-    build(rate_card).parameters().validate(params).check()
+def test_the_params_document_validates_against_the_pipeline(documents, params):
+    build(**documents).parameters().validate(params).check()
