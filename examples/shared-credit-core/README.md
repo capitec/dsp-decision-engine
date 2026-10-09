@@ -196,7 +196,7 @@ that returns a step writing the looked-up values and a `*_cell_id`.
 
 | Module | Publishes |
 |---|---|
-| `dates` | `EffectiveVersions`, `Version`: the step that writes the version id in force on `date_field` (default `decision_date`) to `<family>_version`; `.resolve(on)` for code outside a flow (`.versions` keeps the order given, not sorted) |
+| `dates` | `EffectiveVersions`, `Version`: the step that writes the version id in force on `date_field` (default `decision_date`) to `<family>_version`; `.version_on(on)` for code outside a flow (`.versions` keeps the order given, not sorted) |
 | `evidence` | `new_decision_id()`, `cell_id(table, version, *keys)` |
 | `reason_codes` | `ReasonCodes`, `Code`: the step that ranks fired codes in place and picks the primary; an unregistered code raises; `.rank(fired)` and `in` for code outside a flow |
 | `adjustments` | `AdjustmentStack`, `Overlay`, `Effect`: the step that applies scoped, dated, stack-ordered overlays to `target`; scope is any record fields (the step reads one column per field the overlays name, a missing or null one is out of scope); tighten-only is enforced when the document loads; it records `<target>_unadjusted`, `adjustment_set_id`, `adjustments_applied`; `.apply(...)` and `.due_for_review(on)` for code outside a flow, `.packed()` for a step type that applies a stack itself |
@@ -265,7 +265,7 @@ below and leaves the data alone.
 | `registry.rank(fired)`, `code in registry`, `registry.version` | unchanged on `ReasonCodes`; `registry._by_code[c]` becomes `{x.code: x for x in codes.codes}[c]` |
 | `EffectiveDatedSet(family, [EffectiveVersion(...), ...])` | `EffectiveVersions(family=..., versions=[EffectiveVersion(...), ...])` |
 | `dated.resolver_step(date_field=, output=)` | the `EffectiveVersions` object is the step; `date_field=` and `output=` are fields; name `resolve_<family>_version` and output `<family>_version` as before |
-| `dated.resolve(on)` | unchanged on `EffectiveVersions`; the result has `version_id`, `effective_from` and `effective_to` |
+| `dated.resolve(on)` | `versions.version_on(on)` (`resolve` is the step-type lookup on every step class); the result has `version_id`, `effective_from` and `effective_to` |
 
 One difference: the stack and the reason codes are frozen objects, so a test that builds a register and then edits it builds a new
 stack with `model_copy(update=...)` instead.
