@@ -80,14 +80,14 @@ def card_params(promotional: DecisionTableConfig, reversion: DecisionTableConfig
                                     ("card_reversion_rates", reversion, REVERSION_CARD, ("grade",))):
         rows, version = limit_band_rows(card, table, keys)
         columns = {**dict.fromkeys(keys, int), "lim_lo": float, "band": int, "rate": float}
-        out.append((param_table(columns, default=rows), param(version)))
+        out.append((param_table(columns, default=rows, seeded_from=name), param(version)))
     return tuple(out)
 
 
 def product11_params(card: DecisionTableConfig):
     """`(rows param, version param)` for product 11's card: the card document is their default, shared by the steps that price."""
     rows, version = card_rows(card, PRODUCT11_CARD)
-    return (param_table(RATE_CARD_COLUMNS, shared_key="rate_card_product11", default=rows),
+    return (param_table(RATE_CARD_COLUMNS, shared_key="rate_card_product11", default=rows, seeded_from="rate_card_product11"),
             param(version, shared_key="rate_card_product11_version"))
 
 
