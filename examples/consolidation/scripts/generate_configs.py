@@ -174,6 +174,11 @@ def main(version: str = "0.1.0") -> None:
         (out / f"{name}.json").write_text(json.dumps(document, indent=2) + "\n")
     params = build(*(DecisionTableConfig.load(d) for d in documents.values()),
                    **{name: ConfigurableStep.load(d) for name, d in codes.items()}).parameters().defaults()
+    # The rate card documents are the one place a card is edited; the table params only default to their rows.
+    for key in ("rate_card_product11", "rate_card_product11_version"):
+        del params["shared"][key]
+    for key in ("plain_rate_card", "plain_rate_card_version"):
+        del params["consolidation"]["plain_granting"][key]
     (out / "params.json").write_text(json.dumps(params, indent=2) + "\n")
     print(f"wrote {len(documents) + len(codes)} documents and {out / 'params.json'}")
 
