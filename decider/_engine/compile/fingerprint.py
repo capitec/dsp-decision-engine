@@ -134,7 +134,7 @@ def _class(h: Any, cls: type, seen: set, strict: bool) -> None:
             continue
         part = hashlib.sha256()
         try:
-            _value(part, attr, seen, True)
+            _value(part, attr, set(seen), True)  # a copy: a failed attempt must not mark what it reached as hashed
         except ValueError:
             continue
         h.update(f"{name}:{part.hexdigest()}".encode())
