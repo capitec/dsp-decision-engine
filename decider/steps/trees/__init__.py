@@ -28,6 +28,15 @@ class TreeConfig(ConfigurableStep):
     `str`; only `is_true`/`is_false`: `bool`; otherwise `float`); declare it
     in `feature_types` to compare an int64 column exactly.
 
+    A `mode: "all"` tree writes one output per rule and column, and a tree of
+    more than `part_outputs` outputs (128 by default) is run as several parts
+    of whole rules, each its own node `<name>/part_<k>`, because compile time
+    grows with the square of the outputs one call returns. A part costs about
+    15-20 us per request, so a bigger `part_outputs` (or `None`, no parts) makes
+    `score()` faster and the first build slower (a 521-rule tree: 30 s at 128,
+    about 4 minutes unsplit); a smaller one (32) makes `run()` over a big frame
+    up to twice as fast. A tree with params is never split.
+
     `null_handling` says what a null numeric or boolean feature does.
     `"otherwise"` (the default, as decider 0.3 trees behave): a test on it
     is unknown, NOT keeps it unknown, AND/OR follow three-valued logic and
