@@ -6,7 +6,7 @@ import pytest
 from decider import Engine, flow
 
 from loan_granting.offers import BEST_EXPECTED_VALUE, LARGEST_AMOUNT, LOWEST_TOTAL_COST, build_offer_set, expected_value, steps
-from loan_granting.pricing import PricingResult, RateCardIndex
+from loan_granting.pricing import PricingResult
 from loan_granting.solve import BIND_AFF, BIND_CAP, BIND_EXH
 
 RULES = {"minimum_offer_amount": 2_000.0, "minimum_instalment": 150.0, "total_cost_ratio_threshold": 1.85,
@@ -92,7 +92,7 @@ def test_no_surviving_offer_is_an_empty_set_not_an_error():
 
 @pytest.fixture(scope="module")
 def validator(rate_card):
-    *_, final_validation = steps(RateCardIndex.from_card(rate_card))
+    *_, final_validation = steps(rate_card)
     return Engine().bind(flow(final_validation, name="check"), mode="interpreted")
 
 
