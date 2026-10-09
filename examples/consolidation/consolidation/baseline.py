@@ -9,9 +9,9 @@ from __future__ import annotations
 
 from datetime import date
 
-from decider import DecisionTableConfig, ParamTable, allow_fallback, missing_as, param, param_table, step
+from decider import ParamTable, allow_fallback, missing_as, param, param_table, step
 from loan_granting.pricing import PriceEvaluator
-from loan_granting.rate_tables import RATE_CARD_COLUMNS, RateCardTable, rate_card_rows
+from loan_granting.rate_tables import RATE_CARD_COLUMNS, RateCardTable
 from loan_granting.solve import PRODUCT_MAX_AMOUNT, solve_term
 
 from consolidation import vocab
@@ -84,13 +84,14 @@ def baseline_step(capacity_documents: tuple[str, str]):
     return baseline_measures
 
 
-def plain_granting_step(plain_card: DecisionTableConfig, product11_params: tuple):
-    """The `plain_granting` step, pricing from `plain_card` (the Flex Loan's, a `DecisionTableConfig`) and product 11's card.
+def plain_granting_step(plain_card: tuple[list[dict], str], product11_params: tuple):
+    """The `plain_granting` step, pricing from the Flex Loan's card and product 11's.
 
-    The cards are the defaults of table params: `product11_params` is `rate_tables.product11_params(card)`, and the
-    Flex Loan's rows are `plain_rate_card`, with its version in `plain_rate_card_version`.
+    The cards are the defaults of table params: `plain_card` is `loan_granting.rate_tables.rate_card_rows(card)` and
+    becomes `plain_rate_card` with its version in `plain_rate_card_version`; `product11_params` is
+    `rate_tables.product11_params(card)`.
     """
-    plain_rows, plain_version = rate_card_rows(plain_card)
+    plain_rows, plain_version = plain_card
     plain_param = param_table(RATE_CARD_COLUMNS, default=plain_rows)
     plain_version_param = param(plain_version)
     consolidation_param, consolidation_version_param = product11_params
