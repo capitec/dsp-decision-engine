@@ -52,6 +52,12 @@ def test_int64_above_2_53_is_compared_exactly_in_every_mode(run):
         assert (exe.score({"n": BIG})["hit"], exe.score({"n": BIG + 1})["hit"]) == (1, 0), mode
 
 
+def test_an_int_threshold_past_2_53_that_float64_cannot_hold_is_accepted(run):
+    tree = one_node({"op": "==", "feature": "n", "threshold": BIG + 1}, feature_types={"n": "int"})
+    frame = pl.DataFrame({"n": pl.Series([BIG, BIG + 1, BIG + 2], dtype=pl.Int64)})
+    assert run(tree, frame)["hit"].to_list() == [0, 1, 0]
+
+
 def test_an_undeclared_int_feature_is_read_as_a_float_and_collapses(run):
     tree = one_node({"op": "==", "feature": "n", "threshold": BIG}, name="undeclared")
     assert kinds(tree) == {"n": float}
