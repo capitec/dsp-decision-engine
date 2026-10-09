@@ -203,7 +203,7 @@ collections_treatment/    the package
   suspensions.py          the twenty suspensions and what each blocks
   scoring.py              scorecard, calibration, bands, contact band, recovery, the score's tiny post-steps
   matrix.py               the matrix document, its lookup, the intensity and treatment post-steps
-  overlays.py             the overlay stack: scopes on one column, refuses statutory targets
+  overlays.py             `in_dag`: renames a stack's output columns and refuses statutory targets
   path.py                 the escalation path, as known and as at now; intervals and caps
   arrangements.py         the affordability assessment in arrangement mode, sustainability
   capacity.py             pools, blockers before ranking, ranking and rationing
@@ -223,7 +223,7 @@ Later examples import `collections_treatment` by package name. These names are s
 | `collections_treatment.pipeline.EMIT` | The columns it emits |
 | `collections_treatment.vocab` | `NO_ACTION` to `WRITE_OFF_RECOMMENDATION`, `TREATMENT_NAMES`, `ALL_TREATMENTS`, `TREATMENT_POOL`, the pool codes, the `NS_*` non-selection reasons, the `RESET_*` events |
 | `collections_treatment.suspensions` | `RULES` (a tuple of code, scope, source, how it lifts, treatments blocked), `evaluate_suspensions`, `treatment_after_suspensions`, `pre_prescription_flag`, `add_business_days` |
-| `collections_treatment.overlays` | `OverlayStack`: an `AdjustmentStack` that scopes on one column of any name and refuses statutory targets when it loads; `in_dag(stack, applied)`; `STATUTORY_TARGETS` |
+| `collections_treatment.overlays` | `in_dag(stack, applied)`: renames an `AdjustmentStack`'s output columns for the shared `dag` and refuses a stack that overlays a statutory target; `STATUTORY_TARGETS` |
 | `collections_treatment.matrix` | `generate_matrix()`, `lookup(document)`, `matrix_cell_id`, `MATRIX_VERSION` |
 | `collections_treatment.capacity` | `allocate_capacity` (the `frame_step`), `build_pool_table()`, `default_pool_rows()`, `BASIS_VALUE`, `BASIS_PRIORITY` |
 | `collections_treatment.path` | `resolve_path_position_step`, `PATH_FLAGS`, `PATH_OUTPUTS`, `interval_and_cap_check_step` |
@@ -241,16 +241,16 @@ event flags (`qualifying_payment`, `promise_captured`, `cured`, `dispute_raised`
 
 ## Things worth knowing
 
-- **Overlays are documents.** Each of the six overlay targets is a `collections_overlay_stack` document in
+- **Overlays are documents.** Each of the six overlay targets is an `adjustment_stack` document in
   `configs/0.1.0/` (`score_shift`, `scaling_change`, `odds_multiplier`, `band_boundary_shift`, `intensity_dial`,
   `treatment_suppression`), handed to `build` by name like the matrix. Owner, approval reference, rationale and review
   date sit beside the effect and scope, and editing them is not a change of behaviour. The step names and params paths are
   unchanged, so `collections_treatment/score_shift/adjustment_stack_enabled` still switches a stack off. A stack
-  reads the one column its overlays scope on; the few steps that need the overlaid value as an integer or a probability
+  reads the columns its overlays scope on (any names); the few steps that need the overlaid value as an integer or a probability
   are small post-steps (`matrix.treatment_intensity`, `scoring.clamp_probability`).
 
 ```json
-{"type": "collections_overlay_stack", "name": "score_shift", "target": "collections_score", "set_id": "AS-COLL-SCORE-2026.09",
+{"type": "adjustment_stack", "name": "score_shift", "target": "collections_score", "set_id": "AS-COLL-SCORE-2026.09",
  "base_field": "collections_score_unadjusted", "adjusted_output": "collections_score",
  "adjustments": [{"adjustment_id": "ADJ-COLL-SCORE-001", "kind": "score_shift", "target": "collections_score",
    "effect": {"op": "add", "value": -22.0}, "scope": {"agency_placed_12m": true}, "stack_position": 1,
