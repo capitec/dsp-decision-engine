@@ -15,7 +15,7 @@ from numba.core import types
 from pydantic import PydanticSchemaGenerationError, PydanticUserError, TypeAdapter, ValidationError
 
 from decider._engine.ir.decls import Output, base_annotation
-from decider._engine.types import columnar_item, item_schema
+from decider._engine.types import columnar_item, item_schema, pydantic_ready
 from decider.ops.nested import struct_item
 from decider.ops.text import Text
 
@@ -60,10 +60,9 @@ def _prepared(annotation: Any) -> tuple[TypeAdapter, list[str] | None, bool] | N
     if t is None:
         return None
     try:
-        adapter = TypeAdapter(list[typing.Optional[t]])
+        adapter = TypeAdapter(list[typing.Optional[pydantic_ready(t)]])
     except (PydanticUserError, PydanticSchemaGenerationError):
-        # A type pydantic has no schema for (`typing.TypedDict` before Python 3.12) is left unchecked.
-        return None
+        return None  # a type pydantic has no schema for is left unchecked
     # A `Struct` or `Columnar` step may return its records as tuples of the fields.
     t = base_annotation(annotation)
     item = struct_item(t) or columnar_item(t)
