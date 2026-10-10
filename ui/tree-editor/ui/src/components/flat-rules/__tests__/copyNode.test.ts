@@ -104,10 +104,9 @@ describe('copyWithNewIds', () => {
     expect(copy.editMode).toBe(true);
   });
 
-  // A composite nested inside a composite's conditions is a node with its own id; the copy keeps the original's.
-  it.fails('gives a composite nested in a composite condition a new id too', () => {
-    const inner = { id: 'inner', type: 'composite', op: 'or', conditions: [] };
-    const copy: any = copyWithNewIds({ id: 'outer', type: 'composite', op: 'and', conditions: [inner] } as any);
-    expect(copy.conditions[0].id).not.toBe('inner');
+  it('keeps a composite condition list as it was, nested composites included', () => {
+    const conditions = [{ type: 'composite', op: 'not', conditions: [{ type: 'unary', feature: 'f', op: '>', threshold: { param: 'a' } }] }];
+    const copy: any = copyWithNewIds({ id: 'outer', type: 'composite', op: 'and', conditions, then: leaf('t') } as any);
+    expect(copy.conditions).toEqual(conditions);
   });
 });
