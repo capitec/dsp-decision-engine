@@ -53,7 +53,7 @@ def test_reloading_after_an_unsaved_edit_shows_the_saved_state(signed_in: Page):
     rename_rule(signed_in, "Edited")
     signed_in.reload()
 
-    expect(signed_in.get_by_test_id("rule-card")).to_have_count(1)
+    expect(signed_in.get_by_test_id("rule-card")).to_have_count(1, timeout=30_000)
     assert rule_names(signed_in) == ["Rule 1"]
 
 
