@@ -171,7 +171,6 @@ def test_the_move_dialog_marks_the_current_folder_and_offers_no_no_op(signed_in:
 
 # ---- overview counts ----------------------------------------------------------------------------------------------
 
-@pytest.mark.smoke
 def test_overview_counts_follow_creating_and_deleting_projects(signed_in: Page):
     ids = [create_project(signed_in, f"Counted {i}", flat_document())["id"] for i in range(3)]
     expect(total_projects_on_overview(signed_in)).to_have_text("3")

@@ -70,7 +70,6 @@ def test_a_team_the_user_belongs_to_is_listed_with_their_role(signed_in: Page, o
     expect(signed_in.get_by_role("heading", name=name)).to_be_visible()
 
 
-@pytest.mark.smoke
 def test_a_project_shared_with_a_team_appears_for_its_members_only(signed_in: Page, other: Other):
     name = team_name()
     create_team(name, my_id(signed_in), (other.id,))
