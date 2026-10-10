@@ -119,7 +119,7 @@ def first_offer(offers: list) -> str:
     return f"{','.join(offers[0])}={offers[0].get('rate')}"
 
 
-@pytest.mark.parametrize("make", (best_named,), ids=("python",))
+@pytest.mark.parametrize("make", (best_tuple, best_named), ids=("compiled", "python"))
 def test_a_python_step_reads_a_struct_as_a_dict_in_every_mode(make):
     out = assert_equivalent(flow(make, offer_fields, name="order"), LABELLED)
     assert out["offer_fields"].to_list() == ["rate,code=0.1", "rate,code=0.2"]

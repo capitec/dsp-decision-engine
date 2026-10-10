@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Iterator, Mapping, Union
 
 import numpy as np
+from numba.core.dispatcher import Dispatcher
 
 from decikit._engine.boundary.whole import refuse
 from decikit._engine.compile.declared import check_output
@@ -137,7 +138,7 @@ class Fallback:
     """
 
     __slots__ = ("calls", "fn", "reason", "declared", "writes", "_boxes", "_scales", "_tables", "_whole", "_checks",
-                 "_ks", "_dicts")
+                 "_ks", "_dicts", "_python")
 
     def __init__(self, call: Call, fn, reason: str, declared: bool = False):
         self.calls = (call,)
@@ -159,6 +160,7 @@ class Fallback:
                              else None for o in node.outputs)
         self._ks = range(len(self.writes))
         self._dicts = tuple(to_dicts(o.annotation) for o in node.outputs)
+        self._python = not isinstance(fn, Dispatcher)
         self._whole = tuple(dtype == np.int64 for _, dtype in self.writes)
         # A number, Decimal or bool has its declared type already; only an object output can be a wrong shape.
         self._checks = tuple(node.kind == "scalar" and dtype == object for _, dtype in self.writes)
@@ -167,8 +169,8 @@ class Fallback:
         call = self.calls[0]
         node = call.node
         bundle = bundles[call.id] if node.params else ()
-        cols = [(i.arg, _per_row(values[v.id]), valid.get(v.id) if i.null_policy is NullPolicy.OPTIONAL else None)
-                for i, v in zip(node.inputs, call.reads)]
+        cols = [(i.arg, _per_row(values[v.id], self._python),
+                 valid.get(v.id) if i.null_policy is NullPolicy.OPTIONAL else None) for i, v in zip(node.inputs, call.reads)]
         outs = [np.empty(n, dtype) for _, dtype in self.writes]
         masks: list = [None] * len(outs)  # made when a null turns up
         consts = tuple(v for _, v in node.consts)
@@ -233,13 +235,16 @@ def _ragged_values(hi: np.ndarray, sink: Sink, schema: Schema) -> np.ndarray:
     return out
 
 
-def _per_row(values: np.ndarray) -> list:
+def _per_row(values: np.ndarray, python: bool) -> list:
     # A kernel that fails at run time retries by calling each step once per row; a `Ragged` (the
     # shared-kernel shape) has no per-row representation of its own, so give it `build_rows`'s.
     if isinstance(values, Ragged):
         return [values.row(i) for i in range(len(values.lo))]
-    # A record array's tolist() gives plain tuples, which a step reading a struct's fields can't read.
-    return list(values) if values.dtype.names else values.tolist()
+    # A record array's tolist() gives tuples: a compiled body takes each record, a Python body the dict interpreted
+    # mode gives it.
+    if (names := values.dtype.names) is not None:
+        return [dict(zip(names, row)) for row in values.tolist()] if python else list(values)
+    return values.tolist()
 
 
 Unit = Union[Kernel, Fallback]
