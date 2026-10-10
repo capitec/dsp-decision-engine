@@ -31,8 +31,8 @@ Impact: a long-lived process that stages many versions or sees many distinct par
 **The Arrow shim is compiled with `cc` on first import.** POSIX only, and it needs a C compiler or a cache directory the process can write to (`_engine/boundary/_arrow/_build.py`).
 Impact: Windows, and slim containers without a compiler, cannot run compiled modes; the MCP editor-socket path on Windows is untested.
 
-**`score()` is not instantaneous.** A short flow costs about 28 µs per record fused and 59 µs interpreted; a one-row frame through `run()` costs about 150 µs.
-Workaround: serve single records as a dict through `score()`; see [serving latency](../architecture/serving.md).
+**`run(record)` is not instantaneous.** A short flow costs about 28 µs per record fused and 59 µs interpreted; a one-row frame through `run()` costs about 150 µs.
+Workaround: serve single records as a dict through `run()`; see [serving latency](../architecture/serving.md).
 
 ## Numbers
 

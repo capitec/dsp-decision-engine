@@ -506,7 +506,7 @@ Test through the decider toolkit, not by calling the step functions: only a run 
 
 | Helper | Asserts |
 |---|---|
-| `assert_equivalent(step, frame, params=None, modes=MODES, script=None)` | every mode gives exactly the same answer, by `run`, by `score` per row and by a session; returns the output frame |
+| `assert_equivalent(step, frame, params=None, modes=MODES, script=None)` | every mode gives exactly the same answer, by `run` on the frame, by `run` per record and by a session; returns the output frame |
 | `corpus(step, baseline=1.0)` | nothing; returns boundary-value frames for every input the flow reads |
 | `no_recompile()` | numba compiles nothing inside the block |
 
@@ -518,7 +518,7 @@ flowchart LR
     I --> R{"same columns,<br/>dtypes, values?"}
     S --> R
     U --> R
-    I --> P["score(record)<br/>for every row"]
+    I --> P["run(record)<br/>for every row"]
     I --> Q["session resumed<br/>to the end"]
     P --> R
     Q --> R
@@ -539,7 +539,7 @@ flowchart LR
 For each mode in `modes` (default `("interpreted", "stepped", "fused")`), it checks against the first mode's `run(frame)`:
 
 - `run(frame)`: same columns, dtypes and values. NaN equals NaN; nothing else is approximate.
-- `score(record)` for every row: the same dict as that row of `run`.
+- `run(record)` for every row: the same dict as that row of `run(frame)`.
 - A debug session resumed to the end: the same frame as `run`.
 - With `script`, a second session driven by `script(session)` and then resumed to the end: the same frame in every mode.
 
@@ -572,7 +572,7 @@ shape: (3, 2)
 [True, False, True]
 ```
 
-The returned frame is the plain run's, not the scripted one. An error in the first mode propagates as it is; `run` raising only in a later mode is reported as a divergence (`run() raised ... in fused mode but not in interpreted`). A failure names the mode and, for `score`, the row and column.
+The returned frame is the plain run's, not the scripted one. An error in the first mode propagates as it is; `run` raising only in a later mode is reported as a divergence (`run() raised ... in fused mode but not in interpreted`). A failure names the mode and, for a record run, the row and column.
 
 ### `corpus`
 
@@ -650,9 +650,9 @@ FRAME = pl.DataFrame({"income": [1000.0, 800.0, 0.0], "debt": [500.0, 100.0, 50.
 
 def test_worked_example_gives_exact_answers():
     exe = Engine().bind(build(), mode="fused")
-    assert exe.score({"income": 1000.0, "debt": 350.0}) == {
+    assert exe.run({"income": 1000.0, "debt": 350.0}) == {
         "income": 1000.0, "debt": 350.0, "approved": True}
-    assert exe.score({"income": 1000.0, "debt": 450.0})["approved"] is False
+    assert exe.run({"income": 1000.0, "debt": 450.0})["approved"] is False
 
 
 def test_every_mode_agrees_on_the_sample():

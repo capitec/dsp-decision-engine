@@ -155,7 +155,7 @@ wrote, and the fused kernel is built from LLVM IR by an intrinsic, once per proc
 the step dispatchers, and a closure over a dispatcher never hits numba's disk cache.
 
 The fused kernel compile therefore stays in every new process. In this run of a one-step pipeline,
-the first `score()` of a fresh process took 391 ms with a cold step cache and 345 ms with the step
+the first `run(record)` of a fresh process took 391 ms with a cold step cache and 345 ms with the step
 loaded from disk; most of that is building the kernel around it. Serving pays it during warm-up:
 `decikit build`, and each serving worker as it stages a config version, score a warm-up record
 through every kernel, and a worker answers `/ping` only after that (see [serving](../serving.md)).

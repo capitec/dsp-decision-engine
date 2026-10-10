@@ -98,7 +98,7 @@ to 3000.0 for one row and 0.0 for two.
 
 - Tools run a pipeline with the latest version's `params.json` (the defaults in
   code when there is none). To try other values, change them with `params_set`
-  or score through `pipeline.compile().score(record, params)` in a test.
+  or score through `pipeline.compile().run(record, params)` in a test.
 - `discover_flows` reads `.py` files only and skips `.venv`, `node_modules` and
   directories starting with `.`. A flow file appears as the `build()` that
   loads it.

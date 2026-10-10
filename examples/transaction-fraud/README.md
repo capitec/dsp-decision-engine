@@ -84,7 +84,7 @@ dispatch to queues, outcome feedback, languages, the runners-up record, and the 
 | `dag` (dependency order) for the pipeline, `flow` (written order) for one value written twice | [pipeline.py](fraud_interdiction/pipeline.py) |
 | `ConfigurableStep` types whose fields are the data, compared by `decikit.lab.diff`: overlays, reason codes and rule-set versions from `credit_core`, and this package's `AmountOverlays` and `ActionResolver`, which hold an `AdjustmentStack` as a field | [overlays.py](fraud_interdiction/overlays.py), [action.py](fraud_interdiction/action.py), [tests/test_release_checks.py](tests/test_release_checks.py) |
 | A params document, including a switch that turns the whole overlay stack off | [`params.json`](configs/0.1.0/params.json), [backtest.py](fraud_interdiction/backtest.py) |
-| One executable for a batch (`run`) and a record (`score`) with the same answers; a backtest is the batch run | [backtest.py](fraud_interdiction/backtest.py), [tests/test_serving.py](tests/test_serving.py) |
+| One executable for a batch and a record (both `run`) with the same answers; a backtest is the batch run | [backtest.py](fraud_interdiction/backtest.py), [tests/test_serving.py](tests/test_serving.py) |
 | JSON dates arriving as strings, warm-up from `sample_request.json`, serving the raw request bytes | [sample_request.json](sample_request.json), [tests/test_serving.py](tests/test_serving.py) |
 
 ## Run it

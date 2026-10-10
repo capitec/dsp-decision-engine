@@ -14,7 +14,7 @@ New rationale goes into the decision file for its area; a new measurement become
 
 | Area | File |
 |---|---|
-| IR, wiring, runners, fusion, compile cache, fallback, `score`, `each` | [engine](decisions/engine.md) |
+| IR, wiring, runners, fusion, compile cache, fallback, `run` on a record or a frame, `each` | [engine](decisions/engine.md) |
 | Package layers, public names, checks, diff, thread safety, extension points | [api-layout](decisions/api-layout.md) |
 | `Decimal`, `Currency`, rounding, overflow | [money](decisions/money.md) |
 | `str`, `Text` spans, `Literal` outputs | [strings](decisions/strings.md) |

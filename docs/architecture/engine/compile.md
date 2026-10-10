@@ -196,7 +196,7 @@ There is no heuristic because fusion is non-monotone: at a fixed 1M rows
 the split/fused time ratio was 3.26 at 3 modules and 13.00 at 20 for a cheap straight-line body,
 but 0.76 and 0.22 for a heavy body. The mechanism is register pressure (a fused
 kernel of 20 modules spilled 47 times per iteration), and no static signal predicts it. One
-grouping serves both a batch and `score()`, so there is one code path and one cache surface.
+grouping serves both a batch and `run(record)`, so there is one code path and one cache surface.
 
 ### What a kernel keeps
 
@@ -424,7 +424,7 @@ dropped for the life of the runner.
 
 Measured against the previous engine on the same box:
 41.6 to 44.3M rows/s for a branch over 1M rows (14.8M rows/s Python-driven in stepped mode) and
-6.33M rows/s for a loop of up to 360 iterations over 200k rows (0.81M stepped). `score()` through
+6.33M rows/s for a loop of up to 360 iterations over 200k rows (0.81M stepped). `run(record)` through
 that branch was 23 µs p50 fused against 66 µs stepped.
 
 ## Values that are not one number
@@ -490,7 +490,7 @@ it back into one `list[dict]` per row (`_ragged_values`), narrowing bool and int
 A row node (a tree or table) declaring a `Literal` of strings, or a `lookup(...)` of lists or
 records, returns the index of its value. `output_dtype` stores it as int64, and `Kernel.run` wraps
 the column in `Coded(codes, CodeTable)`: the table holds the values once, as Python objects and
-as a polars Series with null last. `decode()` gives Python values for `score()`, `series()` a
+as a polars Series with null last. `decode()` gives Python values for `run(record)`, `series()` a
 polars column for `run()` by gathering the codes, and code `-1` marks a null. A function step's
 `Literal` output runs in Python.
 

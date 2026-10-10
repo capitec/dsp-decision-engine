@@ -275,7 +275,7 @@ flowchart LR
     style param fill:#f3f4f6,stroke:#6b7280,color:#1f2937
 ```
 
-Both sources produce the same `Rows` type, a namedtuple subclass that numba types as a named tuple of four int64. Changing the rows or their count never changes a type, so it never recompiles; the `no_recompile` tests cover `run`, `score` and a zero-row table. The pricing table with param rows, inside `flow(pt, name="loans")`:
+Both sources produce the same `Rows` type, a namedtuple subclass that numba types as a named tuple of four int64. Changing the rows or their count never changes a type, so it never recompiles; the `no_recompile` tests cover `run` on a frame and on a record, and a zero-row table. The pricing table with param rows, inside `flow(pt, name="loans")`:
 
 ```text
 {'loans/pricing': {'prices': {'type': 'table', 'schema': {'product': 'String', 'lo': 'Float64', 'hi': 'Float64', 'rate': 'Float64', 'tier': "Enum(categories=['small', 'large', 'card', 'none'])"}, 'required': True}}}
@@ -322,9 +322,9 @@ Row 2 answered after rows 0 and 1 were tried, so a session can stop on `limit_ba
 
 ## Measured
 
-From `benchmarks/table_match.py` (12 bands writing String, Int64 and Float64 outputs; 1M rows through `run(df)`, 20k `score(dict)`; dev box at load average about 4):
+From `benchmarks/table_match.py` (12 bands writing String, Int64 and Float64 outputs; 1M rows through `run(df)`, 20k `run(dict)`; dev box at load average about 4):
 
-| Table | Engine | ns/row | `score` p50 | `score` p99 |
+| Table | Engine | ns/row | `run(record)` p50 | `run(record)` p99 |
 |---|---|---|---|---|
 | bands | decider2 fused | 304 | 42.9 µs | 53.1 µs |
 | bands | decikit fused | 164 | 27.4 µs | 36.1 µs |
@@ -333,7 +333,7 @@ From `benchmarks/table_match.py` (12 bands writing String, Int64 and Float64 out
 | bands AND string `in` | decikit fused | 413 | 69.6 µs | 111.6 µs |
 | bands AND string `in` | decikit fused, rows param | 423 | 137.1 µs | 157.4 µs |
 
-The rows-param rows paid for hashing the whole params document on every call. After `ParamsCache.key` started remembering the last document object and its hash, rows-param `score()` p50/p99 went from 88.6/191.9 µs to 35.8/42.9 µs. Documents are treated as immutable once passed for that reason.
+The rows-param rows paid for hashing the whole params document on every call. After `ParamsCache.key` started remembering the last document object and its hash, rows-param `run(record)` p50/p99 went from 88.6/191.9 µs to 35.8/42.9 µs. Documents are treated as immutable once passed for that reason.
 
 ## Failure modes
 
