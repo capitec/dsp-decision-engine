@@ -87,7 +87,6 @@ def test_between_without_bounds_is_reported_and_fixed_by_giving_one(signed_in: P
     fixed(signed_in, tmp_path)
 
 
-@pytest.mark.xfail(strict=True, reason="the message ends with `e.g. ''` and never says to pick a parameter")
 def test_unfinished_parameter_choice_says_to_pick_a_parameter(signed_in: Page, tmp_path):
     open_doc(signed_in, parameters=LIMIT)
     card = unary_rule(signed_in, "<=")
@@ -135,7 +134,6 @@ def test_parameter_name_that_is_not_an_identifier_is_reported_with_a_suggestion(
     fixed(signed_in, tmp_path)
 
 
-@pytest.mark.xfail(strict=True, reason="a condition without a feature saves as valid and exports")
 def test_condition_without_a_feature_is_reported_and_fixed_by_choosing_one(signed_in: Page, tmp_path):
     open_doc(signed_in)
     card = rule_card(signed_in)

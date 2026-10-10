@@ -69,7 +69,6 @@ def test_deleted_output_column_leaves_the_other_columns_valid(signed_in: Page):
     assert run_frame(export_document(signed_in, project), {"amount": [1.0]}) == [{"decision": "approve"}]
 
 
-@pytest.mark.xfail(strict=True, reason="changing a column's type overwrites every record's value with the default")
 def test_changing_an_output_column_type_keeps_the_values_that_convert(signed_in: Page):
     open_doc(signed_in, APPROVE, output=SCORED)
     open_tab(signed_in, "Configure Outputs")
@@ -97,12 +96,14 @@ def test_added_record_can_be_chosen_by_a_leaf_and_runs(signed_in: Page):
     assert run_frame(export_document(signed_in, project), {"amount": [1.0]}) == [{"decision": "review"}]
 
 
-def test_the_first_record_has_no_delete_button(signed_in: Page):
+def test_every_record_can_be_deleted_and_the_default_row_is_its_own(signed_in: Page):
     open_doc(signed_in, APPROVE, output=THREE)
     open_tab(signed_in, "Configure Outputs")
 
-    expect(signed_in.get_by_test_id("output-record-delete")).to_have_count(2)
-    expect(signed_in.locator("tbody tr").first.get_by_text("Default")).to_be_visible()
+    expect(signed_in.get_by_test_id("output-record-delete")).to_have_count(3)
+    default_row = signed_in.get_by_test_id("output-default-row")
+    expect(default_row.get_by_text("Default")).to_be_visible()
+    expect(default_row.locator("input").first).to_have_value("decline")
 
 
 def test_deleting_a_record_repoints_leaves_to_the_same_remaining_records(signed_in: Page):
@@ -113,7 +114,7 @@ def test_deleting_a_record_repoints_leaves_to_the_same_remaining_records(signed_
             "then": {"type": "leaf", "result_idx": 2}}
     project = open_doc(signed_in, low, high, output=THREE)
     open_tab(signed_in, "Configure Outputs")
-    signed_in.get_by_test_id("output-record-delete").first.click()  # record 1 ("review")
+    signed_in.get_by_test_id("output-record-delete").nth(1).click()  # record 1 ("review")
 
     reply = save(signed_in)
     assert reply["validation_errors"] == []
@@ -123,7 +124,6 @@ def test_deleting_a_record_repoints_leaves_to_the_same_remaining_records(signed_
     assert rows == [{"decision": "decline"}, {"decision": "escalate"}]
 
 
-@pytest.mark.xfail(strict=True, reason="editing the first output record also overwrites the default row")
 def test_editing_the_first_record_leaves_the_default_row_alone(signed_in: Page):
     open_doc(signed_in, APPROVE, output=THREE)
     open_tab(signed_in, "Configure Outputs")
