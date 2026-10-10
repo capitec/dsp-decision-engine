@@ -1,8 +1,4 @@
-"""Sharing projects and folders between two users: who sees what, who may save, who may delete.
-
-Most permission failures share one cause: the permission checks treat any signed-in user as a superadmin
-(`is_superadmin` is called without `await` in the folder-permission service), so those tests carry one shared reason.
-"""
+"""Sharing projects and folders between two users: who sees what, who may save, who may delete."""
 
 import re
 
@@ -26,17 +22,13 @@ from platform_ui import (
 from seed import create_folder, create_project, get_project, list_folders, list_projects, share_folder, share_project
 from test_flat_rule_params import flat_document
 
-EVERYONE_IS_ADMIN = "every signed-in user is treated as a superadmin (is_superadmin is not awaited in services/folder_permissions.py)"
 PUT = lambda r: r.request.method == "PUT" and "/api/v1/projects/" in r.url  # noqa: E731
 
 
-def attempt_save(page: Page) -> int | None:
-    """Press Save; the server's status, or None when the editor does not let the user press it."""
-    save = page.get_by_role("button", name="Save", exact=True)
-    if save.is_disabled():
-        return None
+def attempt_save(page: Page) -> int:
+    """Press Save; the server's status."""
     with page.expect_response(PUT) as reply:
-        save.click()
+        page.get_by_role("button", name="Save", exact=True).click()
     return reply.value.status
 
 
@@ -137,7 +129,6 @@ def test_a_read_write_user_can_save_and_the_owner_sees_it(signed_in: Page, other
     assert stored_document(signed_in, project) != (flat_document() if kind == "flat" else node_ui.loan_document())
 
 
-@pytest.mark.xfail(strict=True, reason=EVERYONE_IS_ADMIN)
 @pytest.mark.parametrize("kind", ["flat", "tree"])
 def test_a_read_only_users_save_is_refused_with_a_message_and_stores_nothing(signed_in: Page, other: Other, kind: str):
     project = seed_shared(signed_in, other, kind, "read")
@@ -145,11 +136,10 @@ def test_a_read_only_users_save_is_refused_with_a_message_and_stores_nothing(sig
     open_editor(other.page, kind, project)
 
     make_edit(other.page, kind)
-    status = attempt_save(other.page)
 
-    assert status in (None, 403)
-    if status == 403:
-        expect(toast(other.page, "Save Failed")).to_be_visible()
+    assert attempt_save(other.page) == 403
+    expect(toast(other.page, "Save Failed")).to_contain_text("Insufficient permissions")
+    expect(other.page.get_by_text("Unsaved changes")).to_be_visible()
     assert stored_document(signed_in, project) == before
 
 
@@ -176,7 +166,6 @@ def test_deleting_a_shared_project_from_the_list_tells_the_user_and_keeps_it(sig
     assert get_project(signed_in, project)["name"] == "Not yours"
 
 
-@pytest.mark.xfail(strict=True, reason=EVERYONE_IS_ADMIN)
 def test_a_read_only_user_cannot_share_the_project_onward(signed_in: Page, other: Other, browser, base_url):
     project = create_project(signed_in, "Closed", flat_document())["id"]
     share_project(signed_in, project, other.id, "read")
@@ -187,7 +176,6 @@ def test_a_read_only_user_cannot_share_the_project_onward(signed_in: Page, other
     assert reply.status == 403
 
 
-@pytest.mark.xfail(strict=True, reason=EVERYONE_IS_ADMIN)
 def test_removing_a_share_takes_the_access_away(signed_in: Page, other: Other):
     project = create_project(signed_in, "Temporary", flat_document())["id"]
     share = share_project(signed_in, project, other.id, "write")
@@ -199,7 +187,6 @@ def test_removing_a_share_takes_the_access_away(signed_in: Page, other: Other):
 
 # ---- another user's unshared project ---------------------------------------------------------------------------------
 
-@pytest.mark.xfail(strict=True, reason=EVERYONE_IS_ADMIN)
 @pytest.mark.parametrize("route", ["projects", "flat-rules"])
 def test_opening_another_users_unshared_project_by_url_shows_no_data(signed_in: Page, other: Other, route: str):
     project = create_project(signed_in, "Secret plans", flat_document())["id"]
@@ -211,7 +198,6 @@ def test_opening_another_users_unshared_project_by_url_shows_no_data(signed_in: 
     expect(other.page.get_by_role("button", name="Add Rule")).to_have_count(0)
 
 
-@pytest.mark.xfail(strict=True, reason=EVERYONE_IS_ADMIN)
 @pytest.mark.parametrize("verb,path", [("get", ""), ("put", ""), ("get", "/export"), ("get", "/shares")])
 def test_the_api_refuses_another_users_unshared_project(signed_in: Page, other: Other, verb: str, path: str):
     project = create_project(signed_in, "Secret plans", flat_document())["id"]
@@ -273,7 +259,6 @@ def test_the_projects_in_a_shared_folder_are_listed_for_the_other_user(signed_in
     expect(project_card(other.page, "Inside shared")).to_be_visible()
 
 
-@pytest.mark.xfail(strict=True, reason=EVERYONE_IS_ADMIN)
 def test_a_read_only_folder_is_marked_with_a_lock_for_the_other_user(signed_in: Page, other: Other):
     folder = create_folder(signed_in, "Look only")["id"]
     share_folder(signed_in, folder, other.id, "read")
@@ -304,7 +289,6 @@ def test_the_other_user_can_open_a_subfolder_of_a_shared_folder(signed_in: Page,
     expect(folder_row(other.page, "Low")).to_be_visible()
 
 
-@pytest.mark.xfail(strict=True, reason=EVERYONE_IS_ADMIN)
 def test_a_project_in_a_read_only_folder_cannot_be_saved_by_the_other_user(signed_in: Page, other: Other):
     folder = create_folder(signed_in, "Look only")["id"]
     project = create_project(signed_in, "Inside", flat_document(), folder_id=folder)["id"]
@@ -327,7 +311,6 @@ def test_a_project_in_a_read_write_folder_can_be_saved_by_the_other_user(signed_
     assert get_project(signed_in, project)["name"] == "changed"
 
 
-@pytest.mark.xfail(strict=True, reason=EVERYONE_IS_ADMIN)
 def test_a_read_only_folder_cannot_get_new_subfolders_or_be_deleted_by_the_other_user(signed_in: Page, other: Other):
     folder = create_folder(signed_in, "Look only")["id"]
     share_folder(signed_in, folder, other.id, "read")
@@ -339,7 +322,6 @@ def test_a_read_only_folder_cannot_get_new_subfolders_or_be_deleted_by_the_other
     assert [f["name"] for f in list_folders(signed_in)] == ["Look only"]
 
 
-@pytest.mark.xfail(strict=True, reason=EVERYONE_IS_ADMIN)
 def test_another_users_unshared_folder_is_refused_by_the_api(signed_in: Page, other: Other):
     folder = create_folder(signed_in, "Hidden")["id"]
 
