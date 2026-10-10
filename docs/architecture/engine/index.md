@@ -55,6 +55,11 @@ An engine is a settings document in the registry, named by its `type` tag. `Engi
 ones, under `NumbaEngine`. `Engine.registered()` gives `{tag: class}` and `Engine.resolve(tag)` the class. `compile` and
 `session` take a tag or an instance (`engine="fused"`, `FusedEngine(strict_compile=True)`).
 
+`Step.run` and `Step.compile` with no engine follow the context-scoped default: `decikit.engine(...)` sets it for a block
+(a `ContextVar`, so threads and tasks started inside inherit it), and unset it is the fused engine. `Step.session` opens
+interpreted and ignores the default; serving names its engine in its own document and never reads it. `run` does not
+cache executables, so a fused `run` binds and builds on every call; compile once to avoid that.
+
 | Setting | Default | Effect |
 |---|---|---|
 | `params_validation` | `"eager"` | `"eager"` validates every node's params the first time a params document is seen and raises on any invalid one. `"lazy"` validates a node the first time it runs, so an invalid param in a node no row reaches never fails a run. |
