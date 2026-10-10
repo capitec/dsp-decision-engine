@@ -19,7 +19,8 @@ import {
   useFlatRuleHasInputSchemaErrors,
   useFlatRuleHasOutputErrors,
   useFlatRuleHasParameterErrors,
-  useFlatRuleRuleErrors
+  useFlatRuleRuleErrors,
+  useFlatRuleStore,
 } from './useFlatRuleStore';
 import { useFlatRuleLive } from './useFlatRuleLive';
 import { OutputConfigurationTab } from './OutputConfigurationTab';
