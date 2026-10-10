@@ -127,6 +127,18 @@ class CookieConfig(BaseModel):
     samesite: t.Literal["lax", "strict", "none"] | None = "strict"
 
 
+# Defaults live on subclasses, not in default factories: an env override of one field
+# (DSP_AUTH__STATUS_COOKIE__SECURE) rebuilds the model from its class defaults.
+class _OidcCookieConfig(CookieConfig):
+    key: str = "oidc_session_id"
+    samesite: t.Literal["lax", "strict", "none"] | None = "lax"  # OAuth redirects come from the provider
+
+
+class _StatusCookieConfig(CookieConfig):
+    key: str = "session_status"
+    httponly: bool = False  # JS reads the expiry
+
+
 class _OidcAuthSettings(BaseModel):
     enabled: t.Literal[True] = True
     providers: t.Dict[str, _OidcProviderSettings]
@@ -138,13 +150,7 @@ class _OidcAuthSettings(BaseModel):
     redirect_path: str = "/token"
 
     # OIDC-specific cookie settings (for OAuth flow only)
-    cookie: CookieConfig = Field(
-        default_factory=lambda: CookieConfig(
-            key="oidc_session_id",
-            samesite="lax",  # Required for OAuth redirects from external providers
-            httponly=True,  # OIDC temp cookie doesn't need JS access
-        )
-    )
+    cookie: _OidcCookieConfig = Field(default_factory=_OidcCookieConfig)
 
     # Reverse proxy/ingress settings
     redirect_url_override: t.Optional[str] = Field(
@@ -219,18 +225,10 @@ class AuthenticationSettings(BaseModel):
     superadmin_teams: t.List[str] = Field(default_factory=list)
 
     # Main session cookie (secure, httponly)
-    cookie: CookieConfig = Field(
-        default_factory=lambda: CookieConfig(httponly=True, samesite="strict")
-    )
+    cookie: CookieConfig = Field(default_factory=CookieConfig)
 
     # Session status cookie (JS readable, contains only expiry timestamp)
-    status_cookie: CookieConfig = Field(
-        default_factory=lambda: CookieConfig(
-            key="session_status",
-            httponly=False,  # JS needs to read this
-            samesite="strict",  # Can be strict since it's same-site only
-        )
-    )
+    status_cookie: _StatusCookieConfig = Field(default_factory=_StatusCookieConfig)
     session_token_len: int = 32
     session_rolling_duration_s: int = (
         3600  # we will keep a session alive for an hour of no inactivity but if there is it will reset the session duration

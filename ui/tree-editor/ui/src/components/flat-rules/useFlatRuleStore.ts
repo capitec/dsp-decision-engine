@@ -4,7 +4,7 @@ import { subscribeWithSelector } from 'zustand/middleware';
 import { PrioritizedTree, RuleTableRow, FlatRuleProjectDetail, RuleCondition } from './types';
 import { flatRuleApi } from './api';
 import { normalizeDtypes } from '@/utils/normalize-dtypes';
-import { parseFlatRuleValidationErrors, groupErrorsByRule, getSectionErrors, formatRuleErrors } from '@/utils/flat-rule-validation-parser';
+import { parseFlatRuleValidationErrors, groupErrorsByRule, getSectionErrors, formatRuleErrors, type ParsedFlatRuleError } from '@/utils/flat-rule-validation-parser';
 import { subscribeToStoreActivity } from '@/lib/background-token-refresh';
 import { toast } from '@/hooks/use-toast';
 import { apiErrorMessage } from '@/lib/utils';
@@ -29,6 +29,10 @@ interface FlatRuleState {
   
   // Save state
   saving: boolean;
+  // What was last loaded or saved: every edit replaces `trees` or `project.project_data`, so a different
+  // reference means unsaved changes
+  savedTrees: PrioritizedTree[];
+  savedProjectData: any;
   error: string | null;
   ruleErrors: Map<string, string>; // Map of treeId to error message
 
@@ -61,8 +65,8 @@ interface FlatRuleState {
   deleteParameter: (name: string) => void;
   isParameterInUse: (parameterName: string) => boolean;
   
-  // Save functionality
-  saveProject: () => Promise<void>;
+  // Save functionality; resolves to whether the server stored the document
+  saveProject: () => Promise<boolean>;
   
   
   // Initialization
@@ -72,11 +76,29 @@ interface FlatRuleState {
   updateProjectData: (updates: any) => void;
 }
 
+function containsNode(node: any, id: string): boolean {
+  if (!node || typeof node !== 'object') return false;
+  if (node.id === id) return true;
+  return [node.then, node.otherwise, ...(node.branches ?? [])].some(child => containsNode(child, id));
+}
+
+// decikit reports a document that is valid but cannot be built with no location: the message names the node
+// ("tree node '<id>': ...") or the output, so place it on that rule or on the output section.
+function locateBuildError(error: ParsedFlatRuleError, trees: PrioritizedTree[]): ParsedFlatRuleError {
+  if (error.type !== 'build_error') return error;
+  const nodeId = /^tree node '([^']+)': /.exec(error.message)?.[1];
+  const ruleIndex = nodeId ? trees.findIndex(tree => containsNode(tree.rootNode, nodeId)) : -1;
+  if (ruleIndex >= 0) {
+    return { ...error, ruleIndex, section: 'rule', conditionPath: [], message: error.message.replace(/^tree node '[^']+': /, '') };
+  }
+  return /\boutput\b/.test(error.message) ? { ...error, section: 'output' } : error;
+}
+
 // Map decikit's validation_errors onto per-rule highlighting and section flags
 function buildErrorState(rawErrors: any[] | undefined, trees: PrioritizedTree[]) {
   const ruleErrors = new Map<string, string>();
   const validationErrors = new Map<number, any[]>();
-  const parsed = parseFlatRuleValidationErrors(rawErrors ?? []);
+  const parsed = parseFlatRuleValidationErrors(rawErrors ?? []).map(e => locateBuildError(e, trees));
   groupErrorsByRule(parsed).forEach((errors, ruleIndex) => {
     if (ruleIndex < trees.length) {
       ruleErrors.set(trees[ruleIndex].id, formatRuleErrors(errors));
@@ -179,6 +201,8 @@ const store = create<FlatRuleState>()(
     availableFields: [],
     outputOptions: [],
     saving: false,
+    savedTrees: [],
+    savedProjectData: undefined,
     error: null,
     ruleErrors: new Map(),
     validationErrors: new Map(),
@@ -243,12 +267,10 @@ const store = create<FlatRuleState>()(
               return {
                 ...node,
                 branches: node.branches.map(branch => updateNodeRecursively(branch) || branch),
-                otherwise: node.otherwise ? (updateNodeRecursively(node.otherwise) || node.otherwise) : node.otherwise
               } as RuleTableRow;
             }
 
-            // Unary/composite nodes: recurse into then field
-            if (hasThen && (node.type === 'unary' || node.type === 'composite')) {
+            if ((hasThen || hasOtherwise) && (node.type === 'unary' || node.type === 'composite')) {
               return {
                 ...node,
                 then: node.then ? (updateNodeRecursively(node.then) || node.then) : node.then,
@@ -279,7 +301,6 @@ const store = create<FlatRuleState>()(
               return {
                 ...node,
                 branches: node.branches.map(branch => updateNodeRecursively(branch)),
-                otherwise: node.otherwise ? updateNodeRecursively(node.otherwise) : node.otherwise
               } as RuleTableRow;
             }
 
@@ -445,7 +466,7 @@ const store = create<FlatRuleState>()(
     // Save functionality
     saveProject: async () => {
       const state = get();
-      if (state.saving) return;
+      if (state.saving) return false;
 
       try {
         set({
@@ -464,6 +485,7 @@ const store = create<FlatRuleState>()(
           rules: state.trees.map(tree => ({
             meta: {
               name: tree.name,
+              ...(tree.description && { description: tree.description }),
               position: { x: 0, y: 0 }
             },
             rule: tree.rootNode
@@ -476,7 +498,7 @@ const store = create<FlatRuleState>()(
         });
 
         const errorState = buildErrorState(saved.validation_errors, state.trees);
-        set(errorState);
+        set({ ...errorState, savedTrees: state.trees, savedProjectData: state.project.project_data });
         toast(saved.validation_errors.length === 0
           ? { title: "Project Saved", description: "Your changes have been saved successfully." }
           : {
@@ -484,7 +506,7 @@ const store = create<FlatRuleState>()(
               description: `${saved.validation_errors.length} issue(s) found. Affected rules are highlighted.`,
               duration: 10000,
             });
-
+        return true;
       } catch (err: any) {
         console.error('Failed to save project:', err);
         toast({
@@ -492,6 +514,7 @@ const store = create<FlatRuleState>()(
           description: apiErrorMessage(err, 'Failed to save project. Please try again.'),
           variant: "destructive",
         });
+        return false;
       } finally {
         set({ saving: false });
       }
@@ -549,7 +572,7 @@ const store = create<FlatRuleState>()(
               name: root.meta?.name || `Rule ${index + 1}`,
               priority: index + 1,
               rootNode: ensureNodeIds(root.rule) || createDefaultLeafNode(),
-              description: ''
+              description: root.meta?.description || ''
             }))
           : [{
               id: crypto.randomUUID(),
@@ -589,6 +612,8 @@ const store = create<FlatRuleState>()(
         collapsedNodes: new Set(),
         focusedNode: null,
         saving: false,
+        savedTrees: trees,
+        savedProjectData: enhancedProject.project_data,
         error: null,
         ...buildErrorState(project.validation_errors, trees)
       });
@@ -630,6 +655,9 @@ export const useFlatRuleFocusedNode = () => useFlatRuleStore((state) => state.fo
 export const useFlatRuleAvailableFields = () => useFlatRuleStore((state) => state.availableFields);
 export const useFlatRuleOutputOptions = () => useFlatRuleStore((state) => state.outputOptions);
 export const useFlatRuleSaving = () => useFlatRuleStore((state) => state.saving);
+export const useFlatRuleDirty = () => useFlatRuleStore(
+  (state) => state.trees !== state.savedTrees || state.project.project_data !== state.savedProjectData
+);
 export const useFlatRuleError = () => useFlatRuleStore((state) => state.error);
 export const useFlatRuleRuleErrors = () => useFlatRuleStore((state) => state.ruleErrors);
 export const useFlatRuleValidationErrors = () => useFlatRuleStore((state) => state.validationErrors);

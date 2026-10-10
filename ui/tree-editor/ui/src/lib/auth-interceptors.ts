@@ -11,6 +11,10 @@ import { isAuthenticated, logout } from './auth';
 let refreshInProgress = false;
 let refreshPromise: Promise<void> | null = null;
 
+// A sent request's body is consumed, so a request retried after a session refresh is sent from an unsent copy
+const unsentCopies = new WeakMap<Request, Request>();
+const retry = (request: Request) => fetch(unsentCopies.get(request) ?? request);
+
 /**
  * Response interceptor that handles 401 errors with automatic session refresh
  */
@@ -45,7 +49,7 @@ export const authResponseInterceptor = async (
       throw new Error('Session refresh failed - authentication not restored');
     }
     // Retry the original request
-    return fetch(request);
+    return retry(request);
   }
 
   // Start refresh process
@@ -76,7 +80,7 @@ export const authResponseInterceptor = async (
   await refreshPromise;
 
   // Retry the original request with the refreshed session
-  return fetch(request);
+  return retry(request);
 };
 
 /**
@@ -86,7 +90,9 @@ export const credentialsInterceptor = async (
   request: Request
 ): Promise<Request> => {
   // Clone the request with credentials: 'include'
-  return new Request(request, {
+  const withCredentials = new Request(request, {
     credentials: 'include',
   });
+  unsentCopies.set(withCredentials, withCredentials.clone());
+  return withCredentials;
 };

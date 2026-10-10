@@ -70,7 +70,6 @@ export const NumericalTestNodeEditor: React.FC<NumericalTestNodeEditorProps> = (
               condition: { ...condition, feature: newFeature }
             })}
             availableFeatures={featureNames}
-            availableParameters={availableParameters}
           />
         </div>
 
@@ -87,7 +86,7 @@ export const NumericalTestNodeEditor: React.FC<NumericalTestNodeEditorProps> = (
           onChange={(newThreshold) => {
             updateNodeData(node.id, {
               ...nodeData,
-              condition: { ...condition, threshold: newThreshold }
+              condition: { ...condition, threshold: newThreshold ?? 0 }
             });
           }}
           availableParameters={availableParameters}

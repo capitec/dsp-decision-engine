@@ -7,7 +7,8 @@ import {
 } from '@/api';
 import type { ProjectDetailResponse } from '@/api/types.gen';
 import { ValidationResult } from '../validation/ValidationResultsDialog';
-import { extractFeatures, renameFeature } from './FeatureActions';
+import { withNodeFeatures, renameFeature } from './FeatureActions';
+import { detectSubtrees, generateDefaultNodeName } from './util';
 import { ParameterMap, TreeEdge, V2Subtree, PolarsSchema } from '@/types/tree-types';
 import { normalizeTreeOutput } from '@/utils/normalize-dtypes';
 import { ValidationError, parseValidationErrors, formatValidationErrors, getInvalidNodeIds, getSectionErrors } from '@/utils/validation-error-parser';
@@ -43,39 +44,20 @@ const normalizeNode = (node: any): Node => {
     measured: node.measured || undefined,
     selected: false,
     dragging: false,
-    ...node
+    ...node,
+    // decikit lets a document leave out positions (they default to 0, 0); the canvas is laid out on load then
+    position: node.position ?? { x: 0, y: 0 },
   };
 };
 
-// Helper function to extract feature name from v3 Feature type
-const getFeatureName = (feature: string | { type?: 'computed'; expression: string } | undefined): string | null => {
-  if (typeof feature === 'string') return feature;
-  if (feature && typeof feature === 'object' && 'expression' in feature) {
-    return feature.expression;
-  }
-  return null;
-};
+const EDITOR_KEYS = new Set(['type', 'nodes', 'edges', 'subtrees', 'input_schema', 'output', 'parameters', 'formatVersion', 'format_version']);
 
-// Helper function to get node type string from v3 nodes
-const getNodeTypeString = (node: Node): string => {
-  return node.data.type;
-};
-
-// Helper function to infer Polars type from node type (v3)
-const inferPolarsTypeFromNode = (nodeType: string, op?: string): 'String' | 'Float64' | 'Int64' => {
-  switch (nodeType) {
-    case 'unary':
-      return 'Float64';
-    case 'cases':
-      // Need to check op to determine type
-      if (op === 'ranges') return 'Float64';
-      if (op === 'isin') return 'Int64';
-      if (op === 'string_match') return 'String';
-      return 'String'; // default
-    default:
-      return 'String';
-  }
-};
+// decikit also accepts edges without an id and a single sourceIndex instead of a list
+const normalizeEdge = (edge: any): Edge => ({
+  ...edge,
+  id: edge.id ?? `${edge.source}:${edge.target}`,
+  data: { ...edge.data, sourceIndex: [edge.data?.sourceIndex ?? 0].flat() },
+});
 
 // Map decikit's validation_errors onto node highlighting and section flags
 const applyValidationErrors = (errors: ValidationError[], nodes: Array<{ id: string }>) => {
@@ -111,6 +93,8 @@ interface EditorStoreState {
   projectDescription: string | null;
   autoRearrange: boolean;
   formatVersion: number;
+  // The document's keys the editor does not edit (metadata, name, ...), written back unchanged on save
+  documentRest: Record<string, any>;
 
   // Validation state
   validationErrors: ValidationError[];
@@ -122,8 +106,8 @@ interface EditorStoreState {
 
   // Actions
   setInputSchema: (schema: PolarsSchema | ((prev: PolarsSchema) => PolarsSchema)) => void;
-  setNodes: (nodes: Node[] | ((prev: Node[]) => Node[])) => void;
-  setEdges: (edges: Edge[] | ((prev: Edge[]) => Edge[])) => void;
+  setNodes: (nodes: Node[] | ((prev: Node[]) => Node[]), dirty?: boolean) => void;
+  setEdges: (edges: Edge[] | ((prev: Edge[]) => Edge[]), dirty?: boolean) => void;
   setSubtrees: (subtrees: Subtree[] | ((prev: Subtree[]) => Subtree[])) => void;
 
   // v2 setters
@@ -179,6 +163,7 @@ const editorStore = create<EditorStoreState>()(
     projectDescription: null,
     autoRearrange: false,
     formatVersion: 3,
+    documentRest: {},
 
     // Validation state
     validationErrors: [],
@@ -194,48 +179,21 @@ const editorStore = create<EditorStoreState>()(
       isDirty: true
     })),
 
-    setNodes: (nodes) => set((state) => {
+    setNodes: (nodes, dirty = true) => set((state) => {
       const updatedNodes = typeof nodes === 'function' ? nodes(state.nodes) : nodes;
-      const extractedFeatures = extractFeatures(updatedNodes);
-
-      // Auto-sync new features to input_schema with inferred types
-      const updatedInputSchema = [...state.input_schema];
-      const existingFeatureNames = new Set(updatedInputSchema.map(([name]) => name));
-
-      // Build a map of feature name to node type for type inference
-      const featureToNodeType = new Map<string, string>();
-      updatedNodes.forEach(node => {
-        if ('feature' in node.data) {
-          const featureName = getFeatureName(node.data.feature);
-          if (featureName) {
-            featureToNodeType.set(featureName, getNodeTypeString(node));
-          }
-        }
-      });
-
-      extractedFeatures.forEach(featureName => {
-        if (!existingFeatureNames.has(featureName)) {
-          const nodeType = featureToNodeType.get(featureName) || 'cases:string_match';
-          const inferredType = inferPolarsTypeFromNode(
-            nodeType.startsWith('cases:') ? 'cases' : nodeType,
-            nodeType.split(':')[1]
-          );
-          updatedInputSchema.push([featureName, inferredType]);
-          existingFeatureNames.add(featureName);
-        }
-      });
+      const updatedInputSchema = withNodeFeatures(state.input_schema, updatedNodes);
 
       return {
         nodes: updatedNodes,
         input_schema: updatedInputSchema,
-        isDirty: true,
+        isDirty: dirty || state.isDirty,
         // Don't clear validation errors here - they persist until save succeeds or user edits the invalid node
       };
     }),
 
-    setEdges: (edges) => set((state) => ({
+    setEdges: (edges, dirty = true) => set((state) => ({
       edges: typeof edges === 'function' ? edges(state.edges) : edges,
-      isDirty: true
+      isDirty: dirty || state.isDirty
     })),
 
     setSubtrees: (subtrees) => set((state) => ({
@@ -285,34 +243,7 @@ const editorStore = create<EditorStoreState>()(
           };
         });
 
-        const extractedFeatures = extractFeatures(updatedNodes);
-
-        // Auto-sync new features to input_schema with inferred types
-        const updatedInputSchema = [...state.input_schema];
-        const existingFeatureNames = new Set(updatedInputSchema.map(([name]) => name));
-
-        // Build a map of feature name to node type for type inference
-        const featureToNodeType = new Map<string, string>();
-        updatedNodes.forEach(n => {
-          if ('feature' in n.data) {
-            const featureName = getFeatureName(n.data.feature);
-            if (featureName) {
-              featureToNodeType.set(featureName, getNodeTypeString(n));
-            }
-          }
-        });
-
-        extractedFeatures.forEach(featureName => {
-          if (!existingFeatureNames.has(featureName)) {
-            const nodeType = featureToNodeType.get(featureName) || 'cases:string_match';
-            const inferredType = inferPolarsTypeFromNode(
-              nodeType.startsWith('cases:') ? 'cases' : nodeType,
-              nodeType.split(':')[1]
-            );
-            updatedInputSchema.push([featureName, inferredType]);
-            existingFeatureNames.add(featureName);
-          }
-        });
+        const updatedInputSchema = withNodeFeatures(state.input_schema, updatedNodes);
 
         // Clear validation error for this specific node since it's being edited
         const newInvalidNodeIds = new Set(state.invalidNodeIds);
@@ -330,31 +261,7 @@ const editorStore = create<EditorStoreState>()(
     addNode: (node) => {
       set((state) => {
         const updatedNodes = [...state.nodes, node];
-        const extractedFeatures = extractFeatures(updatedNodes);
-
-        // Auto-sync new features to input_schema with inferred types
-        const updatedInputSchema = [...state.input_schema];
-        const existingFeatureNames = new Set(updatedInputSchema.map(([name]) => name));
-
-        // Build a map of feature name to node type for type inference
-        const featureToNodeType = new Map<string, string>();
-        updatedNodes.forEach(n => {
-          if ('feature' in n.data) {
-            const featureName = getFeatureName(n.data.feature);
-            if (featureName) {
-              featureToNodeType.set(featureName, getNodeTypeString(n));
-            }
-          }
-        });
-
-        extractedFeatures.forEach(featureName => {
-          if (!existingFeatureNames.has(featureName)) {
-            const nodeType = featureToNodeType.get(featureName) || 'string_match_node';
-            const inferredType = inferPolarsTypeFromNode(nodeType);
-            updatedInputSchema.push([featureName, inferredType]);
-            existingFeatureNames.add(featureName);
-          }
-        });
+        const updatedInputSchema = withNodeFeatures(state.input_schema, updatedNodes);
 
         return {
           nodes: updatedNodes,
@@ -367,31 +274,7 @@ const editorStore = create<EditorStoreState>()(
     removeNode: (nodeId) => {
       set((state) => {
         const updatedNodes = state.nodes.filter(n => n.id !== nodeId);
-        const extractedFeatures = extractFeatures(updatedNodes);
-
-        // Auto-sync new features to input_schema with inferred types
-        const updatedInputSchema = [...state.input_schema];
-        const existingFeatureNames = new Set(updatedInputSchema.map(([name]) => name));
-
-        // Build a map of feature name to node type for type inference
-        const featureToNodeType = new Map<string, string>();
-        updatedNodes.forEach(n => {
-          if ('feature' in n.data) {
-            const featureName = getFeatureName(n.data.feature);
-            if (featureName) {
-              featureToNodeType.set(featureName, getNodeTypeString(n));
-            }
-          }
-        });
-
-        extractedFeatures.forEach(featureName => {
-          if (!existingFeatureNames.has(featureName)) {
-            const nodeType = featureToNodeType.get(featureName) || 'string_match_node';
-            const inferredType = inferPolarsTypeFromNode(nodeType);
-            updatedInputSchema.push([featureName, inferredType]);
-            existingFeatureNames.add(featureName);
-          }
-        });
+        const updatedInputSchema = withNodeFeatures(state.input_schema, updatedNodes);
 
         return {
           nodes: updatedNodes,
@@ -430,35 +313,10 @@ const editorStore = create<EditorStoreState>()(
     renameFeature: (oldName, newName) => {
       set((state) => {
         const updatedNodes = renameFeature(state.nodes, oldName, newName);
-        const extractedFeatures = extractFeatures(updatedNodes);
-
-        // Update input_schema - rename the feature but keep the type
-        const updatedInputSchema = state.input_schema.map(([name, type]) =>
+        const renamedSchema = state.input_schema.map(([name, type]) =>
           name === oldName ? [newName, type] : [name, type]
         ) as PolarsSchema;
-
-        // Add new features if any with inferred types
-        const existingFeatureNames = new Set(updatedInputSchema.map(([name]) => name));
-
-        // Build a map of feature name to node type for type inference
-        const featureToNodeType = new Map<string, string>();
-        updatedNodes.forEach(n => {
-          if ('feature' in n.data) {
-            const featureName = getFeatureName(n.data.feature);
-            if (featureName) {
-              featureToNodeType.set(featureName, getNodeTypeString(n));
-            }
-          }
-        });
-
-        extractedFeatures.forEach(featureName => {
-          if (!existingFeatureNames.has(featureName)) {
-            const nodeType = featureToNodeType.get(featureName) || 'string_match_node';
-            const inferredType = inferPolarsTypeFromNode(nodeType);
-            updatedInputSchema.push([featureName, inferredType]);
-            existingFeatureNames.add(featureName);
-          }
-        });
+        const updatedInputSchema = withNodeFeatures(renamedSchema, updatedNodes);
 
         return {
           nodes: updatedNodes,
@@ -522,6 +380,7 @@ const editorStore = create<EditorStoreState>()(
 
         // Prepare project data in v3 format
         const projectData = {
+          ...state.documentRest,
           type: "ui-tree", // Type discriminator (stays as "ui-tree" for all versions)
           nodes: v3Nodes,
           edges: v3Edges,
@@ -546,7 +405,12 @@ const editorStore = create<EditorStoreState>()(
         // Validation never blocks a save: the server returns what decikit found
         const errors = (response.data?.validation_errors ?? []) as unknown as ValidationError[];
         const formatted = applyValidationErrors(errors, state.nodes);
-        set({ isDirty: false, ...formatted.state });
+        // An edit made while the save was in flight replaced one of these and is not in what was saved
+        set((now) => ({
+          isDirty: (['nodes', 'edges', 'subtrees', 'output', 'parameters', 'input_schema'] as const)
+            .some((key) => now[key] !== state[key]),
+          ...formatted.state,
+        }));
 
         toast(errors.length === 0
           ? { title: "Project Saved", description: "Your changes have been saved successfully." }
@@ -587,30 +451,19 @@ const editorStore = create<EditorStoreState>()(
     initializeFromProject: (response) => {
       const projectData = response.project_data as any; // Type as any since it's a union type
       const normalizedNodes = (projectData.nodes || []).map(normalizeNode);
+      const edges = (projectData.edges || []).map(normalizeEdge);
+      // A saved subtree is {id: its root node's id, name}, and decikit runs the first one listed, so the
+      // editor's subtrees start from them, in their order, rather than being rebuilt in node order.
+      const nodeById = new Map<string, Node>(normalizedNodes.map((n: Node) => [n.id, n]));
+      const savedSubtrees: Subtree[] = (projectData.subtrees || [])
+        .filter((st: any) => nodeById.has(st.rootNodeId ?? st.id))
+        .map((st: any, order: number) => {
+          const rootNodeId = st.rootNodeId ?? st.id;
+          return { ...st, id: st.id ?? rootNodeId, rootNodeId, order: st.order ?? order,
+                   name: st.name || generateDefaultNodeName(nodeById.get(rootNodeId)!) };
+        });
 
-      // Get input_schema from project data
-      let inputSchema: PolarsSchema = projectData.input_schema || [];
-
-      // Auto-sync any features from nodes that aren't in schema with inferred types
-      const extractedFeatures = extractFeatures(normalizedNodes);
-      const existingFeatureNames = new Set(inputSchema.map(([name]) => name));
-
-      // Build a map of feature name to node type for type inference
-      const featureToNodeType = new Map<string, string>();
-      normalizedNodes.forEach((n: any) => {
-        if ('feature' in n.data && n.data.feature) {
-          featureToNodeType.set(n.data.feature, n.data.node_type);
-        }
-      });
-
-      extractedFeatures.forEach(featureName => {
-        if (!existingFeatureNames.has(featureName)) {
-          const nodeType = featureToNodeType.get(featureName) || 'string_match_node';
-          const inferredType = inferPolarsTypeFromNode(nodeType);
-          inputSchema.push([featureName, inferredType]);
-          existingFeatureNames.add(featureName);
-        }
-      });
+      const inputSchema: PolarsSchema = withNodeFeatures(projectData.input_schema || [], normalizedNodes);
 
       // Normalize output dtypes to handle both array and object formats from backend
       const normalizedOutput = projectData.output
@@ -622,8 +475,9 @@ const editorStore = create<EditorStoreState>()(
         projectDescription: response.description,
         input_schema: inputSchema,
         nodes: normalizedNodes,
-        edges: projectData.edges || [],
-        subtrees: projectData.subtrees || [],
+        edges,
+        ...((projectData.nodes || []).some((n: any) => !n.position) && { autoRearrange: true }),
+        subtrees: detectSubtrees(normalizedNodes, edges, savedSubtrees),
 
         // v2 format - backend handles backward compatibility
         output: normalizedOutput,
@@ -631,6 +485,7 @@ const editorStore = create<EditorStoreState>()(
 
         // Extract format version from loaded project
         formatVersion: projectData.formatVersion || projectData.format_version || 3,
+        documentRest: Object.fromEntries(Object.entries(projectData).filter(([k]) => !EDITOR_KEYS.has(k))),
 
         isDirty: false,
         error: null,
@@ -661,6 +516,7 @@ const editorStore = create<EditorStoreState>()(
         projectDescription: null,
         autoRearrange: false,
         formatVersion: 3,
+    documentRest: {},
         validationErrors: [],
         invalidNodeIds: new Set<string>(),
         hasFeatureErrors: false,

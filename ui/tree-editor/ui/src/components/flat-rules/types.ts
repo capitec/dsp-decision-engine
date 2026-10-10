@@ -101,6 +101,7 @@ export interface UISchemaFieldBoolean extends UISchemaFieldBase {
 export interface PEDTreeNode {
   meta?: {
     name?: string;
+    description?: string;
     position?: { x: number; y: number };
   };
   rule: any; // Full rule structure - can be expanded later
@@ -246,8 +247,6 @@ export type UnaryCondition =
       match_type: 'exact' | 'starts_with' | 'contains' | 'ends_with' | 'regex';
       case_sensitive?: boolean;
     })
-  | ({ op: 'is_null' } & { feature: string })
-  | ({ op: 'is_not_null' } & { feature: string })
   | ({ op: 'is_true' } & { feature: string })
   | ({ op: 'is_false' } & { feature: string });
 
@@ -286,7 +285,7 @@ export interface CasesRangesNode {
     then: number; // Index into branches array
   }>;
   branches: RuleTableRow[]; // Array of actual branch nodes
-  otherwise?: RuleTableRow; // Direct otherwise node (not an index)
+  otherwise?: number; // Index into branches array
 
   // UI state
   editMode?: boolean;
@@ -306,7 +305,7 @@ export interface CasesStringMatchNode {
     then: number; // Index into branches array
   }>;
   branches: RuleTableRow[]; // Array of actual branch nodes
-  otherwise?: RuleTableRow; // Direct otherwise node (not an index)
+  otherwise?: number; // Index into branches array
 
   // UI state
   editMode?: boolean;
@@ -326,7 +325,7 @@ export interface CasesIsInNode {
     then: number; // Index into branches array
   }>;
   branches: RuleTableRow[]; // Array of actual branch nodes
-  otherwise?: RuleTableRow; // Direct otherwise node (not an index)
+  otherwise?: number; // Index into branches array
 
   // UI state
   editMode?: boolean;

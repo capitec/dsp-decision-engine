@@ -334,7 +334,7 @@ export const FolderShareDialog: React.FC<FolderShareDialogProps> = ({
                   const displaySubtext = isUser && share.user_email ? share.user_email : undefined;
 
                   return (
-                    <div key={share.id} className="flex items-center justify-between p-3">
+                    <div key={share.id} data-testid="share-row" className="flex items-center justify-between p-3">
                       <div className="flex items-center gap-3 flex-1">
                         {isUser ? (
                           <UserIcon className="h-5 w-5 text-gray-400 flex-shrink-0" />
@@ -356,6 +356,7 @@ export const FolderShareDialog: React.FC<FolderShareDialogProps> = ({
                         size="sm"
                         onClick={() => handleRemoveShare(share.id)}
                         disabled={loading}
+                        data-testid="share-remove"
                         className="ml-2 text-red-600 hover:text-red-700 hover:bg-red-50"
                       >
                         <Trash2 className="h-4 w-4" />

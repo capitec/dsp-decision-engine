@@ -20,6 +20,10 @@ def check_document(data: t.Any, project_type: ProjectType) -> None:
     if not isinstance(data, dict):
         raise ValueError("project_data must be a JSON object")
     fmt = detect_format(data)
+    if fmt == "v3" and "nodes" not in data:
+        kind = data.get("type")
+        raise ValueError(f"a {kind!r} document is not a tree or flat-rule document" if kind
+                         else "the file is not a tree or flat-rule document: it has no nodes or rules")
     if fmt not in FORMATS.values():
         if fmt.startswith("v") and fmt[1:].isdigit():
             raise ValueError(f"{fmt} tree documents are no longer supported")
@@ -30,11 +34,25 @@ def check_document(data: t.Any, project_type: ProjectType) -> None:
         )
 
 
+def imported_document(data: t.Any) -> t.Any:
+    """The tree a file holds, as the editor holds it: the file itself, or the `tree` of a TreeConfig step document
+    (`{"type": "tree", ...}`, whose step settings the editor does not hold); a one-rule `flat_rule` becomes a
+    prioritized set of that rule."""
+    if isinstance(data, dict) and data.get("type") == "tree" and isinstance(data.get("tree"), dict):
+        data = data["tree"]
+    # One nested rule runs as a first_match set of that one rule, which the flat-rule editor holds
+    if isinstance(data, dict) and data.get("type") == "flat_rule" and "rule" in data:
+        rest = {k: v for k, v in data.items() if k not in ("type", "rule")}
+        return {**rest, "type": "prioritized_flat_rule", "mode": "first_match", "rules": [data["rule"]]}
+    return data
+
+
 def detect_project_type(data: t.Any) -> ProjectType:
     """Project type of a supported document; raises ValueError otherwise."""
     fmt = detect_format(data) if isinstance(data, dict) else None
     for project_type, f in FORMATS.items():
         if f == fmt:
+            check_document(data, project_type)
             return project_type
     check_document(data, ProjectType.TREE)  # always raises here
     raise AssertionError
@@ -48,10 +66,26 @@ def validation_errors(data: t.Dict[str, t.Any]) -> t.List[t.Dict[str, t.Any]]:
     # A valid document can still fail to build (unsupported output types, out-of-range
     # result_idx, ...); building takes milliseconds and catches what running would.
     try:
-        TreeConfig(name="tree", tree=data).parameters()
+        params = TreeConfig(name="tree", tree=data).parameters()
     except (ValueError, TypeError) as e:
         return [{"loc": [], "msg": str(e), "type": "build_error"}]
-    return []
+    # The editor lets a parameter's default be any type, but a run converts it to the type
+    # of the slot that references it (a threshold is a number), so check that conversion here.
+    return [
+        {"loc": ["parameters", name], "msg": f"parameter '{name}': default {d.default!r} is not a valid "
+                                             f"{getattr(d.annotation, '__name__', d.annotation)}, which is how the tree uses it",
+         "type": "param_default"}
+        for decls in params.decls.values() for name, d in decls.items()
+        if not d.required and not _converts(d.annotation, d.default)
+    ]
+
+
+def _converts(annotation: t.Any, value: t.Any) -> bool:
+    try:
+        TypeAdapter(annotation).validate_python(value)
+    except ValidationError:
+        return False
+    return True
 
 
 def default_project_data(project_type: ProjectType) -> t.Dict[str, t.Any]:

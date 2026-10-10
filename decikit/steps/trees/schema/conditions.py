@@ -143,7 +143,7 @@ class ComputedFeature(BaseModel):
         return self._expr
 
 
-class Feature(RootModel[t.Union[ComputedFeature, str]]):
+class Feature(RootModel[t.Union[ComputedFeature, t.Annotated[str, Field(min_length=1)]]]):
     """A column name, or a `ComputedFeature`."""
 
     def __str__(self) -> str:

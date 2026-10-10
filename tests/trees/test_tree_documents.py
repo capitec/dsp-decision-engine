@@ -473,3 +473,23 @@ def test_several_roots_convert_from_the_root_the_v3_tree_runs(run):
     doc = {"nodes": [_leaf("first", 0), _leaf("second", 1)]}
     assert load_document(doc).to_flat_rules().rule.rule.id == "first"
     _flat_matches_v3(doc, run)
+
+
+def test_an_empty_feature_name_is_invalid():
+    unary = {"type": "unary", "condition": {"op": "<", "feature": "", "threshold": 1}}
+    with pytest.raises(pydantic.ValidationError, match="at least 1 character"):
+        load_document({"nodes": [{"id": "a", "data": unary}], "edges": []})
+
+
+def test_an_empty_param_name_says_no_parameter_was_chosen():
+    with pytest.raises(pydantic.ValidationError, match="no parameter chosen"):
+        ParamRef(param="")
+
+
+def test_rules_sharing_a_name_in_all_mode_are_invalid():
+    leaf = {"rule": {"type": "leaf", "result_idx": -1}}
+    doc = {"type": "prioritized_flat_rule", "mode": "all", "output": {"dtypes": [["d", "String"]]},
+           "rules": [{**leaf, "meta": {"name": "Same"}}, {**leaf, "meta": {"name": "Same"}}]}
+    with pytest.raises(pydantic.ValidationError, match="share a name"):
+        load_document(doc)
+    load_document({**doc, "mode": "first_match"})

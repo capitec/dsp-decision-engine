@@ -8,7 +8,6 @@ import { useEditorStore } from '../../editor/useEditorStore';
 import { ComputedFeatureInput } from '../../shared-tree/ComputedFeatureInput';
 import { Node, CasesRangesNodeData } from '../../editor/types';
 import { RangeEndLogic, getCasesNodeBranchSourceIndex, getCasesNodeOtherwiseSourceIndex } from '@/types/tree-v3-types';
-import { useParameterManagement } from '../../editor/useParameterManagement';
 
 interface RangeTestNodeEditorProps {
   node: Node<CasesRangesNodeData>;
@@ -21,7 +20,6 @@ export const RangeTestNodeEditor: React.FC<RangeTestNodeEditorProps> = ({ node }
   );
   const updateNodeData = useEditorStore((state) => state.updateNodeData);
 
-  const { availableParameters } = useParameterManagement();
 
   if (!node || node.data.type !== 'cases' || node.data.op !== 'ranges') {
     return null;
@@ -81,7 +79,6 @@ export const RangeTestNodeEditor: React.FC<RangeTestNodeEditorProps> = ({ node }
             value={nodeData.feature || ''}
             onChange={(feature: string | { type: 'computed'; expression: string }) => updateNodeData(node.id, { feature })}
             availableFeatures={featureNames}
-            availableParameters={availableParameters}
           />
         </div>
 

@@ -36,11 +36,12 @@ export function OutputTab() {
 
   // Handle updates from UnifiedOutputTable
   const handleConfigChange = (updates: Partial<OutputConfiguration>) => {
+    // The table calls the records `output`; the document calls them `data`
+    const { output: data, ...rest } = updates;
     setOutput({
       ...output,
-      ...updates,
-      // Map 'output' field to 'data' for TreeOutput
-      ...(updates.output && { data: updates.output }),
+      ...rest,
+      ...(data && { data }),
       // Pass through display_fmt
       ...(updates.display_fmt !== undefined && { display_fmt: updates.display_fmt }),
     });

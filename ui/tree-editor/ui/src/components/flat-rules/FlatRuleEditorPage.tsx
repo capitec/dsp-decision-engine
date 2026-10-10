@@ -12,6 +12,7 @@ import { flatRuleApi } from './api';
 import { RuleEditor } from './RuleEditor';
 import {
   useFlatRuleSaving,
+  useFlatRuleDirty,
   useFlatRuleError,
   useFlatRuleSaveProject,
   useFlatRuleInitializeFromProject,
@@ -24,6 +25,10 @@ import { OutputConfigurationTab } from './OutputConfigurationTab';
 import { InputConfigurationTab } from './InputConfigurationTab';
 import type { FlatRuleProjectDetail } from './types';
 import { useToast } from "@/hooks/use-toast";
+import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
+import { Badge } from "@/components/ui/badge";
+
+const LEAVE_MESSAGE = "You have unsaved changes in these rules. Are you sure you want to leave?";
 import { apiErrorMessage } from "@/lib/utils";
 import { parseFlatRuleValidationErrors, formatRuleErrors } from "@/utils/flat-rule-validation-parser";
 
@@ -35,6 +40,7 @@ const FlatRuleEditorHeader: React.FC<{
   onRename: () => void
 }> = ({ project, onBack, onExport, onRename }) => {
   const saving = useFlatRuleSaving();
+  const dirty = useFlatRuleDirty();
   const error = useFlatRuleError();
   const saveProject = useFlatRuleSaveProject();
 
@@ -54,6 +60,11 @@ const FlatRuleEditorHeader: React.FC<{
                 <Button onClick={onRename} variant="ghost" size="sm" className="h-6 w-6 p-0">
                   <Edit2 className="w-3 h-3" />
                 </Button>
+                {dirty && (
+                  <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-800 border-amber-200">
+                    Unsaved changes
+                  </Badge>
+                )}
               </div>
               {project.description && (
                 <p className="text-sm text-gray-600">{project.description}</p>
@@ -94,6 +105,9 @@ export const FlatRuleEditorPage: React.FC = () => {
   const [renameForm, setRenameForm] = useState({ name: '', description: '' });
   const [renameLoading, setRenameLoading] = useState(false);
   const initializeFromProject = useFlatRuleInitializeFromProject();
+  const saveProject = useFlatRuleSaveProject();
+  const dirty = useFlatRuleDirty();
+  useUnsavedChanges(dirty, LEAVE_MESSAGE);
   const hasInputSchemaErrors = useFlatRuleHasInputSchemaErrors();
   const hasOutputErrors = useFlatRuleHasOutputErrors();
   const hasParameterErrors = useFlatRuleHasParameterErrors();
@@ -128,7 +142,7 @@ export const FlatRuleEditorPage: React.FC = () => {
   }, [projectId, initializeFromProject]); // Depend on projectId and initializeFromProject
 
   const handleBack = () => {
-    navigate('/flat-rules');
+    if (!dirty || window.confirm(LEAVE_MESSAGE)) navigate('/projects');
   };
 
   // Development helper: detect if page reloaded but data didn't
@@ -143,6 +157,8 @@ export const FlatRuleEditorPage: React.FC = () => {
 
   const handleExport = async () => {
     if (!project) return;
+    // The export is built from the stored document, so store what the editor shows first (as the node editor does).
+    if (!(await saveProject())) return;
 
     try {
       await flatRuleApi.downloadExport(project.id, project.name);

@@ -62,10 +62,10 @@ export const CompositeConditionEditor: React.FC<CompositeConditionEditorProps> =
         const errorMessage = getErrorAtPath(conditionErrors, currentPath);
 
         return (
-        <div key={idx} className={`p-2 rounded ${bgColor} space-y-2 ${hasError ? 'ring-2 ring-red-500 bg-red-50' : ''}`}>
+        <div key={idx} data-testid="condition-row" className={`p-2 rounded ${bgColor} space-y-2 ${hasError ? 'ring-2 ring-red-500 bg-red-50' : ''}`}>
           {/* Error indicator */}
           {hasError && (
-            <div className="flex items-center gap-1.5 text-red-600 text-xs bg-red-100 px-2 py-1 rounded">
+            <div data-testid="condition-error" className="flex items-center gap-1.5 text-red-600 text-xs bg-red-100 px-2 py-1 rounded">
               <AlertCircle className="w-3 h-3" />
               <span>{errorMessage || 'Validation error'}</span>
             </div>
@@ -84,18 +84,18 @@ export const CompositeConditionEditor: React.FC<CompositeConditionEditorProps> =
                   let updatedCond: any;
 
                   if (value === 'and' || value === 'or' || value === 'not') {
-                    updatedCond = { type: 'composite', op: value, conditions: [] };
+                    updatedCond = { type: 'composite', op: value, conditions: cond.conditions ?? [] };
                   } else {
                     const feature = cond.feature || '';
                     if (['<=', '<', '==', '>', '>=', '!='].includes(value)) {
-                      updatedCond = { type: 'unary', op: value, feature, threshold: 0 };
+                      updatedCond = { type: 'unary', op: value, feature, threshold: cond.threshold ?? 0 };
                     } else if (value === 'between') {
                       updatedCond = { type: 'unary', op: value, feature, min: null, max: null };
                     } else if (value === 'isin') {
                       updatedCond = { type: 'unary', op: value, feature, values: [] };
                     } else if (value === 'string_match') {
                       updatedCond = { type: 'unary', op: value, feature, patterns: [''], match_type: 'exact', case_sensitive: true, trim_whitespace: false };
-                    } else if (value === 'is_null' || value === 'is_not_null' || value === 'is_true' || value === 'is_false') {
+                    } else if (value === 'is_true' || value === 'is_false') {
                       updatedCond = { type: 'unary', op: value, feature };
                     }
                   }
@@ -104,7 +104,7 @@ export const CompositeConditionEditor: React.FC<CompositeConditionEditorProps> =
                   onUpdate(newConditions);
                 }}
               >
-                <SelectTrigger className="w-32 h-6 text-xs">
+                <SelectTrigger className="w-32 h-6 text-xs" data-testid="condition-op">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -117,8 +117,6 @@ export const CompositeConditionEditor: React.FC<CompositeConditionEditorProps> =
                   <SelectItem value="between">Between</SelectItem>
                   <SelectItem value="isin">IsIn</SelectItem>
                   <SelectItem value="string_match">String Match</SelectItem>
-                  <SelectItem value="is_null">Is Null</SelectItem>
-                  <SelectItem value="is_not_null">Is Not Null</SelectItem>
                   <SelectItem value="is_true">Is True</SelectItem>
                   <SelectItem value="is_false">Is False</SelectItem>
                   <SelectItem value="and">AND</SelectItem>
@@ -156,7 +154,6 @@ export const CompositeConditionEditor: React.FC<CompositeConditionEditorProps> =
                       onUpdate(newConditions);
                     }}
                     availableFeatures={availableFeatures}
-                    availableParameters={availableParameters}
                   />
                 </div>
               </div>
@@ -192,6 +189,7 @@ export const CompositeConditionEditor: React.FC<CompositeConditionEditorProps> =
                     <span className="font-medium text-gray-600 text-sm w-20">Min:</span>
                     <ParameterizedNumericInput
                       value={cond.min ?? null}
+                      allowEmpty
                       onChange={(newValue) => {
                         const newConditions = [...conditions];
                         newConditions[idx] = { ...cond, min: newValue };
@@ -211,6 +209,7 @@ export const CompositeConditionEditor: React.FC<CompositeConditionEditorProps> =
                     <span className="font-medium text-gray-600 text-sm w-20">Max:</span>
                     <ParameterizedNumericInput
                       value={cond.max ?? null}
+                      allowEmpty
                       onChange={(newValue) => {
                         const newConditions = [...conditions];
                         newConditions[idx] = { ...cond, max: newValue };
@@ -242,7 +241,7 @@ export const CompositeConditionEditor: React.FC<CompositeConditionEditorProps> =
                     }}
                     availableParameters={availableParameters}
                     label=""
-                    placeholder="Type integers and press Enter"
+                    placeholder="Type numbers and press Enter"
                     onManageParameters={onManageParameters}
                     showManageParameters={true}
                     showLabel={false}
@@ -317,7 +316,7 @@ export const CompositeConditionEditor: React.FC<CompositeConditionEditorProps> =
                         onUpdate(newConditions);
                       }}
                     >
-                      <SelectTrigger className="w-32 h-8">
+                      <SelectTrigger className="w-32 h-8" data-testid="match-type">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
