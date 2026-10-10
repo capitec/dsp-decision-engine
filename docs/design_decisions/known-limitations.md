@@ -108,9 +108,6 @@ Impact: noise only. Fixing it means `run(lazy_frame)` no longer runs the whole p
 **The polars engine refuses an output it cannot type.** A column crossing a frame step or reaching the output must have a polars dtype before the first row, so a step returning an untyped `dict`, a bare `list` or `Any` there raises `EngineError` naming the step. Consolidation, loan-granting-pricing and retail-credit-e2e are refused this way.
 Workaround: annotate the output (`TypedDict`, `list[float]`, `Struct[Item]`), or run on the numba engine.
 
-**The polars engine refuses `each`.** An `each` gathers dicts of whatever fields its items hold, so its list has no dtype until a batch holds items (`Null` on zero rows, `List(Null)` on a batch of empty lists, on the fused engine too), and polars needs every column's dtype before the first row. Every pipeline whose `each` output is an output or crosses a frame step is refused (business-nested and business-credit-e2e among the examples).
-Workaround: run it on the numba engine. Fixing it means giving the gathered list a dtype from the pipeline: the input item struct plus the body's declared outputs.
-
 **A fallback step's error counts the row from the start of its batch.** When the plan streams, the `in step <path>, row <k>` note of a step that runs in Python is the row within the batch polars handed the segment, not within the frame.
 Workaround: run the same frame on the fused engine to find the row.
 
