@@ -81,6 +81,7 @@ export const UnaryConditionForm: React.FC<UnaryConditionFormProps> = ({
             <span className="font-medium text-gray-600 text-sm w-20">Min:</span>
             <ParameterizedNumericInput
               value={(condition as any).min ?? null}
+              allowEmpty
               onChange={(newValue) => onChange({ ...condition, min: newValue } as any)}
               availableParameters={availableParameters}
               label=""
@@ -95,6 +96,7 @@ export const UnaryConditionForm: React.FC<UnaryConditionFormProps> = ({
             <span className="font-medium text-gray-600 text-sm w-20">Max:</span>
             <ParameterizedNumericInput
               value={(condition as any).max ?? null}
+              allowEmpty
               onChange={(newValue) => onChange({ ...condition, max: newValue } as any)}
               availableParameters={availableParameters}
               label=""

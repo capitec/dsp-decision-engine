@@ -189,6 +189,7 @@ export const CompositeConditionEditor: React.FC<CompositeConditionEditorProps> =
                     <span className="font-medium text-gray-600 text-sm w-20">Min:</span>
                     <ParameterizedNumericInput
                       value={cond.min ?? null}
+                      allowEmpty
                       onChange={(newValue) => {
                         const newConditions = [...conditions];
                         newConditions[idx] = { ...cond, min: newValue };
@@ -208,6 +209,7 @@ export const CompositeConditionEditor: React.FC<CompositeConditionEditorProps> =
                     <span className="font-medium text-gray-600 text-sm w-20">Max:</span>
                     <ParameterizedNumericInput
                       value={cond.max ?? null}
+                      allowEmpty
                       onChange={(newValue) => {
                         const newConditions = [...conditions];
                         newConditions[idx] = { ...cond, max: newValue };
