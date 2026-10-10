@@ -11,7 +11,7 @@ from decikit._engine.compile.njit import FALLBACK_ERRORS, compile_call, paramete
 from decikit._engine.compile.outputs import CodeTable, coded, coded_values, output_dtype
 from decikit._engine.compile.rows import Ragged
 from decikit._engine.compile.sink import Sink
-from decikit._engine.compile.structs import Schema
+from decikit._engine.compile.structs import Schema, to_dicts
 from decikit._engine.ir.decls import Input, NullPolicy, base_annotation, is_typed, nullable
 from decikit._engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, ScatterGather, Sequence, NodeVersion
 from decikit.ops.nested import struct_item
@@ -136,7 +136,8 @@ class Fallback:
     Same `run` and `writes` as `Kernel`; it stores every version it writes.
     """
 
-    __slots__ = ("calls", "fn", "reason", "declared", "writes", "_boxes", "_scales", "_tables", "_whole", "_checks", "_ks")
+    __slots__ = ("calls", "fn", "reason", "declared", "writes", "_boxes", "_scales", "_tables", "_whole", "_checks",
+                 "_ks", "_dicts")
 
     def __init__(self, call: Call, fn, reason: str, declared: bool = False):
         self.calls = (call,)
@@ -157,6 +158,7 @@ class Fallback:
         self._tables = tuple(CodeTable(*c) if node.kind == "row" and (c := coded_values(o.annotation)) is not None
                              else None for o in node.outputs)
         self._ks = range(len(self.writes))
+        self._dicts = tuple(to_dicts(o.annotation) for o in node.outputs)
         self._whole = tuple(dtype == np.int64 for _, dtype in self.writes)
         # A number, Decimal or bool has its declared type already; only an object output can be a wrong shape.
         self._checks = tuple(node.kind == "scalar" and dtype == object for _, dtype in self.writes)
@@ -173,7 +175,7 @@ class Fallback:
         fixed = dict(node.consts) | {d.arg: b for d, b in zip(node.params, bundle)}
         boxes = self._boxes
         fixed = {a: boxes[a](x) if a in boxes else x for a, x in fixed.items()}
-        scales, whole, ks = self._scales, self._whole, self._ks
+        scales, whole, ks, dicts = self._scales, self._whole, self._ks, self._dicts
         single = len(outs) == 1 and node.kind == "scalar"
         for r in range(n):
             args = [(a, None if m is not None and not m[r] else boxes[a](col[r]) if a in boxes else col[r])
@@ -192,6 +194,8 @@ class Fallback:
                     masks[k][r], x = False, 0
                 elif scales[k] is not None:
                     x = to_raw(x, scales[k])
+                elif dicts[k] is not None:
+                    x = dicts[k](x)
                 elif whole[k] and isinstance(x, (float, np.floating)) and not x.is_integer():
                     raise refuse(f"step '{node.origin.path}' output '{call.writes[k].name}'"
                                  + (f" (row {r})" if n > 1 else ""), x)
