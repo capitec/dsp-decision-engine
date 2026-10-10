@@ -91,6 +91,23 @@ def test_a_quiet_run_yields_a_none_per_node_and_computes_the_same_output(mode):
     assert exe.output(loud).equals(exe.output(quiet))
 
 
+@pytest.mark.parametrize("mode", ["interpreted", "stepped", "fused"])
+def test_a_runner_subclass_overriding_iterate_without_quiet_still_runs_and_sees_checkpoints(mode):
+    exe = Engine().bind(by_sector, mode=mode)
+    seen = []
+
+    class Counting(type(exe.runner)):
+        def iterate(self, plan, state, params, trace=None, table=None):
+            for checkpoint in super().iterate(plan, state, params, trace, table):
+                seen.append(checkpoint)
+                yield checkpoint
+
+    exe.runner.__class__ = Counting
+    assert exe.run(_frame(2))["term_cap"].to_list() == [54.0, 60.0]
+    assert exe.score({"requested_term": 72.0, "sector_code": 1})["term_cap"] == 54.0
+    assert seen and all(isinstance(c, Checkpoint) for c in seen)
+
+
 def test_a_session_can_stop_before_a_node_and_inspect_after_it(bind):
     exe = bind(by_sector)
     state, params = exe.prepare(_frame(2))
