@@ -405,7 +405,12 @@ const editorStore = create<EditorStoreState>()(
         // Validation never blocks a save: the server returns what decikit found
         const errors = (response.data?.validation_errors ?? []) as unknown as ValidationError[];
         const formatted = applyValidationErrors(errors, state.nodes);
-        set({ isDirty: false, ...formatted.state });
+        // An edit made while the save was in flight replaced one of these and is not in what was saved
+        set((now) => ({
+          isDirty: (['nodes', 'edges', 'subtrees', 'output', 'parameters', 'input_schema'] as const)
+            .some((key) => now[key] !== state[key]),
+          ...formatted.state,
+        }));
 
         toast(errors.length === 0
           ? { title: "Project Saved", description: "Your changes have been saved successfully." }
