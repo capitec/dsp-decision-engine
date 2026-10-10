@@ -19,7 +19,7 @@ function setup() {
   const sockets: FakeSocket[] = []
   let editor: Json = doc('A')
   const shown: Json[] = []
-  const hooks = { read: () => editor, show: vi.fn((d: Json) => { editor = d; shown.push(d) }), rejected: vi.fn(), settled: vi.fn() }
+  const hooks = { read: () => editor, show: vi.fn((d: Json) => { editor = d; shown.push(d) }), rejected: vi.fn(), settled: vi.fn(), validation: vi.fn() }
   const sync = new LiveSync('ws://x', doc('A'), 1, hooks, 150, () => { const s = new FakeSocket(); sockets.push(s); return s as any })
   const socket = () => sockets[sockets.length - 1]
   socket().onopen()
@@ -77,6 +77,17 @@ describe('LiveSync', () => {
 
     expect(shown[shown.length - 1]).toEqual(doc('A'))
     expect(hooks.rejected).toHaveBeenCalledWith('read-only access')
+  })
+
+  it('reports validation only for the version it shows, also when the validation arrives first', () => {
+    const { hooks, socket } = setup()
+
+    socket().receive({ type: 'validation', version: 2, errors: ['ahead'] })
+    expect(hooks.validation).not.toHaveBeenCalled()
+    socket().receive({ type: 'applied', version: 2, client_id: 'other', msg_id: 'm', ops: [] })
+    socket().receive({ type: 'validation', version: 1, errors: ['behind'] })
+
+    expect(hooks.validation.mock.calls).toEqual([[['ahead'], 2]])
   })
 
   it('catches up again when a version is missing', () => {
