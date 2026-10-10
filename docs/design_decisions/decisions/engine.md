@@ -41,7 +41,7 @@ Why the engine (IR, wiring, runners, kernels, compile cache, fallback, `score`, 
 ## No source is generated; only user steps are disk-cached
 
 - Fused kernels are built from LLVM IR by a numba `intrinsic` once per process. User steps use `cache=True` with the index key extended by `SALT` (hash of `compile/semantics/`, `span.py`, `decimal_type.py`, `ops/`) and `fingerprint(fn)`; `decider build` records the CPU target and `decider serve` warns on a mismatch.
-- Why: `exec`'d code cannot be cached and a regenerated file changes mtime so every entry misses; warm is about 0.18 s against 4.9 to 47 s cold. numba's key omits `co_consts` and called overloads (silent stale answers). Not: `NUMBA_CPU_NAME=generic`, or normalising mtimes.
+- Why: `exec`'d code cannot be cached and a regenerated file changes mtime so every entry misses; warm is about 0.18 s against 4.9 to 47 s cold. numba's key omits `co_consts` and called overloads (silent stale answers). Not: forcing `NUMBA_CPU_NAME=generic` in the engine (the container image defaults to it; see serving), or normalising mtimes.
 - See: [experiment](../experiments/kernel-compilation-choices.md), [cache](../../architecture/engine/cache.md)
 
 ## Fusion follows a fixed rule, never a cost heuristic

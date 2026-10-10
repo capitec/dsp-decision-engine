@@ -174,9 +174,9 @@ x86_64-unknown-linux-gnu  raptorlake  +64bit,+adx,+aes,-amx-avx512,-amx-bf16,...
 that is set, else in the project's code path). `decider serve` compares it
 with the host and, when they differ, warns that `decider build` ran for another CPU, that numba's
 disk cache won't hit, and that every worker will compile at startup. It is a warning, since warm-up
-still compiles everything before the worker answers. `NUMBA_CPU_NAME=generic` was rejected
-as the fix: it makes entries portable but gives up the instruction
-selection small kernels depend on.
+still compiles everything before the worker answers. The engine leaves `NUMBA_CPU_NAME` to the
+deployment; the container image sets it to `generic` by default, which makes entries portable at a
+per-record cost that measured below 3% (see the serving decisions).
 
 ## Python fallback
 
