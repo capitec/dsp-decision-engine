@@ -66,8 +66,8 @@ def open_tree(page: Page, doc: dict, name: str = "Tree") -> str:
     """Seed a tree project through the API and open it in the editor; returns the project id."""
     project = create_project(page, name, doc, project_type="tree")
     page.goto(f"/projects/{project['id']}")
-    expect(page.get_by_role("button", name="Add Node")).to_be_visible()
-    expect(page.locator(".react-flow__node")).to_have_count(len(doc["nodes"]))
+    expect(page.get_by_role("button", name="Add Node")).to_be_visible(timeout=20_000)  # a cold backend can be slow to load
+    expect(page.locator(".react-flow__node")).to_have_count(len(doc["nodes"]), timeout=20_000)
     fit_view(page)
     return project["id"]
 

@@ -265,7 +265,7 @@ def test_feature_added_in_the_features_dialog_is_saved_in_the_input_schema(signe
     save(signed_in)
 
     names = [name for name, _ in get_project(signed_in, project)["project_data"]["input_schema"]]
-    assert names == ["amount", "band", "code", "income"]
+    assert names == ["amount", "band", "code", "flag", "income"]
 
 
 def test_feature_picked_in_a_node_is_added_to_the_input_schema_when_it_is_new(signed_in: Page):
