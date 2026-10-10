@@ -9,6 +9,8 @@ from datetime import date
 
 from decikit import allow_fallback, missing_as, param, step
 
+from consolidation.records import EligibilityGateVerdicts
+
 PROCEED, DEBT_REVIEW_PATH, DECLINE, REFER, NOT_APPLICABLE = "proceed", "debt_review_path", "decline", "refer", "not_applicable"
 
 GATES = ("CON-ELIG-01", "CON-ELIG-02", "CON-ELIG-03", "CON-ELIG-04", "CON-ELIG-05", "CON-ELIG-06", "CON-ELIG-07")
@@ -22,7 +24,7 @@ def eligibility_gates(
     last_consolidation_date: date | None = None, bureau_unobtainable: bool = missing_as(False),
     active_reckless_lending_allegation: bool = missing_as(False),
     serial_consolidation_months: int = param(6, ge=0, le=24), minimum_settleable_accounts: int = param(2, ge=1, le=10),
-) -> tuple[dict, str]:
+) -> tuple[EligibilityGateVerdicts, str]:
     """Which of the seven gates fired (by gate id), and the route that follows.
 
     The route takes the first of: debt review, a terminal decline (administration, no verified income, no bureau

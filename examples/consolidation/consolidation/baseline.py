@@ -24,6 +24,7 @@ from consolidation.rate_tables import (
     CardTable,
     CreditLifeTable,
 )
+from consolidation.records import Baseline, Invariants, PlainOffer, ShortCircuitVerdicts
 from consolidation.scenario import remaining_cost, weighted_rate
 
 CONDITIONS = ("request_affordable_as_made", "debt_service_ratio_within_ceiling", "no_account_in_arrears",
@@ -35,9 +36,9 @@ CONDITIONS = ("request_affordable_as_made", "debt_service_ratio_within_ceiling",
 def invariants(
     gross_monthly_income: float, income_source_code: int, income_haircut_applied: float, statutory_deductions: float,
     net_monthly_income: float, living_expenses: float, expense_basis_code: int, dependants_count: float,
-    income_verification_tier: int, applicant_income_evidence_gap: bool, bureau_is_stale: bool, minimum_income_tier: int,
+    income_verification_tier: int, applicant_income_evidence_gap: int, bureau_is_stale: bool, minimum_income_tier: int,
     residual_floor_amount: float, affordability_buffer_applied: float,
-) -> dict:
+) -> Invariants:
     """The income and expense determination, made once. Every scenario reads this record and nothing recomputes it."""
     return {
         "gross_monthly_income": gross_monthly_income, "income_source_code": income_source_code,
@@ -57,7 +58,7 @@ def baseline_step(capacity_documents: tuple[str, str]):
     def baseline_measures(
         classified_accounts: list[dict], invariants: dict, decision_date: date, channel_code: int, segment_code: float,
         court_ordered_deductions: float = missing_as(0.0), paydown_horizon_months: int = param(36, ge=1, le=84),
-    ) -> dict:
+    ) -> Baseline:
         """Obligations, capacity, average rate, remaining cost, accounts and providers as the client stands today.
 
         `existing_obligations` is what the assessment costs the accounts at (imputed for cards); `total_instalment` is
@@ -111,7 +112,7 @@ def plain_granting_step(plain_card: tuple[list[dict], str], product11_params: tu
         plain_rate_card_version: str = plain_version_param, consolidation_rate_card: ParamTable = consolidation_param,
         consolidation_rate_card_version: str = consolidation_version_param, credit_life: ParamTable = CREDIT_LIFE,
         credit_life_version: str = CREDIT_LIFE_VERSION_PARAM,
-    ) -> tuple[dict, dict, bool]:
+    ) -> tuple[PlainOffer, ShortCircuitVerdicts, bool]:
         """The plain Flex Loan the client could have, and the six conditions that say whether it is enough.
 
         The offer is the largest affordable amount (up to the amount asked for) at `reference_term_months`.
