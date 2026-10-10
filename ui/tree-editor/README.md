@@ -74,8 +74,8 @@ connection, ignores a stray node silently, binds only Backspace (not Delete), ha
 Workspace dialog that promises an undo it lacks and a canvas 80px taller than the page; a 150-character rule name
 widens the page; two tabs saving one project: the last save wins without a warning; the folder and project move
 dialogs, Create Subfolder's parent, folder-create and team-create messages, Delete all contents (it moves subfolders
-to the root), deleting the open folder, folder shares not listing the folder's projects and subfolders, a stale
-search response replacing a newer one and the refresh popup closed without a reason. The 521-rule sets are
+to the root), folder shares not listing the folder's projects and subfolders and the refresh popup closed without a
+reason. The 521-rule sets are
 `xfail(run=False)` in the editor round trips: the flat-rule editor renders every rule and exceeds 3 GB.
 
 ## Image
