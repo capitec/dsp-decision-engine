@@ -31,8 +31,6 @@ export const UnaryOperatorSelector: React.FC<UnaryOperatorSelectorProps> = ({
         <SelectItem value="between">Between</SelectItem>
         <SelectItem value="isin">IsIn</SelectItem>
         <SelectItem value="string_match">String Match</SelectItem>
-        <SelectItem value="is_null">Is Null</SelectItem>
-        <SelectItem value="is_not_null">Is Not Null</SelectItem>
         <SelectItem value="is_true">Is True</SelectItem>
         <SelectItem value="is_false">Is False</SelectItem>
       </SelectContent>

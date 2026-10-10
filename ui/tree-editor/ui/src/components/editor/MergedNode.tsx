@@ -134,24 +134,6 @@ const MergedNode: React.FC<NodeProps<Node>> = ({ data: nodeData, selected, id })
               </span>
             </div>
           );
-        } else if (op === 'is_null') {
-          return (
-            <div className="flex items-center justify-center gap-1.5 min-w-0">
-              <span className="font-mono text-[9px] bg-blue-100 px-1 py-0.5 rounded shrink-0">
-                {feature}
-              </span>
-              <span className="truncate text-[10px]">is null</span>
-            </div>
-          );
-        } else if (op === 'is_not_null') {
-          return (
-            <div className="flex items-center justify-center gap-1.5 min-w-0">
-              <span className="font-mono text-[9px] bg-blue-100 px-1 py-0.5 rounded shrink-0">
-                {feature}
-              </span>
-              <span className="truncate text-[10px]">is not null</span>
-            </div>
-          );
         }
         return <span>Unary ({op})</span>;
       }

@@ -26,7 +26,7 @@ export interface ParsedValidationError {
 }
 
 const NODE_TAGS = new Set(['leaf', 'unary', 'composite', 'cases', 'cases:ranges', 'cases:isin', 'cases:string_match']);
-const OP_TAGS = new Set(['<', '<=', '==', '>', '>=', '!=', 'between', 'isin', 'string_match', 'is_true', 'is_false', 'is_null', 'is_not_null']);
+const OP_TAGS = new Set(['<', '<=', '==', '>', '>=', '!=', 'between', 'isin', 'string_match', 'is_true', 'is_false']);
 // Union-branch tags pydantic appends for every branch it tried: they carry no location information.
 const BRANCH_TAG = /^(int|float|str|bool|ParamRef|list\[.*|function-.*|union\[.*|(IsIn|Range|StringMatch)Condition)$/;
 const CONDITION_FOR: Record<string, string> = {
