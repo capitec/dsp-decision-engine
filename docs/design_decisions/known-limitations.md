@@ -22,8 +22,8 @@ Workaround: build on the serving host type, or compare `cpu_target()` recorded a
 **Two steps in one fused kernel cannot read one column as `Columnar` of different Item types.** Binding raises `TypeError`.
 Workaround: read the column with one Item type everywhere, or give the second reader its own column.
 
-**A compiled step returning a dict or a list of dicts runs in Python.** `compile_call` accepts it, but no kernel stores a dict, so the fused kernel fails at its first launch and splits into per-call Python runs, silently (no `FallbackWarning`, absent from `fallbacks()`, and `strict_compile=True` does not raise).
-Impact: such a step costs a Python call per row although it looks compiled; its output is still checked against the declared type. Return a `Struct[...]` tuple or a `Columnar[...]` list of tuples to compile it.
+**A compiled step returning a dict or a list runs in Python, and takes its kernel with it.** `compile_call` accepts it, but no kernel stores a dict, so its kernel splits into per-call Python runs, every other step of that kernel included. The split is reported (`split at launch: ...` in `fallbacks()`, a `FallbackWarning` in fused mode, refused by `strict_compile=True`), found at build by a zero-row launch.
+Impact: each step of that kernel costs a Python call per row, and under strict every one of them needs `@allow_fallback`, even a step that compiles on its own. Return a `Struct[...]` tuple or a `Columnar[...]` list of tuples to compile it.
 
 **Compile caches grow without eviction.** Step dispatchers, fused kernels, Arrow schema plans, the params cache and `RequestHandler._history` are unbounded.
 Impact: a long-lived process that stages many versions or sees many distinct params documents leaks memory; restart periodically.
