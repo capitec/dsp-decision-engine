@@ -308,8 +308,19 @@ of it:
 `_call` looks up the call's unit and runs it with `_run`; a call with no unit (a frame step) falls through to the
 interpreted `_call`. `_run` validates the params of every call in the unit (they all run on every row the unit runs
 on), reads each external input on the scope's rows, builds or fetches its compiled representation, applies the null
-policy, runs the unit, and writes its outputs. While it builds the snapshot, `_build` warns once per step that falls
-back to Python with a `FallbackWarning`, or raises under `strict=True` unless the step is `@allow_fallback`.
+policy, runs the unit, and writes its outputs.
+
+While it builds the snapshot, `_build` passes every `Fallback` unit to `_report`: `fallbacks` records each step with
+its reason, `strict=True` raises unless the step is `@allow_fallback`, and a `FallbackWarning` is given only when the
+class attribute `loud` is set. `FusedRunner` sets it; `SteppedRunner`, which exists to inspect one node at a time,
+does not.
+
+A kernel can still be refused at its first launch, on a value numba only meets then (a `dict` param, or a step it
+compiles only at that launch, such as one with a table param); it then runs each of its calls in Python. `_build`
+installs `on_split` on every kernel: the kernel calls it before it splits, and it reports the split through
+`_report` (reason `split at launch: <numba error>`) and republishes the snapshot with the new `fallbacks` under the
+lock, once per kernel. Under `strict=True` it raises and the kernel stays whole, so every later launch is refused
+too.
 
 Branches, loops, row subsets, merges, frame steps and scatter-gather are the interpreted code, so stepped mode
 yields exactly the checkpoints interpreted mode does.
@@ -317,7 +328,8 @@ yields exactly the checkpoints interpreted mode does.
 ## Fused: one kernel for several calls
 
 `FusedRunner` sets `fuse = True`, so `compile_plan` groups each innermost sequence of scalar calls into one kernel,
-and adds packed kernels for branches and loops of plain scalar steps. It overrides three methods:
+and adds packed kernels for branches and loops of plain scalar steps; it sets `loud = True`, so every step outside a
+shared kernel warns once. It overrides three methods:
 
 - `_sequence` yields one `before`/`after` pair per kernel, with the origin of the kernel's first call; the later
   calls of that kernel yield nothing. A session that breaks on a later call maps it to its kernel through

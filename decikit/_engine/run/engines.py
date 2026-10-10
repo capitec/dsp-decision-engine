@@ -51,7 +51,8 @@ class NumbaEngine(Engine):
 
     Args:
         strict_compile: a step that would run in Python raises instead of
-            warning. Mark the ones you accept `@allow_fallback`.
+            running, a step of a kernel numba refuses at launch included. Mark
+            the ones you accept `@allow_fallback`.
 
     Example::
 
