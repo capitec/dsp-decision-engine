@@ -82,6 +82,20 @@ def test_threshold_from_a_new_parameter_saves_valid_exports_and_runs(signed_in: 
     assert decisions(document, [500.0, 1500.0], {"limit": 2000.0}) == ["approve", "approve"]
 
 
+@pytest.mark.smoke
+def test_export_right_after_setting_a_parameter_includes_it(signed_in: Page, tmp_path):
+    """Export without pressing Save first: the file must hold what the editor shows, as in the node editor."""
+    open_seeded(signed_in)
+    add_parameter(signed_in, "limit", "Float64", "1000")
+    unary_then_approve(signed_in)
+    use_parameter(rule_card(signed_in), "limit")
+
+    document = export(signed_in, tmp_path)
+    assert document["parameters"] == {"limit": {"type": "Float64", "default_value": 1000}}
+    assert document["rules"][0]["rule"]["condition"]["threshold"] == {"param": "limit"}
+    assert decisions(document, [500.0, 1500.0]) == ["approve", "decline"]
+
+
 @pytest.mark.parametrize("dtype, value, expected", [
     ("Int64", "1000", 1000),
     ("Float64", "999.5", 999.5),
