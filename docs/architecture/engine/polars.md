@@ -97,7 +97,8 @@ def run(self, data, params=None, trace=None):
 - **The batch function** runs the segment's executable on the batch, drops `unneeded`, and casts any column
   of `nulls` that came back `Null` to its declared dtype.
 - **Emission.** Streamable segments are `streamable=True`; frame-step segments `streamable=False`, which
-  polars runs once on all rows. Under `collect()` every segment runs once on the whole frame.
+  polars runs once on all rows. Every node turns off predicate, projection and slice pushdown, which older polars
+  enabled by default: a filter or `head` on the plan must not reach below a frame step. Under `collect()` every segment runs once on the whole frame.
 
 ### Columns empty on zero rows
 
@@ -107,7 +108,8 @@ annotation in the segment's plan: a polars dtype (a frame step's declared `write
 is, and otherwise `declared_dtype` maps it (`str` to `String`, `date` to `Date`, a TypedDict to a `Struct`).
 The column goes into `nulls`, so a batch where it is all null is cast to that dtype. An annotation with no
 dtype (`dict`, bare `list`, `Any`) is refused with an `EngineError` naming the column, its writer and what to
-annotate.
+annotate. An `each`'s gathered list has no annotation that could name it (its items' fields
+are known only from the data), so the error says to run the pipeline on the numba engine instead.
 
 ## Errors
 
