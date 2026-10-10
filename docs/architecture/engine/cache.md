@@ -291,7 +291,11 @@ ValueError : loan/uses_regex runs in Python, row by row:
 Each call of a kernel compiled alone, but a kernel can still fail as a whole when it is launched:
 a value numba only meets then (a param it cannot type, for instance) makes the kernel's own
 compile fail. `Kernel.run` catches `FALLBACK_ERRORS` on that launch, replaces itself with one
-`Fallback` per call for the rest of its life, and reruns. A `Packed` branch or loop does not split;
+`Fallback` per call for the rest of its life, and reruns. The split is reported like a build-time
+fallback, through the `on_split` callback the runner installs: listed in `fallbacks()` as
+`split at launch: <error>`, warned about in fused mode, refused under `strict_compile`. A kernel
+holding a step that returns a `dict` or a `list` always splits, so the build launches it once on
+zero rows and the split happens there. A `Packed` branch or loop does not split;
 it raises, and the [fused runner](runners.md) drops the packing for that path and runs the branch
 or loop unpacked from then on.
 
@@ -307,6 +311,7 @@ sequenceDiagram
         K-->>R: values stored
     else NumbaError on first launch
         N-->>K: compile error
+        K->>R: on_split(fallbacks): listed, warned (fused), raised (strict)
         K->>K: _python = one Fallback per call
         K->>K: run each call in Python
         K-->>R: values stored

@@ -503,7 +503,13 @@ polars column for `run()` by gathering the codes, and code `-1` marks a null. A 
 | `Fallback` | calls the step once per row in Python with Python scalars, boxing Decimals; stores objects for non-numeric outputs |
 
 If a `Kernel` launch raises one of numba's compile errors (a value numba only meets at launch),
-the kernel switches to one `Fallback` per call for the rest of its life. A runtime error inside a
+the kernel switches to one `Fallback` per call for the rest of its life, each with the reason
+`split at launch: <numba error>` and the call's `@allow_fallback` flag (`Kernel.declared`). Before
+it switches it calls `on_split` with those fallbacks; the runner installs one that lists them in
+`fallbacks()`, warns in fused mode and raises under `strict_compile`, and a raise leaves the kernel
+whole, so its next launch is refused too. A step returning a `dict` or a `list` compiles alone but
+always makes its kernel split, so the runner launches such a kernel once on zero rows while it
+builds and the split is reported before any row runs ([runners](runners.md)). A runtime error inside a
 kernel propagates; the runner adds a note naming the step, or listing every step of a fused kernel
 because a kernel cannot tell which of its steps raised:
 
@@ -519,7 +525,8 @@ envelope.
 
 ## Debugging a kernel
 
-- `exe.fallbacks()` lists every step outside the shared kernel and why. [The cache
+- `exe.fallbacks()` lists every step outside the shared kernel and why, the steps of a kernel that
+  split at launch included. [The cache
   page](cache.md) shows a real one.
 - `exe.runner.units` maps call ids to units; `unit.calls`, `unit.reads` and `unit.writes` show the
   grouping; `exe.runner.packed` lists packed branches and loops by path.

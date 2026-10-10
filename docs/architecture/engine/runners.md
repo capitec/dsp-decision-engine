@@ -308,16 +308,37 @@ of it:
 `_call` looks up the call's unit and runs it with `_run`; a call with no unit (a frame step) falls through to the
 interpreted `_call`. `_run` validates the params of every call in the unit (they all run on every row the unit runs
 on), reads each external input on the scope's rows, builds or fetches its compiled representation, applies the null
-policy, runs the unit, and writes its outputs. While it builds the snapshot, `_build` warns once per step that falls
-back to Python with a `FallbackWarning`, or raises under `strict=True` unless the step is `@allow_fallback`.
+policy, runs the unit, and writes its outputs.
+
+While it builds the snapshot, `_build` launches on zero rows every kernel holding a step whose output no kernel
+column holds (a `dict`, a TypedDict, a `list`), outside packed branches and loops. Such a step compiles alone, but
+numba refuses the kernel at its launch, so the probe makes that kernel split into one `Fallback` per call at build
+instead of at the first real batch. Then `_report` takes every step outside a shared kernel, build-time `Fallback`
+units and the steps of split kernels alike: `fallbacks` records each with its reason (`split at launch: <numba
+error>` for a split), `strict=True` raises unless the step is `@allow_fallback`, and a `FallbackWarning` is given
+only when the class attribute `loud` is set. `FusedRunner` sets it; `SteppedRunner`, which exists to inspect one
+node at a time, does not.
+
+A kernel can still split at a later launch, on a type the probe did not see (a `dict` param, or a step numba
+compiles only at its first launch, such as one with a table param). `_build` installs `on_split` on every kernel: the kernel calls it before it splits, and it
+reports the split the same way and republishes the snapshot with the new `fallbacks` under the lock, once per
+kernel. Under `strict=True` it raises and the kernel stays whole, so every later launch is refused too.
+
+The probe passes what a first launch at full scope passes: an input column read-only, anything else writable, the
+default params bundles. Only the kernels above are probed, because a first launch's argument types depend on the
+data and a probe of any other kernel can compile a signature no launch uses (the measurement is in
+`docs/design_decisions/decisions/engine.md`).
+Not probed either, so reported when they split: a kernel reading an untyped (`Any`), span or `Columnar[...]`
+input, or with a param that has no typed default.
 
 Branches, loops, row subsets, merges, frame steps and scatter-gather are the interpreted code, so stepped mode
 yields exactly the checkpoints interpreted mode does.
 
 ## Fused: one kernel for several calls
 
-`FusedRunner` sets `fuse = True`, so `compile_plan` groups each innermost sequence of scalar calls into one kernel,
-and adds packed kernels for branches and loops of plain scalar steps. It overrides three methods:
+`FusedRunner` sets `fuse = True`, so `compile_plan` groups each innermost sequence of scalar calls into one kernel
+and `_build` adds packed kernels for branches and loops of plain scalar steps, and `loud = True`, so every step
+outside a shared kernel warns once. It overrides three methods:
 
 - `_sequence` yields one `before`/`after` pair per kernel, with the origin of the kernel's first call; the later
   calls of that kernel yield nothing. A session that breaks on a later call maps it to its kernel through
