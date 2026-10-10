@@ -14,6 +14,7 @@ from node_ui import (
     loan_document,
     node,
     nudge,
+    open_menu,
     open_tree,
     run,
     save,
@@ -28,12 +29,8 @@ from node_ui import (
 from seed import create_project, get_project
 
 
-def menu(page: Page) -> None:
-    page.locator("button").filter(has=page.locator("svg.lucide-ellipsis-vertical")).last.click()
-
-
 def export_from_menu(page: Page, tmp_path) -> dict:
-    menu(page)
+    open_menu(page)
     with page.expect_download() as download:
         page.get_by_role("menuitem", name="Export Project").click()
     path = tmp_path / "export.json"
@@ -52,7 +49,7 @@ def marker(page: Page, node_id: str):
 
 def refused_export_says(page: Page) -> str:
     """Click Export Project and return the text of the 'Export failed' toast."""
-    menu(page)
+    open_menu(page)
     page.get_by_role("menuitem", name="Export Project").click()
     failed = toast(page, "Export failed")
     expect(failed).to_be_visible()

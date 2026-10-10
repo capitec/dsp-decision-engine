@@ -17,6 +17,7 @@ from node_ui import (
     loan_document,
     node,
     nudge,
+    open_menu,
     open_tree,
     run,
     save,
@@ -186,7 +187,7 @@ def test_one_edge_can_serve_both_branches_of_a_node_from_the_edge_panel(signed_i
 def test_removing_the_last_branch_of_an_edge_keeps_one_branch_assigned(signed_in: Page):
     project = open_tree(signed_in, loan_document())
     click_edge(signed_in, "root", "yes")
-    signed_in.locator("svg.lucide-x").last.click()
+    signed_in.get_by_test_id("remove-branch").last.click()
     save(signed_in)
 
     assert saved_edges(signed_in, project)["root:yes"] == [0]
@@ -290,7 +291,7 @@ def test_renamed_subtree_keeps_its_name_after_a_reload(signed_in: Page):
 @pytest.mark.xfail(strict=True, reason="the Clear Workspace dialog promises Ctrl+Z but the editor has no undo")
 def test_clear_workspace_can_be_undone_with_ctrl_z(signed_in: Page):
     open_tree(signed_in, loan_document())
-    signed_in.locator("button").filter(has=signed_in.locator("svg.lucide-ellipsis-vertical")).last.click()
+    open_menu(signed_in)
     signed_in.get_by_role("menuitem", name="Clear Workspace").click()
     signed_in.get_by_role("alertdialog").get_by_role("button", name="Clear Workspace").click()
     expect(signed_in.locator(NODES)).to_have_count(0)
