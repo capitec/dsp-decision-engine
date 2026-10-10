@@ -258,7 +258,11 @@ def _series(name: str, values: np.ndarray, valid: np.ndarray | None, annotation:
             # The step's values were checked against the declaration, so what polars widens (an int
             # beside a float) is the same number; its strict inference would truncate a later float.
             dtype = _typed_dtype(annotation)
-            return pl.Series(name, [_floats(x, dtype) for x in values], dtype=dtype, strict=False)
+            try:
+                return pl.Series(name, values, dtype=dtype, strict=False)
+            except TypeError:
+                # Walking every row costs about as much as building the column, so only on a refusal.
+                return pl.Series(name, [_floats(x, dtype) for x in values], dtype=dtype, strict=False)
         try:
             s = pl.Series(name, values)
         except TypeError:
