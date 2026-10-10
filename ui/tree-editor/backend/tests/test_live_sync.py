@@ -549,3 +549,73 @@ async def test_a_message_applied_before_the_connection_dropped_and_sent_again_is
 
 def names(row):
     return [r["meta"]["name"] for r in row.project_data["rules"]]
+
+
+# ---- a message resent while its first send was still in flight -------------------------------------------------
+
+@db
+@pytest.mark.asyncio
+async def test_a_message_sent_twice_while_the_first_waits_for_the_lock_is_applied_once(offline):
+    from sqlalchemy import select
+    from dsp_decikit.db.session import db_session
+    from dsp_decikit.db.models import Project
+    from dsp_decikit.services.live_sync import apply_message
+    project_id, stored = offline
+
+    async with db_session() as holder:
+        await holder.execute(select(Project).where(Project.id == project_id).with_for_update())
+        sends = [asyncio.create_task(apply_message(project_id, "c1", "m1", 1, [added("d")])) for _ in range(2)]
+        await asyncio.sleep(0.3)
+        await holder.commit()
+    done = await asyncio.gather(*sends)
+
+    assert [a.version for a in done] == [2, 2]
+    assert [v for v, *_ in await log(project_id)] == [1, 2]
+
+
+@db
+@pytest.mark.asyncio
+async def test_a_resent_message_does_not_overwrite_an_edit_made_after_it_was_applied(offline):
+    from dsp_decikit.services.live_sync import apply_message
+    project_id, stored = offline
+    await apply_message(project_id, "c1", "m1", 1, [name("a", "Mine")])
+    await apply_message(project_id, "c2", "m2", 2, [name("a", "Theirs")])
+
+    await apply_message(project_id, "c1", "m1", 1, [name("a", "Mine")])
+
+    assert names(await stored())[0] == "Theirs"
+
+
+@db
+@pytest.mark.asyncio
+async def test_an_offline_batch_skips_the_messages_it_contains_that_were_applied_meanwhile(offline):
+    from dsp_decikit.services.live_sync import apply_message
+    project_id, stored = offline
+    await apply_message(project_id, "c1", "m1", 1, [name("a", "Mine")])
+    await apply_message(project_id, "c2", "m2", 2, [name("a", "Theirs")])
+
+    await apply_message(project_id, "c1", "batch", 1, [name("a", "Mine"), name("b", "Offline")], offline=True,
+                        parts=[["m1", 1], ["m3", 1]])
+
+    assert names(await stored())[:2] == ["Theirs", "Offline"]
+
+
+@db
+@pytest.mark.asyncio
+async def test_the_log_refuses_a_second_row_for_the_same_message(offline):
+    from sqlalchemy.exc import IntegrityError
+    from dsp_decikit.db.session import db_session
+    from dsp_decikit.db.models import ProjectOp
+    project_id, _ = offline
+
+    with pytest.raises(IntegrityError):
+        async with db_session() as session:
+            session.add(ProjectOp(project_id=project_id, version=2, client_id="server", msg_id="created", ops=[]))
+            await session.commit()
+
+
+@pytest.mark.parametrize("parts", ["x", [["m1"]], [["m1", -1]], [[1, 1]], [["m1", 3]]])
+def test_offline_parts_that_do_not_describe_the_ops_are_rejected(parts):
+    with pytest.raises(Rejected):
+        check_message({"type": "ops", "id": "b", "base": 1, "offline": True, "parts": parts,
+                       "ops": [name("a", "x"), name("b", "y")]})

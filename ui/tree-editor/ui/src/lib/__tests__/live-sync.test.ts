@@ -118,7 +118,23 @@ describe('LiveSync', () => {
     expect(socket().ops()).toEqual([])
     socket().receive({ type: 'ready', version: 2 })
 
-    expect(socket().ops()).toEqual([expect.objectContaining({ base: 1, ops: second.ops, offline: true })])
+    expect(socket().ops()).toEqual([expect.objectContaining({ base: 1, ops: second.ops, offline: true, parts: [[second.id, second.ops.length]] })])
+  })
+
+  it('names in an offline batch every message it contains, through an earlier batch, so the server can skip one it already applied', () => {
+    const { sync, socket, type } = offline(doc('Offline'))
+    socket().receive({ type: 'ready', version: 1 })
+    const [first] = socket().ops()
+    socket().close()
+    type(doc('Offline', 'Later'))
+    vi.advanceTimersByTime(500)
+    const later = sync.pending[1]
+    socket().onopen()
+    socket().receive({ type: 'ready', version: 1 })
+
+    const [batch] = socket().ops()
+    expect(batch.id).not.toBe(first.id)
+    expect(batch.parts).toEqual([...first.parts, [later.id, later.ops.length]])
   })
 
   function offline(edit: Json) {
