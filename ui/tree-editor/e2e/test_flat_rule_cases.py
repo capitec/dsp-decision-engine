@@ -36,6 +36,8 @@ def test_cloned_rule_with_a_cases_node_saves_valid_and_runs_the_same(signed_in: 
     reply = save(signed_in)
     assert reply["validation_errors"] == []
     assert [r["rule"]["otherwise"] for r in reply["project_data"]["rules"]] == [2, 2]
+    document = export(signed_in, tmp_path)
+    assert [decisions({**document, "rules": [rule]}, AMOUNTS) for rule in document["rules"]] == [EXPECTED, EXPECTED]
 
 
 def test_pasted_cases_node_keeps_its_otherwise_branch(signed_in: Page):
