@@ -18,7 +18,7 @@ curl -s -d @sample_request.json -H 'content-type: application/json' localhost:80
 ```
 
 `decikit build` ends with `built config version 0.0.0 (pipeline
-credit_risk.pipeline:build, mode fused)`; the curl answers
+credit_risk.pipeline:build, engine fused)`; the curl answers
 `{"income":1000.0,"debt":250.0,"applied_on":"2026-01-15","approved":true}`. A
 `FallbackWarning` for a `date` input is normal: that one step runs in Python.
 

@@ -128,7 +128,7 @@ override@afford/affordable
 - `set(name, value)` overrides an input column or any value produced so far, from here on. `value` is one value for every row or a list with one per row (`None` is null), cast to the declared dtype. The override is recorded as a version produced by `override@<current path>`, so the trail shows who changed what.
 - `output()` is the frame `run` would have returned, overrides applied. It raises `RuntimeError: the run hasn't finished; resume() it first` before the end.
 
-`session` takes the same arguments as `run` plus a mode: `pipeline.session(df, params=doc, mode="stepped")`. Keyword arguments other than these go to `Engine` (for example `params_validation=`). An `Executable` from `compile()` has `exe.session(df, params)` too.
+`session` takes the same arguments as `run` plus an engine, a tag or an instance: `pipeline.session(df, params=doc, engine="stepped")`. For engine options pass an instance: `engine=SteppedEngine(params_validation="lazy")`. An `Executable` from `compile()` has `exe.session(df, params)` too.
 
 ```mermaid
 flowchart LR
@@ -321,12 +321,12 @@ Every mode supports sessions and gives the same answers. What differs is where t
 </div>
 
 ```python
-s = pipeline.session(df, mode="fused")
+s = pipeline.session(df, engine="fused")
 s.break_at("afford/affordability_ratio")
 cp = s.resume()
 print(cp.origin.path, s.events[-1].kernel)
 
-s = pipeline.session(df, mode="fused")
+s = pipeline.session(df, engine="fused")
 s.break_at("afford/affordable")
 s.resume()
 s.value("disposable_income")
@@ -334,10 +334,10 @@ s.value("disposable_income")
 
 ```text
 afford/disposable_income ('afford/disposable_income', 'afford/affordability_ratio', 'afford/term_cap')
-KeyError: "'disposable_income' is computed inside the fused kernel ['afford/disposable_income', 'afford/affordability_ratio', 'afford/term_cap'] and never stored; open the session with mode='stepped' to inspect or set it"
+KeyError: "'disposable_income' is computed inside the fused kernel ['afford/disposable_income', 'afford/affordability_ratio', 'afford/term_cap'] and never stored; open the session with engine='stepped' to inspect or set it"
 ```
 
-A breakpoint on any step of a kernel pauses before the whole kernel, and `Paused.kernel` lists its steps. Values a kernel uses only inside itself are never stored, so `value` and `set` on them raise the `KeyError` above. Open the session with `mode="stepped"` when you need to see inside: stepped compiles each step on its own and pauses at every node. The [compile and fallback guide](compile-and-fallback.md) explains how kernels form, and [Debug internals](../architecture/engine/debug.md) how the session drives each runner.
+A breakpoint on any step of a kernel pauses before the whole kernel, and `Paused.kernel` lists its steps. Values a kernel uses only inside itself are never stored, so `value` and `set` on them raise the `KeyError` above. Open the session with `engine="stepped"` when you need to see inside: stepped compiles each step on its own and pauses at every node. The [compile and fallback guide](compile-and-fallback.md) explains how kernels form, and [Debug internals](../architecture/engine/debug.md) how the session drives each runner.
 
 One consequence: in fused mode, breaking on the second step of a kernel and setting a value the first step reads gives a different answer from interpreted mode, where the first step has already run when you pause.
 
@@ -506,7 +506,7 @@ Test through the decider toolkit, not by calling the step functions: only a run 
 
 | Helper | Asserts |
 |---|---|
-| `assert_equivalent(step, frame, params=None, modes=MODES, script=None)` | every mode gives exactly the same answer, by `run`, by `score` per row and by a session; returns the output frame |
+| `assert_equivalent(step, frame, params=None, modes=MODES, script=None)` | every mode gives exactly the same answer, by `run` on the frame, by `run` per record and by a session; returns the output frame |
 | `corpus(step, baseline=1.0)` | nothing; returns boundary-value frames for every input the flow reads |
 | `no_recompile()` | numba compiles nothing inside the block |
 
@@ -518,7 +518,7 @@ flowchart LR
     I --> R{"same columns,<br/>dtypes, values?"}
     S --> R
     U --> R
-    I --> P["score(record)<br/>for every row"]
+    I --> P["run(record)<br/>for every row"]
     I --> Q["session resumed<br/>to the end"]
     P --> R
     Q --> R
@@ -539,7 +539,7 @@ flowchart LR
 For each mode in `modes` (default `("interpreted", "stepped", "fused")`), it checks against the first mode's `run(frame)`:
 
 - `run(frame)`: same columns, dtypes and values. NaN equals NaN; nothing else is approximate.
-- `score(record)` for every row: the same dict as that row of `run`.
+- `run(record)` for every row: the same dict as that row of `run(frame)`.
 - A debug session resumed to the end: the same frame as `run`.
 - With `script`, a second session driven by `script(session)` and then resumed to the end: the same frame in every mode.
 
@@ -572,7 +572,7 @@ shape: (3, 2)
 [True, False, True]
 ```
 
-The returned frame is the plain run's, not the scripted one. An error in the first mode propagates as it is; `run` raising only in a later mode is reported as a divergence (`run() raised ... in fused mode but not in interpreted`). A failure names the mode and, for `score`, the row and column.
+The returned frame is the plain run's, not the scripted one. An error in the first mode propagates as it is; `run` raising only in a later mode is reported as a divergence (`run() raised ... in fused mode but not in interpreted`). A failure names the mode and, for a record run, the row and column.
 
 ### `corpus`
 
@@ -640,7 +640,7 @@ def build():
 import polars as pl
 import pytest
 
-from decikit import Engine
+from decikit import FusedEngine
 from decikit.lab.testing import assert_equivalent, corpus, no_recompile
 
 from credit import build
@@ -649,10 +649,10 @@ FRAME = pl.DataFrame({"income": [1000.0, 800.0, 0.0], "debt": [500.0, 100.0, 50.
 
 
 def test_worked_example_gives_exact_answers():
-    exe = Engine().bind(build(), mode="fused")
-    assert exe.score({"income": 1000.0, "debt": 350.0}) == {
+    exe = FusedEngine().bind(build())
+    assert exe.run({"income": 1000.0, "debt": 350.0}) == {
         "income": 1000.0, "debt": 350.0, "approved": True}
-    assert exe.score({"income": 1000.0, "debt": 450.0})["approved"] is False
+    assert exe.run({"income": 1000.0, "debt": 450.0})["approved"] is False
 
 
 def test_every_mode_agrees_on_the_sample():
@@ -666,7 +666,7 @@ def test_every_mode_agrees_on_boundary_values(case):
 
 
 def test_retuning_the_limit_never_recompiles():
-    exe = Engine().bind(build(), mode="fused")
+    exe = FusedEngine().bind(build())
     exe.run(FRAME)
     with no_recompile():
         out = exe.run(FRAME, params={"credit": {"approved": {"limit": 0.6}}})

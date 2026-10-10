@@ -1,6 +1,6 @@
 # Decision traces
 
-A decision trace records, for each record, which steps ran, in which branch arm and loop iteration, with a durable reference to each step. It works in every mode, including fused, where the steps run inside one numba kernel and no Python sees an individual record. Tracing is off unless the caller passes a `TraceSink` to `run` or `score`, and an untraced call runs a kernel with no trace code in it at all.
+A decision trace records, for each record, which steps ran, in which branch arm and loop iteration, with a durable reference to each step. It works in every mode, including fused, where the steps run inside one numba kernel and no Python sees an individual record. Tracing is off unless the caller passes a `TraceSink` to `run`, and an untraced call runs a kernel with no trace code in it at all.
 
 How to turn tracing on and read the result is in [Tracing](../../guides/tracing.md).
 
@@ -132,7 +132,7 @@ from decikit.trace import Kind, TraceSink
 from loan import pipeline, df
 
 for mode in ("interpreted", "stepped", "fused"):
-    exe = Engine().bind(pipeline, mode=mode)
+    exe = Engine.resolve(mode)().bind(pipeline)
     sink = TraceSink()
     exe.run(df, trace=sink)
     ev = sink.events()
@@ -278,11 +278,11 @@ adapter got 36 [('STEP', 1, 0), ('STEP', 2, 0), ('STEP', 1, 1)]
 
 The adapter's first three events show the cross-record order: steps 1 and 2 for record 0 come from one kernel, then that kernel's events for record 1 follow.
 
-`score` traces the same way, with every event on record 0:
+`run` on a record traces the same way, with every event on record 0:
 
 ```python
 s = TraceSink()
-print(exe.score({"net_income": 5200.0, "expenses": 2100.0, "instalment": 1500.0, "balance": 4000.0, "months": 0}, trace=s))
+print(exe.run({"net_income": 5200.0, "expenses": 2100.0, "instalment": 1500.0, "balance": 4000.0, "months": 0}, trace=s))
 print([(e.kind.name, e.origin.path, e.iteration) for e in s.events()])
 ```
 
@@ -298,7 +298,7 @@ A tree, a decision table and a scorecard are each one row node, one call (a `mod
 ```python
 for mode in ("interpreted", "fused"):
     sink = TraceSink()
-    Engine().bind(p, mode=mode).run(df, trace=sink)
+    Engine.resolve(mode)().bind(p).run(df, trace=sink)
     print(mode, [(e.kind.name, e.origin.path, e.record) for e in sink.events()])
 ```
 
@@ -316,14 +316,14 @@ The path a record took inside the node is not in the trace. It is available two 
 
 ## What a trace costs
 
-Measured on 2026-10-08 on the loan pipeline above, through the repository's memory-capped runner on the development machine, after warm-up (one run for the 60,000-row cases, mean of 2,000 for `score`):
+Measured on 2026-10-08 on the loan pipeline above, through the repository's memory-capped runner on the development machine, after warm-up (one run for the 60,000-row cases, mean of 2,000 for `run(record)`):
 
 | Mode | Call | Untraced | Traced | Events |
 |---|---|---|---|---|
 | interpreted | `run`, 60,000 rows | 784 ms | 2,967 ms | 980,000 |
-| interpreted | `score`, one record | 0.437 ms | 0.494 ms | |
+| interpreted | `run(record)`, one record | 0.437 ms | 0.494 ms | |
 | fused | `run`, 60,000 rows | 0.764 ms | 2,470 ms | 720,000 |
-| fused | `score`, one record | 0.086 ms | 0.198 ms | |
+| fused | `run(record)`, one record | 0.086 ms | 0.198 ms | |
 
 The cost is on the Python side. A fused traced run spends almost all of its time turning 720,000 int64s into `TraceEvent` objects and appending them one by one, about 3.4 µs per event. For a single record that adds about 0.11 ms. For batches, `max_events` and `sample_rate` are there to keep the count bounded; they drop events after decoding, so they bound memory, not decode time.
 

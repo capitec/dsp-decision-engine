@@ -20,7 +20,7 @@ the wiring `resolve`, and numba's event API. The user-level walkthrough is in th
 ## Why these three exist
 
 The engine runs a flow three ways: interpreted (plain Python), stepped (one compiled kernel per step) and fused
-(adjacent steps compiled into one kernel). On top of that, `Executable.score(record)` runs a single dict record on a
+(adjacent steps compiled into one kernel). On top of that, `Executable.run(record)` runs a single dict record on a
 separate path, and a debug `Session` pauses and resumes a run. That is five ways to compute one answer, and the
 design promise is that they agree exactly. Kernels use CPython-equal `round(x, n)` and `x ** n` so they can.
 [Runners](../engine/runners.md) and [Compile](../engine/compile.md) describe the modes; this package is how a test
@@ -43,10 +43,10 @@ assert_equivalent(step, frame, params=None, modes=MODES, script=None) -> pl.Data
 
 For each mode in `modes`, in order, it:
 
-1. binds the step with `Engine().bind(step, mode=mode)`;
+1. binds the step with `Engine.resolve(mode)().bind(step)`;
 2. runs `exe.run(frame, params)`. The first mode's output becomes `expected`, and every later mode's output must
    equal it;
-3. calls `exe.score(record, params)` for every row of `frame` and compares the dict with the same row of this mode's
+3. calls `exe.run(record, params)` for every row of `frame` and compares the dict with the same row of this mode's
    run output (same keys in the same order, equal values);
 4. opens `exe.session(frame, params)`, resumes it until `session.finished`, and compares `session.output()` with this
    mode's run output;
@@ -57,12 +57,12 @@ It returns `expected`.
 
 ```mermaid
 flowchart TD
-  A["for mode in modes"]:::engine --> B["exe = Engine().bind(step, mode)"]:::engine
+  A["for mode in modes"]:::engine --> B["exe = Engine.resolve(mode)().bind(step)"]:::engine
   B --> C{"exe.run(frame, params) raises?"}:::neutral
   C -- "yes, first mode" --> E1["re-raise the error as is"]:::error
   C -- "yes, later mode" --> E2["AssertionError: run() raised ...<br/>in X mode but not in Y"]:::error
   C -- no --> D["out == expected<br/>(the first mode sets expected)"]:::tooling
-  D --> F["score(row) == row of out<br/>for every row"]:::tooling
+  D --> F["run(row) == row of out<br/>for every row"]:::tooling
   F --> G["session resumed to end<br/>output() == out"]:::tooling
   G --> H{"script given?"}:::neutral
   H -- yes --> I["script(new session), resume to end<br/>== first mode's scripted frame"]:::tooling
@@ -85,7 +85,7 @@ Every failure is an `AssertionError` whose message starts with what was compared
 |---|---|
 | `run() in {mode} mode differs from {first}` | Two modes computed different frames |
 | `run() raised {error!r} in {mode} mode but not in {first}` | A later mode crashed where the first didn't |
-| `score() of row {i} in {mode} mode differs from run()` | Single-record scoring disagrees with the batch run; the message names the key and both values |
+| `run(record) of row {i} in {mode} mode differs from run(frame)` | Single-record scoring disagrees with the batch run; the message names the key and both values |
 | `a session resumed to the end in {mode} mode differs from run()` | The debugger's output disagrees with the run |
 | `the scripted session in {mode} mode differs from {first}` | The same session script gave different frames in two modes |
 
@@ -164,7 +164,7 @@ only the kernel's boundary values, so setting a value computed inside the kernel
 debugger's own error:
 
 ```text
-KeyError: "'affordability' is computed inside the fused kernel ['loan/affordability', 'loan/approved'] and never stored; open the session with mode='stepped' to inspect or set it"
+KeyError: "'affordability' is computed inside the fused kernel ['loan/affordability', 'loan/approved'] and never stored; open the session with engine='stepped' to inspect or set it"
 ```
 
 A breakpoint on a later step of a fused kernel, followed by `set` on that step's input, also differs by design: the
@@ -173,7 +173,7 @@ Narrow `modes` to `("interpreted", "stepped")` for scripts that need per-step st
 
 ### Cost
 
-Each mode binds once, runs once, makes one `score` call per row, and runs one or two sessions. The per-row `score`
+Each mode binds once, runs once, makes one `run(record)` call per row, and runs one or two sessions. The per-row `run(record)`
 calls dominate on a large frame, so feed it small, sharp frames: `corpus` adds at most ten rows per input.
 
 ## `corpus`
@@ -289,7 +289,7 @@ docstring states that a load from numba's disk cache doesn't count either.
 The passing case retunes a param on a fused executable:
 
 ```python
-exe = Engine().bind(pipeline, mode="fused")
+exe = FusedEngine().bind(pipeline)
 exe.run(df)
 with no_recompile():
     exe.run(df, params={"loan": {"approved": {"limit": 0.5}}})
@@ -306,7 +306,7 @@ def make():
     return shifted
 
 with no_recompile():
-    Engine().bind(flow(make(), name="shift"), mode="stepped").run(pl.DataFrame({"x": [1.0]}))
+    SteppedEngine().bind(flow(make(), name="shift")).run(pl.DataFrame({"x": [1.0]}))
 ```
 
 ```text
@@ -330,7 +330,7 @@ opt-in because they compile and run the flow. Details and real output are on the
 
 `tests/testing/test_testing.py` holds the behaviour: `assert_equivalent` returns the first mode's output; passes over
 every corpus frame; refuses a non-frame; propagates an error that every mode raises; names the mode and both values
-on a divergence; names the row when `score` disagrees; catches a session that disagrees with `run`; agrees on a
+on a divergence; names the row when `run(record)` disagrees; catches a session that disagrees with `run`; agrees on a
 scripted break, set and resume; catches a scripted session that differs between modes; accepts narrowed `modes`.
 The corpus tests pin the shared schema and row counts, per-input typing, single-column moves, the bool and int
 edges, nulls only for non-required inputs, rounding ties on every float, decimal columns with large amounts, and a

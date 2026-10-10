@@ -65,14 +65,14 @@ def test_the_same_documents_build_an_unchanged_pipeline(shipped):
 
 def test_a_client_reason_severity_edit_changes_which_decline_reason_is_primary(sample, params, parse):
     declined = parse(sample | {"client_under_administration": True, "bureau_unobtainable": True})
-    assert rebuilt().score(declined, params)["primary_reason_code"] == 2002
-    out = rebuilt(client_reason_codes=severity(2004, 1)).score(declined, params)
+    assert rebuilt().run(declined, params)["primary_reason_code"] == 2002
+    out = rebuilt(client_reason_codes=severity(2004, 1)).run(declined, params)
     assert (out["decline_reason_codes"], out["primary_reason_code"]) == ([2004, 2002], 2004)
 
 
 def test_a_scenario_rejection_severity_edit_changes_which_rejection_is_primary(sample, params, parse):
     def primaries(compiled):
-        out = compiled.score(parse(sample), params)
+        out = compiled.run(parse(sample), params)
         return {s["scenario_id"]: s["primary_rejection_reason_code"] for s in out["scenarios"]
                 if {1003, 1004} <= set(s["rejection_reason_codes"])}
 
@@ -82,7 +82,7 @@ def test_a_scenario_rejection_severity_edit_changes_which_rejection_is_primary(s
 
 def test_an_intervention_overlay_edit_moves_the_anti_harm_threshold_of_product_11(sample, params, parse):
     def ceiling(compiled):
-        scenarios = compiled.score(parse(sample), params)["scenarios"]
+        scenarios = compiled.run(parse(sample), params)["scenarios"]
         flex = next(s for s in scenarios if s["product_code"] == 11 and s["interventions"])
         return next(i for i in flex["interventions"] if i["intervention"] == 4)
 
@@ -91,7 +91,7 @@ def test_an_intervention_overlay_edit_moves_the_anti_harm_threshold_of_product_1
 
 
 def test_an_objective_overlay_edit_changes_the_weights_the_branch_channel_is_scored_with(sample, params, parse):
-    out = rebuilt(objective_adjustments=effect(0.2)).score(parse(sample | {"channel_code": 1}), params)
+    out = rebuilt(objective_adjustments=effect(0.2)).run(parse(sample | {"channel_code": 1}), params)
     assert out["objective_weights"]["min_commitment"] == 0.333333 and out["objective_weights"]["new_money"] == 0.666667
 
 
@@ -100,8 +100,8 @@ def test_a_rate_card_document_edit_reprices_the_consolidation_loan(sample, param
         for row in document["rows"]:
             row["rate"] += 1.0
 
-    base = rebuilt().score(parse(sample), params)["scenarios"]
-    edited = rebuilt(rate_card_product11=dearer).score(parse(sample), params)["scenarios"]
+    base = rebuilt().run(parse(sample), params)["scenarios"]
+    edited = rebuilt(rate_card_product11=dearer).run(parse(sample), params)["scenarios"]
     flex = [(a, b) for a, b in zip(base, edited) if a["product_code"] == 11 and "nominal_annual_rate" in a]
     assert flex and all(round(b["nominal_annual_rate"] - a["nominal_annual_rate"], 4) == 0.01 for a, b in flex)
     assert all(a["nominal_annual_rate"] == b["nominal_annual_rate"] for a, b in zip(base, edited) if a["product_code"] == 20)
@@ -113,7 +113,7 @@ def test_a_capacity_overlay_edit_moves_the_capacity_every_scenario_is_tested_aga
         document["adjustments"][0]["effect"]["value"] = 0.5
 
     record = parse(sample)
-    original, tightened = rebuilt().score(record, params), rebuilt(capacity_adjustments=tighten).score(record, params)
+    original, tightened = rebuilt().run(record, params), rebuilt(capacity_adjustments=tighten).run(record, params)
     assert tightened["baseline"]["max_affordable_instalment"] < original["baseline"]["max_affordable_instalment"]
     assert tightened["scenarios"][0]["max_affordable_instalment"] < original["scenarios"][0]["max_affordable_instalment"]
 

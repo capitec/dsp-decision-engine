@@ -3,17 +3,17 @@ import math
 from datetime import date
 
 import pytest
-from decikit import Engine
+from decikit import InterpretedEngine
 
 from business_nested import scoring
 
-score = Engine().bind(scoring.entity_scoring_unit(), mode="interpreted")
+score = InterpretedEngine().bind(scoring.entity_scoring_unit())
 PERSON = {"is_natural_person": True, "bureau_score": 705.0, "months_on_record": 140.0, "worst_delinquency_months": 0.0,
           "effective_ownership_pct": 55.0, "decision_date": date(2026, 9, 24)}
 
 
 def scored(params=None, **changes):
-    return score.score(PERSON | changes, params)
+    return score.run(PERSON | changes, params)
 
 
 def pd(points):
@@ -65,16 +65,16 @@ def test_the_bureau_cut_offs_are_params():
     assert scored(params, bureau_score=690.0)["score_before_overlay"] == scored(bureau_score=640.0)["score_before_overlay"]
 
 
-grade = Engine().bind(scoring.grade_lookup("pd", "grade"), mode="interpreted")
+grade = InterpretedEngine().bind(scoring.grade_lookup("pd", "grade"))
 
 
 @pytest.mark.parametrize("segment, probability, expected", [
     (4, 0.0, 1), (4, 0.0099, 1), (4, 0.0101, 2), (4, 0.0599, 4), (4, 0.0601, 5), (4, 0.5999, 11), (4, 0.99, 12),
     (5, 0.0079, 1), (5, 0.0081, 2), (5, 0.99, 12), (9, 0.001, 12)])
 def test_the_grade_ladder_by_segment(segment, probability, expected):
-    assert grade.score({"pd": probability, "segment_code": float(segment)})["grade"] == expected
+    assert grade.run({"pd": probability, "segment_code": float(segment)})["grade"] == expected
 
 
 def test_the_ladder_cell_that_gave_the_grade_is_recorded():
-    out = grade.score({"pd": 0.05, "segment_code": 4.0})
+    out = grade.run({"pd": 0.05, "segment_code": 4.0})
     assert out["grade_cell_id"] == "grade_ladder@bus-rg-2026.09#4|4"

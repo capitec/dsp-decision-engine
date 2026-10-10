@@ -3,7 +3,7 @@ import json
 import warnings
 
 import pytest
-from decikit import ConfigurableStep, Engine, HiddenStateWarning
+from decikit import ConfigurableStep, HiddenStateWarning, InterpretedEngine
 from decikit.lab import diff
 
 from assessment import documents
@@ -27,7 +27,7 @@ def shipped():
 def test_the_assessment_reads_no_hidden_objects(shipped):
     with warnings.catch_warnings():
         warnings.simplefilter("error", HiddenStateWarning)
-        Engine().bind(shipped, mode="interpreted")
+        InterpretedEngine().bind(shipped)
 
 
 def test_the_same_documents_build_an_unchanged_pipeline(shipped):
@@ -56,6 +56,6 @@ def test_changing_a_reason_severity_changes_the_ranking_step(shipped):
 
 def test_a_tighter_overlay_lowers_the_served_capacity(sample, parse, params):
     sample = sample | {"product_code": 10}
-    base = build().compile("interpreted").score(parse(sample), params)["max_affordable_instalment"]
+    base = build().compile("interpreted").run(parse(sample), params)["max_affordable_instalment"]
     tighter = rebuilt(lambda doc: doc["adjustments"][0]["effect"].update(value=0.80))
-    assert tighter.compile("interpreted").score(parse(sample), params)["max_affordable_instalment"] < base
+    assert tighter.compile("interpreted").run(parse(sample), params)["max_affordable_instalment"] < base

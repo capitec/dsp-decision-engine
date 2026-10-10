@@ -9,7 +9,7 @@ import polars as pl
 import pytest
 from typing_extensions import TypedDict
 
-from decikit import Engine, flow, frame_step
+from decikit import InterpretedEngine, flow, frame_step
 from decikit.ops import Struct
 from decikit.config import JsonFileStore
 from decikit.exceptions import DecikitError, ParamsError
@@ -108,7 +108,7 @@ def test_a_struct_input_is_warmed_and_coerced_like_the_typed_dict_it_holds():
         return applicant["income"]
 
     assert dummy(Struct[DatedApplicant]) == {"income": 1.0, "opened_date": dt.date(2000, 1, 1)}
-    dates = _dates(Engine().bind(flow(afford, name="p")))
+    dates = _dates(InterpretedEngine().bind(flow(afford, name="p")))
     out = coerce_record({"applicant": {"income": 1.0, "opened_date": "2026-01-01"}}, dates)
     assert out["applicant"] == {"income": 1.0, "opened_date": dt.date(2026, 1, 1)}
 
@@ -211,7 +211,7 @@ def test_code_path_wins_over_an_earlier_path_entry_and_the_pipeline_file_is_repo
     handler.stage()
     handler.activate()
     live = handler.module_fn()
-    assert "mine" in live.executable.score({"x": 1.0})
+    assert "mine" in live.executable.run({"x": 1.0})
     assert str(tmp_path / "mine" / "pipeline.py") in capsys.readouterr().err
     monkeypatch.delitem(sys.modules, "pipeline")
 

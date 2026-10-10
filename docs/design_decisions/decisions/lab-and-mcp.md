@@ -5,14 +5,14 @@ Read this before changing decision tracing, step ids, datasets, the experiment r
 ## A trace event is one int64 written in the kernel; names are joined in Python
 
 - A traced kernel writes one packed envelope per call into one flat buffer; paths, sources and ids sit in a `StepTable` joined at drain time. Strings never enter a kernel.
-- Why: the write costs ~0.8 ns/event; one shared buffer cost under 3% on `score()`, a column per step cost 6x more.
+- Why: the write costs ~0.8 ns/event; one shared buffer cost under 3% on `run(record)`, a column per step cost 6x more.
 - Not: per-step trace columns or live Python callbacks per node (they force the Python fallback).
 - See: [experiment](../experiments/trace-capture-cost.md), `docs/architecture/engine/trace.md`
 
 ## Tracing is opt-in; batch tracing is bounded and loss is reported
 
 - No `TraceSink`, no trace code in the kernel. `max_events` and `sample_rate` bound a batch; `status()` reports dropped and failed, never silently.
-- Why: batch cost is decoding into `TraceEvent`s (1M rows: 4.8 ms untraced, 10.2 s traced), not the kernel write; `score()` overhead is negligible.
+- Why: batch cost is decoding into `TraceEvent`s (1M rows: 4.8 ms untraced, 10.2 s traced), not the kernel write; `run(record)` overhead is negligible.
 - Keep decode vectorised or lazy (~53M events/s unpack against ~1.2M/s per-event Python).
 - See: [experiment](../experiments/trace-capture-cost.md)
 

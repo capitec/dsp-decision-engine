@@ -8,7 +8,7 @@ from typing import TypedDict
 import polars as pl
 import pytest
 
-from decikit import Engine, flow, missing_as
+from decikit import Engine, FusedEngine, flow, missing_as
 from decikit.ops import Columnar, Struct
 from decikit.ops import Text
 from decikit.exceptions import FallbackWarning
@@ -122,14 +122,14 @@ def test_every_shape_gives_the_same_answer_in_every_mode(fn, over_frame, for_rec
 
 @pytest.mark.parametrize("fn, _over_frame, for_record, _kernel", SHAPES, ids=IDS)
 @pytest.mark.parametrize("mode", ("interpreted", *COMPILED))
-def test_every_shape_scores_one_record(mode, fn, _over_frame, for_record, _kernel):
-    assert Engine().bind(flow(fn, name="p"), mode=mode).score(RECORD)[fn.__name__] == for_record
+def test_every_shape_runs_one_record(mode, fn, _over_frame, for_record, _kernel):
+    assert Engine.resolve(mode)().bind(flow(fn, name="p")).run(RECORD)[fn.__name__] == for_record
 
 
 @pytest.mark.parametrize("fn, _over_frame, _for_record, kernel", SHAPES, ids=IDS)
 @pytest.mark.parametrize("mode", COMPILED)
 def test_only_the_shapes_a_kernel_holds_stay_in_it(mode, fn, _over_frame, _for_record, kernel):
-    exe = Engine().bind(flow(fn, name="p"), mode=mode)
+    exe = Engine.resolve(mode)().bind(flow(fn, name="p"))
     exe.run(FRAME)
     assert (exe.fallbacks() == {}) is kernel, exe.fallbacks()
 
@@ -164,7 +164,7 @@ def test_a_raw_bytes_input_over_a_bytes_column_is_refused_the_same_way_in_every_
 
     for mode in ("interpreted", *COMPILED):
         with pytest.raises(TypeError, match="'blob' is a string input"):
-            Engine().bind(flow(over_blob, name="p"), mode=mode).run(FRAME)
+            Engine.resolve(mode)().bind(flow(over_blob, name="p")).run(FRAME)
 
 
 def test_a_step_mixing_an_opt_in_and_a_python_shape_still_agrees():
@@ -247,7 +247,7 @@ def test_a_null_reads_the_same_way_in_every_mode(fn, expected):
 @pytest.mark.parametrize("mode", ("interpreted", *COMPILED))
 def test_a_null_reads_the_same_way_for_one_record(mode, fn, expected):
     record = {"sector": None, "accounts": None, "applicant": None}
-    assert Engine().bind(flow(fn, name="p"), mode=mode).score(record)[fn.__name__] == expected[1]
+    assert Engine.resolve(mode)().bind(flow(fn, name="p")).run(record)[fn.__name__] == expected[1]
 
 
 # --- outputs ------------------------------------------------------------------------------------
@@ -284,7 +284,7 @@ def test_a_field_no_kernel_can_hold_is_refused_and_says_what_to_do():
         return float(len(accounts.balance))
 
     with pytest.raises(TypeError, match="'opened'"):
-        Engine().bind(flow(total, name="p"), mode="fused").run(FRAME)
+        FusedEngine().bind(flow(total, name="p")).run(FRAME)
 
 
 def test_an_int_or_none_field_in_an_item_is_refused_because_it_has_no_null_value():
@@ -292,7 +292,7 @@ def test_an_int_or_none_field_in_an_item_is_refused_because_it_has_no_null_value
         return float(len(accounts.balance))
 
     with pytest.raises(TypeError, match=r"'count'.*float \| None"):
-        Engine().bind(flow(total, name="p"), mode="fused").run(FRAME)
+        FusedEngine().bind(flow(total, name="p")).run(FRAME)
 
 
 def test_a_string_field_in_a_struct_keeps_the_step_in_python_naming_the_field():
@@ -301,7 +301,7 @@ def test_a_string_field_in_a_struct_keeps_the_step_in_python_naming_the_field():
 
     frame = pl.DataFrame({"applicant": [{"income": 5.0, "name": "a"}]},
                          schema={"applicant": pl.Struct({"income": pl.Float64, "name": pl.String})})
-    exe = Engine().bind(flow(income, name="p"), mode="fused")
+    exe = FusedEngine().bind(flow(income, name="p"))
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", FallbackWarning)
         assert exe.run(frame)["income"].to_list() == [5.0]
@@ -329,7 +329,7 @@ def test_a_null_item_field_that_is_not_optional_names_the_item_and_the_row():
 
     frame = pl.DataFrame({"accounts": [[{"balance": 1.0}], [{"balance": None}]]})
     with pytest.raises(ValueError, match="'balance' is null in item 0 of row 1"):
-        Engine().bind(flow(total, name="p"), mode="fused").run(frame)
+        FusedEngine().bind(flow(total, name="p")).run(frame)
 
 
 def out_bytes(sector: str) -> bytes:

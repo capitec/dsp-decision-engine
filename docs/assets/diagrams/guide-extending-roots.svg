@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 440" font-family="system-ui, sans-serif">
-  <rect x="0" y="0" width="900" height="440" fill="#ffffff"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 492" font-family="system-ui, sans-serif">
+  <rect x="0" y="0" width="900" height="492" fill="#ffffff"/>
 
   <text x="20" y="34" font-size="16" font-weight="600" fill="#1f2937">registry root</text>
   <text x="300" y="34" font-size="16" font-weight="600" fill="#1f2937">entry-point group</text>
@@ -34,15 +34,22 @@
   <text x="564" y="232" font-size="15" fill="#14532d">DECIKIT_CONFIG__TYPE</text>
 
   <rect x="10" y="256" width="270" height="44" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
-  <text x="24" y="284" font-size="15" fill="#7c2d00">Metric, Plot, Block</text>
+  <text x="24" y="284" font-size="15" fill="#7c2d00">Engine</text>
   <rect x="290" y="256" width="250" height="44" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
-  <text x="304" y="284" font-size="14" fill="#4c1d95">decikit.metrics, .plots, .blocks</text>
+  <text x="304" y="284" font-size="15" fill="#4c1d95">decikit.engines</text>
   <rect x="550" y="256" width="340" height="44" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
-  <text x="564" y="284" font-size="15" fill="#14532d">experiment.json</text>
+  <text x="564" y="284" font-size="15" fill="#14532d">DECIKIT_API__ENGINE__TYPE, compile(tag)</text>
 
-  <rect x="10" y="320" width="880" height="106" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
-  <text x="26" y="346" font-size="15" font-weight="600" fill="#1f2937">Not registries (plain Python hooks)</text>
-  <text x="26" y="372" font-size="14" fill="#1f2937">Adapter: any object with accept(events), passed as TraceSink(adapter)</text>
-  <text x="26" y="394" font-size="14" fill="#1f2937">Callback (experiments) and RequestHandler (serving): subclass and pass the instance or import path</text>
-  <text x="26" y="416" font-size="14" fill="#1f2937">FieldMetadata (decikit.ops): subclass for a display kind the debugger shows</text>
+  <rect x="10" y="308" width="270" height="44" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="24" y="336" font-size="15" fill="#7c2d00">Metric, Plot, Block</text>
+  <rect x="290" y="308" width="250" height="44" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="304" y="336" font-size="14" fill="#4c1d95">decikit.metrics, .plots, .blocks</text>
+  <rect x="550" y="308" width="340" height="44" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="564" y="336" font-size="15" fill="#14532d">experiment.json</text>
+
+  <rect x="10" y="372" width="880" height="106" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="26" y="398" font-size="15" font-weight="600" fill="#1f2937">Not registries (plain Python hooks)</text>
+  <text x="26" y="424" font-size="14" fill="#1f2937">Adapter: any object with accept(events), passed as TraceSink(adapter)</text>
+  <text x="26" y="446" font-size="14" fill="#1f2937">Callback (experiments) and RequestHandler (serving): subclass and pass the instance or import path</text>
+  <text x="26" y="468" font-size="14" fill="#1f2937">FieldMetadata (decikit.ops): subclass for a display kind the debugger shows</text>
 </svg>

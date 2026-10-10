@@ -1,7 +1,7 @@
 """The bridge drives a debug session, so the cross-mode parity contract holds for the flows it debugs.
 
-`decikit.lab.testing.assert_equivalent` is the parity contract: `run()`, `score()`
-and a resumed session give the same frame in every mode, exactly (NaN equals
+`decikit.lab.testing.assert_equivalent` is the parity contract: `run()` on a frame and on
+each record, and a resumed session give the same answer in every mode, exactly (NaN equals
 NaN, nothing else is approximate). A bridge session runs in interpreted mode,
 so a flow debugged through the bridge must produce the same numeric results a
 compiled run does.

@@ -79,7 +79,7 @@ def test_a_node_breakpoint_on_the_tree_pauses_after_the_part_that_reached_it():
     n = W + 4
     tree = _rules(n, lambda k: {"op": ">", "feature": "x", "threshold": k})
     cfg = TreeConfig(name="t", part_outputs=W, tree=tree)
-    s = engine.Engine().bind(cfg).session(pl.DataFrame({"x": [1000.0]}))
+    s = engine.InterpretedEngine().bind(cfg).session(pl.DataFrame({"x": [1000.0]}))
     s.break_at(f"t#{cfg.tree.to_tree().rules[-1].root}")
     at = s.resume()
     assert (at.origin.path, at.when) == ("t/part_1", "after")

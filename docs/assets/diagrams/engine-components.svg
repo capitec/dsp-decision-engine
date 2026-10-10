@@ -9,7 +9,7 @@
   <!-- authoring -->
   <rect x="40" y="24" width="440" height="72" rx="10" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
   <text x="60" y="52" font-size="16" font-weight="600" fill="#7c2d00">A step, a plain function, or an IR node</text>
-  <text x="60" y="78" font-size="14" fill="#7c2d00">Engine(...).bind(pipeline, mode="fused")</text>
+  <text x="60" y="78" font-size="14" fill="#7c2d00">FusedEngine(...).bind(pipeline)</text>
 
   <line x1="260" y1="96" x2="260" y2="128" stroke="#374151" stroke-width="1.5" marker-end="url(#a)"/>
 
@@ -31,7 +31,7 @@
   <!-- run -->
   <rect x="40" y="348" width="440" height="320" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
   <text x="60" y="376" font-size="16" font-weight="600" fill="#134e4a">run/   Executable</text>
-  <text x="60" y="398" font-size="14" fill="#134e4a">run(df) · score(record) · session(df) · fallbacks()</text>
+  <text x="60" y="398" font-size="14" fill="#134e4a">run(df or record) · session(df) · fallbacks()</text>
 
   <rect x="62" y="414" width="396" height="58" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
   <text x="78" y="437" font-size="14" font-weight="600" fill="#14532d">State</text>
@@ -45,7 +45,7 @@
   <text x="78" y="577" font-size="14" font-weight="600" fill="#134e4a">runner.iterate(plan, state, params)</text>
   <text x="78" y="599" font-size="13" fill="#134e4a">InterpretedRunner, SteppedRunner, FusedRunner</text>
 
-  <text x="60" y="644" font-size="14" fill="#134e4a">output(state) → polars frame, or a dict from score()</text>
+  <text x="60" y="644" font-size="14" fill="#134e4a">output(state) → polars frame, or a dict from run(record)</text>
 
   <!-- right column -->
   <rect x="560" y="348" width="400" height="48" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>

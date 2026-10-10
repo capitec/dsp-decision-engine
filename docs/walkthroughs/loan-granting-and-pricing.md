@@ -221,7 +221,7 @@ Reading the rows:
 
 ## 5. Score one record
 
-A served request is one record. Compile once, then call `score` with a dict:
+A served request is one record. Compile once, then call `run` with a dict:
 
 ```python
 from decikit import ConfigurableStep
@@ -235,7 +235,7 @@ pipeline = build(ConfigurableStep.load(config["application_card"]), Configurable
 exe = pipeline.compile("fused")
 record = {"age": 34, "monthly_income": 28000.0, "monthly_expenses": 14000.0, "months_employed": 40.0,
           "utilisation": 0.25, "amount": 60000.0, "term_months": 36}
-result = exe.score(record, config["params"])
+result = exe.run(record, config["params"])
 print({k: result[k] for k in ("app_score", "age_score", "months_employed_score", "utilisation_score",
                               "risk_grade", "annual_rate", "instalment", "approved")})
 print(exe.fallbacks())
@@ -246,7 +246,7 @@ print(exe.fallbacks())
 {}
 ```
 
-The scorecard writes each variable's points (`age_score` and so on) beside the total, which are the reason codes a decline letter needs. `fallbacks()` is empty: every step, the scorecard, the parameter-table loop and the rate card compiled into kernels. `score` takes the record as a dict, never as keyword arguments, and is the path to use for one decision; running a one-row frame costs several times more.
+The scorecard writes each variable's points (`age_score` and so on) beside the total, which are the reason codes a decline letter needs. `fallbacks()` is empty: every step, the scorecard, the parameter-table loop and the rate card compiled into kernels. `run` takes the record as a dict, never as keyword arguments, and is the path to use for one decision; running a one-row frame costs several times more.
 
 ## 6. Test through the handler
 
@@ -304,7 +304,7 @@ The tests assert exact answers from worked examples. A test that only checks an 
 $ decikit build
 decikit: pipeline flex_loan.pipeline:build from /…/flex_loan/pipeline.py
 decikit: handler flex_loan.inference:Handler from /…/flex_loan/inference.py
-built config version 0.0.0 (pipeline flex_loan.pipeline:build, mode fused)
+built config version 0.0.0 (pipeline flex_loan.pipeline:build, engine fused)
 ```
 
 `decikit build` imported the pipeline, loaded version `0.0.0`'s two documents, validated its params document, and scored `sample_request.json` through every kernel, which fills numba's disk cache so the server starts without compiling. Then serve it (one worker on a chosen port here; the defaults are port 8080 and 2 × CPUs + 1 workers):
@@ -327,7 +327,7 @@ $ curl -s -H 'content-type: application/json' -d '{"age": 23, "monthly_income": 
 {"age":23,"monthly_income":9000,"monthly_expenses":6500,"months_employed":6,"utilisation":0.92,"amount":30000,"term_months":24,"approved":false,"base_points":600.0,"age_score":-20.0,"months_employed_score":-10.0,"utilisation_score":-40.0,"app_score":530.0,"risk_grade":4,"annual_rate":0.255,"instalment":1608.68,"eligible":true,"affordable":false}
 ```
 
-The response holds the request plus every output. A JSON object takes the single-record path, as `score` did in step 5; a JSON array, CSV or Parquet body runs as a frame. Errors come back as JSON with a status code; the [serving guide](../guides/projects-and-serving.md) lists the real ones.
+The response holds the request plus every output. A JSON object takes the single-record path, as `run` on a dict did in step 5; a JSON array, CSV or Parquet body runs as a frame. Errors come back as JSON with a status code; the [serving guide](../guides/projects-and-serving.md) lists the real ones.
 
 ## 8. Retune through a new config version
 
@@ -367,7 +367,7 @@ print(sorted(store.versions()))
 
 ```bash
 $ decikit build
-built config version 0.1.0 (pipeline flex_loan.pipeline:build, mode fused)
+built config version 0.1.0 (pipeline flex_loan.pipeline:build, engine fused)
 $ decikit serve --workers 1 --port 39109 --host 127.0.0.1
 $ curl -s -d @sample_request.json -H 'content-type: application/json' localhost:39109/invocations
 {"age":34,"monthly_income":28000,"monthly_expenses":14000,"months_employed":40,"utilisation":0.25,"amount":60000,"term_months":36,"approved":true,"base_points":600.0,"age_score":10.0,"months_employed_score":15.0,"utilisation_score":50.0,"app_score":675.0,"risk_grade":3,"annual_rate":0.195,"instalment":2214.56,"eligible":true,"affordable":true}

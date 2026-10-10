@@ -88,7 +88,7 @@ CPYTHON = {
 @pytest.mark.parametrize("fn", STEPS)
 @pytest.mark.parametrize("mode", COMPILED)
 def test_span_operations_answer_as_cpython_does(mode, fn):
-    exe = Engine(strict_compile=True).bind(flow(fn, name="p"), mode=mode)
+    exe = Engine.resolve(mode)(strict_compile=True).bind(flow(fn, name="p"))
     assert exe.run(FRAME)[fn.__name__].to_list() == CPYTHON[fn.__name__]
     assert exe.fallbacks() == {}
 
@@ -110,7 +110,7 @@ def unrelated_pairs(low: int, high: int) -> int:
 
 @pytest.mark.parametrize("mode", COMPILED)
 def test_a_plain_pair_of_ints_keeps_its_own_operations(mode):
-    exe = Engine(strict_compile=True).bind(flow(unrelated_pairs, name="p"), mode=mode)
+    exe = Engine.resolve(mode)(strict_compile=True).bind(flow(unrelated_pairs, name="p"))
     out = exe.run(pl.DataFrame({"low": [1, 1], "high": [2, 9]}))
     assert out["unrelated_pairs"].to_list() == [112, 2]
 
@@ -122,10 +122,10 @@ def test_a_string_built_at_run_time_is_refused_not_answered_wrongly():
 
 
 @pytest.mark.parametrize("mode", COMPILED)
-def test_score_reads_one_record_through_the_same_operations(mode):
-    exe = Engine(strict_compile=True).bind(flow(eq_literal, name="p"), mode=mode)
-    assert exe.score({"sector": WANT})["eq_literal"] is True
-    assert exe.score({"sector": "public"})["eq_literal"] is False
+def test_a_record_run_reads_one_record_through_the_same_operations(mode):
+    exe = Engine.resolve(mode)(strict_compile=True).bind(flow(eq_literal, name="p"))
+    assert exe.run({"sector": WANT})["eq_literal"] is True
+    assert exe.run({"sector": "public"})["eq_literal"] is False
 
 
 def other(sector: Text | None, alias: Text | None) -> bool:

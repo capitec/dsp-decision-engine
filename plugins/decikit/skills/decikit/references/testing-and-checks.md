@@ -14,12 +14,12 @@ from datetime import date
 import polars as pl
 import pytest
 
-from decikit import Engine
+from decikit import FusedEngine
 from decikit.lab.testing import assert_equivalent
 
 from credit_risk.pipeline import build
 
-EXE = Engine().bind(build(), mode="fused")
+EXE = FusedEngine().bind(build())
 PARAMS = {"credit_risk": {"approved": {"limit": 0.4, "month_end_limit": 0.3}}}
 
 
@@ -33,7 +33,7 @@ PARAMS = {"credit_risk": {"approved": {"limit": 0.4, "month_end_limit": 0.3}}}
     ],
 )
 def test_approval_at_the_limits(income, debt, applied_on, approved):
-    out = EXE.score({"income": income, "debt": debt, "applied_on": applied_on}, PARAMS)
+    out = EXE.run({"income": income, "debt": debt, "applied_on": applied_on}, PARAMS)
     assert out["approved"] is approved
 
 
@@ -43,8 +43,8 @@ def test_every_mode_agrees_on_the_worked_rows():
     assert assert_equivalent(build(), frame)["approved"].to_list() == [True, False]
 ```
 
-Run `uv run pytest -q`. `score` takes one record as a dict and the params
-document; `assert_equivalent` runs every mode, `run`, `score` per row and a
+Run `uv run pytest -q`. `run` takes one record as a dict (or a frame) and the params
+document; `assert_equivalent` runs every mode, `run` on the frame and per row and a
 session, and fails when any disagree. Name tests for behaviour
 (`test_missing_debt_counts_as_zero`). The template's own test scores the sample
 request through the handler as `decikit serve` does.

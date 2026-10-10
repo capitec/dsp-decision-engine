@@ -1,7 +1,7 @@
 # Kernel semantics
 
-A step gives the same answer in `interpreted`, `stepped` and `fused` mode, and in `run` and
-`score`. Plain numba does not guarantee that: it rounds halves differently from CPython, computes
+A step gives the same answer in `interpreted`, `stepped` and `fused` mode, and in `run` on a
+frame or a record. Plain numba does not guarantee that: it rounds halves differently from CPython, computes
 `x ** n` by repeated squaring, has no fixed-point decimal and types a string as its own unicode
 object. Kernel semantics is the set of numba types and overloads that close those gaps, plus the
 rules for nulls that every runner applies the same way. It lives in
@@ -127,8 +127,8 @@ mode computes with a Python int and fails when it stores a result that does not 
 def wrapped(cents: int) -> int:
     return cents * 4_000_000_000
 
-flow(wrapped, name="w").compile("fused").score({"cents": 10_000_000_000})
-flow(wrapped, name="w").compile("interpreted").score({"cents": 10_000_000_000})
+flow(wrapped, name="w").compile("fused").run({"cents": 10_000_000_000})
+flow(wrapped, name="w").compile("interpreted").run({"cents": 10_000_000_000})
 ```
 
 ```text
@@ -380,7 +380,7 @@ copies has no validity, so a null in it sends that launch down the unpacked path
 
 - A typing error inside a step (a decimal mixed with a float, a span compared with a string built
   at run time, `//` on a decimal) is one of numba's compile errors: the step runs in Python with a
-  `FallbackWarning`, or raises under `Engine(strict_compile=True)`. [The compile cache](cache.md)
+  `FallbackWarning`, or raises under `FusedEngine(strict_compile=True)`. [The compile cache](cache.md)
   covers the decision.
 - Overflow is silent in a kernel. Checks flag the risky products; tests should include large
   principals and `.xx5` ties, which random sampling rarely reaches (the wrap point was found by

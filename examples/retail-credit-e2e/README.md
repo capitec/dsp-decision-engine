@@ -100,7 +100,7 @@ fresh checkout takes a minute or two while numba compiles):
 
 ```bash
 uv run decikit build
-# built config version 0.1.0 (pipeline retail_credit.pipeline:build, mode fused)
+# built config version 0.1.0 (pipeline retail_credit.pipeline:build, engine fused)
 ```
 
 Serve, and decide the sample application. Its dates are plain JSON strings. A decision takes a few milliseconds:

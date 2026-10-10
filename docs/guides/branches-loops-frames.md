@@ -440,7 +440,7 @@ A frame step runs as Python over polars in every mode, so the scalar steps aroun
 ```python
 fast = screen.compile("fused")
 print(fast.fallbacks())
-print(fast.score({"client_id": 1, "amount": 800.0}))
+print(fast.run({"client_id": 1, "amount": 800.0}))
 ```
 
 ```text
@@ -448,8 +448,8 @@ print(fast.score({"client_id": 1, "amount": 800.0}))
 {'client_id': 1, 'amount': 800.0, 'risky': False}
 ```
 
-!!! warning "A frame step sees one row in `score`"
-    `score` runs a pipeline with a frame step through a one-row frame. The group-by above then sums one record, so client 1 scores `client_total = 800` and `risky = False`, where the batch run gave `True`. Keep aggregations over other records in the request (precomputed upstream) or in a lookup the step joins, not in a group-by over the batch.
+!!! warning "A frame step sees one row when `run` takes a record"
+    `run` on a record runs a pipeline with a frame step through a one-row frame. The group-by above then sums one record, so client 1 scores `client_total = 800` and `risky = False`, where the batch run gave `True`. Keep aggregations over other records in the request (precomputed upstream) or in a lookup the step joins, not in a group-by over the batch.
 
 `reads` and `writes` may be left out. Undeclared names are checked against the frame the step returns when it runs, and a step that does not return a column a later step reads fails then:
 

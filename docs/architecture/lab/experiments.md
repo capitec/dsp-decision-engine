@@ -30,7 +30,7 @@ flowchart TD
     CLI["decikit experiment run"] --> J
     J["experiment.json<br/>run(path) / start(path)"] --> R
     R["_runner._run"] --> K["checks.run<br/>preflight"]
-    R --> E["engine: Engine().bind<br/>fused or stepped"]
+    R --> E["engine: FusedEngine or SteppedEngine .bind"]
     R --> W["_worker subprocess<br/>(revision scenarios)"]
     R --> D["diff: resolve,<br/>materialise, remove"]
     R --> CB["callbacks and metrics<br/>(hooks)"]
@@ -263,7 +263,7 @@ on_run_end completed
 
 ### The local executor: fused or stepped
 
-`_Local` runs one scenario in this process. Its constructor merges the scenario's params over the baseline document with `merge` (nested dicts key by key) and binds the flow with `Engine().bind(step, mode=...)`. The mode is `"fused"` unless something needs to see inside the flow: a node selector from any metric or callback, or an override with `at`. Then it is `"stepped"`, which pauses after every node and is still compiled. The [runners page](../engine/runners.md) explains both modes.
+`_Local` runs one scenario in this process. Its constructor merges the scenario's params over the baseline document with `merge` (nested dicts key by key) and binds the flow with `Engine.resolve(...)().bind(step)`. The mode is `"fused"` unless something needs to see inside the flow: a node selector from any metric or callback, or an override with `at`. Then it is `"stepped"`, which pauses after every node and is still compiled. The [runners page](../engine/runners.md) explains both modes.
 
 `_Local.run(index, offset, batch)`:
 

@@ -137,9 +137,9 @@ def instalment(principal: Currency, rate: float = param(0.12), months: int = par
 pipe = flow(instalment, name="loan")
 df = pl.DataFrame({"principal": [10000.0, 2500.5]}).with_columns(pl.col("principal").cast(pl.Decimal(38, 4)))
 for mode in ("interpreted", "stepped", "fused"):
-    out = Engine().bind(pipe, mode).run(df)
+    out = Engine.resolve(mode)().bind(pipe).run(df)
     print(mode, out["instalment"].to_list(), out.schema["instalment"])
-print(pipe.compile("fused").score({"principal": Currency(10000)}))
+print(pipe.compile("fused").run({"principal": Currency(10000)}))
 ```
 
 ```text
@@ -179,7 +179,7 @@ Python.
 `Columnar[Item]` and `Struct[Item]` in `decikit/ops/nested.py` are markers with no behaviour of their own; `Item` is a
 `TypedDict`. `Columnar[Item]` reads a `list[dict]` column as one flat array per field (struct of arrays), so
 `items.price[j]` is the `j`th item's price and a kernel can loop over it. Its docstring prices the arrays at about
-20 µs per `score()` call, so a short list with a one-line body is faster as a plain `list[dict]` step in Python.
+20 µs per `run(record)` call, so a short list with a one-line body is faster as a plain `list[dict]` step in Python.
 `Struct[Item]` is one record per row. `struct_item(annotation)` returns the `Item` of a `Struct[Item]`. The engine's
 `compile/rows.py` and `compile/structs.py` do the work; [Kernels](engine/kernels.md) covers them.
 
@@ -228,8 +228,8 @@ flowchart LR
 | `IRError` | `exceptions.py` | a signature that can't be wired, a condition that isn't one call, a node with no origin, a shared param with two types |
 | `ParamsError` | `exceptions.py` | a params document fails a node's model, or names a path with no params |
 | `MissingInputError` | `exceptions.py` | a required input is null or absent; carries `input`, `path`, `null_count`; HTTP 400 |
-| `EngineError` | `exceptions.py` | an unknown mode or validation setting, or an input column that shadows a produced name |
-| `RegistryError` | `exceptions.py` | a `type` tag names no registered class |
+| `EngineError` | `exceptions.py` | an input column that shadows a produced name, or a strict-compile refusal |
+| `RegistryError` | `exceptions.py` | a `type` tag names no registered class, an engine tag included |
 | `ExprError` | `exceptions.py` | an expression outside the admitted grammar (also exported by `decikit.steps.expr`) |
 | `DecikitMissingDependencyError` | `exceptions.py` | an optional dependency is missing; raised through `wrap_import_errors(extra)` |
 | `ArrowKindError`, `NeedsKernelSplit`, `ArrowImportError` | `_engine/boundary/errors.py` | the Arrow boundary can't read a column as its declared kind |
@@ -246,7 +246,7 @@ Real messages, each naming where and how to fix it:
 
 ```text
 MissingInputError [400]: input 'debt' of step 'p/dti' is required but column 'debt' has 1 null row(s) of 2. Fix the data, or declare `debt: T = missing_as(fill)` or `debt: T | None`.
-EngineError [500]: unknown mode 'jit'; expected one of ['fused', 'interpreted', 'stepped']
+RegistryError [500]: 'fsued' is not a registered Engine type. Did you mean 'fused'? Import the module that defines it first, or name it by import path, '<module>:<Class>'.
 EngineError [500]: 'dti' is produced by this pipeline and is also a column of the input frame. Drop or rename the frame column 'dti', or relabel the step that writes it (`.relabel(writes={'dti': 'dti_2'})`), so neither silently shadows the other.
 ParamsError [500]: invalid params (affects 1 row):
 p/ok: param 'limit': Input should be less than or equal to 1 (got 3.0)
@@ -265,7 +265,7 @@ ParamsError [500]: params document: no step with params at 'p/okk'. Did you mean
 ## _registry: type tags for pluggable documents
 
 A config document names a class by a `type` tag: `{"type": "tree", ...}`. `decikit/_registry.py` turns tags into
-classes for seven roots (`ConfigurableStep`, `ConfigStore`, `DatasetProvider`, `Check`, `Metric`, `Plot`, `Block`)
+classes for eight roots (`ConfigurableStep`, `ConfigStore`, `DatasetProvider`, `Check`, `Engine`, `Metric`, `Plot`, `Block`)
 without ever letting a document name arbitrary code.
 
 `BaseRegistryModule` is a pydantic `BaseModel` and an `ABC`. Its machinery runs at three moments:
@@ -370,7 +370,7 @@ more than the fastest option, paid once because configs are validated once and c
 
 Entry points close the last gap: a root declared with `group="steps"` also searches
 `importlib.metadata.entry_points(group="decikit.steps", name=tag)` on a miss, so an installed package's types load
-without the user importing them. [Package layout](package-layout.md) lists the seven groups.
+without the user importing them. [Package layout](package-layout.md) lists the eight groups.
 
 ## _serde: frames and dtypes as JSON
 
@@ -438,7 +438,7 @@ so nothing reads the environment at import time, and `get_settings.cache_clear()
 | Field | Default | Read by |
 |---|---|---|
 | `serve.host`, `serve.port`, `serve.workers`, `serve.server` | `0.0.0.0`, `8080`, `None` (2 x CPUs + 1 at serve time), `starlette` | `decikit serve` |
-| `api.code_path`, `api.pipeline`, `api.handler`, `api.mode` | `.`, `pipeline:build`, `inference:Handler`, `fused` | `decikit build`, `decikit serve`, `RequestHandler` |
+| `api.code_path`, `api.pipeline`, `api.handler`, `api.engine.type` | `.`, `pipeline:build`, `inference:Handler`, `fused` | `decikit build`, `decikit serve`, `RequestHandler` |
 | `build.warn_shadowed_tables` | `True` | `RequestHandler.stage()` (so `decikit build` and every server start): `ShadowedTableWarning` for a params document that sets a table seeded from a config document |
 | `config` | `{"type": "file:json"}` plus the store's own fields | `DecikitConfigSettings.get()`, which resolves a `ConfigStore` by tag |
 | `datasets_path` | `${PROJECT_ROOT}/datasets` | `lab.data` dataset catalog |
@@ -451,12 +451,12 @@ nearest ancestor directory holding `configs/`.
 import os
 from decikit._settings import get_settings
 s = get_settings()
-print(s.serve.port, s.api.mode, s.config.type, s.datasets_path)
+print(s.serve.port, s.api.engine.type, s.config.type, s.datasets_path)
 os.environ["DECIKIT_SERVE__PORT"] = "9090"
-os.environ["DECIKIT_API__MODE"] = "stepped"
+os.environ["DECIKIT_API__ENGINE__TYPE"] = "stepped"
 print(get_settings().serve.port)
 get_settings.cache_clear()
-print(get_settings().serve.port, get_settings().api.mode)
+print(get_settings().serve.port, get_settings().api.engine.type)
 ```
 
 ```text

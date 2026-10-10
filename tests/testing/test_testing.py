@@ -1,4 +1,4 @@
-"""The testing helpers: every mode, score and a session agree; boundary corpus; no recompiles."""
+"""The testing helpers: every mode, a record run and a session agree; boundary corpus; no recompiles."""
 import decimal as stdlib
 
 import polars as pl
@@ -8,7 +8,7 @@ from numba.extending import overload
 from decikit import flow, missing_as, param
 from decikit.ops import decimal
 from decikit.ops.decimal import Currency
-from decikit._engine import Engine
+from decikit._engine import Engine, SteppedEngine
 from decikit._engine.debug import Session
 from decikit._engine.run import Executable
 from decikit.lab.testing import assert_equivalent, corpus, no_recompile
@@ -105,18 +105,18 @@ def ratio(x: float, y: float) -> float:
 @pytest.mark.parametrize("mode", ("interpreted", "stepped", "fused"))
 def test_dividing_by_zero_agrees_across_modes(mode):
     with pytest.raises(ZeroDivisionError):
-        Engine().bind(flow(ratio), mode).run(pl.DataFrame({"x": [1.0, 0.0], "y": [0.0, 0.0]}))
+        Engine.resolve(mode)().bind(flow(ratio)).run(pl.DataFrame({"x": [1.0, 0.0], "y": [0.0, 0.0]}))
 
 
-def test_a_score_disagreeing_with_run_fails_naming_the_row(monkeypatch):
-    score = Executable.score
+def test_a_record_run_disagreeing_with_a_frame_run_fails_naming_the_row(monkeypatch):
+    run_record = Executable._run_record
 
-    def off_by_one(self, record, params=None):
-        out = score(self, record, params)
+    def off_by_one(self, record, params=None, trace=None):
+        out = run_record(self, record, params, trace)
         return out | {"scaled": out["scaled"] + (record["a"] == 20.0)}
 
-    monkeypatch.setattr(Executable, "score", off_by_one)
-    with pytest.raises(AssertionError, match=r"score\(\) of row 1 in interpreted mode differs.*'scaled'.*39.0.*38.0"):
+    monkeypatch.setattr(Executable, "_run_record", off_by_one)
+    with pytest.raises(AssertionError, match=r"run\(record\) of row 1 in interpreted mode differs.*'scaled'.*39.0.*38.0"):
         assert_equivalent(pipeline, FRAME)
 
 
@@ -220,12 +220,12 @@ def test_corpus_nulls_only_inputs_no_step_requires():
 
 @pytest.mark.parametrize("mode", ["stepped", "fused"])
 def test_no_recompile_passes_for_a_value_only_retune(mode):
-    exe = Engine().bind(pipeline, mode=mode)
+    exe = Engine.resolve(mode)().bind(pipeline)
     exe.run(FRAME)
-    exe.score(FRAME.row(0, named=True))
+    exe.run(FRAME.row(0, named=True))
     with no_recompile():
         exe.run(FRAME, params={"scaled": {"factor": 3.0}})
-        exe.score(FRAME.row(0, named=True), params={"scaled": {"factor": 4.0}})
+        exe.run(FRAME.row(0, named=True), params={"scaled": {"factor": 4.0}})
 
 
 def test_no_recompile_fails_when_something_compiles():
@@ -236,7 +236,7 @@ def test_no_recompile_fails_when_something_compiles():
 
     with pytest.raises(AssertionError, match="numba compiled .*shifted"):
         with no_recompile():
-            Engine().bind(flow(shifted), mode="stepped").run(pl.DataFrame({"x": [1.0]}))
+            SteppedEngine().bind(flow(shifted)).run(pl.DataFrame({"x": [1.0]}))
 
 
 def test_corpus_adds_rounding_ties_for_every_float_input():

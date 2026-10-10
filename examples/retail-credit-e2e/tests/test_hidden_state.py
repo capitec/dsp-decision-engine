@@ -4,7 +4,7 @@ import json
 import math
 import warnings
 
-from decikit import ConfigurableStep, Engine, flow, step
+from decikit import ConfigurableStep, InterpretedEngine, flow, step
 from decikit.exceptions import HiddenStateWarning
 from decikit.lab import diff
 
@@ -16,7 +16,7 @@ from retail_credit.pipeline import build
 def test_building_the_pipeline_emits_no_hidden_state_warning():
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        Engine().bind(build(), mode="interpreted")
+        InterpretedEngine().bind(build())
     assert [str(w.message) for w in caught if issubclass(w.category, HiddenStateWarning)] == []
 
 

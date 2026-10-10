@@ -96,8 +96,8 @@ class CodeTable:
 class Coded:
     """A coded output kept as each row's index into `table` (-1 for null) until it is read.
 
-    `decode()` gives the Python values (what `score` returns) and `series()`
-    the polars column (what `run` returns), so neither path builds an object
+    `decode()` gives the Python values (what `run` on a record returns) and `series()`
+    the polars column (what `run` on a frame returns), so neither path builds an object
     column only to convert it again.
     """
 

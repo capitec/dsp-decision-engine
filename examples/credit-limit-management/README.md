@@ -87,7 +87,7 @@ Then [`allocation.allocate`](limit_mgmt/allocation.py) takes the whole book:
 | `flow`s composed into one `dag` with `.emit`, and step paths that become the params document | [pipeline.py](limit_mgmt/pipeline.py), [`configs/0.1.0/params.json`](configs/0.1.0/params.json) |
 | Multi-output steps, `param` with bounds, `missing_as`, `@helper` for a function a compiled step calls | [caps.py](limit_mgmt/caps.py), [exclusions.py](limit_mgmt/exclusions.py) |
 | Steps whose only input is a param, so a constant (the assessment mode) shows in the params document and the evidence record | [affordability.py](limit_mgmt/affordability.py) |
-| `@allow_fallback` for steps that are Python on purpose (dates, ragged lists), checked by `Engine(strict_compile=True)` | [population.py](limit_mgmt/population.py), [tests/test_serving.py](tests/test_serving.py) |
+| `@allow_fallback` for steps that are Python on purpose (dates, ragged lists), checked by `FusedEngine(strict_compile=True)` | [population.py](limit_mgmt/population.py), [tests/test_serving.py](tests/test_serving.py) |
 | One pipeline, three consumers: `decikit serve` for one account, `.compile("fused").run(frame)` over the whole book, and the same run with a candidate params document for simulation | [simulation.py](limit_mgmt/simulation.py), [tests/test_cycle.py](tests/test_cycle.py) |
 | A book-wide decision outside the engine, as a plain polars function over the engine's frame | [allocation.py](limit_mgmt/allocation.py), [tests/test_allocation.py](tests/test_allocation.py) |
 | Warm-up from `sample_request.json`, and serving the raw request bytes | [tests/test_serving.py](tests/test_serving.py) |
@@ -107,7 +107,7 @@ first build in a fresh checkout takes a minute while numba compiles):
 
 ```bash
 uv run decikit build
-# built config version 0.1.0 (pipeline limit_mgmt.pipeline:build, mode fused)
+# built config version 0.1.0 (pipeline limit_mgmt.pipeline:build, engine fused)
 ```
 
 Serve, and decide the sample account: a card at R15 000, grade 2, a steady salary credited nine days ago.

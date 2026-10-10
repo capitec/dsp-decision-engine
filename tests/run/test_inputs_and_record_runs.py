@@ -1,4 +1,4 @@
-"""Input dtypes survive score(), nulls follow each input's policy, and step errors propagate."""
+"""Input dtypes survive run() on a record, nulls follow each input's policy, and step errors propagate."""
 from __future__ import annotations
 
 import polars as pl
@@ -8,29 +8,29 @@ from decikit import flow, missing_as
 from decikit._engine.boundary.nulls import MissingInputError
 
 
-def test_score_preserves_int_precision_above_2_53(bind):
+def test_a_record_run_preserves_int_precision_above_2_53(bind):
     def big(n: int) -> int:
         return n * 3 + 1
 
     exe = bind(flow(big))
     n = 2 ** 53 + 1
-    assert exe.score({"n": n})["big"] == exe.run(pl.DataFrame({"n": [n]}))["big"][0] == n * 3 + 1
+    assert exe.run({"n": n})["big"] == exe.run(pl.DataFrame({"n": [n]}))["big"][0] == n * 3 + 1
 
 
-def test_score_types_a_bool_input_as_bool(bind):
+def test_a_record_run_types_a_bool_input_as_bool(bind):
     def flag(active: bool) -> bool:
         return not active
 
-    assert bind(flow(flag)).score({"active": True})["flag"] is False
+    assert bind(flow(flag)).run({"active": True})["flag"] is False
 
 
-def test_score_can_index_a_tuple_by_an_int_input(bind):
+def test_a_record_run_can_index_a_tuple_by_an_int_input(bind):
     def lookup(term: int) -> float:
         return (0.05, 0.06, 0.07, 0.08)[term]
 
     exe = bind(flow(lookup))
     via_run = exe.run(pl.DataFrame({"term": [0, 1, 2, 3]}))["lookup"].to_list()
-    assert [exe.score({"term": t})["lookup"] for t in range(4)] == via_run == [0.05, 0.06, 0.07, 0.08]
+    assert [exe.run({"term": t})["lookup"] for t in range(4)] == via_run == [0.05, 0.06, 0.07, 0.08]
 
 
 def test_an_int_input_declared_float_is_cast(bind):
@@ -56,25 +56,25 @@ def filled(bureau_score: float = missing_as(0.0)) -> float:
     return bureau_score * 0.01
 
 
-def test_score_raises_naming_a_required_input_absent_from_the_record(bind):
+def test_a_record_run_raises_naming_a_required_input_absent_from_the_record(bind):
     with pytest.raises(MissingInputError, match="input 'instalment' of step 'affordability' .* not in the input frame"):
-        bind(flow(affordability)).score({})
+        bind(flow(affordability)).run({})
 
 
 def test_a_missing_required_input_error_names_both_ways_to_default_it(bind):
     with pytest.raises(MissingInputError, match=r"declare `instalment: T = missing_as\(fill\)` or `instalment: T \| None`"):
-        bind(flow(affordability)).score({})
+        bind(flow(affordability)).run({})
 
 
 def test_a_step_in_front_defaults_the_input_of_a_step_reused_as_it_is(bind):
     def instalment(instalment: float = missing_as(0.0)) -> float:
         return instalment
 
-    assert bind(flow(instalment, affordability)).score({})["affordability"] == 0.0
+    assert bind(flow(instalment, affordability)).run({})["affordability"] == 0.0
 
 
-def test_score_fills_a_missing_as_input_absent_from_the_record(bind):
-    assert bind(flow(filled)).score({})["filled"] == 0.0
+def test_a_record_run_fills_a_missing_as_input_absent_from_the_record(bind):
+    assert bind(flow(filled)).run({})["filled"] == 0.0
 
 
 def test_run_raises_naming_a_required_column_absent_from_the_frame(bind):

@@ -26,7 +26,7 @@ def test_every_example_is_listed():
 # One process per project: the example packages register config types that other tests in this process also claim.
 SCRIPT = """
 import json, sys, warnings
-from decikit import Engine, HiddenStateWarning, ShadowedTableWarning
+from decikit import HiddenStateWarning, InterpretedEngine, ShadowedTableWarning
 from decikit.config import JsonFileStore
 from decikit.serving import RequestHandler
 
@@ -36,7 +36,7 @@ version = store.read(store.latest_version())
 handler = RequestHandler(store, package + ".pipeline:build")
 with warnings.catch_warnings(record=True) as caught:
     warnings.simplefilter("always")
-    exe = Engine().bind(handler.pipeline_fn(version.config), mode="interpreted")
+    exe = InterpretedEngine().bind(handler.pipeline_fn(version.config))
     exe.warn_shadowed_tables(version.config.get("params"))
 print(json.dumps([str(w.message) for w in caught if issubclass(w.category, (HiddenStateWarning, ShadowedTableWarning))]))
 """

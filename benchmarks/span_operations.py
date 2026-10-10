@@ -13,7 +13,7 @@ import polars as pl
 
 from decikit import flow, param
 from decikit.ops import Text
-from decikit._engine import Engine
+from decikit._engine import FusedEngine
 
 N = 200_000
 CALLS = 3000
@@ -71,11 +71,11 @@ cases = [("numeric kernel (the ceiling)", numeric, AMOUNT),
 
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
-    engines = [(name, Engine().bind(flow(fn, name="p"), mode="fused"), row) for name, fn, row in cases]
+    engines = [(name, FusedEngine().bind(flow(fn, name="p")), row) for name, fn, row in cases]
     # Latency first: a batch just before leaves the allocator churning.
-    results = [(name, *latency(exe.score, row), exe, row) for name, exe, row in engines]
+    results = [(name, *latency(exe.run, row), exe, row) for name, exe, row in engines]
     results = [(name, rows_per_s(exe.run, FRAME.select(list(row))), p50, p99) for name, p50, p99, exe, row in results]
 
-print(f"{'variant':<30}{'batch rows/s':>16}{'score p50 us':>14}{'score p99 us':>14}")
+print(f"{'variant':<30}{'batch rows/s':>16}{'record p50 us':>14}{'record p99 us':>14}")
 for name, batch, p50, p99 in results:
     print(f"{name:<30}{batch:>16,.0f}{p50:>14.1f}{p99:>14.1f}")
