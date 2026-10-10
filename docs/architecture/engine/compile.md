@@ -479,7 +479,9 @@ Kernel ['credit/offer_limit']
 
 Inside the first kernel, `offer` is a record pointer to a stack buffer; `offer_limit` reads the
 stored record array, so the run is split before it. A step returning a dict for a `Struct` output
-still runs, in Python.
+still runs, in Python. A struct column a kernel writes on some rows and a Python step on others (two
+branch arms, a loop's seed and its body) is held as the dicts a Python step returns, and a kernel
+reading it builds its records from them (`State.write`).
 
 ### Sinks: `Columnar` outputs
 
