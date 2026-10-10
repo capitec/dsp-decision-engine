@@ -21,7 +21,7 @@ export const CompositeLogicSelector: React.FC<CompositeLogicSelectorProps> = ({
 }) => {
   return (
     <Select value={value} onValueChange={(v) => onChange(v as 'and' | 'or' | 'not')}>
-      <SelectTrigger className={className}>
+      <SelectTrigger className={className} data-testid="composite-op">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

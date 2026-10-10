@@ -148,7 +148,7 @@ def test_removing_a_case_drops_its_condition(signed_in: Page):
 # ---- composite ------------------------------------------------------------------------------------------------------
 
 def condition_card(page: Page, n: int):
-    return sidebar(page).get_by_test_id("composite-condition").filter(has_text=re.compile(rf"^Condition {n}\b")).first
+    return sidebar(page).get_by_test_id("condition-row").filter(has_text=re.compile(rf"^Condition {n}\b")).first
 
 
 def pick_in_card(page: Page, card, trigger_text: str, option: str) -> None:
@@ -248,7 +248,7 @@ def test_nested_condition_can_be_added_inside_a_composite_condition(signed_in: P
     pick_in_card(signed_in, condition_card(signed_in, 1), "≤", "OR")
     sidebar(signed_in).get_by_role("button", name="Add Nested Condition").click()
     expect(sidebar(signed_in).get_by_text("Nested 1")).to_be_visible()
-    nested = sidebar(signed_in).get_by_test_id("composite-condition").filter(has_text="Nested 1").last
+    nested = sidebar(signed_in).get_by_test_id("condition-row").filter(has_text="Nested 1").last
     choose_feature(signed_in, "amount", scope=nested)
     save(signed_in)
 
