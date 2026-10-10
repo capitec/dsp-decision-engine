@@ -62,7 +62,9 @@ def test_saved_edit_survives_reload_and_leaving_and_coming_back(signed_in: Page)
     rename_rule(signed_in, "Edited")
     save(signed_in)
     signed_in.get_by_role("button", name="Back").click()
+    expect(signed_in).to_have_url(re.compile(r"/flat-rules$"))
     signed_in.go_back()
+    expect(signed_in).to_have_url(re.compile(rf"/flat-rules/{project}$"))
 
     expect(signed_in.get_by_test_id("rule-card")).to_have_count(1)
     assert rule_names(signed_in) == ["Edited"]
@@ -181,7 +183,6 @@ def test_a_very_long_rule_name_does_not_widen_the_page(signed_in: Page):
     assert signed_in.evaluate(NO_WIDENING)
 
 
-@pytest.mark.xfail(strict=True, reason="an unbroken 300-character rule description widens the page")
 def test_a_very_long_rule_description_does_not_widen_the_page(signed_in: Page):
     open_doc(signed_in, SMALL)
     card = rule_card(signed_in)
