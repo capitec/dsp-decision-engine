@@ -333,7 +333,7 @@ def test_an_engine_tag_is_resolved_to_an_engine(tmp_path):
 def test_a_strict_engine_from_the_environment_refuses_an_undeclared_fallback_at_stage(tmp_path, monkeypatch):
     from decikit import FusedEngine
     from decikit._settings import get_settings
-    from decikit.exceptions import DecikitError
+    from decikit.exceptions import EngineError
     from decikit.serving._handler import construct_handler_from_settings
 
     JsonFileStore(basepath=str(tmp_path)).create_version({"params": {}})
@@ -349,5 +349,6 @@ def test_a_strict_engine_from_the_environment_refuses_an_undeclared_fallback_at_
     finally:
         get_settings.cache_clear()
     assert handler.engine == FusedEngine(strict_compile=True)
-    with pytest.raises(DecikitError, match="labels/label runs in Python"):
+    with pytest.raises(EngineError, match="labels/label runs in Python") as refused:
         handler.stage()
+    assert "warm-up failed" not in str(refused.value)  # the refusal is not blamed on sample_request.json
