@@ -4,11 +4,11 @@ import json
 import re
 
 import pytest
-from playwright.sync_api import Page, Route, expect
+from playwright.sync_api import Page, expect
 
 import node_ui
 from flat_rules_ui import add_parameter, open_flat_rules
-from platform_ui import edit_is_stored, open_projects, open_with_edit, press_save, project_card, toast
+from platform_ui import edit_is_stored, first_held, open_projects, open_with_edit, press_save, project_card, toast
 from seed import create_project, get_project
 from test_flat_rule_params import flat_document
 
@@ -27,15 +27,6 @@ def count_saves(page: Page) -> list:
     seen = []
     page.on("request", lambda request: seen.append(request) if request.method == "PUT" and SAVE_URL.search(request.url) else None)
     return seen
-
-
-def held_save(page: Page, held: list) -> Route:
-    """The first save request the page sent to a `held` handler (each round trip lets pending routes arrive)."""
-    for _ in range(200):
-        if held:
-            return held[0]
-        page.evaluate("0")
-    raise AssertionError("no save request was sent")
 
 
 def failure_shown(page: Page, kind: str) -> None:
@@ -103,7 +94,7 @@ def test_a_slow_save_shows_progress_and_repeated_clicks_send_one_request(signed_
 
     signed_in.get_by_role("button", name="Save", exact=True).dblclick()
     expect(signed_in.get_by_role("button", name="Saving...")).to_be_disabled()
-    held_save(signed_in, held).continue_()
+    first_held(signed_in, held).continue_()
 
     expect(toast(signed_in, "Project Saved")).to_be_visible()
     assert len(seen) == 1
@@ -118,7 +109,7 @@ def test_an_edit_made_while_a_save_is_in_flight_is_not_reported_as_saved(signed_
     on_saves(signed_in, held.append)
 
     press_save(signed_in)
-    held_save(signed_in, held)
+    first_held(signed_in, held)
     node_ui.nudge(signed_in, "yes")
     held[0].continue_()
     expect(toast(signed_in, "Project Saved")).to_be_visible()

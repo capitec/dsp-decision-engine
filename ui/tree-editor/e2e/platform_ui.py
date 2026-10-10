@@ -1,6 +1,6 @@
 """Project list, folder and sharing actions of the platform pages: each does what a user does, nothing more."""
 
-from playwright.sync_api import Locator, Page, expect
+from playwright.sync_api import Locator, Page, Route, expect
 
 import node_ui
 from flat_rules_ui import open_flat_rules
@@ -147,6 +147,15 @@ def edit_is_stored(page: Page, project: str, kind: str) -> bool:
     if kind == "flat":
         return len(data["rules"]) == 2
     return next(n for n in data["nodes"] if n["id"] == "root")["position"] != node_ui.loan_document()["nodes"][0]["position"]
+
+
+def first_held(page: Page, held: list) -> Route:
+    """The first route a handler appended to `held`; each round trip to the page lets pending route handlers run."""
+    for _ in range(200):
+        if held:
+            return held[0]
+        page.evaluate("0")
+    raise AssertionError("the page sent no request to the held route")
 
 
 def press_save(page: Page) -> None:
