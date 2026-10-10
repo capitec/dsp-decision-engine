@@ -221,7 +221,10 @@ class Executable:
         """Every step that runs outside the shared kernel, keyed by step path, with the reason why.
 
         A step the author accepted with `@allow_fallback` is reported too, with
-        `"@allow_fallback: "` in front of its reason.
+        `"@allow_fallback: "` in front of its reason. A kernel numba refuses
+        only when it is launched runs each of its steps in Python from then on,
+        and each is listed then, as `"split at launch: <numba's error>"`. Fused
+        mode warns about each with a `FallbackWarning`, stepped mode does not.
 
         Example::
 

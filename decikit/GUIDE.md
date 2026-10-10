@@ -677,10 +677,10 @@ like `DECIKIT_API__PIPELINE=myapp.pipeline:build`.
 **The plain type always works.** Annotate a step `str`, `date`, `list[dict]`,
 `dict` or a TypedDict and it runs in every mode and gives the same answer. A
 numba kernel holds only numbers (`float`, `int`, `bool`, `Decimal`) and `Text`, so a step
-reading or writing anything else runs on its own, row by row, in Python, and says so once
-per step with a `FallbackWarning`. Only speed changes: such a step runs at
-under 1M rows/s in a batch instead of a kernel's hundreds of millions, and
-costs under 10 µs more on a single record's `run()`. Trees and decision tables read
+reading or writing anything else runs on its own, row by row, in Python. Fused mode says so
+once per step with a `FallbackWarning`; stepped mode only lists it in `fallbacks()`. Only
+speed changes: such a step runs at under 1M rows/s in a batch instead of a kernel's hundreds
+of millions, and costs under 10 µs more on a single record's `run()`. Trees and decision tables read
 their strings as byte spans inside their kernels, so a string rule set does not
 pay this at all.
 
