@@ -14,6 +14,7 @@ import time
 import typing as t
 import uuid
 from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 
 from fastapi import WebSocket
 from sqlalchemy import func, select
@@ -71,11 +72,11 @@ class Hub:
         self._validate_soon(project_id, room)
 
     def leave(self, project_id: uuid.UUID, client: Client) -> None:
+        # The room stays: a client joining right now is added to this room object once it is caught up.
+        # ponytail: one small Room per project opened on this process; evict idle rooms under their lock if it grows
         room = self.rooms.get(project_id)
         if room is not None:
             room.clients.discard(client)
-            if not room.clients:
-                del self.rooms[project_id]
 
     def pump_soon(self, project_id: uuid.UUID) -> None:
         """Send this project's new versions to its sockets here (coalesced: one fetch serves many calls)."""
@@ -89,8 +90,14 @@ class Hub:
     async def _pump(self, project_id: uuid.UUID, room: Room) -> None:
         while room.dirty:
             room.dirty = False
-            async with room.lock:
-                await self._send_rows(project_id, room)
+            try:
+                async with room.lock:
+                    await self._send_rows(project_id, room)
+            except Exception as e:
+                # No other notification may come for this version, so the pump itself tries again.
+                logger.warning("live fan-out project=%s failed, retrying: %s", project_id, e)
+                room.dirty = True
+                await asyncio.sleep(1)
         self._validate_soon(project_id, room)
 
     async def _send_rows(self, project_id: uuid.UUID, room: Room) -> None:
@@ -125,8 +132,15 @@ class Hub:
                                                       .where(Project.id == project_id))).one()
             if version == room.validated:
                 return
-            started = time.perf_counter()
-            errors = await asyncio.get_running_loop().run_in_executor(self.validator, validation_errors, doc)
+            started, pool = time.perf_counter(), self.validator
+            try:
+                errors = await asyncio.get_running_loop().run_in_executor(pool, validation_errors, doc)
+            except BrokenProcessPool:
+                # The process was killed (out of memory, say); a new one validates the next version.
+                logger.warning("live validator died on project=%s version=%d", project_id, version)
+                if self.validator is pool:
+                    self.validator = _validator()
+                return
             logger.info("live validation project=%s version=%d errors=%d ms=%.1f", project_id, version, len(errors),
                         (time.perf_counter() - started) * 1e3)
             room.validation = json.dumps({"type": "validation", "version": version, "errors": errors})
@@ -135,7 +149,7 @@ class Hub:
                 await _send(client, room.validation)
 
     def start(self) -> None:
-        self.validator = ProcessPoolExecutor(1, mp_context=multiprocessing.get_context("spawn"))
+        self.validator = _validator()
         self.listener = asyncio.create_task(self._listen())
 
     async def stop(self) -> None:
@@ -176,6 +190,10 @@ class Hub:
                     with contextlib.suppress(Exception):
                         await conn.close()
             await asyncio.sleep(1)
+
+
+def _validator() -> ProcessPoolExecutor:
+    return ProcessPoolExecutor(1, mp_context=multiprocessing.get_context("spawn"))
 
 
 async def _send(client: Client, text: str) -> bool:

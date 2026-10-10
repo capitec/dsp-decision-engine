@@ -241,6 +241,8 @@ def test_every_project_appears_on_exactly_one_page(signed_in: Page):
     names += signed_in.get_by_test_id("project-card").locator("h3, [class*=text-lg]").all_inner_texts()
     signed_in.get_by_role("button", name="Next").click()
     expect(signed_in.get_by_text("Showing 13-14 of 14 projects")).to_be_visible()
+    # The label follows the page number at once; the cards follow when the page has loaded.
+    expect(signed_in.get_by_test_id("project-card")).to_have_count(2)
     names += signed_in.get_by_test_id("project-card").locator("h3, [class*=text-lg]").all_inner_texts()
 
     assert sorted(names) == [f"Bulk {i:02d}" for i in range(14)]

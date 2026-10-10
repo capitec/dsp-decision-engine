@@ -5,6 +5,7 @@ DSP_DB__PORT pointing at it: the row lock and the log they check are Postgres be
 """
 
 import asyncio
+import json
 import os
 import uuid
 
@@ -52,6 +53,17 @@ def test_a_malformed_ops_message_is_rejected_whole(ops):
 def test_an_ops_message_without_an_id_with_a_bad_base_or_too_many_ops_is_rejected(message):
     with pytest.raises(Rejected):
         check_message(message)
+
+
+@pytest.mark.parametrize("op", [
+    {"op": "replace", "path": "/rules/a/meta/name", "value": "nul \u0000 inside"},
+    {"op": "add", "path": "/parameters/p", "value": {"nul \u0000 key": 1}},
+    {"op": "remove", "path": "/parameters/nul \u0000 key"},
+])
+def test_an_ops_message_with_a_nul_character_is_rejected_as_the_database_cannot_store_it(op):
+    # Otherwise the write fails, the socket drops, and the client resends the same message for ever.
+    with pytest.raises(Rejected):
+        check_message({"type": "ops", "id": "m1", "base": 1, "ops": [op]})
 
 
 def test_a_well_formed_ops_message_passes():
@@ -263,6 +275,97 @@ async def test_two_writers_on_one_project_are_serialised_by_the_row_lock(project
     data = (await stored()).project_data
     assert [r["meta"]["name"] for r in data["rules"]] == ["One", "Two"]
     assert [v for v, *_ in await log(project_id)] == [2, 3]
+
+
+# ---- fan-out ---------------------------------------------------------------------------------------------------
+
+class Socket:
+    """A websocket that records what the hub sends; `on_send` runs before each send."""
+
+    def __init__(self, on_send=None):
+        self.sent, self.on_send = [], on_send
+
+    async def send_text(self, text):
+        if self.on_send:
+            self.on_send()
+        self.sent.append(json.loads(text))
+
+    def versions(self):
+        return [m["version"] for m in self.sent if m["type"] == "applied"]
+
+
+@db
+@pytest.mark.asyncio
+async def test_a_client_joining_while_the_last_other_client_leaves_still_gets_new_versions(project):
+    from dsp_decikit.services.live_hub import Client, Hub
+    from dsp_decikit.services.live_sync import apply_message
+    project_id, _ = project
+    hub = Hub()
+    first = Client(Socket(), "c1")
+    await hub.join(project_id, first, 1)
+    # The other client leaves while the joiner is being brought up to date (here: while it gets its snapshot).
+    second = Client(Socket(on_send=lambda: hub.leave(project_id, first)), "c2")
+
+    await hub.join(project_id, second, 0)
+    await apply_message(project_id, "c3", "m1", 1, [name("a", "After the join")])
+    hub.pump_soon(project_id)
+    await asyncio.gather(*[r.pumping for r in hub.rooms.values() if r.pumping])
+
+    assert second.ws.versions() == [2]
+
+
+@db
+@pytest.mark.asyncio
+async def test_a_version_the_fan_out_failed_to_fetch_still_reaches_a_connected_client(project):
+    from dsp_decikit.services.live_hub import Client, Hub
+    from dsp_decikit.services.live_sync import apply_message
+    project_id, _ = project
+    hub = Hub()
+    client = Client(Socket(), "c1")
+    await hub.join(project_id, client, 1)
+    fetch, failures = hub._send_rows, [ConnectionError("no connection from the pool")]
+
+    async def flaky(*args):
+        if failures:
+            raise failures.pop()
+        await fetch(*args)
+
+    hub._send_rows = flaky
+    await apply_message(project_id, "c2", "m1", 1, [name("a", "Fetched later")])
+    hub.pump_soon(project_id)  # the only notification this version gets
+
+    for _ in range(50):
+        if client.ws.versions():
+            break
+        await asyncio.sleep(0.1)
+    assert client.ws.versions() == [2]
+
+
+@db
+@pytest.mark.asyncio
+async def test_after_the_validator_process_dies_the_next_version_is_validated_again(project):
+    import multiprocessing
+    from concurrent.futures import ProcessPoolExecutor
+    from concurrent.futures.process import BrokenProcessPool
+    from dsp_decikit.services.live_hub import Client, Hub
+    from dsp_decikit.services.live_sync import apply_message
+    project_id, _ = project
+    hub = Hub()
+    hub.validator = ProcessPoolExecutor(1, mp_context=multiprocessing.get_context("spawn"))
+    with pytest.raises(BrokenProcessPool):  # killed, as by the out-of-memory killer
+        await asyncio.get_running_loop().run_in_executor(hub.validator, os._exit, 1)
+    client = Client(Socket(), "c1")
+    await hub.join(project_id, client, 1)
+    await asyncio.gather(*[r.validating for r in hub.rooms.values() if r.validating], return_exceptions=True)
+
+    await apply_message(project_id, "c2", "m1", 1, [name("a", "Validated")])
+    hub.pump_soon(project_id)
+    for _ in range(300):
+        if any(m["type"] == "validation" and m["version"] == 2 for m in client.ws.sent):
+            break
+        await asyncio.sleep(0.1)
+    hub.validator.shutdown()
+    assert any(m["type"] == "validation" and m["version"] == 2 for m in client.ws.sent)
 
 
 # ---- the offline rule, against Postgres ---------------------------------------------------------------------------

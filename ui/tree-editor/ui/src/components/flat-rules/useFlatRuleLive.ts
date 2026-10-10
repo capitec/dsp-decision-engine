@@ -74,9 +74,7 @@ export function useFlatRuleLive(project: FlatRuleProjectDetail | null) {
         remember(doc);
         setConflict({ names: [...new Set(conflicts.map(label))], reason, doc });
       },
-      validation: (errors, version) => {
-        if (version === sync.version) store.getState().setValidationErrors(errors);
-      },
+      validation: (errors) => store.getState().setValidationErrors(errors),
       settled: markSavedIfIdle,
     });
 
