@@ -267,13 +267,10 @@ class Executable:
         """Every step that runs outside the shared kernel, keyed by step path, with the reason why.
 
         A step the author accepted with `@allow_fallback` is reported too, with
-        `"@allow_fallback: "` in front of its reason. Each step of a kernel
-        numba refuses only at launch is reported as `"split at launch: <numba's
-        error>"`. Building launches a kernel holding a step that returns a
-        `dict` or a `list` on zero rows, so such a step is listed before any
-        row runs; a kernel refused for another reason is listed when it is.
-        Fused mode warns about each with a `FallbackWarning`, stepped mode does
-        not.
+        `"@allow_fallback: "` in front of its reason. A kernel numba refuses
+        only when it is launched runs each of its steps in Python from then on,
+        and each is listed then, as `"split at launch: <numba's error>"`. Fused
+        mode warns about each with a `FallbackWarning`, stepped mode does not.
 
         Example::
 

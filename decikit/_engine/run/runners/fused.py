@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from typing import Iterable, Iterator
 
-from decikit._engine.compile import FALLBACK_ERRORS, ArmOutOfRange
+from decikit._engine.compile import FALLBACK_ERRORS, ArmOutOfRange, compile_packed
 from decikit._engine.run.params import RunParams
 from decikit._engine.run.runners.base import Checkpoint
 from decikit._engine.run.runners.interpreted import _Scope
-from decikit._engine.run.runners.stepped import Compiled, SteppedRunner
+from decikit._engine.run.runners.stepped import Compiled, SteppedRunner, _external
 from decikit._engine.run.state import State, all_set
-from decikit._engine.wiring.plan import Branch, Call, Loop, Sequence
+from decikit._engine.wiring.plan import Branch, Call, Loop, Plan, Sequence
 
 
 class FusedRunner(SteppedRunner):
@@ -34,6 +34,12 @@ class FusedRunner(SteppedRunner):
 
     fuse = True
     loud = True
+
+    def _build(self, plan: Plan, lazy: bool) -> Compiled:
+        compiled = super()._build(plan, lazy)
+        packed = compile_packed(plan, lazy, compiled.python)
+        compiled.reads.update((id(k), _external(k)) for k in packed.values())
+        return compiled._replace(packed=packed)
 
     def _sequence(self, seq: Sequence, state: State, params: RunParams, scope: _Scope) -> Iterator[Checkpoint]:
         units = scope.ctx.compiled.units

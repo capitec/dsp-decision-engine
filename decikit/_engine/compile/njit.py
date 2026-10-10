@@ -23,7 +23,7 @@ from decikit._engine.compile.rows import rows_probe
 from decikit._engine.compile.span import SPAN
 from decikit._engine.compile.structs import bad_field, struct_dtype, struct_schema
 from decikit._engine.ir.decls import (KIND_DTYPES, FeatureKind, Input, NullPolicy, Output, base_annotation,
-                                     feature_kind, nullable)
+                                     feature_kind, is_typed, nullable)
 from decikit._engine.ir.nodes import CallNode
 from decikit._engine.params import NodeParams
 from decikit.steps._helpers import allows_fallback, helper_signatures
@@ -172,12 +172,17 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None, bool]:
                           if base_annotation(i.annotation) is str), None))
     if no_kernel is not None:
         return key, dispatcher.py_func, no_kernel, declared
+    # A function step returning a dict, a list or another object compiles alone, but no kernel column
+    # stores it: inside a kernel it fails at launch and takes every other step of the kernel with it.
+    unstored = next((f"writes '{o.name}' as {o.annotation}, which no kernel stores" for o in node.outputs
+                     if node.kind == "scalar" and not _stored(base_annotation(o.annotation))), None)
     sig = _probe_signature(node)
     if sig is None:
-        return key, dispatcher, None, declared
+        return key, dispatcher if unstored is None else dispatcher.py_func, unstored, declared
     reason = once(_REASONS, (key, sig), lambda: _refused(dispatcher.compile, sig))
     if reason is not None and undeclared:
         reason = f"calls '{undeclared[0]}' without @helper or @allow_fallback: {reason}"
+    reason = reason or unstored
     # A nullable struct output has no record array with a per-row validity mask a kernel stores.
     nullable_struct = next((o for o in node.outputs
                             if nullable(o.annotation) and struct_item(base_annotation(o.annotation)) is not None), None)
@@ -215,6 +220,12 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None, bool]:
     if reason is None and ragged_item is not None:
         return (*jit(_ragged_wrapper(dispatcher)), None, declared)
     return key, (dispatcher if reason is None else dispatcher.py_func), reason, declared
+
+
+def _stored(annotation: Any) -> bool:
+    # A number, a `Struct` record or `Columnar` rows; `Any` is left to numba, as an unannotated step's output.
+    return (annotation is Any or is_typed(annotation) or struct_item(annotation) is not None
+            or columnar_item(annotation) is not None)
 
 
 def _ragged_reason(output: Output, item: Any, dispatcher: Dispatcher, sig: tuple) -> str | None:
