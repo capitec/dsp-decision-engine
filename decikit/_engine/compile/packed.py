@@ -86,9 +86,12 @@ def _calls(r: Resolved) -> Iterator[Call]:
         yield r.condition
         for arm in r.arms:
             yield from _calls(arm)
-    else:
+    elif isinstance(r, Loop):
         yield r.condition
         yield from _calls(r.body)
+    else:
+        # An each or a state machine runs outside any kernel.
+        raise _Unpackable
 
 
 def _trace_factor(program: tuple) -> int:
