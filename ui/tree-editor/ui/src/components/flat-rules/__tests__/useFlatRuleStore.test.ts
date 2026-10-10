@@ -140,7 +140,7 @@ describe('opening a document', () => {
   it('puts the decikit errors on the rule they name and sets the section flags', () => {
     const errors = [...flatErrors.empty_composite, ...flatErrors.parameter_not_an_object, ...flatErrors.output_dtypes_not_a_list];
     state().initializeFromProject({ ...project(), validation_errors: errors });
-    const [treeId] = [state().trees[1].id];
+    const treeId = state().trees[1].id;
     expect([...state().validationErrors.keys()]).toEqual([1]);
     expect(state().ruleErrors.get(treeId)).toContain('at least one condition');
     expect(state().hasParameterErrors).toBe(true);

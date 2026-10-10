@@ -135,7 +135,7 @@ describe('flat-rule errors from decikit', () => {
   it('every error in every case formats to a non-empty line', () => {
     for (const [name, errors] of Object.entries(flat)) {
       const parsed = parseFlatRuleValidationErrors(errors);
-      for (const p of parsed) expect(formatRuleErrors([p]), name).toMatch(/^• .+: .+|^• .+/);
+      for (const p of parsed) expect(formatRuleErrors([p]), name).toMatch(/^• \S/);
       expect(parsed.length === 0, name).toBe(errors.length === 0);
     }
   });

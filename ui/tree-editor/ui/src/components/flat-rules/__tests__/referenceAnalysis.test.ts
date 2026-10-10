@@ -80,7 +80,7 @@ describe('findStructRecordReferences', () => {
     ]);
   });
 
-  it('ignores a null value, a list-typed column that holds a non-list, and other types', () => {
+  it('finds nothing for a type no column uses or a record nobody references', () => {
     expect(findStructRecordReferences('ann', 'tier', config())).toEqual([]);
     expect(findStructRecordReferences('carl', 'person', config())).toEqual([]);
   });
