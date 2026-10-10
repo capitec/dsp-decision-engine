@@ -65,6 +65,7 @@ from decikit.steps.flowfile import load_flow
 
 if TYPE_CHECKING:
     from decikit._engine.run import Engine, Executable, FusedEngine, InterpretedEngine, NumbaEngine, SteppedEngine
+    from decikit._engine.run.engines import engine
     from decikit.steps.scorecard import ScorecardConfig
     from decikit.steps.tables import DecisionTableConfig
     from decikit.steps.trees import TreeConfig
@@ -80,7 +81,7 @@ __all__ = [
     "step", "frame_step", "flow", "dag", "branch", "loop", "each", "optimise", "EachMode", "allow_fallback",
     "helper", "param", "param_table", "missing_as", "ParamTable", "PolarsSchema", "TreeConfig", "DecisionTableConfig", "ScorecardConfig",
     # run
-    "Engine", "InterpretedEngine", "SteppedEngine", "FusedEngine", "Executable", "load_flow", "describe",
+    "engine", "Engine", "InterpretedEngine", "SteppedEngine", "FusedEngine", "Executable", "load_flow", "describe",
     # extend
     "Step", "ConfigurableStep", "CustomFunction", "Value", "ParamRef", "StepRef", "NumbaEngine",
     # errors
@@ -95,6 +96,7 @@ _LAZY = {
     "SteppedEngine": "decikit._engine.run",
     "FusedEngine": "decikit._engine.run",
     "Executable": "decikit._engine.run",
+    "engine": "decikit._engine.run.engines",
     "TreeConfig": "decikit.steps.trees",
     "DecisionTableConfig": "decikit.steps.tables",
     "ScorecardConfig": "decikit.steps.scorecard",
