@@ -319,15 +319,16 @@ def child(pipe: str, cfg: str, size: str) -> dict:
 
         def once():
             run(df) if engine == "fused" else run(lf).collect()
+    # A fast run repeats in the child (up to 20 times or 3 s) and reports the median; a slow one runs once.
     walls = []
-    for _ in range(20 if n <= 10_000 else 1):
+    while not walls or (len(walls) < 20 and sum(walls) < 3):
         t = time.perf_counter()
         once()
         walls.append(time.perf_counter() - t)
     out.unlink(missing_ok=True)
     wall = statistics.median(walls)
     return {"pipeline": pipe, "config": cfg, "size": size, "rows": n, "status": "ok", "build_s": round(build, 3),
-            "load_s": round(load, 3), "wall_s": round(wall, 4), "rows_per_s": round(n / wall),
+            "load_s": round(load, 3), "wall_s": round(wall, 4), "first_s": round(walls[0], 4), "inner": len(walls), "rows_per_s": round(n / wall),
             "peak_rss_mb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024)}
 
 
