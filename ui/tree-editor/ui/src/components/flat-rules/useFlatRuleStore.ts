@@ -246,8 +246,7 @@ const store = create<FlatRuleState>()(
               } as RuleTableRow;
             }
 
-            // Unary/composite nodes: recurse into then field
-            if (hasThen && (node.type === 'unary' || node.type === 'composite')) {
+            if ((hasThen || hasOtherwise) && (node.type === 'unary' || node.type === 'composite')) {
               return {
                 ...node,
                 then: node.then ? (updateNodeRecursively(node.then) || node.then) : node.then,
