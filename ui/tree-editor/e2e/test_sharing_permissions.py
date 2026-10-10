@@ -6,19 +6,19 @@ import pytest
 from playwright.sync_api import Page, expect
 
 import node_ui
-from flat_rules_ui import open_flat_rules
 from platform_fixtures import Other, other  # noqa: F401  (the fixture)
 from platform_ui import (
     expand_folder,
     folder_row,
     open_projects,
-    project_card,
     project_action,
+    project_card,
     select_folder,
     share_folder_with,
     share_project_with,
     toast,
 )
+from real_trees_ui import open_project
 from seed import create_folder, create_project, get_project, list_folders, list_projects, share_folder, share_project
 from test_flat_rule_params import flat_document
 
@@ -30,14 +30,6 @@ def attempt_save(page: Page) -> int:
     with page.expect_response(PUT) as reply:
         page.get_by_role("button", name="Save", exact=True).click()
     return reply.value.status
-
-
-def open_editor(page: Page, kind: str, project: str) -> None:
-    if kind == "flat":
-        open_flat_rules(page, project)
-    else:
-        page.goto(f"/projects/{project}")
-        expect(page.get_by_role("button", name="Add Node")).to_be_visible(timeout=20_000)
 
 
 def make_edit(page: Page, kind: str) -> None:
@@ -120,7 +112,7 @@ def test_overview_of_the_other_user_counts_and_labels_a_shared_project(signed_in
 @pytest.mark.parametrize("kind", ["flat", "tree"])
 def test_a_read_write_user_can_save_and_the_owner_sees_it(signed_in: Page, other: Other, kind: str):
     project = seed_shared(signed_in, other, kind, "write")
-    open_editor(other.page, kind, project)
+    open_project(other.page, project, kind == "flat", timeout=30_000)
 
     make_edit(other.page, kind)
 
@@ -133,7 +125,7 @@ def test_a_read_write_user_can_save_and_the_owner_sees_it(signed_in: Page, other
 def test_a_read_only_users_save_is_refused_with_a_message_and_stores_nothing(signed_in: Page, other: Other, kind: str):
     project = seed_shared(signed_in, other, kind, "read")
     before = stored_document(signed_in, project)
-    open_editor(other.page, kind, project)
+    open_project(other.page, project, kind == "flat", timeout=30_000)
 
     make_edit(other.page, kind)
 
