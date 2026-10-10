@@ -71,7 +71,8 @@ def prepared_accounts(
         opened = a.get("opened_date")
         months = (decision_date.year - opened.year) * 12 + decision_date.month - opened.month if opened else 999
         expiry = a.get("quotation_expiry_date")
-        out.append({**a, "months_since_opened": months,
+        # A record rebuilt from a frame row holds null for a key the account left out; the declared fields are not nullable
+        out.append({**{k: v for k, v in a.items() if v is not None}, "months_since_opened": months,
                     "quotation_held": bool(a.get("quotation_reference")) and expiry is not None and expiry >= decision_date,
                     "is_nominated": a["account_ref"] in client_nominated_settle,
                     "is_excluded": a["account_ref"] in client_excluded_settle})
