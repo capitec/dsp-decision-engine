@@ -1,9 +1,9 @@
-"""Writing project versions: every write locks the project row, bumps its version, logs the ops that made the new
-version in `project_ops` and notifies the `project_ops` channel in the same transaction.
+"""Writing project versions: every document write locks the project row, bumps its version, logs the ops that made
+the new version in `project_ops` and notifies the `project_ops` channel in the same transaction.
 
 A live message (`apply_message`) follows the online rule: an op inside something another client changed since the
 message's base is dropped, the rest apply, and the last writer wins per field. A REST save (`save_version`) is
-one root-replace op.
+one root-replace op; only document changes make versions.
 """
 
 import json
@@ -119,12 +119,18 @@ async def _commit_version(session: AsyncSession, project: Project, ops: list, cl
 
 async def save_version(session: AsyncSession, project_id: uuid.UUID, base_version: t.Optional[int],
                        changes: t.Dict[str, t.Any], client_id: str, msg_id: str) -> int:
-    """Write `changes` (columns of the project) as the next version; the caller commits. `project_data` is logged as
-    one root-replace op. Raises StaleVersion when `base_version` is given and the project has moved on."""
+    """Write `changes` (columns of the project); the caller commits. Only a document change makes a new version,
+    logged as one root-replace op; a rename or move keeps the version. Raises StaleVersion when `base_version` is
+    given and the project has moved on."""
     project = await _locked(session, project_id)
     if base_version is not None and project.version != base_version:
         raise StaleVersion(project.version)
-    ops = [{"op": "replace", "path": "", "value": changes["project_data"]}] if "project_data" in changes else []
+    if "project_data" not in changes:
+        await session.execute(update(Project).where(Project.id == project_id)
+                              .values(**changes, updated_at=datetime.now(timezone.utc))
+                              .execution_options(synchronize_session=False))
+        return project.version
+    ops = [{"op": "replace", "path": "", "value": changes["project_data"]}]
     return await _commit_version(session, project, ops, client_id, msg_id, **changes)
 
 

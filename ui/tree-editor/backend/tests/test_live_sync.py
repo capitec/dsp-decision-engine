@@ -228,17 +228,17 @@ async def test_a_rest_save_is_logged_as_one_root_replace(project):
 
 @db
 @pytest.mark.asyncio
-async def test_a_rest_save_that_only_renames_logs_an_empty_message(project):
+async def test_a_rest_save_that_only_renames_keeps_the_version_and_logs_nothing(project):
     from dsp_decikit.services.live_sync import save_version
     from dsp_decikit.db.session import db_session
     project_id, stored = project
 
     async with db_session() as session:
-        await save_version(session, project_id, None, {"name": "Renamed"}, "rest", "m1")
+        assert await save_version(session, project_id, None, {"name": "Renamed"}, "rest", "m1") == 1
         await session.commit()
 
-    assert (await stored()).name == "Renamed"
-    assert await log(project_id) == [(2, "rest", "m1", [])]
+    assert ((await stored()).name, (await stored()).version) == ("Renamed", 1)
+    assert await log(project_id) == []
 
 
 @db
