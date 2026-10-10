@@ -243,7 +243,6 @@ const store = create<FlatRuleState>()(
               return {
                 ...node,
                 branches: node.branches.map(branch => updateNodeRecursively(branch) || branch),
-                otherwise: node.otherwise ? (updateNodeRecursively(node.otherwise) || node.otherwise) : node.otherwise
               } as RuleTableRow;
             }
 
@@ -279,7 +278,6 @@ const store = create<FlatRuleState>()(
               return {
                 ...node,
                 branches: node.branches.map(branch => updateNodeRecursively(branch)),
-                otherwise: node.otherwise ? updateNodeRecursively(node.otherwise) : node.otherwise
               } as RuleTableRow;
             }
 
