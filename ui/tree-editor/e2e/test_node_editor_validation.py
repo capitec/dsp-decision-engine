@@ -205,7 +205,6 @@ def test_leaf_pointing_past_the_output_records_is_reported_with_its_node(signed_
 
 # ---- editor behaviour: unsaved changes, leaving, export ---------------------------------------------------------------
 
-@pytest.mark.xfail(strict=True, reason="every tree opens marked 'Unsaved changes' before any edit, also one the editor has just saved")
 def test_clean_tree_has_no_unsaved_indicator_and_save_is_disabled(signed_in: Page):
     open_tree(signed_in, loan_document())
     signed_in.wait_for_load_state("networkidle")

@@ -132,8 +132,8 @@ interface EditorStoreState {
 
   // Actions
   setInputSchema: (schema: PolarsSchema | ((prev: PolarsSchema) => PolarsSchema)) => void;
-  setNodes: (nodes: Node[] | ((prev: Node[]) => Node[])) => void;
-  setEdges: (edges: Edge[] | ((prev: Edge[]) => Edge[])) => void;
+  setNodes: (nodes: Node[] | ((prev: Node[]) => Node[]), dirty?: boolean) => void;
+  setEdges: (edges: Edge[] | ((prev: Edge[]) => Edge[]), dirty?: boolean) => void;
   setSubtrees: (subtrees: Subtree[] | ((prev: Subtree[]) => Subtree[])) => void;
 
   // v2 setters
@@ -204,7 +204,7 @@ const editorStore = create<EditorStoreState>()(
       isDirty: true
     })),
 
-    setNodes: (nodes) => set((state) => {
+    setNodes: (nodes, dirty = true) => set((state) => {
       const updatedNodes = typeof nodes === 'function' ? nodes(state.nodes) : nodes;
       const extractedFeatures = extractFeatures(updatedNodes);
 
@@ -238,14 +238,14 @@ const editorStore = create<EditorStoreState>()(
       return {
         nodes: updatedNodes,
         input_schema: updatedInputSchema,
-        isDirty: true,
+        isDirty: dirty || state.isDirty,
         // Don't clear validation errors here - they persist until save succeeds or user edits the invalid node
       };
     }),
 
-    setEdges: (edges) => set((state) => ({
+    setEdges: (edges, dirty = true) => set((state) => ({
       edges: typeof edges === 'function' ? edges(state.edges) : edges,
-      isDirty: true
+      isDirty: dirty || state.isDirty
     })),
 
     setSubtrees: (subtrees) => set((state) => ({

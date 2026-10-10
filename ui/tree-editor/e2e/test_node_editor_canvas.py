@@ -145,7 +145,6 @@ def test_selecting_a_node_an_edge_and_the_empty_canvas_shows_the_matching_panel(
     expect(sidebar(signed_in).get_by_text("Node Type")).to_be_visible()
 
 
-@pytest.mark.xfail(strict=True, reason="selecting a node marks the project 'Unsaved changes'")
 def test_selection_does_not_mark_the_project_unsaved(signed_in: Page):
     open_tree(signed_in, loan_document())
     settle(signed_in)
