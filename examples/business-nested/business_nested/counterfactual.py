@@ -8,7 +8,7 @@ from __future__ import annotations
 import copy
 from functools import cache
 
-from decikit import Engine, Executable, flow
+from decikit import Executable, InterpretedEngine, flow
 
 from business_nested import structure
 from business_nested.entity import entity_unit
@@ -51,17 +51,17 @@ def single_event_counterfactual(executable: Executable, record: dict, event_id: 
 
 @cache
 def _resolver() -> Executable:
-    return Engine().bind(flow(structure.resolved_entities), mode="interpreted")
+    return InterpretedEngine().bind(flow(structure.resolved_entities))
 
 
 @cache
 def _entity_executable() -> Executable:
-    return Engine().bind(entity_unit(), mode="interpreted")
+    return InterpretedEngine().bind(entity_unit())
 
 
 @cache
 def _decision_executable() -> Executable:
-    return Engine().bind(decision_unit(), mode="interpreted")
+    return InterpretedEngine().bind(decision_unit())
 
 
 def reassess_entity(record: dict, original: dict, entity_id: int) -> dict:

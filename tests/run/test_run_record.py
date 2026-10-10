@@ -6,7 +6,7 @@ import time
 import pytest
 
 from decikit import flow, missing_as, param
-from decikit._engine import Engine
+from decikit._engine import Engine, FusedEngine
 from decikit._engine.params import ParamsError
 
 
@@ -64,7 +64,7 @@ def test_a_bad_retune_is_a_hard_error(bind):
 
 @pytest.mark.parametrize("mode", ["stepped", "fused"])
 def test_sixteen_threads_run_records_concurrently_with_no_cross_talk(mode):
-    exe = Engine().bind(flagship, mode=mode)
+    exe = Engine.resolve(mode)().bind(flagship)
     exe.run(ROW)
     n_threads, rounds = 16, 200
     start = threading.Barrier(n_threads)
@@ -93,7 +93,7 @@ def test_sixteen_threads_run_records_concurrently_with_no_cross_talk(mode):
 
 def test_fused_flagship_record_p50_is_within_60_microseconds():
     # Three rounds, so a load spike on a shared box can't fail a real ~30 µs result.
-    exe = Engine().bind(flagship, mode="fused")
+    exe = FusedEngine().bind(flagship)
     for _ in range(500):
         exe.run(ROW)
     p50s = []

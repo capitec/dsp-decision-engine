@@ -8,7 +8,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from decikit import Engine, allow_fallback, flow, missing_as, param, step
+from decikit import Engine, FusedEngine, SteppedEngine, allow_fallback, flow, missing_as, param, step
 from decikit.ops import Columnar
 from decikit._engine.compile.rows import ARROW_ROWS, build_rows
 from decikit.lab.testing import assert_equivalent
@@ -111,7 +111,7 @@ def test_a_str_field_answers_as_cpython_does_in_every_mode(fn):
 def test_the_arrow_read_answers_the_same_as_the_python_read(fn):
     # Above ARROW_ROWS the field is read straight out of the list's own string buffers.
     frame = pl.DataFrame({"items": [[{"label": v} for v in VALUES]] * (ARROW_ROWS + 4)})
-    exe = Engine().bind(flow(fn, name="p"), mode="fused")
+    exe = FusedEngine().bind(flow(fn, name="p"))
     assert set(exe.run(frame)[fn.__name__].to_list()) == {CPYTHON[fn.__name__]}
 
 
@@ -136,13 +136,13 @@ def test_a_str_field_beside_a_number_finds_the_item_in_every_mode():
 
 @pytest.mark.parametrize("mode", MODES)
 def test_a_record_run_reads_one_record_through_the_same_operations(mode):
-    exe = Engine().bind(flow(find_best_item, name="p"), mode=mode)
+    exe = Engine.resolve(mode)().bind(flow(find_best_item, name="p"))
     assert [exe.run({"items": row})["find_best_item"] for row in ROWS] == FOUND
 
 
 def test_each_row_reads_only_its_own_items_on_the_arrow_path():
     frame = pl.DataFrame({"items": ROWS * (ARROW_ROWS // 2)})
-    exe = Engine().bind(flow(find_best_item, name="p"), mode="fused")
+    exe = FusedEngine().bind(flow(find_best_item, name="p"))
     assert exe.run(frame)["find_best_item"].to_list() == FOUND * (ARROW_ROWS // 2)
     # A slice carries its offset on the parent list only; the spans must still be windowed to it.
     assert exe.run(frame.slice(1, ARROW_ROWS))["find_best_item"].to_list() == (
@@ -190,7 +190,7 @@ def test_a_str_field_compared_against_a_param_runs_in_the_kernel():
     # `_probe_signature` typed `want` from `SPAN in ins`, which only sees a top-level `bytes`
     # input; a `str` field nested inside a `Columnar[...]` input's schema was invisible to it, so
     # `want` was typed as an int32 and the step fell back to Python.
-    exe = Engine().bind(flow(eq_param, name="p"), mode="fused")
+    exe = FusedEngine().bind(flow(eq_param, name="p"))
     exe.run(PAIRS)
     assert exe.fallbacks() == {}
 
@@ -235,7 +235,7 @@ def test_a_null_in_a_required_str_field_names_the_item_it_is_in(n):
     frame = pl.DataFrame({"items": rows},
                          schema={"items": pl.List(pl.Struct({"el_1": pl.Int64, "el_2": pl.String}))})
     with pytest.raises(ValueError, match="'el_2' is null in item 1 of row 0.*`str | None`"):
-        Engine().bind(flow(required_str, name="p"), mode="stepped").run(frame)
+        SteppedEngine().bind(flow(required_str, name="p")).run(frame)
 
 
 def test_an_int_field_still_refuses_to_be_optional():
@@ -257,7 +257,7 @@ def test_a_null_or_empty_list_reads_no_items_beside_a_str_field(mult):
             [{"el_1": 3, "el_2": "snoop"}]]
     frame = pl.DataFrame({"items": rows * mult},
                          schema={"items": pl.List(pl.Struct({"el_1": pl.Int64, "el_2": pl.String}))})
-    exe = Engine().bind(flow(n_snoop, name="p"), mode="fused")
+    exe = FusedEngine().bind(flow(n_snoop, name="p"))
     assert exe.run(frame)["n_snoop"].to_list() == [1, 0, 0, 1] * mult
 
 
@@ -284,14 +284,14 @@ _LABEL_RECORD = {"items": [{"label": "a", "value": 1.0}, {"label": "b", "value":
 
 
 def test_allow_fallback_returning_list_of_str_gives_plain_strings_in_a_record_run():
-    exe = Engine().bind(flow(_total_values, _collect_labels), mode="fused")
+    exe = FusedEngine().bind(flow(_total_values, _collect_labels))
     result = exe.run(_LABEL_RECORD, {})
     assert result["_collect_labels"] == ["a", "b"]
     assert all(isinstance(x, str) for x in result["_collect_labels"])
 
 
 def test_allow_fallback_returning_list_of_str_gives_plain_strings_in_run():
-    exe = Engine().bind(flow(_total_values, _collect_labels), mode="fused")
+    exe = FusedEngine().bind(flow(_total_values, _collect_labels))
     result = exe.run(_LABEL_FRAME)
     assert result["_collect_labels"].to_list() == [["a", "b"]]
 

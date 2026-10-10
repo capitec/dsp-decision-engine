@@ -5,7 +5,7 @@ import polars as pl
 import pytest
 
 from decikit import flow, step
-from decikit._engine import Engine
+from decikit._engine import Engine, FusedEngine, InterpretedEngine
 from decikit.exceptions import NotIntegralError, WiringError
 from decikit.steps.tables import DecisionTableConfig
 
@@ -37,7 +37,7 @@ def test_an_undeclared_table_still_conflicts_with_an_int_step():
         return code * 2
 
     with pytest.raises(WiringError, match="'code' as int, but .* as float"):
-        Engine().bind(flow(double, by_code(EQ_ROWS, declare=False), name="p"))
+        InterpretedEngine().bind(flow(double, by_code(EQ_ROWS, declare=False), name="p"))
 
 
 def test_an_undeclared_table_still_conflates_ids_above_2_53(run):
@@ -102,12 +102,12 @@ def test_a_step_that_writes_a_declared_int_variable_as_float_is_a_wiring_error()
         return float(raw)
 
     with pytest.raises(WiringError, match="reads 'code' as int, but .* writes it as float"):
-        Engine().bind(flow(to_float, by_code(EQ_ROWS), name="p"))
+        InterpretedEngine().bind(flow(to_float, by_code(EQ_ROWS), name="p"))
 
 
 @pytest.mark.parametrize("bad", [math.nan, math.inf, -math.inf])
 def test_a_nan_or_infinite_float_into_an_int_variable_is_refused(bad):
-    exe = Engine().bind(by_code(EQ_ROWS))
+    exe = InterpretedEngine().bind(by_code(EQ_ROWS))
     with pytest.raises(Exception, match="(?i)nan|inf|integer|Int64"):
         exe.run(pl.DataFrame({"code": [bad]}))
     with pytest.raises((ValueError, OverflowError)):
@@ -156,7 +156,7 @@ def test_an_unsigned_value_from_2_63_is_refused_when_the_document_loads():
 
 
 def test_an_int_table_compiles_without_falling_back():
-    exe = Engine(strict_compile=True).bind(by_code(EQ_ROWS), mode="fused")
+    exe = FusedEngine(strict_compile=True).bind(by_code(EQ_ROWS))
     assert exe.run(pl.DataFrame({"code": [BIG, BIG + 1]}))["pts"].to_list() == [2, 0]
 
 
@@ -184,7 +184,7 @@ def test_a_float_variable_beside_an_int_variable_keeps_both_lanes(run):
 
 @pytest.mark.parametrize("mode", ["interpreted", "stepped", "fused"])
 def test_a_fractional_float_into_an_int_variable_is_refused_and_a_whole_one_matches(mode):
-    exe = Engine().bind(by_code(EQ_ROWS), mode=mode)
+    exe = Engine.resolve(mode)().bind(by_code(EQ_ROWS))
     with pytest.raises(NotIntegralError, match="input 'code'"):
         exe.run({"code": 7.5})
     with pytest.raises(NotIntegralError, match=r"input 'code' \(row 1\)"):
@@ -198,7 +198,7 @@ def test_an_int_step_writing_a_fraction_into_an_int_variable_is_refused_naming_t
     def halved(raw: float) -> int:
         return raw / 2
 
-    exe = Engine().bind(flow(halved, by_code(EQ_ROWS), name="p"), mode=mode)
+    exe = Engine.resolve(mode)().bind(flow(halved, by_code(EQ_ROWS), name="p"))
     assert exe.run({"raw": 14.0})["pts"] == 1
     with pytest.raises(NotIntegralError, match="p/halved"):
         exe.run({"raw": 15.0})

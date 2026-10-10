@@ -5,7 +5,7 @@ from datetime import date
 from pathlib import Path
 
 import pytest
-from decikit import ConfigurableStep, Engine, HiddenStateWarning
+from decikit import ConfigurableStep, HiddenStateWarning, InterpretedEngine
 from decikit.lab import diff
 
 from business_nested import events, vocab
@@ -41,7 +41,7 @@ def changed_paths(edited):
 def test_the_business_nested_steps_read_no_hidden_objects():
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        Engine().bind(build(), mode="interpreted")
+        InterpretedEngine().bind(build())
     flagged = [str(w.message).split(" reads ")[0] for w in caught if issubclass(w.category, HiddenStateWarning)]
     # The affordability assessment embedded in the sole-proprietor branch still closes over its own registers.
     assert all("affordability_assessment" in path for path in flagged)
@@ -101,7 +101,7 @@ def test_an_overlay_for_another_target_is_rejected_when_the_document_loads():
 def test_an_overlay_on_the_disqualifying_threshold_is_applied_with_the_material_one():
     document = json.loads((CONFIGS / "event_threshold_overlays.json").read_text())
     document["adjustments"].append({**document["adjustments"][0], "adjustment_id": "ADJ-X", "target": "disqualifying_threshold"})
-    out = Engine().bind(events.event_unit(ConfigurableStep.load(document)), mode="interpreted").run({
+    out = InterpretedEngine().bind(events.event_unit(ConfigurableStep.load(document))).run({
         "event_id": 1, "event_type_code": 1, "amount": 30_000.0, "event_date": date(2026, 8, 1),
         "status_is_active": True, "is_disputed": False, "is_satisfied": False,
         "decision_date": date(2026, 9, 24), "sector_code": 412, "criticality_class": vocab.CRITICAL})

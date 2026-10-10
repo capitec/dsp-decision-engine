@@ -7,7 +7,7 @@ from typing import TypedDict
 import polars as pl
 import pytest
 
-from decikit import Engine, dag, flow, step
+from decikit import FusedEngine, InterpretedEngine, dag, flow, step
 from decikit.ops import Columnar, Struct
 from decikit.exceptions import FallbackWarning, WiringError
 from decikit.ops import Text
@@ -87,7 +87,7 @@ def test_a_semantic_bytes_and_a_text_read_the_same_column():
 
 
 def test_each_representation_of_one_column_lands_where_it_belongs():
-    exe = Engine().bind(flow(semantic, span, name="p"), mode="fused")
+    exe = FusedEngine().bind(flow(semantic, span, name="p"))
     exe.run(FRAME)
     # The semantic reader runs in Python; the `Text` reader stays in the kernel around it.
     assert set(exe.fallbacks()) == {"p/semantic"}
@@ -116,7 +116,7 @@ REFUSED = [
                          ids=[f"{a.__name__}+{b.__name__}" for a, b, *_ in REFUSED])
 def test_two_readers_of_one_column_must_want_the_same_type(first, second, one, other):
     with pytest.raises(WiringError, match=f"{one}.*{other}"):
-        Engine().bind(flow(first, second, name="p"), mode="fused")
+        FusedEngine().bind(flow(first, second, name="p"))
 
 
 @pytest.mark.parametrize("first, second, one, other", REFUSED,
@@ -124,7 +124,7 @@ def test_two_readers_of_one_column_must_want_the_same_type(first, second, one, o
 def test_the_same_clash_is_refused_in_a_dag_and_in_interpreted_mode(first, second, one, other):
     for maker in (lambda: flow(first, second, name="p"), lambda: dag(step(first), step(second), name="p")):
         with pytest.raises(WiringError, match=f"{one}.*{other}"):
-            Engine().bind(maker(), mode="interpreted")
+            InterpretedEngine().bind(maker())
 
 
 # --- a decision tree reads its string features as bytes -----------------------------------------

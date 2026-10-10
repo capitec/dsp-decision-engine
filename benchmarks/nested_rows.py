@@ -16,7 +16,7 @@ from typing import TypedDict
 import numpy as np
 import polars as pl
 
-from decikit import Engine, flow
+from decikit import SteppedEngine, flow
 from decikit.ops import Columnar
 from decikit._engine.compile.rows import build_rows
 from decikit._engine.run.state import from_series
@@ -129,7 +129,7 @@ def end_to_end():
         ("list[dict], Python per row", list_total, FRAME, RECORD),
         ("Columnar[Item], compiled kernel", rows_total, FRAME, RECORD),
     ):
-        exe = Engine().bind(flow(step, name="p"), mode="stepped")
+        exe = SteppedEngine().bind(flow(step, name="p"))
         p50, p99 = latency(exe, record)
         print(f"{name:<34}{frame.height / best(exe.run, frame, budget=2.0):>14,.0f}{p50:>11.1f}us{p99:>8.1f}")
 

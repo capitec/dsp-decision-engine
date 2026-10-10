@@ -6,7 +6,7 @@ from typing import TypedDict
 import polars as pl
 import pytest
 
-from decikit import Engine, flow, optimise, param, step
+from decikit import FusedEngine, flow, optimise, param, step
 from decikit.ops import Columnar, Struct
 from decikit.exceptions import WiringError
 from decikit.lab.testing import assert_equivalent
@@ -68,14 +68,14 @@ def test_keeps_the_highest_scoring_bundle_in_every_mode():
 
 
 def test_a_disqualified_bundle_is_counted_and_excluded():
-    exe = Engine().bind(pipeline(disqualify=heavy), mode="fused")
+    exe = FusedEngine().bind(pipeline(disqualify=heavy))
     out = exe.run(FRAME)
     assert out["best_index"].to_list() == [7, -1, 2]
     assert out["disqualified"].to_list() == [0, 0, 2]
 
 
 def test_an_empty_list_reads_as_no_candidates():
-    exe = Engine().bind(pipeline(), mode="fused")
+    exe = FusedEngine().bind(pipeline())
     got = exe.run({"items": []})
     assert got["best_index"] == -1 and got["best_score"] == -1e300
     assert got["evaluated"] == 0 and got["disqualified"] == 0
@@ -110,12 +110,12 @@ def test_a_tie_keeps_the_earlier_candidate():
 def test_the_score_output_is_renamable():
     evaluate = flow(bundle_weight, total.relabel(writes={"score": "margin"}), name="evaluate")
     p = flow(optimise(bundles, evaluate, score="margin", max_candidates=1 << 8, name="best"), name="order")
-    out = Engine().bind(p, mode="fused").run(FRAME)
+    out = FusedEngine().bind(p).run(FRAME)
     assert out["best_score"].to_list() == [10.0, -1e300, 5.0]
 
 
 def test_the_childrens_params_are_tunable_through_the_document():
-    exe = Engine().bind(pipeline(disqualify=heavy), mode="fused")
+    exe = FusedEngine().bind(pipeline(disqualify=heavy))
     assert exe.run(FRAME)["disqualified"].to_list() == [0, 0, 2]
     params = {"order": {"best": {"search": {"body": {"heavy": {"max_weight": 1.0}}}}}}
     out = exe.run(FRAME, params=params)
@@ -180,6 +180,6 @@ def test_a_record_carries_through_a_tie_to_the_earlier_candidate():
 
 
 def test_a_record_optimise_compiles_without_a_fallback():
-    exe = Engine(strict_compile=True).bind(record_pipeline(), mode="fused")
+    exe = FusedEngine(strict_compile=True).bind(record_pipeline())
     assert exe.fallbacks() == {}
     assert exe.run({"items": [{"price": 2.0, "weight": 1.0}]})["record"] == {"total": 2.0, "weight": 1.0}

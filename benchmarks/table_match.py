@@ -14,7 +14,7 @@ import time
 import numpy as np
 import polars as pl
 
-from decikit._engine import Engine
+from decikit._engine import Engine, FusedEngine
 from decikit.steps.tables import DecisionTableConfig
 
 N = 1_000_000
@@ -58,14 +58,14 @@ def compare(expression: dict, **extra) -> None:
     engines = {}
     table = DecisionTableConfig.load({"type": "decision_table", "name": "bands", **doc})
     for mode in ("fused", "stepped", "interpreted"):
-        exe = Engine().bind(table, mode=mode)
+        exe = Engine.resolve(mode)().bind(table)
         engines[f"decikit {mode}"] = (exe.run, exe.run)
     # The same rows read from the params document, which every call passes.
     columns = {**DTYPES, "band": {"type": "Enum", "categories": sorted({r["band"] for r in ROWS} | {"none"})}}
     by_param = DecisionTableConfig.load({"type": "decision_table", "name": "bands", "columns": columns,
                                          "rows": {"table": "rows"},
                                          **{k: v for k, v in doc.items() if k != "parameters"}})
-    exe = Engine().bind(by_param, mode="fused")
+    exe = FusedEngine().bind(by_param)
     params = {"bands": {"rows": ROWS}}
     engines["decikit fused, rows param"] = (lambda df, exe=exe: exe.run(df, params),
                                             lambda r, exe=exe: exe.run(r, params))

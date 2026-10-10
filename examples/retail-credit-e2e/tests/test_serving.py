@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 
 import pytest
-from decikit import Engine
+from decikit import FusedEngine
 from decikit.config import JsonFileStore
 from decikit.serving import RequestHandler
 
@@ -56,7 +56,7 @@ def test_a_consolidation_offer_is_served(handler, sample):
 
 
 def test_every_step_that_runs_in_python_says_so_on_purpose(sample, params):
-    strict = Engine(strict_compile=True).bind(build(), mode="fused")
+    strict = FusedEngine(strict_compile=True).bind(build())
     undeclared = {step for step, reason in strict.fallbacks().items() if not reason.startswith("@allow_fallback")}
     assert strict.fallbacks() and not undeclared
     # A node that compiles on first use only meets strict mode when it is scored.

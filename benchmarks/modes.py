@@ -62,7 +62,7 @@ def latency(score, calls=20000):
 # Latency first: a million-row batch just before leaves the allocator churning.
 engines = {}
 for mode in ("fused", "stepped", "interpreted"):
-    exe = Engine().bind(flagship, mode=mode)
+    exe = Engine.resolve(mode)().bind(flagship)
     engines[f"decikit {mode}"] = (exe.run, exe.run)
 latencies = {name: latency(score, calls=2000 if "interpreted" in name else 20000)
              for name, (_, score) in engines.items()}
