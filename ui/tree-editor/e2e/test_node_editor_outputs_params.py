@@ -279,7 +279,6 @@ def test_feature_picked_in_a_node_is_added_to_the_input_schema_when_it_is_new(si
     assert "income" in names
 
 
-@pytest.mark.xfail(strict=True, reason="deleting a feature a node uses blanks the node's feature and saves with no message; the export then sends every row to otherwise")
 def test_deleting_a_feature_a_cases_node_uses_is_refused_or_reported_when_saved(signed_in: Page):
     project = open_tree(signed_in, banded(output_table("approve", "review", "refer")))
     dialog = open_features(signed_in)

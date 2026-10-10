@@ -93,7 +93,6 @@ def test_invalid_node_is_marked_named_in_a_message_and_blocks_export(signed_in: 
     assert re.search(CASES[how], refused_export_says(signed_in), re.I)
 
 
-@pytest.mark.xfail(strict=True, reason="a unary node with no feature chosen saves and exports without any message")
 def test_unary_node_without_a_feature_is_flagged(signed_in: Page):
     open_tree(signed_in, loan_document())
     select_node(signed_in, "root")
@@ -105,7 +104,6 @@ def test_unary_node_without_a_feature_is_flagged(signed_in: Page):
     expect(marker(signed_in, "root")).to_be_visible()
 
 
-@pytest.mark.xfail(strict=True, reason="the message for an unfinished parameter ends 'rename it, e.g. \'\'' and never says a name is missing")
 def test_unfinished_parameter_message_says_a_name_is_missing(signed_in: Page):
     invalid_via_ui(signed_in, "unfinished_parameter")
     save(signed_in)

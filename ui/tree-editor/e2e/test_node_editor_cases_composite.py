@@ -65,7 +65,6 @@ def test_cases_ranges_strict_bands_save_and_route_each_value_to_its_branch(signe
         "approve", "review", "review", "decline"]
 
 
-@pytest.mark.xfail(strict=True, reason="ticking Strict Mode on a ranges node with no bands yet turns strict off instead of on")
 def test_strict_mode_ticked_before_any_band_is_added_stays_on(signed_in: Page):
     start_cases(signed_in, three_leaves(unary("root")), "Ranges")
     sidebar(signed_in).get_by_label("Strict Mode").click()
@@ -73,7 +72,6 @@ def test_strict_mode_ticked_before_any_band_is_added_stays_on(signed_in: Page):
     expect(sidebar(signed_in).get_by_label("Strict Mode")).to_be_checked()
 
 
-@pytest.mark.xfail(strict=True, reason="a ranges node made in the editor shows Strict Mode off but saves no `strict`, so decikit applies strict and rejects gaps")
 def test_cases_ranges_with_the_strict_box_left_off_save_without_validation_errors(signed_in: Page):
     project = start_cases(signed_in, three_leaves(unary("root")), "Ranges")
     choose_feature(signed_in, "amount")
@@ -88,7 +86,6 @@ def test_cases_ranges_with_the_strict_box_left_off_save_without_validation_error
     assert saved_data(signed_in, project).get("strict") is False
 
 
-@pytest.mark.xfail(strict=True, reason="a ranges node made in the editor shows Strict Mode off but saves no `strict`, so decikit applies strict and rejects gaps")
 def test_cases_ranges_with_manual_bounds_route_values_into_the_gap_to_otherwise(signed_in: Page):
     project = start_cases(signed_in, three_leaves(unary("root")), "Ranges")
     choose_feature(signed_in, "amount")
@@ -268,7 +265,6 @@ def test_empty_composite_shows_what_is_missing_in_the_sidebar(signed_in: Page):
     expect(sidebar(signed_in).get_by_text("A composite needs at least one condition")).to_be_visible()
 
 
-@pytest.mark.xfail(strict=True, reason="a document whose root is a composite node crashes the editor on open")
 def test_composite_node_as_the_root_opens_without_a_page_error(signed_in: Page):
     errors = []
     signed_in.on("pageerror", lambda e: errors.append(str(e)))
