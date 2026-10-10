@@ -5,7 +5,7 @@ import pytest
 
 from decikit import flow
 from decikit import _engine as engine
-from decikit._engine import Engine
+from decikit._engine import FusedEngine
 from decikit._engine.compile import kernel
 from decikit.steps.trees import TreeConfig, _walker as walker
 from decikit.lab.testing import assert_equivalent
@@ -54,7 +54,7 @@ def test_a_tree_walks_to_the_leaf_each_row_reaches(run):
 
 def test_retuning_a_param_threshold_never_recompiles():
     tree = two_level(age={"param": "age_floor", "default": 30.0})
-    exe = Engine().bind(tree, mode="fused")
+    exe = FusedEngine().bind(tree)
     frame = pl.DataFrame({"age": [25.0, 45.0], "score": [800.0, 600.0]})
     exe.run(frame)
     before = compiled_counts()
@@ -65,9 +65,9 @@ def test_retuning_a_param_threshold_never_recompiles():
 
 def test_editing_a_literal_threshold_rebuilds_the_ir_but_never_recompiles():
     frame = pl.DataFrame({"age": [25.0, 45.0], "score": [800.0, 600.0]})
-    Engine().bind(two_level(), mode="fused").run(frame)
+    FusedEngine().bind(two_level()).run(frame)
     before = compiled_counts()
-    answers = [Engine().bind(two_level(age=a), mode="fused").run(frame)["pts"].to_list() for a in (40.0, 50.0, 18.0)]
+    answers = [FusedEngine().bind(two_level(age=a)).run(frame)["pts"].to_list() for a in (40.0, 50.0, 18.0)]
     assert compiled_counts() == before
     assert answers == [[10.0, 30.0], [10.0, 20.0], [30.0, 30.0]]
 
@@ -236,7 +236,7 @@ def test_strict_ranges_must_be_contiguous():
 def test_retuning_changes_a_record_run_without_recompiling():
     tree = two_level(score={"param": "score_floor", "default": 700.0})
     assert tree.parameters()["risk"]["score_floor"]["default"] == 700.0
-    exe = Engine().bind(tree, mode="fused")
+    exe = FusedEngine().bind(tree)
     record = {"age": 25.0, "score": 800.0}
     assert exe.run(record)["pts"] == 10.0
     before = compiled_counts()

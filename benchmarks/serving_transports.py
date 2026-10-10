@@ -74,7 +74,7 @@ def build():
 
     store = JsonFileStore(basepath=tempfile.mkdtemp(dir=".scratch"))
     store.create_version({"params": {}})
-    handler = RequestHandler(store, cases()["flagship"][0], mode="fused")
+    handler = RequestHandler(store, cases()["flagship"][0], engine="fused")
     handler.stage()
     handler.activate()
     return handler

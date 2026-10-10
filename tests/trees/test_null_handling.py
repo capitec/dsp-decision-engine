@@ -112,14 +112,14 @@ def test_a_null_string_is_a_plain_miss_or_hit_by_its_null_handling(run):
 def test_strict_null_handling_raises_for_numbers_and_strings(mode):
     numbers = _tree(lt("x", 50.0), null_handling="error")
     with pytest.raises(MissingInputError, match="'x'"):
-        Engine().bind(numbers, mode=mode).run(pl.DataFrame({"x": _col(10.0, None)}))
+        Engine.resolve(mode)().bind(numbers).run(pl.DataFrame({"x": _col(10.0, None)}))
     strings = _tree(_match("error"))
     with pytest.raises(MissingInputError, match="'s'"):
-        Engine().bind(strings, mode=mode).run(pl.DataFrame({"s": pl.Series(["a", None], dtype=pl.String)}))
+        Engine.resolve(mode)().bind(strings).run(pl.DataFrame({"s": pl.Series(["a", None], dtype=pl.String)}))
 
 
 @pytest.mark.parametrize("mode", MODES)
 def test_a_record_run_routes_a_null_like_a_frame_run(mode):
-    exe = Engine().bind(_composite("or", lt("x", 50.0), lt("y", 50.0)), mode=mode)
+    exe = Engine.resolve(mode)().bind(_composite("or", lt("x", 50.0), lt("y", 50.0)))
     assert exe.run({"x": None, "y": 10.0})["r"] == "yes"
     assert exe.run({"x": None, "y": 90.0})["r"] == "no"

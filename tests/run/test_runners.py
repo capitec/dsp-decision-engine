@@ -35,7 +35,7 @@ by_sector = flow(term_cap, branch(is_private, cap_private, cap_public, modifies=
 
 
 def _checkpoints(pipeline, df, mode="interpreted"):
-    exe = Engine().bind(pipeline, mode=mode)
+    exe = Engine.resolve(mode)().bind(pipeline)
     state, params = exe.prepare(df)
     return [(c.when, c.origin.path) for c in exe.runner.iterate(exe.plan, state, params)]
 
@@ -82,7 +82,7 @@ def test_a_checkpoint_carries_the_node_origin(bind):
 
 @pytest.mark.parametrize("mode", ["interpreted", "stepped", "fused"])
 def test_a_quiet_run_yields_a_none_per_node_and_computes_the_same_output(mode):
-    exe = Engine().bind(by_sector, mode=mode)
+    exe = Engine.resolve(mode)().bind(by_sector)
     loud, params = exe.prepare(_frame(2))
     quiet, _ = exe.prepare(_frame(2))
     stops = list(exe.runner.iterate(exe.plan, loud, params))
@@ -93,7 +93,7 @@ def test_a_quiet_run_yields_a_none_per_node_and_computes_the_same_output(mode):
 
 @pytest.mark.parametrize("mode", ["interpreted", "stepped", "fused"])
 def test_a_runner_subclass_overriding_iterate_without_quiet_still_runs_and_sees_checkpoints(mode):
-    exe = Engine().bind(by_sector, mode=mode)
+    exe = Engine.resolve(mode)().bind(by_sector)
     seen = []
 
     class Counting(type(exe.runner)):

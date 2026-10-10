@@ -112,7 +112,7 @@ def report(label, times, got=None):
 
 def bench(mode, repeat_score, repeat_run):
     warnings.simplefilter("ignore")
-    exe = Engine().bind(pipeline, mode=mode)
+    exe = Engine.resolve(mode)().bind(pipeline)
     runner = exe.runner
     exe.run(RECORD)
     print(f"[{mode}] packed loops: {sorted(getattr(runner, 'packed', {}))}")

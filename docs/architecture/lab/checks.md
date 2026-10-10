@@ -100,7 +100,7 @@ flowchart LR
   N --> R["_refs<br/>node id to StepRef"]:::ir
   D --> R
   IR --> SU["_suppressions<br/>inherited per node"]:::neutral
-  P --> O["ctx.outputs<br/>Engine().bind().run(frame, params)"]:::engine
+  P --> O["ctx.outputs<br/>InterpretedEngine().bind().run(frame, params)"]:::engine
   N --> CA["ctx.calls()<br/>authored call nodes"]:::ir
   CA --> SRC["ctx.source(node)<br/>parsed once per function"]:::authoring
   R --> F["ctx.finding(...)"]:::tooling

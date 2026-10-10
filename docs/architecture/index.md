@@ -17,7 +17,7 @@ flowchart TB
     fn["Python functions<br/>param() · missing_as()"]:::authoring --> steps["Steps<br/>flow · dag · branch · loop<br/>each · optimise · ConfigurableStep"]:::authoring
     steps -->|"to_ir()"| ir["IR<br/>CallNode · SequenceNode · BranchNode<br/>LoopNode · ScatterGatherNode"]:::ir
     ir -->|"resolve()"| plan["Plan<br/>every read bound to a version"]:::ir
-    plan -->|"Engine.bind(mode)"| exe["Executable<br/>one runner per mode"]:::engine
+    plan -->|"engine.bind(step)"| exe["Executable<br/>one runner per mode"]:::engine
     params["params document (JSON)"]:::data --> exe
     data["polars frame or one dict"]:::data -->|"Arrow boundary"| exe
     exe --> modes["interpreted · stepped · fused"]:::engine
@@ -129,7 +129,7 @@ names a branch keeps to itself and type clashes between readers are `WiringError
 
 ### The engine and its three modes
 
-`Engine(params_validation=..., strict_compile=...).bind(step, mode)` resolves the step and returns an `Executable`,
+An engine (`Engine.resolve(tag)(params_validation=..., strict_compile=...)`) `.bind(step)` resolves the step and returns an `Executable`,
 which holds the plan, one runner for the mode and the params caches. The three runners are generators that yield a
 `Checkpoint` before and after each node they run (a fused kernel yields one pair for all of its steps):
 
@@ -146,7 +146,7 @@ says so with a `FallbackWarning`. [Runners](engine/runners.md) traces the driver
 [Kernels](engine/kernels.md) cover what compiling means.
 
 ```python
-outs = {m: Engine().bind(loan, m).run(df) for m in ("interpreted", "stepped", "fused")}
+outs = {m: Engine.resolve(m)().bind(loan).run(df) for m in ("interpreted", "stepped", "fused")}
 print("modes agree:", all(outs["interpreted"].equals(o) for o in outs.values()))
 print(loan.compile("fused").fallbacks())
 ```
@@ -203,7 +203,7 @@ every file; [Foundation packages](foundation.md) covers layer 0.
 
 ## Lifecycle of a build
 
-`pipeline.compile("fused")` is `Engine().bind(pipeline, "fused")`. Building the IR, wiring it and setting up params
+`pipeline.compile("fused")` is `FusedEngine().bind(pipeline)`. Building the IR, wiring it and setting up params
 happen at bind time. A stepped or fused runner compiles on its first call (or the first `fallbacks()`), under its own
 lock, and publishes the result whole.
 
@@ -375,9 +375,9 @@ flowchart LR
 | Diff | `decikit/lab/diff/` | an IR content hash per node (the function's fingerprint, consts, inputs, outputs, params); trees and tables as z3 terms |
 | Testing | `decikit/lab/testing/` | `Engine.bind` in every mode, then `run` on the frame, `run` per record and a session must agree |
 | Experiments | `decikit/lab/experiments/` | an `Executable` in fused or stepped mode per scenario, fed in batches |
-| Serving | `decikit/serving/` | `Engine().bind(...)` per config version, `run(record, params)` per request |
+| Serving | `decikit/serving/` | `engine.bind(...)` per config version, `run(record, params)` per request |
 | Editor bridge | `decikit/_tooling/bridge/` | `to_ir` and `step_map` for the flow panel, a `Session` for stepping, `session.replace` for hot edits |
-| MCP | `decikit/_tooling/mcp/` | `Engine().bind(step)` for runs, traces and sessions an agent asks for |
+| MCP | `decikit/_tooling/mcp/` | `InterpretedEngine().bind(step)` for runs, traces and sessions an agent asks for |
 
 ## Map of the architecture section
 

@@ -15,7 +15,7 @@ def no_recompile() -> Iterator[None]:
 
     Example::
 
-        exe = Engine().bind(pipeline, mode="fused")
+        exe = pipeline.compile("fused")
         exe.run(df)
         with no_recompile():
             exe.run(df, params={"term": {"cap": 24.0}})

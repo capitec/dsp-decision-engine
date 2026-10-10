@@ -7,11 +7,17 @@ Why the engine (IR, wiring, runners, kernels, compile cache, fallback, `run`'s r
 Proposed 2026-10-09, being built on branch `engine/flexible-rework`; each bullet becomes a section below when its
 phase lands. The design, alternatives and plan: [flexible engine rework](../../design_specs/2026-10-09_flexible_engine_rework/README.md).
 
-- Proposed: an engine is a registry document (`Engine` is a `BaseRegistryModule` root; `InterpretedEngine`, `SteppedEngine`, `FusedEngine` keep the mode strings as aliases), and serving settings name an engine document instead of a mode string.
 - Proposed: `run` on a `LazyFrame` takes the polars engine (until then it is collected and run as a frame).
 - Proposed: `Step.run` and `compile` follow a context-scoped default engine set with `decikit.engine(...)`, fused when unset; `Step.session` opens interpreted unless given an engine.
 - Proposed: the polars engine is lazy and starts as a host (the fused pipeline inside `map_batches`, split only at frame steps); polars-native step bodies are built only if a measurement against the host justifies them.
 - Proposed: a Spark engine comes last, outside `decikit/`, and shapes nothing else.
+
+## An engine is a registry document
+
+- `Engine` is a `BaseRegistryModule` root (group `engines`): a frozen settings document (`params_validation`, and `strict_compile` on `NumbaEngine`) named by its `type` tag. `InterpretedEngine`, `SteppedEngine` and `FusedEngine` are the three built-in tags; `compile` and `session` take a tag or an instance, `RequestHandler` holds an instance (a tag is resolved once), and serving reads `DECIKIT_API__ENGINE__TYPE` plus the engine's own fields. `Engine.bind(step)` replaces `Engine().bind(step, mode)`; an unknown tag is a `RegistryError` with a did-you-mean. Not: a `RUNNERS` dict with a `register_mode`.
+- Why: the registry already gives settings-driven construction, entry-point discovery (`decikit.engines`) and `json_schema()`; `strict_compile` and `params_validation` could not be set for `decikit serve` before. A dict would add extensibility and nothing else.
+- Cost: pydantic on `Engine`, which holds settings only, so nothing awkward moves onto a model.
+- See: [engine](../../architecture/engine/index.md), [extending](../../guides/extending.md), [flexible engine rework](../../design_specs/2026-10-09_flexible_engine_rework/03-design-choices.md)
 
 ## Pipeline structure lives in Python
 
@@ -32,7 +38,7 @@ phase lands. The design, alternatives and plan: [flexible engine rework](../../d
 - A function of the standard library or an installed package is keyed by name, version, its own code and its closure, not walked. The name and version alone collided: two closures from one installed factory shared one compiled dispatcher, so `stepped` and `fused` answered with the first closure's value. The step function itself is always walked, so a step type shipped as a wheel is checked like one in the project.
 - Mutable containers count although the key sees an exact literal `dict` or `list` by value: a step reads them at call time, so they can be edited after the bind, and numba compiles neither. A tuple, frozenset, enum member or date is data. A frame step is not checked (the fraud rule set and `_renamed_frame` would need an exemption first).
 - Cost: 0.5 to 10.5 ms once per bind for the 12 example pipelines (53 to 128 steps each); nothing per call.
-- `Engine(strict_compile=True)` raises `EngineError` for the same findings (`warn_hidden_state(plan, strict=self.strict_compile)`). A test builds every example from its latest config version and asserts no `HiddenStateWarning`; the one entry in its allow-list is governance-replay's `FLOWS`, the registry of the flows the replayer replays.
+- `FusedEngine(strict_compile=True)` raises `EngineError` for the same findings (`warn_hidden_state(plan, strict=self.strict_compile)`). A test builds every example from its latest config version and asserts no `HiddenStateWarning`; the one entry in its allow-list is governance-replay's `FLOWS`, the registry of the flows the replayer replays.
 - Not: a digest of arbitrary objects (a changed method would read as unchanged), raising always (a project would fail to build before it could migrate; the default stays a warning).
 - See: `tests/compile/test_hidden_state.py`, `tests/wiring/test_hidden_state_warning.py`
 
@@ -75,7 +81,7 @@ phase lands. The design, alternatives and plan: [flexible engine rework](../../d
 
 ## Fall back to Python only on compile failure, one step at a time
 
-- `FALLBACK_ERRORS = (NumbaError, UnsupportedBytecodeError)`; around `dispatcher.compile` alone, `NotImplementedError`, `AssertionError` and `TypeError` count too. The kernel splits around the step; a kernel that fails whole on launch becomes one `Fallback` per call. A runtime error always propagates. A scalar step declaring `*args` or `**kwargs` (a hand-built `CallNode`) falls back too: no kernel can bind a column to it. `@allow_fallback` accepts a fallback silently; `Engine(strict_compile=True)` refuses it.
+- `FALLBACK_ERRORS = (NumbaError, UnsupportedBytecodeError)`; around `dispatcher.compile` alone, `NotImplementedError`, `AssertionError` and `TypeError` count too. The kernel splits around the step; a kernel that fails whole on launch becomes one `Fallback` per call. A runtime error always propagates. A scalar step declaring `*args` or `**kwargs` (a hand-built `CallNode`) falls back too: no kernel can bind a column to it. `@allow_fallback` accepts a fallback silently; `FusedEngine(strict_compile=True)` refuses it.
 - Why: a kernel cannot call Python except through `objmode`, slower than giving up (4 steps, 200k rows: all-njit 7.1 ms, Python 167 ms, per-row `objmode` 548 ms). Bare `Exception` would hide bugs as fallbacks. Not: `objmode` escapes, which cost about 2.7 µs a row (77x all-njit, 615x inside `prange`).
 - A function step that writes a container (a `dict`, a TypedDict, a `list`, a `tuple`, a `set` or a numpy array, which a kernel column would cut to its first element) is a build-time `Fallback`: once numba has compiled its body (so numba's own refusal keeps its reason), `compile_call` refuses it with `writes '<output>' as <type>, which no kernel stores`, and its run splits around it. Any other output is left to numba. A kernel numba still refuses at its first launch (a `dict` param, a float returned for a `Decimal`, an `IntEnum` or `bytes` output) runs each of its steps in Python from then on and reports through `Kernel.on_split`, once per kernel, as `split at launch: <numba error>`; a strict refusal leaves the kernel whole, so every launch is refused.
 - Loudness is per runner (`loud`, one class attribute): fused warns once per step outside a shared kernel, stepped never warns, interpreted reports nothing; `strict_compile=True` raises in fused and stepped unless the step is `@allow_fallback`.

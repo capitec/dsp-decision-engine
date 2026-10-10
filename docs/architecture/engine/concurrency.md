@@ -10,7 +10,7 @@ Two helpers in `decikit/_engine/concurrency.py` implement most of the contract: 
 |---|---|
 | `Executable.run` on one shared executable, frame or record: same or different params documents, traced or not, including the first call | `RequestHandler` serves every request from one executable, and kernels are `nogil=True` so threads overlap |
 | `RequestHandler.process_fn` while `stage`, `activate` or `rollback` run | versions are swapped under load |
-| `Engine().bind(...)` while other executables run | staging a new version compiles while the old one serves, and both touch the module-global compile caches |
+| `InterpretedEngine().bind(...)` while other executables run | staging a new version compiles while the old one serves, and both touch the module-global compile caches |
 | registry `resolve` and `lazy` | loading a document can import and register types while requests run |
 | input extraction, `raw_str` codes, params validation and conversion | all reached from `run` |
 

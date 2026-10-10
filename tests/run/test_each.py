@@ -6,7 +6,7 @@ from typing import TypedDict
 import polars as pl
 import pytest
 
-from decikit import EachMode, Engine, each, flow, missing_as, param
+from decikit import EachMode, Engine, FusedEngine, InterpretedEngine, each, flow, missing_as, param
 from decikit.ops import Columnar
 from decikit.lab.testing import assert_equivalent
 
@@ -35,7 +35,7 @@ def test_each_adds_child_outputs_as_fields():
 
 @pytest.mark.parametrize("mode", MODES)
 def test_each_batch_agrees_with_per_row(mode):
-    exe = Engine().bind(pipeline(EachMode.BATCH), mode=mode)
+    exe = Engine.resolve(mode)().bind(pipeline(EachMode.BATCH))
     out = exe.run(FRAME)
     assert out["items"].to_list() == [
         [{"weight": 5.0, "heavy": False}, {"weight": 25.0, "heavy": True}],
@@ -52,12 +52,12 @@ def test_a_null_list_reads_as_no_items():
 
 @pytest.mark.parametrize("record", ({"items": []}, {"items": None}))
 def test_batch_handles_empty_and_null_lists_on_a_single_record(record):
-    exe = Engine().bind(pipeline(EachMode.BATCH), mode="fused")
+    exe = FusedEngine().bind(pipeline(EachMode.BATCH))
     assert exe.run(record)["items"] == []
 
 
 def test_the_childs_params_are_tunable_through_the_parent_document():
-    exe = Engine().bind(pipeline(), mode="interpreted")
+    exe = InterpretedEngine().bind(pipeline())
     record = {"items": [{"weight": 25.0}]}
     assert exe.run(record)["items"] == [{"weight": 25.0, "heavy": True}]
     params = {"order": {"items": {"heavy_kg": 30.0}}}
@@ -74,7 +74,7 @@ def test_a_missing_item_field_uses_the_childs_fill():
 
 @pytest.mark.parametrize("mode", MODES)
 def test_an_item_dict_missing_the_key_entirely_uses_the_childs_fill(mode):
-    exe = Engine().bind(pipeline(), mode=mode)
+    exe = Engine.resolve(mode)().bind(pipeline())
     assert exe.run({"items": [{}]})["items"] == [{"heavy": False}]
 
 
@@ -96,13 +96,13 @@ def bundle_total(items: Columnar[Item]) -> float:
 def test_a_parent_step_reads_the_enriched_list_as_columnar(mode, each_mode):
     p = flow(each("items", flow(heavy, name="item"), name="items", execution_mode=each_mode),
              bundle_total, name="order")
-    exe = Engine().bind(p, mode=mode)
+    exe = Engine.resolve(mode)().bind(p)
     assert exe.run(FRAME)["bundle_total"].to_list() == [25.0, 0.0, 40.0]
 
 
 def test_batch_mode_does_not_inject_parent_frame_columns_into_items():
     frame = pl.DataFrame({"order_id": [1, 2], "items": [[{"weight": 5.0}, {"weight": 25.0}], []]})
-    exe = Engine().bind(pipeline(EachMode.BATCH), mode="fused")
+    exe = FusedEngine().bind(pipeline(EachMode.BATCH))
     result = exe.run(frame)["items"].to_list()
     assert result == [[{"weight": 5.0, "heavy": False}, {"weight": 25.0, "heavy": True}], []]
 
@@ -113,5 +113,5 @@ def test_a_parent_step_reads_the_enriched_list_as_columnar_past_the_arrow_thresh
     frame = pl.DataFrame({"items": [[{"weight": float(i % 3)}, {"weight": 30.0}] for i in range(ARROW_ROWS + 4)]})
     p = flow(each("items", flow(heavy, name="item"), name="items", execution_mode=EachMode.BATCH),
              bundle_total, name="order")
-    exe = Engine().bind(p, mode="fused")
+    exe = FusedEngine().bind(p)
     assert exe.run(frame)["bundle_total"].to_list() == [30.0] * (ARROW_ROWS + 4)

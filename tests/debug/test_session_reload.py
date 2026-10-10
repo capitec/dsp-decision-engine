@@ -41,7 +41,7 @@ def buffer(headroom: float) -> float:
 
 @pytest.mark.parametrize("mode", MODES)
 def test_reload_reruns_from_the_first_changed_step_in_every_mode(mode):
-    s = flow(disposable_income, ratio, headroom).session(FRAME, mode=mode)
+    s = flow(disposable_income, ratio, headroom).session(FRAME, engine=mode)
     s.resume()
     edited = flow(disposable_income, step(halved, name="ratio", output="ratio"), headroom)
     cp = s.reload(edited)
@@ -159,7 +159,7 @@ def test_editing_an_imported_module_on_disk_reloads_the_pipeline_without_stale_r
     monkeypatch.syspath_prepend(str(tmp_path))
     try:
         watcher = ModuleWatcher(f"{pkg}.pipeline:pipeline")
-        s = watcher.get().session(FRAME, mode=mode)
+        s = watcher.get().session(FRAME, engine=mode)
         s.resume()
         assert watcher.poll() is None
         _write(root / "features.py", "def ratio(disposable_income: float, instalment: float) -> float:\n"

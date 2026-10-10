@@ -9,7 +9,7 @@ in Python and says so, and the steps around it stay compiled.
 The code is in `decikit/_engine/compile/njit.py` (`jit`, the salted disk cache, `compile_call`,
 `FALLBACK_ERRORS`), `compile/fingerprint.py` (`fingerprint`, `cpu_target`), `compile/kernel.py`
 (the fused kernel cache) and `compile/units.py` (`Fallback`). The [stepped runner](runners.md)
-turns fallbacks into warnings, `Engine(strict_compile=True)` in `decikit/_engine/run/engine.py`
+turns fallbacks into warnings, `FusedEngine(strict_compile=True)` in `decikit/_engine/run/engines.py`
 turns them into errors, and `decikit build` and `decikit serve` in `decikit/_tooling/cli/` record
 and check the CPU target. How a compiled kernel is assembled is on [compilation](compile.md).
 
@@ -202,7 +202,7 @@ ZeroDivisionError: division by zero
   in step loan/instalment
 ZeroDivisionError: division by zero
   in one of the steps ['two/fee', 'two/instalment'], fused into one kernel;
-  run in mode='stepped' to see which
+  run in engine='stepped' to see which
 ```
 
 The scope is this narrow for measured reasons. Catching every `Exception`
@@ -275,14 +275,14 @@ outside the shared kernel: ...`. `exe.fallbacks()` reports both kinds by step pa
   an intentional Python boundary, and the calling step falls back instead of compiling it. Trees,
   tables, scorecards, branches and loops fall back as a whole, so the decorator on one raises
   `TypeError`; filter the warning category for those.
-- `Engine(strict_compile=True)` turns an unaccepted Python fallback into an error at the first
-  run. It raises a plain `ValueError` (not a `DecikitError`):
+- `FusedEngine(strict_compile=True)` turns an unaccepted Python fallback into an error at the first
+  run. It raises `EngineError`:
 
 ```text
-ValueError : loan/uses_regex runs in Python, row by row:
+EngineError : loan/uses_regex runs in Python, row by row:
   UnsupportedBytecodeError: Use of unsupported opcode (IMPORT_NAME) found.
   Raised from .../c4_cache.py (46); accept it with @allow_fallback,
-  or run mode='interpreted'
+  or run engine='interpreted'
 ```
 
   A step that runs compiled one call per row only warns, even under `strict_compile`.
@@ -330,7 +330,7 @@ sequenceDiagram
 | a step is recompiled after a harmless rename | the file moved: numba's disk cache is keyed by file path and line | expected once; the in-process cache still shares it |
 | a step never hits the disk cache | it has a closure, or it was defined without a file | move it to module level in a `.py` file |
 | a `FallbackWarning` names numba's long candidate listing | a typing error, for example a `Decimal` mixed with a float | read the decider toolkit line in the middle of the listing ([kernel semantics](kernels.md)) |
-| a `ZeroDivisionError` with a note listing several steps | a runtime error in a fused kernel | rerun in `mode="stepped"` to see which step |
+| a `ZeroDivisionError` with a note listing several steps | a runtime error in a fused kernel | rerun in `engine="stepped"` to see which step |
 
 `dispatcher.stats.cache_hits` and `cache_misses` (the dispatcher from `jit(fn)`) show whether a
 step came from disk. Old shim builds and old cache index entries are never evicted; both are small

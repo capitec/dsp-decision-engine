@@ -3,7 +3,7 @@ import polars as pl
 import pytest
 
 from decikit import _engine as engine
-from decikit._engine import Engine
+from decikit._engine import FusedEngine
 from decikit._engine.compile import kernel
 from decikit.steps.expr import parse
 from decikit.steps.trees import TreeConfig, _walker as walker
@@ -61,9 +61,8 @@ def test_every_operator_agrees_between_the_walkers(run, expression, x, y):
 
 def test_editing_a_literal_inside_an_expression_never_recompiles():
     frame = pl.DataFrame({"x": [4.0]})
-    Engine().bind(two_leaf({"op": ">", "feature": computed("x * 2"), "threshold": 10.0}), mode="fused").run(frame)
+    FusedEngine().bind(two_leaf({"op": ">", "feature": computed("x * 2"), "threshold": 10.0})).run(frame)
     before = len(walker.walk.signatures), len(kernel._KERNELS)
-    answers = [Engine().bind(two_leaf({"op": ">", "feature": computed(f"x * {k}"), "threshold": 10.0}),
-                             mode="fused").run(frame)["r"].to_list() for k in (2.0, 100.0, 0.1, 3, 4, 5, 6, 7)]
+    answers = [FusedEngine().bind(two_leaf({"op": ">", "feature": computed(f"x * {k}"), "threshold": 10.0})).run(frame)["r"].to_list() for k in (2.0, 100.0, 0.1, 3, 4, 5, 6, 7)]
     assert (len(walker.walk.signatures), len(kernel._KERNELS)) == before
     assert answers[0] != answers[1]

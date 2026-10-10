@@ -429,7 +429,7 @@ DECIKIT_API__PIPELINE=flow.yaml
 DECIKIT_CONFIG__BASEPATH=configs
 $ decikit build
 decikit: pipeline from flow file /…/flowapp/flow.yaml
-built config version 0.0.0 (pipeline flow.yaml, mode fused)
+built config version 0.0.0 (pipeline flow.yaml, engine fused)
 ```
 
 In-process, pass the path to `RequestHandler`:

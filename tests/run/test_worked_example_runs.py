@@ -2,7 +2,7 @@
 import polars as pl
 
 from decikit import branch, dag, flow, frame_step, missing_as, param, step
-from decikit._engine import Engine
+from decikit._engine import InterpretedEngine
 from decikit.steps.trees import TreeConfig
 from decikit.lab.testing import assert_equivalent
 
@@ -121,7 +121,7 @@ def test_the_worked_example_retunes_arms_shared_params_and_the_tree(bind):
 
 
 def test_the_tree_reference_reports_its_internal_nodes():
-    exe = Engine().bind(pipeline)
+    exe = InterpretedEngine().bind(pipeline)
     visited = []
     exe.runner.visit = visited.append
     exe.run(FRAME)

@@ -304,7 +304,7 @@ The tests assert exact answers from worked examples. A test that only checks an 
 $ decikit build
 decikit: pipeline flex_loan.pipeline:build from /…/flex_loan/pipeline.py
 decikit: handler flex_loan.inference:Handler from /…/flex_loan/inference.py
-built config version 0.0.0 (pipeline flex_loan.pipeline:build, mode fused)
+built config version 0.0.0 (pipeline flex_loan.pipeline:build, engine fused)
 ```
 
 `decikit build` imported the pipeline, loaded version `0.0.0`'s two documents, validated its params document, and scored `sample_request.json` through every kernel, which fills numba's disk cache so the server starts without compiling. Then serve it (one worker on a chosen port here; the defaults are port 8080 and 2 × CPUs + 1 workers):
@@ -367,7 +367,7 @@ print(sorted(store.versions()))
 
 ```bash
 $ decikit build
-built config version 0.1.0 (pipeline flex_loan.pipeline:build, mode fused)
+built config version 0.1.0 (pipeline flex_loan.pipeline:build, engine fused)
 $ decikit serve --workers 1 --port 39109 --host 127.0.0.1
 $ curl -s -d @sample_request.json -H 'content-type: application/json' localhost:39109/invocations
 {"age":34,"monthly_income":28000,"monthly_expenses":14000,"months_employed":40,"utilisation":0.25,"amount":60000,"term_months":36,"approved":true,"base_points":600.0,"age_score":10.0,"months_employed_score":15.0,"utilisation_score":50.0,"app_score":675.0,"risk_grade":3,"annual_rate":0.195,"instalment":2214.56,"eligible":true,"affordable":true}

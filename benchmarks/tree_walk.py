@@ -105,7 +105,7 @@ def compare(doc: dict) -> None:
     tree = TreeConfig(name="campaign", tree=doc, feature_types=TYPES)
     engines = {}
     for mode in ("fused", "stepped", "interpreted"):
-        exe = Engine().bind(tree, mode=mode)
+        exe = Engine.resolve(mode)().bind(tree)
         engines[f"decikit {mode}"] = (exe.run, exe.run)
 
     # The outputs agree before anything is timed.

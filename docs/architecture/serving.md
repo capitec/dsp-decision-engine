@@ -75,7 +75,7 @@ All three methods take `self._lock`, a `threading.Lock`. `stage(version=None)` d
 
 1. `store.latest_version()` when no version is given, or `RuntimeError("the config store has no versions to stage.")` for an empty store.
 2. `store.read(version)` for the documents.
-3. `Engine().bind(self.pipeline_fn(config), mode=self.mode)`.
+3. `self.engine.bind(self.pipeline_fn(config))`.
 4. `warm_fn(executable, params)`: one record through `run()` as a dict and the same record as a one-row frame through `run()`, so every kernel compiles (or loads from numba's disk cache) before a request needs it.
 5. A new `Live` in `_staged`.
 
@@ -310,7 +310,7 @@ One request was measured at every layer for three pipelines: flagship (5 float i
 *The codec is a rounding error; the engine's per-call setup and the HTTP framing are the terms that cost.*
 </div>
 
-The in-process budget, fused mode, one record, no HTTP (µs, lowest p50 of three repetitions):
+The in-process budget, fused engine, one record, no HTTP (µs, lowest p50 of three repetitions):
 
 | Term | flagship | tree | gated |
 |---|---|---|---|
@@ -376,7 +376,7 @@ Inside one worker, `process_fn` is a plain method: `run()` runs on the event loo
 
 - `process_fn` takes no lock. It reads `self._active` once, a single reference read, and uses that `Live` for the whole request.
 - `stage`, `activate` and `rollback` serialise on `self._lock`. A long `stage()` blocks another `stage()` or `activate()`, never a request.
-- An `Executable` is shared by every request of a version. The engine side of concurrent first calls, per-thread frame views and `nogil=True` kernels is covered in [Concurrency](engine/concurrency.md). `tests/serving/test_concurrency.py` runs cold executables from many threads in every mode and checks they agree with a single thread.
+- An `Executable` is shared by every request of a version. The engine side of concurrent first calls, per-thread frame views and `nogil=True` kernels is covered in [Concurrency](engine/concurrency.md). `tests/serving/test_concurrency.py` runs cold executables from many threads in every engine and checks they agree with a single thread.
 
 The shipped apps call `stage()` and `activate()` only at startup, through `init_fn`. There is no route for swapping versions in a running server: deploy a new version by restarting, or add a route to your `Handler` subclass that calls `stage()` and `activate()`.
 
@@ -393,7 +393,7 @@ numba caches compiled kernels on disk for the CPU it compiled on. `decikit build
 | `api.code_path` | `DECIKIT_API__CODE_PATH` | `.` |
 | `api.pipeline` | `DECIKIT_API__PIPELINE` | `pipeline:build` |
 | `api.handler` | `DECIKIT_API__HANDLER` | `inference:Handler` |
-| `api.mode` | `DECIKIT_API__MODE` | `fused` |
+| `api.engine.type` and the engine's fields | `DECIKIT_API__ENGINE__TYPE`, `DECIKIT_API__ENGINE__STRICT_COMPILE`, `DECIKIT_API__ENGINE__PARAMS_VALIDATION` | `fused`, `false`, `eager` |
 | `config.type` and the store's fields | `DECIKIT_CONFIG__TYPE`, `DECIKIT_CONFIG__BASEPATH` | `file:json`, `configs` |
 | `serve.host`, `serve.port`, `serve.workers`, `serve.server` | `DECIKIT_SERVE__*` | `0.0.0.0`, `8080`, `2 * CPUs + 1`, `starlette` |
 
@@ -402,7 +402,7 @@ What it does, in order:
 1. Puts `code_path` and its parent at the front of `sys.path`, removing them first if they were already further back. A project directory that is itself a package (the template's layout) resolves from its parent, and a second project's `pipeline.py` earlier on the path cannot shadow this one.
 2. Resolves the pipeline: a flow file is joined to `code_path`; an import path is imported once to print where it came from. The server log shows `decikit: pipeline loan_check.pipeline:build from .../loan_check/pipeline.py`, so a pipeline imported from the wrong project is visible before it serves wrong answers.
 3. Looks for the handler module. If `importlib.util.find_spec` finds it, the class must exist there, else `AttributeError` with the fix in the message. If the module does not exist at all, it falls back to the plain `RequestHandler`.
-4. Builds the store from `settings.config` (`ConfigStore.resolve(type).model_validate(...)`) and calls the handler class with the store, the pipeline, the mode and `sample_request=<code_path>/sample_request.json`.
+4. Builds the store from `settings.config` (`ConfigStore.resolve(type).model_validate(...)`) and calls the handler class with the store, the pipeline, the engine (`Engine.resolve(type)` validated from `settings.api.engine`) and `sample_request=<code_path>/sample_request.json`.
 
 ## Extending the handler
 

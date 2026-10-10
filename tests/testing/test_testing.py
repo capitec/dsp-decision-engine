@@ -8,7 +8,7 @@ from numba.extending import overload
 from decikit import flow, missing_as, param
 from decikit.ops import decimal
 from decikit.ops.decimal import Currency
-from decikit._engine import Engine
+from decikit._engine import Engine, SteppedEngine
 from decikit._engine.debug import Session
 from decikit._engine.run import Executable
 from decikit.lab.testing import assert_equivalent, corpus, no_recompile
@@ -105,7 +105,7 @@ def ratio(x: float, y: float) -> float:
 @pytest.mark.parametrize("mode", ("interpreted", "stepped", "fused"))
 def test_dividing_by_zero_agrees_across_modes(mode):
     with pytest.raises(ZeroDivisionError):
-        Engine().bind(flow(ratio), mode).run(pl.DataFrame({"x": [1.0, 0.0], "y": [0.0, 0.0]}))
+        Engine.resolve(mode)().bind(flow(ratio)).run(pl.DataFrame({"x": [1.0, 0.0], "y": [0.0, 0.0]}))
 
 
 def test_a_record_run_disagreeing_with_a_frame_run_fails_naming_the_row(monkeypatch):
@@ -220,7 +220,7 @@ def test_corpus_nulls_only_inputs_no_step_requires():
 
 @pytest.mark.parametrize("mode", ["stepped", "fused"])
 def test_no_recompile_passes_for_a_value_only_retune(mode):
-    exe = Engine().bind(pipeline, mode=mode)
+    exe = Engine.resolve(mode)().bind(pipeline)
     exe.run(FRAME)
     exe.run(FRAME.row(0, named=True))
     with no_recompile():
@@ -236,7 +236,7 @@ def test_no_recompile_fails_when_something_compiles():
 
     with pytest.raises(AssertionError, match="numba compiled .*shifted"):
         with no_recompile():
-            Engine().bind(flow(shifted), mode="stepped").run(pl.DataFrame({"x": [1.0]}))
+            SteppedEngine().bind(flow(shifted)).run(pl.DataFrame({"x": [1.0]}))
 
 
 def test_corpus_adds_rounding_ties_for_every_float_input():

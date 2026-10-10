@@ -28,7 +28,7 @@ From a checkout: `uv sync`, then `uv run pytest`.
 
 ```python
 import polars as pl
-from decikit import Engine, flow, param
+from decikit import FusedEngine, flow, param
 
 def ratio(income: float, debt: float) -> float:
     return debt / income
@@ -40,7 +40,7 @@ pipeline = flow(ratio, affordable, name="afford")
 df = pl.DataFrame({"income": [1000.0, 500.0], "debt": [200.0, 400.0]})
 pipeline.run(df)                                                   # income, debt, affordable
 pipeline.run(df, params={"afford": {"affordable": {"limit": 0.9}}})
-Engine().bind(pipeline, mode="fused").run({"income": 1000.0, "debt": 200.0})  # one record
+FusedEngine().bind(pipeline).run({"income": 1000.0, "debt": 200.0})  # one record
 ```
 
 ## CLI
