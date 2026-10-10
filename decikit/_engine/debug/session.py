@@ -41,13 +41,13 @@ class Session(Edits):
     runners that report positions, such as the interpreted one); a predicate
     is called with every checkpoint.
 
-    Every mode supports sessions. Interpreted and stepped pause at every
+    Every numba engine supports sessions. Interpreted and stepped pause at every
     node. Fused pauses only at kernel boundaries: a kernel running several
     steps is one checkpoint with its first step's path, and a breakpoint (or
     `rewind`) on any of its steps stops just before the whole kernel, with
     the kernel's steps in `Paused.kernel`. Values a kernel uses only inside
     itself are never stored, so `value` and `set` on one raise a `KeyError`
-    that suggests `mode="stepped"`. A fused branch or loop of plain scalar
+    that suggests `engine="stepped"`. A fused branch or loop of plain scalar
     steps is one such kernel, with the branch's or loop's own path.
 
     Branches and loops: `step()` runs one whole; `step_into()` enters it.
@@ -371,7 +371,7 @@ class Session(Edits):
         # Stored after all when a packed branch or loop took the unpacked path (a null it can't carry).
         if kernel is not None and v.id not in self.state.values:
             raise KeyError(f"{spec!r} is computed inside the fused kernel {list(kernel)} and never stored; "
-                           "open the session with mode='stepped' to inspect or set it")
+                           "open the session with engine='stepped' to inspect or set it")
 
     def _visit(self, locator: str) -> None:
         self._visits[locator] += 1
