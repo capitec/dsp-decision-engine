@@ -29,6 +29,10 @@ interface FlatRuleState {
   
   // Save state
   saving: boolean;
+  // What was last loaded or saved: every edit replaces `trees` or `project.project_data`, so a different
+  // reference means unsaved changes
+  savedTrees: PrioritizedTree[];
+  savedProjectData: any;
   error: string | null;
   ruleErrors: Map<string, string>; // Map of treeId to error message
 
@@ -179,6 +183,8 @@ const store = create<FlatRuleState>()(
     availableFields: [],
     outputOptions: [],
     saving: false,
+    savedTrees: [],
+    savedProjectData: undefined,
     error: null,
     ruleErrors: new Map(),
     validationErrors: new Map(),
@@ -474,7 +480,7 @@ const store = create<FlatRuleState>()(
         });
 
         const errorState = buildErrorState(saved.validation_errors, state.trees);
-        set(errorState);
+        set({ ...errorState, savedTrees: state.trees, savedProjectData: state.project.project_data });
         toast(saved.validation_errors.length === 0
           ? { title: "Project Saved", description: "Your changes have been saved successfully." }
           : {
@@ -588,6 +594,8 @@ const store = create<FlatRuleState>()(
         collapsedNodes: new Set(),
         focusedNode: null,
         saving: false,
+        savedTrees: trees,
+        savedProjectData: enhancedProject.project_data,
         error: null,
         ...buildErrorState(project.validation_errors, trees)
       });
@@ -629,6 +637,9 @@ export const useFlatRuleFocusedNode = () => useFlatRuleStore((state) => state.fo
 export const useFlatRuleAvailableFields = () => useFlatRuleStore((state) => state.availableFields);
 export const useFlatRuleOutputOptions = () => useFlatRuleStore((state) => state.outputOptions);
 export const useFlatRuleSaving = () => useFlatRuleStore((state) => state.saving);
+export const useFlatRuleDirty = () => useFlatRuleStore(
+  (state) => state.trees !== state.savedTrees || state.project.project_data !== state.savedProjectData
+);
 export const useFlatRuleError = () => useFlatRuleStore((state) => state.error);
 export const useFlatRuleRuleErrors = () => useFlatRuleStore((state) => state.ruleErrors);
 export const useFlatRuleValidationErrors = () => useFlatRuleStore((state) => state.validationErrors);
