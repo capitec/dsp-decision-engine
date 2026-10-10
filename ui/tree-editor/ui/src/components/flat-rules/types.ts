@@ -101,6 +101,7 @@ export interface UISchemaFieldBoolean extends UISchemaFieldBase {
 export interface PEDTreeNode {
   meta?: {
     name?: string;
+    description?: string;
     position?: { x: number; y: number };
   };
   rule: any; // Full rule structure - can be expanded later
