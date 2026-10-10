@@ -4,7 +4,7 @@ import warnings
 from pathlib import Path
 
 import pytest
-from decikit import ConfigurableStep, DecisionTableConfig, Engine, HiddenStateWarning
+from decikit import ConfigurableStep, DecisionTableConfig, HiddenStateWarning, InterpretedEngine
 from decikit.lab import diff
 
 from fraud_interdiction.pipeline import build
@@ -36,7 +36,7 @@ def changed_paths(a, b):
 def test_the_pipeline_reads_no_hidden_objects(shipped):
     with warnings.catch_warnings():
         warnings.simplefilter("error", HiddenStateWarning)
-        Engine().bind(shipped, mode="interpreted")
+        InterpretedEngine().bind(shipped)
 
 
 def test_the_same_documents_build_an_unchanged_pipeline(shipped):

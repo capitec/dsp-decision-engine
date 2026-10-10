@@ -44,7 +44,7 @@ def ours(mode="fused"):
                             modifies=["limit"], name="limits")
     repay = decikit.loop(owing, decikit.step(pay, output="balance"), carries=["balance"], max_iterations=360,
                          name="repay")
-    return Engine().bind(decikit.flow(limits), mode).run, Engine().bind(decikit.flow(repay), mode).run
+    return Engine.resolve(mode)().bind(decikit.flow(limits)).run, Engine.resolve(mode)().bind(decikit.flow(repay)).run
 
 
 def rows_per_s(run, frame, reps=7):

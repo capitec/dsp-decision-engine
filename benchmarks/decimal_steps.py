@@ -1,4 +1,4 @@
-"""Warm `score()` and batch cost of a Decimal money flow against the same flow on plain int cents.
+"""Warm `run(record)` and batch cost of a Decimal money flow against the same flow on plain int cents.
 
     uv run python benchmarks/decimal_steps.py [--reps 5]
 
@@ -53,12 +53,12 @@ def main(reps: int) -> None:
     frame_int = pl.DataFrame({"principal": cents})
     frame_dec = pl.DataFrame({"principal": pl.Series(cents).cast(pl.Decimal(18, 0)) / 100}).cast({"principal": pl.Decimal(18, 2)})
     assert plain.fallbacks() == {} and dec.fallbacks() == {}
-    print("score():", plain.score(row_int)["total_int"], dec.score(row_dec)["total_dec"])
-    assert plain.score(row_int)["total_int"] == dec.score(row_dec)["total_dec"].raw
+    print("run(record):", plain.run(row_int)["total_int"], dec.run(row_dec)["total_dec"])
+    assert plain.run(row_int)["total_int"] == dec.run(row_dec)["total_dec"].raw
     best = {"int cents": [1e9, 1e9, 0.0], "decimal": [1e9, 1e9, 0.0]}
     for _ in range(reps):
         for name, exe, row, frame in (("int cents", plain, row_int, frame_int), ("decimal", dec, row_dec, frame_dec)):
-            p50, p99 = stats(lambda: exe.score(row))
+            p50, p99 = stats(lambda: exe.run(row))
             exe.run(frame)
             t = time.perf_counter()
             for _ in range(5):
@@ -66,7 +66,7 @@ def main(reps: int) -> None:
             rate = 5 * n / (time.perf_counter() - t) / 1e6
             best[name] = [min(best[name][0], p50), min(best[name][1], p99), max(best[name][2], rate)]
     for name, (p50, p99, rate) in best.items():
-        print(f"{name:10s} score() p50 {p50:6.1f} us  p99 {p99:6.1f} us   run() {rate:6.1f} M rows/s")
+        print(f"{name:10s} run(record) p50 {p50:6.1f} us  p99 {p99:6.1f} us   run() {rate:6.1f} M rows/s")
 
 
 if __name__ == "__main__":

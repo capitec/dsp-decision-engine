@@ -92,7 +92,7 @@ The stages, in the order the decision takes them:
 | `reason_codes` documents twice: why a scenario was rejected (read by the search) and why a client was declined or referred (a step in the flow) | [reasons.py](consolidation/reasons.py), [`configs/0.1.0/`](configs/0.1.0) |
 | `each` over the products the search can price, reading the assessment's own buffer grid | [capacity.py](consolidation/capacity.py) |
 | `TypedDict` account lists: JSON date strings arrive as `date`s | [inventory.py](consolidation/inventory.py) |
-| `@allow_fallback` for steps that are Python on purpose, checked by `Engine(strict_compile=True)` | [tests/test_serving.py](tests/test_serving.py) |
+| `@allow_fallback` for steps that are Python on purpose, checked by `FusedEngine(strict_compile=True)` | [tests/test_serving.py](tests/test_serving.py) |
 | Warm-up from `sample_request.json`, and serving the raw request bytes | [sample_request.json](sample_request.json), [tests/test_serving.py](tests/test_serving.py) |
 
 ## Run it
@@ -111,7 +111,7 @@ checkout takes a minute while numba compiles):
 
 ```bash
 uv run decikit build
-# built config version 0.1.0 (pipeline consolidation.pipeline:build, mode fused)
+# built config version 0.1.0 (pipeline consolidation.pipeline:build, engine fused)
 ```
 
 Serve, and assess the sample client. Her dates are plain JSON strings. The 178 scenarios the search evaluates take a

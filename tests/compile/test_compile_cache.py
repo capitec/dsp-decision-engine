@@ -321,7 +321,7 @@ import polars as pl
 import step
 from decikit import Engine, flow
 
-out = [Engine().bind(flow(step.half, name="p"), mode=mode).run(pl.DataFrame({"x": [3.0]}))["half"].to_list()
+out = [Engine.resolve(mode)().bind(flow(step.half, name="p")).run(pl.DataFrame({"x": [3.0]}))["half"].to_list()
        for mode in ("stepped", "fused")]
 print(json.dumps(out))
 """

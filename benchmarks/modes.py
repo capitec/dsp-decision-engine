@@ -1,4 +1,4 @@
-"""Flagship batch throughput and score() latency in every mode.
+"""Flagship batch throughput and run(record) latency in every mode.
 
     uv run python benchmarks/modes.py
 """
@@ -62,13 +62,13 @@ def latency(score, calls=20000):
 # Latency first: a million-row batch just before leaves the allocator churning.
 engines = {}
 for mode in ("fused", "stepped", "interpreted"):
-    exe = Engine().bind(flagship, mode=mode)
-    engines[f"decikit {mode}"] = (exe.run, exe.score)
+    exe = Engine.resolve(mode)().bind(flagship)
+    engines[f"decikit {mode}"] = (exe.run, exe.run)
 latencies = {name: latency(score, calls=2000 if "interpreted" in name else 20000)
              for name, (_, score) in engines.items()}
 results = {name: (rows_per_s(run, reps=1 if "interpreted" in name else 7), *latencies[name])
            for name, (run, _) in engines.items()}
 
-print(f"{'engine':<22}{'batch rows/s':>16}{'score p50 us':>14}{'score p99 us':>14}")
+print(f"{'engine':<22}{'batch rows/s':>16}{'record p50 us':>14}{'record p99 us':>14}")
 for name, (batch, p50, p99) in results.items():
     print(f"{name:<22}{batch:>16,.0f}{p50:>14.1f}{p99:>14.1f}")

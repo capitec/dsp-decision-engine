@@ -3,7 +3,7 @@ import polars as pl
 import pytest
 
 from decikit import _engine as engine
-from decikit._engine import Engine
+from decikit._engine import Engine, FusedEngine
 from decikit._engine.compile import kernel
 from decikit._engine.ir.decls import base_annotation
 from decikit.steps.trees import TreeConfig, _walker as walker
@@ -48,8 +48,8 @@ def test_int64_above_2_53_is_compared_exactly_in_every_mode(run):
     frame = pl.DataFrame({"n": pl.Series([BIG, BIG + 1], dtype=pl.Int64)})
     assert run(tree, frame)["hit"].to_list() == [1, 0]
     for mode in MODES:
-        exe = Engine().bind(tree, mode=mode)
-        assert (exe.score({"n": BIG})["hit"], exe.score({"n": BIG + 1})["hit"]) == (1, 0), mode
+        exe = Engine.resolve(mode)().bind(tree)
+        assert (exe.run({"n": BIG})["hit"], exe.run({"n": BIG + 1})["hit"]) == (1, 0), mode
 
 
 def test_an_int_threshold_past_2_53_that_float64_cannot_hold_is_accepted(run):
@@ -70,7 +70,7 @@ def test_a_bool_feature_stays_a_bool_end_to_end(run):
     assert kinds(tree) == {"flag": bool}
     assert run(tree, pl.DataFrame({"flag": [True, False, True]}))["hit"].to_list() == [1, 0, 1]
     for mode in MODES:
-        assert Engine().bind(tree, mode=mode).score({"flag": False})["hit"] == 0, mode
+        assert Engine.resolve(mode)().bind(tree).run({"flag": False})["hit"] == 0, mode
 
 
 def test_an_int_feature_stays_an_int_end_to_end(run):
@@ -146,7 +146,7 @@ def test_polars_spellings_are_accepted():
 def test_retuning_an_int_threshold_never_recompiles():
     tree = one_node({"op": ">", "feature": "cents", "threshold": {"param": "floor", "default": 100}},
                     name="retune", feature_types={"cents": "int"})
-    exe = Engine().bind(tree, mode="fused")
+    exe = FusedEngine().bind(tree)
     frame = pl.DataFrame({"cents": pl.Series([50, 150, 250], dtype=pl.Int64)})
     assert exe.run(frame)["hit"].to_list() == [0, 1, 1]
     before = len(walker.walk.signatures), len(kernel._KERNELS)

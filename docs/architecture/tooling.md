@@ -134,7 +134,7 @@ $ decikit build
 decikit: pipeline loan_check.pipeline:build from .../loan_check/pipeline.py
 decikit: handler loan_check.inference:Handler from .../loan_check/inference.py
 FallbackWarning: loan_check/month_end runs in Python, row by row: reads 'applied_on' as <class 'datetime.date'>, which no kernel takes
-built config version 0.0.0 (pipeline loan_check.pipeline:build, mode fused)
+built config version 0.0.0 (pipeline loan_check.pipeline:build, engine fused)
 ```
 
 Any exception from staging becomes one line, `config version <v> failed to build: <Type>: <message>`, and exit status 1. `build` does not start a server and does not activate anything.

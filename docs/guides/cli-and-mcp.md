@@ -98,7 +98,7 @@ Stages a config version exactly as `serve` would, then stops. It imports the pip
 
 ```text
 $ cd credit_risk && decikit build
-built config version 0.0.0 (pipeline credit_risk.pipeline:build, mode fused)
+built config version 0.0.0 (pipeline credit_risk.pipeline:build, engine fused)
 ```
 
 A version that fails is reported with its error: `Error: config version 9.9.9 failed to build: <ErrorType>: <message>`. Run `build` in CI and in the image build, on the same CPU type you serve on.
@@ -112,7 +112,7 @@ Serves the latest config version over HTTP: `POST /invocations` scores a request
 | `--host` | `DECIKIT_SERVE__HOST` or `0.0.0.0` |
 | `--port` | `DECIKIT_SERVE__PORT` or `8080` |
 | `--workers` | `DECIKIT_SERVE__WORKERS` or 2 × CPUs + 1 |
-| `--mode interpreted\|stepped\|fused` | `DECIKIT_API__MODE` or `fused` |
+| `--engine interpreted\|stepped\|fused` (or an installed engine's tag) | `DECIKIT_API__ENGINE__TYPE` or `fused` |
 | `--server starlette\|sanic` | `DECIKIT_SERVE__SERVER` or `starlette` |
 
 ```text

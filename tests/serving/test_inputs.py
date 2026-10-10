@@ -9,10 +9,10 @@ import polars as pl
 import pytest
 from typing_extensions import TypedDict
 
-from decikit import Engine, flow, frame_step
+from decikit import FusedEngine, InterpretedEngine, flow, frame_step
 from decikit.ops import Struct
 from decikit.config import JsonFileStore
-from decikit.exceptions import DecikitError, ParamsError
+from decikit.exceptions import DecikitError, EngineError, ParamsError
 from decikit.serving import RequestHandler
 from decikit.serving._handler import _dates, construct_handler_from_settings
 from decikit.serving._parse import coerce_record, dummy, has_date
@@ -108,7 +108,7 @@ def test_a_struct_input_is_warmed_and_coerced_like_the_typed_dict_it_holds():
         return applicant["income"]
 
     assert dummy(Struct[DatedApplicant]) == {"income": 1.0, "opened_date": dt.date(2000, 1, 1)}
-    dates = _dates(Engine().bind(flow(afford, name="p")))
+    dates = _dates(InterpretedEngine().bind(flow(afford, name="p")))
     out = coerce_record({"applicant": {"income": 1.0, "opened_date": "2026-01-01"}}, dates)
     assert out["applicant"] == {"income": 1.0, "opened_date": dt.date(2026, 1, 1)}
 
@@ -168,6 +168,25 @@ def test_a_failing_sample_request_is_named_in_the_error(tmp_path):
         _handler(tmp_path, flow(second, name="g"), sample_request=str(sample)).stage()
 
 
+def test_a_sample_carrying_a_pipeline_output_is_blamed_on_the_sample(tmp_path):
+    sample = tmp_path / "sample_request.json"
+    sample.write_text('{"history": [1.0, 2.0], "second": 2.0}')
+    with pytest.raises(DecikitError, match="warm-up failed with EngineError: 'second' is produced.*Fix .*sample_request"
+                       ) as blamed:
+        _handler(tmp_path, flow(second, name="g"), sample_request=str(sample)).stage()
+    assert type(blamed.value) is DecikitError
+
+
+def test_a_strict_refusal_raises_before_warm_up_and_is_not_blamed_on_the_sample(tmp_path):
+    sample = tmp_path / "sample_request.json"
+    sample.write_text('{"history": [1.0, 2.0], "second": 2.0}')   # warming with it would fail
+    handler = _handler(tmp_path, flow(second, name="g"), engine=FusedEngine(strict_compile=True),
+                       sample_request=str(sample))
+    with pytest.raises(EngineError, match="g/second runs in Python") as refused:
+        handler.stage()
+    assert "warm-up failed" not in str(refused.value) and "sample_request" not in str(refused.value)
+
+
 def test_a_sample_request_is_coerced_like_a_request(tmp_path):
     sample = tmp_path / "sample_request.json"
     sample.write_text(json.dumps(RECORD))
@@ -211,7 +230,7 @@ def test_code_path_wins_over_an_earlier_path_entry_and_the_pipeline_file_is_repo
     handler.stage()
     handler.activate()
     live = handler.module_fn()
-    assert "mine" in live.executable.score({"x": 1.0})
+    assert "mine" in live.executable.run({"x": 1.0})
     assert str(tmp_path / "mine" / "pipeline.py") in capsys.readouterr().err
     monkeypatch.delitem(sys.modules, "pipeline")
 

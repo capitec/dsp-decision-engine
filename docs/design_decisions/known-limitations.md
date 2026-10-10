@@ -5,7 +5,7 @@ Gaps in the current code that users and maintainers should know about before rel
 ## Compilation and caching
 
 **Object globals are keyed by identity.** A step reading an instance of a class of its own is fingerprinted with `id()` (`_engine/compile/fingerprint.py`); numbers, strings, dates, Decimals, regexes, enums, classes and plain containers of those are keyed by value. A class is keyed by its own methods' bytecode and constants, not by what its methods call, and a jitclass by its numba type, which differs per process.
-Impact: the numba disk cache from `decikit build` misses on another process, and `decikit.lab.diff` reads the step as always changed. Binding warns with `HiddenStateWarning` (`Engine(strict_compile=True)` raises); put the data in literals, a config document, `param()`s or `param_table`s.
+Impact: the numba disk cache from `decikit build` misses on another process, and `decikit.lab.diff` reads the step as always changed. Binding warns with `HiddenStateWarning` (`FusedEngine(strict_compile=True)` raises); put the data in literals, a config document, `param()`s or `param_table`s.
 
 **A callable object read as `module.NAME` is not seen.** The walk follows the attributes a step reads off a module, but skips any callable that is not a function, module or class (so a ufunc or `np.searchsorted` is not flagged). An instance with `__call__` read that way (`transforms.normalise(x)` where `normalise = Normaliser(mean, std)`) is neither keyed nor warned about; read as a plain global it is.
 Impact: editing its data leaves the cache key and `decikit.lab.diff` unchanged. Keep the data in a document or a `param()`, or import the object by name.
@@ -22,8 +22,8 @@ Workaround: build on the serving host type, or compare `cpu_target()` recorded a
 **Two steps in one fused kernel cannot read one column as `Columnar` of different Item types.** Binding raises `TypeError`.
 Workaround: read the column with one Item type everywhere, or give the second reader its own column.
 
-**A compiled step returning a dict or a list of dicts runs in Python.** `compile_call` accepts it, but no kernel stores a dict, so the fused kernel fails at its first launch and splits into per-call Python runs, silently (no `FallbackWarning`, absent from `fallbacks()`, and `strict_compile=True` does not raise).
-Impact: such a step costs a Python call per row although it looks compiled; its output is still checked against the declared type. Return a `Struct[...]` tuple or a `Columnar[...]` list of tuples to compile it.
+**A kernel numba refuses only at its launch takes every step in it to Python.** A step writing a `dict`, a `list`, `bytes` or a date or time falls back alone at build, but a kernel can still fail at its first launch on a value numba only meets then (a `dict` param, a float returned for a `Decimal` output, an output declared as an `IntEnum`), and then each of its steps runs in Python. It is reported (`split at launch: ...` in `fallbacks()`, a `FallbackWarning` in fused mode, refused by `strict_compile=True`), but only when that kernel first runs, and under strict every step of the kernel needs `@allow_fallback`, even one that compiles on its own.
+Impact: a Python call per row for each step of that kernel. Give the param a typed value or a `param_table`, and return what the output declares.
 
 **Compile caches grow without eviction.** Step dispatchers, fused kernels, Arrow schema plans, the params cache and `RequestHandler._history` are unbounded.
 Impact: a long-lived process that stages many versions or sees many distinct params documents leaks memory; restart periodically.
@@ -31,8 +31,11 @@ Impact: a long-lived process that stages many versions or sees many distinct par
 **The Arrow shim is compiled with `cc` on first import.** POSIX only, and it needs a C compiler or a cache directory the process can write to (`_engine/boundary/_arrow/_build.py`).
 Impact: Windows, and slim containers without a compiler, cannot run compiled modes; the MCP editor-socket path on Windows is untested.
 
-**`score()` is not instantaneous.** A short flow costs about 28 µs per record fused and 59 µs interpreted; a one-row frame through `run()` costs about 150 µs.
-Workaround: serve single records as a dict through `score()`; see [serving latency](../architecture/serving.md).
+**`run(record)` is not instantaneous.** A short flow costs about 28 µs per record fused and 59 µs interpreted; a one-row frame through `run()` costs about 150 µs.
+Workaround: serve single records as a dict through `run()`; see [serving latency](../architecture/serving.md).
+
+**A repeated `run` on a small frame is slower fused than interpreted.** `Step.run` follows the default engine (fused when unset) and binds and builds on every call; there is no numba compile after the first call, but a measured repeat on 10 rows costs 2.1 to 2.7 times the interpreted run (+2 to +3.5 ms on the flagship, about +35 ms on the affordability example), almost all of it the build.
+Workaround: `compile()` once and call the executable, or `with decikit.engine("interpreted"):` while iterating. `Step.run` caches no executable on purpose (see [engine](decisions/engine.md)).
 
 ## Numbers
 
@@ -55,6 +58,15 @@ Workaround: round in a step (`int(x)`, `round(x)`), or declare the column `float
 
 **Frame-step `writes` dtypes are not verified or cast.** A declared dtype is kept when the step returns it, but a different dtype is accepted as-is (only missing columns and row-count changes raise).
 Impact: a wrong dtype surfaces later, at the reader; declare `writes={"col": pl.Float64}` and return exactly that.
+
+**An all-null output of a type polars cannot name comes back `Null`.** An all-null or empty output takes its declared dtype when the annotation names one: numbers, `str`, `bytes`, `date`, `datetime`, `time`, a `Literal` of strings, `list[T]` of those, `Struct[...]`, `Columnar[...]` and a `TypedDict` of numbers, text and bools. A bare `dict` or `list`, `list[dict]`, `dict[str, T]`, `Any`, `timedelta`, a `Literal` of numbers and a `TypedDict` with a field outside those take their dtype from the values (`declared_dtype` and `_typed_dtype` in `_engine/run/state.py`).
+Impact: such a column's dtype depends on the data; declare a typed shape where a consumer needs a fixed schema.
+
+**An output with no return annotation, or `-> Any`, is stored differently by a kernel.** A step numba compiles writes it into a float64 column with no null mask (`numpy_dtype` reads an unknown annotation as float), while the interpreted engine, and a step running in Python, keep the value as it is. A step returning an int gives `Int64` and `3` from `run(record)` on the interpreted engine, but `Float64` and `3.0` on the stepped and fused engines; one returning `None` on some rows gives a null on the interpreted engine and raises `TypeError: expected int64, got None` (`float64` for a float) on the other two.
+Workaround: annotate the return (`-> int`, `-> float | None`). Whether an unannotated output should be refused, run in Python or typed by its value is an open API decision.
+
+**`run(record)` returns a plain `dict` or `list[dict]` output as the step built it; a frame row returns what polars made of it.** The record path hands back the Python value, while `run(frame)` stores the column as a polars struct or list of structs (`_series` in `_engine/run/state.py`). So a frame row has every key any item of the column has, `None` where an item lacked it (`"changes": {}` comes back as `{"amount": None, "grade": None}`), keys in the struct's field order rather than the item's, an int beside a float as a float, and a non-string key as text. A declared shape (`TypedDict`, `list[float]`) still turns an int the step returned for a float field into a float in the frame only, and a `Struct` or `Columnar` field does the same between engines: an int returned for a float field stays an int from `run(record)` on the interpreted engine and is a float from a kernel (equal under `==`). Loan granting's `waterfall_rules` and consolidation's `classified_accounts`, `settlements`, `scenarios`, `chosen_offer`, `runners_up` and `execution_package` differ this way between a record and a one-row frame.
+Impact: compare such outputs by value with missing keys read as `None`, or declare a `Struct`/`Columnar` shape, whose fields are fixed. Round-tripping the record path's value through the same polars build would make the two equal at about 57 us per `dict` and 250 us per twelve-item `list[dict]` output per record.
 
 **A `param_table` value is a numpy scalar in interpreted mode.** Arithmetic on it follows numpy, so `x / t.d[0]` with a zero gives `inf` and a warning where fused raises `ZeroDivisionError`.
 Workaround: convert with `float(t.d[0])` in the step, or guard the divisor.
@@ -87,6 +99,17 @@ Impact: an arithmetic change that preserves outputs reads as `identical=None`, n
 
 **`checks.yaml` is found from the current directory,** as datasets are, so `decikit check` and the MCP `check_report` depend on the working directory.
 Workaround: pass `--config` / `config=` explicitly.
+
+## Polars engine
+
+**Warnings come twice on the polars engine.** A `HiddenStateWarning`, a `FallbackWarning` and the warning about an input column named like a param fire once for the whole pipeline (which the engine binds to run records and to check each `run` on zero rows) and once for the segment that holds the step, under the `default` warnings filter too.
+Impact: noise only. Fixing it means `run(lazy_frame)` no longer runs the whole pipeline on zero rows: shadowing from its produced names, params through `check_namespaces`, and the final columns computed statically, which a frame step of unknown outputs prevents.
+
+**A fallback step's error counts the row from the start of its batch.** When the plan streams, the `in step <path>, row <k>` note of a step that runs in Python is the row within the batch polars handed the segment, not within the frame.
+Workaround: run the same frame on the fused engine to find the row.
+
+**A frame step that declares its reads sees only the batch.** On the polars engine it gets the input columns and the values earlier segments pass on; on the fused engine it also sees every intermediate in scope.
+Impact: only a frame step that reads a column it did not declare differs. Declare every column it reads.
 
 ## Serving
 

@@ -5,7 +5,7 @@ import numpy as np
 import polars as pl
 
 from decikit import _engine as engine
-from decikit._engine import Engine
+from decikit._engine import InterpretedEngine
 from decikit._engine.compile import Fallback, Kernel, compile_plan, default_bundle
 from decikit._engine.wiring import resolve
 from decikit.steps import ParamRef
@@ -57,7 +57,7 @@ def test_parameters_report_the_referenced_edges_and_points():
 def test_retuning_an_edge_and_points_changes_the_output_without_rebuilding_ir():
     sc = card()
     ir = engine.to_ir(sc)
-    exe = Engine().bind(sc)
+    exe = InterpretedEngine().bind(sc)
     before = exe.run(DF)
     assert before["age_score"].to_list() == [99.0, 5.0, 10.0, 15.0, 0.0, 15.0]
     assert before["score"].to_list() == [299.0, 112.0, 122.0, 132.0, 101.0, 132.0]
@@ -89,7 +89,8 @@ def test_compiled_kernels_give_the_interpreted_answers():
     inputs = {"age": age, "income": DF["income"].to_numpy()}
     valid = {"age": np.array([a is not None for a in AGE])}
     flat = {f"{p}/{node}": v for p, nodes in RETUNE.items() for node, v in nodes.items()}
-    for params, frame in (({}, sc.run(DF)), (flat, sc.run(DF, params=RETUNE))):
+    interpreted = sc.compile("interpreted")
+    for params, frame in (({}, interpreted.run(DF)), (flat, interpreted.run(DF, params=RETUNE))):
         units, out = _run_compiled(plan, inputs, valid, params)
         assert all(isinstance(u, Kernel) for u in units.values())
         assert out == {k: frame[k].to_list() for k in out}

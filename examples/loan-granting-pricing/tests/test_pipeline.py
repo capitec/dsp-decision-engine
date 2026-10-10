@@ -4,7 +4,7 @@ import math
 
 import polars as pl
 import pytest
-from decikit import Engine
+from decikit import InterpretedEngine
 
 from loan_granting import reasons
 from loan_granting.pipeline import build
@@ -223,12 +223,12 @@ def test_a_waterfall_decline_declines_with_its_reason(decide):
 
 
 def test_the_batch_run_gives_the_same_answers_as_scoring_one_record_at_a_time(documents, sample, params, parse):
-    executable = Engine().bind(build(**documents), mode="interpreted")
+    executable = InterpretedEngine().bind(build(**documents))
     records = [parse(sample), parse({**sample, "requested_amount": 40_000.0, "channel_code": 4}),
                parse({**sample, "applicant_age_years": 15.0})]
     batch = executable.run(pl.DataFrame(records), params=params)
     for i, record in enumerate(records):
-        single = executable.score(record, params)
+        single = executable.run(record, params)
         for name in ("outcome_code", "risk_grade", "amount_cap", "max_affordable_instalment", "solve_total_evaluations"):
             assert batch[name][i] == single[name], (i, name)
         assert batch["recommended_offer"][i] == single["recommended_offer"] or (

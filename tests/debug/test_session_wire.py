@@ -3,7 +3,7 @@ import json
 
 import polars as pl
 
-from decikit import flow
+from decikit import InterpretedEngine, flow
 from decikit._engine.debug import (COMMAND, EVENT, EVENT_LOG, BreakAt, ClearBreak, Pause, ReloadFailed, Resume, Rewind,
                                   SetValue, StepInto, StepOver)
 
@@ -24,7 +24,7 @@ FRAME = pl.DataFrame({
 
 
 def a_session_log():
-    s = flow(disposable_income, ratio).session(FRAME, params_validation="lazy")
+    s = flow(disposable_income, ratio).session(FRAME, engine=InterpretedEngine(params_validation="lazy"))
     s.break_at("ratio")
     s.resume()
     s.set("disposable_income", [0.5] + [1.0] * 49)

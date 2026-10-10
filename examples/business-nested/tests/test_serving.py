@@ -4,7 +4,7 @@ from pathlib import Path
 
 import polars as pl
 import pytest
-from decikit import Engine
+from decikit import FusedEngine
 from decikit.config import JsonFileStore
 from decikit.lab.testing import assert_equivalent
 from decikit.serving import RequestHandler
@@ -73,6 +73,6 @@ def test_every_mode_and_a_single_record_give_the_same_answers(sample):
 
 
 def test_every_step_that_runs_in_python_says_so_on_purpose():
-    executable = Engine(strict_compile=True).bind(build(), mode="fused")  # raises on an unannounced fallback
+    executable = FusedEngine(strict_compile=True).bind(build())  # raises on an unannounced fallback
     assert executable.fallbacks()
     assert all(reason.startswith("@allow_fallback") for reason in executable.fallbacks().values())

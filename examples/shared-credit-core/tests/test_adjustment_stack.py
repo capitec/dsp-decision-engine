@@ -245,7 +245,7 @@ def test_any_scope_column_gives_the_values_evaluate_gives_in_every_mode(mode):
     scorer = flow(SCOPED, name="t").compile(mode)
     for record in RECORDS:
         expected = SCOPED.apply(record["score_raw"], record, record["decision_date"])
-        got = scorer.score(record)
+        got = scorer.run(record)
         assert (got["score"], got["adjustments_applied"]) == (expected.adjusted_value, list(expected.adjustments_applied))
 
 
@@ -277,7 +277,7 @@ def test_a_flag_scope_column_can_be_declared_a_bool():
     exe = flow(flagged, name="t").compile("interpreted")
     assert next(v.annotation for v in exe.plan.inputs if v.name == "agency_placed") == bool | None
     record = {"score_raw": 600.0, "decision_date": JUNE}
-    assert [exe.score({**record, "agency_placed": flag})["score"] for flag in (True, False)] == [590.0, 600.0]
+    assert [exe.run({**record, "agency_placed": flag})["score"] for flag in (True, False)] == [590.0, 600.0]
 
 
 def test_a_declared_column_type_is_the_one_the_step_reads_a_shared_column_as():
@@ -287,6 +287,6 @@ def test_a_declared_column_type_is_the_one_the_step_reads_a_shared_column_as():
         return campaign_id + 1
 
     both = flow(campaigns, step(next_campaign), name="t")
-    assert both.compile("interpreted").score({"score_raw": 600.0, "decision_date": JUNE, "campaign_id": 23})["score"] == 590.0
+    assert both.compile("interpreted").run({"score_raw": 600.0, "decision_date": JUNE, "campaign_id": 23})["score"] == 590.0
     with pytest.raises(WiringError, match="campaign_id"):
         flow(stack(overlay(scope={"campaign_id": 23})), step(next_campaign), name="t").compile("interpreted")

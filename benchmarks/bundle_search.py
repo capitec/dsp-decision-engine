@@ -112,15 +112,15 @@ def report(label, times, got=None):
 
 def bench(mode, repeat_score, repeat_run):
     warnings.simplefilter("ignore")
-    exe = Engine().bind(pipeline, mode=mode)
+    exe = Engine.resolve(mode)().bind(pipeline)
     runner = exe.runner
-    exe.score(RECORD)
+    exe.run(RECORD)
     print(f"[{mode}] packed loops: {sorted(getattr(runner, 'packed', {}))}")
     print(f"[{mode}] fallbacks: {runner.fallbacks()}")
     want = hand_written(np.ascontiguousarray(prices[0]), np.ascontiguousarray(weights[0]), MASKS)
-    got = exe.score(RECORD)["best"]
+    got = exe.run(RECORD)["best"]
     assert abs(got - want) < 1e-9, (got, want)
-    report(f"{mode} score() 1 order", timed(lambda: exe.score(RECORD), repeat_score), got=got)
+    report(f"{mode} run(record) 1 order", timed(lambda: exe.run(RECORD), repeat_score), got=got)
     out = exe.run(FRAME)
     assert abs(out["best"][0] - want) < 1e-9
     report(f"{mode} run() {ORDERS} orders", timed(lambda: exe.run(FRAME), repeat_run))

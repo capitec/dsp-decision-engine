@@ -16,7 +16,8 @@ import polars as pl
 import pytest
 from numba.core.errors import NumbaError
 
-from decikit import ConfigurableStep, Engine, branch, each, flow, missing_as, param, step
+from decikit import (ConfigurableStep, Engine, FusedEngine, InterpretedEngine, branch, each, flow, missing_as, param,
+                     step)
 from decikit.ops import Text
 from decikit.config import JsonFileStore
 from decikit._engine.compile.njit import jit
@@ -102,8 +103,8 @@ RECORDS = [record(i) for i in range(THREADS * 2)]
 
 @pytest.fixture(scope="module")
 def serial():
-    exe = Engine().bind(pipeline(), mode="interpreted")
-    return [exe.score(r) for r in RECORDS]
+    exe = InterpretedEngine().bind(pipeline())
+    return [exe.run(r) for r in RECORDS]
 
 
 # --- (a) concurrent first calls on a cold executable ---------------------------------
@@ -112,18 +113,18 @@ def serial():
 @pytest.mark.parametrize("mode", MODES)
 def test_concurrent_first_calls_on_a_cold_executable_agree_with_one_thread(mode, serial):
     for _ in range(25):
-        exe = Engine().bind(pipeline(), mode=mode)
-        got = together(exe.score, RECORDS[:THREADS])
+        exe = Engine.resolve(mode)().bind(pipeline())
+        got = together(exe.run, RECORDS[:THREADS])
         assert got == serial[:THREADS]
-        assert hammer(exe.score, RECORDS) == serial
+        assert hammer(exe.run, RECORDS) == serial
 
 
 @pytest.mark.parametrize("mode", MODES)
 def test_concurrent_first_frame_runs_on_a_cold_executable_agree_with_one_thread(mode):
     frame = pl.DataFrame(RECORDS)
-    expected = Engine().bind(pipeline(), mode="interpreted").run(frame)
+    expected = InterpretedEngine().bind(pipeline()).run(frame)
     for _ in range(15):
-        exe = Engine().bind(pipeline(), mode=mode)
+        exe = Engine.resolve(mode)().bind(pipeline())
         assert all(out.equals(expected) for out in together(lambda _: exe.run(frame), range(THREADS)))
 
 
@@ -145,8 +146,8 @@ def span_words(rep):
 
 @pytest.mark.parametrize("mode", ("stepped", "fused"))
 def test_str_params_on_the_span_path_survive_concurrent_first_use(mode):
-    exe = Engine().bind(span_pipeline(), mode=mode)
-    exe.score({"sector": "x"})
+    exe = Engine.resolve(mode)().bind(span_pipeline())
+    exe.run({"sector": "x"})
     for rep in range(40):
         words = span_words(rep)
         calls = [({"s": {"is_sector": {"want": words["ab"[i % 2]]}}},
@@ -154,7 +155,7 @@ def test_str_params_on_the_span_path_survive_concurrent_first_use(mode):
         expected = [sector == doc["s"]["is_sector"]["want"] for doc, sector in calls]
 
         def score(c):
-            return exe.score({"sector": c[1]}, c[0])["is_sector"]
+            return exe.run({"sector": c[1]}, c[0])["is_sector"]
 
         assert together(score, calls[:THREADS]) == expected[:THREADS]
         assert hammer(score, calls) == expected
@@ -169,19 +170,19 @@ def trace_of(sink):
 
 @pytest.mark.parametrize("mode", MODES)
 def test_each_traced_call_gets_exactly_its_own_events(mode, serial):
-    exe = Engine().bind(pipeline(), mode=mode)
+    exe = Engine.resolve(mode)().bind(pipeline())
     expected = []
     for r in RECORDS:
         sink = TraceSink()
-        exe.score(r, trace=sink)
+        exe.run(r, trace=sink)
         expected.append(trace_of(sink))
     assert all(expected)
 
     def call(i):
         if i % 2:
-            return exe.score(RECORDS[i]), None
+            return exe.run(RECORDS[i]), None
         sink = TraceSink()
-        return exe.score(RECORDS[i], trace=sink), trace_of(sink)
+        return exe.run(RECORDS[i], trace=sink), trace_of(sink)
 
     for _ in range(30):
         for i, (out, events) in enumerate(hammer(call, range(len(RECORDS)))):
@@ -194,14 +195,14 @@ def test_each_traced_call_gets_exactly_its_own_events(mode, serial):
 
 @pytest.mark.parametrize("mode", ("interpreted", "stepped"))
 def test_report_is_the_latest_call_on_the_calling_thread(mode):
-    exe = Engine(params_validation="lazy").bind(pipeline(), mode=mode)
+    exe = Engine.resolve(mode)(params_validation="lazy").bind(pipeline())
     counter = iter(range(10**9))
 
     def call(sector_code):
         # A document nobody has used before, so validation runs and the report lists the node it reached.
         n = next(counter)
         doc = {"p": {"by_sector": {"cap_private": {"cap": 50.0 + n}, "cap_public": {"cap": 80.0 + n}}}}
-        exe.score({**RECORDS[0], "sector_code": sector_code}, doc)
+        exe.run({**RECORDS[0], "sector_code": sector_code}, doc)
         return exe.report.validated
 
     private, public = call(1), call(2)
@@ -212,18 +213,18 @@ def test_report_is_the_latest_call_on_the_calling_thread(mode):
 
 
 def test_a_thread_that_has_not_called_yet_has_an_empty_report():
-    exe = Engine().bind(pipeline(), mode="interpreted")
-    exe.score(RECORDS[0])
+    exe = InterpretedEngine().bind(pipeline())
+    exe.run(RECORDS[0])
     with ThreadPoolExecutor(1) as pool:
         assert pool.submit(lambda: exe.report.validated).result() == []
 
 
 def test_a_param_in_the_record_warns_once_however_many_threads_see_it():
     for _ in range(20):
-        exe = Engine().bind(pipeline(), mode="interpreted")
+        exe = InterpretedEngine().bind(pipeline())
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
-            together(lambda i: exe.score({**RECORDS[i], "cap": 1.0}), range(THREADS))
+            together(lambda i: exe.run({**RECORDS[i], "cap": 1.0}), range(THREADS))
         assert len([w for w in caught if "'cap' is a param" in str(w.message)]) == 1
 
 
@@ -270,7 +271,7 @@ def test_stage_and_activate_under_load_never_serve_a_wrong_answer(tmp_path):
     def serve():
         while not stop.is_set():
             live = handler.module_fn()
-            out = live.executable.score({"net_income": 9000.0, "expenses": 3000.0}, live.params)
+            out = live.executable.run({"net_income": 9000.0, "expenses": 3000.0}, live.params)
             if (out["bonus"], out["capped"]) not in ANSWERS:
                 wrong.append(out)
 
@@ -329,12 +330,12 @@ def banded():
 
 def test_arm_out_of_range_under_load_raises_for_those_rows_only_and_keeps_the_kernel():
     records = [{"band": i % 3, "price": float(i)} for i in range(THREADS * 4)]
-    serial = Engine().bind(banded(), mode="interpreted")
-    expected = [outcome(serial.score, r) for r in records]
+    serial = InterpretedEngine().bind(banded())
+    expected = [outcome(serial.run, r) for r in records]
     assert any(isinstance(e, tuple) for e in expected) and any(isinstance(e, dict) for e in expected)
     for _ in range(15):
-        exe = Engine().bind(banded(), mode="fused")
-        assert hammer(lambda r: outcome(exe.score, r), records) == expected
+        exe = FusedEngine().bind(banded())
+        assert hammer(lambda r: outcome(exe.run, r), records) == expected
         assert len(exe.runner.packed) == 1
 
 
@@ -343,13 +344,13 @@ def test_a_packed_kernel_numba_refuses_is_dropped_once_and_every_call_still_answ
         raise NumbaError("refused")
 
     for _ in range(15):
-        exe = Engine().bind(pipeline(), mode="fused")
-        exe.score(RECORDS[0])
+        exe = FusedEngine().bind(pipeline())
+        exe.run(RECORDS[0])
         (path,) = exe.runner.packed
         with patch.object(type(exe.runner.packed[path]), "run", refuse):
-            assert hammer(exe.score, RECORDS) == serial
+            assert hammer(exe.run, RECORDS) == serial
         assert exe.runner.packed == {}
-        assert exe.score(RECORDS[1]) == serial[1]
+        assert exe.run(RECORDS[1]) == serial[1]
 
 
 # --- (g) each ------------------------------------------------------------------------
@@ -367,20 +368,20 @@ def orders():
 def test_each_under_concurrent_first_calls_agrees_with_one_thread(mode):
     carts = [{"items": [{"weight": float(w)} for w in range(i % 5 + 1)] + [{"weight": 25.0}]}
              for i in range(THREADS * 2)]
-    expected = [Engine().bind(orders(), mode="interpreted").score(c) for c in carts]
+    expected = [InterpretedEngine().bind(orders()).run(c) for c in carts]
     for _ in range(15):
-        exe = Engine().bind(orders(), mode=mode)
-        assert together(exe.score, carts[:THREADS]) == expected[:THREADS]
-        assert hammer(exe.score, carts) == expected
+        exe = Engine.resolve(mode)().bind(orders())
+        assert together(exe.run, carts[:THREADS]) == expected[:THREADS]
+        assert hammer(exe.run, carts) == expected
 
 
 # --- (h) a session opened on the shared executable mid-load ---------------------------
 
 
 def test_a_session_opened_on_a_shared_executable_neither_disturbs_nor_is_disturbed(serial):
-    exe = Engine().bind(pipeline(), mode="fused")
+    exe = FusedEngine().bind(pipeline())
     frame = pl.DataFrame(RECORDS)
-    expected = Engine().bind(pipeline(), mode="interpreted").run(frame)
+    expected = InterpretedEngine().bind(pipeline()).run(frame)
     stop = threading.Event()
     wrong = []
 
@@ -388,7 +389,7 @@ def test_a_session_opened_on_a_shared_executable_neither_disturbs_nor_is_disturb
         i = 0
         while not stop.is_set():
             i = (i + 1) % len(RECORDS)
-            if exe.score(RECORDS[i]) != serial[i]:
+            if exe.run(RECORDS[i]) != serial[i]:
                 wrong.append((k, i))
 
     with ThreadPoolExecutor(THREADS) as pool:
@@ -433,12 +434,12 @@ def test_concurrent_row_layouts_of_one_schema_are_one_class():
 def test_cold_executables_sharing_a_kernel_compile_at_once_and_agree(mode):
     for _ in range(8):
         k = float(next(_fresh))
-        exes = [Engine().bind(flow(scaled_by(k), name=f"p{i}"), mode=mode) for i in range(THREADS)]
-        assert together(lambda e: e.score({"x": 2.0})["scale"], exes) == [2.0 * k] * THREADS
+        exes = [Engine.resolve(mode)().bind(flow(scaled_by(k), name=f"p{i}")) for i in range(THREADS)]
+        assert together(lambda e: e.run({"x": 2.0})["scale"], exes) == [2.0 * k] * THREADS
 
 
 def test_concurrent_first_validations_of_one_document_share_one_result():
-    exe = Engine().bind(pipeline(), mode="interpreted")
+    exe = InterpretedEngine().bind(pipeline())
     node = next(iter(exe.nodes.values()))
     for i in range(30):
         doc = {"p": {"by_sector": {"cap_private": {"cap": 50.0 + i}, "cap_public": {"cap": 80.0 + i}}}}

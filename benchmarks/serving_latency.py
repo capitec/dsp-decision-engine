@@ -1,6 +1,6 @@
 """Where one request's microseconds go inside the process, and the kernel floor.
 
-Every term of `RequestHandler.process_fn` is timed on its own; `Executable.score()` is
+Every term of `RequestHandler.process_fn` is timed on its own; `Executable.run` on a record is
 timed as cumulative prefixes of the work it does, so each stage is the next
 difference. The whole table runs `--reps` times and the lowest p50 and p99 of
 each term is reported: this box is shared, and the minimum is what the term
@@ -105,14 +105,14 @@ def terms(pipeline, row):
     """(name, callable) for every term of one request, plus the floors."""
     store = JsonFileStore(basepath=tempfile.mkdtemp(dir=".scratch"))
     store.create_version({"params": {}})
-    handler = RequestHandler(store, pipeline, mode="fused")
+    handler = RequestHandler(store, pipeline, engine="fused")
     handler.stage()
     handler.activate()
     live = handler.module_fn()
     exe, params, dates = live.executable, live.params, live.dates
     plan, runner = exe.plan, exe.runner
     body = json.dumps(row).encode()
-    result = exe.score(row, params)
+    result = exe.run(row, params)
 
     def build():
         state = State(plan, _NO_FRAME, 1)
@@ -146,16 +146,16 @@ def terms(pipeline, row):
         ("input_fn body (sync part)", lambda: parse_application_json(body)),
         ("coerce_record", lambda: coerce_record(row, dates)),
         ("module_fn", handler.module_fn),
-        ("score() total", lambda: exe.score(row, params)),
+        ("run(record) total", lambda: exe.run(row, params)),
         ("to_json(result)", lambda: to_json(result)),
         ("output_fn", lambda: handler.output_fn(result, "application/json")),
         ("input_fn", lambda: handler.input_fn(body, "application/json")),
         ("handler.score(record)", lambda: handler.score(row)),
         ("process_fn (no HTTP)", lambda: handler.process_fn(body, "application/json", "application/json")),
         ("same work, sync, one function", lambda: handler.output_fn(
-            exe.score(coerce_record(parse_application_json(body), dates), params), "application/json")),
+            exe.run(coerce_record(parse_application_json(body), dates), params), "application/json")),
         ("same work, sync, gc off", _gc_off(lambda: handler.output_fn(
-            exe.score(coerce_record(parse_application_json(body), dates), params), "application/json"))),
+            exe.run(coerce_record(parse_application_json(body), dates), params), "application/json"))),
         ("|score: State(plan, _NO_FRAME, 1)", lambda: State(plan, _NO_FRAME, 1)),
         ("|score: + _load inputs", build),
         ("|score: + _params bundle", prepared),
