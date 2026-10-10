@@ -55,6 +55,17 @@ def test_an_ops_message_without_an_id_with_a_bad_base_or_too_many_ops_is_rejecte
         check_message(message)
 
 
+@pytest.mark.parametrize("op", [
+    {"op": "replace", "path": "/rules/a/meta/name", "value": "nul \u0000 inside"},
+    {"op": "add", "path": "/parameters/p", "value": {"nul \u0000 key": 1}},
+    {"op": "remove", "path": "/parameters/nul \u0000 key"},
+])
+def test_an_ops_message_with_a_nul_character_is_rejected_as_the_database_cannot_store_it(op):
+    # Otherwise the write fails, the socket drops, and the client resends the same message for ever.
+    with pytest.raises(Rejected):
+        check_message({"type": "ops", "id": "m1", "base": 1, "ops": [op]})
+
+
 def test_a_well_formed_ops_message_passes():
     check_message({"type": "ops", "id": "m1", "base": 3, "ops": [
         {"op": "replace", "path": "/rules/a/meta/name", "value": "x"},
@@ -355,3 +366,4 @@ async def test_after_the_validator_process_dies_the_next_version_is_validated_ag
         await asyncio.sleep(0.1)
     hub.validator.shutdown()
     assert any(m["type"] == "validation" and m["version"] == 2 for m in client.ws.sent)
+
