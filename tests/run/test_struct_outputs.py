@@ -138,7 +138,7 @@ def test_a_tuple_returning_columnar_output_fuses_into_the_shared_kernel():
 @pytest.mark.parametrize("mode", ("fused", "stepped"))
 def test_a_columnar_output_a_later_step_reads_it_and_the_kernel_splits(mode):
     # Not `assert_equivalent`'s full mode list: a step-produced (not frame-sourced) `Columnar[...]`
-    # value has no per-row representation in `mode="interpreted"`, a pre-existing limitation this
+    # value has no per-row representation in the interpreted engine, a pre-existing limitation this
     # feature doesn't touch.
     exe = Engine.resolve(mode)().bind(flow(ladder_tuple, reads_offers, name="order").emit("offers"))
     out = exe.run(pl.DataFrame({"code": [1, 5]}))
