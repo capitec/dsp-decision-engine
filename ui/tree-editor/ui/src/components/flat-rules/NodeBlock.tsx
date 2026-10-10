@@ -20,6 +20,7 @@ import { CompositeLogicSelector } from '../shared-tree/CompositeLogicSelector';
 import { ComputedFeatureInput } from '../shared-tree/ComputedFeatureInput';
 import { CompositeConditionEditor } from './CompositeConditionEditor';
 import { hasErrorAtPath, getErrorAtPath } from '@/utils/flat-rule-validation-parser';
+import { boundLabel } from '@/utils/param-refs';
 import type { RuleTableRow, RuleBranch, RangeCondition, RuleCondition, LeafRuleNode, CompositeRuleNode } from './types';
 import { ParameterOption } from '../shared-tree/ParameterizedNumericInput';
 import {
@@ -771,7 +772,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                             <div>
                               {isStrictMode ? (
                                 <div className="text-xs text-gray-500 px-2 py-1 bg-gray-100 rounded h-8 flex items-center">
-                                  {idx === 0 ? '-∞' : displayMin ?? '-∞'}
+                                  {idx === 0 ? '-∞' : boundLabel(displayMin)}
                                 </div>
                               ) : (
                                 <ParameterizedNumericInput
