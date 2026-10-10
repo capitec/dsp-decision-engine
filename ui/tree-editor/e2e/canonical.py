@@ -22,6 +22,9 @@ def _clean(value):
 def canonical(document: dict) -> dict:
     """`document` without the editor's own additions, numbers as floats; compare with `as_lines`."""
     doc = _clean(document)
+    if doc.get("type") == "flat_rule":  # imported as a first_match set of its one rule, which runs the same
+        rest = {k: v for k, v in doc.items() if k not in ("type", "rule")}
+        doc = {**rest, "type": "prioritized_flat_rule", "mode": "first_match", "rules": [doc["rule"]]}
     # The export stamps its own metadata and fills in `name` with the project's when the document has none; a
     # document's own name is test_real_tree_export_keeps_the_documents_own_name's to check.
     metadata = {k: v for k, v in doc.pop("metadata", {}).items() if k not in EXPORT_STAMP}
@@ -35,8 +38,10 @@ def canonical(document: dict) -> dict:
         del doc["parameters"]
     if doc.get("output", {}).get("type_defs") == {}:
         del doc["output"]["type_defs"]
-    for rule in doc.get("rules", []):
+    for k, rule in enumerate(doc.get("rules", [])):
         rule.get("meta", {}).pop("position", None)
+        if doc.get("mode", "first_match") == "first_match":  # only "all" mode names its columns after the rules
+            rule.setdefault("meta", {}).setdefault("name", f"Rule {k + 1}")
     if "nodes" in doc:
         if doc.get("type") in ("ui-tree", "v3-tree"):
             del doc["type"]
