@@ -48,6 +48,15 @@ describe('LiveSync', () => {
     expect(hooks.settled).toHaveBeenCalledWith(2)
   })
 
+  it('sends a field the editor holds as undefined as no field, as the server will store it', () => {
+    const { socket, type } = setup()
+
+    type({ ...(doc('A') as object), extra: undefined } as unknown as Json)
+    vi.advanceTimersByTime(150)
+
+    expect(socket().ops()).toEqual([])
+  })
+
   it('pushes an edit not yet sent before it applies a remote version, and shows both', () => {
     const { sync, socket, shown, type } = setup()
     type(doc('Mine'))

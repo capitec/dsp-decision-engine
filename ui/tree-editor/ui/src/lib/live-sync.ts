@@ -77,7 +77,8 @@ export class LiveSync {
     clearTimeout(this.timer)
     if (!this.edited) return
     this.edited = false
-    const now = this.hooks.read()
+    // Through JSON, as the server will see it: an undefined field is no field.
+    const now = JSON.parse(JSON.stringify(this.hooks.read()))
     const ops = diff(this.view, now)
     if (!ops.length) return
     const message = { id: crypto.randomUUID(), base: this.version, ops }
