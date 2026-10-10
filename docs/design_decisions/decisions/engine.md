@@ -1,6 +1,6 @@
 # Engine
 
-Why the engine (IR, wiring, runners, kernels, compile cache, fallback, `score`, `each`) is shaped the way it is; read it before changing any of those or proposing an alternative.
+Why the engine (IR, wiring, runners, kernels, compile cache, fallback, `run`'s record path, `each`) is shaped the way it is; read it before changing any of those or proposing an alternative.
 
 ## Proposed: the flexible engine rework
 
@@ -8,7 +8,7 @@ Proposed 2026-10-09, being built on branch `engine/flexible-rework`; each bullet
 phase lands. The design, alternatives and plan: [flexible engine rework](../../design_specs/2026-10-09_flexible_engine_rework/README.md).
 
 - Proposed: an engine is a registry document (`Engine` is a `BaseRegistryModule` root; `InterpretedEngine`, `SteppedEngine`, `FusedEngine` keep the mode strings as aliases), and serving settings name an engine document instead of a mode string.
-- Proposed: `run` dispatches on its input (a dict takes the record path, a `DataFrame` the frame path, a `LazyFrame` the polars engine) and `score` is removed.
+- Proposed: `run` on a `LazyFrame` takes the polars engine (until then it is collected and run as a frame).
 - Proposed: `Step.run` and `compile` follow a context-scoped default engine set with `decikit.engine(...)`, fused when unset; `Step.session` opens interpreted unless given an engine.
 - Proposed: loudness is per engine: fused warns about every step that does not run compiled, kernels that split at their first launch included; stepped and interpreted never warn; `strict_compile=True` raises wherever it is set.
 - Proposed: the polars engine is lazy and starts as a host (the fused pipeline inside `map_batches`, split only at frame steps); polars-native step bodies are built only if a measurement against the host justifies them.
@@ -124,15 +124,15 @@ phase lands. The design, alternatives and plan: [flexible engine rework](../../d
 - Why: the rebuilt-union registry left stale unions on late registration, was superlinear (333 ms for 175 types) and gave 1332-character errors; lookup costs about 15 us more on a 63-node config, once. Without `SerializeAsAny` pydantic dumps a subclass as its base, silently.
 - See: [configurable steps](../../architecture/configurable-steps/index.md), `decikit/_registry.py`
 
-## `score` takes a dict and caches converted params bundles
+## `run` takes a dict or a frame, and caches converted params bundles
 
-- `score(record, params)` takes one dict; with no frame steps it builds no polars frame. Converted bundles are cached per params document and node, and a reused document is hashed once. Not: positional calls (transposition risk), a reused record buffer as default (brittle, thread-unsafe).
+- `run(record, params)` takes one dict; with no frame steps it builds no polars frame. `run` dispatches on its input: a `dict` first, then a `LazyFrame` (collected), a `DataFrame`, any other `Mapping`, else `TypeError`; checking the frames and `Mapping` first cost the flagship record 1.3-1.9 us of about 35 fused (2.0-2.8 of 47 stepped), a `dict` first 0.1-0.7 us (1.1 stepped), within noise (in-process, interleaved). Converted bundles are cached per params document and node, and a reused document is hashed once. Not: positional calls (transposition risk), a reused record buffer as default (brittle, thread-unsafe), a second name for the record path (the input already says which path; `score` was removed with no alias).
 - Why: 400 keyword arguments cost 1190 us, a dict 60 us; converting a validated model costs 170.6 us against 78.3 us to validate it, a cached bundle 0.23 us.
 - See: [experiment](../experiments/single-record-calling-convention.md), [engine](../../architecture/engine/index.md)
 
 ## One executable serves all threads; shared state is immutable or per thread
 
-- `run` and `score` on a shared `Executable` are safe from many threads, including the first call: caches fill through `once`, the compiled snapshot is published whole, `report` is thread-local, a bundle and its UTF-8 buffer are one `setdefault` entry.
+- `run` on a shared `Executable`, on a frame or a record, is safe from many threads, including the first call: caches fill through `once`, the compiled snapshot is published whole, `report` is thread-local, a bundle and its UTF-8 buffer are one `setdefault` entry.
 - Why: kernels are `nogil`, and an unsynchronised span buffer was a use-after-free. Sessions and trace sinks are single caller by contract.
 - See: [concurrency](../../architecture/engine/concurrency.md), `decikit/_engine/concurrency.py`
 

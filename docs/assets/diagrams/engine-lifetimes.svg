@@ -31,9 +31,9 @@
   <!-- call -->
   <rect x="30" y="356" width="220" height="96" rx="10" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
   <text x="50" y="394" font-size="16" font-weight="600" fill="#7c2d00">Per call</text>
-  <text x="50" y="418" font-size="13" fill="#7c2d00">run, score or session</text>
+  <text x="50" y="418" font-size="13" fill="#7c2d00">run or session</text>
   <rect x="270" y="356" width="700" height="96" rx="10" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
   <text x="290" y="382" font-size="14" fill="#7c2d00">a State: an array and validity mask per NodeVersion, plus the frame</text>
   <text x="290" y="406" font-size="14" fill="#7c2d00">a RunParams over the document, and its RunReport (thread-local on the Executable)</text>
-  <text x="290" y="430" font-size="14" fill="#7c2d00">the runner's generator of Checkpoints, drained by run and score, stepped by a Session</text>
+  <text x="290" y="430" font-size="14" fill="#7c2d00">the runner's generator of Checkpoints, drained by run, stepped by a Session</text>
 </svg>

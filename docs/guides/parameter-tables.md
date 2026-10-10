@@ -87,7 +87,7 @@ three_bands = {"pricing": {"initiation_fee": {"bands": [
     {"floor": 10000.0, "rate": 0.05, "cap": 1200.0}]}}}
 with no_recompile():
     print(exe.run(df, params=three_bands)["initiation_fee"].to_list())
-    print(exe.score({"amount": 20000.0}, three_bands))
+    print(exe.run({"amount": 20000.0}, three_bands))
 print(exe.fallbacks())
 ```
 
@@ -118,7 +118,7 @@ flowchart LR
 ```
 
 !!! warning "Pass a new document, don't edit one in place"
-    `run` and `score` treat a params document as immutable. The executable validates a document once and remembers the last document object it was given, so passing the same dict again skips validation and hashing. Mutating that dict in place (appending a row to `params["pricing"]["initiation_fee"]["bands"]`) and passing it again can return answers from the old rows. Build a new dict, for example with `copy.deepcopy`, for each change.
+    `run` treats a params document as immutable. The executable validates a document once and remembers the last document object it was given, so passing the same dict again skips validation and hashing. Mutating that dict in place (appending a row to `params["pricing"]["initiation_fee"]["bands"]`) and passing it again can return answers from the old rows. Build a new dict, for example with `copy.deepcopy`, for each change.
 
 In a project the rows go in `configs/<version>/params.json`, and a new config version carries new rows; see [projects and serving](projects-and-serving.md).
 
@@ -287,7 +287,7 @@ pricing/base_rate: param 'ladder': row 0, column 'floor': Input should be a vali
 pricing/base_rate: param 'ladder': Input should be a valid list (got {'floor': 600, 'rate': 0.1}); expected a list of rows like [{"floor": int, "rate": float}, ...]
 ```
 
-`run` and `score` raise the same messages as a `ParamsError` (`invalid params (affects 3 rows):` followed by the list). In a served project, `decikit build` and `RequestHandler.stage` validate the version's params document, so a bad row stops the version from being staged and the active version keeps serving.
+`run` raises the same messages, on a frame or a record, as a `ParamsError` (`invalid params (affects 3 rows):` followed by the list). In a served project, `decikit build` and `RequestHandler.stage` validate the version's params document, so a bad row stops the version from being staged and the active version keeps serving.
 
 ## Parameter table or decision table
 

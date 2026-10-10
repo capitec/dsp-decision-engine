@@ -19,7 +19,7 @@
 
   <!-- first call -->
   <rect x="200" y="80" width="470" height="110" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
-  <text x="435" y="108" text-anchor="middle" font-size="16" font-weight="600" fill="#134e4a">first run() or score(): compile</text>
+  <text x="435" y="108" text-anchor="middle" font-size="16" font-weight="600" fill="#134e4a">first run(): compile</text>
   <rect x="215" y="120" width="215" height="58" rx="8" fill="#ffffff" stroke="#0d9488" stroke-width="1.5"/>
   <text x="322" y="144" text-anchor="middle" font-size="14" fill="#134e4a">each step: njit, typed</text>
   <text x="322" y="164" text-anchor="middle" font-size="14" fill="#134e4a">from the annotations</text>

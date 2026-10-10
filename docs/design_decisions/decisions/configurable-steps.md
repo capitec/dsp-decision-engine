@@ -30,12 +30,12 @@ Read this before changing how tree or table documents become kernels, or what a 
 - Why: the fused kernel's compile time grows with the square of the outputs of one call (521 rules: 196 s cold, 14 s split in 32s), and narrow kernels are shared. The walker's own `pick` is not the cause.
 - Why 64: a single record, start-up and a big frame pull the width in different directions, and 64 is the best compromise over ten rule shapes (table below; [part size](../experiments/tree-split-part-size.md)). A tree of up to 64 rules is never split. From 250 rules up a single record is within 2-3% of an unsplit tree, as with 128; only a tree of 65 to 128 rules pays (up to 8%), and its author can set `part_outputs: 128`. Parts of 128 stage twice as slowly per process and make a big frame 1.4-1.5x slower than parts of 32 (64: 1.1x). A user who runs large frames sets 32; one who needs the last few percent and has a cold start to spare sets more or none.
 - Each part reads every feature with the kind the whole tree gives it. A node breakpoint `<name>#<id>` matches the parts under `<name>`.
-- Cost: `<name>` alone no longer names one node, so a trace, a diff and `checks` report per part (`<name>/part_1`); `_split.DEFAULT_PART_OUTPUTS` is the default width. Every process compiles its fused parts again: `examples/transaction-fraud` stages in 61 s at parts of 128, 31 s at 64 and 21 s at 32, for no measurable change in its `score()`.
+- Cost: `<name>` alone no longer names one node, so a trace, a diff and `checks` report per part (`<name>/part_1`); `_split.DEFAULT_PART_OUTPUTS` is the default width. Every process compiles its fused parts again: `examples/transaction-fraud` stages in 61 s at parts of 128, 31 s at 64 and 21 s at 32, for no measurable change in its `run(record)`.
 - See: [wide output compile](../experiments/wide-output-compile.md), `decikit/steps/trees/_split.py`
 
-Measured by the part-size sweep, median over ten rule shapes (`score()` against an unsplit tree; cold bind; `run()` over 200k rows against parts of 32):
+Measured by the part-size sweep, median over ten rule shapes (`run(record)` against an unsplit tree; cold bind; `run()` over 200k rows against parts of 32):
 
-| Width | `score()` at 250-521 rules | `score()` at 100 rules | cold bind, 250-521 rules | `run()` over a frame |
+| Width | `run(record)` at 250-521 rules | `run(record)` at 100 rules | cold bind, 250-521 rules | `run()` over a frame |
 |---|---|---|---|---|
 | 32 | 1.11-1.13x | 1.18x | 22-34 s | 1.0x |
 | 64 (default) | 1.02-1.03x | 1.08x | 16-17 s | 1.1x |
@@ -52,7 +52,7 @@ Measured by the part-size sweep, median over ten rule shapes (`score()` against 
 
 - A null comparison is unknown and takes the otherwise branch; each comparison row carries an `UNKNOWN` target, so no Kleene state and no duplicated rows.
 - A numeric null is a fill (`NaN`, `-2**63`), not an Optional; a NaN in the data is a null.
-- Why: `T | None` cost a mask array per feature per launch (`score()` p50 63 -> 102 us; 58-61 us with fills).
+- Why: `T | None` cost a mask array per feature per launch (`run(record)` p50 63 -> 102 us; 58-61 us with fills).
 - See: [tree walker costs](../experiments/tree-walker-costs.md), `docs/architecture/configurable-steps/trees.md`
 
 ## Strings are matched as bytes; regex, case folding and trimming run in Python
@@ -77,7 +77,7 @@ Measured by the part-size sweep, median over ten rule shapes (`score()` against 
 ## Table rows are inline or from params, with one matcher
 
 - Both sources are the same `Rows` type, so one compiled matcher serves both and changing rows never recompiles; param rows are validated and packed once when the params document arrives.
-- `ParamsCache.key` remembers the last document object, so params documents are immutable once passed (rows-param `score()` p50 88.6 -> 35.8 us).
+- `ParamsCache.key` remembers the last document object, so params documents are immutable once passed (rows-param `run(record)` p50 88.6 -> 35.8 us).
 - A String output of param rows must be an `Enum` column (choices are IR); not: running such tables in Python.
 - See: [trees and tables vs decider2](../experiments/trees-tables-vs-decider2.md), `docs/architecture/configurable-steps/tables.md`
 

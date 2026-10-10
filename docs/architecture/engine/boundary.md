@@ -167,7 +167,7 @@ is refused, since the fill must be an int code.
 The engine's runners no longer send a semantic `str` input into a kernel as a code. A step reading
 `str` runs in Python, and one reading `Text` gets spans (see [kernel semantics](kernels.md) for the
 measurement behind that). On the way out, a row node's `Literal` or `lookup(...)` output is an int64
-index into a `CodeTable` built once per kernel, decoded to Python values for `score()` and gathered
+index into a `CodeTable` built once per kernel, decoded to Python values for `run(record)` and gathered
 into a polars column for `run()` ([compilation](compile.md) has the details).
 
 ## Inside the shim
@@ -229,7 +229,7 @@ the 16-byte pairs. `FrameView.describe()` shows what nanoarrow saw:
 ```
 
 The runner builds spans for a `Text` input with `spans()` in `run/representations.py`. Up to 32
-values (a `score()` record) it encodes each value and points at that `bytes` object's own buffer,
+values (one record's run) it encodes each value and points at that `bytes` object's own buffer,
 which is cheaper than building a frame to export. Above that it exports the input frame's own
 column when the state still holds it, or a new String Series for an override or a row subset.
 
@@ -313,16 +313,16 @@ The vendored sources are pinned: `vendor/VERSION` names the release and its sha5
 `vendor/SHA512SUMS` lists each kept file, which `tests/boundary/test_shim.py` checks against the
 files and the header's version.
 
-## One record: `score()`
+## One record: `run(record)`
 
 ```mermaid
 sequenceDiagram
     participant C as caller
-    participant X as Executable.score
+    participant X as Executable.run
     participant S as State (n = 1)
     participant R as runner
     participant K as kernels
-    C->>X: score(record dict, params)
+    C->>X: run(record dict, params)
     alt the pipeline has a frame step
         X->>X: pl.DataFrame([record]), then the frame path
     else no frame step
@@ -348,7 +348,7 @@ starts from the record's own keys, minus dropped ones, and adds each output: `No
 validity is false, a boxed `Decimal`, or a dict for a struct record.
 
 Building one `np.array` per input cost about 8 µs of a 36 µs call, hence the per-dtype
-array. On the flagship pipeline, a 30.4 µs `score()` splits into
+array. On the flagship pipeline, a 30.4 µs `run(record)` splits into
 1.17 µs to make the state, 6.68 µs to load the record, 1.54 µs to look up the params bundle,
 18.9 µs in the runner around a 2.1 µs kernel, and 2.28 µs for the output dict.
 
@@ -356,7 +356,7 @@ For the same record, `run()` on a one-row frame goes through the Arrow export an
 frame. On a two-step pipeline in this run, fused mode, p50 of 3,000 calls after 500 warm-up calls:
 
 ```text
-score p50 33.3 us; run(one-row frame) p50 125.5 us
+run(record) p50 33.3 us; run(one-row frame) p50 125.5 us
 ```
 
 ## Measured
@@ -379,7 +379,7 @@ Before the change, a one-row flagship run spent 105 µs in `State.from_frame`; a
 measured too: polars
 copies on `read_ipc_stream` before the decider toolkit sees anything, and at one row the copy that remains is a
 few dozen bytes. The codec was worth about 2 µs of a 39.4 µs request, so requests stay JSON and go
-through `score()`.
+through `run(record)`.
 
 ## Debugging the boundary
 
