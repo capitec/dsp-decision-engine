@@ -24,6 +24,7 @@ function mapProjectToFlatRule(project: ProjectResponse): FlatRuleProject {
     description: project.description || undefined,
     created_at: project.created_at,
     updated_at: project.updated_at,
+    version: project.version,
     created_by: project.created_by
   };
 }
@@ -37,6 +38,7 @@ function mapProjectDetailToFlatRuleDetail(project: ProjectDetailResponse): FlatR
     description: project.description || undefined,
     created_at: project.created_at,
     updated_at: project.updated_at,
+    version: project.version,
     created_by: project.created_by,
     project_data: projectData,
     validation_errors: project.validation_errors as any[]
@@ -103,7 +105,8 @@ export const flatRuleApi = {
       body: {
         name: data.name,
         description: data.description,
-        project_data: data.project_data
+        project_data: data.project_data,
+        base_version: data.base_version
       }
     });
 

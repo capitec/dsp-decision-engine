@@ -64,6 +64,7 @@ const rules = () => [
 const project = (over: any = {}): any => ({
   id: 'proj',
   name: 'P',
+  version: 7,
   project_data: {
     type: 'prioritized_flat_rule',
     input_schema: [['x', 'Float64'], ['s', 'String']],
@@ -241,6 +242,21 @@ describe('saving', () => {
     expect(await state().saveProject()).toBe(false);
     expect((toast as any).mock.calls[0][0]).toMatchObject({ title: 'Save Failed', description: 'nope', variant: 'destructive' });
     expect(state().saving).toBe(false);
+    err.mockRestore();
+  });
+
+  it('sends the loaded version, takes the new one from the reply and refuses a stale save with a toast', async () => {
+    update.mockResolvedValue({ id: 'proj', version: 8, validation_errors: [] });
+    await state().saveProject();
+    expect(update.mock.calls[0][1].base_version).toBe(7);
+    await state().saveProject();
+    expect(update.mock.calls[1][1].base_version).toBe(8);
+
+    update.mockRejectedValue({ detail: { code: 'stale_version', current_version: 9 } });
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(await state().saveProject()).toBe(false);
+    expect((toast as any).mock.lastCall[0]).toMatchObject({ title: 'Save Refused', variant: 'destructive' });
+    expect(state().project.version).toBe(8);
     err.mockRestore();
   });
 

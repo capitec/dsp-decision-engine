@@ -207,7 +207,7 @@ def test_after_a_reload_the_second_tab_sees_the_first_tabs_edit_and_can_save(sig
     else:
         expect(second.locator(".react-flow__node")).to_have_count(3, timeout=20_000)
         stored = next(n for n in get_project(signed_in, project)["project_data"]["nodes"] if n["id"] == "root")
-        assert node_position(second, "root") == stored["position"]
+        assert node_position(second, "root") == pytest.approx(stored["position"], abs=0.01)  # the transform is rounded
     expect(second.get_by_text("Unsaved changes")).to_be_hidden()
     if kind == "flat":
         second.get_by_role("button", name="Add Rule").click()
