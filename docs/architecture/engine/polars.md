@@ -119,8 +119,8 @@ typed as the gather builds it: `List(Struct)` of every field of the item, in its
 writes (`ScatterGather.new_fields`), a field the body rewrites keeping its place. The item's dtype comes from the
 segment's input schema when the list is an input, from the declared type of the step that writes it otherwise
 (`list[TypedDict]`, `Struct`), and from the enclosing item for a nested `each`, which recurses. Each body value takes
-its annotation's dtype. The fused engine casts its own gathered column to the same dtype (`fitted`: only when that
-adds null fields, reorders fields or widens values), so a batch of empty lists, a field no item fills and items
+its annotation's dtype. The numba engines cast their own gathered column to the same dtype (`fitted`: only when that
+adds null fields, reorders fields or widens values, never across time zones), so a batch of empty lists, a field no item fills and items
 holding their keys in another order all come back declared. A batch whose items do not fit (a field the declaration
 lacks) keeps their own fields there and raises here. A body value or an item with no declared type is refused with
 an `EngineError` naming the `each` and the step to annotate.
