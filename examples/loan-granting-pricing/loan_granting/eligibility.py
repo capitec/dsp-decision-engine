@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import math
 from datetime import date
+from typing import TypedDict
 
 from decikit import allow_fallback, dag, missing_as, param, step
 
@@ -100,6 +101,23 @@ def gate_insolvency_seasoning(
     return PASS if insolvency_rehabilitated_months >= seasoning_months else FAIL
 
 
+class GateVerdicts(TypedDict):
+    product_channel: str
+    min_age: str
+    max_age_at_maturity: str
+    capacity: str
+    residency: str
+    employment_type: str
+    debt_review: str
+    administration_order: str
+    insolvency: str
+    deceased_estate: str
+    exclusion_lists: str
+    duplicate_application: str
+    in_flight_application: str
+    insolvency_seasoning: str
+
+
 GATE_REASONS = (
     ("gate_product_channel", reasons.R_PRODUCT_CHANNEL), ("gate_min_age", reasons.R_MIN_AGE),
     ("gate_max_age_at_maturity", reasons.R_MAX_AGE_AT_MATURITY), ("gate_capacity", reasons.R_NO_CAPACITY),
@@ -118,7 +136,7 @@ def eligibility_gates(
     gate_residency: int, gate_employment_type: int, gate_debt_review: int, gate_administration_order: int,
     gate_insolvency: int, gate_deceased_estate: int, gate_exclusion_lists: int, gate_duplicate_application: int,
     gate_in_flight_application: int, gate_insolvency_seasoning: int, exclusion_list_hits: list[int] = missing_as([]),
-) -> tuple[dict, bool, list[int]]:
+) -> tuple[GateVerdicts, bool, list[int]]:
     """The verdict of every gate by name, whether all passed, and the reason of each that failed."""
     gates = {name: verdict for name, verdict in dict(locals()).items() if name.startswith("gate_")}
     fired = [code for name, code in GATE_REASONS if gates[name] == FAIL]

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import asdict
+from typing import TypedDict
 
 from decikit import DecisionTableConfig, ParamTable, allow_fallback, missing_as, param, param_table, step
 
@@ -21,6 +22,62 @@ from loan_granting.rate_tables import (
     rate_card_rows,
 )
 from loan_granting.solve import BIND_EXH, GRID, PRODUCT_MAX_AMOUNT, PRODUCT_MIN_AMOUNT, solve_term
+
+
+class Pricing(TypedDict):
+    offered_amount: float
+    term_months: int
+    risk_grade: int
+    priced: bool
+    nominal_annual_rate: float | None
+    rate_cell_id: str | None
+    rate_card_version: str | None
+    rate_addon_bps: float
+    within_statutory_ceiling: bool
+    initiation_fee: float
+    initiation_fee_capped: bool
+    monthly_service_fee: float
+    amount_financed: float
+    credit_life_premium: float
+    credit_life_cell_id: str | None
+    credit_life_capped: bool
+    instalment: float
+    total_cost_of_credit: float
+    effective_annual_rate: float
+
+
+class TermSolution(TypedDict, total=False):  # field order is the order a frame row serves them in
+    term_months: int
+    amount: float | None
+    binding_constraint_code: str
+    evaluation_count: int
+    pricing: Pricing | None
+    excluded: str
+
+
+class Offer(TypedDict, total=False):  # the recommended offer is `{}` when no term has one
+    term_months: int
+    offered_amount: float
+    nominal_annual_rate: float | None
+    rate_cell_id: str | None
+    rate_card_version: str | None
+    initiation_fee: float
+    monthly_service_fee: float
+    amount_financed: float
+    credit_life_premium: float
+    instalment: float
+    total_cost_of_credit: float
+    effective_annual_rate: float
+    binding_constraint_code: str
+    evaluation_count: int
+    is_recommended: bool
+
+
+class Suppressed(TypedDict):
+    term_months: int
+    reason: str
+    reason_codes: list[int]
+
 
 LARGEST_AMOUNT, LOWEST_TOTAL_COST, BEST_EXPECTED_VALUE = "largest_amount", "lowest_total_cost", "best_expected_value"
 
@@ -146,7 +203,7 @@ def steps(rate_card: DecisionTableConfig):
         evaluation_ceiling_per_term: int = param(24, ge=1, le=64), permitted_terms: ParamTable = PERMITTED_TERMS,
         rate_card: ParamTable = card_param, rate_card_version: str = card_version_param,
         credit_life: ParamTable = CREDIT_LIFE, credit_life_version: str = CREDIT_LIFE_VERSION_PARAM,
-    ) -> tuple[list[dict], int]:
+    ) -> tuple[list[TermSolution], int]:
         """Solve every permitted term not ruled out by the term cap or the segment; the amounts are found, not guessed."""
         evaluator = PriceEvaluator(
             RateCardTable(rate_card, rate_card_version), CreditLifeTable(credit_life, credit_life_version),
@@ -171,12 +228,12 @@ def steps(rate_card: DecisionTableConfig):
     @allow_fallback
     @step(outputs=("offers", "recommended_offer", "suppressed_terms", "suppression_reason_codes", "has_any_offer"))
     def offer_set(
-        term_solutions: list[dict], probability_of_default: float, recommendation_objective: str,
+        term_solutions: list[TermSolution], probability_of_default: float, recommendation_objective: str,
         total_cost_ratio_threshold: float, minimum_offer_amount: float = param(PRODUCT_MIN_AMOUNT, ge=0.0),
         minimum_instalment: float = param(150.0, ge=0.0), effective_rate_ceiling: float = param(0.60, gt=0.0),
         dedup_tolerance: float = param(0.02, ge=0.0), lgd: float = param(0.72, ge=0.0, le=1.0),
         average_ead: float = param(0.55, ge=0.0, le=1.0), funding_cost: float = param(0.0875, ge=0.0),
-    ) -> tuple[list[dict], dict, list[dict], list[int], bool]:
+    ) -> tuple[list[Offer], Offer, list[Suppressed], list[int], bool]:
         """The offers that survive the minimum viable offer rules, the recommended one, and why each other term has none."""
         rules = {"minimum_offer_amount": minimum_offer_amount, "minimum_instalment": minimum_instalment,
                  "total_cost_ratio_threshold": total_cost_ratio_threshold, "effective_rate_ceiling": effective_rate_ceiling,
@@ -189,7 +246,7 @@ def steps(rate_card: DecisionTableConfig):
     @allow_fallback
     @step(outputs=("final_validation_passed", "final_validation_failures"))
     def final_validation(
-        recommended_offer: dict, risk_grade: int, applicant_age_years: float, is_joint_application: bool,
+        recommended_offer: Offer, risk_grade: int, applicant_age_years: float, is_joint_application: bool,
         amount_cap: float, term_cap: float, worst_acceptable_grade: float, max_affordable_instalment: float,
         statutory_ceiling: float, initiation_fee_cap: float, monthly_service_fee_cap: float,
         total_cost_ratio_threshold: float, credit_life_substitution_declared: bool = missing_as(False),
