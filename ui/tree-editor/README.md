@@ -19,8 +19,17 @@ channel `project_ops`. With `DSP_LIVE_COLLAB=true` the flat-rule editor edits li
 /api/v1/projects/{id}/live`: it pushes each edit about 150 ms after typing pauses, every open editor receives every
 version in order, two edits to different fields are both kept, the last writer wins on the same field, and an edit
 inside a rule someone else changed or deleted is discarded and its author told. A header badge shows Live or
-Reconnecting...; Save waits until the server has every edit. READ access receives, WRITE sends. A REST save reaches open
+Offline; Save waits until the server has every edit. READ access receives, WRITE sends. A REST save reaches open
 editors as one whole-document replace. The node editor still saves over REST. The log is never trimmed yet.
+
+Edits made while disconnected (a closed socket, or no answer to a ping for about 10 seconds) go back on reconnect as
+one offline batch, after the editor has caught up. The server merges it whole only when none of its paths is equal to,
+inside or above a path someone else changed since the disconnect (two reorders of the rules conflict only when both
+changed the order of the same rules differently) and the merged document has no validation error that neither the
+stored document nor the offline editor's own had. Otherwise it refuses the whole batch: the editor shows the stored
+document and a banner naming the rules that collided, with Download my version (the offline document, shaped like an
+Export). The base document is rebuilt from the log (a new project logs its first version), so a batch older than the
+log is refused. A batch is not kept across a page reload.
 
 ## Tests
 
