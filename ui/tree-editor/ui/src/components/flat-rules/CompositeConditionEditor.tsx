@@ -241,7 +241,7 @@ export const CompositeConditionEditor: React.FC<CompositeConditionEditorProps> =
                     }}
                     availableParameters={availableParameters}
                     label=""
-                    placeholder="Type integers and press Enter"
+                    placeholder="Type numbers and press Enter"
                     onManageParameters={onManageParameters}
                     showManageParameters={true}
                     showLabel={false}

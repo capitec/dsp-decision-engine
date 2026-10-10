@@ -141,7 +141,7 @@ def fill_number(scope: Locator, text: str, index: int = 0) -> None:
 def add_isin_values(scope: Locator, values: list[int | str]) -> None:
     """Type each value into the last empty IsIn chip field of `scope`, Enter after each."""
     # the placeholder disappears with the first chip, so type into the focused field instead of re-locating it
-    scope.get_by_placeholder("Type integers and press Enter").last.click()
+    scope.get_by_placeholder("Type numbers and press Enter").last.click()
     for value in values:
         scope.page.keyboard.type(str(value))
         scope.page.keyboard.press("Enter")

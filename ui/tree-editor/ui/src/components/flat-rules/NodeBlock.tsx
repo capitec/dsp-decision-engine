@@ -892,7 +892,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                                 }}
                                 availableParameters={availableParameters}
                                 label=""
-                                placeholder="Type integers and press Enter"
+                                placeholder="Type numbers and press Enter"
                                 onManageParameters={onManageParameters}
                                 showManageParameters={true}
                                 showLabel={false}
