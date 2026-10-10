@@ -112,14 +112,15 @@ rest exactly (as sorted-key JSON lines, so a failure shows the differing lines):
   equal the library's row. Four trees (flat rules with params, a v3 tree, the campaign tree, the 200-rule set) also
   run `python -m decikit build` and `python -m decikit serve --port <port> --workers 1` (ports `E2E_SERVE_PORT`
   (8650) to +3) with `DECIKIT_API__CODE_PATH`, `DECIKIT_API__PIPELINE` and `DECIKIT_CONFIG__BASEPATH` set, and
-  every record POSTed as raw JSON to `/invocations` must get the in-process answer. The server is stopped by its process when the test ends. Only the first of those
-  records is null: compiled, `score()` compiles again for every new set of null inputs (about 30 s each for the
-  200-rule set, 3 s for 32 rules), so 50 records with scattered nulls take over 20 minutes.
+  every record POSTed as raw JSON to `/invocations` must get the in-process answer. The server is stopped by its
+  process when the test ends, or when the run is stopped by its PID. Only the first of those records is null:
+  compiled, `score()` compiles again for every new set of null inputs (about 30 s each for the 200-rule set, 2.5 s
+  for 32 rules; a pattern seen before costs nothing), so 50 records with scattered nulls take over 20 minutes.
 
 ## Size and time
 
 Opening a flat-rule set renders every rule at once: 64 rules open in about 3 s, 114 in 10 s, 200 in 13 s, and 521
 rules take the browser past 3 GB (the cap e2e runs have) before they open, so `fraud-live` and `generated-521` are
 listed as known failures that are not run; their import, export and run without the editor are checked instead
-(`test_rule_set_too_big_to_open_exports_and_runs_like_its_source`). The round trips of `fraud-shadow` and `generated-200` take about 30 s
-and are marked `slow`.
+(`test_rule_set_too_big_to_open_exports_and_runs_like_its_source`). The round trips of `fraud-shadow` and
+`generated-200` take about 30 s and are marked `slow`; the 627-node `campaign-scale` tree takes about 6 s.
