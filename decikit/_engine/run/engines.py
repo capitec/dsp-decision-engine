@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Any, Literal
+from contextlib import contextmanager
+from contextvars import ContextVar
+from typing import Any, Iterator, Literal
 
 from pydantic import ConfigDict
 
@@ -117,6 +119,45 @@ class FusedEngine(NumbaEngine):
 
     def _runner(self) -> Runner:
         return FusedRunner(strict=self.strict_compile)
+
+
+_FUSED = FusedEngine()
+_default: ContextVar[Engine | None] = ContextVar("decikit_default_engine", default=None)
+
+
+def default_engine() -> Engine:
+    return _default.get() or _FUSED
+
+
+def as_engine(which: str | Engine | None) -> Engine:
+    if which is None:
+        return default_engine()
+    return Engine.resolve(which)() if isinstance(which, str) else which
+
+
+@contextmanager
+def engine(which: str | Engine) -> Iterator[None]:
+    """Run every `pipeline.run(...)` and `pipeline.compile()` inside the block on `which`.
+
+    `which` is an engine's tag (`"interpreted"`, `"stepped"`, `"fused"`) or an
+    `Engine` instance. Outside any block the default is `FusedEngine()`. The
+    setting is a context variable: it ends with the block (also on an
+    exception), an `asyncio` task started inside gets a copy, and a thread
+    sees it only when run under `contextvars.copy_context().run`.
+    `pipeline.session(...)` opens interpreted whatever is set, and serving
+    runs its own engine.
+
+    Example::
+
+        with decikit.engine("interpreted"):     # instant runs while editing
+            pipeline.run(df)
+        pipeline.run(df)                        # fused again
+    """
+    token = _default.set(as_engine(which))
+    try:
+        yield
+    finally:
+        _default.reset(token)
 
 
 # Lazy, because its module imports this one.

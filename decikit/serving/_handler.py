@@ -150,6 +150,8 @@ class RequestHandler:
                     raise RuntimeError("the config store has no versions to stage.")
             versioned = self.store.read(version)
             exe = self.engine.bind(self.pipeline_fn(versioned.config))
+            # Builds the kernels now, so a strict refusal raises here and is not blamed on the warm-up sample.
+            exe.fallbacks()
             params = versioned.config.get("params")
             if get_settings().build.warn_shadowed_tables:
                 exe.warn_shadowed_tables(params)
@@ -275,7 +277,7 @@ class RequestHandler:
                     record = coerce_record(json.load(f), _dates(executable))
             executable.run(record, params)
             executable.run(pl.DataFrame([record]), params)
-        except (exc.ParamsError, exc.EngineError):
+        except exc.ParamsError:
             raise
         except Exception as e:
             raise exc.DecikitError(f"warm-up failed with {type(e).__name__}: {e}. {hint}") from e

@@ -27,7 +27,7 @@ def test_field_metadata_is_json_with_its_kind():
 
 def test_annotated_steps_run_like_plain_ones_in_every_mode():
     p = flow(instalment, name="f")
-    assert p.run(pl.DataFrame({"loan": [1200.0]}))["instalment"].to_list() == [12.0]
+    assert p.run(pl.DataFrame({"loan": [1200.0]}), engine="interpreted")["instalment"].to_list() == [12.0]
     for mode in ("fused", "stepped"):
         exe = Engine.resolve(mode)().bind(p)
         assert exe.run({"loan": 1200.0})["instalment"] == 12.0

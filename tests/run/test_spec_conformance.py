@@ -98,7 +98,8 @@ def is_private(sector: str) -> float:
 
 
 def test_a_string_input_reaches_an_interpreted_step_as_a_string():
-    out = flow(is_private).run(pl.DataFrame({"sector": ["private", "public", "private"]}))
+    # interpreted: the default fused engine would run this step as a warned fallback, not the case under test
+    out = flow(is_private).run(pl.DataFrame({"sector": ["private", "public", "private"]}), engine="interpreted")
     assert out["is_private"].to_list() == [1.0, 0.0, 1.0]
 
 

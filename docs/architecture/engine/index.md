@@ -58,6 +58,12 @@ plan and has no session ([Polars engine](polars.md)). `Engine.registered()` give
 `Engine.resolve(tag)` the class. `compile` and `session` take a tag or an instance (`engine="fused"`,
 `FusedEngine(strict_compile=True)`).
 
+`Step.run` and `Step.compile` with no engine follow the context-scoped default: `decikit.engine(...)` sets it for a block
+(a `ContextVar`: an `asyncio` task started inside gets a copy, a thread sees it only when run under
+`contextvars.copy_context().run`), and unset it is the fused engine. `Step.session` opens
+interpreted and ignores the default; serving names its engine in its own document and never reads it. `run` does not
+cache executables, so a fused `run` binds and builds on every call; compile once to avoid that.
+
 | Setting | Default | Effect |
 |---|---|---|
 | `params_validation` | `"eager"` | `"eager"` validates every node's params the first time a params document is seen and raises on any invalid one. `"lazy"` validates a node the first time it runs, so an invalid param in a node no row reaches never fails a run. |
