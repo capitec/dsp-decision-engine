@@ -83,7 +83,7 @@ const project = (over: any = {}): any => ({
 
 const open = (over?: any) => state().initializeFromProject(project(over));
 const saved = (errors: any[] = []) => update.mockResolvedValue({ id: 'proj', validation_errors: errors });
-const sentRules = (): any[] => update.mock.calls.at(-1)![1].project_data.rules;
+const sentRules = (): any[] => update.mock.calls[update.mock.calls.length - 1][1].project_data.rules;
 
 beforeEach(() => {
   update.mockReset();
@@ -210,7 +210,7 @@ describe('saving', () => {
   it('sends the rest of the document unchanged', async () => {
     saved();
     await state().saveProject();
-    const data = update.mock.calls.at(-1)![1].project_data;
+    const data = update.mock.calls[update.mock.calls.length - 1][1].project_data;
     expect(data.parameters).toEqual(project().project_data.parameters);
     expect(data.output.data).toEqual([{ Action: 'Alert' }, { Action: 'Block' }]);
     expect(data.output.default).toEqual({ Action: 'Allow' });
@@ -232,7 +232,7 @@ describe('saving', () => {
     await state().saveProject();
     expect(state().ruleErrors.size).toBe(0);
     expect(state().validationErrors.size).toBe(0);
-    expect((toast as any).mock.calls.at(-1)[0].title).toBe('Project Saved');
+    expect((toast as any).mock.calls[(toast as any).mock.calls.length - 1][0].title).toBe('Project Saved');
   });
 
   it('a failed save returns false, tells the user and frees the saving flag', async () => {
