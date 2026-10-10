@@ -94,6 +94,42 @@ def test_a_struct_a_branch_leaves_null_on_some_rows_is_read_by_field_in_every_mo
     assert out["offer_rate"].to_list() == [0.1, -1.0]
 
 
+LABELLED = pl.DataFrame({"rate": [0.1, 0.2], "code": [1, 2], "label": ["ab", "c"]})
+
+
+@allow_fallback
+def offer_fields(offer: dict) -> str:
+    return f"{','.join(offer)}={offer.get('rate')}"
+
+
+@allow_fallback
+@step(output="offer")
+def best_named(rate: float, label: str) -> Struct[Product]:
+    return rate, len(label)  # a `str` input keeps the step in Python
+
+
+@allow_fallback
+@step(output="offers")
+def ladder_named(code: int, label: str) -> Columnar[Product]:
+    return [(0.1, code), (0.2, len(label))]
+
+
+@allow_fallback
+def first_offer(offers: list) -> str:
+    return f"{','.join(offers[0])}={offers[0].get('rate')}"
+
+
+@pytest.mark.parametrize("make", (best_named,), ids=("python",))
+def test_a_python_step_reads_a_struct_as_a_dict_in_every_mode(make):
+    out = assert_equivalent(flow(make, offer_fields, name="order"), LABELLED)
+    assert out["offer_fields"].to_list() == ["rate,code=0.1", "rate,code=0.2"]
+
+
+def test_a_python_step_reads_a_python_columnar_output_as_dicts_in_every_mode():
+    out = assert_equivalent(flow(ladder_named, first_offer, name="order"), LABELLED)
+    assert out["first_offer"].to_list() == ["rate,code=0.1", "rate,code=0.1"]
+
+
 def test_a_struct_can_be_a_loop_carry_and_packs_into_one_kernel():
     @step(output="going")
     def more(rate: float) -> bool:

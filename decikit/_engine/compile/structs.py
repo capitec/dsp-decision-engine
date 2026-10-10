@@ -7,16 +7,17 @@ through the boundary an ordinary column uses.
 """
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Any
 
 import numpy as np
 import polars as pl
 
 from decikit._engine.concurrency import Cache, once
-from decikit._engine.ir.decls import KIND_DTYPES, Input, NullPolicy, feature_kind
+from decikit._engine.ir.decls import KIND_DTYPES, Input, NullPolicy, base_annotation, feature_kind
 from decikit.exceptions import MissingInputError
-from decikit._engine.types import item_schema
+from decikit.ops.nested import struct_item
+from decikit._engine.types import annotation_cache, columnar_item, item_schema
 
 Schema = tuple[tuple[str, Any], ...]
 
@@ -28,6 +29,23 @@ _MISSING = object()
 def struct_schema(item: Any) -> Schema:
     """`Item`'s fields in declaration order, as `(name, type)` pairs."""
     return item_schema(item)
+
+
+@annotation_cache
+def to_dicts(annotation: Any) -> Callable[[Any], Any] | None:
+    """How a Python step's `Struct[Item]` or `Columnar[Item]` value becomes the dicts every mode stores; else `None`.
+
+    A step may return a struct as a tuple of its fields and rows as a list of
+    them; a kernel's output reads back as dicts, so the Python paths store the same.
+    """
+    t = base_annotation(annotation)
+    if (item := struct_item(t)) is not None:
+        names = [name for name, _ in item_schema(item)]
+        return lambda x: x if isinstance(x, dict) else dict(zip(names, x))
+    if (item := columnar_item(t)) is not None:
+        names = [name for name, _ in item_schema(item)]
+        return lambda xs: [x if isinstance(x, dict) else dict(zip(names, x)) for x in xs]
+    return None
 
 
 def bad_field(schema: Schema) -> tuple[str, Any] | None:
