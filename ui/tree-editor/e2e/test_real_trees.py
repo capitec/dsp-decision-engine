@@ -16,17 +16,8 @@ SUBTREE_ORDER = "the tree editor reorders `subtrees`, so the export's first subt
 # tree id -> why the check is known to fail for it
 MATCHES_SOURCE = {
     "campaign-23": METADATA,
-    "stored-rich-flat": "the flat-rule editor drops each rule's `meta.description` on save",
     "stored-rich-v3": f"{METADATA}; {SUBTREE_NAMES}; it adds computed expressions to `input_schema`",
     "stored-upgraded-v1": f"{METADATA}; {SUBTREE_NAMES}; {SUBTREE_ORDER}",
-}
-STRING_FEATURES = "the tree editor types every feature it adds to `input_schema` String, numbers included"
-COMPUTED_FEATURE = f"{STRING_FEATURES}, and adds a computed feature's expression ('income - expenses') as a feature"
-TYPES_FEATURES = {
-    **dict.fromkeys(("campaign-23", "bank-bureau-grade", "bank-collections-risk", "bank-fraud-screen",
-                     "docs-guide-risk", "docs-debugging-and-testing-risk-tree", "docs-trees-tables-scorecards-risk"),
-                    STRING_FEATURES),
-    **dict.fromkeys(("stored-rich-v3", "docs-trees-loan-tree"), COMPUTED_FEATURE),
 }
 
 
@@ -47,7 +38,7 @@ def test_real_tree_export_matches_its_source(page: Page, tree):
     assert {key: export.get(key) for key in own_parts(tree.document)} == own_parts(tree.document)
 
 
-@pytest.mark.parametrize("tree", cases(TYPES_FEATURES))
+@pytest.mark.parametrize("tree", cases({}))
 def test_real_tree_export_types_the_features_it_adds_as_decikit_reads_them(page: Page, tree):
     known = tree.document.get("input_schema") or []
     added = [entry for entry in round_trip(page, tree).export.get("input_schema") or [] if entry not in known]
