@@ -274,3 +274,23 @@ def test_an_int_in_a_nested_float_field_is_a_float_in_the_frame(mode, fn, row):
     assert out[fn.__name__].to_list() == [row, row]
     if mode != "polars":
         assert exe.run({"x": 1.0})[fn.__name__] == fn(1.0)
+
+
+class Flagged(TypedDict):
+    amount: float
+    ok: bool
+
+
+class Flags(TypedDict):
+    lines: list[Flagged]
+
+
+def numpy_fields(x: float) -> Flags:
+    return {"lines": [{"amount": np.int64(6), "ok": np.bool_(True)}, {"amount": 1.5, "ok": False}]}
+
+
+@pytest.mark.parametrize("mode", MODES)
+def test_a_numpy_number_in_a_nested_field_is_its_python_value_in_the_frame(mode):
+    out = bound(numpy_fields, mode).run(pl.DataFrame({"x": [1.0]}))["numpy_fields"]
+    assert out.to_list() == [{"lines": [{"amount": 6.0, "ok": True}, {"amount": 1.5, "ok": False}]}]
+    assert out.dtype == pl.Struct({"lines": pl.List(pl.Struct({"amount": pl.Float64, "ok": pl.Boolean}))})
