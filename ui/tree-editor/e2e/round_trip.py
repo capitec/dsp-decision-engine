@@ -25,11 +25,10 @@ class RoundTrip:
 
 SLOW = {"fraud-shadow", "generated-200"}
 # Trees that cannot make the trip at all, so every check of them fails for this reason.
-SINGLE_FLAT_RULE = "the editor refuses a one-rule `flat_rule` document decikit runs (400: project_type is 'tree' ...)"
-CANNOT_TRIP = {
-    "docs-trees-tables-scorecards-risk-2": SINGLE_FLAT_RULE,
-    "docs-trees-tables-scorecards-afford": SINGLE_FLAT_RULE,
-}
+SINGLE_FLAT_RULE = ("the editor has no project type for a one-rule `flat_rule` document decikit runs (400: Unsupported "
+                    "document format 'flat_rule'): needs a decision: convert to a one-rule prioritized set or refuse "
+                    "clearly")
+CANNOT_TRIP = {tree.id: SINGLE_FLAT_RULE for tree in TREES if tree.document.get("type") == "flat_rule"}
 # Not run: opening them takes the browser past the 3 GB the e2e runs are capped at, which kills the whole run.
 TOO_BIG = {tree_id: "the flat-rule editor renders all 521 rules at once and runs out of memory (3 GB) opening them"
            for tree_id in ("fraud-live", "generated-521")}
