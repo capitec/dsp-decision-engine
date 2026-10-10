@@ -218,6 +218,9 @@ class Executable:
             out = exe.run(df, params={"shared": {"min_ratio": 0.4}})
             exe.run({"net_income": 4100.0, "expenses": 1500.0})["disposable_income"]  # 2600.0
         """
+        # A dict first: it is the serving hot path, the `Mapping` check is slow, and a dict is never a frame.
+        if isinstance(data, dict):
+            return self._run_record(data, params, trace)
         if isinstance(data, pl.LazyFrame):
             data = data.collect()
         if isinstance(data, pl.DataFrame):
