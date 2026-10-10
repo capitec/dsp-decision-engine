@@ -34,6 +34,9 @@ Impact: Windows, and slim containers without a compiler, cannot run compiled mod
 **`run(record)` is not instantaneous.** A short flow costs about 28 µs per record fused and 59 µs interpreted; a one-row frame through `run()` costs about 150 µs.
 Workaround: serve single records as a dict through `run()`; see [serving latency](../architecture/serving.md).
 
+**A repeated `run` on a small frame is slower fused than interpreted.** `Step.run` follows the default engine (fused when unset) and binds and builds on every call; there is no numba compile after the first call, but a measured repeat costs 2.1 to 2.7 times the interpreted run (+2.2 ms on the flagship, about +42 ms on the affordability example).
+Workaround: `compile()` once and call the executable, or `with decikit.engine("interpreted"):` while iterating. Executables are not cached inside `Step.run` on purpose: a cached fused executable would keep compiled constants after a global is edited in a notebook.
+
 ## Numbers
 
 **int64 arithmetic wraps silently.** Kernels do not saturate, and interpreted mode raises `OverflowError` where fused wraps.

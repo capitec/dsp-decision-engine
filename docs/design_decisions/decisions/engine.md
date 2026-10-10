@@ -8,7 +8,7 @@ Proposed 2026-10-09, being built on branch `engine/flexible-rework`; each bullet
 phase lands. The design, alternatives and plan: [flexible engine rework](../../design_specs/2026-10-09_flexible_engine_rework/README.md).
 
 - Proposed: `run` on a `LazyFrame` takes the polars engine (until then it is collected and run as a frame).
-- Proposed: `Step.run` and `compile` follow a context-scoped default engine set with `decikit.engine(...)`, fused when unset; `Step.session` opens interpreted unless given an engine.
+- Proposed: `Step.run` and `compile` follow a context-scoped default engine set with `decikit.engine(...)`, fused when unset; `Step.session` opens interpreted unless given an engine. Built (P3); `Step.run` does not cache executables, see the repeated-run cost in `known-limitations.md`.
 - Proposed: the polars engine is lazy and starts as a host (the fused pipeline inside `map_batches`, split only at frame steps); polars-native step bodies are built only if a measurement against the host justifies them.
 - Proposed: a Spark engine comes last, outside `decikit/`, and shapes nothing else.
 
