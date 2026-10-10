@@ -3,7 +3,7 @@
 import pytest
 from playwright.sync_api import Page, expect
 
-from flat_docs import APPROVE, DEFAULT, document, open_doc, run_frame
+from flat_docs import APPROVE, DEFAULT, open_doc, run_frame
 from flat_rules_ui import (
     add_output_column,
     delete_output_column,
@@ -14,7 +14,7 @@ from flat_rules_ui import (
     save,
     set_output_column_type,
 )
-from seed import create_project, export_document
+from seed import export_document
 
 THREE = {"dtypes": [["decision", "String"]], "type_defs": {}, "default": {"decision": "decline"},
          "data": [{"decision": "approve"}, {"decision": "review"}, {"decision": "escalate"}]}
@@ -59,8 +59,7 @@ def test_renamed_output_column_is_renamed_in_every_record_and_in_decikit(signed_
 
 
 def test_deleted_output_column_leaves_the_other_columns_valid(signed_in: Page):
-    project = create_project(signed_in, "Two", document(APPROVE, output=SCORED))["id"]
-    signed_in.goto(f"/flat-rules/{project}")
+    project = open_doc(signed_in, APPROVE, output=SCORED)
     open_tab(signed_in, "Configure Outputs")
     delete_output_column(signed_in, "score")
 
@@ -72,8 +71,7 @@ def test_deleted_output_column_leaves_the_other_columns_valid(signed_in: Page):
 
 @pytest.mark.xfail(strict=True, reason="changing a column's type overwrites every record's value with the default")
 def test_changing_an_output_column_type_keeps_the_values_that_convert(signed_in: Page):
-    project = create_project(signed_in, "Scored", document(APPROVE, output=SCORED))["id"]
-    signed_in.goto(f"/flat-rules/{project}")
+    open_doc(signed_in, APPROVE, output=SCORED)
     open_tab(signed_in, "Configure Outputs")
     set_output_column_type(signed_in, "score", "Float64")
 
@@ -100,8 +98,7 @@ def test_added_record_can_be_chosen_by_a_leaf_and_runs(signed_in: Page):
 
 
 def test_the_first_record_has_no_delete_button(signed_in: Page):
-    project = create_project(signed_in, "Three", document(APPROVE, output=THREE))["id"]
-    signed_in.goto(f"/flat-rules/{project}")
+    open_doc(signed_in, APPROVE, output=THREE)
     open_tab(signed_in, "Configure Outputs")
 
     expect(signed_in.get_by_test_id("output-record-delete")).to_have_count(2)
@@ -114,8 +111,7 @@ def test_deleting_a_record_repoints_leaves_to_the_same_remaining_records(signed_
            "then": {"type": "leaf", "result_idx": 1}}
     high = {"type": "unary", "condition": {"type": "unary", "op": ">", "feature": "amount", "threshold": 10},
             "then": {"type": "leaf", "result_idx": 2}}
-    project = create_project(signed_in, "Repoint", document(low, high, output=THREE))["id"]
-    signed_in.goto(f"/flat-rules/{project}")
+    project = open_doc(signed_in, low, high, output=THREE)
     open_tab(signed_in, "Configure Outputs")
     signed_in.get_by_test_id("output-record-delete").first.click()  # record 1 ("review")
 
@@ -129,8 +125,7 @@ def test_deleting_a_record_repoints_leaves_to_the_same_remaining_records(signed_
 
 @pytest.mark.xfail(strict=True, reason="editing the first output record also overwrites the default row")
 def test_editing_the_first_record_leaves_the_default_row_alone(signed_in: Page):
-    project = create_project(signed_in, "Three", document(APPROVE, output=THREE))["id"]
-    signed_in.goto(f"/flat-rules/{project}")
+    open_doc(signed_in, APPROVE, output=THREE)
     open_tab(signed_in, "Configure Outputs")
     output_cell(signed_in, 0, 0).fill("approved")
 
