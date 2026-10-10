@@ -33,6 +33,16 @@ def add_parameter(page: Page, name: str, dtype: str = "Float64", value: str | No
     expect(dialog).to_be_hidden()
 
 
+def set_parameter_default(page: Page, name: str, value: str) -> None:
+    """Manage Parameters -> the row of `name` -> new default -> Save Changes."""
+    page.get_by_role("button", name=re.compile(r"^Manage Parameters")).click()
+    dialog = page.get_by_role("dialog", name="Manage Parameters")
+    row = dialog.locator("tbody tr").filter(has=page.locator(f"input[value='{name}']"))
+    row.locator("td").nth(2).locator("input").first.fill(value)
+    dialog.get_by_role("button", name="Save Changes").click()
+    expect(dialog).to_be_hidden()
+
+
 def set_node_type(page: Page, scope: Locator, kind: str, index: int = 0) -> None:
     """Leaf, Unary, Cases or Composite for the `index`-th node of `scope`."""
     scope.get_by_test_id("node-type").nth(index).click()
