@@ -129,7 +129,7 @@ The invariants the tests pin down:
 
 `warm_fn` needs a record the pipeline can answer. It uses `sample_request` (a JSON file, by default `sample_request.json` in the code path) when the file exists, after converting its dates like a real request. Otherwise it builds a synthetic record with `dummy()`: `1.0` for a float (one, not zero, so a ratio does not divide by zero), `1` for an int, `""` for a string, `2000-01-01` for a date, one element for a list, every field for a TypedDict.
 
-A `ParamsError` from warm-up propagates unchanged. Any other failure is wrapped in a `DecikitError` whose message says how to fix it. A pricing step `1.0 / (rate - floor)` staged without a sample file divides by zero on the synthetic record:
+`stage` builds the executable's kernels (`exe.fallbacks()`) before it warms, so `strict_compile` refusing a step that runs in Python raises there as an `EngineError`, not as a warm-up failure; a kernel numba refuses only at its first launch is refused during warm-up and wrapped like any other failure. A `ParamsError` from warm-up propagates unchanged. Any other failure is wrapped in a `DecikitError` whose message says how to fix it. A pricing step `1.0 / (rate - floor)` staged without a sample file divides by zero on the synthetic record:
 
 ```text
 DecikitError
