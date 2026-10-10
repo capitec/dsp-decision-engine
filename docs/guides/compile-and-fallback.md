@@ -127,7 +127,7 @@ Branches and loops pack into one fused kernel when every step inside is a plain 
 
 ## Fallback and the FallbackWarning
 
-A step that cannot compile still runs. The compiled modes run it in Python, row by row, and keep the steps before and after it compiled. Each fallback is announced once per executable with a `FallbackWarning`, and `fallbacks()` lists every one with its reason:
+A step that cannot compile still runs. The compiled modes run it in Python, row by row, and keep the steps before and after it compiled. Fused mode announces each fallback once per executable with a `FallbackWarning` (stepped mode, which exists to inspect one step at a time, does not), and `fallbacks()` lists every one with its reason:
 
 ```python
 from decikit import FallbackWarning, allow_fallback
@@ -190,6 +190,8 @@ Reading the report:
 - `lookup` builds a dict literal, which numba supports, so it compiled and is not listed.
 - `flagged` has an `import` in its body. numba refused it with `UnsupportedBytecodeError`, one of the compile-time errors that trigger a fallback.
 - `via_legacy` calls a function marked `@allow_fallback`, which makes the call an intentional Python boundary: no warning, but still listed with `@allow_fallback:` in front.
+
+A step that returns a `dict`, a TypedDict or a `list` compiles on its own, but no kernel column holds what it returns, so the kernel it shares runs in Python as a whole: every step of that kernel is listed as `split at launch: <numba's error>`. Building finds this before any row runs. Return a `Struct[Item]` or `Columnar[Item]` of tuples to keep such a step compiled.
 
 Interpreted mode never falls back, so its `fallbacks()` is always empty. The warning text is `FallbackWarning: <path> runs in Python, row by row: <reason>`. Python-row speed is below 1M rows/s in a batch against a kernel's hundreds of millions, and under 10 µs extra on a single `score()` (the figures the guide gives).
 
