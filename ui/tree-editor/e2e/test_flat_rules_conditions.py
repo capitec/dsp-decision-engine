@@ -1,12 +1,17 @@
 """Every condition operator of the flat-rule editor, driven through the UI: what is saved and what decikit then does."""
 
+import re
+
 import pytest
 from playwright.sync_api import Page, expect
 
-from flat_docs import decisions_for, open_doc
+from flat_docs import DEFAULT, decisions_for, open_doc
 from flat_rules_ui import (
+    OPERATOR_LABELS,
     add_isin_values,
     add_parameter,
+    add_then,
+    choose_feature,
     choose_match_type,
     choose_operator,
     fill_number,
@@ -176,11 +181,20 @@ def test_boolean_checks_save_and_run(signed_in: Page, op, expected):
     assert approved(export_document(signed_in, project), {"flag": [True, False]}) == expected
 
 
-@pytest.mark.xfail(strict=True, reason="the operator list offers Is Null, which decikit's schema does not accept")
+@pytest.mark.xfail(strict=True, reason="the operator list offers Is Null and Is Not Null, which decikit's schema does not accept")
 @pytest.mark.parametrize("op", ["is_null", "is_not_null"])
-def test_null_check_operators_save_a_valid_document(signed_in: Page, op):
+def test_a_null_check_is_either_not_offered_or_saves_a_valid_document(signed_in: Page, op):
     open_doc(signed_in)
-    unary_rule(signed_in, op)
+    card = rule_card(signed_in)
+    set_node_type(signed_in, card, "Unary")
+    card.get_by_test_id("unary-op").click()
+    expect(signed_in.get_by_role("option", name="Between")).to_be_visible()
+    option = signed_in.get_by_role("option", name=OPERATOR_LABELS[op], exact=True)
+    if option.count() == 0:
+        return  # decikit has no null checks, so not offering one is right too
+    option.click()
+    choose_feature(signed_in, card, "amount")
+    add_then(signed_in, card)
 
     assert save(signed_in)["validation_errors"] == []
 
@@ -192,9 +206,7 @@ def test_computed_feature_expression_saves_and_runs(signed_in: Page):
     card.get_by_title("Switch to computed feature").click()
     card.get_by_placeholder("Expression (e.g., feature1 + feature2)").fill("amount * 2 - 1")
     fill_number(card, "9")
-    card.get_by_role("button", name="Add THEN").click()
-    signed_in.get_by_test_id("leaf-output").get_by_role("combobox").click()
-    signed_in.get_by_role("option").filter(has_text="approve").first.click()
+    add_then(signed_in, card)
 
     reply = save(signed_in)
     assert reply["validation_errors"] == []
@@ -202,15 +214,27 @@ def test_computed_feature_expression_saves_and_runs(signed_in: Page):
     assert approved(export_document(signed_in, project), {"amount": [5.0, 6.0]}) == [True, False]
 
 
-@pytest.mark.xfail(strict=True, reason="typing inf in a threshold stores 0")
 @pytest.mark.parametrize("text", ["inf", "-inf", "nan"])
-def test_non_finite_threshold_is_not_silently_replaced_by_zero(signed_in: Page, text):
+def test_a_non_finite_threshold_is_refused_and_the_number_kept(signed_in: Page, text):
     open_doc(signed_in)
     card = unary_rule(signed_in, "<")
+    fill_number(card, "5")
     fill_number(card, text)
 
+    expect(number_input(card)).to_have_class(re.compile("border-red-500"))
+    assert saved_condition(save(signed_in))["threshold"] == 5
+
+
+@pytest.mark.xfail(strict=True, reason="a range bound offers inf, -inf and nan, then stores 0 for them")
+@pytest.mark.parametrize("text", ["inf", "-inf", "nan"])
+def test_a_non_finite_range_bound_is_not_saved_as_zero(signed_in: Page, text):
+    bands = {"type": "cases", "op": "ranges", "strict": True, "feature": "amount", "otherwise": 0,
+             "conditions": [{"when": {"min": None, "max": 10}, "then": 0}], "branches": [DEFAULT]}
+    open_doc(signed_in, bands)
+    fill_number(rule_card(signed_in), text)
+
     saved = save(signed_in)
-    assert saved_condition(saved)["threshold"] != 0 or saved["validation_errors"]
+    assert saved["project_data"]["rules"][0]["rule"]["conditions"][0]["when"]["max"] in (None, 10)
 
 
 @pytest.mark.xfail(strict=True, reason="changing the operator resets the threshold to 0")
