@@ -28,7 +28,7 @@ export interface ParsedValidationError {
 const NODE_TAGS = new Set(['leaf', 'unary', 'composite', 'cases', 'cases:ranges', 'cases:isin', 'cases:string_match']);
 const OP_TAGS = new Set(['<', '<=', '==', '>', '>=', '!=', 'between', 'isin', 'string_match', 'is_true', 'is_false']);
 // Union-branch tags pydantic appends for every branch it tried: they carry no location information.
-const BRANCH_TAG = /^(int|float|str|bool|ParamRef|list\[.*|function-.*|union\[.*|(IsIn|Range|StringMatch)Condition)$/;
+const BRANCH_TAG = /^(int|float|str|bool|ParamRef|list\[.*|function-.*|constrained-.*|union\[.*|(IsIn|Range|StringMatch)Condition)$/;
 const CONDITION_FOR: Record<string, string> = {
   'cases:isin': 'IsInCondition',
   'cases:ranges': 'RangeCondition',
@@ -68,14 +68,18 @@ export function cleanLoc(loc: (string | number)[]): (string | number)[] | null {
   return out;
 }
 
-/** Collapse errors that share a key, keeping the one with the deepest loc (the real cause). */
-export function dedupeByPath<T>(
+/**
+ * Collapse errors that share a key, keeping the one with the deepest loc (the real cause); at equal depth, the
+ * branch whose type the value had (a `*_type` error only says the value was not of that branch's type).
+ */
+export function dedupeByPath<T extends { type: string }>(
   items: Array<{ key: string; error: T; loc: (string | number)[] }>
 ): T[] {
-  const best = new Map<string, { error: T; depth: number }>();
+  const best = new Map<string, { error: T; rank: number }>();
   for (const { key, error, loc } of items) {
+    const rank = loc.length * 2 + (error.type.endsWith('_type') ? 0 : 1);
     const prev = best.get(key);
-    if (!prev || loc.length > prev.depth) best.set(key, { error, depth: loc.length });
+    if (!prev || rank > prev.rank) best.set(key, { error, rank });
   }
   return Array.from(best.values(), b => b.error);
 }
