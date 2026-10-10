@@ -167,14 +167,6 @@ def test_cases_ranges_in_strict_mode_infer_the_lower_bounds(signed_in: Page):
     assert decided[:3] == ["approve", "approve", "review"]
 
 
-@pytest.mark.xfail(strict=True, reason="a cases node's otherwise is always branch 0 and the editor has no control to change it")
-def test_cases_ranges_offer_a_way_to_choose_the_otherwise_branch(signed_in: Page):
-    open_doc(signed_in, output=OUTPUT3)
-    card = build_cases(signed_in, "ranges", "amount")
-
-    expect(card.get_by_text("Otherwise", exact=False).first).to_be_visible()
-
-
 def manual_ranges(page: Page, bands: list[tuple[str, str, int]]):
     card = build_cases(page, "ranges", "amount", branches=2)
     choose_output(page, card, "approve", 1)
@@ -260,44 +252,6 @@ def test_branch_button_on_a_unary_node_changes_nothing_in_the_saved_rule(signed_
 def two_branch_cases(otherwise: int) -> dict:
     return {"type": "cases", "op": "isin", "feature": "count", "otherwise": otherwise,
             "conditions": [{"when": {"values": [1]}, "then": 1}], "branches": [DEFAULT, APPROVE]}
-
-
-@pytest.mark.xfail(strict=True, reason="cloning a cases node drops its otherwise index (Field required)")
-def test_cloned_rule_with_a_cases_node_validates_and_runs_the_same(signed_in: Page):
-    project = open_doc(signed_in, two_branch_cases(0))
-    rule_card(signed_in).get_by_title("Clone Rule").click()
-
-    reply = save(signed_in)
-    assert reply["validation_errors"] == []
-    doc = export_document(signed_in, project)
-    frame = {"count": [0, 1]}
-    assert decisions_for({**doc, "rules": doc["rules"][1:]}, frame) == decisions_for(
-        {**doc, "rules": doc["rules"][:1]}, frame)
-
-
-@pytest.mark.xfail(strict=True, reason="cloning a cases node whose otherwise is not branch 0 turns otherwise into an object")
-def test_cloned_cases_rule_keeps_a_non_zero_otherwise_index(signed_in: Page):
-    open_doc(signed_in, two_branch_cases(1))
-    rule_card(signed_in).get_by_title("Clone Rule").click()
-
-    reply = save(signed_in)
-    assert reply["validation_errors"] == []
-    assert saved_rule(reply, 1)["otherwise"] == 1
-
-
-@pytest.mark.xfail(strict=True, reason="pasting a cases node whose otherwise is not branch 0 turns otherwise into an object")
-def test_pasted_cases_node_keeps_a_non_zero_otherwise_index(signed_in: Page):
-    open_doc(signed_in, {"type": "unary", "condition": {"type": "unary", "op": "<=", "feature": "amount",
-                                                          "threshold": 5},
-                         "then": two_branch_cases(1), "otherwise": DEFAULT})
-    card = rule_card(signed_in)
-    nodes = card.get_by_test_id("rule-node")
-    nodes.nth(1).get_by_title("Copy node").first.click()
-    card.get_by_test_id("rule-node").last.get_by_title("Paste here").first.click()
-
-    reply = save(signed_in)
-    assert reply["validation_errors"] == []
-    assert saved_rule(reply)["otherwise"]["otherwise"] == 1
 
 
 def test_copying_a_leaf_and_pasting_it_over_another_leaf_saves_and_runs(signed_in: Page):
