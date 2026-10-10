@@ -286,7 +286,7 @@ export interface CasesRangesNode {
     then: number; // Index into branches array
   }>;
   branches: RuleTableRow[]; // Array of actual branch nodes
-  otherwise?: RuleTableRow; // Direct otherwise node (not an index)
+  otherwise?: number; // Index into branches array
 
   // UI state
   editMode?: boolean;
@@ -306,7 +306,7 @@ export interface CasesStringMatchNode {
     then: number; // Index into branches array
   }>;
   branches: RuleTableRow[]; // Array of actual branch nodes
-  otherwise?: RuleTableRow; // Direct otherwise node (not an index)
+  otherwise?: number; // Index into branches array
 
   // UI state
   editMode?: boolean;
@@ -326,7 +326,7 @@ export interface CasesIsInNode {
     then: number; // Index into branches array
   }>;
   branches: RuleTableRow[]; // Array of actual branch nodes
-  otherwise?: RuleTableRow; // Direct otherwise node (not an index)
+  otherwise?: number; // Index into branches array
 
   // UI state
   editMode?: boolean;
