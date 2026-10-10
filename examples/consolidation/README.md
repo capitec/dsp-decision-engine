@@ -300,10 +300,11 @@ Inputs it reads that the caller owns: `decision_id`, `decision_date`, `channel_c
   consolidation-specific scorecard (the grade comes in with the request), joint applicants, a time budget, rate add-on
   overlays, and the persistence and replay of the record. `hardship_declared` and an assessment mode are not read.
 - **Every record output is a declared `TypedDict`** (`records.py`), so each column has a polars dtype before the first row.
-  A key a record may leave out is in a `total=False` class, and a frame row holds it as null. The intervention
-  `actual` and `threshold` are floats even for a count (`6.0`, not `6`), because one float column cannot hold both.
-  The two `each` gathers (`classified_accounts`, `scenario_buffers`) have no declared type, so the polars engine still
-  refuses this pipeline; the fused and interpreted engines run it.
+  A key a record may leave out is in a `total=False` class, and a batch row holds it as null. The two `each` gathers
+  (`classified_accounts`, `scenario_buffers`) are typed by the engine from `PreparedAccount` and the body's outputs, but
+  the polars engine still refuses this pipeline: it holds the gathered accounts to every declared field in the declared
+  order, and an account that leaves out `credit_limit` or `days_since_statement` comes back without it. The fused and
+  interpreted engines run it.
 - **One workaround for what the decider toolkit lacks**, marked `# workaround`: the product policies are keyed by text because a `dict`
   with integer keys becomes a column that a JSON or CSV batch response cannot write, and `product_policies` is one of
   the pipeline's outputs.
