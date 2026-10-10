@@ -753,6 +753,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                               ) : (
                                 <ParameterizedNumericInput
                                   value={(condition.when as any).min ?? null}
+                                  allowEmpty
                                   onChange={(newValue) => {
                                     const newConditions = [...node.conditions];
                                     newConditions[idx] = { ...condition, when: { ...condition.when, min: newValue } };
@@ -774,6 +775,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                             <div>
                               <ParameterizedNumericInput
                                 value={(condition.when as any).max ?? null}
+                                allowEmpty
                                 onChange={(newValue) => {
                                   const newConditions = [...node.conditions];
                                   newConditions[idx] = { ...condition, when: { ...condition.when, max: newValue } };

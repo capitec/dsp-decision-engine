@@ -22,10 +22,12 @@ export interface ParameterOption {
 }
 
 interface ParameterizedNumericInputProps {
-  /** Current value: either a number or a parameter reference */
-  value: number | ParameterReference;
+  /** Current value: either a number or a parameter reference; null is an open bound (with `allowEmpty`) */
+  value: number | ParameterReference | null;
   /** Callback when value changes */
-  onChange: (value: number | ParameterReference) => void;
+  onChange: (value: number | ParameterReference | null) => void;
+  /** A range bound: clearing the field leaves it open (null) instead of 0 */
+  allowEmpty?: boolean;
   /** Available parameters/variables for selection */
   availableParameters?: ParameterOption[];
   /** Label for the input */
@@ -90,7 +92,8 @@ export const ParameterizedNumericInput: React.FC<ParameterizedNumericInputProps>
   disabled = false,
   className = "",
   onManageParameters,
-  showManageParameters = true
+  showManageParameters = true,
+  allowEmpty = false
 }) => {
   const isParameter = isParameterReference(value);
   const parameterName = paramRefName(value) ?? '';
@@ -280,11 +283,11 @@ export const ParameterizedNumericInput: React.FC<ParameterizedNumericInputProps>
           <>
             <NumericInput
               value={numericValue}
-              onChange={(val) => onChange(typeof val === 'number' ? val : 0)}
+              onChange={(val) => onChange(typeof val === 'number' ? val : allowEmpty ? null : 0)}
               step={step}
               placeholder={placeholder}
               className="h-8 flex-1"
-              allowEmpty={false}
+              allowEmpty={allowEmpty}
               allowInfinity={allowInfinity}
               allowNaN={allowNaN}
               disabled={disabled}

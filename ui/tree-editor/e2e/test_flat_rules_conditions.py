@@ -80,7 +80,6 @@ def test_between_with_both_one_or_open_bounds_saves_and_runs(signed_in: Page, fi
     assert approved(export_document(signed_in, project), {"amount": amounts}) == expected
 
 
-@pytest.mark.xfail(strict=True, reason="clearing a numeric field stores 0 instead of leaving the bound open")
 def test_clearing_a_between_bound_leaves_it_open(signed_in: Page):
     open_doc(signed_in)
     card = unary_rule(signed_in, "between")
