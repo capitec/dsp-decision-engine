@@ -218,7 +218,9 @@ def test_the_same_field_edited_at_once_converges_to_one_value_everywhere(signed_
     rename_rule(second, "From second")
     held[0].wait_held(signed_in)
     held[1].wait_held(second)
+    # Released together, the two sockets race for the row lock; one after the other, the later one must win.
     held[0].release()
+    stored(signed_in, project, lambda d: names(d)[0] == "From first")
     held[1].release()
 
     data = stored(signed_in, project, lambda d: names(d)[0] == "From second")
@@ -303,6 +305,22 @@ def test_a_read_only_share_sees_edits_live_but_cannot_send(signed_in: Page, othe
     expect(toast(other.page, "read-only")).to_be_visible()
     assert names(get_project(signed_in, project)["project_data"]) == ["Seen by the reader", "Rule 2"]
     assert get_project(signed_in, project)["project_data"]["mode"] == "first_match"
+
+
+def test_a_reader_whose_share_is_removed_is_disconnected_without_sending_anything(signed_in: Page, other):
+    project = two_rules(signed_in)
+    share = share_project(signed_in, project, other.id, "read")
+    other.page.evaluate("""(project) => new Promise((resolve) => {
+        const ws = new WebSocket(`ws://${location.host}/api/v1/projects/${project}/live`);
+        ws.onopen = () => ws.send(JSON.stringify({type: 'hello', since: 0, client_id: 'reader'}));
+        ws.onmessage = (e) => { if (JSON.parse(e.data).type === 'ready') resolve(); };
+        ws.onclose = (e) => { window.liveClosed = e.code; };
+    })""", project)
+
+    assert signed_in.request.delete(f"/api/v1/projects/{project}/shares/{share['id']}").ok
+
+    other.page.wait_for_function("window.liveClosed !== undefined", timeout=30_000)
+    assert other.page.evaluate("window.liveClosed") == 1008
 
 
 def handshake(base_url: str, project: str, cookie: str | None, origin: str | None) -> int:

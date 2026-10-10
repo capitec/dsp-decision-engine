@@ -6,9 +6,11 @@ and `ping` (answered `pong`). Server -> client: `snapshot {version, doc}`, `appl
 for every version in order (the author's ack included), `ready {version}` once caught up, `dropped {msg_id, version,
 ops}` and `rejected {msg_id, reason, conflicts}` to the author only, `validation {version, errors}` for the latest
 version.
-READ access connects and receives; WRITE sends ops. The session and access are checked again on every message.
+READ access connects and receives; WRITE sends ops. The session and access are checked again on every message and
+every 15 s.
 """
 
+import asyncio
 import json
 import time
 import typing as t
@@ -30,6 +32,7 @@ from dsp_decikit.settings import settings
 from .routes import router
 
 MAX_MESSAGE_BYTES = 4 * 1024 * 1024
+RECHECK_S = 15
 POLICY_VIOLATION = 1008
 
 
@@ -71,7 +74,10 @@ async def live(ws: WebSocket, project_id: uuid.UUID):
     client = None
     try:
         while True:
-            text = await ws.receive_text()
+            try:
+                text = await asyncio.wait_for(ws.receive_text(), RECHECK_S)
+            except asyncio.TimeoutError:
+                text = ""  # a reader never sends: check its session and access all the same
             started = time.perf_counter()
             if len(text) > MAX_MESSAGE_BYTES:
                 await ws.close(1009)
@@ -80,6 +86,8 @@ async def live(ws: WebSocket, project_id: uuid.UUID):
             if mode is None:
                 await ws.close(POLICY_VIOLATION, "session ended or access removed")
                 return
+            if not text:
+                continue
             authorised = time.perf_counter()
             try:
                 message = json.loads(text)

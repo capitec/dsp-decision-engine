@@ -36,6 +36,7 @@ export interface LiveHooks {
   merged?: () => void
   /** My offline edits were refused whole and are gone from the editor; `doc` is my version with them. */
   offlineRejected?: (rejection: { reason: string; conflicts: string[]; doc: Json }) => void
+  /** The server's validation errors of the version the editor shows (`version`, my pending edits aside). */
   validation?: (errors: unknown[], version: number) => void
   /** Every edit is on the server (nothing pending). */
   settled?: (version: number) => void
@@ -62,6 +63,8 @@ export class LiveSync {
   /** The version (and document) my edits since the disconnect were made on. */
   private offlineBase?: { version: number; doc: Json }
   private offlineDoc: Json = null
+  // Validation runs apart from the fan-out, so it can arrive before the version it is for.
+  private validation?: { errors: unknown[]; version: number }
 
   constructor(
     private url: string,
@@ -215,7 +218,8 @@ export class LiveSync {
     } else if (m.type === 'dropped') {
       this.hooks.dropped?.(m.ops)
     } else if (m.type === 'validation') {
-      this.hooks.validation?.(m.errors, m.version)
+      this.validation = m
+      this.report()
     } else if (m.type === 'error') {
       console.warn('live sync:', m.reason)
     }
@@ -224,9 +228,17 @@ export class LiveSync {
   private refresh() {
     this.view = apply(this.confirmed, this.pending.flatMap((p) => p.ops))[0]
     this.hooks.show(this.view)
+    this.report()
     if (this.idle()) {
       this.hooks.settled?.(this.version)
       this.waiters.splice(0).forEach((resolve) => resolve())
+    }
+  }
+
+  private report() {
+    if (this.validation && this.validation.version <= this.version) {
+      if (this.validation.version === this.version) this.hooks.validation?.(this.validation.errors, this.version)
+      this.validation = undefined
     }
   }
 }
