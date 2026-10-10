@@ -1,0 +1,3303 @@
+[
+ {
+  "name": "equal documents give no ops, whatever the key order",
+  "kind": "diff",
+  "old": {
+   "a": 1,
+   "b": {
+    "c": [
+     1,
+     {
+      "d": 2
+     }
+    ]
+   }
+  },
+  "new": {
+   "b": {
+    "c": [
+     1,
+     {
+      "d": 2
+     }
+    ]
+   },
+   "a": 1
+  },
+  "ops": []
+ },
+ {
+  "name": "dict keys are removed, added and recursed into",
+  "kind": "diff",
+  "old": {
+   "a": 1,
+   "b": 2,
+   "c": {
+    "d": 1
+   }
+  },
+  "new": {
+   "a": 1,
+   "c": {
+    "d": 2
+   },
+   "e": 3
+  },
+  "ops": [
+   {
+    "op": "remove",
+    "path": "/b"
+   },
+   {
+    "op": "replace",
+    "path": "/c/d",
+    "value": 2
+   },
+   {
+    "op": "add",
+    "path": "/e",
+    "value": 3
+   }
+  ]
+ },
+ {
+  "name": "a value changing kind is replaced",
+  "kind": "diff",
+  "old": {
+   "a": {
+    "x": 1
+   }
+  },
+  "new": {
+   "a": [
+    1
+   ]
+  },
+  "ops": [
+   {
+    "op": "replace",
+    "path": "/a",
+    "value": [
+     1
+    ]
+   }
+  ]
+ },
+ {
+  "name": "true is not 1",
+  "kind": "diff",
+  "old": {
+   "a": 1,
+   "b": 0
+  },
+  "new": {
+   "a": true,
+   "b": false
+  },
+  "ops": [
+   {
+    "op": "replace",
+    "path": "/a",
+    "value": true
+   },
+   {
+    "op": "replace",
+    "path": "/b",
+    "value": false
+   }
+  ]
+ },
+ {
+  "name": "null to a value is a replace",
+  "kind": "diff",
+  "old": {
+   "a": null
+  },
+  "new": {
+   "a": {
+    "x": 1
+   }
+  },
+  "ops": [
+   {
+    "op": "replace",
+    "path": "/a",
+    "value": {
+     "x": 1
+    }
+   }
+  ]
+ },
+ {
+  "name": "a plain list of the same length is diffed per index",
+  "kind": "diff",
+  "old": {
+   "l": [
+    1,
+    {
+     "x": 2
+    },
+    3
+   ]
+  },
+  "new": {
+   "l": [
+    1,
+    {
+     "x": 5
+    },
+    4
+   ]
+  },
+  "ops": [
+   {
+    "op": "replace",
+    "path": "/l/1/x",
+    "value": 5
+   },
+   {
+    "op": "replace",
+    "path": "/l/2",
+    "value": 4
+   }
+  ]
+ },
+ {
+  "name": "a plain list whose length changed is replaced whole",
+  "kind": "diff",
+  "old": {
+   "l": [
+    1,
+    2
+   ]
+  },
+  "new": {
+   "l": [
+    1,
+    2,
+    3
+   ]
+  },
+  "ops": [
+   {
+    "op": "replace",
+    "path": "/l",
+    "value": [
+     1,
+     2,
+     3
+    ]
+   }
+  ]
+ },
+ {
+  "name": "an edit inside a rule is addressed by its key",
+  "kind": "diff",
+  "old": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    }
+   ]
+  },
+  "new": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "Renamed"
+     },
+     "rule": {
+      "id": "b"
+     }
+    }
+   ]
+  },
+  "ops": [
+   {
+    "op": "replace",
+    "path": "/rules/b/meta/name",
+    "value": "Renamed"
+   }
+  ]
+ },
+ {
+  "name": "a rule appended at the end needs no order op",
+  "kind": "diff",
+  "old": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    }
+   ]
+  },
+  "new": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    },
+    {
+     "meta": {
+      "name": "C"
+     },
+     "rule": {
+      "id": "c"
+     }
+    }
+   ]
+  },
+  "ops": [
+   {
+    "op": "add",
+    "path": "/rules/c",
+    "value": {
+     "meta": {
+      "name": "C"
+     },
+     "rule": {
+      "id": "c"
+     }
+    }
+   }
+  ]
+ },
+ {
+  "name": "a rule inserted in the middle is added then ordered",
+  "kind": "diff",
+  "old": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    }
+   ]
+  },
+  "new": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "C"
+     },
+     "rule": {
+      "id": "c"
+     }
+    },
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    }
+   ]
+  },
+  "ops": [
+   {
+    "op": "add",
+    "path": "/rules/c",
+    "value": {
+     "meta": {
+      "name": "C"
+     },
+     "rule": {
+      "id": "c"
+     }
+    }
+   },
+   {
+    "op": "order",
+    "path": "/rules",
+    "value": [
+     "a",
+     "c",
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "a deleted rule is removed by key",
+  "kind": "diff",
+  "old": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    },
+    {
+     "meta": {
+      "name": "C"
+     },
+     "rule": {
+      "id": "c"
+     }
+    }
+   ]
+  },
+  "new": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "C"
+     },
+     "rule": {
+      "id": "c"
+     }
+    }
+   ]
+  },
+  "ops": [
+   {
+    "op": "remove",
+    "path": "/rules/b"
+   }
+  ]
+ },
+ {
+  "name": "reordered rules give one order op",
+  "kind": "diff",
+  "old": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    },
+    {
+     "meta": {
+      "name": "C"
+     },
+     "rule": {
+      "id": "c"
+     }
+    }
+   ]
+  },
+  "new": {
+   "rules": [
+    {
+     "meta": {
+      "name": "C"
+     },
+     "rule": {
+      "id": "c"
+     }
+    },
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    }
+   ]
+  },
+  "ops": [
+   {
+    "op": "order",
+    "path": "/rules",
+    "value": [
+     "c",
+     "a",
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "delete, edit, insert and reorder together",
+  "kind": "diff",
+  "old": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    },
+    {
+     "meta": {
+      "name": "C"
+     },
+     "rule": {
+      "id": "c"
+     }
+    }
+   ]
+  },
+  "new": {
+   "rules": [
+    {
+     "meta": {
+      "name": "D"
+     },
+     "rule": {
+      "id": "d"
+     }
+    },
+    {
+     "meta": {
+      "name": "Cee"
+     },
+     "rule": {
+      "id": "c"
+     }
+    },
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    }
+   ]
+  },
+  "ops": [
+   {
+    "op": "remove",
+    "path": "/rules/b"
+   },
+   {
+    "op": "add",
+    "path": "/rules/d",
+    "value": {
+     "meta": {
+      "name": "D"
+     },
+     "rule": {
+      "id": "d"
+     }
+    }
+   },
+   {
+    "op": "replace",
+    "path": "/rules/c/meta/name",
+    "value": "Cee"
+   },
+   {
+    "op": "order",
+    "path": "/rules",
+    "value": [
+     "d",
+     "c",
+     "a"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "a keyed list with a duplicate key is a plain list (same length)",
+  "kind": "diff",
+  "old": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    }
+   ]
+  },
+  "new": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "Second"
+     },
+     "rule": {
+      "id": "a"
+     }
+    }
+   ]
+  },
+  "ops": [
+   {
+    "op": "replace",
+    "path": "/rules/1/meta/name",
+    "value": "Second"
+   }
+  ]
+ },
+ {
+  "name": "a keyed list with a duplicate key is a plain list (length changed)",
+  "kind": "diff",
+  "old": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    }
+   ]
+  },
+  "new": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    }
+   ]
+  },
+  "ops": [
+   {
+    "op": "replace",
+    "path": "/rules",
+    "value": [
+     {
+      "meta": {
+       "name": "A"
+      },
+      "rule": {
+       "id": "a"
+      }
+     },
+     {
+      "meta": {
+       "name": "A"
+      },
+      "rule": {
+       "id": "a"
+      }
+     },
+     {
+      "meta": {
+       "name": "B"
+      },
+      "rule": {
+       "id": "b"
+      }
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "name": "one side with a duplicate key makes the list plain",
+  "kind": "diff",
+  "old": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    }
+   ]
+  },
+  "new": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    }
+   ]
+  },
+  "ops": [
+   {
+    "op": "replace",
+    "path": "/rules/1/meta/name",
+    "value": "A"
+   },
+   {
+    "op": "replace",
+    "path": "/rules/1/rule/id",
+    "value": "a"
+   }
+  ]
+ },
+ {
+  "name": "rules without ids are a plain list",
+  "kind": "diff",
+  "old": {
+   "rules": [
+    {
+     "meta": {
+      "name": "x"
+     },
+     "rule": {}
+    }
+   ]
+  },
+  "new": {
+   "rules": [
+    {
+     "meta": {
+      "name": "y"
+     },
+     "rule": {}
+    }
+   ]
+  },
+  "ops": [
+   {
+    "op": "replace",
+    "path": "/rules/0/meta/name",
+    "value": "y"
+   }
+  ]
+ },
+ {
+  "name": "nodes are keyed by id",
+  "kind": "diff",
+  "old": {
+   "nodes": [
+    {
+     "id": "n1",
+     "position": {
+      "x": 1
+     }
+    },
+    {
+     "id": "n2"
+    }
+   ]
+  },
+  "new": {
+   "nodes": [
+    {
+     "id": "n1",
+     "position": {
+      "x": 7
+     }
+    },
+    {
+     "id": "n2"
+    }
+   ]
+  },
+  "ops": [
+   {
+    "op": "replace",
+    "path": "/nodes/n1/position/x",
+    "value": 7
+   }
+  ]
+ },
+ {
+  "name": "edges without an id are keyed by source:target",
+  "kind": "diff",
+  "old": {
+   "edges": [
+    {
+     "source": "n1",
+     "target": "n2"
+    }
+   ]
+  },
+  "new": {
+   "edges": [
+    {
+     "source": "n1",
+     "target": "n2",
+     "data": {
+      "sourceIndex": 1
+     }
+    },
+    {
+     "id": "e9",
+     "source": "n1",
+     "target": "n3"
+    }
+   ]
+  },
+  "ops": [
+   {
+    "op": "add",
+    "path": "/edges/n1:n2/data",
+    "value": {
+     "sourceIndex": 1
+    }
+   },
+   {
+    "op": "add",
+    "path": "/edges/e9",
+    "value": {
+     "id": "e9",
+     "source": "n1",
+     "target": "n3"
+    }
+   }
+  ]
+ },
+ {
+  "name": "subtrees are keyed by id",
+  "kind": "diff",
+  "old": {
+   "subtrees": [
+    {
+     "id": "s1",
+     "name": "x"
+    },
+    {
+     "id": "s2"
+    }
+   ]
+  },
+  "new": {
+   "subtrees": [
+    {
+     "id": "s2"
+    },
+    {
+     "id": "s1",
+     "name": "y"
+    }
+   ]
+  },
+  "ops": [
+   {
+    "op": "replace",
+    "path": "/subtrees/s1/name",
+    "value": "y"
+   },
+   {
+    "op": "order",
+    "path": "/subtrees",
+    "value": [
+     "s2",
+     "s1"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "a list named rules below the root is a plain list",
+  "kind": "diff",
+  "old": {
+   "output": {
+    "rules": [
+     {
+      "meta": {
+       "name": "A"
+      },
+      "rule": {
+       "id": "a"
+      }
+     }
+    ]
+   }
+  },
+  "new": {
+   "output": {
+    "rules": [
+     {
+      "meta": {
+       "name": "X"
+      },
+      "rule": {
+       "id": "a"
+      }
+     }
+    ]
+   }
+  },
+  "ops": [
+   {
+    "op": "replace",
+    "path": "/output/rules/0/meta/name",
+    "value": "X"
+   }
+  ]
+ },
+ {
+  "name": "keys containing / and ~ are escaped",
+  "kind": "diff",
+  "old": {
+   "a/b": 1,
+   "~c": 2,
+   "nodes": [
+    {
+     "id": "x/~y",
+     "v": 1
+    }
+   ]
+  },
+  "new": {
+   "a/b": 3,
+   "~c": 4,
+   "nodes": [
+    {
+     "id": "x/~y",
+     "v": 2
+    }
+   ]
+  },
+  "ops": [
+   {
+    "op": "replace",
+    "path": "/a~1b",
+    "value": 3
+   },
+   {
+    "op": "replace",
+    "path": "/nodes/x~1~0y/v",
+    "value": 2
+   },
+   {
+    "op": "replace",
+    "path": "/~0c",
+    "value": 4
+   }
+  ]
+ },
+ {
+  "name": "a root changing kind is a root replace",
+  "kind": "diff",
+  "old": [
+   1,
+   2
+  ],
+  "new": {
+   "a": 1
+  },
+  "ops": [
+   {
+    "op": "replace",
+    "path": "",
+    "value": {
+     "a": 1
+    }
+   }
+  ]
+ },
+ {
+  "name": "an edit inside a rule that no longer exists is dropped",
+  "kind": "apply",
+  "doc": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    }
+   ]
+  },
+  "ops": [
+   {
+    "op": "replace",
+    "path": "/rules/b/meta/name",
+    "value": "X"
+   },
+   {
+    "op": "replace",
+    "path": "/rules/a/meta/name",
+    "value": "Y"
+   }
+  ],
+  "expected": {
+   "rules": [
+    {
+     "meta": {
+      "name": "Y"
+     },
+     "rule": {
+      "id": "a"
+     }
+    }
+   ]
+  },
+  "dropped": [
+   {
+    "op": "replace",
+    "path": "/rules/b/meta/name",
+    "value": "X"
+   }
+  ]
+ },
+ {
+  "name": "same-field edits: the last one wins",
+  "kind": "apply",
+  "doc": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    }
+   ]
+  },
+  "ops": [
+   {
+    "op": "replace",
+    "path": "/rules/a/meta/name",
+    "value": "First"
+   },
+   {
+    "op": "replace",
+    "path": "/rules/a/meta/name",
+    "value": "Second"
+   }
+  ],
+  "expected": {
+   "rules": [
+    {
+     "meta": {
+      "name": "Second"
+     },
+     "rule": {
+      "id": "a"
+     }
+    }
+   ]
+  },
+  "dropped": []
+ },
+ {
+  "name": "concurrent rule inserts by two clients keep both rules",
+  "kind": "apply",
+  "doc": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    }
+   ]
+  },
+  "ops": [
+   {
+    "op": "add",
+    "path": "/rules/c",
+    "value": {
+     "meta": {
+      "name": "C"
+     },
+     "rule": {
+      "id": "c"
+     }
+    }
+   },
+   {
+    "op": "order",
+    "path": "/rules",
+    "value": [
+     "a",
+     "c",
+     "b"
+    ]
+   },
+   {
+    "op": "add",
+    "path": "/rules/d",
+    "value": {
+     "meta": {
+      "name": "D"
+     },
+     "rule": {
+      "id": "d"
+     }
+    }
+   },
+   {
+    "op": "order",
+    "path": "/rules",
+    "value": [
+     "a",
+     "d",
+     "b"
+    ]
+   }
+  ],
+  "expected": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "C"
+     },
+     "rule": {
+      "id": "c"
+     }
+    },
+    {
+     "meta": {
+      "name": "D"
+     },
+     "rule": {
+      "id": "d"
+     }
+    },
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    }
+   ]
+  },
+  "dropped": []
+ },
+ {
+  "name": "an order op re-inserts keys it does not list after their predecessor",
+  "kind": "apply",
+  "doc": {
+   "rules": [
+    {
+     "meta": {
+      "name": "X"
+     },
+     "rule": {
+      "id": "x"
+     }
+    },
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "Y"
+     },
+     "rule": {
+      "id": "y"
+     }
+    },
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    },
+    {
+     "meta": {
+      "name": "Z"
+     },
+     "rule": {
+      "id": "z"
+     }
+    }
+   ]
+  },
+  "ops": [
+   {
+    "op": "order",
+    "path": "/rules",
+    "value": [
+     "b",
+     "a"
+    ]
+   }
+  ],
+  "expected": {
+   "rules": [
+    {
+     "meta": {
+      "name": "X"
+     },
+     "rule": {
+      "id": "x"
+     }
+    },
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    },
+    {
+     "meta": {
+      "name": "Z"
+     },
+     "rule": {
+      "id": "z"
+     }
+    },
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "Y"
+     },
+     "rule": {
+      "id": "y"
+     }
+    }
+   ]
+  },
+  "dropped": []
+ },
+ {
+  "name": "an order op skips keys that no longer exist",
+  "kind": "apply",
+  "doc": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    }
+   ]
+  },
+  "ops": [
+   {
+    "op": "order",
+    "path": "/rules",
+    "value": [
+     "b",
+     "z",
+     "a"
+    ]
+   }
+  ],
+  "expected": {
+   "rules": [
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    },
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    }
+   ]
+  },
+  "dropped": []
+ },
+ {
+  "name": "an order op on a plain list is dropped",
+  "kind": "apply",
+  "doc": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    }
+   ]
+  },
+  "ops": [
+   {
+    "op": "order",
+    "path": "/rules",
+    "value": [
+     "a"
+    ]
+   }
+  ],
+  "expected": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    }
+   ]
+  },
+  "dropped": [
+   {
+    "op": "order",
+    "path": "/rules",
+    "value": [
+     "a"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "an order op on a missing list is dropped",
+  "kind": "apply",
+  "doc": {},
+  "ops": [
+   {
+    "op": "order",
+    "path": "/rules",
+    "value": [
+     "a"
+    ]
+   }
+  ],
+  "expected": {},
+  "dropped": [
+   {
+    "op": "order",
+    "path": "/rules",
+    "value": [
+     "a"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "adding an existing key replaces the item in place",
+  "kind": "apply",
+  "doc": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    },
+    {
+     "meta": {
+      "name": "C"
+     },
+     "rule": {
+      "id": "c"
+     }
+    }
+   ]
+  },
+  "ops": [
+   {
+    "op": "add",
+    "path": "/rules/b",
+    "value": {
+     "meta": {
+      "name": "New"
+     },
+     "rule": {
+      "id": "b"
+     }
+    }
+   }
+  ],
+  "expected": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "New"
+     },
+     "rule": {
+      "id": "b"
+     }
+    },
+    {
+     "meta": {
+      "name": "C"
+     },
+     "rule": {
+      "id": "c"
+     }
+    }
+   ]
+  },
+  "dropped": []
+ },
+ {
+  "name": "removing an item that is gone is a no-op",
+  "kind": "apply",
+  "doc": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    }
+   ]
+  },
+  "ops": [
+   {
+    "op": "remove",
+    "path": "/rules/b"
+   },
+   {
+    "op": "remove",
+    "path": "/x"
+   }
+  ],
+  "expected": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    }
+   ]
+  },
+  "dropped": []
+ },
+ {
+  "name": "a removed rule's later edits are dropped",
+  "kind": "apply",
+  "doc": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    }
+   ]
+  },
+  "ops": [
+   {
+    "op": "remove",
+    "path": "/rules/a"
+   },
+   {
+    "op": "replace",
+    "path": "/rules/a/meta/name",
+    "value": "X"
+   }
+  ],
+  "expected": {
+   "rules": [
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    }
+   ]
+  },
+  "dropped": [
+   {
+    "op": "replace",
+    "path": "/rules/a/meta/name",
+    "value": "X"
+   }
+  ]
+ },
+ {
+  "name": "an index into a plain list out of range is dropped",
+  "kind": "apply",
+  "doc": {
+   "l": [
+    1,
+    2
+   ]
+  },
+  "ops": [
+   {
+    "op": "replace",
+    "path": "/l/2",
+    "value": 9
+   },
+   {
+    "op": "replace",
+    "path": "/l/1",
+    "value": 8
+   }
+  ],
+  "expected": {
+   "l": [
+    1,
+    8
+   ]
+  },
+  "dropped": [
+   {
+    "op": "replace",
+    "path": "/l/2",
+    "value": 9
+   }
+  ]
+ },
+ {
+  "name": "an index that is not a canonical number is dropped",
+  "kind": "apply",
+  "doc": {
+   "l": [
+    1,
+    2
+   ]
+  },
+  "ops": [
+   {
+    "op": "replace",
+    "path": "/l/01",
+    "value": 9
+   },
+   {
+    "op": "replace",
+    "path": "/l/-1",
+    "value": 9
+   },
+   {
+    "op": "replace",
+    "path": "/l/x",
+    "value": 9
+   }
+  ],
+  "expected": {
+   "l": [
+    1,
+    2
+   ]
+  },
+  "dropped": [
+   {
+    "op": "replace",
+    "path": "/l/01",
+    "value": 9
+   },
+   {
+    "op": "replace",
+    "path": "/l/-1",
+    "value": 9
+   },
+   {
+    "op": "replace",
+    "path": "/l/x",
+    "value": 9
+   }
+  ]
+ },
+ {
+  "name": "an op through a value of the wrong kind is dropped",
+  "kind": "apply",
+  "doc": {
+   "a": 1,
+   "s": "str"
+  },
+  "ops": [
+   {
+    "op": "replace",
+    "path": "/a/b",
+    "value": 2
+   },
+   {
+    "op": "add",
+    "path": "/s/0",
+    "value": "x"
+   }
+  ],
+  "expected": {
+   "a": 1,
+   "s": "str"
+  },
+  "dropped": [
+   {
+    "op": "replace",
+    "path": "/a/b",
+    "value": 2
+   },
+   {
+    "op": "add",
+    "path": "/s/0",
+    "value": "x"
+   }
+  ]
+ },
+ {
+  "name": "a plain list keyed by index when the keyed list has duplicates",
+  "kind": "apply",
+  "doc": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    }
+   ]
+  },
+  "ops": [
+   {
+    "op": "replace",
+    "path": "/rules/1/meta/name",
+    "value": "X"
+   },
+   {
+    "op": "replace",
+    "path": "/rules/a/meta/name",
+    "value": "Y"
+   }
+  ],
+  "expected": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "X"
+     },
+     "rule": {
+      "id": "a"
+     }
+    }
+   ]
+  },
+  "dropped": [
+   {
+    "op": "replace",
+    "path": "/rules/a/meta/name",
+    "value": "Y"
+   }
+  ]
+ },
+ {
+  "name": "keys containing / and ~ resolve unescaped",
+  "kind": "apply",
+  "doc": {
+   "a/b": {
+    "~": 1
+   },
+   "nodes": [
+    {
+     "id": "x/y"
+    }
+   ]
+  },
+  "ops": [
+   {
+    "op": "replace",
+    "path": "/a~1b/~0",
+    "value": 2
+   },
+   {
+    "op": "add",
+    "path": "/nodes/x~1y/v",
+    "value": 3
+   }
+  ],
+  "expected": {
+   "a/b": {
+    "~": 2
+   },
+   "nodes": [
+    {
+     "id": "x/y",
+     "v": 3
+    }
+   ]
+  },
+  "dropped": []
+ },
+ {
+  "name": "a root replace swaps the document",
+  "kind": "apply",
+  "doc": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    }
+   ]
+  },
+  "ops": [
+   {
+    "op": "replace",
+    "path": "",
+    "value": {
+     "x": 1
+    }
+   },
+   {
+    "op": "add",
+    "path": "/y",
+    "value": 2
+   }
+  ],
+  "expected": {
+   "x": 1,
+   "y": 2
+  },
+  "dropped": []
+ },
+ {
+  "name": "a root remove is dropped",
+  "kind": "apply",
+  "doc": {
+   "x": 1
+  },
+  "ops": [
+   {
+    "op": "remove",
+    "path": ""
+   }
+  ],
+  "expected": {
+   "x": 1
+  },
+  "dropped": [
+   {
+    "op": "remove",
+    "path": ""
+   }
+  ]
+ },
+ {
+  "name": "a path without a leading slash is dropped",
+  "kind": "apply",
+  "doc": {
+   "x": 1
+  },
+  "ops": [
+   {
+    "op": "replace",
+    "path": "x",
+    "value": 2
+   }
+  ],
+  "expected": {
+   "x": 1
+  },
+  "dropped": [
+   {
+    "op": "replace",
+    "path": "x",
+    "value": 2
+   }
+  ]
+ },
+ {
+  "name": "an unknown op is dropped",
+  "kind": "apply",
+  "doc": {
+   "x": 1
+  },
+  "ops": [
+   {
+    "op": "move",
+    "path": "/x",
+    "value": 2
+   }
+  ],
+  "expected": {
+   "x": 1
+  },
+  "dropped": [
+   {
+    "op": "move",
+    "path": "/x",
+    "value": 2
+   }
+  ]
+ },
+ {
+  "name": "an add into an empty keyed list appends",
+  "kind": "apply",
+  "doc": {
+   "rules": []
+  },
+  "ops": [
+   {
+    "op": "add",
+    "path": "/rules/a",
+    "value": {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    }
+   }
+  ],
+  "expected": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    }
+   ]
+  },
+  "dropped": []
+ },
+ {
+  "name": "an edit inside a rule deleted concurrently is stale",
+  "kind": "stale",
+  "mine": [
+   {
+    "op": "replace",
+    "path": "/rules/a/meta/name",
+    "value": "X"
+   }
+  ],
+  "concurrent": [
+   {
+    "op": "remove",
+    "path": "/rules/a"
+   }
+  ],
+  "dropped": [
+   {
+    "op": "replace",
+    "path": "/rules/a/meta/name",
+    "value": "X"
+   }
+  ]
+ },
+ {
+  "name": "same path: mine wins",
+  "kind": "stale",
+  "mine": [
+   {
+    "op": "replace",
+    "path": "/rules/a/meta/name",
+    "value": "X"
+   }
+  ],
+  "concurrent": [
+   {
+    "op": "replace",
+    "path": "/rules/a/meta/name",
+    "value": "Y"
+   }
+  ],
+  "dropped": []
+ },
+ {
+  "name": "a concurrent edit below mine: mine wins",
+  "kind": "stale",
+  "mine": [
+   {
+    "op": "remove",
+    "path": "/rules/a"
+   }
+  ],
+  "concurrent": [
+   {
+    "op": "replace",
+    "path": "/rules/a/meta/name",
+    "value": "Y"
+   }
+  ],
+  "dropped": []
+ },
+ {
+  "name": "an index edit into a plain list whose length changed concurrently is stale",
+  "kind": "stale",
+  "mine": [
+   {
+    "op": "replace",
+    "path": "/output/data/1/Action",
+    "value": "Block"
+   },
+   {
+    "op": "replace",
+    "path": "/output/default/Action",
+    "value": "Allow"
+   }
+  ],
+  "concurrent": [
+   {
+    "op": "replace",
+    "path": "/output/data",
+    "value": [
+     {
+      "Action": "A"
+     }
+    ]
+   }
+  ],
+  "dropped": [
+   {
+    "op": "replace",
+    "path": "/output/data/1/Action",
+    "value": "Block"
+   }
+  ]
+ },
+ {
+  "name": "/rules/ab is not under /rules/a",
+  "kind": "stale",
+  "mine": [
+   {
+    "op": "replace",
+    "path": "/rules/ab/meta/name",
+    "value": "X"
+   }
+  ],
+  "concurrent": [
+   {
+    "op": "remove",
+    "path": "/rules/a"
+   }
+  ],
+  "dropped": []
+ },
+ {
+  "name": "segments are compared unescaped, not as string prefixes",
+  "kind": "stale",
+  "mine": [
+   {
+    "op": "replace",
+    "path": "/nodes/a~01/v",
+    "value": 1
+   },
+   {
+    "op": "replace",
+    "path": "/nodes/a~0/v",
+    "value": 2
+   },
+   {
+    "op": "replace",
+    "path": "/nodes/a/b/v",
+    "value": 3
+   }
+  ],
+  "concurrent": [
+   {
+    "op": "remove",
+    "path": "/nodes/a~0"
+   },
+   {
+    "op": "remove",
+    "path": "/nodes/a~1b"
+   }
+  ],
+  "dropped": [
+   {
+    "op": "replace",
+    "path": "/nodes/a~0/v",
+    "value": 2
+   }
+  ]
+ },
+ {
+  "name": "my order op is stale when the list was replaced",
+  "kind": "stale",
+  "mine": [
+   {
+    "op": "order",
+    "path": "/rules",
+    "value": [
+     "b",
+     "a"
+    ]
+   }
+  ],
+  "concurrent": [
+   {
+    "op": "replace",
+    "path": "/rules",
+    "value": [
+     {
+      "meta": {
+       "name": "A"
+      },
+      "rule": {
+       "id": "a"
+      }
+     }
+    ]
+   }
+  ],
+  "dropped": [
+   {
+    "op": "order",
+    "path": "/rules",
+    "value": [
+     "b",
+     "a"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "my order op survives a concurrent order op and concurrent rule edits",
+  "kind": "stale",
+  "mine": [
+   {
+    "op": "order",
+    "path": "/rules",
+    "value": [
+     "b",
+     "a"
+    ]
+   }
+  ],
+  "concurrent": [
+   {
+    "op": "order",
+    "path": "/rules",
+    "value": [
+     "a",
+     "b"
+    ]
+   },
+   {
+    "op": "replace",
+    "path": "/rules/a/meta/name",
+    "value": "Z"
+   },
+   {
+    "op": "add",
+    "path": "/rules/c",
+    "value": {
+     "meta": {
+      "name": "C"
+     },
+     "rule": {
+      "id": "c"
+     }
+    }
+   }
+  ],
+  "dropped": []
+ },
+ {
+  "name": "a concurrent root replace makes every edit stale but a root replace",
+  "kind": "stale",
+  "mine": [
+   {
+    "op": "replace",
+    "path": "/x",
+    "value": 1
+   },
+   {
+    "op": "replace",
+    "path": "",
+    "value": {
+     "y": 2
+    }
+   }
+  ],
+  "concurrent": [
+   {
+    "op": "replace",
+    "path": "",
+    "value": {
+     "x": 0
+    }
+   }
+  ],
+  "dropped": [
+   {
+    "op": "replace",
+    "path": "/x",
+    "value": 1
+   }
+  ]
+ },
+ {
+  "name": "equal paths are related",
+  "kind": "related",
+  "a": "/rules/a",
+  "b": "/rules/a",
+  "related": true
+ },
+ {
+  "name": "an ancestor is related",
+  "kind": "related",
+  "a": "/rules",
+  "b": "/rules/a/meta",
+  "related": true
+ },
+ {
+  "name": "a descendant is related",
+  "kind": "related",
+  "a": "/rules/a/meta",
+  "b": "/rules/a",
+  "related": true
+ },
+ {
+  "name": "the root is related to everything",
+  "kind": "related",
+  "a": "",
+  "b": "/x",
+  "related": true
+ },
+ {
+  "name": "/rules/ab is not under /rules/a",
+  "kind": "related",
+  "a": "/rules/a",
+  "b": "/rules/ab",
+  "related": false
+ },
+ {
+  "name": "siblings are unrelated",
+  "kind": "related",
+  "a": "/rules/a",
+  "b": "/rules/b",
+  "related": false
+ },
+ {
+  "name": "an order key is under its list",
+  "kind": "related",
+  "a": "/rules/#order",
+  "b": "/rules",
+  "related": true
+ },
+ {
+  "name": "an order key is not related to an item",
+  "kind": "related",
+  "a": "/rules/#order",
+  "b": "/rules/a",
+  "related": false
+ },
+ {
+  "name": "escaped slash is one segment",
+  "kind": "related",
+  "a": "/a~1b",
+  "b": "/a/b",
+  "related": false
+ },
+ {
+  "name": "edits to different rules merge",
+  "kind": "conflicts",
+  "base": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    },
+    {
+     "meta": {
+      "name": "C"
+     },
+     "rule": {
+      "id": "c"
+     }
+    }
+   ]
+  },
+  "mine": [
+   {
+    "op": "replace",
+    "path": "/rules/a/meta/name",
+    "value": "X"
+   }
+  ],
+  "theirs": [
+   {
+    "op": "replace",
+    "path": "/rules/b/meta/name",
+    "value": "Y"
+   }
+  ],
+  "conflicts": []
+ },
+ {
+  "name": "the same field edited on both sides conflicts",
+  "kind": "conflicts",
+  "base": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    },
+    {
+     "meta": {
+      "name": "C"
+     },
+     "rule": {
+      "id": "c"
+     }
+    }
+   ]
+  },
+  "mine": [
+   {
+    "op": "replace",
+    "path": "/rules/a/meta/name",
+    "value": "X"
+   }
+  ],
+  "theirs": [
+   {
+    "op": "replace",
+    "path": "/rules/a/meta/name",
+    "value": "Y"
+   }
+  ],
+  "conflicts": [
+   "/rules/a/meta/name"
+  ]
+ },
+ {
+  "name": "an edit inside a rule they deleted conflicts",
+  "kind": "conflicts",
+  "base": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    },
+    {
+     "meta": {
+      "name": "C"
+     },
+     "rule": {
+      "id": "c"
+     }
+    }
+   ]
+  },
+  "mine": [
+   {
+    "op": "replace",
+    "path": "/rules/a/meta/name",
+    "value": "X"
+   }
+  ],
+  "theirs": [
+   {
+    "op": "remove",
+    "path": "/rules/a"
+   }
+  ],
+  "conflicts": [
+   "/rules/a/meta/name"
+  ]
+ },
+ {
+  "name": "deleting a rule they edited conflicts",
+  "kind": "conflicts",
+  "base": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    },
+    {
+     "meta": {
+      "name": "C"
+     },
+     "rule": {
+      "id": "c"
+     }
+    }
+   ]
+  },
+  "mine": [
+   {
+    "op": "remove",
+    "path": "/rules/a"
+   }
+  ],
+  "theirs": [
+   {
+    "op": "replace",
+    "path": "/rules/a/meta/name",
+    "value": "Y"
+   }
+  ],
+  "conflicts": [
+   "/rules/a"
+  ]
+ },
+ {
+  "name": "/rules/ab is not under /rules/a",
+  "kind": "conflicts",
+  "base": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "AB"
+     },
+     "rule": {
+      "id": "ab"
+     }
+    }
+   ]
+  },
+  "mine": [
+   {
+    "op": "replace",
+    "path": "/rules/ab/meta/name",
+    "value": "X"
+   }
+  ],
+  "theirs": [
+   {
+    "op": "remove",
+    "path": "/rules/a"
+   }
+  ],
+  "conflicts": []
+ },
+ {
+  "name": "both reordering the common rules differently conflicts",
+  "kind": "conflicts",
+  "base": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    },
+    {
+     "meta": {
+      "name": "C"
+     },
+     "rule": {
+      "id": "c"
+     }
+    }
+   ]
+  },
+  "mine": [
+   {
+    "op": "order",
+    "path": "/rules",
+    "value": [
+     "c",
+     "a",
+     "b"
+    ]
+   }
+  ],
+  "theirs": [
+   {
+    "op": "order",
+    "path": "/rules",
+    "value": [
+     "b",
+     "a",
+     "c"
+    ]
+   }
+  ],
+  "conflicts": [
+   "/rules/#order"
+  ]
+ },
+ {
+  "name": "both reordering the same way merges",
+  "kind": "conflicts",
+  "base": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    },
+    {
+     "meta": {
+      "name": "C"
+     },
+     "rule": {
+      "id": "c"
+     }
+    }
+   ]
+  },
+  "mine": [
+   {
+    "op": "order",
+    "path": "/rules",
+    "value": [
+     "c",
+     "a",
+     "b"
+    ]
+   }
+  ],
+  "theirs": [
+   {
+    "op": "order",
+    "path": "/rules",
+    "value": [
+     "c",
+     "a",
+     "b"
+    ]
+   }
+  ],
+  "conflicts": []
+ },
+ {
+  "name": "both only inserting rules merges",
+  "kind": "conflicts",
+  "base": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    },
+    {
+     "meta": {
+      "name": "C"
+     },
+     "rule": {
+      "id": "c"
+     }
+    }
+   ]
+  },
+  "mine": [
+   {
+    "op": "add",
+    "path": "/rules/d",
+    "value": {
+     "meta": {
+      "name": "D"
+     },
+     "rule": {
+      "id": "d"
+     }
+    }
+   },
+   {
+    "op": "order",
+    "path": "/rules",
+    "value": [
+     "a",
+     "d",
+     "b",
+     "c"
+    ]
+   }
+  ],
+  "theirs": [
+   {
+    "op": "add",
+    "path": "/rules/e",
+    "value": {
+     "meta": {
+      "name": "E"
+     },
+     "rule": {
+      "id": "e"
+     }
+    }
+   },
+   {
+    "op": "order",
+    "path": "/rules",
+    "value": [
+     "a",
+     "b",
+     "e",
+     "c"
+    ]
+   }
+  ],
+  "conflicts": []
+ },
+ {
+  "name": "inserts and deletes on both sides merge",
+  "kind": "conflicts",
+  "base": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    },
+    {
+     "meta": {
+      "name": "C"
+     },
+     "rule": {
+      "id": "c"
+     }
+    }
+   ]
+  },
+  "mine": [
+   {
+    "op": "remove",
+    "path": "/rules/b"
+   },
+   {
+    "op": "add",
+    "path": "/rules/d",
+    "value": {
+     "meta": {
+      "name": "D"
+     },
+     "rule": {
+      "id": "d"
+     }
+    }
+   },
+   {
+    "op": "order",
+    "path": "/rules",
+    "value": [
+     "d",
+     "a",
+     "c"
+    ]
+   }
+  ],
+  "theirs": [
+   {
+    "op": "add",
+    "path": "/rules/e",
+    "value": {
+     "meta": {
+      "name": "E"
+     },
+     "rule": {
+      "id": "e"
+     }
+    }
+   },
+   {
+    "op": "order",
+    "path": "/rules",
+    "value": [
+     "a",
+     "e",
+     "b",
+     "c"
+    ]
+   },
+   {
+    "op": "remove",
+    "path": "/rules/c"
+   }
+  ],
+  "conflicts": []
+ },
+ {
+  "name": "my reorder against their append merges (they made no order op)",
+  "kind": "conflicts",
+  "base": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    },
+    {
+     "meta": {
+      "name": "C"
+     },
+     "rule": {
+      "id": "c"
+     }
+    }
+   ]
+  },
+  "mine": [
+   {
+    "op": "order",
+    "path": "/rules",
+    "value": [
+     "c",
+     "b",
+     "a"
+    ]
+   }
+  ],
+  "theirs": [
+   {
+    "op": "add",
+    "path": "/rules/e",
+    "value": {
+     "meta": {
+      "name": "E"
+     },
+     "rule": {
+      "id": "e"
+     }
+    }
+   }
+  ],
+  "conflicts": []
+ },
+ {
+  "name": "my reorder against their insert conflicts (the common keys' orders differ)",
+  "kind": "conflicts",
+  "base": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    },
+    {
+     "meta": {
+      "name": "C"
+     },
+     "rule": {
+      "id": "c"
+     }
+    }
+   ]
+  },
+  "mine": [
+   {
+    "op": "order",
+    "path": "/rules",
+    "value": [
+     "c",
+     "b",
+     "a"
+    ]
+   }
+  ],
+  "theirs": [
+   {
+    "op": "add",
+    "path": "/rules/e",
+    "value": {
+     "meta": {
+      "name": "E"
+     },
+     "rule": {
+      "id": "e"
+     }
+    }
+   },
+   {
+    "op": "order",
+    "path": "/rules",
+    "value": [
+     "a",
+     "e",
+     "b",
+     "c"
+    ]
+   }
+  ],
+  "conflicts": [
+   "/rules/#order"
+  ]
+ },
+ {
+  "name": "my reorder against their replace of the whole list conflicts",
+  "kind": "conflicts",
+  "base": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    },
+    {
+     "meta": {
+      "name": "C"
+     },
+     "rule": {
+      "id": "c"
+     }
+    }
+   ]
+  },
+  "mine": [
+   {
+    "op": "order",
+    "path": "/rules",
+    "value": [
+     "c",
+     "b",
+     "a"
+    ]
+   }
+  ],
+  "theirs": [
+   {
+    "op": "replace",
+    "path": "/rules",
+    "value": [
+     {
+      "meta": {
+       "name": "A"
+      },
+      "rule": {
+       "id": "a"
+      }
+     }
+    ]
+   }
+  ],
+  "conflicts": [
+   "/rules/#order"
+  ]
+ },
+ {
+  "name": "their reorder with my rule edits merges",
+  "kind": "conflicts",
+  "base": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    },
+    {
+     "meta": {
+      "name": "C"
+     },
+     "rule": {
+      "id": "c"
+     }
+    }
+   ]
+  },
+  "mine": [
+   {
+    "op": "replace",
+    "path": "/rules/a/meta/name",
+    "value": "X"
+   },
+   {
+    "op": "add",
+    "path": "/rules/d",
+    "value": {
+     "meta": {
+      "name": "D"
+     },
+     "rule": {
+      "id": "d"
+     }
+    }
+   }
+  ],
+  "theirs": [
+   {
+    "op": "order",
+    "path": "/rules",
+    "value": [
+     "c",
+     "b",
+     "a"
+    ]
+   }
+  ],
+  "conflicts": []
+ },
+ {
+  "name": "a plain-list index edit against their length change conflicts",
+  "kind": "conflicts",
+  "base": {
+   "l": [
+    1,
+    2
+   ]
+  },
+  "mine": [
+   {
+    "op": "replace",
+    "path": "/l/1",
+    "value": 5
+   }
+  ],
+  "theirs": [
+   {
+    "op": "replace",
+    "path": "/l",
+    "value": [
+     1
+    ]
+   }
+  ],
+  "conflicts": [
+   "/l/1"
+  ]
+ },
+ {
+  "name": "my root replace conflicts with any change of theirs",
+  "kind": "conflicts",
+  "base": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    },
+    {
+     "meta": {
+      "name": "C"
+     },
+     "rule": {
+      "id": "c"
+     }
+    }
+   ]
+  },
+  "mine": [
+   {
+    "op": "replace",
+    "path": "",
+    "value": {
+     "x": 1
+    }
+   }
+  ],
+  "theirs": [
+   {
+    "op": "remove",
+    "path": "/rules/c"
+   }
+  ],
+  "conflicts": [
+   ""
+  ]
+ },
+ {
+  "name": "my root replace merges when they changed nothing",
+  "kind": "conflicts",
+  "base": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    },
+    {
+     "meta": {
+      "name": "C"
+     },
+     "rule": {
+      "id": "c"
+     }
+    }
+   ]
+  },
+  "mine": [
+   {
+    "op": "replace",
+    "path": "",
+    "value": {
+     "x": 1
+    }
+   }
+  ],
+  "theirs": [],
+  "conflicts": []
+ },
+ {
+  "name": "every conflicting path of mine is listed once",
+  "kind": "conflicts",
+  "base": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    },
+    {
+     "meta": {
+      "name": "C"
+     },
+     "rule": {
+      "id": "c"
+     }
+    }
+   ]
+  },
+  "mine": [
+   {
+    "op": "replace",
+    "path": "/rules/a/meta/name",
+    "value": "X"
+   },
+   {
+    "op": "replace",
+    "path": "/rules/a/meta/name",
+    "value": "Z"
+   },
+   {
+    "op": "replace",
+    "path": "/rules/b/meta/name",
+    "value": "Y"
+   },
+   {
+    "op": "replace",
+    "path": "/rules/c/meta/name",
+    "value": "W"
+   }
+  ],
+  "theirs": [
+   {
+    "op": "remove",
+    "path": "/rules/a"
+   },
+   {
+    "op": "remove",
+    "path": "/rules/b"
+   }
+  ],
+  "conflicts": [
+   "/rules/a/meta/name",
+   "/rules/b/meta/name"
+  ]
+ }
+]
