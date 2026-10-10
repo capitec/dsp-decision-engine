@@ -27,4 +27,17 @@ describe('shiftLeafResults', () => {
     expect(out.otherwise.otherwise.result_idx).toBe(0);
     expect(root.then.result_idx).toBe(2);
   });
+
+  it('removing the last row points its leaves at the default and leaves earlier ones', () => {
+    expect(shiftLeafResults([leaf(0), leaf(1), leaf(2)], 2).map(l => l.result_idx)).toEqual([0, 1, -1]);
+  });
+
+  it('changes only leaves: a cases node keeps its condition-to-branch indices and its otherwise index', () => {
+    const cases = { type: 'cases', conditions: [{ when: { min: 0, max: 1 }, then: 1 }], branches: [leaf(1), leaf(2)], otherwise: 1, result_idx: 3 };
+    const out: any = shiftLeafResults(cases, 0);
+    expect(out.conditions[0].then).toBe(1);
+    expect(out.otherwise).toBe(1);
+    expect(out.result_idx).toBe(3);
+    expect(out.branches.map((b: any) => b.result_idx)).toEqual([0, 1]);
+  });
 });
