@@ -13,6 +13,13 @@ export function paramRefName(value: unknown): string | null {
 
 export const isParamRef = (value: unknown): value is ParamRefValue => paramRefName(value) !== null;
 
+/** A range bound as the editors print it: `$name` for a parameter reference, `-∞` for no bound. */
+export function boundLabel(value: unknown): string {
+  if (value === null || value === undefined) return '-∞';
+  const name = paramRefName(value);
+  return name !== null ? `$${name}` : String(value);
+}
+
 /**
  * Rebuild `value` with every parameter reference passed through `fn`, wherever it sits
  * (thresholds, between/range bounds, isin values, patterns, nested composites).

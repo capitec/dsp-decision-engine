@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { makeParamRef, paramRefName, collectParamRefs } from '../param-refs';
+import { makeParamRef, paramRefName, collectParamRefs, boundLabel } from '../param-refs';
 import {
   renameParameterInNodes,
   deleteParameterFromNodes,
@@ -56,5 +56,15 @@ describe('parameter references', () => {
     expect(cleared[3].data.conditions[0].values).toEqual([]);
     expect(cleared[3].data.conditions[1].values).toEqual([1]);
     expect(cleared[4].data.conditions[0].patterns).toEqual(['x']);
+  });
+});
+
+describe('boundLabel', () => {
+  it('prints a parameter bound by name, a missing bound as -∞ and a number as itself', () => {
+    expect(boundLabel({ param: 'limit' })).toBe('$limit');
+    expect(boundLabel({ key: 'legacy' })).toBe('$legacy');
+    expect(boundLabel(null)).toBe('-∞');
+    expect(boundLabel(undefined)).toBe('-∞');
+    expect(boundLabel(1000)).toBe('1000');
   });
 });

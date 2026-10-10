@@ -19,7 +19,9 @@ import { UnaryOperatorSelector } from '../shared-tree/UnaryOperatorSelector';
 import { CompositeLogicSelector } from '../shared-tree/CompositeLogicSelector';
 import { ComputedFeatureInput } from '../shared-tree/ComputedFeatureInput';
 import { CompositeConditionEditor } from './CompositeConditionEditor';
+import { copyWithNewIds } from './copyNode';
 import { hasErrorAtPath, getErrorAtPath } from '@/utils/flat-rule-validation-parser';
+import { boundLabel } from '@/utils/param-refs';
 import type { RuleTableRow, RuleBranch, RangeCondition, RuleCondition, LeafRuleNode, CompositeRuleNode } from './types';
 import { ParameterOption } from '../shared-tree/ParameterizedNumericInput';
 import {
@@ -493,34 +495,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                 const nodeToUse = copiedNode;
 
                 if (nodeToUse) {
-                  // Deep copy the node with fresh IDs to avoid conflicts
-                  const deepCopyWithNewIds = (originalNode: RuleTableRow): RuleTableRow => {
-                    const base = {
-                      ...originalNode,
-                      id: crypto.randomUUID(),
-                    };
-
-                    // Handle different node types
-                    if (originalNode.type === 'unary' || originalNode.type === 'composite') {
-                      return {
-                        ...base,
-                        then: originalNode.then ? deepCopyWithNewIds(originalNode.then) : originalNode.then,
-                        otherwise: originalNode.otherwise ? deepCopyWithNewIds(originalNode.otherwise) : originalNode.otherwise,
-                      } as RuleTableRow;
-                    }
-
-                    if (originalNode.type === 'cases') {
-                      return {
-                        ...base,
-                        branches: originalNode.branches?.map(branch => deepCopyWithNewIds(branch)),
-                        otherwise: originalNode.otherwise ? deepCopyWithNewIds(originalNode.otherwise) : originalNode.otherwise,
-                      } as RuleTableRow;
-                    }
-
-                    return base as RuleTableRow;
-                  };
-
-                  const nodeWithNewIds = deepCopyWithNewIds(nodeToUse);
+                  const nodeWithNewIds = copyWithNewIds(nodeToUse);
 
                   // Paste the node by replacing this node
                   updateNode(treeId, node.id, nodeWithNewIds);
@@ -661,7 +636,6 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                     value={node.feature || ''}
                     onChange={(newFeature: string | { type: 'computed'; expression: string }) => updateNode(treeId, node.id, { feature: newFeature } as any)}
                     availableFeatures={availableFeatures}
-                    availableParameters={availableParameters}
                   />
                 </div>
 
@@ -771,7 +745,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                             <div>
                               {isStrictMode ? (
                                 <div className="text-xs text-gray-500 px-2 py-1 bg-gray-100 rounded h-8 flex items-center">
-                                  {idx === 0 ? '-∞' : displayMin ?? '-∞'}
+                                  {idx === 0 ? '-∞' : boundLabel(displayMin)}
                                 </div>
                               ) : (
                                 <ParameterizedNumericInput
@@ -1137,14 +1111,12 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                         onClick={() => {
                           // Remove branch and update condition references
                           const newBranches = node.branches.filter((_, i) => i !== branchIdx);
-                          const newConditions = node.conditions.map(cond => ({
-                            ...cond,
-                            then: cond.then > branchIdx ? cond.then - 1 : cond.then === branchIdx ? 0 : cond.then
-                          }));
-                          // Note: otherwise is a direct child node, not an index - no need to update it
+                          const shift = (i: number) => i > branchIdx ? i - 1 : i === branchIdx ? 0 : i;
+                          const newConditions = node.conditions.map(cond => ({ ...cond, then: shift(cond.then) }));
                           updateNode(treeId, node.id, {
                             branches: newBranches,
-                            conditions: newConditions
+                            conditions: newConditions,
+                            otherwise: shift(node.otherwise ?? 0)
                           } as any);
                         }}
                         title="Delete branch"
@@ -1186,7 +1158,25 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                 </Button>
               </div>
 
-              {/* OTHERWISE branch - handled by onAddOtherwiseBranch callback, rendered below */}
+              {/* Where a value no condition matches goes: an index into the branches above */}
+              <div className="mt-2 flex items-center gap-2 text-xs">
+                <span className="font-medium text-gray-600">Otherwise →</span>
+                <Select
+                  value={String(node.otherwise ?? 0)}
+                  onValueChange={(value) => updateNode(treeId, node.id, { otherwise: parseInt(value) } as any)}
+                >
+                  <SelectTrigger className="h-8 w-32" data-testid="cases-otherwise">
+                    <SelectValue placeholder="Branch" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {node.branches.map((_, branchIdx) => (
+                      <SelectItem key={branchIdx} value={String(branchIdx)}>
+                        Branch {branchIdx}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </>
           );
         }

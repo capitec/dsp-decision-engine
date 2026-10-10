@@ -105,3 +105,23 @@ def test_openapi_contains_document_types():
         "ParamRef",
         "TreeDocument",
     } <= set(schemas)
+
+
+def _flat_with_param(default):
+    doc = default_project_data(ProjectType.FLAT_RULE)
+    doc["output"]["dtypes"] = [["decision", "String"]]
+    doc["parameters"] = {"limit": {"type": "String", "default_value": default}}
+    doc["rules"] = [{"rule": {"type": "unary", "then": {"type": "leaf", "result_idx": -1},
+                              "condition": {"op": "<=", "feature": "amount", "threshold": {"param": "limit"}}}}]
+    return doc
+
+
+def test_parameter_default_the_tree_cannot_use_is_reported_under_parameters():
+    errors = validation_errors(_flat_with_param(""))
+    assert [e["loc"] for e in errors] == [["parameters", "limit"]]
+    assert "limit" in errors[0]["msg"] and "float" in errors[0]["msg"]
+
+
+@pytest.mark.parametrize("default", [1000, 999.5, "1000", None])
+def test_parameter_default_the_tree_can_use_is_valid(default):
+    assert validation_errors(_flat_with_param(default)) == []

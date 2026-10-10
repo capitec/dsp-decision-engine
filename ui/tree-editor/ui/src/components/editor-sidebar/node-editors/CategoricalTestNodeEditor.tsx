@@ -62,7 +62,6 @@ export const CategoricalTestNodeEditor: React.FC<CategoricalTestNodeEditorProps>
               feature: newFeature
             })}
             availableFeatures={featureNames}
-            availableParameters={availableParameters}
           />
         </div>
 
