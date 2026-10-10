@@ -3,7 +3,7 @@ from __future__ import annotations
 import threading
 import warnings
 from functools import partial
-from typing import Any, Iterator, NamedTuple
+from typing import Any, Iterable, Iterator, NamedTuple
 
 import numpy as np
 import polars as pl
@@ -51,11 +51,12 @@ class SteppedRunner(InterpretedRunner):
     values, except a `Text` or `Columnar[...]` input, whose representation is
     part of what it declares.
 
-    A step no kernel holds -- one reading or writing a semantic `str`, a `date`
-    or a `list`, or with a body numba can't compile -- runs in Python, row by
-    row, with one `FallbackWarning` naming it. With `strict=True` it raises
-    instead, unless the step is `@allow_fallback`. A `Columnar[Item]` input still
-    runs compiled, one call per row.
+    A step no kernel holds -- one reading or writing a semantic `str`, a `date`,
+    a `list` or a `dict`, or with a body numba can't compile -- runs in Python,
+    row by row, and so does every step of a kernel numba refuses only when it
+    is launched. `fallbacks()` lists each, without a warning; with
+    `strict=True` it raises instead, unless the step is `@allow_fallback`. A
+    `Columnar[Item]` input still runs compiled, one call per row.
 
     Example::
 
@@ -65,6 +66,8 @@ class SteppedRunner(InterpretedRunner):
     """
 
     fuse = False
+    # Whether a step outside a shared kernel warns with a `FallbackWarning`; `strict` refuses one either way.
+    loud = False
 
     def __init__(self, strict: bool = False) -> None:
         super().__init__()
@@ -105,10 +108,17 @@ class SteppedRunner(InterpretedRunner):
         strs = {c.id: names for c in plan.calls if _reads_span(c)
                 and (names := tuple(d.name for d in c.node.params if d.annotation is str))}
         units = compile_plan(plan, fuse=self.fuse, python=python)
-        fallbacks: dict[str, str] = {}
+        fallbacks = self._report(u for u in units.values() if isinstance(u, Fallback))
         for unit in units.values():
-            if not isinstance(unit, Fallback):
-                continue
+            if isinstance(unit, Kernel):
+                unit.on_split = partial(self._split, plan)
+        reads = {id(unit): _external(unit) for unit in units.values()}
+        return Compiled(plan, units, reads, strs, fallbacks, python, {}, {})
+
+    def _report(self, units: Iterable[Fallback]) -> dict[str, str]:
+        # Every step outside a shared kernel, by path; strict refuses one that runs Python undeclared.
+        fallbacks: dict[str, str] = {}
+        for unit in units:
             # A fallback backed by a dispatcher still runs compiled, just one call per row.
             compiled = isinstance(unit.fn, Dispatcher)
             for c in unit.calls:
@@ -117,15 +127,26 @@ class SteppedRunner(InterpretedRunner):
                 if unit.declared:
                     continue
                 if compiled:
-                    warnings.warn(f"{path} runs compiled, one call per row outside the shared "
-                                  f"kernel: {unit.reason}", FallbackWarning, stacklevel=5)
+                    if self.loud:
+                        warnings.warn(f"{path} runs compiled, one call per row outside the shared "
+                                      f"kernel: {unit.reason}", FallbackWarning, stacklevel=6)
                     continue
                 message = f"{path} runs in Python, row by row: {unit.reason}"
                 if self.strict:
                     raise ValueError(f"{message}; accept it with @allow_fallback, or run mode='interpreted'")
-                warnings.warn(message, FallbackWarning, stacklevel=5)
-        reads = {id(unit): _external(unit) for unit in units.values()}
-        return Compiled(plan, units, reads, strs, fallbacks, python, {}, {})
+                if self.loud:
+                    warnings.warn(message, FallbackWarning, stacklevel=6)
+        return fallbacks
+
+    def _split(self, plan: Plan, units: tuple[Fallback, ...]) -> None:
+        # A kernel splitting at a launch after the build: reported like a build-time fallback, once.
+        with self._lock:
+            now = self._compiled
+            if now.plan is plan and units[0].calls[0].node.origin.path in now.fallbacks:
+                return   # another thread's launch split it first
+            found = self._report(units)
+            if now.plan is plan:
+                self._compiled = now._replace(fallbacks=now.fallbacks | found)
 
     def fallbacks(self) -> dict[str, str]:
         return dict(self._compiled.fallbacks)

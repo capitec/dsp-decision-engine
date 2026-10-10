@@ -49,8 +49,9 @@ class Engine:
             `"lazy"` validates a node the first time it runs, so an invalid
             param in a node no row reaches never fails a run.
         strict_compile: in `"stepped"` and `"fused"` modes, a step that would
-            run in Python raises at the first run instead of warning. Mark the
-            ones you accept `@allow_fallback`.
+            run in Python raises at the first run instead of running, a step
+            of a kernel numba refuses at launch included. Mark the ones you
+            accept `@allow_fallback`.
 
     Example::
 
@@ -271,7 +272,10 @@ class Executable:
         """Every step that runs outside the shared kernel, keyed by step path, with the reason why.
 
         A step the author accepted with `@allow_fallback` is reported too, with
-        `"@allow_fallback: "` in front of its reason.
+        `"@allow_fallback: "` in front of its reason. A kernel numba refuses
+        only when it is launched runs each of its steps in Python from then on,
+        and each is listed then, as `"split at launch: <numba's error>"`. Fused
+        mode warns about each with a `FallbackWarning`, stepped mode does not.
 
         Example::
 
