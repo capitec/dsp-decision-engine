@@ -39,13 +39,16 @@ def to_dicts(annotation: Any) -> Callable[[Any], Any] | None:
     them; a kernel's output reads back as dicts, so the Python paths store the same.
     """
     t = base_annotation(annotation)
-    if (item := struct_item(t)) is not None:
-        names = [name for name, _ in item_schema(item)]
-        return lambda x: x if isinstance(x, dict) else dict(zip(names, x))
-    if (item := columnar_item(t)) is not None:
-        names = [name for name, _ in item_schema(item)]
-        return lambda xs: [x if isinstance(x, dict) else dict(zip(names, x)) for x in xs]
-    return None
+    item = struct_item(t) or columnar_item(t)
+    if item is None:
+        return None
+    names = [name for name, _ in item_schema(item)]
+
+    def record(x: Any) -> Any:
+        # Anything but a tuple of exactly the fields stays as returned, for the output check to refuse.
+        return dict(zip(names, x)) if isinstance(x, (tuple, list)) and len(x) == len(names) else x
+
+    return record if columnar_item(t) is None else lambda xs: [record(x) for x in xs]
 
 
 def bad_field(schema: Schema) -> tuple[str, Any] | None:

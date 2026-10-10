@@ -6,7 +6,7 @@ from typing import TypedDict
 import polars as pl
 import pytest
 
-from decikit import FusedEngine, SteppedEngine, allow_fallback, branch, flow, loop, step
+from decikit import FusedEngine, InterpretedEngine, SteppedEngine, allow_fallback, branch, flow, loop, step
 from decikit.ops import Columnar, Struct
 from decikit.lab.testing import assert_equivalent
 
@@ -128,6 +128,31 @@ def test_a_python_step_reads_a_struct_as_a_dict_in_every_mode(make):
 def test_a_python_step_reads_a_python_columnar_output_as_dicts_in_every_mode():
     out = assert_equivalent(flow(ladder_named, first_offer, name="order"), LABELLED)
     assert out["first_offer"].to_list() == ["rate,code=0.1", "rate,code=0.1"]
+
+
+@allow_fallback
+@step(output="offer")
+def best_too_long(rate: float, label: str) -> Struct[Product]:
+    return rate, len(label), label
+
+
+@allow_fallback
+@step(output="offer")
+def best_not_a_tuple(rate: float, label: str) -> Struct[Product]:
+    return rate
+
+
+@allow_fallback
+@step(output="offers")
+def ladder_too_long(code: int, label: str) -> Columnar[Product]:
+    return [(0.1, code, label)]
+
+
+@pytest.mark.parametrize("engine", (InterpretedEngine, SteppedEngine, FusedEngine))
+@pytest.mark.parametrize("fn", (best_too_long, best_not_a_tuple, ladder_too_long))
+def test_a_python_struct_step_returning_something_other_than_its_fields_is_refused_in_every_engine(fn, engine):
+    with pytest.raises(ValueError, match="Input should be a valid dictionary"):
+        engine().bind(flow(fn, name="order")).run(LABELLED)
 
 
 def test_a_struct_can_be_a_loop_carry_and_packs_into_one_kernel():
