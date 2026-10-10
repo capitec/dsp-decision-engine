@@ -219,9 +219,8 @@ describe('tree errors from decikit', () => {
   });
 });
 
-// decikit tries an empty feature as a computed feature and as a name; the name branch's tag `constrained-str` is
-// not taken for a union branch, so each editor shows two errors, one of them about computed features.
-it.fails('an empty feature name is one error on the feature saying it is empty, in both editors', () => {
+// decikit tries an empty feature both as a computed feature and as a name; only the name's error says what is wrong.
+it('an empty feature name is one error on the feature saying it is empty, in both editors', () => {
   const flatParsed = parseFlatRuleValidationErrors(flat.empty_feature_name);
   const treeParsed = parseValidationErrors(tree.empty_feature_name, [{ id: 'a' }]);
   expect([flatParsed.map(e => [e.conditionPath, e.message]), treeParsed.map(e => [e.fieldPath, e.message])]).toEqual([
