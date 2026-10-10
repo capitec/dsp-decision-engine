@@ -1,11 +1,18 @@
 # Ignore everything then whitelist what the image actually needs
 *
 
-# Package source and build artefacts
+# Package source (the builder stage builds the wheel from these)
 !/decider
-!/dist
 !/pyproject.toml
-!/uv.lock
+!/README.md
+
+# In-repo example projects (PROJECT=examples/<name>), without their tests and generators
+!/examples
+/examples/*/tests
+/examples/*/scripts
+
+# Docker helpers
+!/docker/bake.sh
 
 # Strip noise from allowed directories
 **/__pycache__
