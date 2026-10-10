@@ -5,7 +5,7 @@ Gaps in the current code that users and maintainers should know about before rel
 ## Compilation and caching
 
 **Object globals are keyed by identity.** A step reading an instance of a class of its own is fingerprinted with `id()` (`_engine/compile/fingerprint.py`); numbers, strings, dates, Decimals, regexes, enums, classes and plain containers of those are keyed by value. A class is keyed by its own methods' bytecode and constants, not by what its methods call, and a jitclass by its numba type, which differs per process.
-Impact: the numba disk cache from `decider build` misses on another process, and `decider.lab.diff` reads the step as always changed. Binding warns with `HiddenStateWarning`; put the data in literals, a config document, `param()`s or `param_table`s.
+Impact: the numba disk cache from `decider build` misses on another process, and `decider.lab.diff` reads the step as always changed. Binding warns with `HiddenStateWarning` (`Engine(strict_compile=True)` raises); put the data in literals, a config document, `param()`s or `param_table`s.
 
 **A callable object read as `module.NAME` is not seen.** The walk follows the attributes a step reads off a module, but skips any callable that is not a function, module or class (so a ufunc or `np.searchsorted` is not flagged). An instance with `__call__` read that way (`transforms.normalise(x)` where `normalise = Normaliser(mean, std)`) is neither keyed nor warned about; read as a plain global it is.
 Impact: editing its data leaves the cache key and `decider.lab.diff` unchanged. Keep the data in a document or a `param()`, or import the object by name.

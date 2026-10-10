@@ -162,6 +162,8 @@ class ParamDecl:
             (`(("product", "str"), ("rate", "float"))`); `None` otherwise.
         arg: the function argument a scalar call passes it as (default:
             `name`), for a config param whose document key differs from it.
+        seeded_from: for a table, the config document its default rows were read from.
+        allow_override: a params document may set this table although `seeded_from` names a document.
 
     Example::
 
@@ -179,6 +181,8 @@ class ParamDecl:
     on_invalid: OnInvalid = "error"
     schema: tuple[tuple[str, str], ...] | None = None
     arg: str | None = None
+    seeded_from: str | None = None
+    allow_override: bool = False
 
     def __post_init__(self) -> None:
         if self.arg is None:

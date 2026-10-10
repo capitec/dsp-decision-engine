@@ -19,6 +19,7 @@ from pydantic_core import to_json
 import decider.exceptions as exc
 from decider.serving._errors import (InputParsingError, OutputFormattingError, UnsupportedAcceptError,
                                      UnsupportedContentTypeError)
+from decider._settings import get_settings
 from decider.config import ConfigStore, Version
 from decider import Engine, Executable
 from decider.ir import base_annotation, has_optional_key
@@ -145,6 +146,8 @@ class RequestHandler:
             versioned = self.store.read(version)
             exe = Engine().bind(self.pipeline_fn(versioned.config), mode=self.mode)
             params = versioned.config.get("params")
+            if get_settings().build.warn_shadowed_tables:
+                exe.warn_shadowed_tables(params)
             self.warm_fn(exe, params)
             self._staged = Live(versioned.version, exe, params, _dates(exe), _dates(exe, has_optional_key))
             return versioned.version
@@ -298,8 +301,6 @@ def _is_flow_file(pipeline: t.Any) -> bool:
 
 def construct_handler_from_settings() -> RequestHandler:
     """The handler `settings.api` describes: `Handler` from `inference.py` in `code_path` if there is one."""
-    from decider._settings import get_settings
-
     settings = get_settings()
 
     code_path = os.path.abspath(settings.api.code_path)

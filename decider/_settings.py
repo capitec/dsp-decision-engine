@@ -29,6 +29,12 @@ class APISettings(BaseModel):
     mode: str = "fused"
 
 
+class BuildSettings(BaseModel):
+    """What `decider build` and `RequestHandler.stage()` check."""
+    # ShadowedTableWarning: a params document sets a table whose default rows come from a config document.
+    warn_shadowed_tables: bool = True
+
+
 class DeciderConfigSettings(BaseModel):
     """The config store to build: its `type` tag plus that store's own fields (e.g. `basepath`)."""
     model_config = ConfigDict(extra='allow')
@@ -50,6 +56,7 @@ class DeciderSettings(BaseSettings):
 
     serve: ServeSettings = Field(default_factory=ServeSettings)
     api: APISettings = Field(default_factory=APISettings)
+    build: BuildSettings = Field(default_factory=BuildSettings)
     config: DeciderConfigSettings = Field(default_factory=DeciderConfigSettings)
     datasets_path: str = "${PROJECT_ROOT}/datasets"  # folder of named datasets; `${PROJECT_ROOT}` is the nearest ancestor holding `configs/`
     checks_path: str = "${PROJECT_ROOT}/checks.yaml"  # the project's checks file; resolved like `datasets_path`
