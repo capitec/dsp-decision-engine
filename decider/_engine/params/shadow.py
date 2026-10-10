@@ -10,9 +10,12 @@ from decider.exceptions import ShadowedTableWarning
 
 def warn_shadowed_tables(nodes: Iterable[NodeParams], doc: Mapping | None) -> None:
     """Warn once per seeded table that params document `doc` sets, naming the table, its config document and the key."""
+    if not isinstance(doc, Mapping):
+        return  # validation reports a document that is not a mapping
+    shared = doc.get("shared")
+    shared = shared if isinstance(shared, Mapping) else {}
     for node in nodes:
-        local = _local_view(doc or {}, node.path)
-        shared = (doc or {}).get("shared", {})
+        local = _local_view(doc, node.path)
         for d in node.decls:
             if d.seeded_from is None or d.allow_override:
                 continue
