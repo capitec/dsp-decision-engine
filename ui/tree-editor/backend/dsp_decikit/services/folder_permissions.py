@@ -195,7 +195,7 @@ async def get_effective_project_permissions(
         return True, AccessMode.ADMIN, permissions
 
     # 2. Check superadmin
-    if is_superadmin(current_user):
+    if await is_superadmin(current_user):
         permissions.append(
             PermissionInfo(
                 source=PermissionSource.SUPERADMIN,
@@ -281,7 +281,7 @@ async def get_effective_folder_permissions(
         return True, AccessMode.ADMIN, permissions
 
     # 2. Check superadmin
-    if is_superadmin(current_user):
+    if await is_superadmin(current_user):
         permissions.append(
             PermissionInfo(
                 source=PermissionSource.SUPERADMIN,
