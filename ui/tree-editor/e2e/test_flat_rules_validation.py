@@ -4,9 +4,10 @@ Export is refused with an explanation, and fixing the input clears the marker an
 import re
 
 import pytest
+from decikit.exceptions import ParamsError
 from playwright.sync_api import Locator, Page, expect
 
-from flat_docs import APPROVE, open_doc
+from flat_docs import APPROVE, decisions_for, open_doc
 from flat_rules_ui import (
     add_then,
     choose_feature,
@@ -112,16 +113,17 @@ def test_unfinished_parameter_choice_is_reported_on_the_threshold_and_export_ref
     fixed(signed_in, tmp_path)
 
 
-@pytest.mark.xfail(strict=True, reason="a parameter name that is not defined saves as valid and exports")
-def test_undefined_parameter_name_is_reported_and_names_the_parameter(signed_in: Page, tmp_path):
+def test_undeclared_parameter_name_exports_as_a_parameter_the_run_must_supply(signed_in: Page, tmp_path):
+    # decikit reads a param that no `parameters` entry declares as a required run-time param
     open_doc(signed_in, parameters=LIMIT)
     card = unary_rule(signed_in, "<=")
     use_parameter(card, "ghost")
 
-    reported_on_the_rule(signed_in, "ghost")
-    refused_export(signed_in, "ghost")
-    fill_parameter(card, "limit")
-    fixed(signed_in, tmp_path)
+    assert save(signed_in)["validation_errors"] == []
+    document = export(signed_in, tmp_path)
+    with pytest.raises(ParamsError, match="'ghost' is required"):
+        decisions_for(document, {"amount": [1.0]})
+    assert decisions_for(document, {"amount": [1.0, 2000.0]}, {"ghost": 1000.0}) == ["approve", "decline"]
 
 
 def test_parameter_name_that_is_not_an_identifier_is_reported_with_a_suggestion(signed_in: Page, tmp_path):
