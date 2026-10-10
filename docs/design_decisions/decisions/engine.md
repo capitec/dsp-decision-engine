@@ -2,15 +2,6 @@
 
 Why the engine (IR, wiring, runners, kernels, compile cache, fallback, `run`'s record path, `each`) is shaped the way it is; read it before changing any of those or proposing an alternative.
 
-## Proposed: the flexible engine rework
-
-Proposed 2026-10-09, being built on branch `engine/flexible-rework`; each bullet becomes a section below when its
-phase lands. The design, alternatives and plan: [flexible engine rework](../../design_specs/2026-10-09_flexible_engine_rework/README.md).
-
-- Proposed: `run` on a `LazyFrame` takes the polars engine (until then it is collected and run as a frame).
-- Proposed: the polars engine is lazy and starts as a host (the fused pipeline inside `map_batches`, split only at frame steps); polars-native step bodies are built only if a measurement against the host justifies them.
-- Proposed: a Spark engine comes last, outside `decikit/`, and shapes nothing else.
-
 ## An engine is a registry document
 
 - `Engine` is a `BaseRegistryModule` root (group `engines`): a frozen settings document (`params_validation`, and `strict_compile` on `NumbaEngine`) named by its `type` tag. `InterpretedEngine`, `SteppedEngine` and `FusedEngine` are the three built-in tags; `compile` and `session` take a tag or an instance, `RequestHandler` holds an instance (a tag is resolved once), and serving reads `DECIKIT_API__ENGINE__TYPE` plus the engine's own fields. `Engine.bind(step)` replaces `Engine().bind(step, mode)`; an unknown tag is a `RegistryError` with a did-you-mean. Not: a `RUNNERS` dict with a `register_mode`.
@@ -25,6 +16,22 @@ phase lands. The design, alternatives and plan: [flexible engine rework](../../d
 - The name `decikit.engine` shadows a common variable name when imported bare; accepted, since `use_engine` reads worse in the guide.
 - `run` binds on every call and caches no executable: a cached one would keep a step's compiled globals after a notebook edits them. The cost is in [known limitations](../known-limitations.md).
 - See: [engine](../../architecture/engine/index.md), [flexible engine rework](../../design_specs/2026-10-09_flexible_engine_rework/03-design-choices.md) (choice 11)
+
+## The polars engine hosts the fused engine; it translates nothing
+
+- `PolarsEngine` (`type: "polars"`, `segments: FusedEngine`) turns a pipeline into a `LazyFrame` plan: the root sequence's top-level children are cut at frame calls, each run of row-local children is bound as an ordinary fused `Executable` and handed to polars as `map_batches(streamable=True)`, each frame step as a `streamable=False` node, and a final `select` makes the columns equal fused's. `run(LazyFrame)` returns a `LazyFrame`, `run(DataFrame)` collects, `run(dict)` runs the whole pipeline fused. `Step.run(lazy_frame)` with no engine named takes it whatever the default (a `PolarsEngine` default keeps its settings). Not: native polars expressions per step (`impl("polars")`), which P5 measured and dropped.
+- Why: it streams, runs larger-than-memory batches and composes with the caller's own plan, with answers equal to fused by construction, because every step still runs on the numba engine. Hand-written polars beat it only on the in-memory flagship at 50M rows (0.22 s against 0.93 s); streamed, the host is within 10-26% of hand-written polars and both are near a plain scan-to-sink copy; on the 127-node tree the host is at least as fast, and the hand-written `when` chain ran out of memory streamed at 50M; on ten `str`/`date` steps a `frame_step` with polars expressions closes 82-93% of the gap with no new machinery.
+- Segments emit only what a later segment or the final select reads; a streamable segment splits where a step rewrites a name an earlier step of it read; each segment declares every pipeline name as an input. Not: emitting every written name (09's sketch), which materialised every column and sent untyped intermediates to polars, and sub-wiring raised `WiringError` in two shapes the full pipeline accepts.
+- Refused with `EngineError`, never answered differently: `trace=`, `session`, a qualified output, a frame step that cannot run on zero rows (the schema comes from a zero-row run), and an output with no polars dtype (an untyped `dict`, a bare `list`, `Any`, an `each`'s gathered list) crossing a segment boundary or reaching the final select, naming what to annotate. Not: inferring the dtype from the first batch, which makes the schema depend on the data. 5 of the 12 examples are refused this way.
+- Every `map_batches` node turns predicate, projection and slice pushdown off explicitly: polars 1.30 and earlier (checked: 1.0, 1.20, 1.30) pushed a filter on the result below a frame step by default, which changed what the frame step saw.
+- `params_validation` must equal `segments.params_validation`: the segments do all the validation, so a mismatch would be silently ignored. `run(DataFrame)` keeps a plain `collect()`; multi-core is `run(df.lazy()).collect(engine="streaming")` (3.7x faster at 50M rows, 2.8x slower at 1M on the flagship), documented rather than picked by a size heuristic.
+- Cost: every boundary is a UDF polars cannot optimise through; each `run` binds a zero-row run of the whole pipeline (shadowing, params, final columns) and one per segment for its schema; warnings come once for the pipeline and once for the segment; a frame step materialises the whole frame. Memory: the host adds 0.1-0.3 GB over plain polars streaming (50M rows at 4 threads: 0.56 GB against a 0.8 GB frame).
+- See: [polars engine](../../architecture/engine/polars.md), [experiment](../experiments/polars-host-vs-native.md), [known limitations](../known-limitations.md), [flexible engine rework](../../design_specs/2026-10-09_flexible_engine_rework/09-polars-host-design.md)
+
+## No Spark engine yet
+
+- The registry's `decikit.engines` entry point is the seam (`tests/registry/test_engines.py` loads an engine through it); a Spark engine would live in its own package, reuse the segmenter with `mapInArrow` boundaries and refuse frame steps. Not built: pyspark is not a dependency and the package is not trivial.
+- See: [flexible engine rework](../../design_specs/2026-10-09_flexible_engine_rework/07-implementation-plan.md) (P7)
 
 ## Pipeline structure lives in Python
 
