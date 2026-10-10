@@ -28,6 +28,14 @@ describe('flat-rule errors from decikit', () => {
     expect(parseFlatRuleValidationErrors(flat.valid)).toEqual([]);
   });
 
+  it('a node carrying UI-only fields is accepted, but a parameter reference carrying one is rejected on the reference', () => {
+    const parsed = parseFlatRuleValidationErrors(flat.ui_only_node_fields);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0].ruleIndex).toBe(1);
+    expect(parsed[0].conditionPath).toEqual(['rule', 'condition', 'threshold']);
+    expect(parsed[0].message).toBe('Extra inputs are not permitted');
+  });
+
   it('an empty composite points at the rule that holds it', () => {
     const [err] = parseFlatRuleValidationErrors(flat.empty_composite);
     expect(err.ruleIndex).toBe(1);
