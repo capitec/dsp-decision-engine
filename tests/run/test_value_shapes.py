@@ -5,6 +5,7 @@ import warnings
 from datetime import date, datetime, time
 from typing import TypedDict
 
+import numpy as np
 import polars as pl
 import pytest
 
@@ -359,3 +360,29 @@ def test_an_all_null_output_keeps_its_declared_dtype_in_every_mode(annotation, d
     nothing.__annotations__["return"] = annotation | None
     assert assert_equivalent(flow(nothing, name="p"), FRAME)["nothing"].dtype == dtype
     assert assert_equivalent(flow(nothing, name="p"), FRAME.clear())["nothing"].dtype == dtype
+
+
+def as_int64(x: float) -> np.int64:
+    return np.int64(x)
+
+
+def as_int32(x: float) -> np.int32:
+    return np.int32(x)
+
+
+def as_float32(x: float) -> np.float32:
+    return np.float32(x * 1.5)
+
+
+def as_bool(x: float) -> np.bool_ | None:
+    return np.bool_(x > 1.0)
+
+
+NUMPY_OUTPUTS = [(as_int64, pl.Int64, [1, 2]), (as_int32, pl.Int64, [1, 2]), (as_float32, pl.Float64, [1.5, 3.0]),
+                 (as_bool, pl.Boolean, [False, True])]
+
+
+@pytest.mark.parametrize("fn, dtype, expected", NUMPY_OUTPUTS, ids=[fn.__name__ for fn, _, _ in NUMPY_OUTPUTS])
+def test_a_numpy_number_output_is_the_python_number_it_holds_in_every_mode(fn, dtype, expected):
+    out = assert_equivalent(flow(fn, name="p"), pl.DataFrame({"x": [1.0, 2.0]}))[fn.__name__]
+    assert (out.dtype, out.to_list()) == (dtype, expected)
