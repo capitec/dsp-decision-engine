@@ -4,7 +4,7 @@ import { subscribeWithSelector } from 'zustand/middleware';
 import { PrioritizedTree, RuleTableRow, FlatRuleProjectDetail, RuleCondition } from './types';
 import { flatRuleApi } from './api';
 import { normalizeDtypes } from '@/utils/normalize-dtypes';
-import { parseFlatRuleValidationErrors, groupErrorsByRule, getSectionErrors, formatRuleErrors } from '@/utils/flat-rule-validation-parser';
+import { parseFlatRuleValidationErrors, groupErrorsByRule, getSectionErrors, formatRuleErrors, type ParsedFlatRuleError } from '@/utils/flat-rule-validation-parser';
 import { subscribeToStoreActivity } from '@/lib/background-token-refresh';
 import { toast } from '@/hooks/use-toast';
 import { apiErrorMessage } from '@/lib/utils';
@@ -76,11 +76,29 @@ interface FlatRuleState {
   updateProjectData: (updates: any) => void;
 }
 
+function containsNode(node: any, id: string): boolean {
+  if (!node || typeof node !== 'object') return false;
+  if (node.id === id) return true;
+  return [node.then, node.otherwise, ...(node.branches ?? [])].some(child => containsNode(child, id));
+}
+
+// decikit reports a document that is valid but cannot be built with no location: the message names the node
+// ("tree node '<id>': ...") or the output, so place it on that rule or on the output section.
+function locateBuildError(error: ParsedFlatRuleError, trees: PrioritizedTree[]): ParsedFlatRuleError {
+  if (error.type !== 'build_error') return error;
+  const nodeId = /^tree node '([^']+)': /.exec(error.message)?.[1];
+  const ruleIndex = nodeId ? trees.findIndex(tree => containsNode(tree.rootNode, nodeId)) : -1;
+  if (ruleIndex >= 0) {
+    return { ...error, ruleIndex, section: 'rule', conditionPath: [], message: error.message.replace(/^tree node '[^']+': /, '') };
+  }
+  return /\boutput\b/.test(error.message) ? { ...error, section: 'output' } : error;
+}
+
 // Map decikit's validation_errors onto per-rule highlighting and section flags
 function buildErrorState(rawErrors: any[] | undefined, trees: PrioritizedTree[]) {
   const ruleErrors = new Map<string, string>();
   const validationErrors = new Map<number, any[]>();
-  const parsed = parseFlatRuleValidationErrors(rawErrors ?? []);
+  const parsed = parseFlatRuleValidationErrors(rawErrors ?? []).map(e => locateBuildError(e, trees));
   groupErrorsByRule(parsed).forEach((errors, ruleIndex) => {
     if (ruleIndex < trees.length) {
       ruleErrors.set(trees[ruleIndex].id, formatRuleErrors(errors));

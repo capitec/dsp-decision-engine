@@ -146,7 +146,6 @@ def test_condition_without_a_feature_is_reported_and_fixed_by_choosing_one(signe
     fixed(signed_in, tmp_path)
 
 
-@pytest.mark.xfail(strict=True, reason="the error has no rule path and names a node id, so nothing is marked after Save")
 def test_leaf_pointing_past_the_output_records_is_reported_on_the_rule(signed_in: Page):
     open_doc(signed_in, {"type": "leaf", "result_idx": 9})
 
@@ -161,7 +160,6 @@ def test_leaf_pointing_past_the_output_records_refuses_the_export_with_the_reaso
     refused_export(signed_in, "result_idx 9 is not a row of the output")
 
 
-@pytest.mark.xfail(strict=True, reason="deleting the last output column is reported nowhere in the editor after Save")
 def test_no_output_columns_is_reported_on_the_outputs_tab(signed_in: Page, tmp_path):
     open_doc(signed_in)
     open_tab(signed_in, "Configure Outputs")
