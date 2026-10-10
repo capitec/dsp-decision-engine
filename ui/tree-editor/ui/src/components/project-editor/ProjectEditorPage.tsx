@@ -342,7 +342,7 @@ const ProjectEditorContent: React.FC<{ onGoBack: () => void }> = ({ onGoBack }) 
           {/* Enhanced Kebab Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="flex-shrink-0">
+              <Button variant="outline" size="sm" className="flex-shrink-0" data-testid="project-menu">
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>

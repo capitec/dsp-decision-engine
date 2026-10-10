@@ -42,7 +42,7 @@ export const Sidebar: React.FC<SidebarProps> = () => {
   }, [edges, selectedEdgeId]);
 
   return (
-    <div className="w-80 bg-gray-50 border-l border-gray-200 h-full overflow-y-auto p-4 space-y-4">
+    <div className="w-80 bg-gray-50 border-l border-gray-200 h-full overflow-y-auto p-4 space-y-4" data-testid="editor-sidebar">
       {selectedNode ? (
         <NodeSelectionPanel node={selectedNode} />
       ) : selectedEdge ? (

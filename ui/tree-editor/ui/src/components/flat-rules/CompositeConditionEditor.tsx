@@ -62,7 +62,7 @@ export const CompositeConditionEditor: React.FC<CompositeConditionEditorProps> =
         const errorMessage = getErrorAtPath(conditionErrors, currentPath);
 
         return (
-        <div key={idx} className={`p-2 rounded ${bgColor} space-y-2 ${hasError ? 'ring-2 ring-red-500 bg-red-50' : ''}`}>
+        <div key={idx} data-testid="composite-condition" className={`p-2 rounded ${bgColor} space-y-2 ${hasError ? 'ring-2 ring-red-500 bg-red-50' : ''}`}>
           {/* Error indicator */}
           {hasError && (
             <div className="flex items-center gap-1.5 text-red-600 text-xs bg-red-100 px-2 py-1 rounded">

@@ -16,9 +16,9 @@ def rule_card(page: Page, rule: int = 0) -> Locator:
 
 
 def add_parameter(page: Page, name: str, dtype: str = "Float64", value: str | None = None) -> None:
-    """Manage Parameters -> new row -> name, type, default -> Add -> Save Changes."""
+    """Manage Parameters -> new row -> name, type, default -> Add -> Save Changes (flat-rule and node editors)."""
     page.get_by_role("button", name=re.compile(r"^Manage Parameters")).click()
-    dialog = page.get_by_role("dialog", name="Manage Parameters")
+    dialog = page.get_by_role("dialog")
     first = dialog.get_by_role("button", name="Add Your First Parameter")
     (first if first.is_visible() else dialog.get_by_role("button", name="Add Parameter")).click()
     row = dialog.locator("tbody tr").filter(has=page.get_by_placeholder("parameter_name"))
