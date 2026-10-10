@@ -17,12 +17,12 @@ BAD_FILES = {
     "txt_file": ("notes.txt", '{"type": "prioritized_flat_rule"}', "Only JSON files are supported"),
     "invalid_json": ("tree.json", '{"type": "tree", ', "Invalid JSON"),
     "empty_file": ("tree.json", "", "Invalid JSON"),
-    "not_a_tree": ("tree.json", '{"a": 1}', ""),
-    "v1_tree": ("tree.json", '{"type": "v1-tree", "root": {}}', ""),
-    "json_array": ("tree.json", "[1, 2, 3]", ""),
-    "json_null": ("tree.json", "null", ""),
-    "json_string": ("tree.json", '"just text"', ""),
-    "binary_junk": ("tree.json", bytes([0xFF, 0xFE, 0x00, 0x80, 0x81]), ""),
+    "not_a_tree": ("tree.json", '{"a": 1}', "not a tree or flat-rule document"),
+    "v1_tree": ("tree.json", '{"type": "v1-tree", "root": {}}', "v1 tree documents are no longer supported"),
+    "json_array": ("tree.json", "[1, 2, 3]", "must be a JSON object"),
+    "json_null": ("tree.json", "null", "must be a JSON object"),
+    "json_string": ("tree.json", '"just text"', "must be a JSON object"),
+    "binary_junk": ("tree.json", bytes([0xFF, 0xFE, 0x00, 0x80, 0x81]), "Failed to read file"),
 }
 LARGE_RULES = 521
 
@@ -35,21 +35,14 @@ def canonical(document: dict) -> str:
     return json.dumps({k: v for k, v in document.items() if k != "metadata"}, sort_keys=True)
 
 
-NOT_A_TREE_ACCEPTED = "a JSON object that is not a project ({\"a\": 1}) is imported as an empty tree project instead of being refused"
-
-
-@pytest.mark.parametrize("filename,content,message", [
-    pytest.param(*case, id=name, marks=pytest.mark.xfail(strict=True, reason=NOT_A_TREE_ACCEPTED) if name == "not_a_tree" else ())
-    for name, case in BAD_FILES.items()
-])
+@pytest.mark.parametrize("filename,content,message", BAD_FILES.values(), ids=BAD_FILES.keys())
 def test_a_file_that_is_not_a_project_is_refused_in_the_dialog_and_creates_nothing(signed_in: Page, filename, content, message):
     open_projects(signed_in)
 
     dialog = import_project(signed_in, filename, content, submit=not filename.endswith(".txt"))  # a .txt file is refused on choosing it
 
     expect(dialog.locator("p.text-red-700")).to_be_visible()
-    assert re.search(message, error_text(dialog))
-    assert error_text(dialog).strip() not in ("", "[object Object]")
+    assert message in error_text(dialog)
     expect(dialog).to_be_visible()
     assert list_projects(signed_in)["total"] == 0
     assert "/projects" in signed_in.url and "/flat-rules/" not in signed_in.url
