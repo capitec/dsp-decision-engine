@@ -301,3 +301,30 @@ async def test_a_client_joining_while_the_last_other_client_leaves_still_gets_ne
     await asyncio.gather(*[r.pumping for r in hub.rooms.values() if r.pumping])
 
     assert second.ws.versions() == [2]
+
+
+@db
+@pytest.mark.asyncio
+async def test_a_version_the_fan_out_failed_to_fetch_still_reaches_a_connected_client(project):
+    from dsp_decikit.services.live_hub import Client, Hub
+    from dsp_decikit.services.live_sync import apply_message
+    project_id, _ = project
+    hub = Hub()
+    client = Client(Socket(), "c1")
+    await hub.join(project_id, client, 1)
+    fetch, failures = hub._send_rows, [ConnectionError("no connection from the pool")]
+
+    async def flaky(*args):
+        if failures:
+            raise failures.pop()
+        await fetch(*args)
+
+    hub._send_rows = flaky
+    await apply_message(project_id, "c2", "m1", 1, [name("a", "Fetched later")])
+    hub.pump_soon(project_id)  # the only notification this version gets
+
+    for _ in range(50):
+        if client.ws.versions():
+            break
+        await asyncio.sleep(0.1)
+    assert client.ws.versions() == [2]
