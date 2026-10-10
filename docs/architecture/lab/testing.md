@@ -1,19 +1,21 @@
 # Testing helpers
 
-`decikit.lab.testing` is three helpers for a project's own test suite. `assert_equivalent` proves that the three
-execution modes, single-record scoring and the debugger all give the same answer. `corpus` builds the boundary
+`decikit.lab.testing` is three helpers for a project's own test suite. `assert_equivalent` proves that every
+engine (the three numba engines and the polars engine), single-record scoring and the debugger all give the same
+answer. `corpus` builds the boundary
 inputs worth proving it on. `no_recompile` proves that a block of code compiled nothing. The runtime checks
 `crash_probe` and `mode_divergence` are built from the first two (see [Checks](checks.md)).
 
 | File | What it holds |
 |---|---|
-| `decikit/lab/testing/__init__.py` | `MODES`, `assert_equivalent`, `corpus`, `no_recompile` |
-| `decikit/lab/testing/_equivalence.py` | `MODES = ("interpreted", "stepped", "fused")` and `assert_equivalent` |
+| `decikit/lab/testing/__init__.py` | `assert_equivalent`, `corpus`, `no_recompile` |
+| `decikit/lab/testing/_equivalence.py` | `assert_equivalent`; the default engines come from `Engine.registered()` |
 | `decikit/lab/testing/_corpus.py` | `corpus` and its value tables (`TIES`, `LARGE_RAW`, `INT_NEAR_2_53`) |
 | `decikit/lab/testing/_recompile.py` | `no_recompile`, a context manager over numba's compile events |
 
-The package imports nothing else from the lab. It needs the engine (`Engine`), the debugger (`decikit.debug.Session`),
-the wiring `resolve`, and numba's event API. The user-level walkthrough is in the
+The package imports nothing else from the lab, and nothing from `decikit._engine`. It needs the engines (`Engine`
+and `NumbaEngine`, from `decikit`), the debugger (`decikit.debug.Session`), `decikit.ir` to find frame steps, and
+numba's event API. The user-level walkthrough is in the
 [debugging and testing guide](../../guides/debugging-and-testing.md) and the
 [diff and equivalence guide](../../guides/diff-and-equivalence.md).
 
@@ -32,40 +34,50 @@ The serving path also promises that retuning a parameter value never recompiles 
 ## `assert_equivalent`
 
 ```python
-assert_equivalent(step, frame, params=None, modes=MODES, script=None) -> pl.DataFrame
+assert_equivalent(step, frame, params=None, engines=None, script=None) -> pl.DataFrame
 ```
 
 <div class="diagram" markdown>
-![A grid with a row per mode and a column per comparison: run against the first mode's output, score of every record against this mode's run, a session resumed to the end against this mode's run, and a scripted session against the first mode's scripted session](../../assets/diagrams/lab-equivalence-matrix.svg)
+![A grid with a row per engine and a column per comparison: run against the first engine's output, a record run of every row against this engine's run, a session resumed to the end against this engine's run, and a scripted session against the first engine's scripted session](../../assets/diagrams/lab-equivalence-matrix.svg)
 
-*Green cells are the references the other modes are held to. Every grey cell is an exact comparison.*
+*Green cells are the references the other engines are held to. Every grey cell is an exact comparison. The polars engine has no session columns.*
 </div>
 
-For each mode in `modes`, in order, it:
+`engines` holds tags or `Engine` instances. `None` means every built-in engine, read from `Engine.registered()`
+(the classes defined in `decikit`), in registration order: interpreted, stepped, fused, polars. Interpreted, the
+plainest, is the reference. For each engine, in order, it:
 
-1. binds the step with `Engine.resolve(mode)().bind(step)`;
-2. runs `exe.run(frame, params)`. The first mode's output becomes `expected`, and every later mode's output must
-   equal it;
-3. calls `exe.run(record, params)` for every row of `frame` and compares the dict with the same row of this mode's
-   run output (same keys in the same order, equal values);
-4. opens `exe.session(frame, params)`, resumes it until `session.finished`, and compares `session.output()` with this
-   mode's run output;
-5. with `script`, opens a second session, calls `script(session)`, resumes it to the end, and compares the result
-   with the first mode's scripted result.
+1. binds the step: `Engine.resolve(tag)().bind(step)` for a tag, `engine.bind(step)` for an instance;
+2. runs the frame: `exe.run(frame, params)` on a numba engine, `exe.run(frame.lazy(), params).collect()` on any
+   other. The first engine's output becomes `expected`, and every later engine's output must equal it;
+3. calls `exe.run(record, params)` for every row of `frame` and compares the dict with the same row of this
+   engine's frame output (same keys in the same order, equal values). When the pipeline has a frame step, the dict
+   is compared with this engine's run of a one-row frame of that record instead: a cross-row step (a rank, an
+   allocation) legitimately answers one record differently from a batch;
+4. on a numba engine (a `NumbaEngine`), opens `exe.session(frame, params)`, resumes it until `session.finished`,
+   and compares `session.output()` with this engine's frame output;
+5. on a numba engine with `script`, opens a second session, calls `script(session)`, resumes it to the end, and
+   compares the result with the first numba engine's scripted result.
 
-It returns `expected`.
+A later engine that refuses the pipeline, by raising `EngineError` while binding or running it (the polars engine
+and an untyped `dict` output, say), is skipped with a `UserWarning` naming the engine and the reason. It returns
+`expected`.
 
 ```mermaid
 flowchart TD
-  A["for mode in modes"]:::engine --> B["exe = Engine.resolve(mode)().bind(step)"]:::engine
-  B --> C{"exe.run(frame, params) raises?"}:::neutral
-  C -- "yes, first mode" --> E1["re-raise the error as is"]:::error
-  C -- "yes, later mode" --> E2["AssertionError: run() raised ...<br/>in X mode but not in Y"]:::error
-  C -- no --> D["out == expected<br/>(the first mode sets expected)"]:::tooling
-  D --> F["run(row) == row of out<br/>for every row"]:::tooling
-  F --> G["session resumed to end<br/>output() == out"]:::tooling
+  A["for engine in engines"]:::engine --> B["exe = engine.bind(step)"]:::engine
+  B --> C{"run(frame) raises?"}:::neutral
+  C -- "yes, first engine" --> E1["re-raise the error as is"]:::error
+  C -- "EngineError, later engine" --> W["warn: skipped, refuses this pipeline"]:::neutral
+  C -- "other, later engine" --> E2["AssertionError: run() raised ...<br/>on the X engine but not on Y"]:::error
+  C -- no --> D["out == expected<br/>(the first engine sets expected)"]:::tooling
+  D --> F["run(record) == its row of out,<br/>or of a one-row run with a frame step"]:::tooling
+  F --> N{"numba engine?"}:::neutral
+  N -- no --> A
+  W --> A
+  N -- yes --> G["session resumed to end<br/>output() == out"]:::tooling
   G --> H{"script given?"}:::neutral
-  H -- yes --> I["script(new session), resume to end<br/>== first mode's scripted frame"]:::tooling
+  H -- yes --> I["script(new session), resume to end<br/>== first scripted frame"]:::tooling
   H -- no --> A
   I --> A
   classDef engine fill:#ccfbf1,stroke:#0d9488,color:#134e4a,stroke-width:1.5px;
@@ -79,26 +91,27 @@ flowchart TD
 Frames are compared with polars' `assert_frame_equal(check_exact=True)`: same column names in the same order, same
 dtypes, same values. NaN equals NaN; nothing else is approximate, so a float that differs in the last bit fails.
 Records are compared key by key with `==`, with NaN equal to NaN, after checking that the key lists match in order.
-Every failure is an `AssertionError` whose message starts with what was compared and in which mode:
+Every failure is an `AssertionError` whose message starts with what was compared and on which engine:
 
 | Prefix | Meaning |
 |---|---|
-| `run() in {mode} mode differs from {first}` | Two modes computed different frames |
-| `run() raised {error!r} in {mode} mode but not in {first}` | A later mode crashed where the first didn't |
-| `run(record) of row {i} in {mode} mode differs from run(frame)` | Single-record scoring disagrees with the batch run; the message names the key and both values |
-| `a session resumed to the end in {mode} mode differs from run()` | The debugger's output disagrees with the run |
-| `the scripted session in {mode} mode differs from {first}` | The same session script gave different frames in two modes |
+| `run() on the {engine} engine differs from {first}` | Two engines computed different frames |
+| `run() raised {error!r} on the {engine} engine but not on {first}` | A later engine crashed where the first didn't |
+| `run(record) of row {i} on the {engine} engine differs from run(frame)` | Single-record scoring disagrees with the batch run; the message names the key and both values (`from a one-row run(frame)` when the pipeline has a frame step) |
+| `a session resumed to the end on the {engine} engine differs from run()` | The debugger's output disagrees with the run |
+| `the scripted session on the {engine} engine differs from {first}` | The same session script gave different frames on two engines |
 
 ### Errors
 
-An error in the first mode propagates unchanged. Identical crashes in every mode are not agreement, because
+An error on the first engine propagates unchanged. Identical crashes on every engine are not agreement, because
 nothing was compared:
 
 ```text
 RuntimeError: deliberately broken in every mode
 ```
 
-A crash only in a later mode is a divergence like any other. A `frame` that isn't a `pl.DataFrame` is refused up
+A crash only on a later engine is a divergence like any other; an `EngineError` there is a refusal, skipped with
+a warning. A `frame` that isn't a `pl.DataFrame` is refused up
 front with `TypeError: assert_equivalent needs a polars DataFrame, not dict`.
 
 ### A real divergence
@@ -125,7 +138,7 @@ assert_equivalent(flow(bumped, name="fee"), pl.DataFrame({"x": [1.0, 5.0]}))
 ```
 
 ```text
-AssertionError: run() in stepped mode differs from interpreted: DataFrames are different (value mismatch for column "bumped")
+AssertionError: run() on the stepped engine differs from interpreted: DataFrames are different (value mismatch for column "bumped")
 [left]: shape: (2,)
 Series: 'bumped' [f64]
 [
@@ -140,9 +153,9 @@ Series: 'bumped' [f64]
 ]
 ```
 
-`[left]` is the mode being checked, `[right]` is `expected` from the first mode. The comparison stops at the first
-difference, so the fused mode isn't reached. The builtin `round` does not diverge this way: `round(x, 2)` over
-`[2.675, 0.125]` passes in all three modes because kernels implement CPython's rounding.
+`[left]` is the engine being checked, `[right]` is `expected` from the first engine. The comparison stops at the
+first difference, so the fused engine isn't reached. The builtin `round` does not diverge this way: `round(x, 2)`
+over `[2.675, 0.125]` passes on every engine because kernels implement CPython's rounding.
 
 ### Scripted sessions
 
@@ -159,8 +172,9 @@ out = assert_equivalent(pipeline, df, script=override_debt)
 print(out["approved"].to_list())   # [True, False], the unscripted run
 ```
 
-A script can only touch values every mode stores. A fused session pauses before the whole fused kernel and keeps
-only the kernel's boundary values, so setting a value computed inside the kernel fails in the fused mode with the
+Scripts run on the numba engines only; the polars engine has no session. A script can only touch values every
+numba engine stores. A fused session pauses before the whole fused kernel and keeps
+only the kernel's boundary values, so setting a value computed inside the kernel fails on the fused engine with the
 debugger's own error:
 
 ```text
@@ -169,11 +183,12 @@ KeyError: "'affordability' is computed inside the fused kernel ['loan/affordabil
 
 A breakpoint on a later step of a fused kernel, followed by `set` on that step's input, also differs by design: the
 set lands before the kernel's earlier steps run. `tests/testing/test_testing.py` pins this as an expected failure.
-Narrow `modes` to `("interpreted", "stepped")` for scripts that need per-step stops.
+Narrow `engines` to `("interpreted", "stepped")` for scripts that need per-step stops.
 
 ### Cost
 
-Each mode binds once, runs once, makes one `run(record)` call per row, and runs one or two sessions. The per-row `run(record)`
+Each engine binds once, runs once, makes one `run(record)` call per row (and, with a frame step, one one-row
+run per row), and each numba engine runs one or two sessions. The per-row `run(record)`
 calls dominate on a large frame, so feed it small, sharp frames: `corpus` adds at most ten rows per input.
 
 ## `corpus`
@@ -328,10 +343,13 @@ opt-in because they compile and run the flow. Details and real output are on the
 
 ## What the tests pin
 
-`tests/testing/test_testing.py` holds the behaviour: `assert_equivalent` returns the first mode's output; passes over
-every corpus frame; refuses a non-frame; propagates an error that every mode raises; names the mode and both values
-on a divergence; names the row when `run(record)` disagrees; catches a session that disagrees with `run`; agrees on a
-scripted break, set and resume; catches a scripted session that differs between modes; accepts narrowed `modes`.
+`tests/testing/test_testing.py` holds the behaviour: `assert_equivalent` returns the first engine's output; passes
+over every corpus frame; refuses a non-frame; propagates an error that every engine raises; names the engine and
+both values on a divergence; names the row when `run(record)` disagrees; catches a session that disagrees with
+`run`; agrees on a scripted break, set and resume; catches a scripted session that differs between engines; accepts
+narrowed `engines`, tags or instances. `tests/testing/test_equivalence_engines.py` pins the polars engine running by
+default, a later engine raising as a divergence, a refusal skipped with a warning, a refusal by the first engine
+propagating, and a frame-step pipeline compared one row at a time.
 The corpus tests pin the shared schema and row counts, per-input typing, single-column moves, the bool and int
 edges, nulls only for non-required inputs, rounding ties on every float, decimal columns with large amounts, and a
 step with no inputs. The `no_recompile` tests pin a value-only retune passing in stepped and fused modes, and a
@@ -341,5 +359,5 @@ closure compile failing.
 
 - [Checks](checks.md) for `crash_probe` and `mode_divergence`.
 - [Runners](../engine/runners.md) and [Debug](../engine/debug.md) for the modes and the session being compared.
-- [Diff](diff.md) for comparing two versions of a flow rather than two modes of one.
+- [Diff](diff.md) for comparing two versions of a flow rather than two engines on one.
 - The [debugging and testing guide](../../guides/debugging-and-testing.md) for using these in a test suite.

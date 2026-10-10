@@ -616,7 +616,7 @@ findings at all. `crash_probe` doesn't cover this case, because it runs over gen
 | Code | Alias | What it does | Severity |
 |---|---|---|---|
 | DCD501 | `crash_probe` | Binds the flow once and runs every frame of `testing.corpus(pipeline)` with `params`. Each exception is a finding at the flow root, naming the case frame | error |
-| DCD505 | `mode_divergence` | Calls `testing.assert_equivalent(pipeline, frame, params, modes)` for every corpus frame. An `AssertionError` is a finding; any other exception is ignored, since `crash_probe` reports crashes. `modes` is an option, default all three | error |
+| DCD505 | `mode_divergence` | Calls `testing.assert_equivalent(pipeline, frame, params, engines)` for every corpus frame. An `AssertionError` is a finding; any other exception is ignored, since `crash_probe` reports crashes. `engines` is an option (tags), default every built-in engine, polars included | error |
 
 Neither needs `data=`; both build their own inputs. Over a flow that divides by an unguarded `income`:
 
