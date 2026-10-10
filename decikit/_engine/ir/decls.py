@@ -93,7 +93,7 @@ def base_annotation(annotation: Any) -> Any:
 
 
 def _builtin(t: Any) -> Any:
-    # A kernel stores a number as float64, int64 or bool; a numpy number is stored the same in every mode.
+    # A kernel stores a number as float64, int64 or bool; a numpy number is stored the same by every engine.
     if isinstance(t, type) and issubclass(t, np.generic):
         return next((b for n, b in ((np.bool_, bool), (np.integer, int), (np.floating, float)) if issubclass(t, n)), t)
     return t
