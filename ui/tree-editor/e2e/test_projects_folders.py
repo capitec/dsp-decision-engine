@@ -23,7 +23,6 @@ from platform_ui import (
 from seed import create_folder, create_project, get_project
 from test_flat_rule_params import flat_document
 
-EXPORT_FAILS_ON_EMOJI = "exporting a project whose name has characters outside Latin-1 fails with HTTP 500: the file name goes unencoded into the Content-Disposition header"
 UNUSUAL_NAMES = {
     "quotes": "He said \"hi\" & 'bye'",
     "slashes": r"a/b\c..\d",
@@ -291,7 +290,6 @@ def test_a_slow_older_list_response_does_not_replace_the_newer_search_result(sig
     expect(project_card(signed_in, "Needle")).to_be_visible()
 
 
-@pytest.mark.xfail(strict=True, reason="a % typed in the search box is a wildcard: it matches every project")
 def test_search_for_a_percent_sign_matches_only_names_containing_one(signed_in: Page):
     create_project(signed_in, "Discount 50% off", flat_document())
     create_project(signed_in, "No symbols here", flat_document())
@@ -359,10 +357,7 @@ def test_unusual_folder_names_render_as_text_and_survive_reload(signed_in: Page,
     assert [f["name"] for f in signed_in.request.get("/api/v1/folders").json()] == [name]
 
 
-@pytest.mark.parametrize("name", [
-    pytest.param(name, id=key, marks=pytest.mark.xfail(strict=True, reason=EXPORT_FAILS_ON_EMOJI) if key == "emoji" else ())
-    for key, name in UNUSUAL_NAMES.items()
-])
+@pytest.mark.parametrize("name", list(UNUSUAL_NAMES.values()), ids=list(UNUSUAL_NAMES))
 def test_exporting_a_project_with_an_unusual_name_from_the_list_downloads_a_safe_file_name(signed_in: Page, name: str, tmp_path):
     document = flat_document()
     create_project(signed_in, name, document)
@@ -379,10 +374,7 @@ def test_exporting_a_project_with_an_unusual_name_from_the_list_downloads_a_safe
     assert json.loads(path.read_text())["type"] == document["type"]
 
 
-@pytest.mark.parametrize("name", [
-    pytest.param(name, id=key, marks=pytest.mark.xfail(strict=True, reason=EXPORT_FAILS_ON_EMOJI) if key == "emoji" else ())
-    for key, name in UNUSUAL_NAMES.items()
-])
+@pytest.mark.parametrize("name", list(UNUSUAL_NAMES.values()), ids=list(UNUSUAL_NAMES))
 def test_exporting_from_the_editor_a_project_with_an_unusual_name_downloads_a_safe_file_name(signed_in: Page, name: str, tmp_path):
     project = create_project(signed_in, name, flat_document())["id"]
     open_flat_rules(signed_in, project)

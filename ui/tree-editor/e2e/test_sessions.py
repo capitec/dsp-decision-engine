@@ -13,7 +13,6 @@ from test_flat_rule_params import flat_document
 from tree_ui import sign_in, sign_out
 
 EXPIRED_DIALOG = "Session Expired"
-SAVE_LOST_AFTER_REFRESH = "the Save that hit the expired session is not retried after the session is refreshed: the toast says 'Cannot construct a Request with a Request object that has already been used'"
 
 
 def refresh_session_through_the_popup(page: Page, email: str) -> None:
@@ -106,27 +105,6 @@ def test_an_idle_editor_notices_the_expired_session_by_itself(signed_in: Page):
     expect(signed_in.get_by_role("dialog").get_by_text(EXPIRED_DIALOG)).to_be_visible(timeout=20_000)
 
 
-@pytest.mark.parametrize("kind", ["flat", "tree"])
-def test_after_refreshing_the_session_the_edit_can_be_saved_again(signed_in: Page, email: str, kind: str):
-    project = open_with_edit(signed_in, kind)
-    signed_in.context.clear_cookies()
-    press_save(signed_in)
-    expect(signed_in.get_by_role("dialog").get_by_text(EXPIRED_DIALOG)).to_be_visible()
-
-    refresh_session_through_the_popup(signed_in, email)
-    expect(signed_in.get_by_role("dialog")).to_have_count(0)
-    if kind == "flat":
-        expect(signed_in.get_by_test_id("rule-card")).to_have_count(2)
-    else:
-        expect(signed_in.get_by_text("Unsaved changes")).to_be_visible()
-    if not edit_is_stored(signed_in, project, kind):
-        press_save(signed_in)
-        expect(toast(signed_in, "Project Saved")).to_be_visible()
-
-    assert edit_is_stored(signed_in, project, kind)
-
-
-@pytest.mark.xfail(strict=True, reason=SAVE_LOST_AFTER_REFRESH)
 @pytest.mark.parametrize("kind", ["flat", "tree"])
 def test_the_save_interrupted_by_the_expired_session_goes_through_after_the_refresh(signed_in: Page, email: str, kind: str):
     project = open_with_edit(signed_in, kind)

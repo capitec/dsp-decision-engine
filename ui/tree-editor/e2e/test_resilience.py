@@ -14,7 +14,6 @@ from test_flat_rule_params import flat_document
 
 SAVE_URL = re.compile(r"/api/v1/projects/[0-9a-f-]{36}$")
 NO_CONFLICT_DETECTION = "no conflict detection: the second tab's save replaces the first tab's saved edit without a warning"
-DIRTY_FLAG_CLEARED = "an edit made while a save is in flight is neither stored nor flagged: the save's reply clears 'Unsaved changes'"
 
 
 def on_saves(page: Page, handler) -> None:
@@ -101,7 +100,6 @@ def test_a_slow_save_shows_progress_and_repeated_clicks_send_one_request(signed_
     assert edit_is_stored(signed_in, project, kind)
 
 
-@pytest.mark.xfail(strict=True, reason=DIRTY_FLAG_CLEARED)
 def test_an_edit_made_while_a_save_is_in_flight_is_not_reported_as_saved(signed_in: Page):
     project = node_ui.open_tree(signed_in, node_ui.loan_document(), "In flight")
     node_ui.nudge(signed_in, "root")
