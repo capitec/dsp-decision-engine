@@ -49,7 +49,7 @@ class RealTree:
 
 
 def tree_files() -> set[Path]:
-    """Every JSON file in the repo that `TreeConfig.load` accepts as it is or wrapped (dependencies and builds aside)."""
+    """Every JSON file in the repo `TreeConfig.load` accepts as it is or wrapped (dependencies and builds aside)."""
     found = set()
     for folder, subfolders, names in os.walk(REPO):
         subfolders[:] = [d for d in subfolders if d not in ("node_modules", "build", "dist") and not d.startswith(".")]
