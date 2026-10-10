@@ -89,7 +89,8 @@ def test_compiled_kernels_give_the_interpreted_answers():
     inputs = {"age": age, "income": DF["income"].to_numpy()}
     valid = {"age": np.array([a is not None for a in AGE])}
     flat = {f"{p}/{node}": v for p, nodes in RETUNE.items() for node, v in nodes.items()}
-    for params, frame in (({}, sc.run(DF)), (flat, sc.run(DF, params=RETUNE))):
+    interpreted = sc.compile("interpreted")
+    for params, frame in (({}, interpreted.run(DF)), (flat, interpreted.run(DF, params=RETUNE))):
         units, out = _run_compiled(plan, inputs, valid, params)
         assert all(isinstance(u, Kernel) for u in units.values())
         assert out == {k: frame[k].to_list() for k in out}

@@ -45,7 +45,7 @@ def test_every_mode_gives_the_flagship_answer(bind):
     assert out["cap_by_income_band"].to_list() == [60.0, 48.0, 60.0, 48.0]
 
 
-def test_step_run_is_the_interpreted_engine():
+def test_step_run_gives_the_interpreted_engines_answer():
     assert pipeline.run(FRAME).equals(InterpretedEngine().bind(pipeline).run(FRAME))
 
 

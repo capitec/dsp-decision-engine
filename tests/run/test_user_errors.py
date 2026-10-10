@@ -49,7 +49,7 @@ def test_an_error_in_a_step_keeps_its_type_and_names_the_step(mode):
 def test_interpreted_mode_also_names_the_row_counted_in_the_input_frame():
     guarded = branch(is_big, zero, ratio, modifies=["ratio"], name="b")   # rows 0 and 2 take `ratio`
     with pytest.raises(ZeroDivisionError) as err:
-        flow(guarded).run(FRAME)
+        flow(guarded).run(FRAME, engine="interpreted")   # a fused kernel can only name its steps, not the row
     assert "in step b/ratio, row 2" in notes(err)
 
 
@@ -100,7 +100,7 @@ def test_a_kernel_numba_cannot_type_runs_in_python(mode):
     # Each step compiles alone; the dict param is only seen when the kernel launches.
     pipeline = flow(ratio, scaled)
     df = FRAME.head(2)
-    expected = pipeline.run(df)
+    expected = pipeline.run(df, engine="interpreted")
     assert Engine.resolve(mode)().bind(pipeline).run(df).equals(expected)
 
 
