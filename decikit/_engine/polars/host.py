@@ -34,7 +34,8 @@ class PolarsExecutable:
 
     Each run of row-local steps between frame steps runs on the fused engine
     for every batch polars hands it; each frame step sees the whole frame.
-    `segments` lists them, with whether polars may stream each one.
+    `segments` lists them, with whether polars may stream each one, and
+    `engine` is the engine document that bound it.
 
     Example::
 
@@ -43,7 +44,8 @@ class PolarsExecutable:
         exe.segments   # ((("p/ratio", "p/affordable"), True), (("p/rank_income",), False), (("p/flag",), True))
     """
 
-    def __init__(self, step_or_ir: Any, bind: Callable[[IRNode], Executable]):
+    def __init__(self, step_or_ir: Any, bind: Callable[[IRNode], Executable], engine: Any = None):
+        self.engine = engine
         ir = step_or_ir if isinstance(step_or_ir, IRNode) else to_ir(step_or_ir)
         self.full = bind(ir)
         qualified = sorted(k for k in self.full.plan.outputs if "@" in k)
@@ -98,10 +100,9 @@ class PolarsExecutable:
         """
         if trace is not None:
             raise EngineError("the polars engine records no trace; run the pipeline on the numba engine "
-                              "(`Engine().bind(pipeline, 'fused')`) to write a TraceSink")
+                              "(`pipeline.compile('fused')`) to write a TraceSink")
         if isinstance(data, Mapping):
-            # The record path never builds a frame; `score` is today's name for it.
-            return self.full.score(data, params)
+            return self.full.run(data, params)
         if isinstance(data, pl.DataFrame):
             return self.run(data.lazy(), params).collect()
         if not isinstance(data, pl.LazyFrame):
@@ -138,7 +139,7 @@ class PolarsExecutable:
     def session(self, *args: Any, **kwargs: Any) -> Any:
         """Not supported: debug the same pipeline on the numba engine, which pauses at every node."""
         raise EngineError("the polars engine has no debug session; open one on the numba engine: "
-                          "`pipeline.session(df)` or `Engine().bind(pipeline, 'fused').session(df)`")
+                          "`pipeline.session(df)`, or `pipeline.session(df, engine='fused')`")
 
 
 def _groups(ir: IRNode) -> list[tuple[tuple[IRNode, ...], bool]]:

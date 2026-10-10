@@ -117,3 +117,7 @@ class FusedEngine(NumbaEngine):
 
     def _runner(self) -> Runner:
         return FusedRunner(strict=self.strict_compile)
+
+
+# Lazy, because its module imports this one.
+Engine.lazy({"polars": "decikit._engine.polars.engine"})
