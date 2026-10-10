@@ -1,0 +1,93 @@
+"""One tree's trip through the editor (import, open, save, reload, export), done once per test session."""
+
+import uuid
+from dataclasses import dataclass, field
+
+import pytest
+from playwright.sync_api import Page, expect
+
+import real_trees_ui as ui
+from real_trees import TREES, RealTree
+from seed import export_document, import_document
+from tree_ui import register
+
+
+@dataclass
+class RoundTrip:
+    imported: dict  # the import reply, with `validation_errors`
+    shown: int  # rule cards or nodes on screen once opened
+    saved: dict  # the save reply
+    saved_message: str  # the toast after Save
+    shown_after_reload: int
+    export: dict  # GET /export after the reload
+    page_errors: list = field(default_factory=list)
+
+
+SLOW = {"fraud-shadow", "generated-200"}
+# Trees that cannot make the trip at all, so every check of them fails for this reason.
+SINGLE_FLAT_RULE = "the editor refuses a one-rule `flat_rule` document decikit runs (400: project_type is 'tree' ...)"
+NO_POSITION = "a v3 node without `position` (optional in decikit) crashes the tree editor: reading 'x' of undefined"
+CANNOT_TRIP = {
+    "docs-trees-tables-scorecards-risk-2": SINGLE_FLAT_RULE,
+    "docs-trees-tables-scorecards-afford": SINGLE_FLAT_RULE,
+    "campaign-23": f"{NO_POSITION}; with positions its composite root crashes it too: reading 'logic_op' of undefined",
+    **dict.fromkeys(("bank-bureau-grade", "bank-collections-risk", "bank-fraud-screen", "docs-guide-risk",
+                     "docs-trees-loan-tree", "docs-trees-tables-scorecards-risk",
+                     "docs-debugging-and-testing-risk-tree"), NO_POSITION),
+}
+# Not run: opening them takes the browser past the 3 GB the e2e runs are capped at, which kills the whole run.
+TOO_BIG = {tree_id: "the flat-rule editor renders all 521 rules at once and runs out of memory (3 GB) opening them"
+           for tree_id in ("fraud-live", "generated-521")}
+
+
+def cases(known: dict[str, str]) -> list:
+    """Every tree as a test case, expected to fail where `known` (or CANNOT_TRIP) says why."""
+    known = {**CANNOT_TRIP, **known}
+    return [pytest.param(tree, id=tree.id, marks=[
+        *([pytest.mark.xfail(run=False, reason=TOO_BIG[tree.id])] if tree.id in TOO_BIG else []),
+        *([pytest.mark.xfail(strict=True, reason=known[tree.id])] if tree.id in known else []),
+        *([pytest.mark.slow] if tree.id in SLOW else []),
+    ]) for tree in TREES]
+
+
+# A tree that fails its trip fails every check of it with the same error, without trying again.
+_done: dict[str, RoundTrip | AssertionError] = {}
+
+
+def expected_items(tree: RealTree) -> int:
+    return len(tree.document["rules"] if tree.flat else tree.document["nodes"])
+
+
+def round_trip(page: Page, tree: RealTree) -> RoundTrip:
+    """A fresh user imports the tree's document as the import dialog does, opens it, saves, reloads and exports."""
+    if tree.id not in _done:
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        try:
+            _done[tree.id] = _trip(page, tree, errors)
+        except Exception as error:
+            _done[tree.id] = AssertionError(f"{tree.id} did not get through the editor: {error}\npage errors: {errors}")
+    if isinstance(_done[tree.id], AssertionError):
+        raise _done[tree.id]
+    return _done[tree.id]
+
+
+def _trip(page: Page, tree: RealTree, errors: list) -> RoundTrip:
+    page.on("dialog", lambda dialog: dialog.accept())
+    register(page, f"{uuid.uuid4().hex[:10]}@example.com")
+    imported = import_document(page, tree.id, tree.document, f"{tree.id}.json")
+    # The flat-rule editor renders every rule at once, so a big rule set takes a while to open; a loaded
+    # machine takes several seconds over a small one.
+    timeout = 15_000 + 250 * expected_items(tree)
+    page.set_default_timeout(timeout)
+    ui.open_project(page, imported["project_id"], tree.flat, timeout)
+    expect(ui.items(page, tree.flat).first).to_be_visible(timeout=timeout)
+    shown = ui.items(page, tree.flat).count()
+    saved = ui.save(page, tree.flat)
+    message = page.get_by_text("Project Saved").or_(page.get_by_text("Saved with validation issues")).first
+    message = message.inner_text(timeout=timeout)
+    page.reload()
+    ui.wait_until_loaded(page, tree.flat, timeout)
+    expect(ui.items(page, tree.flat).first).to_be_visible(timeout=timeout)
+    return RoundTrip(imported, shown, saved, message, ui.items(page, tree.flat).count(),
+                     export_document(page, imported["project_id"]), errors)
