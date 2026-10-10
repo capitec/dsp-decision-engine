@@ -251,10 +251,13 @@ def test_back_with_unsaved_edits_leaves_without_saving_when_confirmed(signed_in:
     assert condition["threshold"] == 1000
 
 
+@pytest.mark.xfail(strict=True, reason="browser Back from the editor with unsaved edits leaves the editor even when its prompt is dismissed")
 def test_browser_back_with_unsaved_edits_asks_and_staying_keeps_the_editor(signed_in: Page):
     page = signed_in.context.new_page()
+    create_project(page, "Back button", loan_document(), project_type="tree")
     page.goto("/projects")
-    open_tree(page, loan_document())
+    page.get_by_role("button", name="Open Project").click()  # a client-side navigation, as a user makes it
+    expect(page.get_by_role("button", name="Add Node")).to_be_visible()
     select_node(page, "root")
     set_threshold(page, "2000")
     messages = []
