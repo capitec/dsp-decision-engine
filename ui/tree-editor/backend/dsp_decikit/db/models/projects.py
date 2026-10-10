@@ -104,7 +104,23 @@ class Project(SQLModel, table=True):
     shares: t.List["ProjectShare"] = Relationship(back_populates="project")
 
 
-# Operations and sessions are cache-only - no database tables needed
+class ProjectOp(SQLModel, table=True):
+    """One project version: the ops that made it from the one before, and who sent them."""
+
+    __tablename__ = "project_ops"
+    __table_args__ = {"schema": "app_schema"}
+
+    project_id: uuid.UUID = Field(
+        sa_column=Column(UUID, ForeignKey("app_schema.projects.id", ondelete="CASCADE"), primary_key=True)
+    )
+    version: int = Field(sa_column=Column(Integer, primary_key=True))
+    client_id: str = Field(sa_column=Column(Text, nullable=False))
+    msg_id: str = Field(sa_column=Column(Text, nullable=False))
+    ops: t.List[t.Dict[str, t.Any]] = Field(sa_column=Column(JSONB, nullable=False))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(TIMESTAMP(timezone=True), nullable=False),
+    )
 
 
 class ProjectShare(SQLModel, table=True):

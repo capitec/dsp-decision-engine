@@ -19,8 +19,10 @@ import {
   useFlatRuleHasInputSchemaErrors,
   useFlatRuleHasOutputErrors,
   useFlatRuleHasParameterErrors,
-  useFlatRuleRuleErrors
+  useFlatRuleRuleErrors,
+  useFlatRuleStore,
 } from './useFlatRuleStore';
+import { useFlatRuleLive } from './useFlatRuleLive';
 import { OutputConfigurationTab } from './OutputConfigurationTab';
 import { InputConfigurationTab } from './InputConfigurationTab';
 import type { FlatRuleProjectDetail } from './types';
@@ -43,6 +45,7 @@ const FlatRuleEditorHeader: React.FC<{
   const dirty = useFlatRuleDirty();
   const error = useFlatRuleError();
   const saveProject = useFlatRuleSaveProject();
+  const live = useFlatRuleStore((state) => state.live);
 
   return (
     <header className="bg-white border-b border-gray-200 px-6 py-4">
@@ -63,6 +66,13 @@ const FlatRuleEditorHeader: React.FC<{
                 {dirty && (
                   <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-800 border-amber-200">
                     Unsaved changes
+                  </Badge>
+                )}
+                {live && (
+                  <Badge variant="secondary" data-testid="live-status" className={live === 'live'
+                    ? "text-xs bg-green-100 text-green-800 border-green-200"
+                    : "text-xs bg-amber-100 text-amber-800 border-amber-200"}>
+                    {live === 'live' ? 'Live' : live === 'connecting' ? 'Connecting...' : 'Reconnecting...'}
                   </Badge>
                 )}
               </div>
@@ -108,6 +118,7 @@ export const FlatRuleEditorPage: React.FC = () => {
   const saveProject = useFlatRuleSaveProject();
   const dirty = useFlatRuleDirty();
   useUnsavedChanges(dirty, LEAVE_MESSAGE);
+  useFlatRuleLive(project);
   const hasInputSchemaErrors = useFlatRuleHasInputSchemaErrors();
   const hasOutputErrors = useFlatRuleHasOutputErrors();
   const hasParameterErrors = useFlatRuleHasParameterErrors();
