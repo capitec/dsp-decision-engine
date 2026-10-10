@@ -463,7 +463,8 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
             </div>
           )}
           
-          {node.type !== 'leaf' && (
+          {/* Only a cases node has a list of branches; unary and composite nodes have THEN/OTHERWISE */}
+          {node.type === 'cases' && (
             <>
               <Button
                 variant="outline"
