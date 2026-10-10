@@ -76,7 +76,7 @@ def test_negative_decimal_and_very_large_thresholds_are_saved_exactly(signed_in:
     assert run(export_document(signed_in, project), amount=amounts) == outcome(expected)
 
 
-@pytest.mark.xfail(strict=True, reason="typing inf or nan in a threshold shows it in the box but saves 0")
+@pytest.mark.xfail(strict=True, reason="inf, -inf or nan typed in a threshold is saved as 0, with no message")
 @pytest.mark.parametrize("text", ["inf", "-inf", "nan"])
 def test_special_number_typed_in_a_threshold_is_not_silently_saved_as_zero(signed_in: Page, text):
     project = open_tree(signed_in, two_leaves(unary("root", threshold=5)))
@@ -87,14 +87,14 @@ def test_special_number_typed_in_a_threshold_is_not_silently_saved_as_zero(signe
     assert saved_data(signed_in, project)["condition"]["threshold"] != 0
 
 
-@pytest.mark.xfail(strict=True, reason="a threshold too large for a float (1e400) becomes null in the saved document")
+@pytest.mark.xfail(strict=True, reason="1e400 typed in a threshold shows inf and is saved as null; decikit then reports only 'Input should be a valid integer'")
 def test_threshold_beyond_float_range_is_not_saved_as_null(signed_in: Page):
     project = open_tree(signed_in, two_leaves(unary("root", threshold=5)))
     select_node(signed_in, "root")
     set_threshold(signed_in, "1e400")
-    reply = save(signed_in)
+    save(signed_in)
 
-    assert saved_data(signed_in, project)["condition"]["threshold"] is not None or reply["validation_errors"] == []
+    assert saved_data(signed_in, project)["condition"]["threshold"] is not None
 
 
 def test_isin_on_an_integer_feature_saves_the_values_and_decides(signed_in: Page):

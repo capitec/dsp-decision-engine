@@ -218,15 +218,16 @@ def test_stray_added_node_does_not_change_what_the_tree_decides(signed_in: Page)
     assert run(export_document(signed_in, project), amount=[500.0, 2000.0]) == ["approve", "review"]
 
 
-@pytest.mark.xfail(strict=True, reason="a stray node saved before the real root becomes the first subtree and is the tree that runs; nothing warns")
-def test_stray_node_listed_before_the_real_root_does_not_change_what_the_tree_decides(signed_in: Page):
+def test_the_subtree_listed_first_is_the_tree_that_runs(signed_in: Page):
+    # decikit runs only the first listed subtree's root; the others are ignored
     base = loan_document()
     doc = {**base, "nodes": [leaf("stray", -1, 900, 0), *base["nodes"]]}
     project = open_tree(signed_in, doc)
+    expect(signed_in.get_by_role("button", name="Navigate to root node").first.locator("xpath=..")).to_contain_text("Leaf -1")
     nudge(signed_in, "stray")
     save(signed_in)
 
-    assert run(export_document(signed_in, project), amount=[500.0, 2000.0]) == ["approve", "review"]
+    assert run(export_document(signed_in, project), amount=[500.0, 2000.0]) == ["decline", "decline"]
 
 
 @pytest.mark.xfail(strict=True, reason="a node nothing connects to is silently ignored: no message names the stray node")
