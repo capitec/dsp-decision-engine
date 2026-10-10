@@ -9,7 +9,7 @@ from playwright.sync_api import Page, expect
 import real_trees_ui as ui
 from canonical import as_lines
 from real_trees import BY_ID, REPO, TREES
-from round_trip import CANNOT_TRIP, expected_items
+from round_trip import expected_items
 from seed import export_document, get_project
 from tree_runs import assert_runs_alike, probe_frame
 
@@ -19,10 +19,8 @@ STEP_DOCUMENT = ("a TreeConfig step document file (type: tree) imports as a brok
 
 def some(*tree_ids: str, smoke: str = "") -> list:
     """The trees as cases; `smoke` is the one in the smoke subset."""
-    return [pytest.param(tree_id, id=tree_id, marks=[
-        *([pytest.mark.xfail(strict=True, reason=CANNOT_TRIP[tree_id])] if tree_id in CANNOT_TRIP else []),
-        *([pytest.mark.smoke] if tree_id == smoke else []),
-    ]) for tree_id in tree_ids]
+    return [pytest.param(tree_id, id=tree_id, marks=[pytest.mark.smoke] if tree_id == smoke else [])
+            for tree_id in tree_ids]
 
 
 def import_through_the_dialog(page: Page, tree, tmp_path) -> tuple[str, bool]:
