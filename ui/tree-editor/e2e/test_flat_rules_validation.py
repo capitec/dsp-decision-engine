@@ -22,9 +22,7 @@ from flat_rules_ui import (
     unary_rule,
     use_parameter,
 )
-
-LIMIT = {"limit": {"type": "Float64", "default_value": 1000}}
-
+from test_flat_rule_params import LIMIT
 
 def refused_export(page: Page, message: re.Pattern | str) -> None:
     page.get_by_role("button", name="Export").click()

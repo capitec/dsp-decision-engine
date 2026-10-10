@@ -7,18 +7,25 @@ from playwright.sync_api import Locator, Page, expect
 
 
 def open_flat_rules(page: Page, project_id: str) -> None:
+    """Open the flat-rule editor on a project and wait until it has loaded."""
     page.goto(f"/flat-rules/{project_id}")
-    expect(page.get_by_role("button", name="Add Rule")).to_be_visible()
+    expect(page.get_by_role("button", name="Add Rule")).to_be_visible(timeout=30_000)  # the test machine is shared
 
 
 def rule_card(page: Page, rule: int = 0) -> Locator:
+    """The card of the `rule`-th rule, in the order shown."""
     return page.get_by_test_id("rule-card").nth(rule)
+
+
+def open_parameters(page: Page) -> Locator:
+    """Manage Parameters; returns the dialog."""
+    page.get_by_role("button", name=re.compile(r"^Manage Parameters")).click()
+    return page.get_by_role("dialog", name="Manage Parameters")
 
 
 def add_parameter(page: Page, name: str, dtype: str = "Float64", value: str | None = None) -> None:
     """Manage Parameters -> new row -> name, type, default -> Add -> Save Changes."""
-    page.get_by_role("button", name=re.compile(r"^Manage Parameters")).click()
-    dialog = page.get_by_role("dialog", name="Manage Parameters")
+    dialog = open_parameters(page)
     first = dialog.get_by_role("button", name="Add Your First Parameter")
     (first if first.is_visible() else dialog.get_by_role("button", name="Add Parameter")).click()
     row = dialog.locator("tbody tr").filter(has=page.get_by_placeholder("parameter_name"))
@@ -35,8 +42,7 @@ def add_parameter(page: Page, name: str, dtype: str = "Float64", value: str | No
 
 def set_parameter_default(page: Page, name: str, value: str) -> None:
     """Manage Parameters -> the row of `name` -> new default -> Save Changes."""
-    page.get_by_role("button", name=re.compile(r"^Manage Parameters")).click()
-    dialog = page.get_by_role("dialog", name="Manage Parameters")
+    dialog = open_parameters(page)
     row = dialog.locator("tbody tr").filter(has=page.locator(f"input[value='{name}']"))
     row.locator("td").nth(2).locator("input").first.fill(value)
     dialog.get_by_role("button", name="Save Changes").click()
@@ -50,6 +56,7 @@ def set_node_type(page: Page, scope: Locator, kind: str, index: int = 0) -> None
 
 
 def choose_feature(page: Page, scope: Locator, feature: str) -> None:
+    """Pick `feature` in the first feature selector of `scope`."""
     scope.get_by_text("Select or search feature...").first.click()
     page.get_by_role("option", name=feature, exact=True).click()
 
@@ -117,6 +124,7 @@ def choose_condition_op(page: Page, scope: Locator, op: str, index: int = 0) -> 
 
 
 def choose_match_type(page: Page, scope: Locator, match_type: str, index: int = 0) -> None:
+    """Pick a string match type ("exact", "regex", ...) in the `index`-th match-type selector of `scope`."""
     _pick(page, scope.get_by_test_id("match-type").nth(index), MATCH_LABELS[match_type])
 
 
@@ -126,6 +134,7 @@ def number_input(scope: Locator, index: int = 0) -> Locator:
 
 
 def fill_number(scope: Locator, text: str, index: int = 0) -> None:
+    """Type `text` into the `index`-th numeric field of `scope`."""
     number_input(scope, index).fill(text)
 
 
@@ -139,6 +148,7 @@ def add_isin_values(scope: Locator, values: list[int | str]) -> None:
 
 
 def fill_pattern(scope: Locator, text: str, index: int = 0) -> None:
+    """Type `text` into the `index`-th string-match pattern of `scope`."""
     scope.get_by_placeholder(re.compile(r"^Pattern \d+$")).nth(index).fill(text)
 
 
@@ -150,6 +160,7 @@ def add_then(page: Page, scope: Locator, output: str | None = "approve", index: 
 
 
 def add_otherwise(scope: Locator, index: int = 0) -> None:
+    """Add the `index`-th OTHERWISE branch of `scope` (a leaf on the default row)."""
     scope.get_by_role("button", name="Add OTHERWISE").nth(index).click()
 
 
@@ -168,6 +179,7 @@ def unary_rule(page: Page, op: str, *, feature: str = "amount", then: str | None
 
 
 def rename_rule(page: Page, new_name: str, rule: int = 0) -> None:
+    """Rename the `rule`-th rule with its pencil and check buttons."""
     card = rule_card(page, rule)
     card.get_by_test_id("rule-rename").click()
     box = card.get_by_role("textbox").first
@@ -176,16 +188,13 @@ def rename_rule(page: Page, new_name: str, rule: int = 0) -> None:
 
 
 def rule_names(page: Page) -> list[str]:
+    """The names of the rule cards shown, in order."""
     return page.get_by_test_id("rule-name").all_inner_texts()
 
 
 def open_tab(page: Page, name: str) -> None:
     """Rules, Configure Inputs or Configure Outputs."""
     page.get_by_role("tab", name=re.compile(name)).click()
-
-
-def project_id(page: Page) -> str:
-    return page.url.rstrip("/").rsplit("/", 1)[-1]
 
 
 def build_nested_composite(page: Page, card: Locator, ops: list[str], feature: str = "amount",
@@ -215,10 +224,12 @@ def add_output_column(page: Page, name: str, dtype: str | None = None) -> None:
 
 
 def output_header(page: Page, column: str) -> Locator:
+    """The header cell of output column `column` on the Configure Outputs tab."""
     return page.locator("thead th").filter(has_text=column)
 
 
 def rename_output_column(page: Page, old: str, new: str) -> None:
+    """Click the column name, type the new one, Enter."""
     output_header(page, old).get_by_title("Click to rename").click()
     box = page.locator("thead").get_by_role("textbox")
     box.fill(new)
@@ -231,6 +242,7 @@ def delete_output_column(page: Page, column: str) -> None:
 
 
 def set_output_column_type(page: Page, column: str, dtype: str) -> None:
+    """Pick `dtype` in the type selector of output column `column`."""
     output_header(page, column).get_by_role("combobox").click()
     page.get_by_role("option", name=dtype, exact=True).click()
 
@@ -241,6 +253,7 @@ def output_cell(page: Page, record: int, column: int) -> Locator:
 
 
 def open_custom_types(page: Page) -> Locator:
+    """Manage Custom Types; returns the dialog."""
     page.get_by_role("button", name=re.compile(r"^Manage Custom Types")).click()
     return page.get_by_role("dialog", name="Manage Custom Types")
 

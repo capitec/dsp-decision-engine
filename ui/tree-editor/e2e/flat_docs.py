@@ -3,12 +3,13 @@
 import polars as pl
 from decikit import TreeConfig
 
-from playwright.sync_api import expect
+from flat_rules_ui import open_flat_rules
 from seed import create_project
 from test_flat_rule_params import flat_document
 
 APPROVE = {"type": "leaf", "result_idx": 0}
 DEFAULT = {"type": "leaf", "result_idx": -1}
+SMALL = {"type": "unary", "condition": {"type": "unary", "op": "<=", "feature": "amount", "threshold": 5}, "then": APPROVE}
 SCHEMA = [["amount", "Float64"], ["count", "Int64"], ["flag", "Boolean"], ["band", "String"]]
 
 
@@ -30,14 +31,14 @@ def run_frame(doc: dict, frame: dict, params: dict | None = None) -> list[dict]:
 
 
 def decisions_for(doc: dict, frame: dict, params: dict | None = None) -> list[str]:
+    """The `decision` column of `run_frame`."""
     return [row["decision"] for row in run_frame(doc, frame, params)]
 
 
 def open_doc(page, *rules: dict, name: str = "Rules", **kwargs) -> str:
     """Seed a project holding `document(*rules, **kwargs)` through the API, open it in the editor; returns its id."""
     project = create_project(page, name, document(*rules, **kwargs))["id"]
-    page.goto(f"/flat-rules/{project}")
-    expect(page.get_by_role("button", name="Add Rule")).to_be_visible(timeout=30_000)  # the test machine is shared
+    open_flat_rules(page, project)
     return project
 
 OUTPUT3 = {
