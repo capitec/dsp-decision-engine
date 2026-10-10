@@ -7,6 +7,8 @@ from pathlib import Path
 from playwright.sync_api import Locator, Page, Response, expect
 
 import flat_rules_ui
+import node_ui
+import tree_ui
 
 
 def items(page: Page, flat: bool) -> Locator:
@@ -21,29 +23,23 @@ def open_project(page: Page, project_id: str, flat: bool, timeout: float = 15_00
 
 
 def wait_until_loaded(page: Page, flat: bool, timeout: float = 15_000) -> None:
+    """Wait for the editor's Add Rule or Add Node button."""
     expect(page.get_by_role("button", name="Add Rule" if flat else "Add Node")).to_be_visible(timeout=timeout)
 
 
 def save(page: Page, flat: bool) -> dict:
     """Save as it is (the tree editor only saves a change, so move a node first); returns the server's reply."""
     if not flat:
-        node = items(page, flat).first.bounding_box()
-        page.mouse.move(node["x"] + node["width"] / 2, node["y"] + node["height"] / 2)
-        page.mouse.down()
-        page.mouse.move(node["x"] + node["width"] / 2 + 40, node["y"] + node["height"] / 2 + 40, steps=5)
-        page.mouse.up()
+        tree_ui.drag(page, items(page, flat).first, 40, 40)
         expect(page.get_by_text("Unsaved changes")).to_be_visible()
-    with page.expect_response(lambda r: r.request.method == "PUT" and "/api/v1/projects/" in r.url) as reply:
-        page.get_by_role("button", name="Save", exact=True).click()
-    assert reply.value.ok, reply.value.text()
-    return reply.value.json()
+    return flat_rules_ui.save(page)
 
 
 def export(page: Page, flat: bool, tmp_path: Path) -> dict:
     """Export through the editor (the Export button, or Export Project in the tree editor's menu)."""
     if flat:
         return flat_rules_ui.export(page, tmp_path)
-    page.locator("button").filter(has=page.locator("svg.lucide-ellipsis-vertical")).last.click()
+    node_ui.open_menu(page)
     with page.expect_download() as download:
         page.get_by_role("menuitem", name="Export Project").click()
     path = tmp_path / "export.json"
