@@ -119,8 +119,11 @@ class PolarsExecutable:
                 schema = pl.Schema({n: t for n, t in schema.items() if n not in stale})
             doc = _params_for(params, seg)
             out, nulls = _output_schema(seg, schema, doc)
+            # Older polars let a later filter, slice or projection pass a map_batches node by default, under a
+            # frame step that then sees fewer rows or columns.
             lf = lf.map_batches(partial(_run_batch, seg.executable, doc, seg.unneeded, nulls), schema=out,
-                                streamable=seg.streamable)
+                                streamable=seg.streamable, predicate_pushdown=False, projection_pushdown=False,
+                                slice_pushdown=False)
             schema = out
         return lf.select(final)
 
