@@ -257,7 +257,8 @@ def _series(name: str, values: np.ndarray, valid: np.ndarray | None, annotation:
         if schema_of(annotation) is not None:
             # The step's values were checked against the declaration, so what polars widens (an int
             # beside a float) is the same number; its strict inference would truncate a later float.
-            return pl.Series(name, values, dtype=_typed_dtype(annotation), strict=False)
+            dtype = _typed_dtype(annotation)
+            return pl.Series(name, [_floats(x, dtype) for x in values], dtype=dtype, strict=False)
         try:
             s = pl.Series(name, values)
         except TypeError:
@@ -421,6 +422,19 @@ def _typed_dtype(annotation: Any) -> pl.DataType | None:
     if typing.get_origin(t) is list and (item := _typed_dtype(typing.get_args(t)[0])) is not None:
         return pl.List(item)
     return None
+
+
+def _floats(value: Any, dtype: pl.DataType | None) -> Any:
+    # `value` with every int in a Float64 field of `dtype` a float: polars builds a Struct strictly
+    # whatever `strict` says, so an int in a float field of a list inside a struct raises.
+    if dtype == pl.Float64:
+        return float(value) if isinstance(value, int) else value
+    if isinstance(dtype, pl.Struct) and isinstance(value, dict):
+        fields = {f.name: f.dtype for f in dtype.fields}
+        return {k: _floats(x, fields.get(k)) for k, x in value.items()}
+    if isinstance(dtype, pl.List) and isinstance(value, list):
+        return [_floats(x, dtype.inner) for x in value]
+    return value
 
 
 def _item_dtype(item: Any) -> pl.Struct:

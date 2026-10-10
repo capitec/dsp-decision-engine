@@ -242,3 +242,35 @@ def numpy_in_one_row(x: float) -> dict:
 def test_an_undeclared_dict_counts_a_numpy_number_as_a_number(mode):
     assert bound(numpy_in_one_row, mode).run(pl.DataFrame({"x": [0.5, 2.0]}))["numpy_in_one_row"].to_list() == [
         {"n": 4}, {"n": 3}]
+
+
+class Line(TypedDict):
+    amount: float
+    fee: float | None
+
+
+class Plan(TypedDict):
+    lines: list[Line]
+    total: Offer
+
+
+def whole_numbers(x: float) -> Plan:
+    return {"lines": [{"amount": 6, "fee": 2}, {"amount": 1.5, "fee": None}], "total": {"v": 3}}
+
+
+def plans(x: float) -> list[Plan]:
+    return [{"lines": [{"amount": 6, "fee": 2}, {"amount": 1.5, "fee": None}], "total": {"v": 3}}]
+
+
+FLOATS = {"lines": [{"amount": 6.0, "fee": 2.0}, {"amount": 1.5, "fee": None}], "total": {"v": 3.0}}
+
+
+@pytest.mark.parametrize("mode", (*MODES, "polars"))
+@pytest.mark.parametrize("fn, row", [(whole_numbers, FLOATS), (plans, [FLOATS])])
+def test_an_int_in_a_nested_float_field_is_a_float_in_the_frame(mode, fn, row):
+    exe = bound(fn, mode)
+    frame = pl.DataFrame({"x": [1.0, 2.0]})
+    out = exe.run(frame.lazy()).collect() if mode == "polars" else exe.run(frame)
+    assert out[fn.__name__].to_list() == [row, row]
+    if mode != "polars":
+        assert exe.run({"x": 1.0})[fn.__name__] == fn(1.0)
