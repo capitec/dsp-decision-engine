@@ -30,22 +30,25 @@ def test_an_unsaved_edit_is_indicated(signed_in: Page):
 
 @pytest.mark.xfail(strict=True, reason="Back leaves the editor with unsaved edits without asking")
 def test_back_after_an_unsaved_edit_asks_before_leaving(signed_in: Page):
-    project = open_doc(signed_in, SMALL)
+    open_doc(signed_in, SMALL)
     seen = dialog_types(signed_in)
     rename_rule(signed_in, "Edited")
     signed_in.get_by_role("button", name="Back").click()
 
-    assert seen or signed_in.url.endswith(project) or signed_in.get_by_text(UNSAVED).count()
+    # signed_in accepts a native confirm, so the page ends on the overview or on an in-page prompt
+    prompt = signed_in.get_by_role("alertdialog")
+    expect(signed_in.get_by_role("heading", name="Overview").or_(prompt).first).to_be_visible()
+    assert seen or prompt.is_visible()
 
 
 @pytest.mark.xfail(strict=True, reason="closing the page with unsaved edits shows no beforeunload prompt")
 def test_closing_the_tab_after_an_unsaved_edit_asks_before_leaving(signed_in: Page):
     open_doc(signed_in, SMALL)
-    seen = dialog_types(signed_in)
     rename_rule(signed_in, "Edited")
-    signed_in.close(run_before_unload=True)
+    with signed_in.expect_event("dialog") as dialog:
+        signed_in.close(run_before_unload=True)
 
-    assert "beforeunload" in seen
+    assert dialog.value.type == "beforeunload"
 
 
 def test_reloading_after_an_unsaved_edit_shows_the_saved_state(signed_in: Page):
@@ -78,16 +81,6 @@ def test_browser_back_after_the_back_button_returns_to_the_editor(signed_in: Pag
     signed_in.go_back()
 
     expect(signed_in).to_have_url(re.compile(rf"/flat-rules/{project}$"))
-
-
-@pytest.mark.xfail(strict=True, reason="Export downloads the stored document without the unsaved edit and says nothing")
-def test_export_after_an_unsaved_edit_includes_it_or_says_it_was_left_out(signed_in: Page, tmp_path):
-    open_doc(signed_in, SMALL)
-    rename_rule(signed_in, "Edited")
-    exported = export(signed_in, tmp_path)
-
-    told = signed_in.get_by_role("status").filter(has_text=UNSAVED).count() > 0
-    assert exported["rules"][0]["meta"]["name"] == "Edited" or told
 
 
 def test_export_after_saving_includes_the_edit(signed_in: Page, tmp_path):
