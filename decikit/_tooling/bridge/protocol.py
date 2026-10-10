@@ -45,8 +45,8 @@ _OPTIONAL_EXTRAS = {
 class Capabilities(BaseModel):
     """What this decikit build can do, for callers that must degrade gracefully.
 
-    `modes` lists the execution modes `Engine.bind` accepts; a mode outside it
-    raises `EngineError`. `optional_dependencies` maps each optional extra to
+    `modes` lists the registered engines a debug session can run on (the
+    `NumbaEngine` tags). `optional_dependencies` maps each optional extra to
     whether it is installed (unavailable ones raise
     `DecikitMissingDependencyError` on use). `source_mapping` says whether an
     import-path source can be resolved to a file and line.
@@ -66,10 +66,10 @@ class Capabilities(BaseModel):
 
 def capabilities() -> Capabilities:
     """The capabilities of the installed decikit."""
-    from decikit._engine.run.engine import RUNNERS  # imports numba
+    from decikit import Engine, NumbaEngine  # imports numba
 
     return Capabilities(
-        modes=tuple(sorted(RUNNERS)),
+        modes=tuple(sorted(tag for tag, cls in Engine.registered().items() if issubclass(cls, NumbaEngine))),
         optional_dependencies={extra: importlib.util.find_spec(module) is not None
                                for extra, module in _OPTIONAL_EXTRAS.items()},
     )

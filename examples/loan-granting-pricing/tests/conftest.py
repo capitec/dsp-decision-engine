@@ -69,7 +69,7 @@ def decide(pipeline, sample, params):
                 record.pop(field, None)
             else:
                 record[field] = value
-        return pipeline.score(parse_dates(record), params_document or params)
+        return pipeline.run(parse_dates(record), params_document or params)
 
     return run
 

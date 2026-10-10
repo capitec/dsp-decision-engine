@@ -35,7 +35,7 @@
     <text x="230" y="224">resolve_step, source_location</text>
     <text x="230" y="250">value_slots and data edges</text>
     <text x="230" y="276">resolve_step, ±5 lines of source</text>
-    <text x="230" y="302">Engine().bind(step).run, tallies</text>
+    <text x="230" y="302">InterpretedEngine().bind(step).run, tallies</text>
     <text x="230" y="328">lab.checks.run(step, config, data)</text>
     <text x="230" y="354">lab.checks.catalogue()</text>
     <text x="230" y="380">ExperimentDef from a file</text>
@@ -51,7 +51,7 @@
       <text x="526" y="198">raw_trace</text>
     </g>
     <text x="660" y="172">bridge.replay.trace, one record's values</text>
-    <text x="660" y="198">Engine().bind(step).run(trace=TraceSink())</text>
+    <text x="660" y="198">InterpretedEngine().bind(step).run(trace=TraceSink())</text>
     <text x="526" y="226">off: {"redacted": "raw data disabled: ..."}</text>
   </g>
 
@@ -67,7 +67,7 @@
     </g>
     <text x="660" y="308">run_summary's run, plus "ran": true</text>
     <text x="660" y="334">lab.experiments.run(definition, frame)</text>
-    <text x="660" y="360">Engine().bind(step).session(frame)</text>
+    <text x="660" y="360">InterpretedEngine().bind(step).session(frame)</text>
     <text x="660" y="386">cli.ids.generate(path, check)</text>
     <text x="526" y="420">the server does not re-approve; the host asks the user</text>
   </g>

@@ -18,7 +18,7 @@ Quickstart::
     pipeline = flow(ratio, affordable, name="afford")
     df = pl.DataFrame({"income": [1000.0, 500.0], "debt": [200.0, 400.0]})
     pipeline.run(df)                                          # income, debt, affordable
-    pipeline.compile("fused").score({"income": 1000.0, "debt": 200.0})   # compile once, then one record at a time (a dict)
+    pipeline.compile("fused").run({"income": 1000.0, "debt": 200.0})     # compile once, then one record at a time (a dict)
 
 A function's arguments are the columns it reads and its name is the column it
 writes. `flow` runs steps in written order (a later write wins), `dag` in
@@ -64,7 +64,7 @@ from decikit.steps import (ConfigurableStep, CustomFunction, EachMode, ParamRef,
 from decikit.steps.flowfile import load_flow
 
 if TYPE_CHECKING:
-    from decikit._engine.run import Engine, Executable
+    from decikit._engine.run import Engine, Executable, FusedEngine, InterpretedEngine, NumbaEngine, SteppedEngine
     from decikit.steps.scorecard import ScorecardConfig
     from decikit.steps.tables import DecisionTableConfig
     from decikit.steps.trees import TreeConfig
@@ -80,9 +80,9 @@ __all__ = [
     "step", "frame_step", "flow", "dag", "branch", "loop", "each", "optimise", "EachMode", "allow_fallback",
     "helper", "param", "param_table", "missing_as", "ParamTable", "PolarsSchema", "TreeConfig", "DecisionTableConfig", "ScorecardConfig",
     # run
-    "Engine", "Executable", "load_flow", "describe",
+    "Engine", "InterpretedEngine", "SteppedEngine", "FusedEngine", "Executable", "load_flow", "describe",
     # extend
-    "Step", "ConfigurableStep", "CustomFunction", "Value", "ParamRef", "StepRef",
+    "Step", "ConfigurableStep", "CustomFunction", "Value", "ParamRef", "StepRef", "NumbaEngine",
     # errors
     "DecikitError", "FallbackWarning", "HiddenStateWarning", "ShadowedTableWarning",
 ]
@@ -90,6 +90,10 @@ __all__ = [
 # Names whose modules import numba load on first use, so `import decikit` stays light.
 _LAZY = {
     "Engine": "decikit._engine.run",
+    "NumbaEngine": "decikit._engine.run",
+    "InterpretedEngine": "decikit._engine.run",
+    "SteppedEngine": "decikit._engine.run",
+    "FusedEngine": "decikit._engine.run",
     "Executable": "decikit._engine.run",
     "TreeConfig": "decikit.steps.trees",
     "DecisionTableConfig": "decikit.steps.tables",

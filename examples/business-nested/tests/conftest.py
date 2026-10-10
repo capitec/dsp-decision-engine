@@ -41,7 +41,7 @@ def assess(executable, sample, params):
                 record.pop(field, None)
             else:
                 record[field] = value
-        return executable.score(parse_dates(record), params_document or params)
+        return executable.run(parse_dates(record), params_document or params)
 
     return run
 

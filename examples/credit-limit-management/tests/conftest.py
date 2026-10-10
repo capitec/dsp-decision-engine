@@ -29,7 +29,7 @@ def decide(pipeline, sample, params):
 
     def run(*, params_document=None, **changes):
         record = copy.deepcopy(sample) | changes
-        return pipeline.score(parse_dates(record), params_document or params)
+        return pipeline.run(parse_dates(record), params_document or params)
 
     return run
 

@@ -54,7 +54,7 @@ def walk(session, until):
 
 @pytest.mark.parametrize("mode", ["interpreted", "stepped"])
 def test_step_into_a_branch_visits_each_taken_arm_in_order_and_says_which(mode):
-    s = by_sector.session(TERM, mode=mode)
+    s = by_sector.session(TERM, engine=mode)
     s.step_into()                                                    # before the branch
     seen = walk(s, lambda cp: cp.origin.path == "by")
     assert seen == [
@@ -71,7 +71,7 @@ def test_step_into_a_branch_visits_each_taken_arm_in_order_and_says_which(mode):
 
 @pytest.mark.parametrize("mode", ["interpreted", "stepped"])
 def test_an_arm_no_row_takes_is_never_entered(mode):
-    s = by_sector.session(TERM.with_columns(sector_code=pl.lit(2)), mode=mode)
+    s = by_sector.session(TERM.with_columns(sector_code=pl.lit(2)), engine=mode)
     s.step_into()
     paths = [p for _, p, _, _ in walk(s, lambda cp: cp.origin.path == "by")]
     assert "by/private" not in paths and "by/cap_public" in paths
@@ -79,7 +79,7 @@ def test_an_arm_no_row_takes_is_never_entered(mode):
 
 @pytest.mark.parametrize("mode", ["interpreted", "stepped"])
 def test_step_into_a_loop_visits_each_iteration_and_numbers_it(mode):
-    s = search.session(BEST, mode=mode)
+    s = search.session(BEST, engine=mode)
     s.step_into()
     seen = walk(s, lambda cp: cp.origin.path == "search")
     # Row 0 needs 4 iterations, row 1 one; the fifth check finds no row going on.
@@ -96,7 +96,7 @@ def test_step_into_a_loop_visits_each_iteration_and_numbers_it(mode):
 def test_step_runs_a_whole_branch_or_loop(mode):
     for pipeline, frame, path, name, values in [(by_sector, TERM, "by", "term_cap", [53.0, 60.0, 49.0]),
                                                 (search, BEST, "search", "best", [12.0, 12.0, 20.0])]:
-        s = pipeline.session(frame, mode=mode)
+        s = pipeline.session(frame, engine=mode)
         assert s.step_into().origin.path == path
         at = s.step()
         assert (at.when, at.origin.path) == ("after", path)
@@ -114,7 +114,7 @@ def test_a_paused_event_says_which_iteration_and_round_trips_as_json():
 
 
 def test_a_packed_branch_is_one_fused_checkpoint_covering_every_step_inside():
-    s = by_sector.session(TERM, mode="fused")
+    s = by_sector.session(TERM, engine="fused")
     s.break_at("by/private/cap_band")
     at = s.resume()
     assert (at.when, at.origin.path) == ("before", "by")
@@ -122,7 +122,7 @@ def test_a_packed_branch_is_one_fused_checkpoint_covering_every_step_inside():
     assert paused.kernel == ("by", "by/is_private", "by/private/cap_private", "by/private/cap_band", "by/cap_public")
     assert s.step_into().origin.path == "by"
     assert s.current.when == "after"
-    with pytest.raises(KeyError, match="mode='stepped'"):
+    with pytest.raises(KeyError, match="engine='stepped'"):
         s.value("term_cap@by/private/cap_private")
     s.resume()
     assert s.output()["term_cap"].to_list() == [53.0, 60.0, 49.0]
@@ -130,7 +130,7 @@ def test_a_packed_branch_is_one_fused_checkpoint_covering_every_step_inside():
 
 def test_a_fused_branch_that_cannot_pack_is_stepped_into_like_stepped_mode():
     unpackable = flow(by_sector).emit("is_private@by/is_private")
-    s = unpackable.session(TERM, mode="fused")
+    s = unpackable.session(TERM, engine="fused")
     s.break_at("by/cap_public")
     at = s.resume()
     assert (at.origin.path, at.arm) == ("by/cap_public", 1)

@@ -83,8 +83,8 @@ def test_a_different_rate_card_in_the_params_document_prices_the_offer(pipeline,
     dearer = copy.deepcopy(params)
     dearer["shared"]["rate_card"] = [{**row, "rate": row["rate"] + 1.0} for row in rows]
     dearer["shared"]["rate_card_version"] = "rc-test"
-    before = pipeline.score(parse(sample), params)["recommended_offer"]
-    after = pipeline.score(parse(sample), dearer)["recommended_offer"]
+    before = pipeline.run(parse(sample), params)["recommended_offer"]
+    after = pipeline.run(parse(sample), dearer)["recommended_offer"]
     assert after["rate_card_version"] == "rc-test"
     assert after["nominal_annual_rate"] == pytest.approx(before["nominal_annual_rate"] + 0.01)
 

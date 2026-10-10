@@ -9,7 +9,7 @@ in Python and says so, and the steps around it stay compiled.
 The code is in `decikit/_engine/compile/njit.py` (`jit`, the salted disk cache, `compile_call`,
 `FALLBACK_ERRORS`), `compile/fingerprint.py` (`fingerprint`, `cpu_target`), `compile/kernel.py`
 (the fused kernel cache) and `compile/units.py` (`Fallback`). The [stepped runner](runners.md)
-turns fallbacks into warnings, `Engine(strict_compile=True)` in `decikit/_engine/run/engine.py`
+turns fallbacks into warnings, `FusedEngine(strict_compile=True)` in `decikit/_engine/run/engines.py`
 turns them into errors, and `decikit build` and `decikit serve` in `decikit/_tooling/cli/` record
 and check the CPU target. How a compiled kernel is assembled is on [compilation](compile.md).
 
@@ -155,7 +155,7 @@ wrote, and the fused kernel is built from LLVM IR by an intrinsic, once per proc
 the step dispatchers, and a closure over a dispatcher never hits numba's disk cache.
 
 The fused kernel compile therefore stays in every new process. In this run of a one-step pipeline,
-the first `score()` of a fresh process took 391 ms with a cold step cache and 345 ms with the step
+the first `run(record)` of a fresh process took 391 ms with a cold step cache and 345 ms with the step
 loaded from disk; most of that is building the kernel around it. Serving pays it during warm-up:
 `decikit build`, and each serving worker as it stages a config version, score a warm-up record
 through every kernel, and a worker answers `/ping` only after that (see [serving](../serving.md)).
@@ -202,7 +202,7 @@ ZeroDivisionError: division by zero
   in step loan/instalment
 ZeroDivisionError: division by zero
   in one of the steps ['two/fee', 'two/instalment'], fused into one kernel;
-  run in mode='stepped' to see which
+  run in engine='stepped' to see which
 ```
 
 The scope is this narrow for measured reasons. Catching every `Exception`
@@ -262,7 +262,8 @@ FallbackWarning : loan/uses_regex runs in Python, row by row:
  ('Kernel', ['loan/instalment'])]
 ```
 
-There is one `FallbackWarning` per step and executable, raised when the runner builds its units.
+In fused mode there is one `FallbackWarning` per step and executable, raised when the runner
+builds its units; stepped mode only lists the step in `fallbacks()`.
 A step that still runs compiled but outside the shared kernel (a `Columnar[...]` input read by a
 row node, or an OPTIONAL one) gets a different message: `... runs compiled, one call per row
 outside the shared kernel: ...`. `exe.fallbacks()` reports both kinds by step path.
@@ -274,14 +275,14 @@ outside the shared kernel: ...`. `exe.fallbacks()` reports both kinds by step pa
   an intentional Python boundary, and the calling step falls back instead of compiling it. Trees,
   tables, scorecards, branches and loops fall back as a whole, so the decorator on one raises
   `TypeError`; filter the warning category for those.
-- `Engine(strict_compile=True)` turns an unaccepted Python fallback into an error at the first
-  run. It raises a plain `ValueError` (not a `DecikitError`):
+- `FusedEngine(strict_compile=True)` turns an unaccepted Python fallback into an error at the first
+  run. It raises `EngineError`:
 
 ```text
-ValueError : loan/uses_regex runs in Python, row by row:
+EngineError : loan/uses_regex runs in Python, row by row:
   UnsupportedBytecodeError: Use of unsupported opcode (IMPORT_NAME) found.
   Raised from .../c4_cache.py (46); accept it with @allow_fallback,
-  or run mode='interpreted'
+  or run engine='interpreted'
 ```
 
   A step that runs compiled one call per row only warns, even under `strict_compile`.
@@ -291,7 +292,11 @@ ValueError : loan/uses_regex runs in Python, row by row:
 Each call of a kernel compiled alone, but a kernel can still fail as a whole when it is launched:
 a value numba only meets then (a param it cannot type, for instance) makes the kernel's own
 compile fail. `Kernel.run` catches `FALLBACK_ERRORS` on that launch, replaces itself with one
-`Fallback` per call for the rest of its life, and reruns. A `Packed` branch or loop does not split;
+`Fallback` per call for the rest of its life, and reruns. The split is reported like a build-time
+fallback, through the `on_split` callback the runner installs: listed in `fallbacks()` as
+`split at launch: <error>`, warned about in fused mode, refused under `strict_compile`. A step
+returning a `dict`, a TypedDict, a `list`, a `tuple`, a `set` or an array never reaches a kernel:
+`compile_call` refuses it, so it falls back alone at build. A `Packed` branch or loop does not split;
 it raises, and the [fused runner](runners.md) drops the packing for that path and runs the branch
 or loop unpacked from then on.
 
@@ -307,6 +312,7 @@ sequenceDiagram
         K-->>R: values stored
     else NumbaError on first launch
         N-->>K: compile error
+        K->>R: on_split(fallbacks): listed, warned (fused), raised (strict)
         K->>K: _python = one Fallback per call
         K->>K: run each call in Python
         K-->>R: values stored
@@ -324,7 +330,7 @@ sequenceDiagram
 | a step is recompiled after a harmless rename | the file moved: numba's disk cache is keyed by file path and line | expected once; the in-process cache still shares it |
 | a step never hits the disk cache | it has a closure, or it was defined without a file | move it to module level in a `.py` file |
 | a `FallbackWarning` names numba's long candidate listing | a typing error, for example a `Decimal` mixed with a float | read the decider toolkit line in the middle of the listing ([kernel semantics](kernels.md)) |
-| a `ZeroDivisionError` with a note listing several steps | a runtime error in a fused kernel | rerun in `mode="stepped"` to see which step |
+| a `ZeroDivisionError` with a note listing several steps | a runtime error in a fused kernel | rerun in `engine="stepped"` to see which step |
 
 `dispatcher.stats.cache_hits` and `cache_misses` (the dispatcher from `jit(fn)`) show whether a
 step came from disk. Old shim builds and old cache index entries are never evicted; both are small

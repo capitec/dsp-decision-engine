@@ -21,7 +21,7 @@ from decikit.serving._errors import (InputParsingError, OutputFormattingError, U
                                      UnsupportedContentTypeError)
 from decikit._settings import get_settings
 from decikit.config import ConfigStore, Version
-from decikit import Engine, Executable
+from decikit import Engine, Executable, FusedEngine
 from decikit.ir import base_annotation, has_optional_key
 from decikit.steps import ConfigurableStep, Step
 from decikit.ops.nested import Columnar, struct_item
@@ -64,9 +64,10 @@ class RequestHandler:
     `ConfigurableStep.load` and passed in. The version's `"params"` document
     is the params document every request runs with.
 
-    Config changes are explicit: `stage(version)` builds and warms a version
-    off the request path, `activate()` swaps it in atomically, `rollback()`
-    goes back to the previous one. Errors propagate to the caller, and the
+    Config changes are explicit: `stage(version)` binds a version with
+    `engine` (`FusedEngine()` unless given; an `Engine` or its tag) and warms it off the request
+    path, `activate()` swaps it in atomically, `rollback()` goes back to the
+    previous one. Errors propagate to the caller, and the
     active version keeps serving. `POST /invocations` with a JSON object
     scores one record; a JSON array, JSONL, CSV, Parquet or Arrow IPC body
     runs as a frame. Send one record as JSON: Arrow IPC costs more to encode
@@ -104,12 +105,16 @@ class RequestHandler:
 
     store: ConfigStore
     pipeline: t.Any = "pipeline:build"
-    mode: str = "fused"
+    engine: Engine | str = field(default_factory=FusedEngine)
     sample_request: str | None = None
     _active: Live | None = field(default=None, init=False, repr=False)
     _staged: Live | None = field(default=None, init=False, repr=False)
     _history: list[Live] = field(default_factory=list, init=False, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
+
+    def __post_init__(self):
+        if isinstance(self.engine, str):
+            self.engine = Engine.resolve(self.engine)()
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -144,7 +149,7 @@ class RequestHandler:
                 if version is None:
                     raise RuntimeError("the config store has no versions to stage.")
             versioned = self.store.read(version)
-            exe = Engine().bind(self.pipeline_fn(versioned.config), mode=self.mode)
+            exe = self.engine.bind(self.pipeline_fn(versioned.config))
             params = versioned.config.get("params")
             if get_settings().build.warn_shadowed_tables:
                 exe.warn_shadowed_tables(params)
@@ -246,7 +251,7 @@ class RequestHandler:
         """
         live = self.module_fn()
         if isinstance(request, dict):
-            return live.executable.score(coerce_record(request, live.dates), live.params)
+            return live.executable.run(coerce_record(request, live.dates), live.params)
         return live.executable.run(coerce_frame(request, live.frame_inputs), live.params)
 
     def process_fn(self, data: bytes, accept: str, content_type: str) -> Response:
@@ -268,9 +273,9 @@ class RequestHandler:
             if sample:
                 with open(sample) as f:
                     record = coerce_record(json.load(f), _dates(executable))
-            executable.score(record, params)
+            executable.run(record, params)
             executable.run(pl.DataFrame([record]), params)
-        except exc.ParamsError:
+        except (exc.ParamsError, exc.EngineError):
             raise
         except Exception as e:
             raise exc.DecikitError(f"warm-up failed with {type(e).__name__}: {e}. {hint}") from e
@@ -333,5 +338,6 @@ def construct_handler_from_settings() -> RequestHandler:
                 f"{handler_module.__file__} has no {class_name!r}; define `class {class_name}(RequestHandler)` "
                 f"there, or point DECIKIT_API__HANDLER at the module:class that holds your handler.")
         print(f"decikit: handler {settings.api.handler} from {handler_module.__file__}", file=sys.stderr)
-    return constructor(settings.config.get(), pipeline, settings.api.mode,
+    engine = Engine.resolve(settings.api.engine.type).model_validate(settings.api.engine.model_dump())
+    return constructor(settings.config.get(), pipeline, engine,
                        sample_request=os.path.join(code_path, "sample_request.json"))

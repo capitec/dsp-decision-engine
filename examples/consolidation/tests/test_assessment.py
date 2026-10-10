@@ -17,7 +17,7 @@ def whole_assessment(record: dict, retained_refs, product_code: int, proposed_in
                  "applicant1_bureau_accounts": bureau, "applicant1_internal_accounts": internal}
     if proposed_instalment is not None:
         assessed["proposed_instalment"] = proposed_instalment
-    return WHOLE.score(assessed, WHOLE_PARAMS)
+    return WHOLE.run(assessed, WHOLE_PARAMS)
 
 
 WHOLE_PARAMS = build_assessment().parameters().defaults()

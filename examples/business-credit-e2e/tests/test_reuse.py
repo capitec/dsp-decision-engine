@@ -13,7 +13,7 @@ PROBE = textwrap.dedent("""
     from business_credit_e2e.records import parse_dates
     import business_credit_e2e.review, business_credit_e2e.covenant, business_credit_e2e.history
     request = parse_dates(json.load(open(sys.argv[1])))
-    build().compile("interpreted").score(request, build().parameters().defaults())
+    build().compile("interpreted").run(request, build().parameters().defaults())
     print(json.dumps(sorted(m for m in sys.modules if m.split(".")[0] in %r)))
 """ % (EXAMPLES,))
 

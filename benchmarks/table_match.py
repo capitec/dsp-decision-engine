@@ -1,4 +1,4 @@
-"""Decision-table score() latency and batch throughput of a DecisionTableConfig in every mode.
+"""Decision-table run(record) latency and batch throughput of a DecisionTableConfig in every mode.
 
 Three tables. "bands": 12 contiguous score bands (between) writing a String,
 an Int64 and a Float64 column. "gated": the same bands ANDed with a string
@@ -14,7 +14,7 @@ import time
 import numpy as np
 import polars as pl
 
-from decikit._engine import Engine
+from decikit._engine import Engine, FusedEngine
 from decikit.steps.tables import DecisionTableConfig
 
 N = 1_000_000
@@ -58,17 +58,17 @@ def compare(expression: dict, **extra) -> None:
     engines = {}
     table = DecisionTableConfig.load({"type": "decision_table", "name": "bands", **doc})
     for mode in ("fused", "stepped", "interpreted"):
-        exe = Engine().bind(table, mode=mode)
-        engines[f"decikit {mode}"] = (exe.run, exe.score)
+        exe = Engine.resolve(mode)().bind(table)
+        engines[f"decikit {mode}"] = (exe.run, exe.run)
     # The same rows read from the params document, which every call passes.
     columns = {**DTYPES, "band": {"type": "Enum", "categories": sorted({r["band"] for r in ROWS} | {"none"})}}
     by_param = DecisionTableConfig.load({"type": "decision_table", "name": "bands", "columns": columns,
                                          "rows": {"table": "rows"},
                                          **{k: v for k, v in doc.items() if k != "parameters"}})
-    exe = Engine().bind(by_param, mode="fused")
+    exe = FusedEngine().bind(by_param)
     params = {"bands": {"rows": ROWS}}
     engines["decikit fused, rows param"] = (lambda df, exe=exe: exe.run(df, params),
-                                            lambda r, exe=exe: exe.score(r, params))
+                                            lambda r, exe=exe: exe.run(r, params))
 
     # The outputs agree before anything is timed.
     expected = engines["decikit interpreted"][0](frame.head(20000)).select(OUTPUTS).cast({"pts": pl.Int64})
@@ -79,7 +79,7 @@ def compare(expression: dict, **extra) -> None:
                  for name, (_, score) in engines.items()}
     results = {name: (rows_per_s(run, reps=1 if "interpreted" in name else 7), *latencies[name])
                for name, (run, _) in engines.items()}
-    print(f"{'engine':<26}{'batch rows/s':>16}{'ns/row':>10}{'score p50 us':>14}{'score p99 us':>14}")
+    print(f"{'engine':<26}{'batch rows/s':>16}{'ns/row':>10}{'record p50 us':>14}{'record p99 us':>14}")
     for name, (batch, p50, p99) in results.items():
         print(f"{name:<26}{batch:>16,.0f}{1e9 / batch:>10.1f}{p50:>14.1f}{p99:>14.1f}")
 

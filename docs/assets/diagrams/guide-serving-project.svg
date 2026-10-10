@@ -62,7 +62,7 @@
   <rect x="670" y="230" width="220" height="176" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
   <text x="686" y="256" font-size="16" font-weight="600" fill="#1e3a8a">HTTP</text>
   <text x="686" y="284" font-size="14" fill="#1e3a8a">POST /invocations</text>
-  <text x="700" y="306" font-size="13" fill="#1e3a8a">JSON object: score()</text>
+  <text x="700" y="306" font-size="13" fill="#1e3a8a">JSON object: run(dict)</text>
   <text x="700" y="326" font-size="13" fill="#1e3a8a">array, CSV, Parquet,</text>
   <text x="700" y="346" font-size="13" fill="#1e3a8a">Arrow, JSONL: run()</text>
   <text x="686" y="378" font-size="14" fill="#1e3a8a">GET /ping</text>

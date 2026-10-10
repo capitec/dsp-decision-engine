@@ -5,7 +5,7 @@ Gaps in the current code that users and maintainers should know about before rel
 ## Compilation and caching
 
 **Object globals are keyed by identity.** A step reading an instance of a class of its own is fingerprinted with `id()` (`_engine/compile/fingerprint.py`); numbers, strings, dates, Decimals, regexes, enums, classes and plain containers of those are keyed by value. A class is keyed by its own methods' bytecode and constants, not by what its methods call, and a jitclass by its numba type, which differs per process.
-Impact: the numba disk cache from `decikit build` misses on another process, and `decikit.lab.diff` reads the step as always changed. Binding warns with `HiddenStateWarning` (`Engine(strict_compile=True)` raises); put the data in literals, a config document, `param()`s or `param_table`s.
+Impact: the numba disk cache from `decikit build` misses on another process, and `decikit.lab.diff` reads the step as always changed. Binding warns with `HiddenStateWarning` (`FusedEngine(strict_compile=True)` raises); put the data in literals, a config document, `param()`s or `param_table`s.
 
 **A callable object read as `module.NAME` is not seen.** The walk follows the attributes a step reads off a module, but skips any callable that is not a function, module or class (so a ufunc or `np.searchsorted` is not flagged). An instance with `__call__` read that way (`transforms.normalise(x)` where `normalise = Normaliser(mean, std)`) is neither keyed nor warned about; read as a plain global it is.
 Impact: editing its data leaves the cache key and `decikit.lab.diff` unchanged. Keep the data in a document or a `param()`, or import the object by name.
@@ -22,8 +22,8 @@ Workaround: build on the serving host type, or compare `cpu_target()` recorded a
 **Two steps in one fused kernel cannot read one column as `Columnar` of different Item types.** Binding raises `TypeError`.
 Workaround: read the column with one Item type everywhere, or give the second reader its own column.
 
-**A compiled step returning a dict or a list of dicts runs in Python.** `compile_call` accepts it, but no kernel stores a dict, so the fused kernel fails at its first launch and splits into per-call Python runs, silently (no `FallbackWarning`, absent from `fallbacks()`, and `strict_compile=True` does not raise).
-Impact: such a step costs a Python call per row although it looks compiled; its output is still checked against the declared type. Return a `Struct[...]` tuple or a `Columnar[...]` list of tuples to compile it.
+**A kernel numba refuses only at its launch takes every step in it to Python.** A step writing a `dict` or a `list` falls back alone at build, but a kernel can still fail at its first launch on a value numba only meets then (a `dict` param, a float returned for a `Decimal` output, an output declared as an `IntEnum` or `bytes`), and then each of its steps runs in Python. It is reported (`split at launch: ...` in `fallbacks()`, a `FallbackWarning` in fused mode, refused by `strict_compile=True`), but only when that kernel first runs, and under strict every step of the kernel needs `@allow_fallback`, even one that compiles on its own.
+Impact: a Python call per row for each step of that kernel. Give the param a typed value or a `param_table`, and return what the output declares.
 
 **Compile caches grow without eviction.** Step dispatchers, fused kernels, Arrow schema plans, the params cache and `RequestHandler._history` are unbounded.
 Impact: a long-lived process that stages many versions or sees many distinct params documents leaks memory; restart periodically.
@@ -31,8 +31,8 @@ Impact: a long-lived process that stages many versions or sees many distinct par
 **The Arrow shim is compiled with `cc` on first import.** POSIX only, and it needs a C compiler or a cache directory the process can write to (`_engine/boundary/_arrow/_build.py`).
 Impact: Windows, and slim containers without a compiler, cannot run compiled modes; the MCP editor-socket path on Windows is untested.
 
-**`score()` is not instantaneous.** A short flow costs about 28 µs per record fused and 59 µs interpreted; a one-row frame through `run()` costs about 150 µs.
-Workaround: serve single records as a dict through `score()`; see [serving latency](../architecture/serving.md).
+**`run(record)` is not instantaneous.** A short flow costs about 28 µs per record fused and 59 µs interpreted; a one-row frame through `run()` costs about 150 µs.
+Workaround: serve single records as a dict through `run()`; see [serving latency](../architecture/serving.md).
 
 ## Numbers
 

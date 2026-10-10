@@ -70,7 +70,7 @@ def handler(store):
 
 def _score(handler, record=RECORD):
     live = handler.module_fn()
-    return live.executable.score(record, live.params)
+    return live.executable.run(record, live.params)
 
 
 def test_stage_builds_the_version_without_serving_it(handler):
@@ -121,8 +121,8 @@ def test_after_staging_the_first_string_tree_requests_compile_nothing(tmp_path):
     frame = pl.DataFrame({"s": ["running", "ran", "héllo wörld", None]})
     with no_recompile():
         assert live.executable.run(frame, live.params)["hit"].to_list() == [1, 0, 0, 0]
-        assert live.executable.score({"s": "singing"}, live.params)["hit"] == 1
-        assert live.executable.score({"s": "日本語"}, {"warm": {"extra": "語"}})["hit"] == 1
+        assert live.executable.run({"s": "singing"}, live.params)["hit"] == 1
+        assert live.executable.run({"s": "日本語"}, {"warm": {"extra": "語"}})["hit"] == 1
 
 
 def test_record_fields_survive_in_the_answer(handler):
@@ -314,3 +314,41 @@ def test_startup_uses_the_inference_handler_and_activates_the_latest_version(sto
     assert type(app.state.handler).__name__ == "Handler"
     assert app.state.handler.active == Version(0, 1, 0)
     assert _request(app, "POST", "/invocations", json.dumps(RECORD).encode())[1] == b"3000"
+
+
+def label(code: str) -> bool:  # reads a str, which no kernel takes: it runs in Python
+    return code.startswith("A")
+
+
+def build_labels():
+    return flow(label, name="labels")
+
+
+def test_an_engine_tag_is_resolved_to_an_engine(tmp_path):
+    from decikit import SteppedEngine
+
+    assert RequestHandler(JsonFileStore(basepath=str(tmp_path)), build, engine="stepped").engine == SteppedEngine()
+
+
+def test_a_strict_engine_from_the_environment_refuses_an_undeclared_fallback_at_stage(tmp_path, monkeypatch):
+    from decikit import FusedEngine
+    from decikit._settings import get_settings
+    from decikit.exceptions import EngineError
+    from decikit.serving._handler import construct_handler_from_settings
+
+    JsonFileStore(basepath=str(tmp_path)).create_version({"params": {}})
+    monkeypatch.setenv("DECIKIT_API__CODE_PATH", str(tmp_path))
+    monkeypatch.setenv("DECIKIT_API__PIPELINE", f"{__name__}:build_labels")
+    monkeypatch.setenv("DECIKIT_CONFIG__BASEPATH", str(tmp_path))
+    monkeypatch.setenv("DECIKIT_API__ENGINE__TYPE", "fused")
+    monkeypatch.setenv("DECIKIT_API__ENGINE__STRICT_COMPILE", "true")
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    get_settings.cache_clear()
+    try:
+        handler = construct_handler_from_settings()
+    finally:
+        get_settings.cache_clear()
+    assert handler.engine == FusedEngine(strict_compile=True)
+    with pytest.raises(EngineError, match="labels/label runs in Python") as refused:
+        handler.stage()
+    assert "warm-up failed" not in str(refused.value)  # the refusal is not blamed on sample_request.json

@@ -4,7 +4,7 @@ from datetime import date
 
 import pytest
 
-from decikit import Engine, HiddenStateWarning, flow
+from decikit import HiddenStateWarning, InterpretedEngine, flow
 from decikit.lab import diff
 
 from business_credit_e2e import covenant, vocab
@@ -77,6 +77,6 @@ def test_a_changed_threshold_in_the_terms_document_is_a_different_pipeline():
 def test_the_covenant_steps_read_no_hidden_state():
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        Engine().bind(build(), mode="interpreted")
+        InterpretedEngine().bind(build())
     assert [str(w.message) for w in caught if issubclass(w.category, HiddenStateWarning)
             and ("covenant" in str(w.message) or "COV-DSCR" in str(w.message))] == []

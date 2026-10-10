@@ -2,7 +2,7 @@
 import polars as pl
 
 from decikit import branch, dag, flow, frame_step, missing_as, param, step
-from decikit._engine import Engine
+from decikit._engine import InterpretedEngine
 from decikit.steps.trees import TreeConfig
 from decikit.lab.testing import assert_equivalent
 
@@ -121,15 +121,15 @@ def test_the_worked_example_retunes_arms_shared_params_and_the_tree(bind):
 
 
 def test_the_tree_reference_reports_its_internal_nodes():
-    exe = Engine().bind(pipeline)
+    exe = InterpretedEngine().bind(pipeline)
     visited = []
     exe.runner.visit = visited.append
     exe.run(FRAME)
     assert visited == ["n0", "n1", "n0", "n0", "n1"]
 
 
-def test_score_runs_the_worked_example_for_one_record(bind):
-    out = bind(pipeline).score(FRAME.row(1, named=True))
+def test_run_takes_the_worked_example_one_record_at_a_time(bind):
+    out = bind(pipeline).run(FRAME.row(1, named=True))
     assert (out["term_cap"], out["bureau_score"], out["risk_band"]) == (48.0, 650, 0)
 
 
@@ -139,7 +139,7 @@ def _cap_ratio_in_term(s):
     s.set("ratio", [0.5, 5.0, 0.5])
 
 
-def test_all_three_modes_agree_on_the_worked_example_in_run_score_and_a_session():
+def test_all_three_modes_agree_on_the_worked_example_in_a_frame_run_a_record_run_and_a_session():
     params = {"shared": {"min_ratio": 1.0}, "risk_tree": {"hi_thresh": 2.0}}
     out = assert_equivalent(pipeline, FRAME, params=params, script=_cap_ratio_in_term)
     assert out["risk_band"].to_list() == [1, 0, 0]

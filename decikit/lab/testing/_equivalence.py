@@ -25,7 +25,7 @@ def assert_equivalent(
 
     - `run(frame)`: same columns, dtypes and values (NaN equals NaN, nothing
       else is approximate);
-    - `score(record)` for every row: the same dict as that row of `run`;
+    - `run(record)` for every row, as a dict: the same dict as that row of `run(frame)`;
     - a debug `Session` resumed to the end: the same frame as `run`;
     - with `script`, a second session driven by `script(session)` (then
       resumed to the end): the same frame in every mode.
@@ -48,7 +48,7 @@ def assert_equivalent(
         raise TypeError(f"assert_equivalent needs a polars DataFrame, not {type(frame).__name__}")
     expected = scripted = None
     for mode in modes:
-        exe = Engine().bind(step, mode=mode)
+        exe = Engine.resolve(mode)().bind(step)
         try:
             out = exe.run(frame, params)
         except Exception as e:
@@ -59,7 +59,7 @@ def assert_equivalent(
             expected = out
         _same_frame(out, expected, f"run() in {mode} mode differs from {modes[0]}")
         for i, (record, row) in enumerate(zip(frame.iter_rows(named=True), out.iter_rows(named=True))):
-            _same_record(exe.score(record, params), row, f"score() of row {i} in {mode} mode differs from run()")
+            _same_record(exe.run(record, params), row, f"run(record) of row {i} in {mode} mode differs from run(frame)")
         session = exe.session(frame, params)
         session.resume()
         _same_frame(_finish(session), out, f"a session resumed to the end in {mode} mode differs from run()")
@@ -91,7 +91,7 @@ def _same_record(got: dict, want: dict, what: str) -> None:
         raise AssertionError(f"{what}: keys {list(got)} != {list(want)}")
     for key, value in want.items():
         if not _same(got[key], value):
-            raise AssertionError(f"{what} at {key!r}: score={got[key]!r}, run={value!r}")
+            raise AssertionError(f"{what} at {key!r}: record={got[key]!r}, frame={value!r}")
 
 
 def _same(a: Any, b: Any) -> bool:
