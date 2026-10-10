@@ -132,6 +132,36 @@ Each worker process imports the pipeline and the handler, then stages and activa
 
 The starlette server needs `pip install 'decider[serve-starlette]'`.
 
+### Container image
+
+`docker/Dockerfile` builds an image that serves with sanic as a non-root user. Run the commands from a checkout of the repository. They were tested with podman; docker needs BuildKit for `--build-context` and the bind mount in the project stage, and was not tested.
+
+```bash
+podman build -t decider:latest -f docker/Dockerfile .                          # library only, no project
+podman run --rm -p 8080:8080 -v $PWD/my-project:/opt/ml/model/code:ro,Z decider:latest   # project mounted
+```
+
+To bake a project in, so that `decider build` runs while the image is built (a bad config or a missing document fails the build, not the first request):
+
+```bash
+podman build --target project --build-context app=/path/to/my-project \
+    --build-arg PIPELINE=my_pkg.pipeline:build -t my-app -f docker/Dockerfile .
+```
+
+or, from your own Dockerfile on top of the library image (`bake` installs `requirements.txt` if there is one, then runs `decider build`):
+
+```dockerfile
+FROM decider:latest
+COPY . /opt/ml/model/code
+ENV DECIDER_API__PIPELINE=my_pkg.pipeline:build
+RUN bake
+```
+
+- A baked image keeps numba's disk cache for your step functions, which skips their compilation at start (measured: 16 s instead of 35 s to `/ping` for one worker of `examples/loan-granting-pricing`, 39 s instead of 119 s for `examples/transaction-fraud`). The fused kernels are still built in every worker at start, so wait for `GET /ping` before sending traffic.
+- The cache is valid on the CPU that built the image. On another CPU `decider serve` warns and every worker compiles at start; build with `--build-arg CPU_TARGET=generic` to make the cache portable.
+- Rootless podman: the mounted folder must be readable by "others", or add `--userns=keep-id`.
+- The header of `docker/Dockerfile` lists every build argument and variable. `docker/smoke.sh` builds, runs and checks each example under `examples/`.
+
 ### Settings
 
 Settings are `DECIDER_*` environment variables, with `__` between nested names. A `.env` file in the current directory fills in whatever the real environment does not set. There are no other flags; `decider --help` lists every command.

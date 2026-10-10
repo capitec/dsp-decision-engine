@@ -83,3 +83,32 @@ Read this before changing how a request is parsed, scored or transported, or how
 - The gather, string and `load_*` functions are called through `uint64` address arguments.
 - Why: a captured symbol address makes a `cache=True` kernel uncacheable; `tests/boundary/test_shim.py` checks the disk cache with a second process.
 - See: `decider/_engine/boundary/_arrow/intrinsics.py`
+
+## The image is built in stages, and a project is baked in only when asked
+
+- A builder stage (full Python image, has a compiler) installs the repository with the `serve-sanic` extra into a venv and compiles the Arrow shim; the runtime stage (slim, non-root `app`, no compiler) copies the venv and the shim. The default build needs no project and no pre-built wheel; a mounted project at `/opt/ml/model/code` is the old contract.
+- The `project` target adds a project three ways, all ending in `bake` (the project's `requirements.txt`, then `decider build`; a no-op when nothing is baked): `--build-context app=<dir>`, `--build-arg PROJECT=examples/<name>` (the sibling example packages go on `sys.path` through a `.pth` file), or the user's own `FROM <runtime>` Dockerfile.
+- Why a prebuilt shim works: the shim's cache key covers sources, flags, `cc` as a string and the machine, not the compiler binary, so the one built in the builder loads in the runtime image (checked: no `cc` there, `_arrow.diagnose()` says `loaded`). Why `VERSION` is an argument: hatch-vcs reads git, and the build context has no `.git`.
+- The 12 example images share the 675 MB runtime layers; each adds about 50 MB. `DECIDER_API__ROOT_PATH` and `DECIDER_EXT__EXTENSION_PATH` of the old image are no longer settings, so the image sets `DECIDER_API__CODE_PATH` and `DECIDER_CONFIG__BASEPATH`.
+- Rootless podman maps the container's uid 1000 to a subuid, so a mounted folder needs read access for "others" or `--userns=keep-id` (tested: a mode 700 folder fails without it); add `:Z` for SELinux.
+- See: `docker/Dockerfile`, `docker/smoke.sh`, `decider/_engine/boundary/_arrow/_build.py`
+
+## Baking caches the user steps, not the fused kernels
+
+- Measured on one box (28 CPUs, other jobs running, one worker, container start to first `/ping` 200, then 300 requests on one connection):
+
+  | Image | `loan-granting-pricing` | `transaction-fraud` |
+  |---|---|---|
+  | baked cache | 18.7, 15.4, 16.0 s | 44.4, 37.9, 39.1 s |
+  | `NUMBA_CACHE_DIR` pointed at an empty folder | 32.3, 37.8 s | 119.8, 118.7 s |
+  | runtime image, project mounted, never built | 30.9 s | not measured |
+  | built with `CPU_TARGET=generic` | 15.6, 13.6 s | 33.8, 33.3 s |
+  | first request / median request, baked | 12 to 16 / 12 ms | 23 to 26 / 24 ms |
+
+- What is left after the cache hits (about 15 s and 38 s) is the imports, the fused kernels built from LLVM IR in every worker, and the warm-up. Nothing writes those to disk (see the compile cache page), so a worker is not ready until it has done them and the image's `HEALTHCHECK` polls `/ping` (only honoured by `podman build --format docker`).
+- Every example answered 200 with its README figures. First requests of `consolidation` (413 ms), `governance-replay` (872 ms), `retail-credit-e2e` (214 ms) and `business-credit-e2e` (115 ms) are slower than the others because they stage something lazily; the rest took 5 to 34 ms.
+- The cache is keyed by source path and CPU, so it hits because the project sits at `/opt/ml/model/code` when built and when served, and only on the CPU that built it. Simulating another CPU (`NUMBA_CPU_NAME=generic` at run time on a host-built image) printed the "`decider build` ran for CPU 'raptorlake' but this host is 'generic'" warning and brought the start back to the empty-cache figures (39 s and 123 s). No warning appears when the image runs on the CPU that built it.
+- `CPU_TARGET=generic` builds and serves with `NUMBA_CPU_NAME=generic` (no AVX), so the cache hits on any x86-64 CPU. Its cost on these two pipelines was not measurable (medians 10 to 12 ms and 19 to 21 ms against 12 ms and 24 ms); one earlier 27 ms median for the first pipeline, on a host-built image run with `NUMBA_CPU_NAME=generic`, did not repeat. Only this CPU was tried.
+- `NUMBA_CPU_NAME` is chosen by a stage, not an `ENV ${ARG}`: an empty value makes numba name an empty CPU but keep the host features.
+- Not verified: the docker daemon, a second CPU model, an internal index through `PIP_CONF`.
+
