@@ -20,6 +20,10 @@ def check_document(data: t.Any, project_type: ProjectType) -> None:
     if not isinstance(data, dict):
         raise ValueError("project_data must be a JSON object")
     fmt = detect_format(data)
+    if fmt == "v3" and "nodes" not in data:
+        kind = data.get("type")
+        raise ValueError(f"a {kind!r} document is not a tree or flat-rule document" if kind
+                         else "the file is not a tree or flat-rule document: it has no nodes or rules")
     if fmt not in FORMATS.values():
         if fmt.startswith("v") and fmt[1:].isdigit():
             raise ValueError(f"{fmt} tree documents are no longer supported")
@@ -30,11 +34,20 @@ def check_document(data: t.Any, project_type: ProjectType) -> None:
         )
 
 
+def imported_document(data: t.Any) -> t.Any:
+    """The tree a file holds: the file itself, or the `tree` of a TreeConfig step document (`{"type": "tree", ...}`),
+    whose step settings (path_output, feature_types, ...) the editor does not hold."""
+    if isinstance(data, dict) and data.get("type") == "tree" and isinstance(data.get("tree"), dict):
+        return data["tree"]
+    return data
+
+
 def detect_project_type(data: t.Any) -> ProjectType:
     """Project type of a supported document; raises ValueError otherwise."""
     fmt = detect_format(data) if isinstance(data, dict) else None
     for project_type, f in FORMATS.items():
         if f == fmt:
+            check_document(data, project_type)
             return project_type
     check_document(data, ProjectType.TREE)  # always raises here
     raise AssertionError
